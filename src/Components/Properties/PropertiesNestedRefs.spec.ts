@@ -132,9 +132,10 @@ describeMobileAndDesktop('Properties: an element whose references resolve to ent
     const panel = page.getByTestId('PropertiesPanel')
     await expect(panel.getByText(GRID_AXIS_TYPE).first()).toBeVisible()
     await expect(panel.getByText('A', {exact: true}).first()).toBeVisible()
-    // Settle: the property sets come after the element's table.
-    const SETTLE_MS = 1000
-    await page.waitForTimeout(SETTLE_MS)
+    // The panel's last request for the grid is its property sets (it has
+    // none, so no tables follow): every read the panel made is in by then.
+    await page.waitForFunction(() =>
+      (window as unknown as Record<string, string[]>).__bldrsTestOps.includes('propertySets'))
     const ops: string[] = await page.evaluate(() =>
       (window as unknown as Record<string, string[]>).__bldrsTestOps)
     // The only `props` reads are of the grid itself (the panel's effect can

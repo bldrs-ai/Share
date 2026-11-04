@@ -1,13 +1,13 @@
 /* eslint-disable no-magic-numbers, require-await */
 import React from 'react'
 import {render, screen} from '@testing-library/react'
-import {deref} from '@bldrs-ai/ifclib'
+import {decodeIFCString as ifclibDecodeIFCString, deref} from '@bldrs-ai/ifclib'
 import {EngineSession} from '../../engine/EngineSession'
 import {createEngineHandler} from '../../engine/engineHandler'
-import {Op} from '../../engine/protocol'
+import {ENGINE_PROTOCOL_VERSION, Op} from '../../engine/protocol'
 import {makeInProcessTransport} from '../../engine/transports'
 import {MAX_ARRAY_MEMBERS, createPropertyTable, createPropertyTables} from './itemProperties'
-import {resolvePropertyTables, resolveValue, schemaTypeName} from './propertyTable'
+import {decodeIFCString, resolvePropertyTables, resolveValue, schemaTypeName} from './propertyTable'
 
 
 // Share#2070: the Properties panel's tables are resolved by ONE module
@@ -31,6 +31,7 @@ const ENUM = 3
 const REAL = 4
 const REF = 5
 const ref = (value) => ({type: REF, value})
+const REPRESENTATION_ROOT = 9060
 
 
 /**
@@ -45,7 +46,11 @@ function gridLines() {
     9011: {
       expressID: 9011, type: IFCGRIDAXIS, AxisTag: {type: STRING, value: 'A'},
       AxisCurve: ref(9013), SameSense: {type: ENUM, value: 'T'},
+      // Not an IfcGridAxis attribute: here so a nested entity carries a
+      // representation root, which conway's recursive read leaves a handle.
+      Representation: ref(REPRESENTATION_ROOT),
     },
+    [REPRESENTATION_ROOT]: {expressID: REPRESENTATION_ROOT, type: IFCPOLYLINE, Points: [ref(9014)]},
     9012: {
       expressID: 9012, type: IFCGRIDAXIS, AxisTag: {type: STRING, value: '\\X2\\00E9\\X0\\'},
       AxisCurve: ref(9013), SameSense: {type: ENUM, value: 'F'},
@@ -103,14 +108,17 @@ function gridLines() {
 
 /**
  * conway's `getLine(id, flatten)`: a recursive read inlines every reference
- * in a field, or in an array whose first member is one, as a whole entity
+ * in a field, or in an array whose first member is one, as a whole entity,
+ * except a representation root, which stays a handle
  * (ifc_api_proxy_ifc.js#flattenLine). Fresh objects on every read, as both
- * engines return.
+ * engines return. `reads` logs each `[id, recursive]` asked for.
  *
  * @param {object} lines
- * @return {function(number, number, boolean): Promise<object>}
+ * @return {object} `{readLine, getItemProperties, reads}`
  */
 function engineReads(lines) {
+  const reads = []
+  const inline = (handle) => (handle.value === REPRESENTATION_ROOT ? handle : readLine(handle.value, true))
   const readLine = (id, flatten) => {
     if (lines[id] === undefined) {
       return undefined
@@ -120,15 +128,19 @@ function engineReads(lines) {
       for (const key of Object.keys(line)) {
         const value = line[key]
         if (value && value.type === REF) {
-          line[key] = readLine(value.value, true)
+          line[key] = inline(value)
         } else if (Array.isArray(value) && value.length > 0 && value[0]?.type === REF) {
-          line[key] = value.map((member) => readLine(member.value, true))
+          line[key] = value.map(inline)
         }
       }
     }
     return line
   }
-  return {readLine, getItemProperties: async (_modelID, id, recursive = false) => readLine(id, recursive)}
+  const getItemProperties = async (_modelID, id, recursive = false) => {
+    reads.push([id, recursive])
+    return readLine(id, recursive)
+  }
+  return {readLine, getItemProperties, reads}
 }
 
 
@@ -275,7 +287,74 @@ describe('Properties tables resolved in the engine session (Share#2070)', () => 
 })
 
 
+describe('what a table reads', () => {
+  it('reads each reference it shows once, a rooted one shallow only, and nothing past the cut', async () => {
+    const lines = gridLines()
+    const {getItemProperties, reads} = engineReads(lines)
+    const reader = {
+      read: (id, recursive) => getItemProperties(0, id, recursive),
+      readMember: (id) => getItemProperties(0, id, false),
+      typeLookups: [schemaTypeName],
+    }
+    await resolvePropertyTables(reader, [{record: structuredClone(lines[9010])}])
+    // Every reference shown is one shallow read: UAxes 2 + VAxes 1 +
+    // Neighbour 1 + MAX_ARRAY_MEMBERS of Samples' 70.
+    expect(reads.filter(([, recursive]) => !recursive)).toHaveLength(4 + MAX_ARRAY_MEMBERS)
+    // Then a recursive one for each but the rooted wall, whose name is all
+    // that shows.
+    expect(reads.filter(([, recursive]) => recursive)).toHaveLength(3 + MAX_ARRAY_MEMBERS)
+    expect(reads.filter(([id]) => id === 9020)).toEqual([[9020, false]])
+    // Never resolved: a representation, which no table shows.
+    expect(reads.filter(([id]) => id === REPRESENTATION_ROOT)).toEqual([])
+  })
+
+  it('stops reading when the engine closes mid-table, with the engine\'s own error', async () => {
+    const lines = gridLines()
+    const {getItemProperties} = engineReads(lines)
+    const replies = []
+    let handler = null
+    const api = {
+      wasmModule: undefined,
+      async Init() {
+        this.wasmModule = {HEAPU8: {byteLength: 16}}
+      },
+      async OpenModelStreamed() {
+        return 0
+      },
+      IsModelOpen: () => true,
+      CloseModel: () => null,
+      properties: {
+        getItemProperties: async (...args) => {
+          // A CLOSE lands while the table is between reads.
+          handler.dispose()
+          return getItemProperties(...args)
+        },
+      },
+    }
+    handler = createEngineHandler({
+      loadIfcAPI: async () => function IfcAPI() {
+        return api
+      },
+      post: (msg) => replies.push(msg),
+    })
+    const send = (id, op, args) => handler.handle({v: ENGINE_PROTOCOL_VERSION, epoch: 0, id, op, args})
+    await send(1, Op.INIT, {})
+    await send(2, Op.OPEN, {source: {bytes: new Uint8Array(4)}})
+    await send(3, Op.PROPERTY_TABLES, {tables: [{record: structuredClone(lines[9010])}]})
+    const reply = replies.find((msg) => msg.re === 3)
+    expect(reply.ok).toBe(false)
+    expect(reply.error.message).toMatch(/no model is open|init has not run/)
+  })
+})
+
+
 describe('propertyTable.js deref agrees with ifclib\'s', () => {
+  it('decodeIFCString is ifclib\'s', () => {
+    for (const value of ['plain', '\\X2\\00E9\\X0\\t\\X2\\00E8\\X0\\', '\\X2\\0041\\X0\\\\X2\\', '', 42, null, undefined]) {
+      expect(decodeIFCString(value)).toEqual(ifclibDecodeIFCString(value))
+    }
+  })
+
   it('gives every value ifclib resolves the node ifclib\'s result renders as', async () => {
     const lines = gridLines()
     const {readLine, getItemProperties} = engineReads(lines)
@@ -348,7 +427,19 @@ describe('Properties on a GLB cache hit (Share#2066)', () => {
       2: {expressID: 2, type: IFCGRIDAXIS, Next: ref(3)},
       3: {expressID: 3, type: IFCPOLYLINE, Next: ref(2)},
     }
-    render(await createPropertyTable(cacheHitModel(records), structuredClone(records[1])))
+    // A loop fails here, fast and by name, rather than as an endless chain
+    // of microtasks that Jest's timeout never gets a turn to stop.
+    const MAX_READS = 100
+    let reads = 0
+    const model = cacheHitModel(records)
+    const read = model.getItemProperties
+    model.getItemProperties = (id) => {
+      if (++reads > MAX_READS) {
+        throw new Error('deref did not terminate')
+      }
+      return read(id)
+    }
+    render(await createPropertyTable(model, structuredClone(records[1])))
     // 2 and 3 are the two nested tables; 3's Next is 2 again, still being
     // resolved, so it is shown by id.
     expect(screen.getByText('Gridaxis')).toBeInTheDocument()

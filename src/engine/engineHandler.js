@@ -155,9 +155,20 @@ export function createEngineHandler({
   // recursive)` is a PROPS request, and its `getIfcType` the static table),
   // so a table resolved here is the one resolved on the page
   // (itemProperties.jsx#readerFor).
+  //
+  // A table is many awaited reads, and handle() does not serialise ops, so a
+  // CLOSE can land between two of them. Each read checks the model is still
+  // open, so the table then stops at its next read with "no model is open"
+  // rather than reading a disposed engine.
   const tableReader = {
-    read: (id, recursive) => api.properties.getItemProperties(modelID, id, recursive),
-    readMember: (id) => api.properties.getItemProperties(modelID, id, false),
+    read: (id, recursive) => {
+      requireModel()
+      return api.properties.getItemProperties(modelID, id, recursive)
+    },
+    readMember: (id) => {
+      requireModel()
+      return api.properties.getItemProperties(modelID, id, false)
+    },
     typeLookups: [schemaTypeName],
   }
 

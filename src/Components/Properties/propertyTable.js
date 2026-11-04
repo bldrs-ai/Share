@@ -42,9 +42,11 @@ import debug from '../../utils/debug'
  * as `#id TYPE` instead. A reference chain can be long (an IfcGrid's axis →
  * its IfcPolyline → its points), and each level is a table in a 130 px cell.
  *
- * Each top-level reference is still read whole (one recursive
- * `getItemProperties`, which conway flattens inside the engine), and the cut
- * is made after it. In the worker those reads are under 1 ms each; what this
+ * A reference to an entity without a GlobalId is still read whole (one
+ * recursive `getItemProperties`, which conway flattens inside the engine),
+ * and the cut is made after it; a rooted one is read shallow, and nothing
+ * under a key no table shows (a representation, a placement) is resolved
+ * (derefValue). In the worker those reads are under 1 ms each; what this
  * bounds is what crosses back and what the panel builds.
  */
 export const MAX_NESTED_TABLE_DEPTH = 2
@@ -104,6 +106,15 @@ const SKIPPED_PROPS = new Set([
   'PredefinedType', 'Representation', 'RepresentationContexts', 'Representations', 'Tag',
   'UnitsInContext',
 ])
+
+
+/**
+ * SKIPPED_PROPS that derefValue leaves unresolved on an entity. Not `type`,
+ * which it maps to the schema name the Type row and `#id TYPE` show, nor
+ * `GlobalId`, which decides whether a reference is shown by name
+ * (derefReference).
+ */
+const UNRESOLVED_PROPS = new Set([...SKIPPED_PROPS].filter((key) => key !== 'type' && key !== 'GlobalId'))
 
 
 /**
@@ -167,9 +178,11 @@ function withTotals(reader) {
  * @param {boolean} isPset a property set: no Type, expressID or Name row
  * @param {number} depth how deep this table is nested inside another
  * @param {boolean} derefed whether `ifcProps` is already resolved: a nested
- *   entity, which came out of derefValue whole. Resolving its values again
- *   would change nothing (the old renderer did, as a no-op), and its arrays
- *   are already cut.
+ *   entity, which came out of derefValue whole. Its values must NOT be
+ *   resolved again: derefValue would rebuild every array it cut, and their
+ *   full lengths are keyed on those arrays (`totals`), so `… and N more`
+ *   would be lost. (The old renderer did deref a second time; on its values
+ *   that was a no-op.)
  * @return {Promise<object>} a `Node.TABLE`
  */
 async function resolveTable(reader, ifcProps, isPset, depth, derefed) {
@@ -241,7 +254,7 @@ async function resolveRow(reader, propName, propValue, depth, derefed) {
       // UAxes / VAxes are references to IfcGridAxis entities, which have no
       // GlobalId, so they resolve to whole objects (Share#2063, where
       // rendering that array took down the app).
-      const resolved = derefed ? propValue : await derefValue(reader, cloneForDeref(propValue), new Set())
+      const resolved = derefed ? propValue : await derefValue(reader, propValue, new Set())
       return {k: Node.ROW, label, value: await resolveValue(reader, resolved, depth)}
     }
   }
@@ -264,8 +277,8 @@ export async function resolveValue(reader, value, depth = 0) {
   if (value === null || value === undefined) {
     return ''
   }
-  if (value instanceof UnresolvedRef) {
-    return {k: Node.ENTITY, id: value.id, typeName: null}
+  if (value.k === Node.ENTITY && value.expressID === undefined) {
+    return value // unresolvedRef's
   }
   const type = typeof value
   if (type === 'string' || type === 'number' || type === 'bigint') {
@@ -465,29 +478,37 @@ async function unpackHelper(reader, eltArr, toRows) {
  * A reference that resolved to nothing: the reader had no entity for it (a
  * GLB cache hit holds only the entities its spatial tree reaches, Share#2066;
  * or the file's reference dangles), or it points back up its own chain.
- * Shown as `#id`, where ifclib's deref gave the string 'null'.
+ * Shown as `#id`, where ifclib's deref gave the string 'null'. It is the
+ * final `Node.ENTITY` node already, a plain object, so it means the same
+ * after a structured clone.
+ *
+ * @param {number} id
+ * @return {object}
  */
-class UnresolvedRef {
-  /** @param {number} id */
-  constructor(id) {
-    this.id = id
-  }
+function unresolvedRef(id) {
+  return {k: Node.ENTITY, id, typeName: null}
 }
 
 
 /**
- * Recursive dereference of nested step values, rewriting `ref` in place.
- * ifclib's `deref` (Ifc.js), which the panel used before, with four changes:
+ * Recursive dereference of nested step values. ifclib's `deref` (Ifc.js),
+ * which the panel used before, with these changes:
  *   - reads go through the PropertyReader, so a GLB cache hit resolves
  *     against its own records rather than the viewer's engine, which has no
  *     model open (Share#2066);
- *   - an unresolved reference, or one back up its own chain (`path`), is an
- *     UnresolvedRef rather than the string 'null' or a loop;
+ *   - an unresolved reference, or one back up its own chain (`path`), is a
+ *     `#id` node (unresolvedRef) rather than the string 'null' or a loop;
+ *   - it builds its result instead of rewriting `ref` in place, so nothing it
+ *     is given is ever changed or needs copying first. A cache hit's reader
+ *     returns objects its LRU block cache shares (bldrsElementProperties.js),
+ *     and the spatial-tree node Properties.jsx can fall back to is the
+ *     NavTree's own;
  *   - an array is cut to MAX_ARRAY_MEMBERS before its members are resolved,
- *     its full length kept in `reader.totals`: the rest never render;
- *   - each entity read is copied before it is rewritten, because a cache
- *     hit's reader returns objects its LRU block cache shares
- *     (bldrsElementProperties.js), where an engine returns a fresh one.
+ *     its full length kept in `reader.totals` against the new array: the
+ *     rest never render, and are never read or copied;
+ *   - on an entity, the keys no table shows (UNRESOLVED_PROPS) are left as
+ *     they are, and a reference to a rooted entity is resolved from a shallow
+ *     read (derefReference).
  * Everything else is ifclib's, kept so the panel shows what it showed:
  * 'null' for a missing value, a typed value as its value (strings decoded),
  * an entity's `type` as its schema name and its `GlobalId` as the bare
@@ -504,14 +525,16 @@ async function derefValue(reader, ref, path) {
     return 'null'
   }
   if (Array.isArray(ref)) {
-    if (ref.length > MAX_ARRAY_MEMBERS && reader !== null) {
-      reader.totals.set(ref, ref.length)
-      ref.length = MAX_ARRAY_MEMBERS
+    const cut = ref.length > MAX_ARRAY_MEMBERS && reader !== null
+    const shown = cut ? ref.slice(0, MAX_ARRAY_MEMBERS) : ref
+    const out = new Array(shown.length)
+    for (let i = 0; i < shown.length; i++) {
+      out[i] = await derefValue(reader, shown[i], path)
     }
-    for (let i = 0; i < ref.length; i++) {
-      ref[i] = await derefValue(reader, ref[i], path)
+    if (cut) {
+      reader.totals.set(out, ref.length)
     }
-    return ref
+    return out
   }
   if (typeof ref !== 'object') {
     return ref // number or string, e.g. the value of Name or expressID
@@ -532,20 +555,29 @@ async function derefValue(reader, ref, path) {
         throw new Error(`Unknown reference type: ${ref}`)
     }
   }
+  const isEntity = ref.expressID !== undefined
+  const out = {}
   for (const key in ref) {
     if (!Object.prototype.hasOwnProperty.call(ref, key)) {
       continue
     }
     const val = ref[key]
     if (key === 'type') {
-      ref[key] = schemaTypeName(val)
+      out[key] = schemaTypeName(val)
     } else if (key === 'GlobalId' && val.type === STRING) {
-      ref[key] = val.value
+      out[key] = val.value
+    } else if (isEntity && UNRESOLVED_PROPS.has(key)) {
+      // An entity renders as a table (resolveRow skips these keys at every
+      // depth) or as `#id TYPE`, so these are never shown. Resolving them
+      // read whole subgraphs to throw away: a product's Representation is
+      // left as a handle by conway's recursive read, and resolving it read
+      // the shape graph, thousands of records on PSB.
+      out[key] = val
     } else {
-      ref[key] = await derefValue(reader, val, path)
+      out[key] = await derefValue(reader, val, path)
     }
   }
-  return ref
+  return out
 }
 
 
@@ -554,24 +586,35 @@ async function derefValue(reader, ref, path) {
  * @param {number} id
  * @param {Set<number>} path
  * @return {Promise<*>} the entity, `{type, ref}` for a rooted one, or an
- *   UnresolvedRef
+ *   unresolvedRef
  */
 async function derefReference(reader, id, path) {
   if (path.has(id)) {
-    return new UnresolvedRef(id)
+    return unresolvedRef(id)
+  }
+  // Shallow first. A rooted entity is named, not nested (it has its own row
+  // in the tree), and ifclib returned `{type, ref}` for it only after
+  // resolving its whole closure. Both are top-level fields, so the shallow
+  // read is enough, and the closure is never read.
+  const shallow = await reader.read(id, false)
+  if (shallow === null || shallow === undefined) {
+    return unresolvedRef(id)
+  }
+  if (shallow.GlobalId?.type === STRING && shallow.GlobalId.value) {
+    return {type: schemaTypeName(shallow.type), ref: shallow.GlobalId.value}
   }
   const record = await reader.read(id, true)
   if (record === null || record === undefined) {
-    return new UnresolvedRef(id)
+    return unresolvedRef(id)
   }
   path.add(id)
   let entity
   try {
-    entity = await derefValue(reader, cloneForDeref(record), path)
+    entity = await derefValue(reader, record, path)
   } finally {
     path.delete(id)
   }
-  // A rooted entity is named, not nested: it has its own row in the tree.
+  // A GlobalId of another shape, as ifclib tested it.
   if (entity.GlobalId) {
     return {type: entity.type, ref: entity.GlobalId}
   }
@@ -645,28 +688,4 @@ function toInt(s) {
  */
 function isPrimitive(value) {
   return value === null || value === undefined || (typeof value !== 'object' && typeof value !== 'function')
-}
-
-
-/**
- * A copy for derefValue to rewrite in place. Two kinds of value the panel is
- * given ARE shared: on a GLB cache hit, `getRecord` returns the object held in
- * bldrsElementProperties.js's LRU block cache; and the spatial-tree node
- * Properties.jsx falls back to is the NavTree's own, whose `Name` handle
- * deref would turn into a bare string under the tree's label.
- * structuredClone where there is one; values that will not clone (none are
- * expected from either engine) are used as they are.
- *
- * @param {*} value
- * @return {*}
- */
-function cloneForDeref(value) {
-  if (value === null || typeof value !== 'object' || typeof structuredClone !== 'function') {
-    return value
-  }
-  try {
-    return structuredClone(value)
-  } catch {
-    return value
-  }
 }

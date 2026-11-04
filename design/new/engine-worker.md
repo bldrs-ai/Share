@@ -767,22 +767,75 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 | 3 — IFC load in the worker | merged (#2058). PSB, n=3, flag off → on: main-thread long tasks over 50 ms 418 → 23, time blocked 63 → 12 s, Geometry 48.3 → 40.6 s, Total 94.8 → 83.3 s, page heap after load 2130 → 889 MB (the worker's own JS heap 65 MB). Buffered tree-at-index: SEESTRASSE 8.05 → 4.60 s, sp-231MB 37.4 → 11.9 s |
 | 4 — sync-access-handle source | merged (#2072). Measured flag on, Blob store vs read-only sync handle, at medians: PSB (n=3) source I/O 19.1 → 3.8 s, Parsing 28.3 → 20.2 s, time to index 44.2 → 35.8 s, Total 96.5 → 82.9 s; sp-231MB (n=2) I/O 8.5 → 2.1 s, Parsing 14.0 → 9.9 s, Total 64.8 → 60.1 s; SEESTRASSE (n=1) I/O 0.32 → 0.07 s, Total flat. Geometry, main-thread long tasks and page heap unchanged. Every leg was windowed, checked by its `Engine source I/O:` line, in a persistent profile. Caveat: the Blob store's per-read time includes event-loop wait as well as I/O (each read is an async round trip), so the I/O figures are not pure I/O. The wall-clock stages (Parsing, time to index, Total) carry the claim |
 | 6 — STEP in the worker | merged (#2067). A STEP is opened buffered (conway's store-backed open is IFC-only), so step 4's source store does not apply to it |
-| 5, 7, 8, 9 | not started; 9 is gated on #2061 and #2070 |
+| 5, 7, 8, 9 | not started; 9 is gated on #2061 (#2070's Properties panel cost is fixed by #2074) |
 
 **Known issues.**
 
 - **#2061: worker JS heap on sp-231MB.** The engine worker holds about
   350 MB of live JS heap after an sp-231MB load, against 65 MB for PSB.
   This is unexplained (it needs a heap snapshot) and gates step 9.
-- **#2070: each engine round trip waits behind a main-thread frame.** A
-  worker reply is a main-thread task, so with the render loop running it
-  waits for the frame in progress. The engine itself answers a read in
-  under 1 ms inside the worker. In headless Chromium (software GL) the
-  round trip measured 127–217 ms, and 0.34 ms with rAF frozen. On a GPU
-  the cost is up to a frame per round trip. That makes sequential reads
-  frame-bound: the Properties panel's deref does one read per top-level
-  reference. The likely fixes are batching or not rendering while idle.
-  It gates step 9.
+- **#2070: each engine round trip waits behind a main-thread frame. Fixed
+  for the Properties panel (#2074); the general cost stays.** A worker
+  reply is a main-thread task, so with the render loop running it waits
+  for the frame in progress. The engine itself answers a read in under
+  1 ms inside the worker. In headless Chromium (software GL) the round
+  trip measured 127–217 ms, and 0.34 ms with rAF frozen. On a GPU the cost
+  is up to a frame per round trip. That makes sequential reads
+  frame-bound, and the Properties panel made one per top-level reference
+  (ifclib's `deref`) and one per property of each property set.
+  - *The fix.* The panel's tables are resolved next to the engine:
+    `Components/Properties/propertyTable.js`, behind the `propertyTables`
+    op (§4), one request per table, and one for all of an element's
+    property sets. The reply holds only what renders: past
+    `MAX_NESTED_TABLE_DEPTH` an entity is its `#id TYPE`, past
+    `MAX_ARRAY_MEMBERS` an array is `… and N more` and its other members
+    are never read, and an all-primitive array arrives joined. A reference
+    to a rooted entity is read shallow (its name is all that shows), and
+    nothing under a key no table shows (`Representation`,
+    `ObjectPlacement`, …) is resolved, which also bounds how long one
+    `propertyTables` op holds the worker's pump, `pause`, `abort` and
+    `close`. Checked against the old renderer on seven conway dumps (18.5k
+    records): identical HTML from the old renderer, the page and the
+    session, but for the intended `null` → `#id`. The same
+    module resolves on the page for every model without an engine session
+    (the main-thread engine, a GLB cache hit), and `itemProperties.jsx`
+    renders either result, so the table cannot depend on where it was
+    resolved. Format-neutral: a STEP element's table takes the same op.
+    The page finds the op as `properties.resolvePropertyTables`, present
+    only when `init`'s `capabilities.propertyTables` says the engine
+    serves it, so a stale worker bundle keeps the per-read path.
+  - *Measured* (headless Chromium, SwiftShader, persistent profile, render
+    loop running, every worker leg on the sync access handle): time from
+    selecting the IfcGrid, with the Properties panel open, to its table
+    showing every axis.
+
+    | | main-thread engine, before → after | worker, before → after |
+    |---|---|---|
+    | grid-axes.ifc (2 axes), n=3, median | 133 → 254 ms | 958 → 814 ms |
+    | PSB grid #9414151 (42 axes), n=2 | 17.9 / 25.7 → 20.6 / 24.3 s | 282 / 220 → 15.3 / 17.2 s |
+
+    On PSB a SwiftShader frame of the 8.8M-vertex scene is seconds long,
+    so 40+ sequential round trips took minutes; the worker now matches the
+    main-thread engine. The main-thread engine is unchanged within the
+    spread on PSB. On grid-axes both columns are within a frame or two,
+    which is the measurement's resolution there (3 round trips before, 2
+    after). The user's check of the deploy preview on PSB agreed: the grid's
+    table "loaded quickly".
+  - *Left.* Any other sequential per-id read loop through the facade still
+    pays a frame per read. And the page still paints every frame while
+    idle. `renderDemand.js` (#2052) paints on demand only during a load, on
+    purpose: after it, cut planes, isolation, looks, hover and splat
+    sorting change the picture without asking for a paint. Making idle
+    rendering on demand means each of those has to ask. That is its own
+    change (follow-up), and it would help the whole page, not only the
+    worker.
+- **#2066: on a GLB cache hit every reference row read `null`. Fixed
+  (#2074).** The panel resolved references through
+  `model.ifcManager.ifcAPI`, which on a cache hit is the viewer's engine,
+  with no model open. `propertyTable.js` reads through the model's own
+  `getItemProperties` instead: on a live model the same engine call as
+  before, and on a cache hit its `BLDRS_element_properties` records. A
+  reference outside those records shows as `#id`.
 - **#2063: the Properties panel took the app down. Fixed, and not a worker
   bug.** Selecting an `IfcGrid` with the panel open replaced the page with
   "Oh no!" on both engines. ifclib's `deref` resolves a reference to an
@@ -946,7 +999,7 @@ and the other lacks.
 | Reopen without a re-parse | `OpenModelFromIndex` + index sidecar | conway#756 (§7 step 8) | conway#757 | **differs**: STEP re-parses on reopen until conway#757 |
 | Tree | `properties.getSpatialStructure(id, 'names', {includeSolids: true})`, through the indexed handle and `EngineSession#propertiesApi` | `includeSolids` ignored | multibody sub-solids as ephemeral `solid` nodes | shared call; data |
 | Ids and refs | `e` / `o` / `n` refs (`viewer/tools/refs.js`); selection joins on whichever key both sides carry | express IDs; tree id = geometry parent | tree id = the NAUO, geometry parent = the shared `product_definition_shape`; the join key is the occurrence path (step-occurrence-selection.md) | **data**: an assembly's reuse has no IFC equivalent, so the key differs, not the code |
-| Properties | `getItemProperties` / `getPropertySets`; the worker's batched `props` op | IFC entities and psets | AP214 records | shared |
+| Properties | `getItemProperties` / `getPropertySets`; the panel's tables through `propertyTable.js`, behind the worker's `propertyTables` op or on the page (§7.1, #2070) | IFC entities and psets | AP214 records | shared |
 | Preview | `ON_PREVIEW_MESH` → `payloadToPreviewMesh` → `ProgressiveLoadSession`; picking via `previewSelection.js` (#2052) | store or streamed preview channel | `StreamedPreviewChannel` with `ap214PreviewAdapter` | shared, and the worker passes payloads through unchanged. Two STEP gaps, the same on both engines: none of the STEP models tried (the fixtures and real files up to 14 MB) put a preview mesh on screen before its index, and a STEP payload's `expressID` is the part shape, not the occurrence (it carries no occurrence path), so a pick before the index would select per part — both conway asks |
 | Geometry pump | `ExtractGeometryBatchAsync` → `IncrementalBatchedBuilder` (main) / the batch columns → `decodePlacements` → the same builder (worker) | — | `PlacedGeometry.occurrencePath`, the batch's path columns, where a present-but-empty path (a root-level instance) stays `[]` (#2067) | shared; data |
 | Assembly and decoration | `assembleBatchedModel`, `decorateConwayDirectIfcModel`, `stampAppliedCoordination` | — | per-occurrence tables carried onto the rebuilt instance map | shared |
