@@ -266,7 +266,7 @@ describeMobileAndDesktop('Open 205: interactive at first mesh', () => {
       const after = await settledCamera(page)
       after.pose.forEach((v, i) => expect(v).toBeCloseTo(zoomed.pose[i], 3))
       if (path.includes('engineWorker')) {
-        engineCheck.expectWorkerEngine()
+        await engineCheck.expectWorkerEngine()
       }
     })
 
@@ -306,7 +306,7 @@ describeMobileAndDesktop('Open 205: interactive at first mesh', () => {
         (window as any).store.getState().selectedElement?.expressID === target,
       id, {timeout: HELD_TIMEOUT_MS})
       if (path.includes('engineWorker')) {
-        engineCheck.expectWorkerEngine()
+        await engineCheck.expectWorkerEngine()
       }
     })
 
@@ -351,7 +351,7 @@ describeMobileAndDesktop('Open 205: interactive at first mesh', () => {
       // URL carries its element path.
       expect(new URL(page.url()).pathname).toMatch(new RegExp(`/${id}$`))
       if (path.includes('engineWorker')) {
-        engineCheck.expectWorkerEngine()
+        await engineCheck.expectWorkerEngine()
       }
     })
   }

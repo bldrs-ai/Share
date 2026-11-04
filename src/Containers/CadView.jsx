@@ -60,7 +60,7 @@ import {
 import {reportUploadNotInBrowser} from '../OPFS/reportUploadNotInBrowser'
 import {getBrowser} from '../connections/registry'
 import {installEngineDevHook} from '../engine/engineDevHook'
-import {LEGACY_VIEW_RULES_MESSAGE, hasLegacyViewRules, isWorkerEngineModel} from '../engine/engineIfcLoad'
+import useLegacyViewRulesNotice from '../engine/useLegacyViewRulesNotice'
 import modelIdentity from '../routes/modelIdentity'
 import useExistInFeature from '../hooks/useExistInFeature'
 import useDirectLinkQuota from '../quota/useDirectLinkQuota'
@@ -2718,16 +2718,9 @@ export default function CadView({
   // sessions directly, for the E2E, before any load goes through them.
   // Same install-on-flag, uninstall-on-unflag shape as the assist hook.
   useEffect(() => (isEngineWorkerEnabled ? installEngineDevHook() : undefined), [isEngineWorkerEnabled])
-  // The legacy `?view=` rules (IfcViewsManager) style elements through the
-  // main-thread engine, which holds no model when the model's engine is in a
-  // worker: they would silently do nothing. Say so once the model is up
-  // (engine-worker.md §8 item 7; the stack is deleted before the flag
-  // defaults on).
-  useEffect(() => {
-    if (isWorkerEngineModel(model) && hasLegacyViewRules()) {
-      setSnackMessage(LEGACY_VIEW_RULES_MESSAGE)
-    }
-  }, [model, setSnackMessage])
+  // `?view=` rules cannot run on a worker-engine model; say so (engine-worker.md
+  // §8 item 7).
+  useLegacyViewRulesNotice(model, setSnackMessage)
 
 
   const abs = {position: 'absolute'}

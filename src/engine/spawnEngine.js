@@ -58,12 +58,15 @@ export function engineFlagSnapshot() {
  * @param {function(): Worker} [options.makeWorker] for tests
  * @param {function(): Promise<Function>} [options.loadIfcAPI] in-process
  *   engine loader, for tests
+ * @param {number} [options.initTimeoutMs] the worker's init clock
+ *   (EngineSession ENGINE_INIT_TIMEOUT_MS), for tests
  * @return {Promise<EngineSession>} initialised
  */
 export async function spawnEngineSession({
   inProcess = false,
   makeWorker = defaultMakeWorker,
   loadIfcAPI = () => import('web-ifc').then((m) => m.IfcAPI),
+  initTimeoutMs = undefined,
 } = {}) {
   const inProcessTransport = () =>
     makeInProcessTransport((post) => createEngineHandler({loadIfcAPI, post}))
@@ -71,7 +74,7 @@ export async function spawnEngineSession({
     return await initSession(inProcessTransport())
   }
   try {
-    return await initSession(makeWorkerTransport(makeWorker()))
+    return await initSession(makeWorkerTransport(makeWorker()), initTimeoutMs)
   } catch (e) {
     // The worker could not stand an engine up: its script failed to load,
     // it speaks another protocol version (a stale cached worker beside a new
@@ -90,12 +93,13 @@ export async function spawnEngineSession({
 
 /**
  * @param {object} transport
+ * @param {number} [timeoutMs] init's clock; undefined for the default
  * @return {Promise<EngineSession>} initialised, or closed and rejected
  */
-async function initSession(transport) {
+async function initSession(transport, timeoutMs = undefined) {
   const session = new EngineSession(transport, {epoch: nextEpoch++})
   try {
-    await session.init({verbose: isFeatureEnabled('glbVerbose'), flags: engineFlagSnapshot()})
+    await session.init({verbose: isFeatureEnabled('glbVerbose'), flags: engineFlagSnapshot(), timeoutMs})
   } catch (e) {
     session.close()
     throw e

@@ -17,20 +17,18 @@ import {ENGINE_PROTOCOL_VERSION, Ev, Op, ProtocolMismatchError, deserializeError
 export const SESSION_CLOSED = 'engine session closed'
 
 /**
- * How long `init` waits for the engine's reply before giving up.
+ * How long `init` waits for a working engine: the worker's `hello` and then
+ * the init reply, on one clock started when `init` is called, i.e. at
+ * spawn (spawnEngine.js).
  *
- * On a worker the clock starts at the worker's `hello`, which it posts once
- * its module has evaluated, so what is timed is `Init()`: decoding and
- * compiling the inline wasm, 94–148 ms per instance in §3. Fetching and
- * evaluating the multi-MB worker script is not on the clock, so a slow
- * network cannot kill a healthy worker; a script that fails to load fires
- * the worker's `error` instead, which rejects at once. In process the clock
- * starts at the request.
- *
- * 30 s is ~200× the measured Init, for a slow phone. Its job is narrow:
- * an engine that started but never answers. Every v1+ engine echoes a
- * version refusal (and announces its version in `hello`), so a mismatch is
- * refused at once rather than waiting this out.
+ * What the clock covers on a worker: fetching and evaluating the worker
+ * script (6.3 MB minified), then `Init()` (decoding and compiling the inline
+ * wasm, 94–148 ms per instance in §3). 30 s leaves room for a slow phone on
+ * a cold cache. When it runs out the load is not lost: spawnEngineSession
+ * falls back to the in-process engine, so a stalled worker costs at most
+ * this long, and never hangs the load. A version mismatch does not wait it
+ * out: every v1+ engine announces its version in `hello` and echoes a
+ * refusal, so a mismatch is refused at once.
  */
 export const ENGINE_INIT_TIMEOUT_MS = 30_000
 
@@ -190,19 +188,16 @@ export class EngineSession {
    * @param {boolean} [options.verbose] engine debug logging (`glbVerbose`)
    * @param {object} [options.flags] the engine-relevant feature flags,
    *   snapshotted: a worker cannot read the page's `?feature=` (§4 `init`)
-   * @param {number} [options.timeoutMs] see ENGINE_INIT_TIMEOUT_MS; rejects
-   *   with a ProtocolMismatchError if all the engine sent was another
-   *   version's
+   * @param {number} [options.timeoutMs] see ENGINE_INIT_TIMEOUT_MS, covering
+   *   the worker's hello too; rejects with a ProtocolMismatchError if all the
+   *   engine sent was another version's
    * @return {Promise<object>} `{conwayVersion, capabilities, wasmBytes, initMs}`
    */
   async init({verbose = false, flags = {}, timeoutMs = ENGINE_INIT_TIMEOUT_MS} = {}) {
-    if (this.expectsHello) {
-      const helloVersion = await this.hello
-      if (helloVersion !== ENGINE_PROTOCOL_VERSION) {
-        this.close()
-        throw new ProtocolMismatchError(ENGINE_PROTOCOL_VERSION, helloVersion)
-      }
-    }
+    // One clock from the start, covering the worker's hello as well as the
+    // init reply: a worker script whose fetch stalls without an `error`
+    // event never says hello, and a wait on hello alone would hang the load
+    // with no fallback (review on #2058).
     let timer
     const timeout = new Promise((resolve, reject) => {
       timer = setTimeout(() => reject(this.foreignVersion === undefined ?
@@ -211,6 +206,13 @@ export class EngineSession {
     })
     let result
     try {
+      if (this.expectsHello) {
+        const helloVersion = await Promise.race([this.hello, timeout])
+        if (helloVersion !== ENGINE_PROTOCOL_VERSION) {
+          this.close()
+          throw new ProtocolMismatchError(ENGINE_PROTOCOL_VERSION, helloVersion)
+        }
+      }
       result = await Promise.race([this.request(Op.INIT, {epoch: this.epoch, verbose, flags}), timeout])
     } finally {
       clearTimeout(timer)

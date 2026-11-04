@@ -1,4 +1,5 @@
 import {expect, test} from '@playwright/test'
+import {watchEngineWorker} from '../tests/e2e/engineWorker'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
 import {waitForModelReady} from '../tests/e2e/models'
 import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
@@ -11,11 +12,10 @@ import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
  * geometry on screen, a URL-selected element's properties — while the
  * engine that produced it lives in `Engine.worker.js`.
  *
- * "In the worker" is checked twice, so neither can be faked by the other:
- * a Worker is created from `/Engine.worker.js`, and the main-thread engine's
- * own boundary line (`[conwayDirect] demand pump:`, which only
- * `parseIfcWithConway` prints) never appears, while the assembly's
- * (`[conwayDirect] parsed …`) does.
+ * "In the worker" is checked by tests/e2e/engineWorker.ts#watchEngineWorker:
+ * the model's engine session is a worker one (not the in-process fallback),
+ * a Worker was created from `/Engine.worker.js`, and the main-thread pump's
+ * line never printed.
  *
  * `index.ifc` is the Bldrs logo; `#621` is one of its proxies.
  */
@@ -26,16 +26,14 @@ describeMobileAndDesktop('Engine worker: IFC load', () => {
   })
 
   test('the model loads, from a worker engine, with real geometry', async ({page}) => {
-    const workerUrls: string[] = []
-    page.on('worker', (worker) => workerUrls.push(worker.url()))
+    const engine = watchEngineWorker(page)
     const lines: string[] = []
     page.on('console', (msg) => lines.push(msg.text()))
 
     await page.goto('/share/v/p/index.ifc?feature=engineWorker')
     await waitForModelReady(page)
 
-    expect(workerUrls.some((url) => url.endsWith('/Engine.worker.js')), workerUrls.join(', ')).toBe(true)
-    expect(lines.filter((line) => line.includes('[conwayDirect] demand pump:'))).toEqual([])
+    await engine.expectWorkerEngine()
     const parsed = lines.find((line) => line.includes('[conwayDirect] parsed'))
     expect(parsed, lines.join('\n')).toBeTruthy()
     const vertices = Number(parsed?.match(/vertices=(\d+)/)?.[1])
@@ -45,11 +43,10 @@ describeMobileAndDesktop('Engine worker: IFC load', () => {
   })
 
   test('a URL-selected element\'s properties come from the worker engine', async ({page}) => {
-    const workerUrls: string[] = []
-    page.on('worker', (worker) => workerUrls.push(worker.url()))
+    const engine = watchEngineWorker(page)
     await page.goto('/share/v/p/index.ifc/81/621?feature=engineWorker')
     await waitForModelReady(page)
-    expect(workerUrls.some((url) => url.endsWith('/Engine.worker.js')), workerUrls.join(', ')).toBe(true)
+    await engine.expectWorkerEngine()
     await page.getByTestId('control-button-properties').click()
     const propertiesPanel = page.getByTestId('PropertiesPanel')
     await expect(propertiesPanel).toBeVisible()

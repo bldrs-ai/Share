@@ -413,6 +413,8 @@ describe('engine/engineIfcLoad legacy ?view= rules', () => {
     expect(hasLegacyViewRules('?view=ch.sia380-1.heatmap')).toBe(true)
     expect(hasLegacyViewRules('?view=default')).toBe(false)
     expect(hasLegacyViewRules('?feature=engineWorker')).toBe(false)
+    // A name ShareViewer does not know already does nothing: no message.
+    expect(hasLegacyViewRules('?view=made-up')).toBe(false)
   })
 })
 

@@ -159,7 +159,7 @@ describeMobileAndDesktop('Open 205: NavTree usable before geometry finishes', ()
       expect(await navTreePanel.locator('[data-is-selected="true"]').count()).toBe(1)
       if (path.includes('engineWorker')) {
         // The worker leg really ran in the worker.
-        engine.expectWorkerEngine()
+        await engine.expectWorkerEngine()
       }
     })
   }

@@ -292,14 +292,10 @@ export function createEngineHandler({
     },
 
     [Op.STATS]() {
-      return {
-        wasmBytes: wasmBytesOf(api),
-        // Chrome's non-standard heap figure, where this scope has it; the
-        // engine's JS heap (its index, §3) is the larger half of a worker,
-        // and the page's own performance.memory cannot see it.
-        jsHeapBytes: globalThis.performance?.memory?.usedJSHeapSize,
-        modelID,
-      }
+      // The worker's JS heap is not reported: `performance.memory` is absent
+      // in a dedicated worker (and bucketed where present). Measure it from
+      // outside, with CDP `Runtime.getHeapUsage` on the worker target.
+      return {wasmBytes: wasmBytesOf(api), modelID}
     },
 
     [Op.CLOSE]() {

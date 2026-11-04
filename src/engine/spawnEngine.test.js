@@ -85,6 +85,22 @@ describe('engine/spawnEngineSession fallback', () => {
     expect(session.kind).toBe('inProcess')
   })
 
+  it('a worker that never says hello falls back once the init clock runs out', async () => {
+    let worker
+    const session = await spawnEngineSession({
+      makeWorker: () => {
+        worker = new EventTarget()
+        worker.postMessage = jest.fn()
+        worker.terminate = jest.fn()
+        return worker
+      },
+      loadIfcAPI: async () => stubIfcAPI(),
+      initTimeoutMs: 20,
+    })
+    expect(session.kind).toBe('inProcess')
+    expect(worker.terminate).toHaveBeenCalled()
+  })
+
   it('an in-process failure is not retried: there is nowhere left to go', async () => {
     await expect(spawnEngineSession({
       inProcess: true,

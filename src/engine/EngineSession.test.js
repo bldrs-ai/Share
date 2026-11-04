@@ -619,13 +619,20 @@ describe('engine round-3 review fixes (#2057)', () => {
     worker.postMessage = (msg) => worker.posted.push(msg)
     worker.terminate = jest.fn()
     const session = new EngineSession(makeWorkerTransport(worker), {epoch: 2})
-    const init = session.init({timeoutMs: 10})
-    await new Promise((resolve) => setTimeout(resolve, 30))
-    // No hello yet: the init request has not even been sent, and the 10 ms
-    // clock has not started, so nothing has failed.
+    const init = session.init({timeoutMs: 60_000})
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    // No hello yet: the init request has not been sent.
     expect(worker.posted).toHaveLength(0)
     worker.dispatchEvent(new MessageEvent('message', {data: {v: ENGINE_PROTOCOL_VERSION + 1, epoch: 0, ev: 'hello'}}))
     await expect(init).rejects.toMatchObject({name: 'ProtocolMismatchError', engineVersion: ENGINE_PROTOCOL_VERSION + 1})
     expect(worker.terminate).toHaveBeenCalled()
+  })
+
+  it('a worker that never says hello times out instead of hanging (review on #2058)', async () => {
+    const worker = new EventTarget()
+    worker.postMessage = jest.fn()
+    worker.terminate = jest.fn()
+    const session = new EngineSession(makeWorkerTransport(worker), {epoch: 2})
+    await expect(session.init({timeoutMs: 20})).rejects.toThrow('engine did not answer init within 20 ms')
   })
 })

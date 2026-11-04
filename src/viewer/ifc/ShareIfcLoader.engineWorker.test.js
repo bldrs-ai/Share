@@ -193,6 +193,33 @@ describe('viewer/ifc/ShareIfcLoader with ?feature=engineWorker', () => {
     expect(buildConwayIfcModel).not.toHaveBeenCalled()
   })
 
+  it('a builder that never got a batch in fails the load with ITS error', async () => {
+    IncrementalBatchedBuilder.mockImplementation(() => ({
+      root: {parent: null},
+      appendBatch: () => {
+        throw new Error('appendBatch: bad placement table')
+      },
+      setPumpProgress: jest.fn(),
+      hasContent: () => false,
+      finalize: jest.fn(),
+    }))
+    const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
+    loader.type = 'ifc'
+    const onError = jest.fn()
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await expect(loader.parse(new ArrayBuffer(4), jest.fn(), onError)).resolves.toBeNull()
+    } finally {
+      errorSpy.mockRestore()
+      warnSpy.mockRestore()
+    }
+    const err = onError.mock.calls[0][0]
+    expect(err.message).toMatch(/incremental build failed: appendBatch: bad placement table/)
+    expect(err.cause.message).toBe('appendBatch: bad placement table')
+    expect(buildConwayIfcModel).not.toHaveBeenCalled()
+  })
+
   it('a model with nothing to draw opens empty, as it does without the flag', async () => {
     IncrementalBatchedBuilder.mockImplementation(() => ({
       root: {parent: null},

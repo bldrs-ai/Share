@@ -18,6 +18,7 @@
 import {reportEngineLog, reportEngineVersion} from '../loader/loadProgress'
 import {openModelFailure} from '../loader/unsupportedSchema'
 import {conwayDirectInfo, conwayDirectWarn} from '../viewer/ifc/conwayDirectLog'
+import {viewRules} from '../viewer/legacyViewRules'
 import {Ev, Op} from './protocol'
 import {spawnEngineSession} from './spawnEngine'
 
@@ -410,13 +411,14 @@ export const LEGACY_VIEW_RULES_MESSAGE =
 
 
 /**
- * Does the URL ask for a legacy `?view=` rule set (ShareViewer's
- * `viewRules`, anything but the default)?
+ * Does the URL ask for a legacy `?view=` rule set that ShareViewer knows
+ * (`viewer/legacyViewRules.js`, anything but `default`)? An unknown name
+ * already does nothing, with or without the flag, so it gets no message.
  *
  * @param {string} [search] `location.search`
  * @return {boolean}
  */
 export function hasLegacyViewRules(search = globalThis.location?.search ?? '') {
   const view = new URLSearchParams(search).get('view')?.toLowerCase()
-  return Boolean(view) && view !== 'default'
+  return Boolean(view) && view !== 'default' && Object.hasOwn(viewRules, view)
 }

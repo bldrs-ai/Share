@@ -446,6 +446,8 @@ export default class ShareIfcLoader {
     })
 
     let builder = null
+    // The first error the incremental builder hit on a batch, if any.
+    let batchError = null
     // `?feature=engineWorker` (engine-worker.md §7 step 3): this model's
     // engine runs in its own worker, and `ifcAPI` below is the IfcAPI-shaped
     // facade over it (engine/engineIfcLoad.js), so everything after the parse
@@ -537,6 +539,9 @@ export default class ShareIfcLoader {
           builder.setPumpProgress(progress?.done, progress?.total)
           builder.appendBatch(batch)
         } catch (e) {
+          // Kept for a worker load, which cannot rebuild without the
+          // builder: if no batch ever got in, THIS is why (below).
+          batchError = batchError ?? e
           debug(WARN).warn('incremental batch append failed; preview fallback:', e)
           try {
             const assembled =
@@ -602,6 +607,15 @@ export default class ShareIfcLoader {
             throw new Error(`engine worker load: incremental assembly failed: ${e?.message ?? e}`, {cause: e})
           }
         }
+      }
+
+      if (ifcModel === undefined && engineLoad !== null && batchError !== null) {
+        // A worker load whose builder never got a batch in (its constructor,
+        // scene.add or appendBatch failed every time) has nothing to rebuild
+        // from either: fail with that error, not recapture()'s (review on
+        // #2058).
+        throw new Error(`engine worker load: incremental build failed: ${batchError?.message ?? batchError}`,
+          {cause: batchError})
       }
 
       // BatchedMesh render path (`?feature=batchedMesh`, §3b.iv): render the
