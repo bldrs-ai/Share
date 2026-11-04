@@ -36,13 +36,16 @@
  *         artifact shows empty Properties and an unnamed NavTree
  *         indefinitely, while a cache-miss user sees them whole — the
  *         0.24.0 failure shape (a baked capture output nothing in the key
- *         identifies), so the same remedy. Every IFC artifact pays one
- *         re-parse, small complete ones included: the key cannot tell a
- *         complete artifact from a partial one. A resident-source
- *         artifact's records are unchanged in content; their order in the
- *         container blocks now follows the sorted drain
- *         (bldrsElementProperties.js), which is also why a windowed and a
- *         resident capture of one model are now byte-identical.
+ *         identifies), so the same remedy. The key cannot tell a complete
+ *         artifact from a partial one, so EVERY artifact pays one re-parse,
+ *         IFC and STEP alike, though a STEP artifact (always captured from
+ *         a resident source) and a resident IFC one were complete. What a
+ *         fresh write now holds: the same element-properties container as
+ *         a resident capture always wrote, byte for byte, from either kind
+ *         of source; and a spatial tree named by the `'names'` call the
+ *         live NavTree makes, which leaves a `$` (null) Name or LongName
+ *         out where the old `getLine` fill wrote `null` (IFC only; a STEP
+ *         tree is unchanged).
  * 0.24.0 — retires STEP artifacts whose `BLDRS_element_properties` part
  *         rows carry no entity type. conway's `AP214Properties.
  *         getItemProperties` answered a spatial-tree node (a NAUO

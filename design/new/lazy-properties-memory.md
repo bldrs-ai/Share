@@ -218,12 +218,13 @@ run `?feature=glbDraco` / `?feature=glbMeshopt` on a large model and compare.
   birth*, so "after the spill" became "always", and the capture's sync
   `getLine` skipped every record outside the resident windows without a
   word: sp-231MB's artifact kept 41,244 of 161,754 records and none of its
-  4,432 tree names. Both capture walks now read with `getLineResident`
-  when `proxy.sourceIsExternal` (the element-properties sweep keeps its
-  sync arm for a resident source), and they read in express-ID order so a
-  windowed source pages forward: PSB's whole capture reads 3.4 GB of
-  windows. The GLB slot was bumped to 0.25.0 to retire the partial
-  artifacts.
+  4,432 tree names. The element-properties sweep now reads records a chunk
+  at a time through conway's `visitLineDataInFileOrder` (span reads in file
+  order, no window paged in, conway#755), and the tree is named by
+  `getSpatialStructure(…, 'names')`, which reads its names in one
+  file-order pass. On a windowed PSB the whole capture reads 1.0 GB, 163 MB
+  of it for the properties. The GLB slot was bumped to 0.25.0 to retire
+  the partial artifacts.
 - **Draco vs. worker freeze:** compression encode is CPU-heavy; keep it in
   the GlbWriter worker, not the main thread.
 

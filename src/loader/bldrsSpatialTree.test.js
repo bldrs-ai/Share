@@ -164,115 +164,40 @@ describe('loader/bldrsSpatialTree', () => {
       expect(mgr.getSpatialStructure).toHaveBeenCalledWith(42, true)
     })
 
-    it('uses bare-tree call + sync enrich when adapter surface is reachable', async () => {
-      // When `ifcAPI.getPassthrough(modelID)` returns a proxy with
-      // sync `getLine`, the capture switches to the fast path:
-      // bare `getSpatialStructure(modelID, false)` (no Conway "JSON
-      // workflow disabled" warning) + per-node sync `getLine` for
-      // Name/LongName enrichment. The serialized tree must still
-      // carry Name/LongName so cache-hit NavTree renders correctly.
-      const bareTree = {
-        expressID: 1, type: 'IFCPROJECT', children: [
-          {expressID: 2, type: 'IFCSITE', children: []},
+    // #2038. The capture names its nodes with the `'names'` call the live
+    // NavTree makes, through Conway's own surface. It used to take the bare
+    // tree and fill each name with a sync getLine, which on a windowed source
+    // (conway's store-backed open) threw outside the resident windows and
+    // left the node unnamed: every one of sp-231MB's 4,432 nodes.
+    it('names the tree with the \'names\' call the live NavTree makes', async () => {
+      const namedTree = {
+        expressID: 1, type: 'IFCPROJECT', Name: {type: 1, value: 'Project'}, children: [
+          {expressID: 2, type: 'IFCSITE', Name: {type: 1, value: 'Site'}, LongName: {type: 1, value: 'My Site'}},
         ],
       }
-      const proxy = {
-        getLine: jest.fn((id) => {
-          if (id === 1) {
-            return {Name: {value: 'Project'}, LongName: {value: 'My Project'}}
-          }
-          if (id === 2) {
-            return {Name: {value: 'Site'}, LongName: {value: 'My Site'}}
-          }
-          return undefined
-        }),
-      }
+      const getSpatialStructure = jest.fn(() => Promise.resolve(namedTree))
+      const getLine = jest.fn(() => {
+        throw new Error('StepBufferNotResidentError: not resident')
+      })
       const mgr = {
-        getSpatialStructure: jest.fn(() => bareTree),
-        ifcAPI: {getPassthrough: () => proxy},
+        getSpatialStructure: jest.fn(),
+        ifcAPI: {properties: {getSpatialStructure}, getPassthrough: () => ({getLine, sourceIsExternal: true})},
       }
       const captured = await captureBldrsSpatialTree(mgr, 0)
-      // Bare-tree call: false, not true.
-      expect(mgr.getSpatialStructure).toHaveBeenCalledWith(0, false)
-      // Names enriched into the serialized output.
-      expect(captured.Name).toEqual({value: 'Project'})
-      expect(captured.LongName).toEqual({value: 'My Project'})
-      expect(captured.children[0].Name).toEqual({value: 'Site'})
-      expect(captured.children[0].LongName).toEqual({value: 'My Site'})
-      // Two sync getLine calls — one per node.
-      expect(proxy.getLine).toHaveBeenCalledTimes(2)
+      expect(getSpatialStructure).toHaveBeenCalledWith(0, 'names', {includeSolids: true})
+      expect(captured.Name).toEqual({type: 1, value: 'Project'})
+      expect(captured.children[0].Name).toEqual({type: 1, value: 'Site'})
+      expect(captured.children[0].LongName).toEqual({type: 1, value: 'My Site'})
+      expect(getLine).not.toHaveBeenCalled()
+      expect(mgr.getSpatialStructure).not.toHaveBeenCalled()
     })
 
-    it('tolerates a getLine call that throws on one node (rest still enriched)', async () => {
-      const bareTree = {
-        expressID: 1, type: 'IFCPROJECT', children: [
-          {expressID: 2, type: 'IFCSITE', children: []},
-          {expressID: 3, type: 'IFCBUILDING', children: []},
-        ],
-      }
-      const proxy = {
-        getLine: (id) => {
-          if (id === 2) {
-            throw new Error('parse error on node 2')
-          }
-          return {Name: {value: `e${id}`}}
-        },
-      }
-      const mgr = {
-        getSpatialStructure: () => bareTree,
-        ifcAPI: {getPassthrough: () => proxy},
-      }
-      const captured = await captureBldrsSpatialTree(mgr, 0)
-      expect(captured.Name).toEqual({value: 'e1'})
-      expect(captured.children[0].Name).toBeUndefined() // throw → no name
-      expect(captured.children[1].Name).toEqual({value: 'e3'})
-    })
-
-    // #2038: on a windowed source (conway's store-backed open, how an
-    // OPFS-staged IFC opens) a sync getLine throws for any record outside
-    // the resident windows, so the old walk left every such node unnamed —
-    // all 4,432 of sp-231MB's. The proxy here has NOTHING resident: sync
-    // getLine always throws, as it would for a record in an evicted window.
-    describe('windowed source (#2038)', () => {
-      /**
-       * @param {object} bareTree
-       * @return {{mgr: object, proxy: object}}
-       */
-      function makeWindowedMgr(bareTree) {
-        const proxy = {
-          sourceIsExternal: true,
-          getLine: jest.fn(() => {
-            throw new Error('StepBufferNotResidentError: not resident')
-          }),
-          getLineResident: jest.fn((id) => Promise.resolve({Name: {type: 1, value: `n${id}`}})),
-        }
-        return {proxy, mgr: {getSpatialStructure: () => bareTree, ifcAPI: {getPassthrough: () => proxy}}}
-      }
-
-      it('names every node by paging its record in', async () => {
-        const {mgr, proxy} = makeWindowedMgr({
-          expressID: 1, type: 'IFCPROJECT', children: [
-            {expressID: 2, type: 'IFCSITE', children: []},
-          ],
-        })
-        const captured = await captureBldrsSpatialTree(mgr, 0)
-        expect(captured.Name).toEqual({type: 1, value: 'n1'})
-        expect(captured.children[0].Name).toEqual({type: 1, value: 'n2'})
-        expect(proxy.getLine).not.toHaveBeenCalled()
-      })
-
-      it('reads the nodes in express-ID order, not tree order', async () => {
-        // Tree order hops across the file (on a windowed PSB it paged
-        // 1.9 GB of windows for 7,872 nodes); id order is file order.
-        const {mgr, proxy} = makeWindowedMgr({
-          expressID: 50, type: 'IFCPROJECT', children: [
-            {expressID: 900, type: 'IFCSITE', children: [{expressID: 10, type: 'IFCBUILDING'}]},
-            {expressID: 400, type: 'IFCSITE'},
-          ],
-        })
-        await captureBldrsSpatialTree(mgr, 0)
-        expect(proxy.getLineResident.mock.calls.map(([id]) => id)).toEqual([10, 50, 400, 900])
-      })
+    it('asks a manager without Conway\'s surface for the tree with properties', async () => {
+      // Test stubs and non-Conway loaders: the manager's own call, with
+      // properties, is what names its nodes there.
+      const mgr = {getSpatialStructure: jest.fn(() => Promise.resolve({expressID: 1, type: 'IFCPROJECT'}))}
+      await captureBldrsSpatialTree(mgr, 4)
+      expect(mgr.getSpatialStructure).toHaveBeenCalledWith(4, true)
     })
   })
 

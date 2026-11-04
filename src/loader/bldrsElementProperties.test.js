@@ -1,4 +1,5 @@
 /* eslint-disable no-magic-numbers */
+import * as pako from 'pako'
 import useStore from '../store/useStore'
 import {
   BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME,
@@ -15,6 +16,22 @@ import {
   serializeGlb,
 } from './injectGlbExtensions'
 import {getGlbLogs} from '../../tools/jest/glbLogCapture'
+
+
+/**
+ * The container's header JSON (wire format in bldrsElementProperties.js's
+ * header comment: magic, version, header length, then the gzipped header).
+ * Its `blockIds` list each block's records in the order they were added.
+ *
+ * @param {Uint8Array} bytes container bytes
+ * @return {{blocks: Array, blockIds: Array<Array<number>>, propertySets: object}}
+ */
+function decodeContainerHeaderForTest(bytes) {
+  const HEADER_LENGTH_OFFSET = 8
+  const PREAMBLE_BYTES = 12
+  const length = new DataView(bytes.buffer, bytes.byteOffset).getUint32(HEADER_LENGTH_OFFSET, true)
+  return JSON.parse(pako.ungzip(bytes.subarray(PREAMBLE_BYTES, PREAMBLE_BYTES + length), {to: 'string'}))
+}
 
 
 describe('loader/bldrsElementProperties', () => {
@@ -517,8 +534,8 @@ describe('loader/bldrsElementProperties', () => {
   // per-entity failures: 75 % of sp-231MB's records were missing from its
   // artifact, and a different set on every load. The proxy here has
   // NOTHING resident (sync getLine always throws, as for a record in an
-  // evicted window), so with the old sync-only read the capture finds no
-  // record at all.
+  // evicted window), and reads only through conway's file-order visit, so
+  // with the old sync-only read the capture finds no record at all.
   describe('captureBldrsElementProperties — windowed source (#2038)', () => {
     const root = (id, refs = []) => ({
       expressID: id, type: 3124254112, GlobalId: {type: 1, value: `g${id}`},
@@ -533,7 +550,7 @@ describe('loader/bldrsElementProperties', () => {
     /**
      * @param {object} entitiesById
      * @param {object} [options]
-     * @param {Set<number>} [options.unreadable] ids whose paged read rejects
+     * @param {Set<number>} [options.unreadable] ids conway cannot read
      * @return {{mgr: object, proxy: object}}
      */
     function makeWindowedMgr(entitiesById, {unreadable = new Set()} = {}) {
@@ -543,12 +560,23 @@ describe('loader/bldrsElementProperties', () => {
         // RootExpressIDs answers.
         model: [{[Symbol.iterator]: () => [][Symbol.iterator]()}],
         sourceIsExternal: true,
-        getLine: jest.fn(() => {
+        getLine: jest.fn((id) => {
+          if (unreadable.has(id)) {
+            throw new Error(`malformed record #${id}`)
+          }
           throw new Error('StepBufferNotResidentError: not resident')
         }),
-        getLineResident: jest.fn((id) => (unreadable.has(id) ?
-          Promise.reject(new Error(`store read failed for #${id}`)) :
-          Promise.resolve(entitiesById[id]))),
+        // conway visits in FILE order, not the caller's: reversed here, so a
+        // capture that emitted in visit order would come out reordered.
+        visitLineDataInFileOrder: jest.fn((ids, visit) => {
+          if (ids.some((id) => unreadable.has(id))) {
+            return Promise.reject(new Error('malformed record'))
+          }
+          for (const id of [...ids].reverse()) {
+            visit(id, entitiesById[id])
+          }
+          return Promise.resolve()
+        }),
       }
       const mgr = {
         ifcAPI: {
@@ -559,7 +587,7 @@ describe('loader/bldrsElementProperties', () => {
       return {mgr, proxy}
     }
 
-    it('captures every reachable record by paging it in', async () => {
+    it('captures every reachable record through the file-order visit', async () => {
       const entities = {
         10: root(10, [200]),
         11: root(11),
@@ -573,42 +601,50 @@ describe('loader/bldrsElementProperties', () => {
       expect(proxy.getLine).not.toHaveBeenCalled()
     })
 
-    it('drains each generation of refs in ascending express-ID order', async () => {
-      // Roots discover 300, 200, 250 in that order; 200 discovers 150.
-      // Id order is file order, so a sorted generation pages its windows
-      // in one forward pass (PSB: 3.9 GB of window reads in discovery
-      // order, 1.7 GB sorted).
+    it('emits records in discovery order, whatever order conway visits them in', async () => {
+      // What keeps a windowed capture byte-identical to a resident one: the
+      // two visit in different orders (a span pass, then a fallback pass for
+      // complex records, on a windowed source).
       const entities = {
         10: root(10, [300, 200]),
         11: root(11, [250]),
-        150: leaf(150),
-        200: leaf(200, [150]),
+        200: leaf(200),
         250: leaf(250),
         300: leaf(300),
       }
-      const {mgr, proxy} = makeWindowedMgr(entities)
-      await captureBldrsElementProperties(mgr, 0, null)
-      const drained = proxy.getLineResident.mock.calls.map(([id]) => id).slice(2)
-      expect(drained).toEqual([200, 250, 300, 150])
+      const {mgr} = makeWindowedMgr(entities)
+      const {compressedBytes} = await captureBldrsElementProperties(mgr, 0, null)
+      // `blockIds` lists each block's records in the order they were added.
+      const order = decodeContainerHeaderForTest(compressedBytes).blockIds.flat()
+      expect(order).toEqual([10, 11, 300, 200, 250])
     })
 
-    it('keeps the rest of the closure and reports how many records it could not read', async () => {
+    it('keeps the rest of a chunk, and reports the records it could not read', async () => {
+      // One record that throws fails conway's whole visit; the chunk is then
+      // read record by record, and only that record is lost.
       const entities = {10: root(10, [200, 300]), 200: leaf(200), 300: leaf(300)}
-      const {mgr} = makeWindowedMgr(entities, {unreadable: new Set([200])})
+      const {mgr, proxy} = makeWindowedMgr(entities, {unreadable: new Set([200])})
+      proxy.getLine.mockImplementation((id) => {
+        if (id === 200) {
+          throw new Error('malformed record #200')
+        }
+        return entities[id]
+      })
       const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
       expect(Object.keys(captured.itemProperties).sort()).toEqual(['10', '300'])
       expect(getGlbLogs().some((l) => l.level === 'warn' &&
         l.text.includes('1 record(s) could not be read'))).toBe(true)
     })
 
-    it('reads a resident source synchronously, without paging', async () => {
-      const entities = {10: root(10, [200]), 200: leaf(200)}
+    it('says so when a windowed source cannot be read in file order', async () => {
+      // An older conway, or the AP214 proxy: the per-record sync read drops
+      // whatever is not resident, and that must not be silent.
+      const entities = {10: root(10)}
       const {mgr, proxy} = makeWindowedMgr(entities)
-      proxy.sourceIsExternal = false
-      proxy.getLine.mockImplementation((id) => entities[id])
-      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
-      expect(Object.keys(captured.itemProperties).sort()).toEqual(['10', '200'])
-      expect(proxy.getLineResident).not.toHaveBeenCalled()
+      delete proxy.visitLineDataInFileOrder
+      await captureBldrsElementProperties(mgr, 0, null)
+      expect(getGlbLogs().some((l) => l.level === 'warn' &&
+        l.text.includes('cannot read it in file order'))).toBe(true)
     })
   })
 

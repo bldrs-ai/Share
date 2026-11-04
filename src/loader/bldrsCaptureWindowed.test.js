@@ -7,18 +7,27 @@ import {captureBldrsSpatialTree} from './bldrsSpatialTree'
 
 /**
  * #2038 against the real engine: the GLB capture of a WINDOWED source must
- * equal the capture of the same model fully resident.
+ * equal the capture of the same model fully resident, byte for byte.
  *
  * conway's store-backed open (how every IFC staged in OPFS opens) keeps a
  * few 4 MiB windows of the file resident, and a sync `getLine` on a record
  * outside them throws `StepBufferNotResidentError`. The capture used to skip
  * those records silently (sp-231MB's artifact kept 41,244 of 161,754 records
- * and none of its 4,432 tree names). A fixture big enough to overflow real
- * windows would not belong in the repo, so this spills the 18 KB demo model
- * into 4 KiB windows with ONE resident, through `SpillModelSource` — the same
- * windowed provider a store-backed open builds. With the old sync-only
- * reads, most records and every node name outside the last-touched window
- * go missing.
+ * and none of its 4,432 tree names).
+ *
+ * Two windowed models, neither of them what production builds exactly:
+ *   - SPILLED, the case that fails with the old reads. A fixture big enough
+ *     to overflow real 4 MiB windows would not belong in the repo, and a
+ *     store-backed open's window size is not a setting. So this opens the
+ *     18 KB demo model BUFFERED and spills it into 4 KiB windows with one
+ *     resident, through `SpillModelSource`. That builds the same provider
+ *     class a store-backed open builds (`WindowedStepBufferProvider`), at a
+ *     size that leaves most records non-resident.
+ *   - STORE-BACKED, through `OpenModelStream(store)` itself, as production
+ *     opens. At 18 KB the whole file sits in its one resident window, so
+ *     this case passes with the old reads too. It is here because it runs
+ *     conway's span reader (the windowed arm of `visitLineDataInFileOrder`)
+ *     for real and requires its records to equal `getLine`'s.
  */
 describe('loader/GLB capture of a windowed source (#2038)', () => {
   const WINDOW_BYTES = 4096
@@ -89,6 +98,25 @@ describe('loader/GLB capture of a windowed source (#2038)', () => {
     // Byte-identical, not just the same records: the artifact must not
     // depend on how the source was read. (The drain's id-order sort, which
     // is about window I/O, is pinned by bldrsElementProperties.test.js.)
+    expect(Buffer.from(windowed.properties).equals(Buffer.from(resident.properties))).toBe(true)
+  }, TIMEOUT_MS)
+
+  it('captures the same from a store-backed open as from a buffered one', async () => {
+    const {api, modelID, bytes} = await openDemoModel()
+    const resident = await capture(api, modelID)
+
+    const streamed = new IfcAPI()
+    // eslint-disable-next-line new-cap
+    await streamed.Init()
+    // eslint-disable-next-line new-cap
+    const streamedID = await streamed.OpenModelStream({
+      byteLength: bytes.byteLength,
+      read: (offset, length) => Promise.resolve(bytes.slice(offset, offset + length)),
+    }, {DEFER_GEOMETRY: true, STREAMING_CONSUMER: true})
+    expect(streamed.getPassthrough(streamedID).sourceIsExternal).toBe(true)
+
+    const windowed = await capture(streamed, streamedID)
+    expect(windowed.tree).toEqual(resident.tree)
     expect(Buffer.from(windowed.properties).equals(Buffer.from(resident.properties))).toBe(true)
   }, TIMEOUT_MS)
 })
