@@ -53,7 +53,7 @@
  *
  * @param {object} ifcAPI
  * @return {OpenAttempt|undefined} undefined on an engine without the
- *   counter (real web-ifc), which never refuses on schema anyway
+ *   counter (e.g. a test mock)
  */
 export function beginOpenAttempt(ifcAPI) {
   const id = ifcAPI?.globalModelIDCounter

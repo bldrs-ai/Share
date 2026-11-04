@@ -27,7 +27,6 @@ export default {
   // Share
   OPFS_IS_ENABLED: true,
   THEME_IS_ENABLED: true,
-  USE_WEBIFC_SHIM: true,
 
   // API_KEYS
   GOOGLE_API_KEY: null,

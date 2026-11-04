@@ -1133,7 +1133,8 @@ forced tree-wide via `resolutions` — so the original "bump `three`" goal
 is met; what remains under **5e** is shedding the fork-era color/lighting
 compat scaffolding + wit-three leftovers (see below). **5f** is reframed:
 the `web-ifc` shim is **kept** as the Conway↔web-ifc engine flag, not a
-deletion target. **5g** renamed the test mock off the `web-ifc-viewer`
+deletion target (**superseded 2026-11-01:** the product call was made and
+the real-`web-ifc` build was removed; see slice 5f's note). **5g** renamed the test mock off the `web-ifc-viewer`
 name (5d.4 had parked it behind a jest `moduleNameMapper`). The slice
 numbering below matches the `5d.N` tags in the committed source comments
 (`grep -rn "5d\." src/`).
@@ -1388,6 +1389,16 @@ removed here. Eventual removal of the shim is a **product call** (once
 Conway is confidently shown to fully supersede web-ifc), not blocked on
 imports.
 
+  > **Removed 2026-11-01 (product-owner decision).** That product call
+  > has been made: the comparison build, `webIfcSingleThreadPlugin`,
+  > `serveStaticIsolated.mjs`, the `USE_WEBIFC_SHIM` switch, the
+  > `*-webifc` scripts, `webIfcEngine.webifc.spec.ts` and the
+  > `playwright-webifc-run` job are gone, and Share imports
+  > `@bldrs-ai/conway/web-ifc` directly. The MT follow-up below is moot.
+  > A `'web-ifc'` → Conway alias stays only for `@bldrs-ai/ifclib`'s
+  > transitive import. See `adapter-removal.md`'s 2026-11-01 status note.
+  > The rest of this slice is the historical record.
+
   **Done (2026-06).** The flag was secretly *dead*: `isWebIfcShimEnabled`
   in `tools/esbuild/defines.js` was hardcoded `true` (`// TODO: kill
   this`), so the `web-ifc → conway` alias was always applied and
@@ -1481,7 +1492,7 @@ production coupling.
 - ~~Delete `src/Infrastructure/IfcIsolator.js`'s `IfcContext` import.~~ Done — `IfcIsolator` moved to `src/viewer/three/` and no longer imports the fork's `IfcContext`.
 - Delete the §8.3 deprecation shim once the GLB-scene PR has cut over.
 - Update `DESIGN.md` and `CLAUDE.md` to point at `src/viewer/`.
-- ~~Drop `web-ifc` from build scripts.~~ **Superseded by the reframed slice 5f:** the `web-ifc` shim is kept as the Conway↔web-ifc engine flag; its eventual removal is a product call once Conway fully supersedes web-ifc, not a mechanical cleanup.
+- ~~Drop `web-ifc` from build scripts.~~ **Superseded by the reframed slice 5f:** the `web-ifc` shim is kept as the Conway↔web-ifc engine flag; its eventual removal is a product call once Conway fully supersedes web-ifc, not a mechanical cleanup. **Done 2026-11-01** by product-owner decision (slice 5f note).
 
 ### Phase 7 — OffscreenCanvas render worker (separate spec, post-merge)
 - Per §8.4 Move B. Becomes tractable only once the viewer is wholly under `src/viewer/`, because the worker boundary corresponds exactly to the `ShareViewer` facade. Out of scope for this doc; will get its own design.

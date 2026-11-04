@@ -80,7 +80,7 @@
 // DOM render, integrity check (every key in `propertySets` exists
 // as a product in `itemProperties`).
 import * as pako from 'pako'
-import {IFCRELDEFINESBYPROPERTIES} from 'web-ifc'
+import {IFCRELDEFINESBYPROPERTIES} from '@bldrs-ai/conway/web-ifc'
 import useStore from '../store/useStore'
 import {yieldToBrowser} from '../utils/scheduling'
 import {glbInfo, glbVerbose} from './glbLog'

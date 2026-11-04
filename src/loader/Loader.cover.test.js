@@ -900,7 +900,7 @@ describe('load() error/edge paths with OPFS enabled', () => {
   // TODO: Loader.js tags errors with `isOutOfMemory` by calling
   // `isOutOfMemoryError(err)` from src/utils/oom.js, which is message-
   // sniffing based. The refactor should confirm the OOM shapes it looks
-  // for still match the engines (Conway, web-ifc) we're actually using.
+  // for still match the engine (Conway) we're actually using.
   it('tags out-of-memory errors from the IFC loader with isOutOfMemory', async () => {
     // Build a viewer with a Conway IfcAPI whose OpenModel throws an
     // OOM. newIfcLoader's hot-patched parse catches, tags, and

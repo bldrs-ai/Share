@@ -1,6 +1,7 @@
 # Removing the `conway-web-ifc-adapter` shim
 
-**Status:** **landed (2026-06)** — Option A shipped both sides; adapter retired
+**Status:** **landed (2026-06)** — Option A shipped both sides; adapter retired.
+**Amended 2026-11-01:** real-`web-ifc` comparison build removed (see below).
 **Owner:** —
 **Branch:** `claude/conway-web-ifc-adapter-removal-s1olih`
 **Spans:** `bldrs-ai/Share` (consumer), `bldrs-ai/conway` (engine),
@@ -39,6 +40,27 @@ design-of-record describing how it was done.
 reshape onto Conway-native entities (compat-surface doc decision (b)) is
 still deferred — the vendored `ifc2x4_helper.ts` duplicate-entity layer
 stays until then.
+
+### Status — real-`web-ifc` comparison build removed (2026-11-01)
+
+By product-owner decision, Share no longer keeps the real-`web-ifc`
+engine. This reverses the "keep the comparison build" choice recorded
+in §1.1, §5 and the §7 risk register; those sections are annotated, not
+rewritten.
+
+- Share's four `'web-ifc'` imports (`ShareIfc.js`'s `IfcAPI`, and the
+  `IFC*` constants in `bldrsElementProperties.js`, `ViewRulesCompiler.js`,
+  `IfcElementsStyleManager.js`) now import `@bldrs-ai/conway/web-ifc`.
+- Removed: the `web-ifc` dependency, the `USE_WEBIFC_SHIM` switch
+  (`isWebIfcShimEnabled`, its prod define), `webIfcSingleThreadPlugin`,
+  `serveStaticIsolated.mjs`, the `*-webifc` package scripts,
+  `tools/playwright.webifc.config.js`, `webIfcEngine.webifc.spec.ts` and
+  the `playwright-webifc-run` CI job.
+- Kept: a `'web-ifc'` → Conway compat alias in `tools/esbuild/plugins.js`,
+  now unconditional, solely because `@bldrs-ai/ifclib` (5.3.3) still
+  imports `web-ifc` in its `src/IfcModel.js` and depends on
+  `web-ifc ^0.0.35`, which is why `web-ifc` remains in `yarn.lock`. The
+  alias goes when ifclib drops that dependency.
 
 ---
 
@@ -94,6 +116,11 @@ resolves to the real package — that is the **engine-comparison build**
 (`playwright-webifc-run` CI job, `webIfcSingleThreadPlugin`). See
 `viewer-replacement.md` slice 5f. Both engines expose the *same*
 `IfcAPI` shape; that shared shape is the whole reason a swap is possible.
+
+> **2026-11-01:** the `USE_WEBIFC_SHIM=false` build and
+> `playwright-webifc-run` are gone (status note above). Share imports
+> `@bldrs-ai/conway/web-ifc` directly; the alias survives only for
+> ifclib's transitive `'web-ifc'` import.
 
 ### 1.2 What the adapter is
 
@@ -359,6 +386,10 @@ export. No final compat-pointer npm release needed.
 
 ## 5. Stretch — runtime engine swap (web-ifc ↔ Conway)
 
+> **Moot as of 2026-11-01:** the real-`web-ifc` engine was removed from
+> Share (status note above), so there is no second engine to swap to.
+> Kept as a record of the analysis.
+
 Today the swap is **build-time**: two builds, two tabs, selected by
 `USE_WEBIFC_SHIM` + `webIfcShimAlias`. A true **runtime** toggle is
 tractable *because both engines expose the same `IfcAPI` constructor* —
@@ -416,7 +447,7 @@ lands.
 | wasm-copy scripts still reach the adapter path | Medium | Build ships no/old wasm | Audit every `build-share-copy-wasm-*` (§4.2.3) |
 | Stray `IFC*` constant imports lose their resolver | Low | Build break in 3 files | Re-export constants from compat `index.ts` (§4.3) |
 | Conway repo bloat (42 K-line gen tables ×2) slows CI | Low | Slower Conway builds | Tables are generated; compat tree is `tsc`-only, no codegen on PR |
-| Engine-comparison build regresses unnoticed | Medium | Lose the legacy reference | Keep `playwright-webifc-run` required-adjacent; it already exercises real web-ifc |
+| Engine-comparison build regresses unnoticed | — | — | **Retired 2026-11-01:** the comparison build and `playwright-webifc-run` were removed by product-owner decision (status note above); no legacy reference engine remains |
 
 ---
 

@@ -133,7 +133,8 @@ export function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
     backgroundColor: new Color(backgroundColorStr),
   })
 
-  // Path to web-ifc.wasm in serving directory.
+  // Serving directory of Conway's conway-geom wasm + glue, which
+  // `build-share-copy-wasm-conway-MT` copies into docs/static/js.
   viewer.IFC.setWasmPath('./static/js/')
   viewer.clipper.active = true
   viewer.clipper.orthogonalY = false
