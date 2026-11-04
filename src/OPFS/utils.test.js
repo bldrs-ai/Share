@@ -587,7 +587,8 @@ describe('OPFS Test Suite', () => {
 
       const result = await clearOPFSCache()
 
-      expect(result).toBe(true)
+      // Nothing was locked: nothing left behind.
+      expect(result).toEqual([])
       expect(OPFSService.initializeWorker).toHaveBeenCalled()
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalledTimes(1)

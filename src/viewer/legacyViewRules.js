@@ -1,5 +1,5 @@
 // The legacy `?view=` rule sets ShareViewer's IfcViewsManager knows, shared
-// with the engine worker's "not available here" check (engine/engineIfcLoad.js
+// with the engine worker's "not available here" check (engine/engineModelLoad.js
 // #hasLegacyViewRules) so the two cannot disagree about which names exist.
 // The whole stack is deleted before ?feature=engineWorker defaults on
 // (engine-worker.md §8 item 7, viewer-replacement.md §8.1).
