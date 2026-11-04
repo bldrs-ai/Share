@@ -351,10 +351,122 @@ runs the same module on the page itself.
   SEESTRASSE: 21 MB, 10,675 geometries, 0.4 s copy-out, 86–98 ms of posts.
 - **Not caused by the worker, noticed in passing:** the first leaf
   `getItemProperties` + `getPropertySets` on windowed PSB took ~3.3 s and
-  read ~1.9 GB of windows (with the Blob store). The pset lookup appears to
-  page in most of the file. Worth a conway issue; a sync handle hides most of
-  it.
+  read ~1.9 GB of windows (with the Blob store). The pset lookup paged in
+  most of the file. **Fixed in conway 1.1635.762** (conway#762, closing
+  conway#755 and #761; pinned by Share#2062), with numbers in §3.1.
 
+
+### 3.1 Property reads on a windowed open (conway#755, #761)
+
+Property reads go through the same windowed source in either arm, so the
+fix lands in conway and serves the worker and the main-thread engine alike.
+This is the record of what changed and what it measured, for whoever next
+reads properties off a store-backed model, whether that is the panel, the
+worker facade or a CLI/MCP `model.*` tool.
+
+**What was wrong.** Two separate bugs, in the same place: conway's
+`ifc_properties.ts` paged records one `ensureLine` at a time.
+
+- **Every pset read scanned every relationship.** `getPropertySets`,
+  `getTypeProperties` and `getMaterialsProperties` read *every*
+  relationship record of their kind on *every* call, to find the few that
+  name the element. Each record's window was paged in and never released.
+  - PSB's 23.5 k `IfcRelDefinesByProperties` hold 1.2 MB between them, but
+    they sit in all 215 of its 4 MiB windows.
+  - So every read, first or later, paged the whole 860 MB file: 4–5 s
+    each in conway's Node probe.
+  - The views it kept pinned evicted windows, and arrayBuffers grew to
+    1.27 GB.
+- **A recursive read threw.** A recursive (flattened) read paged in only
+  the seed record. A set whose `IfcPropertySingleValue`s sat in an evicted
+  window threw `StepBufferNotResidentError`: 109 of 299 sampled elements on
+  sp-231MB, and 5 of 30 on PSB.
+
+**What conway does now.**
+
+1. **A lazy element → relating-IDs index, one per relationship kind**
+   (`IfcProperties.relatedIndex`).
+   - It is sorted `Uint32Array` pairs, 8 B each (188 KB on PSB), and a read
+     is a binary search.
+   - It is built on the first property read of that kind, not at index
+     time. A load that never reads properties never pays for it, and the
+     index build and the sidecar are unchanged.
+   - The build reads the relationship records as coalesced **record
+     spans**, straight from the store in file order
+     (`StepBufferProvider.readSpan`, `visitRecordBytesInFileOrder`). The
+     spans merge across gaps of up to 64 KiB, are capped at 1 MiB, and go
+     four in flight. They don't page whole windows; on PSB that is ~1,080
+     reads and 20 MB instead of the whole file.
+   - No window is paged in or reordered in the LRU.
+2. **A recursive read pins the record's `#ref` closure before it
+   flattens** (`IfcApiProxyIfc.getLineResident`).
+   - It reuses the closure walk geometry extraction uses.
+   - Afterwards it unpins, drops the captured window views, and trims the
+     window back to its cap.
+   - A non-recursive read holds its record's pin across its await, so
+     another read's eviction can't drop it before the synchronous read.
+3. **Behaviour change: a recursive property read leaves geometry
+   representations as `{type: 5, value}` handles by default.**
+   - This covers `IfcProductRepresentation` (a product's `Representation`)
+     and `IfcRepresentationMap` (a type's `RepresentationMaps`). The walk
+     doesn't page them in.
+   - A product's representation is its whole shape graph. PSB's largest
+     sampled product reached 9,659 records and 1.18 MB of flattened JSON;
+     with the default it is 3 KB, read in 1 ms.
+   - `{includeRepresentations: true}`, a new optional last argument to the
+     `properties.*` reads, restores web-ifc's full flatten for
+     head-to-heads. `IfcAPI.GetLine(…, true)` is unchanged.
+   - Share makes no recursive property reads, so neither the panel nor the
+     worker facade sees the change.
+   - Conway documents the rule in its `design/new/web-ifc-compat-surface.md`.
+
+**Node probe** (conway's harness, windowed `OpenModelStream`, 4 MiB
+windows, `getPropertySets(…, true)`, ~300 sampled elements per model; the
+before rows on PSB cover the first 30 reads, as each one paid a full sweep):
+
+| model | first read: before → after | later reads, median: before → after | throws: before → after |
+|---|---|---|---|
+| PSB 860 MB | 4.79 s, 856 MB → **0.41 s, 20 MB** | 5.26 s, 860 MB → **0.6 ms, 0 reads** | 5/30 → 0/297 |
+| sp-231MB | 48 ms, 4.0 MB → 58 ms, 0.2 MB | 10.0 ms → 0.1 ms | 109/299 → 0/299 |
+| SEESTRASSE 24 MB | 122 ms, 20.2 MB → 101 ms, 16.3 MB | 14.9 ms → 0.4 ms | 0/292 → 0/292 |
+
+- Open time and RSS after open are unchanged on all three.
+- Per-element results are identical for every read that didn't throw
+  before.
+
+**In Share** (local PSB through OPFS, `OpenModelStream`, main-thread
+engine; headless Chromium in the 4-vCPU container, the Playwright build of
+Share at the pin):
+
+- **Rendering paused** (`pauseViewerRendering`'s seam):
+  - The first `getPropertySets` took **1.07 s and 739 store reads**. Later
+    reads took 0–1 ms.
+  - The Properties panel showed the column's three psets 1.8 s after its
+    button was clicked.
+- **`?feature=engineWorker`, windowed (`windowed=yes`), rendering paused:**
+  - The first `getPropertySets` through the worker facade took **1.59 s**.
+    Later reads took ~1 ms.
+  - The panel showed the same three psets 1.9 s after the click.
+  - A second run, with a buffered open (`windowed=no`) after its OPFS
+    staging failed, took 0.75 s for the first read and 1–3 ms after.
+- **Known measurement artifact: rendering live in SwiftShader,
+  main-thread engine.**
+  - The same first read had not finished after 240 s. In this GPU-less
+    container each frame costs seconds, and each Blob `read` resolved only
+    between frames: ~10 s per read. It is also why the PSB load takes
+    ~170 s here.
+  - It is not a measurement of a real GPU browser. What carries over: on a
+    busy main thread, the index build is bound by *store round trips*, not
+    bytes. It makes ~740–1,080 span reads, four in flight, against the 215
+    window reads of the old per-call sweep.
+  - Follow-up options, if it shows up on real hardware:
+    - more reads in flight;
+    - coarser spans when the store is slow;
+    - building the index in the engine worker, whose reads don't queue
+      behind frames.
+  - Not filed as an issue. It was not reproduced with the worker: the
+    live-render worker run lost its OPFS staging and opened buffered, so
+    it measured nothing windowed.
 
 ## 4. Protocol
 
@@ -915,6 +1027,12 @@ PSB in a worker; what `terminate()` frees (measured memory and RSS);
 main-thread long tasks with the engine on the main thread versus in a
 worker; Blob-store versus sync-handle I/O; tree, property and mesh transfer
 costs.
+
+**Measured, §3.1:** property reads on a windowed open before and after
+conway#762, in conway's Node probe (three models) and in Share with the
+main-thread engine and in the engine worker (rendering paused). **Not
+measured, §3.1:** the live-render case on a real GPU, and the live-render
+case in the worker.
 
 **Not measured:** real-GPU frames; Safari and Firefox (module workers and
 `createSyncAccessHandle({mode: 'read-only'})` support differ); two
