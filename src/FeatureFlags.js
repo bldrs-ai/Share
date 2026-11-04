@@ -166,6 +166,11 @@ export const flags = [
   // (step 5); `window.__bldrsEngine` (engineDevHook.js) drives sessions
   // directly.
   {name: 'engineWorker', isActive: false},
+  // Kill switch for the engine worker's OPFS sync access handle
+  // (engine-worker.md §7 step 4): read the source through the Blob store
+  // instead, as on the main thread. `?feature=` can only turn flags on, so
+  // this is phrased as the off switch.
+  {name: 'disableEngineSyncHandle', isActive: false},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-

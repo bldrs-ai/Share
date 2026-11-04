@@ -34,6 +34,15 @@ export const ENGINE_INIT_TIMEOUT_MS = 30_000
 
 
 /**
+ * How long close() waits for a sync-handle session's engine to release its
+ * OPFS lock before terminating anyway. The release is CloseModel plus one
+ * handle close, well under a frame; this bounds an engine that is wedged
+ * mid-call, which termination then deals with as before.
+ */
+export const ENGINE_CLOSE_TIMEOUT_MS = 1_000
+
+
+/**
  * One engine, seen from the page. See the file header.
  */
 export class EngineSession {
@@ -263,6 +272,9 @@ export class EngineSession {
         throw error
       }
       this.modelID = result.modelID
+      // `syncHandle` when the engine holds an OPFS lock for this session
+      // (engineSources.js), which close() then releases politely.
+      this.sourceKind = result.source?.kind ?? null
       return result
     } catch (e) {
       this.rejectIndexed(e)
@@ -408,13 +420,40 @@ export class EngineSession {
 
   /**
    * End the session: terminate the engine and refuse whatever is pending.
-   * No polite `close` request first: on a worker, `terminate()` frees more
-   * than `CloseModel` ever could and does not wait on a busy engine; in
+   *
+   * Usually no polite `close` request first: on a worker, `terminate()` frees
+   * more than `CloseModel` ever could and does not wait on a busy engine; in
    * process, the transport's `terminate()` runs the same dispose the request
-   * would.
+   * would. The exception is a session whose engine reads its source through
+   * an OPFS sync access handle (engine-worker.md §7 step 4). That handle
+   * locks the model's OPFS entry against removal, and terminate() lets it go
+   * only some time after it returns, so whatever comes next (clearing the
+   * cache, a re-stage, the next model's eviction of a stale entry) could
+   * still find it locked. So `close` is sent and its reply awaited, for at
+   * most ENGINE_CLOSE_TIMEOUT_MS, before terminating.
+   *
+   * @return {Promise<void>} settles once the engine is gone and, for a
+   *   sync-handle session, its lock released (or the wait timed out)
    */
   close() {
-    this.fail(new Error(SESSION_CLOSED), 'closed')
+    if (this.closing) {
+      return this.closing
+    }
+    if (this.sourceKind !== 'syncHandle' || this.closed) {
+      this.fail(new Error(SESSION_CLOSED), 'closed')
+      this.closing = Promise.resolve()
+      return this.closing
+    }
+    let timer
+    const timeout = new Promise((resolve) => {
+      timer = setTimeout(resolve, ENGINE_CLOSE_TIMEOUT_MS)
+    })
+    this.closing = Promise.race([this.request(Op.CLOSE).catch(() => null), timeout])
+      .finally(() => {
+        clearTimeout(timer)
+        this.fail(new Error(SESSION_CLOSED), 'closed')
+      })
+    return this.closing
   }
 }
 

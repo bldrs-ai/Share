@@ -24,6 +24,7 @@
 // capture job comes in step 5.
 import {classifyOpenFailure, openDeferred} from '../loader/conwayOpen'
 import {ENGINE_PROTOCOL_VERSION, Ev, Op, serializeError} from './protocol'
+import {openSourceStore} from './engineSources'
 import {makeBatchEncoder, previewMessage, snapshotStatistics} from './engineStream'
 
 
@@ -76,25 +77,9 @@ export function wasmBytesOf(api) {
 }
 
 
-/**
- * A Conway `StepExternalByteStore` over a Blob or File. The same contract as
- * `loader/opfsSourceByteStore.js#makeBlobByteStore`, redeclared here because
- * that module logs through the page's GLB log and must not be pulled into
- * the worker bundle. Step 4 adds the OPFS sync-access-handle store beside it.
- *
- * @param {Blob} blob
- * @return {{byteLength: number, read: function(number, number): Promise<Uint8Array>}}
- */
-export function makeBlobStore(blob) {
-  return {
-    get byteLength() {
-      return blob.size
-    },
-    async read(offset, length) {
-      return new Uint8Array(await blob.slice(offset, offset + length).arrayBuffer())
-    },
-  }
-}
+// The source byte stores (Blob, and the OPFS sync access handle) live in
+// engineSources.js; re-exported for the tests that build a store directly.
+export {makeBlobStore} from './engineSources'
 
 
 /**
@@ -109,11 +94,13 @@ export function makeBlobStore(blob) {
  *   engine's Logger and console, and forwarding would count them twice
  * @param {function(): Promise<void>} [options.yieldToLoop] between pump
  *   calls, so requests (a tree read, `pump` pause, `abort`) get a turn
+ * @param {object} [options.sourceOptions] passed to
+ *   engineSources.js#openSourceStore (tests: `getOpfsRoot`, `canSyncHandle`)
  * @return {{handle: function(object): Promise<void>, dispose: function(): void}}
  */
 export function createEngineHandler({
   loadIfcAPI, post, now = () => performance.now(), logForwarder = null,
-  yieldToLoop = yieldToEventLoop,
+  yieldToLoop = yieldToEventLoop, sourceOptions = {},
 }) {
   let epoch = 0
   let seq = 0
@@ -138,6 +125,14 @@ export function createEngineHandler({
   let paused = false
   let aborted = false
   let resume = null
+  // The byte store the open model's windowed source reads through, kept for
+  // the session's whole life: property reads page windows from it long
+  // after the load. Closed in dispose(), after CloseModel, so a sync access
+  // handle is released only once nothing can read through it.
+  let sourceStore = null
+  // Why the store is not the sync access handle, when it is not (reported
+  // in the `open` reply and the `done` packet).
+  let sourceFallback = null
 
   const send = (msg, transfer) => post({v: ENGINE_PROTOCOL_VERSION, epoch, ...msg}, transfer)
   const flushLog = () => {
@@ -354,19 +349,46 @@ export function createEngineHandler({
     // Held locally: dispose() nulls `api`, and an open that finishes after
     // close must still be able to CloseModel what it opened.
     const engine = api
-    const {modelID: id, windowed, attempt} = await openDeferred(engine, {
-      store: windowable ? makeBlobStore(blob) : null,
-      loadBytes: async () => {
-        const bytes = source?.bytes ?? (blob ? await blob.arrayBuffer() : null)
-        if (!bytes) {
-          throw new Error('engine: open needs source.file or source.bytes')
-        }
-        // A transferred Uint8Array is used as it is: another copy here would
-        // briefly hold the file three times over on a buffered open.
-        return ArrayBuffer.isView(bytes) ? bytes : new Uint8Array(bytes)
-      },
-      settings,
-    })
+    // A read-only OPFS sync access handle on the File's own entry, which this
+    // worker finds itself, else the Blob store (engineSources.js#openSourceStore
+    // says when and why).
+    const opened = windowable ?
+      await openSourceStore(source, {allowSyncHandle: !flags.disableEngineSyncHandle, now, ...sourceOptions}) :
+      null
+    const store = opened?.store ?? null
+    let adopted = false
+    let id
+    let windowed
+    let attempt
+    try {
+      ({modelID: id, windowed, attempt} = await openDeferred(engine, {
+        store,
+        loadBytes: async () => {
+          const bytes = source?.bytes ?? (blob ? await blob.arrayBuffer() : null)
+          if (!bytes) {
+            throw new Error('engine: open needs source.file or source.bytes')
+          }
+          // A transferred Uint8Array is used as it is: another copy here would
+          // briefly hold the file three times over on a buffered open.
+          return ArrayBuffer.isView(bytes) ? bytes : new Uint8Array(bytes)
+        },
+        settings,
+      }))
+      if (windowed && !disposed && typeof id === 'number' && id >= 0) {
+        // Kept for the session: property reads page windows from it long
+        // after the load. Released in dispose(), after CloseModel.
+        sourceStore = store
+        sourceFallback = opened.fallbackReason
+        adopted = true
+      }
+    } finally {
+      // Not adopted (a buffered fallback, a failed or refused open, an open
+      // that threw, or a close that came first): nothing reads it again, so
+      // a sync access handle's lock is let go now rather than at terminate.
+      if (!adopted) {
+        store?.close()
+      }
+    }
     if (disposed) {
       // Closed while the open ran: release what it made, and stop.
       if (typeof id === 'number' && id >= 0) {
@@ -392,7 +414,10 @@ export function createEngineHandler({
       return {modelID: -1, windowed: false, failure}
     }
     modelID = id
-    const result = {modelID, windowed, format, openMs: now() - t0, wasmBytes: wasmBytesOf(api)}
+    const result = {
+      modelID, windowed, format, openMs: now() - t0, wasmBytes: wasmBytesOf(api),
+      source: sourceSummary(),
+    }
     emit(Ev.INDEXED, {modelID, windowed})
     if (stream) {
       // `startPaused`: the page's test hold (engineModelLoad.js); the pump
@@ -536,7 +561,7 @@ export function createEngineHandler({
    * @return {Promise<object>}
    */
   async function summarize(counts) {
-    const summary = {...counts, wasmBytes: wasmBytesOf(api)}
+    const summary = {...counts, wasmBytes: wasmBytesOf(api), source: sourceSummary()}
     if (typeof api.getStatistics === 'function') {
       summary.statistics = snapshotStatistics(api.getStatistics(modelID))
     }
@@ -562,10 +587,14 @@ export function createEngineHandler({
   }
 
   /**
-   * Close the model and drop the engine. In a worker this is a courtesy:
-   * `terminate()` follows and frees everything regardless. In process it is
-   * the whole of the cleanup, because the wasm heap is only returned once
-   * nothing references the `IfcAPI` (in-app-model-switch.md §4.5).
+   * Close the model and drop the engine. In process it is the whole of the
+   * cleanup, because the wasm heap is only returned once nothing references
+   * the `IfcAPI` (in-app-model-switch.md §4.5). In a worker `terminate()`
+   * follows and frees the heap regardless, but a session reading through a
+   * sync access handle asks for this first (EngineSession#close): the
+   * handle's OPFS lock is then let go here, after CloseModel, at a known
+   * point, rather than whenever the browser gets round to it after
+   * termination.
    */
   function dispose() {
     disposed = true
@@ -587,6 +616,22 @@ export function createEngineHandler({
     }
     api = null
     modelID = -1
+    sourceStore?.close()
+    sourceStore = null
+  }
+
+  /**
+   * How the open model's source is being read, for the load report:
+   * `{kind: 'syncHandle' | 'blob' | 'resident', fallbackReason, reads,
+   * bytes, ms}`.
+   *
+   * @return {object}
+   */
+  function sourceSummary() {
+    if (sourceStore === null) {
+      return {kind: 'resident', fallbackReason: null}
+    }
+    return {kind: sourceStore.kind, fallbackReason: sourceFallback, ...sourceStore.counters}
   }
 
   /**

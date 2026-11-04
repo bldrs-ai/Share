@@ -24,6 +24,7 @@ import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 jest.mock('../loader/loadProgress', () => ({
   reportEngineLog: jest.fn(),
   reportEngineVersion: jest.fn(),
+  reportSourceInfo: jest.fn(),
 }))
 
 

@@ -4,6 +4,7 @@ import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__m
 import {noteGateLogin, takeGateLoginReturn, takeGateLoginSource} from '../../Auth0/gateLogin'
 import {mockLogout} from '../../Auth0/mockLogout'
 import {clearOPFSCache} from '../../OPFS/utils'
+import {closeAllEngineSessions} from '../../engine/spawnEngine'
 import {RouteThemeCtx} from '../../Share.fixture'
 import {addRecentFileEntry, loadAllRecentFiles} from '../../connections/persistence'
 import {_resetSubscriptionTrackingForTests, trackSubscriptionFromToken} from '../../privacy/subscriptionTracking'
@@ -14,6 +15,7 @@ import {goToSubscription} from './subscriptionNav'
 
 
 jest.mock('../../OPFS/utils', () => ({clearOPFSCache: jest.fn()}))
+jest.mock('../../engine/spawnEngine', () => ({closeAllEngineSessions: jest.fn(() => Promise.resolve(0))}))
 // The upgrade door itself (and its begin_checkout event) is pinned in
 // subscriptionNav.test.js; here only that the menu goes through it.
 jest.mock('./subscriptionNav', () => ({goToSubscription: jest.fn()}))
@@ -75,6 +77,10 @@ describe('ProfileControl', () => {
 
   describe('Clear Local Cache', () => {
     beforeEach(() => {
+      clearOPFSCache.mockReset()
+      closeAllEngineSessions.mockReset()
+      closeAllEngineSessions.mockImplementation(() => Promise.resolve(0))
+      reloadAfterCacheClear.mockClear()
       localStorage.clear()
       addRecentFileEntry({id: 'up.ifc', source: 'local', name: 'up.ifc', lastModifiedUtc: null})
       addRecentFileEntry({id: '/share/v/gh/o/r/main/m.ifc', source: 'github', name: 'm.ifc', lastModifiedUtc: null})
@@ -96,9 +102,60 @@ describe('ProfileControl', () => {
     // Uploads live only in OPFS; their recents would otherwise survive the
     // wipe and fail with "Folder <id> not found" when clicked.
     it('drops local recents along with OPFS, keeping other sources', async () => {
-      clearOPFSCache.mockResolvedValue(true)
+      clearOPFSCache.mockResolvedValue([])
       await clickClearLocalCache()
       expect(loadAllRecentFiles().map((f) => f.source)).toEqual(['github'])
+    })
+
+    // engine-worker.md §7 step 4: an engine worker's sync access handle locks
+    // its model's OPFS entry, so the sessions are closed, and the close
+    // AWAITED, before the clear.
+    it('does not clear OPFS until the engine sessions have closed', async () => {
+      let closed
+      closeAllEngineSessions.mockImplementation(() => new Promise((resolve) => {
+        closed = resolve
+      }))
+      clearOPFSCache.mockResolvedValue([])
+      const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
+      fireEvent.click(await findByTestId('control-button-profile'))
+      fireEvent.click(await findByTestId('clear-local-cache'))
+      await waitFor(() => expect(closeAllEngineSessions).toHaveBeenCalled())
+      await act(() => Promise.resolve())
+      expect(clearOPFSCache).not.toHaveBeenCalled()
+      await act(() => {
+        closed(1)
+      })
+      await waitFor(() => expect(reloadAfterCacheClear).toHaveBeenCalled())
+      expect(clearOPFSCache).toHaveBeenCalledTimes(1)
+    })
+
+    // A session still opening is terminated rather than closed politely, and
+    // its lock goes just after: the entry it held is skipped the first time.
+    it('clears again what the first pass skipped, and drops local recents once all is gone', async () => {
+      clearOPFSCache.mockResolvedValueOnce(['BldrsLocalStorage/V1/m.ifc']).mockResolvedValueOnce([])
+      await clickClearLocalCache()
+      expect(clearOPFSCache).toHaveBeenCalledTimes(2)
+      expect(useStore.getState().alert).toBeNull()
+      expect(loadAllRecentFiles().map((f) => f.source)).toEqual(['github'])
+    })
+
+    it('says so through the app\'s alert, keeps local recents, and reloads only once it is dismissed', async () => {
+      clearOPFSCache.mockResolvedValue(['BldrsLocalStorage/V1/m.ifc'])
+      const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
+      fireEvent.click(await findByTestId('control-button-profile'))
+      fireEvent.click(await findByTestId('clear-local-cache'))
+      await waitFor(() => expect(useStore.getState().alert).not.toBeNull())
+      const alert = useStore.getState().alert
+      expect(clearOPFSCache).toHaveBeenCalledTimes(2)
+      expect(alert).toMatchObject({
+        type: 'cacheClearSkipped',
+        message: '1 file is open in another tab and wasn\'t cleared. Close that tab and clear again.',
+      })
+      expect(loadAllRecentFiles().map((f) => f.source)).toEqual(['github', 'local'])
+      expect(reloadAfterCacheClear).not.toHaveBeenCalled()
+      act(() => alert.onDismiss())
+      expect(reloadAfterCacheClear).toHaveBeenCalled()
+      act(() => useStore.setState({alert: null}))
     })
 
     it('keeps local recents when the OPFS clear failed', async () => {

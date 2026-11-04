@@ -325,7 +325,40 @@ beforeEach(() => {
   }
 })
 
+/**
+ * A FileSystemHandle anywhere in a reply, or null. WebKit cannot
+ * structured-clone FileSystemHandles (bug 256712): a reply carrying one
+ * becomes a DataCloneError there, which turns every File-carrying reply into
+ * an error on Safari and iOS. So no reply may carry one (engine-worker.md §7
+ * step 4: the engine worker finds the entry itself).
+ *
+ * @param {*} value
+ * @param {Set} [seen]
+ * @return {object|null}
+ */
+function findHandle(value, seen = new Set()) {
+  if (value === null || typeof value !== 'object' || seen.has(value)) {
+    return null
+  }
+  seen.add(value)
+  if (value instanceof FileHandle || value instanceof DirectoryHandle ||
+      typeof value.getFile === 'function' || typeof value.createSyncAccessHandle === 'function') {
+    return value
+  }
+  for (const inner of Object.values(value)) {
+    const found = findHandle(inner, seen)
+    if (found) {
+      return found
+    }
+  }
+  return null
+}
+
 afterEach(() => {
+  // Every reply any test drew from the worker stays clone-safe everywhere.
+  for (const [message] of global.self?.postMessage?.mock?.calls ?? []) {
+    expect(findHandle(message)).toBeNull()
+  }
   jest.clearAllMocks()
 })
 
@@ -397,6 +430,96 @@ test('deleteAllEntries removes all files', async () => {
   }
   expect(entries.length).toBe(0)
 })
+
+test('deleteAllEntries skips an entry another handle holds, and removes the rest', async () => {
+  // engine-worker.md §7 step 4: an engine worker reading an open model
+  // through a read-only sync access handle locks that entry against
+  // removeEntry (NoModificationAllowedError). The clear must go on past it.
+  const locked = new Set(['open.ifc', 'held.ifc'])
+  const lockable = (dir) => {
+    const remove = dir.removeEntry.bind(dir)
+    dir.removeEntry = async (name, options) => {
+      if (locked.has(name)) {
+        throw new DOMException('locked', 'NoModificationAllowedError')
+      }
+      return await remove(name, options)
+    }
+    return dir
+  }
+  lockable(rootDir)
+  await rootDir.getFileHandle('open.ifc', {create: true})
+  const sub = lockable(await rootDir.getDirectoryHandle('sub', {create: true}))
+  await sub.getFileHandle('held.ifc', {create: true})
+  await sub.getFileHandle('free.ifc', {create: true})
+  await rootDir.getDirectoryHandle('empty', {create: true})
+  await rootDir.getFileHandle('z.txt', {create: true})
+
+  const skipped = await worker.deleteAllEntries(rootDir)
+
+  expect(skipped).toEqual(['open.ifc', 'sub/held.ifc'])
+  expect(Array.from(rootDir.entriesMap.keys())).toEqual(['open.ifc', 'sub'])
+  expect(Array.from(sub.entriesMap.keys())).toEqual(['held.ifc'])
+})
+
+
+test('deleteAllEntries still fails on an error that is not a lock', async () => {
+  await rootDir.getFileHandle('a.ifc', {create: true})
+  rootDir.removeEntry = () => Promise.reject(new Error('disk on fire'))
+  await expect(worker.deleteAllEntries(rootDir)).rejects.toThrow('disk on fire')
+})
+
+
+test('clearCache reports what it skipped', async () => {
+  await rootDir.getFileHandle('open.ifc', {create: true})
+  rootDir.removeEntry = () => Promise.reject(new DOMException('locked', 'NoModificationAllowedError'))
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => null)
+  await worker.clearCache(7)
+  expect(self.postMessage).toHaveBeenCalledWith({completed: true, event: 'clear', skipped: ['open.ifc'], requestId: 7})
+  expect(warn).toHaveBeenCalledWith('OPFS clear: skipped 1 locked entry:', ['open.ifc'])
+  warn.mockRestore()
+})
+
+
+/**
+ * owner/repo/branch/<file>.<commit> in the in-memory OPFS, whose remove()
+ * fails the way a held entry's does (engine-worker.md §7 step 4).
+ *
+ * @param {string} fileName
+ * @param {string} commitHash
+ * @return {Promise<FileHandle>}
+ */
+async function lockedModelEntry(fileName, commitHash) {
+  const owner = await rootDir.getDirectoryHandle('owner', {create: true})
+  const repo = await owner.getDirectoryHandle('repo', {create: true})
+  const branch = await repo.getDirectoryHandle('main', {create: true})
+  const entry = await branch.getFileHandle(`${fileName}.${commitHash}`, {create: true})
+  entry.remove = () => Promise.reject(new DOMException('locked', 'NoModificationAllowedError'))
+  return entry
+}
+
+
+test('deleteModelFromOPFS answers a held entry with an error, not a false \'deleted\'', async () => {
+  await lockedModelEntry('m.ifc', 'c1')
+  await worker.deleteModelFromOPFS('c1', 'm.ifc', 'owner', 'repo', 'main', 3)
+  expect(self.postMessage.mock.calls.map(([m]) => m)).toEqual([
+    {error: 'deleteModelFromOPFS: m.ifc.c1 is open in an engine; not deleted', requestId: 3},
+  ])
+})
+
+
+test('downloadModelToOPFS answers a held stale copy with an error instead of throwing', async () => {
+  // The stale-commit branch: the found entry's name does not parse back to
+  // the commit asked for (a commit string that itself contains the file
+  // name is one way there).
+  await lockedModelEntry('a.ifc', 'a.ifc.x')
+  global.fetch = jest.fn()
+  await worker.downloadModelToOPFS('https://x/a.ifc', 'a.ifc.x', 'a.ifc', 'owner', 'repo', 'main', false, 4)
+  expect(self.postMessage.mock.calls.map(([m]) => m)).toEqual([
+    {error: 'downloadModelToOPFS: a.ifc.a.ifc.x is open in an engine; not replaced', requestId: 4},
+  ])
+  expect(global.fetch).not.toHaveBeenCalled()
+})
+
 
 test('snapshotCache posts directory snapshot', async () => {
   await rootDir.getFileHandle('foo.txt', {create: true})

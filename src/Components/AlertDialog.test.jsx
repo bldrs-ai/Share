@@ -10,6 +10,7 @@ import {
 import {getProvider} from '../connections/registry'
 import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
 import {NO_GEOMETRY_ALERT, noGeometryAlert} from '../loader/loadProgress'
+import {cacheClearSkippedAlert} from '../OPFS/messages'
 import {
   UNRECOGNIZED_FORMAT_ALERT_EVENT,
   reportUnrecognizedFormat,
@@ -422,6 +423,45 @@ describe('AlertDialog — noGeometry alert type (#1962)', () => {
     expect(trackAlertEvent).toHaveBeenCalledTimes(1)
     expect(trackAlertEvent).toHaveBeenCalledWith(NO_GEOMETRY_ALERT)
     expect(trackAlert).not.toHaveBeenCalled()
+  })
+})
+
+
+// engine-worker.md §7 step 4: Clear cache could not remove what an engine in
+// another tab holds; ProfileControl's reload waits for this to be read.
+describe('AlertDialog — cacheClearSkipped alert type', () => {
+  const onClose = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.getState().setAlert(null)
+    })
+  })
+
+  it('says how many were left, without the Discord footer, and counts nothing', () => {
+    act(() => {
+      useStore.getState().setAlert(cacheClearSkippedAlert(2, jest.fn()))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('Cache partly cleared')).toBeInTheDocument()
+    expect(screen.getByText('2 files are open in another tab and weren\'t cleared. Close that tab and clear again.'))
+      .toBeInTheDocument()
+    expect(screen.queryByText(/Discord/i)).not.toBeInTheDocument()
+    expect(trackAlertEvent).not.toHaveBeenCalled()
+    expect(trackAlert).not.toHaveBeenCalled()
+  })
+
+  it('OK runs the held reload once, and not the failed-load close', () => {
+    const onDismiss = jest.fn()
+    act(() => {
+      useStore.getState().setAlert(cacheClearSkippedAlert(1, onDismiss))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    fireEvent.click(screen.getByText('OK'))
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+    expect(useStore.getState().alert).toBeNull()
+    expect(onClose).not.toHaveBeenCalled()
   })
 })
 
