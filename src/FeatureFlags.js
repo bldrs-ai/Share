@@ -160,9 +160,9 @@ export const flags = [
   {name: 'demandGeometry', isActive: true},
   // Per-model engine worker (design/new/engine-worker.md, open-205 #2053):
   // each model's Conway engine runs in its own module Worker and is freed
-  // by terminate(). Off while the §7 steps land behind it. Today an IFC
-  // load (not STEP, until step 6) parses, pumps and answers property reads
-  // in the worker (engine/engineIfcLoad.js), with no GLB cache write yet
+  // by terminate(). Off while the §7 steps land behind it. Today an IFC or
+  // STEP load parses, pumps and answers property reads in the worker
+  // (engine/engineModelLoad.js), with no GLB cache write yet
   // (step 5); `window.__bldrsEngine` (engineDevHook.js) drives sessions
   // directly.
   {name: 'engineWorker', isActive: false},

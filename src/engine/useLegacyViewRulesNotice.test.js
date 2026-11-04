@@ -1,5 +1,5 @@
 import {renderHook} from '@testing-library/react'
-import {LEGACY_VIEW_RULES_MESSAGE} from './engineIfcLoad'
+import {LEGACY_VIEW_RULES_MESSAGE} from './engineModelLoad'
 import useLegacyViewRulesNotice from './useLegacyViewRulesNotice'
 
 
