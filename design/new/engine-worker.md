@@ -663,13 +663,22 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 | 3 — IFC load in the worker | merged (#2058). PSB, n=3, flag off → on: main-thread long tasks over 50 ms 418 → 23, time blocked 63 → 12 s, Geometry 48.3 → 40.6 s, Total 94.8 → 83.3 s, page heap after load 2130 → 889 MB (the worker's own JS heap 65 MB). Buffered tree-at-index: SEESTRASSE 8.05 → 4.60 s, sp-231MB 37.4 → 11.9 s |
 | 4 — sync-access-handle source | in progress |
 | 6 — STEP in the worker | in progress |
-| 5, 7, 8, 9 | not started; 9 is gated on #2061 |
+| 5, 7, 8, 9 | not started; 9 is gated on #2061 and #2070 |
 
 **Known issues.**
 
 - **#2061: worker JS heap on sp-231MB.** The engine worker holds about
   350 MB of live JS heap after an sp-231MB load, against 65 MB for PSB.
   This is unexplained (it needs a heap snapshot) and gates step 9.
+- **#2070: each engine round trip waits behind a main-thread frame.** A
+  worker reply is a main-thread task, so with the render loop running it
+  waits for the frame in progress. The engine itself answers a read in
+  under 1 ms inside the worker. In headless Chromium (software GL) the
+  round trip measured 127–217 ms, and 0.34 ms with rAF frozen. On a GPU
+  the cost is up to a frame per round trip. That makes sequential reads
+  frame-bound: the Properties panel's deref does one read per top-level
+  reference. The likely fixes are batching or not rendering while idle.
+  It gates step 9.
 - **#2063: the Properties panel took the app down. Fixed, and not a worker
   bug.** Selecting an `IfcGrid` with the panel open replaced the page with
   "Oh no!" on both engines. ifclib's `deref` resolves a reference to an
@@ -684,11 +693,13 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
   and reads the selection again, while answers to earlier selections can
   still be in flight from the worker. `Properties.jsx`'s `isStale` guard
   drops any answer for a selection or model that is no longer current.
-  Two tests cover it, each failing with the guard removed:
-  - a unit test: a slow earlier answer arrives after the current one;
-  - `PropertiesNestedRefs.spec.ts`: rapid NavTree clicks with the panel
-    mounted, the geometry released mid-burst, ending on a cheap element
-    right after an expensive one. The expensive answer comes back last.
+  Its test is a unit test: a slow earlier answer arrives after the current
+  one, and the test fails with the guard removed.
+  `PropertiesNestedRefs.spec.ts` is only a smoke test of the same
+  hand-off: rapid NavTree clicks under the worker, with the geometry
+  released mid-burst. It passes even with every isStale check removed.
+  The worker answers in order, so in practice nothing arrives out of
+  order.
 
   The panel's ErrorBoundary is not keyed on the selection, so the panel
   stays mounted. It resets itself when the selection or the read model

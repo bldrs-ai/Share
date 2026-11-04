@@ -103,7 +103,7 @@ describeMobileAndDesktop('Properties: an element whose references resolve to ent
     })
   }
 
-  test('engine worker: rapid NavTree clicks across the end of the load leave the LAST selection\'s properties', async ({page}) => {
+  test('engine worker (smoke): rapid NavTree clicks across the end of the load leave the LAST selection\'s properties', async ({page}) => {
     const TEST_TIMEOUT = 90_000
     test.setTimeout(TEST_TIMEOUT)
     const errors = collectPageErrors(page)
@@ -118,39 +118,64 @@ describeMobileAndDesktop('Properties: an element whose references resolve to ent
     await expect(navTree.locator('[data-node-label]').first()).toBeVisible()
     await expandTree(navTree)
     await expect(navTree.locator('[data-node-label="Grid"]')).toHaveCount(1)
+    // The Properties control appears once something is selected.
+    const building = navTree.locator('[data-node-label="Test Building"]')
+    await building.getByTestId('NavTreeNodeLabel').first().evaluate((e) => (e as HTMLElement).click())
+    await expect(building.first()).toHaveAttribute('data-is-selected', 'true')
     await page.getByTestId('control-button-properties').click()
     await expect(page.getByTestId('PropertiesPanel')).toBeVisible()
+    // On a phone the panels share one tabbed drawer and Properties took the
+    // front; the burst clicks rows, so bring the tree's tab back.
+    const isTabbed = !(await navTree.isVisible())
+    if (isTabbed) {
+      await page.getByRole('tab', {name: 'Nav'}).click()
+      await expect(navTree.locator('[data-node-label="Grid"]')).toHaveCount(1)
+    }
 
-    // One burst, in page, with the panel mounted throughout: select the grid
-    // and the proxy back and forth, let the geometry in mid-burst, and end
-    // on the grid and then the building. Every read is a round trip to the
-    // worker, and the grid's table takes many (deref follows each axis to
-    // its curve and points) where the building's takes one or two, so the
-    // grid's answer comes back AFTER the building's. Without Properties.jsx's
-    // isStale guard it lands last and the panel shows the grid under the
-    // building's selection, which this test then fails on.
-    await page.evaluate(async () => {
-      const w = window as unknown as Record<string, () => void>
-      const click = (label: string) => {
-        const row = document.querySelector(`[data-testid="NavTreePanel"] [data-node-label="${label}"]`)
-        const target = row?.querySelector('[data-testid="NavTreeNodeLabel"]') as HTMLElement | null
-        if (!target) {
-          throw new Error(`no NavTree row ${label}`)
+    // In-page clicks, so a burst is not paced by Playwright's actionability
+    // waits (the rows sit over a live canvas).
+    const clickRows = async (labels: string[], releaseAfter: number, paced = true) => {
+      await page.evaluate(async ({rows, release, pace}) => {
+        const w = window as unknown as Record<string, () => void>
+        const tick = () => (pace ? new Promise((resolve) => setTimeout(resolve, 0)) : Promise.resolve())
+        for (let i = 0; i < rows.length; i++) {
+          const row = document.querySelector(`[data-testid="NavTreePanel"] [data-node-label="${rows[i]}"]`)
+          const target = row?.querySelector('[data-testid="NavTreeNodeLabel"]') as HTMLElement | null
+          if (!target) {
+            throw new Error(`no NavTree row ${rows[i]}`)
+          }
+          target.click()
+          if (i === release) {
+            w.__bldrsTestReleaseGeometryPump()
+          }
+          await tick()
         }
-        target.click()
-      }
-      const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
-      for (const label of ['Grid', 'P-1', 'Grid', 'P-1']) {
-        click(label)
-        await tick()
-      }
-      w.__bldrsTestReleaseGeometryPump()
-      for (const label of ['Grid', 'P-1', 'Grid', 'Test Building']) {
-        click(label)
-        await tick()
-      }
-    })
+      }, {rows: labels, release: releaseAfter, pace: paced})
+    }
+
+    // 1. Across the end of the load: the grid and the proxy back and forth,
+    // with the geometry let in mid-burst, so answers from the indexed
+    // model's facade are in flight while it is swapped for the finished
+    // model (whose effect re-run then reads the current selection again).
+    const NO_RELEASE = -1
+    const RELEASE_AFTER = 3
+    await clickRows(['Grid', 'P-1', 'Grid', 'P-1', 'Grid', 'P-1'], RELEASE_AFTER)
     await waitForModelReady(page)
+
+    // 2. Then the grid and, in the same task, the building, with the panel
+    // open. This is a SMOKE test of the hand-off and of rapid selection
+    // under the worker engine: no page error, no "Oh no!", and the last
+    // selection's properties on screen. It does not prove Properties.jsx's
+    // isStale guard. It still passes with every isStale check removed,
+    // because the worker answers in order and the next selection always
+    // lands before the earlier chain's first answer, so nothing arrives out
+    // of order. The guard's own test is Properties.test.jsx ("a slow answer
+    // for an earlier selection…"), which holds an earlier answer back on
+    // purpose.
+    await clickRows(['Grid', 'Test Building'], NO_RELEASE, false)
+    if (isTabbed) {
+      await page.getByRole('tab', {name: 'Props'}).click()
+    }
 
     const panel = page.getByTestId('PropertiesPanel')
     await expect(panel.getByText('Test Building', {exact: true}).first()).toBeVisible()
