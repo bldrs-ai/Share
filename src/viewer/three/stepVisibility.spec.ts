@@ -1,4 +1,5 @@
 import {Page, expect, test} from '@playwright/test'
+import {watchEngineWorker} from '../../tests/e2e/engineWorker'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 import {waitForModelReady} from '../../tests/e2e/models'
 import {homepageSetup, pauseViewerRendering, setIsReturningUser} from '../../tests/e2e/utils'
@@ -121,6 +122,50 @@ describeMobileAndDesktop('STEP hide / isolate / multi-select', () => {
 })
 
 
+// engine-worker.md §7 step 6: the same per-occurrence operations with the
+// model's engine in its own worker. Each passes only if every placement's
+// occurrence path crossed the worker boundary (the batch's path column) onto
+// the batched instances: without them a leaf row has no eye, and a pick or
+// a selection names the shared part shape, i.e. every block of that size.
+describeMobileAndDesktop('STEP hide / isolate / pick, engine worker', () => {
+  const WORKER_STEP_PATH = `${STEP_PATH}?feature=engineWorker`
+
+  test.beforeEach(async ({page}) => {
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+  })
+
+  test('a leaf occurrence\'s eye hides just that occurrence, and Isolate shows just one', async ({page}) => {
+    const engine = watchEngineWorker(page)
+    const {leaves} = await loadStepTree(page, WORKER_STEP_PATH)
+    await engine.expectWorkerEngine()
+    await expect(leaves.getByTestId('hide-icon')).toHaveCount(LEAF_COUNT)
+    await leaves.nth(0).getByTestId('hide-icon').click()
+    await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT - 1)
+    await leaves.nth(0).getByTestId('unhide-icon').click()
+    await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT)
+
+    await leaves.nth(1).getByTestId('NavTreeNodeLabel').click()
+    await expect.poll(() => paintedInstances(page)).toBe(1)
+    await closeTree(page)
+    await page.getByTestId('Isolate').click()
+    await expect.poll(() => visibleInstances(page)).toBe(1)
+    await expect.poll(() => displayToken(page)).toMatch(/^iso=o[\d.]+$/)
+  })
+
+  test('a double-click in the scene selects one occurrence', async ({page}) => {
+    const engine = watchEngineWorker(page)
+    await loadStepTree(page, WORKER_STEP_PATH)
+    await engine.expectWorkerEngine()
+    await closeTree(page)
+    const [point] = await instancePoints(page, 1)
+    await page.mouse.dblclick(point.x, point.y)
+    await expect.poll(async () => (await selection(page)).instances).toHaveLength(1)
+    await expect.poll(() => paintedInstances(page)).toBe(1)
+  })
+})
+
+
 describeMobileAndDesktop('IFC scene multi-select', () => {
   test.beforeEach(async ({page}) => {
     await homepageSetup(page)
@@ -187,10 +232,11 @@ const SETTLE_MS = 1000
  * leaf occurrences.
  *
  * @param page Playwright page
+ * @param path the model route; the engine-worker leg adds its flag
  * @return the leaf occurrence rows
  */
-async function loadStepTree(page: Page) {
-  await page.goto(STEP_PATH)
+async function loadStepTree(page: Page, path = STEP_PATH) {
+  await page.goto(path)
   await waitForModelReady(page)
   await pauseViewerRendering(page)
   const panel = page.getByTestId('NavTreePanel')

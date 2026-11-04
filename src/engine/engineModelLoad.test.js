@@ -2,17 +2,18 @@
 import {EngineSession} from './EngineSession'
 import {createEngineHandler} from './engineHandler'
 import {
-  createEngineIfcLoad,
+  createEngineModelLoad,
   decodePlacements,
   hasLegacyViewRules,
   isWorkerEngineModel,
   makeEngineIfcApi,
   makeGeometryStore,
   statisticsView,
-} from './engineIfcLoad'
+} from './engineModelLoad'
 import {makeBatchEncoder, makeLogForwarder, previewMessage, snapshotStatistics} from './engineStream'
 import {makeInProcessTransport} from './transports'
 import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
+import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 
 
 // engine-worker.md §7 step 3: an IFC load streamed from an engine session.
@@ -162,10 +163,10 @@ function spawnOver(api) {
 }
 
 
-describe('engine/engineIfcLoad streamed IFC load', () => {
+describe('engine/engineModelLoad streamed IFC load', () => {
   it('delivers each batch to onMeshBatch with geometry served from the facade, once per shape', async () => {
     const api = makeStreamingApi()
-    const load = createEngineIfcLoad({spawn: spawnOver(api)})
+    const load = createEngineModelLoad({spawn: spawnOver(api)})
     const seen = []
     const onMeshBatch = (flatMeshes, modelID, progress) => {
       // What incrementalBatchedBuilder does at delivery: resolve each new
@@ -198,14 +199,14 @@ describe('engine/engineIfcLoad streamed IFC load', () => {
   })
 
   it('keeps no geometry on the page once each batch has been appended', async () => {
-    const load = createEngineIfcLoad({spawn: spawnOver(makeStreamingApi())})
+    const load = createEngineModelLoad({spawn: spawnOver(makeStreamingApi())})
     await load.parse(new Blob(['x']), {onMeshBatch: () => null})
     expect(load.ifcAPI.GetGeometry(0, 100)).toBeNull()
     expect(load.ifcAPI.GetGeometry(0, 101)).toBeNull()
   })
 
   it('serves the done packet through the facade: statistics, matrices, unit scale, version', async () => {
-    const load = createEngineIfcLoad({spawn: spawnOver(makeStreamingApi())})
+    const load = createEngineModelLoad({spawn: spawnOver(makeStreamingApi())})
     await load.parse(new Blob(['x']), {onMeshBatch: () => null})
     const stats = load.ifcAPI.getStatistics(0)
     expect(stats.getGeometryMemory()).toBe(12.5)
@@ -221,7 +222,7 @@ describe('engine/engineIfcLoad streamed IFC load', () => {
   })
 
   it('forwards preview payloads, with their buffers', async () => {
-    const load = createEngineIfcLoad({spawn: spawnOver(makeStreamingApi())})
+    const load = createEngineModelLoad({spawn: spawnOver(makeStreamingApi())})
     const previews = []
     await load.parse(new Blob(['x']), {onMeshBatch: () => null, onPreviewMesh: (p) => previews.push(p)})
     expect(previews).toHaveLength(1)
@@ -233,7 +234,7 @@ describe('engine/engineIfcLoad streamed IFC load', () => {
   })
 
   it('calls onIndexed at the index, with properties answering through the facade', async () => {
-    const load = createEngineIfcLoad({spawn: spawnOver(makeStreamingApi())})
+    const load = createEngineModelLoad({spawn: spawnOver(makeStreamingApi())})
     let indexedTree = null
     const onIndexed = async (id) => {
       indexedTree = await load.ifcAPI.properties.getSpatialStructure(id, 'names')
@@ -251,7 +252,7 @@ describe('engine/engineIfcLoad streamed IFC load', () => {
         return -1
       },
     })
-    const load = createEngineIfcLoad({spawn: spawnOver(api)})
+    const load = createEngineModelLoad({spawn: spawnOver(api)})
     const source = new Blob(['ISO-10303-21;\nHEADER;\nFILE_SCHEMA((\'IFC4X3_ADD2\'));\nENDSEC;'])
     await expect(load.parse(source, {onMeshBatch: () => null})).rejects.toBeInstanceOf(UnsupportedSchemaError)
     expect(load.ifcAPI.engineSession.closed).toBe(true)
@@ -263,7 +264,7 @@ describe('engine/engineIfcLoad streamed IFC load', () => {
         throw new RangeError('WebAssembly.Memory(): could not allocate memory')
       },
     })
-    const load = createEngineIfcLoad({spawn: spawnOver(api)})
+    const load = createEngineModelLoad({spawn: spawnOver(api)})
     await expect(load.parse(new Blob(['x']), {onMeshBatch: () => null}))
       .rejects.toThrow('could not allocate memory')
     expect(load.ifcAPI.engineSession.closed).toBe(true)
@@ -276,7 +277,7 @@ describe('engine/engineIfcLoad streamed IFC load', () => {
         cb(flatMesh(20, [{geometryExpressID: 101, flatTransformation: IDENTITY, color: {x: 1, y: 1, z: 1, w: 1}}]))
       },
     })
-    const load = createEngineIfcLoad({spawn: spawnOver(api)})
+    const load = createEngineModelLoad({spawn: spawnOver(api)})
     const parents = []
     const {recapture} = await load.parse(new Blob(['x']), {
       onMeshBatch: (fms) => fms.forEach((fm) => parents.push(fm.expressID)),
@@ -292,13 +293,13 @@ describe('engine/engineIfcLoad streamed IFC load', () => {
       ExtractGeometryBatchAsync: async () => ({extracted: 0, remaining: 0}),
       StreamAllMeshesAsync: async () => undefined,
     })
-    const load = createEngineIfcLoad({spawn: spawnOver(api)})
+    const load = createEngineModelLoad({spawn: spawnOver(api)})
     const {recapture} = await load.parse(new Blob(['x']), {onMeshBatch: () => null})
     await expect(recapture()).resolves.toEqual([])
   })
 
   it('a bytes source is copied for the engine, leaving the caller\'s buffer intact', async () => {
-    const load = createEngineIfcLoad({spawn: spawnOver(makeStreamingApi())})
+    const load = createEngineModelLoad({spawn: spawnOver(makeStreamingApi())})
     const bytes = new Uint8Array([1, 2, 3, 4]).buffer
     await load.parse(bytes, {onMeshBatch: () => null})
     expect(bytes.byteLength).toBe(4)
@@ -408,7 +409,7 @@ describe('engine/engineStream helpers', () => {
 })
 
 
-describe('engine/engineIfcLoad legacy ?view= rules', () => {
+describe('engine/engineModelLoad legacy ?view= rules', () => {
   it('names a non-default view rule set, and nothing else', () => {
     expect(hasLegacyViewRules('?view=ch.sia380-1.heatmap')).toBe(true)
     expect(hasLegacyViewRules('?view=default')).toBe(false)
@@ -419,7 +420,7 @@ describe('engine/engineIfcLoad legacy ?view= rules', () => {
 })
 
 
-describe('engine/engineIfcLoad review fixes (#2058 round 1)', () => {
+describe('engine/engineModelLoad review fixes (#2058 round 1)', () => {
   it('a model whose every shape is degenerate recaptures as empty, so it opens like flag-off', async () => {
     const api = makeStreamingApi()
     // Only the degenerate geometry 102: placements arrive, shapes do not.
@@ -432,7 +433,7 @@ describe('engine/engineIfcLoad review fixes (#2058 round 1)', () => {
       cb(next)
       return {extracted: 1, remaining: 0}
     }
-    const load = createEngineIfcLoad({spawn: spawnOver(api)})
+    const load = createEngineModelLoad({spawn: spawnOver(api)})
     const batches = []
     const {recapture} = await load.parse(new Blob(['x']), {onMeshBatch: (fms) => batches.push(fms)})
     expect(batches).toHaveLength(1)
@@ -445,7 +446,7 @@ describe('engine/engineIfcLoad review fixes (#2058 round 1)', () => {
         return 5
       },
     })
-    const load = createEngineIfcLoad({spawn: spawnOver(api)})
+    const load = createEngineModelLoad({spawn: spawnOver(api)})
     const ids = []
     await load.parse(new Blob(['x']), {onMeshBatch: (fms, id) => ids.push(id)})
     expect(ids[0]).toBe(5)
@@ -463,7 +464,7 @@ describe('engine/engineIfcLoad review fixes (#2058 round 1)', () => {
     api.ExtractGeometryBatchAsync = () => new Promise((resolve) => {
       release = () => resolve({extracted: 0, remaining: 0})
     })
-    const load = createEngineIfcLoad({spawn: spawnOver(api)})
+    const load = createEngineModelLoad({spawn: spawnOver(api)})
     const parsing = load.parse(new Blob(['x']), {onMeshBatch: () => null})
     await new Promise((resolve) => setTimeout(resolve, 10))
     load.ifcAPI.engineSession.close()
@@ -477,7 +478,7 @@ describe('engine/engineIfcLoad review fixes (#2058 round 1)', () => {
       ReleaseEntityCache: jest.fn(),
       ReleaseModelGeometry: jest.fn(() => true),
     })
-    const load = createEngineIfcLoad({spawn: spawnOver(api)})
+    const load = createEngineModelLoad({spawn: spawnOver(api)})
     await load.parse(new Blob(['x']), {onMeshBatch: () => null})
     expect(load.ifcAPI.IsModelOpen(0)).toBe(true)
     load.ifcAPI.ReleaseEntityCache(0)
@@ -522,7 +523,7 @@ describe('engine/engineHandler review fixes (#2058 round 1)', () => {
 })
 
 
-describe('engine/engineIfcLoad with the real IncrementalBatchedBuilder', () => {
+describe('engine/engineModelLoad with the real IncrementalBatchedBuilder', () => {
   it('assembles the same model through the facade as from the engine directly, shared shapes included', async () => {
     // Geometry 100 is placed in batch 1 and again in batch 2. By then the
     // facade's store has DROPPED it (after batch 1's append), so batch 2's
@@ -541,7 +542,7 @@ describe('engine/engineIfcLoad with the real IncrementalBatchedBuilder', () => {
         break
       }
     }
-    const load = createEngineIfcLoad({spawn: spawnOver(makeStreamingApi())})
+    const load = createEngineModelLoad({spawn: spawnOver(makeStreamingApi())})
     let viaWorker = null
     await load.parse(new Blob(['x']), {
       onMeshBatch: (flatMeshes, modelID) => {
@@ -553,5 +554,159 @@ describe('engine/engineIfcLoad with the real IncrementalBatchedBuilder', () => {
     const actual = viaWorker.finalize().stats
     expect(actual).toEqual(expected)
     expect(actual).toMatchObject({uniqueGeometryCount: 2, instanceCount: 3})
+  })
+})
+
+
+/**
+ * A stub AP214 engine: an assembly whose one part shape (geometry 200,
+ * owned by product_definition_shape 30) is placed twice, once per
+ * occurrence, each placement carrying its own occurrence path — the shape
+ * conway's AP214 deferred pump emits (step-occurrence-selection.md). Its
+ * store-backed open refuses, as conway's does for AP214.
+ *
+ * @return {object}
+ */
+function makeStepApi() {
+  const tree = {expressID: 1, type: 'PRODUCT_DEFINITION', children: []}
+  const api = makeStreamingApi({
+    async OpenModelStream() {
+      api.calls.push('OpenModelStream')
+      return -1
+    },
+    async OpenModelStreamed(bytes, settings) {
+      api.calls.push(`OpenModelStreamed:${bytes.byteLength}`)
+      settings.ON_PREVIEW_MESH?.({
+        expressID: 30, geometryExpressID: 200, color: {x: 0, y: 1, z: 0, w: 1},
+        flatTransformation: IDENTITY, vertexData: new Float32Array(6), indexData: new Uint32Array(3),
+      })
+      return 0
+    },
+    treeCalls: [],
+    properties: {
+      getSpatialStructure: async (id, mode, opts) => {
+        api.treeCalls.push([mode, opts])
+        return tree
+      },
+      getItemProperties: async (id, eid) => ({expressID: eid}),
+      getPropertySets: async () => [],
+      getAllItemsOfType: async () => [],
+    },
+  })
+  api.heap.set(200, heapGeometry(7))
+  const batches = [
+    [flatMesh(30, [
+      {geometryExpressID: 200, flatTransformation: IDENTITY, color: {x: 0, y: 1, z: 0, w: 1}, occurrencePath: [41, 42]},
+      {geometryExpressID: 200, flatTransformation: IDENTITY.map((v, i) => (i === 12 ? 15 : v)),
+        color: {x: 0, y: 1, z: 0, w: 1}, occurrencePath: [41, 43]},
+    ])],
+    // A body under a second, deeper occurrence: paths are variable length.
+    [flatMesh(31, [
+      {geometryExpressID: 200, flatTransformation: IDENTITY.map((v, i) => (i === 13 ? 30 : v)),
+        color: {x: 0, y: 1, z: 0, w: 1}, occurrencePath: [44, 45, 46]},
+    ])],
+  ]
+  api.ExtractGeometryBatchAsync = async (id, size, cb) => {
+    const next = batches.shift()
+    if (next === undefined) {
+      return {extracted: 0, remaining: 0}
+    }
+    api.calls.push('pump')
+    next.forEach(cb)
+    return {extracted: next.length, remaining: batches.length}
+  }
+  return api
+}
+
+
+// engine-worker.md §7 step 6: STEP through the SAME load as IFC. What
+// differs is data (source kind, occurrence paths, includeSolids), so each
+// test here pins one of those crossing the worker boundary intact.
+describe('engine/engineModelLoad streamed STEP load', () => {
+  it('a STEP arrives as bytes and opens buffered, never trying the IFC-only windowed open', async () => {
+    const api = makeStepApi()
+    const load = createEngineModelLoad({format: 'step', spawn: spawnOver(api)})
+    const {summary} = await load.parse(new Uint8Array(9).buffer, {onMeshBatch: () => null})
+    expect(api.calls.filter((c) => c.startsWith('Open'))).toEqual(['OpenModelStreamed:9'])
+    expect(summary).toMatchObject({format: 'step', windowed: false, meshes: 2, geometries: 1})
+  })
+
+  it('every placement keeps its own occurrence path through the worker', async () => {
+    const load = createEngineModelLoad({format: 'step', spawn: spawnOver(makeStepApi())})
+    const paths = []
+    await load.parse(new Uint8Array(4).buffer, {
+      onMeshBatch: (flatMeshes) => {
+        for (const fm of flatMeshes) {
+          for (const placed of fm.geometries) {
+            paths.push([fm.expressID, placed.geometryExpressID, placed.occurrencePath])
+          }
+        }
+      },
+    })
+    expect(paths).toEqual([[30, 200, [41, 42]], [30, 200, [41, 43]], [31, 200, [44, 45, 46]]])
+  })
+
+  it('the at-index tree asks the worker for STEP\'s sub-solids', async () => {
+    const api = makeStepApi()
+    const load = createEngineModelLoad({format: 'step', spawn: spawnOver(api)})
+    // What makeIndexedModelHandle's getSpatialStructure asks, for both formats.
+    const onIndexed = (id) => load.ifcAPI.properties.getSpatialStructure(id, 'names', {includeSolids: true})
+    await load.parse(new Uint8Array(4).buffer, {onMeshBatch: () => null, onIndexed})
+    expect(api.treeCalls).toEqual([['names', {includeSolids: true}]])
+  })
+
+  it('a STEP preview crosses with its element id and buffers', async () => {
+    const load = createEngineModelLoad({format: 'step', spawn: spawnOver(makeStepApi())})
+    const previews = []
+    await load.parse(new Uint8Array(4).buffer, {onMeshBatch: () => null, onPreviewMesh: (p) => previews.push(p)})
+    expect(previews).toHaveLength(1)
+    expect(previews[0]).toMatchObject({expressID: 30, geometryExpressID: 200})
+    expect(previews[0].vertexData.length).toBe(6)
+  })
+
+  it('the pump line names the format, so a spec can tell a STEP worker load from an IFC one', async () => {
+    await createEngineModelLoad({format: 'step', spawn: spawnOver(makeStepApi())})
+      .parse(new Uint8Array(4).buffer, {onMeshBatch: () => null})
+    await createEngineModelLoad({spawn: spawnOver(makeStreamingApi())})
+      .parse(new Blob(['x']), {onMeshBatch: () => null})
+    const pumpLines = getConwayDirectLogs().map((l) => l.text).filter((text) => text.includes('engine worker pump:'))
+    expect(pumpLines).toHaveLength(2)
+    expect(pumpLines[0]).toContain('format=step')
+    expect(pumpLines[0]).toContain('windowed=no')
+    expect(pumpLines[1]).toContain('format=ifc')
+  })
+
+  it('assembles the same per-occurrence tables through the facade as from the engine directly', async () => {
+    const {IncrementalBatchedBuilder} = jest.requireActual('../viewer/ifc/incrementalBatchedBuilder')
+    const directApi = makeStepApi()
+    const direct = new IncrementalBatchedBuilder(directApi, 0)
+    for (;;) {
+      const batch = []
+      const {extracted, remaining} = await directApi.ExtractGeometryBatchAsync(0, 8, (fm) => batch.push(fm))
+      if (batch.length > 0) {
+        direct.appendBatch(batch)
+      }
+      if (extracted === 0 && remaining === 0) {
+        break
+      }
+    }
+    const load = createEngineModelLoad({format: 'step', spawn: spawnOver(makeStepApi())})
+    let viaWorker = null
+    await load.parse(new Uint8Array(4).buffer, {
+      onMeshBatch: (flatMeshes, modelID) => {
+        viaWorker = viaWorker ?? new IncrementalBatchedBuilder(load.ifcAPI, modelID)
+        viaWorker.appendBatch(flatMeshes)
+      },
+    })
+    const expected = direct.finalize()
+    const actual = viaWorker.finalize()
+    expect(actual.stats).toEqual(expected.stats)
+    expect(actual.stats).toMatchObject({uniqueGeometryCount: 1, instanceCount: 3})
+    const tables = (result) => result.batches.map((b) => ({
+      parents: Array.from(b.mesh.instanceParents),
+      paths: b.mesh.instanceOccurrencePaths,
+    }))
+    expect(tables(actual)).toEqual(tables(expected))
+    expect(tables(actual)[0].paths).toEqual([[41, 42], [41, 43], [44, 45, 46]])
   })
 })

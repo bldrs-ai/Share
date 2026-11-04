@@ -1,7 +1,28 @@
-// An IFC load whose engine runs in its own worker (design/new/engine-worker.md
-// §7 step 3, `?feature=engineWorker`). The page side of a streamed open:
-// what `parseIfcWithConway` does for a main-thread engine, re-expressed over
-// an EngineSession so `ShareIfcLoader#parse` keeps one assembly path.
+// A Conway model load whose engine runs in its own worker
+// (design/new/engine-worker.md §7 steps 3 and 6, `?feature=engineWorker`).
+// The page side of a streamed open: what `parseIfcWithConway` does for a
+// main-thread engine, re-expressed over an EngineSession so
+// `ShareIfcLoader#parse` keeps one assembly path.
+//
+// ONE load for both Conway formats, IFC and STEP/AP214 (AGENTS.md "IFC and
+// STEP converge"; engine-worker.md §11 maps the two pipelines stage by
+// stage). Conway's web-ifc compat `IfcAPI` serves both (it routes AP214 to
+// its own proxy behind the same surface), so the worker, the protocol, the
+// session and this facade are format-neutral code. What differs between the
+// formats is data, and none of it needs a branch here:
+//   - the SOURCE kind: an IFC can be opened windowed from a File (`{file}`),
+//     while conway's store-backed open is IFC-only, so the Loader's header
+//     sniff (Loader.js#canOpenFromStore) hands a STEP over as bytes and it
+//     crosses as a transferred `{bytes}` buffer, resident in the worker;
+//   - the ID scheme: STEP placements carry an occurrence path, which rides
+//     the batch's path column (engineStream.js#makeBatchEncoder) and is
+//     decoded back onto each placement below;
+//   - the tree's `includeSolids`, which the caller already passes
+//     (conwayDirectIfcLoader.js#attachConwayDirectModelMethods) and the
+//     session forwards (EngineSession.js#makePropertiesApi).
+// `format` itself only travels as a label (the `open` request, the `done`
+// packet, the pump line), so a log or a spec can say which format a worker
+// load was.
 //
 // The seam is an IfcAPI-shaped facade (`makeEngineIfcApi`). Everything that
 // assembles and decorates the model — `IncrementalBatchedBuilder`,
@@ -27,6 +48,32 @@ import {spawnEngineSession} from './spawnEngine'
 const MATRIX_ELEMENTS = 16
 /* RGBA per placement. */
 const COLOR_COMPONENTS = 4
+
+
+/**
+ * The loader types (`loader.type`, Loader.js#findLoader) whose model a
+ * Conway engine parses, and the engine format each is. `.ifczip` is listed
+ * although `Loader#load` unwraps it to its `.ifc` before the parse, so a
+ * caller that asks before the unwrap gets the same answer as one after.
+ */
+const ENGINE_FORMAT_BY_LOADER_TYPE = Object.freeze({
+  ifc: 'ifc',
+  ifczip: 'ifc',
+  step: 'step',
+  stp: 'step',
+})
+
+
+/**
+ * @param {string|undefined} loaderType `loader.type`
+ * @return {'ifc'|'step'|null} the engine format, or null for a format no
+ *   Conway engine parses (GLB, OBJ, …: those stay on the main thread,
+ *   engine-worker.md §2.3)
+ */
+export function engineFormatOf(loaderType) {
+  return Object.hasOwn(ENGINE_FORMAT_BY_LOADER_TYPE, loaderType ?? '') ?
+    ENGINE_FORMAT_BY_LOADER_TYPE[loaderType] : null
+}
 
 
 /**
@@ -211,10 +258,12 @@ export function makeEngineIfcApi(store) {
  * `ShareIfcLoader#parse` closes over `this.ifcManager.ifcAPI` today.
  *
  * @param {object} [options]
+ * @param {'ifc'|'step'} [options.format] from {@link engineFormatOf}; a
+ *   label only (see the file header)
  * @param {function(): Promise<object>} [options.spawn] for tests
  * @return {{ifcAPI: object, parse: Function}}
  */
-export function createEngineIfcLoad({spawn = spawnEngineSession} = {}) {
+export function createEngineModelLoad({format = 'ifc', spawn = spawnEngineSession} = {}) {
   const store = makeGeometryStore()
   const ifcAPI = makeEngineIfcApi(store)
 
@@ -289,7 +338,7 @@ export function createEngineIfcLoad({spawn = spawnEngineSession} = {}) {
     let opened
     try {
       opened = await session.open(sourceFor(buffer),
-        {stream: {previews: Boolean(onPreviewMesh), startPaused}})
+        {format, stream: {previews: Boolean(onPreviewMesh), startPaused}})
     } catch (e) {
       session.close()
       const failure = e.engineFailure
@@ -326,7 +375,8 @@ export function createEngineIfcLoad({spawn = spawnEngineSession} = {}) {
     // main-thread pump (Share#1744), for a worker load. Named differently on
     // purpose: E2E specs tell the two engines apart by which line appears.
     const done = ifcAPI.summary
-    conwayDirectInfo(`engine worker pump: batches=${done.batches} meshes=${done.meshes} ` +
+    conwayDirectInfo(`engine worker pump: format=${done.format ?? format} ` +
+      `batches=${done.batches} meshes=${done.meshes} ` +
       `geometries=${done.geometries} windowed=${done.windowed ? 'yes' : 'no'}`)
     if (done.meshes === 0) {
       conwayDirectWarn('engine worker pump produced no meshes; the model has nothing to draw')
@@ -352,10 +402,17 @@ export function createEngineIfcLoad({spawn = spawnEngineSession} = {}) {
 
 
 /**
+ * The `open` source. Which kind a load sends is decided upstream, by the
+ * Loader's header sniff (Loader.js#canOpenFromStore), not by the format
+ * tag: a mislabelled IFC named `.step` still arrives as a File and still
+ * opens windowed, and a STEP (conway's store-backed open is IFC-only)
+ * arrives as bytes.
+ *
  * @param {Blob|ArrayBuffer|Uint8Array} buffer
- * @return {object} the `open` source: a Blob/File as-is (windowed,
- *   cloned by reference); bytes as a copy, transferred — the caller's buffer
- *   stays intact for whatever reads it after the parse
+ * @return {object} a Blob/File as-is (windowed, cloned by reference); bytes
+ *   as a copy, transferred — the caller's buffer stays intact for whatever
+ *   reads it after the parse (openModelFailure's header sniff on a failed
+ *   open)
  */
 function sourceFor(buffer) {
   if (typeof buffer?.slice === 'function' && typeof buffer?.size === 'number') {

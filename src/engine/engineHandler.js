@@ -11,6 +11,11 @@
 // each bundle their own copy of Conway, and the Jest suite drives it with a
 // stub.
 //
+// Format-neutral: IFC and STEP/AP214 open through the same compat `IfcAPI`
+// and the same calls (§7 step 6). What differs is data — the source kind,
+// the occurrence-path column, `includeSolids` on the tree — and none of it
+// branches here (engineModelLoad.js says where each one enters).
+//
 // What it does: `init`; `open`, index-only or streamed (§7 step 3: previews
 // while the parse runs, then the geometry pump's batches as transferable
 // columns, then a `done` packet), with a failed open classified here, where
@@ -205,7 +210,7 @@ export function createEngineHandler({
       }
     },
 
-    async [Op.OPEN]({source, stream = null} = {}) {
+    async [Op.OPEN]({source, format = null, stream = null} = {}) {
       if (api === null) {
         throw new Error('engine: init has not run')
       }
@@ -216,7 +221,7 @@ export function createEngineHandler({
       }
       opening = true
       try {
-        return await openModel(source, stream)
+        return await openModel(source, stream, format)
       } finally {
         opening = false
       }
@@ -311,9 +316,14 @@ export function createEngineHandler({
    * @param {object} source `{file}` or `{bytes}`
    * @param {object|null} stream `{previews, batchSize, startPaused}`, or null
    *   for an index-only open
+   * @param {string|null} format `'ifc'` or `'step'` (engineModelLoad.js
+   *   #engineFormatOf), or null when the caller did not say. A label only:
+   *   conway detects the schema from the bytes, and the source kind (not
+   *   this) decides whether the open is windowed, so a mislabelled file
+   *   opens as what it is. It is echoed in the reply and the `done` packet.
    * @return {Promise<object>}
    */
-  async function openModel(source, stream) {
+  async function openModel(source, stream, format) {
     const settings = {
       ...BASE_OPEN_SETTINGS,
       ON_PROGRESS: (event) => emit(Ev.PROGRESS, {event: plainProgress(event)}),
@@ -337,7 +347,10 @@ export function createEngineHandler({
     // The same sequence the main-thread path runs (loader/conwayOpen.js):
     // windowed from the Blob/File when it can be (a File structured-clones
     // by reference, so nothing was copied to get it here, §2.2); else, or
-    // when that open fails other than by a schema refusal, buffered.
+    // when that open fails other than by a schema refusal, buffered. A STEP
+    // takes the buffered arm: the Loader hands it over as bytes, because
+    // conway's store-backed open is IFC-only (a windowed STEP open is a
+    // conway ask, engine-worker.md §2.3).
     // Held locally: dispose() nulls `api`, and an open that finishes after
     // close must still be able to CloseModel what it opened.
     const engine = api
@@ -379,10 +392,10 @@ export function createEngineHandler({
       return {modelID: -1, windowed: false, failure}
     }
     modelID = id
-    const result = {modelID, windowed, openMs: now() - t0, wasmBytes: wasmBytesOf(api)}
+    const result = {modelID, windowed, format, openMs: now() - t0, wasmBytes: wasmBytesOf(api)}
     emit(Ev.INDEXED, {modelID, windowed})
     if (stream) {
-      // `startPaused`: the page's test hold (engineIfcLoad.js); the pump
+      // `startPaused`: the page's test hold (engineModelLoad.js); the pump
       // waits at its first boundary for `pump {mode: 'run'}`.
       if (stream.startPaused) {
         paused = true
@@ -390,7 +403,7 @@ export function createEngineHandler({
       // Started, not awaited: the open's reply is the index (§4), and the
       // page's reads (tree, properties) are served beside the pump, each
       // paging the same windows, exactly as on the main thread (#2037).
-      runPump({windowed, batchSize: stream.batchSize ?? PUMP_BATCH_SIZE})
+      runPump({windowed, format, batchSize: stream.batchSize ?? PUMP_BATCH_SIZE})
     }
     return result
   }
@@ -418,9 +431,10 @@ export function createEngineHandler({
    *
    * @param {object} opts
    * @param {boolean} opts.windowed
+   * @param {string|null} opts.format the open's label, for the `done` packet
    * @param {number} opts.batchSize
    */
-  async function runPump({windowed, batchSize}) {
+  async function runPump({windowed, format, batchSize}) {
     const encoder = makeBatchEncoder(api, modelID)
     let total
     let done = 0
@@ -482,7 +496,7 @@ export function createEngineHandler({
         await oneShotFallback(windowed, postBatch)
       }
       emit(Ev.DONE, {summary: await summarize({batches, meshes, bytes, pumpMs: now() - tPump,
-        geometries: encoder.sentCount(), windowed})})
+        geometries: encoder.sentCount(), windowed, format})})
     } catch (e) {
       emit(Ev.FAILED, {kind: 'pump', message: e?.message ?? String(e), name: e?.name})
     }

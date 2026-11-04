@@ -200,6 +200,15 @@ range; (b) `decorateConwayDirectIfcModel` carries the occurrence tables
 rebuilt map — safe because the synthetic instance ids line up 1:1 (same emission
 order; BVH permutes only the index buffer, not the numbering).
 
+**Under `?feature=engineWorker`** (engine-worker.md §7 step 6) the engine,
+and so every `PlacedGeometry`, lives in a worker. The paths cross as one
+column per pump batch (`engine/engineStream.js#makeBatchEncoder`: offsets
+plus a flat id list, a zero-length run for a placement without one), and
+`engine/engineModelLoad.js#decodePlacements` puts each back on its placement
+as a plain array before the same `IncrementalBatchedBuilder` reads it. So
+the occurrence tables, and everything above that joins on them, are the
+main-thread ones. The tree's `includeSolids` travels on the `tree` request.
+
 ### Done (landed — PRs #1573 + #1575)
 
 - **Data foundation.** `IfcInstanceMap` captures `instanceIdToOccurrencePath` +
