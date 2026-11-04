@@ -619,6 +619,32 @@ describe('loader/bldrsElementProperties', () => {
       expect(order).toEqual([10, 11, 300, 200, 250])
     })
 
+    it('emits a resident source in the order main always has, with or without the file-order visit', async () => {
+      // The order the sweep emitted in before #2038 (roots in the type
+      // index's order, then the drain in FIFO discovery order), so a resident
+      // source's container is byte-identical to the one main wrote. Both
+      // reads a resident proxy can take: conway's file-order visit (which
+      // visits out of order here, as the mock does), and an older conway's
+      // per-record getLine.
+      const entities = {
+        10: root(10, [300, 200]),
+        11: root(11, [250]),
+        200: leaf(200),
+        250: leaf(250),
+        300: leaf(300),
+      }
+      for (const withVisit of [true, false]) {
+        const {mgr, proxy} = makeWindowedMgr(entities)
+        proxy.sourceIsExternal = false
+        proxy.getLine.mockImplementation((id) => entities[id])
+        if (!withVisit) {
+          delete proxy.visitLineDataInFileOrder
+        }
+        const {compressedBytes} = await captureBldrsElementProperties(mgr, 0, null)
+        expect(decodeContainerHeaderForTest(compressedBytes).blockIds.flat()).toEqual([10, 11, 300, 200, 250])
+      }
+    })
+
     it('keeps the rest of a chunk, and reports the records it could not read', async () => {
       // One record that throws fails conway's whole visit; the chunk is then
       // read record by record, and only that record is lost.
