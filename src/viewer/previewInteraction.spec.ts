@@ -1,4 +1,5 @@
 import {Page, expect, test} from '@playwright/test'
+import {watchEngineWorker} from '../tests/e2e/engineWorker'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
 import {waitForModelReady} from '../tests/e2e/models'
 import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
@@ -234,6 +235,7 @@ describeMobileAndDesktop('Open 205: interactive at first mesh', () => {
   for (const {engine, path} of ENGINES) {
     test(`${engine}: orbit and zoom work before the index, and the end of the load leaves the camera there`, async ({page}) => {
       test.setTimeout(TEST_TIMEOUT_MS)
+      const engineCheck = watchEngineWorker(page)
       await openHeldAtParse(page, path)
       await expect(page.getByTestId('LoadingBackdrop')).toBeHidden()
 
@@ -263,10 +265,14 @@ describeMobileAndDesktop('Open 205: interactive at first mesh', () => {
       await waitForModelReady(page, HELD_TIMEOUT_MS)
       const after = await settledCamera(page)
       after.pose.forEach((v, i) => expect(v).toBeCloseTo(zoomed.pose[i], 3))
+      if (path.includes('engineWorker')) {
+        engineCheck.expectWorkerEngine()
+      }
     })
 
     test(`${engine}: a double-click on a preview mesh selects its element during the parse`, async ({page}) => {
       test.setTimeout(TEST_TIMEOUT_MS)
+      const engineCheck = watchEngineWorker(page)
       await openHeldAtParse(page, path)
       const id = await doubleClickSelectsAPreviewElement(page)
       await expectStillParsing(page)
@@ -299,10 +305,14 @@ describeMobileAndDesktop('Open 205: interactive at first mesh', () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).store.getState().selectedElement?.expressID === target,
       id, {timeout: HELD_TIMEOUT_MS})
+      if (path.includes('engineWorker')) {
+        engineCheck.expectWorkerEngine()
+      }
     })
 
     test(`${engine}: a selection made on the preview survives into the finished model`, async ({page}) => {
       test.setTimeout(TEST_TIMEOUT_MS)
+      const engineCheck = watchEngineWorker(page)
       await openHeldAtParse(page, path)
       const id = await doubleClickSelectsAPreviewElement(page)
       await releaseIndex(page)
@@ -340,6 +350,9 @@ describeMobileAndDesktop('Open 205: interactive at first mesh', () => {
       // The tree came up at the index and resolved the pick to its row, so the
       // URL carries its element path.
       expect(new URL(page.url()).pathname).toMatch(new RegExp(`/${id}$`))
+      if (path.includes('engineWorker')) {
+        engineCheck.expectWorkerEngine()
+      }
     })
   }
 })

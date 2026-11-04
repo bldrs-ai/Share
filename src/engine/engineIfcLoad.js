@@ -17,7 +17,8 @@
 // method can be reached by accident: the facade has none to offer.
 import {reportEngineLog, reportEngineVersion} from '../loader/loadProgress'
 import {openModelFailure} from '../loader/unsupportedSchema'
-import {Ev} from './protocol'
+import {conwayDirectInfo, conwayDirectWarn} from '../viewer/ifc/conwayDirectLog'
+import {Ev, Op} from './protocol'
 import {spawnEngineSession} from './spawnEngine'
 
 
@@ -114,7 +115,11 @@ export function decodePlacements(placements) {
       // (`Matrix4.fromArray`, its coincidence key), and a copy keeps the
       // placement independent of the transferred buffer.
       flatTransformation: Array.from(transforms.subarray(m, m + MATRIX_ELEMENTS)),
-      color: {x: colors[c], y: colors[c + 1], z: colors[c + 2], w: colors[c + 3]},
+    }
+    if (!Number.isNaN(colors[c])) {
+      // NaN is the encoder's "no colour" (engineStream.js); left unset, the
+      // builder applies its DEFAULT_COLOR.
+      placed.color = {x: colors[c], y: colors[c + 1], z: colors[c + 2], w: colors[c + 3]}
     }
     if (pathOffsets && pathOffsets[i + 1] > pathOffsets[i]) {
       placed.occurrencePath = Array.from(pathIds.subarray(pathOffsets[i], pathOffsets[i + 1]))
@@ -171,6 +176,19 @@ export function makeEngineIfcApi(store) {
     ...store.api,
     // Async on the engine, so callers already await it.
     GetCoordinationMatrix: () => Promise.resolve(facade.summary?.coordinationMatrix),
+    // The two load-end releases (§2.1 rows 30, 31), as fire-and-forget
+    // messages: CadView drops the entity cache after its load-time reads,
+    // and Loader.js the native geometry once the scene is built. Without
+    // them the worker kept both for the life of the session (review on
+    // #2058).
+    IsModelOpen: () => facade.engineSession !== null && !facade.engineSession.closed,
+    ReleaseEntityCache: () => {
+      facade.engineSession?.request(Op.RELEASE, {entityCache: true}).catch(() => null)
+    },
+    ReleaseModelGeometry: () => {
+      facade.engineSession?.request(Op.RELEASE, {geometry: true}).catch(() => null)
+      return true
+    },
     GetAppliedCoordinationMatrix: () => facade.summary?.appliedCoordination,
     getStatistics: () => statisticsView(facade.summary?.statistics),
     getConwayVersion: () => facade.engineSession?.info?.conwayVersion,
@@ -218,8 +236,7 @@ export function createEngineIfcLoad({spawn = spawnEngineSession} = {}) {
     ifcAPI.engineSession = session
     reportEngineVersion(session.info?.conwayVersion)
 
-    let modelID = -1
-    let deliveredBatches = 0
+    let deliveredGeometries = 0
     session.on(Ev.PROGRESS, (msg) => onProgress?.(msg.event))
     session.on(Ev.MODEL_INFO, (msg) => onProgress?.({modelInfo: msg.info}))
     session.on(Ev.LOG, (msg) => reportEngineLog(msg))
@@ -228,9 +245,12 @@ export function createEngineIfcLoad({spawn = spawnEngineSession} = {}) {
       for (const geometry of msg.geometries) {
         store.put(geometry)
       }
-      deliveredBatches++
+      deliveredGeometries += msg.geometries.length
       try {
-        onMeshBatch?.(decodePlacements(msg.placements), modelID, msg.progress ?? {})
+        // `session.modelID`, set by the `indexed` event, which the engine
+        // posts before its first batch; the `open` reply can arrive after the
+        // first batches (the pump starts before the reply is sent).
+        onMeshBatch?.(decodePlacements(msg.placements), session.modelID, msg.progress ?? {})
       } finally {
         store.drop(msg.geometries)
       }
@@ -277,7 +297,7 @@ export function createEngineIfcLoad({spawn = spawnEngineSession} = {}) {
       }
       throw e
     }
-    modelID = opened.modelID
+    const modelID = opened.modelID
     if (holdIndex !== null) {
       await holdIndex()
     }
@@ -301,14 +321,25 @@ export function createEngineIfcLoad({spawn = spawnEngineSession} = {}) {
       session.close()
       throw e
     }
+    // The integration-boundary line conwayDirectIfcLoader prints for the
+    // main-thread pump (Share#1744), for a worker load. Named differently on
+    // purpose: E2E specs tell the two engines apart by which line appears.
+    const done = ifcAPI.summary
+    conwayDirectInfo(`engine worker pump: batches=${done.batches} meshes=${done.meshes} ` +
+      `geometries=${done.geometries} windowed=${done.windowed ? 'yes' : 'no'}`)
+    if (done.meshes === 0) {
+      conwayDirectWarn('engine worker pump produced no meshes; the model has nothing to draw')
+    }
     // The degraded end-of-load builds in ShareIfcLoader#parse read the whole
     // stream back through `recapture`. Here the engine re-emits a one-shot
     // stream as batches itself (engineHandler.js#oneShotFallback), so every
-    // mesh it had has already gone to `onMeshBatch`: a fallback after
-    // delivered batches would be building from nothing, and must say so
-    // rather than produce an empty model. With no batches at all (a model
-    // with no geometry), empty IS the stream.
-    const recapture = () => (deliveredBatches > 0 ?
+    // mesh it had has already gone to `onMeshBatch`. When no drawable shape
+    // was delivered (no products, or every one degenerate) empty IS the
+    // stream, and the model opens empty with the "nothing to draw" verdict,
+    // as it does on the main thread. When shapes were delivered and a
+    // fallback still asks, building from nothing would hide the failure, so
+    // it refuses (ShareIfcLoader#parse throws the builder's own error first).
+    const recapture = () => (deliveredGeometries > 0 ?
       Promise.reject(new Error('engine worker load: the stream is not retained; ' +
         'the incremental build is the only build')) :
       Promise.resolve([]))
@@ -370,4 +401,22 @@ function warnIndexFailure(e) {
  */
 export function isWorkerEngineModel(model) {
   return Boolean(model?.ifcManager?.ifcAPI?.engineSession)
+}
+
+
+/** What `?view=` says on a worker-engine model (CadView). */
+export const LEGACY_VIEW_RULES_MESSAGE =
+  'View rules (?view=) need the main-thread engine and are not available with ?feature=engineWorker'
+
+
+/**
+ * Does the URL ask for a legacy `?view=` rule set (ShareViewer's
+ * `viewRules`, anything but the default)?
+ *
+ * @param {string} [search] `location.search`
+ * @return {boolean}
+ */
+export function hasLegacyViewRules(search = globalThis.location?.search ?? '') {
+  const view = new URLSearchParams(search).get('view')?.toLowerCase()
+  return Boolean(view) && view !== 'default'
 }

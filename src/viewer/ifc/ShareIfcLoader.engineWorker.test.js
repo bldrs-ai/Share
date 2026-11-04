@@ -6,6 +6,7 @@
 import ShareIfcLoader, {isEngineWorkerLoad} from './ShareIfcLoader'
 import {assembleBatchedModel} from './buildBatchedConwayModel'
 import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
+import {buildConwayIfcModel} from './buildConwayIfcModel'
 import {parseIfcWithConway} from './conwayDirectIfcLoader'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {createEngineIfcLoad} from '../../engine/engineIfcLoad'
@@ -163,6 +164,52 @@ describe('viewer/ifc/ShareIfcLoader with ?feature=engineWorker', () => {
     }
     expect(facade.engineSession.close).toHaveBeenCalledTimes(1)
     expect(onError).toHaveBeenCalled()
+  })
+
+  it('a failed incremental assembly fails the load with ITS error, chained as cause', async () => {
+    IncrementalBatchedBuilder.mockImplementation(() => ({
+      root: {parent: null},
+      appendBatch: jest.fn(),
+      setPumpProgress: jest.fn(),
+      hasContent: () => true,
+      finalize: () => {
+        throw new Error('BatchedMesh capacity exceeded')
+      },
+    }))
+    const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
+    loader.type = 'ifc'
+    const onError = jest.fn()
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await expect(loader.parse(new ArrayBuffer(4), jest.fn(), onError)).resolves.toBeNull()
+    } finally {
+      errorSpy.mockRestore()
+      warnSpy.mockRestore()
+    }
+    const err = onError.mock.calls[0][0]
+    expect(err.message).toMatch(/incremental assembly failed: BatchedMesh capacity exceeded/)
+    expect(err.cause.message).toBe('BatchedMesh capacity exceeded')
+    expect(buildConwayIfcModel).not.toHaveBeenCalled()
+  })
+
+  it('a model with nothing to draw opens empty, as it does without the flag', async () => {
+    IncrementalBatchedBuilder.mockImplementation(() => ({
+      root: {parent: null},
+      appendBatch: jest.fn(),
+      setPumpProgress: jest.fn(),
+      hasContent: () => false,
+      finalize: jest.fn(),
+    }))
+    buildConwayIfcModel.mockImplementation(() => ({
+      mesh: {matrix: null, geometry: null, userData: {}},
+      stats: {vertexCount: 0, triangleCount: 0},
+    }))
+    const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
+    loader.type = 'ifc'
+    const model = await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
+    expect(model).toBeTruthy()
+    expect(buildConwayIfcModel).toHaveBeenCalledWith([], facade, OPENED_MODEL_ID, expect.anything())
   })
 
   it('isEngineWorkerLoad: IFC and .ifczip, with the flag, demand geometry and a scene', () => {

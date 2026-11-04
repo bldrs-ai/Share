@@ -4,6 +4,7 @@ import {createEngineHandler} from './engineHandler'
 import {
   createEngineIfcLoad,
   decodePlacements,
+  hasLegacyViewRules,
   isWorkerEngineModel,
   makeEngineIfcApi,
   makeGeometryStore,
@@ -403,5 +404,152 @@ describe('engine/engineStream helpers', () => {
     store.drop([{id: 1}])
     expect(store.size).toBe(0)
     expect(makeEngineIfcApi(store).GetLinearScalingFactor).toBeUndefined()
+  })
+})
+
+
+describe('engine/engineIfcLoad legacy ?view= rules', () => {
+  it('names a non-default view rule set, and nothing else', () => {
+    expect(hasLegacyViewRules('?view=ch.sia380-1.heatmap')).toBe(true)
+    expect(hasLegacyViewRules('?view=default')).toBe(false)
+    expect(hasLegacyViewRules('?feature=engineWorker')).toBe(false)
+  })
+})
+
+
+describe('engine/engineIfcLoad review fixes (#2058 round 1)', () => {
+  it('a model whose every shape is degenerate recaptures as empty, so it opens like flag-off', async () => {
+    const api = makeStreamingApi()
+    // Only the degenerate geometry 102: placements arrive, shapes do not.
+    const only102 = [flatMesh(12, [{geometryExpressID: 102, flatTransformation: IDENTITY}])]
+    api.ExtractGeometryBatchAsync = async (id, size, cb) => {
+      const next = only102.shift()
+      if (!next) {
+        return {extracted: 0, remaining: 0}
+      }
+      cb(next)
+      return {extracted: 1, remaining: 0}
+    }
+    const load = createEngineIfcLoad({spawn: spawnOver(api)})
+    const batches = []
+    const {recapture} = await load.parse(new Blob(['x']), {onMeshBatch: (fms) => batches.push(fms)})
+    expect(batches).toHaveLength(1)
+    await expect(recapture()).resolves.toEqual([])
+  })
+
+  it('the first batch gets the real modelID, not -1', async () => {
+    const api = makeStreamingApi({
+      async OpenModelStream() {
+        return 5
+      },
+    })
+    const load = createEngineIfcLoad({spawn: spawnOver(api)})
+    const ids = []
+    await load.parse(new Blob(['x']), {onMeshBatch: (fms, id) => ids.push(id)})
+    expect(ids[0]).toBe(5)
+  })
+
+  it('a placement without a colour decodes without one, for the builder\'s default', () => {
+    const encoder = makeBatchEncoder(makeStreamingApi(), 0)
+    const {placements} = encoder.encode([flatMesh(1, [{geometryExpressID: 100, flatTransformation: IDENTITY}])])
+    expect(decodePlacements(placements)[0].geometries[0].color).toBeUndefined()
+  })
+
+  it('closing the session mid-stream rejects the parse instead of leaving it pending', async () => {
+    const api = makeStreamingApi()
+    let release
+    api.ExtractGeometryBatchAsync = () => new Promise((resolve) => {
+      release = () => resolve({extracted: 0, remaining: 0})
+    })
+    const load = createEngineIfcLoad({spawn: spawnOver(api)})
+    const parsing = load.parse(new Blob(['x']), {onMeshBatch: () => null})
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    load.ifcAPI.engineSession.close()
+    release()
+    await expect(parsing).rejects.toThrow('engine session closed')
+  })
+
+  it('the load-end releases reach the worker engine', async () => {
+    const api = makeStreamingApi({
+      IsModelOpen: () => true,
+      ReleaseEntityCache: jest.fn(),
+      ReleaseModelGeometry: jest.fn(() => true),
+    })
+    const load = createEngineIfcLoad({spawn: spawnOver(api)})
+    await load.parse(new Blob(['x']), {onMeshBatch: () => null})
+    expect(load.ifcAPI.IsModelOpen(0)).toBe(true)
+    load.ifcAPI.ReleaseEntityCache(0)
+    load.ifcAPI.ReleaseModelGeometry(0)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(api.ReleaseEntityCache).toHaveBeenCalledWith(0)
+    expect(api.ReleaseModelGeometry).toHaveBeenCalledWith(0)
+  })
+})
+
+
+describe('engine/engineHandler review fixes (#2058 round 1)', () => {
+  it('a failed open flushes the engine log BEFORE its reply', async () => {
+    const posted = []
+    let pending = {entries: [{level: 'error', message: 'parse blew up', count: 1}], lines: []}
+    const handler = createEngineHandler({
+      loadIfcAPI: async () => function IfcAPI() {
+        return makeStreamingApi({
+          async OpenModelStream() {
+            throw new RangeError('WebAssembly.Memory(): could not allocate memory')
+          },
+        })
+      },
+      post: (m) => posted.push(m),
+      logForwarder: {
+        take: () => {
+          const out = pending
+          pending = null
+          return out
+        },
+        dispose: () => null,
+      },
+    })
+    await handler.handle({v: 1, id: 1, op: 'init', args: {epoch: 1}})
+    await handler.handle({v: 1, id: 2, op: 'open', args: {source: {file: new Blob(['x'])}}})
+    const logAt = posted.findIndex((m) => m.ev === 'log')
+    const replyAt = posted.findIndex((m) => m.re === 2)
+    expect(posted[replyAt].ok).toBe(false)
+    expect(logAt).toBeGreaterThanOrEqual(0)
+    expect(logAt).toBeLessThan(replyAt)
+  })
+})
+
+
+describe('engine/engineIfcLoad with the real IncrementalBatchedBuilder', () => {
+  it('assembles the same model through the facade as from the engine directly, shared shapes included', async () => {
+    // Geometry 100 is placed in batch 1 and again in batch 2. By then the
+    // facade's store has DROPPED it (after batch 1's append), so batch 2's
+    // placement must come from the builder's own cache: the invariant the
+    // store's drop rests on (review on #2058).
+    const {IncrementalBatchedBuilder} = jest.requireActual('../viewer/ifc/incrementalBatchedBuilder')
+    const directApi = makeStreamingApi()
+    const direct = new IncrementalBatchedBuilder(directApi, 0)
+    for (;;) {
+      const batch = []
+      const {extracted, remaining} = await directApi.ExtractGeometryBatchAsync(0, 8, (fm) => batch.push(fm))
+      if (batch.length > 0) {
+        direct.appendBatch(batch)
+      }
+      if (extracted === 0 && remaining === 0) {
+        break
+      }
+    }
+    const load = createEngineIfcLoad({spawn: spawnOver(makeStreamingApi())})
+    let viaWorker = null
+    await load.parse(new Blob(['x']), {
+      onMeshBatch: (flatMeshes, modelID) => {
+        viaWorker = viaWorker ?? new IncrementalBatchedBuilder(load.ifcAPI, modelID)
+        viaWorker.appendBatch(flatMeshes)
+      },
+    })
+    const expected = direct.finalize().stats
+    const actual = viaWorker.finalize().stats
+    expect(actual).toEqual(expected)
+    expect(actual).toMatchObject({uniqueGeometryCount: 2, instanceCount: 3})
   })
 })

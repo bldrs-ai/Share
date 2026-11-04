@@ -593,6 +593,14 @@ export default class ShareIfcLoader {
             // best-effort
           }
           ifcModel = undefined
+          if (engineLoad !== null) {
+            // A worker load keeps no copy of the stream to rebuild from (the
+            // worker sent each shape once and the builder held the only
+            // copy), so the fallbacks below have nothing to build: fail the
+            // load with THIS error, which says what broke, rather than with
+            // recapture()'s (review on #2058).
+            throw new Error(`engine worker load: incremental assembly failed: ${e?.message ?? e}`, {cause: e})
+          }
         }
       }
 

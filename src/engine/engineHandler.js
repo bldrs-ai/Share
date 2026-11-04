@@ -269,19 +269,37 @@ export function createEngineHandler({
       return await api.properties.getAllItemsOfType(modelID, type, verbose)
     },
 
-    [Op.RELEASE]({entityCache = false} = {}) {
+    [Op.RELEASE]({entityCache = false, geometry = false} = {}) {
       requireModel()
       // eslint-disable-next-line new-cap
-      if (entityCache && typeof api.ReleaseEntityCache === 'function' && api.IsModelOpen(modelID)) {
+      if (!api.IsModelOpen?.(modelID)) {
+        return false
+      }
+      let released = false
+      if (entityCache && typeof api.ReleaseEntityCache === 'function') {
         // eslint-disable-next-line new-cap
         api.ReleaseEntityCache(modelID)
-        return true
+        released = true
       }
-      return false
+      if (geometry && typeof api.ReleaseModelGeometry === 'function') {
+        // The scene is built; nothing reads the native geometry again. Lets
+        // this engine reuse those wasm pages rather than grow (Loader.js'
+        // main-thread twin runs in the GLB writer's `finally`).
+        // eslint-disable-next-line new-cap
+        released = api.ReleaseModelGeometry(modelID) || released
+      }
+      return released
     },
 
     [Op.STATS]() {
-      return {wasmBytes: wasmBytesOf(api), modelID}
+      return {
+        wasmBytes: wasmBytesOf(api),
+        // Chrome's non-standard heap figure, where this scope has it; the
+        // engine's JS heap (its index, §3) is the larger half of a worker,
+        // and the page's own performance.memory cannot see it.
+        jsHeapBytes: globalThis.performance?.memory?.usedJSHeapSize,
+        modelID,
+      }
     },
 
     [Op.CLOSE]() {
@@ -594,45 +612,64 @@ export function createEngineHandler({
       send({re: msg.id, ok: false, error: {name: 'Error', message: `engine: unknown op ${msg.op}`}})
       return
     }
+    let reply
     try {
-      const result = await op(msg.args)
-      send({re: msg.id, ok: true, result})
+      reply = {re: msg.id, ok: true, result: await op(msg.args)}
     } catch (e) {
-      send({re: msg.id, ok: false, error: serializeError(e)})
+      reply = {re: msg.id, ok: false, error: serializeError(e)}
     }
+    // The engine's log first, before EVERY reply and not only before
+    // events: a failed open's reply is what makes the page close the
+    // session, and the Logger errors that explain the failure would
+    // otherwise die with it (review on #2058). Cheap when empty.
+    flushLog()
+    send(reply)
   }
 
   return {handle, dispose}
 }
 
 
+// One reused channel, and the pump continuations waiting on it, FIFO.
+let tickChannel = null
+const tickWaiters = []
+
+
 /**
  * Give queued requests (a tree read, `pump` pause, `abort`) a turn between
- * pump calls, without a timer. NOT `setTimeout(0)`: nested timeouts are
- * clamped to 4 ms after the fifth level, and a pump yields once per batch of
- * 8 products, so on sp-231MB (thousands of batches) the clamp alone added
- * ~16 s to Geometry in this PR's first measurement. Same order as conway's
- * own `core/progress.js#yieldToEventLoop`: `scheduler.yield`, else a
- * MessageChannel round trip, which is not clamped.
+ * pump calls, without a timer.
+ *
+ * - NOT `setTimeout(0)`: nested timeouts are clamped to 4 ms after the fifth
+ *   level, and a pump yields once per batch of 8 products, so on sp-231MB
+ *   (thousands of batches) the clamp alone added ~16 s to Geometry in this
+ *   PR's first measurement.
+ * - NOT `scheduler.yield()` either, though conway's own pump prefers it: its
+ *   continuation is scheduled AHEAD of tasks already queued, which on the
+ *   main thread still lets rendering and input in, but in a worker the only
+ *   other work is the page's requests, which arrive as posted-message tasks.
+ *   A pump that never waits on I/O (a buffered source) could hold a tree or
+ *   properties request until Geometry ends (review on #2058).
+ * - A MessageChannel tick is a posted-message task too, queued behind any
+ *   request that arrived first, so requests are served in arrival order.
+ *   One channel, reused, rather than one per yield (~12k on PSB).
  *
  * @return {Promise<void>}
  */
 export function yieldToEventLoop() {
-  const scheduler = globalThis.scheduler
-  if (typeof scheduler?.yield === 'function') {
-    return scheduler.yield()
+  if (typeof MessageChannel !== 'function') {
+    return new Promise((resolve) => setTimeout(resolve, 0))
   }
-  if (typeof MessageChannel === 'function') {
-    return new Promise((resolve) => {
-      const channel = new MessageChannel()
-      channel.port1.onmessage = () => {
-        channel.port1.close()
-        resolve()
-      }
-      channel.port2.postMessage(null)
-    })
+  if (tickChannel === null) {
+    tickChannel = new MessageChannel()
+    tickChannel.port1.onmessage = () => tickWaiters.shift()?.()
+    // Node (Jest) only: an open port would otherwise keep the process alive.
+    tickChannel.port1.unref?.()
+    tickChannel.port2.unref?.()
   }
-  return new Promise((resolve) => setTimeout(resolve, 0))
+  return new Promise((resolve) => {
+    tickWaiters.push(resolve)
+    tickChannel.port2.postMessage(null)
+  })
 }
 
 

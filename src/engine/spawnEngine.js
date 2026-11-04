@@ -65,12 +65,35 @@ export async function spawnEngineSession({
   makeWorker = defaultMakeWorker,
   loadIfcAPI = () => import('web-ifc').then((m) => m.IfcAPI),
 } = {}) {
-  const epoch = nextEpoch++
-  const useWorker = !inProcess && supportsModuleWorkers()
-  const transport = useWorker ?
-    makeWorkerTransport(makeWorker()) :
+  const inProcessTransport = () =>
     makeInProcessTransport((post) => createEngineHandler({loadIfcAPI, post}))
-  const session = new EngineSession(transport, {epoch})
+  if (inProcess || !supportsModuleWorkers()) {
+    return await initSession(inProcessTransport())
+  }
+  try {
+    return await initSession(makeWorkerTransport(makeWorker()))
+  } catch (e) {
+    // The worker could not stand an engine up: its script failed to load,
+    // it speaks another protocol version (a stale cached worker beside a new
+    // page, ProtocolMismatchError), or it never answered init. The
+    // in-process engine is the page's own build and always speaks its
+    // version, so the load goes on there rather than failing (§8 item 6:
+    // the fallback is permanent). Said once in the console, because a model
+    // that silently lost its worker would look like a regression of
+    // everything the worker buys.
+    console.warn(`[engine] worker engine failed to start (${e?.name ?? 'Error'}: ${e?.message ?? e}); ` +
+      'running this model\'s engine in process instead')
+    return await initSession(inProcessTransport())
+  }
+}
+
+
+/**
+ * @param {object} transport
+ * @return {Promise<EngineSession>} initialised, or closed and rejected
+ */
+async function initSession(transport) {
+  const session = new EngineSession(transport, {epoch: nextEpoch++})
   try {
     await session.init({verbose: isFeatureEnabled('glbVerbose'), flags: engineFlagSnapshot()})
   } catch (e) {

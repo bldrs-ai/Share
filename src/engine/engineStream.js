@@ -107,8 +107,15 @@ export function makeBatchEncoder(api, modelID) {
         for (let k = 0; k < MATRIX_ELEMENTS; k++) {
           transforms.push(m[k])
         }
+        // NaN marks "no colour", so the page leaves `color` unset and the
+        // builder applies its own DEFAULT_COLOR, as it would on the main
+        // thread, rather than drawing opaque black.
         const c = placed.color
-        colors.push(c?.x ?? 0, c?.y ?? 0, c?.z ?? 0, c?.w ?? 1)
+        if (c) {
+          colors.push(c.x, c.y, c.z, c.w)
+        } else {
+          colors.push(NaN, NaN, NaN, NaN)
+        }
         const path = placed.occurrencePath
         if (path) {
           // An Array or an Embind vector: forEachVectorItem reads either.

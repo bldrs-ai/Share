@@ -25,9 +25,9 @@ import 'react-chat-elements/dist/main.css'
 import './chat-bubbles.css'
 
 
-/** Shown instead of running a reply's code on a worker-engine model. */
+/** The legacy chat's answer on a model whose engine is in a worker. */
 export const WORKER_ENGINE_BOT_MESSAGE =
-  'This chat can only run its selection code against the main-thread engine, ' +
+  'This chat reads the model through the main-thread engine, ' +
   'and this model was opened with ?feature=engineWorker. Reload without that ' +
   'flag to use it, or use ?feature=assist.'
 
@@ -116,6 +116,17 @@ export default function BotChat() {
 
     setMessages((prev) => [...prev, userMsg, phMsg])
 
+    if (isWorkerEngineModel(useStore.getState().model)) {
+      // The legacy chat reads properties and runs its code against the
+      // main-thread engine (`viewer.IFC.loader.ifcManager`), which holds no
+      // model when the model's engine is in a worker: it would answer from
+      // nothing. Say so instead (engine-worker.md §8 item 7: this chat stays
+      // on the main-thread engine until `?feature=assist` retires it).
+      const aiMsg = {id: uuid(), position: 'left', title: 'Assistant:', text: WORKER_ENGINE_BOT_MESSAGE, date: new Date()}
+      setMessages((prev) => [...prev.filter((message) => message.id !== phId), aiMsg])
+      return
+    }
+
     try {
       const selectedProps = await viewer.getSelectedElementsProps(selectedElements)
 
@@ -147,22 +158,14 @@ export default function BotChat() {
       const payload = safeJsonFromCodeBlock(raw)
 
       debug().log('LLM response:', payload)
-      let assistantText = payload?.assistant_response || raw
+      const assistantText = payload?.assistant_response || raw
 
       if (Array.isArray(payload?.selectedElements)) {
         const strIds = payload.selectedElements.map(String)
         setSelectedElements(strIds)
       }
 
-      if (typeof payload.client_code === 'string' && isWorkerEngineModel(useStore.getState().model)) {
-        // The legacy eval reaches the main-thread engine through
-        // `viewer.IFC.loader.ifcManager` synchronously-shaped calls, and a
-        // model whose engine runs in a worker has no model open there: the
-        // code would read nothing and select nothing, silently. Say so
-        // instead (engine-worker.md §8 item 7: the bot stays on the
-        // main-thread engine until the `?feature=assist` port retires it).
-        assistantText = `${assistantText}\n\n${WORKER_ENGINE_BOT_MESSAGE}`
-      } else if (typeof payload.client_code === 'string') {
+      if (typeof payload.client_code === 'string') {
         try {
           const asyncWrapper = `
          // wrap client_code in an async IIFE so await works

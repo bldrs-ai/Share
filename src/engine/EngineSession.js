@@ -385,10 +385,11 @@ export class EngineSession {
     // leaves it running), and until it is terminated it pins its whole heap
     // (§3: PSB's 2.2 GB). `close()` after this is a no-op.
     this.transport.terminate()
-    if (kind === 'crash') {
-      for (const cb of this.listeners.get(Ev.FAILED) ?? []) {
-        cb({ev: Ev.FAILED, kind: 'crash', message: error.message})
-      }
+    // `failed` for a close too, not only a crash: a streamed load waiting on
+    // `done` or `failed` would otherwise wait forever on a session closed
+    // under it (eviction and close, steps 7 and 8).
+    for (const cb of this.listeners.get(Ev.FAILED) ?? []) {
+      cb({ev: Ev.FAILED, kind, message: error.message})
     }
     // Nothing is delivered after this, so nothing should stay reachable
     // from a closed session (the dev hook keeps closed sessions around).
