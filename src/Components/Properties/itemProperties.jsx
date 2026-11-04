@@ -125,8 +125,23 @@ function webIfcFor(model) {
  * How deep nested entities render as their own tables before they are shown
  * as `#id TYPE` instead. A reference chain can be long (an IfcGrid's axis →
  * its IfcPolyline → its points), and each level is a table in a 130 px cell.
+ *
+ * This bounds RENDERING only. `deref` has already resolved the whole
+ * transitive closure of every reference before renderableValue sees it: one
+ * `getItemProperties(0, id, true)` per reference (a worker round trip each
+ * under `?feature=engineWorker`), with no cycle guard. That predates this
+ * limit; bounding it means a lazier deref, not a smaller number here.
  */
 const MAX_NESTED_TABLE_DEPTH = 2
+
+
+/**
+ * How many members of an array are shown before `… and N more`. Arrays the
+ * panel can reach run to tens of thousands of members (an
+ * IfcCartesianPointList3D's coordinates, a shell's faces), and each entity
+ * member is a nested table.
+ */
+export const MAX_ARRAY_MEMBERS = 50
 
 
 /**
@@ -155,10 +170,22 @@ export async function renderableValue(model, value, serial, depth = 0) {
     return String(value)
   }
   if (Array.isArray(value)) {
+    const shown = value.length > MAX_ARRAY_MEMBERS ? value.slice(0, MAX_ARRAY_MEMBERS) : value
+    const more = value.length - shown.length
+    const moreText = more > 0 ? `… and ${more} more` : null
+    if (shown.every(isPrimitive)) {
+      // The common case (coordinates, indices, labels): one string, not a
+      // span and an await per member.
+      const text = shown.map((member) => (member === null || member === undefined ? '' : String(member))).join(', ')
+      return moreText ? `${text}, ${moreText}` : text
+    }
     const parts = []
-    for (let i = 0; i < value.length; i++) {
-      const part = await renderableValue(model, value[i], `${serial}-${i}`, depth)
+    for (let i = 0; i < shown.length; i++) {
+      const part = await renderableValue(model, shown[i], `${serial}-${i}`, depth)
       parts.push(<span key={`${serial}-${i}`}>{i > 0 ? ', ' : ''}{part}</span>)
+    }
+    if (moreText) {
+      parts.push(<span key={`${serial}-more`}>, {moreText}</span>)
     }
     return parts
   }
@@ -171,8 +198,10 @@ export async function renderableValue(model, value, serial, depth = 0) {
       return await createPropertyTable(model, value, false, serial, depth + 1)
     }
     if (value.ref !== undefined) {
-      // deref's shape for a reference to a rooted entity: {type, ref: GlobalId}.
-      return String(value.ref)
+      // deref's shape for a reference to a rooted entity: {type, ref:
+      // GlobalId}, `type` already a name ('IFCWALL').
+      const name = typeof value.type === 'string' ? prettyType(value.type) : ''
+      return name ? `${name} ${value.ref}` : String(value.ref)
     }
     try {
       return JSON.stringify(value)
@@ -181,6 +210,15 @@ export async function renderableValue(model, value, serial, depth = 0) {
     }
   }
   return String(value)
+}
+
+
+/**
+ * @param {*} value
+ * @return {boolean} whether React renders it as text
+ */
+function isPrimitive(value) {
+  return value === null || value === undefined || (typeof value !== 'object' && typeof value !== 'function')
 }
 
 
@@ -274,11 +312,15 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0, depth
       // each to a whole object, and rendering that array as React children
       // took down the whole app (React #31; the PSB grid, Share#2063).
       //
-      // `structuredClone` first: deref rewrites the value IN PLACE, and the
-      // record can be shared (a main-thread engine's cached object, or the
-      // spatial-tree node the panel falls back to), so a second render of
-      // the same element would otherwise start from already-resolved
-      // objects.
+      // `structuredClone` first: deref rewrites the value IN PLACE, and two
+      // records the panel is given ARE shared: on a GLB cache hit,
+      // `getRecord` returns the object held in bldrsElementProperties.js's
+      // LRU block cache; and the spatial-tree node Properties.jsx falls
+      // back to is the NavTree's own, whose `Name` handle deref would turn
+      // into a bare string under the tree's label. Only this top-level
+      // value is copied: the entities deref fetches for each reference are
+      // mutated too, which is safe only because both engines' (and the
+      // worker facade's) getItemProperties return a fresh object per call.
       const derefed = await deref(cloneForDeref(propValue), webIfcFor(model), serial)
       return (
         <Row

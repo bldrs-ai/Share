@@ -683,11 +683,17 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
   streams, then the finished model. At the swap, the panel's effect re-runs
   and reads the selection again, while answers to earlier selections can
   still be in flight from the worker. `Properties.jsx`'s `isStale` guard
-  drops any answer for a selection or model that is no longer current. It
-  is now covered by a unit test (a slow earlier answer arrives after the
-  current one) and an E2E (`PropertiesNestedRefs.spec.ts`: rapid NavTree
-  clicks with the geometry released mid-burst). No crash was traced to
-  this race; #2063 is a different bug.
+  drops any answer for a selection or model that is no longer current.
+  Two tests cover it, each failing with the guard removed:
+  - a unit test: a slow earlier answer arrives after the current one;
+  - `PropertiesNestedRefs.spec.ts`: rapid NavTree clicks with the panel
+    mounted, the geometry released mid-burst, ending on a cheap element
+    right after an expensive one. The expensive answer comes back last.
+
+  The panel's ErrorBoundary is not keyed on the selection, so the panel
+  stays mounted. It resets itself when the selection or the read model
+  changes, so a failure at the indexed model is retried with the finished
+  one. No crash was traced to this race; #2063 is a different bug.
 
 ## 8. Decisions (2026-11-03)
 

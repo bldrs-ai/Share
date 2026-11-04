@@ -1,7 +1,7 @@
 import React from 'react'
 import {render, screen} from '@testing-library/react'
 import {MockModel} from '../../utils/IfcMock.test'
-import {createPropertyTable, hasProperties, quantities, renderableValue} from './itemProperties'
+import {MAX_ARRAY_MEMBERS, createPropertyTable, hasProperties, quantities, renderableValue} from './itemProperties'
 
 
 const REF_TYPE = 5
@@ -221,10 +221,36 @@ describe('renderableValue', () => {
   it('never hands React a raw object', async () => {
     expect(await renderableValue(model, true, 0)).toBe('true')
     expect(await renderableValue(model, null, 0)).toBe('')
-    expect(await renderableValue(model, {type: 'IFCWALL', ref: 'guid-1'}, 0)).toBe('guid-1')
+    // A reference to a rooted entity keeps its type, as its nested table did.
+    expect(await renderableValue(model, {type: 'IFCWALL', ref: 'guid-1'}, 0)).toBe('Wall guid-1')
+    expect(await renderableValue(model, {ref: 'guid-2'}, 0)).toBe('guid-2')
     expect(await renderableValue(model, {a: 1}, 0)).toBe('{"a":1}')
     render(<div>{await renderableValue(model, ['x', 2, {b: 3}], 0)}</div>)
     expect(screen.getByText('x')).toBeInTheDocument()
     expect(screen.getByText(', {"b":3}')).toBeInTheDocument()
+  })
+})
+
+
+describe('renderableValue on long and primitive arrays', () => {
+  const model = engineModel({})
+
+  it('renders an all-primitive array as ONE string, not a node per member', async () => {
+    expect(await renderableValue(model, [0, 2, 'x', true], 0)).toBe('0, 2, x, true')
+  })
+
+  it('shows the first MAX_ARRAY_MEMBERS members of a long array, then how many more', async () => {
+    const extra = 30
+    const total = MAX_ARRAY_MEMBERS + extra
+    const numbers = Array.from({length: total}, (_, i) => i)
+    const text = await renderableValue(model, numbers, 0)
+    expect(text.endsWith(`${MAX_ARRAY_MEMBERS - 1}, … and ${extra} more`)).toBe(true)
+    expect(text).not.toContain(`, ${MAX_ARRAY_MEMBERS},`)
+
+    const objects = Array.from({length: total}, (_, i) => ({n: i}))
+    const parts = await renderableValue(model, objects, 0)
+    expect(parts).toHaveLength(MAX_ARRAY_MEMBERS + 1)
+    render(<div>{parts}</div>)
+    expect(screen.getByText(`, … and ${extra} more`)).toBeInTheDocument()
   })
 })

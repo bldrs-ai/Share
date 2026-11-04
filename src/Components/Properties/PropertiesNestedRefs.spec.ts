@@ -121,10 +121,14 @@ describeMobileAndDesktop('Properties: an element whose references resolve to ent
     await page.getByTestId('control-button-properties').click()
     await expect(page.getByTestId('PropertiesPanel')).toBeVisible()
 
-    // One burst, in page: select the grid and the proxy back and forth, let
-    // the geometry in mid-burst, and end on the grid. Each selection is an
-    // engine round trip to the worker, so their answers come back in a pile
-    // around the handover from the indexed model to the finished one.
+    // One burst, in page, with the panel mounted throughout: select the grid
+    // and the proxy back and forth, let the geometry in mid-burst, and end
+    // on the grid and then the building. Every read is a round trip to the
+    // worker, and the grid's table takes many (deref follows each axis to
+    // its curve and points) where the building's takes one or two, so the
+    // grid's answer comes back AFTER the building's. Without Properties.jsx's
+    // isStale guard it lands last and the panel shows the grid under the
+    // building's selection, which this test then fails on.
     await page.evaluate(async () => {
       const w = window as unknown as Record<string, () => void>
       const click = (label: string) => {
@@ -141,7 +145,7 @@ describeMobileAndDesktop('Properties: an element whose references resolve to ent
         await tick()
       }
       w.__bldrsTestReleaseGeometryPump()
-      for (const label of ['Grid', 'P-1', 'Test Building', 'P-1', 'Grid']) {
+      for (const label of ['Grid', 'P-1', 'Grid', 'Test Building']) {
         click(label)
         await tick()
       }
@@ -149,7 +153,12 @@ describeMobileAndDesktop('Properties: an element whose references resolve to ent
     await waitForModelReady(page)
 
     const panel = page.getByTestId('PropertiesPanel')
-    await expect(panel.getByText(GRID_AXIS_TYPE).first()).toBeVisible()
+    await expect(panel.getByText('Test Building', {exact: true}).first()).toBeVisible()
+    // Settle: give any late answer for an earlier selection time to land.
+    const LATE_ANSWER_MS = 1500
+    await page.waitForTimeout(LATE_ANSWER_MS)
+    await expect(panel.getByText('Test Building', {exact: true}).first()).toBeVisible()
+    await expect(panel.getByText(GRID_AXIS_TYPE)).toHaveCount(0)
     await expect(panel.getByText(PROXY_ONLY_TEXT)).toHaveCount(0)
     await expect(page.getByText(APP_ERROR_TEXT)).toHaveCount(0)
     expect(errors).toEqual([])
