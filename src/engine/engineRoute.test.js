@@ -1,0 +1,79 @@
+import {flags} from '../FeatureFlags'
+import {MainThreadReason, hasLegacyViewRules, mainThreadEngineNote, mainThreadEngineReason} from './engineRoute'
+
+
+describe('engine/engineRoute', () => {
+  let originalLocation
+  const setSearch = (search) => {
+    Object.defineProperty(window, 'location', {writable: true, value: {...originalLocation, search}})
+  }
+  beforeEach(() => {
+    originalLocation = window.location
+  })
+  afterEach(() => {
+    Object.defineProperty(window, 'location', {writable: true, value: originalLocation})
+  })
+
+  it('runs a plain load in the engine worker', () => {
+    setSearch('')
+    expect(mainThreadEngineReason()).toBeNull()
+    setSearch('?feature=engineWorker')
+    expect(mainThreadEngineReason()).toBeNull()
+  })
+
+  it('the kill switch puts the main-thread engine back, even with the flag named', () => {
+    setSearch('?feature=disableEngineWorker')
+    expect(mainThreadEngineReason()).toBe(MainThreadReason.KILL_SWITCH)
+    setSearch('?feature=engineWorker,disableEngineWorker')
+    expect(mainThreadEngineReason()).toBe(MainThreadReason.KILL_SWITCH)
+  })
+
+  it('a known ?view= rule set loads on the main-thread engine, which applies it', () => {
+    setSearch('?view=ch.sia380-1.heatmap')
+    expect(mainThreadEngineReason()).toBe(MainThreadReason.VIEW_RULES)
+    // The default view and a name ShareViewer does not know do nothing on
+    // either engine, so they leave the load in the worker.
+    setSearch('?view=default')
+    expect(mainThreadEngineReason()).toBeNull()
+    setSearch('?view=made-up')
+    expect(mainThreadEngineReason()).toBeNull()
+  })
+
+  it('the legacy ?feature=bot chat loads on the main-thread engine; ?feature=assist does not', () => {
+    setSearch('?feature=bot')
+    expect(mainThreadEngineReason()).toBe(MainThreadReason.LEGACY_BOT)
+    setSearch('?feature=assist')
+    expect(mainThreadEngineReason()).toBeNull()
+  })
+
+  it('names the switch the user set before a legacy consumer that is on too', () => {
+    setSearch('?feature=bot,disableEngineWorker&view=ch.sia380-1.heatmap')
+    expect(mainThreadEngineReason()).toBe(MainThreadReason.KILL_SWITCH)
+  })
+
+  it('with the flag off in FeatureFlags.js (the prod kill switch), nothing runs in a worker', () => {
+    const flag = flags.find((f) => f.name === 'engineWorker')
+    const was = flag.isActive
+    flag.isActive = false
+    try {
+      setSearch('')
+      expect(mainThreadEngineReason()).toBe(MainThreadReason.FLAG_OFF)
+    } finally {
+      flag.isActive = was
+    }
+  })
+
+  it('says why in one line', () => {
+    expect(mainThreadEngineNote(MainThreadReason.VIEW_RULES)).toBe(
+      'Engine: main thread (?view= rules need the main-thread engine)')
+    expect(mainThreadEngineNote(MainThreadReason.KILL_SWITCH)).toBe(
+      'Engine: main thread (?feature=disableEngineWorker)')
+  })
+
+  it('hasLegacyViewRules names a non-default view rule set, and nothing else', () => {
+    expect(hasLegacyViewRules('?view=ch.sia380-1.heatmap')).toBe(true)
+    expect(hasLegacyViewRules('?view=default')).toBe(false)
+    expect(hasLegacyViewRules('?feature=engineWorker')).toBe(false)
+    expect(hasLegacyViewRules('?view=made-up')).toBe(false)
+  })
+})

@@ -183,7 +183,19 @@ describe('CadView', () => {
 
   let originalWorker
 
+  let originalUrl
+
   beforeAll(() => {
+    // These tests load a real index.ifc through the main-thread engine. Since
+    // engine-worker.md §7 step 9 a load runs in an engine session by default;
+    // here, without module workers, that is the in-process transport, which
+    // structured-clones its messages, and Node's structuredClone cannot carry
+    // a jsdom File, so the open would receive no source. The engine path has
+    // its own tests (ShareIfcLoader.engineWorker.test.js,
+    // engine/engineModelLoad.test.js, the E2E); this file tests CadView, so
+    // it takes the kill switch.
+    originalUrl = window.location.href
+    window.history.replaceState(null, '', '/?feature=disableEngineWorker')
     // Store the original Worker in case other tests need it
     originalWorker = global.Worker
     axios.get.mockResolvedValue({
@@ -234,6 +246,10 @@ describe('CadView', () => {
   afterEach(() => {
     jest.clearAllMocks()
     global.Worker = originalWorker
+  })
+
+  afterAll(() => {
+    window.history.replaceState(null, '', originalUrl)
   })
 
 

@@ -322,7 +322,11 @@ export default function CadView({
   // TODO(pablo): Removing this setter leads to a very strange stack overflow
   const [searchParams] = useSearchParams()
   const isAssistEnabled = useExistInFeature('assist')
-  const isEngineWorkerEnabled = useExistInFeature('engineWorker')
+  // The engine dev hook installs only when the URL names `engineWorker`
+  // itself: the flag is on for everyone since engine-worker.md §7 step 9, and
+  // the hook is for Playwright and the console, not every visitor's window.
+  const isEngineDevHookAsked = (searchParams.get('feature') ?? '')
+    .split(',').some((f) => f.trim().toLowerCase() === 'engineworker')
 
   // Begin helpers //
   /**
@@ -2717,9 +2721,10 @@ export default function CadView({
   // `window.__bldrsEngine` (engine-worker.md §7 step 2): drives engine
   // sessions directly, for the E2E, before any load goes through them.
   // Same install-on-flag, uninstall-on-unflag shape as the assist hook.
-  useEffect(() => (isEngineWorkerEnabled ? installEngineDevHook() : undefined), [isEngineWorkerEnabled])
+  useEffect(() => (isEngineDevHookAsked ? installEngineDevHook() : undefined), [isEngineDevHookAsked])
   // `?view=` rules cannot run on a worker-engine model; say so (engine-worker.md
-  // §8 item 7).
+  // §8 item 7). A load that asks for them runs on the main thread
+  // (engine/engineRoute.js), so this covers a `?view=` added after the load.
   useLegacyViewRulesNotice(model, setSnackMessage)
 
 

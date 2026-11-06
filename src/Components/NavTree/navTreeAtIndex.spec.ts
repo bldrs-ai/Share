@@ -115,18 +115,20 @@ describeMobileAndDesktop('Open 205: NavTree usable before geometry finishes', ()
     await holdGeometry(page)
   })
 
-  for (const {format, path, row} of [
-    {format: 'IFC', path: '/share/v/p/index.ifc', row: 'Together'},
-    {format: 'STEP', path: '/share/v/p/index.step', row: null},
+  for (const {format, path, row, worker} of [
+    // The main-thread engine, through the kill switch (the worker is the
+    // default since engine-worker.md §7 step 9).
+    {format: 'IFC', path: '/share/v/p/index.ifc?feature=disableEngineWorker', row: 'Together', worker: false},
+    {format: 'STEP', path: '/share/v/p/index.step?feature=disableEngineWorker', row: null, worker: false},
     // engine-worker.md §7 steps 3 and 6: the same, with the model's engine
     // in its own worker. The hold is honoured there by starting the worker's pump
     // paused (engine/engineModelLoad.js).
-    {format: 'IFC (engine worker)', path: '/share/v/p/index.ifc?feature=engineWorker', row: 'Together'},
+    {format: 'IFC (engine worker)', path: '/share/v/p/index.ifc', row: 'Together', worker: true},
     // §7 step 6: STEP through the same worker load. Its tree at the index is
     // the worker's AP214 index, and the per-occurrence selection below holds
     // across the load's end only if the occurrence paths crossed the worker
     // boundary onto the batched instances.
-    {format: 'STEP (engine worker)', path: '/share/v/p/index.step?feature=engineWorker', row: null},
+    {format: 'STEP (engine worker)', path: '/share/v/p/index.step', row: null, worker: true},
   ]) {
     test(`${format}: expand, select and read properties while geometry is held`, async ({page}) => {
       const TEST_TIMEOUT = 90_000
@@ -187,10 +189,8 @@ describeMobileAndDesktop('Open 205: NavTree usable before geometry finishes', ()
         // crossed the worker boundary.
         await expect.poll(() => paintedInstances(page)).toBe(1)
       }
-      if (path.includes('engineWorker')) {
-        // The worker leg really ran in the worker.
-        await engine.expectWorkerEngine()
-      }
+      // Each leg really ran on its engine.
+      await (worker ? engine.expectWorkerEngine() : engine.expectMainThreadEngine())
     })
   }
 })
