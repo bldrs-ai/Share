@@ -88,10 +88,18 @@ describeMobileAndDesktop('Assist view tools', () => {
   // Codex review round 2 on #1946: in a file whose rows are ALL at the empty
   // occurrence path, a part's ref fell back to row ids that own no geometry,
   // and isolate blanked the model while reporting success.
+  //
+  // engine-worker.md §7 step 6: parsed in a worker, the default since step
+  // 9. Every row of this file is at the EMPTY occurrence path, and that `[]`
+  // has to survive the worker boundary as `[]`, not as "no path": without it
+  // the same fallback blanks the model (re-opened by a lossy encoding;
+  // engineStream.js#makeBatchEncoder). The main-thread leg is below.
   test('isolates one part of a root-only multi-root STEP file', async ({page}) => {
     test.setTimeout(TWO_ROOT_TIMEOUT_MS)
+    const engine = watchEngineWorker(page)
     await openLocalFile(page, TWO_ROOT_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page)
+    await engine.expectWorkerEngine()
     await enableAssistInPlace(page)
     const total = await visibleInstances(page)
     const plates = await instancesOf(page, PLATES_OWNER)
@@ -249,28 +257,25 @@ function hashToken(page: Page, name: string): string | null {
 }
 
 
-// engine-worker.md §7 step 6: the root-only STEP file with its engine in a
-// worker. Every row of it is at the EMPTY occurrence path, and that `[]` has
-// to survive the worker boundary as `[]`, not as "no path": without it a
-// part's ref falls back to row ids that own no geometry, and isolate blanks
-// the model (the round-2 finding above, re-opened by a lossy encoding;
-// engineStream.js#makeBatchEncoder).
-describeMobileAndDesktop('Assist view tools, engine worker', () => {
+// The root-only STEP file again, on the main-thread engine through the kill
+// switch (engine-worker.md §7 step 9 keeps both engines running), where the
+// empty occurrence path never crosses a boundary.
+describeMobileAndDesktop('Assist view tools, main-thread engine', () => {
   test.beforeEach(async ({page}) => {
     await homepageSetup(page)
     await setIsReturningUser(page.context())
   })
 
-  test('isolates one part of a root-only multi-root STEP file parsed in a worker', async ({page}) => {
+  test('isolates one part of a root-only multi-root STEP file parsed on the main thread', async ({page}) => {
     test.setTimeout(TWO_ROOT_TIMEOUT_MS)
     // The flag rides the session across the Open dialog's navigation.
-    await page.goto(`${IFC_PATH},engineWorker`)
+    await page.goto(`${IFC_PATH},disableEngineWorker`)
     await waitForModelReady(page)
     await pauseViewerRendering(page)
     const engine = watchEngineWorker(page)
     await openLocalFile(page, TWO_ROOT_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
     await waitForModelReady(page)
-    await engine.expectWorkerEngine()
+    await engine.expectMainThreadEngine()
     await enableAssistInPlace(page)
     const total = await visibleInstances(page)
     const plates = await instancesOf(page, PLATES_OWNER)

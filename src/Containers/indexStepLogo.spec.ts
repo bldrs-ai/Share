@@ -37,9 +37,11 @@ const ALIGNMENT_TOLERANCE_M = 0.01
 // bounds separate lime from the failure they guard with room to spare.
 const CHANNEL_OFF_MAX = 0.2
 const CHANNEL_ON_MIN = 0.9
+// The engine worker is the default (engine-worker.md §7 step 9); the kill
+// switch keeps the main-thread engine's legs running.
 const ENGINES = [
-  {engine: 'main-thread engine', query: ''},
-  {engine: 'engine worker', query: '?feature=engineWorker'},
+  {engine: 'main-thread engine', query: '?feature=disableEngineWorker', worker: false},
+  {engine: 'engine worker', query: '', worker: true},
 ]
 
 
@@ -182,12 +184,13 @@ describeMobileAndDesktop('index.step logo', () => {
     await expect(page.locator('[data-is-selected="true"]')).toHaveCount(1)
   })
 
-  // engine-worker.md §7 step 6: the colour and world-space checks again with
-  // both models' engines in their own workers. Colours ride the batch's
-  // colour column, and the world frame is the builder's recentre plus the
-  // engine's applied frame from the `done` packet, so each can drift there
-  // without the main-thread legs noticing.
-  for (const {engine, query} of ENGINES) {
+  // engine-worker.md §7 step 6: the colour and world-space checks on both
+  // engines, the worker (the default) and the main thread (the kill switch).
+  // On the worker, colours ride the batch's colour column, and the world
+  // frame is the builder's recentre plus the engine's applied frame from the
+  // `done` packet, so each can drift there without the main-thread legs
+  // noticing.
+  for (const {engine, query, worker: inWorker} of ENGINES) {
     test(`renders lime, not the default grey of an unread styling chain (${engine})`, async ({page}) => {
       test.setTimeout(TEST_TIMEOUT_MS)
 
@@ -197,9 +200,7 @@ describeMobileAndDesktop('index.step logo', () => {
       const worker = watchEngineWorker(page)
       await page.goto(`/share/v/p/index.step${query}`)
       await waitForModelReady(page)
-      if (query) {
-        await worker.expectWorkerEngine()
-      }
+      await (inWorker ? worker.expectWorkerEngine() : worker.expectMainThreadEngine())
 
       // `emitSolidColour` writes the full chain Conway walks: STYLED_ITEM →
       // PRESENTATION_STYLE_ASSIGNMENT → SURFACE_STYLE_USAGE →
@@ -246,16 +247,14 @@ describeMobileAndDesktop('index.step logo', () => {
       // and only a `#c:` permalink reveals. That was the bug this test exists
       // to catch.
       // The IFC from the main-thread engine either way: the reference frame.
-      await page.goto('/share/v/p/index.ifc')
+      await page.goto('/share/v/p/index.ifc?feature=disableEngineWorker')
       await waitForModelReady(page)
       const ifcBounds = await modelBounds(page)
 
       const worker = watchEngineWorker(page)
       await page.goto(`/share/v/p/index.step${query}`)
       await waitForModelReady(page)
-      if (query) {
-        await worker.expectWorkerEngine()
-      }
+      await (inWorker ? worker.expectWorkerEngine() : worker.expectMainThreadEngine())
       const stepBounds = await modelBounds(page)
 
       for (const corner of ['min', 'max'] as const) {

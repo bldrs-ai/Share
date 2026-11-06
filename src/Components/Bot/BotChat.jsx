@@ -25,11 +25,16 @@ import 'react-chat-elements/dist/main.css'
 import './chat-bubbles.css'
 
 
-/** The legacy chat's answer on a model whose engine is in a worker. */
+/**
+ * The legacy chat's answer on a model whose engine is in a worker. A load
+ * with `?feature=bot` in its URL runs on the main-thread engine
+ * (engine/engineRoute.js), so this shows only when the chat was turned on
+ * after a worker load, and reloading the page fixes it.
+ */
 export const WORKER_ENGINE_BOT_MESSAGE =
   'This chat reads the model through the main-thread engine, ' +
-  'and this model was opened with ?feature=engineWorker. Reload without that ' +
-  'flag to use it, or use ?feature=assist.'
+  'and this model was parsed in an engine worker. Reload the page to use it, ' +
+  'or use ?feature=assist.'
 
 
 /** @return {ReactElement} */
@@ -123,7 +128,8 @@ export default function BotChat() {
       // main-thread engine (`viewer.IFC.loader.ifcManager`), which holds no
       // model when the model's engine is in a worker: it would answer from
       // nothing. Say so instead (engine-worker.md §8 item 7: this chat stays
-      // on the main-thread engine until `?feature=assist` retires it).
+      // on the main-thread engine until `?feature=assist` retires it, and
+      // engineRoute.js keeps a `?feature=bot` load there).
       const aiMsg = {id: uuid(), position: 'left', title: 'Assistant:', text: WORKER_ENGINE_BOT_MESSAGE, date: new Date()}
       setMessages((prev) => [...prev.filter((message) => message.id !== phId), aiMsg])
       return

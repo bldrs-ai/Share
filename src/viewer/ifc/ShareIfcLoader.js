@@ -32,7 +32,8 @@ import {hasParams} from '../../utils/location'
 import {HASH_PREFIX_CAMERA} from '../../Components/Camera/hashState'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {createEngineModelLoad, engineFormatOf} from '../../engine/engineModelLoad'
-import {reportGeometryStats} from '../../loader/loadProgress'
+import {reportGeometryStats, reportSourceInfo} from '../../loader/loadProgress'
+import {MainThreadReason, mainThreadEngineNote, mainThreadEngineReason} from '../../engine/engineRoute'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
 import ProgressiveLoadSession from '../ProgressiveLoadSession'
 import {beginLoadSelection, endLoadSelection} from '../streamingBatchPick'
@@ -326,19 +327,35 @@ const BYTES_PER_KIB = 1024
 const BYTES_PER_MIB = BYTES_PER_KIB * BYTES_PER_KIB
 
 /**
- * Does this parse run its engine in a worker (`?feature=engineWorker`,
- * engine-worker.md §7 steps 3 and 6)? Every format a Conway engine parses —
- * IFC (and an unwrapped `.ifczip`) and STEP/AP214 — through one worker load
+ * Does this parse run its engine in a worker (engine-worker.md §7 steps 3, 6
+ * and 9)? Every format a Conway engine parses — IFC (and an unwrapped
+ * `.ifczip`) and STEP/AP214 — through one worker load
  * (engine/engineModelLoad.js), and only on the streamed path that feeds the
- * incremental builder.
+ * incremental builder. Default on; `engine/engineRoute.js` says when a load
+ * stays on the main-thread engine instead (the kill switch, `?view=` rules,
+ * the legacy `?feature=bot`).
  *
  * @param {string|undefined} loaderType `loader.type` (Loader.js#findLoader)
  * @param {object|null} scene
  * @return {boolean}
  */
 export function isEngineWorkerLoad(loaderType, scene) {
-  return isFeatureEnabled('engineWorker') &&
-    isFeatureEnabled('demandGeometry') &&
+  return isEngineWorkerCandidate(loaderType, scene) && mainThreadEngineReason() === null
+}
+
+
+/**
+ * Could this parse run in a worker at all: a Conway format, streamed into a
+ * scene? Only such a load gets an `Engine: main thread (…)` report line when
+ * the route keeps it on the main thread; a mesh format or a non-streamed load
+ * never had an engine worker to give up.
+ *
+ * @param {string|undefined} loaderType
+ * @param {object|null} scene
+ * @return {boolean}
+ */
+function isEngineWorkerCandidate(loaderType, scene) {
+  return isFeatureEnabled('demandGeometry') &&
     scene !== null &&
     engineFormatOf(loaderType) !== null
 }
@@ -463,6 +480,17 @@ export default class ShareIfcLoader {
     // to feed.
     const engineLoad = isEngineWorkerLoad(this.type, scene) ?
       createEngineModelLoad({format: engineFormatOf(this.type)}) : null
+    if (engineLoad === null && isEngineWorkerCandidate(this.type, scene)) {
+      // Say in the report and the console why this load runs on the slower
+      // main-thread engine, so a `?view=` link or a kill-switched session
+      // reads as deliberate rather than as a lost worker.
+      const reason = mainThreadEngineReason()
+      if (reason !== MainThreadReason.FLAG_OFF) {
+        const note = mainThreadEngineNote(reason)
+        conwayDirectInfo(note)
+        reportSourceInfo(note)
+      }
+    }
 
     // Selections made while this load streams are kept for its builder
     // (streamingBatchPick.js#LOAD_SELECTION_KEY), and dropped in the

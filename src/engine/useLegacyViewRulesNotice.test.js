@@ -4,7 +4,9 @@ import useLegacyViewRulesNotice from './useLegacyViewRulesNotice'
 
 
 // Review on #2058: `?view=` on a worker-engine model shows a clear message,
-// and only for a rule set ShareViewer knows.
+// and only for a rule set ShareViewer knows. Since the flip (§7 step 9) a
+// load with `?view=` runs on the main-thread engine, so a worker model meets
+// view rules only when they were added to the URL after the load.
 
 const WORKER_MODEL = {ifcManager: {ifcAPI: {engineSession: {}}}}
 const MAIN_MODEL = {ifcManager: {ifcAPI: {}}}

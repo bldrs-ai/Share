@@ -10,6 +10,7 @@ import {buildConwayIfcModel} from './buildConwayIfcModel'
 import {parseIfcWithConway} from './conwayDirectIfcLoader'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {createEngineModelLoad} from '../../engine/engineModelLoad'
+import {getConwayDirectLogs} from '../../../tools/jest/conwayDirectLogCapture'
 
 
 jest.mock('./conwayDirectIfcLoader', () => ({
@@ -281,5 +282,54 @@ describe('viewer/ifc/ShareIfcLoader with ?feature=engineWorker', () => {
     expect(isEngineWorkerLoad('ifc', {})).toBe(false)
     isFeatureEnabled.mockImplementation((name) => name === 'engineWorker')
     expect(isEngineWorkerLoad('ifc', {})).toBe(false)
+  })
+
+  // §7 step 9: the flag is on by default, and engine/engineRoute.js keeps a
+  // load on the main-thread engine for the kill switch and the two legacy
+  // consumers that read that engine directly. Each such load says why.
+  describe('loads that stay on the main-thread engine', () => {
+    let originalLocation
+    beforeEach(() => {
+      originalLocation = window.location
+      // eslint-disable-next-line require-await
+      parseIfcWithConway.mockImplementation(async (b, api, s, p, onMeshBatch) => {
+        onMeshBatch?.([{expressID: 101, geometries: {size: () => 1}}], 0, {done: 1, total: 1})
+        // eslint-disable-next-line require-await
+        return {modelID: 0, captured: [], recapture: async () => []}
+      })
+    })
+    afterEach(() => {
+      Object.defineProperty(window, 'location', {writable: true, value: originalLocation})
+    })
+
+    it.each([
+      ['?feature=disableEngineWorker', ['disableEngineWorker'], 'Engine: main thread (?feature=disableEngineWorker)'],
+      ['?view=ch.sia380-1.heatmap', [], 'Engine: main thread (?view= rules need the main-thread engine)'],
+      ['?feature=bot', ['bot'],
+        'Engine: main thread (the legacy ?feature=bot chat needs the main-thread engine)'],
+    ])('%s parses on the main-thread engine, and says so', async (search, urlFlags, note) => {
+      Object.defineProperty(window, 'location', {writable: true, value: {...originalLocation, search}})
+      isFeatureEnabled.mockImplementation((name) =>
+        name === 'demandGeometry' || name === 'engineWorker' || urlFlags.includes(name))
+      expect(isEngineWorkerLoad('ifc', {})).toBe(false)
+      const ifcAPI = makeIfcAPI()
+      const loader = new ShareIfcLoader({ifcAPI, ifc: makeIfcNamespace()})
+      loader.type = 'ifc'
+      await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
+      expect(createEngineModelLoad).not.toHaveBeenCalled()
+      expect(parseIfcWithConway).toHaveBeenCalledTimes(1)
+      expect(parseIfcWithConway.mock.calls[0][1]).toBe(ifcAPI)
+      expect(getConwayDirectLogs().map((l) => l.text)).toContain(note)
+    })
+
+    it('a load the worker never could have taken (a mesh format) says nothing about engines', async () => {
+      Object.defineProperty(window, 'location', {writable: true, value: {...originalLocation, search: '?feature=disableEngineWorker'}})
+      isFeatureEnabled.mockImplementation((name) =>
+        name === 'demandGeometry' || name === 'engineWorker' || name === 'disableEngineWorker')
+      const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
+      loader.type = 'glb'
+      await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
+      expect(getConwayDirectLogs().some((l) => l.text.startsWith('Engine:'))).toBe(false)
+    })
   })
 })

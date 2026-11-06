@@ -123,79 +123,88 @@ describeMobileAndDesktop('STEP hide / isolate / multi-select', () => {
 })
 
 
-// engine-worker.md §7 step 6: the same per-occurrence operations with the
-// model's engine in its own worker. Each passes only if every placement's
-// occurrence path crossed the worker boundary (the batch's path column) onto
-// the batched instances: without them a leaf row has no eye, and a pick or
-// a selection names the shared part shape, i.e. every block of that size.
-describeMobileAndDesktop('STEP hide / isolate / pick, engine worker', () => {
-  const WORKER_STEP_PATH = `${STEP_PATH}?feature=engineWorker`
+// engine-worker.md §7 step 6: the same per-occurrence operations, checked on
+// each engine. In the worker (the default since step 9) each passes only if
+// every placement's occurrence path crossed the worker boundary (the batch's
+// path column) onto the batched instances: without them a leaf row has no
+// eye, and a pick or a selection names the shared part shape, i.e. every
+// block of that size. The main-thread engine runs them through the kill
+// switch.
+for (const {label, path, worker} of [
+  {label: 'engine worker', path: STEP_PATH, worker: true},
+  {label: 'main-thread engine', path: `${STEP_PATH}?feature=disableEngineWorker`, worker: false},
+]) {
+  describeMobileAndDesktop(`STEP hide / isolate / pick, ${label}`, () => {
+    test.beforeEach(async ({page}) => {
+      await homepageSetup(page)
+      await setIsReturningUser(page.context())
+    })
 
-  test.beforeEach(async ({page}) => {
-    await homepageSetup(page)
-    await setIsReturningUser(page.context())
+    const expectEngine = (engine: ReturnType<typeof watchEngineWorker>) =>
+      (worker ? engine.expectWorkerEngine() : engine.expectMainThreadEngine())
+
+    test('a leaf occurrence\'s eye hides just that occurrence; Isolate shows just one, and its link reopens it', async ({page}) => {
+      test.setTimeout(THREE_LOADS_TIMEOUT_MS)
+      const glbLogs = captureGlbLogs(page)
+      const engine = watchEngineWorker(page)
+      const {leaves} = await loadStepTree(page, path)
+      await expectEngine(engine)
+      await expect(leaves.getByTestId('hide-icon')).toHaveCount(LEAF_COUNT)
+      await leaves.nth(0).getByTestId('hide-icon').click()
+      await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT - 1)
+      await leaves.nth(0).getByTestId('unhide-icon').click()
+      await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT)
+
+      await leaves.nth(1).getByTestId('NavTreeNodeLabel').click()
+      await expect.poll(() => paintedInstances(page)).toBe(1)
+      await closeTree(page)
+      await page.getByTestId('Isolate').click()
+      await expect.poll(() => visibleInstances(page)).toBe(1)
+      await expect.poll(() => displayToken(page)).toMatch(/^iso=o[\d.]+$/)
+
+      // The `iso=o…` link names an occurrence path, and reopened it resolves
+      // to that one occurrence again, both ways a reload can open it. Either
+      // engine writes the GLB artifact (engine-worker.md §7 step 5), so a
+      // reload once the write has landed is a cache HIT with no engine at
+      // all, and only one before it is a fresh parse. Which of the two a bare
+      // reload got was the write's timing (#2081: mobile CI got the hit), so
+      // each is pinned on purpose. The kill switch stays in the URL.
+      expect(page.url().includes('feature=disableEngineWorker')).toBe(!worker)
+      await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_TIMEOUT_MS)
+
+      // 1. From the artifact: the occurrence paths come back from the GLB.
+      resetGlbLogs(glbLogs)
+      await page.reload()
+      await waitForModelReady(page)
+      await waitForGlbLog(glbLogs, 'cache HIT', CACHE_TIMEOUT_MS)
+      await expect.poll(() => visibleInstances(page)).toBe(1)
+
+      // 2. From a fresh parse on the same engine: with the artifact gone, the
+      // reload misses and the engine opens the source again. Cleared from the
+      // cache-hit page, which holds no engine, so no sync access handle locks
+      // the entries.
+      await clearOpfs(page)
+      resetGlbLogs(glbLogs)
+      const reopened = watchEngineWorker(page)
+      await page.reload()
+      await waitForModelReady(page)
+      await expectEngine(reopened)
+      expect(glbLinesSinceReset(glbLogs).some((line) => line.includes('cache MISS')), 'a parse, not a hit').toBe(true)
+      await expect.poll(() => visibleInstances(page)).toBe(1)
+    })
+
+    test('a double-click in the scene selects one occurrence', async ({page}) => {
+      const engine = watchEngineWorker(page)
+      await loadStepTree(page, path)
+      await expectEngine(engine)
+      await closeTree(page)
+      const [point] = await instancePoints(page, 1)
+      await page.mouse.dblclick(point.x, point.y)
+      await expect.poll(async () => (await selection(page)).instances).toHaveLength(1)
+      await expect.poll(() => paintedInstances(page)).toBe(1)
+    })
   })
-
-  test('a leaf occurrence\'s eye hides just that occurrence; Isolate shows just one, and its link reopens it', async ({page}) => {
-    test.setTimeout(THREE_LOADS_TIMEOUT_MS)
-    const glbLogs = captureGlbLogs(page)
-    const engine = watchEngineWorker(page)
-    const {leaves} = await loadStepTree(page, WORKER_STEP_PATH)
-    await engine.expectWorkerEngine()
-    await expect(leaves.getByTestId('hide-icon')).toHaveCount(LEAF_COUNT)
-    await leaves.nth(0).getByTestId('hide-icon').click()
-    await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT - 1)
-    await leaves.nth(0).getByTestId('unhide-icon').click()
-    await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT)
-
-    await leaves.nth(1).getByTestId('NavTreeNodeLabel').click()
-    await expect.poll(() => paintedInstances(page)).toBe(1)
-    await closeTree(page)
-    await page.getByTestId('Isolate').click()
-    await expect.poll(() => visibleInstances(page)).toBe(1)
-    await expect.poll(() => displayToken(page)).toMatch(/^iso=o[\d.]+$/)
-
-    // The `iso=o…` link names an occurrence path, and reopened it resolves to
-    // that one occurrence again, both ways a reload can open it. A worker load
-    // writes the GLB artifact (engine-worker.md §7 step 5), so a reload once
-    // the write has landed is a cache HIT with no engine at all, and only one
-    // before it is a fresh worker parse. Which of the two a bare reload got
-    // was the write's timing (#2081: mobile CI got the hit), so each is
-    // pinned on purpose.
-    expect(page.url()).toContain('feature=engineWorker')
-    await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_TIMEOUT_MS)
-
-    // 1. From the artifact: the occurrence paths come back from the GLB.
-    resetGlbLogs(glbLogs)
-    await page.reload()
-    await waitForModelReady(page)
-    await waitForGlbLog(glbLogs, 'cache HIT', CACHE_TIMEOUT_MS)
-    await expect.poll(() => visibleInstances(page)).toBe(1)
-
-    // 2. From a fresh worker parse: with the artifact gone, the reload misses
-    // and the worker opens the source again. Cleared from the cache-hit page,
-    // which holds no engine, so no sync access handle locks the entries.
-    await clearOpfs(page)
-    resetGlbLogs(glbLogs)
-    const reopened = watchEngineWorker(page)
-    await page.reload()
-    await waitForModelReady(page)
-    await reopened.expectWorkerEngine()
-    expect(glbLinesSinceReset(glbLogs).some((line) => line.includes('cache MISS')), 'a parse, not a hit').toBe(true)
-    await expect.poll(() => visibleInstances(page)).toBe(1)
-  })
-
-  test('a double-click in the scene selects one occurrence', async ({page}) => {
-    const engine = watchEngineWorker(page)
-    await loadStepTree(page, WORKER_STEP_PATH)
-    await engine.expectWorkerEngine()
-    await closeTree(page)
-    const [point] = await instancePoints(page, 1)
-    await page.mouse.dblclick(point.x, point.y)
-    await expect.poll(async () => (await selection(page)).instances).toHaveLength(1)
-    await expect.poll(() => paintedInstances(page)).toBe(1)
-  })
-})
+}
 
 
 describeMobileAndDesktop('IFC scene multi-select', () => {
