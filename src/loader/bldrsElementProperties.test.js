@@ -224,6 +224,25 @@ describe('loader/bldrsElementProperties', () => {
       expect(captured.propertySets[100]).toEqual([500])
     })
 
+    it('indexes every member of an IfcPropertySetDefinitionSet, in order, deduped (Share#2069)', async () => {
+      // conway#766: an aggregate-valued select reads as an array of refs.
+      const rel = {
+        expressID: 999,
+        type: 4186316022,
+        RelatedObjects: [{type: 5, value: 100}],
+        RelatingPropertyDefinition: [{type: 5, value: 501}, {type: 5, value: 500}, {type: 5, value: 501}],
+      }
+      const entities = {
+        100: {expressID: 100, type: 3124254112},
+        500: {expressID: 500, type: 1660063152},
+        501: {expressID: 501, type: 1660063152},
+        999: rel,
+      }
+      const mgr = makeFastMgr(entities)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+      expect(captured.propertySets[100]).toEqual([501, 500])
+    })
+
     it('de-dupes psetIds when a product appears under the same rel twice', async () => {
       /** Same shape mock as above; redefined per-test for isolation. */
       class IfcRelDefinesByProperties {
