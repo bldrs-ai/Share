@@ -1,4 +1,4 @@
-import {computeBatchedBoundsTree, computeBoundsTree, getBVHExtremes} from 'three-mesh-bvh'
+import {computeBatchedBoundsTree, computeBoundsTree} from 'three-mesh-bvh'
 import {reportBvhDepthCap} from '../../loader/loadProgress'
 
 
@@ -61,14 +61,16 @@ export function computeQuietBatchedBoundsTree(index = -1, options = {}) {
 
 
 /**
- * Which of these trees reached the depth cap, and the largest leaf among
- * them. Walks each tree once (three-mesh-bvh's `getBVHExtremes`), which costs
- * a fraction of the build it follows.
+ * Which of these trees reached the depth cap, and the largest leaf at the
+ * cap. Walks each tree once (`MeshBVH#traverse`, every root), which costs a
+ * fraction of the build it follows.
  *
  * A leaf at the cap depth is how a cap hit shows: three-mesh-bvh makes a leaf
- * at `maxDepth` whatever it holds. A run of identical centroids stops earlier
- * and silently, so it isn't counted, and isn't what the warning reported
- * either.
+ * at `maxDepth` whatever it holds. Only those leaves are measured. A run of
+ * identical centroids stops earlier and silently, possibly in a large leaf of
+ * the same tree, but that isn't what the cap did and no `maxDepth` would
+ * split it, so counting it would mislead the retune this number is for. (Not
+ * `getBVHExtremes`: its `primitives.max` spans every leaf of a root.)
  *
  * @param {Array<object|null>} bvhs MeshBVH instances; nulls are skipped
  * @param {number} maxDepth the depth the trees were built with
@@ -82,18 +84,36 @@ export function depthCapExtremes(bvhs, maxDepth) {
     if (!bvh) {
       continue
     }
-    let capped = false
-    for (const root of getBVHExtremes(bvh)) {
-      if (root.depth.max >= maxDepth) {
-        capped = true
-        maxLeafTriangles = Math.max(maxLeafTriangles, root.primitives.max)
-      }
-    }
-    if (capped) {
+    const largest = largestCappedLeaf(bvh, maxDepth)
+    if (largest !== null) {
       trees++
+      maxLeafTriangles = Math.max(maxLeafTriangles, largest)
     }
   }
   return trees > 0 ? {trees, maxLeafTriangles} : null
+}
+
+
+/**
+ * @param {object} bvh a MeshBVH
+ * @param {number} maxDepth
+ * @return {number|null} the most triangles in one leaf at `maxDepth`, or null
+ *   when no leaf reached it
+ */
+function largestCappedLeaf(bvh, maxDepth) {
+  let largest = null
+  // A tree has one root per geometry group; `_roots` is how three-mesh-bvh's
+  // own getBVHExtremes enumerates them, and there is no public count.
+  const rootCount = bvh._roots?.length ?? 1
+  const visit = (depth, isLeaf, boundingData, offsetOrSplit, count) => {
+    if (isLeaf && depth >= maxDepth) {
+      largest = Math.max(largest ?? 0, count)
+    }
+  }
+  for (let rootIndex = 0; rootIndex < rootCount; rootIndex++) {
+    bvh.traverse(visit, rootIndex)
+  }
+  return largest
 }
 
 

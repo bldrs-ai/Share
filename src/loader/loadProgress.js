@@ -902,7 +902,11 @@ class LoadProgressReporter {
     if (this.isDataDefectDiagnostic(summary.topText)) {
       tags.data_defect = 'true'
     }
-    captureMessage(diagnosticsTitle(summary.topText), {
+    // With no console diagnostics, the event exists for the depth cap alone
+    // (captureLoadDiagnostics): title it by that, and send it at info, since
+    // a capped leaf slows picks without breaking them.
+    const capOnly = summary.total === 0 && Boolean(this.bvhDepthCap)
+    captureMessage(capOnly ? BVH_DEPTH_CAP_TITLE : diagnosticsTitle(summary.topText), {
       // A file with nothing to draw is an input property, not a defect, so
       // it stays out of the error stream like the 4.3 refusal does; the
       // event is still sent because the chip it backs is coloured by the
@@ -910,7 +914,7 @@ class LoadProgressReporter {
       level: {
         [LOAD_OUTCOMES.UNUSABLE]: 'error',
         [LOAD_OUTCOMES.NO_GEOMETRY]: 'info',
-      }[loadOutcome] ?? 'warning',
+      }[loadOutcome] ?? (capOnly ? 'info' : 'warning'),
       tags,
       contexts: {
         loadDiagnostics: {
@@ -1061,6 +1065,10 @@ function ellipsize(text) {
     `${text.slice(0, MAX_DIAGNOSTIC_SAMPLE_CHARS - 1)}…` :
     text
 }
+
+
+/** Diagnostics-event title for a load whose only finding is the BVH depth cap. */
+const BVH_DEPTH_CAP_TITLE = 'Load diagnostics: picking index hit its depth cap'
 
 
 /**
@@ -1625,7 +1633,13 @@ export function captureLoadDiagnostics({
   contentId = undefined,
   contentType = undefined,
 } = {}) {
-  if (errorCount + warningCount === 0 || activeReporter === null) {
+  if (activeReporter === null) {
+    return
+  }
+  // A depth-cap hit is sent on its own too: bvhBuild.js silences
+  // three-mesh-bvh's warning, so a load whose only finding is the cap now
+  // has zero console counts, and its leaf size is what the record is for.
+  if (errorCount + warningCount === 0 && !activeReporter.bvhDepthCap) {
     return
   }
   try {

@@ -61,6 +61,9 @@ export default function SaveModelControl() {
 
 
   useEffect(() => {
+    // A token change while the dialog is open starts a new fetch; the old
+    // one (its expired token likely rejecting late) must not overwrite it.
+    let cancelled = false
     /** Fetch the user's orgs, falling back to their own account alone. */
     async function fetchOrganizations() {
       let orgNamesFetched = []
@@ -74,11 +77,16 @@ export default function SaveModelControl() {
         // and the later repo/commit calls surface the auth failure themselves.
         debug(WARN).warn('SaveModelControl: could not list GitHub organizations', err?.status ?? err?.message)
       }
-      setOrgNamesArray([...orgNamesFetched, user && user.nickname])
+      if (!cancelled) {
+        setOrgNamesArray([...orgNamesFetched, user && user.nickname])
+      }
     }
 
     if (isSaveModelVisible && accessToken) {
       fetchOrganizations()
+    }
+    return () => {
+      cancelled = true
     }
   }, [isSaveModelVisible, accessToken, user])
 

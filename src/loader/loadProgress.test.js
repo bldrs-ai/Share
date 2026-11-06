@@ -964,6 +964,44 @@ describe('loadProgress', () => {
         warnSpy.mockRestore()
       })
 
+      // bvhBuild.js silences three-mesh-bvh's depth-cap warning, so a load
+      // whose only finding is the cap has zero console counts; without its
+      // own admission the leaf size this event exists for would never send.
+      it('sends a cap-only load at info, titled by the cap', () => {
+        beginLoadProgress({fileInfo: 'index.stp'})
+        reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
+        endLoadProgress()
+        captureLoadDiagnostics({})
+
+        const [message, context] = diagnosticsCall()
+        expect(message).toBe('Load diagnostics: picking index hit its depth cap')
+        expect(context.level).toBe('info')
+        expect(context.contexts.loadDiagnostics.bvhDepthCap)
+          .toEqual({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
+      })
+
+      it('sends nothing for a clean load that did not hit the cap', () => {
+        beginLoadProgress({fileInfo: 'index.stp'})
+        endLoadProgress()
+        captureLoadDiagnostics({})
+        expect(diagnosticsCall()).toBeUndefined()
+      })
+
+      it('titles a cap hit with console diagnostics by the diagnostics', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'index.stp'})
+        console.warn('No basis found for brep!')
+        reportBvhDepthCap({trees: 1, maxLeafTriangles: 90, maxDepth: 40})
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1})
+
+        const [message, context] = diagnosticsCall()
+        expect(message).toBe('Load diagnostics: No basis found for brep!')
+        expect(context.level).toBe('warning')
+        expect(context.contexts.loadDiagnostics.bvhDepthCap).toEqual(expect.objectContaining({trees: 1}))
+        warnSpy.mockRestore()
+      })
+
       /*
        * Severity is the load's outcome, not its noise level (ops#27 T0).
        * These three cases are the whole policy: geometry reached the scene

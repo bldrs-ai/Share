@@ -1,6 +1,7 @@
 /* eslint-disable no-magic-numbers */
 import {BatchedMesh, BufferGeometry, Float32BufferAttribute, MeshBasicMaterial} from 'three'
 import {reportBvhDepthCap} from '../../loader/loadProgress'
+import {getBVHExtremes} from 'three-mesh-bvh'
 import {BVH_MAX_DEPTH, computeQuietBatchedBoundsTree, computeQuietBoundsTree, depthCapExtremes} from './bvhBuild'
 
 
@@ -48,6 +49,28 @@ describe('viewer/ifc/bvhBuild', () => {
     // Four leaves at depth 2 share 400 triangles, so the largest holds a
     // quarter or more: far past the 10-triangle leaf size.
     expect(maxLeafTriangles).toBeGreaterThanOrEqual(100)
+  })
+
+  // A tree can hold both a capped branch and an earlier, unsplittable leaf
+  // (identical centroids). Only the capped leaves are what a deeper cap or SAH
+  // would split, so only they are measured.
+  it('measures only the leaves at the cap, not an earlier unsplittable one', () => {
+    const strip = triangleStrip(400)
+    const stack = [] // 200 coincident triangles, far from the strip
+    for (let i = 0; i < 200; i++) {
+      stack.push(-1000, 0, 0, -999.5, 1, 0, -999, 0, 0)
+    }
+    const positions = [...stack, ...strip.getAttribute('position').array]
+    const geometry = new BufferGeometry()
+    geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+
+    const bvh = computeQuietBoundsTree.call(geometry, {maxDepth: 4})
+    // The scenario holds: the tree's largest leaf overall is the stack.
+    expect(getBVHExtremes(bvh)[0].primitives.max).toBe(200)
+    const [{maxLeafTriangles}] = reportBvhDepthCap.mock.calls[0]
+    // Eight leaves at depth 4 share the strip's 400.
+    expect(maxLeafTriangles).toBeGreaterThanOrEqual(50)
+    expect(maxLeafTriangles).toBeLessThan(200)
   })
 
   it('records nothing for a tree that stays under the cap', () => {

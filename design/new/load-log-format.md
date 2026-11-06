@@ -156,8 +156,12 @@ Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 trian
      load-time warn it became the title of the diagnostics event
      (SHARE-1MT). The line records the number the warning left out, the
      largest capped leaf, which decides whether raising `maxDepth` or
-     building with the SAH strategy is worth it. The same figures go to
-     Sentry as `loadDiagnostics.bvhDepthCap`.
+     building with the SAH strategy is worth it. Only leaves at the cap
+     count: an earlier leaf of identical centroids isn't something a deeper
+     cap would split. The same figures go to Sentry as
+     `loadDiagnostics.bvhDepthCap`, including from a load with no other
+     diagnostics, which sends an `info` event titled `Load diagnostics:
+     picking index hit its depth cap`.
 
 **Precision** — seconds to millisecond precision (3 decimals), memory to
 byte precision (6 decimals of MB), per the report's diagnostic purpose.

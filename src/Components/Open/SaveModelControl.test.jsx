@@ -246,6 +246,39 @@ describe('SaveModelControl', () => {
     }
   })
 
+  // A token refresh while the dialog is open starts a second org fetch. The
+  // first, on the expired token, can reject after the second succeeded; its
+  // fallback must not replace the fresh list.
+  it('keeps the newer org list when the expired token\'s request fails late', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    let rejectStale
+    getOrganizations.mockImplementation((token) => (token === 'expired' ?
+      new Promise((resolve, reject) => {
+        rejectStale = reject
+      }) :
+      Promise.resolve(MOCK_ORGANIZATIONS.data)))
+    const {result} = renderHook(() => useStore((state) => state))
+    // eslint-disable-next-line require-await
+    await act(async () => {
+      result.current.setAccessToken('expired')
+      result.current.setOpfsFile(new File(['test'], 'test.ifc', {type: 'application/octet-stream'}))
+      result.current.setIsSaveModelVisible(true)
+    })
+    const {getByTestId, findByRole, queryByRole} = render(<SaveModelControlFixture/>)
+    await act(async () => {
+      result.current.setAccessToken('fresh')
+      await Promise.resolve()
+    })
+    await act(async () => {
+      rejectStale(Object.assign(new Error('Bad credentials'), {status: HTTP_AUTHORIZATION_REQUIRED}))
+      await Promise.resolve()
+    })
+
+    fireEvent.mouseDown(within(getByTestId('saveOrganization')).getByRole('combobox'))
+    expect(await findByRole('option', {name: `@${MOCK_ORGANIZATIONS.data[0].login}`})).toBeInTheDocument()
+    expect(queryByRole('option', {name: '@testing'})).toBeInTheDocument()
+  })
+
   // The Export tab (#1838). The Save tab is today's content; Export hosts
   // ExportSection, and neither exists with the flag off.
   describe('Export tab', () => {
