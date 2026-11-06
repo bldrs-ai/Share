@@ -56,9 +56,33 @@ hugged box renders them as a narrow clipped column. Expanding also grows
 MUI's message slot (`flexGrow`), which otherwise stays content-sized and turns
 the extra width into empty space on the right.
 
-A user pasting any of these into a bug report produces the same text; Sentry
-receives the same trail as breadcrumbs plus the final report string in the
-`load` context.
+A user pasting any of these into a bug report produces the same text. Sentry
+receives the same trail as breadcrumbs, plus the final report string in the
+`load` context (stall and failure events) and the `loadDiagnostics` context
+(diagnostics events), **with one line changed: the model line.** conway's
+`Model: <header FILE_NAME> — <schema>, <size>, <originating system>
+(<preprocessor>)` is the exporter's free text, and in the wild that has
+included a full UNC path to a company file share, with its private IP and
+project folder names (SHARE-1MT). Sentry's server-side scrubber left it alone.
+So Sentry's copy reads `Model: (name withheld) — <schema>, <size>, <tool>`,
+built from the reporter's latched fields with the tool taken from the
+`authoring_tool` allowlist (`LoadProgressReporter#sentryModelLine`). `privacy/sentryRedaction.js` is Sentry's
+`beforeBreadcrumb`, and rewrites three things as breadcrumbs:
+- the model line's console echo;
+- any console line that names a user's file through `consoleFileName`, i.e.
+  `<prefix>: file "<name>" …` (the drop path's rejected-upload warning, the
+  no-model-in-archive warning). These have the quoted name withheld. The
+  `file ` marker keeps ordinary library warnings such as three.js's
+  `THREE.Sprite: "Raycaster.camera" …` from matching;
+- click breadcrumbs' `title`, `aria-label`, `alt` and `name` values, which
+  carry file names in the recent-files list and the projects drawer.
+
+The reporter's console tee runs teed text through the same redaction, because
+teed warnings reach the diagnostics event's title and `messages` without
+passing through `beforeBreadcrumb`. That makes the report's own `Warnings &
+errors` line redacted as well; the console prints the warning whole. The model
+line keeps the full header text in the report dialog, the snackbar and the
+console: that is the user reading their own file's header.
 
 Canonical implementation: conway `src/core/progress_log.ts`
 (`LoadLogAccumulator` + formatters), consumed by the conway CLI renderer.

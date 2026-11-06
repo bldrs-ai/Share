@@ -5,6 +5,7 @@ import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {forgetInMemoryUpload, registerInMemoryUpload} from '../loader/inMemoryUploads'
 import {openUploadThroughArchive} from '../loader/modelArchive'
 import {unrecognizedFormatAlert} from '../loader/unrecognizedFormat'
+import {consoleFileName} from '../privacy/sentryRedaction'
 import {localOnlyPath} from '../routes/localOnly'
 import {disablePageReloadApprovalCheck} from './event'
 import {navigateToInMemoryModel, navigateToModel} from './navigate'
@@ -124,14 +125,13 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
       // The alert is the user's signal; this is the console's, which had none —
       // a rejected drop left nothing to go on when reported (test-models#69).
       // It names the file, which the alert deliberately does not: the alert
-      // keeps only the extension (`loader/unrecognizedFormat.js`), so the name
-      // stays out of the Sentry event's title, grouping and tags, and out of GA.
-      // It does still reach Sentry through this line: the default breadcrumbs
-      // integration records console output, so the event AlertDialog captures
-      // carries it as a console breadcrumb. At WARN, the level prod logs at; a
-      // bare `debug()` is INFO and prints nothing there.
+      // keeps only the extension (`loader/unrecognizedFormat.js`). The name is
+      // written through consoleFileName, so the breadcrumb Sentry records from
+      // this line has it withheld (`privacy/sentryRedaction.js`). At WARN, the
+      // level prod logs at; a bare `debug()` is INFO and prints nothing there.
       debug(WARN).warn(
-        `handleFileDrop: "${uploadedFile.name}" (${uploadedFile.size} bytes) is not a recognized model format`)
+        `handleFileDrop: ${consoleFileName(uploadedFile.name)} (${uploadedFile.size} bytes) ` +
+        'is not a recognized model format')
       setAlert(unrecognizedFormatAlert(message, uploadedFile.name, 'drop'))
       if (onError) {
         onError(message)
