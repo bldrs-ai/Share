@@ -1,9 +1,11 @@
 import React from 'react'
-import {act, fireEvent, render, renderHook, waitFor} from '@testing-library/react'
+import {act, fireEvent, render, renderHook, waitFor, within} from '@testing-library/react'
 import {getOrganizations} from '../../net/github/Organizations'
 import {getBranches} from '../../net/github/Branches'
 import useExistInFeature from '../../hooks/useExistInFeature'
 import useStore from '../../store/useStore'
+import {WARN, disableDebug, setDebugLevel} from '../../utils/debug'
+import {HTTP_AUTHORIZATION_REQUIRED} from '../../net/http'
 import {
   mockedUseAuth0,
   mockedUserLoggedIn,
@@ -213,6 +215,35 @@ describe('SaveModelControl', () => {
       render(<SaveModelControlFixture/>)
     })
     expect(getOrganizations).toHaveBeenCalled()
+  })
+
+  // SHARE-1X6: an expired or revoked GitHub token makes /user/orgs reject
+  // with a 401. That was an unhandled rejection, and the owner list stayed
+  // empty; the user's own account is still a valid owner to save under.
+  it('offers the user\'s own account when the org list fails', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    getOrganizations.mockRejectedValue(Object.assign(new Error('Bad credentials'), {status: HTTP_AUTHORIZATION_REQUIRED}))
+    // setupTests disables debug output; raise it so the warning is observable.
+    setDebugLevel(WARN)
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const {result} = renderHook(() => useStore((state) => state))
+      // eslint-disable-next-line require-await
+      await act(async () => {
+        result.current.setAccessToken('expired')
+        result.current.setOpfsFile(new File(['test'], 'test.ifc', {type: 'application/octet-stream'}))
+        result.current.setIsSaveModelVisible(true)
+      })
+      const {getByTestId, findByRole} = render(<SaveModelControlFixture/>)
+      await waitFor(() => expect(warnSpy).toHaveBeenCalledWith(
+        'SaveModelControl: could not list GitHub organizations', HTTP_AUTHORIZATION_REQUIRED))
+
+      fireEvent.mouseDown(within(getByTestId('saveOrganization')).getByRole('combobox'))
+      expect(await findByRole('option', {name: '@testing'})).toBeInTheDocument()
+    } finally {
+      warnSpy.mockRestore()
+      disableDebug()
+    }
   })
 
   // The Export tab (#1838). The Save tab is today's content; Export hosts

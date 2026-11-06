@@ -28,6 +28,7 @@ import {
   isStructuredProgress,
   loadFailureCaptureContext,
   noGeometryAlert,
+  reportBvhDepthCap,
   reportCacheHit,
   reportEngineVersion,
   reportFirstMesh,
@@ -176,6 +177,21 @@ describe('loadProgress', () => {
       reportLoadProgress({modelInfo: {fileName: 'index.ifc', schema: 'IFC4'}})
       expect(reportLines()).toContain('Conway v1.379.1190')
       expect(reportLines()).toContain('Model: index.ifc — IFC4')
+    })
+
+    // A BVH that hit three-mesh-bvh's depth cap becomes one Health line,
+    // summed over the load's builds, instead of the console warning that
+    // titled its diagnostics event (viewer/ifc/bvhBuild.js).
+    it('adds one Health line for BVH trees that hit the depth cap', () => {
+      beginLoadProgress({fileInfo: 'big.stp'})
+      reportBvhDepthCap({trees: 1, maxLeafTriangles: 120, maxDepth: 40})
+      reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
+      endLoadProgress()
+      expect(reportLines()).toContain(
+        'Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 triangles, tested one by one per pick')
+      // After the load it is a no-op.
+      reportBvhDepthCap({trees: 9, maxLeafTriangles: 9, maxDepth: 40})
+      expect(reportLines().filter((line) => line.startsWith('Health: picking'))).toHaveLength(1)
     })
 
     it('reportModelInfo works for non-engine formats', () => {

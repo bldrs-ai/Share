@@ -194,6 +194,9 @@ class LoadProgressReporter {
     // preview feedback #4). Includes conway's engine warnings/errors, which
     // route through console.warn/error.
     this.diagnostics = new Map()
+    // BVH trees that reached three-mesh-bvh's depth cap during the load
+    // (reportBvhDepthCap), or null when none did.
+    this.bvhDepthCap = null
     // Base messages (conway LogEntry.message, whitespace-collapsed like the
     // tee's text) conway logged during this load, split by whether the entry
     // carried the data-defect marker — what isDataDefectDiagnostic matches
@@ -750,6 +753,12 @@ class LoadProgressReporter {
     // stage lines.
     const total = this.log.totalLine()
     this.addReportLine(this.summary ? `${total} | ${this.summary}` : total)
+    if (this.bvhDepthCap) {
+      const {trees, maxLeafTriangles, maxDepth} = this.bvhDepthCap
+      this.addReportLine(`Health: picking index hit its depth cap (${maxDepth}) in ` +
+        `${trees} ${trees === 1 ? 'tree' : 'trees'}; largest leaf ${maxLeafTriangles} triangles, ` +
+        'tested one by one per pick')
+    }
 
     // Warnings & errors captured from the console during the load, appended
     // after Total (issue #301 preview feedback #4). Restore the console
@@ -924,6 +933,9 @@ class LoadProgressReporter {
           consoleTotal: summary.total,
           consoleDistinct: summary.distinct,
           messages: this.topDiagnostics(MAX_SENTRY_DIAGNOSTICS),
+          // How big the leaves three-mesh-bvh capped are, the number for
+          // deciding whether to retune its build (viewer/ifc/bvhBuild.js).
+          bvhDepthCap: this.bvhDepthCap ?? undefined,
           report: this.sentryLines.join('\n'),
         },
       },
@@ -1677,6 +1689,28 @@ export function endLoadProgress(error = null) {
  * numbers live in the Health line one expand (or the "i" report) away.
  */
 const FRAMING_NOTE = 'stray geometry far from the model was left out of the zoom fit'
+
+
+/**
+ * Record BVH trees that reached three-mesh-bvh's depth cap
+ * (`viewer/ifc/bvhBuild.js`). Accumulates across the load's builds, a batched
+ * model building one tree per geometry, and becomes one `Health:` line after
+ * Total plus a `bvhDepthCap` field on the diagnostics event. Safe no-op with
+ * no active load, or after it ended.
+ *
+ * @param {{trees: number, maxLeafTriangles: number, maxDepth: number}} capped
+ */
+export function reportBvhDepthCap({trees, maxLeafTriangles, maxDepth}) {
+  if (!activeReporter || activeReporter.ended) {
+    return
+  }
+  const previous = activeReporter.bvhDepthCap
+  activeReporter.bvhDepthCap = {
+    trees: (previous?.trees ?? 0) + trees,
+    maxLeafTriangles: Math.max(previous?.maxLeafTriangles ?? 0, maxLeafTriangles),
+    maxDepth,
+  }
+}
 
 
 /**
