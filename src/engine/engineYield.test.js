@@ -1,6 +1,7 @@
 /** @jest-environment node */ // eslint-disable-line jsdoc/check-tag-names
 /* eslint-disable no-magic-numbers, require-await */
 import {createEngineHandler} from './engineHandler'
+import {ENGINE_PROTOCOL_VERSION} from './protocol'
 
 
 // Review on #2058 (P2-5): in a worker the page's requests arrive as message
@@ -82,10 +83,10 @@ describe('engine/engineHandler pump yield', () => {
         },
       })
       channel.port1.onmessage = (event) => handler.handle(event.data)
-      await handler.handle({v: 1, id: 1, op: 'init', args: {epoch: 1}})
-      await handler.handle({v: 1, id: 2, op: 'open', args: {source: {bytes: new ArrayBuffer(4)}, stream: {}}})
+      await handler.handle({v: ENGINE_PROTOCOL_VERSION, id: 1, op: 'init', args: {epoch: 1}})
+      await handler.handle({v: ENGINE_PROTOCOL_VERSION, id: 2, op: 'open', args: {source: {bytes: new ArrayBuffer(4)}, stream: {}}})
       // As the page would: posted while the pump is running.
-      channel.port2.postMessage({v: 1, id: 3, op: 'tree', args: {mode: 'names'}})
+      channel.port2.postMessage({v: ENGINE_PROTOCOL_VERSION, id: 3, op: 'tree', args: {mode: 'names'}})
       await new Promise((resolve) => {
         const poll = () => (order.some(([what]) => what === 'done') ? resolve() : setTimeout(poll, 5))
         poll()

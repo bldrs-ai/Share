@@ -1036,8 +1036,10 @@ export async function load(
           // A windowed open already reads through its store and answers
           // `windowed`; a buffered one (every STEP) is released to windows
           // over the OPFS File. Its geometry went at load end (above).
-          spillEngineSource(engineSession, glbExportContext.sourceFile)
-          return
+          // Returned, so the writer settles only once the spill has; a close
+          // meanwhile waits for the spill's reply itself
+          // (EngineSession#closePolitely).
+          return spillEngineSource(engineSession, glbExportContext.sourceFile)
         }
         // The writer's property/tree captures were the LAST load-time
         // sweeps that read the parsed source synchronously — from here
@@ -1086,12 +1088,13 @@ export async function load(
  *
  * @param {object} engineSession
  * @param {Blob|null|undefined} sourceFile
+ * @return {Promise<void>} settles with the spill, never rejects
  */
 function spillEngineSource(engineSession, sourceFile) {
   if (!sourceFile) {
-    return
+    return Promise.resolve()
   }
-  engineSession.spill(sourceFile).then((result) => {
+  return engineSession.spill(sourceFile).then((result) => {
     if (result?.spilled) {
       glbInfo(
         `source spill (engine worker): released resident source buffer (${sourceFile.size}B); ` +

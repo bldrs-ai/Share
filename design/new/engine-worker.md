@@ -472,9 +472,19 @@ Share at the pin):
 ## 4. Protocol
 
 One worker per model session, one `MessagePort` (the worker's own). Every
-message carries `v: 1` and the session's `epoch` (bumped on every respawn,
-so a late message from a terminated or replaced worker is dropped by
-construction, not by a guard).
+message carries `v` (`ENGINE_PROTOCOL_VERSION`, 2 since step 5) and the
+session's `epoch` (bumped on every respawn, so a late message from a
+terminated or replaced worker is dropped by construction, not by a guard).
+
+**Version or capability.** The version goes up when the page starts to
+*need* an op an older worker lacks: `hello` then names the old version, the
+page refuses the stale cached `Engine.worker.js` before it instantiates its
+wasm, and the load runs in process (§8 item 6). v2 added `capture` and
+`spill`. They are not capabilities, because the main thread holds no engine
+to capture with: a worker without `capture` could never write a worker
+load's GLB artifact (Codex on #2081). An op the page can do without is an
+`init` capability instead, such as `propertyTables`, whose tables the page
+otherwise resolves itself.
 
 **Requests** (main → worker) get one reply `{re: id, ok, result | error}`:
 
@@ -488,7 +498,7 @@ construction, not by a guard).
 | `propertyTables` | `{tables: [{record, isPset}]}` | the Properties panel's tables, resolved next to the engine by `propertyTable.js` and cut to what renders (#2070, §7.1); offered only when `init`'s `capabilities.propertyTables` says so |
 | `itemsOfType` | `{type, verbose}` | ids |
 | `capture` | `{geometryExpressIds}` (the STEP merged layout's ids, else null) | `{spatialTree, elementProperties, geometryItemIdentities, captureMs, wasmBytes}`; the properties container transferred (§7 step 5) |
-| `spill` | `{file}`: the OPFS File the model was parsed from | `{spilled, reason, source}`; `reason: 'windowed'` for a store-backed open, which has nothing resident to release |
+| `spill` | `{file}`: the OPFS File the model was parsed from | `{spilled, reason, source}`; `reason: 'windowed'` for a store-backed open, which has nothing resident to release. A spill through a sync access handle takes the entry's lock, so `EngineSession#close` waits for a spill still in flight before it decides whether to close politely (Codex on #2081) |
 | `release` | `{entityCache} \| {geometry: true}` | bool |
 | `abort` | — | ack; the pump stops at the next batch boundary |
 | `stats` | — | `wasmBytes`, resident window bytes, I/O counters |
@@ -512,7 +522,7 @@ straight to whoever builds the scene: the main thread today, a render
 worker later (§9). Without it, events go to the worker's own port. With
 it, the host's budget accounting still runs on the control port (§9).
 
-**Not in v1:** document writes (the op log, model-edit.md L1). They slot
+**Not in v2:** document writes (the op log, model-edit.md L1). They slot
 in as more ops without changing the shape. The index-sidecar export
 (conway#756) arrives with eviction (§7 step 8) as an `exportIndex` op.
 

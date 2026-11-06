@@ -11,6 +11,7 @@ import {
   statisticsView,
 } from './engineModelLoad'
 import {makeBatchEncoder, makeLogForwarder, previewMessage, snapshotStatistics} from './engineStream'
+import {ENGINE_PROTOCOL_VERSION} from './protocol'
 import {makeInProcessTransport} from './transports'
 import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
 import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
@@ -573,8 +574,8 @@ describe('engine/engineHandler review fixes (#2058 round 1)', () => {
         dispose: () => null,
       },
     })
-    await handler.handle({v: 1, id: 1, op: 'init', args: {epoch: 1}})
-    await handler.handle({v: 1, id: 2, op: 'open', args: {source: {file: new Blob(['x'])}}})
+    await handler.handle({v: ENGINE_PROTOCOL_VERSION, id: 1, op: 'init', args: {epoch: 1}})
+    await handler.handle({v: ENGINE_PROTOCOL_VERSION, id: 2, op: 'open', args: {source: {file: new Blob(['x'])}}})
     const logAt = posted.findIndex((m) => m.ev === 'log')
     const replyAt = posted.findIndex((m) => m.re === 2)
     expect(posted[replyAt].ok).toBe(false)

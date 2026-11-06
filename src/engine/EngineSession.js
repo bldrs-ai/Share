@@ -59,6 +59,9 @@ export class EngineSession {
     this.closed = false
     this.modelID = -1
     this.capabilities = null
+    // A spill awaiting its reply, as a promise that settles either way
+    // (spill(), close()); null otherwise.
+    this.spilling = null
     this.lastWasmBytes = 0
     this.nextId = 1
     this.pending = new Map()
@@ -411,15 +414,39 @@ export class EngineSession {
    * @param {File|Blob} file
    * @return {Promise<{spilled: boolean, reason: (string|null), source: object}>}
    */
-  async spill(file) {
-    const result = await this.request(Op.SPILL, {file})
-    if (result?.spilled && result.source?.kind) {
-      // A spill through a sync access handle takes the entry's OPFS lock for
-      // the session, as a windowed open does, so close() must release it
-      // politely too (engine-worker.md §7 step 4).
-      this.sourceKind = result.source.kind
+  spill(file) {
+    if (this.closing) {
+      // A spill sent after close() began could take a sync handle that the
+      // close already decided it need not release.
+      return Promise.reject(new Error(SESSION_CLOSED))
     }
-    return result
+    // Until the reply lands, close() cannot know whether the engine now holds
+    // a sync handle, so it waits for `settled` first (review on #2081).
+    // Cleared in the reply's own handler, so a caller resuming from this
+    // spill already sees it gone, and a later close() stays synchronous.
+    const landed = () => {
+      if (this.spilling === settled) {
+        this.spilling = null
+      }
+    }
+    const spilling = this.request(Op.SPILL, {file}).then((result) => {
+      landed()
+      if (result?.spilled && result.source?.kind) {
+        // A spill through a sync access handle takes the entry's OPFS lock
+        // for the session, as a windowed open does, so close() must release
+        // it politely too (engine-worker.md §7 step 4).
+        this.sourceKind = result.source.kind
+      }
+      return result
+    }, (e) => {
+      landed()
+      throw e
+    })
+    // Settles either way, and after `sourceKind` is set: it hangs off
+    // `spilling`.
+    const settled = spilling.then(() => null, () => null)
+    this.spilling = settled
+    return spilling
   }
 
 
@@ -477,7 +504,9 @@ export class EngineSession {
    * only some time after it returns, so whatever comes next (clearing the
    * cache, a re-stage, the next model's eviction of a stale entry) could
    * still find it locked. So `close` is sent and its reply awaited, for at
-   * most ENGINE_CLOSE_TIMEOUT_MS, before terminating.
+   * most ENGINE_CLOSE_TIMEOUT_MS, before terminating. A session whose spill
+   * has not replied yet may be taking such a handle, so it waits for that
+   * reply first ({@link closePolitely}).
    *
    * @return {Promise<void>} settles once the engine is gone and, for a
    *   sync-handle session, its lock released (or the wait timed out)
@@ -486,21 +515,44 @@ export class EngineSession {
     if (this.closing) {
       return this.closing
     }
-    if (this.sourceKind !== 'syncHandle' || this.closed) {
+    if (this.closed || (this.sourceKind !== 'syncHandle' && !this.spilling)) {
       this.fail(new Error(SESSION_CLOSED), 'closed')
       this.closing = Promise.resolve()
       return this.closing
     }
-    let timer
-    const timeout = new Promise((resolve) => {
-      timer = setTimeout(resolve, ENGINE_CLOSE_TIMEOUT_MS)
-    })
-    this.closing = Promise.race([this.request(Op.CLOSE).catch(() => null), timeout])
-      .finally(() => {
-        clearTimeout(timer)
-        this.fail(new Error(SESSION_CLOSED), 'closed')
-      })
+    this.closing = this.closePolitely()
     return this.closing
+  }
+
+
+  /**
+   * close()'s slow path. A spill still in flight (the GLB writer's, for a
+   * buffered STEP open) may be opening a sync access handle as this runs, and
+   * only its reply says so; terminating before it lands is exactly the lock
+   * left held that close() exists to prevent (review on #2081). So it waits
+   * for that reply first, then for `close`'s, each bounded by
+   * ENGINE_CLOSE_TIMEOUT_MS.
+   *
+   * @return {Promise<void>}
+   */
+  async closePolitely() {
+    const bounded = (promise) => {
+      let timer
+      const timeout = new Promise((resolve) => {
+        timer = setTimeout(resolve, ENGINE_CLOSE_TIMEOUT_MS)
+      })
+      return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+    }
+    try {
+      if (this.spilling) {
+        await bounded(this.spilling)
+      }
+      if (this.sourceKind === 'syncHandle' && !this.closed) {
+        await bounded(this.request(Op.CLOSE).catch(() => null))
+      }
+    } finally {
+      this.fail(new Error(SESSION_CLOSED), 'closed')
+    }
   }
 }
 

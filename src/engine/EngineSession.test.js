@@ -261,7 +261,7 @@ describe('engine/EngineSession epochs and protocol', () => {
     const handler = createEngineHandler({loadIfcAPI: async () => null, post: (m) => posted.push(m)})
     await handler.handle({v: ENGINE_PROTOCOL_VERSION + 1, id: 1, op: Op.STATS})
     expect(posted[0]).toMatchObject({re: 1, ok: false})
-    expect(posted[0].error.message).toMatch(/protocol v2 unsupported/)
+    expect(posted[0].error.message).toContain(`protocol v${ENGINE_PROTOCOL_VERSION + 1} unsupported`)
   })
 
   it('the handler answers an unknown op with an error, not silence', async () => {
@@ -327,6 +327,60 @@ describe('engine/transports worker transport', () => {
     expect(worker.terminate).not.toHaveBeenCalled()
     reply(worker.posted[1], true)
     await closing
+    expect(worker.terminate).toHaveBeenCalledTimes(1)
+  })
+
+  it('a close while a spill is in flight waits for its reply, then releases the handle it took', async () => {
+    // Review on #2081: the writer does not hold the session, so a cache
+    // clear or a navigation can close it between `spill` going out and its
+    // reply. Terminating then leaves the handle the spill just opened locked
+    // past closeAllEngineSessions().
+    const worker = makeFakeWorker()
+    const session = new EngineSession(makeWorkerTransport(worker), {epoch: 2})
+    const reply = (posted, result) => worker.dispatchEvent(new MessageEvent('message', {
+      data: {v: ENGINE_PROTOCOL_VERSION, epoch: 2, re: posted.msg.id, ok: true, result},
+    }))
+    const spilled = session.spill(new Blob([new Uint8Array(4)]))
+    const closing = session.close()
+    expect(worker.terminate).not.toHaveBeenCalled()
+    await expect(session.spill(new Blob([]))).rejects.toThrow(SESSION_CLOSED)
+    expect(worker.posted).toHaveLength(1)
+    reply(worker.posted[0], {spilled: true, reason: null, source: {kind: 'syncHandle'}})
+    await spilled
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(worker.posted[1]?.msg).toMatchObject({op: Op.CLOSE})
+    expect(worker.terminate).not.toHaveBeenCalled()
+    reply(worker.posted[1], true)
+    await closing
+    expect(worker.terminate).toHaveBeenCalledTimes(1)
+  })
+
+  it('a close while a spill is in flight that took no handle just terminates once it replies', async () => {
+    const worker = makeFakeWorker()
+    const session = new EngineSession(makeWorkerTransport(worker), {epoch: 2})
+    const spilled = session.spill(new Blob([new Uint8Array(4)]))
+    const closing = session.close()
+    worker.dispatchEvent(new MessageEvent('message', {
+      data: {v: ENGINE_PROTOCOL_VERSION, epoch: 2, re: worker.posted[0].msg.id, ok: true,
+        result: {spilled: false, reason: 'windowed', source: {kind: 'blob'}}},
+    }))
+    await spilled
+    await closing
+    expect(worker.posted.map(({msg}) => msg.op)).toEqual([Op.SPILL])
+    expect(worker.terminate).toHaveBeenCalledTimes(1)
+  })
+
+  it('a spill that settled long ago leaves close() synchronous', async () => {
+    const worker = makeFakeWorker()
+    const session = new EngineSession(makeWorkerTransport(worker), {epoch: 2})
+    const spilled = session.spill(new Blob([new Uint8Array(4)]))
+    worker.dispatchEvent(new MessageEvent('message', {
+      data: {v: ENGINE_PROTOCOL_VERSION, epoch: 2, re: worker.posted[0].msg.id, ok: true,
+        result: {spilled: false, reason: 'unsupported', source: {kind: 'resident'}}},
+    }))
+    await spilled
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    session.close()
     expect(worker.terminate).toHaveBeenCalledTimes(1)
   })
 })
