@@ -1,9 +1,9 @@
 # Per-model engine worker — one Conway engine per model, in its own Web Worker (open-205)
 
 **Status:** decided 2026-11-03 (§8); being built behind
-`?feature=engineWorker` in the §7 order. Steps 1–4 and 6 have landed: IFC
-and STEP both load in the worker. Step 5 (the GLB artifact of a worker
-load) is in review.
+`?feature=engineWorker` in the §7 order. Steps 1–6 have landed: IFC
+and STEP both load in the worker, and a worker load writes the GLB
+artifact (step 5, #2081). Step 9 (default on) is next.
 **Epic:** `open-205` (#2011). Story: #2053. Absorbs #2031 (close and
 eviction): with an engine in a worker, terminating the worker *is* the
 eviction.
@@ -726,11 +726,47 @@ are not re-minted by an engine respawn because the scene is not rebuilt.
 
 ## 7. Migration plan
 
-Every PR is behind `?feature=engineWorker` (off), keeps the main-thread
-engine as the default and fallback, and carries desktop + mobile E2E per
-the UI rule. The main-thread engine stays permanently (§8 item 6), but as
-the same protocol and session API over an in-process transport, not as a
-second, divergent path.
+### Resume here (2026-11-06)
+
+Picking `open-205` back up after a break? Read this, then §7.1 (numbers)
+and §7.2 (step-9 criteria). Docs #2064, #2068 and #2071 are merged.
+
+**Release goal.** `?feature=engineWorker` on by default. That is step 9,
+the only thing left that users would see.
+
+**Merged.**
+- Steps 0–4: this doc (#2056), conway#540 (conway#759), protocol and
+  client (#2057), IFC load in the worker (#2058), the sync-access-handle
+  source (#2072).
+- Step 6, STEP in the worker (#2067), with the one part-21 list
+  (`loader/part21Formats.js`).
+- #2065, the Properties panel crash fix (not a worker bug).
+- #2074: one worker request per Properties table, and cache-hit refs.
+  Closes #2070 and #2066.
+- #2073 (#2038): GLB export capture through conway's file-order readers.
+- #2079 (#2075).
+- #2080: the conway `1.1636.766` pin, together with #2069.
+- Step 5, the GLB capture in the worker (#2081): a worker load writes the
+  same artifact, byte for byte, as a main-thread one (PSB checked whole,
+  §7.1). Protocol v2 (§4). This was the last code blocker for the flip.
+
+**In flight.** Nothing in this chain.
+
+**Flip gates (step 9).** §7.2 is the list, each item needing a merged PR
+or a measurement in a PR body.
+1. #2061: the 350 MB worker JS heap on sp-231MB, explained and fixed or
+   accepted (needs a heap snapshot).
+2. Flip prep: the kill switch checked in a real browser, the `?view=`
+   rules stack deleted or its fallback settled, and the flag-on E2E suite
+   green as the default.
+3. A real-GPU check, plus Safari and Firefox by hand.
+
+**Next after the flip.**
+- STEP convergence in conway (§11): the STEP index sidecar (conway#757),
+  a windowed STEP open, STEP previews with an occurrence path.
+- #2077 and #2078 (priority residency), then #2076.
+- Steps 7–8 (sessions own their worker, close and eviction) only when
+  in-app model switching (#2011) is picked up. They do not gate the flip.
 
 1. **conway: recognise a worker** (conway#540): `WorkerGlobalScope` in
    `isWebPlatform`, `self.crossOriginIsolated` in `pThreadsAllowed`. Small;
@@ -941,7 +977,8 @@ second, divergent path.
    #2023's memory spec, asserting the evicted worker's memory is gone
    (`measureUserAgentSpecificMemory` breakdown in an isolated test server,
    or the renderer's RSS) and that properties still answer.
-9. **Default on**, after steps 2–8 have merged. The in-process transport
+9. **Default on**, after steps 2–6 have merged. Steps 7–8 are only needed
+   for in-app model switching (#2011), so they do not gate it. The in-process transport
    stays as the fallback for browsers without module workers, and
    `?feature=disableEngineWorker` is the kill switch. Before it: delete the
    `?view=` rules stack (§8 item 7).
@@ -960,8 +997,9 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 | 3 — IFC load in the worker | merged (#2058). PSB, n=3, flag off → on: main-thread long tasks over 50 ms 418 → 23, time blocked 63 → 12 s, Geometry 48.3 → 40.6 s, Total 94.8 → 83.3 s, page heap after load 2130 → 889 MB (the worker's own JS heap 65 MB). Buffered tree-at-index: SEESTRASSE 8.05 → 4.60 s, sp-231MB 37.4 → 11.9 s |
 | 4 — sync-access-handle source | merged (#2072). Measured flag on, Blob store vs read-only sync handle, at medians: PSB (n=3) source I/O 19.1 → 3.8 s, Parsing 28.3 → 20.2 s, time to index 44.2 → 35.8 s, Total 96.5 → 82.9 s; sp-231MB (n=2) I/O 8.5 → 2.1 s, Parsing 14.0 → 9.9 s, Total 64.8 → 60.1 s; SEESTRASSE (n=1) I/O 0.32 → 0.07 s, Total flat. Geometry, main-thread long tasks and page heap unchanged. Every leg was windowed, checked by its `Engine source I/O:` line, in a persistent profile. Caveat: the Blob store's per-read time includes event-loop wait as well as I/O (each read is an async round trip), so the I/O figures are not pure I/O. The wall-clock stages (Parsing, time to index, Total) carry the claim |
 | 6 — STEP in the worker | merged (#2067). A STEP is opened buffered (conway's store-backed open is IFC-only), so step 4's source store does not apply to it |
-| 5 — GLB capture in the worker | in review, after #2073 (#2038: the capture dropped every record a windowed source did not have resident). n=1 each, flag off → on, `RAF_THROTTLE_MS=3600000`, persistent profile. PSB: time to artifact 171.6 → 118.9 s; the writer 38.1 → 31.0 s, of which the worker's capture is 7.6 s; main-thread long tasks before ready 536 (81.6 s) → 35 (13.7 s), and during the write 71 (7.85 s, max 624 ms) → 4 (0.43 s, max 208 ms); page heap (`performance.memory`) at the end 1,127 → 522 MB, sampled peak 1,766 → 848 MB; the worker's JS heap peaked at 140 MB, beside 899 MB of wasm. 58 MB STEP: time to artifact 47.6 → 43.2 s; writer 7.6 → 6.8 s, capture 2.5 s; long tasks before ready 292 (35.8 s) → 10 (3.6 s), during the write 4 (0.35 s) → 1 (0.07 s); page heap at the end 688 → 148 MB; worker JS heap peak 322 MB beside 515 MB of wasm. The PSB artifacts' captured extensions are byte-identical across the two engines; their colours differed until the batch colour column became float64 (step 5 above) |
-| 7, 8, 9 | not started; 9 is gated on #2061 and step 5 (#2070's Properties panel cost is fixed by #2074) |
+| 5 — GLB capture in the worker | merged (#2081), after #2073 (#2038: the capture dropped every record a windowed source did not have resident). n=1 each, flag off → on, `RAF_THROTTLE_MS=3600000`, persistent profile. PSB: time to artifact 171.6 → 118.9 s; the writer 38.1 → 31.0 s, of which the worker's capture is 7.6 s; main-thread long tasks before ready 536 (81.6 s) → 35 (13.7 s), and during the write 71 (7.85 s, max 624 ms) → 4 (0.43 s, max 208 ms); page heap (`performance.memory`) at the end 1,127 → 522 MB, sampled peak 1,766 → 848 MB; the worker's JS heap peaked at 140 MB, beside 899 MB of wasm. 58 MB STEP: time to artifact 47.6 → 43.2 s; writer 7.6 → 6.8 s, capture 2.5 s; long tasks before ready 292 (35.8 s) → 10 (3.6 s), during the write 4 (0.35 s) → 1 (0.07 s); page heap at the end 688 → 148 MB; worker JS heap peak 322 MB beside 515 MB of wasm. **Byte identity:** after the batch colour column became float64 (step 5 above), the two engines' whole PSB artifacts are identical, 86,341,686 B each with one SHA-256 (re-measured 2026-11-06, n=1 per side, on a less loaded machine: time to artifact 68.6 → 58.9 s, long tasks before ready 222 (27.8 s) → 13 (6.7 s)). Review fixes: protocol v2, so a stale cached worker without `capture` is refused at hello and the load runs in process (§4); `close()` waits for a spill still in flight before it decides whether to close politely |
+| 7, 8 | deferred; only in-app switching needs them |
+| 9 | not started; gated on #2061 and the §7.2 flip prep. Step 5 is merged; #2070 is closed: its Properties panel cost is fixed by #2074 |
 
 **Known issues.**
 
@@ -1056,6 +1094,48 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
   stays mounted. It resets itself when the selection or the read model
   changes, so a failure at the indexed model is retried with the finished
   one. No crash was traced to this race; #2063 is a different bug.
+
+### 7.2 Step 9 (default on): the criteria
+
+Every item needs either a merged PR or a measurement in a PR body.
+
+1. **Steps 2–6 merged**, each behind the flag, each with its desktop and
+   mobile E2E. Met: step 5 merged last (#2081). Steps 7–8 are deferred (they serve
+   in-app switching, not the flip), so the memory-after-evict check in
+   item 5 waits with them.
+2. **The `?view=` rules stack deleted** (§8 item 7). WidgetApi's
+   `ChangeViewSettingsEventHandler` is migrated first. Legacy
+   `?feature=bot` stays on the main-thread engine and refuses clearly
+   under the worker (in place since #2058).
+3. **#2061 explained and fixed or accepted.** That is the 350 MB worker
+   JS heap after an sp-231MB load. It needs a heap snapshot, and its
+   number goes against the §5.2 budget.
+4. **#2070 fixed. Met, by #2074.** One round trip per Properties table: a
+   `propertyTables` op that runs in the worker, applying the depth limit
+   and `MAX_ARRAY_MEMBERS` there so it returns only what renders. What
+   stays is the general cost of a frame-bound round trip for any other
+   sequential read (§7.1); it does not gate the flip.
+5. **No load regressions, flag off vs on.** PSB n≥3, plus SEESTRASSE and
+   sp-231MB, at `RAF_THROTTLE_MS=3600000`:
+   - main-thread long tasks over 50 ms, time to index, Geometry, Total;
+   - memory after evict (the #2023 E2E; with step 8);
+   - each windowed leg checked to have actually run windowed (its
+     `Engine source I/O:` line present), with a persistent profile, since
+     an incognito-like context's small OPFS quota silently falls back to
+     a buffered open.
+6. **The kill switches work in a real browser:**
+   - `?feature=disableEngineWorker` puts the main-thread engine back;
+   - the in-process fallback runs when a worker cannot start (unit-tested
+     since #2058; one E2E with `Worker` stubbed to throw);
+   - `disableEngineSyncHandle` puts the Blob store back (step 4).
+7. **Other browsers checked by hand.** Safari and Firefox: module workers,
+   `createSyncAccessHandle({mode: 'read-only'})` or its Blob fallback, and
+   one model opening end to end with properties. Recorded in the step-9
+   PR.
+8. **The flag-on E2E suite green** as the default:
+   - navTreeAtIndex, previewInteraction, engineIfcLoad, engineSyncHandle;
+   - PropertiesNestedRefs, the STEP specs from step 6;
+   - batchedGlbCache, the cache hit after a worker load (step 5).
 
 ## 8. Decisions (2026-11-03)
 
@@ -1204,7 +1284,7 @@ and the other lacks.
 | Geometry pump | `ExtractGeometryBatchAsync` → `IncrementalBatchedBuilder` (main) / the batch columns → `decodePlacements` → the same builder (worker) | — | `PlacedGeometry.occurrencePath`, the batch's path columns, where a present-but-empty path (a root-level instance) stays `[]` (#2067) | shared; data |
 | Assembly and decoration | `assembleBatchedModel`, `decorateConwayDirectIfcModel`, `stampAppliedCoordination` | — | per-occurrence tables carried onto the rebuilt instance map | shared |
 | Hide / isolate / `#d:` | `IfcIsolator.js`, `Residency/visibilityHash.js` | `e` refs | `o` refs (occurrence paths) | shared; data |
-| GLB writer capture | `bldrsElementProperties` / `bldrsSpatialTree` / `bldrsFaceIds` (main thread); a worker load writes no artifact for either format until §7 step 5 | `RootExpressIDs` fast path | full record scan (no IfcRoot); occurrence-path table beside the face ids | shared writer, with a STEP table; step 5 moves it into the worker for both |
+| GLB writer capture | `glbEngineCapture.js#captureEngineExtensions` (`bldrsElementPropertiesCapture` / `bldrsSpatialTree` / the geometry-identity table), run next to whichever engine loaded the model: the page's, or the worker's as the `capture` op (§7 step 5) | `RootExpressIDs` fast path | full record scan (no IfcRoot); occurrence-path table beside the face ids | shared: one job for both formats and both engines |
 | Cache hit | the `BLDRS_*` GLB reader; spawns no engine | — | restores the occurrence and geometry-id tables | shared |
 | Load report | `loadProgress.js`; the worker forwards its Logger and console, and `engineWasmMb=` on the Total line | `ifcVersion` = the IFC schema | the AP schema | shared |
 
@@ -1217,8 +1297,9 @@ and the other lacks.
 3. STEP previews (conway): first a preview that appears at all on the
    models tried, then an occurrence path on its payload, so a STEP pick at
    first mesh selects the occurrence, as an IFC pick selects the element.
-4. §7 step 5 (the capture job) for both formats at once, including STEP's
-   occurrence-path table.
+4. ~~§7 step 5 (the capture job) for both formats at once, including
+   STEP's occurrence-path table.~~ Done in #2081: one job, run next to
+   either engine.
 
 **Measured** (2026-11-04, §7 step 6 as first pushed in #2067):
 - `RAF_THROTTLE_MS=3600000`, one cold load per run, n=2 except the largest (n=1), medians, in a shared 4-vCPU container.

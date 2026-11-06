@@ -68,8 +68,8 @@ export function reportUnrecognizedFormat(alert) {
  * A file name's last extension, lowercased, safe to use as a Sentry tag.
  *
  * Only the extension: the name is the user's own text and stays out of the
- * event's tags and grouping (the drop path's console warning still reaches
- * Sentry as a breadcrumb; see `utils/dragAndDrop.js`). A trailing `.gz` is
+ * event's tags and grouping (the console warnings that name it have it
+ * withheld from Sentry's breadcrumbs; see `privacy/sentryRedaction.js`). A trailing `.gz` is
  * looked through, because the gzip envelope keeps the user's name
  * (`loader/gzipEnvelope.js`): `Tower.rvt.gz` is a rejected .rvt, and tagging
  * it `gz` would fold every compressed upload into one bucket. Bounded to a short alphanumeric token so the tag's value set stays

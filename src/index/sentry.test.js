@@ -1,8 +1,14 @@
+import {init} from '@sentry/react'
 import {gtagEvent} from '../privacy/analytics'
-import {shouldSendSentryEvent, _resetSentryFilterStateForTests} from './sentry'
+import {redactBreadcrumb} from '../privacy/sentryRedaction'
+import setupSentry, {shouldSendSentryEvent, _resetSentryFilterStateForTests} from './sentry'
 
 
 jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn()}))
+jest.mock('@sentry/react', () => ({
+  ...jest.requireActual('@sentry/react'),
+  init: jest.fn(),
+}))
 
 
 beforeEach(() => {
@@ -323,5 +329,17 @@ describe('shouldSendSentryEvent — anonymous onerror heuristic (SHARE-152 / SHA
     expect(gtagEvent).toHaveBeenCalledTimes(2)
     expect(gtagEvent).toHaveBeenCalledWith('netlify_rum_blocked', {})
     expect(gtagEvent).toHaveBeenCalledWith('anonymous_injected_error', {})
+  })
+})
+
+
+// The redaction is only as good as its wiring: without this, console
+// breadcrumbs naming the user's file reach Sentry however correct
+// privacy/sentryRedaction.js is.
+describe('setupSentry', () => {
+  it('rewrites breadcrumbs through redactBreadcrumb', () => {
+    setupSentry()
+    expect(init).toHaveBeenCalledTimes(1)
+    expect(init.mock.calls[0][0].beforeBreadcrumb).toBe(redactBreadcrumb)
   })
 })
