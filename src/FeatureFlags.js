@@ -160,11 +160,17 @@ export const flags = [
   {name: 'demandGeometry', isActive: true},
   // Per-model engine worker (design/new/engine-worker.md, open-205 #2053):
   // each model's Conway engine runs in its own module Worker and is freed
-  // by terminate(). Off while the §7 steps land behind it. Step 2 (this
-  // flag's first use) ships only the session layer in `src/engine/` and the
-  // `window.__bldrsEngine` dev hook (`engineDevHook.js`); no load goes
-  // through it yet.
+  // by terminate(). Off while the §7 steps land behind it. Today an IFC or
+  // STEP load parses, pumps and answers property reads in the worker
+  // (engine/engineModelLoad.js), with no GLB cache write yet
+  // (step 5); `window.__bldrsEngine` (engineDevHook.js) drives sessions
+  // directly.
   {name: 'engineWorker', isActive: false},
+  // Kill switch for the engine worker's OPFS sync access handle
+  // (engine-worker.md §7 step 4): read the source through the Blob store
+  // instead, as on the main thread. `?feature=` can only turn flags on, so
+  // this is phrased as the off switch.
+  {name: 'disableEngineSyncHandle', isActive: false},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-

@@ -64,6 +64,7 @@ import {
 } from '../viewer/ifc/appliedCoordination'
 import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
 import {spillModelSource} from './opfsSourceByteStore'
+import {PART21_LOADER_TYPES} from './part21Formats'
 import {STORE_DETECT_PREFIX_BYTES, isConwayIfcFormat, looksLikeTruncatedPart21Blob} from './stepFormat'
 import {
   externalCacheKey,
@@ -98,11 +99,6 @@ import {markIfOutOfMemory} from '../utils/oom'
 // would notice "cache hasn't warmed yet."
 const SCHEDULE_IDLE_TIMEOUT_MS = 5_000
 const LFS_POINTER_PROBE_BYTES = 256
-
-// The formats `findLoader` routes to conway via `parseIfcWithConway`. All
-// three are ISO-10303-21 part-21 files sharing one loader; only FILE_SCHEMA
-// separates IFC from STEP, so the suffix is not evidence either way.
-const PART21_LOADER_TYPES = new Set(['ifc', 'step', 'stp'])
 
 
 /**
@@ -776,6 +772,21 @@ export async function load(
       {onIndexed, onFirstMesh})
   } catch (e) {
     throw markIfOutOfMemory(e)
+  }
+  if (model?.ifcManager?.ifcAPI?.engineSession) {
+    // Parsed by a worker engine (`?feature=engineWorker`). No GLB cache write
+    // yet: the writer's property capture, source spill and geometry release
+    // all reach for a main-thread engine (`viewer.IFC.loader.ifcManager`),
+    // which holds no model here. They move into the worker as one `capture`
+    // job in engine-worker.md §7 step 5, which turns the write back on.
+    glbExportContext = null
+    // The writer's `finally` is where a main-thread load frees conway's
+    // native geometry (below); with no writer, free the worker's now, once
+    // the scene is built and nothing reads it again (§2.1 row 30).
+    if (isFeatureEnabled('demandGeometry')) {
+      // eslint-disable-next-line new-cap
+      model.ifcManager.ifcAPI.ReleaseModelGeometry?.(model.modelID)
+    }
   }
 
   // Conway's handle for THIS parse, latched before the model leaves

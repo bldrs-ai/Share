@@ -38,7 +38,9 @@ import {
   PaymentOutlined,
   CleaningServicesOutlined as CleaningServicesOutlinedIcon,
 } from '@mui/icons-material'
+import {cacheClearSkippedAlert} from '../../OPFS/messages'
 import {clearOPFSCache} from '../../OPFS/utils'
+import {closeAllEngineSessions} from '../../engine/spawnEngine'
 import {clearRecentFilesBySource} from '../../connections/persistence'
 import {reloadAfterCacheClear} from '../../utils/navigate'
 
@@ -54,6 +56,7 @@ export default function ProfileControl() {
   const setAccessToken = useStore((state) => state.setAccessToken)
   const viewer = useStore((state) => state.viewer)
   const appPrefix = useStore((state) => state.appPrefix)
+  const setAlert = useStore((state) => state.setAlert)
   // The §6e Neutral/Flat render toggle only appears when the whole look system
   // is enabled (`?feature=look`); off, there's no look to switch.
   const isLookEnabled = isFeatureEnabled('look')
@@ -334,12 +337,21 @@ export default function ProfileControl() {
         <MenuItem
           onClick={async () => {
             onCloseMenu()
+            let reloadNow = true
             try {
-              await clearOPFSCache()
-              // Uploads exist only in OPFS, so their recents now point at
-              // nothing. Only on success: if the clear failed the uploads
-              // may still be there (the startup sweep catches a partial).
-              clearRecentFilesBySource('local')
+              const skipped = await clearLocalCacheReleasingEngines()
+              if (skipped.length === 0) {
+                // Uploads exist only in OPFS, so their recents now point at
+                // nothing. Only on a full clear: what survived (and any
+                // upload in it) keeps its recent, and the startup sweep
+                // (pruneLocalRecents.js) drops the recents that lost theirs.
+                clearRecentFilesBySource('local')
+              } else {
+                // Held by an engine in another tab. Said, not reloaded over
+                // as if the clear had worked: the reload waits for the user.
+                reloadNow = false
+                setAlert(cacheClearSkippedAlert(skipped.length, () => reloadAfterCacheClear(appPrefix)))
+              }
             } catch (err) {
               console.error('Clear OPFS cache failed (reloading anyway)', err)
               captureException(err)
@@ -347,7 +359,9 @@ export default function ProfileControl() {
               // On a temporary (uploaded) model the just-cleared OPFS was the
               // only copy, so reloading the same URL would error; go to the
               // home model instead. Normal models just reload from source.
-              reloadAfterCacheClear(appPrefix)
+              if (reloadNow) {
+                reloadAfterCacheClear(appPrefix)
+              }
             }
           }}
           data-testid='clear-local-cache'
@@ -378,3 +392,32 @@ export default function ProfileControl() {
 
 
 export const useMock = process.env.OAUTH2_CLIENT_ID === 'cypresstestaudience'
+
+
+/**
+ * How long to wait before clearing again what the first pass skipped. An
+ * engine session still opening when the cache is cleared is terminated, not
+ * closed politely (spawnEngine.js#closeAllEngineSessions), and the browser
+ * lets its sync access handle's lock go a little after terminate() returns.
+ */
+export const CACHE_CLEAR_RETRY_MS = 500
+
+
+/**
+ * Clear the local (OPFS) cache with the engines released first: an engine
+ * worker reading its model through an OPFS sync access handle holds that
+ * entry locked against removal (engine-worker.md §7 step 4). What the first
+ * pass skips is cleared again once, after CACHE_CLEAR_RETRY_MS.
+ *
+ * @return {Promise<Array<string>>} OPFS paths still left behind
+ */
+export async function clearLocalCacheReleasingEngines() {
+  await closeAllEngineSessions()
+  const skipped = await clearOPFSCache()
+  if (skipped.length === 0) {
+    return skipped
+  }
+  await new Promise((resolve) => setTimeout(resolve, CACHE_CLEAR_RETRY_MS))
+  return await clearOPFSCache()
+}
+

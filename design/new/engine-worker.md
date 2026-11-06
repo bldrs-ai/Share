@@ -1,7 +1,8 @@
 # Per-model engine worker — one Conway engine per model, in its own Web Worker (open-205)
 
 **Status:** decided 2026-11-03 (§8); being built behind
-`?feature=engineWorker` in the §7 order.
+`?feature=engineWorker` in the §7 order. Steps 1–3 and 6 have landed: IFC
+and STEP both load in the worker.
 **Epic:** `open-205` (#2011). Story: #2053. Absorbs #2031 (close and
 eviction): with an engine in a worker, terminating the worker *is* the
 eviction.
@@ -208,7 +209,8 @@ through async reads.
   `flatMeshToBatchedModel.js`) and the tree uses `includeSolids`. Both are
   data, not engine calls. **Recommendation: IFC and STEP move together**, in
   one worker type with one protocol. The STEP-only parts are a column and a
-  flag. (A windowed STEP open is a Conway ask, not a blocker.)
+  flag. (A windowed STEP open is a Conway ask, not a blocker.) Done in §7
+  step 6: one worker load (`engine/engineModelLoad.js`) serves both.
 - **GLB, glTF, OBJ, STL, PLY, PDB, XYZ, splats, USD, 3DM, ADF/MTS, FBX** use
   three.js or Share's own JS decoders on the main thread. They have no wasm
   engine and no retained heap that only a terminate can free: their whole
@@ -349,10 +351,122 @@ runs the same module on the page itself.
   SEESTRASSE: 21 MB, 10,675 geometries, 0.4 s copy-out, 86–98 ms of posts.
 - **Not caused by the worker, noticed in passing:** the first leaf
   `getItemProperties` + `getPropertySets` on windowed PSB took ~3.3 s and
-  read ~1.9 GB of windows (with the Blob store). The pset lookup appears to
-  page in most of the file. Worth a conway issue; a sync handle hides most of
-  it.
+  read ~1.9 GB of windows (with the Blob store). The pset lookup paged in
+  most of the file. **Fixed in conway 1.1635.762** (conway#762, closing
+  conway#755 and #761; pinned by Share#2062), with numbers in §3.1.
 
+
+### 3.1 Property reads on a windowed open (conway#755, #761)
+
+Property reads go through the same windowed source in either arm, so the
+fix lands in conway and serves the worker and the main-thread engine alike.
+This is the record of what changed and what it measured, for whoever next
+reads properties off a store-backed model, whether that is the panel, the
+worker facade or a CLI/MCP `model.*` tool.
+
+**What was wrong.** Two separate bugs, in the same place: conway's
+`ifc_properties.ts` paged records one `ensureLine` at a time.
+
+- **Every pset read scanned every relationship.** `getPropertySets`,
+  `getTypeProperties` and `getMaterialsProperties` read *every*
+  relationship record of their kind on *every* call, to find the few that
+  name the element. Each record's window was paged in and never released.
+  - PSB's 23.5 k `IfcRelDefinesByProperties` hold 1.2 MB between them, but
+    they sit in all 215 of its 4 MiB windows.
+  - So every read, first or later, paged the whole 860 MB file: 4–5 s
+    each in conway's Node probe.
+  - The views it kept pinned evicted windows, and arrayBuffers grew to
+    1.27 GB.
+- **A recursive read threw.** A recursive (flattened) read paged in only
+  the seed record. A set whose `IfcPropertySingleValue`s sat in an evicted
+  window threw `StepBufferNotResidentError`: 109 of 299 sampled elements on
+  sp-231MB, and 5 of 30 on PSB.
+
+**What conway does now.**
+
+1. **A lazy element → relating-IDs index, one per relationship kind**
+   (`IfcProperties.relatedIndex`).
+   - It is sorted `Uint32Array` pairs, 8 B each (188 KB on PSB), and a read
+     is a binary search.
+   - It is built on the first property read of that kind, not at index
+     time. A load that never reads properties never pays for it, and the
+     index build and the sidecar are unchanged.
+   - The build reads the relationship records as coalesced **record
+     spans**, straight from the store in file order
+     (`StepBufferProvider.readSpan`, `visitRecordBytesInFileOrder`). The
+     spans merge across gaps of up to 64 KiB, are capped at 1 MiB, and go
+     four in flight. They don't page whole windows; on PSB that is ~1,080
+     reads and 20 MB instead of the whole file.
+   - No window is paged in or reordered in the LRU.
+2. **A recursive read pins the record's `#ref` closure before it
+   flattens** (`IfcApiProxyIfc.getLineResident`).
+   - It reuses the closure walk geometry extraction uses.
+   - Afterwards it unpins, drops the captured window views, and trims the
+     window back to its cap.
+   - A non-recursive read holds its record's pin across its await, so
+     another read's eviction can't drop it before the synchronous read.
+3. **Behaviour change: a recursive property read leaves geometry
+   representations as `{type: 5, value}` handles by default.**
+   - This covers `IfcProductRepresentation` (a product's `Representation`)
+     and `IfcRepresentationMap` (a type's `RepresentationMaps`). The walk
+     doesn't page them in.
+   - A product's representation is its whole shape graph. PSB's largest
+     sampled product reached 9,659 records and 1.18 MB of flattened JSON;
+     with the default it is 3 KB, read in 1 ms.
+   - `{includeRepresentations: true}`, a new optional last argument to the
+     `properties.*` reads, restores web-ifc's full flatten for
+     head-to-heads. `IfcAPI.GetLine(…, true)` is unchanged.
+   - Share makes no recursive property reads, so neither the panel nor the
+     worker facade sees the change.
+   - Conway documents the rule in its `design/new/web-ifc-compat-surface.md`.
+
+**Node probe** (conway's harness, windowed `OpenModelStream`, 4 MiB
+windows, `getPropertySets(…, true)`, ~300 sampled elements per model; the
+before rows on PSB cover the first 30 reads, as each one paid a full sweep):
+
+| model | first read: before → after | later reads, median: before → after | throws: before → after |
+|---|---|---|---|
+| PSB 860 MB | 4.79 s, 856 MB → **0.41 s, 20 MB** | 5.26 s, 860 MB → **0.6 ms, 0 reads** | 5/30 → 0/297 |
+| sp-231MB | 48 ms, 4.0 MB → 58 ms, 0.2 MB | 10.0 ms → 0.1 ms | 109/299 → 0/299 |
+| SEESTRASSE 24 MB | 122 ms, 20.2 MB → 101 ms, 16.3 MB | 14.9 ms → 0.4 ms | 0/292 → 0/292 |
+
+- Open time and RSS after open are unchanged on all three.
+- Per-element results are identical for every read that didn't throw
+  before.
+
+**In Share** (local PSB through OPFS, `OpenModelStream`, main-thread
+engine; headless Chromium in the 4-vCPU container, the Playwright build of
+Share at the pin):
+
+- **Rendering paused** (`pauseViewerRendering`'s seam):
+  - The first `getPropertySets` took **1.07 s and 739 store reads**. Later
+    reads took 0–1 ms.
+  - The Properties panel showed the column's three psets 1.8 s after its
+    button was clicked.
+- **`?feature=engineWorker`, windowed (`windowed=yes`), rendering paused:**
+  - The first `getPropertySets` through the worker facade took **1.59 s**.
+    Later reads took ~1 ms.
+  - The panel showed the same three psets 1.9 s after the click.
+  - A second run, with a buffered open (`windowed=no`) after its OPFS
+    staging failed, took 0.75 s for the first read and 1–3 ms after.
+- **Known measurement artifact: rendering live in SwiftShader,
+  main-thread engine.**
+  - The same first read had not finished after 240 s. In this GPU-less
+    container each frame costs seconds, and each Blob `read` resolved only
+    between frames: ~10 s per read. It is also why the PSB load takes
+    ~170 s here.
+  - It is not a measurement of a real GPU browser. What carries over: on a
+    busy main thread, the index build is bound by *store round trips*, not
+    bytes. It makes ~740–1,080 span reads, four in flight, against the 215
+    window reads of the old per-call sweep.
+  - Follow-up options, if it shows up on real hardware:
+    - more reads in flight;
+    - coarser spans when the store is slow;
+    - building the index in the engine worker, whose reads don't queue
+      behind frames.
+  - Not filed as an issue. It was not reproduced with the worker: the
+    live-render worker run lost its OPFS staging and opened buffered, so
+    it measured nothing windowed.
 
 ## 4. Protocol
 
@@ -370,6 +484,7 @@ construction, not by a guard).
 | `pump` | `{mode: 'run' \| 'throttle' \| 'pause'}` | ack |
 | `tree` | `{mode: 'names' \| true, includeSolids}` | the spatial tree (structured clone) |
 | `props` | `{ids, recursive, psets}` | records, in `ids` order (batched: one message for N ids) |
+| `propertyTables` | `{tables: [{record, isPset}]}` | the Properties panel's tables, resolved next to the engine by `propertyTable.js` and cut to what renders (#2070, §7.1); offered only when `init`'s `capabilities.propertyTables` says so |
 | `itemsOfType` | `{type, verbose}` | ids |
 | `capture` | `{geometryIds, properties, spatialTree, faceIds}` | packed containers, transferred |
 | `release` | `{entityCache} \| {spill: true} \| {geometry: true}` | bool |
@@ -412,6 +527,7 @@ session.tree({mode})      // → Promise<Node>
 session.properties(id, {recursive, psets})
 session.propertiesMany(ids, opts)
 session.propertySets(id)
+session.propertyTables(tables)  // the panel's tables, one request (§7.1, #2070)
 session.itemsOfType(type)
 session.typeName(code)    // sync: conway's static IfcTypesMap, imported main-side
 session.capture(opts)     // GLB writer job
@@ -422,9 +538,9 @@ session.close()           // abort + terminate
 `getSpatialStructure`, `getItemProperties`, `getPropertySets`,
 `getIfcType`, and `ifcManager.{getSpatialStructure, getItemProperties,
 getPropertySets, getIfcType, idsByType}` plus an `ifcManager.ifcAPI` that
-exposes only `properties.*` (for `itemProperties.jsx`'s `deref`). It
-replaces `makeIndexedModelHandle` and `makeConwayDirectIfcManager`, so every
-async consumer in §2.1 keeps its code. Nothing on the main thread can reach
+exposes only `properties.*` (where the Properties panel finds
+`resolvePropertyTables`, §7.1). It replaces `makeIndexedModelHandle` and
+`makeConwayDirectIfcManager`, so every async consumer in §2.1 keeps its code. Nothing on the main thread can reach
 a sync engine method, because there is no `IfcAPI` object there to reach.
 
 Reads go to the first source that can answer: the live worker; a
@@ -597,11 +713,50 @@ are not re-minted by an engine respawn because the scene is not rebuilt.
 
 ## 7. Migration plan
 
-Every PR is behind `?feature=engineWorker` (off), keeps the main-thread
-engine as the default and fallback, and carries desktop + mobile E2E per
-the UI rule. The main-thread engine stays permanently (§8 item 6), but as
-the same protocol and session API over an in-process transport, not as a
-second, divergent path.
+### Resume here (2026-11-04)
+
+Picking `open-205` back up after a break? Read this, then §7.1 (numbers)
+and §7.2 (step-9 criteria). Docs #2064 and #2068 are merged.
+
+**Release goal.** `?feature=engineWorker` on by default. That is step 9,
+the only thing left that users would see.
+
+**Merged.**
+- Steps 0–4: this doc (#2056), conway#540 (conway#759), protocol and
+  client (#2057), IFC load in the worker (#2058), the sync-access-handle
+  source (#2072).
+- Step 6, STEP in the worker (#2067), with the one part-21 list
+  (`loader/part21Formats.js`).
+- #2065, the Properties panel crash fix (not a worker bug).
+- #2074: one worker request per Properties table, and cache-hit refs.
+  Closes #2070 and #2066.
+- #2073 (#2038): GLB export capture through conway's file-order readers.
+- #2079 (#2075).
+
+**In flight.**
+- Step 5's draft PR: the GLB capture in the worker. A worker load writes
+  no cache artifact yet, so every reopen misses the GLB cache. This is the
+  flip blocker.
+- #2080: the conway `1.1636.766` pin, together with #2069 (the pin needs
+  it).
+- #2071: this section and §7.2.
+
+**Flip gates (step 9).** §7.2 is the list, each item needing a merged PR
+or a measurement in a PR body.
+1. Step 5 merged.
+2. #2061: the 350 MB worker JS heap on sp-231MB, explained and fixed or
+   accepted (needs a heap snapshot).
+3. Flip prep: the kill switch checked in a real browser, the `?view=`
+   rules stack deleted or its fallback settled, and the flag-on E2E suite
+   green as the default.
+4. A real-GPU check, plus Safari and Firefox by hand.
+
+**Next after the flip.**
+- STEP convergence in conway (§11): the STEP index sidecar (conway#757),
+  a windowed STEP open, STEP previews with an occurrence path.
+- #2077 and #2078 (priority residency), then #2076.
+- Steps 7–8 (sessions own their worker, close and eviction) only when
+  in-app model switching (#2011) is picked up. They do not gate the flip.
 
 1. **conway: recognise a worker** (conway#540): `WorkerGlobalScope` in
    `isWebPlatform`, `self.crossOriginIsolated` in `pThreadsAllowed`. Small;
@@ -623,6 +778,59 @@ second, divergent path.
    needs `OPFS.worker.js` not to hold a read-write handle on the same file
    while the engine reads it, and a Blob-store fallback where read-only
    handles are missing (Safari and Firefox not checked).
+   *As built:*
+   - The engine worker finds the File's OPFS entry itself
+     (`engine/engineSources.js#findOpfsEntry`). It walks
+     `navigator.storage.getDirectory()` for an entry with the File's
+     `name` (`getFile()` names the File after its entry), `size` and
+     `lastModified`. Nothing about the entry is sent from the page:
+     WebKit cannot structured-clone a FileSystemHandle (bug 256712), so
+     `OPFS.worker.js`'s replies keep their old shape. A File that did not
+     come from OPFS (an upload kept in memory, an inflated `.gz`) matches
+     nothing and gets the Blob store.
+   - `openSourceStore` opens `createSyncAccessHandle({mode: 'read-only'})`
+     on that entry. It keeps the handle only if the handle reports
+     `mode === 'read-only'`: a browser that ignores the option opens an
+     exclusive `readwrite` handle, which is closed at once. With the
+     handle open, which freezes the entry, it checks `size` and
+     `lastModified` against the snapshot again. Otherwise it falls back
+     to the Blob store and gives the reason on the load report's
+     `Engine source I/O:` line.
+   - **The lock.** Even read-only, the handle holds a shared lock on the
+     entry for the session, so the entry can't be removed, moved or
+     written while the model is open (`NoModificationAllowedError`). A
+     File snapshot locked nothing. So:
+     - *Clear cache* closes every engine session first
+       (`spawnEngine.js#closeAllEngineSessions`).
+     - `OPFS.worker.js#deleteAllEntries` skips a locked entry and
+       reports it, rather than aborting the clear partway.
+     - The stale-commit remove in `downloadModelToOPFS` and
+       `deleteModelFromOPFS` both answer with an explicit error for a
+       locked entry. The first was an unguarded throw, the second an
+       unhandled rejection behind a `deleted` reply. The page then loads
+       from the network, as on any OPFS error.
+     - Another tab re-staging or evicting a model this tab has open hits
+       the same lock, and is handled the same way.
+   - **Release.** When a sync-handle session's open has replied,
+     `EngineSession#close()` sends `close` and waits for the reply, at
+     most `ENGINE_CLOSE_TIMEOUT_MS` (1 s), before `terminate()`. The
+     handler releases the handle after `CloseModel`. Any other session,
+     including one still opening, is terminated at once, and its lock
+     goes a little after `terminate()` returns. An open that doesn't
+     adopt the store (buffered fallback, failed or refused open, a throw,
+     a close that came first) closes it in a `finally`.
+   - *Clear cache* therefore clears twice if it has to. `clearOPFSCache`
+     resolves with what it skipped, and `ProfileControl` clears again
+     once after `CACHE_CLEAR_RETRY_MS` (0.5 s). If entries are still held
+     (another tab), it says so in the app's alert dialog
+     (`cacheClearSkipped`) and keeps the local recents. It reloads only
+     once the user dismisses the dialog. The startup sweep
+     (`pruneLocalRecents.js`) drops the recents whose entries went.
+   - **A requirement on step 7:** an in-app switch must await
+     `close()` before it evicts or re-stages the previous model's entry.
+     Today's switch reloads the page, so it doesn't need to; none of the
+     existing callers await it, apart from `closeAllEngineSessions`.
+   - Kill switch: `?feature=disableEngineSyncHandle`.
 5. **GLB writer capture in the worker.** The `capture` job (properties,
    spatial tree, face ids), then spill and release worker-side, then the
    flag's cache write turns on. E2E: `batchedGlbCache.spec.ts` under the
@@ -630,6 +838,53 @@ second, divergent path.
 6. **STEP in the worker.** Buffered source transfer, the occurrence-path
    column, `includeSolids`. E2E: `indexStepLogo`, `stepVisibility` under the
    flag.
+   **Landed** (2026-11-04) as a generalisation, not a twin:
+   `engine/engineIfcLoad.js` became `engine/engineModelLoad.js`
+   (`createEngineModelLoad({format})`), and `ShareIfcLoader#isEngineWorkerLoad`
+   takes every loader type `engineFormatOf` maps (`ifc`, `ifczip`, `step`,
+   `stp`). That list is now the ONE part-21 list
+   (`loader/part21Formats.js`), which `Loader.js`, `modelArchive.js` and
+   `ShareModel.js` also read instead of three copies of their own. No STEP
+   branch was needed: step 3 had already put the occurrence-path column in
+   the batch encoding and forwarded `includeSolids` through
+   `EngineSession#propertiesApi`, and conway's compat `IfcAPI` routes AP214
+   behind the same calls. Two fixes to shared code came out of it, both
+   about STEP's data:
+   - **An empty occurrence path survives the boundary.** A root-level
+     instance's path is `[]`, which the root-pick and root-row logic tell
+     from "no path" (#1901, #1909). The encoder sent a zero-length run, and
+     no columns at all when every path was empty, so the page saw "no path".
+     A per-placement `pathPresent` column now keeps the two apart
+     (step-occurrence-selection.md has the details).
+   - **Bytes are transferred, not copied first.** A STEP is always buffered,
+     so the copy held the whole file twice on the page for the length of the
+     open. Only a failed open's message reads the source again, and it needs
+     only the header and size (`openFailureSource`).
+   `format` crosses as a label only: the `open` request, the `done` packet,
+   and the `engine worker pump: format=… (by suffix)` line. It decides
+   nothing, because a suffix is no evidence of the schema. The Loader's
+   header sniff (`Loader.js#canOpenFromStore`) already picks the source
+   kind: a File for a real IFC, bytes for a STEP. The worker opens whichever
+   it is handed.
+   E2E: `engineModelLoad.spec.ts` (STEP load, per-occurrence tree and scene
+   selection, properties), worker legs in `navTreeAtIndex.spec.ts`,
+   `indexStepLogo.spec.ts` (colour, world space) and
+   `stepVisibility.spec.ts` (eye, Isolate and its reopened link, scene
+   pick) and `assistTools.spec.ts` (isolate in a root-only file, which needs
+   the empty path), desktop and mobile.
+   Left for later, for both formats: the GLB cache write (step 5; a STEP
+   worker load writes none either), and for STEP only a windowed open
+   (conway's store-backed open is IFC-only) and an index sidecar
+   (conway#757), so a STEP is resident in its worker and re-parses on
+   reopen.
+   Measured on four STEP models from 4 to 111 MB, with the loop frozen:
+   - main-thread long tasks during the load fall from 5.8–36 s to 3–4.5 s;
+     what is left is page boot and the end-of-load assembly;
+   - Geometry is unchanged within the spread;
+   - a small model's index comes about 1 s later, from the worker's spawn
+     and cold compile;
+   - the page heap is 30–73 % lower.
+   The table is on #2067.
 7. **Sessions own their worker** (with #2019). The engine moves from the
    viewer to the session; a switch keeps the old worker; the background
    batch policy (§8 item 1). Tests, each shown failing on revert: queued
@@ -644,11 +899,165 @@ second, divergent path.
    #2023's memory spec, asserting the evicted worker's memory is gone
    (`measureUserAgentSpecificMemory` breakdown in an isolated test server,
    or the renderer's RSS) and that properties still answer.
-9. **Default on**, after steps 2–8 have merged. The in-process transport
+9. **Default on**, after steps 2–6 have merged. Steps 7–8 are only needed
+   for in-app model switching (#2011), so they do not gate it. The in-process transport
    stays as the fallback for browsers without module workers, and
    `?feature=disableEngineWorker` is the kill switch. Before it: delete the
    `?view=` rules stack (§8 item 7).
 
+
+### 7.1 Progress and known issues
+
+Kept current by every code PR in the chain. Numbers are the PRs' own, with
+`RAF_THROTTLE_MS=3600000`.
+
+| Step | State |
+|---|---|
+| 0 — this doc | merged (#2056) |
+| 1 — conway#540 | merged (conway#759, published `1.1633.540`) |
+| 2 — protocol, worker entry, client | merged (#2057) |
+| 3 — IFC load in the worker | merged (#2058). PSB, n=3, flag off → on: main-thread long tasks over 50 ms 418 → 23, time blocked 63 → 12 s, Geometry 48.3 → 40.6 s, Total 94.8 → 83.3 s, page heap after load 2130 → 889 MB (the worker's own JS heap 65 MB). Buffered tree-at-index: SEESTRASSE 8.05 → 4.60 s, sp-231MB 37.4 → 11.9 s |
+| 4 — sync-access-handle source | merged (#2072). Measured flag on, Blob store vs read-only sync handle, at medians: PSB (n=3) source I/O 19.1 → 3.8 s, Parsing 28.3 → 20.2 s, time to index 44.2 → 35.8 s, Total 96.5 → 82.9 s; sp-231MB (n=2) I/O 8.5 → 2.1 s, Parsing 14.0 → 9.9 s, Total 64.8 → 60.1 s; SEESTRASSE (n=1) I/O 0.32 → 0.07 s, Total flat. Geometry, main-thread long tasks and page heap unchanged. Every leg was windowed, checked by its `Engine source I/O:` line, in a persistent profile. Caveat: the Blob store's per-read time includes event-loop wait as well as I/O (each read is an async round trip), so the I/O figures are not pure I/O. The wall-clock stages (Parsing, time to index, Total) carry the claim |
+| 6 — STEP in the worker | merged (#2067). A STEP is opened buffered (conway's store-backed open is IFC-only), so step 4's source store does not apply to it |
+| 5 — GLB capture in the worker | in flight (the flip blocker): #2073 (export capture completeness) is its groundwork |
+| 7, 8 | deferred; only in-app switching needs them |
+| 9 | not started; gated on step 5 and #2061. #2070 is closed: its Properties panel cost is fixed by #2074 |
+
+**Known issues.**
+
+- **#2061: worker JS heap on sp-231MB.** The engine worker holds about
+  350 MB of live JS heap after an sp-231MB load, against 65 MB for PSB.
+  This is unexplained (it needs a heap snapshot) and gates step 9.
+- **#2070: each engine round trip waits behind a main-thread frame. Fixed
+  for the Properties panel (#2074); the general cost stays.** A worker
+  reply is a main-thread task, so with the render loop running it waits
+  for the frame in progress. The engine itself answers a read in under
+  1 ms inside the worker. In headless Chromium (software GL) the round
+  trip measured 127–217 ms, and 0.34 ms with rAF frozen. On a GPU the cost
+  is up to a frame per round trip. That makes sequential reads
+  frame-bound, and the Properties panel made one per top-level reference
+  (ifclib's `deref`) and one per property of each property set.
+  - *The fix.* The panel's tables are resolved next to the engine:
+    `Components/Properties/propertyTable.js`, behind the `propertyTables`
+    op (§4), one request per table, and one for all of an element's
+    property sets. The reply holds only what renders: past
+    `MAX_NESTED_TABLE_DEPTH` an entity is its `#id TYPE`, past
+    `MAX_ARRAY_MEMBERS` an array is `… and N more` and its other members
+    are never read, and an all-primitive array arrives joined. A reference
+    to a rooted entity is read shallow (its name is all that shows), and
+    nothing under a key no table shows (`Representation`,
+    `ObjectPlacement`, …) is resolved, which also bounds how long one
+    `propertyTables` op holds the worker's pump, `pause`, `abort` and
+    `close`. Checked against the old renderer on seven conway dumps (18.5k
+    records): identical HTML from the old renderer, the page and the
+    session, but for the intended `null` → `#id`. The same
+    module resolves on the page for every model without an engine session
+    (the main-thread engine, a GLB cache hit), and `itemProperties.jsx`
+    renders either result, so the table cannot depend on where it was
+    resolved. Format-neutral: a STEP element's table takes the same op.
+    The page finds the op as `properties.resolvePropertyTables`, present
+    only when `init`'s `capabilities.propertyTables` says the engine
+    serves it, so a stale worker bundle keeps the per-read path.
+  - *Measured* (headless Chromium, SwiftShader, persistent profile, render
+    loop running, every worker leg on the sync access handle): time from
+    selecting the IfcGrid, with the Properties panel open, to its table
+    showing every axis.
+
+    | | main-thread engine, before → after | worker, before → after |
+    |---|---|---|
+    | grid-axes.ifc (2 axes), n=3, median | 133 → 254 ms | 958 → 814 ms |
+    | PSB grid #9414151 (42 axes), n=2 | 17.9 / 25.7 → 20.6 / 24.3 s | 282 / 220 → 15.3 / 17.2 s |
+
+    On PSB a SwiftShader frame of the 8.8M-vertex scene is seconds long,
+    so 40+ sequential round trips took minutes; the worker now matches the
+    main-thread engine. The main-thread engine is unchanged within the
+    spread on PSB. On grid-axes both columns are within a frame or two,
+    which is the measurement's resolution there (3 round trips before, 2
+    after). The user's check of the deploy preview on PSB agreed: the grid's
+    table "loaded quickly".
+  - *Left.* Any other sequential per-id read loop through the facade still
+    pays a frame per read. And the page still paints every frame while
+    idle. `renderDemand.js` (#2052) paints on demand only during a load, on
+    purpose: after it, cut planes, isolation, looks, hover and splat
+    sorting change the picture without asking for a paint. Making idle
+    rendering on demand means each of those has to ask. That is its own
+    change (follow-up), and it would help the whole page, not only the
+    worker.
+- **#2066: on a GLB cache hit every reference row read `null`. Fixed
+  (#2074).** The panel resolved references through
+  `model.ifcManager.ifcAPI`, which on a cache hit is the viewer's engine,
+  with no model open. `propertyTable.js` reads through the model's own
+  `getItemProperties` instead: on a live model the same engine call as
+  before, and on a cache hit its `BLDRS_element_properties` records. A
+  reference outside those records shows as `#id`.
+- **#2063: the Properties panel took the app down. Fixed, and not a worker
+  bug.** Selecting an `IfcGrid` with the panel open replaced the page with
+  "Oh no!" on both engines. ifclib's `deref` resolves a reference to an
+  entity with no GlobalId (an `IfcGridAxis`) into the whole entity object,
+  and the panel handed an *array* of those to React, which throws #31. It
+  surfaced under the flag because that was where a large model was being
+  burned in. The panel now renders every resolved value safely, derefs a
+  copy (deref rewrites in place), and has its own ErrorBoundary.
+- **The properties hand-off at load end.** The panel reads through
+  `selectReadModel`: the indexed model's worker facade while geometry
+  streams, then the finished model. At the swap, the panel's effect re-runs
+  and reads the selection again, while answers to earlier selections can
+  still be in flight from the worker. `Properties.jsx`'s `isStale` guard
+  drops any answer for a selection or model that is no longer current.
+  Its test is a unit test: a slow earlier answer arrives after the current
+  one, and the test fails with the guard removed.
+  `PropertiesNestedRefs.spec.ts` is only a smoke test of the same
+  hand-off: rapid NavTree clicks under the worker, with the geometry
+  released mid-burst. It passes even with every isStale check removed.
+  The worker answers in order, so in practice nothing arrives out of
+  order.
+
+  The panel's ErrorBoundary is not keyed on the selection, so the panel
+  stays mounted. It resets itself when the selection or the read model
+  changes, so a failure at the indexed model is retried with the finished
+  one. No crash was traced to this race; #2063 is a different bug.
+
+### 7.2 Step 9 (default on): the criteria
+
+Every item needs either a merged PR or a measurement in a PR body.
+
+1. **Steps 2–6 merged**, each behind the flag, each with its desktop and
+   mobile E2E. Step 5 is the open one. Steps 7–8 are deferred (they serve
+   in-app switching, not the flip), so the memory-after-evict check in
+   item 5 waits with them.
+2. **The `?view=` rules stack deleted** (§8 item 7). WidgetApi's
+   `ChangeViewSettingsEventHandler` is migrated first. Legacy
+   `?feature=bot` stays on the main-thread engine and refuses clearly
+   under the worker (in place since #2058).
+3. **#2061 explained and fixed or accepted.** That is the 350 MB worker
+   JS heap after an sp-231MB load. It needs a heap snapshot, and its
+   number goes against the §5.2 budget.
+4. **#2070 fixed. Met, by #2074.** One round trip per Properties table: a
+   `propertyTables` op that runs in the worker, applying the depth limit
+   and `MAX_ARRAY_MEMBERS` there so it returns only what renders. What
+   stays is the general cost of a frame-bound round trip for any other
+   sequential read (§7.1); it does not gate the flip.
+5. **No load regressions, flag off vs on.** PSB n≥3, plus SEESTRASSE and
+   sp-231MB, at `RAF_THROTTLE_MS=3600000`:
+   - main-thread long tasks over 50 ms, time to index, Geometry, Total;
+   - memory after evict (the #2023 E2E; with step 8);
+   - each windowed leg checked to have actually run windowed (its
+     `Engine source I/O:` line present), with a persistent profile, since
+     an incognito-like context's small OPFS quota silently falls back to
+     a buffered open.
+6. **The kill switches work in a real browser:**
+   - `?feature=disableEngineWorker` puts the main-thread engine back;
+   - the in-process fallback runs when a worker cannot start (unit-tested
+     since #2058; one E2E with `Worker` stubbed to throw);
+   - `disableEngineSyncHandle` puts the Blob store back (step 4).
+7. **Other browsers checked by hand.** Safari and Firefox: module workers,
+   `createSyncAccessHandle({mode: 'read-only'})` or its Blob fallback, and
+   one model opening end to end with properties. Recorded in the step-9
+   PR.
+8. **The flag-on E2E suite green** as the default:
+   - navTreeAtIndex, previewInteraction, engineIfcLoad, engineSyncHandle;
+   - PropertiesNestedRefs, the STEP specs from step 6;
+   - batchedGlbCache, the cache hit after a worker load (step 5).
 
 ## 8. Decisions (2026-11-03)
 
@@ -758,7 +1167,64 @@ main-thread long tasks with the engine on the main thread versus in a
 worker; Blob-store versus sync-handle I/O; tree, property and mesh transfer
 costs.
 
+**Measured, §3.1:** property reads on a windowed open before and after
+conway#762, in conway's Node probe (three models) and in Share with the
+main-thread engine and in the engine worker (rendering paused). **Not
+measured, §3.1:** the live-render case on a real GPU, and the live-render
+case in the worker.
+
 **Not measured:** real-GPU frames; Safari and Firefox (module workers and
 `createSyncAccessHandle({mode: 'read-only'})` support differ); two
 concurrent engine workers loading large models at once; a respawn with a
 sidecar; the main-side cost of assembling a background session's batches.
+
+
+## 11. IFC and STEP, stage by stage
+
+AGENTS.md says the two Conway pipelines converge: one seam per stage, with
+a format difference kept as data and explained where it is kept. This is
+the map of where they stand after §7 step 6 (STEP in the worker), read on
+code at `origin/main` with conway `1.1635.762`. "Shared" means one code
+path serves both formats; "data" means the same code with a different
+value; "differs" means a separate code path, or a capability one format has
+and the other lacks.
+
+| Stage | Shared seam | IFC | STEP / AP214 | Status |
+|---|---|---|---|---|
+| Route | `Loader.js#findLoader`: one arm for `ifc`/`ifczip`/`step`/`stp` → `ShareIfcLoader`; one list of the part-21 types, `loader/part21Formats.js` (#2067), read by the Loader, `modelArchive.js`, `ShareModel.js` and the engine-worker routing | `.ifczip` unwrapped first (`Loader#load`) | — | shared |
+| Engine | conway's compat `IfcAPI` (`@bldrs-ai/conway/web-ifc`); it routes AP214 to `IfcApiProxyAP214` behind the same calls | `IfcApiProxyIfc` | `IfcApiProxyAP214` | shared surface; conway owns the split |
+| Source kind | `Loader.js#canOpenFromStore`: conway's own `ModelFormatDetector` over the 64 KiB prefix, never the suffix | a `File`, opened windowed from a `StepExternalByteStore` (in the worker, over a read-only sync access handle: `engineSources.js`, #2072) | an `ArrayBuffer`, opened buffered and resident | **data**; it stays until conway has a store-backed AP214 open (`fromStore` returns `undefined` for AP214) |
+| Open | `loader/conwayOpen.js#openDeferred`, in both engines (main thread and worker): windowed, else buffered; a schema refusal is final | `OpenModelStream`, then `OpenModelStreamed` | `OpenModelStreamed` (`IfcApiProxyAP214.createDeferred`) | shared |
+| Open failure | `classifyOpenFailure` → `unsupportedSchema.js#openModelFailure`, classified where the statistics are (§2.4 G3) | — | — | shared |
+| Engine worker | `engine/engineModelLoad.js` + `engineHandler.js` + `EngineSession` + the remembered in-process fallback (`spawnEngine.js`); `format` is a label | — | — | shared (§7 steps 3, 6) |
+| Index | `onIndexed` → `makeIndexedModelHandle` (`indexedModel`, #2037), started beside the pump | the deferred index | the AP214 assembly tree, built at open | shared |
+| Reopen without a re-parse | `OpenModelFromIndex` + index sidecar | conway#756 (§7 step 8) | conway#757 | **differs**: STEP re-parses on reopen until conway#757 |
+| Tree | `properties.getSpatialStructure(id, 'names', {includeSolids: true})`, through the indexed handle and `EngineSession#propertiesApi` | `includeSolids` ignored | multibody sub-solids as ephemeral `solid` nodes | shared call; data |
+| Ids and refs | `e` / `o` / `n` refs (`viewer/tools/refs.js`); selection joins on whichever key both sides carry | express IDs; tree id = geometry parent | tree id = the NAUO, geometry parent = the shared `product_definition_shape`; the join key is the occurrence path (step-occurrence-selection.md) | **data**: an assembly's reuse has no IFC equivalent, so the key differs, not the code |
+| Properties | `getItemProperties` / `getPropertySets`; the panel's tables through `propertyTable.js`, behind the worker's `propertyTables` op or on the page (§7.1, #2070) | IFC entities and psets | AP214 records | shared |
+| Preview | `ON_PREVIEW_MESH` → `payloadToPreviewMesh` → `ProgressiveLoadSession`; picking via `previewSelection.js` (#2052) | store or streamed preview channel | `StreamedPreviewChannel` with `ap214PreviewAdapter` | shared, and the worker passes payloads through unchanged. Two STEP gaps, the same on both engines: none of the STEP models tried (the fixtures and real files up to 14 MB) put a preview mesh on screen before its index, and a STEP payload's `expressID` is the part shape, not the occurrence (it carries no occurrence path), so a pick before the index would select per part — both conway asks |
+| Geometry pump | `ExtractGeometryBatchAsync` → `IncrementalBatchedBuilder` (main) / the batch columns → `decodePlacements` → the same builder (worker) | — | `PlacedGeometry.occurrencePath`, the batch's path columns, where a present-but-empty path (a root-level instance) stays `[]` (#2067) | shared; data |
+| Assembly and decoration | `assembleBatchedModel`, `decorateConwayDirectIfcModel`, `stampAppliedCoordination` | — | per-occurrence tables carried onto the rebuilt instance map | shared |
+| Hide / isolate / `#d:` | `IfcIsolator.js`, `Residency/visibilityHash.js` | `e` refs | `o` refs (occurrence paths) | shared; data |
+| GLB writer capture | `bldrsElementProperties` / `bldrsSpatialTree` / `bldrsFaceIds` (main thread); a worker load writes no artifact for either format until §7 step 5 | `RootExpressIDs` fast path | full record scan (no IfcRoot); occurrence-path table beside the face ids | shared writer, with a STEP table; step 5 moves it into the worker for both |
+| Cache hit | the `BLDRS_*` GLB reader; spawns no engine | — | restores the occurrence and geometry-id tables | shared |
+| Load report | `loadProgress.js`; the worker forwards its Logger and console, and `engineWasmMb=` on the Total line | `ifcVersion` = the IFC schema | the AP schema | shared |
+
+**What is left to converge, in order of value:**
+
+1. A windowed STEP open (conway): the one stage where STEP still holds the
+   whole source in memory, in the worker now rather than on the page.
+2. The STEP index sidecar (conway#757), so a STEP reopen or an eviction
+   rehydrate (§7 step 8) skips the parse as an IFC's will.
+3. STEP previews (conway): first a preview that appears at all on the
+   models tried, then an occurrence path on its payload, so a STEP pick at
+   first mesh selects the occurrence, as an IFC pick selects the element.
+4. §7 step 5 (the capture job) for both formats at once, including STEP's
+   occurrence-path table.
+
+**Measured** (2026-11-04, §7 step 6 as first pushed in #2067):
+- `RAF_THROTTLE_MS=3600000`, one cold load per run, n=2 except the largest (n=1), medians, in a shared 4-vCPU container.
+- Four STEP models, 4 to 111 MB, flag off versus on. The full table is on #2067.
+- *Main-thread long tasks:* 5.8–36 s → 3–4.5 s in total. On the 58 MB model the count drops from 290 to 13. What remains in worker mode is page boot (before the load, the same in both modes) and the end-of-load assembly on the page (0.4–2.0 s). That assembly is the next main-thread cost, for IFC worker loads too.
+- *Engine time:* Geometry is unchanged within the spread. The worker's fixed cost is about +0.7 s in *Opening model* (spawn plus a cold wasm compile, as §3 measured), so the index and Total of a small model come 1–1.5 s later. From 58 MB up the difference is noise or a gain.
+- *Page heap at ready:* 30–73 % lower. The engine's JS heap (24–229 MB) is in the worker now.

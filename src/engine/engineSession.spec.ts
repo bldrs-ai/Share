@@ -13,8 +13,9 @@ import {homepageSetup, pauseViewerRendering, setIsReturningUser} from '../tests/
  *
  * What it proves, on the REAL pinned Conway (Jest only runs a stub):
  *   - the engine runs in a module Worker built from `Engine.worker.js` —
- *     which is also what proves conway#540's platform prelude works, since
- *     without it `Init()` dies loading the Node wasm;
+ *     which is also what proves the pinned conway recognises a worker
+ *     (conway#540, pinned from 1.1633.540), since without that `Init()`
+ *     dies loading the Node wasm;
  *   - an index-only open, the spatial tree and property reads answer across
  *     the boundary;
  *   - the in-process transport (the permanent main-thread fallback, §8 item

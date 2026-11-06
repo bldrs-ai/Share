@@ -1,4 +1,5 @@
 /* eslint-disable no-magic-numbers */
+import * as pako from 'pako'
 import useStore from '../store/useStore'
 import {
   BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME,
@@ -15,6 +16,22 @@ import {
   serializeGlb,
 } from './injectGlbExtensions'
 import {getGlbLogs} from '../../tools/jest/glbLogCapture'
+
+
+/**
+ * The container's header JSON (wire format in bldrsElementProperties.js's
+ * header comment: magic, version, header length, then the gzipped header).
+ * Its `blockIds` list each block's records in the order they were added.
+ *
+ * @param {Uint8Array} bytes container bytes
+ * @return {{blocks: Array, blockIds: Array<Array<number>>, propertySets: object}}
+ */
+function decodeContainerHeaderForTest(bytes) {
+  const HEADER_LENGTH_OFFSET = 8
+  const PREAMBLE_BYTES = 12
+  const length = new DataView(bytes.buffer, bytes.byteOffset).getUint32(HEADER_LENGTH_OFFSET, true)
+  return JSON.parse(pako.ungzip(bytes.subarray(PREAMBLE_BYTES, PREAMBLE_BYTES + length), {to: 'string'}))
+}
 
 
 describe('loader/bldrsElementProperties', () => {
@@ -507,6 +524,196 @@ describe('loader/bldrsElementProperties', () => {
         expect(scanCounts.fullScans).toBe(1)
         expect(Object.keys(captured.itemProperties).sort()).toEqual(['100', '500', '999'])
       })
+    })
+  })
+
+  // #2038. A windowed source (conway's store-backed open — how every IFC
+  // staged in OPFS opens — or a spilled one) keeps a few 4 MiB windows
+  // resident, and a SYNC getLine on a record outside them throws
+  // StepBufferNotResidentError. The capture used to skip those as
+  // per-entity failures: 75 % of sp-231MB's records were missing from its
+  // artifact, and a different set on every load. The proxy here has
+  // NOTHING resident (sync getLine always throws, as for a record in an
+  // evicted window), and reads only through conway's file-order visit, so
+  // with the old sync-only read the capture finds no record at all.
+  describe('captureBldrsElementProperties — windowed source (#2038)', () => {
+    const root = (id, refs = []) => ({
+      expressID: id, type: 3124254112, GlobalId: {type: 1, value: `g${id}`},
+      // Refs ride a non-geometric field, so the drain follows them.
+      HasAssignments: refs.map((value) => ({type: 5, value})),
+    })
+    const leaf = (id, refs = []) => ({
+      expressID: id, type: 1, Name: {type: 1, value: `l${id}`},
+      HasProperties: refs.map((value) => ({type: 5, value})),
+    })
+
+    /**
+     * @param {object} entitiesById
+     * @param {object} [options]
+     * @param {Set<number>} [options.unreadable] ids conway cannot read
+     * @return {{mgr: object, proxy: object}}
+     */
+    function makeWindowedMgr(entitiesById, {unreadable = new Set()} = {}) {
+      const roots = Object.values(entitiesById).filter((e) => e.GlobalId).map((e) => e.expressID)
+      const proxy = {
+        // The full-scan fallback's model; never walked here, since
+        // RootExpressIDs answers.
+        model: [{[Symbol.iterator]: () => [][Symbol.iterator]()}],
+        sourceIsExternal: true,
+        getLine: jest.fn((id) => {
+          if (unreadable.has(id)) {
+            throw new Error(`malformed record #${id}`)
+          }
+          throw new Error('StepBufferNotResidentError: not resident')
+        }),
+        // conway visits in FILE order, not the caller's: reversed here, so a
+        // capture that emitted in visit order would come out reordered.
+        visitLineDataInFileOrder: jest.fn((ids, visit) => {
+          if (ids.some((id) => unreadable.has(id))) {
+            return Promise.reject(new Error('malformed record'))
+          }
+          for (const id of [...ids].reverse()) {
+            visit(id, entitiesById[id])
+          }
+          return Promise.resolve()
+        }),
+      }
+      const mgr = {
+        ifcAPI: {
+          getPassthrough: () => proxy,
+          RootExpressIDs: () => roots[Symbol.iterator](),
+        },
+      }
+      return {mgr, proxy}
+    }
+
+    it('captures every reachable record through the file-order visit', async () => {
+      const entities = {
+        10: root(10, [200]),
+        11: root(11),
+        200: leaf(200, [300]),
+        300: leaf(300),
+      }
+      const {mgr, proxy} = makeWindowedMgr(entities)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+      expect(Object.keys(captured.itemProperties).sort()).toEqual(['10', '11', '200', '300'])
+      expect(captured.itemProperties[300]).toEqual(entities[300])
+      expect(proxy.getLine).not.toHaveBeenCalled()
+    })
+
+    it('emits records in discovery order, whatever order conway visits them in', async () => {
+      // What keeps a windowed capture byte-identical to a resident one: the
+      // two visit in different orders (a span pass, then a fallback pass for
+      // complex records, on a windowed source).
+      const entities = {
+        10: root(10, [300, 200]),
+        11: root(11, [250]),
+        200: leaf(200),
+        250: leaf(250),
+        300: leaf(300),
+      }
+      const {mgr} = makeWindowedMgr(entities)
+      const {compressedBytes} = await captureBldrsElementProperties(mgr, 0, null)
+      // `blockIds` lists each block's records in the order they were added.
+      const order = decodeContainerHeaderForTest(compressedBytes).blockIds.flat()
+      expect(order).toEqual([10, 11, 300, 200, 250])
+    })
+
+    it('emits a resident source in the order main always has, with or without the file-order visit', async () => {
+      // The order the sweep emitted in before #2038 (roots in the type
+      // index's order, then the drain in FIFO discovery order), so a resident
+      // source's container is byte-identical to the one main wrote. Both
+      // reads a resident proxy can take: conway's file-order visit (which
+      // visits out of order here, as the mock does), and an older conway's
+      // per-record getLine.
+      const entities = {
+        10: root(10, [300, 200]),
+        11: root(11, [250]),
+        200: leaf(200),
+        250: leaf(250),
+        300: leaf(300),
+      }
+      for (const withVisit of [true, false]) {
+        const {mgr, proxy} = makeWindowedMgr(entities)
+        proxy.sourceIsExternal = false
+        proxy.getLine.mockImplementation((id) => entities[id])
+        if (!withVisit) {
+          delete proxy.visitLineDataInFileOrder
+        }
+        const {compressedBytes} = await captureBldrsElementProperties(mgr, 0, null)
+        expect(decodeContainerHeaderForTest(compressedBytes).blockIds.flat()).toEqual([10, 11, 300, 200, 250])
+      }
+    })
+
+    it('does not yield per BFS generation on a small model', async () => {
+      // On a page that is painting, each yield waits out a frame (~1 s under
+      // SwiftShader): one per generation made index.ifc's 72-record capture
+      // take 8.7 s and timed out NavTree.cacheHit.spec.ts. The sweep yields
+      // once per ENTITIES_PER_YIELD records, as it always did.
+      const entities = {
+        10: root(10, [200]),
+        200: leaf(200, [300]),
+        300: leaf(300, [400]),
+        400: leaf(400),
+      }
+      const {mgr} = makeWindowedMgr(entities)
+      const hadScheduler = Object.hasOwn(globalThis, 'scheduler')
+      const savedScheduler = globalThis.scheduler
+      const yieldSpy = jest.fn(() => Promise.resolve())
+      globalThis.scheduler = {yield: yieldSpy}
+      try {
+        const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+        expect(Object.keys(captured.itemProperties)).toHaveLength(4)
+      } finally {
+        if (hadScheduler) {
+          globalThis.scheduler = savedScheduler
+        } else {
+          delete globalThis.scheduler
+        }
+      }
+      expect(yieldSpy).not.toHaveBeenCalled()
+    })
+
+    it('keeps the rest of a chunk, paging each record in, and reports the records it could not read', async () => {
+      // One record that throws fails conway's whole visit; the chunk is then
+      // read record by record. On a windowed source that retry must page
+      // each record in (getLineResident): the mock's sync getLine throws for
+      // every record, as it would outside the resident windows, so a sync
+      // retry would lose the whole chunk.
+      const entities = {10: root(10, [200, 300]), 200: leaf(200), 300: leaf(300)}
+      const unreadable = new Set([200])
+      const {mgr, proxy} = makeWindowedMgr(entities, {unreadable})
+      proxy.getLineResident = jest.fn((id) => (unreadable.has(id) ?
+        Promise.reject(new Error(`malformed record #${id}`)) :
+        Promise.resolve(entities[id])))
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+      expect(Object.keys(captured.itemProperties).sort()).toEqual(['10', '300'])
+      expect(proxy.getLine).not.toHaveBeenCalled()
+      expect(getGlbLogs().some((l) => l.level === 'warn' &&
+        l.text.includes('1 record(s) could not be read'))).toBe(true)
+    })
+
+    it('pages record by record when a windowed source cannot be read in file order', async () => {
+      // An older conway: no file-order visit, but getLineResident.
+      const entities = {10: root(10, [200]), 200: leaf(200)}
+      const {mgr, proxy} = makeWindowedMgr(entities)
+      delete proxy.visitLineDataInFileOrder
+      proxy.getLineResident = jest.fn((id) => Promise.resolve(entities[id]))
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+      expect(Object.keys(captured.itemProperties).sort()).toEqual(['10', '200'])
+      expect(getGlbLogs().some((l) => l.level === 'warn')).toBe(false)
+    })
+
+    it('says so when a windowed source can only be read synchronously', async () => {
+      // The AP214 proxy: neither the file-order visit nor getLineResident,
+      // so the sync read drops whatever is not resident, and that must not
+      // be silent.
+      const entities = {10: root(10)}
+      const {mgr, proxy} = makeWindowedMgr(entities)
+      delete proxy.visitLineDataInFileOrder
+      await captureBldrsElementProperties(mgr, 0, null)
+      expect(getGlbLogs().some((l) => l.level === 'warn' &&
+        l.text.includes('can only read it synchronously'))).toBe(true)
     })
   })
 

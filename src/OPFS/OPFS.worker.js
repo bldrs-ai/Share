@@ -254,28 +254,69 @@ export async function traverseDirectory(dirHandle, path = '', previewLength = 0)
  */
 export async function clearCache(requestId) {
   const opfsRoot = await navigator.storage.getDirectory()
-  await deleteAllEntries(opfsRoot)
+  const skipped = await deleteAllEntries(opfsRoot)
+  if (skipped.length > 0) {
+    console.warn(`OPFS clear: skipped ${skipped.length} locked entr${skipped.length === 1 ? 'y' : 'ies'}:`, skipped)
+  }
 
   // Send the directory structure as a message to the main thread
-  postReply({completed: true, event: 'clear'}, requestId)
+  postReply({completed: true, event: 'clear', skipped}, requestId)
 }
 
 
 /**
- * Delete all entries for a given directory handle
+ * Whether an OPFS remove/move failed because another handle holds the
+ * entry. An engine worker reading a model's source through a read-only sync
+ * access handle (engine-worker.md §7 step 4) holds a shared lock on it for
+ * the session, and removeEntry / remove / move need an exclusive one.
+ *
+ * @param {*} error
+ * @return {boolean}
+ */
+export function isLockedEntryError(error) {
+  return error?.name === 'NoModificationAllowedError'
+}
+
+
+/**
+ * Delete all entries for a given directory handle. An entry another handle
+ * holds (a model open in an engine worker, here or in another tab:
+ * isLockedEntryError) is skipped, not fatal, so one open model does not stop
+ * the clear partway and leave every entry after it behind.
  *
  * @param {FileSystemDirectoryHandle} dirHandle - The directory handle to delete all entries from.
- * @return {Promise<void>}
+ * @param {string} [prefix] path of `dirHandle`, for the report
+ * @return {Promise<Array<string>>} paths of the entries left behind
  */
-export async function deleteAllEntries(dirHandle) {
-  for await (const [name, handle] of dirHandle.entries()) {
-    if (handle.kind === 'directory') {
-      await deleteAllEntries(handle)
-      await dirHandle.removeEntry(name, {recursive: true})
-    } else if (handle.kind === 'file') {
-      await dirHandle.removeEntry(name)
+export async function deleteAllEntries(dirHandle, prefix = '') {
+  const skipped = []
+  // Collected first: removing while iterating can end the iteration early.
+  const entries = []
+  for await (const entry of dirHandle.entries()) {
+    entries.push(entry)
+  }
+  for (const [name, handle] of entries) {
+    const path = `${prefix}${name}`
+    try {
+      if (handle.kind === 'directory') {
+        const inner = await deleteAllEntries(handle, `${path}/`)
+        if (inner.length > 0) {
+          // Keep the directory: it still holds what was skipped.
+          skipped.push(...inner)
+          continue
+        }
+        await dirHandle.removeEntry(name, {recursive: true})
+      } else if (handle.kind === 'file') {
+        await dirHandle.removeEntry(name)
+      }
+    } catch (error) {
+      if (!isLockedEntryError(error)) {
+        throw error
+      }
+      skipped.push(path)
     }
   }
+  return skipped
 }
 
 
@@ -1181,7 +1222,19 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       postReply({completed: true, event: 'exists', file: blobFile}, requestId)
       return
     } else {
-      await modelBlobFileHandle.remove()
+      try {
+        await modelBlobFileHandle.remove()
+      } catch (error) {
+        if (!isLockedEntryError(error)) {
+          throw error
+        }
+        // A stale commit's copy that an engine worker still reads (this tab
+        // or another): it cannot be replaced until that model closes. Say
+        // so; the page loads from the network instead (Loader.js).
+        postReply({error: `downloadModelToOPFS: ${modelBlobFileHandle.name} is open in an engine; not replaced`},
+          requestId)
+        return
+      }
     }
   }
   try {
@@ -1871,7 +1924,18 @@ export async function deleteModelFromOPFS(commitHash, originalFilePath, owner, r
   }
 
   if (fileIsCached && modelBlobFileHandle !== null) {
-    modelBlobFileHandle.remove()
+    // Awaited: un-awaited, a failure was an unhandled rejection while the
+    // reply said 'deleted'.
+    try {
+      await modelBlobFileHandle.remove()
+    } catch (error) {
+      postReply({
+        error: isLockedEntryError(error) ?
+          `deleteModelFromOPFS: ${modelBlobFileHandle.name} is open in an engine; not deleted` :
+          `deleteModelFromOPFS: ${error?.message ?? error}`,
+      }, requestId)
+      return
+    }
   }
 
   postReply({completed: true, event: 'deleted', commitHash: commitHash}, requestId)

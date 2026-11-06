@@ -1,114 +1,153 @@
 import React, {useState} from 'react'
 import {Typography} from '@mui/material'
-import {deref, decodeIFCString} from '@bldrs-ai/ifclib'
 import debug from '../../utils/debug'
 import {prettyType} from '../../utils/ifc'
-import {stoi} from '../../utils/strings'
+import {
+  Node,
+  hasProperties as resolveHasProperties,
+  moreText,
+  quantities as resolveQuantities,
+  resolvePropertyTables,
+  resolveValue,
+  typeNameOf,
+} from './propertyTable'
+
+
+export {MAX_ARRAY_MEMBERS, MAX_NESTED_TABLE_DEPTH} from './propertyTable'
 
 
 /**
- * Recursive display of tables.  The recursion is:
- *
- * createPropertyTable -> prettyProps -> createPropertyTable
+ * A property table for one entity, as a React component. Resolved by
+ * propertyTable.js (in the model's engine worker when it has one, one
+ * request for the whole table; on this thread otherwise), then rendered
+ * here.
  *
  * @param {object} model IFC model
- * @param {object} ifcProps Caller should pass the root IFC element.
- * Recursive calls will pass children
- * @param {boolean} isPset Is property set
- * @param {number} serial
- * @return {object} A property table react component
+ * @param {object} ifcProps the entity
+ * @param {boolean} [isPset] a property set
+ * @param {number} [serial] react key base
+ * @return {Promise<object>} A property table react component
  */
 export async function createPropertyTable(model, ifcProps, isPset = false, serial = 0) {
-  const ROWS = []
-  let rowKey = 0
-  const typeName = entityTypeName(model, ifcProps)
-  if (!isPset && typeName !== null && typeName !== 'IfcPropertySet') {
-    // Prettified for reading ('Element (generic proxy)'), not the raw
-    // schema constant ('IFCBUILDINGELEMENTPROXY').
-    ROWS.push(<Row d1={'Type'} d2={prettyType(typeName)} key={`type-${serial}`}/>)
+  const [table] = await resolveTables(model, [{record: ifcProps, isPset}])
+  return renderTable(table, serial)
+}
+
+
+/**
+ * Several tables in one resolve: the panel's property sets, which under the
+ * engine worker are one request for all of them rather than one per set (and
+ * one per property in each).
+ *
+ * @param {object} model IFC model
+ * @param {Array<object>} entries `{record, isPset}` each
+ * @return {Promise<Array<object>>} property table react components, in order
+ */
+export async function createPropertyTables(model, entries) {
+  const tables = await resolveTables(model, entries)
+  return tables.map((table, i) => renderTable(table, i))
+}
+
+
+/**
+ * Resolve tables where the model's reads are. A model whose engine is an
+ * engine session (`?feature=engineWorker`, EngineSession.js#propertiesApi)
+ * offers `properties.resolvePropertyTables`, which runs propertyTable.js next
+ * to the engine: one round trip, instead of one per reference (Share#2070).
+ * Every other model is resolved here, by the same code over the model's own
+ * reads.
+ *
+ * A record that will not cross to the worker (a DataCloneError, thrown by
+ * postMessage before anything is sent) is resolved here instead, through the
+ * same session's per-read requests: slower, never wrong. Any other failure is
+ * the table's, as it would be here.
+ *
+ * @param {object} model
+ * @param {Array<object>} entries `{record, isPset}` each
+ * @return {Promise<Array<object>>} propertyTable.js `Node.TABLE`s
+ */
+async function resolveTables(model, entries) {
+  if (entries.length === 0) {
+    return []
   }
-  for (const key in ifcProps) {
-    if (isPset && (key === 'expressID' || key === 'Name')) {
-      continue
-    }
-    const val = ifcProps[key]
-    const propRow = await prettyProps(model, key, val, false, rowKey++ )
-    if (propRow) {
-      if (propRow.key === null) {
-        throw new Error(`Row for key=(${key}) created with invalid react key`)
+  const remote = webIfcFor(model)?.properties?.resolvePropertyTables
+  if (typeof remote === 'function') {
+    try {
+      return await remote(0, entries)
+    } catch (e) {
+      if (e?.name !== 'DataCloneError') {
+        throw e
       }
-      ROWS.push(propRow)
+      debug().warn('itemProperties: record did not cross to the engine; resolving here', e)
     }
   }
-  return (
-    <table key={`table-${serial++}`} role="table" aria-label="Element properties">
-      <tbody>{ROWS}</tbody>
-    </table>
-  )
+  return await resolvePropertyTables(readerFor(model), entries)
+}
+
+
+/**
+ * propertyTable.js's reads over a model on this thread. The engine handler
+ * builds the same over its engine (engineHandler.js#tableReader), and for a
+ * live model the two make the same engine calls.
+ *
+ * The model's own `getItemProperties` first, for references too. Every live
+ * model has one that takes `recursive` and reads the model's own engine
+ * (conwayDirectIfcLoader.js#attachConwayDirectModelMethods). A GLB cache
+ * hit's answers from its BLDRS_element_properties records, and is the only
+ * thing that can: its `ifcManager.ifcAPI` is the viewer's engine, which has
+ * no model open, so resolving through it gave `null` for every reference
+ * (Share#2066). The engine API is the fallback for a model with no read of
+ * its own.
+ *
+ * @param {object} model
+ * @return {object} a propertyTable.js PropertyReader
+ */
+function readerFor(model) {
+  const hasOwnRead = typeof model?.getItemProperties === 'function'
+  return {
+    read: hasOwnRead ?
+      (id, recursive) => model.getItemProperties(id, recursive) :
+      (id, recursive) => webIfcFor(model).properties.getItemProperties(0, id, recursive),
+    readMember: hasOwnRead ? (id) => model.getItemProperties(id) : null,
+    typeLookups: typeLookupsFor(model),
+  }
+}
+
+
+/**
+ * Numeric type code → name, for propertyTable.js#typeNameOf. Two manager
+ * shapes exist: ShareIfcManager's `getIfcType(modelID, typeCode)` and the
+ * Conway-direct shim, which lacks it but exposes the compat surface's
+ * `properties.getIfcType(typeCode)` directly (an engine session's is
+ * conway's static IfcTypesMap).
+ *
+ * @param {object} model
+ * @return {Array<function(number): string>}
+ */
+function typeLookupsFor(model) {
+  return [
+    (code) => model?.ifcManager?.getIfcType?.(0, code),
+    (code) => model?.ifcManager?.ifcAPI?.properties?.getIfcType?.(code),
+  ]
 }
 
 
 /**
  * Display name for the entity's schema type, or null when no usable name
- * can be derived (the row is omitted rather than showing a junk value).
- *
- * Resolution order:
- *   1. `ifcProps.type` as a string — Conway's compat surface returns the
- *      entity type name directly ('ADVANCED_FACE', 'IFCWALL', …). This is
- *      the STEP path and the modern Conway-direct IFC path.
- *   2. Numeric `ifcProps.type` (an IFC type code from `getLine`-shaped
- *      surfaces) mapped through `model.ifcManager.getIfcType(0, code)`.
- *   3. `constructor.name` when it looks like a real IFC class (web-ifc
- *      dev builds return class instances like `IfcWall`). Minified prod
- *      builds mangle those names ('t') and plain objects give 'Object' —
- *      neither is a type, so both are rejected rather than displayed,
- *      which is the long-standing "IFC Type: Object" bug this replaces.
+ * can be derived. See propertyTable.js#typeNameOf for the resolution order.
  *
  * @param {object} model IFC model (for the numeric type-code lookup)
  * @param {object} ifcProps the entity
  * @return {string|null}
  */
 export function entityTypeName(model, ifcProps) {
-  const rawType = ifcProps?.type
-  if (typeof rawType === 'string' && rawType.length > 0) {
-    return rawType
-  }
-  if (typeof rawType === 'number') {
-    // Two manager shapes exist: ShareIfcManager's `getIfcType(modelID,
-    // typeCode)` and the Conway-direct shim, which lacks it but exposes
-    // the compat surface's `properties.getIfcType(typeCode)` directly.
-    const lookups = [
-      () => model?.ifcManager?.getIfcType?.(0, rawType),
-      () => model?.ifcManager?.ifcAPI?.properties?.getIfcType?.(rawType),
-    ]
-    for (const lookup of lookups) {
-      try {
-        const name = lookup()
-        if (typeof name === 'string' && name.length > 0) {
-          return name
-        }
-      } catch {
-        // Try the next shape, then the constructor heuristic.
-      }
-    }
-  }
-  const ctorName = ifcProps?.constructor?.name
-  if (typeof ctorName === 'string' && ctorName.startsWith('Ifc')) {
-    return ctorName
-  }
-  return null
+  return typeNameOf(ifcProps, typeLookupsFor(model))
 }
 
 
 /**
- * The object `deref` needs to resolve a type-5 entity reference. Its
- * second parameter is a **web-ifc API**, not our model: it calls
- * `webIfc.properties.getItemProperties(...)`. Passing the model meant
- * that call threw on `undefined.getItemProperties` the moment a
- * property carried a reference — which aborted the whole table and left
- * the previously selected element's properties on screen. Spatial
- * containers (IfcSite, IfcBuilding) hit it; leaves mostly don't, which
- * is why this hid for so long.
+ * The model's engine API: where an engine session's `resolvePropertyTables`
+ * is found, and readerFor's fallback read.
  *
  * @param {object} model IFC model
  * @return {object} web-ifc-shaped API, falling back to the model so
@@ -120,81 +159,17 @@ function webIfcFor(model) {
 
 
 /**
- * The keys are defined here:
- * https://standards.buildingsmart.org/IFC/DEV/IFC4_3/RC2/HTML/schema/ifcproductextension/lexical/ifcelement.htm
+ * A resolved property value as something React can render (see
+ * propertyTable.js#resolveValue), resolved on this thread.
  *
  * @param {object} model IFC model
- * @param {string} propName Property name
- * @param {object | string} propValue Property value
- * @param {boolean} isPset
- * @param {number} serial
- * @return {object}
+ * @param {*} value an already-resolved value
+ * @param {number} serial react key base
+ * @param {number} [depth] nesting depth so far
+ * @return {Promise<*>} a React node
  */
-async function prettyProps(model, propName, propValue, isPset, serial = 0) {
-  let label = `${propName}`
-  const refPrefix = 'Ref'
-  if (label.startsWith(refPrefix)) {
-    label = label.substring(refPrefix.length)
-  }
-  if (propValue === null || propValue === undefined || propValue === '') {
-    debug().warn(`prettyProps: skipping propName(${propName}) invalid propValue(${propValue})`)
-    return null
-  }
-  switch (propName) {
-    case 'type':
-    case 'CompositionType':
-    case 'GlobalId':
-    case 'ObjectPlacement':
-    case 'ObjectType':
-    case 'OwnerHistory':
-    case 'PredefinedType':
-    case 'Representation':
-    case 'RepresentationContexts':
-    case 'Representations':
-    case 'Tag':
-    case 'UnitsInContext':
-      debug().warn('prettyProps, skipping prop for propName: ', propName)
-      return null
-    case 'Coordinates':
-    case 'RefLatitude':
-    case 'RefLongitude': return (
-      <Row
-        d1={label}
-        d2={
-          dms(
-            await deref(propValue[0]),
-            await deref(propValue[1]),
-            await deref(propValue[2]))
-        }
-        key={serial}
-      />
-    )
-    case 'expressID': return <Row d1={'Express Id'} d2={propValue} key={serial}/>
-    case 'Quantities': return await quantities(model, propValue, serial)
-    case 'HasProperties': return await hasProperties(model, propValue, serial)
-    default: {
-    // Not sure where else to put this.. but seems better than handling in deref.
-      if (propValue.type === 0) {
-        return null
-      }
-      // `deref` takes (ref, webIfc, indent) — the 4th "render nested
-      // entity" callback this used to pass was never invoked, so a
-      // resolved reference came back as a raw entity object and React
-      // threw "Objects are not valid as a React child", aborting the
-      // table. Nest it into its own table here instead. Arrays are left
-      // alone: React renders them, and deref has already resolved each
-      // member.
-      const derefed = await deref(propValue, webIfcFor(model), serial)
-      const isEntity = derefed !== null && typeof derefed === 'object' && !Array.isArray(derefed)
-      return (
-        <Row
-          d1={label}
-          d2={isEntity ? await createPropertyTable(model, derefed, false, serial) : derefed}
-          key={serial}
-        />
-      )
-    }
-  }
+export async function renderableValue(model, value, serial, depth = 0) {
+  return renderValue(await resolveValue(readerFor(model), value, depth), serial)
 }
 
 
@@ -202,29 +177,10 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0) {
  * @param {object} model IFC model
  * @param {object} quantitiesObj Quantities element
  * @param {number} serial
- * @return {object} Table of quantities
+ * @return {Promise<object>} Table of quantities
  */
 export async function quantities(model, quantitiesObj, serial) {
-  return await unpackHelper(model, quantitiesObj, serial, (ifcElt, rows) => {
-    // Same shape, same guard as hasProperties below: a resolved quantity with
-    // no Name is a row we can't label, and reading through the missing Name
-    // is what crashed the panel (SHARE-1P3). Drop the one quantity, not the
-    // whole table.
-    if (ifcElt?.Name?.value === undefined) {
-      debug().warn('quantities: skipping quantity with no Name: ', ifcElt)
-      return
-    }
-    const name = decodeIFCString(ifcElt.Name.value)
-    let val = 'value'
-    for (const key in ifcElt) {
-      if (key.endsWith('Value')) {
-        val = ifcElt[key].value
-        break
-      }
-    }
-    val = decodeIFCString(val)
-    rows.push(<Row d1={name} d2={val} key={serial++}/>)
-  })
+  return renderSubtable(await resolveQuantities(readerFor(model), quantitiesObj), serial)
 }
 
 
@@ -232,79 +188,117 @@ export async function quantities(model, quantitiesObj, serial) {
  * Convert a HasProperties to react component
  *
  * @param {object} model IFC model
- * @param {Array} eltArr Array of IFC elements
+ * @param {Array} hasPropertiesArr Array of HasProperties elements
  * @param {number} serial
- * @param {Function} ifcToRowCb Callback to convert an IFC elt to a table row
- * @return {object} The react component or null if fail
+ * @return {Promise<object>} Table rows for given hasPropertiesArr
  */
-export async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
-  // HasProperties behaves a little special.
-  if (Array.isArray(eltArr)) {
-    const rows = []
-
-    for (const i in eltArr) {
-      if (Object.prototype.hasOwnProperty.call(eltArr, i)) {
-        const p = eltArr[i]
-        const refTypeVal = 5
-        if (p.type !== refTypeVal) {
-          throw new Error('Array contains non-reference type')
-        }
-        const refId = stoi(p.value)
-        if (model.getItemProperties) {
-          const ifcElt = await model.getItemProperties(refId)
-          // A reference the model can't resolve yields undefined, and the
-          // row callbacks all dereference `.Name.value` — that TypeError
-          // took down the whole Properties panel rather than costing one
-          // row (SHARE-1P3). Skip the entry and keep building the table.
-          if (ifcElt === undefined || ifcElt === null) {
-            debug().warn(`unpackHelper: unresolved property reference #${refId}`)
-            continue
-          }
-          ifcToRowCb(ifcElt, rows)
-        } else {
-          debug().warn('model has no getProperties method: ', model)
-        }
-      }
-    }
-    return (
-      <tr key={`hasProps-${serial++}`}>
-        <td colSpan={2} style={{borderBottom: 'none'}}>
-          <table>
-            <tbody>{rows}</tbody>
-          </table>
-        </td>
-      </tr>
-    )
-  }
-  debug().warn('HasProperties with unknown structure: ', eltArr)
-  return null
+export async function hasProperties(model, hasPropertiesArr, serial) {
+  return renderSubtable(await resolveHasProperties(readerFor(model), hasPropertiesArr), serial)
 }
 
 
 /**
- * @param {object} model IFC model
- * @param {Array} hasPropertiesArr Array of HasProperties elements
- * @param {number} serial
- * @return {object} Table rows for given hasPropertiesArr
+ * @param {object} table a propertyTable.js `Node.TABLE`
+ * @param {number} serial react key base
+ * @return {object} the table
  */
-export async function hasProperties(model, hasPropertiesArr, serial) {
-  if (!Array.isArray(hasPropertiesArr)) {
-    throw new Error('hasPropertiesArr should be array')
+function renderTable(table, serial) {
+  const rows = []
+  if (table.typeName !== null) {
+    // Prettified for reading ('Element (generic proxy)'), not the raw
+    // schema constant ('IFCBUILDINGELEMENTPROXY').
+    rows.push(<Row d1={'Type'} d2={prettyType(table.typeName)} key={`type-${serial}`}/>)
   }
-  return await unpackHelper(model, hasPropertiesArr, serial, (dObj, rows) => {
-    // A pset entry that resolved to something without a Name is not a row we
-    // can label — and reading through the missing Name is what crashed the
-    // panel (SHARE-1P3). Drop this one property, not the whole table.
-    if (dObj?.Name?.value === undefined) {
-      debug().warn('hasProperties: skipping property with no Name: ', dObj)
-      return
-    }
-    const name = decodeIFCString(dObj.Name.value)
-    const value = (dObj.NominalValue === undefined || dObj.NominalValue === null) ?
-      '<error>' :
-      decodeIFCString(dObj.NominalValue.value)
-    rows.push(<Row d1={name} d2={value} key={serial++}/>)
+  table.rows.forEach((row, i) => {
+    rows.push(row.k === Node.SUBTABLE ?
+      renderSubtable(row, i) :
+      <Row d1={row.label} d2={renderValue(row.value, `${serial}-${i}`)} nested={holdsTable(row.value)} key={i}/>)
   })
+  return (
+    <table key={`table-${serial}`} role="table" aria-label="Element properties">
+      <tbody>{rows}</tbody>
+    </table>
+  )
+}
+
+
+/**
+ * HasProperties / Quantities: label-value rows in one full-width cell.
+ *
+ * @param {object|null} subtable a propertyTable.js `Node.SUBTABLE`
+ * @param {number} serial
+ * @return {object|null}
+ */
+function renderSubtable(subtable, serial) {
+  if (subtable === null) {
+    return null
+  }
+  return (
+    <tr key={`hasProps-${serial}`}>
+      <td colSpan={2} style={{borderBottom: 'none'}}>
+        <table>
+          <tbody>{subtable.rows.map((row, i) => <Row d1={row.label} d2={row.value} key={i}/>)}</tbody>
+        </table>
+      </td>
+    </tr>
+  )
+}
+
+
+/**
+ * @param {*} value a propertyTable.js value
+ * @return {boolean} whether it renders as a nested table, or a list of them
+ */
+function holdsTable(value) {
+  return value?.k === Node.TABLE || (value?.k === Node.LIST && value.items.some((item) => item?.k === Node.TABLE))
+}
+
+
+/**
+ * @param {*} value a propertyTable.js value: a string, number or node
+ * @param {string|number} serial react key base
+ * @return {*} a React node
+ */
+function renderValue(value, serial) {
+  if (value === null || typeof value !== 'object') {
+    return value
+  }
+  switch (value.k) {
+    case Node.TABLE: return renderTable(value, serial)
+    case Node.ENTITY: return `#${value.id}${value.typeName ? ` ${prettyType(value.typeName)}` : ''}`
+    case Node.REF: {
+      const name = value.typeName === null ? '' : prettyType(value.typeName)
+      return name ? `${name} ${value.ref}` : value.ref
+    }
+    case Node.LIST: {
+      // Members that are tables (an IfcGrid's UAxes: one IfcGridAxis table
+      // each) are separated by spacing and a hairline (`.prop-member`,
+      // styled in Properties.jsx), not by a ", " line between two tables.
+      // The ", " stays between the inline members (`#id Type` strings,
+      // primitives), where it reads as a list.
+      const parts = []
+      let prevWasTable = false
+      value.items.forEach((item, i) => {
+        const key = `${serial}-${i}`
+        if (item?.k === Node.TABLE) {
+          parts.push(<div className='prop-member' key={key}>{renderValue(item, key)}</div>)
+        } else {
+          parts.push(<span key={key}>{i > 0 && !prevWasTable ? ', ' : ''}{renderValue(item, key)}</span>)
+        }
+        prevWasTable = item?.k === Node.TABLE
+      })
+      if (value.more > 0) {
+        const key = `${serial}-more`
+        parts.push(prevWasTable ?
+          <div className='prop-member' key={key}>{moreText(value.more)}</div> :
+          <span key={key}>, {moreText(value.more)}</span>)
+      }
+      return parts
+    }
+    default:
+      // Not a node propertyTable.js makes; never a raw object to React (#31).
+      return String(value)
+  }
 }
 
 
@@ -316,24 +310,49 @@ export async function hasProperties(model, hasPropertiesArr, serial) {
  *
  * @param {object} d1 Table cell data 1
  * @param {object} d2 Table cell data 2
- * @param {number} serial
+ * @param {boolean} [nested] d2 is a nested table (or a list of them): the
+ *   label sits above it and it takes the row's full width, indented, rather
+ *   than sharing the row with the label. Side by side, each level of nesting
+ *   would cost a label column, and three levels in (an IfcGrid's UAxes ->
+ *   Gridaxis -> AxisCurve) a 340 px panel had ~70 px left for values
+ *   (Share#2075).
  * @return {object} The react component
  */
-function Row({d1, d2}) {
+function Row({d1, d2, nested = false}) {
   const [isActive, setIsActive] = useState(false)
   const toggleActive = () => {
     setIsActive(!isActive)
   }
-  const rowStyleInactive = {
+  // Label column: sized to its content (`width: 1%` shrinks an auto-layout
+  // cell to its widest label), capped at 40% of the table, truncated with an
+  // ellipsis past that; `title` keeps the full label readable. Value column:
+  // `maxWidth: 0` stops its content from claiming width in the auto table
+  // layout, so it takes whatever the label column leaves, at every nesting
+  // level (Share#2075). The design system sets no table column widths; these
+  // are the minimal values that give that split.
+  const truncate = {
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   }
+  const labelCellStyle = {...truncate, width: '1%', maxWidth: '40%', paddingRight: '8px'}
+  const valueCellStyle = {...truncate, width: '99%', maxWidth: 0}
+  const valueTitle = (typeof d2 === 'string' || typeof d2 === 'number') ? String(d2) : undefined
   if (d1 === null || d1 === undefined || d2 === undefined) {
     debug().warn('Row with invalid data: ', d1, d2)
   }
   if (d2 === null) {
     return <tr onDoubleClick={toggleActive}><td colSpan='2'>{d1}</td></tr>
+  }
+  if (nested) {
+    return (
+      <tr role='row'>
+        <td colSpan={2} role='cell' aria-label={`Property: ${d1}`}>
+          <Typography variant='propTitle' sx={{display: 'block'}}>{d1}</Typography>
+          <div className='prop-nested'>{d2}</div>
+        </td>
+      </tr>
+    )
   }
   return (
     isActive ? (
@@ -345,10 +364,10 @@ function Row({d1, d2}) {
       </tr>
     ) : (
       <tr onDoubleClick={toggleActive} role='row' aria-expanded='false'>
-        <td style={rowStyleInactive} role='cell' aria-label={`Property: ${d1}`}>
+        <td style={labelCellStyle} role='cell' title={String(d1)} aria-label={`Property: ${d1}`}>
           <Typography variant='propTitle'>{d1}</Typography>
         </td>
-        <td style={rowStyleInactive} role='cell' aria-label={`Value: ${d2}`}>
+        <td style={valueCellStyle} role='cell' title={valueTitle} aria-label={`Value: ${d2}`}>
           <Typography variant='propValue'>{d2}</Typography>
         </td>
       </tr>
@@ -356,15 +375,3 @@ function Row({d1, d2}) {
   )
 }
 
-
-/**
- * A coordinate in Degree-Minutes-Seconds (DMS) syntax, e..g. 1° 2' 3''
- *
- * @param {number} deg Degrees
- * @param {number} min Minutes
- * @param {number} sec Seconds
- * @return {string} Formatted DMS coorindate string
- */
-const dms = (deg, min, sec) => {
-  return `${deg}° ${min}' ${sec}''`
-}

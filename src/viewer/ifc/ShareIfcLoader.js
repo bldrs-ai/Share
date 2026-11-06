@@ -31,6 +31,7 @@ import {isOutOfMemoryError, markIfOutOfMemory} from '../../utils/oom'
 import {hasParams} from '../../utils/location'
 import {HASH_PREFIX_CAMERA} from '../../Components/Camera/hashState'
 import {isFeatureEnabled} from '../../FeatureFlags'
+import {createEngineModelLoad, engineFormatOf} from '../../engine/engineModelLoad'
 import {reportGeometryStats} from '../../loader/loadProgress'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
 import ProgressiveLoadSession from '../ProgressiveLoadSession'
@@ -320,6 +321,28 @@ export function stampAppliedCoordination(ifcModel, ifcAPI, modelID) {
 }
 
 
+const BYTES_PER_KIB = 1024
+const BYTES_PER_MIB = BYTES_PER_KIB * BYTES_PER_KIB
+
+/**
+ * Does this parse run its engine in a worker (`?feature=engineWorker`,
+ * engine-worker.md §7 steps 3 and 6)? Every format a Conway engine parses —
+ * IFC (and an unwrapped `.ifczip`) and STEP/AP214 — through one worker load
+ * (engine/engineModelLoad.js), and only on the streamed path that feeds the
+ * incremental builder.
+ *
+ * @param {string|undefined} loaderType `loader.type` (Loader.js#findLoader)
+ * @param {object|null} scene
+ * @return {boolean}
+ */
+export function isEngineWorkerLoad(loaderType, scene) {
+  return isFeatureEnabled('engineWorker') &&
+    isFeatureEnabled('demandGeometry') &&
+    scene !== null &&
+    engineFormatOf(loaderType) !== null
+}
+
+
 /**
  * IFC loader for ShareViewer. Single entry point: `parse(buffer)`.
  *
@@ -425,10 +448,24 @@ export default class ShareIfcLoader {
     })
 
     let builder = null
+    // The first error the incremental builder hit on a batch, if any.
+    let batchError = null
+    // `?feature=engineWorker` (engine-worker.md §7 steps 3 and 6): this
+    // model's engine runs in its own worker, and `ifcAPI` below is the
+    // IfcAPI-shaped facade over it (engine/engineModelLoad.js), so everything
+    // after the parse assembles exactly as it does for the main-thread
+    // engine. IFC and STEP alike: STEP's occurrence paths cross as a batch
+    // column and land on the same placements the builder reads, and its
+    // `includeSolids` tree is the same request the main-thread handle makes.
+    // The streamed path only: with `demandGeometry` off, or no scene to
+    // stream into, there is no incremental builder for the worker's batches
+    // to feed.
+    const engineLoad = isEngineWorkerLoad(this.type, scene) ?
+      createEngineModelLoad({format: engineFormatOf(this.type)}) : null
 
     try {
       session.report('Opening model...')
-      const ifcAPI = this.ifcManager.ifcAPI
+      const ifcAPI = engineLoad !== null ? engineLoad.ifcAPI : this.ifcManager.ifcAPI
       // onProgress is threaded into conway's ON_PROGRESS extension so the
       // opaque gap between 'Parsing model geometry...' and 'Building
       // model...' carries real per-phase counts (headerParse / dataParse /
@@ -507,6 +544,9 @@ export default class ShareIfcLoader {
           builder.setPumpProgress(progress?.done, progress?.total)
           builder.appendBatch(batch)
         } catch (e) {
+          // Kept for a worker load, which cannot rebuild without the
+          // builder: if no batch ever got in, THIS is why (below).
+          batchError = batchError ?? e
           debug(WARN).warn('incremental batch append failed; preview fallback:', e)
           try {
             const assembled =
@@ -532,9 +572,13 @@ export default class ShareIfcLoader {
       // on a windowed source the re-extraction pages the byte window, so it
       // cannot be synchronous, and a missed `await` would feed a Promise to
       // a builder that iterates placements — an empty model, silently.
-      const {modelID, recapture} =
+      const onModelIndexed = onIndexed ?
+        (openedModelID) => onIndexed(makeIndexedModelHandle(ifcAPI, openedModelID)) :
+        undefined
+      const {modelID, recapture} = engineLoad !== null ?
+        await engineLoad.parse(buffer, {onProgress, onMeshBatch, onPreviewMesh, onIndexed: onModelIndexed}) :
         await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress, onMeshBatch, onPreviewMesh,
-          onIndexed ? (openedModelID) => onIndexed(makeIndexedModelHandle(ifcAPI, openedModelID)) : undefined)
+          onModelIndexed)
 
       session.beginAssembly()
 
@@ -559,7 +603,24 @@ export default class ShareIfcLoader {
             // best-effort
           }
           ifcModel = undefined
+          if (engineLoad !== null) {
+            // A worker load keeps no copy of the stream to rebuild from (the
+            // worker sent each shape once and the builder held the only
+            // copy), so the fallbacks below have nothing to build: fail the
+            // load with THIS error, which says what broke, rather than with
+            // recapture()'s (review on #2058).
+            throw new Error(`engine worker load: incremental assembly failed: ${e?.message ?? e}`, {cause: e})
+          }
         }
+      }
+
+      if (ifcModel === undefined && engineLoad !== null && batchError !== null) {
+        // A worker load whose builder never got a batch in (its constructor,
+        // scene.add or appendBatch failed every time) has nothing to rebuild
+        // from either: fail with that error, not recapture()'s (review on
+        // #2058).
+        throw new Error(`engine worker load: incremental build failed: ${batchError?.message ?? batchError}`,
+          {cause: batchError})
       }
 
       // BatchedMesh render path (`?feature=batchedMesh`, §3b.iv): render the
@@ -734,6 +795,12 @@ export default class ShareIfcLoader {
             metresPerUnit === MM ? 'mm' : `${metresPerUnit} m`
           parts.push(`units=${unitLabel}`)
         }
+        if (engineLoad !== null && typeof engineLoad.ifcAPI.summary?.wasmBytes === 'number') {
+          // The engine's wasm heap lives in its worker now, where the report's
+          // heap column (this page's performance.memory) cannot see it
+          // (engine-worker.md §2.4 G3), so say it on the Total line.
+          parts.push(`engineWasmMb=${Math.round(engineLoad.ifcAPI.summary.wasmBytes / BYTES_PER_MIB)}`)
+        }
         session.setSummary(parts)
       } catch (e) {
         debug(WARN).warn('load summary skipped:', e)
@@ -755,7 +822,11 @@ export default class ShareIfcLoader {
       // finding. Note that on a live model this second read is exactly the
       // conway-side double-count `IfcItemsMap.js` documents, so treat a
       // parity diff taken this way with that caveat.
-      if (isFeatureEnabled('ifcItemsMapParity')) {
+      // Neither diagnostic runs on a worker load: both re-read the whole
+      // stream, which the page does not retain there (the worker sends each
+      // geometry once and the builder keeps the only copy), and both are
+      // opt-in or verbose-only (engine-worker.md §2.1 rows 11, 12).
+      if (isFeatureEnabled('ifcItemsMapParity') && engineLoad === null) {
         runIfcItemsMapParityCheck(ifcAPI, ifcModel, await recapture())
       }
       // Instanced-rendering analysis: groups the captured stream by shared
@@ -765,7 +836,9 @@ export default class ShareIfcLoader {
       // numbers alongside what just rendered as a BatchedMesh. Passed as a
       // thunk so the recapture happens only if the gate inside actually
       // opens.
-      await logInstancedModelStats(ifcAPI, modelID, recapture, isFeatureEnabled('batchedMesh'))
+      if (engineLoad === null) {
+        await logInstancedModelStats(ifcAPI, modelID, recapture, isFeatureEnabled('batchedMesh'))
+      }
       // Always-on integration-boundary log. `conwayDirect.spec.ts`
       // (and the deploy-preview smoke checks) gate on `[conwayDirect]
       // parsed modelID=…` firing — it's the single observable signal
@@ -788,6 +861,9 @@ export default class ShareIfcLoader {
       return ifcModel
     } catch (err) {
       session.abort()
+      // A failed worker load's engine has nothing left to serve: free it now
+      // rather than when the viewer goes (engine/EngineSession.js#close).
+      engineLoad?.ifcAPI.engineSession?.close()
       // A partially assembled incremental group must not survive a
       // failed load — remove it (its wasm-side twin is released by the
       // engine's own error paths).
