@@ -25,6 +25,10 @@
  *    and the builder keeps painting rows that arrive later until `finalize`
  *    restores every painted row to its own colour.
  *
+ *  - `streamingTablesModel` stands in for the model in the viewer's
+ *    per-instance queries until the model exists, so a pick's root-level and
+ *    occurrence answers are the finished model's.
+ *
  * Format-neutral: an IFC row's occurrence path is null, a STEP row's is its
  * occurrence (`[]` at the root).
  */
@@ -32,7 +36,8 @@
 
 /**
  * `root.userData` key of a builder still streaming its batches. Its value
- * answers `pickRow(mesh, batchId)` and `paintSelection(selection, rgba)`.
+ * answers `pickRow(mesh, batchId)`, `paintSelection(selection, rgba)` and
+ * `liveTables()`.
  */
 export const STREAMING_BATCHES_KEY = 'streamingBatches'
 
@@ -99,4 +104,33 @@ export function paintStreamingSelection(scene, selection, color) {
     painted += root.userData[STREAMING_BATCHES_KEY].paintSelection(selection, color)
   }
   return painted
+}
+
+
+/**
+ * The streaming batches' rows as a stand-in model for the viewer's
+ * per-instance queries, while the load has no model 0 yet: an object with a
+ * `traverse` over the builders' table views (`IncrementalBatchedBuilder
+ * #liveTables`). This is what makes a STEP pick made mid-pump get the
+ * finished model's answers to "which instances are root-level" and "which
+ * instances sit at this occurrence" (a shift-pick toggling a root-level shell
+ * needs the first; codex on Share#2084). Null when nothing is streaming.
+ *
+ * @param {object} scene three.js scene
+ * @return {object|null} `{traverse(fn)}`
+ */
+export function streamingTablesModel(scene) {
+  const roots = streamingBatchRoots(scene)
+  if (roots.length === 0) {
+    return null
+  }
+  return {
+    traverse(fn) {
+      for (const root of roots) {
+        for (const view of root.userData[STREAMING_BATCHES_KEY].liveTables()) {
+          fn(view)
+        }
+      }
+    },
+  }
 }

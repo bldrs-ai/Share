@@ -322,3 +322,139 @@ describeMobileAndDesktop('Pickable durable batches during the pump', () => {
     }
   }
 })
+
+
+// A root-only, two-part STEP file: every placement is at the empty path, and
+// a shift-pick of a shell toggles it through the root-level join
+// (CadView#toggleRootLevelInstance, `viewer.getRootLevelInstances`).
+const TWO_ROOT_FIXTURE = 'src/tests/fixtures/twoRootShells.step'
+
+
+/**
+ * The mid-pump hold, armed only for the load after `armMidPumpHold`: a local
+ * file is opened from a page that has loaded a model of its own, and the Open
+ * dialog's navigation reloads the page (so the arming lives in
+ * sessionStorage, which survives it).
+ *
+ * @param page
+ */
+async function holdMidPumpWhenArmed(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as Record<string, unknown>
+    w.__bldrsTestHoldMidPump = () => (sessionStorage.getItem('bldrsHoldMidPump') === '1' ?
+      new Promise<void>((resolve) => {
+        w.__bldrsTestReleaseMidPump = () => {
+          sessionStorage.removeItem('bldrsHoldMidPump')
+          resolve()
+        }
+      }) : Promise.resolve())
+  })
+}
+
+
+/**
+ * Open a file from disk through the Open dialog without waiting for the load
+ * to finish (export.ts#openLocalFile waits for it, which a held pump never
+ * lets happen).
+ *
+ * @param page
+ * @param path
+ */
+async function openLocalFileHeld(page: Page, path: string) {
+  await page.evaluate(() => sessionStorage.setItem('bldrsHoldMidPump', '1'))
+  await page.getByTestId('control-button-open').click()
+  await page.getByRole('tab', {name: 'Local'}).click()
+  const browse = page.getByTestId('button_open_file')
+  await expect(browse).toBeVisible()
+  const CHOOSER_WAIT_MS = 15_000
+  const waiting = page.waitForEvent('filechooser', {timeout: CHOOSER_WAIT_MS})
+  await browse.click()
+  await (await waiting).setFiles(path)
+  await expect(page).toHaveURL(/\/share\/v\/local-only\/.+\.step/, {timeout: HELD_TIMEOUT_MS})
+}
+
+
+/**
+ * Shift-double-click at a point, and settle.
+ *
+ * @param page
+ * @param x
+ * @param y
+ */
+async function shiftDoubleClick(page: Page, x: number, y: number) {
+  await page.keyboard.down('Shift')
+  await page.mouse.dblclick(x, y)
+  await page.keyboard.up('Shift')
+  await page.waitForTimeout(PICK_SETTLE_MS)
+}
+
+
+/**
+ * Codex on #2084: before the model existed, the root-level join answered
+ * nothing (no model 0), so shift-picking a selected root-level shell again
+ * dropped its instance and row but left its owner in the selection, which the
+ * streaming paint then lit whole and finalize kept. The viewer's per-instance
+ * queries now answer from the streaming rows until the model is in
+ * (streamingBatchPick.js#streamingTablesModel).
+ */
+describeMobileAndDesktop('Pickable durable batches during the pump: root-level shift toggle', () => {
+  beforeEach(async ({page}) => {
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+    await holdMidPumpWhenArmed(page)
+  })
+
+  for (const {engine, query} of ENGINES) {
+    test(`${engine}: shift-picking a root-level shell twice mid-pump leaves nothing selected after finalize`, async ({page}) => {
+      test.setTimeout(TEST_TIMEOUT_MS)
+      // The flag rides the session across the Open dialog's navigation.
+      await page.goto(`/share/v/p/index.ifc${query}`)
+      await waitForModelReady(page, HELD_TIMEOUT_MS)
+      await openLocalFileHeld(page, TWO_ROOT_FIXTURE)
+      await page.waitForFunction(() => {
+        const w = window as unknown as Record<string, unknown>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return typeof w.__bldrsTestReleaseMidPump === 'function' && (w as any).store?.getState?.().rootElement
+      }, null, {timeout: HELD_TIMEOUT_MS})
+      await expect(page.getByTestId('LoadingBackdrop')).toBeHidden()
+      await expectStillPumping(page)
+
+      // Select one root-level shell with a shift-pick.
+      const targets = (await rowTargets(page)).filter((t) => Array.isArray(t.path) && t.path.length === 0)
+      expect(targets.length, 'a root-level shell must be on screen').toBeGreaterThan(0)
+      let picked: {target: RowTarget, instance: number} | null = null
+      for (const candidate of targets.slice(0, MAX_PICK_TRIES)) {
+        await shiftDoubleClick(page, candidate.x, candidate.y)
+        const instances = (await selectionState(page, candidate.instance)).instances
+        if (instances.length === 1) {
+          picked = {target: candidate, instance: instances[0]}
+          break
+        }
+      }
+      if (picked === null) {
+        throw new Error('a shift-pick must select a root-level shell')
+      }
+      const {target, instance} = picked
+      const selected = await selectionState(page, instance)
+      expect(selected.anchors.length).toBeGreaterThan(0)
+      expect(selected.streamingPainted).toBeGreaterThan(0)
+
+      // The same shell again: out of the selection, owner and all.
+      await shiftDoubleClick(page, target.x, target.y)
+      const cleared = await selectionState(page, instance)
+      expect(cleared.instances).toEqual([])
+      expect(cleared.anchors).toEqual([])
+      expect(cleared.elements).toEqual([])
+      expect(cleared.streamingPainted).toBe(0)
+      await expectStillPumping(page)
+
+      await page.evaluate(() =>
+        ((window as unknown as Record<string, () => void>).__bldrsTestReleaseMidPump)())
+      await waitForModelReady(page, HELD_TIMEOUT_MS)
+      const after = await selectionState(page, instance)
+      expect(after.elements).toEqual([])
+      expect(after.anchors).toEqual([])
+      expect(after.finishedPainted).toBe(0)
+    })
+  }
+})

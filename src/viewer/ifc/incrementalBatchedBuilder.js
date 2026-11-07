@@ -2,6 +2,7 @@ import {BatchedMesh, Box3, DoubleSide, Group, Matrix4, Vector4} from 'three'
 import debug, {WARN} from '../../utils/debug'
 import {
   allocateInstanceTables,
+  buildOccurrencePathIndex,
   ensureInstanceCapacity,
   exactInstanceTables,
   writeRow,
@@ -305,6 +306,32 @@ export class IncrementalBatchedBuilder {
       occurrencePath: state.instanceOccurrencePaths[batchId] ?? null,
       geometryId: state.instanceGeometryIds[batchId],
     }
+  }
+
+
+  /**
+   * The rows written so far, as the finished model's batches will carry them:
+   * one object per batch with exact-length tables and the path index
+   * decoration builds (`occurrencePathToBatchIds`), shaped like a decorated
+   * BatchedMesh so `ShareViewer`'s per-instance queries
+   * (`getRootLevelInstances`, `getInstanceIdsForOccurrencePath`) run their
+   * own code on them while there is no model yet. Copies, built per call:
+   * those queries run on a pick or a selection, not per frame.
+   *
+   * @return {Array<object>} one table view per non-empty batch
+   */
+  liveTables() {
+    const views = []
+    for (const state of [this.opaque, this.transparent]) {
+      if (state === null || state.cursor === 0) {
+        continue
+      }
+      const tables = exactInstanceTables(state, state.cursor)
+      // The table owner's own index builder, the one decoration uses, so the
+      // keys and the root-level exclusion are decoration's.
+      views.push({isBatchedMesh: true, ...tables, occurrencePathToBatchIds: buildOccurrencePathIndex(tables)})
+    }
+    return views
   }
 
 

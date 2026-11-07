@@ -37,7 +37,7 @@ import debug from '../utils/debug'
 import {occurrencePathKey} from '../utils/occurrencePaths'
 import {modelHasCapability} from './ShareModel'
 import {paintPreviewSelection} from './previewSelection'
-import {paintStreamingSelection} from './streamingBatchPick'
+import {paintStreamingSelection, streamingTablesModel} from './streamingBatchPick'
 import {isFeatureEnabled} from '../FeatureFlags'
 import {viewRules} from './legacyViewRules'
 import {
@@ -1113,7 +1113,7 @@ export class ShareViewer {
    */
   getInstanceIdsForOccurrencePath(
     modelID, occurrencePath, {includeDescendants = true, geometryExpressId = null} = {}) {
-    const model = this._modelById(modelID)
+    const model = this._modelOrStreamingTables_(modelID)
     if (!model || !Array.isArray(occurrencePath) || occurrencePath.length === 0) {
       return []
     }
@@ -1223,7 +1223,7 @@ export class ShareViewer {
     const instanceIds = []
     const instanceOwners = []
     const parentExpressIds = new Set()
-    const model = this._modelById(modelID)
+    const model = this._modelOrStreamingTables_(modelID)
     if (!model || typeof model.traverse !== 'function') {
       return {instanceIds, parentExpressIds: [], instanceOwners}
     }
@@ -1584,6 +1584,28 @@ export class ShareViewer {
       pool.inHighlighter = false
     }
     pool.mesh.visible = false
+  }
+
+
+  /**
+   * The model, or while a load is still streaming and has none, its rows
+   * (`streamingBatchPick.js#streamingTablesModel`): the per-instance queries
+   * then answer for what is on screen, as they will for the finished model.
+   *
+   * @param {number} modelID
+   * @return {object|null} something with `traverse`
+   */
+  _modelOrStreamingTables_(modelID) {
+    const model = this._modelById(modelID)
+    if (model) {
+      return model
+    }
+    try {
+      return streamingTablesModel(this.context?.getScene?.() ?? null)
+    } catch {
+      // A disposed viewer.
+      return null
+    }
   }
 
 

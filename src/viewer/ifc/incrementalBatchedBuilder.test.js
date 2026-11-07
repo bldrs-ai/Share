@@ -1083,3 +1083,31 @@ describe('IncrementalBatchedBuilder: pickable and paintable while streaming', ()
     expect([0, 1, 2].map((batchId) => colorAt(mesh, batchId))).toEqual([own, own, own])
   })
 })
+
+
+describe('IncrementalBatchedBuilder#liveTables', () => {
+  const shapes = {
+    999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
+  }
+
+  it('gives, before finalize, the tables and path index the finished batch will carry', () => {
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    const placed = (parent, path) => ({
+      expressID: parent,
+      geometries: [{geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: OPAQUE, occurrencePath: path}],
+    })
+    builder.appendBatch([placed(8, []), placed(100, [10, 20]), placed(3008, [])])
+    const [view] = builder.liveTables()
+    expect(view.isBatchedMesh).toBe(true)
+    expect(Array.from(view.instanceParents)).toEqual([8, 100, 3008])
+    expect(Array.from(view.instanceOccurrenceIds)).toEqual([0, 1, 2])
+    expect(view.instanceOccurrencePaths).toEqual([[], [10, 20], []])
+    // Root-level rows are not indexed by path, as decoration does it.
+    expect([...view.occurrencePathToBatchIds.entries()]).toEqual([['10/20', [1]]])
+
+    const [batch] = builder.finalize().batches
+    expect(Array.from(batch.instanceParents)).toEqual(Array.from(view.instanceParents))
+    expect(Array.from(batch.instanceOccurrenceIds)).toEqual(Array.from(view.instanceOccurrenceIds))
+    expect(batch.instanceOccurrencePaths).toEqual(view.instanceOccurrencePaths)
+  })
+})
