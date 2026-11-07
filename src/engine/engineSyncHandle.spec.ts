@@ -49,7 +49,8 @@ describeMobileAndDesktop('Engine worker: OPFS sync access handle', () => {
 
   test('the worker reads the staged model through a read-only sync access handle', async ({page}) => {
     const engine = watchEngineWorker(page)
-    await page.goto(`${MODEL}?feature=engineWorker`)
+    // The worker is the default engine (engine-worker.md §7 step 9).
+    await page.goto(MODEL)
     const line = await engineSourceLine(page)
     expect(line).toMatch(/^Engine source I\/O: OPFS sync access handle, [1-9]\d* reads/)
     await engine.expectWorkerEngine()
@@ -57,7 +58,7 @@ describeMobileAndDesktop('Engine worker: OPFS sync access handle', () => {
 
   test('with the kill switch the same worker load reads through the Blob store, and still opens', async ({page}) => {
     const engine = watchEngineWorker(page)
-    await page.goto(`${MODEL}?feature=engineWorker,disableEngineSyncHandle`)
+    await page.goto(`${MODEL}?feature=disableEngineSyncHandle`)
     // engineSourceLine waits for the model to be ready: it opened.
     const line = await engineSourceLine(page)
     expect(line).toMatch(/^Engine source I\/O: Blob store \(disabled\), [1-9]\d* reads/)
@@ -73,9 +74,31 @@ describeMobileAndDesktop('Engine worker: OPFS sync access handle', () => {
     const STEP_TEST_TIMEOUT_MS = 90_000
     test.setTimeout(STEP_TEST_TIMEOUT_MS)
     const engine = watchEngineWorker(page)
-    await page.goto('/share/v/p/index.step?feature=engineWorker')
+    await page.goto('/share/v/p/index.step')
     const line = await engineSourceLine(page, STEP_TEST_TIMEOUT_MS)
     expect(line).toMatch(/^Engine source I\/O: OPFS sync access handle, [1-9]\d* reads/)
     await engine.expectWorkerEngine()
   })
+
+  // The main-thread engine (the kill switch) reads its source through the
+  // page's own Blob store and has no source store of the worker's: the same
+  // models open there, and no `Engine source I/O:` line is printed.
+  for (const {name, path} of [
+    {name: 'IFC', path: MODEL},
+    {name: 'STEP', path: '/share/v/p/index.step'},
+  ]) {
+    test(`an ${name} load on the main-thread engine opens, with no worker source line`, async ({page}) => {
+      const MAIN_TEST_TIMEOUT_MS = 90_000
+      test.setTimeout(MAIN_TEST_TIMEOUT_MS)
+      const engine = watchEngineWorker(page)
+      await page.goto(`${path}?feature=disableEngineWorker`)
+      await waitForModelReady(page, MAIN_TEST_TIMEOUT_MS)
+      await engine.expectMainThreadEngine()
+      const lines = await page.evaluate(() =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).store.getState().loadReportLines as string[])
+      expect(lines.some((line) => line.startsWith('Total:')), lines.join('\n')).toBe(true)
+      expect(lines.filter((line) => line.startsWith('Engine source I/O:'))).toEqual([])
+    })
+  }
 })

@@ -1046,11 +1046,13 @@ ready, so the gain needs the worker (step 9).
     part that looks droppable (a conway ask);
   - a 4.4 MB type index.
   So `ENGINE_JS_BYTES_PER_SOURCE_BYTE` (§5.2) needs no outlier allowance
-  for IFC. STEP is the exception. A buffered STEP stays resident, and its
-  worker holds 286 MB of live JS heap after a 111 MB STEP load (229 MB at
-  ready). The same state sits on the page with the flag off (page heap at
-  the end 327 MB), so it moved rather than grew, and it waits on a
-  windowed STEP open (§11 item 1).
+  for IFC. STEP is the exception. Measured before #2085, when a STEP was
+  still opened buffered and resident: its worker held 286 MB of live JS
+  heap after a 111 MB STEP load (229 MB at ready). The same state sat on
+  the page with the flag off (page heap at the end 327 MB), so it moved
+  rather than grew. #2085 has since made the STEP open windowed. Its peak
+  is unchanged (#2085's measurement), and the heap after load has not
+  been measured again.
 - **#2070: each engine round trip waits behind a main-thread frame. Fixed
   for the Properties panel (#2074); the general cost stays.** A worker
   reply is a main-thread task, so with the render loop running it waits
