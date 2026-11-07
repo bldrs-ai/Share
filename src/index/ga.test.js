@@ -1,7 +1,15 @@
 import Cookies from 'js-cookie'
 import {captureException, setTag} from '@sentry/react'
 import {_resetGaClientIdForTests, getGaClientId, setIsAllowed} from '../privacy/analytics'
-import setupGa, {GA_MEASUREMENT_ID, shouldInitGa} from './ga'
+import setupGa, {
+  CONSENT_DEFAULT,
+  CONSENT_GRANTED,
+  GA_MEASUREMENT_ID,
+  _resetGaForTests,
+  deleteGoogleCookies,
+  shouldInitGa,
+  updateGaConsent,
+} from './ga'
 
 
 jest.mock('@sentry/react', () => ({captureException: jest.fn(), setTag: jest.fn()}))
@@ -16,10 +24,11 @@ function findGtagScript() {
 beforeEach(() => {
   jest.clearAllMocks()
   _resetGaClientIdForTests()
+  _resetGaForTests()
   // getGaClientId falls back to this cookie; clear it so the assertions
   // below see only what setupGa's callback provides.
   Cookies.remove('_ga')
-  Cookies.remove('isAnalyticsAllowed')
+  Cookies.set('consentLevel', '1.functional')
   document.head.querySelectorAll('script').forEach((s) => s.remove())
   // Mirror the inline bootstrap index.html declares before the bundle.
   window.dataLayer = []
@@ -192,7 +201,7 @@ describe('setupGa', () => {
   // search on this tag, so nothing matched before it was sent (#1767).
   describe('open_cid Sentry tag', () => {
     afterEach(() => {
-      Cookies.remove('isAnalyticsAllowed')
+      Cookies.set('consentLevel', '1.functional')
     })
 
     // Set from the cookie at setup so a load-failure exception thrown
@@ -230,12 +239,13 @@ describe('setupGa', () => {
     })
 
     // undefined is what removes a tag — Sentry drops undefined keys when
-    // it merges scope tags onto an event.
+    // it merges scope tags onto an event. A visitor who declined never gets
+    // gtag/js at all, so there's no client id callback to publish from.
     test('sends no id when analytics consent is withheld', () => {
       Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
       setIsAllowed(false)
       setupGa({hostname: 'bldrs.ai', isWebdriver: false})
-      window.dataLayer.find((entry) => entry?.[0] === 'get')[3]('1234567890.0987654321')
+      expect(window.dataLayer.find((entry) => entry?.[0] === 'get')).toBeUndefined()
       const values = setTag.mock.calls.filter(([key]) => key === 'open_cid').map(([, value]) => value)
       expect(values.every((value) => value === undefined)).toBe(true)
     })
@@ -254,12 +264,17 @@ describe('setupGa', () => {
       expect(setTag).toHaveBeenLastCalledWith('open_cid', undefined)
     })
 
+    // A declined visitor's _ga is deleted at setup, so the id has to come
+    // back from gtag/js itself once the re-grant loads it.
     test('republishes the tag when consent is granted again', () => {
       Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
       setIsAllowed(false)
       setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+      expect(Cookies.get('_ga')).toBeUndefined()
 
       setIsAllowed(true)
+      updateGaConsent()
+      window.dataLayer.find((entry) => entry?.[0] === 'get')[3]('1234567890.0987654321')
       expect(setTag).toHaveBeenLastCalledWith('open_cid', '1234567890.0987654321')
     })
   })
@@ -272,5 +287,165 @@ describe('setupGa', () => {
       expect.objectContaining({message: expect.stringContaining('ga_init: gtag bootstrap missing')}),
       {tags: {subsystem: 'ga_init'}},
     )
+  })
+})
+
+
+/** @return {Array} the dataLayer as [command, arg, params] triples */
+function queued() {
+  return window.dataLayer.map((entry) => [entry?.[0], entry?.[1], entry?.[2]])
+}
+
+
+// design/new/analytics-consent.md: GA loads only once the visitor allows it.
+describe('consent', () => {
+  const PROD = {hostname: 'bldrs.ai', isWebdriver: false}
+
+  test('a visitor who has not chosen gets no loader on prod', () => {
+    Cookies.remove('consentLevel')
+    setupGa(PROD)
+    expect(findGtagScript()).toBeNull()
+    expect(window.dataLayer).toHaveLength(0)
+  })
+
+  // Codex on #2051: GA was default-on until this change, so a returning
+  // visitor can arrive undecided with GA cookies already set.
+  test.each([
+    ['has not chosen', null],
+    ['chose Browse only', '1.restricted'],
+  ])('deletes leftover GA cookies at setup when the visitor %s', (_, cookie) => {
+    if (cookie) {
+      Cookies.set('consentLevel', cookie)
+    } else {
+      Cookies.remove('consentLevel')
+    }
+    Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+    Cookies.set('_gcl_au', '1.1.x')
+    setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+    expect(Cookies.get('_ga')).toBeUndefined()
+    expect(Cookies.get('_gcl_au')).toBeUndefined()
+  })
+
+  // A bldrs preview that didn't opt into GA this load could still have
+  // run the tag on an earlier one, so its leftovers go too.
+  test('deletes leftover GA cookies on a bldrs deploy preview without the GA flag', () => {
+    Cookies.remove('consentLevel')
+    Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+    setupGa({hostname: 'deploy-preview-2051--bldrs-share-prod.netlify.app', isWebdriver: false, enableInPreview: false})
+    expect(Cookies.get('_ga')).toBeUndefined()
+  })
+
+  // Codex on #2051: a self-hosted Share under another site never ran our
+  // tag; the `_ga` there is that site's analytics, not ours to delete.
+  test.each(['share.example.com', 'localhost', 'deploy-preview-1--some-fork.netlify.app'])(
+    'leaves GA cookies alone on %s, where our tag never ran', (hostname) => {
+      Cookies.remove('consentLevel')
+      Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+      setupGa({hostname, isWebdriver: false, enableInPreview: true})
+      expect(Cookies.get('_ga')).toBe('GA1.1.1234567890.0987654321')
+      Cookies.remove('_ga')
+    })
+
+  test('keeps the GA cookie at setup for a consenting visitor', () => {
+    Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+    setupGa({hostname: 'localhost', isWebdriver: false})
+    expect(Cookies.get('_ga')).toBe('GA1.1.1234567890.0987654321')
+  })
+
+  test('a visitor who chose Browse only gets no loader on prod', () => {
+    Cookies.set('consentLevel', '1.restricted')
+    setupGa(PROD)
+    expect(findGtagScript()).toBeNull()
+  })
+
+  test('allowing mid-page loads gtag/js, with consent granted before config', () => {
+    Cookies.remove('consentLevel')
+    setupGa(PROD)
+    expect(findGtagScript()).toBeNull()
+
+    setIsAllowed(true)
+    updateGaConsent()
+    expect(findGtagScript()).not.toBeNull()
+    const commands = queued()
+    const updateAt = commands.findIndex(([cmd, arg]) => cmd === 'consent' && arg === 'update')
+    const configAt = commands.findIndex(([cmd, arg]) => cmd === 'config' && arg === GA_MEASUREMENT_ID)
+    expect(commands[updateAt][2]).toEqual(CONSENT_GRANTED)
+    expect(configAt).toBeGreaterThan(updateAt)
+    expect(window[`ga-disable-${GA_MEASUREMENT_ID}`]).toBe(false)
+  })
+
+  test('allowing does not queue a second config when the stub already queued one', () => {
+    window.gtag('config', GA_MEASUREMENT_ID, {})
+    setupGa(PROD)
+    updateGaConsent()
+    expect(queued().filter(([cmd]) => cmd === 'config')).toHaveLength(1)
+    // and does not inject the loader twice
+    expect(document.head.querySelectorAll(`script[src*="${GA_MEASUREMENT_ID}"]`)).toHaveLength(1)
+  })
+
+  test('allowing off-prod updates consent but never loads gtag/js', () => {
+    Cookies.remove('consentLevel')
+    setupGa({hostname: 'localhost', isWebdriver: false})
+    setIsAllowed(true)
+    updateGaConsent()
+    expect(findGtagScript()).toBeNull()
+    expect(queued()).toContainEqual(['consent', 'update', CONSENT_GRANTED])
+  })
+
+  test('declining after GA loaded sets the kill switch, denies consent and deletes the cookies', () => {
+    setupGa(PROD)
+    Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+    Cookies.set('_ga_GRLNVMZRGW', 'GS1.1.x')
+    Cookies.set('_gcl_au', '1.1.x')
+    Cookies.set('theme', 'night')
+
+    setIsAllowed(false)
+    updateGaConsent()
+    expect(window[`ga-disable-${GA_MEASUREMENT_ID}`]).toBe(true)
+    expect(queued()).toContainEqual(['consent', 'update', CONSENT_DEFAULT])
+    expect(Cookies.get('_ga')).toBeUndefined()
+    expect(Cookies.get('_ga_GRLNVMZRGW')).toBeUndefined()
+    expect(Cookies.get('_gcl_au')).toBeUndefined()
+    expect(Cookies.get('theme')).toBe('night')
+    Cookies.remove('theme')
+  })
+
+  // Codex on #2051: the decline path must not reach a host site's cookies
+  // either, on a self-hosted Share where our tag never ran.
+  test('declining on a self-hosted Share leaves the host site\'s GA cookies alone', () => {
+    const env = {hostname: 'share.example.com', isWebdriver: false}
+    setupGa(env)
+    Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+    setIsAllowed(false)
+    updateGaConsent(env)
+    expect(window[`ga-disable-${GA_MEASUREMENT_ID}`]).toBe(true)
+    expect(Cookies.get('_ga')).toBe('GA1.1.1234567890.0987654321')
+    Cookies.remove('_ga')
+  })
+
+  test('the consent signals never grant ad personalization', () => {
+    expect(CONSENT_DEFAULT).toEqual({
+      analytics_storage: 'denied', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied',
+    })
+    expect(CONSENT_GRANTED.ad_personalization).toBe('denied')
+    expect(CONSENT_GRANTED.analytics_storage).toBe('granted')
+  })
+
+  test('deleteGoogleCookies tries every parent domain', () => {
+    const remove = jest.spyOn(Cookies, 'remove')
+    Cookies.set('_ga', 'GA1.1.1.2')
+    deleteGoogleCookies('www.bldrs.ai')
+    const domains = remove.mock.calls.filter(([name]) => name === '_ga').map(([, opts]) => opts.domain)
+    expect(domains).toEqual([undefined, 'www.bldrs.ai', 'bldrs.ai'])
+    remove.mockRestore()
+  })
+
+  test('deleteGoogleCookies does nothing off our own GA hosts', () => {
+    const remove = jest.spyOn(Cookies, 'remove')
+    Cookies.set('_ga', 'GA1.1.1.2')
+    deleteGoogleCookies('share.example.com')
+    expect(remove).not.toHaveBeenCalled()
+    remove.mockRestore()
+    Cookies.remove('_ga')
   })
 })

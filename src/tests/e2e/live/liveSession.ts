@@ -186,7 +186,13 @@ export function noteUnverified(testInfo: TestInfo, description: string) {
  * @param target the deploy
  */
 export async function setReturningVisitor(context: BrowserContext, target: LiveTarget) {
-  await context.addCookies([{name: 'isFirstTime', value: '1', domain: target.hostname, path: '/'}])
+  // Browse only: a live run is automation (no GA either way, ga.js
+  // #shouldInitGa), and nothing should consent on a real host's behalf.
+  // Without a choice, About re-opens for an undecided visitor.
+  await context.addCookies([
+    {name: 'isFirstTime', value: '1', domain: target.hostname, path: '/'},
+    {name: 'consentLevel', value: '1.restricted', domain: target.hostname, path: '/'},
+  ])
 }
 
 
