@@ -1,6 +1,17 @@
 // Byte stores the engine reads a windowed source through (conway's
 // `StepExternalByteStore`: `byteLength` and an async `read(offset, length)`
-// returning standalone bytes). engine-worker.md §2.2, §7 step 4.
+// returning standalone bytes, plus — where the read really is synchronous —
+// `readSync(offset, length)`). engine-worker.md §2.2, §7 step 4.
+//
+// `readSync` is what lets a STEP open windowed (conway#757; engine-worker.md
+// §11). IFC's extraction pages each read's record closure in asynchronously
+// first, so any store serves it. AP214's reads records synchronously, so on
+// a windowed source conway faults each missing window in through `readSync`,
+// and refuses a store without one (load status STORE_NOT_SYNCHRONOUS). Both
+// stores here offer it in a worker: the sync access handle's `read` is
+// synchronous by definition, and a Blob is read synchronously with
+// `FileReaderSync`, which only workers have. In process (the page) the Blob
+// store has neither, so a STEP opened there is refused windowed and buffers.
 //
 // Two of them, chosen per open by `openSourceStore`:
 //   - a read-only OPFS sync access handle, which only a worker can open, on
@@ -31,11 +42,17 @@ function newCounters() {
  *
  * @param {Blob} blob
  * @param {function(): number} [now]
- * @return {object} `{byteLength, read, counters, kind, close}`
+ * @param {Function} [ReaderSync] `FileReaderSync`, present only in a worker
+ * @return {object} `{byteLength, read, readSync?, counters, kind, close}`
  */
-export function makeBlobStore(blob, now = () => performance.now()) {
+export function makeBlobStore(blob, now = () => performance.now(), ReaderSync = globalThis.FileReaderSync) {
   const counters = newCounters()
-  return {
+  const count = (t0, length) => {
+    counters.reads++
+    counters.bytes += length
+    counters.ms += now() - t0
+  }
+  const store = {
     kind: 'blob',
     counters,
     get byteLength() {
@@ -44,15 +61,26 @@ export function makeBlobStore(blob, now = () => performance.now()) {
     async read(offset, length) {
       const t0 = now()
       const bytes = new Uint8Array(await blob.slice(offset, offset + length).arrayBuffer())
-      counters.reads++
-      counters.bytes += length
-      counters.ms += now() - t0
+      count(t0, length)
       return bytes
     },
     close() {
       // Nothing held: a File snapshot pins nothing.
     },
   }
+  if (typeof ReaderSync === 'function') {
+    // Worker only (FileReaderSync is [Exposed=Worker]). A snapshot that
+    // went stale throws NotReadableError here exactly as the async read
+    // rejects with it: a per-read failure, never wrong bytes.
+    const reader = new ReaderSync()
+    store.readSync = (offset, length) => {
+      const t0 = now()
+      const bytes = new Uint8Array(reader.readAsArrayBuffer(blob.slice(offset, offset + length)))
+      count(t0, length)
+      return bytes
+    }
+  }
+  return store
 }
 
 
@@ -62,11 +90,26 @@ export function makeBlobStore(blob, now = () => performance.now()) {
  * @param {object} access the sync access handle
  * @param {number} size the file's size, read once at open
  * @param {function(): number} [now]
- * @return {object} `{byteLength, read, counters, kind, close}`
+ * @return {object} `{byteLength, read, readSync, counters, kind, close}`
  */
 export function makeSyncHandleStore(access, size, now = () => performance.now()) {
   const counters = newCounters()
   let closed = false
+  const readNow = (offset, length) => {
+    const t0 = now()
+    const bytes = new Uint8Array(length)
+    const read = access.read(bytes, {at: offset})
+    if (read !== length) {
+      // A short read means the file changed or went away under the handle.
+      // Fail the read, as the Blob store does with NotReadableError: a
+      // per-read failure, never wrong bytes.
+      throw new Error(`engine source: short read at ${offset} (${read} of ${length} bytes)`)
+    }
+    counters.reads++
+    counters.bytes += length
+    counters.ms += now() - t0
+    return bytes
+  }
   return {
     kind: 'syncHandle',
     counters,
@@ -75,19 +118,16 @@ export function makeSyncHandleStore(access, size, now = () => performance.now())
     },
     // eslint-disable-next-line require-await
     async read(offset, length) {
-      const t0 = now()
-      const bytes = new Uint8Array(length)
-      const read = access.read(bytes, {at: offset})
-      if (read !== length) {
-        // A short read means the file changed or went away under the handle.
-        // Fail the read, as the Blob store does with NotReadableError: a
-        // per-read failure, never wrong bytes.
-        throw new Error(`engine source: short read at ${offset} (${read} of ${length} bytes)`)
-      }
-      counters.reads++
-      counters.bytes += length
-      counters.ms += now() - t0
-      return bytes
+      return readNow(offset, length)
+    },
+    // The same synchronous read. conway calls it from inside a synchronous
+    // record read when a STEP model's window is missing (conway#757), on the
+    // same read-only handle and under the same shared lock the session holds
+    // anyway: nothing about the handle's lifetime changes. A read after
+    // close() throws (InvalidStateError), as `read` would; conway only reads
+    // between the open and CloseModel, and close() runs after CloseModel.
+    readSync(offset, length) {
+      return readNow(offset, length)
     },
     close() {
       if (!closed) {
@@ -112,7 +152,7 @@ function canOpenSyncHandles() {
 
 
 /** @return {Promise<object>|undefined} this origin's OPFS root */
-function opfsRoot() {
+export function opfsRoot() {
   return globalThis.navigator?.storage?.getDirectory?.()
 }
 
@@ -143,13 +183,30 @@ const MAX_OPFS_ENTRIES_SCANNED = 10000
  * @throws {Error} past `maxEntries` (`OPFS scan limit (N entries)`)
  */
 export async function findOpfsEntry(file, root, maxEntries = MAX_OPFS_ENTRIES_SCANNED) {
+  return (await locateOpfsEntry(file, root, maxEntries))?.handle ?? null
+}
+
+
+/**
+ * {@link findOpfsEntry}, with the entry's path under `root` — the path is
+ * what the index sidecar is keyed by (engineSidecars.js#sidecarKey), since
+ * two entries can share a name in different directories.
+ *
+ * @param {Blob} file
+ * @param {object} root FileSystemDirectoryHandle to search under
+ * @param {number} [maxEntries]
+ * @return {Promise<{handle: object, path: string}|null>} the entry and its
+ *   `/`-joined path from `root`, or null
+ * @throws {Error} past `maxEntries` (`OPFS scan limit (N entries)`)
+ */
+export async function locateOpfsEntry(file, root, maxEntries = MAX_OPFS_ENTRIES_SCANNED) {
   if (!root || typeof file?.name !== 'string' || file.name === '') {
     return null
   }
-  const dirs = [root]
+  const dirs = [{dir: root, path: ''}]
   let visited = 0
   while (dirs.length > 0) {
-    const dir = dirs.pop()
+    const {dir, path} = dirs.pop()
     for await (const [name, handle] of dir.entries()) {
       if (++visited > maxEntries) {
         // Its own reason on the load report (via openSourceStore's catch),
@@ -157,7 +214,7 @@ export async function findOpfsEntry(file, root, maxEntries = MAX_OPFS_ENTRIES_SC
         throw new Error(`OPFS scan limit (${maxEntries} entries)`)
       }
       if (handle.kind === 'directory') {
-        dirs.push(handle)
+        dirs.push({dir: handle, path: `${path}${name}/`})
       } else if (name === file.name) {
         let current
         try {
@@ -168,7 +225,7 @@ export async function findOpfsEntry(file, root, maxEntries = MAX_OPFS_ENTRIES_SC
           continue
         }
         if (current.size === file.size && current.lastModified === file.lastModified) {
-          return handle
+          return {handle, path: `${path}${name}`}
         }
       }
     }
@@ -203,14 +260,17 @@ export async function findOpfsEntry(file, root, maxEntries = MAX_OPFS_ENTRIES_SC
  * @param {function(): Promise<object>} [options.getOpfsRoot] for tests
  * @param {function(): boolean} [options.canSyncHandle] for tests
  * @param {number} [options.maxOpfsEntries] for tests
- * @return {Promise<{store: object, fallbackReason: (string|null)}>}
+ * @return {Promise<{store: object, fallbackReason: (string|null), entryPath: (string|null)}>}
+ *   `entryPath` is the OPFS entry's path when the File came from one (with
+ *   either store), else null
  */
 export async function openSourceStore(source, {
   allowSyncHandle = true, now, getOpfsRoot = opfsRoot, canSyncHandle = canOpenSyncHandles,
   maxOpfsEntries = MAX_OPFS_ENTRIES_SCANNED,
 } = {}) {
   const blob = source.file
-  const fallback = (reason) => ({store: makeBlobStore(blob, now), fallbackReason: reason})
+  let entryPath = null
+  const fallback = (reason) => ({store: makeBlobStore(blob, now), fallbackReason: reason, entryPath})
   const describe = (e) => `${e?.name ?? 'Error'}: ${e?.message ?? e}`
   if (!allowSyncHandle) {
     return fallback('disabled')
@@ -221,7 +281,9 @@ export async function openSourceStore(source, {
   }
   let entry
   try {
-    entry = await findOpfsEntry(blob, await getOpfsRoot(), maxOpfsEntries)
+    const located = await locateOpfsEntry(blob, await getOpfsRoot(), maxOpfsEntries)
+    entry = located?.handle
+    entryPath = located?.path ?? null
   } catch (e) {
     return fallback(`OPFS lookup failed: ${describe(e)}`)
   }
@@ -252,7 +314,7 @@ export async function openSourceStore(source, {
       access.close()
       return fallback(`entry changed since the snapshot (${size} bytes, snapshot ${blob.size})`)
     }
-    return {store: makeSyncHandleStore(access, size, now), fallbackReason: null}
+    return {store: makeSyncHandleStore(access, size, now), fallbackReason: null, entryPath}
   } catch (e) {
     access.close()
     return fallback(describe(e))

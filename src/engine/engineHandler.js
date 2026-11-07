@@ -29,7 +29,8 @@ import {resolvePropertyTables, schemaTypeName} from '../Components/Properties/pr
 import {captureEngineExtensions, ifcManagerOver} from '../loader/glbEngineCapture'
 import {classifyOpenFailure, openDeferred} from '../loader/conwayOpen'
 import {ENGINE_PROTOCOL_VERSION, Ev, Op, serializeError} from './protocol'
-import {openSourceStore} from './engineSources'
+import {openSourceStore, opfsRoot} from './engineSources'
+import {readSidecar, sidecarKey, writeSidecar} from './engineSidecars'
 import {makeBatchEncoder, previewMessage, snapshotStatistics} from './engineStream'
 import {enableStepPreviewFinishParse} from '../viewer/ifc/pumpTestSeams'
 
@@ -139,6 +140,12 @@ export function createEngineHandler({
   // after the load. Closed in dispose(), after CloseModel, so a sync access
   // handle is released only once nothing can read through it.
   let sourceStore = null
+  // The open model's index sidecar (engineSidecars.js): its key when the
+  // source is an OPFS entry the session can key one by, and where the index
+  // came from — 'sidecar' (opened from it), 'parse', or 'sidecarRejected'
+  // (one was offered and refused, so the model parsed). Reported on the
+  // `done` packet; a parse writes a fresh sidecar before it.
+  let sidecarState = null
   // Why the store is not the sync access handle, when it is not (reported
   // in the `open` reply and the `done` packet).
   let sourceFallback = null
@@ -460,10 +467,11 @@ export function createEngineHandler({
     // The same sequence the main-thread path runs (loader/conwayOpen.js):
     // windowed from the Blob/File when it can be (a File structured-clones
     // by reference, so nothing was copied to get it here, §2.2); else, or
-    // when that open fails other than by a schema refusal, buffered. A STEP
-    // takes the buffered arm: the Loader hands it over as bytes, because
-    // conway's store-backed open is IFC-only (a windowed STEP open is a
-    // conway ask, engine-worker.md §2.3).
+    // when that open fails other than by a schema refusal, buffered. IFC and
+    // STEP alike since conway#757: both stores here read synchronously in a
+    // worker, which is what a windowed STEP needs (engineSources.js). In
+    // process the Blob store cannot, conway refuses the STEP store open
+    // (STORE_NOT_SYNCHRONOUS), and this session's own IfcAPI buffers it.
     // Held locally: dispose() nulls `api`, and an open that finishes after
     // close must still be able to CloseModel what it opened.
     const engine = api
@@ -474,12 +482,31 @@ export function createEngineHandler({
       await openSourceStore(source, {allowSyncHandle: !flags.disableEngineSyncHandle, now, ...sourceOptions}) :
       null
     const store = opened?.store ?? null
+    // A persisted sidecar for this entry, tried before the parse. Only for a
+    // store over an OPFS entry: the sidecar is keyed by the entry, and an
+    // index-first open reads its bytes from a store. Format-neutral: IFC and
+    // STEP sidecars come from the same export and open through the same
+    // call (conway#756, #757).
+    const getOpfsRoot = sourceOptions.getOpfsRoot ?? opfsRoot
+    const key = store !== null && opened.entryPath && !flags.disableEngineSidecar &&
+      typeof engine.OpenModelFromIndex === 'function' && typeof engine.ExportIndexSidecar === 'function' ?
+      await sidecarKey(opened.entryPath, blob).catch(() => null) :
+      null
+    const sidecar = key !== null ? await readSidecar(key, getOpfsRoot) : null
+    if (key !== null) {
+      // The parse records the source's digests so the export below can write
+      // a sidecar for exactly the bytes it indexed (~12 % of the index build,
+      // conway#760); a sidecar open adopts the sidecar's own.
+      settings.RECORD_SOURCE_HASH = true
+    }
     let adopted = false
     let id
     let windowed
     let attempt
+    let index
     try {
-      ({modelID: id, windowed, attempt} = await openDeferred(engine, {
+      ({modelID: id, windowed, attempt, index} = await openDeferred(engine, {
+        sidecar,
         store,
         loadBytes: async () => {
           const bytes = source?.bytes ?? (blob ? await blob.arrayBuffer() : null)
@@ -498,6 +525,9 @@ export function createEngineHandler({
         sourceStore = store
         sourceFallback = opened.fallbackReason
         adopted = true
+        if (key !== null) {
+          sidecarState = {key, getOpfsRoot, source: index ?? 'parse', bytes: sidecar?.byteLength ?? 0, saved: false}
+        }
       }
     } finally {
       // Not adopted (a buffered fallback, a failed or refused open, an open
@@ -642,6 +672,7 @@ export function createEngineHandler({
       if (meshes === 0) {
         await oneShotFallback(windowed, postBatch)
       }
+      await saveSidecar()
       emit(Ev.DONE, {summary: await summarize({batches, meshes, bytes, pumpMs: now() - tPump,
         geometries: encoder.sentCount(), windowed, format})})
     } catch (e) {
@@ -676,6 +707,29 @@ export function createEngineHandler({
   }
 
   /**
+   * Write the open model's index sidecar when it parsed (not when it opened
+   * from one): the next open of the same OPFS entry then skips the parse.
+   * After the pump, so the export (a serialise of the index columns, ~0.2 s
+   * on 106 MB of STEP) never competes with geometry. Best-effort: a failed
+   * export or write leaves no sidecar, and the next open parses.
+   */
+  async function saveSidecar() {
+    if (sidecarState === null || sidecarState.source === 'sidecar' || api === null) {
+      return
+    }
+    try {
+      // eslint-disable-next-line new-cap
+      const exported = await api.ExportIndexSidecar(modelID)
+      if (exported) {
+        sidecarState.bytes = exported.byteLength
+        sidecarState.saved = await writeSidecar(sidecarState.key, exported, sidecarState.getOpfsRoot)
+      }
+    } catch {
+      // Left unsaved; reported as such.
+    }
+  }
+
+  /**
    * The `done` packet: everything `ShareIfcLoader#parse` reads off the engine
    * after the build, as plain data (§4).
    *
@@ -684,6 +738,9 @@ export function createEngineHandler({
    */
   async function summarize(counts) {
     const summary = {...counts, wasmBytes: wasmBytesOf(api), source: sourceSummary()}
+    if (sidecarState !== null) {
+      summary.index = {source: sidecarState.source, bytes: sidecarState.bytes, saved: sidecarState.saved}
+    }
     if (typeof api.getStatistics === 'function') {
       summary.statistics = snapshotStatistics(api.getStatistics(modelID))
     }

@@ -65,7 +65,8 @@ import {
 import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
 import {spillModelSource} from './opfsSourceByteStore'
 import {PART21_LOADER_TYPES} from './part21Formats'
-import {STORE_DETECT_PREFIX_BYTES, isConwayIfcFormat, looksLikeTruncatedPart21Blob} from './stepFormat'
+import {STORE_DETECT_PREFIX_BYTES, conwayStoreOpenRequirement, looksLikeTruncatedPart21Blob} from './stepFormat'
+import {isEngineWorkerLoad} from '../viewer/ifc/ShareIfcLoader'
 import {
   externalCacheKey,
   gitHubCacheKey,
@@ -114,41 +115,52 @@ function scheduleIdleWork(fn) {
 
 
 /**
- * True when Conway can parse an OPFS File through `OpenModelStream`
- * (M1b) so we never allocate a full-source ArrayBuffer.
+ * True when the engine that will parse this OPFS File can open it through
+ * `OpenModelStream` (M1b), so we never allocate a full-source ArrayBuffer.
  *
  * Decided by the file's own FILE_SCHEMA, because neither `isIfc` nor the
  * suffix is evidence of the format and both are wrong in a different
- * direction. Conway's store-backed open is IFC-only
- * (`IfcApiModelPassthroughFactory.fromStore` returns `undefined` for
- * AP214/AP203/AP242) and it reserves the model handle before it sniffs:
+ * direction:
  *
- *   - `isIfc` is true for STEP as well, so it offered STEP files a path
- *     that always refuses them. That burned handle 0 on a model which
- *     never opened, and the buffered `OpenModelStreamed` retry parsed as
- *     handle 1 — misaddressing every Share call site that passes the
- *     scene-level id 0 (`CadView.jsx#loadModel` pins `model.modelID` to
- *     it), the GLB writer's spatial-tree and element-properties captures
- *     among them (#1776).
+ *   - `isIfc` is true for STEP as well. On the main-thread engine a STEP
+ *     store open always refuses, and a refused store open still reserves
+ *     the model handle: it burned handle 0, and the buffered
+ *     `OpenModelStreamed` retry parsed as handle 1 — misaddressing every
+ *     Share call site that passes the scene-level id 0 (`CadView.jsx
+ *     #loadModel` pins `model.modelID` to it), the GLB writer's
+ *     spatial-tree and element-properties captures among them (#1776).
  *   - A suffix test is wrong the other way: `findLoader` takes
  *     `loader.type` from the filename, so an IFC payload named `.step`
- *     would be denied the windowed parse and buffer its whole source —
- *     re-introducing on a mislabelled large model exactly the
- *     hundreds-of-MB allocation M3 removed.
+ *     would be denied the windowed parse and buffer its whole source.
  *
- * The question is answered by conway's own `ModelFormatDetector`, over the
- * same 64 KiB prefix `fromStore` will read — see
- * {@link isConwayIfcFormat}, which explains why this must not go back to
- * being a header scan of our own. Anything it does not read as IFC —
- * AP214/AP203/AP242, and equally a truncated or malformed part-21 file it
- * cannot parse at all — buffers rather than gambling.
+ * The question is answered by conway itself (`stepFormat.js
+ * #conwayStoreOpenRequirement`): its detector over the same 64 KiB prefix
+ * `fromStore` will read, and its table of what each format's store open
+ * needs of the store (conway#757). IFC takes any store. The AP214 family
+ * (STEP) needs one that reads synchronously, because AP214's extraction
+ * reads records synchronously and faults its windows in. One predicate for
+ * both formats, with the format difference as data:
+ *
+ *   - an ENGINE SESSION's worker reads through stores that both read
+ *     synchronously (`engine/engineSources.js`: the OPFS sync access handle,
+ *     and FileReaderSync for its Blob store), so it takes either. In the
+ *     in-process fallback a STEP store open is refused
+ *     (STORE_NOT_SYNCHRONOUS) and buffers — inside that session's own
+ *     IfcAPI, so the burned handle is the session's and misaddresses
+ *     nothing;
+ *   - the viewer's MAIN-THREAD engine reads the File through a Blob store,
+ *     which cannot read synchronously, so it takes `'any'` only and a STEP
+ *     buffers, exactly as before.
+ *
+ * A truncated or malformed part-21 file conway cannot detect buffers rather
+ * than gambling.
  *
  * @param {object} viewer
  * @param {string} loaderType resolved format tag, i.e. `loader.type`
  * @param {Blob} file the source handle, sniffed for its part-21 header
  * @return {Promise<boolean>}
  */
-async function canOpenFromStore(viewer, loaderType, file) {
+export async function canOpenFromStore(viewer, loaderType, file) {
   if (!PART21_LOADER_TYPES.has(loaderType) || isFeatureEnabled('disableStreamOpen')) {
     return false
   }
@@ -165,7 +177,13 @@ async function canOpenFromStore(viewer, loaderType, file) {
     // from its — a multi-byte sequence cut at the slice boundary decodes to a
     // replacement character, which is a different byte than the one it sees.
     const head = await file.slice(0, STORE_DETECT_PREFIX_BYTES).arrayBuffer()
-    return isConwayIfcFormat(new Uint8Array(head))
+    const requirement = conwayStoreOpenRequirement(new Uint8Array(head))
+    if (requirement === 'any') {
+      return true
+    }
+    const scene = typeof viewer?.IFC?.context?.getScene === 'function' ?
+      viewer.IFC.context.getScene() : null
+    return requirement === 'synchronous' && isEngineWorkerLoad(loaderType, scene)
   } catch (e) {
     debug().warn('Loader#canOpenFromStore: header sniff failed; buffering:', e)
     return false

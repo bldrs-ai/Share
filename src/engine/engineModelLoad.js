@@ -10,10 +10,12 @@
 // its own proxy behind the same surface), so the worker, the protocol, the
 // session and this facade are format-neutral code. What differs between the
 // formats is data, and none of it needs a branch here:
-//   - the SOURCE kind: an IFC can be opened windowed from a File (`{file}`),
-//     while conway's store-backed open is IFC-only, so the Loader's header
-//     sniff (Loader.js#canOpenFromStore) hands a STEP over as bytes and it
-//     crosses as a transferred `{bytes}` buffer, resident in the worker;
+//   - the SOURCE kind is the same for both since conway#757: a part-21
+//     file staged in OPFS crosses as a File (`{file}`) and opens windowed.
+//     What differs is what the windowed open needs of its store — IFC any,
+//     STEP one that reads synchronously — and the worker's stores both do
+//     (engineSources.js). The Loader asks conway which (Loader.js
+//     #canOpenFromStore); only the main-thread engine still buffers a STEP;
 //   - the ID scheme: STEP placements carry an occurrence path, which rides
 //     the batch's path column (engineStream.js#makeBatchEncoder) and is
 //     decoded back onto each placement below;
@@ -381,6 +383,7 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
       throw e
     }
     reportSourceInfo(sourceIoLine(ifcAPI.summary.source))
+    reportSourceInfo(indexLine(ifcAPI.summary.index))
     // The integration-boundary line conwayDirectIfcLoader prints for the
     // main-thread pump (Share#1744), for a worker load. Named differently on
     // purpose: E2E specs tell the two engines apart by which line appears.
@@ -416,15 +419,14 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
 /**
  * The `open` source. Which kind a load sends is decided upstream, by the
  * Loader's header sniff (Loader.js#canOpenFromStore), not by the format
- * tag: a mislabelled IFC named `.step` still arrives as a File and still
- * opens windowed, and a STEP (conway's store-backed open is IFC-only)
- * arrives as bytes.
+ * tag: a part-21 file conway can open from a store arrives as a File and
+ * opens windowed, whatever its suffix says; anything else (not staged in
+ * OPFS, not a format the store open takes) arrives as bytes.
  *
  * Bytes are TRANSFERRED as they are, not copied first (EngineSession.js
  * #transferableSource copies only a view onto part of a larger buffer): the
  * caller's buffer is detached, which is the point. A copy would hold a
- * buffered source twice on the page for the length of the open — a STEP's
- * whole file, since a STEP is always buffered — while nothing reads the
+ * buffered source twice on the page for the length of the open, while nothing reads the
  * caller's buffer after the parse (Loader.js#load hands it to `readModel`
  * and drops it). The one late reader is a failed open's error, which needs
  * only the header and the size: {@link openFailureSource} keeps those.
@@ -534,6 +536,29 @@ export function hasLegacyViewRules(search = globalThis.location?.search ?? '') {
 const MIB = 1024 * 1024
 const MS_PER_S = 1000
 /* eslint-enable no-magic-numbers */
+
+
+/**
+ * The load report's line for where the engine's index came from (§7 step
+ * 8): a persisted sidecar (no parse), or the parse, and whether that parse
+ * saved one for the next open. Absent when the open could not use one (a
+ * buffered source, no OPFS entry, the kill switch).
+ *
+ * @param {object|undefined} index the `done` packet's `index`
+ * @return {string|undefined}
+ */
+export function indexLine(index) {
+  if (!index) {
+    return undefined
+  }
+  const size = `${(index.bytes / MIB).toFixed(1)} MB`
+  if (index.source === 'sidecar') {
+    return `Engine index: from sidecar (${size}), no parse`
+  }
+  const refused = index.source === 'sidecarRejected' ? 'sidecar refused, ' : ''
+  const saved = index.saved ? `sidecar saved (${size})` : 'no sidecar saved'
+  return `Engine index: ${refused}parsed; ${saved}`
+}
 
 
 /**

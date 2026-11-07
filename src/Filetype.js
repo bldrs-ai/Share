@@ -612,7 +612,7 @@ export function classifyStepFamily(header) {
  *
  * Both of these answer a *naming* question and neither is a format oracle.
  * The one caller whose false-'ifc' was expensive — `canOpenFromStore`, gating
- * conway's IFC-only store open, where guessing 'ifc' burns a model handle and
+ * the main-thread engine's store open (IFC only there), where guessing 'ifc' burns a model handle and
  * caches a GLB with no NavTree (bldrs-ai/Share#1776) — no longer asks here.
  * It asks conway's own `ModelFormatDetector` instead; see
  * `src/loader/stepFormat.js` for why a scan like this one cannot agree with
@@ -632,7 +632,7 @@ export function stepSchemaName(header) {
   // answer from one entity and conway from the other — and on
   // `FILE_SCHEMA(('IFC4')); FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));` that is the
   // dangerous direction: we say IFC, conway says AP214, and a STEP file goes
-  // down the IFC-only store open (bldrs-ai/Share#1776).
+  // down the main-thread engine's IFC-only store open (bldrs-ai/Share#1776).
   const matches = [...section.matchAll(FILE_SCHEMA_VALUE)]
   return matches.length === 0 ? null : matches[matches.length - 1][1]
 }
@@ -690,7 +690,7 @@ function part21HeaderSection(masked) {
  *   - `/* FILE_SCHEMA(('IFC4')); *``/ FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));` is
  *     AP214 to conway. A raw-text scan finds the commented-out entity first
  *     and reports IFC — the dangerous direction, which sends a STEP file
- *     down conway's IFC-only store open and burns a model handle
+ *     down the main-thread engine's IFC-only store open and burns a model handle
  *     (bldrs-ai/Share#1776).
  *
  * The second is why this masks rather than making the gap pattern
