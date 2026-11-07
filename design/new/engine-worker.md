@@ -1141,8 +1141,9 @@ Every item needs either a merged PR or a measurement in a PR body.
 5. **No load regressions, flag off vs on.** PSB n≥3, plus SEESTRASSE and
    sp-231MB, at `RAF_THROTTLE_MS=3600000`. *Measured on #2083* (flag off
    = `?feature=disableEngineWorker`, n=2, PSB n=1, every IFC leg
-   windowed): main-thread long tasks and time to ready improve on every
-   model. Peak renderer memory is equal or lower on large models, and
+   windowed): main-thread long tasks fall on every model, and Total
+   improves from sp-231MB up (SEESTRASSE is +0.2 s, the worker's spawn).
+   Peak renderer memory is equal or lower on large models, and
    higher by the worker's floor (45–85 MB, §3) on small ones. Memory after
    load is equal, not lower, until steps 7–8 can terminate a worker. The
    table is on #2083.
