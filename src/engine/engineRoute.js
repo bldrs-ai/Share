@@ -5,8 +5,14 @@
 // below cannot disagree with the loader about where a model's engine is.
 //
 // The main-thread engine is kept permanently (§8 item 6). It serves:
-//   - `?feature=disableEngineWorker`, the per-session kill switch. Flipping
-//     `engineWorker` to false in FeatureFlags.js is the prod-wide one;
+//   - the ROLLBACK: `disableEngineWorker` set `isActive: true` in
+//     FeatureFlags.js. That, not `engineWorker: false`, is the prod-wide
+//     kill switch, because a static `true` here wins over every URL, while
+//     `isFeatureEnabled` ORs a static `false` with the URL: flipping
+//     `engineWorker` off would leave every link that still carries
+//     `?feature=engineWorker` (a pre-flip opt-in, a shared spec link) in the
+//     worker (Codex review on #2083). engine-worker.md §7.2 has the procedure;
+//   - `?feature=disableEngineWorker`, the per-session kill switch;
 //   - the legacy `?view=` rules (IfcViewsManager, `viewer/legacyViewRules.js`),
 //     which style elements through `viewer.IFC.loader.ifcManager` and so need
 //     the model open in THAT engine. The stack is due to be deleted (§8 item
@@ -16,13 +22,16 @@
 //     main-thread engine synchronously (§8 item 7: it stays there and retires
 //     with the `?feature=assist` port, ai-workspace.md §13).
 // Each is read from the URL at load time, like every other `?feature=`.
-import {isFeatureEnabled} from '../FeatureFlags'
+import {flags, isFeatureEnabled} from '../FeatureFlags'
 import {viewRules} from '../viewer/legacyViewRules'
 
 
 /** Why a load runs on the main-thread engine, by `mainThreadEngineReason`. */
 export const MainThreadReason = Object.freeze({
-  // `engineWorker` is off: FeatureFlags.js says so (the prod kill switch).
+  // `disableEngineWorker` is on in FeatureFlags.js: the prod-wide rollback,
+  // which no `?feature=` in a URL can override.
+  ROLLBACK: 'rollback',
+  // `engineWorker` is off and the URL does not opt in (the pre-flip default).
   FLAG_OFF: 'flagOff',
   // `?feature=disableEngineWorker`, this session's kill switch.
   KILL_SWITCH: 'disableEngineWorker',
@@ -39,6 +48,7 @@ export const MainThreadReason = Object.freeze({
  * why a `?view=` link loaded on the slower path reads the answer in the report.
  */
 const REASON_TEXT = {
+  [MainThreadReason.ROLLBACK]: 'the engine worker is rolled back: disableEngineWorker is on in FeatureFlags.js',
   [MainThreadReason.FLAG_OFF]: 'engineWorker is off',
   [MainThreadReason.KILL_SWITCH]: '?feature=disableEngineWorker',
   [MainThreadReason.VIEW_RULES]: '?view= rules need the main-thread engine',
@@ -62,15 +72,22 @@ export function hasLegacyViewRules(search = globalThis.location?.search ?? '') {
 
 /**
  * Why this page's next Conway load must run on the main-thread engine, or
- * `null` when it runs in an engine worker. Checked in this order, so the
- * report names the switch the user set rather than a legacy consumer that
- * happens to be on as well.
+ * `null` when it runs in an engine worker. Checked in this order: the
+ * prod rollback first, since nothing may override it, then the switches a
+ * user sets, so the report names the switch rather than a legacy consumer
+ * that happens to be on as well.
  *
  * @param {string} [search] `location.search`, for tests (the flags read the
  *   live URL, as everywhere)
  * @return {string|null} a `MainThreadReason`, or null
  */
 export function mainThreadEngineReason(search = undefined) {
+  // First, and read from the static flag alone: the rollback has to beat a
+  // `?feature=engineWorker` in the URL, which the isFeatureEnabled checks
+  // below would honour.
+  if (flags?.find((f) => f.name === 'disableEngineWorker')?.isActive) {
+    return MainThreadReason.ROLLBACK
+  }
   if (!isFeatureEnabled('engineWorker')) {
     return MainThreadReason.FLAG_OFF
   }

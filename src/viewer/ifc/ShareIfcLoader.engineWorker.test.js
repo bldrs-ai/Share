@@ -8,7 +8,7 @@ import {assembleBatchedModel} from './buildBatchedConwayModel'
 import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
 import {buildConwayIfcModel} from './buildConwayIfcModel'
 import {parseIfcWithConway} from './conwayDirectIfcLoader'
-import {isFeatureEnabled} from '../../FeatureFlags'
+import {flags, isFeatureEnabled} from '../../FeatureFlags'
 import {createEngineModelLoad} from '../../engine/engineModelLoad'
 import {getConwayDirectLogs} from '../../../tools/jest/conwayDirectLogCapture'
 
@@ -28,7 +28,10 @@ jest.mock('./flatMeshToBufferGeometry', () => ({flatMeshToBufferGeometry: jest.f
 jest.mock('./flatMeshToInstancedModel', () => ({flatMeshToInstancedModel: jest.fn()}))
 jest.mock('./parsePreviewMesh', () => ({payloadToPreviewMesh: jest.fn(() => null)}))
 jest.mock('./ifcItemsMapParity', () => ({runIfcItemsMapParityCheck: jest.fn()}))
-jest.mock('../../FeatureFlags', () => ({isFeatureEnabled: jest.fn()}))
+jest.mock('../../FeatureFlags', () => ({
+  isFeatureEnabled: jest.fn(),
+  flags: [{name: 'disableEngineWorker', isActive: false}],
+}))
 jest.mock('../../engine/engineModelLoad', () => ({
   createEngineModelLoad: jest.fn(),
   engineFormatOf: jest.requireActual('../../engine/engineModelLoad').engineFormatOf,
@@ -320,6 +323,25 @@ describe('viewer/ifc/ShareIfcLoader with ?feature=engineWorker', () => {
       expect(parseIfcWithConway).toHaveBeenCalledTimes(1)
       expect(parseIfcWithConway.mock.calls[0][1]).toBe(ifcAPI)
       expect(getConwayDirectLogs().map((l) => l.text)).toContain(note)
+    })
+
+    it('the prod rollback beats a ?feature=engineWorker link, and the report names it', async () => {
+      Object.defineProperty(window, 'location', {writable: true, value: {...originalLocation, search: '?feature=engineWorker'}})
+      // What isFeatureEnabled answers for that URL: engineWorker on.
+      isFeatureEnabled.mockImplementation((name) => name === 'demandGeometry' || name === 'engineWorker')
+      flags[0].isActive = true
+      try {
+        expect(isEngineWorkerLoad('ifc', {})).toBe(false)
+        const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
+        loader.type = 'ifc'
+        await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
+        expect(createEngineModelLoad).not.toHaveBeenCalled()
+        expect(parseIfcWithConway).toHaveBeenCalledTimes(1)
+        expect(getConwayDirectLogs().map((l) => l.text)).toContain(
+          'Engine: main thread (the engine worker is rolled back: disableEngineWorker is on in FeatureFlags.js)')
+      } finally {
+        flags[0].isActive = false
+      }
     })
 
     it('a load the worker never could have taken (a mesh format) says nothing about engines', async () => {

@@ -170,13 +170,18 @@ export const flags = [
   // for the legacy `?view=` rules and for the legacy `?feature=bot` chat,
   // both of which read the main-thread engine directly. Where module workers
   // are missing, or a worker fails to start, the same handler runs in
-  // process on this thread (spawnEngine.js). Flipping this to false is the
-  // prod-wide kill switch.
+  // process on this thread (spawnEngine.js).
+  // Do NOT roll back by setting this to false: `?feature=engineWorker` in a
+  // URL would still turn it on for that link. Roll back with
+  // `disableEngineWorker` below.
   {name: 'engineWorker', isActive: true},
   // OFF-switch for the engine worker above, same inverted shape and reason as
   // `disableStreamOpen`: `?feature=` can only turn flags ON, so
   // `?feature=disableEngineWorker` is the per-session way back to the
   // main-thread engine (parseIfcWithConway), for one A/B or one bad model.
+  // Setting it `isActive: true` here is the PROD ROLLBACK: engineRoute.js
+  // reads the static value before any URL flag, so no link can opt back into
+  // the worker (engine-worker.md §7.2, "Rolling back").
   {name: 'disableEngineWorker', isActive: false},
   // Kill switch for the engine worker's OPFS sync access handle
   // (engine-worker.md §7 step 4): read the source through the Blob store
