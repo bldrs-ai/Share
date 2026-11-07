@@ -1,7 +1,7 @@
 import {Locator, Page, expect, test} from '@playwright/test'
 import {watchEngineWorker} from '../tests/e2e/engineWorker'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
-import {waitForModelReady} from '../tests/e2e/models'
+import {setupVirtualPathIntercept, waitForModelReady} from '../tests/e2e/models'
 import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
 
 
@@ -99,6 +99,15 @@ async function waitForCameraSettled(page: Page) {
  * @param path
  */
 async function openHeldMidPump(page: Page, path: string) {
+  if (path.startsWith('/share/v/gh/')) {
+    // A GitHub model's Contents API call is MSW's to answer, but MSW's
+    // service worker can be in transition right after this full-page
+    // navigation, and under load the call then misses it and fails on the
+    // fake host ("HttpError: Failed to fetch"), so the load never starts and
+    // the hold never engages. The helper's context-level route answers it in
+    // that case, as every other spec opening these fixtures does (#2090).
+    await setupVirtualPathIntercept(page, path.split('?')[0], '')
+  }
   await page.goto(path, {waitUntil: 'domcontentloaded'})
   await page.waitForFunction(() => {
     const w = window as unknown as Record<string, unknown>

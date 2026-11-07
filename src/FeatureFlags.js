@@ -171,6 +171,10 @@ export const flags = [
   // instead, as on the main thread. `?feature=` can only turn flags on, so
   // this is phrased as the off switch.
   {name: 'disableEngineSyncHandle', isActive: false},
+  // Kill switch for the engine worker's index sidecars (engine-worker.md
+  // §7 step 8, §11; engine/engineSidecars.js): neither reopen a model from
+  // its persisted sidecar nor write one, so every open parses.
+  {name: 'disableEngineSidecar', isActive: false},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-
