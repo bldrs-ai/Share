@@ -17,9 +17,11 @@ const {beforeEach} = test
 //    owner, so only the pick's geometry tells them apart (codex on #2088).
 const OCCURRENCE_MODEL = '/share/v/p/index.step'
 const ROOT_SHELLS_MODEL = '/share/v/gh/bldrs-ai/test-models/main/step/twoRootShells.step'
+// The worker is the default engine (engine-worker.md §7 step 9); the kill
+// switch keeps the main-thread engine's leg.
 const ENGINES = [
-  {engine: 'main-thread engine', query: ''},
-  {engine: 'engine worker', query: '?feature=engineWorker'},
+  {engine: 'main-thread engine', query: '?feature=disableEngineWorker', worker: false},
+  {engine: 'engine worker', query: '', worker: true},
 ]
 const TEST_TIMEOUT_MS = 120_000
 const HELD_TIMEOUT_MS = 60_000
@@ -317,7 +319,7 @@ describeMobileAndDesktop('STEP preview picks select the occurrence', () => {
     await previewHeldAtIndex(page)
   })
 
-  for (const {engine, query} of ENGINES) {
+  for (const {engine, query, worker} of ENGINES) {
     test(`${engine}: a preview pick selects and paints its occurrence, and keeps it through the load`, async ({page}) => {
       test.setTimeout(TEST_TIMEOUT_MS)
       const engineCheck = watchEngineWorker(page)
@@ -343,9 +345,7 @@ describeMobileAndDesktop('STEP preview picks select the occurrence', () => {
       for (const row of after.painted) {
         expect(startsWith(after.occurrencePath, row.path), `painted ${row.instance} is under the occurrence`).toBe(true)
       }
-      if (query.includes('engineWorker')) {
-        await engineCheck.expectWorkerEngine()
-      }
+      await (worker ? engineCheck.expectWorkerEngine() : engineCheck.expectMainThreadEngine())
     })
 
     test(`${engine}: a root shell's preview pick paints that shell alone, and the load narrows to it`, async ({page}) => {
@@ -373,9 +373,7 @@ describeMobileAndDesktop('STEP preview picks select the occurrence', () => {
       expect(after.exact, 'the shell, not the product row').toBe(true)
       expect(after.instances).toHaveLength(1)
       expect(after.painted.map((row) => row.instance)).toEqual(after.instances)
-      if (query.includes('engineWorker')) {
-        await engineCheck.expectWorkerEngine()
-      }
+      await (worker ? engineCheck.expectWorkerEngine() : engineCheck.expectMainThreadEngine())
     })
   }
 })

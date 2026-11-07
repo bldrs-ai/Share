@@ -92,6 +92,17 @@ async function engineIndexLine(page: Page): Promise<string> {
 }
 
 
+/**
+ * @param page
+ * @return the finished load's `Engine index:` lines (none on the main thread)
+ */
+async function indexLines(page: Page): Promise<string[]> {
+  return await page.evaluate(() =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((window as any).store.getState().loadReportLines as string[]).filter((line) => line.startsWith('Engine index:')))
+}
+
+
 describeMobileAndDesktop('Engine worker: index sidecar reopen', () => {
   test.beforeEach(async ({page}) => {
     await homepageSetup(page)
@@ -103,7 +114,8 @@ describeMobileAndDesktop('Engine worker: index sidecar reopen', () => {
       test.setTimeout(3 * LOAD_TIMEOUT_MS)
       const glbLogs = captureGlbLogs(page)
       const first = watchEngineWorker(page)
-      await page.goto(`${path}?feature=engineWorker`)
+      // The worker is the default engine (engine-worker.md §7 step 9).
+      await page.goto(path)
       expect(await engineIndexLine(page)).toMatch(/^Engine index: parsed; sidecar saved \(\d+\.\d MB\)$/)
       await first.expectWorkerEngine()
       expect(await dropGlbArtifact(page, glbLogs), 'the worker load cached one artifact').toBe(1)
@@ -117,10 +129,34 @@ describeMobileAndDesktop('Engine worker: index sidecar reopen', () => {
     })
   }
 
+  // The main-thread engine (the engine worker's kill switch) has no index
+  // sidecar: each open parses, on that engine, and the report has no
+  // `Engine index:` line, on the first load or on the reopen.
+  for (const {name, path} of MODELS) {
+    test(`a ${name} on the main-thread engine parses on every open and saves no sidecar`, async ({page}) => {
+      test.setTimeout(3 * LOAD_TIMEOUT_MS)
+      const glbLogs = captureGlbLogs(page)
+      const first = watchEngineWorker(page)
+      await page.goto(`${path}?feature=disableEngineWorker`)
+      await waitForModelReady(page, LOAD_TIMEOUT_MS)
+      await first.expectMainThreadEngine()
+      expect(await indexLines(page)).toEqual([])
+      expect(await dropGlbArtifact(page, glbLogs), 'the main-thread load cached one artifact').toBe(1)
+
+      resetGlbLogs(glbLogs)
+      const reopen = watchEngineWorker(page)
+      await page.reload()
+      await waitForModelReady(page, LOAD_TIMEOUT_MS)
+      await reopen.expectMainThreadEngine()
+      expect(await indexLines(page)).toEqual([])
+      expect(glbLogs.some((line) => line.includes('cache MISS')), 'the reopen went to the engine').toBe(true)
+    })
+  }
+
   test('with the kill switch every open parses and nothing is saved', async ({page}) => {
     test.setTimeout(3 * LOAD_TIMEOUT_MS)
     const glbLogs = captureGlbLogs(page)
-    await page.goto('/share/v/p/index.step?feature=engineWorker,disableEngineSidecar')
+    await page.goto('/share/v/p/index.step?feature=disableEngineSidecar')
     await waitForModelReady(page, LOAD_TIMEOUT_MS)
     await dropGlbArtifact(page, glbLogs)
     await page.reload()

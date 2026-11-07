@@ -257,6 +257,8 @@ export interface MeasureOptions {
 const DEFAULT_OUT_DIR = 'tools/measure'
 const DEFAULT_ITERATIONS = 1
 const DEFAULT_TIMEOUT_MS = 120_000
+// How often the page is polled for the ready transition the CPU window closes on.
+const READY_POLL_MS = 50
 const MS_PER_SECOND = 1000
 const BYTES_PER_KB = 1024
 const BYTES_PER_MB = BYTES_PER_KB * BYTES_PER_KB
@@ -522,6 +524,16 @@ async function measureOnce(page: Page, options: MeasureOptions, iteration: numbe
     // The shared helper's own 15 s default is sized for fixture specs; a
     // measurement run is exactly the case that outgrows it (a big model, a
     // throttled CPU), so the caller's budget wins.
+    // Close the CPU window at the ready transition itself. `waitForModelReady`
+    // detects it through `toHaveAttribute`, whose retry interval grows to a
+    // second, so on a load that runs past its early polls the sample could
+    // land up to a second late, past loadTiming.spec.ts's settle-wait bound
+    // (seen in 1 run in 3 with the engine in a worker, engine-worker.md §7
+    // step 9). A 50 ms page-side poll keeps the sample at the transition.
+    await page.waitForFunction(
+      () => document.querySelector('[data-testid="cadview-dropzone"]')?.getAttribute('data-model-ready') === 'true',
+      null, {polling: READY_POLL_MS, timeout: options.timeoutMs ?? DEFAULT_TIMEOUT_MS})
+    await sampleCpuEnd()
     await waitForModelReady(page, options.timeoutMs ?? DEFAULT_TIMEOUT_MS, sampleCpuEnd)
   } catch (e) {
     ok = false

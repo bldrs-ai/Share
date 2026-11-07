@@ -757,16 +757,14 @@ the only thing left that users would see.
   model's index sidecar, and the next open of the same file comes up from
   it without a parse.
 
-**In flight.** Nothing in this chain.
+**In flight.** Step 9, the flip itself (#2083, draft): `engineWorker`
+on by default, the `disableEngineWorker` kill switch and prod rollback, and
+the `?view=` and legacy `?feature=bot` routes to the main-thread engine
+(`engine/engineRoute.js`). #2061 is explained (§7.1).
 
-**Flip gates (step 9).** §7.2 is the list, each item needing a merged PR
-or a measurement in a PR body.
-1. #2061: the 350 MB worker JS heap on sp-231MB, explained and fixed or
-   accepted (needs a heap snapshot).
-2. Flip prep: the kill switch checked in a real browser, the `?view=`
-   rules stack deleted or its fallback settled, and the flag-on E2E suite
-   green as the default.
-3. A real-GPU check, plus Safari and Firefox by hand.
+**Flip gates (step 9).** §7.2 is the list. What is left is the human's:
+a real-GPU check, plus Safari and Firefox by hand, on #2083's deploy
+preview. #2083 is not merged before that.
 
 **Next after the flip.**
 - STEP convergence in conway (§11): the STEP index sidecar and windowed
@@ -1007,7 +1005,7 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 | 5 — GLB capture in the worker | merged (#2081), after #2073 (#2038: the capture dropped every record a windowed source did not have resident). n=1 each, flag off → on, `RAF_THROTTLE_MS=3600000`, persistent profile. PSB: time to artifact 171.6 → 118.9 s; the writer 38.1 → 31.0 s, of which the worker's capture is 7.6 s; main-thread long tasks before ready 536 (81.6 s) → 35 (13.7 s), and during the write 71 (7.85 s, max 624 ms) → 4 (0.43 s, max 208 ms); page heap (`performance.memory`) at the end 1,127 → 522 MB, sampled peak 1,766 → 848 MB; the worker's JS heap peaked at 140 MB, beside 899 MB of wasm. 58 MB STEP: time to artifact 47.6 → 43.2 s; writer 7.6 → 6.8 s, capture 2.5 s; long tasks before ready 292 (35.8 s) → 10 (3.6 s), during the write 4 (0.35 s) → 1 (0.07 s); page heap at the end 688 → 148 MB; worker JS heap peak 322 MB beside 515 MB of wasm. **Byte identity:** after the batch colour column became float64 (step 5 above), the two engines' whole PSB artifacts are identical, 86,341,686 B each with one SHA-256 (re-measured 2026-11-06, n=1 per side, on a less loaded machine: time to artifact 68.6 → 58.9 s, long tasks before ready 222 (27.8 s) → 13 (6.7 s)). Review fixes: protocol v2, so a stale cached worker without `capture` is refused at hello and the load runs in process (§4); `close()` waits for a spill still in flight before it decides whether to close politely |
 | 8 (part) — index sidecar reopen | Share#2085: a worker load from an OPFS entry saves conway's index sidecar, and the next open of the same entry opens from it instead of parsing, IFC and STEP alike (`engine/engineSidecars.js`). Eviction itself is still deferred. The reopen runs conway's full source check, which the owner chose over the sampled one. Measured with it: on the 58 and 106 MB STEP models, Parsing goes from 1.3–1.8 s and 2.6–2.8 s to 0.31–0.39 s and 0.65–0.70 s, and the tree arrives 2.1–3.3 s and 2.9–3.7 s sooner (§11) |
 | 7, 8 | deferred; only in-app switching needs them |
-| 9 | not started; gated on #2061 and the §7.2 flip prep. Step 5 is merged; #2070 is closed: its Properties panel cost is fixed by #2074 |
+| 9 | in flight (#2083, draft): default on, the kill switch and rollback, the main-thread routes. #2061 explained (below). Waits on the real-GPU, Safari and Firefox checks |
 
 **Picking during the pump (#2084).** The durable batches are pickable from
 the row they are written, on both engines (§11, "Pick during the pump").
@@ -1027,9 +1025,34 @@ ready, so the gain needs the worker (step 9).
 
 **Known issues.**
 
-- **#2061: worker JS heap on sp-231MB.** The engine worker holds about
-  350 MB of live JS heap after an sp-231MB load, against 65 MB for PSB.
-  This is unexplained (it needs a heap snapshot) and gates step 9.
+- **#2061: worker JS heap on sp-231MB. Explained: a measurement
+  artifact.** The 350 MB was the heap before a collection took effect,
+  not live data. Measured again on #2081's merge and on #2058's own
+  commit (b0feb246), with `HeapProfiler.collectGarbage` awaited before
+  each `Runtime.getHeapUsage`:
+  - after an sp-231MB load the worker holds **56.5 MB** of live JS heap,
+    at 0.3, 3, 10 and 30 s after ready, on the sync handle and on the
+    Blob store alike;
+  - the un-collected heap sampled during the load peaks at 343–361 MB,
+    which is the old figure.
+  A heap snapshot after the load (sp-231MB, 2.0M nodes) holds 727 MB in
+  all, of which 662 MB is ArrayBuffer backing stores, outside
+  `usedSize`. That is 515 MB of wasm memory plus the conway model's
+  typed-array columns. The model retains 186 MB:
+  - the windowed provider's 64 MB of resident chunks;
+  - about 40 MB of record-index columns (2.6M records);
+  - a 20.7 MB express-ID map;
+  - 16 MB of `demandAggregates_` still held after the pump ends, the one
+    part that looks droppable (a conway ask);
+  - a 4.4 MB type index.
+  So `ENGINE_JS_BYTES_PER_SOURCE_BYTE` (§5.2) needs no outlier allowance
+  for IFC. STEP is the exception. Measured before #2085, when a STEP was
+  still opened buffered and resident: its worker held 286 MB of live JS
+  heap after a 111 MB STEP load (229 MB at ready). The same state sat on
+  the page with the flag off (page heap at the end 327 MB), so it moved
+  rather than grew. #2085 has since made the STEP open windowed. Its peak
+  is unchanged (#2085's measurement), and the heap after load has not
+  been measured again.
 - **#2070: each engine round trip waits behind a main-thread frame. Fixed
   for the Properties panel (#2074); the general cost stays.** A worker
   reply is a main-thread task, so with the render loop running it waits
@@ -1127,39 +1150,67 @@ Every item needs either a merged PR or a measurement in a PR body.
    mobile E2E. Met: step 5 merged last (#2081). Steps 7–8 are deferred (they serve
    in-app switching, not the flip), so the memory-after-evict check in
    item 5 waits with them.
-2. **The `?view=` rules stack deleted** (§8 item 7). WidgetApi's
-   `ChangeViewSettingsEventHandler` is migrated first. Legacy
-   `?feature=bot` stays on the main-thread engine and refuses clearly
-   under the worker (in place since #2058).
-3. **#2061 explained and fixed or accepted.** That is the 350 MB worker
-   JS heap after an sp-231MB load. It needs a heap snapshot, and its
-   number goes against the §5.2 budget.
+2. **The `?view=` rules stack: settled by routing, not deleted (#2083).**
+   A load whose URL names a known `?view=` rule set runs on the
+   main-thread engine (`engine/engineRoute.js`), where IfcViewsManager
+   reads it, and the report says so (`Engine: main thread (?view= rules
+   need the main-thread engine)`). Legacy `?feature=bot` routes the same
+   way. Deleting the stack (§8 item 7, WidgetApi's
+   `ChangeViewSettingsEventHandler` first) is now a cleanup, not a gate.
+3. **#2061 explained. Met:** a measurement artifact, 56.5 MB live after
+   GC (§7.1).
 4. **#2070 fixed. Met, by #2074.** One round trip per Properties table: a
    `propertyTables` op that runs in the worker, applying the depth limit
    and `MAX_ARRAY_MEMBERS` there so it returns only what renders. What
    stays is the general cost of a frame-bound round trip for any other
    sequential read (§7.1); it does not gate the flip.
 5. **No load regressions, flag off vs on.** PSB n≥3, plus SEESTRASSE and
-   sp-231MB, at `RAF_THROTTLE_MS=3600000`:
+   sp-231MB, at `RAF_THROTTLE_MS=3600000`. *Measured on #2083* (flag off
+   = `?feature=disableEngineWorker`, n=2, PSB n=1, every IFC leg
+   windowed): main-thread long tasks fall on every model, and Total
+   improves from sp-231MB up (SEESTRASSE is +0.2 s, the worker's spawn).
+   Peak renderer memory is equal or lower on large models, and
+   higher by the worker's floor (45–85 MB, §3) on small ones. Memory after
+   load is equal, not lower, until steps 7–8 can terminate a worker. The
+   table is on #2083.
    - main-thread long tasks over 50 ms, time to index, Geometry, Total;
    - memory after evict (the #2023 E2E; with step 8);
    - each windowed leg checked to have actually run windowed (its
      `Engine source I/O:` line present), with a persistent profile, since
      an incognito-like context's small OPFS quota silently falls back to
      a buffered open.
-6. **The kill switches work in a real browser:**
+6. **The kill switches work in a real browser.** Met in headless
+   Chromium (`engine/engineRoute.spec.ts`, desktop and mobile); the human's
+   browser check is item 7:
    - `?feature=disableEngineWorker` puts the main-thread engine back;
    - the in-process fallback runs when a worker cannot start (unit-tested
-     since #2058; one E2E with `Worker` stubbed to throw);
+     since #2058; the E2E stubs `Worker` to throw for `Engine.worker.js`);
    - `disableEngineSyncHandle` puts the Blob store back (step 4).
 7. **Other browsers checked by hand.** Safari and Firefox: module workers,
    `createSyncAccessHandle({mode: 'read-only'})` or its Blob fallback, and
    one model opening end to end with properties. Recorded in the step-9
    PR.
-8. **The flag-on E2E suite green** as the default:
+8. **The flag-on E2E suite green** as the default. Met locally on #2083
+   (477 passed). The few failures were flakes, an environment issue, and a
+   pre-existing previewInteraction flake on both engines; #2083 lists them:
    - navTreeAtIndex, previewInteraction, engineIfcLoad, engineSyncHandle;
    - PropertiesNestedRefs, the STEP specs from step 6;
    - batchedGlbCache, the cache hit after a worker load (step 5).
+
+**Rolling back** (since step 9, #2083). Where a load's engine runs is one
+decision, `engine/engineRoute.js#mainThreadEngineReason`.
+- *Prod-wide:* set `disableEngineWorker` to `isActive: true` in
+  `FeatureFlags.js` and deploy. The route reads that static value before any
+  URL flag, so every load goes to the main-thread engine, including links
+  that still carry `?feature=engineWorker`. Its report line says
+  `Engine: main thread (the engine worker is rolled back: …)`.
+- *Not* `engineWorker: false`. `isFeatureEnabled` ORs a static flag with
+  the URL, so that would leave every `?feature=engineWorker` link in the
+  worker (Codex review on #2083).
+- *One session:* `?feature=disableEngineWorker`.
+- `?view=` rule sets and the legacy bot chat (`?feature=bot`, or a `#bot:`
+  permalink, which opens it without the flag) route to the main-thread
+  engine on their own, since both read it directly.
 
 ## 8. Decisions (2026-11-03)
 

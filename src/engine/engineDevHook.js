@@ -4,7 +4,8 @@ import {spawnEngineSession} from './spawnEngine'
 /**
  * Install `window.__bldrsEngine`, for Playwright and the console to drive
  * engine sessions before any load goes through them (engine-worker.md §7
- * step 2). CadView installs it only under `?feature=engineWorker`.
+ * step 2). CadView installs it only when the URL names `?feature=engineWorker`
+ * (the flag itself is on by default since §7 step 9).
  *
  * Sessions stay in this module, keyed by a small integer handle, because a
  * session object cannot cross `page.evaluate`; every result here is plain

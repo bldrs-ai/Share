@@ -11,8 +11,10 @@ import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
  * IfcGridAxis entities, which have no GlobalId, so deref resolves each to an
  * entity object, and the panel handed that array to React as children (React
  * #31), which the root ErrorBoundary turned into the application error page.
- * Engine-independent; first seen under `?feature=engineWorker` on a large
- * model. The fixture is box.ifc plus one two-axis grid.
+ * Engine-independent; first seen under `?feature=engineWorker` (on by default
+ * since engine-worker.md §7 step 9) on a large model, so both engines are
+ * run, the main-thread one through the kill switch. The fixture is box.ifc
+ * plus one two-axis grid.
  */
 const MODEL = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/grid-axes.ifc'
 const GRID_ID = 9010
@@ -22,8 +24,8 @@ const APP_ERROR_TEXT = 'Oh no!'
 const GRID_AXIS_TYPE = 'Gridaxis'
 const PROXY_ONLY_TEXT = 'sample proxy'
 const ENGINES = [
-  {name: 'main-thread engine', query: ''},
-  {name: 'engine worker', query: '?feature=engineWorker'},
+  {name: 'main-thread engine', query: '?feature=disableEngineWorker', worker: false},
+  {name: 'engine worker', query: '', worker: true},
 ]
 
 
@@ -83,7 +85,7 @@ describeMobileAndDesktop('Properties: an element whose references resolve to ent
     await setupVirtualPathIntercept(page, MODEL, '')
   })
 
-  for (const {name, query} of ENGINES) {
+  for (const {name, query, worker} of ENGINES) {
     test(`${name}: the selected grid's properties open in the panel, and the app stays up`, async ({page}) => {
       const errors = collectPageErrors(page)
       const engine = watchEngineWorker(page)
@@ -98,9 +100,7 @@ describeMobileAndDesktop('Properties: an element whose references resolve to ent
       await expect(panel.getByText('A', {exact: true}).first()).toBeVisible()
       await expect(page.getByText(APP_ERROR_TEXT)).toHaveCount(0)
       expect(errors).toEqual([])
-      if (query) {
-        await engine.expectWorkerEngine()
-      }
+      await (worker ? engine.expectWorkerEngine() : engine.expectMainThreadEngine())
     })
   }
 
