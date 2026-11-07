@@ -21,8 +21,12 @@
 // columns, then a `done` packet), with a failed open classified here, where
 // conway's statistics are (§2.4 G3); the async reads (`tree`, `props`,
 // `propertySets`, `itemsOfType`, and the Properties panel's `propertyTables`);
-// and `pump` pause/run and `abort`. The GLB capture job comes in step 5.
+// `pump` pause/run and `abort`; and the GLB writer's two jobs (§7 step 5):
+// `capture`, which runs the writer's engine captures here as one job, and
+// `spill`, which then releases a resident source to windows over its OPFS
+// File.
 import {resolvePropertyTables, schemaTypeName} from '../Components/Properties/propertyTable'
+import {captureEngineExtensions, ifcManagerOver} from '../loader/glbEngineCapture'
 import {classifyOpenFailure, openDeferred} from '../loader/conwayOpen'
 import {ENGINE_PROTOCOL_VERSION, Ev, Op, serializeError} from './protocol'
 import {openSourceStore} from './engineSources'
@@ -342,6 +346,73 @@ export function createEngineHandler({
     [Op.CLOSE]() {
       dispose()
       return true
+    },
+
+    async [Op.CAPTURE]({geometryExpressIds = null} = {}) {
+      requireModel()
+      const t0 = now()
+      // The same job glbExport.js runs over a main-thread engine, over this
+      // one, so the two artifacts cannot drift (glbEngineCapture.js). It
+      // yields with this handler's tick, not `scheduler.yield()`, so a
+      // Properties read that arrives mid-sweep is served in turn.
+      const captured = await captureEngineExtensions(ifcManagerOver(api), modelID,
+        {geometryExpressIds, yieldToLoop})
+      // The container is the one large field (~7 MB on PSB): transferred, not
+      // cloned. The writer hands back a fresh array over its own buffer; a
+      // view into a larger one is copied first, since transferring it would
+      // take the rest of that buffer too.
+      let elementProperties = captured.elementProperties
+      if (elementProperties && (elementProperties.byteOffset !== 0 ||
+          elementProperties.byteLength !== elementProperties.buffer.byteLength)) {
+        elementProperties = elementProperties.slice()
+      }
+      return new Transferred({
+        spatialTree: captured.spatialTree,
+        elementProperties,
+        geometryItemIdentities: captured.geometryItemIdentities,
+        captureMs: now() - t0,
+        wasmBytes: wasmBytesOf(api),
+      }, elementProperties ? [elementProperties.buffer] : [])
+    },
+
+    async [Op.SPILL]({file = null} = {}) {
+      requireModel()
+      if (sourceStore !== null) {
+        // Windowed already (a store-backed open): conway reads through the
+        // store this session holds, and a second one would only replace a
+        // sync access handle with whatever this open finds.
+        return {spilled: false, reason: 'windowed', source: sourceSummary()}
+      }
+      if (typeof api.SpillModelSource !== 'function' || typeof file?.slice !== 'function') {
+        return {spilled: false, reason: 'unsupported', source: sourceSummary()}
+      }
+      const engine = api
+      const opened = await openSourceStore({file},
+        {allowSyncHandle: !flags.disableEngineSyncHandle, now, ...sourceOptions})
+      if (disposed) {
+        opened.store.close()
+        throw new Error('engine: closed during spill')
+      }
+      let spilled = false
+      let reason = null
+      try {
+        // conway checks the store's byteLength against the parsed source and
+        // throws BEFORE swapping providers, so a mismatched File degrades to
+        // "kept resident", never to wrong bytes (opfsSourceByteStore.js).
+        // eslint-disable-next-line new-cap
+        spilled = engine.SpillModelSource(modelID, opened.store) === true
+      } catch (e) {
+        reason = e?.message ?? String(e)
+      }
+      if (spilled) {
+        // Kept for the session, as an open's store is: later reads page from
+        // it, and a sync access handle's OPFS lock is released in dispose().
+        sourceStore = opened.store
+        sourceFallback = opened.fallbackReason
+      } else {
+        opened.store.close()
+      }
+      return {spilled, reason, source: sourceSummary(), wasmBytes: wasmBytesOf(api)}
     },
   }
 
@@ -713,8 +784,14 @@ export function createEngineHandler({
       return
     }
     let reply
+    let transfer
     try {
-      reply = {re: msg.id, ok: true, result: await op(msg.args)}
+      let result = await op(msg.args)
+      if (result instanceof Transferred) {
+        transfer = result.transfer
+        result = result.result
+      }
+      reply = {re: msg.id, ok: true, result}
     } catch (e) {
       reply = {re: msg.id, ok: false, error: serializeError(e)}
     }
@@ -723,10 +800,26 @@ export function createEngineHandler({
     // session, and the Logger errors that explain the failure would
     // otherwise die with it (review on #2058). Cheap when empty.
     flushLog()
-    send(reply)
+    send(reply, transfer)
   }
 
   return {handle, dispose}
+}
+
+
+/**
+ * An op's result together with the buffers its reply transfers rather than
+ * clones. Only the handler sees it: the reply carries `result` alone.
+ */
+class Transferred {
+  /**
+   * @param {object} result
+   * @param {Array<ArrayBuffer>} transfer
+   */
+  constructor(result, transfer) {
+    this.result = result
+    this.transfer = transfer
+  }
 }
 
 

@@ -1,8 +1,9 @@
 # Per-model engine worker — one Conway engine per model, in its own Web Worker (open-205)
 
 **Status:** decided 2026-11-03 (§8); being built behind
-`?feature=engineWorker` in the §7 order. Steps 1–3 and 6 have landed: IFC
-and STEP both load in the worker.
+`?feature=engineWorker` in the §7 order. Steps 1–6 have landed: IFC
+and STEP both load in the worker, and a worker load writes the GLB
+artifact (step 5, #2081). Step 9 (default on) is next.
 **Epic:** `open-205` (#2011). Story: #2053. Absorbs #2031 (close and
 eviction): with an engine in a worker, terminating the worker *is* the
 eviction.
@@ -471,9 +472,19 @@ Share at the pin):
 ## 4. Protocol
 
 One worker per model session, one `MessagePort` (the worker's own). Every
-message carries `v: 1` and the session's `epoch` (bumped on every respawn,
-so a late message from a terminated or replaced worker is dropped by
-construction, not by a guard).
+message carries `v` (`ENGINE_PROTOCOL_VERSION`, 2 since step 5) and the
+session's `epoch` (bumped on every respawn, so a late message from a
+terminated or replaced worker is dropped by construction, not by a guard).
+
+**Version or capability.** The version goes up when the page starts to
+*need* an op an older worker lacks: `hello` then names the old version, the
+page refuses the stale cached `Engine.worker.js` before it instantiates its
+wasm, and the load runs in process (§8 item 6). v2 added `capture` and
+`spill`. They are not capabilities, because the main thread holds no engine
+to capture with: a worker without `capture` could never write a worker
+load's GLB artifact (Codex on #2081). An op the page can do without is an
+`init` capability instead, such as `propertyTables`, whose tables the page
+otherwise resolves itself.
 
 **Requests** (main → worker) get one reply `{re: id, ok, result | error}`:
 
@@ -486,8 +497,9 @@ construction, not by a guard).
 | `props` | `{ids, recursive, psets}` | records, in `ids` order (batched: one message for N ids) |
 | `propertyTables` | `{tables: [{record, isPset}]}` | the Properties panel's tables, resolved next to the engine by `propertyTable.js` and cut to what renders (#2070, §7.1); offered only when `init`'s `capabilities.propertyTables` says so |
 | `itemsOfType` | `{type, verbose}` | ids |
-| `capture` | `{geometryIds, properties, spatialTree, faceIds}` | packed containers, transferred |
-| `release` | `{entityCache} \| {spill: true} \| {geometry: true}` | bool |
+| `capture` | `{geometryExpressIds}` (the STEP merged layout's ids, else null) | `{spatialTree, elementProperties, geometryItemIdentities, captureMs, wasmBytes}`; the properties container transferred (§7 step 5) |
+| `spill` | `{file}`: the OPFS File the model was parsed from | `{spilled, reason, source}`; `reason: 'windowed'` for a store-backed open, which has nothing resident to release. A spill through a sync access handle takes the entry's lock, so `EngineSession#close` waits for a spill still in flight before it decides whether to close politely (Codex on #2081) |
+| `release` | `{entityCache} \| {geometry: true}` | bool |
 | `abort` | — | ack; the pump stops at the next batch boundary |
 | `stats` | — | `wasmBytes`, resident window bytes, I/O counters |
 
@@ -510,7 +522,7 @@ straight to whoever builds the scene: the main thread today, a render
 worker later (§9). Without it, events go to the worker's own port. With
 it, the host's budget accounting still runs on the control port (§9).
 
-**Not in v1:** document writes (the op log, model-edit.md L1). They slot
+**Not in v2:** document writes (the op log, model-edit.md L1). They slot
 in as more ops without changing the shape. The index-sidecar export
 (conway#756) arrives with eviction (§7 step 8) as an `exportIndex` op.
 
@@ -530,7 +542,8 @@ session.propertySets(id)
 session.propertyTables(tables)  // the panel's tables, one request (§7.1, #2070)
 session.itemsOfType(type)
 session.typeName(code)    // sync: conway's static IfcTypesMap, imported main-side
-session.capture(opts)     // GLB writer job
+session.capture(opts)     // GLB writer's engine captures, one job
+session.spill(file)       // release a resident source to OPFS windows
 session.close()           // abort + terminate
 ```
 
@@ -713,10 +726,10 @@ are not re-minted by an engine respawn because the scene is not rebuilt.
 
 ## 7. Migration plan
 
-### Resume here (2026-11-04)
+### Resume here (2026-11-06)
 
 Picking `open-205` back up after a break? Read this, then §7.1 (numbers)
-and §7.2 (step-9 criteria). Docs #2064 and #2068 are merged.
+and §7.2 (step-9 criteria). Docs #2064, #2068 and #2071 are merged.
 
 **Release goal.** `?feature=engineWorker` on by default. That is step 9,
 the only thing left that users would see.
@@ -732,24 +745,21 @@ the only thing left that users would see.
   Closes #2070 and #2066.
 - #2073 (#2038): GLB export capture through conway's file-order readers.
 - #2079 (#2075).
+- #2080: the conway `1.1636.766` pin, together with #2069.
+- Step 5, the GLB capture in the worker (#2081): a worker load writes the
+  same artifact, byte for byte, as a main-thread one (PSB checked whole,
+  §7.1). Protocol v2 (§4). This was the last code blocker for the flip.
 
-**In flight.**
-- Step 5's draft PR: the GLB capture in the worker. A worker load writes
-  no cache artifact yet, so every reopen misses the GLB cache. This is the
-  flip blocker.
-- #2080: the conway `1.1636.766` pin, together with #2069 (the pin needs
-  it).
-- #2071: this section and §7.2.
+**In flight.** Nothing in this chain.
 
 **Flip gates (step 9).** §7.2 is the list, each item needing a merged PR
 or a measurement in a PR body.
-1. Step 5 merged.
-2. #2061: the 350 MB worker JS heap on sp-231MB, explained and fixed or
+1. #2061: the 350 MB worker JS heap on sp-231MB, explained and fixed or
    accepted (needs a heap snapshot).
-3. Flip prep: the kill switch checked in a real browser, the `?view=`
+2. Flip prep: the kill switch checked in a real browser, the `?view=`
    rules stack deleted or its fallback settled, and the flag-on E2E suite
    green as the default.
-4. A real-GPU check, plus Safari and Firefox by hand.
+3. A real-GPU check, plus Safari and Firefox by hand.
 
 **Next after the flip.**
 - STEP convergence in conway (§11): the STEP index sidecar (conway#757),
@@ -835,6 +845,74 @@ or a measurement in a PR body.
    spatial tree, face ids), then spill and release worker-side, then the
    flag's cache write turns on. E2E: `batchedGlbCache.spec.ts` under the
    flag (cache hit after a worker load opens with properties).
+   *As built* (#2053 step 5, for IFC and STEP alike):
+   - **One capture job, one copy of the code.** The writer's engine
+     captures — the spatial tree with its names, the element-properties
+     container, and STEP's geometry-identity table — are
+     `loader/glbEngineCapture.js#captureEngineExtensions`. A main-thread
+     load runs it over `viewer.IFC.loader.ifcManager`, as before. A worker
+     load runs it inside the worker, as the `capture` op, over the worker's
+     own engine (`ifcManagerOver(api)`), and gets the result back in one
+     reply with the container transferred. `glbExport.js#exportAndCacheGlb`
+     takes it as its `capture` argument. Everything else in the artifact
+     (geometry, instance tables, title, coordination frame) comes from the
+     main-side scene, which a worker load builds the same way, so the
+     writer did not otherwise change.
+   - **The split it needed.** The capture used to live in
+     `bldrsElementProperties.js` with the GLTFLoader reader, which imports
+     the store (for its legacy-format alert); the store touches `window` at
+     import, which would kill the worker at evaluation. The capture and the
+     wire format moved to `bldrsElementPropertiesCapture.js`; the reader
+     stayed. `engine/engineWorkerImports.test.js` asks esbuild for the
+     worker bundle's real import graph and fails on any store, React, MUI,
+     three or `.jsx` module in it.
+   - **Yield.** In the worker the element-properties sweep gives the event
+     loop a turn with the handler's own tick (`yieldToEventLoop`), not
+     `scheduler.yield()`, whose continuation would go ahead of the page's
+     queued requests and hold a Properties read until the sweep ended.
+   - **Spill.** The writer's `finally` sends `spill {file}` with the OPFS
+     File the model came from, as a main-thread load calls
+     `spillModelSource`. A windowed open (an OPFS IFC) already reads through
+     its store and answers `windowed`. A buffered one (every STEP, and an
+     IFC whose windowed open fell back) is released to windows over a store
+     the worker opens on that File through `openSourceStore`: the read-only
+     sync access handle where it can be had, so it takes the same OPFS lock
+     as step 4's windowed open, and `EngineSession#spill` records the kind
+     so `close()` releases it politely.
+   - **Release.** The worker's native geometry is still released at load
+     end, not in the writer's `finally`: the writer reads geometry from the
+     scene, and the engine only for properties.
+   - **A failed capture writes nothing.** If the `capture` request rejects
+     (the session closed under the idle writer), the write is skipped: an
+     artifact without its properties would serve an empty Properties panel
+     to every later cache hit. Each capture's own soft failure is still a
+     null, as on the main thread.
+   - **The colour column is float64.** Comparing the two engines'
+     artifacts for PSB byte for byte found the captured extensions
+     identical (`BLDRS_spatial_tree`, and the 7,458,553 B
+     `BLDRS_element_properties` container, which is also main's resident
+     capture). The one difference was colour: the batch encoder
+     (`engineStream.js`) sent placement colours as float32, while the
+     main-thread engine hands conway's doubles to the builder as they are,
+     so a worker load's materials and instance tables differed in the 8th
+     digit (`0.21586050010324417` vs `0.21586052771560016`; 4 B on 86 MB).
+     The column is now float64, which costs 16 B per placement (about
+     375 KB on PSB).
+   - **#2038 first.** The capture's sync `getLine` dropped every record
+     outside the resident windows of a windowed source, and every worker IFC
+     load is windowed. #2073 fixed that first, for both engines.
+   - **Memory.** The `capture` reply carries `wasmBytes`, like every reply
+     the budget reads (§5.2). The capture's own transient JS heap is not
+     part of the estimate; it is measured below.
+   E2E: `engine/engineGlbCapture.spec.ts`, desktop and mobile, IFC and
+   STEP. It loads the model on the main-thread engine and keeps its
+   artifact, then clears OPFS and loads it in the worker
+   (`watchEngineWorker`), and requires the same artifact byte for byte.
+   It then exports it as Pro and checks that the file carries the tree and
+   the properties, and reloads it as a cache hit whose Properties come from
+   the artifact. The cache hit's reference rows rendering `null` (#2066) is
+   a known issue there, not asserted.
+
 6. **STEP in the worker.** Buffered source transfer, the occurrence-path
    column, `includeSolids`. E2E: `indexStepLogo`, `stepVisibility` under the
    flag.
@@ -872,8 +950,8 @@ or a measurement in a PR body.
    `stepVisibility.spec.ts` (eye, Isolate and its reopened link, scene
    pick) and `assistTools.spec.ts` (isolate in a root-only file, which needs
    the empty path), desktop and mobile.
-   Left for later, for both formats: the GLB cache write (step 5; a STEP
-   worker load writes none either), and for STEP only a windowed open
+   Left for later: the GLB cache write for both formats (step 5, above);
+   and, for STEP only, a windowed open
    (conway's store-backed open is IFC-only) and an index sidecar
    (conway#757), so a STEP is resident in its worker and re-parses on
    reopen.
@@ -919,9 +997,9 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 | 3 — IFC load in the worker | merged (#2058). PSB, n=3, flag off → on: main-thread long tasks over 50 ms 418 → 23, time blocked 63 → 12 s, Geometry 48.3 → 40.6 s, Total 94.8 → 83.3 s, page heap after load 2130 → 889 MB (the worker's own JS heap 65 MB). Buffered tree-at-index: SEESTRASSE 8.05 → 4.60 s, sp-231MB 37.4 → 11.9 s |
 | 4 — sync-access-handle source | merged (#2072). Measured flag on, Blob store vs read-only sync handle, at medians: PSB (n=3) source I/O 19.1 → 3.8 s, Parsing 28.3 → 20.2 s, time to index 44.2 → 35.8 s, Total 96.5 → 82.9 s; sp-231MB (n=2) I/O 8.5 → 2.1 s, Parsing 14.0 → 9.9 s, Total 64.8 → 60.1 s; SEESTRASSE (n=1) I/O 0.32 → 0.07 s, Total flat. Geometry, main-thread long tasks and page heap unchanged. Every leg was windowed, checked by its `Engine source I/O:` line, in a persistent profile. Caveat: the Blob store's per-read time includes event-loop wait as well as I/O (each read is an async round trip), so the I/O figures are not pure I/O. The wall-clock stages (Parsing, time to index, Total) carry the claim |
 | 6 — STEP in the worker | merged (#2067). A STEP is opened buffered (conway's store-backed open is IFC-only), so step 4's source store does not apply to it |
-| 5 — GLB capture in the worker | in flight (the flip blocker): #2073 (export capture completeness) is its groundwork |
+| 5 — GLB capture in the worker | merged (#2081), after #2073 (#2038: the capture dropped every record a windowed source did not have resident). n=1 each, flag off → on, `RAF_THROTTLE_MS=3600000`, persistent profile. PSB: time to artifact 171.6 → 118.9 s; the writer 38.1 → 31.0 s, of which the worker's capture is 7.6 s; main-thread long tasks before ready 536 (81.6 s) → 35 (13.7 s), and during the write 71 (7.85 s, max 624 ms) → 4 (0.43 s, max 208 ms); page heap (`performance.memory`) at the end 1,127 → 522 MB, sampled peak 1,766 → 848 MB; the worker's JS heap peaked at 140 MB, beside 899 MB of wasm. 58 MB STEP: time to artifact 47.6 → 43.2 s; writer 7.6 → 6.8 s, capture 2.5 s; long tasks before ready 292 (35.8 s) → 10 (3.6 s), during the write 4 (0.35 s) → 1 (0.07 s); page heap at the end 688 → 148 MB; worker JS heap peak 322 MB beside 515 MB of wasm. **Byte identity:** after the batch colour column became float64 (step 5 above), the two engines' whole PSB artifacts are identical, 86,341,686 B each with one SHA-256 (re-measured 2026-11-06, n=1 per side, on a less loaded machine: time to artifact 68.6 → 58.9 s, long tasks before ready 222 (27.8 s) → 13 (6.7 s)). Review fixes: protocol v2, so a stale cached worker without `capture` is refused at hello and the load runs in process (§4); `close()` waits for a spill still in flight before it decides whether to close politely |
 | 7, 8 | deferred; only in-app switching needs them |
-| 9 | not started; gated on step 5 and #2061. #2070 is closed: its Properties panel cost is fixed by #2074 |
+| 9 | not started; gated on #2061 and the §7.2 flip prep. Step 5 is merged; #2070 is closed: its Properties panel cost is fixed by #2074 |
 
 **Known issues.**
 
@@ -1022,7 +1100,7 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 Every item needs either a merged PR or a measurement in a PR body.
 
 1. **Steps 2–6 merged**, each behind the flag, each with its desktop and
-   mobile E2E. Step 5 is the open one. Steps 7–8 are deferred (they serve
+   mobile E2E. Met: step 5 merged last (#2081). Steps 7–8 are deferred (they serve
    in-app switching, not the flip), so the memory-after-evict check in
    item 5 waits with them.
 2. **The `?view=` rules stack deleted** (§8 item 7). WidgetApi's
@@ -1207,7 +1285,7 @@ and the other lacks.
 | Pick during the pump | `streamingBatchPick.js`: the incremental builder offers its rows as it writes them (`root.userData.streamingBatches`, withdrawn at `finalize`); CadView's double-click raycasts the preview group and the streaming batches, nearest first, and a row goes through `selectFromInstancePick` as on the finished model; the highlight is the rows' instance colours (`ShareViewer#setPreviewSelection`) | element id + instance | occurrence path (`[]` at the root) + instance | shared, both engines (a worker load's batches feed the same builder). Before it nothing durable answered a pick until `finalize`: on Arty_Z7 from ~7 s to ~38 s |
 | Assembly and decoration | `assembleBatchedModel`, `decorateConwayDirectIfcModel`, `stampAppliedCoordination` | — | per-occurrence tables carried onto the rebuilt instance map | shared |
 | Hide / isolate / `#d:` | `IfcIsolator.js`, `Residency/visibilityHash.js` | `e` refs | `o` refs (occurrence paths) | shared; data |
-| GLB writer capture | `bldrsElementProperties` / `bldrsSpatialTree` / `bldrsFaceIds` (main thread); a worker load writes no artifact for either format until §7 step 5 | `RootExpressIDs` fast path | full record scan (no IfcRoot); occurrence-path table beside the face ids | shared writer, with a STEP table; step 5 moves it into the worker for both |
+| GLB writer capture | `glbEngineCapture.js#captureEngineExtensions` (`bldrsElementPropertiesCapture` / `bldrsSpatialTree` / the geometry-identity table), run next to whichever engine loaded the model: the page's, or the worker's as the `capture` op (§7 step 5) | `RootExpressIDs` fast path | full record scan (no IfcRoot); occurrence-path table beside the face ids | shared: one job for both formats and both engines |
 | Cache hit | the `BLDRS_*` GLB reader; spawns no engine | — | restores the occurrence and geometry-id tables | shared |
 | Load report | `loadProgress.js`; the worker forwards its Logger and console, and `engineWasmMb=` on the Total line | `ifcVersion` = the IFC schema | the AP schema | shared |
 
@@ -1220,8 +1298,9 @@ and the other lacks.
 3. STEP previews (conway): first a preview that appears at all on the
    models tried, then an occurrence path on its payload, so a STEP pick at
    first mesh selects the occurrence, as an IFC pick selects the element.
-4. §7 step 5 (the capture job) for both formats at once, including STEP's
-   occurrence-path table.
+4. ~~§7 step 5 (the capture job) for both formats at once, including
+   STEP's occurrence-path table.~~ Done in #2081: one job, run next to
+   either engine.
 
 **Measured** (2026-11-04, §7 step 6 as first pushed in #2067):
 - `RAF_THROTTLE_MS=3600000`, one cold load per run, n=2 except the largest (n=1), medians, in a shared 4-vCPU container.

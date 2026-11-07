@@ -27,20 +27,14 @@
 import {GLTFExporter} from 'three/examples/jsm/exporters/GLTFExporter.js'
 import {writeGlbBytesToOPFS} from '../OPFS/utils'
 import {yieldToBrowser} from '../utils/scheduling'
-import {
-  BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME,
-  captureBldrsElementProperties,
-} from './bldrsElementProperties'
+import {BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME} from './bldrsElementPropertiesCapture'
 import {
   BLDRS_FACE_IDS_EXTENSION_NAME,
   buildFaceIdsExtensionData,
-  captureGeometryItemIdentities,
   capturePerTriangleIds,
 } from './bldrsFaceIds'
-import {
-  BLDRS_SPATIAL_TREE_EXTENSION_NAME,
-  captureBldrsSpatialTree,
-} from './bldrsSpatialTree'
+import {BLDRS_SPATIAL_TREE_EXTENSION_NAME} from './bldrsSpatialTree'
+import {captureEngineExtensions} from './glbEngineCapture'
 import {
   APPLIED_COORDINATION_KEY,
   COORDINATION_OFFSET_KEY,
@@ -89,6 +83,11 @@ import {injectGlbExtensions, parseGlb} from './injectGlbExtensions'
 // reader reads from it. Single source of truth; bumping the key here
 // flips both ends atomically.
 export const BLDRS_TITLE_EXTRAS_KEY = 'bldrsTitle'
+
+
+// What a write with no engine to capture from (a non-IFC source) embeds:
+// none of the engine-side extensions. The inject filter drops each null.
+const NO_ENGINE_CAPTURE = Object.freeze({spatialTree: null, elementProperties: null, geometryItemIdentities: null})
 
 
 /**
@@ -226,6 +225,13 @@ function modelHasBatchedMesh(model) {
  *   current when the writer STARTS, which is right only for a caller outside
  *   `Loader.js#load` (tests, a one-off re-export); a real load must pass the
  *   value it took at its start, since the writer routinely outlives it.
+ * @param {function(object): Promise<object>} [args.capture] runs the engine
+ *   captures somewhere other than `ifcManager`: `({geometryExpressIds}) →
+ *   {spatialTree, elementProperties, geometryItemIdentities}`, the shape of
+ *   `glbEngineCapture.js#captureEngineExtensions`. A worker-engine load
+ *   passes its session's `capture` op here (engine-worker.md §7 step 5),
+ *   since no engine on the page holds its model. Takes precedence over
+ *   `ifcManager`.
  * @return {Promise<boolean>}
  */
 export async function exportAndCacheGlb({
@@ -235,6 +241,7 @@ export async function exportAndCacheGlb({
   ifcManager = null,
   modelID = null,
   artifactGeneration = currentGlbArtifactGeneration(),
+  capture = null,
 }) {
   const startMs = Date.now()
   try {
@@ -403,6 +410,9 @@ export async function exportAndCacheGlb({
     // Sync — parse + array read; no I/O. Safe to run before the
     // parallel async captures below.
     let faceIds = null
+    // The geometry ids whose identities the capture job resolves (STEP,
+    // merged layout only); null asks for none.
+    let identityGeometryIds = null
     // Per-triangle face_ids are a MERGED-layout concept (identity hung off
     // the giant vertex slab). The batched-native artifact keeps instances
     // first-class and carries per-instance identity in
@@ -473,33 +483,26 @@ export async function exportAndCacheGlb({
       if (Array.isArray(occurrencePaths) && Array.isArray(geometryExpressIds)) {
         faceIds.geometryExpressIds = geometryExpressIds
         // Identity table for those geometry pieces (conway#387): distinct
-        // id → {type, name}, resolved through the live parser we have RIGHT
-        // NOW so a cache-hit load can label transient NavTree rows and the
-        // Properties panel without one. Small: one entry per distinct
-        // geometry id (hundreds on NEMA-class parts), not per instance.
-        const identitiesStartMs = Date.now()
-        faceIds.geometryItemIdentities = await captureGeometryItemIdentities(
-          ifcManager, modelId, geometryExpressIds)
-        glbVerbose(
-          `writer: geometry identity sweep took ${Date.now() - identitiesStartMs}ms ` +
-          `(${Object.keys(faceIds.geometryItemIdentities ?? {}).length} identities)`)
+        // id → {type, name}, resolved by the capture job below through the
+        // live parser we have RIGHT NOW, so a cache-hit load can label
+        // transient NavTree rows and the Properties panel without one.
+        // Small: one entry per distinct geometry id (hundreds on NEMA-class
+        // parts), not per instance.
+        identityGeometryIds = geometryExpressIds
       }
     }
     await yieldToBrowser()
-    const capturePromise = (async () => {
-      // Per-phase timing (glbVerbose): the writer's post-export phases are
-      // otherwise silent for minutes on big models, which makes write stalls
-      // unattributable from the console (#1639 follow-up observation).
-      const treeStartMs = Date.now()
-      const spatialTree = await captureBldrsSpatialTree(ifcManager, modelId)
-      glbVerbose(`writer: spatial-tree capture took ${Date.now() - treeStartMs}ms`)
-      await yieldToBrowser()
-      const propsStartMs = Date.now()
-      const elementProperties = await captureBldrsElementProperties(
-        ifcManager, modelId, spatialTree)
-      glbVerbose(`writer: element-properties capture took ${Date.now() - propsStartMs}ms`)
-      return {spatialTree, elementProperties}
-    })()
+    // The engine captures (tree, element properties, geometry identities)
+    // as one job, wherever the engine is: in process over `ifcManager`, or
+    // the engine worker's `capture` op for a worker load (glbEngineCapture.js
+    // says why it is one job). Overlaps with `compressGlb` below.
+    const runCapture = capture ?? (ifcManager ?
+      (opts) => captureEngineExtensions(ifcManager, modelId, opts) :
+      () => Promise.resolve(NO_ENGINE_CAPTURE))
+    const capturePromise = runCapture({geometryExpressIds: identityGeometryIds})
+    // Settled here only so a capture that rejects while compression runs is
+    // not reported as unhandled; the await below still throws it.
+    capturePromise.catch(() => null)
     // Compress FIRST, then inject. `@gltf-transform/core`'s `WebIO`
     // (used inside `compressGlb`) parses the GLB into a Document and
     // re-serialises it, which **silently drops any extension it
@@ -533,7 +536,14 @@ export async function exportAndCacheGlb({
       await compressGlb(rawBytes, requestedMode, {preserveTriangleOrder: !!faceIds})
     glbVerbose(`writer: compress phase took ${Date.now() - compressStartMs}ms (mode=${mode || 'none'})`)
     await yieldToBrowser()
-    const {spatialTree, elementProperties} = await capturePromise
+    // A capture that THROWS (a worker capture whose session closed, say)
+    // ends the write here, through the catch below: an artifact cached
+    // without its properties would serve an empty Properties panel to every
+    // later cache hit. Each capture's own soft failure is a null, as before.
+    const {spatialTree, elementProperties, geometryItemIdentities} = await capturePromise
+    if (identityGeometryIds !== null) {
+      faceIds.geometryItemIdentities = geometryItemIdentities
+    }
     await yieldToBrowser()
     const faceIdsData = faceIds ? buildFaceIdsExtensionData(faceIds) : null
     // Dispatch the JSON.stringify + pako.gzip + extension injection +
@@ -561,7 +571,7 @@ export async function exportAndCacheGlb({
     // (non-IFC source); the inject filter drops the entry.
     const extensionsForInject = [
       {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: spatialTree, compress: true},
-      {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, precompressed: elementProperties?.compressedBytes},
+      {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, precompressed: elementProperties ?? undefined},
       {name: BLDRS_FACE_IDS_EXTENSION_NAME, data: faceIdsData, compress: true},
       // Batched-native only (null data drops out of the inject filter):
       // per-instance identity + verbatim source colors, node-order-keyed

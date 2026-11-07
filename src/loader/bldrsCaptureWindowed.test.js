@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import {IfcAPI} from '@bldrs-ai/conway/web-ifc'
-import {captureBldrsElementProperties} from './bldrsElementProperties'
+import {captureBldrsElementProperties} from './bldrsElementPropertiesCapture'
 import {captureBldrsSpatialTree} from './bldrsSpatialTree'
 
 

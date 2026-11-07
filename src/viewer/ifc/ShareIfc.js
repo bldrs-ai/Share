@@ -41,16 +41,11 @@
 // off yet.
 
 import {BatchedMesh, BufferGeometry, Mesh} from 'three'
-import {
-  acceleratedRaycast,
-  computeBatchedBoundsTree,
-  computeBoundsTree,
-  disposeBatchedBoundsTree,
-  disposeBoundsTree,
-} from 'three-mesh-bvh'
+import {acceleratedRaycast, disposeBatchedBoundsTree, disposeBoundsTree} from 'three-mesh-bvh'
 import {IfcAPI} from '@bldrs-ai/conway/web-ifc'
 import ShareIfcManager from './ShareIfcManager'
 import {raycastActiveInstances} from './batchedRaycast'
+import {computeQuietBatchedBoundsTree, computeQuietBoundsTree} from './bvhBuild'
 
 
 // Install three-mesh-bvh's accelerated raycasting globally. The fork's
@@ -64,8 +59,11 @@ import {raycastActiveInstances} from './batchedRaycast'
 // idempotent (re-assigning the same functions is harmless). Runs in
 // production only: ShareIfc is mocked in the Jest harness (mirroring the
 // fork's manager, which was also mocked), so tests keep running against
-// unpatched three exactly as before.
-BufferGeometry.prototype.computeBoundsTree = computeBoundsTree
+// unpatched three exactly as before. The build is three-mesh-bvh's without
+// its depth-cap console warning, which became the title of SHARE-1MT's load
+// diagnostics; the cap is recorded on the load report instead (bvhBuild.js).
+// Every format's BVH goes through these two patches.
+BufferGeometry.prototype.computeBoundsTree = computeQuietBoundsTree
 BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree
 Mesh.prototype.raycast = acceleratedRaycast
 
@@ -80,7 +78,7 @@ Mesh.prototype.raycast = acceleratedRaycast
 // `raycastActiveInstances` is that same call, made safe for a batch with a
 // deleted instance, which the library's walk would otherwise throw on
 // (create-300 L0, #1915 — see batchedRaycast.js).
-BatchedMesh.prototype.computeBoundsTree = computeBatchedBoundsTree
+BatchedMesh.prototype.computeBoundsTree = computeQuietBatchedBoundsTree
 BatchedMesh.prototype.disposeBoundsTree = disposeBatchedBoundsTree
 BatchedMesh.prototype.raycast = raycastActiveInstances
 

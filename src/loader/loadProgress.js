@@ -194,6 +194,9 @@ class LoadProgressReporter {
     // preview feedback #4). Includes conway's engine warnings/errors, which
     // route through console.warn/error.
     this.diagnostics = new Map()
+    // BVH trees that reached three-mesh-bvh's depth cap during the load
+    // (reportBvhDepthCap), or null when none did.
+    this.bvhDepthCap = null
     // Base messages (conway LogEntry.message, whitespace-collapsed like the
     // tee's text) conway logged during this load, split by whether the entry
     // carried the data-defect marker — what isDataDefectDiagnostic matches
@@ -750,6 +753,12 @@ class LoadProgressReporter {
     // stage lines.
     const total = this.log.totalLine()
     this.addReportLine(this.summary ? `${total} | ${this.summary}` : total)
+    if (this.bvhDepthCap) {
+      const {trees, maxLeafTriangles, maxDepth} = this.bvhDepthCap
+      this.addReportLine(`Health: picking index hit its depth cap (${maxDepth}) in ` +
+        `${trees} ${trees === 1 ? 'tree' : 'trees'}; largest leaf ${maxLeafTriangles} triangles, ` +
+        'tested one by one per pick')
+    }
 
     // Warnings & errors captured from the console during the load, appended
     // after Total (issue #301 preview feedback #4). Restore the console
@@ -893,7 +902,11 @@ class LoadProgressReporter {
     if (this.isDataDefectDiagnostic(summary.topText)) {
       tags.data_defect = 'true'
     }
-    captureMessage(diagnosticsTitle(summary.topText), {
+    // With no console diagnostics, the event exists for the depth cap alone
+    // (captureLoadDiagnostics): title it by that, and send it at info, since
+    // a capped leaf slows picks without breaking them.
+    const capOnly = summary.total === 0 && Boolean(this.bvhDepthCap)
+    captureMessage(capOnly ? BVH_DEPTH_CAP_TITLE : diagnosticsTitle(summary.topText), {
       // A file with nothing to draw is an input property, not a defect, so
       // it stays out of the error stream like the 4.3 refusal does; the
       // event is still sent because the chip it backs is coloured by the
@@ -901,7 +914,7 @@ class LoadProgressReporter {
       level: {
         [LOAD_OUTCOMES.UNUSABLE]: 'error',
         [LOAD_OUTCOMES.NO_GEOMETRY]: 'info',
-      }[loadOutcome] ?? 'warning',
+      }[loadOutcome] ?? (capOnly ? 'info' : 'warning'),
       tags,
       contexts: {
         loadDiagnostics: {
@@ -924,6 +937,9 @@ class LoadProgressReporter {
           consoleTotal: summary.total,
           consoleDistinct: summary.distinct,
           messages: this.topDiagnostics(MAX_SENTRY_DIAGNOSTICS),
+          // How big the leaves three-mesh-bvh capped are, the number for
+          // deciding whether to retune its build (viewer/ifc/bvhBuild.js).
+          bvhDepthCap: this.bvhDepthCap ?? undefined,
           report: this.sentryLines.join('\n'),
         },
       },
@@ -1049,6 +1065,10 @@ function ellipsize(text) {
     `${text.slice(0, MAX_DIAGNOSTIC_SAMPLE_CHARS - 1)}…` :
     text
 }
+
+
+/** Diagnostics-event title for a load whose only finding is the BVH depth cap. */
+const BVH_DEPTH_CAP_TITLE = 'Load diagnostics: picking index hit its depth cap'
 
 
 /**
@@ -1613,7 +1633,13 @@ export function captureLoadDiagnostics({
   contentId = undefined,
   contentType = undefined,
 } = {}) {
-  if (errorCount + warningCount === 0 || activeReporter === null) {
+  if (activeReporter === null) {
+    return
+  }
+  // A depth-cap hit is sent on its own too: bvhBuild.js silences
+  // three-mesh-bvh's warning, so a load whose only finding is the cap now
+  // has zero console counts, and its leaf size is what the record is for.
+  if (errorCount + warningCount === 0 && !activeReporter.bvhDepthCap) {
     return
   }
   try {
@@ -1677,6 +1703,28 @@ export function endLoadProgress(error = null) {
  * numbers live in the Health line one expand (or the "i" report) away.
  */
 const FRAMING_NOTE = 'stray geometry far from the model was left out of the zoom fit'
+
+
+/**
+ * Record BVH trees that reached three-mesh-bvh's depth cap
+ * (`viewer/ifc/bvhBuild.js`). Accumulates across the load's builds, a batched
+ * model building one tree per geometry, and becomes one `Health:` line after
+ * Total plus a `bvhDepthCap` field on the diagnostics event. Safe no-op with
+ * no active load, or after it ended.
+ *
+ * @param {{trees: number, maxLeafTriangles: number, maxDepth: number}} capped
+ */
+export function reportBvhDepthCap({trees, maxLeafTriangles, maxDepth}) {
+  if (!activeReporter || activeReporter.ended) {
+    return
+  }
+  const previous = activeReporter.bvhDepthCap
+  activeReporter.bvhDepthCap = {
+    trees: (previous?.trees ?? 0) + trees,
+    maxLeafTriangles: Math.max(previous?.maxLeafTriangles ?? 0, maxLeafTriangles),
+    maxDepth,
+  }
+}
 
 
 /**

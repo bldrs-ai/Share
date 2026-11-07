@@ -103,6 +103,7 @@ Parsing: 3.201s, +210.512000 MB heap
 Geometry [0%........56%] 41.004s, +388.250000 MB heap   ← live OR failed-at-56% stage
 Total: 46.310s, 214.000000 → 852.000000 MB heap   ← 5. separate before/after
 Warnings & errors (1247, 224 distinct): CDT Exception (hemisphere: 0) (×892)  ← 6. one-line summary
+Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 triangles, tested one by one per pick  ← 7. optional
 ```
 
 1. **Host line** — Share version + used-JS-heap before the load begins
@@ -141,6 +142,26 @@ Warnings & errors (1247, 224 distinct): CDT Exception (hemisphere: 0) (×892)  �
    the report in the snackbar expando and the copyable "i" report alike.
    Nothing is lost: the console tee passes every message through to the real
    console, so full detail is one devtools panel away.
+7. **Health** — optional lines after Total, each for a condition the load
+   survived but that someone triaging the model wants to know about:
+   - `Health: stray geometry excluded from view framing (…)` — auto-framing
+     left outliers out (`reportFramingExclusion`; added post-load, since
+     framing runs after the load settles).
+   - `Health: picking index hit its depth cap (40) in N trees; largest leaf
+     M triangles, tested one by one per pick` (`reportBvhDepthCap`).
+     three-mesh-bvh stops splitting at `maxDepth` and makes one leaf of whatever is left, so a ray reaching
+     that leaf tests its triangles linearly; picks stay correct. Share builds
+     BVHs with `verbose: false` (`viewer/ifc/bvhBuild.js`) because the
+     library's console warning said only that the cap was hit, and as a
+     load-time warn it became the title of the diagnostics event
+     (SHARE-1MT). The line records the number the warning left out, the
+     largest capped leaf, which decides whether raising `maxDepth` or
+     building with the SAH strategy is worth it. Only leaves at the cap
+     count: an earlier leaf of identical centroids isn't something a deeper
+     cap would split. The same figures go to Sentry as
+     `loadDiagnostics.bvhDepthCap`, including from a load with no other
+     diagnostics, which sends an `info` event titled `Load diagnostics:
+     picking index hit its depth cap`.
 
 **Precision** — seconds to millisecond precision (3 decimals), memory to
 byte precision (6 decimals of MB), per the report's diagnostic purpose.

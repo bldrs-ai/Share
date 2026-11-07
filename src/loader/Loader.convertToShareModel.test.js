@@ -7,7 +7,8 @@
 
 import {BufferAttribute, BufferGeometry, Mesh, Scene} from 'three'
 import {__sanitizeCachedTitleForTest, convertToShareModel} from './Loader'
-import {encodeElementProperties, makeElementPropertiesPayload} from './bldrsElementProperties'
+import {makeElementPropertiesPayload} from './bldrsElementProperties'
+import {encodeElementProperties} from './bldrsElementPropertiesCapture'
 import {
   APPLIED_COORDINATION_KEY,
   COORDINATION_OFFSET_KEY,

@@ -11,6 +11,8 @@ import {navigateToModel} from '../../utils/navigate'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../../connections/persistence'
 import {getGrantedGithubScope, saveGrantedGithubScope} from '../../Auth0/githubGrant'
 import useStore from '../../store/useStore'
+import {WARN, disableDebug, setDebugLevel} from '../../utils/debug'
+import {HTTP_AUTHORIZATION_REQUIRED} from '../../net/http'
 import GitHubFileBrowser from './GitHubFileBrowser'
 
 
@@ -180,6 +182,26 @@ describe('GitHubFileBrowser', () => {
       await waitFor(() => expect(getUserRepositories).toHaveBeenCalledWith('test-token', 'cypresstester'))
       expect(getRepositories).not.toHaveBeenCalled()
     })
+  })
+
+
+  // SHARE-1X6: an expired or revoked GitHub token makes /user/orgs reject
+  // with a 401, which was an unhandled rejection. The user's own account is
+  // still browsable.
+  it('falls back to the user\'s own account when the org list fails', async () => {
+    getOrganizations.mockRejectedValue(Object.assign(new Error('Bad credentials'), {status: HTTP_AUTHORIZATION_REQUIRED}))
+    // setupTests disables debug output; raise it so the warning is observable.
+    setDebugLevel(WARN)
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await renderBrowser()
+      expect(warnSpy).toHaveBeenCalledWith('GitHubFileBrowser: could not list GitHub organizations', HTTP_AUTHORIZATION_REQUIRED)
+      await selectOption('openOrganization', '@cypresstester')
+      await waitFor(() => expect(getUserRepositories).toHaveBeenCalledWith('test-token', 'cypresstester'))
+    } finally {
+      warnSpy.mockRestore()
+      disableDebug()
+    }
   })
 
 

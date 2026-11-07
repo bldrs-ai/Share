@@ -18,7 +18,18 @@
 // DOM, the store or three.
 
 
-export const ENGINE_PROTOCOL_VERSION = 1
+// Bumped when the page starts to NEED something an older engine cannot do;
+// the hello check (EngineSession#init) then refuses a stale cached
+// Engine.worker.js before it instantiates its wasm, and spawnEngine.js runs
+// the load in process. An op the page can do without goes by an `init`
+// capability instead (`propertyTables`: the page resolves its own tables).
+//
+//   1  init, open, tree, props, propertySets, propertyTables (capability),
+//      itemsOfType, release, stats, pump, abort, close
+//   2  capture, spill (§7 step 5). Not capabilities: the main thread has no
+//      engine to capture with, so a worker without `capture` cannot write a
+//      worker load's GLB artifact at all (review on #2081).
+export const ENGINE_PROTOCOL_VERSION = 2
 
 
 /** Requests, each answered by exactly one reply. */
@@ -40,6 +51,15 @@ export const Op = Object.freeze({
   // End a streamed load at its next batch boundary.
   ABORT: 'abort',
   CLOSE: 'close',
+  // The GLB writer's engine captures as one job (§2.4 G2, §7 step 5):
+  // `{geometryExpressIds}` → `{spatialTree, elementProperties,
+  // geometryItemIdentities}`, the container bytes transferred.
+  CAPTURE: 'capture',
+  // Release a RESIDENT source (a buffered open: every STEP) and serve later
+  // reads through windows from `{file}`, the OPFS File it was read from;
+  // the writer's `finally` sends it after the capture, as Loader.js runs
+  // spillModelSource for a main-thread model. `{spilled, reason?, source}`.
+  SPILL: 'spill',
 })
 
 

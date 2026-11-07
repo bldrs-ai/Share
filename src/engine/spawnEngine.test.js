@@ -76,6 +76,34 @@ describe('engine/spawnEngineSession fallback', () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/ProtocolMismatchError.*in process instead/))
   })
 
+  it('a worker built before capture and spill (protocol v1) is refused, so the load runs in process', async () => {
+    // Review on #2081: a stale cached Engine.worker.js that predates
+    // `capture` and `spill` but still spoke the page's version would pass
+    // init, and every worker load would then skip its GLB artifact on
+    // `unknown op capture`. This one answers hello AND init, as such a
+    // worker would; only the version can turn it away.
+    let worker
+    const session = await spawnEngineSession({
+      makeWorker: () => {
+        worker = new EventTarget()
+        worker.terminate = jest.fn()
+        worker.postMessage = jest.fn((msg) => queueMicrotask(() => worker.dispatchEvent(new MessageEvent('message', {
+          data: {v: 1, epoch: msg.epoch, re: msg.id, ok: true,
+            result: {conwayVersion: 'old', capabilities: {propertyTables: true}, wasmBytes: 16, initMs: 1}},
+        }))))
+        queueMicrotask(() => worker.dispatchEvent(new MessageEvent('message', {
+          data: {v: 1, epoch: 0, ev: 'hello', seq: 0},
+        })))
+        return worker
+      },
+      loadIfcAPI: async () => stubIfcAPI(),
+      initTimeoutMs: 200,
+    })
+    expect(session.kind).toBe('inProcess')
+    expect(worker.terminate).toHaveBeenCalled()
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/ProtocolMismatchError.*v1.*in process instead/))
+  })
+
   it('a worker that cannot even be constructed falls back too', async () => {
     const session = await spawnEngineSession({
       makeWorker: () => {

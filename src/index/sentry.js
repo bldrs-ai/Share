@@ -99,10 +99,45 @@ function isAnonymousOnerrorEvent(event) {
 }
 
 
+/*
+ * Globals that in-app browsers' native hosts call into the page as a JS
+ * bridge. The host evaluates its script against the document, so when the
+ * bridge isn't set up yet the browser reports a ReferenceError framed at
+ * the page's own URL, line 1 (the HTML), not `<anonymous>`, and
+ * isAnonymousOnerrorEvent can't see it. Share never references these names,
+ * so the name in an uncaught ReferenceError is the fingerprint.
+ *
+ *   zaloJSV2  Zalo (Vietnam's messenger) in-app browser on iOS WKWebView,
+ *             `Can't find variable: zaloJSV2` (SHARE-1X7).
+ */
+const IN_APP_BROWSER_BRIDGE_GLOBALS = /\bzaloJSV2\b/
+
+
+/**
+ * True for an uncaught ReferenceError naming an in-app browser's bridge
+ * global (IN_APP_BROWSER_BRIDGE_GLOBALS). Like isAnonymousOnerrorEvent,
+ * restricted to values[0] and `mechanism: onerror`.
+ *
+ * @param {object} event Sentry event payload
+ * @return {boolean}
+ */
+function isInAppBrowserBridgeError(event) {
+  const exception = event?.exception?.values?.[0]
+  return exception?.type === 'ReferenceError' &&
+    exception.mechanism?.type === 'onerror' &&
+    typeof exception.value === 'string' &&
+    IN_APP_BROWSER_BRIDGE_GLOBALS.test(exception.value)
+}
+
+
 const HEURISTIC_NOISE_MATCHERS = [
   {
     match: isAnonymousOnerrorEvent,
     gaEventName: 'anonymous_injected_error',
+  },
+  {
+    match: isInAppBrowserBridgeError,
+    gaEventName: 'in_app_browser_bridge_error',
   },
 ]
 

@@ -144,9 +144,10 @@ const liveSessions = new Set()
  * have to skip it. The page reloads after a clear, so nothing is lost by
  * closing the models on screen.
  *
- * Only a session whose open has replied is known to hold a handle, and only
- * it is closed politely (EngineSession#close); one still opening is
- * terminated, and its lock goes shortly AFTER this resolves. A caller that
+ * Only a session whose open or spill has replied is known to hold a handle,
+ * and only it is closed politely (EngineSession#close), after any spill still
+ * in flight has replied; one still opening is terminated, and its lock goes
+ * shortly AFTER this resolves. A caller that
  * must see the entry free (ProfileControl's clear) retries what it skipped.
  *
  * @return {Promise<number>} how many sessions were closed

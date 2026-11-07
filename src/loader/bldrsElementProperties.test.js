@@ -1,15 +1,14 @@
 /* eslint-disable no-magic-numbers */
 import * as pako from 'pako'
 import useStore from '../store/useStore'
+import {BldrsElementPropertiesReader, makeElementPropertiesPayload} from './bldrsElementProperties'
 import {
   BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME,
-  BldrsElementPropertiesReader,
   ElementPropertiesContainerWriter,
   captureBldrsElementProperties,
   decodeElementProperties,
   encodeElementProperties,
-  makeElementPropertiesPayload,
-} from './bldrsElementProperties'
+} from './bldrsElementPropertiesCapture'
 import {
   injectGlbExtensions,
   parseGlb,
