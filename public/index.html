@@ -81,11 +81,17 @@
       // reads this buffer on localhost — the same reason isRealModelOpen
       // documents localhost as a deliberate exception.
       if (consentAllowsAnalytics()) {
+        // Analytics only: every ad signal stays denied, and the config turns
+        // off Google signals and ad-personalization signals (ga.js
+        // #CONSENT_GRANTED, #GA_CONFIG). Google Ads is switched off.
         gtag('consent', 'update', {
-          analytics_storage: 'granted', ad_storage: 'granted',
-          ad_user_data: 'granted', ad_personalization: 'denied'
+          analytics_storage: 'granted', ad_storage: 'denied',
+          ad_user_data: 'denied', ad_personalization: 'denied'
         });
-        gtag('config', 'G-GRLNVMZRGW', userPropsBeforeConfig());
+        var config = userPropsBeforeConfig();
+        config.allow_google_signals = false;
+        config.allow_ad_personalization_signals = false;
+        gtag('config', 'G-GRLNVMZRGW', config);
       }
     </script>
     <style>

@@ -1,7 +1,7 @@
 import {readFileSync} from 'fs'
 import path from 'path'
 import Cookies from 'js-cookie'
-import {CONSENT_DEFAULT, CONSENT_GRANTED, GA_MEASUREMENT_ID} from '../index/ga'
+import {CONSENT_DEFAULT, CONSENT_GRANTED, GA_CONFIG, GA_MEASUREMENT_ID} from '../index/ga'
 import {
   CONSENT_COOKIE_NAME,
   CONSENT_LEVELS,
@@ -144,13 +144,14 @@ describe('index.html gtag stub', () => {
     const configAt = commands.findIndex(([cmd]) => cmd === 'config')
     expect(configAt).toBeGreaterThan(updateAt)
     expect(commands[configAt][1]).toBe(GA_MEASUREMENT_ID)
+    expect(commands[configAt][2]).toEqual(GA_CONFIG)
   })
 
   test('carries the _ga client id as a user property only for a consenting visitor', () => {
     Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
     setConsentLevel(CONSENT_LEVELS.FUNCTIONAL)
     const config = runStub().find(([cmd]) => cmd === 'config')
-    expect(config[2]).toEqual({user_properties: {open_cid: 'cid.1234567890.0987654321'}})
+    expect(config[2]).toEqual({...GA_CONFIG, user_properties: {open_cid: 'cid.1234567890.0987654321'}})
     Cookies.remove('_ga')
   })
 })

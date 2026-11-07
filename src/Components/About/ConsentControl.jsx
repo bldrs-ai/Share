@@ -19,7 +19,7 @@ export const CONSENT_COPY = Object.freeze({
     label: 'Functional',
     summary:
       'Google Analytics with a pseudonymous ID: visits, and which kinds of models are opened ' +
-      '(format, size, source). Also measures our Google Ads.',
+      '(format, size, source). No advertising.',
   },
   [CONSENT_LEVELS.PUBLIC]: {
     label: 'Public sharing',

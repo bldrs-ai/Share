@@ -18,7 +18,7 @@ by side at the same size.
 | Level (cookie value) | Label | What runs |
 |---|---|---|
 | `restricted` | Browse only | No GA: gtag/js is never requested, no `_ga` cookie, none of our GA events. |
-| `functional` | Functional | GA with its pseudonymous client id (`_ga`), our model events (`real_model_open`, …), Google Ads conversion measurement. |
+| `functional` | Functional | GA with its pseudonymous client id (`_ga`) and our model events (`real_model_open`, …). Analytics only: no ad signal, no Google signals. |
 | `public` | Public sharing | Functional, plus consent to analyzing the content of public models the visitor opens. **Nothing analyzes content yet**; the level exists so the choice is collected before that ships. |
 
 - The slider **starts** at Functional, or at Browse only when the browser
@@ -77,11 +77,16 @@ changes, the summary copy and the privacy policy change with it, and
     consent denied, and deletes `_ga`, `_ga_*` and `_gcl_*` on every parent
     domain. After a reload gtag/js isn't loaded at all.
 - **Consent Mode signals** (`ga.js#CONSENT_DEFAULT` / `CONSENT_GRANTED`):
-  granted is `analytics_storage`, `ad_storage`, `ad_user_data`.
-  `ad_personalization` stays denied at every level, because no level's
-  wording asks for remarketing. This is Consent Mode "basic": nothing
-  reaches Google before consent, so there are no cookieless pings and no
-  GA4 modeling of declined visitors.
+  consent grants `analytics_storage` only. `ad_storage`, `ad_user_data`
+  and `ad_personalization` stay denied at every level, because Google Ads
+  is switched off (owner, 2026-11-07) and no level's wording asks for any
+  ad use. Every `config`, the stub's included, also carries
+  `ga.js#GA_CONFIG`: `allow_google_signals: false` (no GA data to
+  doubleclick.net for cross-device or demographics reporting) and
+  `allow_ad_personalization_signals: false`. Granting any ad signal again
+  means new dialog copy and a `CONSENT_VERSION` bump. This is Consent Mode
+  "basic": nothing reaches Google before consent, so there are no
+  cookieless pings and no GA4 modeling of declined visitors.
 - **Sentry** is unchanged: always on. Only the `open_cid` tag follows
   consent (`analytics#getOpenCidForSentry`).
 

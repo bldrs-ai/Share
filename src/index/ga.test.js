@@ -4,6 +4,7 @@ import {_resetGaClientIdForTests, getGaClientId, setIsAllowed} from '../privacy/
 import setupGa, {
   CONSENT_DEFAULT,
   CONSENT_GRANTED,
+  GA_CONFIG,
   GA_MEASUREMENT_ID,
   _resetGaForTests,
   deleteGoogleCookies,
@@ -423,12 +424,24 @@ describe('consent', () => {
     Cookies.remove('_ga')
   })
 
-  test('the consent signals never grant ad personalization', () => {
+  // Google Ads is switched off: consent is for analytics and nothing else.
+  test('consent grants analytics only, never an ad signal', () => {
     expect(CONSENT_DEFAULT).toEqual({
       analytics_storage: 'denied', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied',
     })
-    expect(CONSENT_GRANTED.ad_personalization).toBe('denied')
-    expect(CONSENT_GRANTED.analytics_storage).toBe('granted')
+    expect(CONSENT_GRANTED).toEqual({
+      analytics_storage: 'granted', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied',
+    })
+    expect(GA_CONFIG).toEqual({allow_google_signals: false, allow_ad_personalization_signals: false})
+  })
+
+  test('the config queued on a mid-page allow turns ad signals off', () => {
+    Cookies.remove('consentLevel')
+    setupGa(PROD)
+    setIsAllowed(true)
+    updateGaConsent()
+    const config = queued().find(([cmd]) => cmd === 'config')
+    expect(config[2]).toEqual(GA_CONFIG)
   })
 
   test('deleteGoogleCookies tries every parent domain', () => {

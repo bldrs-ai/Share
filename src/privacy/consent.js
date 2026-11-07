@@ -12,6 +12,7 @@ import Expires from './Expires'
  *               cookie. What else this level gives up (e.g. the free quota)
  *               is undecided; today it gives up nothing but GA.
  *   functional  GA with a pseudonymous client id, and our own model events.
+ *               Analytics only: no ad signal is granted (index/ga.js).
  *   public      functional, plus consent to analyzing the content of public
  *               models the visitor opens. Nothing analyzes content yet; the
  *               level exists so the choice is collected before that ships.
@@ -130,9 +131,10 @@ export function allowsAnalytics(level) {
  *
  * A browser sending Global Privacy Control (navigator.globalPrivacyControl;
  * Brave and DuckDuckGo by default, Firefox as a setting) starts at Browse
- * only. California treats GPC as a binding opt-out of "sharing" for
- * businesses over its thresholds, and Google Ads measurement is arguably
- * sharing; honoring it everywhere is cheaper than deciding where we must.
+ * only. California treats GPC as a binding opt-out of "selling or sharing"
+ * for businesses over its thresholds. GA with every ad signal off is
+ * unlikely to be either, but a visitor who sends GPC has said what they
+ * want, and honoring it everywhere is cheaper than deciding where we must.
  *
  * @param {object} [env] overrides for tests
  * @param {boolean} [env.gpc]

@@ -25,7 +25,8 @@ const DEPLOY_PREVIEW_HOSTNAME = /^deploy-preview-\d+--bldrs-share-prod\.netlify\
  * True when this page should load Google Analytics: production hosts, or a
  * manually opted-in Netlify deploy preview, and never under automation
  * (Playwright/Selenium/Puppeteer set navigator.webdriver). Other off-prod and
- * automated traffic polluted the metrics Google Ads bids on — see
+ * automated traffic polluted the analytics (and, while Google Ads ran, the
+ * metrics it bid on) — see
  * design/roadmap.md grow-120 and the matching event-level guard in
  * privacy/analytics#isRealModelOpen.
  *
@@ -66,10 +67,11 @@ export function isOwnGaHost(hostname) {
  * for a visitor whose cookie already consents); consent.test.js runs the
  * stub and compares them with these, so the copies can't drift.
  *
- * ad_storage + ad_user_data are what let a consenting visitor's GA4 key
- * events count as Google Ads conversions. ad_personalization stays denied
- * even when granted: it's remarketing / personalized ads, which no level's
- * wording in the dialog asks for.
+ * Consent grants analytics_storage only. Every ad signal stays denied at
+ * every level: Google Ads is switched off (2026-11), so nothing may store
+ * ad cookies, send user data to Ads, or personalize ads, and no level's
+ * wording in the dialog asks for any of it. Granting one here again needs
+ * the dialog copy (About/ConsentControl.jsx) and a CONSENT_VERSION bump.
  */
 export const CONSENT_DEFAULT = Object.freeze({
   analytics_storage: 'denied',
@@ -79,9 +81,22 @@ export const CONSENT_DEFAULT = Object.freeze({
 })
 export const CONSENT_GRANTED = Object.freeze({
   analytics_storage: 'granted',
-  ad_storage: 'granted',
-  ad_user_data: 'granted',
+  ad_storage: 'denied',
+  ad_user_data: 'denied',
   ad_personalization: 'denied',
+})
+
+
+/*
+ * Fields every `config` call carries, the stub's included (consent.test.js
+ * checks it). Belt and braces with the denied ad signals above: Google
+ * signals is what sends GA data to doubleclick.net for cross-device and
+ * demographics reporting, and ad-personalization signals are what Ads
+ * remarketing reads. Both off, since Ads is off.
+ */
+export const GA_CONFIG = Object.freeze({
+  allow_google_signals: false,
+  allow_ad_personalization_signals: false,
 })
 
 
@@ -91,8 +106,10 @@ export const CONSENT_GRANTED = Object.freeze({
 const GA_DISABLE_KEY = `ga-disable-${GA_MEASUREMENT_ID}`
 
 
-// First-party cookies the GA and Ads tags write: `_ga`, `_ga_<container>`,
-// and the conversion linker's `_gcl_*`.
+// First-party cookies the GA tag writes, `_ga` and `_ga_<container>`, plus
+// the Ads conversion linker's `_gcl_*`. Ads is off and nothing grants
+// ad_storage, so no new `_gcl_*` is written; it's here for leftovers from
+// when it ran.
 const GOOGLE_COOKIE_PATTERN = /^(_ga(_|$)|_gcl_)/
 
 
@@ -168,7 +185,7 @@ export function updateGaConsent(env = gaEnv) {
   const isConfigQueued = Array.isArray(window.dataLayer) &&
     window.dataLayer.some((entry) => entry?.[0] === 'config' && entry?.[1] === GA_MEASUREMENT_ID)
   if (!isConfigQueued) {
-    window.gtag('config', GA_MEASUREMENT_ID)
+    window.gtag('config', GA_MEASUREMENT_ID, {...GA_CONFIG})
   }
   if (!isGtagLoaded && shouldInitGa(env)) {
     loadGtag(env)
@@ -212,7 +229,7 @@ export function deleteGoogleCookies(hostname = window.location.hostname) {
  * Inject the gtag/js loader.
  *
  * Any init failure is reported to Sentry tagged subsystem:ga_init so
- * we can see when prod loses its Ads-conversion signal. The expected
+ * we can see when prod loses its analytics signal. The expected
  * steady-state noise here is ad-blocker users failing the script load;
  * keep the tag stable so a future sentry.js filter (or a GA-side
  * blocked-client event, cf. netlify_rum_blocked) can key off it.
