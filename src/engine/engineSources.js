@@ -279,6 +279,20 @@ export async function openSourceStore(source, {
   let entryPath = null
   const fallback = (reason) => ({store: makeBlobStore(blob, now), fallbackReason: reason, entryPath})
   const describe = (e) => `${e?.name ?? 'Error'}: ${e?.message ?? e}`
+  // The entry is looked up whichever store reads it: its path keys the
+  // model's index sidecar (engineSidecars.js), and a Blob-store open reopens
+  // from a sidecar as well as a sync-handle one does (codex review of
+  // Share#2085) — under the kill switch, and in a worker or browser without
+  // sync access handles, where the Blob store is all there is. The lookup
+  // only reads directory listings and File snapshots; no handle is opened.
+  let located = null
+  let lookupError = null
+  try {
+    located = await locateOpfsEntry(blob, await getOpfsRoot(), maxOpfsEntries)
+    entryPath = located?.path ?? null
+  } catch (e) {
+    lookupError = e
+  }
   if (!allowSyncHandle) {
     return fallback('disabled')
   }
@@ -286,14 +300,10 @@ export async function openSourceStore(source, {
     // In process (the page has no createSyncAccessHandle).
     return fallback('no sync access handles here')
   }
-  let entry
-  try {
-    const located = await locateOpfsEntry(blob, await getOpfsRoot(), maxOpfsEntries)
-    entry = located?.handle
-    entryPath = located?.path ?? null
-  } catch (e) {
-    return fallback(`OPFS lookup failed: ${describe(e)}`)
+  if (lookupError !== null) {
+    return fallback(`OPFS lookup failed: ${describe(lookupError)}`)
   }
+  const entry = located?.handle
   if (!entry) {
     return fallback('not an OPFS file')
   }

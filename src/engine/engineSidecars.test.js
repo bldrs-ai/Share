@@ -388,6 +388,21 @@ describe('engine/engineHandler: index sidecar reopen (engine-worker.md §7 step 
     expect(root.children[SIDECAR_DIR]).toBeUndefined()
   })
 
+  it('under the sync-handle kill switch the Blob store reopens from the sidecar too', async () => {
+    // The worker's Blob store (FileReaderSync) serves the index path as well
+    // as the sync handle does, so the entry must be found, and its sidecar
+    // used, whichever store reads it (codex review of Share#2085). Node has
+    // no FileReaderSync, so these opens read with `readSync` undefined.
+    const log = []
+    const api = sidecarApi(log)
+    const root = memoryDir({owner: memoryDir({[NAME]: memoryFile(NAME, BYTES)})})
+    const first = await loadOnce(api, root, {disableEngineSyncHandle: true})
+    expect(first.index).toEqual({source: 'parse', bytes: api.SIDECAR.length, saved: true})
+    expect(first.source).toMatchObject({kind: 'blob', fallbackReason: 'disabled'})
+    const second = await loadOnce(api, root, {disableEngineSyncHandle: true})
+    expect(second.index).toEqual({source: 'sidecar', bytes: api.SIDECAR.length, saved: false})
+  })
+
   it('a source with no OPFS entry gets no sidecar', async () => {
     const log = []
     const summary = await loadOnce(sidecarApi(log), memoryDir())

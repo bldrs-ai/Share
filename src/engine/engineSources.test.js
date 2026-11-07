@@ -190,16 +190,20 @@ describe('engine/engineSources', () => {
     expect(entry.access.closed).toBe(true)
   })
 
-  it('uses the Blob store off OPFS, on the page, and with the kill switch, without touching OPFS', async () => {
+  it('uses the Blob store off OPFS, on the page, and with the kill switch, opening no handle', async () => {
     const getOpfsRoot = jest.fn(async () => fakeDir({}))
     expect((await openSourceStore({file: snapshot()}, {getOpfsRoot, canSyncHandle: () => true})).fallbackReason)
       .toBe('not an OPFS file')
-    getOpfsRoot.mockClear()
-    expect((await openSourceStore({file: snapshot()}, {getOpfsRoot, canSyncHandle: () => false})).fallbackReason)
-      .toBe('no sync access handles here')
-    expect((await openSourceStore({file: snapshot()}, {getOpfsRoot, allowSyncHandle: false})).fallbackReason)
-      .toBe('disabled')
-    expect(getOpfsRoot).not.toHaveBeenCalled()
+    // On the page and under the kill switch the entry is still LOOKED UP —
+    // its path keys the index sidecar a Blob-store open reopens from — but
+    // no sync access handle is ever requested on it.
+    const entry = fakeEntry()
+    const root = fakeDir({[NAME]: entry})
+    const onPage = await openSourceStore({file: snapshot()}, {getOpfsRoot: async () => root, canSyncHandle: () => false})
+    expect(onPage).toMatchObject({fallbackReason: 'no sync access handles here', entryPath: NAME})
+    const disabled = await openSourceStore({file: snapshot()}, {getOpfsRoot: async () => root, allowSyncHandle: false})
+    expect(disabled).toMatchObject({fallbackReason: 'disabled', entryPath: NAME})
+    expect(entry.requested).toEqual([])
     // Jest's global, like a page, has no createSyncAccessHandle.
     expect((await openSourceStore({file: snapshot()})).fallbackReason).toBe('no sync access handles here')
   })
@@ -365,7 +369,7 @@ describe('engine/engineHandler reads a windowed source through the sync handle',
     expect(entry.access.closed).toBe(true)
   })
 
-  it('the kill switch in the init flags keeps the Blob store and never looks in OPFS', async () => {
+  it('the kill switch in the init flags keeps the Blob store and never opens a sync handle', async () => {
     const log = []
     const api = readingApi(log)
     const entry = fakeEntry({log})
