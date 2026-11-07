@@ -1001,6 +1001,22 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 | 7, 8 | deferred; only in-app switching needs them |
 | 9 | not started; gated on #2061 and the §7.2 flip prep. Step 5 is merged; #2070 is closed: its Properties panel cost is fixed by #2074 |
 
+**Picking during the pump (#2084).** The durable batches are pickable from
+the row they are written, on both engines (§11, "Pick during the pump").
+Time to first pickable, cold load, render loop throttled, n=2, ms:
+
+| model | engine | before | after |
+|---|---|---|---|
+| Arty_Z7 (58 MB STEP) | worker | 18241 / 18828 (at ready) | 3470 / 3664 (first durable row) |
+| Arty_Z7 | main thread | 18956 / 19278 | 19211 / 19143 (the pump blocks the page) |
+| PSB (IFC) | worker | 7852 / 7696 (preview) | 7653 / 7692 (preview) |
+| PSB | main thread | 15240 / 7467 (preview) | 7650 / 7385 (preview) |
+
+On PSB the first pickable thing was already its preview; the durable
+batches are now pickable from ~19–24 s instead of at ready (~46–56 s). On
+the main-thread engine a STEP pump holds the page from its first batch to
+ready, so the gain needs the worker (step 9).
+
 **Known issues.**
 
 - **#2061: worker JS heap on sp-231MB.** The engine worker holds about
