@@ -3,9 +3,12 @@ import {
   LOAD_PREVIEW_GROUP_KEY,
   PREVIEW_BASE_MATERIAL_KEY,
   PREVIEW_EXPRESS_ID_KEY,
+  PREVIEW_GEOMETRY_ID_KEY,
+  PREVIEW_OCCURRENCE_PATH_KEY,
   loadPreviewGroups,
   paintPreviewSelection,
   pickPreviewExpressId,
+  previewOccurrencePickOf,
 } from './previewSelection'
 
 
@@ -78,6 +81,19 @@ describe('viewer/previewSelection', () => {
     })
   })
 
+  describe('previewOccurrencePickOf', () => {
+    it('reads a STEP preview hit as an occurrence pick with no instance yet, and nothing else', () => {
+      const step = previewMesh(8, new MeshBasicMaterial())
+      step.userData[PREVIEW_OCCURRENCE_PATH_KEY] = []
+      step.userData[PREVIEW_GEOMETRY_ID_KEY] = 99
+      expect(previewOccurrencePickOf({object: step})).toEqual({
+        parentExpressId: 8, instanceId: null, occurrencePath: [], geometryId: 99,
+      })
+      expect(previewOccurrencePickOf({object: previewMesh(8, new MeshBasicMaterial())})).toBeNull()
+      expect(previewOccurrencePickOf({object: new Group()})).toBeNull()
+    })
+  })
+
   describe('paintPreviewSelection', () => {
     it('paints every preview mesh of the selected element, and restores them when deselected', () => {
       const red = new MeshBasicMaterial({color: 0xff0000})
@@ -108,6 +124,69 @@ describe('viewer/previewSelection', () => {
       expect(a2.material).toBe(blue)
       expect(b.material).toBe(red)
       expect(a1.userData[PREVIEW_BASE_MATERIAL_KEY]).toBeUndefined()
+    })
+
+    it('paints the STEP preview meshes at or under a selected occurrence, whose row id owns none', () => {
+      const red = new MeshBasicMaterial()
+      const selection = new MeshBasicMaterial()
+      const under = previewMesh(8, red)
+      under.userData[PREVIEW_OCCURRENCE_PATH_KEY] = [10, 20]
+      const other = previewMesh(8, red)
+      other.userData[PREVIEW_OCCURRENCE_PATH_KEY] = [11, 20]
+      const {scene} = sceneWithPreview([under, other])
+      // The row (NAUO 10) is selected, not the part shape (8) the meshes carry.
+      expect(paintPreviewSelection(scene, [10], selection, [10])).toBe(1)
+      expect(under.material).toBe(selection)
+      expect(other.material).toBe(red)
+    })
+
+    it('paints only the picked occurrence of a reused part, not every mesh carrying its part id', () => {
+      const red = new MeshBasicMaterial()
+      const selection = new MeshBasicMaterial()
+      const picked = previewMesh(8, red)
+      picked.userData[PREVIEW_OCCURRENCE_PATH_KEY] = [10, 20]
+      const reuse = previewMesh(8, red)
+      reuse.userData[PREVIEW_OCCURRENCE_PATH_KEY] = [11, 20]
+      const {scene} = sceneWithPreview([picked, reuse])
+      // A pick before the tree selects the mesh's own id (8, shared by both
+      // nuts) with the picked placement's path.
+      expect(paintPreviewSelection(scene, [8], selection, [10, 20])).toBe(1)
+      expect(picked.material).toBe(selection)
+      expect(reuse.material).toBe(red)
+    })
+
+    it('narrows an occurrence to its selected body', () => {
+      const red = new MeshBasicMaterial()
+      const selection = new MeshBasicMaterial()
+      const body = previewMesh(8, red)
+      body.userData[PREVIEW_OCCURRENCE_PATH_KEY] = [10]
+      body.userData[PREVIEW_GEOMETRY_ID_KEY] = 30
+      const sibling = previewMesh(8, red)
+      sibling.userData[PREVIEW_OCCURRENCE_PATH_KEY] = [10]
+      sibling.userData[PREVIEW_GEOMETRY_ID_KEY] = 31
+      const {scene} = sceneWithPreview([body, sibling])
+      expect(paintPreviewSelection(scene, [10], selection, [10], 30)).toBe(1)
+      expect(body.material).toBe(selection)
+      expect(sibling.material).toBe(red)
+    })
+
+    it('paints only the root-level shell a pick named, not its siblings under the same owner', () => {
+      // Codex on #2088: root shells sit at `[]`, which no selected path names,
+      // and share their owner; the pick's geometry tells them apart.
+      const red = new MeshBasicMaterial()
+      const selection = new MeshBasicMaterial()
+      const picked = previewMesh(8, red)
+      picked.userData[PREVIEW_OCCURRENCE_PATH_KEY] = []
+      picked.userData[PREVIEW_GEOMETRY_ID_KEY] = 31
+      const sibling = previewMesh(8, red)
+      sibling.userData[PREVIEW_OCCURRENCE_PATH_KEY] = []
+      sibling.userData[PREVIEW_GEOMETRY_ID_KEY] = 30
+      const {scene} = sceneWithPreview([picked, sibling])
+      expect(paintPreviewSelection(scene, [8], selection, null, null, 31)).toBe(1)
+      expect(picked.material).toBe(selection)
+      expect(sibling.material).toBe(red)
+      // A selection that names no shell (the product's row) takes them all.
+      expect(paintPreviewSelection(scene, [8], selection)).toBe(2)
     })
 
     it('without a selection material restores what is painted and paints nothing', () => {

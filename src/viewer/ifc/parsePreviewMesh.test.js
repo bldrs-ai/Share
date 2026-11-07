@@ -1,5 +1,5 @@
 /* eslint-disable no-magic-numbers */
-import {PREVIEW_EXPRESS_ID_KEY} from '../previewSelection'
+import {PREVIEW_EXPRESS_ID_KEY, PREVIEW_GEOMETRY_ID_KEY, PREVIEW_OCCURRENCE_PATH_KEY} from '../previewSelection'
 import {payloadToPreviewMesh} from './parsePreviewMesh'
 
 
@@ -37,6 +37,18 @@ describe('viewer/ifc/parsePreviewMesh', () => {
     expect(mesh.geometry.getIndex().count).toBe(3)
     expect(geometryCache.size).toBe(1)
     expect(materialCache.size).toBe(1)
+  })
+
+  it('stamps a STEP payload\'s occurrence path and geometry, keeping a root-level []; an IFC one gets neither', () => {
+    // conway#772: an AP214 preview payload carries the durable placement's
+    // occurrence path, so a pick selects the occurrence (previewSelection.js).
+    const nested = payloadToPreviewMesh(makePayload({occurrencePath: [3, 4]}), new Map(), new Map())
+    expect(nested.userData[PREVIEW_OCCURRENCE_PATH_KEY]).toEqual([3, 4])
+    expect(nested.userData[PREVIEW_GEOMETRY_ID_KEY]).toBe(7)
+    const root = payloadToPreviewMesh(makePayload({occurrencePath: []}), new Map(), new Map())
+    expect(root.userData[PREVIEW_OCCURRENCE_PATH_KEY]).toEqual([])
+    const ifc = payloadToPreviewMesh(makePayload(), new Map(), new Map())
+    expect(ifc.userData[PREVIEW_OCCURRENCE_PATH_KEY]).toBeUndefined()
   })
 
   it('resolves data-less payloads through the geometry cache (mapped sharing)', () => {

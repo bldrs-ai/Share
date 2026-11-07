@@ -1215,17 +1215,24 @@ export class ShareViewer {
    * all of them belong to the sole root of a one-product file, and in a
    * multi-root file `instanceOwners[i]`, the owner of `instanceIds[i]`, says
    * which part (`utils/occurrencePaths.js#rootLevelInstancesOfProduct`).
+   * `instanceGeometryIds[i]` is its geometry (shell) express id, null where
+   * the tables carry none: with the owner, it names the one shell a pick
+   * that carries no instance hit (a STEP preview mesh, CadView#selectFromInstancePick).
    *
    * @param {number} modelID
-   * @return {{instanceIds: number[], parentExpressIds: number[], instanceOwners: number[]}}
+   * @return {{instanceIds: number[], parentExpressIds: number[], instanceOwners: number[],
+   *   instanceGeometryIds: Array<number|null>}}
    */
   getRootLevelInstances(modelID) {
     const instanceIds = []
     const instanceOwners = []
+    // Not `instanceGeometryIds`: a push to that name reads as a batch side
+    // table write to batchedEditGuard.test.js.
+    const geometryIds = []
     const parentExpressIds = new Set()
     const model = this._modelOrStreamingTables_(modelID)
     if (!model || typeof model.traverse !== 'function') {
-      return {instanceIds, parentExpressIds: [], instanceOwners}
+      return {instanceIds, parentExpressIds: [], instanceOwners, instanceGeometryIds: geometryIds}
     }
     model.traverse((obj) => {
       // BatchedMesh render path: per-batch tables, instance id = global
@@ -1235,6 +1242,7 @@ export class ShareViewer {
           if (obj.instanceOccurrencePaths[batchId]?.length === 0) {
             instanceIds.push(obj.instanceOccurrenceIds[batchId])
             instanceOwners.push(obj.instanceParents[batchId])
+            geometryIds.push(obj.instanceGeometryIds?.[batchId] ?? null)
             parentExpressIds.add(obj.instanceParents[batchId])
           }
         }
@@ -1249,11 +1257,12 @@ export class ShareViewer {
           const owner = map.getParentExpressIdByInstance(instanceId)
           instanceIds.push(instanceId)
           instanceOwners.push(owner)
+          geometryIds.push(map.getGeometryExpressIdByInstance?.(instanceId) ?? null)
           parentExpressIds.add(owner)
         }
       }
     })
-    return {instanceIds, parentExpressIds: [...parentExpressIds], instanceOwners}
+    return {instanceIds, parentExpressIds: [...parentExpressIds], instanceOwners, instanceGeometryIds: geometryIds}
   }
 
 
@@ -1867,10 +1876,14 @@ export class ShareViewer {
    *   named body, when the selection is a body
    * @param {boolean} [narrowing.instancesExact] `instanceIds` are a scene
    *   pick's own, which then decide alone
+   * @param {number|null} [narrowing.rootGeometryId] the shell a root-level
+   *   STEP pick hit (NavTreeSlice#selectedRootGeometryId), which alone tells
+   *   it from the product's other root shells
    * @return {number} preview meshes and streaming rows painted
    */
   setPreviewSelection(expressIds, {
     instanceIds = [], occurrencePath = null, solidExpressId = null, instancesExact = false,
+    rootGeometryId = null,
   } = {}) {
     let scene = null
     try {
@@ -1883,9 +1896,9 @@ export class ShareViewer {
       return 0
     }
     const material = this.selector?.getSelectionMaterial?.() ?? null
-    const painted = paintPreviewSelection(scene, expressIds, material) +
+    const painted = paintPreviewSelection(scene, expressIds, material, occurrencePath, solidExpressId, rootGeometryId) +
       paintStreamingSelection(scene,
-        {parents: expressIds, instances: instanceIds, occurrencePath, solidExpressId, instancesExact},
+        {parents: expressIds, instances: instanceIds, occurrencePath, solidExpressId, instancesExact, rootGeometryId},
         material?.color ?? null)
     // The scene changed under a viewer that may be painting on demand.
     this.context.getRenderDemand?.()?.invalidate()

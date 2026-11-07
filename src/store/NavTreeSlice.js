@@ -66,6 +66,18 @@ export default function createNavTreeSlice(set, get) {
     selectedInstancesExact: false,
     setSelectedInstancesExact: (isExact) => set(() => ({selectedInstancesExact: isExact})),
 
+    // The geometry (shell) express id a ROOT-LEVEL STEP scene pick hit, or
+    // null. A root-level placement's path is `[]`, so the selection carries
+    // no path, and its owner (the product_definition_shape) is shared by the
+    // product's every root shell: this is what tells the clicked shell from
+    // its siblings in the load-time paint of the preview meshes and the
+    // streaming rows (previewSelection.js#paintPreviewSelection,
+    // IncrementalBatchedBuilder#isLoadSelected_; codex on #2088), which a
+    // preview pick before its shell has streamed in has nothing else to go
+    // on. Set by the pick funnels, cleared by every `selectItemsInScene`.
+    selectedRootGeometryId: null,
+    setSelectedRootGeometryId: (id) => set(() => ({selectedRootGeometryId: id})),
+
     // STEP occurrence path (NAUO express ids) of the selected occurrence, or
     // null. A reused part's occurrences share one `selectedElements` expressID,
     // so this is what lets the NavTree highlight the one clicked/picked node

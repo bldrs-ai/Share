@@ -194,6 +194,17 @@ export function previewMessage(payload) {
   if (payload.aabb) {
     out.aabb = {min: Array.from(payload.aabb.min), max: Array.from(payload.aabb.max)}
   }
+  // STEP (conway#772): the placement's occurrence, which the preview pick and
+  // paint key on (previewSelection.js#previewOccurrencePickOf). `[]` is a
+  // root-level placement and must arrive as `[]`, not absent: absent reads
+  // as an IFC element and a pick lights every reuse of the part.
+  if (Array.isArray(payload.occurrencePath)) {
+    out.occurrencePath = Array.from(payload.occurrencePath)
+  }
+  // An imposter's fill (parsePreviewMesh.js#aabbPayloadToMesh_).
+  if (typeof payload.solid === 'boolean') {
+    out.solid = payload.solid
+  }
   return {payload: out, transfer}
 }
 

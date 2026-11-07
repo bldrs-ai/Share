@@ -41,7 +41,7 @@ import {reportEngineLog, reportEngineVersion, reportSourceInfo} from '../loader/
 import {HEADER_SNIFF_BYTES, openModelFailure} from '../loader/unsupportedSchema'
 import {engineFormatOf} from '../loader/part21Formats'
 import {conwayDirectInfo, conwayDirectWarn} from '../viewer/ifc/conwayDirectLog'
-import {testPumpBatchSize} from '../viewer/ifc/pumpTestSeams'
+import {testPumpBatchSize, testStepPreviewFinishParse} from '../viewer/ifc/pumpTestSeams'
 import {viewRules} from '../viewer/legacyViewRules'
 import {Ev, Op} from './protocol'
 import {spawnEngineSession} from './spawnEngine'
@@ -340,7 +340,12 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
     let opened
     try {
       opened = await session.open(source,
-        {format, stream: {previews: Boolean(onPreviewMesh), startPaused, batchSize: testPumpBatchSize()}})
+        {format, stream: {
+          previews: Boolean(onPreviewMesh), startPaused, batchSize: testPumpBatchSize(),
+          // The worker's conway is its own; the page's seam reaches it here
+          // (pumpTestSeams.js#testStepPreviewFinishParse).
+          previewFinishParse: testStepPreviewFinishParse(),
+        }})
     } catch (e) {
       session.close()
       const failure = e.engineFailure

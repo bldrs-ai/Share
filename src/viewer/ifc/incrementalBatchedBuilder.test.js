@@ -1097,6 +1097,28 @@ describe('IncrementalBatchedBuilder: pickable and paintable while streaming', ()
     expect(colorAt(mesh, 2)).not.toEqual([1, 0, 0])
   })
 
+  it('a root-level pick that names its shell takes that shell\'s rows, not its siblings\' under the same owner', () => {
+    // Codex on #2088: a one-product STEP's root shells share their owner (the
+    // product_definition_shape) and all sit at `[]`, so only the pick's
+    // geometry tells the clicked one apart, including as it streams in later.
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    builder.appendBatch([stepMesh(8, 999, [])])
+    const mesh = builder.opaque.mesh
+    builder.paintSelection({parents: [8], rootGeometryId: 888}, RED)
+    // One FlatMesh per element per batch, so the owner's two later
+    // placements arrive in one; the second moved off the first, or the
+    // builder drops it as coincident.
+    const later = stepMesh(8, 888, [])
+    const moved = [...IDENTITY_MAT]
+    moved[12] = 5
+    later.geometries.push({...later.geometries[0], flatTransformation: moved, occurrencePath: [5]})
+    builder.appendBatch([later])
+    expect(colorAt(mesh, 0)).not.toEqual([1, 0, 0])
+    expect(colorAt(mesh, 1)).toEqual([1, 0, 0])
+    // A row under an occurrence is no root shell: its owner still decides.
+    expect(colorAt(mesh, 2)).toEqual([1, 0, 0])
+  })
+
   it('adopts a selection made before it existed, from the scene its root is added to', () => {
     // Codex round 5 on #2084: selected after the index, before the first
     // batch, there was no streaming root to paint, and nothing replayed the
