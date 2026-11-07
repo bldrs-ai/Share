@@ -56,6 +56,16 @@ export default function createNavTreeSlice(set, get) {
     selectedInstanceIds: [],
     setSelectedInstanceIds: (ids) => set(() => ({selectedInstanceIds: ids})),
 
+    // Whether `selectedInstanceIds` are a scene pick's exact instances, as
+    // opposed to ones resolved from a selected occurrence or row. Only the
+    // pick funnel (CadView#selectFromInstancePick) sets it; every selection
+    // through `selectItemsInScene` clears it. The streaming paint and the
+    // end-of-load repaint read it, so a pick of one body keeps to that body
+    // while a selected occurrence takes rows that arrive later
+    // (streamingBatchPick.js; codex rounds 2 and 3 on #2084).
+    selectedInstancesExact: false,
+    setSelectedInstancesExact: (isExact) => set(() => ({selectedInstancesExact: isExact})),
+
     // STEP occurrence path (NAUO express ids) of the selected occurrence, or
     // null. A reused part's occurrences share one `selectedElements` expressID,
     // so this is what lets the NavTree highlight the one clicked/picked node

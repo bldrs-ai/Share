@@ -35,6 +35,7 @@ import {createEngineModelLoad, engineFormatOf} from '../../engine/engineModelLoa
 import {reportGeometryStats} from '../../loader/loadProgress'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
 import ProgressiveLoadSession from '../ProgressiveLoadSession'
+import {beginLoadSelection, endLoadSelection} from '../streamingBatchPick'
 import ShareIfcManager from './ShareIfcManager'
 import debug, {DEBUG, WARN, isLogEnabled} from '../../utils/debug'
 
@@ -463,6 +464,10 @@ export default class ShareIfcLoader {
     const engineLoad = isEngineWorkerLoad(this.type, scene) ?
       createEngineModelLoad({format: engineFormatOf(this.type)}) : null
 
+    // Selections made while this load streams are kept for its builder
+    // (streamingBatchPick.js#LOAD_SELECTION_KEY), and dropped in the
+    // `finally` below however the load ends.
+    beginLoadSelection(scene)
     try {
       session.report('Opening model...')
       const ifcAPI = engineLoad !== null ? engineLoad.ifcAPI : this.ifcManager.ifcAPI
@@ -888,6 +893,8 @@ export default class ShareIfcLoader {
         onError(err)
       }
       return null
+    } finally {
+      endLoadSelection(scene)
     }
   }
 }

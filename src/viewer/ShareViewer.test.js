@@ -36,6 +36,7 @@ import {flatMeshToBatchedModel} from './ifc/flatMeshToBatchedModel'
 import {instanceMapFromGeometry, instanceMapFromOrderedPlacedRanges} from './ifc/IfcInstanceMap'
 import Selector from './three/Selector'
 import ThreeContext from './three/ThreeContext'
+import {occurrencePathKey} from '../utils/occurrencePaths'
 
 
 const TEST_MODEL_ID = 7
@@ -879,5 +880,51 @@ describe('viewer/ShareViewer setSelection on a model without expressIdPicking', 
     await ShareViewer.prototype.setSelection.call(viewer, 0, [5])
     // `getSelectedIds` is a class field returning a copy of this array.
     expect(viewer._selectedExpressIds).toEqual([5])
+  })
+})
+
+
+describe('viewer/ShareViewer per-instance queries while a load streams (no model yet)', () => {
+  // Codex on #2084: a shift-pick of a root-level STEP shell mid-pump toggles
+  // through getRootLevelInstances(0), which found no model 0 and answered
+  // nothing, so the second shift-pick left the owner selected. Until the model
+  // exists the viewer answers from the rows the builder has written
+  // (streamingBatchPick.js#streamingTablesModel), with its own code.
+  /** @return {object} a viewer with no model 0, over a scene with one streaming root */
+  function streamingViewer() {
+    const view = {
+      isBatchedMesh: true,
+      instanceParents: [8, 100, 3008],
+      instanceOccurrenceIds: [40, 41, 42],
+      instanceGeometryIds: [1, 2, 3],
+      instanceOccurrencePaths: [[], [10, 20], []],
+      occurrencePathToBatchIds: new Map([[occurrencePathKey([10, 20]), [1]]]),
+    }
+    const scene = new Scene()
+    const root = new Group()
+    root.userData.streamingBatches = {liveTables: () => [view]}
+    scene.add(root)
+    const viewer = Object.create(ShareViewer.prototype)
+    viewer.IFC = {context: {items: {ifcModels: []}}}
+    viewer.context = {getScene: () => scene}
+    return viewer
+  }
+
+  it('lists the streaming rows at the root, with their owners', () => {
+    expect(ShareViewer.prototype.getRootLevelInstances.call(streamingViewer(), 0))
+      .toEqual({instanceIds: [40, 42], parentExpressIds: [8, 3008], instanceOwners: [8, 3008]})
+  })
+
+  it('resolves an occurrence to the streaming rows at and under it', () => {
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      streamingViewer(), 0, [10], {includeDescendants: true})).toEqual([41])
+  })
+
+  it('answers nothing when nothing streams and there is no model', () => {
+    const viewer = Object.create(ShareViewer.prototype)
+    viewer.IFC = {context: {items: {ifcModels: []}}}
+    viewer.context = {getScene: () => new Scene()}
+    expect(ShareViewer.prototype.getRootLevelInstances.call(viewer, 0))
+      .toEqual({instanceIds: [], parentExpressIds: [], instanceOwners: []})
   })
 })

@@ -99,6 +99,7 @@ import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../viewer/three/Picker'
 import {loadPreviewGroups, pickPreviewExpressId} from '../viewer/previewSelection'
+import {streamingBatchRoots, streamingPickOf} from '../viewer/streamingBatchPick'
 import {USER_CAMERA_EVENT} from '../viewer/three/renderDemand'
 import {DEFAULT_LOOK} from '../viewer/looks'
 import {installAssistDevHook} from '../viewer/tools/assistHost'
@@ -229,10 +230,12 @@ export default function CadView({
   // This render's `selectItemsInScene`, for the funnel registered with
   // `viewer/tools/selectionFunnel.js` (see the effect near the end).
   const selectItemsInSceneRef = useRef(null)
-  // open-205 #2043: a double-click on a parse-time preview mesh, made before
-  // the model's index (selectFromPreviewPick). Holds the element id until the
-  // tree is up to resolve it against (resolvePendingPreviewPick); null when
-  // no such pick is waiting.
+  // open-205 #2043: a double-click during the load, made before the model's
+  // index — on a parse-time preview mesh (selectFromPreviewPick: the element
+  // id) or on a durable batch still streaming in (selectFromStreamingPick:
+  // its row's `{parentExpressId, instanceId, occurrencePath, geometryId}`).
+  // Held until the tree is up to resolve it against
+  // (resolvePendingPreviewPick); null when no such pick is waiting.
   const pendingPreviewPickRef = useRef(null)
   // Whether the load in flight took a preview pick at all, before or after
   // its index: its selection has to be painted onto the finished model, and
@@ -1497,12 +1500,17 @@ export default function CadView({
       state.selectedOccurrencePath.length > 0 ? state.selectedOccurrencePath : null
     const solidExpressId = state.selectedSolidExpressId ?? null
     // A tree row's occurrence resolves to its instances only now there are any;
-    // with no occurrence, selectItemsInScene resolves the anchors itself.
-    const instanceIds = occurrencePath === null ? [] :
-      occurrenceInstanceIds(occurrencePath, true, solidExpressId)
+    // with no occurrence, selectItemsInScene resolves the anchors itself. A
+    // scene pick's exact instances are kept as they are: the finished model
+    // narrows a pick to the instance it hit.
+    const isExact = state.selectedInstancesExact === true &&
+      Array.isArray(state.selectedInstanceIds) && state.selectedInstanceIds.length > 0
+    const instanceIds = isExact ? state.selectedInstanceIds :
+      (occurrencePath === null ? [] : occurrenceInstanceIds(occurrencePath, true, solidExpressId))
     const anchors = Array.isArray(state.selectedAnchorIds) && state.selectedAnchorIds.length > 0 ?
       state.selectedAnchorIds.map(Number) : null
     selectItemsInScene(selected.map(Number), false, instanceIds, occurrencePath, solidExpressId, anchors)
+    useStore.getState().setSelectedInstancesExact(isExact)
   }
 
 
@@ -1571,6 +1579,54 @@ export default function CadView({
 
 
   /**
+   * Select the row of a durable batch the user double-clicked while it is
+   * still streaming in. Once the tree is up this is the finished model's
+   * per-instance pick (`selectFromInstancePick`), from the same row, so the
+   * selection — element or occurrence, and the instance that narrows its
+   * highlight — is the one the finished model will have. Before the tree,
+   * like a preview pick: the bare owner id is selected, and the row waits in
+   * `pendingPreviewPickRef` for the tree.
+   *
+   * @param {object} pick `{parentExpressId, instanceId, occurrencePath,
+   *   geometryId}` (`streamingPickOf`)
+   * @param {boolean} isShiftKeyDown
+   */
+  function selectFromStreamingPick(pick, isShiftKeyDown) {
+    previewPickedRef.current = true
+    if (useStore.getState().rootElement === null) {
+      pendingPreviewPickRef.current = pick
+      selectItemsInScene([pick.parentExpressId], false, [pick.instanceId])
+      // The row the ray hit: an exact narrowing, as a pick at the index is.
+      useStore.getState().setSelectedInstancesExact(true)
+      return
+    }
+    pendingPreviewPickRef.current = null
+    selectFromInstancePickRow(pick, isShiftKeyDown)
+  }
+
+
+  /**
+   * The per-instance pick funnel for a row read off a durable batch, while
+   * it streams (`streamingPickOf`) or once decorated: one translation of a
+   * row into `selectFromInstancePick`'s arguments.
+   *
+   * @param {object} pick `{parentExpressId, instanceId, occurrencePath,
+   *   geometryId}`
+   * @param {boolean} isShiftKeyDown
+   */
+  function selectFromInstancePickRow(pick, isShiftKeyDown) {
+    selectFromInstancePick({
+      parentExpressId: pick.parentExpressId,
+      instanceId: pick.instanceId,
+      rawOccurrencePath: pick.occurrencePath ?? null,
+      isRootLevel: Array.isArray(pick.occurrencePath) && pick.occurrencePath.length === 0,
+      pickedGeometryId: pick.geometryId ?? null,
+      isShiftKeyDown,
+    })
+  }
+
+
+  /**
    * Resolve a preview pick made before the index, now that the tree is up
    * (open-205 #2043): re-select it through the finished model's funnel, which
    * writes its URL path and expands the tree to it, and so re-runs the
@@ -1582,17 +1638,22 @@ export default function CadView({
    * for its properties.
    */
   function resolvePendingPreviewPick() {
-    const expressId = pendingPreviewPickRef.current
+    const pending = pendingPreviewPickRef.current
     pendingPreviewPickRef.current = null
-    if (expressId === null) {
+    if (pending === null) {
       return
     }
+    // A durable-batch row (selectFromStreamingPick) or a preview's element id.
+    const isRow = typeof pending === 'object'
+    const expressId = isRow ? pending.parentExpressId : pending
     const anchors = useStore.getState().selectedAnchorIds ?? []
     if (anchors.length !== 1 || Number(anchors[0]) !== expressId) {
       reapplySelectionToGeometry()
       return
     }
-    if (elementsById[expressId] !== undefined) {
+    if (isRow) {
+      selectFromInstancePickRow(pending, false)
+    } else if (elementsById[expressId] !== undefined) {
       elementSelection(viewer, elementsById, selectItemsInScene, false, expressId)
     } else {
       selectItemsInScene([expressId], false)
@@ -1645,14 +1706,33 @@ export default function CadView({
       // durable batches streaming beside it carry no pick tables until the
       // load's end (incrementalBatchedBuilder#finalize), so they are not
       // raycast: a pick in a spot only they cover selects nothing yet.
-      const previewGroups = loadPreviewGroups(viewer.context.getScene())
-      if (previewGroups.length > 0) {
+      //
+      // Beside it, the durable batches themselves, which are pickable from the
+      // row they are written (viewer/streamingBatchPick.js): the builder keeps
+      // the very tables finalize stamps. The nearest hit on either wins; where
+      // they overlap (IFC: the preview and the durable instance of one element)
+      // both name the same element.
+      const scene = viewer.context.getScene()
+      const loadTargets = [...loadPreviewGroups(scene), ...streamingBatchRoots(scene)]
+      if (loadTargets.length > 0) {
         // The loop may be painting on demand (three/renderDemand.js), which
         // leaves a mesh added since the last paint without its world matrix.
-        previewGroups.forEach((group) => group.updateMatrixWorld(true))
-        const previewId = pickPreviewExpressId(picker.castRay(previewGroups))
-        if (previewId !== null) {
-          selectFromPreviewPick(previewId, event.shiftKey)
+        loadTargets.forEach((target) => target.updateMatrixWorld(true))
+        for (const hit of picker.castRay(loadTargets)) {
+          const previewId = pickPreviewExpressId([hit])
+          if (previewId !== null) {
+            selectFromPreviewPick(previewId, event.shiftKey)
+            return
+          }
+          const streamingPick = streamingPickOf(hit)
+          if (streamingPick !== null) {
+            if (viewer.isolator.canBePickedInScene(streamingPick.parentExpressId)) {
+              selectFromStreamingPick(streamingPick, event.shiftKey)
+            }
+            return
+          }
+          // An AABB imposter or a fallback mesh: stands in front of nothing
+          // the user can select, so look past it.
         }
         return
       }
@@ -1860,8 +1940,12 @@ export default function CadView({
       materializeTransientNode(occurrencePath, transientGeometryId)
     }
     selectItemsInScene(
-      [targetId], true, [instanceId], occurrencePath, solidExpressId,
-      rootRow ? [rootRow.expressID] : null)
+      [targetId], true, instanceId === null || instanceId === undefined ? [] : [instanceId],
+      occurrencePath, solidExpressId, rootRow ? [rootRow.expressID] : null)
+    // The instance a ray hit is the selection's exact narrowing: it keeps to
+    // that instance while siblings stream in, and through the end-of-load
+    // repaint (reapplySelectionToGeometry), as a pick on the finished model.
+    useStore.getState().setSelectedInstancesExact(instanceId !== null && instanceId !== undefined)
   }
 
 
@@ -1906,6 +1990,7 @@ export default function CadView({
       rootOwnerIds: rootLevel.ownerIds,
     })
     selectItemsInScene(next.elements, false, next.instances, null, null, next.anchors)
+    useStore.getState().setSelectedInstancesExact(next.instances.length > 0)
   }
 
 
@@ -2103,6 +2188,8 @@ export default function CadView({
       // is its own anchor.
       setSelectedAnchorIds(anchorIds === null ? resIds : anchorIds.map((id) => `${id}`))
       setSelectedInstanceIds(instanceIds)
+      // Derived, unless the pick funnel says otherwise once this returns.
+      useStore.getState().setSelectedInstancesExact(false)
       // STEP per-occurrence key: a reused part's occurrences share one
       // expressID, so this disambiguates which NavTree node to highlight.
       // Every non-occurrence caller passes null, clearing any stale path.
@@ -2565,9 +2652,15 @@ export default function CadView({
       // Update The selection on the scene pick/unpick
       const ids = selectedElements.map((id) => parseInt(id))
       await viewer.setSelection(0, ids)
-      // While a Conway load parses there is no model for setSelection to
-      // paint, only the preview meshes (open-205 #2043); a no-op otherwise.
-      viewer.setPreviewSelection?.(ids)
+      // While a Conway load runs there is no model for setSelection to
+      // paint, only the preview meshes (open-205 #2043) and the durable
+      // batches streaming in (streamingBatchPick.js); a no-op otherwise.
+      viewer.setPreviewSelection?.(ids, {
+        instanceIds: Array.isArray(selectedInstanceIds) ? selectedInstanceIds : [],
+        occurrencePath: useStore.getState().selectedOccurrencePath ?? null,
+        solidExpressId: useStore.getState().selectedSolidExpressId ?? null,
+        instancesExact: useStore.getState().selectedInstancesExact === true,
+      })
       // Per-instance highlight (Conway-direct): if the click handler
       // tagged us with a specific PlacedGeometry's synthetic ID,
       // restrict the visible highlight to just that instance. The

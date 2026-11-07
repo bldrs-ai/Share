@@ -104,6 +104,7 @@ export default function BotChat() {
     const rawSetSelectedElements = useStore.getState().setSelectedElements
     const setSelectedElements = (ids) => {
       useStore.getState().setSelectedInstanceIds([])
+      useStore.getState().setSelectedInstancesExact(false)
       useStore.getState().setSelectedOccurrencePath(null)
       rawSetSelectedElements(ids)
     }

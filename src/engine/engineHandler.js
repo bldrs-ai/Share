@@ -128,6 +128,9 @@ export function createEngineHandler({
   // stops at the next batch boundary and waits, keeping its engine and its
   // place in the stream. `aborted` ends it there for good.
   let paused = false
+  // `pump {mode: 'step'}`: run until one batch is posted, then pause again
+  // (the page's mid-pump test hold, engineModelLoad.js).
+  let pauseAfterBatch = false
   let aborted = false
   let resume = null
   // The byte store the open model's windowed source reads through, kept for
@@ -255,6 +258,7 @@ export function createEngineHandler({
 
     [Op.PUMP]({mode = 'run'} = {}) {
       paused = mode === 'pause'
+      pauseAfterBatch = mode === 'step'
       if (!paused && resume !== null) {
         resume()
         resume = null
@@ -619,6 +623,10 @@ export function createEngineHandler({
           // Copied out inside the pump call's turn, before the next call can
           // evict anything (engineStream.js#makeBatchEncoder).
           postBatch(batch, {done, total})
+          if (pauseAfterBatch) {
+            pauseAfterBatch = false
+            paused = true
+          }
         }
         if (remaining === 0 && extracted === 0) {
           break

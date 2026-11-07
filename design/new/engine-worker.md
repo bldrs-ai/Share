@@ -1001,6 +1001,22 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 | 7, 8 | deferred; only in-app switching needs them |
 | 9 | not started; gated on #2061 and the §7.2 flip prep. Step 5 is merged; #2070 is closed: its Properties panel cost is fixed by #2074 |
 
+**Picking during the pump (#2084).** The durable batches are pickable from
+the row they are written, on both engines (§11, "Pick during the pump").
+Time to first pickable, cold load, render loop throttled, n=2, ms:
+
+| model | engine | before | after |
+|---|---|---|---|
+| Arty_Z7 (58 MB STEP) | worker | 18241 / 18828 (at ready) | 3470 / 3664 (first durable row) |
+| Arty_Z7 | main thread | 18956 / 19278 | 19211 / 19143 (the pump blocks the page) |
+| PSB (IFC) | worker | 7852 / 7696 (preview) | 7653 / 7692 (preview) |
+| PSB | main thread | 15240 / 7467 (preview) | 7650 / 7385 (preview) |
+
+On PSB the first pickable thing was already its preview; the durable
+batches are now pickable from ~19–24 s instead of at ready (~46–56 s). On
+the main-thread engine a STEP pump holds the page from its first batch to
+ready, so the gain needs the worker (step 9).
+
 **Known issues.**
 
 - **#2061: worker JS heap on sp-231MB.** The engine worker holds about
@@ -1282,6 +1298,7 @@ and the other lacks.
 | Properties | `getItemProperties` / `getPropertySets`; the panel's tables through `propertyTable.js`, behind the worker's `propertyTables` op or on the page (§7.1, #2070) | IFC entities and psets | AP214 records | shared |
 | Preview | `ON_PREVIEW_MESH` → `payloadToPreviewMesh` → `ProgressiveLoadSession`; picking via `previewSelection.js` (#2052) | store or streamed preview channel | `StreamedPreviewChannel` with `ap214PreviewAdapter` | shared, and the worker passes payloads through unchanged. Two STEP gaps, the same on both engines: none of the STEP models tried (the fixtures and real files up to 14 MB) put a preview mesh on screen before its index, and a STEP payload's `expressID` is the part shape, not the occurrence (it carries no occurrence path), so a pick before the index would select per part — both conway asks |
 | Geometry pump | `ExtractGeometryBatchAsync` → `IncrementalBatchedBuilder` (main) / the batch columns → `decodePlacements` → the same builder (worker) | — | `PlacedGeometry.occurrencePath`, the batch's path columns, where a present-but-empty path (a root-level instance) stays `[]` (#2067) | shared; data |
+| Pick during the pump | `streamingBatchPick.js`: the incremental builder offers its rows as it writes them (`root.userData.streamingBatches`, withdrawn at `finalize`); CadView's double-click raycasts the preview group and the streaming batches, nearest first, and a row goes through `selectFromInstancePick` as on the finished model; the highlight is the rows' instance colours (`ShareViewer#setPreviewSelection`) | element id + instance | occurrence path (`[]` at the root) + instance | shared, both engines (a worker load's batches feed the same builder). Before it nothing durable answered a pick until `finalize`: on Arty_Z7 from ~7 s to ~38 s |
 | Assembly and decoration | `assembleBatchedModel`, `decorateConwayDirectIfcModel`, `stampAppliedCoordination` | — | per-occurrence tables carried onto the rebuilt instance map | shared |
 | Hide / isolate / `#d:` | `IfcIsolator.js`, `Residency/visibilityHash.js` | `e` refs | `o` refs (occurrence paths) | shared; data |
 | GLB writer capture | `glbEngineCapture.js#captureEngineExtensions` (`bldrsElementPropertiesCapture` / `bldrsSpatialTree` / the geometry-identity table), run next to whichever engine loaded the model: the page's, or the worker's as the `capture` op (§7 step 5) | `RootExpressIDs` fast path | full record scan (no IfcRoot); occurrence-path table beside the face ids | shared: one job for both formats and both engines |

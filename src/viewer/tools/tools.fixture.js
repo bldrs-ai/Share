@@ -323,6 +323,8 @@ export function makeStoreFunnel() {
       selectedInstanceIds: instanceIds,
       selectedOccurrencePath: occurrencePath,
       selectedSolidExpressId: solidExpressId,
+      // The funnel's instances are derived unless the pick funnel says so.
+      selectedInstancesExact: false,
     })
   })
 }

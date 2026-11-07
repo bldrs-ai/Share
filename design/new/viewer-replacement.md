@@ -286,6 +286,22 @@ landed, so `?feature=conwayDirectIfc` is now redundant):
   `viewer.setSelection(0, ids)` then
   `viewer.setInstanceSelection(0, instanceIds)`.
 
+  *During a load* the same handler raycasts what is on screen before
+  the model exists: the parse-time preview group
+  (`viewer/previewSelection.js`) and the durable BatchedMeshes the
+  demand pump is still filling (`viewer/streamingBatchPick.js`). The
+  incremental builder offers each row it writes on its root
+  (`root.userData.streamingBatches`, withdrawn at `finalize`), and a hit
+  on one reads the same `{parent, instance, occurrence path, geometry}`
+  the finished model's batched pick reads from the stamped tables, so it
+  goes through the same `selectFromInstancePick`. Before the tree is up
+  the row waits (`pendingPreviewPickRef`) like a preview pick. The
+  highlight is painted on the streaming rows by
+  `ShareViewer#setPreviewSelection` (instance colours, restored at
+  `finalize`) and repainted on the finished model by
+  `reapplySelectionToGeometry`. Format- and engine-neutral: a worker
+  load's batches feed the same builder.
+
 **Cache round-trip** (`conwayDirectIfc` + `glb`, both default-on):
 
 Per-vertex `instanceID` rides through the IFC→GLB→IFC cache

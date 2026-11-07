@@ -60,6 +60,7 @@ import {beginOpenAttempt, conwayOpenFailure, conwayRefusedSchema, openModelFailu
 import debug, {WARN} from '../../utils/debug'
 import {attachInstanceMapSubsets} from '../three/elementSubsets'
 import {instanceMapFromGeometry} from './IfcInstanceMap'
+import {testPumpBatchSize} from './pumpTestSeams'
 
 
 /**
@@ -356,13 +357,13 @@ export async function parseIfcWithConway(
         // the per-batch scene update.
         // eslint-disable-next-line new-cap
         const pumped = await ifcAPI.ExtractGeometryBatchAsync(
-          modelID, ASYNC_DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
+          modelID, testPumpBatchSize() ?? ASYNC_DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
         extracted = pumped.extracted
         remaining = pumped.remaining
       } else {
         // eslint-disable-next-line new-cap
         const pumped = ifcAPI.ExtractGeometryBatch(
-          modelID, DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
+          modelID, testPumpBatchSize() ?? DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
         extracted = pumped.extracted
         remaining = pumped.remaining
       }
@@ -390,6 +391,7 @@ export async function parseIfcWithConway(
           // first pump call has returned, which is also the first call
           // that can produce a batch, so in practice it is always set here.
           onMeshBatch(batch, modelID, {done: geometryDone, total: geometryTotal})
+          await holdMidPumpForTest()
         }
         // `batch` itself goes out of scope on the next iteration, so on the
         // streaming path the last reference to this batch's FlatMeshes is
@@ -834,6 +836,27 @@ function yieldToEventLoop() {
  */
 async function holdGeometryPumpForTest() {
   const hold = globalThis.__bldrsTestHoldGeometryPump
+  if (typeof hold === 'function') {
+    await hold()
+  }
+}
+
+
+/**
+ * Test seam for picking during the pump (streamingBatchPick.js): awaited
+ * after EVERY batch has gone to `onMeshBatch`, so a spec can hold the load
+ * with the durable model partly on screen and not finished — the state a
+ * large model's whole geometry pass is in, which on a shippable fixture lasts
+ * well under a second — and step it a batch at a time (the hook resolves at
+ * once for the batches it lets through). `streamingBatchPick.spec.ts`
+ * installs `window.__bldrsTestHoldMidPump` with `addInitScript`; the engine
+ * worker honours the same hook (engine/engineModelLoad.js). Absent in
+ * production, where this is a property read per batch.
+ *
+ * @return {Promise<void>}
+ */
+async function holdMidPumpForTest() {
+  const hold = globalThis.__bldrsTestHoldMidPump
   if (typeof hold === 'function') {
     await hold()
   }

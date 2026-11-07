@@ -37,6 +37,7 @@ import debug from '../utils/debug'
 import {occurrencePathKey} from '../utils/occurrencePaths'
 import {modelHasCapability} from './ShareModel'
 import {paintPreviewSelection} from './previewSelection'
+import {paintStreamingSelection, streamingTablesModel} from './streamingBatchPick'
 import {isFeatureEnabled} from '../FeatureFlags'
 import {viewRules} from './legacyViewRules'
 import {
@@ -1112,7 +1113,7 @@ export class ShareViewer {
    */
   getInstanceIdsForOccurrencePath(
     modelID, occurrencePath, {includeDescendants = true, geometryExpressId = null} = {}) {
-    const model = this._modelById(modelID)
+    const model = this._modelOrStreamingTables_(modelID)
     if (!model || !Array.isArray(occurrencePath) || occurrencePath.length === 0) {
       return []
     }
@@ -1222,7 +1223,7 @@ export class ShareViewer {
     const instanceIds = []
     const instanceOwners = []
     const parentExpressIds = new Set()
-    const model = this._modelById(modelID)
+    const model = this._modelOrStreamingTables_(modelID)
     if (!model || typeof model.traverse !== 'function') {
       return {instanceIds, parentExpressIds: [], instanceOwners}
     }
@@ -1587,6 +1588,28 @@ export class ShareViewer {
 
 
   /**
+   * The model, or while a load is still streaming and has none, its rows
+   * (`streamingBatchPick.js#streamingTablesModel`): the per-instance queries
+   * then answer for what is on screen, as they will for the finished model.
+   *
+   * @param {number} modelID
+   * @return {object|null} something with `traverse`
+   */
+  _modelOrStreamingTables_(modelID) {
+    const model = this._modelById(modelID)
+    if (model) {
+      return model
+    }
+    try {
+      return streamingTablesModel(this.context?.getScene?.() ?? null)
+    } catch {
+      // A disposed viewer.
+      return null
+    }
+  }
+
+
+  /**
    * Look up a registered model by modelID. Today the viewer holds
    * at most one model and call-sites always pass `0`; we still index
    * for symmetry with the underlying `ifcModels` array.
@@ -1826,15 +1849,29 @@ export class ShareViewer {
 
 
   /**
-   * Paint a selection on the parse-time preview meshes (open-205 #2043): the
-   * highlight for a selection made while a Conway load is still parsing,
-   * before there is a model for `setSelection` to paint. A no-op once the
-   * preview is gone; the finished model's highlight is `setSelection`'s.
+   * Paint a selection made while a Conway load is still in flight, before
+   * there is a model for `setSelection` to paint: on the parse-time preview
+   * meshes (open-205 #2043), and on the durable batches streaming in
+   * (`streamingBatchPick.js`), which keep painting rows that arrive later. A
+   * no-op once the load has finished; the finished model's highlight is
+   * `setSelection`'s.
    *
    * @param {Array<number>} expressIds the selected elements
-   * @return {number} preview meshes painted
+   * @param {object} [narrowing]
+   * @param {Array<number>} [narrowing.instanceIds] a scene pick's instance:
+   *   on the streaming batches, only it is painted
+   * @param {Array<number>|null} [narrowing.occurrencePath] a STEP
+   *   occurrence: its rows, and its descendants', are painted, including
+   *   rows that stream in later
+   * @param {number|null} [narrowing.solidExpressId] the occurrence's one
+   *   named body, when the selection is a body
+   * @param {boolean} [narrowing.instancesExact] `instanceIds` are a scene
+   *   pick's own, which then decide alone
+   * @return {number} preview meshes and streaming rows painted
    */
-  setPreviewSelection(expressIds) {
+  setPreviewSelection(expressIds, {
+    instanceIds = [], occurrencePath = null, solidExpressId = null, instancesExact = false,
+  } = {}) {
     let scene = null
     try {
       scene = this.context?.getScene?.() ?? null
@@ -1845,7 +1882,11 @@ export class ShareViewer {
     if (scene === null) {
       return 0
     }
-    const painted = paintPreviewSelection(scene, expressIds, this.selector?.getSelectionMaterial?.() ?? null)
+    const material = this.selector?.getSelectionMaterial?.() ?? null
+    const painted = paintPreviewSelection(scene, expressIds, material) +
+      paintStreamingSelection(scene,
+        {parents: expressIds, instances: instanceIds, occurrencePath, solidExpressId, instancesExact},
+        material?.color ?? null)
     // The scene changed under a viewer that may be painting on demand.
     this.context.getRenderDemand?.()?.invalidate()
     return painted

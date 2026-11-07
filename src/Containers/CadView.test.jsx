@@ -2041,7 +2041,8 @@ describe('CadView', () => {
         expect(result.current.rootElement).toBeNull()
         expect(result.current.selectedElement).toBeNull()
         expect(indexedModel.getItemProperties).not.toHaveBeenCalled()
-        await waitFor(() => expect(previewPaintSpy).toHaveBeenLastCalledWith([leaf]))
+        await waitFor(() => expect(previewPaintSpy).toHaveBeenLastCalledWith(
+          [leaf], {instanceIds: [], occurrencePath: null, solidExpressId: null, instancesExact: false}))
         const navigationsBeforeIndex = mockedUseNavigate.mock.calls.length
 
         await act(() => releaseIndex())
@@ -2053,6 +2054,46 @@ describe('CadView', () => {
         // carries the element's path.
         expect(mockedUseNavigate.mock.calls.length).toBeGreaterThan(navigationsBeforeIndex)
         expect(String(mockedUseNavigate.mock.calls.at(-1)[0])).toMatch(new RegExp(`/${leaf}(#|$)`))
+      })
+
+      it('a durable batch still streaming in answers the pick with its row, resolved at the index', async () => {
+        // viewer/streamingBatchPick.js: the builder's root offers the rows it
+        // has written; the ray hits a BatchedMesh under it, nearer than any
+        // preview mesh.
+        const {result} = renderHook(() => useStore((state) => state))
+        const indexedModel = makeIndexedModel()
+        await mountOnParsingLoad(result, indexedModel)
+        const instance = 42
+        const row = {parentExpressId: leaf, instanceId: instance, occurrencePath: null, geometryId: 7}
+        const mesh = {isBatchedMesh: true, parent: {userData: {streamingBatches: {
+          pickRow: (hitMesh, batchId) => (hitMesh === mesh && batchId === 3 ? row : null),
+        }}}}
+        castRaySpy.mockReturnValue([{object: mesh, batchId: 3}])
+        await act(() => window.ondblclick({target: {tagName: 'CANVAS'}, shiftKey: false}))
+        await actAsyncFlush()
+
+        // Before the tree: the owner, narrowed to the row's instance.
+        expect(result.current.selectedElements).toEqual([`${leaf}`])
+        expect(result.current.selectedInstanceIds).toEqual([instance])
+        await waitFor(() => expect(previewPaintSpy).toHaveBeenLastCalledWith(
+          [leaf], {instanceIds: [instance], occurrencePath: null, solidExpressId: null, instancesExact: true}))
+
+        // At the index, the finished model's per-instance funnel takes it.
+        await act(() => releaseIndex())
+        await actAsyncFlush()
+        await waitFor(() => expect(result.current.selectedElement?.Name?.value).toBe(`item ${leaf}`))
+        expect(result.current.selectedAnchorIds).toEqual([`${leaf}`])
+        expect(result.current.selectedInstanceIds).toEqual([instance])
+        // An exact narrowing (codex round 3 on #2084), through the end-of-load
+        // repaint too: reapplySelectionToGeometry keeps the picked instance
+        // rather than re-deriving the occurrence's.
+        expect(result.current.selectedInstancesExact).toBe(true)
+        await waitFor(() => expect(finishGeometry).toBeDefined())
+        await act(() => finishGeometry())
+        await actAsyncFlush()
+        await waitFor(() => expect(result.current.isModelReady).toBe(true))
+        expect(result.current.selectedInstanceIds).toEqual([instance])
+        expect(result.current.selectedInstancesExact).toBe(true)
       })
 
       it('paints the pick on the finished model', async () => {
