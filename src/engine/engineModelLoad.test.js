@@ -4,7 +4,6 @@ import {createEngineHandler} from './engineHandler'
 import {
   createEngineModelLoad,
   decodePlacements,
-  hasLegacyViewRules,
   isWorkerEngineModel,
   makeEngineIfcApi,
   makeGeometryStore,
@@ -467,17 +466,6 @@ describe('engine/engineStream helpers', () => {
     store.drop([{id: 1}])
     expect(store.size).toBe(0)
     expect(makeEngineIfcApi(store).GetLinearScalingFactor).toBeUndefined()
-  })
-})
-
-
-describe('engine/engineModelLoad legacy ?view= rules', () => {
-  it('names a non-default view rule set, and nothing else', () => {
-    expect(hasLegacyViewRules('?view=ch.sia380-1.heatmap')).toBe(true)
-    expect(hasLegacyViewRules('?view=default')).toBe(false)
-    expect(hasLegacyViewRules('?feature=engineWorker')).toBe(false)
-    // A name ShareViewer does not know already does nothing: no message.
-    expect(hasLegacyViewRules('?view=made-up')).toBe(false)
   })
 })
 

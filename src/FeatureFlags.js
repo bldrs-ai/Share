@@ -160,12 +160,29 @@ export const flags = [
   {name: 'demandGeometry', isActive: true},
   // Per-model engine worker (design/new/engine-worker.md, open-205 #2053):
   // each model's Conway engine runs in its own module Worker and is freed
-  // by terminate(). Off while the §7 steps land behind it. Today an IFC or
-  // STEP load parses, pumps and answers property reads in the worker
-  // (engine/engineModelLoad.js), with no GLB cache write yet
-  // (step 5); `window.__bldrsEngine` (engineDevHook.js) drives sessions
-  // directly.
-  {name: 'engineWorker', isActive: false},
+  // by terminate(). An IFC or STEP load parses, pumps, answers property
+  // reads and captures its GLB artifact in the worker
+  // (engine/engineModelLoad.js); `window.__bldrsEngine` (engineDevHook.js)
+  // drives sessions directly when the URL names this flag.
+  // Default-ON since §7 step 9. Where a load's engine runs is decided in ONE
+  // place, `engine/engineRoute.js#mainThreadEngineReason`: the main-thread
+  // engine stays permanently (§8 item 6) for `disableEngineWorker` below,
+  // for the legacy `?view=` rules and for the legacy `?feature=bot` chat,
+  // both of which read the main-thread engine directly. Where module workers
+  // are missing, or a worker fails to start, the same handler runs in
+  // process on this thread (spawnEngine.js).
+  // Do NOT roll back by setting this to false: `?feature=engineWorker` in a
+  // URL would still turn it on for that link. Roll back with
+  // `disableEngineWorker` below.
+  {name: 'engineWorker', isActive: true},
+  // OFF-switch for the engine worker above, same inverted shape and reason as
+  // `disableStreamOpen`: `?feature=` can only turn flags ON, so
+  // `?feature=disableEngineWorker` is the per-session way back to the
+  // main-thread engine (parseIfcWithConway), for one A/B or one bad model.
+  // Setting it `isActive: true` here is the PROD ROLLBACK: engineRoute.js
+  // reads the static value before any URL flag, so no link can opt back into
+  // the worker (engine-worker.md §7.2, "Rolling back").
+  {name: 'disableEngineWorker', isActive: false},
   // Kill switch for the engine worker's OPFS sync access handle
   // (engine-worker.md §7 step 4): read the source through the Blob store
   // instead, as on the main thread. `?feature=` can only turn flags on, so

@@ -31,6 +31,16 @@ const PLATES_OWNER = 3008
 const TWO_ROOT_TIMEOUT_MS = 90_000
 
 
+/**
+ * @param engine from watchEngineWorker
+ * @param worker whether the leg is the worker's
+ * @return the leg's engine check
+ */
+function expectEngine(engine: ReturnType<typeof watchEngineWorker>, worker: boolean): Promise<void> {
+  return worker ? engine.expectWorkerEngine() : engine.expectMainThreadEngine()
+}
+
+
 /** What `__bldrsAssistTools.call` resolves to (assistHost.js). */
 interface CallResult {
   ok: boolean
@@ -41,79 +51,97 @@ interface CallResult {
 }
 
 
-describeMobileAndDesktop('Assist view tools', () => {
-  test.beforeEach(async ({page}) => {
-    await homepageSetup(page)
-    await setIsReturningUser(page.context())
-    await page.goto(IFC_PATH)
-    await waitForModelReady(page)
-    // These tests read state (rows, instance visibility, the URL), not pixels.
-    await pauseViewerRendering(page)
+// Both engines (engine-worker.md §7 step 9): the worker, which is the default,
+// and the main-thread engine through the kill switch. Each test's model is
+// checked to have loaded on its leg's engine.
+for (const {label, flags, worker} of [
+  {label: 'engine worker', flags: '', worker: true},
+  {label: 'main-thread engine', flags: ',disableEngineWorker', worker: false},
+]) {
+  describeMobileAndDesktop(`Assist view tools, ${label}`, () => {
+    test.beforeEach(async ({page}) => {
+      await homepageSetup(page)
+      await setIsReturningUser(page.context())
+      const engine = watchEngineWorker(page)
+      // The kill switch rides the session across the Open dialog's navigation.
+      await page.goto(`${IFC_PATH}${flags}`)
+      await waitForModelReady(page)
+      await expectEngine(engine, worker)
+      // These tests read state (rows, instance visibility, the URL), not pixels.
+      await pauseViewerRendering(page)
+    })
+
+    test('query finds the proxies; select highlights the row; isolate and undo change what is drawn', async ({page}) => {
+      const query = await callTool(page, 'model.query', {ifcType: PROXY_TYPE})
+      expect(query.ok, JSON.stringify(query.error)).toBe(true)
+      expect(query.content?.total).toBe(PROXY_COUNT)
+      expect(query.content?.items?.every(({name}) => name === PROXY_LABEL)).toBe(true)
+      const ref = query.content?.items?.[1]?.ref as string
+      expect(ref).toMatch(/^e\d+$/)
+      const id = ref.substring(1)
+
+      // Select: the NavTree highlights exactly that row, and the URL path names it.
+      const select = await callTool(page, 'view.select', {refs: [ref]})
+      expect(select.ok, JSON.stringify(select.error)).toBe(true)
+      await expect.poll(() => new URL(page.url()).pathname).toMatch(new RegExp(`/${id}$`))
+      const panel = await openTree(page)
+      await expect(panel.locator('[data-is-selected="true"]')).toHaveCount(1)
+      await expect(panel.locator('[data-is-selected="true"]')).toHaveAttribute('data-node-label', PROXY_LABEL)
+      await closeTree(page)
+
+      // Isolate: only that element's instances are drawn, and the link says so.
+      const total = await visibleInstances(page)
+      const own = await instancesOf(page, Number(id))
+      expect(own).toBeGreaterThan(0)
+      expect(own).toBeLessThan(total)
+      const isolate = await callTool(page, 'view.isolate', {refs: [ref]})
+      expect(isolate.ok, JSON.stringify(isolate.error)).toBe(true)
+      await expect.poll(() => visibleInstances(page)).toBe(own)
+      await expect.poll(() => hashToken(page, 'd')).toBe(`iso=${ref}`)
+
+      // Undo: everything is drawn again and the term is gone.
+      expect(await page.evaluate(() => (window as unknown as AssistWindow).__bldrsAssistTools.undo())).toBe(true)
+      await expect.poll(() => visibleInstances(page)).toBe(total)
+      await expect.poll(() => hashToken(page, 'd')).toBe(null)
+    })
+
+    // Codex review round 2 on #1946: in a file whose rows are ALL at the empty
+    // occurrence path, a part's ref fell back to row ids that own no geometry,
+    // and isolate blanked the model while reporting success.
+    //
+    // engine-worker.md §7 step 6: on the worker leg, every row of this file is
+    // at the EMPTY occurrence path, and that `[]` has to survive the worker
+    // boundary as `[]`, not as "no path": without it the same fallback blanks
+    // the model (re-opened by a lossy encoding; engineStream.js#makeBatchEncoder).
+    test('isolates one part of a root-only multi-root STEP file', async ({page}) => {
+      test.setTimeout(TWO_ROOT_TIMEOUT_MS)
+      const engine = watchEngineWorker(page)
+      await openLocalFile(page, TWO_ROOT_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
+      await waitForModelReady(page)
+      await expectEngine(engine, worker)
+      await enableAssistInPlace(page)
+      const total = await visibleInstances(page)
+      const plates = await instancesOf(page, PLATES_OWNER)
+      expect(plates).toBeGreaterThan(0)
+      expect(plates).toBeLessThan(total)
+
+      const isolate = await callTool(page, 'view.isolate', {refs: [`e${PLATES_ROW}`]})
+      expect(isolate.ok, JSON.stringify(isolate.error)).toBe(true)
+      await expect.poll(() => visibleInstances(page)).toBe(plates)
+      expect(await page.evaluate(() => (window as unknown as AssistWindow).__bldrsAssistTools.undo())).toBe(true)
+      await expect.poll(() => visibleInstances(page)).toBe(total)
+    })
+
+    test('a ref the model lacks fails the call, naming it, and changes nothing', async ({page}) => {
+      const before = await visibleInstances(page)
+      const result = await callTool(page, 'view.isolate', {refs: ['e999999']})
+      expect(result.ok).toBe(false)
+      expect(result.error?.code).toBe('unresolved_refs')
+      expect(JSON.stringify(result.error?.details)).toContain('e999999')
+      expect(await visibleInstances(page)).toBe(before)
+    })
   })
-
-  test('query finds the proxies; select highlights the row; isolate and undo change what is drawn', async ({page}) => {
-    const query = await callTool(page, 'model.query', {ifcType: PROXY_TYPE})
-    expect(query.ok, JSON.stringify(query.error)).toBe(true)
-    expect(query.content?.total).toBe(PROXY_COUNT)
-    expect(query.content?.items?.every(({name}) => name === PROXY_LABEL)).toBe(true)
-    const ref = query.content?.items?.[1]?.ref as string
-    expect(ref).toMatch(/^e\d+$/)
-    const id = ref.substring(1)
-
-    // Select: the NavTree highlights exactly that row, and the URL path names it.
-    const select = await callTool(page, 'view.select', {refs: [ref]})
-    expect(select.ok, JSON.stringify(select.error)).toBe(true)
-    await expect.poll(() => new URL(page.url()).pathname).toMatch(new RegExp(`/${id}$`))
-    const panel = await openTree(page)
-    await expect(panel.locator('[data-is-selected="true"]')).toHaveCount(1)
-    await expect(panel.locator('[data-is-selected="true"]')).toHaveAttribute('data-node-label', PROXY_LABEL)
-    await closeTree(page)
-
-    // Isolate: only that element's instances are drawn, and the link says so.
-    const total = await visibleInstances(page)
-    const own = await instancesOf(page, Number(id))
-    expect(own).toBeGreaterThan(0)
-    expect(own).toBeLessThan(total)
-    const isolate = await callTool(page, 'view.isolate', {refs: [ref]})
-    expect(isolate.ok, JSON.stringify(isolate.error)).toBe(true)
-    await expect.poll(() => visibleInstances(page)).toBe(own)
-    await expect.poll(() => hashToken(page, 'd')).toBe(`iso=${ref}`)
-
-    // Undo: everything is drawn again and the term is gone.
-    expect(await page.evaluate(() => (window as unknown as AssistWindow).__bldrsAssistTools.undo())).toBe(true)
-    await expect.poll(() => visibleInstances(page)).toBe(total)
-    await expect.poll(() => hashToken(page, 'd')).toBe(null)
-  })
-
-  // Codex review round 2 on #1946: in a file whose rows are ALL at the empty
-  // occurrence path, a part's ref fell back to row ids that own no geometry,
-  // and isolate blanked the model while reporting success.
-  test('isolates one part of a root-only multi-root STEP file', async ({page}) => {
-    test.setTimeout(TWO_ROOT_TIMEOUT_MS)
-    await openLocalFile(page, TWO_ROOT_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
-    await waitForModelReady(page)
-    await enableAssistInPlace(page)
-    const total = await visibleInstances(page)
-    const plates = await instancesOf(page, PLATES_OWNER)
-    expect(plates).toBeGreaterThan(0)
-    expect(plates).toBeLessThan(total)
-
-    const isolate = await callTool(page, 'view.isolate', {refs: [`e${PLATES_ROW}`]})
-    expect(isolate.ok, JSON.stringify(isolate.error)).toBe(true)
-    await expect.poll(() => visibleInstances(page)).toBe(plates)
-    expect(await page.evaluate(() => (window as unknown as AssistWindow).__bldrsAssistTools.undo())).toBe(true)
-    await expect.poll(() => visibleInstances(page)).toBe(total)
-  })
-
-  test('a ref the model lacks fails the call, naming it, and changes nothing', async ({page}) => {
-    const before = await visibleInstances(page)
-    const result = await callTool(page, 'view.isolate', {refs: ['e999999']})
-    expect(result.ok).toBe(false)
-    expect(result.error?.code).toBe('unresolved_refs')
-    expect(JSON.stringify(result.error?.details)).toContain('e999999')
-    expect(await visibleInstances(page)).toBe(before)
-  })
-})
+}
 
 
 /** The dev hook's surface, as far as these tests use it. */
@@ -247,38 +275,3 @@ function hashToken(page: Page, name: string): string | null {
   const token = new URL(page.url()).hash.substring(1).split(';').find((part) => part.startsWith(`${name}:`))
   return token ? token.substring(name.length + 1) : null
 }
-
-
-// engine-worker.md §7 step 6: the root-only STEP file with its engine in a
-// worker. Every row of it is at the EMPTY occurrence path, and that `[]` has
-// to survive the worker boundary as `[]`, not as "no path": without it a
-// part's ref falls back to row ids that own no geometry, and isolate blanks
-// the model (the round-2 finding above, re-opened by a lossy encoding;
-// engineStream.js#makeBatchEncoder).
-describeMobileAndDesktop('Assist view tools, engine worker', () => {
-  test.beforeEach(async ({page}) => {
-    await homepageSetup(page)
-    await setIsReturningUser(page.context())
-  })
-
-  test('isolates one part of a root-only multi-root STEP file parsed in a worker', async ({page}) => {
-    test.setTimeout(TWO_ROOT_TIMEOUT_MS)
-    // The flag rides the session across the Open dialog's navigation.
-    await page.goto(`${IFC_PATH},engineWorker`)
-    await waitForModelReady(page)
-    await pauseViewerRendering(page)
-    const engine = watchEngineWorker(page)
-    await openLocalFile(page, TWO_ROOT_FIXTURE, /\/share\/v\/local-only\/.+\.step/)
-    await waitForModelReady(page)
-    await engine.expectWorkerEngine()
-    await enableAssistInPlace(page)
-    const total = await visibleInstances(page)
-    const plates = await instancesOf(page, PLATES_OWNER)
-    expect(plates).toBeGreaterThan(0)
-    expect(plates).toBeLessThan(total)
-
-    const isolate = await callTool(page, 'view.isolate', {refs: [`e${PLATES_ROW}`]})
-    expect(isolate.ok, JSON.stringify(isolate.error)).toBe(true)
-    await expect.poll(() => visibleInstances(page)).toBe(plates)
-  })
-})

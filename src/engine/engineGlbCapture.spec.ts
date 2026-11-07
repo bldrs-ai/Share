@@ -61,7 +61,8 @@ const STEP_PATH = '/share/v/p/index.step'
 // The logo as an AP214 assembly: seven `Together` occurrences
 // (tools/models/README.md, engineModelLoad.spec.ts).
 const STEP_LEAF = 'Together'
-const MAIN_FLAGS = '?feature=export,glbVerbose'
+// The kill switch: the worker is the default since engine-worker.md §7 step 9.
+const MAIN_FLAGS = '?feature=disableEngineWorker,export,glbVerbose'
 const WORKER_FLAGS = '?feature=engineWorker,export,glbVerbose'
 const CACHE_TIMEOUT_MS = 60_000
 // Two parses (one per engine, each a cold wasm boot), an export and a cache
@@ -169,8 +170,11 @@ async function exportNative(page: Page): Promise<Buffer> {
  * @param path the model's route
  */
 async function workerArtifactMatchesMainAndExports(page: Page, glbLogs: string[], path: string) {
+  const mainEngine = watchEngineWorker(page)
   const reference = await loadAndWaitForArtifact(page, glbLogs, `${path}${MAIN_FLAGS}`)
-  // On the main-thread engine the captures run in process, with no line.
+  // The reference really came from the main-thread engine, and its captures
+  // ran in process, with no line.
+  await mainEngine.expectMainThreadEngine()
   expect(glbLogs.some((l) => l.includes('engine captures ran in'))).toBe(false)
 
   await clearOpfs(page)

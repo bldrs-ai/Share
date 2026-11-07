@@ -15,13 +15,14 @@ const {beforeEach} = test
 // page.route: the model fetch goes through MSW's service worker, which
 // context.route does not see.
 const MODEL_PATH = '/share/v/p/__test_fixtures__/Momentum.ifc'
-// The same load with the model's engine in its own worker
-// (engine-worker.md §7 step 3): its preview payloads cross from the worker,
-// and the index hold is honoured by starting its pump paused
-// (engine/engineModelLoad.js).
+// The model's engine runs in its own worker by default (engine-worker.md §7
+// steps 3 and 9): its preview payloads cross from the worker, and the index
+// hold is honoured by starting its pump paused (engine/engineModelLoad.js).
+// The kill switch puts the same load back on the main-thread engine, which
+// stays permanently (§8 item 6), so both legs keep running.
 const ENGINES = [
-  {engine: 'main-thread engine', path: MODEL_PATH},
-  {engine: 'engine worker', path: `${MODEL_PATH}?feature=engineWorker`},
+  {engine: 'main-thread engine', path: `${MODEL_PATH}?feature=disableEngineWorker`, worker: false},
+  {engine: 'engine worker', path: MODEL_PATH, worker: true},
 ]
 const TEST_TIMEOUT_MS = 120_000
 const HELD_TIMEOUT_MS = 60_000
@@ -232,7 +233,7 @@ describeMobileAndDesktop('Open 205: interactive at first mesh', () => {
     await holdIndex(page)
   })
 
-  for (const {engine, path} of ENGINES) {
+  for (const {engine, path, worker} of ENGINES) {
     test(`${engine}: orbit and zoom work before the index, and the end of the load leaves the camera there`, async ({page}) => {
       test.setTimeout(TEST_TIMEOUT_MS)
       const engineCheck = watchEngineWorker(page)
@@ -265,9 +266,7 @@ describeMobileAndDesktop('Open 205: interactive at first mesh', () => {
       await waitForModelReady(page, HELD_TIMEOUT_MS)
       const after = await settledCamera(page)
       after.pose.forEach((v, i) => expect(v).toBeCloseTo(zoomed.pose[i], 3))
-      if (path.includes('engineWorker')) {
-        await engineCheck.expectWorkerEngine()
-      }
+      await (worker ? engineCheck.expectWorkerEngine() : engineCheck.expectMainThreadEngine())
     })
 
     test(`${engine}: a double-click on a preview mesh selects its element during the parse`, async ({page}) => {
@@ -305,9 +304,7 @@ describeMobileAndDesktop('Open 205: interactive at first mesh', () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).store.getState().selectedElement?.expressID === target,
       id, {timeout: HELD_TIMEOUT_MS})
-      if (path.includes('engineWorker')) {
-        await engineCheck.expectWorkerEngine()
-      }
+      await (worker ? engineCheck.expectWorkerEngine() : engineCheck.expectMainThreadEngine())
     })
 
     test(`${engine}: a selection made on the preview survives into the finished model`, async ({page}) => {
@@ -350,9 +347,7 @@ describeMobileAndDesktop('Open 205: interactive at first mesh', () => {
       // The tree came up at the index and resolved the pick to its row, so the
       // URL carries its element path.
       expect(new URL(page.url()).pathname).toMatch(new RegExp(`/${id}$`))
-      if (path.includes('engineWorker')) {
-        await engineCheck.expectWorkerEngine()
-      }
+      await (worker ? engineCheck.expectWorkerEngine() : engineCheck.expectMainThreadEngine())
     })
   }
 })

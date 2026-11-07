@@ -41,7 +41,6 @@ import {reportEngineLog, reportEngineVersion, reportSourceInfo} from '../loader/
 import {HEADER_SNIFF_BYTES, openModelFailure} from '../loader/unsupportedSchema'
 import {engineFormatOf} from '../loader/part21Formats'
 import {conwayDirectInfo, conwayDirectWarn} from '../viewer/ifc/conwayDirectLog'
-import {viewRules} from '../viewer/legacyViewRules'
 import {Ev, Op} from './protocol'
 import {spawnEngineSession} from './spawnEngine'
 
@@ -491,23 +490,15 @@ export function isWorkerEngineModel(model) {
 }
 
 
-/** What `?view=` says on a worker-engine model (CadView). */
-export const LEGACY_VIEW_RULES_MESSAGE =
-  'View rules (?view=) need the main-thread engine and are not available with ?feature=engineWorker'
-
-
 /**
- * Does the URL ask for a legacy `?view=` rule set that ShareViewer knows
- * (`viewer/legacyViewRules.js`, anything but `default`)? An unknown name
- * already does nothing, with or without the flag, so it gets no message.
- *
- * @param {string} [search] `location.search`
- * @return {boolean}
+ * What `?view=` says on a worker-engine model (useLegacyViewRulesNotice). A
+ * load with a known `?view=` in its URL runs on the main-thread engine
+ * (engineRoute.js), so this shows only when the view was asked for after the
+ * model loaded in a worker, and reloading applies it.
  */
-export function hasLegacyViewRules(search = globalThis.location?.search ?? '') {
-  const view = new URLSearchParams(search).get('view')?.toLowerCase()
-  return Boolean(view) && view !== 'default' && Object.hasOwn(viewRules, view)
-}
+export const LEGACY_VIEW_RULES_MESSAGE =
+  'View rules (?view=) need the main-thread engine, and this model was parsed in an engine worker. ' +
+  'Reload the page to apply them.'
 
 
 /* eslint-disable no-magic-numbers */

@@ -51,6 +51,13 @@ describe('FeatureFlags', () => {
     expect(disable?.isActive).toBe(false)
   })
 
+  it('declares engineWorker active by default, with disableEngineWorker as its off-switch', () => {
+    // open-205 §7 step 9: every Conway load runs its engine in a worker
+    // unless this session opts out (engine/engineRoute.js).
+    expect(flags.find((f) => f.name === 'engineWorker')?.isActive).toBe(true)
+    expect(flags.find((f) => f.name === 'disableEngineWorker')?.isActive).toBe(false)
+  })
+
   it('declares export active by default', () => {
     // share-140 S4 (#1835): the Export tab ships on for everyone. The server
     // (`pro-module`) still gates the exporter on the subscription, so this
