@@ -1,4 +1,4 @@
-import {Page, expect, test} from '@playwright/test'
+import {Locator, Page, expect, test} from '@playwright/test'
 import {watchEngineWorker} from '../tests/e2e/engineWorker'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
 import {waitForModelReady} from '../tests/e2e/models'
@@ -585,6 +585,24 @@ const MAX_HELD_BATCHES = 50
 
 
 /**
+ * Expand every NavTree row, one toggle per settle (NavTreePanel's toggle reads
+ * the render-time expansion; navTreeAtIndex.spec.ts#expandTree).
+ *
+ * @param panel the NavTree panel
+ */
+async function expandNavTree(panel: Locator) {
+  for (let click = 0; click < MAX_EXPAND_CLICKS; click++) {
+    const next = panel.locator('[data-node-label][data-is-expanded="false"] [data-testid="NavTreeNodeToggle"]').first()
+    if (await next.count() === 0) {
+      break
+    }
+    await next.evaluate((e) => (e as HTMLElement).click())
+    await panel.page().waitForTimeout(EXPAND_SETTLE_MS)
+  }
+}
+
+
+/**
  * Rows under an occurrence written so far, and how many of them are painted.
  *
  * @param page
@@ -728,14 +746,7 @@ describeMobileAndDesktop('Pickable durable batches during the pump: an occurrenc
       await page.getByTestId('control-button-navigation').click()
       const panel = page.getByTestId('NavTreePanel')
       await expect(panel).toBeVisible()
-      for (let click = 0; click < MAX_EXPAND_CLICKS; click++) {
-        const next = panel.locator('[data-node-label][data-is-expanded="false"] [data-testid="NavTreeNodeToggle"]').first()
-        if (await next.count() === 0) {
-          break
-        }
-        await next.evaluate((e) => (e as HTMLElement).click())
-        await page.waitForTimeout(EXPAND_SETTLE_MS)
-      }
+      await expandNavTree(panel)
       const row = panel.locator(`[data-occurrence-path="${assembly}"]`).first()
       await row.getByTestId('NavTreeNodeLabel').evaluate((e) => (e as HTMLElement).click())
       await expect(row).toHaveAttribute('data-is-selected', 'true')
@@ -751,6 +762,100 @@ describeMobileAndDesktop('Pickable durable batches during the pump: an occurrenc
       }
       expect(after.rows, 'a later batch adds rows under the sub-assembly').toBeGreaterThan(before.rows)
       expect(after.painted).toBe(after.rows)
+    })
+  }
+})
+
+
+// twoRootShells.step served as a GitHub-hosted fixture, so it opens by URL with
+// the per-batch hold installed from the first page script: two top-level
+// parts (rows 7 and 3007, owners 8 and 3008), every placement at the root,
+// arriving over six batches at batch size 1.
+const TWO_ROOT_PATH = '/share/v/gh/bldrs-ai/test-models/main/step/twoRootShells.step'
+const PLATES_ROW = 3007
+const PLATES_OWNER = 3008
+const OTHER_OWNER = 8
+
+
+/**
+ * The rows of one owner written so far, and how many are painted.
+ *
+ * @param page
+ * @param owner the owner (product_definition_shape) id
+ * @return counts
+ */
+function rowsOf(page: Page, owner: number): Promise<{rows: number, painted: number}> {
+  return page.evaluate((id) => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    let rows = 0
+    let painted = 0
+    for (const root of (window as any).store.getState().viewer.context.getScene().children) {
+      const builder = root.userData?.streamingBatches
+      for (const state of [builder?.opaque, builder?.transparent]) {
+        for (let batchId = 0; batchId < (state?.cursor ?? 0); batchId++) {
+          if (state.instanceParents[batchId] === id) {
+            rows++
+            if (builder.paintedRows.get(state)?.has(batchId)) {
+              painted++
+            }
+          }
+        }
+      }
+    }
+    return {rows, painted}
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  }, owner)
+}
+
+
+/**
+ * Codex round 4 on #2084: a top-level STEP product selected mid-stream (its
+ * NavTree row, a link, search) carries the root-level instances written so
+ * far, no path and no pick; letting those decide left its later shells
+ * unpainted. A pathless selection is painted by its owners.
+ */
+describeMobileAndDesktop('Pickable durable batches during the pump: a top-level product selected mid-pump', () => {
+  beforeEach(async ({page}) => {
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+    await holdMidPump(page, MAX_HELD_BATCHES)
+    await page.addInitScript(() => {
+      (window as unknown as Record<string, unknown>).__bldrsTestPumpBatchSize = 1
+    })
+  })
+
+  for (const {engine, query} of ENGINES) {
+    test(`${engine}: shells of a selected top-level product that stream in later are painted`, async ({page}) => {
+      test.setTimeout(TEST_TIMEOUT_MS)
+      await openHeldMidPump(page, `${TWO_ROOT_PATH}${query}`)
+      // Step until the part is part-way in.
+      let before = await rowsOf(page, PLATES_OWNER)
+      for (let batch = 0; before.rows === 0 && batch < MAX_HELD_BATCHES; batch++) {
+        await nextBatch(page)
+        await expectStillPumping(page)
+        before = await rowsOf(page, PLATES_OWNER)
+      }
+      expect(before.rows, 'a batch brings some of the part').toBeGreaterThan(0)
+
+      await page.getByTestId('control-button-navigation').click()
+      const panel = page.getByTestId('NavTreePanel')
+      await expect(panel).toBeVisible()
+      await expandNavTree(panel)
+      const row = panel.locator(`[data-express-id="${PLATES_ROW}"]`).first()
+      await row.getByTestId('NavTreeNodeLabel').evaluate((e) => (e as HTMLElement).click())
+      await expect(row).toHaveAttribute('data-is-selected', 'true')
+      await expect.poll(async () => (await rowsOf(page, PLATES_OWNER)).painted).toBe(before.rows)
+
+      let after = before
+      for (let batch = 0; after.rows === before.rows && batch < MAX_HELD_BATCHES; batch++) {
+        await nextBatch(page)
+        await expectStillPumping(page)
+        after = await rowsOf(page, PLATES_OWNER)
+      }
+      expect(after.rows, 'a later batch brings more of the part').toBeGreaterThan(before.rows)
+      expect(after.painted).toBe(after.rows)
+      // Nothing of the other part.
+      expect((await rowsOf(page, OTHER_OWNER)).painted).toBe(0)
     })
   }
 })

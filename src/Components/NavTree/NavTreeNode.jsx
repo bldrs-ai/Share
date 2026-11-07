@@ -48,6 +48,7 @@ export default function NavTreeNode({
       // A STEP occurrence's path ('/'-joined NAUO ids), for e2e to find one
       // occurrence's row among a reused part's identically labelled ones.
       data-occurrence-path={Array.isArray(node.occurrencePath) ? node.occurrencePath.join('/') : undefined}
+      data-express-id={node.expressID}
       data-is-selected={isSelected ? 'true' : 'false'}
       data-is-expanded={hasChildren ? (isExpanded ? 'true' : 'false') : undefined}
       style={{

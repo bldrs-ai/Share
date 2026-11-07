@@ -279,6 +279,19 @@ describe('viewer/tools (model, view and share providers)', () => {
       expect(useStore.getState().selectedElements).toEqual(['200'])
     })
 
+    it('undo brings back a scene pick\'s exact narrowing, which the funnel clears (codex round 4 on #2084)', async () => {
+      // A pick of one body: its instance is exact (CadView#selectFromInstancePick).
+      useStore.setState({
+        selectedElements: ['200'], selectedAnchorIds: ['200'], selectedInstanceIds: [7],
+        selectedInstancesExact: true,
+      })
+      const result = await registry.call('view.select', {refs: ['e102']})
+      expect(useStore.getState().selectedInstancesExact).toBe(false)
+      await result.undo()
+      expect(useStore.getState().selectedInstanceIds).toEqual([7])
+      expect(useStore.getState().selectedInstancesExact).toBe(true)
+    })
+
     it('clears with an empty list, and undo brings the selection back', async () => {
       await registry.call('view.select', {refs: ['e200']})
       const result = await registry.call('view.select', {refs: []})

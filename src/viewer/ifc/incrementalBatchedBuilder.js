@@ -347,12 +347,14 @@ export class IncrementalBatchedBuilder {
    *    siblings stream in;
    *  - otherwise a STEP occurrence (`occurrencePath` non-empty): the rows at
    *    or under it, narrowed to `solidExpressId`'s rows when a body is
-   *    named, whatever `instances` came with it. Those are the rows written
-   *    SO FAR (a tree click resolves the occurrence to them), and letting
-   *    them decide left rows that streamed in later under a selected
-   *    assembly unpainted;
-   *  - otherwise `instances` when there are any;
-   *  - otherwise the rows whose parent is selected (IFC).
+   *    named;
+   *  - otherwise the rows whose parent (owner) is selected: IFC, and a
+   *    pathless STEP selection such as a top-level product, whose owners the
+   *    funnel adds to the selected elements.
+   * Instances that are NOT a pick's (resolved from a row, an occurrence or a
+   * link) never decide: they are the rows written SO FAR, and letting them
+   * decide left the rows that streamed in later unpainted (codex rounds 2
+   * and 4 on #2084).
    *
    * @param {object|null} selection `{parents, instances, instancesExact,
    *   occurrencePath, solidExpressId}`, each optional; null clears
@@ -428,9 +430,6 @@ export class IncrementalBatchedBuilder {
     if (selection.path !== null) {
       return isPathPrefix(selection.path, state.instanceOccurrencePaths[row]) &&
         (selection.solid === null || state.instanceGeometryIds[row] === selection.solid)
-    }
-    if (selection.instances.size > 0) {
-      return selection.instances.has(state.instanceOccurrenceIds[row])
     }
     return selection.parents.has(state.instanceParents[row])
   }

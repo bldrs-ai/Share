@@ -1083,6 +1083,19 @@ describe('IncrementalBatchedBuilder: pickable and paintable while streaming', ()
     expect(own).not.toEqual([1, 0, 0])
   })
 
+  it('a pathless selection takes its owners\' rows that arrive later, whatever derived instances came with it', () => {
+    // Codex round 4 on #2084: a root-level STEP product selected from the
+    // NavTree (or a link, or search) mid-stream carries the root instances
+    // written so far, no path and no pick. Its owners decide.
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    builder.appendBatch([stepMesh(8, 999, [])])
+    const mesh = builder.opaque.mesh
+    builder.paintSelection({parents: [3007, 8], instances: [0]}, RED)
+    builder.appendBatch([stepMesh(8, 888, []), stepMesh(9, 999, [])])
+    expect([0, 1].map((batchId) => colorAt(mesh, batchId))).toEqual([[1, 0, 0], [1, 0, 0]])
+    expect(colorAt(mesh, 2)).not.toEqual([1, 0, 0])
+  })
+
   it('an IFC row has no occurrence path', () => {
     const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
     builder.appendBatch([flatMesh(5, [{geomExpressID: 999, color: OPAQUE}])])
@@ -1102,8 +1115,8 @@ describe('IncrementalBatchedBuilder: pickable and paintable while streaming', ()
 
     // By occurrence: the rows at or under it.
     expect(builder.paintSelection({occurrencePath: [7]}, RED)).toBe(2)
-    // The narrowing decides alone: one instance.
-    expect(builder.paintSelection({parents: [10, 11], instances: [0]}, RED)).toBe(1)
+    // A pick's narrowing decides alone: one instance.
+    expect(builder.paintSelection({parents: [10, 11], instances: [0], instancesExact: true}, RED)).toBe(1)
     expect(colorAt(mesh, 1)).toEqual(own)
 
     // A row the pump delivers after the pick joins the selection.

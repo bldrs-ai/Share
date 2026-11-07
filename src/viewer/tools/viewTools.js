@@ -575,6 +575,9 @@ function captureSelection(state) {
     instances: [...(state.selectedInstanceIds ?? [])],
     occurrencePath: state.selectedOccurrencePath ?? null,
     solid: state.selectedSolidExpressId ?? null,
+    // A scene pick's narrowing (NavTreeSlice#selectedInstancesExact): the
+    // funnel clears it, so a restore puts it back.
+    exact: state.selectedInstancesExact === true,
   }
 }
 
@@ -593,6 +596,7 @@ function restoreSelection(before) {
   }
   restore(before.elements.map(Number), true, before.instances, before.occurrencePath, before.solid,
     before.anchors.map(Number))
+  useStore.getState().setSelectedInstancesExact?.(before.exact)
 }
 
 
@@ -604,7 +608,7 @@ function selectionUnchanged(before) {
   const now = captureSelection(useStore.getState())
   const same = (a, b) => a.length === b.length && a.every((v, i) => String(v) === String(b[i]))
   return same(now.elements, before.elements) && same(now.anchors, before.anchors) &&
-    same(now.instances, before.instances) && now.solid === before.solid &&
+    same(now.instances, before.instances) && now.solid === before.solid && now.exact === before.exact &&
     same(now.occurrencePath ?? [], before.occurrencePath ?? [])
 }
 
