@@ -22,8 +22,9 @@
 // the root).
 //
 // Trust: the envelope only finds a candidate. Whether the sidecar describes
-// the file is conway's call at open — the length, plus the sampled digest
-// (`VERIFY_INDEX_SOURCE_HASH: 'sampled'`, about 0.5 MB read) — and a
+// the file is conway's call at open — the length, plus the full source
+// digest (`VERIFY_INDEX_SOURCE_HASH: true`, one pass over the file;
+// loader/conwayOpen.js#openDeferred says why not 'sampled') — and a
 // mismatch comes back as INDEX_STALE, after which the load parses and
 // writes a fresh sidecar over the stale one.
 //

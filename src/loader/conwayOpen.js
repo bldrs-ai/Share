@@ -42,15 +42,20 @@ export async function openDeferred(ifcAPI, {store, loadBytes, settings, sidecar 
   let index = null
   if (store !== null && sidecar !== null && typeof ifcAPI.OpenModelFromIndex === 'function') {
     // Index-first (engine-worker.md §7 step 8; conway#756, #757): the index
-    // comes off the persisted sidecar, so there is no parse. The sampled
-    // check reads about 0.5 MB of the store against the sidecar's sampled
-    // digest; the length check alone would trust a same-length rewrite. Any
-    // -1 (a stale sidecar is INDEX_STALE) falls through to the parse below,
-    // which is what the caller would have done without one: never worse.
+    // comes off the persisted sidecar, so there is no parse. The sidecar is
+    // persisted, so the reopen runs conway's FULL source check (`true`):
+    // one hashing pass over the whole store against the digest the parse
+    // recorded. The length check alone would trust a same-length rewrite,
+    // and the owner chose the full check over `'sampled'` (~0.5 MB read)
+    // on Share#2085 even though it costs about twice the sampled reopen,
+    // because a sampled hit can miss an edit between samples. It is still
+    // well under a parse (engine-worker.md §11). Any -1 (a stale sidecar is
+    // INDEX_STALE) falls through to the parse below, which is what the
+    // caller would have done without one: never worse.
     attempt = beginOpenAttempt(ifcAPI)
     // eslint-disable-next-line new-cap
     const modelID = await ifcAPI.OpenModelFromIndex(store, sidecar,
-      {...settings, VERIFY_INDEX_SOURCE_HASH: 'sampled'})
+      {...settings, VERIFY_INDEX_SOURCE_HASH: true})
     if (typeof modelID === 'number' && modelID >= 0) {
       return {modelID, windowed: true, attempt, index: 'sidecar'}
     }

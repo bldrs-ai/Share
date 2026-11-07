@@ -350,7 +350,7 @@ async function loadOnce(api, root, flags = {}) {
 
 
 describe('engine/engineHandler: index sidecar reopen (engine-worker.md §7 step 8)', () => {
-  it('the first open parses and saves a sidecar; the reopen opens from it, with the sampled check', async () => {
+  it('the first open parses and saves a sidecar; the reopen opens from it, with the full source check', async () => {
     const log = []
     const api = sidecarApi(log)
     const root = memoryDir({owner: memoryDir({[NAME]: memoryFile(NAME, BYTES)})})
@@ -364,8 +364,9 @@ describe('engine/engineHandler: index sidecar reopen (engine-worker.md §7 step 
     log.length = 0
     const second = await loadOnce(api, root)
     expect(second.index).toEqual({source: 'sidecar', bytes: api.SIDECAR.length, saved: false})
-    // No parse, and no second export.
-    expect(log).toEqual(['index verify=sampled', 'CloseModel'])
+    // No parse, and no second export. `verify=true` is the full source
+    // hash the owner chose on Share#2085; 'sampled' here is a regression.
+    expect(log).toEqual(['index verify=true', 'CloseModel'])
   })
 
   it('a refused sidecar falls back to the parse and is replaced', async () => {
@@ -375,7 +376,7 @@ describe('engine/engineHandler: index sidecar reopen (engine-worker.md §7 step 
     const reopened = await loadOnce(sidecarApi(log, {refuseIndex: true}), root)
     expect(reopened.index).toEqual({source: 'sidecarRejected', bytes: 5, saved: true})
     expect(log).toEqual([
-      'index verify=sampled', 'stream recordHash=true readSync=function', 'export', 'CloseModel',
+      'index verify=true', 'stream recordHash=true readSync=function', 'export', 'CloseModel',
     ])
   })
 
