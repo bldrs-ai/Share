@@ -98,7 +98,7 @@ import {
 import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../viewer/three/Picker'
-import {loadPreviewGroups, pickPreviewExpressId} from '../viewer/previewSelection'
+import {loadPreviewGroups, pickPreviewExpressId, previewOccurrencePickOf} from '../viewer/previewSelection'
 import {streamingBatchRoots, streamingPickOf} from '../viewer/streamingBatchPick'
 import {USER_CAMERA_EVENT} from '../viewer/three/renderDemand'
 import {DEFAULT_LOOK} from '../viewer/looks'
@@ -1595,9 +1595,13 @@ export default function CadView({
     previewPickedRef.current = true
     if (useStore.getState().rootElement === null) {
       pendingPreviewPickRef.current = pick
-      selectItemsInScene([pick.parentExpressId], false, [pick.instanceId])
-      // The row the ray hit: an exact narrowing, as a pick at the index is.
-      useStore.getState().setSelectedInstancesExact(true)
+      // A durable row's instance is the pick's exact narrowing; a STEP
+      // preview mesh has no instance yet, only its occurrence, which the
+      // preview and the streaming rows are painted by.
+      const isRowPick = pick.instanceId !== null && pick.instanceId !== undefined
+      selectItemsInScene([pick.parentExpressId], false, isRowPick ? [pick.instanceId] : [],
+        pick.occurrencePath?.length > 0 ? pick.occurrencePath : null)
+      useStore.getState().setSelectedInstancesExact(isRowPick)
       return
     }
     pendingPreviewPickRef.current = null
@@ -1719,6 +1723,13 @@ export default function CadView({
         // leaves a mesh added since the last paint without its world matrix.
         loadTargets.forEach((target) => target.updateMatrixWorld(true))
         for (const hit of picker.castRay(loadTargets)) {
+          // A STEP preview mesh knows its occurrence: the same funnel as a
+          // durable row, with no instance yet.
+          const occurrencePick = previewOccurrencePickOf(hit)
+          if (occurrencePick !== null) {
+            selectFromStreamingPick(occurrencePick, event.shiftKey)
+            return
+          }
           const previewId = pickPreviewExpressId([hit])
           if (previewId !== null) {
             selectFromPreviewPick(previewId, event.shiftKey)
@@ -1918,7 +1929,9 @@ export default function CadView({
     // carries. Resolved before the shift branch, which needs it too.
     const rootRow = (isRootLevel && occurrencePath === null) ?
       findRootLevelOwnerNode(rootEltForPick, parentExpressId) : null
-    if (isShiftKeyDown && rootRow) {
+    // A root-level shell toggles by its instance; a preview pick has none
+    // yet, so it takes the row toggle below, as a shift-click on the row does.
+    if (isShiftKeyDown && rootRow && instanceId !== null && instanceId !== undefined) {
       toggleRootLevelInstance(rootRow, targetId, instanceId)
       return
     }

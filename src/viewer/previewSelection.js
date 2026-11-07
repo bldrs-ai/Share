@@ -26,6 +26,16 @@
 export const PREVIEW_EXPRESS_ID_KEY = 'previewExpressID'
 
 /**
+ * `mesh.userData` key carrying a STEP preview mesh's occurrence path (conway
+ * PreviewMeshPayload.occurrencePath: the durable placement's own path, `[]`
+ * for a root-level part). Absent for IFC.
+ */
+export const PREVIEW_OCCURRENCE_PATH_KEY = 'previewOccurrencePath'
+
+/** `mesh.userData` key carrying a preview mesh's geometry (solid) express id. */
+export const PREVIEW_GEOMETRY_ID_KEY = 'previewGeometryID'
+
+/**
  * `mesh.userData` key holding a painted preview mesh's own material while the
  * selection material stands in for it. ProgressiveLoadSession's teardown
  * disposes THIS one, never the borrowed selection material, which belongs to
@@ -79,6 +89,34 @@ export function pickPreviewExpressId(intersections) {
 
 
 /**
+ * The pick one raycast hit on a preview mesh reads, in the shape a durable
+ * row's pick has (`streamingBatchPick.js#streamingPickOf`), so a STEP
+ * preview pick goes through the same per-occurrence funnel. A preview has no
+ * durable instance yet, so `instanceId` is null: the finished model resolves
+ * the occurrence's instances from its path (CadView#reapplySelectionToGeometry).
+ *
+ * @param {object} hit one three.js intersection
+ * @return {object|null} `{parentExpressId, instanceId: null, occurrencePath,
+ *   geometryId}` for a STEP preview mesh; null for an IFC one (an element id,
+ *   {@link pickPreviewExpressId}) or anything else
+ */
+export function previewOccurrencePickOf(hit) {
+  const userData = hit?.object?.userData
+  const path = userData?.[PREVIEW_OCCURRENCE_PATH_KEY]
+  const id = userData?.[PREVIEW_EXPRESS_ID_KEY]
+  if (!Array.isArray(path) || !Number.isFinite(id)) {
+    return null
+  }
+  return {
+    parentExpressId: id,
+    instanceId: null,
+    occurrencePath: path,
+    geometryId: userData[PREVIEW_GEOMETRY_ID_KEY] ?? null,
+  }
+}
+
+
+/**
  * Paint the preview meshes of `expressIds` with `material`, and restore every
  * other painted preview mesh to its own material. Idempotent, so it can run
  * on every selection change; a no-op when no preview is on screen.
@@ -89,14 +127,21 @@ export function pickPreviewExpressId(intersections) {
  * material slot is swapped instead, and the original kept on the mesh under
  * {@link PREVIEW_BASE_MATERIAL_KEY}.
  *
+ * A STEP selection is an occurrence, whose row id is no preview mesh's owner,
+ * so `occurrencePath` also paints the meshes placed at or under it.
+ *
  * @param {object} scene three.js scene
  * @param {Array<number|string>} expressIds the selection
  * @param {object|null} material the viewer's selection material; null
  *   (no selector yet) restores everything and paints nothing
+ * @param {Array<number>|null} [occurrencePath] a selected STEP occurrence
  * @return {number} preview meshes now painted
  */
-export function paintPreviewSelection(scene, expressIds, material) {
+export function paintPreviewSelection(scene, expressIds, material, occurrencePath = null) {
   const wanted = new Set((expressIds ?? []).map(Number))
+  const path = Array.isArray(occurrencePath) && occurrencePath.length > 0 ? occurrencePath.map(Number) : null
+  const isUnderPath = (meshPath) => path !== null && Array.isArray(meshPath) &&
+    meshPath.length >= path.length && path.every((id, i) => Number(meshPath[i]) === id)
   let painted = 0
   for (const group of loadPreviewGroups(scene)) {
     for (const mesh of group.children) {
@@ -106,7 +151,7 @@ export function paintPreviewSelection(scene, expressIds, material) {
         continue
       }
       const isPainted = userData[PREVIEW_BASE_MATERIAL_KEY] !== undefined
-      if (material && wanted.has(id)) {
+      if (material && (wanted.has(id) || isUnderPath(userData[PREVIEW_OCCURRENCE_PATH_KEY]))) {
         if (!isPainted) {
           userData[PREVIEW_BASE_MATERIAL_KEY] = mesh.material
         }

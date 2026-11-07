@@ -762,8 +762,10 @@ or a measurement in a PR body.
 3. A real-GPU check, plus Safari and Firefox by hand.
 
 **Next after the flip.**
-- STEP convergence in conway (§11): the STEP index sidecar (conway#757),
-  a windowed STEP open, STEP previews with an occurrence path.
+- STEP convergence in conway (§11): the STEP index sidecar and windowed
+  open (conway#757, landed in conway#769) and occurrence paths on preview
+  payloads (conway#772) are in conway 1.1639.773; STEP previews themselves
+  are parked until conway#773.
 - #2077 and #2078 (priority residency), then #2076.
 - Steps 7–8 (sessions own their worker, close and eviction) only when
   in-app model switching (#2011) is picked up. They do not gate the flip.
@@ -1296,7 +1298,7 @@ and the other lacks.
 | Tree | `properties.getSpatialStructure(id, 'names', {includeSolids: true})`, through the indexed handle and `EngineSession#propertiesApi` | `includeSolids` ignored | multibody sub-solids as ephemeral `solid` nodes | shared call; data |
 | Ids and refs | `e` / `o` / `n` refs (`viewer/tools/refs.js`); selection joins on whichever key both sides carry | express IDs; tree id = geometry parent | tree id = the NAUO, geometry parent = the shared `product_definition_shape`; the join key is the occurrence path (step-occurrence-selection.md) | **data**: an assembly's reuse has no IFC equivalent, so the key differs, not the code |
 | Properties | `getItemProperties` / `getPropertySets`; the panel's tables through `propertyTable.js`, behind the worker's `propertyTables` op or on the page (§7.1, #2070) | IFC entities and psets | AP214 records | shared |
-| Preview | `ON_PREVIEW_MESH` → `payloadToPreviewMesh` → `ProgressiveLoadSession`; picking via `previewSelection.js` (#2052) | store or streamed preview channel | `StreamedPreviewChannel` with `ap214PreviewAdapter` | shared, and the worker passes payloads through unchanged. Two STEP gaps, the same on both engines: none of the STEP models tried (the fixtures and real files up to 14 MB) put a preview mesh on screen before its index, and a STEP payload's `expressID` is the part shape, not the occurrence (it carries no occurrence path), so a pick before the index would select per part — both conway asks |
+| Preview | `ON_PREVIEW_MESH` → `payloadToPreviewMesh` → `ProgressiveLoadSession`; picking via `previewSelection.js` (#2052) | store or streamed preview channel | `StreamedPreviewChannel` with `ap214PreviewAdapter`, on the buffered and the windowed open (conway#772) | shared, and the worker passes payloads through unchanged. A STEP payload carries its durable placement's `occurrencePath` (`[]` at the root), and a pick on it selects the occurrence (`previewOccurrencePickOf`). **STEP previews are parked until conway#773**: the parse-end tick that would put one on screen is off (`PREVIEW_FINISH_PARSE`), because its first unit pays the throwaway generation's prep before the index (+0.5 s on Arty_Z7, +0.3 s on DSA2), and the cost gate passes over the parse-time units, so no STEP model on the corpus shows a preview. Picking during the pump (the next row) covers early interactivity meanwhile |
 | Geometry pump | `ExtractGeometryBatchAsync` → `IncrementalBatchedBuilder` (main) / the batch columns → `decodePlacements` → the same builder (worker) | — | `PlacedGeometry.occurrencePath`, the batch's path columns, where a present-but-empty path (a root-level instance) stays `[]` (#2067) | shared; data |
 | Pick during the pump | `streamingBatchPick.js`: the incremental builder offers its rows as it writes them (`root.userData.streamingBatches`, withdrawn at `finalize`); CadView's double-click raycasts the preview group and the streaming batches, nearest first, and a row goes through `selectFromInstancePick` as on the finished model; the highlight is the rows' instance colours (`ShareViewer#setPreviewSelection`) | element id + instance | occurrence path (`[]` at the root) + instance | shared, both engines (a worker load's batches feed the same builder). Before it nothing durable answered a pick until `finalize`: on Arty_Z7 from ~7 s to ~38 s |
 | Assembly and decoration | `assembleBatchedModel`, `decorateConwayDirectIfcModel`, `stampAppliedCoordination` | — | per-occurrence tables carried onto the rebuilt instance map | shared |
@@ -1311,9 +1313,11 @@ and the other lacks.
    whole source in memory, in the worker now rather than on the page.
 2. The STEP index sidecar (conway#757), so a STEP reopen or an eviction
    rehydrate (§7 step 8) skips the parse as an IFC's will.
-3. STEP previews (conway): first a preview that appears at all on the
-   models tried, then an occurrence path on its payload, so a STEP pick at
-   first mesh selects the occurrence, as an IFC pick selects the element.
+3. STEP previews (conway): the occurrence path on the payload landed
+   (conway#772, wired to the preview pick), as did the channel on the
+   windowed open; previews that appear at all are **parked until
+   conway#773** (the parse-end tick's prep cost, and the cost gate's starting
+   rate). Early picking on STEP comes from the durable batches (#2084).
 4. ~~§7 step 5 (the capture job) for both formats at once, including
    STEP's occurrence-path table.~~ Done in #2081: one job, run next to
    either engine.

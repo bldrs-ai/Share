@@ -8,7 +8,7 @@ import {
   Mesh,
 } from 'three'
 import {makeSurfaceColor, makeSurfaceMaterial} from '../lookMaterial'
-import {PREVIEW_EXPRESS_ID_KEY} from '../previewSelection'
+import {PREVIEW_EXPRESS_ID_KEY, PREVIEW_GEOMETRY_ID_KEY, PREVIEW_OCCURRENCE_PATH_KEY} from '../previewSelection'
 
 
 const AABB_GEOMETRY_KEY = -1
@@ -89,6 +89,14 @@ export function payloadToPreviewMesh(payload, geometryCache, materialCache, coor
   // pick down CadView's finished-model branch, which needs the tree.
   if (Number.isFinite(payload.expressID)) {
     mesh.userData[PREVIEW_EXPRESS_ID_KEY] = payload.expressID
+  }
+  // STEP (conway's AP214 preview): which occurrence this placement is, `[]`
+  // at the root, so a pick selects the occurrence rather than every reuse of
+  // the part, as a pick on the finished model does. Kept present-but-empty:
+  // the root-level join tells `[]` from "no path" (#1901, #1909).
+  if (Array.isArray(payload.occurrencePath)) {
+    mesh.userData[PREVIEW_OCCURRENCE_PATH_KEY] = payload.occurrencePath.slice()
+    mesh.userData[PREVIEW_GEOMETRY_ID_KEY] = payload.geometryExpressID
   }
   return mesh
 }

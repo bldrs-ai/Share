@@ -2096,6 +2096,23 @@ describe('CadView', () => {
         expect(result.current.selectedInstancesExact).toBe(true)
       })
 
+      it('a STEP preview hit selects its occurrence, with no instance to narrow by (conway#772)', async () => {
+        const {result} = renderHook(() => useStore((state) => state))
+        await mountOnParsingLoad(result, makeIndexedModel())
+        const path = [leaf]
+        castRaySpy.mockReturnValue([
+          {object: {userData: {previewExpressID: leaf, previewOccurrencePath: path, previewGeometryID: 7}}},
+        ])
+        await act(() => window.ondblclick({target: {tagName: 'CANVAS'}, shiftKey: false}))
+        await actAsyncFlush()
+        expect(result.current.selectedElements).toEqual([`${leaf}`])
+        expect(result.current.selectedOccurrencePath).toEqual(path)
+        expect(result.current.selectedInstanceIds).toEqual([])
+        expect(result.current.selectedInstancesExact).toBe(false)
+        await waitFor(() => expect(previewPaintSpy).toHaveBeenLastCalledWith(
+          [leaf], {instanceIds: [], occurrencePath: path, solidExpressId: null, instancesExact: false}))
+      })
+
       it('paints the pick on the finished model', async () => {
         const {result} = renderHook(() => useStore((state) => state))
         const setSelectionSpy = jest.spyOn(ShareViewer.prototype, 'setSelection')
