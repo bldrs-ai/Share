@@ -722,12 +722,21 @@ export function createEngineHandler({
   /**
    * Write the open model's index sidecar when it parsed (not when it opened
    * from one): the next open of the same OPFS entry then skips the parse.
+   * Either way, sweep the sidecar directory (sweepSidecars).
    * After the pump, so the export (a serialise of the index columns, ~0.2 s
    * on 106 MB of STEP) never competes with geometry. Best-effort: a failed
    * export or write leaves no sidecar, and the next open parses.
    */
   async function saveSidecar() {
-    if (sidecarState === null || sidecarState.source === 'sidecar' || api === null) {
+    if (sidecarState === null || api === null) {
+      return
+    }
+    if (sidecarState.source === 'sidecar') {
+      // Nothing to save, but the sweep runs on every open that keys a
+      // sidecar, so a model that always reopens from its sidecar still
+      // retires strays — a Safari write's abandoned temporary (codex review
+      // of Share#2095).
+      await sweepSidecars(sidecarState.getOpfsRoot)
       return
     }
     try {

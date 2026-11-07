@@ -46,12 +46,25 @@ const SWEEP_PATH_BYTES = 4096
 // The suffix writeThroughSyncHandle's temporary ends in, after a per-write
 // id (`<key>.<id>.tmp`), so two writers never share one. Never a sidecar.
 const TMP_SUFFIX = '.tmp'
-// How old a temporary must be before the sweep removes it. A writer's own is
-// unlocked for a moment between its handle's close and its move, and the
-// sweep must not take it then (codex review of Share#2095); any temporary
-// this old was abandoned (a worker killed mid-write).
+// The Web Lock a writer holds on its temporary, from before it is created
+// until after its move: `<prefix><temporary's name>`. Between the handle's
+// close and the move nothing else locks the file, so the sweep removes a
+// temporary only when it can take this lock, which is exactly when no live
+// writer holds it; a killed worker's locks are released with it (codex
+// review of Share#2095). Web Locks are in workers in Chromium, Firefox and
+// Safari 15.4+.
+export const TMP_LOCK_PREFIX = 'bldrs-sidecar-tmp:'
+// Where `navigator.locks` is missing: how old a temporary must be before the
+// sweep removes it. A writer is past its move in milliseconds; one this old
+// was abandoned.
 // eslint-disable-next-line no-magic-numbers
 export const STALE_TMP_MS = 10 * 60 * 1000
+
+
+/** @return {object|undefined} this global's `LockManager` */
+function webLocks() {
+  return globalThis.navigator?.locks
+}
 
 
 /**
@@ -231,21 +244,44 @@ async function writeThroughWritable(handle, bytes) {
  * and only then moves it over the name: the previous sidecar is removed
  * first, because whether `move()` replaces an existing file is not settled
  * across engines. Nothing is created under the real name before the move.
- * A failure between the remove and the move leaves no sidecar (the next
- * open parses), and a temporary left by a killed worker is retired by the
- * sweep once it is {@link STALE_TMP_MS} old. Each handle call is awaited:
+ * Any failure — the write, the flush, the remove, the move — throws, after
+ * removing the temporary; writeSidecar reports it as `no sidecar saved`
+ * with the reason. One between the remove and the move leaves no sidecar,
+ * so the next open parses. The writer holds the temporary's Web Lock
+ * ({@link TMP_LOCK_PREFIX}) throughout, so the sweep cannot take a live
+ * temporary, and retires one a killed worker left. Each handle call is awaited:
  * Safari 15.2–16.3 returned promises from them, later versions return
  * values, and `await` serves both.
  *
  * @param {object} dir the sidecar directory
  * @param {string} name the sidecar's file name
  * @param {Uint8Array} bytes
+ * @param {object} [locks] `navigator.locks`; without it the write runs
+ *   unlocked and the sweep falls back to {@link STALE_TMP_MS}
  * @return {Promise<void>}
  */
-export async function writeThroughSyncHandle(dir, name, bytes) {
+export async function writeThroughSyncHandle(dir, name, bytes, locks = webLocks()) {
   // eslint-disable-next-line no-magic-numbers
   const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
   const tmpName = `${name}.${id}${TMP_SUFFIX}`
+  if (typeof locks?.request === 'function') {
+    await locks.request(`${TMP_LOCK_PREFIX}${tmpName}`, () => writeTemporaryAndMove(dir, name, tmpName, bytes))
+  } else {
+    await writeTemporaryAndMove(dir, name, tmpName, bytes)
+  }
+}
+
+
+/**
+ * writeThroughSyncHandle's body, under its lock.
+ *
+ * @param {object} dir
+ * @param {string} name
+ * @param {string} tmpName
+ * @param {Uint8Array} bytes
+ * @return {Promise<void>}
+ */
+async function writeTemporaryAndMove(dir, name, tmpName, bytes) {
   const tmp = await dir.getFileHandle(tmpName, {create: true})
   try {
     const access = await tmp.createSyncAccessHandle()
@@ -385,18 +421,58 @@ async function entryExists(root, path) {
 
 
 /**
+ * Remove a stray (a writer's temporary, or anything not a sidecar) unless a
+ * live writer may still need it. With Web Locks: only when its lock can be
+ * taken at once (`ifAvailable`), the remove made while holding it, so no
+ * writer can start on that name meanwhile — a stray no writer ever locked
+ * is taken too. Without: only once it is {@link STALE_TMP_MS} old. Never
+ * throws.
+ *
+ * @param {object} dir
+ * @param {string} name
+ * @param {object} handle
+ * @param {function(): number} now
+ * @param {object} [locks]
+ * @return {Promise<boolean>} whether it was removed
+ */
+async function removeAbandoned(dir, name, handle, now, locks) {
+  const remove = async () => {
+    try {
+      await dir.removeEntry(name)
+      return true
+    } catch {
+      // Left for the next sweep (locked mid-write, already gone).
+      return false
+    }
+  }
+  try {
+    if (typeof locks?.request === 'function') {
+      return await locks.request(`${TMP_LOCK_PREFIX}${name}`, {ifAvailable: true},
+        (lock) => (lock ? remove() : false))
+    }
+    // An age that cannot be read (a file locked mid-write) keeps it.
+    return now() - (await handle.getFile()).lastModified > STALE_TMP_MS ? await remove() : false
+  } catch {
+    return false
+  }
+}
+
+
+/**
  * Remove every sidecar whose source entry is gone — deleted, evicted, or
  * pruned with its recent (`connections/pruneLocalRecents.js`) — or that is
  * not an envelope at all. A replaced entry needs no sweep: its sidecar
- * shares the slot and is overwritten. Run after a save, off the load's
+ * shares the slot and is overwritten. Run after every worker open that keys a
+ * sidecar (saved or opened from), after the pump, off the load's
  * critical path; the directory holds one file per staged model, so the
  * sweep is a handful of lookups. Best-effort.
  *
  * @param {function(): Promise<object>} getOpfsRoot
  * @param {function(): number} [now] wall-clock ms, for tests
+ * @param {object} [locks] `navigator.locks`, for tests
  * @return {Promise<number>} how many were removed
  */
-export async function sweepSidecars(getOpfsRoot, now = Date.now) {
+export async function sweepSidecars(getOpfsRoot, now = Date.now, locks = webLocks()) {
   let removed = 0
   try {
     const root = await getOpfsRoot()
@@ -414,17 +490,11 @@ export async function sweepSidecars(getOpfsRoot, now = Date.now) {
       let keep = false
       if (!name.endsWith('.cidx')) {
         // A writeThroughSyncHandle temporary its move never consumed, or any
-        // other stray: no sidecar is read under it. Only once it is stale: a
-        // writer in another tab may be between its close and its move, when
-        // nothing locks it (codex review of Share#2095). One whose age cannot
-        // be read (locked mid-write) is left too.
-        try {
-          if (now() - (await handle.getFile()).lastModified > STALE_TMP_MS) {
-            await dir.removeEntry(name)
-            removed++
-          }
-        } catch {
-          // Left for the next sweep.
+        // other stray: no sidecar is read under it. Never one a live writer
+        // in another tab still needs: it may be between its close and its
+        // move, when no file lock holds it (codex review of Share#2095).
+        if (await removeAbandoned(dir, name, handle, now, locks)) {
+          removed++
         }
         continue
       }

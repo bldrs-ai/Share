@@ -4,8 +4,8 @@ import {EngineSession} from './EngineSession'
 import {createEngineHandler} from './engineHandler'
 import {indexLine} from './engineModelLoad'
 import {
-  SIDECAR_DIR, STALE_TMP_MS, discardSidecar, readSidecar, sidecarKey, sidecarWriter, sweepSidecars, writeSidecar,
-  writeThroughSyncHandle,
+  SIDECAR_DIR, STALE_TMP_MS, TMP_LOCK_PREFIX, discardSidecar, readSidecar, sidecarKey, sidecarWriter, sweepSidecars,
+  writeSidecar, writeThroughSyncHandle,
 } from './engineSidecars'
 import {locateOpfsEntry, makeBlobStore, makeSyncHandleStore, openSourceStore} from './engineSources'
 import {ENGINE_PROTOCOL_VERSION, Ev} from './protocol'
@@ -172,6 +172,34 @@ class Safari17WorkerFileHandle {
 }
 
 
+/**
+ * A `navigator.locks` stand-in: exclusive locks by name, with `ifAvailable`.
+ *
+ * @return {object} `{request, held}`
+ */
+function fakeLocks() {
+  const held = new Set()
+  return {
+    held,
+    async request(name, options, callback) {
+      const [opts, cb] = typeof options === 'function' ? [{}, options] : [options, callback]
+      if (held.has(name)) {
+        if (opts.ifAvailable) {
+          return cb(null)
+        }
+        throw new Error(`fakeLocks: ${name} is held and this stand-in does not queue`)
+      }
+      held.add(name)
+      try {
+        return await cb({name, mode: 'exclusive'})
+      } finally {
+        held.delete(name)
+      }
+    },
+  }
+}
+
+
 /** @param {Function} FileHandle installed as the global for one test */
 function useFileHandle(FileHandle) {
   globalThis.FileSystemFileHandle = FileHandle
@@ -294,6 +322,74 @@ describe('engine/engineSidecars', () => {
     expect(names).toHaveLength(2)
     expect(names[0]).not.toBe(names[1])
     expect(names.every((name) => name.startsWith('a.cidx.') && name.endsWith('.tmp'))).toBe(true)
+  })
+
+  it('a writer holds its temporary\'s lock from before it is created until after its move', async () => {
+    const locks = fakeLocks()
+    const dir = memoryDir({}, {writable: false})
+    const seen = []
+    const getFileHandle = dir.getFileHandle.bind(dir)
+    dir.getFileHandle = async (name, options) => {
+      seen.push(`create, held ${Array.from(locks.held).join()}`)
+      const handle = await getFileHandle(name, options)
+      const move = handle.move.bind(handle)
+      handle.move = async (to, newName) => {
+        seen.push(`move, held ${Array.from(locks.held).join()}`)
+        return move(to, newName)
+      }
+      return handle
+    }
+    await writeThroughSyncHandle(dir, 'a.cidx', Uint8Array.of(1), locks)
+    const tmpName = seen[0].match(/held bldrs-sidecar-tmp:(.*)$/)?.[1]
+    expect(tmpName).toMatch(/^a\.cidx\..+\.tmp$/)
+    expect(seen).toEqual([`create, held ${TMP_LOCK_PREFIX}${tmpName}`, `move, held ${TMP_LOCK_PREFIX}${tmpName}`])
+    expect(locks.held.size).toBe(0)
+  })
+
+  it('with Web Locks the sweep removes a temporary only when its lock is free, whatever its age', async () => {
+    const locks = fakeLocks()
+    const root = memoryDir({owner: memoryDir({[NAME]: memoryFile(NAME, BYTES)})})
+    const getOpfsRoot = async () => root
+    await writeSidecar(`owner/${NAME}`, snapshot(), Uint8Array.of(1), getOpfsRoot)
+    const dir = root.children[SIDECAR_DIR]
+    const kept = dir.children[await sidecarKey(`owner/${NAME}`)]
+    const NOW = MTIME + (2 * STALE_TMP_MS)
+    // Stale but held: a writer suspended between its close and its move.
+    dir.children['held.cidx.1.tmp'] = memoryFile('held.cidx.1.tmp', kept.bytes)
+    // Fresh but free: a killed worker's, whose lock went with it.
+    dir.children['free.cidx.2.tmp'] = memoryFile('free.cidx.2.tmp', kept.bytes, {lastModified: NOW})
+    let release
+    const holding = locks.request(`${TMP_LOCK_PREFIX}held.cidx.1.tmp`, () => new Promise((resolve) => {
+      release = resolve
+    }))
+    expect(await sweepSidecars(getOpfsRoot, () => NOW, locks)).toBe(1)
+    expect(Object.keys(dir.children).sort()).toEqual([await sidecarKey(`owner/${NAME}`), 'held.cidx.1.tmp'].sort())
+    release()
+    await holding
+    expect(await sweepSidecars(getOpfsRoot, () => NOW, locks)).toBe(1)
+    expect(Object.keys(dir.children)).toEqual([await sidecarKey(`owner/${NAME}`)])
+  })
+
+  it('a move that fails leaves no sidecar and no temporary, and says why', async () => {
+    useFileHandle(Safari17WorkerFileHandle)
+    const root = memoryDir({}, {writable: false})
+    const getOpfsRoot = async () => root
+    const PATH = 'owner/PSB.ifc'
+    await writeSidecar(PATH, snapshot(), Uint8Array.of(7), getOpfsRoot)
+    const dir = root.children[SIDECAR_DIR]
+    const getFileHandle = dir.getFileHandle.bind(dir)
+    dir.getFileHandle = async (name, options) => {
+      const handle = await getFileHandle(name, options)
+      handle.move = async () => {
+        throw Object.assign(new Error('move refused'), {name: 'InvalidModificationError'})
+      }
+      return handle
+    }
+    expect(await writeSidecar(PATH, snapshot(), Uint8Array.of(1), getOpfsRoot))
+      .toEqual({saved: false, writer: 'syncAccessHandle', error: 'InvalidModificationError: move refused'})
+    // The old one was removed before the move, so the next open parses.
+    expect(await readSidecar(PATH, snapshot(), getOpfsRoot)).toBeNull()
+    expect(Object.keys(dir.children)).toEqual([])
   })
 
   it('a sync-handle write that comes up short keeps the previous sidecar, leaves no .tmp, and says why', async () => {
@@ -635,6 +731,17 @@ describe('engine/engineHandler: index sidecar reopen (engine-worker.md §7 step 
     expect(first.index).toEqual({source: 'parse', bytes: api.SIDECAR.length, saved: true, writer: 'syncAccessHandle'})
     const second = await loadOnce(api, root, {disableEngineSyncHandle: true})
     expect(second.index).toEqual({source: 'sidecar', bytes: api.SIDECAR.length, saved: false})
+  })
+
+  it('an open from the sidecar still sweeps, so a model that always reopens retires strays', async () => {
+    const api = sidecarApi([])
+    const root = memoryDir({owner: memoryDir({[NAME]: memoryFile(NAME, BYTES)})})
+    await loadOnce(api, root)
+    // An interrupted Safari write's temporary, long abandoned (node has no
+    // navigator.locks, so the age fallback decides).
+    root.children[SIDECAR_DIR].children['x.cidx.1.tmp'] = memoryFile('x.cidx.1.tmp', Uint8Array.of(0))
+    expect((await loadOnce(api, root)).index.source).toBe('sidecar')
+    expect(Object.keys(root.children[SIDECAR_DIR].children)).toEqual([await sidecarKey(`owner/${NAME}`)])
   })
 
   it('a save that fails carries its reason in the done packet', async () => {
