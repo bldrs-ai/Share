@@ -63,6 +63,25 @@ describe('engine/engineRoute', () => {
     }
   })
 
+  // Codex review on #2083: the prod rollback must beat a URL opt-in. With
+  // `isFeatureEnabled`'s OR, `engineWorker: false` would not: a link that
+  // still says `?feature=engineWorker` stayed in the worker.
+  it('the rollback (disableEngineWorker on in FeatureFlags.js) wins over ?feature=engineWorker', () => {
+    const flag = flags.find((f) => f.name === 'disableEngineWorker')
+    const was = flag.isActive
+    flag.isActive = true
+    try {
+      for (const search of ['', '?feature=engineWorker', '?feature=engineWorker,assist']) {
+        setSearch(search)
+        expect(mainThreadEngineReason()).toBe(MainThreadReason.ROLLBACK)
+      }
+      expect(mainThreadEngineNote(MainThreadReason.ROLLBACK)).toBe(
+        'Engine: main thread (the engine worker is rolled back: disableEngineWorker is on in FeatureFlags.js)')
+    } finally {
+      flag.isActive = was
+    }
+  })
+
   it('says why in one line', () => {
     expect(mainThreadEngineNote(MainThreadReason.VIEW_RULES)).toBe(
       'Engine: main thread (?view= rules need the main-thread engine)')

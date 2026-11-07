@@ -1161,6 +1161,20 @@ Every item needs either a merged PR or a measurement in a PR body.
    - PropertiesNestedRefs, the STEP specs from step 6;
    - batchedGlbCache, the cache hit after a worker load (step 5).
 
+**Rolling back** (since step 9, #2083). Where a load's engine runs is one
+decision, `engine/engineRoute.js#mainThreadEngineReason`.
+- *Prod-wide:* set `disableEngineWorker` to `isActive: true` in
+  `FeatureFlags.js` and deploy. The route reads that static value before any
+  URL flag, so every load goes to the main-thread engine, including links
+  that still carry `?feature=engineWorker`. Its report line says
+  `Engine: main thread (the engine worker is rolled back: …)`.
+- *Not* `engineWorker: false`. `isFeatureEnabled` ORs a static flag with
+  the URL, so that would leave every `?feature=engineWorker` link in the
+  worker (Codex review on #2083).
+- *One session:* `?feature=disableEngineWorker`.
+- `?view=` rule sets and the legacy `?feature=bot` chat route to the
+  main-thread engine on their own, since both read it directly.
+
 ## 8. Decisions (2026-11-03)
 
 These were the open questions of the scope. The user decided each one.
