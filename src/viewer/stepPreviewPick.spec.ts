@@ -1,7 +1,7 @@
 import {Page, expect, test} from '@playwright/test'
 import {watchEngineWorker} from '../tests/e2e/engineWorker'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
-import {waitForModelReady} from '../tests/e2e/models'
+import {setupVirtualPathIntercept, waitForModelReady} from '../tests/e2e/models'
 import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
 
 
@@ -25,6 +25,11 @@ const TEST_TIMEOUT_MS = 120_000
 const HELD_TIMEOUT_MS = 60_000
 const MAX_PICK_TRIES = 12
 const PICK_SETTLE_MS = 3000
+// The parse-end tick has a time budget (conway's FINISH_BUDGET_MS), so on a
+// loaded machine it can place fewer meshes than the fixture has: reopen until
+// the preview has what the test needs.
+const PREVIEW_TRIES = 4
+const PREVIEW_WAIT_MS = 10_000
 
 
 /** A preview mesh on screen: what it draws, and a point on it. */
@@ -85,20 +90,26 @@ async function waitForCameraSettled(page: Page) {
 
 
 /**
- * Open and wait at the index hold with STEP preview meshes on screen. Fails
- * loudly, rather than passing vacuously, if no preview mesh carries an
- * occurrence path.
+ * Open and wait at the index hold with STEP preview meshes on screen, enough
+ * of them that `hasEnough` holds. Fails loudly, rather than passing
+ * vacuously, if no try puts that preview on screen.
  *
  * @param page
  * @param path model URL
+ * @param hasEnough what the test needs of the preview
  */
-async function openHeldWithPreview(page: Page, path: string) {
-  await page.goto(path, {waitUntil: 'domcontentloaded'})
-  await page.waitForFunction(() =>
-    typeof (window as unknown as Record<string, unknown>).__bldrsTestReleaseIndex === 'function',
-  null, {timeout: HELD_TIMEOUT_MS})
-  await expect.poll(() => previewMeshes(page).then((meshes) => meshes.length),
-    {timeout: HELD_TIMEOUT_MS, message: 'the STEP preview must be on screen at the hold'}).toBeGreaterThan(1)
+async function openHeldWithPreview(page: Page, path: string,
+  hasEnough: (meshes: Array<{id: number, path: number[]}>) => boolean) {
+  let enough = false
+  for (let attempt = 0; attempt < PREVIEW_TRIES && !enough; attempt++) {
+    await page.goto(path, {waitUntil: 'domcontentloaded'})
+    await page.waitForFunction(() =>
+      typeof (window as unknown as Record<string, unknown>).__bldrsTestReleaseIndex === 'function',
+    null, {timeout: HELD_TIMEOUT_MS})
+    enough = await expect.poll(() => previewMeshes(page).then(hasEnough), {timeout: PREVIEW_WAIT_MS})
+      .toBe(true).then(() => true, () => false)
+  }
+  expect(enough, 'the STEP preview must be on screen at the hold').toBe(true)
   await expect(page.getByTestId('LoadingBackdrop')).toBeHidden()
   await waitForCameraSettled(page)
   const state = await page.evaluate(() => {
@@ -310,7 +321,9 @@ describeMobileAndDesktop('STEP preview picks select the occurrence', () => {
     test(`${engine}: a preview pick selects and paints its occurrence, and keeps it through the load`, async ({page}) => {
       test.setTimeout(TEST_TIMEOUT_MS)
       const engineCheck = watchEngineWorker(page)
-      await openHeldWithPreview(page, `${OCCURRENCE_MODEL}${query}`)
+      // Two occurrences at least: one to pick, one to leave unpainted.
+      await openHeldWithPreview(page, `${OCCURRENCE_MODEL}${query}`,
+        (meshes) => meshes.filter((m) => m.path.length > 0).length > 1)
 
       const picked = await doubleClickAPreviewMesh(page, (t) => t.path.length > 0)
       const store = await finishedSelection(page)
@@ -338,7 +351,15 @@ describeMobileAndDesktop('STEP preview picks select the occurrence', () => {
     test(`${engine}: a root shell's preview pick paints that shell alone, and the load narrows to it`, async ({page}) => {
       test.setTimeout(TEST_TIMEOUT_MS)
       const engineCheck = watchEngineWorker(page)
-      await openHeldWithPreview(page, `${ROOT_SHELLS_MODEL}${query}`)
+      // A GitHub-hosted fixture: the fallback route for the Contents API
+      // request MSW's service worker can miss right after a navigation
+      // (tests/e2e/models.ts; #2090).
+      await setupVirtualPathIntercept(page, ROOT_SHELLS_MODEL, 'step/twoRootShells.step')
+      // Two root shells of one owner at least: one to pick, a sibling to leave.
+      await openHeldWithPreview(page, `${ROOT_SHELLS_MODEL}${query}`, (meshes) => {
+        const owners = meshes.filter((m) => m.path.length === 0).map((m) => m.id)
+        return owners.some((id, i) => owners.indexOf(id) !== i)
+      })
 
       const picked = await doubleClickAPreviewMesh(page, (t) => t.path.length === 0)
       const meshes = await previewMeshes(page)

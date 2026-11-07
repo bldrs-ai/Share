@@ -2399,9 +2399,15 @@ export default function CadView({
       // back to id membership — otherwise any hash-only location change
       // (camera rest, panel close) would re-fire this and stomp the
       // accumulated multi-select back to the URL's single occurrence.
+      // A root-level pick whose shell had not streamed in when it was made
+      // (NavTreeSlice#selectedRootGeometryId) is anchored on this row while
+      // its selected ids are the shell's owner, and its link is this row's
+      // path: it is this selection, not a click on the row (#2089).
+      const isRootPickOfRow = (state.selectedRootGeometryId ?? null) !== null &&
+        (state.selectedAnchorIds ?? []).includes(`${targetId}`)
       const idSelected =
         state.selectedElements.includes(`${targetId}`) ||
-        viewer.getSelectedIds().includes(targetId)
+        viewer.getSelectedIds().includes(targetId) || isRootPickOfRow
       // Occurrence identity is the path — plus the solid id when the URL
       // addresses one piece of a multibody part. For a piece that shares its
       // part's path (an anonymous conway#387 piece, a pre-conway#628 solid)
