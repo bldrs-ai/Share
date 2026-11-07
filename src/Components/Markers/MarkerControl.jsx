@@ -112,11 +112,9 @@ function MarkerControl({context, oppositeObjects, postProcessor}) {
       return
     }
 
-    // Initialize PlaceMark and start render loop only once
-    const _placeMark = createPlaceMark({context, oppositeObjects, postProcessor})
-
-    // Only start render loop once
-    _placeMark.onRender()
+    // Initialize PlaceMark once. Its per-frame upkeep runs in the viewer's
+    // own loop (PlaceMark#update, ThreeContext#onFrame).
+    createPlaceMark({context, oppositeObjects, postProcessor})
 
     return () => {
       // Cleanup logic will be added here in the future if needed

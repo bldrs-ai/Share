@@ -81,6 +81,54 @@ describeMobileAndDesktop('viewer/three/renderOnDemand', () => {
   })
 
 
+  // codex on #2096: PlaceMark keeps each marker a fixed size on screen by
+  // rescaling it with camera distance, which three gives no signal for. A
+  // marker restored from a note starts at scale 1; when the rescale ran in a
+  // rAF loop of its own after the viewer's paint, the scale-1 frame stayed
+  // up. The marker is put down the way MarkerControl restores one, with no
+  // input and no store change, so only the marker's own ask can paint it.
+  test('a restored note marker paints at its scaled size, with no input', async ({page}) => {
+    await page.getByTestId('control-button-notes').click()
+    await page.waitForFunction(() => (window as unknown as RodWindow).store?.getState().placeMark !== null,
+      undefined, {timeout: 10_000})
+    await waitForIdle(page)
+    await startRecording(page)
+    const markerCount = await page.evaluate(async () => {
+      const state = (window as unknown as RodWindow).store?.getState()
+      const camera = state?.viewer?.context?.getCamera?.()
+      const placeMark = state?.placeMark
+      if (!camera || !placeMark) {
+        throw new Error('no camera or PlaceMark')
+      }
+      // 5 units in front of the camera: PlaceMark's right scale there is
+      // 0.25, well off the 1 a new sprite starts at.
+      const forward = camera.getWorldDirection(camera.position.clone())
+      const point = camera.position.clone().add(forward.multiplyScalar(5))
+      await placeMark.putDown({point, normal: camera.up.clone()})
+      return placeMark.getPlacemarks().length
+    })
+    expect(markerCount).toBeGreaterThan(0)
+    const painted = await stopRecordingWhenIdle(page)
+    expect(painted.paints, 'the restored marker painted').toBeGreaterThan(0)
+    const scales = await page.evaluate(() => {
+      const state = (window as unknown as RodWindow).store?.getState()
+      const camera = state?.viewer?.context?.getCamera?.()
+      return (state?.placeMark?.getPlacemarks() ?? []).map((mark) => ({
+        now: mark.scale.x,
+        // PlaceMark's rule: distance from the camera over 20.
+        expected: mark.position.distanceTo(camera?.position) / 20,
+      }))
+    })
+    for (const {now, expected} of scales) {
+      expect(Math.abs(expected - 1), 'the test marker is far enough to need a rescale').toBeGreaterThan(0.05)
+      expect(now).toBeCloseTo(expected, 5)
+    }
+    expect(painted.lastMarkerScales, 'the last paint showed every marker at its rescaled size')
+      .toEqual(scales.map(({now}) => now))
+    await expectLastPaintCurrent(page, painted.last)
+  })
+
+
   test('a resize repaints at the new size', async ({page}) => {
     const viewport = page.viewportSize()
     if (viewport === null) {
@@ -202,7 +250,12 @@ async function startRecording(page: Page) {
       const camera = context.getCamera?.()
       return camera ? [...camera.position.toArray(), ...camera.quaternion.toArray()] : []
     }
-    const recording = {paints: 0, last: null as CanvasFrame | null, lastPose: [] as number[], painting, pose}
+    const markerScales = (): number[] =>
+      (w.store?.getState().placeMark?.getPlacemarks() ?? []).map((mark) => mark.scale.x)
+    const recording = {
+      paints: 0, last: null as CanvasFrame | null, lastPose: [] as number[], lastMarkerScales: [] as number[],
+      painting, pose,
+    }
     w.__rodRecording = recording
     context.setRenderUpdate((...args: unknown[]) => {
       const paintsBefore = demand.stats.paints
@@ -211,6 +264,7 @@ async function startRecording(page: Page) {
         recording.paints++
         recording.last = read()
         recording.lastPose = pose()
+        recording.lastMarkerScales = markerScales()
       }
     })
   }, FRAME_COLS)
@@ -234,7 +288,10 @@ async function stopRecordingWhenIdle(page: Page): Promise<Recorded> {
     }
     w.store?.getState().viewer?.context?.setRenderUpdate?.(recording.painting)
     delete w.__rodRecording
-    return {paints: recording.paints, last: recording.last, lastPose: recording.lastPose, poseNow: recording.pose()}
+    return {
+      paints: recording.paints, last: recording.last, lastPose: recording.lastPose, poseNow: recording.pose(),
+      lastMarkerScales: recording.lastMarkerScales,
+    }
   })
   expect(recorded.last, 'the viewer painted while recording').not.toBeNull()
   return recorded as Recorded
@@ -249,6 +306,8 @@ type Recorded = {
   /** The camera's position and quaternion at the last paint, and now. */
   lastPose: number[]
   poseNow: number[]
+  /** Each note marker's scale at the last paint. */
+  lastMarkerScales: number[]
 }
 
 
@@ -307,21 +366,39 @@ async function selectAtCanvas(page: Page) {
 }
 
 
+/** The three.js Vector3 surface the specs touch. */
+type Vec3 = {
+  x: number
+  clone: () => Vec3
+  multiplyScalar: (s: number) => Vec3
+  add: (v: Vec3) => Vec3
+  distanceTo: (v?: Vec3) => number
+  toArray: () => number[]
+}
+
+
 type RodWindow = Window & {
   store?: {getState: () => {
     selectedElements?: unknown[]
+    placeMark?: {
+      putDown: (args: {point: Vec3, normal: Vec3}) => Promise<unknown>
+      getPlacemarks: () => Array<{scale: Vec3, position: Vec3}>
+    } | null
     viewer?: {context?: {
       setRenderUpdate?: (fn: (...args: unknown[]) => void) => void
       getLegacyRendererWrapper?: () => {update?: (...args: unknown[]) => void}
       getRenderer?: () => {getContext: () => WebGLRenderingContext}
       getRenderDemand?: () => {stats: {paints: number, frames: number}} | null
-      getCamera?: () => {position: {toArray: () => number[]}, quaternion: {toArray: () => number[]}}
+      getCamera?: () => {
+        position: Vec3, up: Vec3, quaternion: {toArray: () => number[]}, getWorldDirection: (out: Vec3) => Vec3,
+      }
     }}
   }}
   __rodRecording?: {
     paints: number
     last: CanvasFrame | null
     lastPose: number[]
+    lastMarkerScales: number[]
     painting: (...args: unknown[]) => void
     pose: () => number[]
   }

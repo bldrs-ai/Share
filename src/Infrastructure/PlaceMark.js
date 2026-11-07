@@ -291,8 +291,15 @@ export default class PlaceMark extends EventDispatcher {
     const baselineDistance = 20 // e.g., at 100 units from camera, scale = 1
     const baselineScale = 1
 
+    /**
+     * Keep each marker a fixed size on screen: scale it with its distance
+     * from the camera.
+     *
+     * @return {boolean} whether any marker's scale changed
+     */
     const updatePlacemarksVisibility = () => {
       const camPos = _camera.position
+      let isRescaled = false
       _placeMarks.forEach((placemark) => {
         // Normal size in screen
         // placemark.scale.set(PLACEMARK_SIZE, PLACEMARK_SIZE, PLACEMARK_SIZE)
@@ -301,18 +308,39 @@ export default class PlaceMark extends EventDispatcher {
         // const scale = getScaleForDistance(distance, minDist, maxDist, minScale, maxScale)
         // Fixed size
         const scale = baselineScale * (distance / baselineDistance)
-        placemark.scale.set(scale, scale, scale)
+        if (placemark.scale.x !== scale || placemark.scale.y !== scale || placemark.scale.z !== scale) {
+          placemark.scale.set(scale, scale, scale)
+          isRescaled = true
+        }
       })
+      return isRescaled
     }
 
-    this.onRender = () => {
-      updatePlacemarksVisibility()
+    /**
+     * One frame of upkeep, run by the viewer's own loop before its paint
+     * under `?feature=renderOnDemand` (ThreeContext#onFrame). It used to be a
+     * rAF loop of its own, started twice and never stopped, that ran after
+     * the viewer's paint: a marker restored from a note starts at scale 1,
+     * the loop then rescaled it, and a viewer painting on demand kept the
+     * scale-1 frame up until something else painted (codex on #2096). A
+     * transform is no change the render-on-demand hooks see, so a rescale
+     * asks for its paint.
+     */
+    this.update = () => {
+      if (updatePlacemarksVisibility()) {
+        requestPaint()
+      }
       _placeMarks.sort((a, b) =>
         a.position.distanceTo(_camera.position) - b.position.distanceTo(_camera.position))
-      requestAnimationFrame(this.onRender)
     }
 
-    requestAnimationFrame(this.onRender)
+    // A context stand-in without the frame hook (unit tests) gets no upkeep.
+    const stopFrames = context.onFrame?.(this.update) ?? (() => undefined)
+
+    /** Stop the per-frame upkeep. */
+    this.dispose = () => {
+      stopFrames()
+    }
   }
 }
 

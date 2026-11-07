@@ -220,6 +220,36 @@ export default class ThreeContext {
 
 
   /**
+   * Run `fn` once per animation frame in the viewer's own loop, as one of its
+   * components: under `?feature=renderOnDemand` before the frame's paint
+   * (IfcContext#updateAllComponents), otherwise in registration order, after
+   * it. For per-frame scene upkeep that follows the camera (PlaceMark's
+   * sprite scale), so it needs no rAF loop of its own, and a change it makes
+   * shows in the same frame. A change still has to ask for its paint
+   * (`requestPaint`), or a viewer painting on demand won't show it.
+   *
+   * @param {Function} fn called with the frame's delta in seconds
+   * @return {Function} stops calling it; idempotent
+   */
+  onFrame(fn) {
+    const component = {update: fn}
+    // A test harness's legacy stand-in may have no component list; the
+    // vendored IfcContext always does.
+    if (typeof this._legacy?.addComponent !== 'function') {
+      return () => undefined
+    }
+    this._legacy.addComponent(component)
+    return () => {
+      const components = this._legacy?.items?.components
+      const at = components?.indexOf(component) ?? -1
+      if (at >= 0) {
+        components.splice(at, 1)
+      }
+    }
+  }
+
+
+  /**
    * The viewer's on-demand painting state (open-205 #2043): inert outside a
    * progressive load, and while one streams, what decides whether a frame
    * paints. See `renderDemand.js`.
