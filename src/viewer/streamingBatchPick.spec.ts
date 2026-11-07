@@ -66,6 +66,10 @@ async function openHeldMidPump(page: Page, path: string) {
     const s = (w as any).store?.getState?.()
     return typeof w.__bldrsTestReleaseMidPump === 'function' && s?.rootElement
   }, null, {timeout: HELD_TIMEOUT_MS})
+  // The loading overlay lifts at the load's first mesh (CadView#onFirstMesh),
+  // a frame or so after the batch lands: until then it, not the canvas, takes
+  // the double-click.
+  await expect(page.getByTestId('LoadingBackdrop')).toBeHidden()
   await expectStillPumping(page)
 }
 
@@ -107,16 +111,27 @@ async function rowTargets(page: Page): Promise<RowTarget[]> {
     const scene = viewer.context.getScene()
     const camera = viewer.context.getCamera()
     const rect = (document.querySelector('canvas') as HTMLCanvasElement).getBoundingClientRect()
-    // No three import in the page: getBoundingBoxAt only `copy`s its own box
-    // into the target, so a stand-in that keeps min and max does.
-    const boxOf = (mesh: any, geometryId: number) => {
-      const box: any = {copy(b: any) {
-        box.min = b.min.clone()
-        box.max = b.max.clone()
-        return box
-      }}
-      return mesh.getBoundingBoxAt(geometryId, box)
+    // A point ON the instance, not its box centre, which for a letter of the
+    // STEP logo or a ring is empty space: the centroid of its geometry's
+    // first triangle, read off the batch's own index and positions (three's
+    // per-geometry range; no three import in the page).
+    const firstTriangleCentre = (mesh: any, geometryId: number) => {
+      const range = mesh._geometryInfo?.[geometryId]
+      const index = mesh.geometry.index
+      const position = mesh.geometry.attributes.position
+      if (!range || !index || range.count < 3) {
+        return null
+      }
+      const centre = camera.position.clone().set(0, 0, 0)
+      for (let k = 0; k < 3; k++) {
+        const v = index.getX(range.start + k)
+        centre.x += position.getX(v) / 3
+        centre.y += position.getY(v) / 3
+        centre.z += position.getZ(v) / 3
+      }
+      return centre
     }
+    const canvas = document.querySelector('canvas')
     const previewed = new Set<number>()
     for (const group of scene.children.filter((c: any) => c.userData?.isLoadPreview)) {
       for (const mesh of group.children) {
@@ -126,7 +141,6 @@ async function rowTargets(page: Page): Promise<RowTarget[]> {
       }
     }
     const ON_SCREEN = 0.9
-    const HALF = 0.5
     const SPREAD = 12
     const out: any[] = []
     for (const root of scene.children.filter((c: any) => c.userData?.streamingBatches !== undefined)) {
@@ -139,17 +153,20 @@ async function rowTargets(page: Page): Promise<RowTarget[]> {
         const mesh = state.mesh
         for (let batchId = 0; batchId < state.cursor; batchId++) {
           const row = builder.pickRow(mesh, batchId)
-          const box = boxOf(mesh, mesh.getGeometryIdAt(batchId))
-          if (!box?.min) {
+          const local = firstTriangleCentre(mesh, mesh.getGeometryIdAt(batchId))
+          if (local === null) {
             continue
           }
           const matrix = mesh.getMatrixAt(batchId, mesh.matrixWorld.clone()).premultiply(mesh.matrixWorld)
-          const centre = box.min.clone().add(box.max).multiplyScalar(HALF).applyMatrix4(matrix).project(camera)
-          if (Math.abs(centre.x) < ON_SCREEN && Math.abs(centre.y) < ON_SCREEN && centre.z < 1) {
+          const centre = local.applyMatrix4(matrix).project(camera)
+          const x = rect.left + (((centre.x + 1) / 2) * rect.width)
+          const y = rect.top + (((1 - centre.y) / 2) * rect.height)
+          // On screen, and not under a panel or the mobile drawer.
+          if (Math.abs(centre.x) < ON_SCREEN && Math.abs(centre.y) < ON_SCREEN && centre.z < 1 &&
+              document.elementFromPoint(x, y) === canvas) {
             out.push({
               parent: row.parentExpressId, instance: row.instanceId, path: row.occurrencePath,
-              uncovered: !previewed.has(row.parentExpressId),
-              x: rect.left + (((centre.x + 1) / 2) * rect.width), y: rect.top + (((1 - centre.y) / 2) * rect.height),
+              uncovered: !previewed.has(row.parentExpressId), x, y,
             })
           }
         }
@@ -176,12 +193,32 @@ async function doubleClickSelectsARow(page: Page): Promise<RowTarget> {
   expect(targets.length, 'a durable instance must be on screen').toBeGreaterThan(0)
   for (const target of targets.slice(0, MAX_PICK_TRIES)) {
     await page.mouse.dblclick(target.x, target.y)
-    const selected = await page.waitForFunction((instance) =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ((window as any).store.getState().selectedInstanceIds ?? []).includes(instance),
-    target.instance, {timeout: PICK_SETTLE_MS}).then(() => true, () => false)
-    if (selected) {
-      return target
+    // The ray takes the NEAREST instance, which where parts overlap on screen
+    // is not always the one aimed at: any streaming row's instance, selected
+    // as one, is the pick working. Read the row back from the builder.
+    const row = await page.waitForFunction(() => {
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      const s = (window as any).store.getState()
+      const instances = s.selectedInstanceIds ?? []
+      if (instances.length !== 1) {
+        return null
+      }
+      for (const root of s.viewer.context.getScene().children) {
+        const builder = root.userData?.streamingBatches
+        for (const state of [builder?.opaque, builder?.transparent]) {
+          for (let batchId = 0; batchId < (state?.cursor ?? 0); batchId++) {
+            const picked = builder.pickRow(state.mesh, batchId)
+            if (picked.instanceId === instances[0]) {
+              return {parent: picked.parentExpressId, instance: picked.instanceId, path: picked.occurrencePath}
+            }
+          }
+        }
+      }
+      return null
+      /* eslint-enable @typescript-eslint/no-explicit-any */
+    }, null, {timeout: PICK_SETTLE_MS}).then((handle) => handle.jsonValue(), () => null)
+    if (row !== null) {
+      return {...row, x: target.x, y: target.y}
     }
   }
   throw new Error('double-click selected none of the durable instances it was aimed at')
