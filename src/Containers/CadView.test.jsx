@@ -2041,7 +2041,8 @@ describe('CadView', () => {
         expect(result.current.rootElement).toBeNull()
         expect(result.current.selectedElement).toBeNull()
         expect(indexedModel.getItemProperties).not.toHaveBeenCalled()
-        await waitFor(() => expect(previewPaintSpy).toHaveBeenLastCalledWith([leaf], {instanceIds: [], occurrencePath: null}))
+        await waitFor(() => expect(previewPaintSpy).toHaveBeenLastCalledWith(
+          [leaf], {instanceIds: [], occurrencePath: null, solidExpressId: null}))
         const navigationsBeforeIndex = mockedUseNavigate.mock.calls.length
 
         await act(() => releaseIndex())
@@ -2074,7 +2075,8 @@ describe('CadView', () => {
         // Before the tree: the owner, narrowed to the row's instance.
         expect(result.current.selectedElements).toEqual([`${leaf}`])
         expect(result.current.selectedInstanceIds).toEqual([instance])
-        await waitFor(() => expect(previewPaintSpy).toHaveBeenLastCalledWith([leaf], {instanceIds: [instance], occurrencePath: null}))
+        await waitFor(() => expect(previewPaintSpy).toHaveBeenLastCalledWith(
+          [leaf], {instanceIds: [instance], occurrencePath: null, solidExpressId: null}))
 
         // At the index, the finished model's per-instance funnel takes it.
         await act(() => releaseIndex())

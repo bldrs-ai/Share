@@ -339,13 +339,22 @@ export class IncrementalBatchedBuilder {
    * Paint a selection onto the rows written so far, restore the rows that
    * left it, and keep painting rows appended later until `finalize`.
    *
-   * Which rows: when `instances` is non-empty, exactly those (the
-   * per-instance narrowing of a scene pick, as `setInstanceSelection` does on
-   * the finished model); otherwise rows whose parent is selected, plus, for
-   * STEP, rows at or under `occurrencePath`.
+   * Which rows:
+   *  - a STEP occurrence (`occurrencePath` non-empty) decides on its own: the
+   *    rows at or under it, narrowed to `solidExpressId`'s rows when a body
+   *    is named. Whatever `instances` came with it are the rows written SO
+   *    FAR (a tree click resolves the occurrence to them, as does
+   *    `reapplySelectionToGeometry`), or a scene pick's one instance, which
+   *    the end-of-load reapply widens to the occurrence anyway. Letting them
+   *    decide left rows streamed in later under a selected assembly unpainted
+   *    until finalize (codex on #2084);
+   *  - otherwise, when `instances` is non-empty, exactly those (an IFC scene
+   *    pick's narrowing, as `setInstanceSelection` does on the finished
+   *    model);
+   *  - otherwise the rows whose parent is selected.
    *
-   * @param {object|null} selection `{parents, instances, occurrencePath}`,
-   *   each optional; null clears
+   * @param {object|null} selection `{parents, instances, occurrencePath,
+   *   solidExpressId}`, each optional; null clears
    * @param {object|null} color three.js Color; null clears
    * @return {number} rows painted
    */
@@ -354,8 +363,9 @@ export class IncrementalBatchedBuilder {
     const instances = new Set((selection?.instances ?? []).map(Number))
     const path = Array.isArray(selection?.occurrencePath) && selection.occurrencePath.length > 0 ?
       selection.occurrencePath : null
+    const solid = Number.isFinite(selection?.solidExpressId) ? selection.solidExpressId : null
     const isEmpty = color === null || (parents.size === 0 && instances.size === 0 && path === null)
-    this.loadSelection = isEmpty ? null : {parents, instances, path}
+    this.loadSelection = isEmpty ? null : {parents, instances, path, solid}
     this.loadSelectionColor = isEmpty ? null : color
     let painted = 0
     for (const state of [this.opaque, this.transparent]) {
@@ -410,14 +420,14 @@ export class IncrementalBatchedBuilder {
     if (selection === null) {
       return false
     }
+    if (selection.path !== null) {
+      return isPathPrefix(selection.path, state.instanceOccurrencePaths[row]) &&
+        (selection.solid === null || state.instanceGeometryIds[row] === selection.solid)
+    }
     if (selection.instances.size > 0) {
       return selection.instances.has(state.instanceOccurrenceIds[row])
     }
-    if (selection.parents.has(state.instanceParents[row])) {
-      return true
-    }
-    const rowPath = state.instanceOccurrencePaths[row]
-    return selection.path !== null && isPathPrefix(selection.path, rowPath)
+    return selection.parents.has(state.instanceParents[row])
   }
 
 

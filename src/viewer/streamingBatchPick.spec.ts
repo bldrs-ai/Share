@@ -36,19 +36,31 @@ interface RowTarget {
 
 
 /**
- * Hold the pump once, right after its first batch (conwayDirectIfcLoader.js
- * #holdMidPumpForTest; the worker steps to one batch, engineModelLoad.js):
- * durable geometry on screen, the load not finished, no pick tables stamped.
+ * Hold the pump after its first `holds` batches (conwayDirectIfcLoader.js
+ * #holdMidPumpForTest; the worker is stepped a batch at a time,
+ * engineModelLoad.js): durable geometry on screen, the load not finished, no
+ * pick tables stamped.
  *
  * @param page
+ * @param holds how many batches to hold after
  */
-async function holdMidPump(page: Page) {
-  await page.addInitScript(() => {
+async function holdMidPump(page: Page, holds = 1) {
+  await page.addInitScript((count) => {
     const w = window as unknown as Record<string, unknown>
-    w.__bldrsTestHoldMidPump = () => new Promise<void>((resolve) => {
-      w.__bldrsTestReleaseMidPump = resolve
-    })
-  })
+    // Called after every batch; holds the first `count`, numbering each hold
+    // in __bldrsTestHeldAt so a spec can wait for the next one.
+    let calls = 0
+    w.__bldrsTestHoldMidPump = () => {
+      calls++
+      if (calls > count) {
+        return Promise.resolve()
+      }
+      return new Promise<void>((resolve) => {
+        w.__bldrsTestHeldAt = calls
+        w.__bldrsTestReleaseMidPump = resolve
+      })
+    }
+  }, holds)
 }
 
 
@@ -104,8 +116,8 @@ async function expectStillPumping(page: Page) {
  * @param page
  * @return targets
  */
-async function rowTargets(page: Page): Promise<RowTarget[]> {
-  return await page.evaluate(() => {
+async function rowTargets(page: Page, spread = true): Promise<RowTarget[]> {
+  return await page.evaluate((isSpread) => {
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const viewer = (window as any).store.getState().viewer
     const scene = viewer.context.getScene()
@@ -173,10 +185,10 @@ async function rowTargets(page: Page): Promise<RowTarget[]> {
       }
     }
     out.sort((a, b) => Number(b.uncovered) - Number(a.uncovered))
-    const step = Math.max(1, Math.floor(out.length / SPREAD))
+    const step = isSpread ? Math.max(1, Math.floor(out.length / SPREAD)) : 1
     return out.filter((_, i) => i % step === 0)
     /* eslint-enable @typescript-eslint/no-explicit-any */
-  })
+  }, spread)
 }
 
 
@@ -189,9 +201,16 @@ async function rowTargets(page: Page): Promise<RowTarget[]> {
  * @return the picked row
  */
 async function doubleClickSelectsARow(page: Page): Promise<RowTarget> {
-  const targets = await rowTargets(page)
-  expect(targets.length, 'a durable instance must be on screen').toBeGreaterThan(0)
-  for (const target of targets.slice(0, MAX_PICK_TRIES)) {
+  expect((await rowTargets(page)).length, 'a durable instance must be on screen').toBeGreaterThan(0)
+  for (let attempt = 0; attempt < MAX_PICK_TRIES; attempt++) {
+    // Aimed afresh each time: a pick that landed on a preview mesh selects
+    // too, and on a phone a selection opens the drawer, which moves the
+    // canvas under every point worked out before it.
+    const targets = await rowTargets(page)
+    if (targets.length === 0) {
+      break
+    }
+    const target = targets[attempt % targets.length]
     await page.mouse.dblclick(target.x, target.y)
     // The ray takes the NEAREST instance, which where parts overlap on screen
     // is not always the one aimed at: any streaming row's instance, selected
@@ -432,19 +451,23 @@ describeMobileAndDesktop('Pickable durable batches during the pump: root-level s
         }
       }
       if (picked === null) {
-        throw new Error('a shift-pick must select a root-level shell')
+        throw new Error(`a shift-pick must select a root-level shell: ${JSON.stringify({
+          targets: targets.length, last: await selectionState(page, -1)})}`)
       }
       const {target, instance} = picked
       const selected = await selectionState(page, instance)
       expect(selected.anchors.length).toBeGreaterThan(0)
       expect(selected.streamingPainted).toBeGreaterThan(0)
 
-      // The same shell again: out of the selection, owner and all.
-      await shiftDoubleClick(page, target.x, target.y)
+      // The same shell again, where it is now: on a phone the selection opens
+      // the drawer, which moves the canvas under the old point.
+      const again = (await rowTargets(page, false)).find((t) => t.instance === instance) ?? target
+      await shiftDoubleClick(page, again.x, again.y)
       const cleared = await selectionState(page, instance)
-      expect(cleared.instances).toEqual([])
-      expect(cleared.anchors).toEqual([])
-      expect(cleared.elements).toEqual([])
+      const context = JSON.stringify({selected, cleared, target, again})
+      expect(cleared.instances, context).toEqual([])
+      expect(cleared.anchors, context).toEqual([])
+      expect(cleared.elements, context).toEqual([])
       expect(cleared.streamingPainted).toBe(0)
       await expectStillPumping(page)
 
@@ -455,6 +478,186 @@ describeMobileAndDesktop('Pickable durable batches during the pump: root-level s
       expect(after.elements).toEqual([])
       expect(after.anchors).toEqual([])
       expect(after.finishedPainted).toBe(0)
+    })
+  }
+})
+
+
+// The NIST AS1 assembly: sub-assemblies whose parts arrive over several
+// batches of the pump at batch size 1 (8 AP214 units a batch, both engines).
+const AS1_PATH = '/share/v/gh/bldrs-ai/test-models/main/step/nist/as1-oc-214.stp'
+const EXPAND_SETTLE_MS = 150
+const MAX_EXPAND_CLICKS = 20
+const MAX_HELD_BATCHES = 50
+
+
+/**
+ * Rows under an occurrence written so far, and how many of them are painted.
+ *
+ * @param page
+ * @param pathKey the occurrence, '/'-joined
+ * @return counts
+ */
+function rowsUnder(page: Page, pathKey: string): Promise<{rows: number, painted: number}> {
+  return page.evaluate((key) => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const prefix = key.split('/').map(Number)
+    let rows = 0
+    let painted = 0
+    for (const root of (window as any).store.getState().viewer.context.getScene().children) {
+      const builder = root.userData?.streamingBatches
+      for (const state of [builder?.opaque, builder?.transparent]) {
+        for (let batchId = 0; batchId < (state?.cursor ?? 0); batchId++) {
+          const path = state.instanceOccurrencePaths[batchId]
+          if (Array.isArray(path) && prefix.every((id, i) => path[i] === id)) {
+            rows++
+            if (builder.paintedRows.get(state)?.has(batchId)) {
+              painted++
+            }
+          }
+        }
+      }
+    }
+    return {rows, painted}
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  }, pathKey)
+}
+
+
+/**
+ * A sub-assembly that is part-way in: some rows under it written, and some
+ * part below it in the tree with none yet. That is the selection whose
+ * resolved instances are only the rows so far. Null when there is none at
+ * this batch.
+ *
+ * @param page
+ * @return the occurrence, '/'-joined
+ */
+function partlyStreamedAssembly(page: Page): Promise<string | null> {
+  return page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const s = (window as any).store.getState()
+    const written: string[] = []
+    for (const root of s.viewer.context.getScene().children) {
+      const builder = root.userData?.streamingBatches
+      for (const state of [builder?.opaque, builder?.transparent]) {
+        for (let batchId = 0; batchId < (state?.cursor ?? 0); batchId++) {
+          const path = state.instanceOccurrencePaths[batchId]
+          if (Array.isArray(path)) {
+            written.push(path.join('/'))
+          }
+        }
+      }
+    }
+    const under = (key: string) => written.some((w) => w === key || w.startsWith(`${key}/`))
+    const leaves = (node: any): string[] => {
+      const kids = (node.children ?? []).filter((c: any) => Array.isArray(c.occurrencePath) && c.occurrencePath.length > 0)
+      return kids.length === 0 ? [node.occurrencePath.join('/')] : kids.flatMap(leaves)
+    }
+    let found: string | null = null
+    const visit = (node: any) => {
+      if (found !== null) {
+        return
+      }
+      if (Array.isArray(node.occurrencePath) && node.occurrencePath.length > 0) {
+        const key = node.occurrencePath.join('/')
+        const kids = (node.children ?? []).filter((c: any) => Array.isArray(c.occurrencePath) && c.occurrencePath.length > 0)
+        if (kids.length > 0 && under(key) && leaves(node).some((leaf) => !under(leaf))) {
+          found = key
+          return
+        }
+      }
+      for (const child of node.children ?? []) {
+        visit(child)
+      }
+    }
+    visit(s.rootElement)
+    return found
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
+
+
+/**
+ * Let the held pump deliver its next batch, and wait until it is held again
+ * (or the load has finished).
+ *
+ * @param page
+ */
+async function nextBatch(page: Page) {
+  const held = await page.evaluate(() => (window as unknown as Record<string, number>).__bldrsTestHeldAt)
+  await page.evaluate(() =>
+    ((window as unknown as Record<string, () => void>).__bldrsTestReleaseMidPump)())
+  await page.waitForFunction((at) => {
+    const w = window as unknown as Record<string, unknown>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return w.__bldrsTestHeldAt !== at || (w as any).store.getState().isModelReady === true
+  }, held, {timeout: HELD_TIMEOUT_MS})
+}
+
+
+/**
+ * Codex on #2084: a tree click on a STEP assembly resolves it to the instances
+ * written so far and passes them with its path; the streaming paint let those
+ * decide, so rows that streamed in later under the assembly stayed unpainted
+ * until finalize. A selected occurrence now admits later rows by path.
+ */
+describeMobileAndDesktop('Pickable durable batches during the pump: an occurrence selected mid-pump', () => {
+  beforeEach(async ({page}) => {
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+    await holdMidPump(page, MAX_HELD_BATCHES)
+    // One pump batch per 8 AP214 units: the `3810` sub-assembly then lands
+    // over two batches (seen in Node at conway 1.1636.766), where Share's
+    // default batch takes it whole.
+    await page.addInitScript(() => {
+      (window as unknown as Record<string, unknown>).__bldrsTestPumpBatchSize = 1
+    })
+  })
+
+  for (const {engine, query} of ENGINES) {
+    test(`${engine}: rows that stream in under a selected sub-assembly are painted`, async ({page}) => {
+      test.setTimeout(TEST_TIMEOUT_MS)
+      await openHeldMidPump(page, `${AS1_PATH}${query}`)
+
+      // Batch by batch until a sub-assembly is part-way in.
+      let assembly = await partlyStreamedAssembly(page)
+      for (let batch = 0; assembly === null && batch < MAX_HELD_BATCHES; batch++) {
+        await nextBatch(page)
+        await expectStillPumping(page)
+        assembly = await partlyStreamedAssembly(page)
+      }
+      if (assembly === null) {
+        throw new Error('no batch left a sub-assembly part-way in')
+      }
+
+      // Select its row in the NavTree, as a user does.
+      await page.getByTestId('control-button-navigation').click()
+      const panel = page.getByTestId('NavTreePanel')
+      await expect(panel).toBeVisible()
+      for (let click = 0; click < MAX_EXPAND_CLICKS; click++) {
+        const next = panel.locator('[data-node-label][data-is-expanded="false"] [data-testid="NavTreeNodeToggle"]').first()
+        if (await next.count() === 0) {
+          break
+        }
+        await next.evaluate((e) => (e as HTMLElement).click())
+        await page.waitForTimeout(EXPAND_SETTLE_MS)
+      }
+      const row = panel.locator(`[data-occurrence-path="${assembly}"]`).first()
+      await row.getByTestId('NavTreeNodeLabel').evaluate((e) => (e as HTMLElement).click())
+      await expect(row).toHaveAttribute('data-is-selected', 'true')
+      const before = await rowsUnder(page, assembly)
+      await expect.poll(async () => (await rowsUnder(page, assembly)).painted).toBe(before.rows)
+
+      // Batches until more of it lands: painted as it does.
+      let after = before
+      for (let batch = 0; after.rows === before.rows && batch < MAX_HELD_BATCHES; batch++) {
+        await nextBatch(page)
+        await expectStillPumping(page)
+        after = await rowsUnder(page, assembly)
+      }
+      expect(after.rows, 'a later batch adds rows under the sub-assembly').toBeGreaterThan(before.rows)
+      expect(after.painted).toBe(after.rows)
     })
   }
 })

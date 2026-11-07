@@ -2644,6 +2644,7 @@ export default function CadView({
       viewer.setPreviewSelection?.(ids, {
         instanceIds: Array.isArray(selectedInstanceIds) ? selectedInstanceIds : [],
         occurrencePath: useStore.getState().selectedOccurrencePath ?? null,
+        solidExpressId: useStore.getState().selectedSolidExpressId ?? null,
       })
       // Per-instance highlight (Conway-direct): if the click handler
       // tagged us with a specific PlacedGeometry's synthetic ID,

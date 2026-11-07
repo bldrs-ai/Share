@@ -1051,6 +1051,24 @@ describe('IncrementalBatchedBuilder: pickable and paintable while streaming', ()
     expect(builder.root.userData.streamingBatches).toBeUndefined()
   })
 
+  it('a selected occurrence takes the rows that stream in under it later, whatever instances came with it', () => {
+    // Codex on #2084: a tree click on a STEP assembly resolves the occurrence
+    // to the instances written SO FAR and passes them with the path; letting
+    // those decide left later rows under the assembly unpainted.
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    builder.appendBatch([stepMesh(10, 999, [7, 8]), stepMesh(11, 888, [9])])
+    const mesh = builder.opaque.mesh
+    const own = colorAt(mesh, 1)
+    builder.paintSelection({parents: [70], instances: [0], occurrencePath: [7]}, RED)
+    builder.appendBatch([stepMesh(12, 999, [7, 10]), stepMesh(13, 888, [9, 1])])
+    expect([0, 1, 2, 3].map((batchId) => colorAt(mesh, batchId)))
+      .toEqual([[1, 0, 0], own, [1, 0, 0], own])
+
+    // A named body narrows the occurrence to that body's rows.
+    builder.paintSelection({occurrencePath: [7], solidExpressId: 888}, RED)
+    expect(colorAt(mesh, 0)).toEqual(own)
+  })
+
   it('an IFC row has no occurrence path', () => {
     const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
     builder.appendBatch([flatMesh(5, [{geomExpressID: 999, color: OPAQUE}])])
