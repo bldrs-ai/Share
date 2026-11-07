@@ -353,6 +353,22 @@ describe('engine/engineHandler pump control', () => {
     expect(batches).toHaveLength(3)
   })
 
+  it('step runs the pump to one batch and pauses it there; run resumes it to done', async () => {
+    const api = makeStreamingApi()
+    const session = await spawnOver(api)()
+    const batches = []
+    const done = new Promise((resolve) => session.on('done', resolve))
+    session.on('batch', (msg) => batches.push(msg))
+    await session.pump('pause')
+    await session.open({file: new Blob(['x'])}, {stream: {}})
+    await session.pump('step')
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(batches).toHaveLength(1)
+    await session.pump('run')
+    await done
+    expect(batches).toHaveLength(3)
+  })
+
   it('abort ends the stream as failed{aborted} without pumping further', async () => {
     const api = makeStreamingApi()
     const session = await spawnOver(api)()

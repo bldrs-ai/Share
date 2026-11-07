@@ -390,6 +390,9 @@ export async function parseIfcWithConway(
           // first pump call has returned, which is also the first call
           // that can produce a batch, so in practice it is always set here.
           onMeshBatch(batch, modelID, {done: geometryDone, total: geometryTotal})
+          if (pumpedBatches === 1) {
+            await holdMidPumpForTest()
+          }
         }
         // `batch` itself goes out of scope on the next iteration, so on the
         // streaming path the last reference to this batch's FlatMeshes is
@@ -834,6 +837,25 @@ function yieldToEventLoop() {
  */
 async function holdGeometryPumpForTest() {
   const hold = globalThis.__bldrsTestHoldGeometryPump
+  if (typeof hold === 'function') {
+    await hold()
+  }
+}
+
+
+/**
+ * Test seam for picking during the pump (streamingBatchPick.js): hold the
+ * pump once, right after its FIRST batch has gone to `onMeshBatch`, so the
+ * durable model is partly on screen and the load has not finished — the state
+ * a large model's whole geometry pass is in, which on a shippable fixture
+ * lasts well under a second. `streamingBatchPick.spec.ts` installs
+ * `window.__bldrsTestHoldMidPump` with `addInitScript`; the engine worker
+ * honours the same hook (engine/engineModelLoad.js). Absent in production.
+ *
+ * @return {Promise<void>}
+ */
+async function holdMidPumpForTest() {
+  const hold = globalThis.__bldrsTestHoldMidPump
   if (typeof hold === 'function') {
     await hold()
   }

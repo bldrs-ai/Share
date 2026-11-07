@@ -37,6 +37,7 @@ import debug from '../utils/debug'
 import {occurrencePathKey} from '../utils/occurrencePaths'
 import {modelHasCapability} from './ShareModel'
 import {paintPreviewSelection} from './previewSelection'
+import {paintStreamingSelection} from './streamingBatchPick'
 import {isFeatureEnabled} from '../FeatureFlags'
 import {viewRules} from './legacyViewRules'
 import {
@@ -1826,15 +1827,22 @@ export class ShareViewer {
 
 
   /**
-   * Paint a selection on the parse-time preview meshes (open-205 #2043): the
-   * highlight for a selection made while a Conway load is still parsing,
-   * before there is a model for `setSelection` to paint. A no-op once the
-   * preview is gone; the finished model's highlight is `setSelection`'s.
+   * Paint a selection made while a Conway load is still in flight, before
+   * there is a model for `setSelection` to paint: on the parse-time preview
+   * meshes (open-205 #2043), and on the durable batches streaming in
+   * (`streamingBatchPick.js`), which keep painting rows that arrive later. A
+   * no-op once the load has finished; the finished model's highlight is
+   * `setSelection`'s.
    *
    * @param {Array<number>} expressIds the selected elements
-   * @return {number} preview meshes painted
+   * @param {object} [narrowing]
+   * @param {Array<number>} [narrowing.instanceIds] a scene pick's instance:
+   *   on the streaming batches, only it is painted
+   * @param {Array<number>|null} [narrowing.occurrencePath] a STEP
+   *   occurrence: its rows, and its descendants', are painted
+   * @return {number} preview meshes and streaming rows painted
    */
-  setPreviewSelection(expressIds) {
+  setPreviewSelection(expressIds, {instanceIds = [], occurrencePath = null} = {}) {
     let scene = null
     try {
       scene = this.context?.getScene?.() ?? null
@@ -1845,7 +1853,10 @@ export class ShareViewer {
     if (scene === null) {
       return 0
     }
-    const painted = paintPreviewSelection(scene, expressIds, this.selector?.getSelectionMaterial?.() ?? null)
+    const material = this.selector?.getSelectionMaterial?.() ?? null
+    const painted = paintPreviewSelection(scene, expressIds, material) +
+      paintStreamingSelection(scene,
+        {parents: expressIds, instances: instanceIds, occurrencePath}, material?.color ?? null)
     // The scene changed under a viewer that may be painting on demand.
     this.context.getRenderDemand?.()?.invalidate()
     return painted

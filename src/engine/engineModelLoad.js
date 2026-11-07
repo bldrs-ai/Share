@@ -276,6 +276,12 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
     session.on(Ev.MODEL_INFO, (msg) => onProgress?.({modelInfo: msg.info}))
     session.on(Ev.LOG, (msg) => reportEngineLog(msg))
     session.on(Ev.PREVIEW, (msg) => onPreviewMesh?.(msg.payload))
+    // `window.__bldrsTestHoldMidPump` (conwayDirectIfcLoader.js
+    // #holdMidPumpForTest): hold after the FIRST batch, with durable geometry
+    // on screen and the load not finished (streamingBatchPick.spec.ts).
+    const holdMidPump = typeof globalThis.__bldrsTestHoldMidPump === 'function' ?
+      globalThis.__bldrsTestHoldMidPump : null
+    let isMidPumpHeld = false
     session.on(Ev.BATCH, (msg) => {
       for (const geometry of msg.geometries) {
         store.put(geometry)
@@ -288,6 +294,12 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
         onMeshBatch?.(decodePlacements(msg.placements), session.modelID, msg.progress ?? {})
       } finally {
         store.drop(msg.geometries)
+      }
+      // The mid-pump test hold: the engine was stepped to this one batch and
+      // has paused itself; it runs on when the test lets it.
+      if (holdMidPump !== null && !isMidPumpHeld) {
+        isMidPumpHeld = true
+        Promise.resolve(holdMidPump()).then(() => session.pump('run')).catch(() => null)
       }
     })
     // `done` or `failed`, whichever ends the stream. Open failures are
@@ -311,15 +323,16 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
     //     parse and the index being published, with only previews on screen
     //     (previewInteraction.spec.ts);
     //   - `window.__bldrsTestHoldGeometryPump` (#holdGeometryPumpForTest):
-    //     hold between the index and the first batch (navTreeAtIndex.spec.ts).
-    // Here the engine starts PAUSED when either is set, and is let go once
+    //     hold between the index and the first batch (navTreeAtIndex.spec.ts);
+    //   - `window.__bldrsTestHoldMidPump` (above): hold after the first batch.
+    // Here the engine starts PAUSED when any is set, and is let go once
     // both have resolved: pausing after the index would race the worker's
     // first batch.
     const holdIndex = typeof globalThis.__bldrsTestHoldIndex === 'function' ?
       globalThis.__bldrsTestHoldIndex : null
     const holdPump = typeof globalThis.__bldrsTestHoldGeometryPump === 'function' ?
       globalThis.__bldrsTestHoldGeometryPump : null
-    const startPaused = holdIndex !== null || holdPump !== null
+    const startPaused = holdIndex !== null || holdPump !== null || holdMidPump !== null
     // In this order: the failure's header and size first, because opening
     // transfers (detaches) a bytes source.
     const failureSource = openFailureSource(buffer)
@@ -352,7 +365,9 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
       await holdPump()
     }
     if (startPaused) {
-      await session.pump('run')
+      // Held mid-pump: one batch, then the engine pauses itself and the
+      // BATCH handler above waits on the hold.
+      await session.pump(holdMidPump !== null ? 'step' : 'run')
     }
     try {
       ifcAPI.summary = await finished

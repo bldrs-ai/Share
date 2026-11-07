@@ -9,6 +9,7 @@ import {
 import {forEachVectorItem} from './conwayVector'
 import {makeSurfaceMaterial} from '../lookMaterial'
 import {placedShapeBox} from '../three/robustBounds'
+import {STREAMING_BATCHES_KEY} from '../streamingBatchPick'
 import {
   CoincidenceSet,
   DEFAULT_COLOR,
@@ -270,6 +271,140 @@ export class IncrementalBatchedBuilder {
     this.scratchMatrix = new Matrix4()
     this.scratchRgba = new Vector4()
     this.scratchBox = new Box3()
+    // Load-time picking and highlight (viewer/streamingBatchPick.js): the
+    // rows are pickable from the moment they are written, not only once
+    // `finalize` stamps them on the mesh. `finalize` withdraws the offer.
+    this.root.userData[STREAMING_BATCHES_KEY] = this
+    // The selection painted onto the streaming rows, and the rows it
+    // painted, per batch state (their own colour is in `instanceColors`).
+    this.loadSelection = null
+    this.loadSelectionColor = null
+    this.paintedRows = new Map()
+  }
+
+
+  /**
+   * The pick a raycast hit on one of this builder's batches reads, before
+   * `finalize` has stamped any table on the mesh: the same row the finished
+   * model's batched pick (CadView#canvasDoubleClickHandler) will read, so the
+   * selection it makes is the selection the finished model has.
+   *
+   * @param {object} mesh the BatchedMesh the ray hit
+   * @param {number} batchId three's instance id from the intersection
+   * @return {object|null} `{parentExpressId, instanceId, occurrencePath,
+   *   geometryId}`, null for another builder's mesh or an unwritten row
+   */
+  pickRow(mesh, batchId) {
+    const state = this.stateOf_(mesh)
+    if (state === null || !Number.isInteger(batchId) || batchId < 0 || batchId >= state.cursor) {
+      return null
+    }
+    return {
+      parentExpressId: state.instanceParents[batchId],
+      instanceId: state.instanceOccurrenceIds[batchId],
+      occurrencePath: state.instanceOccurrencePaths[batchId] ?? null,
+      geometryId: state.instanceGeometryIds[batchId],
+    }
+  }
+
+
+  /**
+   * Paint a selection onto the rows written so far, restore the rows that
+   * left it, and keep painting rows appended later until `finalize`.
+   *
+   * Which rows: when `instances` is non-empty, exactly those (the
+   * per-instance narrowing of a scene pick, as `setInstanceSelection` does on
+   * the finished model); otherwise rows whose parent is selected, plus, for
+   * STEP, rows at or under `occurrencePath`.
+   *
+   * @param {object|null} selection `{parents, instances, occurrencePath}`,
+   *   each optional; null clears
+   * @param {object|null} color three.js Color; null clears
+   * @return {number} rows painted
+   */
+  paintSelection(selection, color) {
+    const parents = new Set((selection?.parents ?? []).map(Number))
+    const instances = new Set((selection?.instances ?? []).map(Number))
+    const path = Array.isArray(selection?.occurrencePath) && selection.occurrencePath.length > 0 ?
+      selection.occurrencePath : null
+    const isEmpty = color === null || (parents.size === 0 && instances.size === 0 && path === null)
+    this.loadSelection = isEmpty ? null : {parents, instances, path}
+    this.loadSelectionColor = isEmpty ? null : color
+    let painted = 0
+    for (const state of [this.opaque, this.transparent]) {
+      if (state === null) {
+        continue
+      }
+      for (let row = 0; row < state.cursor; row++) {
+        if (this.paintRow_(state, row)) {
+          painted++
+        }
+      }
+    }
+    return painted
+  }
+
+
+  /**
+   * Bring one row's colour in line with the load-time selection.
+   *
+   * @param {object} state batch state
+   * @param {number} row
+   * @return {boolean} whether the row is painted now
+   */
+  paintRow_(state, row) {
+    let painted = this.paintedRows.get(state)
+    const wanted = this.isLoadSelected_(state, row)
+    if (wanted) {
+      const {r, g, b} = this.loadSelectionColor
+      state.mesh.setColorAt(row, this.scratchRgba.set(r, g, b, 1))
+      if (painted === undefined) {
+        painted = new Set()
+        this.paintedRows.set(state, painted)
+      }
+      painted.add(row)
+      return true
+    }
+    if (painted?.delete(row)) {
+      const own = state.instanceColors[row] ?? DEFAULT_COLOR
+      state.mesh.setColorAt(row, this.scratchRgba.set(own.x, own.y, own.z, own.w))
+    }
+    return false
+  }
+
+
+  /**
+   * @param {object} state batch state
+   * @param {number} row
+   * @return {boolean} whether the load-time selection takes this row
+   */
+  isLoadSelected_(state, row) {
+    const selection = this.loadSelection
+    if (selection === null) {
+      return false
+    }
+    if (selection.instances.size > 0) {
+      return selection.instances.has(state.instanceOccurrenceIds[row])
+    }
+    if (selection.parents.has(state.instanceParents[row])) {
+      return true
+    }
+    const rowPath = state.instanceOccurrencePaths[row]
+    return selection.path !== null && isPathPrefix(selection.path, rowPath)
+  }
+
+
+  /**
+   * @param {object} mesh
+   * @return {object|null} this builder's batch state for `mesh`
+   */
+  stateOf_(mesh) {
+    for (const state of [this.opaque, this.transparent]) {
+      if (state !== null && state.mesh === mesh) {
+        return state
+      }
+    }
+    return null
   }
 
 
@@ -380,6 +515,12 @@ export class IncrementalBatchedBuilder {
    * @return {{batches: Array, stats: object}}
    */
   finalize() {
+    // The decorated model's highlight owns the colours from here, painting
+    // against `instanceColors`: hand it the batches in their own colours, and
+    // withdraw the load-time pick offer, which the finished model's tables
+    // replace.
+    this.paintSelection(null, null)
+    delete this.root.userData[STREAMING_BATCHES_KEY]
     const batches = []
     for (const state of [this.opaque, this.transparent]) {
       if (state === null || state.cursor === 0) {
@@ -597,6 +738,10 @@ export class IncrementalBatchedBuilder {
       color,
     })
     state.cursor++
+    // A selection made while the pump runs takes the rows that arrive after it.
+    if (this.loadSelection !== null) {
+      this.paintRow_(state, batchId)
+    }
     this.occurrenceId++
     this.totals.placements++
     if (isTransparent) {
@@ -1036,4 +1181,26 @@ export class IncrementalBatchedBuilder {
       debug(WARN).warn('IncrementalBatchedBuilder: batch capacity trim skipped:', e)
     }
   }
+}
+
+
+/**
+ * Whether `prefix` leads `path`: a selected STEP occurrence takes every row
+ * placed at or under it, as `getInstanceIdsForOccurrencePath` with
+ * descendants does on the finished model.
+ *
+ * @param {Array<number>} prefix non-empty
+ * @param {Array<number>|null} path a row's occurrence path
+ * @return {boolean}
+ */
+function isPathPrefix(prefix, path) {
+  if (!Array.isArray(path) || path.length < prefix.length) {
+    return false
+  }
+  for (let i = 0; i < prefix.length; i++) {
+    if (Number(path[i]) !== Number(prefix[i])) {
+      return false
+    }
+  }
+  return true
 }

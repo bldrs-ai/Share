@@ -285,9 +285,11 @@ export class EngineSession {
 
   /**
    * Backpressure (§5.2): pause the pump at its next batch boundary, or let
-   * it run again. A paused load keeps its engine and its place.
+   * it run again. A paused load keeps its engine and its place. `'step'`
+   * runs it until it has posted one batch and pauses it there (the page's
+   * mid-pump test hold).
    *
-   * @param {'pause'|'run'} mode
+   * @param {'pause'|'run'|'step'} mode
    * @return {Promise<{paused: boolean}>}
    */
   pump(mode) {

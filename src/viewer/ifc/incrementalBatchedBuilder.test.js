@@ -1,5 +1,5 @@
 /* eslint-disable no-magic-numbers */
-import {BatchedMesh, Box3, BufferGeometry, Matrix4, Vector3} from 'three'
+import {BatchedMesh, Box3, BufferGeometry, Matrix4, Vector3, Vector4} from 'three'
 import {clearConwayDirectLogs, getConwayDirectLogs}
   from '../../../tools/jest/conwayDirectLogCapture'
 import {IncrementalBatchedBuilder, PRESIZE_FROM_GEOMETRIES, probeSpreadLimit}
@@ -984,5 +984,102 @@ describe('IncrementalBatchedBuilder', () => {
     const {stats} = builder.finalize()
     expect(stats.instanceCount).toBe(2) // 999 and 888
     expect(stats.skippedFlatMeshes).toBe(1)
+  })
+})
+
+
+describe('IncrementalBatchedBuilder: pickable and paintable while streaming', () => {
+  const shapes = {
+    999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
+    888: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
+  }
+  const RED = {r: 1, g: 0, b: 0}
+
+  /**
+   * @param {number} expressID
+   * @param {number} geomExpressID
+   * @param {Array<number>|undefined} occurrencePath
+   * @return {object} a one-placement FlatMesh carrying a STEP path
+   */
+  function stepMesh(expressID, geomExpressID, occurrencePath) {
+    return {
+      expressID,
+      geometries: [{
+        geometryExpressID: geomExpressID, flatTransformation: IDENTITY_MAT, color: OPAQUE, occurrencePath,
+      }],
+    }
+  }
+
+  /**
+   * @param {object} mesh BatchedMesh
+   * @param {number} batchId
+   * @return {Array<number>} the instance's rgb
+   */
+  function colorAt(mesh, batchId) {
+    const color = new Vector4()
+    mesh.getColorAt(batchId, color)
+    return [color.x, color.y, color.z]
+  }
+
+  it('reads, row by row before finalize, the pick the finished tables give', () => {
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    builder.appendBatch([stepMesh(10, 999, [7, 8]), stepMesh(11, 888, [])])
+    const mesh = builder.opaque.mesh
+    // Offered on the root, which is what CadView's raycast walks up to.
+    expect(builder.root.userData.streamingBatches).toBe(builder)
+    const streaming = [0, 1].map((batchId) => builder.pickRow(mesh, batchId))
+    expect(streaming).toEqual([
+      {parentExpressId: 10, instanceId: 0, occurrencePath: [7, 8], geometryId: 999},
+      // A root-level STEP placement keeps its empty path, which is not "no path".
+      {parentExpressId: 11, instanceId: 1, occurrencePath: [], geometryId: 888},
+    ])
+    // Past the rows written, or another builder's mesh: nothing.
+    expect(builder.pickRow(mesh, 2)).toBeNull()
+    expect(builder.pickRow(new BatchedMesh(1, 3, 3), 0)).toBeNull()
+
+    const {batches} = builder.finalize()
+    const [batch] = batches
+    for (const batchId of [0, 1]) {
+      expect({
+        parentExpressId: batch.instanceParents[batchId],
+        instanceId: batch.instanceOccurrenceIds[batchId],
+        occurrencePath: batch.instanceOccurrencePaths[batchId],
+        geometryId: batch.instanceGeometryIds[batchId],
+      }).toEqual(streaming[batchId])
+    }
+    // Withdrawn: the decorated model's own tables take over.
+    expect(builder.root.userData.streamingBatches).toBeUndefined()
+  })
+
+  it('an IFC row has no occurrence path', () => {
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    builder.appendBatch([flatMesh(5, [{geomExpressID: 999, color: OPAQUE}])])
+    expect(builder.pickRow(builder.opaque.mesh, 0).occurrencePath).toBeNull()
+  })
+
+  it('paints the selection on the rows so far and on rows that arrive later, and restores them at finalize', () => {
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    builder.appendBatch([stepMesh(10, 999, [7, 8]), stepMesh(11, 888, [7, 9])])
+    const mesh = builder.opaque.mesh
+    const own = colorAt(mesh, 0)
+
+    // By element: only the parent's rows.
+    expect(builder.paintSelection({parents: [11]}, RED)).toBe(1)
+    expect(colorAt(mesh, 1)).toEqual([1, 0, 0])
+    expect(colorAt(mesh, 0)).toEqual(own)
+
+    // By occurrence: the rows at or under it.
+    expect(builder.paintSelection({occurrencePath: [7]}, RED)).toBe(2)
+    // The narrowing decides alone: one instance.
+    expect(builder.paintSelection({parents: [10, 11], instances: [0]}, RED)).toBe(1)
+    expect(colorAt(mesh, 1)).toEqual(own)
+
+    // A row the pump delivers after the pick joins the selection.
+    builder.paintSelection({parents: [12]}, RED)
+    builder.appendBatch([stepMesh(12, 999, [7, 10])])
+    expect(colorAt(mesh, 2)).toEqual([1, 0, 0])
+
+    builder.finalize()
+    expect([0, 1, 2].map((batchId) => colorAt(mesh, batchId))).toEqual([own, own, own])
   })
 })
