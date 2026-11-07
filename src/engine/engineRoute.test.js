@@ -1,11 +1,17 @@
 import {flags} from '../FeatureFlags'
-import {MainThreadReason, hasLegacyViewRules, mainThreadEngineNote, mainThreadEngineReason} from './engineRoute'
+import {
+  MainThreadReason,
+  hasLegacyViewRules,
+  isLegacyBotRequested,
+  mainThreadEngineNote,
+  mainThreadEngineReason,
+} from './engineRoute'
 
 
 describe('engine/engineRoute', () => {
   let originalLocation
-  const setSearch = (search) => {
-    Object.defineProperty(window, 'location', {writable: true, value: {...originalLocation, search}})
+  const setSearch = (search, hash = '') => {
+    Object.defineProperty(window, 'location', {writable: true, value: {...originalLocation, search, hash}})
   }
   beforeEach(() => {
     originalLocation = window.location
@@ -43,6 +49,21 @@ describe('engine/engineRoute', () => {
     setSearch('?feature=bot')
     expect(mainThreadEngineReason()).toBe(MainThreadReason.LEGACY_BOT)
     setSearch('?feature=assist')
+    expect(mainThreadEngineReason()).toBeNull()
+  })
+
+  // Codex review on #2083: a `#bot:` permalink opens the legacy chat with no
+  // `?feature=bot` (BotSlice reads the hash), so the route has to read the
+  // same hash, or the chat sits on a worker model it cannot read.
+  it('a #bot: permalink loads on the main-thread engine, as ?feature=bot does', () => {
+    setSearch('', '#bot:')
+    expect(isLegacyBotRequested()).toBe(true)
+    expect(mainThreadEngineReason()).toBe(MainThreadReason.LEGACY_BOT)
+    setSearch('', '#c:1,2,3;bot:')
+    expect(mainThreadEngineReason()).toBe(MainThreadReason.LEGACY_BOT)
+    // A hash without the bot token leaves the load in the worker.
+    setSearch('', '#c:1,2,3')
+    expect(isLegacyBotRequested()).toBe(false)
     expect(mainThreadEngineReason()).toBeNull()
   })
 

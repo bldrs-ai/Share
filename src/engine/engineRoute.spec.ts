@@ -57,7 +57,11 @@ describeMobileAndDesktop('Engine route: worker by default, main thread where ask
       note: 'Engine: main thread (?view= rules need the main-thread engine)'},
     // The legacy chat's eval reads the main-thread engine (§8 item 7).
     {name: 'the legacy ?feature=bot chat', query: '?feature=bot',
-      note: 'Engine: main thread (the legacy ?feature=bot chat needs the main-thread engine)'},
+      note: 'Engine: main thread (the legacy bot chat needs the main-thread engine)'},
+    // A `#bot:` permalink opens the same chat with no flag (BotSlice reads the
+    // hash), so it routes the same way (Codex review on #2083).
+    {name: 'a #bot: permalink', query: '#bot:',
+      note: 'Engine: main thread (the legacy bot chat needs the main-thread engine)'},
   ]) {
     test(`${name} loads on the main-thread engine, and the report says why`, async ({page}) => {
       const engine = watchEngineWorker(page)

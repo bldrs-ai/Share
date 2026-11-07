@@ -27,7 +27,7 @@ import './chat-bubbles.css'
 
 /**
  * The legacy chat's answer on a model whose engine is in a worker. A load
- * with `?feature=bot` in its URL runs on the main-thread engine
+ * with `?feature=bot` or a `#bot:` permalink in its URL runs on the main-thread engine
  * (engine/engineRoute.js), so this shows only when the chat was turned on
  * after a worker load, and reloading the page fixes it.
  */

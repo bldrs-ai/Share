@@ -1208,8 +1208,9 @@ decision, `engine/engineRoute.js#mainThreadEngineReason`.
   the URL, so that would leave every `?feature=engineWorker` link in the
   worker (Codex review on #2083).
 - *One session:* `?feature=disableEngineWorker`.
-- `?view=` rule sets and the legacy `?feature=bot` chat route to the
-  main-thread engine on their own, since both read it directly.
+- `?view=` rule sets and the legacy bot chat (`?feature=bot`, or a `#bot:`
+  permalink, which opens it without the flag) route to the main-thread
+  engine on their own, since both read it directly.
 
 ## 8. Decisions (2026-11-03)
 
