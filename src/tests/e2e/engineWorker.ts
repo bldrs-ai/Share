@@ -25,14 +25,15 @@ const MAIN_THREAD_PUMP_TIMEOUT_MS = 60_000
  * legacy routes: the model has no engine session at all (its IfcAPI is the
  * viewer's own, not a facade over a session, worker or in-process), no
  * Worker was created from `/Engine.worker.js`, and the main-thread pump's
- * line printed, so the model really was pumped on this thread.
+ * line printed, so the model really was pumped on this thread (skipped with
+ * `{pumped: false}` for a spec that stops with the pump held).
  *
  * @param page
  * @return the two checks
  */
 export function watchEngineWorker(page: Page): {
   expectWorkerEngine: () => Promise<void>,
-  expectMainThreadEngine: () => Promise<void>,
+  expectMainThreadEngine: (opts?: {pumped?: boolean}) => Promise<void>,
 } {
   const workerUrls: string[] = []
   const pumpLines: string[] = []
@@ -62,7 +63,7 @@ export function watchEngineWorker(page: Page): {
       expect(workerUrls.some((url) => url.endsWith('/Engine.worker.js')), workerUrls.join(', ')).toBe(true)
       expect(pumpLines, 'the main-thread engine must not have pumped this model').toEqual([])
     },
-    expectMainThreadEngine: async () => {
+    expectMainThreadEngine: async ({pumped = true}: {pumped?: boolean} = {}) => {
       const engine = await page.evaluate(() => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const s = (window as any).store.getState()
@@ -74,7 +75,11 @@ export function watchEngineWorker(page: Page): {
       expect(workerUrls.filter((url) => url.endsWith('/Engine.worker.js')), 'no engine worker may start').toEqual([])
       // The pump's line prints when its pump ends, which a spec that checks at
       // the index can be well ahead of; the session check above is the
-      // decisive one, so give the pump the rest of the load.
+      // decisive one, so give the pump the rest of the load. A spec that ends
+      // with the pump still held passes `pumped: false`: there is no line yet.
+      if (!pumped) {
+        return
+      }
       await expect.poll(() => pumpLines.length, {
         message: 'the main-thread engine must have pumped this model',
         timeout: MAIN_THREAD_PUMP_TIMEOUT_MS,

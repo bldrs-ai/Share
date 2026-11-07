@@ -15,9 +15,11 @@ const MODELS = [
   {format: 'IFC', path: '/share/v/p/__test_fixtures__/Momentum.ifc'},
   {format: 'STEP', path: '/share/v/p/index.step'},
 ]
+// The worker is the default engine (engine-worker.md §7 step 9); the kill
+// switch keeps the main-thread engine's leg.
 const ENGINES = [
-  {engine: 'main-thread engine', query: ''},
-  {engine: 'engine worker', query: '?feature=engineWorker'},
+  {engine: 'main-thread engine', query: '?feature=disableEngineWorker', worker: false},
+  {engine: 'engine worker', query: '', worker: true},
 ]
 const TEST_TIMEOUT_MS = 120_000
 const HELD_TIMEOUT_MS = 60_000
@@ -390,7 +392,7 @@ describeMobileAndDesktop('Pickable durable batches during the pump', () => {
   })
 
   for (const {format, path} of MODELS) {
-    for (const {engine, query} of ENGINES) {
+    for (const {engine, query, worker} of ENGINES) {
       test(`${format}, ${engine}: a durable instance is pickable mid-pump, and the selection survives finalize`, async ({page}) => {
         test.setTimeout(TEST_TIMEOUT_MS)
         const engineCheck = watchEngineWorker(page)
@@ -418,9 +420,7 @@ describeMobileAndDesktop('Pickable durable batches during the pump', () => {
         expect(after.elements).toEqual(during.elements)
         expect(after.occurrencePath).toEqual(during.occurrencePath)
         expect(after.finishedPainted, 'the finished model paints the picked instance').toBeGreaterThan(0)
-        if (query.includes('engineWorker')) {
-          await engineCheck.expectWorkerEngine()
-        }
+        await (worker ? engineCheck.expectWorkerEngine() : engineCheck.expectMainThreadEngine())
       })
     }
   }
@@ -507,12 +507,13 @@ describeMobileAndDesktop('Pickable durable batches during the pump: root-level s
     await holdMidPumpWhenArmed(page)
   })
 
-  for (const {engine, query} of ENGINES) {
+  for (const {engine, query, worker} of ENGINES) {
     test(`${engine}: shift-picking a root-level shell twice mid-pump leaves nothing selected after finalize`, async ({page}) => {
       test.setTimeout(TEST_TIMEOUT_MS)
       // The flag rides the session across the Open dialog's navigation.
       await page.goto(`/share/v/p/index.ifc${query}`)
       await waitForModelReady(page, HELD_TIMEOUT_MS)
+      const engineCheck = watchEngineWorker(page)
       await openLocalFileHeld(page, TWO_ROOT_FIXTURE)
       await page.waitForFunction(() => {
         const w = window as unknown as Record<string, unknown>
@@ -580,6 +581,7 @@ describeMobileAndDesktop('Pickable durable batches during the pump: root-level s
       expect(after.elements).toEqual([])
       expect(after.anchors).toEqual([])
       expect(after.finishedPainted).toBe(0)
+      await (worker ? engineCheck.expectWorkerEngine() : engineCheck.expectMainThreadEngine())
     })
   }
 })
@@ -735,9 +737,10 @@ describeMobileAndDesktop('Pickable durable batches during the pump: an occurrenc
     })
   })
 
-  for (const {engine, query} of ENGINES) {
+  for (const {engine, query, worker} of ENGINES) {
     test(`${engine}: rows that stream in under a selected sub-assembly are painted`, async ({page}) => {
       test.setTimeout(TEST_TIMEOUT_MS)
+      const engineCheck = watchEngineWorker(page)
       await openHeldMidPump(page, `${AS1_PATH}${query}`)
 
       // Batch by batch until a sub-assembly is part-way in.
@@ -771,6 +774,8 @@ describeMobileAndDesktop('Pickable durable batches during the pump: an occurrenc
       }
       expect(after.rows, 'a later batch adds rows under the sub-assembly').toBeGreaterThan(before.rows)
       expect(after.painted).toBe(after.rows)
+      // Still held mid-pump, so the main-thread pump has printed no line yet.
+      await (worker ? engineCheck.expectWorkerEngine() : engineCheck.expectMainThreadEngine({pumped: false}))
     })
   }
 })
@@ -833,9 +838,10 @@ describeMobileAndDesktop('Pickable durable batches during the pump: a top-level 
     })
   })
 
-  for (const {engine, query} of ENGINES) {
+  for (const {engine, query, worker} of ENGINES) {
     test(`${engine}: shells of a selected top-level product that stream in later are painted`, async ({page}) => {
       test.setTimeout(TEST_TIMEOUT_MS)
+      const engineCheck = watchEngineWorker(page)
       await openHeldMidPump(page, `${TWO_ROOT_PATH}${query}`)
       // Step until the part is part-way in.
       let before = await rowsOf(page, PLATES_OWNER)
@@ -865,6 +871,8 @@ describeMobileAndDesktop('Pickable durable batches during the pump: a top-level 
       expect(after.painted).toBe(after.rows)
       // Nothing of the other part.
       expect((await rowsOf(page, OTHER_OWNER)).painted).toBe(0)
+      // Still held mid-pump, so the main-thread pump has printed no line yet.
+      await (worker ? engineCheck.expectWorkerEngine() : engineCheck.expectMainThreadEngine({pumped: false}))
     })
   }
 })
