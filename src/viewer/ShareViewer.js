@@ -1883,7 +1883,7 @@ export class ShareViewer {
       return 0
     }
     const material = this.selector?.getSelectionMaterial?.() ?? null
-    const painted = paintPreviewSelection(scene, expressIds, material, occurrencePath) +
+    const painted = paintPreviewSelection(scene, expressIds, material, occurrencePath, solidExpressId) +
       paintStreamingSelection(scene,
         {parents: expressIds, instances: instanceIds, occurrencePath, solidExpressId, instancesExact},
         material?.color ?? null)

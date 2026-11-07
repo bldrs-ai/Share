@@ -127,21 +127,34 @@ export function previewOccurrencePickOf(hit) {
  * material slot is swapped instead, and the original kept on the mesh under
  * {@link PREVIEW_BASE_MATERIAL_KEY}.
  *
- * A STEP selection is an occurrence, whose row id is no preview mesh's owner,
- * so `occurrencePath` also paints the meshes placed at or under it.
+ * A STEP selection is an occurrence. Its row id is no preview mesh's owner,
+ * and the part id a picked mesh carries is every reuse's, so with an
+ * `occurrencePath` a mesh that knows its own occurrence is painted by that
+ * alone — at or under the path, narrowed to `solidExpressId` when the
+ * selection is one body — as the streaming rows are
+ * (`incrementalBatchedBuilder.js#isLoadSelected_`). A mesh with no path (IFC)
+ * is still painted by its element id.
  *
  * @param {object} scene three.js scene
  * @param {Array<number|string>} expressIds the selection
  * @param {object|null} material the viewer's selection material; null
  *   (no selector yet) restores everything and paints nothing
  * @param {Array<number>|null} [occurrencePath] a selected STEP occurrence
+ * @param {number|null} [solidExpressId] the occurrence's one selected body
  * @return {number} preview meshes now painted
  */
-export function paintPreviewSelection(scene, expressIds, material, occurrencePath = null) {
+export function paintPreviewSelection(scene, expressIds, material, occurrencePath = null, solidExpressId = null) {
   const wanted = new Set((expressIds ?? []).map(Number))
   const path = Array.isArray(occurrencePath) && occurrencePath.length > 0 ? occurrencePath.map(Number) : null
-  const isUnderPath = (meshPath) => path !== null && Array.isArray(meshPath) &&
-    meshPath.length >= path.length && path.every((id, i) => Number(meshPath[i]) === id)
+  const solid = solidExpressId === null || solidExpressId === undefined ? null : Number(solidExpressId)
+  const isSelected = (userData, id) => {
+    const meshPath = userData[PREVIEW_OCCURRENCE_PATH_KEY]
+    if (path === null || !Array.isArray(meshPath)) {
+      return wanted.has(id)
+    }
+    return meshPath.length >= path.length && path.every((step, i) => Number(meshPath[i]) === step) &&
+      (solid === null || Number(userData[PREVIEW_GEOMETRY_ID_KEY]) === solid)
+  }
   let painted = 0
   for (const group of loadPreviewGroups(scene)) {
     for (const mesh of group.children) {
@@ -151,7 +164,7 @@ export function paintPreviewSelection(scene, expressIds, material, occurrencePat
         continue
       }
       const isPainted = userData[PREVIEW_BASE_MATERIAL_KEY] !== undefined
-      if (material && (wanted.has(id) || isUnderPath(userData[PREVIEW_OCCURRENCE_PATH_KEY]))) {
+      if (material && isSelected(userData, id)) {
         if (!isPainted) {
           userData[PREVIEW_BASE_MATERIAL_KEY] = mesh.material
         }

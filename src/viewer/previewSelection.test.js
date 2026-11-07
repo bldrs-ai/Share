@@ -140,6 +140,36 @@ describe('viewer/previewSelection', () => {
       expect(other.material).toBe(red)
     })
 
+    it('paints only the picked occurrence of a reused part, not every mesh carrying its part id', () => {
+      const red = new MeshBasicMaterial()
+      const selection = new MeshBasicMaterial()
+      const picked = previewMesh(8, red)
+      picked.userData[PREVIEW_OCCURRENCE_PATH_KEY] = [10, 20]
+      const reuse = previewMesh(8, red)
+      reuse.userData[PREVIEW_OCCURRENCE_PATH_KEY] = [11, 20]
+      const {scene} = sceneWithPreview([picked, reuse])
+      // A pick before the tree selects the mesh's own id (8, shared by both
+      // nuts) with the picked placement's path.
+      expect(paintPreviewSelection(scene, [8], selection, [10, 20])).toBe(1)
+      expect(picked.material).toBe(selection)
+      expect(reuse.material).toBe(red)
+    })
+
+    it('narrows an occurrence to its selected body', () => {
+      const red = new MeshBasicMaterial()
+      const selection = new MeshBasicMaterial()
+      const body = previewMesh(8, red)
+      body.userData[PREVIEW_OCCURRENCE_PATH_KEY] = [10]
+      body.userData[PREVIEW_GEOMETRY_ID_KEY] = 30
+      const sibling = previewMesh(8, red)
+      sibling.userData[PREVIEW_OCCURRENCE_PATH_KEY] = [10]
+      sibling.userData[PREVIEW_GEOMETRY_ID_KEY] = 31
+      const {scene} = sceneWithPreview([body, sibling])
+      expect(paintPreviewSelection(scene, [10], selection, [10], 30)).toBe(1)
+      expect(body.material).toBe(selection)
+      expect(sibling.material).toBe(red)
+    })
+
     it('without a selection material restores what is painted and paints nothing', () => {
       const red = new MeshBasicMaterial()
       const selection = new MeshBasicMaterial()
