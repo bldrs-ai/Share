@@ -4,7 +4,8 @@ import {EngineSession} from './EngineSession'
 import {createEngineHandler} from './engineHandler'
 import {indexLine} from './engineModelLoad'
 import {
-  SIDECAR_DIR, discardSidecar, readSidecar, sidecarKey, sweepSidecars, writeSidecar, writeThroughSyncHandle,
+  SIDECAR_DIR, STALE_TMP_MS, discardSidecar, readSidecar, sidecarKey, sidecarWriter, sweepSidecars, writeSidecar,
+  writeThroughSyncHandle,
 } from './engineSidecars'
 import {locateOpfsEntry, makeBlobStore, makeSyncHandleStore, openSourceStore} from './engineSources'
 import {ENGINE_PROTOCOL_VERSION, Ev} from './protocol'
@@ -147,6 +148,42 @@ function memoryFile(name, bytes, {lastModified = MTIME, writable = true} = {}) {
 }
 
 
+// writeSidecar picks its writer off the FileSystemFileHandle prototype
+// (engineSidecars.js#sidecarWriter), which node lacks: a dedicated worker's
+// in Chromium or Firefox, and Safari's before 26, which has no
+// createWritable (Share#2093).
+/** A Chromium or Firefox worker's FileSystemFileHandle. */
+class WorkerFileHandle {
+  /** @return {null} stub */
+  createWritable() {
+    return null
+  }
+  /** @return {null} stub */
+  createSyncAccessHandle() {
+    return null
+  }
+}
+/** Safari 17's worker FileSystemFileHandle. */
+class Safari17WorkerFileHandle {
+  /** @return {null} stub */
+  createSyncAccessHandle() {
+    return null
+  }
+}
+
+
+/** @param {Function} FileHandle installed as the global for one test */
+function useFileHandle(FileHandle) {
+  globalThis.FileSystemFileHandle = FileHandle
+}
+
+
+beforeEach(() => useFileHandle(WorkerFileHandle))
+afterEach(() => {
+  delete globalThis.FileSystemFileHandle
+})
+
+
 describe('engine/engineSidecars', () => {
   it('keys a sidecar by the entry\'s path alone: one slot per entry, whatever its version', async () => {
     const key = await sidecarKey('owner/repo/main/logo.step')
@@ -190,8 +227,17 @@ describe('engine/engineSidecars', () => {
     expect(Array.from(await readSidecar(PATH, snapshot(), getOpfsRoot))).toEqual([7])
   })
 
+  it('picks its writer off the prototype: createWritable, else a sync access handle, else none', () => {
+    expect(sidecarWriter(WorkerFileHandle)).toBe('writable')
+    expect(sidecarWriter(Safari17WorkerFileHandle)).toBe('syncAccessHandle')
+    // A Safari 17 page: no createWritable, and no sync access handles off a worker.
+    expect(sidecarWriter(class {})).toBeNull()
+    expect(sidecarWriter(null)).toBeNull()
+  })
+
   it('without createWritable (Safari before 26) it writes through a sync access handle, under the real name only', async () => {
     // Share#2093: Safari 17 reported "parsed; no sidecar saved" on every load.
+    useFileHandle(Safari17WorkerFileHandle)
     const root = memoryDir({}, {writable: false})
     const getOpfsRoot = async () => root
     const PATH = 'owner/repo/PSB.ifc'
@@ -205,7 +251,53 @@ describe('engine/engineSidecars', () => {
     expect(Object.keys(root.children[SIDECAR_DIR].children)).toEqual([await sidecarKey(PATH)])
   })
 
+  it('a first sync-handle save creates nothing under the real name before its move', async () => {
+    // codex review of Share#2095: a `{create: true}` probe for the writer put
+    // an empty file under the real name, which another tab read as a
+    // truncated sidecar and a killed worker left behind.
+    useFileHandle(Safari17WorkerFileHandle)
+    const root = memoryDir({}, {writable: false})
+    const getOpfsRoot = async () => root
+    const PATH = 'owner/PSB.ifc'
+    const key = await sidecarKey(PATH)
+    await root.getDirectoryHandle(SIDECAR_DIR, {create: true})
+    const dir = root.children[SIDECAR_DIR]
+    const seen = []
+    const getFileHandle = dir.getFileHandle.bind(dir)
+    dir.getFileHandle = async (name, options) => {
+      const handle = await getFileHandle(name, options)
+      const open = handle.createSyncAccessHandle.bind(handle)
+      handle.createSyncAccessHandle = async () => {
+        const access = await open()
+        return {...access, write: (from, at) => {
+          seen.push(`write ${name === key ? 'real' : 'tmp'}, real name ${key in dir.children ? 'present' : 'absent'}`)
+          return access.write(from, at)
+        }}
+      }
+      return handle
+    }
+    expect((await writeSidecar(PATH, snapshot(), Uint8Array.of(1), getOpfsRoot)).saved).toBe(true)
+    expect(seen).toEqual(['write tmp, real name absent'])
+    expect(Object.keys(dir.children)).toEqual([key])
+  })
+
+  it('two writers never share a temporary', async () => {
+    const dir = memoryDir({}, {writable: false})
+    const names = []
+    const getFileHandle = dir.getFileHandle.bind(dir)
+    dir.getFileHandle = async (name, options) => {
+      names.push(name)
+      return getFileHandle(name, options)
+    }
+    await writeThroughSyncHandle(dir, 'a.cidx', Uint8Array.of(1))
+    await writeThroughSyncHandle(dir, 'a.cidx', Uint8Array.of(2))
+    expect(names).toHaveLength(2)
+    expect(names[0]).not.toBe(names[1])
+    expect(names.every((name) => name.startsWith('a.cidx.') && name.endsWith('.tmp'))).toBe(true)
+  })
+
   it('a sync-handle write that comes up short keeps the previous sidecar, leaves no .tmp, and says why', async () => {
+    useFileHandle(Safari17WorkerFileHandle)
     const root = memoryDir({}, {writable: false})
     const getOpfsRoot = async () => root
     const PATH = 'owner/PSB.ifc'
@@ -263,19 +355,12 @@ describe('engine/engineSidecars', () => {
     expect(Object.keys(dir.children)).toEqual(['a.cidx'])
   })
 
-  it('with neither writer (a page) nothing is saved, and the reason says so', async () => {
+  it('with neither writer (a page) nothing is saved or created, and the reason says so', async () => {
+    useFileHandle(class {})
     const root = memoryDir({}, {writable: false})
-    const getOpfsRoot = async () => root
-    await root.getDirectoryHandle(SIDECAR_DIR, {create: true})
-    const dir = root.children[SIDECAR_DIR]
-    const getFileHandle = dir.getFileHandle.bind(dir)
-    dir.getFileHandle = async (name, options) => {
-      const handle = await getFileHandle(name, options)
-      delete handle.createSyncAccessHandle
-      return handle
-    }
-    expect(await writeSidecar('owner/x.ifc', snapshot(), Uint8Array.of(1), getOpfsRoot))
+    expect(await writeSidecar('owner/x.ifc', snapshot(), Uint8Array.of(1), async () => root))
       .toEqual({saved: false, writer: null, error: 'no createWritable or createSyncAccessHandle here'})
+    expect(root.children).toEqual({})
   })
 
   it('a replaced entry\'s sidecar is not a candidate, and its save leaves one sidecar, not two', async () => {
@@ -300,12 +385,18 @@ describe('engine/engineSidecars', () => {
     await writeSidecar('owner/deleted.step', snapshot(), Uint8Array.of(2), getOpfsRoot)
     await writeSidecar('gone/dir/x.ifc', snapshot(), Uint8Array.of(3), getOpfsRoot)
     root.children[SIDECAR_DIR].children['not-an-envelope.cidx'] = memoryFile('n', Uint8Array.of(0))
-    // A sync-handle write's `.tmp` whose move never ran (Share#2093): an
-    // envelope for an entry that still exists, so only its name retires it.
+    // Sync-handle temporaries (Share#2093): envelopes for an entry that still
+    // exists, so only their name and age retire them. A fresh one may be
+    // another tab's, unlocked between its close and its move (codex review
+    // of Share#2095): kept. A stale one was abandoned: removed.
+    const NOW = MTIME + (2 * STALE_TMP_MS)
     const kept = root.children[SIDECAR_DIR].children[await sidecarKey(`owner/${NAME}`)]
-    root.children[SIDECAR_DIR].children['stray.cidx.tmp'] = memoryFile('stray.cidx.tmp', kept.bytes)
-    expect(await sweepSidecars(getOpfsRoot)).toBe(4)
-    expect(Object.keys(root.children[SIDECAR_DIR].children)).toEqual([await sidecarKey(`owner/${NAME}`)])
+    root.children[SIDECAR_DIR].children['stale.cidx.1.tmp'] = memoryFile('stale.cidx.1.tmp', kept.bytes)
+    root.children[SIDECAR_DIR].children['fresh.cidx.2.tmp'] =
+      memoryFile('fresh.cidx.2.tmp', kept.bytes, {lastModified: NOW - 1000})
+    expect(await sweepSidecars(getOpfsRoot, () => NOW)).toBe(4)
+    expect(Object.keys(root.children[SIDECAR_DIR].children))
+      .toEqual([await sidecarKey(`owner/${NAME}`), 'fresh.cidx.2.tmp'])
     expect(Array.from(await readSidecar(`owner/${NAME}`, snapshot(), getOpfsRoot))).toEqual([1])
   })
 
@@ -536,6 +627,7 @@ describe('engine/engineHandler: index sidecar reopen (engine-worker.md §7 step 
     // Share#2093's "done when", at the handler: a Blob-store load (Safari has
     // no read-only handles either) saves a sidecar, and the reopen skips the
     // parse.
+    useFileHandle(Safari17WorkerFileHandle)
     const log = []
     const api = sidecarApi(log)
     const root = memoryDir({owner: memoryDir({[NAME]: memoryFile(NAME, BYTES)})}, {writable: false})

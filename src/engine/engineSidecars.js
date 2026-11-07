@@ -43,9 +43,15 @@ const ENVELOPE_FIXED_BYTES = 4 + 4 + 8 + 8 + 4
 // this many bytes (OPFS paths are far shorter); a longer one reads as not an
 // envelope and is swept.
 const SWEEP_PATH_BYTES = 4096
-// The suffix writeThroughSyncHandle writes under before its move. Never a
-// sidecar: the sweep removes any it finds.
+// The suffix writeThroughSyncHandle's temporary ends in, after a per-write
+// id (`<key>.<id>.tmp`), so two writers never share one. Never a sidecar.
 const TMP_SUFFIX = '.tmp'
+// How old a temporary must be before the sweep removes it. A writer's own is
+// unlocked for a moment between its handle's close and its move, and the
+// sweep must not take it then (codex review of Share#2095); any temporary
+// this old was abandoned (a worker killed mid-write).
+// eslint-disable-next-line no-magic-numbers
+export const STALE_TMP_MS = 10 * 60 * 1000
 
 
 /**
@@ -221,11 +227,13 @@ async function writeThroughWritable(handle, bytes) {
  *
  * A sync access handle writes in place, with no commit-on-close, so to keep
  * `createWritable`'s guarantee (never a truncated sidecar under the real
- * name) it writes a `.tmp` sibling, flushes and closes it, and only then
- * moves it over the name: the previous sidecar is removed first, because
- * whether `move()` replaces an existing file is not settled across engines.
+ * name) it writes a uniquely named `.tmp` sibling, flushes and closes it,
+ * and only then moves it over the name: the previous sidecar is removed
+ * first, because whether `move()` replaces an existing file is not settled
+ * across engines. Nothing is created under the real name before the move.
  * A failure between the remove and the move leaves no sidecar (the next
- * open parses) and a `.tmp` the sweep retires. Each handle call is awaited:
+ * open parses), and a temporary left by a killed worker is retired by the
+ * sweep once it is {@link STALE_TMP_MS} old. Each handle call is awaited:
  * Safari 15.2–16.3 returned promises from them, later versions return
  * values, and `await` serves both.
  *
@@ -235,7 +243,9 @@ async function writeThroughWritable(handle, bytes) {
  * @return {Promise<void>}
  */
 export async function writeThroughSyncHandle(dir, name, bytes) {
-  const tmpName = `${name}${TMP_SUFFIX}`
+  // eslint-disable-next-line no-magic-numbers
+  const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const tmpName = `${name}.${id}${TMP_SUFFIX}`
   const tmp = await dir.getFileHandle(tmpName, {create: true})
   try {
     const access = await tmp.createSyncAccessHandle()
@@ -269,6 +279,29 @@ export async function writeThroughSyncHandle(dir, name, bytes) {
 
 
 /**
+ * Which writer this global offers an OPFS file, read off the
+ * FileSystemFileHandle prototype so nothing is created to find out (a probe
+ * handle `{create: true}` would put an empty file under the real name before
+ * the sync-handle write; codex review of Share#2095).
+ *
+ * @param {Function} [FileHandle] `FileSystemFileHandle`
+ * @return {string|null} `'writable'`, `'syncAccessHandle'` (Safari before 26,
+ *   in a worker), or null (a page without createWritable)
+ */
+export function sidecarWriter(FileHandle = globalThis.FileSystemFileHandle) {
+  const proto = FileHandle?.prototype
+  if (typeof proto?.createWritable === 'function') {
+    return 'writable'
+  }
+  // [Exposed=DedicatedWorker]: only a worker's prototype has it.
+  if (typeof proto?.createSyncAccessHandle === 'function') {
+    return 'syncAccessHandle'
+  }
+  return null
+}
+
+
+/**
  * Persist a sidecar for this version of the entry, replacing whatever the
  * entry's slot held — an older version's included. Written through
  * `createWritable` where the browser has it, else through a sync access
@@ -280,32 +313,30 @@ export async function writeThroughSyncHandle(dir, name, bytes) {
  * @param {Blob} file the File snapshot the model was opened from
  * @param {Uint8Array} sidecar conway's sidecar bytes
  * @param {function(): Promise<object>} getOpfsRoot
+ * @param {Function} [FileHandle] `FileSystemFileHandle`, for tests
  * @return {Promise<{saved: boolean, writer: (string|null), error: (string|null)}>}
  *   `writer` is `'writable'` or `'syncAccessHandle'` for the path the write
  *   took; `error` says why nothing was saved — `Name: message` of the
  *   failure, so a browser without either writer reads apart from a quota
  *   or other error on the load report (engineModelLoad.js#indexLine)
  */
-export async function writeSidecar(entryPath, file, sidecar, getOpfsRoot) {
-  let writer = null
+export async function writeSidecar(entryPath, file, sidecar, getOpfsRoot, FileHandle = globalThis.FileSystemFileHandle) {
+  const writer = sidecarWriter(FileHandle)
+  if (writer === null) {
+    // In process in Safari before 26: a page has no sync access handles.
+    return {saved: false, writer, error: 'no createWritable or createSyncAccessHandle here'}
+  }
   try {
     const dir = await sidecarDir(getOpfsRoot, true)
     if (!dir) {
       return {saved: false, writer, error: 'no OPFS root'}
     }
     const name = await sidecarKey(entryPath)
-    const handle = await dir.getFileHandle(name, {create: true})
     const bytes = envelope(entryPath, file, sidecar)
-    if (typeof handle.createWritable === 'function') {
-      writer = 'writable'
-      await writeThroughWritable(handle, bytes)
-    } else if (typeof handle.createSyncAccessHandle === 'function') {
-      writer = 'syncAccessHandle'
-      await writeThroughSyncHandle(dir, name, bytes)
+    if (writer === 'writable') {
+      await writeThroughWritable(await dir.getFileHandle(name, {create: true}), bytes)
     } else {
-      // In process (a page has neither method on an OPFS file in Safari 17,
-      // and no sync access handle anywhere).
-      return {saved: false, writer, error: 'no createWritable or createSyncAccessHandle here'}
+      await writeThroughSyncHandle(dir, name, bytes)
     }
     return {saved: true, writer, error: null}
   } catch (e) {
@@ -362,9 +393,10 @@ async function entryExists(root, path) {
  * sweep is a handful of lookups. Best-effort.
  *
  * @param {function(): Promise<object>} getOpfsRoot
+ * @param {function(): number} [now] wall-clock ms, for tests
  * @return {Promise<number>} how many were removed
  */
-export async function sweepSidecars(getOpfsRoot) {
+export async function sweepSidecars(getOpfsRoot, now = Date.now) {
   let removed = 0
   try {
     const root = await getOpfsRoot()
@@ -381,13 +413,16 @@ export async function sweepSidecars(getOpfsRoot) {
     for (const [name, handle] of names) {
       let keep = false
       if (!name.endsWith('.cidx')) {
-        // A writeThroughSyncHandle `.tmp` its move never consumed, or any
-        // other stray: no sidecar is read under it. One another tab is still
-        // writing is locked by its sync access handle, and the remove below
-        // fails and leaves it.
+        // A writeThroughSyncHandle temporary its move never consumed, or any
+        // other stray: no sidecar is read under it. Only once it is stale: a
+        // writer in another tab may be between its close and its move, when
+        // nothing locks it (codex review of Share#2095). One whose age cannot
+        // be read (locked mid-write) is left too.
         try {
-          await dir.removeEntry(name)
-          removed++
+          if (now() - (await handle.getFile()).lastModified > STALE_TMP_MS) {
+            await dir.removeEntry(name)
+            removed++
+          }
         } catch {
           // Left for the next sweep.
         }
