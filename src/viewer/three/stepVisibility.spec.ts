@@ -1,8 +1,9 @@
 import {Page, expect, test} from '@playwright/test'
 import {watchEngineWorker} from '../../tests/e2e/engineWorker'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
+import {captureGlbLogs, glbLinesSinceReset, resetGlbLogs, waitForGlbLog} from '../../tests/e2e/glbLogs'
 import {waitForModelReady} from '../../tests/e2e/models'
-import {homepageSetup, pauseViewerRendering, setIsReturningUser} from '../../tests/e2e/utils'
+import {clearOpfs, homepageSetup, pauseViewerRendering, setIsReturningUser} from '../../tests/e2e/utils'
 
 
 /**
@@ -136,7 +137,8 @@ describeMobileAndDesktop('STEP hide / isolate / pick, engine worker', () => {
   })
 
   test('a leaf occurrence\'s eye hides just that occurrence; Isolate shows just one, and its link reopens it', async ({page}) => {
-    test.setTimeout(TWO_LOADS_TIMEOUT_MS)
+    test.setTimeout(THREE_LOADS_TIMEOUT_MS)
+    const glbLogs = captureGlbLogs(page)
     const engine = watchEngineWorker(page)
     const {leaves} = await loadStepTree(page, WORKER_STEP_PATH)
     await engine.expectWorkerEngine()
@@ -153,13 +155,33 @@ describeMobileAndDesktop('STEP hide / isolate / pick, engine worker', () => {
     await expect.poll(() => visibleInstances(page)).toBe(1)
     await expect.poll(() => displayToken(page)).toMatch(/^iso=o[\d.]+$/)
 
-    // The `iso=o…` link names an occurrence path; reopened, from a fresh
-    // worker, it resolves to that one occurrence again.
+    // The `iso=o…` link names an occurrence path, and reopened it resolves to
+    // that one occurrence again, both ways a reload can open it. A worker load
+    // writes the GLB artifact (engine-worker.md §7 step 5), so a reload once
+    // the write has landed is a cache HIT with no engine at all, and only one
+    // before it is a fresh worker parse. Which of the two a bare reload got
+    // was the write's timing (#2081: mobile CI got the hit), so each is
+    // pinned on purpose.
     expect(page.url()).toContain('feature=engineWorker')
+    await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_TIMEOUT_MS)
+
+    // 1. From the artifact: the occurrence paths come back from the GLB.
+    resetGlbLogs(glbLogs)
+    await page.reload()
+    await waitForModelReady(page)
+    await waitForGlbLog(glbLogs, 'cache HIT', CACHE_TIMEOUT_MS)
+    await expect.poll(() => visibleInstances(page)).toBe(1)
+
+    // 2. From a fresh worker parse: with the artifact gone, the reload misses
+    // and the worker opens the source again. Cleared from the cache-hit page,
+    // which holds no engine, so no sync access handle locks the entries.
+    await clearOpfs(page)
+    resetGlbLogs(glbLogs)
     const reopened = watchEngineWorker(page)
     await page.reload()
     await waitForModelReady(page)
     await reopened.expectWorkerEngine()
+    expect(glbLinesSinceReset(glbLogs).some((line) => line.includes('cache MISS')), 'a parse, not a hit').toBe(true)
     await expect.poll(() => visibleInstances(page)).toBe(1)
   })
 
@@ -232,6 +254,9 @@ describeMobileAndDesktop('IFC scene multi-select', () => {
 // Tests that load the model two or three times.
 const TWO_LOADS_TIMEOUT_MS = 90_000
 const THREE_LOADS_TIMEOUT_MS = 120_000
+// The GLB writer runs at idle after the load, so its `writer: wrote` can trail
+// ready by seconds on a loaded CI runner (the same bound as batchedGlbCache).
+const CACHE_TIMEOUT_MS = 60_000
 // Long enough for the effects a location change triggers to have run.
 const SETTLE_MS = 1000
 
