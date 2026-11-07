@@ -1069,6 +1069,20 @@ describe('IncrementalBatchedBuilder: pickable and paintable while streaming', ()
     expect(colorAt(mesh, 0)).toEqual(own)
   })
 
+  it('a scene pick\'s exact instance keeps to that body while its siblings stream in under the occurrence', () => {
+    // Codex round 3 on #2084: the first body of a multibody occurrence picked
+    // before its siblings arrive. The pick's instance is exact; the path must
+    // not widen it, or every later body lights up.
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    builder.appendBatch([stepMesh(10, 999, [7, 8])])
+    const mesh = builder.opaque.mesh
+    builder.paintSelection({parents: [10], instances: [0], instancesExact: true, occurrencePath: [7, 8]}, RED)
+    builder.appendBatch([stepMesh(10, 888, [7, 8])])
+    const own = colorAt(mesh, 1)
+    expect(colorAt(mesh, 0)).toEqual([1, 0, 0])
+    expect(own).not.toEqual([1, 0, 0])
+  })
+
   it('an IFC row has no occurrence path', () => {
     const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
     builder.appendBatch([flatMesh(5, [{geomExpressID: 999, color: OPAQUE}])])

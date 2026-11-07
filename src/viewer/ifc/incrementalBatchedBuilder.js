@@ -339,22 +339,23 @@ export class IncrementalBatchedBuilder {
    * Paint a selection onto the rows written so far, restore the rows that
    * left it, and keep painting rows appended later until `finalize`.
    *
-   * Which rows:
-   *  - a STEP occurrence (`occurrencePath` non-empty) decides on its own: the
-   *    rows at or under it, narrowed to `solidExpressId`'s rows when a body
-   *    is named. Whatever `instances` came with it are the rows written SO
-   *    FAR (a tree click resolves the occurrence to them, as does
-   *    `reapplySelectionToGeometry`), or a scene pick's one instance, which
-   *    the end-of-load reapply widens to the occurrence anyway. Letting them
-   *    decide left rows streamed in later under a selected assembly unpainted
-   *    until finalize (codex on #2084);
-   *  - otherwise, when `instances` is non-empty, exactly those (an IFC scene
-   *    pick's narrowing, as `setInstanceSelection` does on the finished
-   *    model);
-   *  - otherwise the rows whose parent is selected.
+   * Which rows, by where the instances came from (the selection says so;
+   * which fields happen to be set cannot, codex rounds 2 and 3 on #2084):
+   *  - a scene pick's exact instances (`instancesExact`): exactly those, as
+   *    `setInstanceSelection` narrows a pick on the finished model, so a
+   *    pick of a multibody occurrence's first body keeps to that body as its
+   *    siblings stream in;
+   *  - otherwise a STEP occurrence (`occurrencePath` non-empty): the rows at
+   *    or under it, narrowed to `solidExpressId`'s rows when a body is
+   *    named, whatever `instances` came with it. Those are the rows written
+   *    SO FAR (a tree click resolves the occurrence to them), and letting
+   *    them decide left rows that streamed in later under a selected
+   *    assembly unpainted;
+   *  - otherwise `instances` when there are any;
+   *  - otherwise the rows whose parent is selected (IFC).
    *
-   * @param {object|null} selection `{parents, instances, occurrencePath,
-   *   solidExpressId}`, each optional; null clears
+   * @param {object|null} selection `{parents, instances, instancesExact,
+   *   occurrencePath, solidExpressId}`, each optional; null clears
    * @param {object|null} color three.js Color; null clears
    * @return {number} rows painted
    */
@@ -365,7 +366,8 @@ export class IncrementalBatchedBuilder {
       selection.occurrencePath : null
     const solid = Number.isFinite(selection?.solidExpressId) ? selection.solidExpressId : null
     const isEmpty = color === null || (parents.size === 0 && instances.size === 0 && path === null)
-    this.loadSelection = isEmpty ? null : {parents, instances, path, solid}
+    const exact = selection?.instancesExact === true && instances.size > 0
+    this.loadSelection = isEmpty ? null : {parents, instances, exact, path, solid}
     this.loadSelectionColor = isEmpty ? null : color
     let painted = 0
     for (const state of [this.opaque, this.transparent]) {
@@ -419,6 +421,9 @@ export class IncrementalBatchedBuilder {
     const selection = this.loadSelection
     if (selection === null) {
       return false
+    }
+    if (selection.exact) {
+      return selection.instances.has(state.instanceOccurrenceIds[row])
     }
     if (selection.path !== null) {
       return isPathPrefix(selection.path, state.instanceOccurrencePaths[row]) &&

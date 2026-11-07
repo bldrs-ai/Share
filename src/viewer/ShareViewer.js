@@ -1865,9 +1865,13 @@ export class ShareViewer {
    *   rows that stream in later
    * @param {number|null} [narrowing.solidExpressId] the occurrence's one
    *   named body, when the selection is a body
+   * @param {boolean} [narrowing.instancesExact] `instanceIds` are a scene
+   *   pick's own, which then decide alone
    * @return {number} preview meshes and streaming rows painted
    */
-  setPreviewSelection(expressIds, {instanceIds = [], occurrencePath = null, solidExpressId = null} = {}) {
+  setPreviewSelection(expressIds, {
+    instanceIds = [], occurrencePath = null, solidExpressId = null, instancesExact = false,
+  } = {}) {
     let scene = null
     try {
       scene = this.context?.getScene?.() ?? null
@@ -1881,7 +1885,8 @@ export class ShareViewer {
     const material = this.selector?.getSelectionMaterial?.() ?? null
     const painted = paintPreviewSelection(scene, expressIds, material) +
       paintStreamingSelection(scene,
-        {parents: expressIds, instances: instanceIds, occurrencePath, solidExpressId}, material?.color ?? null)
+        {parents: expressIds, instances: instanceIds, occurrencePath, solidExpressId, instancesExact},
+        material?.color ?? null)
     // The scene changed under a viewer that may be painting on demand.
     this.context.getRenderDemand?.()?.invalidate()
     return painted

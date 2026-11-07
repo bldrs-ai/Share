@@ -65,6 +65,34 @@ async function holdMidPump(page: Page, holds = 1) {
 
 
 /**
+ * Wait until the camera stops moving: the load's camera follow tweens its fit
+ * as geometry lands (ProgressiveLoadSession), and a point read off the scene
+ * while it does is somewhere else by the time the ray is cast.
+ *
+ * @param page
+ */
+async function waitForCameraSettled(page: Page) {
+  const pose = () => page.evaluate(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const controls = (window as any).store.getState().viewer.context.getCameraControls()
+    const p = controls.getPosition()
+    const t = controls.getTarget()
+    return [p.x, p.y, p.z, t.x, t.y, t.z].map((v: number) => v.toFixed(6)).join(',')
+  })
+  const SETTLE_POLL_MS = 100
+  const STILL_POLLS = 3
+  let last = await pose()
+  let still = 0
+  await expect.poll(async () => {
+    const next = await pose()
+    still = next === last ? still + 1 : 0
+    last = next
+    return still >= STILL_POLLS
+  }, {timeout: HELD_TIMEOUT_MS, intervals: [SETTLE_POLL_MS]}).toBe(true)
+}
+
+
+/**
  * Open and wait at the hold with the tree up, so the pick resolves against it.
  *
  * @param page
@@ -82,6 +110,7 @@ async function openHeldMidPump(page: Page, path: string) {
   // a frame or so after the batch lands: until then it, not the canvas, takes
   // the double-click.
   await expect(page.getByTestId('LoadingBackdrop')).toBeHidden()
+  await waitForCameraSettled(page)
   await expectStillPumping(page)
 }
 
@@ -193,6 +222,49 @@ async function rowTargets(page: Page, spread = true): Promise<RowTarget[]> {
 
 
 /**
+ * What a double-click at (x, y) would pick right now: moves the pointer
+ * there, then casts the viewer's own ray (the one CadView's double-click
+ * casts, `ThreeContext#castRay` from the pointer) at the preview group and
+ * the streaming roots, and reads the nearest hit as CadView does. This is the
+ * condition a pick waits on, rather than a time: the canvas can move under a
+ * point between reading it and clicking (on a phone a selection opens the
+ * drawer; the camera follow can refit).
+ *
+ * @param page
+ * @param x
+ * @param y
+ * @return the row's instance a pick there selects, `preview` for a preview
+ *   mesh, or null for nothing
+ */
+async function pickAt(page: Page, x: number, y: number): Promise<number | 'preview' | null> {
+  await page.mouse.move(x, y)
+  return await page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const viewer = (window as any).store.getState().viewer
+    const scene = viewer.context.getScene()
+    const targets = scene.children.filter((c: any) =>
+      c.userData?.isLoadPreview || c.userData?.streamingBatches !== undefined)
+    targets.forEach((t: any) => t.updateMatrixWorld(true))
+    for (const hit of viewer.context.castRay(targets)) {
+      if (Number.isFinite(hit.object?.userData?.previewExpressID)) {
+        return 'preview'
+      }
+      let node = hit.object?.parent
+      while (node) {
+        const builder = node.userData?.streamingBatches
+        if (builder !== undefined) {
+          return builder.pickRow(hit.object, hit.batchId)?.instanceId ?? null
+        }
+        node = node.parent
+      }
+    }
+    return null
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
+
+
+/**
  * Double-click durable instances until one is selected through the streaming
  * row — the pick that carries the row's instance, which a preview pick never
  * does.
@@ -211,6 +283,9 @@ async function doubleClickSelectsARow(page: Page): Promise<RowTarget> {
       break
     }
     const target = targets[attempt % targets.length]
+    if (typeof await pickAt(page, target.x, target.y) !== 'number') {
+      continue
+    }
     await page.mouse.dblclick(target.x, target.y)
     // The ray takes the NEAREST instance, which where parts overlap on screen
     // is not always the one aimed at: any streaming row's instance, selected
@@ -436,23 +511,36 @@ describeMobileAndDesktop('Pickable durable batches during the pump: root-level s
         return typeof w.__bldrsTestReleaseMidPump === 'function' && (w as any).store?.getState?.().rootElement
       }, null, {timeout: HELD_TIMEOUT_MS})
       await expect(page.getByTestId('LoadingBackdrop')).toBeHidden()
+      await waitForCameraSettled(page)
       await expectStillPumping(page)
 
       // Select one root-level shell with a shift-pick.
       const targets = (await rowTargets(page)).filter((t) => Array.isArray(t.path) && t.path.length === 0)
       expect(targets.length, 'a root-level shell must be on screen').toBeGreaterThan(0)
       let picked: {target: RowTarget, instance: number} | null = null
+      // Every placement in this file is at the root, so whichever row the ray
+      // reaches first at a point is a root-level shell: aim where one does
+      // (shells of the two parts overlap on screen, so a centroid can lie
+      // behind another shell).
+      const rootLevel = new Set((await rowTargets(page, false))
+        .filter((t) => Array.isArray(t.path) && t.path.length === 0).map((t) => t.instance))
+      const seen: Array<number | string | null> = []
       for (const candidate of targets.slice(0, MAX_PICK_TRIES)) {
+        const atPoint = await pickAt(page, candidate.x, candidate.y)
+        seen.push(atPoint)
+        if (typeof atPoint !== 'number' || !rootLevel.has(atPoint)) {
+          continue
+        }
         await shiftDoubleClick(page, candidate.x, candidate.y)
-        const instances = (await selectionState(page, candidate.instance)).instances
+        const instances = (await selectionState(page, atPoint)).instances
         if (instances.length === 1) {
-          picked = {target: candidate, instance: instances[0]}
+          picked = {target: {...candidate, instance: instances[0]}, instance: instances[0]}
           break
         }
       }
       if (picked === null) {
         throw new Error(`a shift-pick must select a root-level shell: ${JSON.stringify({
-          targets: targets.length, last: await selectionState(page, -1)})}`)
+          targets: targets.length, rootLevel: [...rootLevel], seen, last: await selectionState(page, -1)})}`)
       }
       const {target, instance} = picked
       const selected = await selectionState(page, instance)
@@ -461,7 +549,12 @@ describeMobileAndDesktop('Pickable durable batches during the pump: root-level s
 
       // The same shell again, where it is now: on a phone the selection opens
       // the drawer, which moves the canvas under the old point.
-      const again = (await rowTargets(page, false)).find((t) => t.instance === instance) ?? target
+      // Wait until a pick there selects that same shell again.
+      let again = target
+      await expect.poll(async () => {
+        again = (await rowTargets(page, false)).find((t) => t.instance === instance) ?? target
+        return await pickAt(page, again.x, again.y)
+      }, {timeout: HELD_TIMEOUT_MS}).toBe(instance)
       await shiftDoubleClick(page, again.x, again.y)
       const cleared = await selectionState(page, instance)
       const context = JSON.stringify({selected, cleared, target, again})

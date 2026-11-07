@@ -2042,7 +2042,7 @@ describe('CadView', () => {
         expect(result.current.selectedElement).toBeNull()
         expect(indexedModel.getItemProperties).not.toHaveBeenCalled()
         await waitFor(() => expect(previewPaintSpy).toHaveBeenLastCalledWith(
-          [leaf], {instanceIds: [], occurrencePath: null, solidExpressId: null}))
+          [leaf], {instanceIds: [], occurrencePath: null, solidExpressId: null, instancesExact: false}))
         const navigationsBeforeIndex = mockedUseNavigate.mock.calls.length
 
         await act(() => releaseIndex())
@@ -2076,7 +2076,7 @@ describe('CadView', () => {
         expect(result.current.selectedElements).toEqual([`${leaf}`])
         expect(result.current.selectedInstanceIds).toEqual([instance])
         await waitFor(() => expect(previewPaintSpy).toHaveBeenLastCalledWith(
-          [leaf], {instanceIds: [instance], occurrencePath: null, solidExpressId: null}))
+          [leaf], {instanceIds: [instance], occurrencePath: null, solidExpressId: null, instancesExact: true}))
 
         // At the index, the finished model's per-instance funnel takes it.
         await act(() => releaseIndex())
@@ -2084,6 +2084,16 @@ describe('CadView', () => {
         await waitFor(() => expect(result.current.selectedElement?.Name?.value).toBe(`item ${leaf}`))
         expect(result.current.selectedAnchorIds).toEqual([`${leaf}`])
         expect(result.current.selectedInstanceIds).toEqual([instance])
+        // An exact narrowing (codex round 3 on #2084), through the end-of-load
+        // repaint too: reapplySelectionToGeometry keeps the picked instance
+        // rather than re-deriving the occurrence's.
+        expect(result.current.selectedInstancesExact).toBe(true)
+        await waitFor(() => expect(finishGeometry).toBeDefined())
+        await act(() => finishGeometry())
+        await actAsyncFlush()
+        await waitFor(() => expect(result.current.isModelReady).toBe(true))
+        expect(result.current.selectedInstanceIds).toEqual([instance])
+        expect(result.current.selectedInstancesExact).toBe(true)
       })
 
       it('paints the pick on the finished model', async () => {

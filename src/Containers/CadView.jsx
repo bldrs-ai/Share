@@ -1500,12 +1500,17 @@ export default function CadView({
       state.selectedOccurrencePath.length > 0 ? state.selectedOccurrencePath : null
     const solidExpressId = state.selectedSolidExpressId ?? null
     // A tree row's occurrence resolves to its instances only now there are any;
-    // with no occurrence, selectItemsInScene resolves the anchors itself.
-    const instanceIds = occurrencePath === null ? [] :
-      occurrenceInstanceIds(occurrencePath, true, solidExpressId)
+    // with no occurrence, selectItemsInScene resolves the anchors itself. A
+    // scene pick's exact instances are kept as they are: the finished model
+    // narrows a pick to the instance it hit.
+    const isExact = state.selectedInstancesExact === true &&
+      Array.isArray(state.selectedInstanceIds) && state.selectedInstanceIds.length > 0
+    const instanceIds = isExact ? state.selectedInstanceIds :
+      (occurrencePath === null ? [] : occurrenceInstanceIds(occurrencePath, true, solidExpressId))
     const anchors = Array.isArray(state.selectedAnchorIds) && state.selectedAnchorIds.length > 0 ?
       state.selectedAnchorIds.map(Number) : null
     selectItemsInScene(selected.map(Number), false, instanceIds, occurrencePath, solidExpressId, anchors)
+    useStore.getState().setSelectedInstancesExact(isExact)
   }
 
 
@@ -1591,6 +1596,8 @@ export default function CadView({
     if (useStore.getState().rootElement === null) {
       pendingPreviewPickRef.current = pick
       selectItemsInScene([pick.parentExpressId], false, [pick.instanceId])
+      // The row the ray hit: an exact narrowing, as a pick at the index is.
+      useStore.getState().setSelectedInstancesExact(true)
       return
     }
     pendingPreviewPickRef.current = null
@@ -1933,8 +1940,12 @@ export default function CadView({
       materializeTransientNode(occurrencePath, transientGeometryId)
     }
     selectItemsInScene(
-      [targetId], true, [instanceId], occurrencePath, solidExpressId,
-      rootRow ? [rootRow.expressID] : null)
+      [targetId], true, instanceId === null || instanceId === undefined ? [] : [instanceId],
+      occurrencePath, solidExpressId, rootRow ? [rootRow.expressID] : null)
+    // The instance a ray hit is the selection's exact narrowing: it keeps to
+    // that instance while siblings stream in, and through the end-of-load
+    // repaint (reapplySelectionToGeometry), as a pick on the finished model.
+    useStore.getState().setSelectedInstancesExact(instanceId !== null && instanceId !== undefined)
   }
 
 
@@ -1979,6 +1990,7 @@ export default function CadView({
       rootOwnerIds: rootLevel.ownerIds,
     })
     selectItemsInScene(next.elements, false, next.instances, null, null, next.anchors)
+    useStore.getState().setSelectedInstancesExact(next.instances.length > 0)
   }
 
 
@@ -2176,6 +2188,8 @@ export default function CadView({
       // is its own anchor.
       setSelectedAnchorIds(anchorIds === null ? resIds : anchorIds.map((id) => `${id}`))
       setSelectedInstanceIds(instanceIds)
+      // Derived, unless the pick funnel says otherwise once this returns.
+      useStore.getState().setSelectedInstancesExact(false)
       // STEP per-occurrence key: a reused part's occurrences share one
       // expressID, so this disambiguates which NavTree node to highlight.
       // Every non-occurrence caller passes null, clearing any stale path.
@@ -2645,6 +2659,7 @@ export default function CadView({
         instanceIds: Array.isArray(selectedInstanceIds) ? selectedInstanceIds : [],
         occurrencePath: useStore.getState().selectedOccurrencePath ?? null,
         solidExpressId: useStore.getState().selectedSolidExpressId ?? null,
+        instancesExact: useStore.getState().selectedInstancesExact === true,
       })
       // Per-instance highlight (Conway-direct): if the click handler
       // tagged us with a specific PlacedGeometry's synthetic ID,
