@@ -771,14 +771,16 @@ describe('load() error/edge paths with OPFS enabled', () => {
   })
 
 
-  it('buffers an uploaded STEP file rather than offering it to the store open', async () => {
-    // Conway's store-backed open is IFC-only, and it reserves the model
-    // handle before it sniffs the format — so handing it a STEP file burns
-    // handle 0 on a model that never opens and the buffered retry parses as
-    // handle 1. Every Share call site that passes the scene-level id 0 then
-    // addresses a model Conway does not have, which is how a STEP model's
-    // cached GLB ended up with no NavTree and no Properties (#1776). Nothing
-    // is lost by buffering here: the store path had no STEP implementation.
+  it('buffers an uploaded STEP file on the main-thread engine rather than offering it to the store open', async () => {
+    // Conway's store-backed STEP open needs a store that reads synchronously
+    // (conway#757), which the main-thread engine's Blob store cannot, and a
+    // refused store open still reserves the model handle — so handing it a
+    // STEP file burns handle 0 on a model that never opens and the buffered
+    // retry parses as handle 1. Every Share call site that passes the
+    // scene-level id 0 then addresses a model Conway does not have, which is
+    // how a STEP model's cached GLB ended up with no NavTree and no
+    // Properties (#1776). The engine worker takes the File instead
+    // (canOpenFromStore.test.js).
     const file = new MockFile(STEP_SOURCE)
     const arrayBufferSpy = jest.spyOn(file, 'arrayBuffer')
     getModelFromOPFS.mockReset()

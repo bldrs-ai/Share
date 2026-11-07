@@ -23,10 +23,11 @@ const MODEL = '/share/v/p/index.ifc'
 
 /**
  * @param page
+ * @param timeoutMs how long the load may take (waitForModelReady's default)
  * @return the engine source line of the finished load
  */
-async function engineSourceLine(page: Page): Promise<string> {
-  await waitForModelReady(page)
+async function engineSourceLine(page: Page, timeoutMs?: number): Promise<string> {
+  await waitForModelReady(page, timeoutMs)
   await page.waitForFunction(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const lines = (window as any).store.getState().loadReportLines as string[]
@@ -63,21 +64,18 @@ describeMobileAndDesktop('Engine worker: OPFS sync access handle', () => {
     await engine.expectWorkerEngine()
   })
 
-  test('a STEP worker load is buffered, so it has no source store, and still opens', async ({page}) => {
-    // §7 step 6: the Loader hands a STEP over as bytes (conway's
-    // store-backed open is IFC-only), so neither store applies and the
-    // load report has no `Engine source I/O:` line. Guards the store choice
-    // against reaching for a File the STEP open never had.
+  test('a STEP worker load reads through the same read-only sync access handle', async ({page}) => {
+    // conway#757 (engine-worker.md §11): a STEP staged in OPFS opens
+    // windowed in the worker, as an IFC does. AP214's extraction reads
+    // synchronously, so conway faults missing windows in through the store's
+    // `readSync`, which the sync access handle has — the same handle, the
+    // same lock, the same `Engine source I/O:` line as an IFC load.
     const STEP_TEST_TIMEOUT_MS = 90_000
     test.setTimeout(STEP_TEST_TIMEOUT_MS)
     const engine = watchEngineWorker(page)
     await page.goto('/share/v/p/index.step?feature=engineWorker')
-    await waitForModelReady(page, STEP_TEST_TIMEOUT_MS)
-    const lines = await page.evaluate(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).store.getState().loadReportLines as string[])
-    expect(lines.some((line) => line.startsWith('Total:'))).toBe(true)
-    expect(lines.filter((line) => line.startsWith('Engine source I/O:'))).toEqual([])
+    const line = await engineSourceLine(page, STEP_TEST_TIMEOUT_MS)
+    expect(line).toMatch(/^Engine source I\/O: OPFS sync access handle, [1-9]\d* reads/)
     await engine.expectWorkerEngine()
   })
 })

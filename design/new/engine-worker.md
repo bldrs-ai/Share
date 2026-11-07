@@ -203,9 +203,10 @@ through async reads.
 - **STEP / AP214 takes the same path.** It goes through
   `ShareIfcLoader#parse` → `parseIfcWithConway` and the same compat
   `IfcAPI` (`ifc_api_proxy_ap214.js`). Two differences: the store-backed
-  windowed open is IFC-only (`OpenModelStream` refuses STEP and Share falls
-  back to a buffered `OpenModelStreamed`), so a STEP source crosses as a
-  transferred `ArrayBuffer` and lives resident in the worker; and STEP
+  windowed open needs a store that reads synchronously for STEP (conway#757;
+  before it, `OpenModelStream` refused STEP outright and a STEP crossed as a
+  transferred `ArrayBuffer`, resident in the worker), which the worker's
+  stores are and the main-thread engine's is not; and STEP
   placements carry `occurrencePath` (`incrementalBatchedBuilder.js`,
   `flatMeshToBatchedModel.js`) and the tree uses `includeSolids`. Both are
   data, not engine calls. **Recommendation: IFC and STEP move together**, in
@@ -750,6 +751,12 @@ the only thing left that users would see.
   same artifact, byte for byte, as a main-thread one (PSB checked whole,
   §7.1). Protocol v2 (§4). This was the last code blocker for the flip.
 
+- The windowed STEP open and the index sidecar reopen, for both formats
+  (conway#757 via conway#769, in conway `1.1639.773`; Share#2085; §7.1, §11). A STEP
+  in OPFS now opens windowed in the worker. A worker load saves the
+  model's index sidecar, and the next open of the same file comes up from
+  it without a parse.
+
 **In flight.** Nothing in this chain.
 
 **Flip gates (step 9).** §7.2 is the list, each item needing a merged PR
@@ -952,11 +959,9 @@ or a measurement in a PR body.
    `stepVisibility.spec.ts` (eye, Isolate and its reopened link, scene
    pick) and `assistTools.spec.ts` (isolate in a root-only file, which needs
    the empty path), desktop and mobile.
-   Left for later: the GLB cache write for both formats (step 5, above);
-   and, for STEP only, a windowed open
-   (conway's store-backed open is IFC-only) and an index sidecar
-   (conway#757), so a STEP is resident in its worker and re-parses on
-   reopen.
+   Left for later: the GLB cache write for both formats (step 5, since
+   landed in #2081). For STEP only, a windowed open and an index sidecar
+   were left too, and have since landed (conway#757, Share#2085; §7.1).
    Measured on four STEP models from 4 to 111 MB, with the loop frozen:
    - main-thread long tasks during the load fall from 5.8–36 s to 3–4.5 s;
      what is left is page boot and the end-of-load assembly;
@@ -998,8 +1003,9 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 | 2 — protocol, worker entry, client | merged (#2057) |
 | 3 — IFC load in the worker | merged (#2058). PSB, n=3, flag off → on: main-thread long tasks over 50 ms 418 → 23, time blocked 63 → 12 s, Geometry 48.3 → 40.6 s, Total 94.8 → 83.3 s, page heap after load 2130 → 889 MB (the worker's own JS heap 65 MB). Buffered tree-at-index: SEESTRASSE 8.05 → 4.60 s, sp-231MB 37.4 → 11.9 s |
 | 4 — sync-access-handle source | merged (#2072). Measured flag on, Blob store vs read-only sync handle, at medians: PSB (n=3) source I/O 19.1 → 3.8 s, Parsing 28.3 → 20.2 s, time to index 44.2 → 35.8 s, Total 96.5 → 82.9 s; sp-231MB (n=2) I/O 8.5 → 2.1 s, Parsing 14.0 → 9.9 s, Total 64.8 → 60.1 s; SEESTRASSE (n=1) I/O 0.32 → 0.07 s, Total flat. Geometry, main-thread long tasks and page heap unchanged. Every leg was windowed, checked by its `Engine source I/O:` line, in a persistent profile. Caveat: the Blob store's per-read time includes event-loop wait as well as I/O (each read is an async round trip), so the I/O figures are not pure I/O. The wall-clock stages (Parsing, time to index, Total) carry the claim |
-| 6 — STEP in the worker | merged (#2067). A STEP is opened buffered (conway's store-backed open is IFC-only), so step 4's source store does not apply to it |
+| 6 — STEP in the worker | merged (#2067). Since conway#757 (Share#2085) a STEP staged in OPFS opens windowed in the worker through step 4's sync access handle, as an IFC does; conway faults AP214's synchronous reads in through the store's `readSync`. Measured: in the reopen table under §11 ("Measured, conway#757") |
 | 5 — GLB capture in the worker | merged (#2081), after #2073 (#2038: the capture dropped every record a windowed source did not have resident). n=1 each, flag off → on, `RAF_THROTTLE_MS=3600000`, persistent profile. PSB: time to artifact 171.6 → 118.9 s; the writer 38.1 → 31.0 s, of which the worker's capture is 7.6 s; main-thread long tasks before ready 536 (81.6 s) → 35 (13.7 s), and during the write 71 (7.85 s, max 624 ms) → 4 (0.43 s, max 208 ms); page heap (`performance.memory`) at the end 1,127 → 522 MB, sampled peak 1,766 → 848 MB; the worker's JS heap peaked at 140 MB, beside 899 MB of wasm. 58 MB STEP: time to artifact 47.6 → 43.2 s; writer 7.6 → 6.8 s, capture 2.5 s; long tasks before ready 292 (35.8 s) → 10 (3.6 s), during the write 4 (0.35 s) → 1 (0.07 s); page heap at the end 688 → 148 MB; worker JS heap peak 322 MB beside 515 MB of wasm. **Byte identity:** after the batch colour column became float64 (step 5 above), the two engines' whole PSB artifacts are identical, 86,341,686 B each with one SHA-256 (re-measured 2026-11-06, n=1 per side, on a less loaded machine: time to artifact 68.6 → 58.9 s, long tasks before ready 222 (27.8 s) → 13 (6.7 s)). Review fixes: protocol v2, so a stale cached worker without `capture` is refused at hello and the load runs in process (§4); `close()` waits for a spill still in flight before it decides whether to close politely |
+| 8 (part) — index sidecar reopen | Share#2085: a worker load from an OPFS entry saves conway's index sidecar, and the next open of the same entry opens from it instead of parsing, IFC and STEP alike (`engine/engineSidecars.js`). Eviction itself is still deferred. Measured: on the 58 and 106 MB STEP models, Parsing goes from 0.95 s and 2.2 s to 0.12 s and 0.39 s, and the tree arrives 1.8 s and 3.0 s sooner (§11) |
 | 7, 8 | deferred; only in-app switching needs them |
 | 9 | not started; gated on #2061 and the §7.2 flip prep. Step 5 is merged; #2070 is closed: its Properties panel cost is fixed by #2074 |
 
@@ -1289,12 +1295,12 @@ and the other lacks.
 |---|---|---|---|---|
 | Route | `Loader.js#findLoader`: one arm for `ifc`/`ifczip`/`step`/`stp` → `ShareIfcLoader`; one list of the part-21 types, `loader/part21Formats.js` (#2067), read by the Loader, `modelArchive.js`, `ShareModel.js` and the engine-worker routing | `.ifczip` unwrapped first (`Loader#load`) | — | shared |
 | Engine | conway's compat `IfcAPI` (`@bldrs-ai/conway/web-ifc`); it routes AP214 to `IfcApiProxyAP214` behind the same calls | `IfcApiProxyIfc` | `IfcApiProxyAP214` | shared surface; conway owns the split |
-| Source kind | `Loader.js#canOpenFromStore`: conway's own `ModelFormatDetector` over the 64 KiB prefix, never the suffix | a `File`, opened windowed from a `StepExternalByteStore` (in the worker, over a read-only sync access handle: `engineSources.js`, #2072) | an `ArrayBuffer`, opened buffered and resident | **data**; it stays until conway has a store-backed AP214 open (`fromStore` returns `undefined` for AP214) |
-| Open | `loader/conwayOpen.js#openDeferred`, in both engines (main thread and worker): windowed, else buffered; a schema refusal is final | `OpenModelStream`, then `OpenModelStreamed` | `OpenModelStreamed` (`IfcApiProxyAP214.createDeferred`) | shared |
+| Source kind | `Loader.js#canOpenFromStore`: conway's own detector over the 64 KiB prefix, never the suffix, and conway's table of what the store open needs of the store (`storeOpenRequirementOf`, conway#757): IFC any store, STEP one that reads synchronously | a `File`, opened windowed from a `StepExternalByteStore` (in the worker, over a read-only sync access handle: `engineSources.js`, #2072) | the same `File` and the same stores in the worker (both offer `readSync`); on the main-thread engine, whose Blob store cannot read synchronously, an `ArrayBuffer`, buffered | **data**: one predicate; AP214's extraction reads synchronously, so conway faults its windows in and needs `readSync` (conway `streaming-federated-loader.md` §"STEP windowed: synchronous fault-in") |
+| Open | `loader/conwayOpen.js#openDeferred`, in both engines (main thread and worker): from the index sidecar when the worker has one, else windowed, else buffered; a schema refusal is final | `OpenModelFromIndex`, then `OpenModelStream`, then `OpenModelStreamed` | the same calls (`IfcApiProxyAP214.createFromIndex` / `createFromStore`, conway#757); `OpenModelStreamed` on the main-thread engine | shared |
 | Open failure | `classifyOpenFailure` → `unsupportedSchema.js#openModelFailure`, classified where the statistics are (§2.4 G3) | — | — | shared |
 | Engine worker | `engine/engineModelLoad.js` + `engineHandler.js` + `EngineSession` + the remembered in-process fallback (`spawnEngine.js`); `format` is a label | — | — | shared (§7 steps 3, 6) |
 | Index | `onIndexed` → `makeIndexedModelHandle` (`indexedModel`, #2037), started beside the pump | the deferred index | the AP214 assembly tree, built at open | shared |
-| Reopen without a re-parse | `OpenModelFromIndex` + index sidecar | conway#756 (§7 step 8) | conway#757 | **differs**: STEP re-parses on reopen until conway#757 |
+| Reopen without a re-parse | `engine/engineSidecars.js`: a worker load from an OPFS entry saves conway's sidecar (`ExportIndexSidecar`, v3, schema-stamped) under `engine-index-sidecars/`, one per entry path (an envelope records which version of the entry it describes; sidecars of entries that are gone are swept after each save), and the next open of the entry tries `OpenModelFromIndex` with the sampled check before parsing; the load report's `Engine index:` line says which (`engineModelLoad.js#indexLine`); kill switch `?feature=disableEngineSidecar` | conway#756 | conway#757 | shared |
 | Tree | `properties.getSpatialStructure(id, 'names', {includeSolids: true})`, through the indexed handle and `EngineSession#propertiesApi` | `includeSolids` ignored | multibody sub-solids as ephemeral `solid` nodes | shared call; data |
 | Ids and refs | `e` / `o` / `n` refs (`viewer/tools/refs.js`); selection joins on whichever key both sides carry | express IDs; tree id = geometry parent | tree id = the NAUO, geometry parent = the shared `product_definition_shape`; the join key is the occurrence path (step-occurrence-selection.md) | **data**: an assembly's reuse has no IFC equivalent, so the key differs, not the code |
 | Properties | `getItemProperties` / `getPropertySets`; the panel's tables through `propertyTable.js`, behind the worker's `propertyTables` op or on the page (§7.1, #2070) | IFC entities and psets | AP214 records | shared |
@@ -1309,18 +1315,45 @@ and the other lacks.
 
 **What is left to converge, in order of value:**
 
-1. A windowed STEP open (conway): the one stage where STEP still holds the
-   whole source in memory, in the worker now rather than on the page.
-2. The STEP index sidecar (conway#757), so a STEP reopen or an eviction
-   rehydrate (§7 step 8) skips the parse as an IFC's will.
-3. STEP previews (conway): the occurrence path on the payload landed
+1. STEP previews (conway): the occurrence path on the payload landed
    (conway#772, wired to the preview pick), as did the channel on the
    windowed open; previews that appear at all are **parked until
    conway#773** (the parse-end tick's prep cost, and the cost gate's starting
    rate). Early picking on STEP comes from the durable batches (#2084).
-4. ~~§7 step 5 (the capture job) for both formats at once, including
+2. ~~§7 step 5 (the capture job) for both formats at once, including
    STEP's occurrence-path table.~~ Done in #2081: one job, run next to
    either engine.
+3. STEP on the main-thread engine stays buffered: its Blob store cannot
+   read synchronously. That goes away with the flag flip (§7 step 9), not
+   with more conway work.
+
+Done since this section was written: the windowed STEP open and the STEP
+index sidecar (conway#757; Share#2085). The sidecar reopen serves IFC too, so
+§7 step 8's index-only rehydrate now has the file it reads.
+
+**Measured, conway#757** (2026-11-07). Headless Chromium on a shared 4-vCPU container, test-flows build, `?feature=engineWorker`, a persistent profile, n=2 per leg. Each run loads the model and then reloads it in the same profile; the reload is the reopen.
+
+| | 58 MB STEP: first open | 58 MB STEP: reopen | 106 MB STEP: first open | 106 MB STEP: reopen |
+|---|---|---|---|---|
+| `Engine index:` | parsed; sidecar saved (15.8 MB) | from sidecar, no parse | parsed; sidecar saved (37.8 MB) | from sidecar, no parse |
+| Parsing | 0.95 / 0.94 s | **0.12 / 0.11 s** | 2.35 / 2.17 s | **0.40 / 0.39 s** |
+| Tree at (navigation → `rootElement`) | 4.58 / 4.67 s | **2.86 / 2.81 s** | 6.18 / 5.89 s | **3.00 / 2.99 s** |
+| Total | 17.9 / 18.6 s | 17.1 / 16.8 s | 10.1 / 9.7 s | 7.3 / 7.2 s |
+| `Engine source I/O:` | sync handle, 126 reads, 111 MB, 0.08 s | sync handle, 114 reads, 56 MB, 0.04 s | sync handle, 314 reads, 509 MB, 0.33 s | sync handle, 202 reads, 404 MB, 0.25 s |
+
+- Geometry is the same in both legs, so the reopen saves the parse and little else. On these two models that is 0.8–1.9 s off Parsing, and 1.8–3 s off the time to a tree.
+- A first open records the source digests for the export (conway's `RECORD_SOURCE_HASH`, about 12 % of the index build) and writes the sidecar after the pump.
+- The 106 MB model reads 4.8× its size through the windows: conway's adaptive window grows on AP214's access pattern. Over the sync handle this costs 0.33 s.
+- Windowing does not lower the worker's peak memory on these models. The window grows to most of the file, and geometry dominates (conway#769's description has the Node numbers).
+
+**Against the buffered worker open.** I ran the same build, the same models and the same profile handling with `?feature=engineWorker,disableStreamOpen`: a STEP buffered in the worker as before this change, with no sidecar, so its reload parses again.
+- **First open:** the windowed open matches the buffered one within the spread.
+  - Parsing: 0.95 vs 1.02 s on 58 MB, 2.26 vs 2.28 s on 106 MB.
+  - Tree: 4.6 vs 4.6 s, and 6.0 vs 5.8 s.
+  - Total: 18.2 vs 18.4 s, and 9.9 vs 9.5 s.
+- **Reopen, sidecar against re-parse:**
+  - 58 MB: Parsing 0.12 vs 0.92 s, tree 2.83 vs 3.40 s, Total 17.0 vs 17.2 s.
+  - 106 MB: Parsing 0.39 vs 2.26 s, tree 3.00 vs 4.56 s, Total 7.3 vs 8.7 s.
 
 **Measured** (2026-11-04, §7 step 6 as first pushed in #2067):
 - `RAF_THROTTLE_MS=3600000`, one cold load per run, n=2 except the largest (n=1), medians, in a shared 4-vCPU container.

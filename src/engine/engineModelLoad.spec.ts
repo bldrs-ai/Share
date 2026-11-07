@@ -116,11 +116,12 @@ describeMobileAndDesktop('Engine worker: model load', () => {
     await page.goto(STEP_PATH)
     await waitForModelReady(page)
     await engine.expectWorkerEngine()
-    // The STEP open ran in the worker, buffered (conway's windowed open is
-    // IFC-only), and its pump delivered every block.
+    // The STEP open ran in the worker, windowed from its OPFS copy as an IFC
+    // is (conway#757: the worker's stores read synchronously, which a
+    // windowed STEP needs), and its pump delivered every block.
     expect(pumpLines, pumpLines.join('\n')).toHaveLength(1)
     expect(pumpLines[0]).toContain('format=step')
-    expect(pumpLines[0]).toContain('windowed=no')
+    expect(pumpLines[0]).toContain('windowed=yes')
     expect(Number(pumpLines[0].match(/meshes=(\d+)/)?.[1])).toBeGreaterThan(0)
 
     await page.getByTestId('control-button-navigation').click()
