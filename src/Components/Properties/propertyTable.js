@@ -407,6 +407,23 @@ export async function quantities(reader, quantitiesObj) {
 
 
 /**
+ * Display text for a NominalValue. Since conway#766 an aggregate-valued one
+ * (IFCCOMPLEXNUMBER, IFCCOMPOUNDPLANEANGLEMEASURE) has an ARRAY `.value` of
+ * number handles; join them rather than rendering `undefined`.
+ *
+ * @param {object} nominal `{type, value}` handle
+ * @return {string}
+ */
+function nominalValueText(nominal) {
+  const {value} = nominal
+  if (Array.isArray(value)) {
+    return value.map((m) => decodeIFCString(m && typeof m === 'object' ? m.value : m)).join(', ')
+  }
+  return decodeIFCString(value)
+}
+
+
+/**
  * @param {PropertyReader} reader
  * @param {Array} hasPropertiesArr Array of HasProperties elements
  * @return {Promise<object|null>} a `Node.SUBTABLE`
@@ -426,7 +443,7 @@ export async function hasProperties(reader, hasPropertiesArr) {
     const name = decodeIFCString(dObj.Name.value)
     const value = (dObj.NominalValue === undefined || dObj.NominalValue === null) ?
       '<error>' :
-      decodeIFCString(dObj.NominalValue.value)
+      nominalValueText(dObj.NominalValue)
     rows.push({label: name, value})
   })
 }
