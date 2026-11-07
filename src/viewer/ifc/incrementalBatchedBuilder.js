@@ -10,7 +10,7 @@ import {
 import {forEachVectorItem} from './conwayVector'
 import {makeSurfaceMaterial} from '../lookMaterial'
 import {placedShapeBox} from '../three/robustBounds'
-import {LOAD_SELECTION_KEY, STREAMING_BATCHES_KEY} from '../streamingBatchPick'
+import {LOAD_SELECTION_KEY, STREAMING_BATCHES_KEY, endLoadSelection} from '../streamingBatchPick'
 import {
   CoincidenceSet,
   DEFAULT_COLOR,
@@ -569,10 +569,8 @@ export class IncrementalBatchedBuilder {
     // replace.
     this.paintSelection(null, null)
     delete this.root.userData[STREAMING_BATCHES_KEY]
-    // The load is over: the finished model's highlight owns the selection.
-    if (this.root.parent?.userData) {
-      delete this.root.parent.userData[LOAD_SELECTION_KEY]
-    }
+    // The finished model's highlight owns the selection from here.
+    endLoadSelection(this.root.parent)
     const batches = []
     for (const state of [this.opaque, this.transparent]) {
       if (state === null || state.cursor === 0) {

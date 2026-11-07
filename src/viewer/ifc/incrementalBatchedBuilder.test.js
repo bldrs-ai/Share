@@ -1,6 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {BatchedMesh, Box3, BufferGeometry, Matrix4, Scene, Vector3, Vector4} from 'three'
-import {paintStreamingSelection} from '../streamingBatchPick'
+import {beginLoadSelection, paintStreamingSelection} from '../streamingBatchPick'
 import {clearConwayDirectLogs, getConwayDirectLogs}
   from '../../../tools/jest/conwayDirectLogCapture'
 import {IncrementalBatchedBuilder, PRESIZE_FROM_GEOMETRIES, probeSpreadLimit}
@@ -1102,6 +1102,7 @@ describe('IncrementalBatchedBuilder: pickable and paintable while streaming', ()
     // batch, there was no streaming root to paint, and nothing replayed the
     // selection when the builder installed.
     const scene = new Scene()
+    beginLoadSelection(scene)
     paintStreamingSelection(scene, {parents: [10]}, RED)
     const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
     scene.add(builder.root)
@@ -1110,7 +1111,27 @@ describe('IncrementalBatchedBuilder: pickable and paintable while streaming', ()
     expect(colorAt(mesh, 0)).toEqual([1, 0, 0])
     expect(colorAt(mesh, 1)).not.toEqual([1, 0, 0])
     builder.finalize()
-    expect(scene.userData.loadSelection).toBeUndefined()
+    expect('loadSelection' in scene.userData).toBe(false)
+    // A selection after the load leaves nothing for a next load's builder
+    // (the review of 9d4c25eb on #2084).
+    paintStreamingSelection(scene, {parents: [11]}, RED)
+    expect('loadSelection' in scene.userData).toBe(false)
+  })
+
+  it('an empty selection made during the load costs a batch nothing', () => {
+    // The review of 9d4c25eb: an empty selection kept as {selection: {parents: []}}
+    // read as empty, so the adoption guard fired on every batch, rescanning
+    // every row each time.
+    const scene = new Scene()
+    beginLoadSelection(scene)
+    paintStreamingSelection(scene, {parents: [], instances: [], occurrencePath: null}, RED)
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    scene.add(builder.root)
+    const rescans = jest.spyOn(builder, 'paintSelection')
+    for (const parent of [10, 11, 12]) {
+      builder.appendBatch([stepMesh(parent, 999, [parent])])
+    }
+    expect(rescans).not.toHaveBeenCalled()
   })
 
   it('an IFC row has no occurrence path', () => {

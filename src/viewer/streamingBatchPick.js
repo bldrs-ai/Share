@@ -43,11 +43,50 @@ export const STREAMING_BATCHES_KEY = 'streamingBatches'
 
 
 /**
- * `scene.userData` key of the selection last painted during a load, as
- * `{selection, color}`: what a streaming builder installed after it adopts
- * at its first batch (IncrementalBatchedBuilder#appendBatch).
+ * `scene.userData` key of the selection painted during a load, for a
+ * streaming builder that installs after it was made to adopt at its first
+ * batch (IncrementalBatchedBuilder#appendBatch). Present only while a load
+ * is in flight (`beginLoadSelection` / `endLoadSelection`, ShareIfcLoader
+ * #parse), so nothing a finished or failed load selected reaches the next
+ * load's builder; `{selection, color}`, or null while there is nothing to
+ * adopt, so an empty selection costs a batch nothing.
  */
 export const LOAD_SELECTION_KEY = 'loadSelection'
+
+
+/**
+ * A load has begun streaming into `scene`: selections made from now on are
+ * kept for its builder.
+ *
+ * @param {object|null} scene three.js scene
+ */
+export function beginLoadSelection(scene) {
+  if (scene?.userData) {
+    scene.userData[LOAD_SELECTION_KEY] = null
+  }
+}
+
+
+/**
+ * The load is over, however it ended: keep nothing for a builder.
+ *
+ * @param {object|null} scene three.js scene
+ */
+export function endLoadSelection(scene) {
+  if (scene?.userData) {
+    delete scene.userData[LOAD_SELECTION_KEY]
+  }
+}
+
+
+/**
+ * @param {object} selection `{parents, instances, occurrencePath}`
+ * @return {boolean} whether it selects nothing
+ */
+function isEmptySelection(selection) {
+  return (selection?.parents ?? []).length === 0 && (selection?.instances ?? []).length === 0 &&
+    !(Array.isArray(selection?.occurrencePath) && selection.occurrencePath.length > 0)
+}
 
 
 /**
@@ -107,13 +146,13 @@ export function streamingPickOf(hit) {
  * @return {number} rows now painted
  */
 export function paintStreamingSelection(scene, selection, color) {
-  // Kept on the scene for a builder that installs later: a selection made
-  // after the index but before the first batch finds no streaming root yet,
-  // and nothing else would replay it onto the rows when they come (codex
-  // round 5 on #2084). The builder reads it at its first batch and drops it
-  // at finalize.
-  if (scene?.userData) {
-    scene.userData[LOAD_SELECTION_KEY] = color === null ? undefined : {selection, color}
+  // Kept on the scene, while a load is in flight, for a builder that installs
+  // later: a selection made after the index but before the first batch finds
+  // no streaming root yet, and nothing else would replay it onto the rows
+  // when they come (codex round 5 on #2084). See LOAD_SELECTION_KEY.
+  if (scene?.userData && LOAD_SELECTION_KEY in scene.userData) {
+    scene.userData[LOAD_SELECTION_KEY] =
+      color === null || isEmptySelection(selection) ? null : {selection, color}
   }
   let painted = 0
   for (const root of streamingBatchRoots(scene)) {
