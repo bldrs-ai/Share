@@ -28,6 +28,7 @@ import {
   isStructuredProgress,
   loadFailureCaptureContext,
   noGeometryAlert,
+  reportBvhDepthCap,
   reportCacheHit,
   reportEngineVersion,
   reportFirstMesh,
@@ -176,6 +177,21 @@ describe('loadProgress', () => {
       reportLoadProgress({modelInfo: {fileName: 'index.ifc', schema: 'IFC4'}})
       expect(reportLines()).toContain('Conway v1.379.1190')
       expect(reportLines()).toContain('Model: index.ifc — IFC4')
+    })
+
+    // A BVH that hit three-mesh-bvh's depth cap becomes one Health line,
+    // summed over the load's builds, instead of the console warning that
+    // titled its diagnostics event (viewer/ifc/bvhBuild.js).
+    it('adds one Health line for BVH trees that hit the depth cap', () => {
+      beginLoadProgress({fileInfo: 'big.stp'})
+      reportBvhDepthCap({trees: 1, maxLeafTriangles: 120, maxDepth: 40})
+      reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
+      endLoadProgress()
+      expect(reportLines()).toContain(
+        'Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 triangles, tested one by one per pick')
+      // After the load it is a no-op.
+      reportBvhDepthCap({trees: 9, maxLeafTriangles: 9, maxDepth: 40})
+      expect(reportLines().filter((line) => line.startsWith('Health: picking'))).toHaveLength(1)
     })
 
     it('reportModelInfo works for non-engine formats', () => {
@@ -945,6 +961,44 @@ describe('loadProgress', () => {
           messages: ['2× No basis found for brep!'],
           report: expect.stringContaining('Share v'),
         }))
+        warnSpy.mockRestore()
+      })
+
+      // bvhBuild.js silences three-mesh-bvh's depth-cap warning, so a load
+      // whose only finding is the cap has zero console counts; without its
+      // own admission the leaf size this event exists for would never send.
+      it('sends a cap-only load at info, titled by the cap', () => {
+        beginLoadProgress({fileInfo: 'index.stp'})
+        reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
+        endLoadProgress()
+        captureLoadDiagnostics({})
+
+        const [message, context] = diagnosticsCall()
+        expect(message).toBe('Load diagnostics: picking index hit its depth cap')
+        expect(context.level).toBe('info')
+        expect(context.contexts.loadDiagnostics.bvhDepthCap)
+          .toEqual({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
+      })
+
+      it('sends nothing for a clean load that did not hit the cap', () => {
+        beginLoadProgress({fileInfo: 'index.stp'})
+        endLoadProgress()
+        captureLoadDiagnostics({})
+        expect(diagnosticsCall()).toBeUndefined()
+      })
+
+      it('titles a cap hit with console diagnostics by the diagnostics', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'index.stp'})
+        console.warn('No basis found for brep!')
+        reportBvhDepthCap({trees: 1, maxLeafTriangles: 90, maxDepth: 40})
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1})
+
+        const [message, context] = diagnosticsCall()
+        expect(message).toBe('Load diagnostics: No basis found for brep!')
+        expect(context.level).toBe('warning')
+        expect(context.contexts.loadDiagnostics.bvhDepthCap).toEqual(expect.objectContaining({trees: 1}))
         warnSpy.mockRestore()
       })
 

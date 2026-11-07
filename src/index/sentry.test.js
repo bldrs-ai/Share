@@ -343,3 +343,40 @@ describe('setupSentry', () => {
     expect(init.mock.calls[0][0].beforeBreadcrumb).toBe(redactBreadcrumb)
   })
 })
+
+
+describe('shouldSendSentryEvent — in-app browser bridge globals (SHARE-1X7)', () => {
+  /*
+   * SHARE-1X7's shape: Zalo's iOS WKWebView host evaluates its bridge
+   * script against the page, so the frame is the page's own URL at line 1
+   * rather than `<anonymous>`, which the anonymous heuristic would catch.
+   */
+  const bridgeEvent = ({type = 'ReferenceError', value = 'Can\'t find variable: zaloJSV2', mechanism = 'onerror'} = {}) => ({
+    exception: {
+      values: [{
+        type,
+        value,
+        mechanism: {type: mechanism, handled: false},
+        stacktrace: {frames: [{filename: '/share/v/p/index.ifc', lineno: 1, colno: 21}]},
+      }],
+    },
+  })
+
+  it('drops the Zalo bridge ReferenceError and fires its GA signal once', () => {
+    expect(shouldSendSentryEvent(bridgeEvent())).toBe(false)
+    expect(shouldSendSentryEvent(bridgeEvent({value: 'zaloJSV2 is not defined'}))).toBe(false)
+    expect(gtagEvent).toHaveBeenCalledTimes(1)
+    expect(gtagEvent).toHaveBeenCalledWith('in_app_browser_bridge_error', {})
+  })
+
+  it('keeps a ReferenceError naming any other variable', () => {
+    expect(shouldSendSentryEvent(bridgeEvent({value: 'Can\'t find variable: zaloJSV2Helper'}))).toBe(true)
+    expect(shouldSendSentryEvent(bridgeEvent({value: 'Can\'t find variable: shareViewer'}))).toBe(true)
+  })
+
+  it('keeps the bridge name when it is not an uncaught ReferenceError', () => {
+    expect(shouldSendSentryEvent(bridgeEvent({type: 'TypeError'}))).toBe(true)
+    expect(shouldSendSentryEvent(bridgeEvent({mechanism: 'onunhandledrejection'}))).toBe(true)
+    expect(gtagEvent).not.toHaveBeenCalled()
+  })
+})
