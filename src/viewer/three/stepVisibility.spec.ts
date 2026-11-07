@@ -22,105 +22,135 @@ const STEP_PATH = '/share/v/p/index.step'
 const IFC_PATH = '/share/v/p/index.ifc'
 const LEAF = 'Together'
 const LEAF_COUNT = 7
+// Every block below runs on both engines (engine-worker.md §7 step 9): the
+// worker, which is the default (no flag), and the main-thread engine through
+// the kill switch, which a link keeps across reloads. Each test checks its
+// first load ran on the engine it is for.
+const ENGINES = [
+  {label: 'engine worker', query: '', worker: true},
+  {label: 'main-thread engine', query: '?feature=disableEngineWorker', worker: false},
+]
 
 
-describeMobileAndDesktop('STEP hide / isolate / multi-select', () => {
-  test.beforeEach(async ({page}) => {
-    await homepageSetup(page)
-    await setIsReturningUser(page.context())
+/**
+ * @param engine from watchEngineWorker
+ * @param worker whether the leg is the worker's
+ * @return the leg's engine check
+ */
+function expectEngine(engine: ReturnType<typeof watchEngineWorker>, worker: boolean): Promise<void> {
+  return worker ? engine.expectWorkerEngine() : engine.expectMainThreadEngine()
+}
+
+
+for (const {label, query, worker} of ENGINES) {
+  describeMobileAndDesktop(`STEP hide / isolate / multi-select, ${label}`, () => {
+    test.beforeEach(async ({page}) => {
+      await homepageSetup(page)
+      await setIsReturningUser(page.context())
+    })
+
+    test('every leaf occurrence row has an eye, which hides just that occurrence', async ({page}) => {
+      const engine = watchEngineWorker(page)
+      const {leaves} = await loadStepTree(page, `${STEP_PATH}${query}`)
+      await expectEngine(engine, worker)
+      await expect(leaves.getByTestId('hide-icon')).toHaveCount(LEAF_COUNT)
+      await leaves.nth(0).getByTestId('hide-icon').click()
+      await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT - 1)
+      // The open NavTree's `n:` survives the `#d:` write beside it. (Writers used
+      // to re-serialize it as a bare `n`, and the next as `n:undefined`;
+      // location.test.js pins both.)
+      await expect.poll(() => hashToken(page, 'd')).toMatch(/^hide=/)
+      expect(hashToken(page, 'n')).toBe('')
+      await leaves.nth(0).getByTestId('unhide-icon').click()
+      await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT)
+    })
+
+    test('Isolate shows just the selected occurrence, and the link reopens it isolated', async ({page}) => {
+      test.setTimeout(TWO_LOADS_TIMEOUT_MS)
+      const engine = watchEngineWorker(page)
+      const {leaves} = await loadStepTree(page, `${STEP_PATH}${query}`)
+      await expectEngine(engine, worker)
+      await leaves.nth(0).getByTestId('NavTreeNodeLabel').click()
+      await closeTree(page)
+      await page.getByTestId('Isolate').click()
+      await expect.poll(() => visibleInstances(page)).toBe(1)
+      await expect.poll(() => displayToken(page)).toMatch(/^iso=o[\d.]+$/)
+
+      await page.reload()
+      await waitForModelReady(page)
+      await expect.poll(() => visibleInstances(page)).toBe(1)
+    })
+
+    test('shift-clicking rows multi-selects them without selecting text; Hide and Isolate act on all', async ({page}) => {
+      const engine = watchEngineWorker(page)
+      const {leaves} = await loadStepTree(page, `${STEP_PATH}${query}`)
+      await expectEngine(engine, worker)
+      await leaves.nth(0).getByTestId('NavTreeNodeLabel').click()
+      await leaves.nth(1).getByTestId('NavTreeNodeLabel').click({modifiers: ['Shift']})
+      await expect(leaves.nth(0)).toHaveAttribute('data-is-selected', 'true')
+      await expect(leaves.nth(1)).toHaveAttribute('data-is-selected', 'true')
+      expect(await page.evaluate(() => String(window.getSelection())), 'no text selected').toBe('')
+      // Both highlight: the selection resolved to their instances.
+      expect((await selection(page)).instances).toHaveLength(2)
+
+      await closeTree(page)
+      await page.getByTestId('Isolate').click()
+      await expect.poll(() => visibleInstances(page)).toBe(2)
+      await page.getByTestId('Isolate').click()
+      await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT)
+      await page.getByTestId('Hide').click()
+      await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT - 2)
+      expect(page.url()).not.toContain('undefined')
+    })
+
+    test('a link to an isolated multi-selection reopens it isolated and unpainted, as it was left', async ({page}) => {
+      test.setTimeout(TWO_LOADS_TIMEOUT_MS)
+      const engine = watchEngineWorker(page)
+      const {leaves} = await loadStepTree(page, `${STEP_PATH}${query}`)
+      await expectEngine(engine, worker)
+      await leaves.nth(0).getByTestId('NavTreeNodeLabel').click()
+      await leaves.nth(1).getByTestId('NavTreeNodeLabel').click({modifiers: ['Shift']})
+      await expect.poll(() => paintedInstances(page)).toBe(2)
+      await closeTree(page)
+      // Isolate drops the selection's cyan, so the parts show their own colours.
+      await page.getByTestId('Isolate').click()
+      await expect.poll(() => visibleInstances(page)).toBe(2)
+      expect(await paintedInstances(page)).toBe(0)
+
+      await page.reload()
+      await waitForModelReady(page)
+      await expect.poll(() => visibleInstances(page)).toBe(2)
+      // Wait for the viewer to have taken the restored selection (it records
+      // the ids just before it would paint), so "unpainted" isn't just "not yet".
+      await expect.poll(() => page.evaluate(() =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).useStore.getState().viewer.getSelectedIds().length)).toBeGreaterThanOrEqual(2)
+      expect(await paintedInstances(page)).toBe(0)
+    })
+
+    test('shift-double-clicking in the scene adds an occurrence, and the link reopens both selected', async ({page}) => {
+      test.setTimeout(TWO_LOADS_TIMEOUT_MS)
+      const engine = watchEngineWorker(page)
+      await loadStepTree(page, `${STEP_PATH}${query}`)
+      await expectEngine(engine, worker)
+      await closeTree(page)
+      const [first, second] = await instancePoints(page, 2)
+      await page.mouse.dblclick(first.x, first.y)
+      await expect.poll(async () => (await selection(page)).instances).toHaveLength(1)
+      await shiftDoubleClick(page, second)
+      await expect.poll(async () => (await selection(page)).anchors).toHaveLength(2)
+      const selected = await selection(page)
+      expect(selected.instances).toHaveLength(2)
+      // The path names one element; the rest ride `#sel:`.
+      await expect.poll(() => hashToken(page, 'sel')).toMatch(/^e\d+,e\d+$/)
+
+      await page.reload()
+      await waitForModelReady(page)
+      await expect.poll(async () => (await selection(page)).anchors.slice().sort()).toEqual(selected.anchors.slice().sort())
+      expect((await selection(page)).instances.slice().sort()).toEqual(selected.instances.slice().sort())
+    })
   })
-
-  test('every leaf occurrence row has an eye, which hides just that occurrence', async ({page}) => {
-    const {leaves} = await loadStepTree(page)
-    await expect(leaves.getByTestId('hide-icon')).toHaveCount(LEAF_COUNT)
-    await leaves.nth(0).getByTestId('hide-icon').click()
-    await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT - 1)
-    // The open NavTree's `n:` survives the `#d:` write beside it. (Writers used
-    // to re-serialize it as a bare `n`, and the next as `n:undefined`;
-    // location.test.js pins both.)
-    await expect.poll(() => hashToken(page, 'd')).toMatch(/^hide=/)
-    expect(hashToken(page, 'n')).toBe('')
-    await leaves.nth(0).getByTestId('unhide-icon').click()
-    await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT)
-  })
-
-  test('Isolate shows just the selected occurrence, and the link reopens it isolated', async ({page}) => {
-    test.setTimeout(TWO_LOADS_TIMEOUT_MS)
-    const {leaves} = await loadStepTree(page)
-    await leaves.nth(0).getByTestId('NavTreeNodeLabel').click()
-    await closeTree(page)
-    await page.getByTestId('Isolate').click()
-    await expect.poll(() => visibleInstances(page)).toBe(1)
-    await expect.poll(() => displayToken(page)).toMatch(/^iso=o[\d.]+$/)
-
-    await page.reload()
-    await waitForModelReady(page)
-    await expect.poll(() => visibleInstances(page)).toBe(1)
-  })
-
-  test('shift-clicking rows multi-selects them without selecting text; Hide and Isolate act on all', async ({page}) => {
-    const {leaves} = await loadStepTree(page)
-    await leaves.nth(0).getByTestId('NavTreeNodeLabel').click()
-    await leaves.nth(1).getByTestId('NavTreeNodeLabel').click({modifiers: ['Shift']})
-    await expect(leaves.nth(0)).toHaveAttribute('data-is-selected', 'true')
-    await expect(leaves.nth(1)).toHaveAttribute('data-is-selected', 'true')
-    expect(await page.evaluate(() => String(window.getSelection())), 'no text selected').toBe('')
-    // Both highlight: the selection resolved to their instances.
-    expect((await selection(page)).instances).toHaveLength(2)
-
-    await closeTree(page)
-    await page.getByTestId('Isolate').click()
-    await expect.poll(() => visibleInstances(page)).toBe(2)
-    await page.getByTestId('Isolate').click()
-    await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT)
-    await page.getByTestId('Hide').click()
-    await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT - 2)
-    expect(page.url()).not.toContain('undefined')
-  })
-
-  test('a link to an isolated multi-selection reopens it isolated and unpainted, as it was left', async ({page}) => {
-    test.setTimeout(TWO_LOADS_TIMEOUT_MS)
-    const {leaves} = await loadStepTree(page)
-    await leaves.nth(0).getByTestId('NavTreeNodeLabel').click()
-    await leaves.nth(1).getByTestId('NavTreeNodeLabel').click({modifiers: ['Shift']})
-    await expect.poll(() => paintedInstances(page)).toBe(2)
-    await closeTree(page)
-    // Isolate drops the selection's cyan, so the parts show their own colours.
-    await page.getByTestId('Isolate').click()
-    await expect.poll(() => visibleInstances(page)).toBe(2)
-    expect(await paintedInstances(page)).toBe(0)
-
-    await page.reload()
-    await waitForModelReady(page)
-    await expect.poll(() => visibleInstances(page)).toBe(2)
-    // Wait for the viewer to have taken the restored selection (it records
-    // the ids just before it would paint), so "unpainted" isn't just "not yet".
-    await expect.poll(() => page.evaluate(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).useStore.getState().viewer.getSelectedIds().length)).toBeGreaterThanOrEqual(2)
-    expect(await paintedInstances(page)).toBe(0)
-  })
-
-  test('shift-double-clicking in the scene adds an occurrence, and the link reopens both selected', async ({page}) => {
-    test.setTimeout(TWO_LOADS_TIMEOUT_MS)
-    await loadStepTree(page)
-    await closeTree(page)
-    const [first, second] = await instancePoints(page, 2)
-    await page.mouse.dblclick(first.x, first.y)
-    await expect.poll(async () => (await selection(page)).instances).toHaveLength(1)
-    await shiftDoubleClick(page, second)
-    await expect.poll(async () => (await selection(page)).anchors).toHaveLength(2)
-    const selected = await selection(page)
-    expect(selected.instances).toHaveLength(2)
-    // The path names one element; the rest ride `#sel:`.
-    await expect.poll(() => hashToken(page, 'sel')).toMatch(/^e\d+,e\d+$/)
-
-    await page.reload()
-    await waitForModelReady(page)
-    await expect.poll(async () => (await selection(page)).anchors.slice().sort()).toEqual(selected.anchors.slice().sort())
-    expect((await selection(page)).instances.slice().sort()).toEqual(selected.instances.slice().sort())
-  })
-})
+}
 
 
 // engine-worker.md §7 step 6: the same per-occurrence operations, checked on
@@ -130,25 +160,20 @@ describeMobileAndDesktop('STEP hide / isolate / multi-select', () => {
 // eye, and a pick or a selection names the shared part shape, i.e. every
 // block of that size. The main-thread engine runs them through the kill
 // switch.
-for (const {label, path, worker} of [
-  {label: 'engine worker', path: STEP_PATH, worker: true},
-  {label: 'main-thread engine', path: `${STEP_PATH}?feature=disableEngineWorker`, worker: false},
-]) {
+for (const {label, query, worker} of ENGINES) {
+  const path = `${STEP_PATH}${query}`
   describeMobileAndDesktop(`STEP hide / isolate / pick, ${label}`, () => {
     test.beforeEach(async ({page}) => {
       await homepageSetup(page)
       await setIsReturningUser(page.context())
     })
 
-    const expectEngine = (engine: ReturnType<typeof watchEngineWorker>) =>
-      (worker ? engine.expectWorkerEngine() : engine.expectMainThreadEngine())
-
     test('a leaf occurrence\'s eye hides just that occurrence; Isolate shows just one, and its link reopens it', async ({page}) => {
       test.setTimeout(THREE_LOADS_TIMEOUT_MS)
       const glbLogs = captureGlbLogs(page)
       const engine = watchEngineWorker(page)
       const {leaves} = await loadStepTree(page, path)
-      await expectEngine(engine)
+      await expectEngine(engine, worker)
       await expect(leaves.getByTestId('hide-icon')).toHaveCount(LEAF_COUNT)
       await leaves.nth(0).getByTestId('hide-icon').click()
       await expect.poll(() => visibleInstances(page)).toBe(LEAF_COUNT - 1)
@@ -188,7 +213,7 @@ for (const {label, path, worker} of [
       const reopened = watchEngineWorker(page)
       await page.reload()
       await waitForModelReady(page)
-      await expectEngine(reopened)
+      await expectEngine(reopened, worker)
       expect(glbLinesSinceReset(glbLogs).some((line) => line.includes('cache MISS')), 'a parse, not a hit').toBe(true)
       await expect.poll(() => visibleInstances(page)).toBe(1)
     })
@@ -196,7 +221,7 @@ for (const {label, path, worker} of [
     test('a double-click in the scene selects one occurrence', async ({page}) => {
       const engine = watchEngineWorker(page)
       await loadStepTree(page, path)
-      await expectEngine(engine)
+      await expectEngine(engine, worker)
       await closeTree(page)
       const [point] = await instancePoints(page, 1)
       await page.mouse.dblclick(point.x, point.y)
@@ -207,57 +232,61 @@ for (const {label, path, worker} of [
 }
 
 
-describeMobileAndDesktop('IFC scene multi-select', () => {
-  test.beforeEach(async ({page}) => {
-    await homepageSetup(page)
-    await setIsReturningUser(page.context())
+for (const {label, query, worker} of ENGINES) {
+  describeMobileAndDesktop(`IFC scene multi-select, ${label}`, () => {
+    test.beforeEach(async ({page}) => {
+      await homepageSetup(page)
+      await setIsReturningUser(page.context())
+    })
+
+    test('shift-double-clicking in the scene adds an element, and the link reopens both selected', async ({page}) => {
+      test.setTimeout(THREE_LOADS_TIMEOUT_MS)
+      const engine = watchEngineWorker(page)
+      await page.goto(`${IFC_PATH}${query}`)
+      await waitForModelReady(page)
+      await expectEngine(engine, worker)
+      await pauseViewerRendering(page)
+      await closeTree(page)
+      const [first, second] = await instancePoints(page, 2)
+      await page.mouse.dblclick(first.x, first.y)
+      await expect.poll(async () => (await selection(page)).anchors).toHaveLength(1)
+      await shiftDoubleClick(page, second)
+      await expect.poll(async () => (await selection(page)).anchors).toHaveLength(2)
+      const {anchors} = await selection(page)
+      await expect.poll(() => hashToken(page, 'sel')).toBe(anchors.map((id) => `e${id}`).join(','))
+
+      // Back and Forward through the multi-selection restore each state.
+      await page.goBack()
+      await expect.poll(async () => (await selection(page)).anchors).toEqual([anchors[0]])
+      await page.goForward()
+      await expect.poll(async () => (await selection(page)).anchors.slice().sort()).toEqual(anchors.slice().sort())
+
+      await page.reload()
+      await waitForModelReady(page)
+      await expect.poll(async () => (await selection(page)).anchors.slice().sort()).toEqual(anchors.slice().sort())
+
+      // Shift-click the path's own element away: the survivor stays selected,
+      // and in the link, rather than the path restoring the one just dropped.
+      await pauseViewerRendering(page)
+      await shiftDoubleClick(page, first)
+      const survivor = anchors.find((id) => id !== anchors[0])
+      await expect.poll(async () => (await selection(page)).anchors).toEqual([survivor])
+      await expect.poll(() => hashToken(page, 'sel')).toBe(`e${survivor}`)
+      await page.reload()
+      await waitForModelReady(page)
+      await expect.poll(async () => (await selection(page)).anchors).toEqual([survivor])
+
+      // Shift-click the survivor away too: the selection empties and stays so,
+      // rather than the (stale) path bringing its element back when `#sel:` goes.
+      await pauseViewerRendering(page)
+      await shiftDoubleClick(page, second)
+      await expect.poll(() => hashToken(page, 'sel')).toBe(null)
+      // Let the location change the token's removal made run its course.
+      await page.waitForTimeout(SETTLE_MS)
+      expect((await selection(page)).anchors).toEqual([])
+    })
   })
-
-  test('shift-double-clicking in the scene adds an element, and the link reopens both selected', async ({page}) => {
-    test.setTimeout(THREE_LOADS_TIMEOUT_MS)
-    await page.goto(IFC_PATH)
-    await waitForModelReady(page)
-    await pauseViewerRendering(page)
-    await closeTree(page)
-    const [first, second] = await instancePoints(page, 2)
-    await page.mouse.dblclick(first.x, first.y)
-    await expect.poll(async () => (await selection(page)).anchors).toHaveLength(1)
-    await shiftDoubleClick(page, second)
-    await expect.poll(async () => (await selection(page)).anchors).toHaveLength(2)
-    const {anchors} = await selection(page)
-    await expect.poll(() => hashToken(page, 'sel')).toBe(anchors.map((id) => `e${id}`).join(','))
-
-    // Back and Forward through the multi-selection restore each state.
-    await page.goBack()
-    await expect.poll(async () => (await selection(page)).anchors).toEqual([anchors[0]])
-    await page.goForward()
-    await expect.poll(async () => (await selection(page)).anchors.slice().sort()).toEqual(anchors.slice().sort())
-
-    await page.reload()
-    await waitForModelReady(page)
-    await expect.poll(async () => (await selection(page)).anchors.slice().sort()).toEqual(anchors.slice().sort())
-
-    // Shift-click the path's own element away: the survivor stays selected,
-    // and in the link, rather than the path restoring the one just dropped.
-    await pauseViewerRendering(page)
-    await shiftDoubleClick(page, first)
-    const survivor = anchors.find((id) => id !== anchors[0])
-    await expect.poll(async () => (await selection(page)).anchors).toEqual([survivor])
-    await expect.poll(() => hashToken(page, 'sel')).toBe(`e${survivor}`)
-    await page.reload()
-    await waitForModelReady(page)
-    await expect.poll(async () => (await selection(page)).anchors).toEqual([survivor])
-
-    // Shift-click the survivor away too: the selection empties and stays so,
-    // rather than the (stale) path bringing its element back when `#sel:` goes.
-    await pauseViewerRendering(page)
-    await shiftDoubleClick(page, second)
-    await expect.poll(() => hashToken(page, 'sel')).toBe(null)
-    // Let the location change the token's removal made run its course.
-    await page.waitForTimeout(SETTLE_MS)
-    expect((await selection(page)).anchors).toEqual([])
-  })
-})
+}
 
 
 // Tests that load the model two or three times.

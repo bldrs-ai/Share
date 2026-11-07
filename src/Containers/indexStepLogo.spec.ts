@@ -150,39 +150,44 @@ function modelColours(page: import('@playwright/test').Page) {
 }
 
 describeMobileAndDesktop('index.step logo', () => {
-  test('loads and shows the logo assembly, one selectable node per block', async ({page}) => {
-    test.setTimeout(TEST_TIMEOUT_MS)
+  // On both engines, like the colour and world-space checks below.
+  for (const {engine, query, worker: inWorker} of ENGINES) {
+    test(`loads and shows the logo assembly, one selectable node per block (${engine})`, async ({page}) => {
+      test.setTimeout(TEST_TIMEOUT_MS)
 
-    await homepageSetup(page)
-    await setIsReturningUser(page.context())
+      await homepageSetup(page)
+      await setIsReturningUser(page.context())
 
-    await page.goto('/share/v/p/index.step')
-    await waitForModelReady(page)
+      const watched = watchEngineWorker(page)
+      await page.goto(`/share/v/p/index.step${query}`)
+      await waitForModelReady(page)
+      await (inWorker ? watched.expectWorkerEngine() : watched.expectMainThreadEngine())
 
-    await page.getByTestId('control-button-navigation').click()
-    await expect(page.getByTestId('NavTreePanel')).toBeVisible()
+      await page.getByTestId('control-button-navigation').click()
+      await expect(page.getByTestId('NavTreePanel')).toBeVisible()
 
-    const node = (label: string) => page.locator(`[data-node-label="${label}"]`)
+      const node = (label: string) => page.locator(`[data-node-label="${label}"]`)
 
-    // The spatial chain the IFC tells as project/site/building/storey,
-    // told here as nested assemblies. Each level has exactly one child,
-    // so expanding straight down reaches the blocks.
-    for (const name of ['Bldrs', 'Build', 'Every', 'Thing']) {
-      await expect(node(name)).toHaveCount(1)
-      await node(name).getByTestId('NavTreeNodeToggle').click()
-    }
+      // The spatial chain the IFC tells as project/site/building/storey,
+      // told here as nested assemblies. Each level has exactly one child,
+      // so expanding straight down reaches the blocks.
+      for (const name of ['Bldrs', 'Build', 'Every', 'Thing']) {
+        await expect(node(name)).toHaveCount(1)
+        await node(name).getByTestId('NavTreeNodeToggle').click()
+      }
 
-    // Seven occurrences, not two part types: STEP reuse is resolved per
-    // occurrence, so every block gets its own row.
-    await expect(node(NAME_LEAF)).toHaveCount(BLOCK_COUNT)
+      // Seven occurrences, not two part types: STEP reuse is resolved per
+      // occurrence, so every block gets its own row.
+      await expect(node(NAME_LEAF)).toHaveCount(BLOCK_COUNT)
 
-    // Selecting one block selects exactly that block — the four short
-    // blocks share a part shape, and a type-keyed selection would light
-    // up all of them.
-    await node(NAME_LEAF).first().getByTestId('NavTreeNodeLabel').click()
-    await expect(node(NAME_LEAF).first()).toHaveAttribute('data-is-selected', 'true')
-    await expect(page.locator('[data-is-selected="true"]')).toHaveCount(1)
-  })
+      // Selecting one block selects exactly that block — the four short
+      // blocks share a part shape, and a type-keyed selection would light
+      // up all of them.
+      await node(NAME_LEAF).first().getByTestId('NavTreeNodeLabel').click()
+      await expect(node(NAME_LEAF).first()).toHaveAttribute('data-is-selected', 'true')
+      await expect(page.locator('[data-is-selected="true"]')).toHaveCount(1)
+    })
+  }
 
   // engine-worker.md §7 step 6: the colour and world-space checks on both
   // engines, the worker (the default) and the main thread (the kill switch).
