@@ -22,7 +22,11 @@
 //   - a Blob store over the File snapshot, where each read is a
 //     `blob.slice().arrayBuffer()` round trip through the browser's blob
 //     machinery. It works everywhere, including in process, and is the
-//     fallback whenever the handle cannot be had.
+//     fallback whenever the handle cannot be had — in Firefox and Safari
+//     always, since neither has read-only handles. Over an OPFS entry an
+//     open reads the whole file into it once for the load (`holdResident`,
+//     Share#2092): conway re-reads the source several times over, and each
+//     Blob read is slow there.
 //
 // Both count their reads, bytes and time, which the `done` packet reports.
 //
@@ -40,19 +44,60 @@ function newCounters() {
 
 
 /**
+ * The largest source the Blob store reads whole for a load
+ * ({@link openSourceStore}'s `holdResident`; Share#2092). Above it the load
+ * reads windows from the Blob as before.
+ *
+ * Why there is a ceiling at all: the whole-file copy is held beside the
+ * engine's wasm heap until the GLB writer's spill (engineHandler.js, SPILL),
+ * so a load holds the file once more than a sync-access-handle load does.
+ * That is what the main-thread engine held for every model before the flip
+ * (a buffered open), so it is no regression against prod; the ceiling only
+ * bounds it. 1 GiB keeps PSB (861 MB), the largest model measured, inside.
+ */
+// eslint-disable-next-line no-magic-numbers
+const MIB = 1024 * 1024
+// eslint-disable-next-line no-magic-numbers
+export const RESIDENT_SOURCE_MAX_BYTES = 1024 * MIB
+
+
+/**
  * A store over a Blob or File.
+ *
+ * It can also hold the whole Blob in memory for a while (`holdResident`,
+ * Share#2092). conway's windowed source reads PSB ~4.7× over (4 GB for an
+ * 861 MB file): its 4 MiB × 16 window meets several whole-file sweeps after
+ * the parse and through the pump, each longer than the window, so LRU
+ * holds nothing between them (engine-worker.md §7.1, "Blob store"). On a
+ * sync access handle a re-read is a cheap copy; through the Blob each is a
+ * `blob.slice().arrayBuffer()` round trip, which Firefox makes expensive
+ * (11 s of PSB's I/O). A store-side cache does not fix it short of the
+ * whole file: over PSB's recorded reads, an LRU of 512 MB still reads 3.0×
+ * and a never-evicting 512 MB cache 2.6×; only the whole file reads 1×. So
+ * for the load the store reads the file once and serves every read as a
+ * copy out of that, then lets it go (`releaseResident`) and reads the Blob
+ * again.
  *
  * @param {Blob} blob
  * @param {function(): number} [now]
  * @param {Function} [ReaderSync] `FileReaderSync`, present only in a worker
- * @return {object} `{byteLength, read, readSync?, counters, kind, close}`
+ * @return {object} `{byteLength, read, readSync?, counters, kind, close,
+ *   holdResident, releaseResident}`
  */
 export function makeBlobStore(blob, now = () => performance.now(), ReaderSync = globalThis.FileReaderSync) {
-  const counters = newCounters()
+  const counters = {...newCounters(), residentBytes: 0, residentReads: 0}
+  // The whole Blob from holdResident until the release, else null.
+  let resident = null
   const count = (t0, length) => {
     counters.reads++
     counters.bytes += length
     counters.ms += now() - t0
+  }
+  // A copy, never a view: conway keeps the bytes a read returns as its
+  // window chunk, and a view would pin the whole file past the release.
+  const fromResident = (offset, length) => {
+    counters.residentReads++
+    return resident.slice(offset, offset + length)
   }
   const store = {
     kind: 'blob',
@@ -61,13 +106,46 @@ export function makeBlobStore(blob, now = () => performance.now(), ReaderSync = 
       return blob.size
     },
     async read(offset, length) {
+      if (resident !== null) {
+        return fromResident(offset, length)
+      }
       const t0 = now()
       const bytes = new Uint8Array(await blob.slice(offset, offset + length).arrayBuffer())
       count(t0, length)
       return bytes
     },
+    /**
+     * Read the whole Blob, once, and serve every read from it until
+     * `releaseResident`. Counted as one read. Awaited by the open,
+     * before the parse: started in the background instead, the read
+     * contended with the parse's own Blob reads, and PSB's parse finished
+     * later (Chromium, n=3: Parsing 15.6 against 14.0 s, Total 47.1 against
+     * 45.1 s), so the ~0.7 s it costs up front is the better trade. A failed
+     * read (a stale snapshot's NotReadableError, an allocation failure)
+     * holds nothing and leaves the reason in `counters.residentSkipped`.
+     *
+     * @return {Promise<void>} never rejects
+     */
+    async holdResident() {
+      const t0 = now()
+      try {
+        resident = new Uint8Array(await blob.arrayBuffer())
+        count(t0, blob.size)
+        counters.residentBytes = blob.size
+      } catch (e) {
+        resident = null
+        counters.residentSkipped = `${e?.name ?? 'Error'}: ${e?.message ?? e}`
+      }
+    },
+    /** @return {boolean} whether a whole-file copy was held and is now let go */
+    releaseResident() {
+      const held = resident !== null
+      resident = null
+      return held
+    },
     close() {
-      // Nothing held: a File snapshot pins nothing.
+      // A File snapshot pins nothing; the resident copy, if any, goes.
+      resident = null
     },
   }
   if (typeof ReaderSync === 'function') {
@@ -76,6 +154,9 @@ export function makeBlobStore(blob, now = () => performance.now(), ReaderSync = 
     // rejects with it: a per-read failure, never wrong bytes.
     const reader = new ReaderSync()
     store.readSync = (offset, length) => {
+      if (resident !== null) {
+        return fromResident(offset, length)
+      }
       const t0 = now()
       const bytes = new Uint8Array(reader.readAsArrayBuffer(blob.slice(offset, offset + length)))
       count(t0, length)
@@ -263,6 +344,12 @@ export async function locateOpfsEntry(file, root, maxEntries = MAX_OPFS_ENTRIES_
  * @param {object} [options]
  * @param {boolean} [options.allowSyncHandle] false is the kill switch
  *   (`?feature=disableEngineSyncHandle`)
+ * @param {boolean} [options.holdResident] when the store is the Blob store
+ *   over an OPFS entry, read the whole file into it for the load
+ *   (makeBlobStore; Share#2092), up to {@link RESIDENT_SOURCE_MAX_BYTES}.
+ *   Only an open asks: a spill exists to free memory. A failed whole-file
+ *   read leaves the store reading the Blob, with the reason in its
+ *   `counters.residentSkipped`
  * @param {function(): number} [options.now]
  * @param {function(): Promise<object>} [options.getOpfsRoot] for tests
  * @param {function(): boolean} [options.canSyncHandle] for tests
@@ -272,13 +359,27 @@ export async function locateOpfsEntry(file, root, maxEntries = MAX_OPFS_ENTRIES_
  *   either store), else null
  */
 export async function openSourceStore(source, {
-  allowSyncHandle = true, now, getOpfsRoot = opfsRoot, canSyncHandle = canOpenSyncHandles,
+  allowSyncHandle = true, holdResident = false, now, getOpfsRoot = opfsRoot, canSyncHandle = canOpenSyncHandles,
   maxOpfsEntries = MAX_OPFS_ENTRIES_SCANNED,
 } = {}) {
   const blob = source.file
   let entryPath = null
-  const fallback = (reason) => ({store: makeBlobStore(blob, now), fallbackReason: reason, entryPath})
   const describe = (e) => `${e?.name ?? 'Error'}: ${e?.message ?? e}`
+  const fallback = async (reason) => {
+    const store = makeBlobStore(blob, now)
+    // Only over an OPFS entry: that is the Blob whose reads are slow (a
+    // file-backed snapshot). A File already in memory (an upload kept in
+    // this page, an inflated .gz) reads cheaply as it is, and a copy of it
+    // would only hold it twice.
+    if (holdResident && entryPath !== null) {
+      if (blob.size > RESIDENT_SOURCE_MAX_BYTES) {
+        store.counters.residentSkipped = `over ${RESIDENT_SOURCE_MAX_BYTES / MIB} MB`
+      } else {
+        await store.holdResident()
+      }
+    }
+    return {store, fallbackReason: reason, entryPath}
+  }
   // The entry is looked up whichever store reads it: its path keys the
   // model's index sidecar (engineSidecars.js), and a Blob-store open reopens
   // from a sidecar as well as a sync-handle one does (codex review of

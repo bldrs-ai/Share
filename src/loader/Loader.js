@@ -1117,6 +1117,12 @@ function spillEngineSource(engineSession, sourceFile) {
       glbInfo(
         `source spill (engine worker): released resident source buffer (${sourceFile.size}B); ` +
         `property reads now page windows through ${result.source?.kind ?? 'a store'}`)
+    } else if (result?.released) {
+      // A windowed open on the Blob store, which held the whole file for the
+      // load (engine/engineSources.js#makeBlobStore, Share#2092).
+      glbInfo(
+        `source spill (engine worker): released the Blob store's whole-file copy (${sourceFile.size}B); ` +
+        'property reads now page windows from the File')
     } else {
       glbVerbose(`source spill (engine worker): kept resident (${result?.reason ?? 'no reason given'})`)
     }

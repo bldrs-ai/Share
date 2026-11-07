@@ -3,7 +3,9 @@
 import {EngineSession} from './EngineSession'
 import {createEngineHandler} from './engineHandler'
 import {indexLine} from './engineModelLoad'
-import {SIDECAR_DIR, discardSidecar, readSidecar, sidecarKey, sweepSidecars, writeSidecar} from './engineSidecars'
+import {
+  SIDECAR_DIR, discardSidecar, readSidecar, sidecarKey, sweepSidecars, writeSidecar, writeThroughSyncHandle,
+} from './engineSidecars'
 import {locateOpfsEntry, makeBlobStore, makeSyncHandleStore, openSourceStore} from './engineSources'
 import {ENGINE_PROTOCOL_VERSION, Ev} from './protocol'
 import {makeWorkerTransport} from './transports'
@@ -37,9 +39,12 @@ function snapshot() {
  * written to, and what the source entry is found in.
  *
  * @param {object} [children] name → file entry or directory
+ * @param {object} [options]
+ * @param {boolean} [options.writable] false: the files it creates have no
+ *   `createWritable`, as in Safari before 26 (Share#2093)
  * @return {object} a FileSystemDirectoryHandle stand-in
  */
-function memoryDir(children = {}) {
+function memoryDir(children = {}, {writable = true} = {}) {
   const dir = {
     kind: 'directory',
     children,
@@ -53,7 +58,7 @@ function memoryDir(children = {}) {
         if (!create) {
           throw Object.assign(new Error(name), {name: 'NotFoundError'})
         }
-        dir.children[name] = memoryDir()
+        dir.children[name] = memoryDir({}, {writable})
       }
       return dir.children[name]
     },
@@ -62,8 +67,9 @@ function memoryDir(children = {}) {
         if (!create) {
           throw Object.assign(new Error(name), {name: 'NotFoundError'})
         }
-        dir.children[name] = memoryFile(name, new Uint8Array(0))
+        dir.children[name] = memoryFile(name, new Uint8Array(0), {writable})
       }
+      dir.children[name].parent = dir
       return dir.children[name]
     },
     async removeEntry(name) {
@@ -82,15 +88,18 @@ function memoryDir(children = {}) {
  * @param {Uint8Array} bytes
  * @param {object} [options]
  * @param {number} [options.lastModified]
- * @return {object} a FileSystemFileHandle stand-in, with a read-only sync
- *   access handle for a source entry
+ * @param {boolean} [options.writable] false drops `createWritable`
+ * @return {object} a FileSystemFileHandle stand-in, with a sync access
+ *   handle — read-only for a source entry, read-write (writing in place, as
+ *   the real one does) for the Safari sidecar writer
  */
-function memoryFile(name, bytes, {lastModified = MTIME} = {}) {
+function memoryFile(name, bytes, {lastModified = MTIME, writable = true} = {}) {
   const file = {
     kind: 'file',
     name,
     bytes,
-    getFile: async () => new File([file.bytes], name, {lastModified}),
+    parent: null,
+    getFile: async () => new File([file.bytes], file.name, {lastModified}),
     async createWritable() {
       const parts = []
       return {
@@ -101,18 +110,38 @@ function memoryFile(name, bytes, {lastModified = MTIME} = {}) {
         abort: async () => null,
       }
     },
-    async createSyncAccessHandle() {
+    async createSyncAccessHandle(options) {
       return {
-        mode: 'read-only',
+        mode: options?.mode === 'read-only' ? 'read-only' : 'readwrite',
         getSize: () => file.bytes.length,
         read: (into, {at}) => {
           const n = Math.max(0, Math.min(into.length, file.bytes.length - at))
           into.set(file.bytes.subarray(at, at + n))
           return n
         },
+        truncate: (size) => {
+          file.bytes = file.bytes.slice(0, size)
+        },
+        write: (from, {at}) => {
+          const grown = new Uint8Array(Math.max(file.bytes.length, at + from.length))
+          grown.set(file.bytes)
+          grown.set(from, at)
+          file.bytes = grown
+          return from.length
+        },
+        flush: () => null,
         close: () => null,
       }
     },
+    async move(dir, newName) {
+      delete file.parent.children[file.name]
+      dir.children[newName] = file
+      file.parent = dir
+      file.name = newName
+    },
+  }
+  if (!writable) {
+    delete file.createWritable
   }
   return file
 }
@@ -131,10 +160,11 @@ describe('engine/engineSidecars', () => {
     const getOpfsRoot = async () => root
     const PATH = 'owner/repo/logo.step'
     expect(await readSidecar(PATH, snapshot(), getOpfsRoot)).toBeNull()
-    expect(await writeSidecar(PATH, snapshot(), Uint8Array.of(1, 2, 3), getOpfsRoot)).toBe(true)
+    expect(await writeSidecar(PATH, snapshot(), Uint8Array.of(1, 2, 3), getOpfsRoot))
+      .toEqual({saved: true, writer: 'writable', error: null})
     expect(Object.keys(root.children)).toEqual([SIDECAR_DIR])
     expect(Array.from(await readSidecar(PATH, snapshot(), getOpfsRoot))).toEqual([1, 2, 3])
-    expect(await writeSidecar(PATH, snapshot(), Uint8Array.of(9), getOpfsRoot)).toBe(true)
+    expect((await writeSidecar(PATH, snapshot(), Uint8Array.of(9), getOpfsRoot)).saved).toBe(true)
     expect(Array.from(await readSidecar(PATH, snapshot(), getOpfsRoot))).toEqual([9])
     await discardSidecar(PATH, getOpfsRoot)
     expect(await readSidecar(PATH, snapshot(), getOpfsRoot)).toBeNull()
@@ -142,7 +172,7 @@ describe('engine/engineSidecars', () => {
     await discardSidecar(PATH, getOpfsRoot)
   })
 
-  it('a failed write reports false and leaves the previous sidecar', async () => {
+  it('a failed write reports why and leaves the previous sidecar', async () => {
     const root = memoryDir()
     const getOpfsRoot = async () => root
     const PATH = 'owner/logo.step'
@@ -155,8 +185,97 @@ describe('engine/engineSidecars', () => {
       close: async () => null,
       abort: async () => null,
     })
-    expect(await writeSidecar(PATH, snapshot(), Uint8Array.of(1), getOpfsRoot)).toBe(false)
+    expect(await writeSidecar(PATH, snapshot(), Uint8Array.of(1), getOpfsRoot))
+      .toEqual({saved: false, writer: 'writable', error: 'Error: quota'})
     expect(Array.from(await readSidecar(PATH, snapshot(), getOpfsRoot))).toEqual([7])
+  })
+
+  it('without createWritable (Safari before 26) it writes through a sync access handle, under the real name only', async () => {
+    // Share#2093: Safari 17 reported "parsed; no sidecar saved" on every load.
+    const root = memoryDir({}, {writable: false})
+    const getOpfsRoot = async () => root
+    const PATH = 'owner/repo/PSB.ifc'
+    expect(await writeSidecar(PATH, snapshot(), Uint8Array.of(1, 2, 3), getOpfsRoot))
+      .toEqual({saved: true, writer: 'syncAccessHandle', error: null})
+    expect(Object.keys(root.children[SIDECAR_DIR].children)).toEqual([await sidecarKey(PATH)])
+    expect(Array.from(await readSidecar(PATH, snapshot(), getOpfsRoot))).toEqual([1, 2, 3])
+    // A shorter replacement reads back whole, with nothing of the old one.
+    expect((await writeSidecar(PATH, snapshot(), Uint8Array.of(9), getOpfsRoot)).saved).toBe(true)
+    expect(Array.from(await readSidecar(PATH, snapshot(), getOpfsRoot))).toEqual([9])
+    expect(Object.keys(root.children[SIDECAR_DIR].children)).toEqual([await sidecarKey(PATH)])
+  })
+
+  it('a sync-handle write that comes up short keeps the previous sidecar, leaves no .tmp, and says why', async () => {
+    const root = memoryDir({}, {writable: false})
+    const getOpfsRoot = async () => root
+    const PATH = 'owner/PSB.ifc'
+    await writeSidecar(PATH, snapshot(), Uint8Array.of(7), getOpfsRoot)
+    const dir = root.children[SIDECAR_DIR]
+    const getFileHandle = dir.getFileHandle.bind(dir)
+    dir.getFileHandle = async (name, options) => {
+      const handle = await getFileHandle(name, options)
+      if (name.endsWith('.tmp')) {
+        const open = handle.createSyncAccessHandle.bind(handle)
+        handle.createSyncAccessHandle = async () => ({...await open(), write: () => 0})
+      }
+      return handle
+    }
+    const result = await writeSidecar(PATH, snapshot(), Uint8Array.of(1, 2), getOpfsRoot)
+    expect(result).toMatchObject({saved: false, writer: 'syncAccessHandle'})
+    expect(result.error).toMatch(/^Error: short write \(0 of \d+ bytes\)$/)
+    expect(Array.from(await readSidecar(PATH, snapshot(), getOpfsRoot))).toEqual([7])
+    expect(Object.keys(dir.children)).toEqual([await sidecarKey(PATH)])
+  })
+
+  it('writeThroughSyncHandle replaces the file only after the new bytes are flushed and closed', async () => {
+    // No commit-on-close on a sync access handle: the real name must hold
+    // the old bytes until the new ones are complete, then be swapped.
+    const dir = memoryDir({'a.cidx': memoryFile('a.cidx', Uint8Array.of(1, 1, 1, 1))}, {writable: false})
+    dir.children['a.cidx'].parent = dir
+    const order = []
+    const realFile = () => (dir.children['a.cidx'] ? Array.from(dir.children['a.cidx'].bytes).join('') : 'gone')
+    const getFileHandle = dir.getFileHandle.bind(dir)
+    dir.getFileHandle = async (name, options) => {
+      const handle = await getFileHandle(name, options)
+      const open = handle.createSyncAccessHandle.bind(handle)
+      handle.createSyncAccessHandle = async () => {
+        const access = await open()
+        return {
+          ...access,
+          write: (from, at) => {
+            order.push(`write (real file ${realFile()})`)
+            return access.write(from, at)
+          },
+          flush: () => order.push('flush'),
+          close: () => order.push(`close (real file ${realFile()})`),
+        }
+      }
+      const move = handle.move.bind(handle)
+      handle.move = async (to, newName) => {
+        order.push(`move (real file ${realFile()})`)
+        return move(to, newName)
+      }
+      return handle
+    }
+    await writeThroughSyncHandle(dir, 'a.cidx', Uint8Array.of(2, 2))
+    expect(order).toEqual(['write (real file 1111)', 'flush', 'close (real file 1111)', 'move (real file gone)'])
+    expect(Array.from(dir.children['a.cidx'].bytes)).toEqual([2, 2])
+    expect(Object.keys(dir.children)).toEqual(['a.cidx'])
+  })
+
+  it('with neither writer (a page) nothing is saved, and the reason says so', async () => {
+    const root = memoryDir({}, {writable: false})
+    const getOpfsRoot = async () => root
+    await root.getDirectoryHandle(SIDECAR_DIR, {create: true})
+    const dir = root.children[SIDECAR_DIR]
+    const getFileHandle = dir.getFileHandle.bind(dir)
+    dir.getFileHandle = async (name, options) => {
+      const handle = await getFileHandle(name, options)
+      delete handle.createSyncAccessHandle
+      return handle
+    }
+    expect(await writeSidecar('owner/x.ifc', snapshot(), Uint8Array.of(1), getOpfsRoot))
+      .toEqual({saved: false, writer: null, error: 'no createWritable or createSyncAccessHandle here'})
   })
 
   it('a replaced entry\'s sidecar is not a candidate, and its save leaves one sidecar, not two', async () => {
@@ -181,7 +300,11 @@ describe('engine/engineSidecars', () => {
     await writeSidecar('owner/deleted.step', snapshot(), Uint8Array.of(2), getOpfsRoot)
     await writeSidecar('gone/dir/x.ifc', snapshot(), Uint8Array.of(3), getOpfsRoot)
     root.children[SIDECAR_DIR].children['not-an-envelope.cidx'] = memoryFile('n', Uint8Array.of(0))
-    expect(await sweepSidecars(getOpfsRoot)).toBe(3)
+    // A sync-handle write's `.tmp` whose move never ran (Share#2093): an
+    // envelope for an entry that still exists, so only its name retires it.
+    const kept = root.children[SIDECAR_DIR].children[await sidecarKey(`owner/${NAME}`)]
+    root.children[SIDECAR_DIR].children['stray.cidx.tmp'] = memoryFile('stray.cidx.tmp', kept.bytes)
+    expect(await sweepSidecars(getOpfsRoot)).toBe(4)
     expect(Object.keys(root.children[SIDECAR_DIR].children)).toEqual([await sidecarKey(`owner/${NAME}`)])
     expect(Array.from(await readSidecar(`owner/${NAME}`, snapshot(), getOpfsRoot))).toEqual([1])
   })
@@ -222,6 +345,11 @@ describe('engine/engineSidecars', () => {
       .toBe('Engine index: sidecar refused, parsed; sidecar saved (2.0 MB)')
     expect(indexLine({source: 'parse', bytes: 0, saved: false}))
       .toBe('Engine index: parsed; no sidecar saved')
+    // Share#2093: the fallback writer that saved it, or why nothing was saved.
+    expect(indexLine({source: 'parse', bytes: 143.8 * MIB, saved: true, writer: 'syncAccessHandle'}))
+      .toBe('Engine index: parsed; sidecar saved (143.8 MB, via sync access handle)')
+    expect(indexLine({source: 'parse', bytes: 143.8 * MIB, saved: false, saveError: 'QuotaExceededError: full'}))
+      .toBe('Engine index: parsed; no sidecar saved (QuotaExceededError: full)')
     expect(indexLine(undefined)).toBeUndefined()
   })
 })
@@ -402,6 +530,39 @@ describe('engine/engineHandler: index sidecar reopen (engine-worker.md §7 step 
     expect(first.source).toMatchObject({kind: 'blob', fallbackReason: 'disabled'})
     const second = await loadOnce(api, root, {disableEngineSyncHandle: true})
     expect(second.index).toEqual({source: 'sidecar', bytes: api.SIDECAR.length, saved: false})
+  })
+
+  it('without createWritable (Safari before 26) the first load saves through a sync access handle and the next opens from it', async () => {
+    // Share#2093's "done when", at the handler: a Blob-store load (Safari has
+    // no read-only handles either) saves a sidecar, and the reopen skips the
+    // parse.
+    const log = []
+    const api = sidecarApi(log)
+    const root = memoryDir({owner: memoryDir({[NAME]: memoryFile(NAME, BYTES)})}, {writable: false})
+    const first = await loadOnce(api, root, {disableEngineSyncHandle: true})
+    expect(first.index).toEqual({source: 'parse', bytes: api.SIDECAR.length, saved: true, writer: 'syncAccessHandle'})
+    const second = await loadOnce(api, root, {disableEngineSyncHandle: true})
+    expect(second.index).toEqual({source: 'sidecar', bytes: api.SIDECAR.length, saved: false})
+  })
+
+  it('a save that fails carries its reason in the done packet', async () => {
+    const api = sidecarApi([])
+    const root = memoryDir({owner: memoryDir({[NAME]: memoryFile(NAME, BYTES)})})
+    const getDirectoryHandle = root.getDirectoryHandle.bind(root)
+    root.getDirectoryHandle = async (name, options) => {
+      if (name === SIDECAR_DIR && options?.create) {
+        throw Object.assign(new Error('storage full'), {name: 'QuotaExceededError'})
+      }
+      return getDirectoryHandle(name, options)
+    }
+    expect((await loadOnce(api, root)).index).toEqual({
+      source: 'parse', bytes: api.SIDECAR.length, saved: false, saveError: 'QuotaExceededError: storage full',
+    })
+    api.ExportIndexSidecar = async () => {
+      throw new RangeError('out of memory')
+    }
+    expect((await loadOnce(api, root)).index)
+      .toMatchObject({saved: false, saveError: 'export failed: RangeError: out of memory'})
   })
 
   it('a source with no OPFS entry gets no sidecar', async () => {

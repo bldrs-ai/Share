@@ -43,6 +43,9 @@ const ENVELOPE_FIXED_BYTES = 4 + 4 + 8 + 8 + 4
 // this many bytes (OPFS paths are far shorter); a longer one reads as not an
 // envelope and is swept.
 const SWEEP_PATH_BYTES = 4096
+// The suffix writeThroughSyncHandle writes under before its move. Never a
+// sidecar: the sweep removes any it finds.
+const TMP_SUFFIX = '.tmp'
 
 
 /**
@@ -174,37 +177,139 @@ export async function readSidecar(entryPath, file, getOpfsRoot) {
 
 
 /**
- * Persist a sidecar for this version of the entry, replacing whatever the
- * entry's slot held — an older version's included. Written through
- * `createWritable`, which commits on close, so a write that dies part-way
- * leaves the previous file (or none), never a truncated one — and a
- * truncated one would only be refused anyway.
- *
- * @param {string} entryPath the source entry's path under the OPFS root
- * @param {Blob} file the File snapshot the model was opened from
- * @param {Uint8Array} sidecar conway's sidecar bytes
- * @param {function(): Promise<object>} getOpfsRoot
- * @return {Promise<boolean>} whether it was written
+ * @param {*} e
+ * @return {string} `Name: message`, for the load report
  */
-export async function writeSidecar(entryPath, file, sidecar, getOpfsRoot) {
+function describeError(e) {
+  return `${e?.name ?? 'Error'}: ${e?.message ?? e}`
+}
+
+
+/**
+ * Write `bytes` to the file at `handle` through `createWritable`, which
+ * commits on close: a write that dies part-way leaves the previous file (or
+ * none), never a truncated one.
+ *
+ * @param {object} handle the file's FileSystemFileHandle
+ * @param {Uint8Array} bytes
+ * @return {Promise<void>}
+ */
+async function writeThroughWritable(handle, bytes) {
   let writable
   try {
-    const dir = await sidecarDir(getOpfsRoot, true)
-    if (!dir) {
-      return false
-    }
-    const handle = await dir.getFileHandle(await sidecarKey(entryPath), {create: true})
     writable = await handle.createWritable()
-    await writable.write(envelope(entryPath, file, sidecar))
+    await writable.write(bytes)
     await writable.close()
-    return true
-  } catch {
+  } catch (e) {
     try {
       await writable?.abort?.()
     } catch {
       // Nothing more to release.
     }
-    return false
+    throw e
+  }
+}
+
+
+/**
+ * Write `bytes` as the file `name` in `dir` through a read-write
+ * `createSyncAccessHandle` (Share#2093), for a worker without
+ * `createWritable` — Safari before 26 (MDN browser-compat-data:
+ * `FileSystemFileHandle.createWritable` Safari 26, `createSyncAccessHandle`
+ * Safari 15.2; WebKit bug 254726). Only a dedicated worker has the method,
+ * and the sidecar save runs in the engine worker.
+ *
+ * A sync access handle writes in place, with no commit-on-close, so to keep
+ * `createWritable`'s guarantee (never a truncated sidecar under the real
+ * name) it writes a `.tmp` sibling, flushes and closes it, and only then
+ * moves it over the name: the previous sidecar is removed first, because
+ * whether `move()` replaces an existing file is not settled across engines.
+ * A failure between the remove and the move leaves no sidecar (the next
+ * open parses) and a `.tmp` the sweep retires. Each handle call is awaited:
+ * Safari 15.2–16.3 returned promises from them, later versions return
+ * values, and `await` serves both.
+ *
+ * @param {object} dir the sidecar directory
+ * @param {string} name the sidecar's file name
+ * @param {Uint8Array} bytes
+ * @return {Promise<void>}
+ */
+export async function writeThroughSyncHandle(dir, name, bytes) {
+  const tmpName = `${name}${TMP_SUFFIX}`
+  const tmp = await dir.getFileHandle(tmpName, {create: true})
+  try {
+    const access = await tmp.createSyncAccessHandle()
+    try {
+      await access.truncate(0)
+      const wrote = await access.write(bytes, {at: 0})
+      if (wrote !== bytes.byteLength) {
+        throw new Error(`short write (${wrote} of ${bytes.byteLength} bytes)`)
+      }
+      await access.flush()
+    } finally {
+      await access.close()
+    }
+    try {
+      await dir.removeEntry(name)
+    } catch (e) {
+      if (e?.name !== 'NotFoundError') {
+        throw e
+      }
+    }
+    await tmp.move(dir, name)
+  } catch (e) {
+    try {
+      await dir.removeEntry(tmpName)
+    } catch {
+      // Left for the sweep.
+    }
+    throw e
+  }
+}
+
+
+/**
+ * Persist a sidecar for this version of the entry, replacing whatever the
+ * entry's slot held — an older version's included. Written through
+ * `createWritable` where the browser has it, else through a sync access
+ * handle (writeThroughSyncHandle); either way a write that dies part-way
+ * never leaves a truncated sidecar under the real name — and a truncated
+ * one would only be refused anyway. Never throws.
+ *
+ * @param {string} entryPath the source entry's path under the OPFS root
+ * @param {Blob} file the File snapshot the model was opened from
+ * @param {Uint8Array} sidecar conway's sidecar bytes
+ * @param {function(): Promise<object>} getOpfsRoot
+ * @return {Promise<{saved: boolean, writer: (string|null), error: (string|null)}>}
+ *   `writer` is `'writable'` or `'syncAccessHandle'` for the path the write
+ *   took; `error` says why nothing was saved — `Name: message` of the
+ *   failure, so a browser without either writer reads apart from a quota
+ *   or other error on the load report (engineModelLoad.js#indexLine)
+ */
+export async function writeSidecar(entryPath, file, sidecar, getOpfsRoot) {
+  let writer = null
+  try {
+    const dir = await sidecarDir(getOpfsRoot, true)
+    if (!dir) {
+      return {saved: false, writer, error: 'no OPFS root'}
+    }
+    const name = await sidecarKey(entryPath)
+    const handle = await dir.getFileHandle(name, {create: true})
+    const bytes = envelope(entryPath, file, sidecar)
+    if (typeof handle.createWritable === 'function') {
+      writer = 'writable'
+      await writeThroughWritable(handle, bytes)
+    } else if (typeof handle.createSyncAccessHandle === 'function') {
+      writer = 'syncAccessHandle'
+      await writeThroughSyncHandle(dir, name, bytes)
+    } else {
+      // In process (a page has neither method on an OPFS file in Safari 17,
+      // and no sync access handle anywhere).
+      return {saved: false, writer, error: 'no createWritable or createSyncAccessHandle here'}
+    }
+    return {saved: true, writer, error: null}
+  } catch (e) {
+    return {saved: false, writer, error: describeError(e)}
   }
 }
 
@@ -275,6 +380,19 @@ export async function sweepSidecars(getOpfsRoot) {
     }
     for (const [name, handle] of names) {
       let keep = false
+      if (!name.endsWith('.cidx')) {
+        // A writeThroughSyncHandle `.tmp` its move never consumed, or any
+        // other stray: no sidecar is read under it. One another tab is still
+        // writing is locked by its sync access handle, and the remove below
+        // fails and leaves it.
+        try {
+          await dir.removeEntry(name)
+          removed++
+        } catch {
+          // Left for the next sweep.
+        }
+        continue
+      }
       try {
         // Only the envelope's fixed head and path are needed.
         const head = new Uint8Array(await (await handle.getFile()).slice(0, ENVELOPE_FIXED_BYTES + SWEEP_PATH_BYTES).arrayBuffer())
