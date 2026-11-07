@@ -1,5 +1,6 @@
 /* eslint-disable no-magic-numbers */
-import {BatchedMesh, Box3, BufferGeometry, Matrix4, Vector3, Vector4} from 'three'
+import {BatchedMesh, Box3, BufferGeometry, Matrix4, Scene, Vector3, Vector4} from 'three'
+import {paintStreamingSelection} from '../streamingBatchPick'
 import {clearConwayDirectLogs, getConwayDirectLogs}
   from '../../../tools/jest/conwayDirectLogCapture'
 import {IncrementalBatchedBuilder, PRESIZE_FROM_GEOMETRIES, probeSpreadLimit}
@@ -1094,6 +1095,22 @@ describe('IncrementalBatchedBuilder: pickable and paintable while streaming', ()
     builder.appendBatch([stepMesh(8, 888, []), stepMesh(9, 999, [])])
     expect([0, 1].map((batchId) => colorAt(mesh, batchId))).toEqual([[1, 0, 0], [1, 0, 0]])
     expect(colorAt(mesh, 2)).not.toEqual([1, 0, 0])
+  })
+
+  it('adopts a selection made before it existed, from the scene its root is added to', () => {
+    // Codex round 5 on #2084: selected after the index, before the first
+    // batch, there was no streaming root to paint, and nothing replayed the
+    // selection when the builder installed.
+    const scene = new Scene()
+    paintStreamingSelection(scene, {parents: [10]}, RED)
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    scene.add(builder.root)
+    builder.appendBatch([stepMesh(10, 999, [7]), stepMesh(11, 888, [9])])
+    const mesh = builder.opaque.mesh
+    expect(colorAt(mesh, 0)).toEqual([1, 0, 0])
+    expect(colorAt(mesh, 1)).not.toEqual([1, 0, 0])
+    builder.finalize()
+    expect(scene.userData.loadSelection).toBeUndefined()
   })
 
   it('an IFC row has no occurrence path', () => {

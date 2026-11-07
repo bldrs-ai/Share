@@ -43,6 +43,14 @@ export const STREAMING_BATCHES_KEY = 'streamingBatches'
 
 
 /**
+ * `scene.userData` key of the selection last painted during a load, as
+ * `{selection, color}`: what a streaming builder installed after it adopts
+ * at its first batch (IncrementalBatchedBuilder#appendBatch).
+ */
+export const LOAD_SELECTION_KEY = 'loadSelection'
+
+
+/**
  * The streaming builders' roots among the scene's top-level children.
  * `ShareIfcLoader` adds the root straight to the scene, so this never walks
  * the scene graph.
@@ -99,6 +107,14 @@ export function streamingPickOf(hit) {
  * @return {number} rows now painted
  */
 export function paintStreamingSelection(scene, selection, color) {
+  // Kept on the scene for a builder that installs later: a selection made
+  // after the index but before the first batch finds no streaming root yet,
+  // and nothing else would replay it onto the rows when they come (codex
+  // round 5 on #2084). The builder reads it at its first batch and drops it
+  // at finalize.
+  if (scene?.userData) {
+    scene.userData[LOAD_SELECTION_KEY] = color === null ? undefined : {selection, color}
+  }
   let painted = 0
   for (const root of streamingBatchRoots(scene)) {
     painted += root.userData[STREAMING_BATCHES_KEY].paintSelection(selection, color)

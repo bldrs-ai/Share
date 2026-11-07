@@ -10,7 +10,7 @@ import {
 import {forEachVectorItem} from './conwayVector'
 import {makeSurfaceMaterial} from '../lookMaterial'
 import {placedShapeBox} from '../three/robustBounds'
-import {STREAMING_BATCHES_KEY} from '../streamingBatchPick'
+import {LOAD_SELECTION_KEY, STREAMING_BATCHES_KEY} from '../streamingBatchPick'
 import {
   CoincidenceSet,
   DEFAULT_COLOR,
@@ -500,6 +500,13 @@ export class IncrementalBatchedBuilder {
    * @param {object|Array} flatMeshes delta FlatMesh source
    */
   appendBatch(flatMeshes) {
+    // A selection made before this builder existed (after the index, before
+    // the first batch) is waiting on the scene the root was added to: adopt
+    // it, so the rows written from here on are painted (paintRow_).
+    const waiting = this.loadSelection === null ? this.root.parent?.userData?.[LOAD_SELECTION_KEY] : undefined
+    if (waiting) {
+      this.paintSelection(waiting.selection, waiting.color)
+    }
     // Eviction state is a property of THIS pump call: whatever the budget
     // freed before it stays freed for its whole duration, and conway
     // re-extracts an evicted shape only when a later product maps it. So
@@ -562,6 +569,10 @@ export class IncrementalBatchedBuilder {
     // replace.
     this.paintSelection(null, null)
     delete this.root.userData[STREAMING_BATCHES_KEY]
+    // The load is over: the finished model's highlight owns the selection.
+    if (this.root.parent?.userData) {
+      delete this.root.parent.userData[LOAD_SELECTION_KEY]
+    }
     const batches = []
     for (const state of [this.opaque, this.transparent]) {
       if (state === null || state.cursor === 0) {
