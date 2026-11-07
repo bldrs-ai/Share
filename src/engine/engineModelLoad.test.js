@@ -445,6 +445,24 @@ describe('engine/engineStream helpers', () => {
     expect(view.payload.vertexData.length).toBe(3)
   })
 
+  it('previewMessage keeps a STEP payload\'s occurrence path, `[]` included, and adds none to IFC', () => {
+    const color = {x: 1, y: 0, z: 0, w: 1}
+    const root = previewMessage({expressID: 8, geometryExpressID: 30, color, occurrencePath: []}).payload
+    const placed = previewMessage({expressID: 8, geometryExpressID: 30, color, occurrencePath: [3, 4]}).payload
+    const ifc = previewMessage({expressID: 7, geometryExpressID: 70, color}).payload
+    expect(root.occurrencePath).toEqual([])
+    expect(placed.occurrencePath).toEqual([3, 4])
+    expect(placed.geometryExpressID).toBe(30)
+    expect('occurrencePath' in ifc).toBe(false)
+  })
+
+  it('previewMessage keeps an imposter\'s fill', () => {
+    const aabb = {min: [0, 0, 0], max: [1, 1, 1]}
+    const color = {x: 1, y: 0, z: 0, w: 1}
+    expect(previewMessage({expressID: 8, color, aabb, solid: true}).payload.solid).toBe(true)
+    expect('solid' in previewMessage({expressID: 8, color, aabb}).payload).toBe(false)
+  })
+
   it('snapshotStatistics keeps primitive getter values and skips a throwing one', () => {
     expect(snapshotStatistics({getTotalTime: () => 5, getVersion: () => 'IFC4', getLoadStatus: () => {
       throw new Error('x')

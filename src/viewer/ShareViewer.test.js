@@ -30,13 +30,16 @@ jest.mock('three', () => jest.requireActual('three'))
 // before `./ShareViewer` resolves those deps. The hoisted
 // `jest.mock('three', requireActual)` above still wins for three.
 import '../../__mocks__/shareViewerTestHarness'
-import {BufferAttribute, BufferGeometry, Color, Group, Mesh, Scene} from 'three'
+import {BufferAttribute, BufferGeometry, Color, Group, Mesh, MeshBasicMaterial, Scene} from 'three'
 import {ShareViewer} from './ShareViewer'
 import {flatMeshToBatchedModel} from './ifc/flatMeshToBatchedModel'
 import {instanceMapFromGeometry, instanceMapFromOrderedPlacedRanges} from './ifc/IfcInstanceMap'
 import Selector from './three/Selector'
 import ThreeContext from './three/ThreeContext'
 import {occurrencePathKey} from '../utils/occurrencePaths'
+import {
+  LOAD_PREVIEW_GROUP_KEY, PREVIEW_EXPRESS_ID_KEY, PREVIEW_GEOMETRY_ID_KEY, PREVIEW_OCCURRENCE_PATH_KEY,
+} from './previewSelection'
 
 
 const TEST_MODEL_ID = 7
@@ -549,9 +552,9 @@ describe('viewer/ShareViewer getRootLevelInstances', () => {
   it('is empty for a model with no occurrence data (IFC) and for an unknown model', () => {
     const ifc = makeOccurrenceMesh([{parentExpressId: 100, triangleCount: 1}])
     expect(ShareViewer.prototype.getRootLevelInstances.call(makeResolverViewer(ifc), 0))
-      .toEqual({instanceIds: [], parentExpressIds: [], instanceOwners: []})
+      .toEqual({instanceIds: [], parentExpressIds: [], instanceOwners: [], instanceGeometryIds: []})
     expect(ShareViewer.prototype.getRootLevelInstances.call(makeResolverViewer(ifc), 3))
-      .toEqual({instanceIds: [], parentExpressIds: [], instanceOwners: []})
+      .toEqual({instanceIds: [], parentExpressIds: [], instanceOwners: [], instanceGeometryIds: []})
   })
 
   it('reads the batched render path off its per-batch tables', () => {
@@ -560,8 +563,11 @@ describe('viewer/ShareViewer getRootLevelInstances', () => {
     batched.instanceOccurrencePaths = [[], [10], []]
     batched.instanceOccurrenceIds = [40, 41, 42]
     batched.instanceParents = [8, 100, 8]
+    batched.instanceGeometryIds = [30, 31, 32]
     const found = ShareViewer.prototype.getRootLevelInstances.call(makeResolverViewer(batched), 0)
-    expect(found).toEqual({instanceIds: [40, 42], parentExpressIds: [8], instanceOwners: [8, 8]})
+    expect(found).toEqual({
+      instanceIds: [40, 42], parentExpressIds: [8], instanceOwners: [8, 8], instanceGeometryIds: [30, 32],
+    })
   })
 })
 
@@ -884,6 +890,62 @@ describe('viewer/ShareViewer setSelection on a model without expressIdPicking', 
 })
 
 
+describe('viewer/ShareViewer setPreviewSelection', () => {
+  // Nothing end-to-end reaches a STEP preview mesh while conway parks its
+  // parse-end tick (conway#773), so this is what holds the path and the solid
+  // on their way to the preview paint.
+  /**
+   * @param {Array<object>} meshes preview meshes
+   * @param {object} selection the selection material
+   * @return {object} a viewer over a scene holding them in a load preview group
+   */
+  function previewViewer(meshes, selection) {
+    const scene = new Scene()
+    const group = new Group()
+    group.userData[LOAD_PREVIEW_GROUP_KEY] = true
+    meshes.forEach((mesh) => group.add(mesh))
+    scene.add(group)
+    const viewer = Object.create(ShareViewer.prototype)
+    viewer.context = {getScene: () => scene, getRenderDemand: () => null}
+    viewer.selector = {getSelectionMaterial: () => selection}
+    return viewer
+  }
+
+  /**
+   * @param {Array<number>} path
+   * @param {number} geometryId
+   * @return {object} a STEP preview mesh of part 8
+   */
+  function stepPreviewMesh(path, geometryId) {
+    const mesh = new Mesh(new BufferGeometry(), new MeshBasicMaterial())
+    mesh.userData[PREVIEW_EXPRESS_ID_KEY] = 8
+    mesh.userData[PREVIEW_OCCURRENCE_PATH_KEY] = path
+    mesh.userData[PREVIEW_GEOMETRY_ID_KEY] = geometryId
+    return mesh
+  }
+
+  it('paints the selected occurrence of a reused part, not every reuse', () => {
+    const selection = new MeshBasicMaterial()
+    const picked = stepPreviewMesh([10, 20], 30)
+    const reuse = stepPreviewMesh([11, 20], 30)
+    const viewer = previewViewer([picked, reuse], selection)
+    expect(viewer.setPreviewSelection([8], {occurrencePath: [10, 20]})).toBe(1)
+    expect(picked.material).toBe(selection)
+    expect(reuse.material).not.toBe(selection)
+  })
+
+  it('narrows the occurrence to the selected body', () => {
+    const selection = new MeshBasicMaterial()
+    const body = stepPreviewMesh([10], 30)
+    const sibling = stepPreviewMesh([10], 31)
+    const viewer = previewViewer([body, sibling], selection)
+    expect(viewer.setPreviewSelection([10], {occurrencePath: [10], solidExpressId: 30})).toBe(1)
+    expect(body.material).toBe(selection)
+    expect(sibling.material).not.toBe(selection)
+  })
+})
+
+
 describe('viewer/ShareViewer per-instance queries while a load streams (no model yet)', () => {
   // Codex on #2084: a shift-pick of a root-level STEP shell mid-pump toggles
   // through getRootLevelInstances(0), which found no model 0 and answered
@@ -912,7 +974,9 @@ describe('viewer/ShareViewer per-instance queries while a load streams (no model
 
   it('lists the streaming rows at the root, with their owners', () => {
     expect(ShareViewer.prototype.getRootLevelInstances.call(streamingViewer(), 0))
-      .toEqual({instanceIds: [40, 42], parentExpressIds: [8, 3008], instanceOwners: [8, 3008]})
+      .toEqual({
+        instanceIds: [40, 42], parentExpressIds: [8, 3008], instanceOwners: [8, 3008], instanceGeometryIds: [1, 3],
+      })
   })
 
   it('resolves an occurrence to the streaming rows at and under it', () => {
@@ -925,6 +989,6 @@ describe('viewer/ShareViewer per-instance queries while a load streams (no model
     viewer.IFC = {context: {items: {ifcModels: []}}}
     viewer.context = {getScene: () => new Scene()}
     expect(ShareViewer.prototype.getRootLevelInstances.call(viewer, 0))
-      .toEqual({instanceIds: [], parentExpressIds: [], instanceOwners: []})
+      .toEqual({instanceIds: [], parentExpressIds: [], instanceOwners: [], instanceGeometryIds: []})
   })
 })

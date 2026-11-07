@@ -1929,10 +1929,16 @@ export default function CadView({
     // carries. Resolved before the shift branch, which needs it too.
     const rootRow = (isRootLevel && occurrencePath === null) ?
       findRootLevelOwnerNode(rootEltForPick, parentExpressId) : null
-    // A root-level shell toggles by its instance; a preview pick has none
-    // yet, so it takes the row toggle below, as a shift-click on the row does.
-    if (isShiftKeyDown && rootRow && instanceId !== null && instanceId !== undefined) {
-      toggleRootLevelInstance(rootRow, targetId, instanceId)
+    // A STEP preview mesh carries no instance. At the root, where no path
+    // tells its shell from the product's others, its owner and geometry name
+    // the durable instance it previews, once that has streamed in; so the
+    // pick narrows to the shell clicked, as a durable pick does (#1909),
+    // instead of reading as a click on the product's row.
+    const hasInstance = (id) => id !== null && id !== undefined
+    const pickedInstanceId = (!hasInstance(instanceId) && rootRow && pickedGeometryId !== null) ?
+      rootLevelInstanceOf(parentExpressId, pickedGeometryId) : instanceId
+    if (isShiftKeyDown && rootRow && hasInstance(pickedInstanceId)) {
+      toggleRootLevelInstance(rootRow, targetId, pickedInstanceId)
       return
     }
     if (isShiftKeyDown) {
@@ -1941,9 +1947,12 @@ export default function CadView({
       // multi-selection's rows back to their instances for the highlight.
       // An anonymous piece has no row to add, so it doesn't join.
       // A STEP part-level pick's target is its geometry's product id, which is
-      // no row; the row is the occurrence's own node.
-      const rowId = (occurrencePath && occurrencePath.length > 0) ?
-        (solidExpressId ?? occurrencePath[occurrencePath.length - 1]) : targetId
+      // no row; the row is the occurrence's own node. A root-level pick with
+      // no instance to toggle (a preview whose shell hasn't streamed in)
+      // toggles the product's row, which its owner id is not (#1909).
+      const rowId = rootRow ? rootRow.expressID :
+        (occurrencePath && occurrencePath.length > 0) ?
+          (solidExpressId ?? occurrencePath[occurrencePath.length - 1]) : targetId
       if (transientGeometryId === null) {
         elementSelection(viewer, elementsById, selectItemsInScene, true, rowId)
       }
@@ -1953,12 +1962,12 @@ export default function CadView({
       materializeTransientNode(occurrencePath, transientGeometryId)
     }
     selectItemsInScene(
-      [targetId], true, instanceId === null || instanceId === undefined ? [] : [instanceId],
+      [targetId], true, hasInstance(pickedInstanceId) ? [pickedInstanceId] : [],
       occurrencePath, solidExpressId, rootRow ? [rootRow.expressID] : null)
     // The instance a ray hit is the selection's exact narrowing: it keeps to
     // that instance while siblings stream in, and through the end-of-load
     // repaint (reapplySelectionToGeometry), as a pick on the finished model.
-    useStore.getState().setSelectedInstancesExact(instanceId !== null && instanceId !== undefined)
+    useStore.getState().setSelectedInstancesExact(hasInstance(pickedInstanceId))
   }
 
 
@@ -2433,14 +2442,34 @@ export default function CadView({
 
 
   /**
+   * The root-level instance with this owner and geometry: the durable
+   * instance a root-level STEP preview mesh draws, which the mesh itself
+   * can't name (its payload has no instance id).
+   *
+   * @param {number} ownerExpressId the preview mesh's owner (`expressID`)
+   * @param {number} geometryExpressId its geometry (`geometryExpressID`)
+   * @return {number|null} the instance id, or null until one has streamed in
+   */
+  function rootLevelInstanceOf(ownerExpressId, geometryExpressId) {
+    const {instanceIds, instanceOwners, instanceGeometryIds = []} = rootLevelInstances()
+    const at = instanceIds.findIndex((id, i) =>
+      Number(instanceOwners[i]) === Number(ownerExpressId) &&
+      instanceGeometryIds[i] !== null && instanceGeometryIds[i] !== undefined &&
+      Number(instanceGeometryIds[i]) === Number(geometryExpressId))
+    return at === -1 ? null : instanceIds[at]
+  }
+
+
+  /**
    * The model's root-level instances (an empty path), the ids that own them
-   * (per instance in `instanceOwners`), and the instances of every occurrence
-   * below the sole root, or below a given part of a multi-root file
+   * (per instance in `instanceOwners`) and their geometry ids
+   * (`instanceGeometryIds`), and the instances of every occurrence below the
+   * sole root, or below a given part of a multi-root file
    * (`descendantInstanceIdsOf`); empty where the viewer can't say.
    *
    * @return {{instanceIds: Array<number>, parentExpressIds: Array<number>,
-   *   instanceOwners: Array<number>, descendantInstanceIds: Array<number>,
-   *   descendantInstanceIdsOf: Function}}
+   *   instanceOwners: Array<number>, instanceGeometryIds: Array<number|null>,
+   *   descendantInstanceIds: Array<number>, descendantInstanceIdsOf: Function}}
    */
   function rootLevelInstances() {
     const descendantsOf = (product) => [...new Set((product?.children ?? []).flatMap((child) =>
@@ -2449,7 +2478,7 @@ export default function CadView({
         []))]
     if (typeof viewer?.getRootLevelInstances !== 'function') {
       return {
-        instanceIds: [], parentExpressIds: [], instanceOwners: [],
+        instanceIds: [], parentExpressIds: [], instanceOwners: [], instanceGeometryIds: [],
         descendantInstanceIds: [], descendantInstanceIdsOf: () => [],
       }
     }

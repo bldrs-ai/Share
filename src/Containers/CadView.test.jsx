@@ -2113,6 +2113,68 @@ describe('CadView', () => {
           [leaf], {instanceIds: [], occurrencePath: path, solidExpressId: null, instancesExact: false}))
       })
 
+      describe('a root-level STEP preview hit once the tree is up (#1909)', () => {
+        // A one-product assembly: the tree's sole root is the product row
+        // (empty path); its own shells are owned by PDS 8, which is no row.
+        /* eslint-disable no-magic-numbers */
+        const productRow = 500
+        const [shellA, shellB] = [40, 41]
+        const [shapeA, shapeB, unstreamedShape] = [30, 31, 99]
+        /* eslint-enable no-magic-numbers */
+        const stepTree = () => ({
+          expressID: productRow, type: 'product', name: 'P', occurrencePath: [],
+          children: [{expressID: productRow + 1, type: 'product', name: 'Q', occurrencePath: [productRow + 1], children: []}],
+        })
+        const stepModel = () => ({...makeIndexedModel(),
+          ifcManager: {getSpatialStructure: jest.fn(stepTree)}, getSpatialStructure: jest.fn(stepTree)})
+        let rootLevelSpy
+
+        beforeEach(() => {
+          rootLevelSpy = jest.spyOn(ShareViewer.prototype, 'getRootLevelInstances').mockReturnValue({
+            instanceIds: [shellA, shellB], parentExpressIds: [8], instanceOwners: [8, 8],
+            instanceGeometryIds: [shapeA, shapeB],
+          })
+        })
+
+        afterEach(() => rootLevelSpy.mockRestore())
+
+        /**
+         * Double-click a root-level preview shell of owner 8.
+         *
+         * @param {number} geometryId the shell's geometry id
+         * @param {boolean} shiftKey
+         */
+        async function doubleClickRootShell(geometryId, shiftKey) {
+          castRaySpy.mockReturnValue([
+            {object: {userData: {previewExpressID: 8, previewOccurrencePath: [], previewGeometryID: geometryId}}},
+          ])
+          await act(() => window.ondblclick({target: {tagName: 'CANVAS'}, shiftKey}))
+          await actAsyncFlush()
+        }
+
+        it('narrows to the durable shell it previews, not the whole product', async () => {
+          const {result} = renderHook(() => useStore((state) => state))
+          await mountOnParsingLoad(result, stepModel())
+          await act(() => releaseIndex())
+          await actAsyncFlush()
+          await waitFor(() => expect(result.current.rootElement?.expressID).toBe(productRow))
+          await doubleClickRootShell(shapeB, false)
+          expect(result.current.selectedAnchorIds).toEqual([`${productRow}`])
+          expect(result.current.selectedInstanceIds).toEqual([shellB])
+          expect(result.current.selectedInstancesExact).toBe(true)
+        })
+
+        it('with no shell streamed in yet, a shift-click toggles the product\'s row, not its owner id', async () => {
+          const {result} = renderHook(() => useStore((state) => state))
+          await mountOnParsingLoad(result, stepModel())
+          await act(() => releaseIndex())
+          await actAsyncFlush()
+          await waitFor(() => expect(result.current.rootElement?.expressID).toBe(productRow))
+          await doubleClickRootShell(unstreamedShape, true)
+          expect(result.current.selectedAnchorIds).toContain(`${productRow}`)
+        })
+      })
+
       it('paints the pick on the finished model', async () => {
         const {result} = renderHook(() => useStore((state) => state))
         const setSelectionSpy = jest.spyOn(ShareViewer.prototype, 'setSelection')
