@@ -325,6 +325,7 @@ export function makeStoreFunnel() {
       selectedSolidExpressId: solidExpressId,
       // The funnel's instances are derived unless the pick funnel says so.
       selectedInstancesExact: false,
+      selectedRootGeometryId: null,
     })
   })
 }

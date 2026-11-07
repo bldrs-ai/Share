@@ -31,6 +31,7 @@ import {classifyOpenFailure, openDeferred} from '../loader/conwayOpen'
 import {ENGINE_PROTOCOL_VERSION, Ev, Op, serializeError} from './protocol'
 import {openSourceStore} from './engineSources'
 import {makeBatchEncoder, previewMessage, snapshotStatistics} from './engineStream'
+import {enableStepPreviewFinishParse} from '../viewer/ifc/pumpTestSeams'
 
 
 /**
@@ -421,7 +422,7 @@ export function createEngineHandler({
    * OPEN's body, once the one-model slot is claimed (see `opening`).
    *
    * @param {object} source `{file}` or `{bytes}`
-   * @param {object|null} stream `{previews, batchSize, startPaused}`, or null
+   * @param {object|null} stream `{previews, batchSize, startPaused, previewFinishParse}`, or null
    *   for an index-only open
    * @param {string|null} format `'ifc'` or `'step'` (engineModelLoad.js
    *   #engineFormatOf), or null when the caller did not say. A label only:
@@ -445,6 +446,11 @@ export function createEngineHandler({
           // Best-effort, as on the main thread: a preview must never break
           // the load (ShareIfcLoader#parse's onPreviewMesh).
         }
+      }
+      // Test-only (pumpTestSeams.js#testStepPreviewFinishParse): the page
+      // asked for conway's parked parse-end preview tick.
+      if (stream.previewFinishParse === true) {
+        enableStepPreviewFinishParse()
       }
     }
     const t0 = now()

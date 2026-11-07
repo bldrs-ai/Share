@@ -350,14 +350,17 @@ export class IncrementalBatchedBuilder {
    *    named;
    *  - otherwise the rows whose parent (owner) is selected: IFC, and a
    *    pathless STEP selection such as a top-level product, whose owners the
-   *    funnel adds to the selected elements.
+   *    funnel adds to the selected elements. A root-level row (path `[]`)
+   *    of a root-level pick that named its shell (`rootGeometryId`) also
+   *    has to be that shell: the product's root shells share one owner
+   *    (codex on #2088).
    * Instances that are NOT a pick's (resolved from a row, an occurrence or a
    * link) never decide: they are the rows written SO FAR, and letting them
    * decide left the rows that streamed in later unpainted (codex rounds 2
    * and 4 on #2084).
    *
    * @param {object|null} selection `{parents, instances, instancesExact,
-   *   occurrencePath, solidExpressId}`, each optional; null clears
+   *   occurrencePath, solidExpressId, rootGeometryId}`, each optional; null clears
    * @param {object|null} color three.js Color; null clears
    * @return {number} rows painted
    */
@@ -367,9 +370,10 @@ export class IncrementalBatchedBuilder {
     const path = Array.isArray(selection?.occurrencePath) && selection.occurrencePath.length > 0 ?
       selection.occurrencePath : null
     const solid = Number.isFinite(selection?.solidExpressId) ? selection.solidExpressId : null
+    const rootGeometry = Number.isFinite(selection?.rootGeometryId) ? selection.rootGeometryId : null
     const isEmpty = color === null || (parents.size === 0 && instances.size === 0 && path === null)
     const exact = selection?.instancesExact === true && instances.size > 0
-    this.loadSelection = isEmpty ? null : {parents, instances, exact, path, solid}
+    this.loadSelection = isEmpty ? null : {parents, instances, exact, path, solid, rootGeometry}
     this.loadSelectionColor = isEmpty ? null : color
     let painted = 0
     for (const state of [this.opaque, this.transparent]) {
@@ -430,6 +434,11 @@ export class IncrementalBatchedBuilder {
     if (selection.path !== null) {
       return isPathPrefix(selection.path, state.instanceOccurrencePaths[row]) &&
         (selection.solid === null || state.instanceGeometryIds[row] === selection.solid)
+    }
+    const rowPath = state.instanceOccurrencePaths[row]
+    if (selection.rootGeometry !== null && Array.isArray(rowPath) && rowPath.length === 0) {
+      return selection.parents.has(state.instanceParents[row]) &&
+        state.instanceGeometryIds[row] === selection.rootGeometry
     }
     return selection.parents.has(state.instanceParents[row])
   }

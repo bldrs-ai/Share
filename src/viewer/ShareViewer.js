@@ -1876,10 +1876,14 @@ export class ShareViewer {
    *   named body, when the selection is a body
    * @param {boolean} [narrowing.instancesExact] `instanceIds` are a scene
    *   pick's own, which then decide alone
+   * @param {number|null} [narrowing.rootGeometryId] the shell a root-level
+   *   STEP pick hit (NavTreeSlice#selectedRootGeometryId), which alone tells
+   *   it from the product's other root shells
    * @return {number} preview meshes and streaming rows painted
    */
   setPreviewSelection(expressIds, {
     instanceIds = [], occurrencePath = null, solidExpressId = null, instancesExact = false,
+    rootGeometryId = null,
   } = {}) {
     let scene = null
     try {
@@ -1892,9 +1896,9 @@ export class ShareViewer {
       return 0
     }
     const material = this.selector?.getSelectionMaterial?.() ?? null
-    const painted = paintPreviewSelection(scene, expressIds, material, occurrencePath, solidExpressId) +
+    const painted = paintPreviewSelection(scene, expressIds, material, occurrencePath, solidExpressId, rootGeometryId) +
       paintStreamingSelection(scene,
-        {parents: expressIds, instances: instanceIds, occurrencePath, solidExpressId, instancesExact},
+        {parents: expressIds, instances: instanceIds, occurrencePath, solidExpressId, instancesExact, rootGeometryId},
         material?.color ?? null)
     // The scene changed under a viewer that may be painting on demand.
     this.context.getRenderDemand?.()?.invalidate()

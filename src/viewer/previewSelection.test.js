@@ -170,6 +170,25 @@ describe('viewer/previewSelection', () => {
       expect(sibling.material).toBe(red)
     })
 
+    it('paints only the root-level shell a pick named, not its siblings under the same owner', () => {
+      // Codex on #2088: root shells sit at `[]`, which no selected path names,
+      // and share their owner; the pick's geometry tells them apart.
+      const red = new MeshBasicMaterial()
+      const selection = new MeshBasicMaterial()
+      const picked = previewMesh(8, red)
+      picked.userData[PREVIEW_OCCURRENCE_PATH_KEY] = []
+      picked.userData[PREVIEW_GEOMETRY_ID_KEY] = 31
+      const sibling = previewMesh(8, red)
+      sibling.userData[PREVIEW_OCCURRENCE_PATH_KEY] = []
+      sibling.userData[PREVIEW_GEOMETRY_ID_KEY] = 30
+      const {scene} = sceneWithPreview([picked, sibling])
+      expect(paintPreviewSelection(scene, [8], selection, null, null, 31)).toBe(1)
+      expect(picked.material).toBe(selection)
+      expect(sibling.material).toBe(red)
+      // A selection that names no shell (the product's row) takes them all.
+      expect(paintPreviewSelection(scene, [8], selection)).toBe(2)
+    })
+
     it('without a selection material restores what is painted and paints nothing', () => {
       const red = new MeshBasicMaterial()
       const selection = new MeshBasicMaterial()

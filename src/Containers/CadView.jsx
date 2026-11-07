@@ -1503,14 +1503,27 @@ export default function CadView({
     // with no occurrence, selectItemsInScene resolves the anchors itself. A
     // scene pick's exact instances are kept as they are: the finished model
     // narrows a pick to the instance it hit.
-    const isExact = state.selectedInstancesExact === true &&
+    let isExact = state.selectedInstancesExact === true &&
       Array.isArray(state.selectedInstanceIds) && state.selectedInstanceIds.length > 0
-    const instanceIds = isExact ? state.selectedInstanceIds :
+    let instanceIds = isExact ? state.selectedInstanceIds :
       (occurrencePath === null ? [] : occurrenceInstanceIds(occurrencePath, true, solidExpressId))
     const anchors = Array.isArray(state.selectedAnchorIds) && state.selectedAnchorIds.length > 0 ?
       state.selectedAnchorIds.map(Number) : null
+    const rootGeometryId = state.selectedRootGeometryId ?? null
+    // A root-level pick made before its shell's durable instance existed (a
+    // STEP preview pick, #2089) is the product's row plus the shell's
+    // geometry. Now there are instances: the shell it hit, as a pick on the
+    // finished model selects it (#1909), not the whole product the row means.
+    if (!isExact && occurrencePath === null && rootGeometryId !== null) {
+      const shells = rootLevelShellInstances(selected, rootGeometryId)
+      if (shells.length > 0) {
+        instanceIds = shells
+        isExact = true
+      }
+    }
     selectItemsInScene(selected.map(Number), false, instanceIds, occurrencePath, solidExpressId, anchors)
     useStore.getState().setSelectedInstancesExact(isExact)
+    useStore.getState().setSelectedRootGeometryId(rootGeometryId)
   }
 
 
@@ -1602,6 +1615,10 @@ export default function CadView({
       selectItemsInScene([pick.parentExpressId], false, isRowPick ? [pick.instanceId] : [],
         pick.occurrencePath?.length > 0 ? pick.occurrencePath : null)
       useStore.getState().setSelectedInstancesExact(isRowPick)
+      // A root-level shell (`[]`): no path tells it from the product's other
+      // shells, which share its owner; its geometry does.
+      const isRootLevel = Array.isArray(pick.occurrencePath) && pick.occurrencePath.length === 0
+      useStore.getState().setSelectedRootGeometryId(isRootLevel ? (pick.geometryId ?? null) : null)
       return
     }
     pendingPreviewPickRef.current = null
@@ -1968,6 +1985,9 @@ export default function CadView({
     // that instance while siblings stream in, and through the end-of-load
     // repaint (reapplySelectionToGeometry), as a pick on the finished model.
     useStore.getState().setSelectedInstancesExact(hasInstance(pickedInstanceId))
+    // The shell a root-level pick hit, for the load-time paint (NavTreeSlice
+    // #selectedRootGeometryId).
+    useStore.getState().setSelectedRootGeometryId(rootRow ? pickedGeometryId : null)
   }
 
 
@@ -2212,6 +2232,7 @@ export default function CadView({
       setSelectedInstanceIds(instanceIds)
       // Derived, unless the pick funnel says otherwise once this returns.
       useStore.getState().setSelectedInstancesExact(false)
+      useStore.getState().setSelectedRootGeometryId(null)
       // STEP per-occurrence key: a reused part's occurrences share one
       // expressID, so this disambiguates which NavTree node to highlight.
       // Every non-occurrence caller passes null, clearing any stale path.
@@ -2428,11 +2449,15 @@ export default function CadView({
     // shell(s) clicked; re-selecting would widen that to every root-level
     // instance. Only a root-level instance in the selection proves that: a
     // row click on the root (anchor and URL, but no instances) comes through
-    // here too, and still needs its geometry.
+    // here too, and still needs its geometry. So does the shell a root-level
+    // pick named before its instance had streamed in (a STEP preview pick:
+    // NavTreeSlice#selectedRootGeometryId, which a row click clears); the
+    // end-of-load repaint narrows that to the shell (#2089).
     const held = useStore.getState()
     const anchors = held.selectedAnchorIds ?? []
     const isSelectedAlready = anchors.length === 1 && anchors[0] === `${rootRow.expressID}` &&
-      (held.selectedInstanceIds ?? []).some((id) => rootLevel.instanceIds.includes(id))
+      ((held.selectedInstanceIds ?? []).some((id) => rootLevel.instanceIds.includes(id)) ||
+        (held.selectedRootGeometryId ?? null) !== null)
     if (!force && isSelectedAlready) {
       return
     }
@@ -2451,12 +2476,26 @@ export default function CadView({
    * @return {number|null} the instance id, or null until one has streamed in
    */
   function rootLevelInstanceOf(ownerExpressId, geometryExpressId) {
+    return rootLevelShellInstances([ownerExpressId], geometryExpressId)[0] ?? null
+  }
+
+
+  /**
+   * The root-level instances of `geometryExpressId` owned by any of
+   * `ownerIds`: the shell a root-level pick hit, wherever it is placed at the
+   * root.
+   *
+   * @param {Array<number|string>} ownerIds candidate owners (the selected ids)
+   * @param {number} geometryExpressId the shell's geometry
+   * @return {Array<number>} instance ids, empty until one has streamed in
+   */
+  function rootLevelShellInstances(ownerIds, geometryExpressId) {
+    const owners = new Set(ownerIds.map(Number))
     const {instanceIds, instanceOwners, instanceGeometryIds = []} = rootLevelInstances()
-    const at = instanceIds.findIndex((id, i) =>
-      Number(instanceOwners[i]) === Number(ownerExpressId) &&
+    return instanceIds.filter((id, i) =>
+      owners.has(Number(instanceOwners[i])) &&
       instanceGeometryIds[i] !== null && instanceGeometryIds[i] !== undefined &&
       Number(instanceGeometryIds[i]) === Number(geometryExpressId))
-    return at === -1 ? null : instanceIds[at]
   }
 
 
@@ -2702,6 +2741,7 @@ export default function CadView({
         occurrencePath: useStore.getState().selectedOccurrencePath ?? null,
         solidExpressId: useStore.getState().selectedSolidExpressId ?? null,
         instancesExact: useStore.getState().selectedInstancesExact === true,
+        rootGeometryId: useStore.getState().selectedRootGeometryId ?? null,
       })
       // Per-instance highlight (Conway-direct): if the click handler
       // tagged us with a specific PlacedGeometry's synthetic ID,

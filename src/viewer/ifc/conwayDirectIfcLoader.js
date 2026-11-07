@@ -60,7 +60,7 @@ import {beginOpenAttempt, conwayOpenFailure, conwayRefusedSchema, openModelFailu
 import debug, {WARN} from '../../utils/debug'
 import {attachInstanceMapSubsets} from '../three/elementSubsets'
 import {instanceMapFromGeometry} from './IfcInstanceMap'
-import {testPumpBatchSize} from './pumpTestSeams'
+import {enableStepPreviewFinishParse, testPumpBatchSize, testStepPreviewFinishParse} from './pumpTestSeams'
 
 
 /**
@@ -199,6 +199,9 @@ export async function parseIfcWithConway(
       // callback to an engine without the channel is harmless (unknown
       // settings are ignored), so no feature detection is needed here.
       deferSettings.ON_PREVIEW_MESH = onPreviewMesh
+      if (testStepPreviewFinishParse()) {
+        enableStepPreviewFinishParse()
+      }
     }
     // Did the open land on a WINDOWED source — bytes paged on demand out of
     // an OPFS/Blob store — rather than a resident buffer? Load-bearing for

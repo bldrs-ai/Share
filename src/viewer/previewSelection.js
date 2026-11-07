@@ -133,7 +133,10 @@ export function previewOccurrencePickOf(hit) {
  * alone — at or under the path, narrowed to `solidExpressId` when the
  * selection is one body — as the streaming rows are
  * (`incrementalBatchedBuilder.js#isLoadSelected_`). A mesh with no path (IFC)
- * is still painted by its element id.
+ * is still painted by its element id. A ROOT-LEVEL STEP mesh (path `[]`,
+ * which no selected path can name) is painted by its owner and, when the
+ * pick named one, its geometry: `rootGeometryId`, so a pick of one root
+ * shell does not light its siblings, which share the owner.
  *
  * @param {object} scene three.js scene
  * @param {Array<number|string>} expressIds the selection
@@ -141,14 +144,20 @@ export function previewOccurrencePickOf(hit) {
  *   (no selector yet) restores everything and paints nothing
  * @param {Array<number>|null} [occurrencePath] a selected STEP occurrence
  * @param {number|null} [solidExpressId] the occurrence's one selected body
+ * @param {number|null} [rootGeometryId] the shell a root-level pick hit
  * @return {number} preview meshes now painted
  */
-export function paintPreviewSelection(scene, expressIds, material, occurrencePath = null, solidExpressId = null) {
+export function paintPreviewSelection(
+  scene, expressIds, material, occurrencePath = null, solidExpressId = null, rootGeometryId = null) {
   const wanted = new Set((expressIds ?? []).map(Number))
   const path = Array.isArray(occurrencePath) && occurrencePath.length > 0 ? occurrencePath.map(Number) : null
   const solid = solidExpressId === null || solidExpressId === undefined ? null : Number(solidExpressId)
+  const rootGeometry = rootGeometryId === null || rootGeometryId === undefined ? null : Number(rootGeometryId)
   const isSelected = (userData, id) => {
     const meshPath = userData[PREVIEW_OCCURRENCE_PATH_KEY]
+    if (Array.isArray(meshPath) && meshPath.length === 0 && rootGeometry !== null) {
+      return wanted.has(id) && Number(userData[PREVIEW_GEOMETRY_ID_KEY]) === rootGeometry
+    }
     if (path === null || !Array.isArray(meshPath)) {
       return wanted.has(id)
     }

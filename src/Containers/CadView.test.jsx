@@ -2042,7 +2042,7 @@ describe('CadView', () => {
         expect(result.current.selectedElement).toBeNull()
         expect(indexedModel.getItemProperties).not.toHaveBeenCalled()
         await waitFor(() => expect(previewPaintSpy).toHaveBeenLastCalledWith(
-          [leaf], {instanceIds: [], occurrencePath: null, solidExpressId: null, instancesExact: false}))
+          [leaf], {instanceIds: [], occurrencePath: null, solidExpressId: null, instancesExact: false, rootGeometryId: null}))
         const navigationsBeforeIndex = mockedUseNavigate.mock.calls.length
 
         await act(() => releaseIndex())
@@ -2076,7 +2076,7 @@ describe('CadView', () => {
         expect(result.current.selectedElements).toEqual([`${leaf}`])
         expect(result.current.selectedInstanceIds).toEqual([instance])
         await waitFor(() => expect(previewPaintSpy).toHaveBeenLastCalledWith(
-          [leaf], {instanceIds: [instance], occurrencePath: null, solidExpressId: null, instancesExact: true}))
+          [leaf], {instanceIds: [instance], occurrencePath: null, solidExpressId: null, instancesExact: true, rootGeometryId: null}))
 
         // At the index, the finished model's per-instance funnel takes it.
         await act(() => releaseIndex())
@@ -2110,7 +2110,7 @@ describe('CadView', () => {
         expect(result.current.selectedInstanceIds).toEqual([])
         expect(result.current.selectedInstancesExact).toBe(false)
         await waitFor(() => expect(previewPaintSpy).toHaveBeenLastCalledWith(
-          [leaf], {instanceIds: [], occurrencePath: path, solidExpressId: null, instancesExact: false}))
+          [leaf], {instanceIds: [], occurrencePath: path, solidExpressId: null, instancesExact: false, rootGeometryId: null}))
       })
 
       describe('a root-level STEP preview hit once the tree is up (#1909)', () => {
@@ -2162,6 +2162,47 @@ describe('CadView', () => {
           expect(result.current.selectedAnchorIds).toEqual([`${productRow}`])
           expect(result.current.selectedInstanceIds).toEqual([shellB])
           expect(result.current.selectedInstancesExact).toBe(true)
+          // The load-time paint is told which root shell (codex on #2088).
+          expect(result.current.selectedRootGeometryId).toBe(shapeB)
+          await waitFor(() => expect(previewPaintSpy).toHaveBeenLastCalledWith(
+            expect.anything(), expect.objectContaining({rootGeometryId: shapeB})))
+        })
+
+        it('picked before its shell streamed in, the end of the load narrows it to that shell (#2089)', async () => {
+          const {result} = renderHook(() => useStore((state) => state))
+          const shells = {
+            instanceIds: [shellA, shellB], parentExpressIds: [8], instanceOwners: [8, 8],
+            instanceGeometryIds: [shapeA, shapeB],
+          }
+          // Nothing durable at the root yet: the pick and the tree have no shell.
+          rootLevelSpy.mockReturnValue({instanceIds: [], parentExpressIds: [], instanceOwners: [], instanceGeometryIds: []})
+          await mountOnParsingLoad(result, stepModel())
+          await doubleClickRootShell(shapeB, false)
+          await act(() => releaseIndex())
+          await actAsyncFlush()
+          await waitFor(() => expect(result.current.rootElement?.expressID).toBe(productRow))
+          expect(result.current.selectedInstanceIds).toEqual([])
+          expect(result.current.selectedRootGeometryId).toBe(shapeB)
+
+          rootLevelSpy.mockReturnValue(shells)
+          await waitFor(() => expect(finishGeometry).toBeDefined())
+          await act(() => finishGeometry())
+          await actAsyncFlush()
+          await waitFor(() => expect(result.current.isModelReady).toBe(true))
+          expect(result.current.selectedInstanceIds).toEqual([shellB])
+          expect(result.current.selectedInstancesExact).toBe(true)
+          expect(result.current.selectedAnchorIds).toEqual([`${productRow}`])
+        })
+
+        it('before the tree, the pick carries its shell\'s geometry to the load-time paint', async () => {
+          const {result} = renderHook(() => useStore((state) => state))
+          await mountOnParsingLoad(result, stepModel())
+          await doubleClickRootShell(shapeA, false)
+          expect(result.current.rootElement).toBeNull()
+          expect(result.current.selectedElements).toEqual(['8'])
+          expect(result.current.selectedRootGeometryId).toBe(shapeA)
+          await waitFor(() => expect(previewPaintSpy).toHaveBeenLastCalledWith(
+            [8], expect.objectContaining({occurrencePath: null, rootGeometryId: shapeA})))
         })
 
         it('with no shell streamed in yet, a shift-click toggles the product\'s row, not its owner id', async () => {

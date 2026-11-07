@@ -934,6 +934,16 @@ describe('viewer/ShareViewer setPreviewSelection', () => {
     expect(reuse.material).not.toBe(selection)
   })
 
+  it('paints only the root-level shell the pick named', () => {
+    const selection = new MeshBasicMaterial()
+    const picked = stepPreviewMesh([], 31)
+    const sibling = stepPreviewMesh([], 30)
+    const viewer = previewViewer([picked, sibling], selection)
+    expect(viewer.setPreviewSelection([8], {rootGeometryId: 31})).toBe(1)
+    expect(picked.material).toBe(selection)
+    expect(sibling.material).not.toBe(selection)
+  })
+
   it('narrows the occurrence to the selected body', () => {
     const selection = new MeshBasicMaterial()
     const body = stepPreviewMesh([10], 30)
