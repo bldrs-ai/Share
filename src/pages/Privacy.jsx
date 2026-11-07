@@ -9,7 +9,7 @@ export default function Privacy() {
     <TitledLayout title='Privacy Policy'>
       <Box sx={{display: 'grid'}}>
         <Typography variant='body1'><strong>Effective Date:</strong> January 1, 2022</Typography>
-        <Typography variant='body1'><strong>Last Updated:</strong> October 23, 2025</Typography>
+        <Typography variant='body1'><strong>Last Updated:</strong> November 2, 2026</Typography>
 
         <Typography variant='body1'>
           Bldrs Share (“we,” “us,” “our”) provides open-source, browser-first tools for viewing and
@@ -31,9 +31,28 @@ export default function Privacy() {
           If you connect third-party storage (e.g., Google Drive), we only request access to the specific files
           you select. We do not scan or store other files from your account.
         </Typography>
+        {/* Keep this section in step with marketing/src/app/privacy/page.tsx, which serves /privacy/.
+            What it describes is in src/connections/README.md §"Reporting login failures". */}
+        {/* Retention is Sentry's for bldrs-ai's Team plan (errors 90 days, spans/transactions 30), per
+            docs.sentry.io/security-legal-pii/security/data-retention-periods/, checked 2026-11-03.
+            Update both copies if the plan changes. */}
         <Typography variant='body1'>
-          <strong>Telemetry (optional).</strong> If enabled in a hosted deployment, we may collect anonymized
-          usage metrics (e.g., performance, feature use) to improve reliability and UX.
+          <strong>Error and reliability monitoring (always on).</strong> To run and secure the service, the
+          hosted app reports errors and failures, including failed sign-ins, to Sentry, our error-monitoring
+          provider. A report includes the error details, the page address, your browser and its version, the app
+          release and page timing; for a failed sign-in, the Auth0 tracking id; and, if you are signed in, your
+          account identifier (an opaque id, not your name or email). Reports never include your email, name,
+          sign-in tokens or the contents of your files. Sentry processes this data on our behalf as our service
+          provider. We use it only to find and fix problems and keep the service secure, never for advertising,
+          and it is not shared for third-party purposes.
+          Sentry keeps error reports for 90 days and page-timing data for 30 days, then deletes them.
+        </Typography>
+        <Typography variant='body1'>
+          <strong>Analytics (optional).</strong> On bldrs.ai we use Google Analytics, a third-party service, to
+          understand how the product is used (e.g., page views, feature use). Your analytics choice applies to
+          Google Analytics only; it does not turn off the error monitoring above. If you allow analytics, error
+          reports may also carry your Google Analytics client id, so we can connect a problem to a visit; if you
+          decline, they do not.
         </Typography>
 
         <Typography variant='h1'>2. Open-Source and Self-Hosted Use</Typography>
@@ -71,7 +90,8 @@ export default function Privacy() {
         <Typography variant='h1'>6. Your Choices</Typography>
         <Typography variant='body1'>
           You can disconnect Google access in your Google Account settings. You may request deletion of any stored
-          account metadata (if applicable) by emailing <Link href='mailto:support@bldrs.ai'>support@bldrs.ai</Link>.
+          account metadata or error reports tied to your account (if applicable) by emailing{' '}
+          <Link href='mailto:support@bldrs.ai'>support@bldrs.ai</Link>.
           You can also use open-source/self-hosted deployments without accounts, subject to your configuration.
         </Typography>
 

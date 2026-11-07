@@ -1,0 +1,7 @@
+{
+  "description": "A body with no Auth0 error code: 400 without any upstream call (the deployed smoke probe sends exactly this).",
+  "env": {"NODE_ENV": "test"},
+  "request": {"method": "POST", "path": "/.netlify/functions/report-auth-error", "headers": {}, "body": {}},
+  "exchanges": [],
+  "expect": {"statusCode": 400, "bodyIncludes": "invalid_auth_error_report"}
+}

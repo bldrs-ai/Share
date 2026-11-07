@@ -1,6 +1,7 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import {Box, Button, Divider, Slide, Stack, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {openAuthPopup} from '../../Auth0/authPopup'
 import {startLogin} from '../../Auth0/gateLogin'
 import {endSessionLogoutOptions} from '../../Auth0/logoutOptions'
 import {forgetInMemoryUpload} from '../../loader/inMemoryUploads'
@@ -421,7 +422,7 @@ export default function OpenModelDialog({
     if (useMock) {
       loginWithRedirect('github')
     } else {
-      window.open('/popup-auth?connection=github', 'authPopup', 'width=600,height=600')
+      openAuthPopup('/popup-auth?connection=github', {connection: 'github'})
     }
   }
 

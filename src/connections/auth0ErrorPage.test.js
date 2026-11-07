@@ -1,6 +1,6 @@
 import {readFileSync} from 'fs'
 import path from 'path'
-import {describe as describeQuery, render, supportHref} from '../../public/auth/error/error'
+import {describe as describeQuery, render, report, supportHref} from '../../public/auth/error/error'
 
 
 // The Auth0 custom error page is a static file, not app code
@@ -132,5 +132,40 @@ describe('connections/auth0ErrorPage', () => {
 
     expect(writeText).toHaveBeenCalledWith('abc123')
     expect(copy.textContent).toBe('Copied')
+  })
+
+  it('beacons one allowlisted report to the report-auth-error function', () => {
+    const sendBeacon = jest.fn(() => true)
+    const info = render(document,
+      `?error=access_denied&tracking=abc123&connection=github&client_id=xyz&error_description=${encodeURIComponent(XSS)}`)
+
+    expect(report(info, {sendBeacon})).toBe(true)
+
+    expect(sendBeacon).toHaveBeenCalledTimes(1)
+    const [url, body] = sendBeacon.mock.calls[0]
+    expect(url).toBe('/.netlify/functions/report-auth-error')
+    expect(JSON.parse(body)).toEqual({
+      error: 'access_denied',
+      tracking: 'abc123',
+      connection: 'github',
+      client_id: 'xyz',
+      // Flattened and capped here; the function cleans it again.
+      error_description: XSS,
+    })
+  })
+
+  it('omits malformed fields from the report', () => {
+    const sendBeacon = jest.fn(() => true)
+    report(describeQuery(`?error=server_error&tracking=${encodeURIComponent('a<b>')}`), {sendBeacon})
+
+    expect(JSON.parse(sendBeacon.mock.calls[0][1])).toEqual({error: 'server_error'})
+  })
+
+  it('reports nothing without a well-formed error code', () => {
+    const sendBeacon = jest.fn(() => true)
+    expect(report(describeQuery('?tracking=abc123'), {sendBeacon})).toBe(false)
+    expect(report(describeQuery(`?error=${encodeURIComponent('<script>')}`), {sendBeacon})).toBe(false)
+    expect(report(describeQuery('?error=access_denied'), {})).toBe(false)
+    expect(sendBeacon).not.toHaveBeenCalled()
   })
 })

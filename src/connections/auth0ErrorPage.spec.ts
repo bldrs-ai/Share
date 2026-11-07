@@ -48,6 +48,26 @@ describeMobileAndDesktop('Auth0 error page', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   })
 
+  test('reports the failure once to the report-auth-error function', async ({page}) => {
+    // No functions behind the test server: answer the beacon here and keep
+    // what the page sent.
+    const reports: unknown[] = []
+    await page.route('**/.netlify/functions/report-auth-error', async (route) => {
+      reports.push(JSON.parse(route.request().postData() || 'null'))
+      await route.fulfill({status: 204, body: ''})
+    })
+    await page.goto(ERROR_URL)
+
+    await expect.poll(() => reports.length).toBe(1)
+    expect(reports[0]).toEqual({
+      error: 'access_denied',
+      tracking: TRACKING,
+      connection: 'github',
+      client_id: 'xyz',
+      error_description: XSS,
+    })
+  })
+
   test('Copy puts the tracking id on the clipboard', async ({page, context}) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
     await page.goto(ERROR_URL)

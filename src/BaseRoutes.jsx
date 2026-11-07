@@ -5,7 +5,11 @@ import {Button, CssBaseline, Dialog, DialogActions, DialogContent, DialogTitle, 
 import * as Sentry from '@sentry/react'
 import {useAuth0} from './Auth0/Auth0Proxy'
 import {APP_METADATA_CLAIM} from './Auth0/appMetadata'
+import {AUTH_STEPS} from './Auth0/authFailureCodes'
+import {openAuthPopup} from './Auth0/authPopup'
 import {endSessionLogoutOptions} from './Auth0/logoutOptions'
+import {reportAuthFailure} from './Auth0/reportAuthFailure'
+import useAuthFailureReporting from './Auth0/useAuthFailureReporting'
 import useLoginTracking from './Auth0/useLoginTracking'
 import PopupAuth from './Components/Auth/PopupAuth'
 import PopupCallback from './Components/Auth/PopupCallback'
@@ -61,6 +65,9 @@ export default function BaseRoutes({testElt = null}) {
   // provider on every route, so a sign-in completes into a mounted listener
   // wherever the user is.
   useLoginTracking()
+  // Same reason: the provider's own failures, and the signed-in sub for
+  // every login-failure report (Auth0/reportAuthFailure.js).
+  useAuthFailureReporting()
 
   // State for reauthentication modal.
   const [reauthModalOpen, setReauthModalOpen] = useState(false)
@@ -254,6 +261,10 @@ export default function BaseRoutes({testElt = null}) {
         getAccessTokenSilently({...tokenFetchOpts, cacheMode: 'off'})
           .then((token) => processAccessToken(token, {isFresh: true}))
           .catch((err) => {
+            // Reported either way (deduped per page load); invalid_grant
+            // and login_required are reported quietly, see
+            // Auth0/authFailureCodes.js.
+            reportAuthFailure(AUTH_STEPS.TOKEN_REFRESH, err)
             if (err.error === 'invalid_grant') {
               logout(endSessionLogoutOptions())
             }
@@ -291,14 +302,19 @@ export default function BaseRoutes({testElt = null}) {
           return true
         })
         .catch((err) => {
+          // This effect re-runs on every navigation and repeats the fetch;
+          // reportAuthFailure reports one (step, code) once per page load.
+          // Anything other than invalid_grant / login_required used to be
+          // rethrown here, reaching Sentry only as an untagged unhandled
+          // rejection; reported, it is settled like a signed-out pass
+          // instead (no fresh-claims pass, isAuthResolved still flips).
+          reportAuthFailure(AUTH_STEPS.TOKEN_RESTORE, err)
           if (err.error === 'invalid_grant') {
             // The refresh token is dead, so end the Auth0 session too and
             // come back to the origin signed out (Auth0/logoutOptions.js).
             // A full navigation, so the in-place authPassRef race above
             // does not arise here.
             logout(endSessionLogoutOptions())
-          } else if (err.error !== 'login_required') {
-            throw err
           }
           return false
         })
@@ -386,7 +402,7 @@ export default function BaseRoutes({testElt = null}) {
         <DialogActions>
           <Button
             onClick={() => {
-              window.open(`/popup-auth?scope=${reauthScope}&connection=github`, 'authPopup', 'width=600,height=600')
+              openAuthPopup(`/popup-auth?scope=${reauthScope}&connection=github`, {connection: 'github', flow: 'scope'})
               setReauthModalOpen(false)
             }}
           >

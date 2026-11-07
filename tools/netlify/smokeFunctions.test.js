@@ -268,7 +268,7 @@ describe('smokeFunctions.mjs CLI', () => {
     broken = 'unlink-identity'
     // The CLI's own retry waits 5 s before failing a crash for good.
     const {code, stdout} = await runCli([baseUrl, '--strict'])
-    expect(stdout).toContain('1 of 9 FAILED')
+    expect(stdout).toContain(`1 of ${PROBES.length} FAILED`)
     expect(stdout).toMatch(/\| unlink-identity \| 502 \|.*FAIL/)
     expect(code).toBe(1)
   }, 30000)
