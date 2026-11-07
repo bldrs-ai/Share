@@ -3,8 +3,8 @@
 import {EngineSession} from './EngineSession'
 import {createEngineHandler} from './engineHandler'
 import {indexLine} from './engineModelLoad'
-import {SIDECAR_DIR, discardSidecar, readSidecar, sidecarKey, writeSidecar} from './engineSidecars'
-import {makeBlobStore, makeSyncHandleStore, openSourceStore} from './engineSources'
+import {SIDECAR_DIR, discardSidecar, readSidecar, sidecarKey, sweepSidecars, writeSidecar} from './engineSidecars'
+import {locateOpfsEntry, makeBlobStore, makeSyncHandleStore, openSourceStore} from './engineSources'
 import {ENGINE_PROTOCOL_VERSION, Ev} from './protocol'
 import {makeWorkerTransport} from './transports'
 
@@ -119,43 +119,97 @@ function memoryFile(name, bytes, {lastModified = MTIME} = {}) {
 
 
 describe('engine/engineSidecars', () => {
-  it('keys a sidecar by the entry\'s path, size and lastModified', async () => {
-    const key = await sidecarKey('owner/repo/main/logo.step', snapshot())
+  it('keys a sidecar by the entry\'s path alone: one slot per entry, whatever its version', async () => {
+    const key = await sidecarKey('owner/repo/main/logo.step')
     expect(key).toMatch(/^[0-9a-f]{64}\.cidx$/)
-    expect(await sidecarKey('owner/repo/main/logo.step', snapshot())).toBe(key)
-    expect(await sidecarKey('owner/repo/other/logo.step', snapshot())).not.toBe(key)
-    expect(await sidecarKey('owner/repo/main/logo.step', new File([BYTES], NAME, {lastModified: MTIME + 1})))
-      .not.toBe(key)
+    expect(await sidecarKey('owner/repo/main/logo.step')).toBe(key)
+    expect(await sidecarKey('owner/repo/other/logo.step')).not.toBe(key)
   })
 
   it('writes, reads back, replaces and discards a sidecar in its own directory', async () => {
     const root = memoryDir()
     const getOpfsRoot = async () => root
-    expect(await readSidecar('k.cidx', getOpfsRoot)).toBeNull()
-    expect(await writeSidecar('k.cidx', Uint8Array.of(1, 2, 3), getOpfsRoot)).toBe(true)
+    const PATH = 'owner/repo/logo.step'
+    expect(await readSidecar(PATH, snapshot(), getOpfsRoot)).toBeNull()
+    expect(await writeSidecar(PATH, snapshot(), Uint8Array.of(1, 2, 3), getOpfsRoot)).toBe(true)
     expect(Object.keys(root.children)).toEqual([SIDECAR_DIR])
-    expect(Array.from(await readSidecar('k.cidx', getOpfsRoot))).toEqual([1, 2, 3])
-    expect(await writeSidecar('k.cidx', Uint8Array.of(9), getOpfsRoot)).toBe(true)
-    expect(Array.from(await readSidecar('k.cidx', getOpfsRoot))).toEqual([9])
-    await discardSidecar('k.cidx', getOpfsRoot)
-    expect(await readSidecar('k.cidx', getOpfsRoot)).toBeNull()
+    expect(Array.from(await readSidecar(PATH, snapshot(), getOpfsRoot))).toEqual([1, 2, 3])
+    expect(await writeSidecar(PATH, snapshot(), Uint8Array.of(9), getOpfsRoot)).toBe(true)
+    expect(Array.from(await readSidecar(PATH, snapshot(), getOpfsRoot))).toEqual([9])
+    await discardSidecar(PATH, getOpfsRoot)
+    expect(await readSidecar(PATH, snapshot(), getOpfsRoot)).toBeNull()
     // Discarding what is not there is not an error.
-    await discardSidecar('k.cidx', getOpfsRoot)
+    await discardSidecar(PATH, getOpfsRoot)
   })
 
-  it('a failed write reports false and leaves nothing half-written', async () => {
+  it('a failed write reports false and leaves the previous sidecar', async () => {
     const root = memoryDir()
-    const failing = memoryFile('k.cidx', Uint8Array.of(7))
-    failing.createWritable = async () => ({
+    const getOpfsRoot = async () => root
+    const PATH = 'owner/logo.step'
+    await writeSidecar(PATH, snapshot(), Uint8Array.of(7), getOpfsRoot)
+    const slot = root.children[SIDECAR_DIR].children[await sidecarKey(PATH)]
+    slot.createWritable = async () => ({
       write: async () => {
         throw new Error('quota')
       },
       close: async () => null,
       abort: async () => null,
     })
-    root.children[SIDECAR_DIR] = memoryDir({'k.cidx': failing})
-    expect(await writeSidecar('k.cidx', Uint8Array.of(1), async () => root)).toBe(false)
-    expect(Array.from(await readSidecar('k.cidx', async () => root))).toEqual([7])
+    expect(await writeSidecar(PATH, snapshot(), Uint8Array.of(1), getOpfsRoot)).toBe(false)
+    expect(Array.from(await readSidecar(PATH, snapshot(), getOpfsRoot))).toEqual([7])
+  })
+
+  it('a replaced entry\'s sidecar is not a candidate, and its save leaves one sidecar, not two', async () => {
+    const root = memoryDir()
+    const getOpfsRoot = async () => root
+    const PATH = 'owner/repo/logo.step'
+    await writeSidecar(PATH, snapshot(), Uint8Array.of(1), getOpfsRoot)
+    const replaced = new File([BYTES], NAME, {lastModified: MTIME + 1})
+    // The envelope describes the old version: no candidate for the new one.
+    expect(await readSidecar(PATH, replaced, getOpfsRoot)).toBeNull()
+    expect(await readSidecar(PATH, new File([BYTES.subarray(0, 8)], NAME, {lastModified: MTIME}), getOpfsRoot))
+      .toBeNull()
+    await writeSidecar(PATH, replaced, Uint8Array.of(2), getOpfsRoot)
+    expect(Object.keys(root.children[SIDECAR_DIR].children)).toHaveLength(1)
+    expect(Array.from(await readSidecar(PATH, replaced, getOpfsRoot))).toEqual([2])
+  })
+
+  it('the sweep removes the sidecars of entries that are gone, and keeps the rest', async () => {
+    const root = memoryDir({owner: memoryDir({[NAME]: memoryFile(NAME, BYTES)})})
+    const getOpfsRoot = async () => root
+    await writeSidecar(`owner/${NAME}`, snapshot(), Uint8Array.of(1), getOpfsRoot)
+    await writeSidecar('owner/deleted.step', snapshot(), Uint8Array.of(2), getOpfsRoot)
+    await writeSidecar('gone/dir/x.ifc', snapshot(), Uint8Array.of(3), getOpfsRoot)
+    root.children[SIDECAR_DIR].children['not-an-envelope.cidx'] = memoryFile('n', Uint8Array.of(0))
+    expect(await sweepSidecars(getOpfsRoot)).toBe(3)
+    expect(Object.keys(root.children[SIDECAR_DIR].children)).toEqual([await sidecarKey(`owner/${NAME}`)])
+    expect(Array.from(await readSidecar(`owner/${NAME}`, snapshot(), getOpfsRoot))).toEqual([1])
+  })
+
+  it('Clear cache leaves no sidecar behind', async () => {
+    const root = memoryDir({owner: memoryDir({[NAME]: memoryFile(NAME, BYTES)})})
+    await writeSidecar(`owner/${NAME}`, snapshot(), Uint8Array.of(1), async () => root)
+    // OPFS.worker.js registers its message handler on `self` at import, as
+    // OPFS.worker.test.js stubs it; this node environment has none.
+    global.importScripts = jest.fn()
+    global.self = {addEventListener: jest.fn(), postMessage: jest.fn()}
+    const {deleteAllEntries} = require('../OPFS/OPFS.worker')
+    expect(await deleteAllEntries(root)).toEqual([])
+    expect(root.children).toEqual({})
+  })
+
+  it('the engine\'s entry search never descends into the sidecar directory', async () => {
+    const root = memoryDir({owner: memoryDir({[NAME]: memoryFile(NAME, BYTES)})})
+    await writeSidecar(`owner/${NAME}`, snapshot(), Uint8Array.of(1), async () => root)
+    const dir = root.children[SIDECAR_DIR]
+    const entries = dir.entries.bind(dir)
+    let entered = 0
+    dir.entries = () => {
+      entered++
+      return entries()
+    }
+    expect((await locateOpfsEntry(snapshot(), root)).path).toBe(`owner/${NAME}`)
+    expect(entered).toBe(0)
   })
 
   it('indexLine says where the index came from and whether a sidecar was saved', () => {
@@ -339,5 +393,58 @@ describe('engine/engineHandler: index sidecar reopen (engine-worker.md §7 step 
     const summary = await loadOnce(sidecarApi(log), memoryDir())
     expect(summary.index).toBeUndefined()
     expect(log[0]).toBe('stream recordHash=false readSync=undefined')
+  })
+})
+
+
+describe('engine/engineHandler: a STEP whose session fell back in process (#1776, conway#757)', () => {
+  it('a refused store open buffers inside the session\'s own engine, with nothing windowed or leaked', async () => {
+    // In process there is no createSyncAccessHandle and no FileReaderSync,
+    // so the store cannot read synchronously and conway refuses a STEP's
+    // store open (STORE_NOT_SYNCHRONOUS, -1). The buffered retry must run
+    // on THIS session's IfcAPI — the burned handle is the session's — and
+    // the model it opens is the one the session reports.
+    const calls = []
+    const api = {
+      wasmModule: undefined,
+      async Init() {
+        this.wasmModule = {HEAPU8: {byteLength: 1}}
+      },
+      async OpenModelStream(store) {
+        calls.push(`stream readSync=${typeof store.readSync}`)
+        return typeof store.readSync === 'function' ? 0 : -1
+      },
+      async OpenModelStreamed(bytes) {
+        calls.push(`streamed ${bytes.byteLength}`)
+        return 1
+      },
+      getStatistics: () => ({getLoadStatus: () => 'STORE_NOT_SYNCHRONOUS', getLoadFailureReason: () => ''}),
+      CloseModel: (id) => calls.push(`close ${id}`),
+      IsModelOpen: () => true,
+      properties: {},
+    }
+    const listeners = []
+    const toPage = (data) => queueMicrotask(() => listeners.forEach((cb) => cb({data})))
+    const handler = createEngineHandler({
+      loadIfcAPI: async () => function IfcAPI() {
+        return api
+      },
+      post: toPage,
+      yieldToLoop: () => Promise.resolve(),
+      // The page: no sync access handles, and (node) no FileReaderSync.
+      sourceOptions: {canSyncHandle: () => false},
+    })
+    const fakeWorker = {
+      addEventListener: (type, cb) => type === 'message' && listeners.push(cb),
+      postMessage: (msg) => queueMicrotask(() => handler.handle(msg)),
+      terminate: () => null,
+    }
+    const session = new EngineSession(makeWorkerTransport(fakeWorker), {epoch: 1})
+    toPage({v: ENGINE_PROTOCOL_VERSION, epoch: 0, ev: Ev.HELLO, seq: 0})
+    await session.init({flags: {}})
+    const opened = await session.open({file: snapshot()}, {format: 'step'})
+    expect(calls).toEqual(['stream readSync=undefined', `streamed ${BYTES.length}`])
+    expect(opened).toMatchObject({modelID: 1, windowed: false, source: {kind: 'resident'}})
+    await session.close()
   })
 })

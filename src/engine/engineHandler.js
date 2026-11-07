@@ -30,7 +30,7 @@ import {captureEngineExtensions, ifcManagerOver} from '../loader/glbEngineCaptur
 import {classifyOpenFailure, openDeferred} from '../loader/conwayOpen'
 import {ENGINE_PROTOCOL_VERSION, Ev, Op, serializeError} from './protocol'
 import {openSourceStore, opfsRoot} from './engineSources'
-import {readSidecar, sidecarKey, writeSidecar} from './engineSidecars'
+import {readSidecar, sweepSidecars, writeSidecar} from './engineSidecars'
 import {makeBatchEncoder, previewMessage, snapshotStatistics} from './engineStream'
 import {enableStepPreviewFinishParse} from '../viewer/ifc/pumpTestSeams'
 
@@ -140,8 +140,8 @@ export function createEngineHandler({
   // after the load. Closed in dispose(), after CloseModel, so a sync access
   // handle is released only once nothing can read through it.
   let sourceStore = null
-  // The open model's index sidecar (engineSidecars.js): its key when the
-  // source is an OPFS entry the session can key one by, and where the index
+  // The open model's index sidecar (engineSidecars.js): its entry path when
+  // the source is an OPFS entry the session can key one by, and where the index
   // came from — 'sidecar' (opened from it), 'parse', or 'sidecarRejected'
   // (one was offered and refused, so the model parsed). Reported on the
   // `done` packet; a parse writes a fresh sidecar before it.
@@ -488,12 +488,12 @@ export function createEngineHandler({
     // STEP sidecars come from the same export and open through the same
     // call (conway#756, #757).
     const getOpfsRoot = sourceOptions.getOpfsRoot ?? opfsRoot
-    const key = store !== null && opened.entryPath && !flags.disableEngineSidecar &&
+    const entryPath = store !== null && opened.entryPath && !flags.disableEngineSidecar &&
       typeof engine.OpenModelFromIndex === 'function' && typeof engine.ExportIndexSidecar === 'function' ?
-      await sidecarKey(opened.entryPath, blob).catch(() => null) :
+      opened.entryPath :
       null
-    const sidecar = key !== null ? await readSidecar(key, getOpfsRoot) : null
-    if (key !== null) {
+    const sidecar = entryPath !== null ? await readSidecar(entryPath, blob, getOpfsRoot) : null
+    if (entryPath !== null) {
       // The parse records the source's digests so the export below can write
       // a sidecar for exactly the bytes it indexed (~12 % of the index build,
       // conway#760); a sidecar open adopts the sidecar's own.
@@ -525,8 +525,10 @@ export function createEngineHandler({
         sourceStore = store
         sourceFallback = opened.fallbackReason
         adopted = true
-        if (key !== null) {
-          sidecarState = {key, getOpfsRoot, source: index ?? 'parse', bytes: sidecar?.byteLength ?? 0, saved: false}
+        if (entryPath !== null) {
+          sidecarState = {
+            entryPath, file: blob, getOpfsRoot, source: index ?? 'parse', bytes: sidecar?.byteLength ?? 0, saved: false,
+          }
         }
       }
     } finally {
@@ -722,7 +724,12 @@ export function createEngineHandler({
       const exported = await api.ExportIndexSidecar(modelID)
       if (exported) {
         sidecarState.bytes = exported.byteLength
-        sidecarState.saved = await writeSidecar(sidecarState.key, exported, sidecarState.getOpfsRoot)
+        sidecarState.saved =
+          await writeSidecar(sidecarState.entryPath, sidecarState.file, exported, sidecarState.getOpfsRoot)
+        // Retire the sidecars of entries that are gone (codex review of
+        // Share#2085): one file per entry path bounds a replaced entry's,
+        // and this bounds a deleted one's.
+        await sweepSidecars(sidecarState.getOpfsRoot)
       }
     } catch {
       // Left unsaved; reported as such.

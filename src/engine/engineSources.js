@@ -28,6 +28,8 @@
 //
 // Worker-safe: no DOM, no store.
 
+import {SIDECAR_DIR} from './engineSidecars'
+
 
 /**
  * @return {{reads: number, bytes: number, ms: number}}
@@ -214,6 +216,11 @@ export async function locateOpfsEntry(file, root, maxEntries = MAX_OPFS_ENTRIES_
         throw new Error(`OPFS scan limit (${maxEntries} entries)`)
       }
       if (handle.kind === 'directory') {
+        // The index sidecars are not models, and a walk into them would
+        // count each toward the scan cap (codex review of Share#2085).
+        if (path === '' && name === SIDECAR_DIR) {
+          continue
+        }
         dirs.push({dir: handle, path: `${path}${name}/`})
       } else if (name === file.name) {
         let current
