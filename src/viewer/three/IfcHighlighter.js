@@ -3,6 +3,7 @@ import {Mesh} from 'three'
 import {withPerf} from '../../utils/PerfMonitor'
 import CustomPostProcessor from './CustomPostProcessor'
 import ThreeContext from './ThreeContext'
+import {requestPaint, runPaint} from './renderDemand'
 
 
 /**
@@ -47,6 +48,9 @@ export default class IfcHighlighter {
    */
   setHighlighted(meshes) {
     this._selectionOutlineEffect.setSelection(meshes ?? [])
+    // The outline's selection is layers on the meshes, which no hook sees
+    // (renderDemandHooks.js): ask, for a viewer painting on demand.
+    requestPaint()
   }
 
   /**
@@ -59,6 +63,7 @@ export default class IfcHighlighter {
     if (mesh && currentSelection.indexOf(mesh) === -1) {
       currentSelection.add(mesh)
       // NOTE: the added mesh will be automatically be removed from the scene when the prepick changes
+      requestPaint()
     }
   }
 
@@ -81,6 +86,7 @@ export default class IfcHighlighter {
     const currentSelection = this._selectionOutlineEffect.getSelection()
     if (currentSelection.indexOf(mesh) !== -1) {
       currentSelection.delete(mesh)
+      requestPaint()
     }
   }
 }
@@ -98,7 +104,8 @@ export default class IfcHighlighter {
  *
  * @param {ThreeContext} context
  * @param {EffectComposer} composer
- * @return {Function} the new render function
+ * @return {Function} the new render function, which returns whether it
+ *   painted (`withPerf` counts only the frames that did)
  */
 export function newUpdateFunction(context, composer) {
   const rendererWrapper = context.getLegacyRendererWrapper()
@@ -106,15 +113,19 @@ export function newUpdateFunction(context, composer) {
   const demand = context.getRenderDemand?.() ?? null
   return function newUpdateFn() {
     if (rendererWrapper.blocked || !context) {
-      return
+      return false
     }
-    // While a model streams in, paint only when something asked
+    // While a model streams in, and for the whole session under
+    // `?feature=renderOnDemand`, paint only when something asked
     // (renderDemand.js); every frame otherwise.
     if (demand !== null && !demand.shouldRender()) {
-      return
+      return false
     }
     const startMs = performance.now()
-    composer.render()
+    // runPaint: what three mutates while drawing (BatchedMesh's indirect
+    // texture) must not count as a change that asks for the next paint.
+    runPaint(() => composer.render())
     demand?.rendered(performance.now() - startMs)
+    return true
   }
 }

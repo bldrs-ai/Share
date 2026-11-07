@@ -9,6 +9,7 @@ import {
   getHashParamsFromUrl,
 } from '../../utils/location'
 import PlaceMark from '../../Infrastructure/PlaceMark'
+import {requestPaint} from '../../viewer/three/renderDemand'
 import {
   HASH_PREFIX_COMMENT,
   HASH_PREFIX_NOTES,
@@ -94,6 +95,9 @@ function MarkerControl({context, oppositeObjects, postProcessor}) {
     placeMark.getPlacemarks().forEach((placemark_) => {
       placemark_.visible = isNotesVisible
     })
+    // `visible` and the colours below are no change the render-on-demand
+    // hooks see (viewer/three/renderDemandHooks.js).
+    requestPaint()
   }, [isNotesVisible, placeMark])
 
 
@@ -236,6 +240,7 @@ export function PlacemarkHandlers() {
           value.material.color.set(value.userData.inactiveColor)
         }
       }
+      requestPaint()
     })()
     // Add markers to the dependency array so useEffect re-runs on markers change
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -261,6 +266,7 @@ export function PlacemarkHandlers() {
       svgGroup.userData.color = inactiveColor
       svgGroup.material.color.set(inactiveColor)
       svgGroup.userData.id = hash
+      requestPaint()
 
       placeMarkGroupMap.set(hash, svgGroup)
       setPlaceMarkStatus(svgGroup, true)
@@ -309,6 +315,7 @@ export function PlacemarkHandlers() {
         value.material.color.set(value.userData.inactiveColor)
       }
     }
+    requestPaint()
 
     if (foundKey !== null) {
       setSelectedPlaceMarkId(foundKey)
@@ -333,6 +340,7 @@ export function PlacemarkHandlers() {
         value.material.color.set(value.userData.inactiveColor)
       }
     }
+    requestPaint()
 
     if (foundKey !== null) {
       setSelectedPlaceMarkId(foundKey)

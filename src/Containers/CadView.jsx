@@ -2671,6 +2671,20 @@ export default function CadView({
   }, [viewer])
 
 
+  // Under `?feature=renderOnDemand` (story #2055) a store change opens the
+  // viewer's settle window: most of what the panels change reaches the scene
+  // through an effect a frame or two after the store does, and a paint
+  // before it lands would leave the old frame up (three/renderDemand.js,
+  // layer 5). A no-op for a viewer that paints every frame between loads.
+  useEffect(() => {
+    const demand = viewer?.context?.getRenderDemand?.() ?? null
+    if (demand?.isSession !== true) {
+      return undefined
+    }
+    return useStore.subscribe(() => demand.invalidateSoon())
+  }, [viewer])
+
+
   // searchParams changes in parent (ShareRoutes) from user and
   // programmatic navigation, and in SearchBar.
   useEffect(() => {

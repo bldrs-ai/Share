@@ -10,6 +10,7 @@ import {
 } from 'three'
 import {isDevMode} from '../utils/common'
 import {floatStrTrim} from '../utils/strings'
+import {requestPaint} from '../viewer/three/renderDemand'
 
 
 /**
@@ -210,6 +211,9 @@ export default class PlaceMark extends EventDispatcher {
           // placemark.material.color.set(0xffffff)
           _scene.add(placemark)
           _placeMarks.push(placemark)
+          // Hooked through Object3D#add too (renderDemandHooks.js); the
+          // marker's texture arrived async, so ask for the frame that shows it.
+          requestPaint()
           return placemark
         })
         .catch((err) => {

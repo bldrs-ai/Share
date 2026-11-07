@@ -7,6 +7,7 @@ import {
   Quaternion,
   Vector3,
 } from 'three'
+import {requestPaint} from './renderDemand'
 
 
 /**
@@ -83,6 +84,8 @@ export default class CutPlaneArrowHelper extends Group {
    */
   setColor(color: number) {
     this.material.color.setHex(color)
+    // A colour is no change the render-on-demand hooks see (renderDemandHooks.js).
+    requestPaint()
   }
 }
 

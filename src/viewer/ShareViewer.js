@@ -39,6 +39,7 @@ import {modelHasCapability} from './ShareModel'
 import {paintPreviewSelection} from './previewSelection'
 import {paintStreamingSelection, streamingTablesModel} from './streamingBatchPick'
 import {isFeatureEnabled} from '../FeatureFlags'
+import {requestPaint} from './three/renderDemand'
 import {viewRules} from './legacyViewRules'
 import {
   applyBatchedInstancePreselection,
@@ -367,6 +368,7 @@ export class ShareViewer {
   setEnvironmentBlur(sigma) {
     this._envBlur = sigma
     this._buildEnvironment(sigma, this._envType)
+    requestPaint()
   }
 
 
@@ -379,6 +381,7 @@ export class ShareViewer {
   setEnvironmentType(type) {
     this._envType = type
     this._buildEnvironment(this._envBlur, type)
+    requestPaint()
   }
 
 
@@ -480,6 +483,9 @@ export class ShareViewer {
         obj.castShadow = true
       }
     })
+    // Ground visibility, light pose and shadow casting: none of it is a
+    // change the render-on-demand hooks see (renderDemandHooks.js).
+    requestPaint()
   }
 
 
@@ -498,6 +504,7 @@ export class ShareViewer {
     if (key) {
       key.castShadow = enabled
     }
+    requestPaint()
   }
 
 
@@ -511,6 +518,7 @@ export class ShareViewer {
     if (this._groundPlane?.material) {
       this._groundPlane.material.opacity = opacity
     }
+    requestPaint()
   }
 
 
@@ -557,6 +565,9 @@ export class ShareViewer {
     for (const model of models) {
       this.applyLookToModel(model)
     }
+    // Tone mapping lives in the composer, lights and material params in
+    // uniforms: nothing here is a change the hooks see.
+    requestPaint()
   }
 
 
@@ -575,6 +586,7 @@ export class ShareViewer {
       m.roughness = config.roughness
       m.metalness = config.metalness
     })
+    requestPaint()
   }
 
 
@@ -589,6 +601,7 @@ export class ShareViewer {
     const light = this.context.getScene()?.getObjectByName?.(name)
     if (light) {
       light.intensity = value
+      requestPaint()
     }
   }
 
@@ -1518,6 +1531,8 @@ export class ShareViewer {
     }
     pool.mesh.userData.sourceMesh = pickedMesh
     pool.mesh.visible = true
+    // `visible` is no change the hooks see (renderDemandHooks.js).
+    requestPaint()
 
     if (!pool.inHighlighter) {
       this.highlighter.addToHighlighting(pool.mesh)
@@ -1591,6 +1606,10 @@ export class ShareViewer {
     if (pool.inHighlighter) {
       this.highlighter.removeFromHighlighting(pool.mesh)
       pool.inHighlighter = false
+    }
+    // Called on every hover miss, so ask only when this hid something.
+    if (pool.mesh.visible) {
+      requestPaint()
     }
     pool.mesh.visible = false
   }

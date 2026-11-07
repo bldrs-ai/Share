@@ -5,6 +5,7 @@ import {
 } from '../ifc/batchedInstanceGeometry'
 import {BatchEditKind, onBatchEdit} from '../ifc/batchedEdit'
 import {forEachActiveInstance} from '../ifc/batchedInstanceTables'
+import {requestPaint} from '../three/renderDemand'
 
 
 /** Guard against division by zero when the eye sits on an instance. */
@@ -295,6 +296,7 @@ export class ResidencyController {
     // an instance deleted since (three's `setVisibleAt`
     // throws on one, BatchedMesh.js:1162-1164).
     instance.mesh.setVisibleAt(instance.index, visible)
+    requestPaint()
   }
 }
 

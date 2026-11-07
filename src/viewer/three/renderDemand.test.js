@@ -1,5 +1,6 @@
 import RenderDemand, {
-  BACKGROUND_COST_FACTOR, BACKGROUND_MIN_GAP_MS, HEARTBEAT_MS, USER_CAMERA_EVENT, noteUserCamera,
+  BACKGROUND_COST_FACTOR, BACKGROUND_MIN_GAP_MS, HEARTBEAT_MS, SETTLE_MS, USER_CAMERA_EVENT, noteUserCamera,
+  requestBackgroundPaint, requestPaint, runPaint,
 } from './renderDemand'
 
 
@@ -226,6 +227,187 @@ describe('viewer/three/renderDemand', () => {
     paint(3)
     demand.invalidate()
     paint(4)
-    expect(demand.stats).toEqual({paints: 2, paintMs: 7})
+    expect(demand.stats).toEqual({paints: 2, paintMs: 7, frames: 4})
+  })
+})
+
+
+// `?feature=renderOnDemand` (story #2055): on demand between loads too.
+describe('viewer/three/renderDemand session', () => {
+  let clock
+  let demand
+  let probe
+  let probeChanged
+
+  beforeEach(() => {
+    clock = 10_000
+    demand = new RenderDemand({now: () => clock})
+    probeChanged = false
+    probe = {changed: () => probeChanged, snapshot: jest.fn()}
+  })
+
+  afterEach(() => {
+    demand.dispose()
+  })
+
+  /**
+   * One frame: whether it painted, recording the paint when it did.
+   *
+   * @return {boolean}
+   */
+  function frame() {
+    clock += FRAME_MS
+    const painting = demand.shouldRender()
+    if (painting) {
+      demand.rendered(1)
+    }
+    return painting
+  }
+
+  /**
+   * @param {number} count frames to run
+   * @return {number} how many of them painted
+   */
+  function paintsIn(count) {
+    let paints = 0
+    for (let i = 0; i < count; i++) {
+      paints += frame() ? 1 : 0
+    }
+    return paints
+  }
+
+  it('paints once when it starts, then nothing while nothing changes', () => {
+    demand.startSession({probe})
+    expect(paintsIn(120)).toBe(1)
+    // No heartbeat between loads: a minute of idle frames paints nothing.
+    clock += 60_000
+    expect(paintsIn(10)).toBe(0)
+  })
+
+  it('paints the frame after the probe sees a change, and records the baseline at the paint', () => {
+    demand.startSession({probe})
+    paintsIn(2)
+    probe.snapshot.mockClear()
+    probeChanged = true
+    expect(frame()).toBe(true)
+    expect(probe.snapshot).toHaveBeenCalledTimes(1)
+    probeChanged = false
+    expect(paintsIn(10)).toBe(0)
+  })
+
+  it('does not paint a control start between loads: the move after it asks', () => {
+    const controls = makeControls()
+    demand.startSession({controls, probe})
+    paintsIn(2)
+    controls.fire('controlstart')
+    expect(frame()).toBe(false)
+    expect(demand.isUserDriving).toBe(true)
+    controls.fire('update')
+    expect(frame()).toBe(true)
+  })
+
+  it('paints for every camera update between loads, damping included', () => {
+    const controls = makeControls()
+    demand.startSession({controls, probe})
+    paintsIn(2)
+    // camera-controls sends `update` from each frame's update() while it
+    // damps toward rest, with no input event; each one paints.
+    for (let i = 0; i < 5; i++) {
+      controls.fire('update')
+      expect(frame()).toBe(true)
+    }
+    expect(paintsIn(10)).toBe(0)
+  })
+
+  it('keeps the session camera across a load, and paints what the load left at its end', () => {
+    const controls = makeControls()
+    demand.startSession({controls, probe})
+    const endLoad = demand.begin(controls)
+    paintsIn(2)
+    demand.invalidateBackground()
+    endLoad()
+    expect(demand.isOnDemand).toBe(true)
+    expect(controls.listeners.update.size).toBe(1)
+    expect(frame()).toBe(true)
+    expect(paintsIn(10)).toBe(0)
+    controls.fire('update')
+    expect(frame()).toBe(true)
+  })
+
+  it('paints a background ask on the next frame between loads, with no budget', () => {
+    demand.startSession({probe})
+    paintsIn(2)
+    demand.invalidateBackground()
+    expect(frame()).toBe(true)
+    expect(paintsIn(5)).toBe(0)
+  })
+
+  it('reaches the viewer from anywhere through requestPaint, and stops once disposed', () => {
+    demand.startSession({probe})
+    paintsIn(2)
+    requestPaint()
+    expect(frame()).toBe(true)
+    requestBackgroundPaint()
+    expect(frame()).toBe(true)
+    demand.dispose()
+    requestPaint()
+    expect(demand.isDirty).toBe(false)
+  })
+
+  it('ignores the scene changes three makes inside a paint', () => {
+    demand.startSession({probe})
+    paintsIn(2)
+    runPaint(() => requestBackgroundPaint())
+    expect(frame()).toBe(false)
+  })
+
+  it('paints for the settle window after user input, then stops', () => {
+    demand.startSession({probe})
+    paintsIn(2)
+    demand.invalidateSoon()
+    const window = Math.floor(SETTLE_MS / FRAME_MS)
+    expect(paintsIn(window)).toBe(window)
+    expect(paintsIn(10)).toBe(0)
+  })
+
+  it('makes a settle ask background work during a load, so the load\'s store churn stays budgeted', () => {
+    demand.startSession({probe})
+    demand.begin(makeControls())
+    paintsIn(2)
+    let paints = 0
+    for (let i = 0; i < 60; i++) {
+      demand.invalidateSoon()
+      paints += frame() ? 1 : 0
+    }
+    // At least BACKGROUND_MIN_GAP_MS apart: ~10 in a second, not 60.
+    expect(paints).toBeLessThanOrEqual(Math.ceil((60 * FRAME_MS) / BACKGROUND_MIN_GAP_MS) + 1)
+  })
+
+  it('leaves a held viewer to the load budget during a load', () => {
+    demand.startSession({probe})
+    demand.keepPainting()
+    demand.begin(makeControls())
+    paintsIn(2)
+    expect(paintsIn(5)).toBe(0)
+  })
+
+  it('paints every frame while held, and once more at the release', () => {
+    demand.startSession({probe})
+    paintsIn(2)
+    const release = demand.keepPainting()
+    expect(paintsIn(30)).toBe(30)
+    release()
+    release()
+    expect(paintsIn(30)).toBe(1)
+  })
+
+  it('goes back to painting every frame when the session stops', () => {
+    const controls = makeControls()
+    const stop = demand.startSession({controls, probe})
+    paintsIn(2)
+    stop()
+    expect(demand.isOnDemand).toBe(false)
+    expect(controls.listeners.update.size).toBe(0)
+    expect(paintsIn(10)).toBe(10)
   })
 })

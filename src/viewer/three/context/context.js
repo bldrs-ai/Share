@@ -15,6 +15,8 @@ import {IfcEvent, IfcEvents} from './ifcEvent'
 import {NavigationModes} from './base-types'
 import {IfcMouse} from './mouse'
 import RenderDemand from '../renderDemand'
+import {attachSessionNets, createSceneProbe, installSceneHooks} from '../renderDemandHooks'
+import {isFeatureEnabled} from '../../../FeatureFlags'
 
 
 /**
@@ -83,12 +85,31 @@ export class IfcContext {
     // Consulted by the render closure ThreeContext#setRenderUpdate installs;
     // inert (every frame paints) outside a progressive load.
     this.renderDemand = new RenderDemand()
+    // `?feature=renderOnDemand` (story #2055): on demand for the whole
+    // session, so an idle viewer paints nothing. renderDemand.js's module
+    // doc lists the layers that ask for a paint; these are its automatic ones.
+    this.endRenderSession = null
+    if (isFeatureEnabled('renderOnDemand')) {
+      installSceneHooks()
+      const stopSession = this.renderDemand.startSession({
+        controls: this.ifcCamera.cameraControls,
+        probe: createSceneProbe(this),
+      })
+      const detachNets = attachSessionNets(this.renderDemand, this.renderer.renderer.domElement)
+      this.endRenderSession = () => {
+        detachNets()
+        stopSession()
+      }
+    }
     this.ifcAnimator = new Animator()
     this.setupWindowRescale()
     this.render()
   }
   dispose() {
     let _a; let _b; let _c
+    this.endRenderSession?.()
+    this.endRenderSession = null
+    this.renderDemand?.dispose()
     this.isThisBeingDisposed = true;
     (_a = this.stats) === null || _a === void 0 ? void 0 : _a.dom.remove();
     (_b = this.options.preselectMaterial) === null || _b === void 0 ? void 0 : _b.dispose();
@@ -229,7 +250,24 @@ export class IfcContext {
   }
   updateAllComponents() {
     const delta = this.clock.getDelta()
-    this.items.components.forEach((component) => component.update(delta))
+    if (this.renderDemand?.isSession !== true) {
+      this.items.components.forEach((component) => component.update(delta))
+      return
+    }
+    // On demand (`?feature=renderOnDemand`): move the camera before the
+    // paint, not after it. Components update in registration order, and the
+    // renderer registers before the camera, so in that order a frame paints
+    // the pose camera-controls had at the END of the previous frame: input
+    // shows a frame late, and the frame an input's `controlstart` asks for
+    // paints the old pose and is wasted. Flag off keeps the vendored order
+    // (story #2055 has the before/after input latency).
+    const renderer = this.renderer
+    this.items.components.forEach((component) => {
+      if (component !== renderer) {
+        component.update(delta)
+      }
+    })
+    renderer.update(delta)
   }
   setupWindowRescale() {
     window.addEventListener('resize', this.resize)

@@ -7,6 +7,7 @@ import {Vector2, WebGLRenderer} from 'three'
 import {CSS2DRenderer} from 'three/examples/jsm/renderers/CSS2DRenderer.js'
 import {IfcComponent} from '../base-types'
 import {Postproduction} from './postproduction'
+import {runPaint} from '../../renderDemand'
 
 
 export class IfcRenderer extends IfcComponent {
@@ -84,7 +85,9 @@ export class IfcRenderer extends IfcComponent {
     // await this.context.getIfcCamera().currentNavMode.fitModelToFrame();
     const scene = this.context.getScene()
     const cameraToRender = camera || this.context.getCamera()
-    this.tempRenderer.render(scene, cameraToRender)
+    // A draw like the loop's: what three mutates inside it is no change to
+    // paint (renderDemand.js#runPaint).
+    runPaint(() => this.tempRenderer.render(scene, cameraToRender))
     const result = this.tempRenderer.domElement.toDataURL()
     if (dimensions) {
       this.context.ifcCamera.updateAspect(previousDimensions)
