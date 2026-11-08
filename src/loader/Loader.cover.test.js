@@ -21,9 +21,11 @@ import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
 import useStore from '../store/useStore'
 import {constructUploadedBlobPath, load, NotFoundError} from './Loader'
 import {dereferenceAndProxyDownloadContents} from './urls'
+import {gtagEvent} from '../privacy/analytics'
 
 
 jest.mock('axios')
+jest.mock('../privacy/analytics', () => ({...jest.requireActual('../privacy/analytics'), gtagEvent: jest.fn()}))
 jest.mock('@sentry/react', () => ({
   ...jest.requireActual('@sentry/react'),
   captureMessage: jest.fn(),
@@ -679,20 +681,20 @@ describe('load() error/edge paths with OPFS enabled', () => {
       beforeEach(() => {
         captureMessage.mockClear()
         captureException.mockClear()
+        gtagEvent.mockClear()
       })
 
-      it('counts an eviction once, at info, after the re-fetch succeeded', async () => {
+      it('counts an eviction once in GA, after the re-fetch succeeded, and not in Sentry', async () => {
         downloadToOPFS.mockResolvedValue(new MockFile(''))
         axios.get.mockResolvedValue({data: objText})
+        gtagEvent.mockClear()
 
         await load(url, viewer, onProgress, true, setOpfsFile, '')
 
-        expect(captureMessage).toHaveBeenCalledTimes(1)
-        const [, context] = captureMessage.mock.calls[0]
-        expect(context.level).toBe('info')
-        expect(context.fingerprint).toEqual(['opfs-source', 'evicted', 'external'])
-        expect(context.tags).toMatchObject({kind: 'external', condition: 'evicted'})
-        expect(JSON.stringify(captureMessage.mock.calls)).not.toMatch(/example\.com|index\.obj/)
+        const opfsEvents = gtagEvent.mock.calls.filter(([name]) => name.startsWith('opfs_'))
+        expect(opfsEvents).toEqual([['opfs_source_evicted', {kind: 'external', condition: 'evicted'}]])
+        expect(captureMessage).not.toHaveBeenCalled()
+        expect(JSON.stringify(opfsEvents)).not.toMatch(/example\.com|index\.obj/)
       })
 
       it('warns once for a hosted 404 that the direct fetch then got past', async () => {
@@ -706,6 +708,7 @@ describe('load() error/edge paths with OPFS enabled', () => {
         expect(context.level).toBe('warning')
         expect(context.fingerprint).toEqual(['opfs-source', 'download-failed', 'http-error', 'external'])
         expect(context.tags).toMatchObject({kind: 'external', condition: 'http-error', http_status: '404'})
+        expect(gtagEvent.mock.calls.filter(([name]) => name.startsWith('opfs_'))).toEqual([])
         // The worker's text names the file and URL; none of it may reach Sentry.
         expect(JSON.stringify(captureMessage.mock.calls)).not.toMatch(/private-tower|example\.com/)
       })

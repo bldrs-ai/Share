@@ -2,6 +2,7 @@
 import {captureMessage} from '@sentry/react'
 import * as OPFSService from '../OPFS/OPFSService.js'
 import {HTTP_NOT_FOUND} from '../net/http'
+import {gtagEvent} from '../privacy/analytics'
 import {
   writeSavedGithubModelOPFS,
   getModelFromOPFS,
@@ -21,6 +22,7 @@ import {
 jest.mock('../OPFS/OPFSService.js')
 jest.mock('@sentry/react', () => ({captureMessage: jest.fn()}))
 // Captures what utils.js logs: a console.error line becomes a Sentry breadcrumb.
+jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn()}))
 const mockDebugError = jest.fn()
 jest.mock('../utils/debug', () => ({
   __esModule: true,
@@ -217,20 +219,22 @@ describe('OPFS Test Suite', () => {
         'BldrsLocalStorage', 'V1', 'Projects')
     }
 
-    it('reports a download served from memory (no move) as one info event', async () => {
+    it('counts a download served from memory (no move) in GA, not Sentry', async () => {
+      gtagEvent.mockClear()
       await downloadWithReply({completed: true, event: 'download', cached: false, file: new Blob(['x'])})
 
-      expect(captureMessage).toHaveBeenCalledTimes(1)
-      const [, context] = captureMessage.mock.calls[0]
-      expect(context.level).toBe('info')
-      expect(context.fingerprint).toEqual(['opfs-source', 'not-cached', 'move-unavailable', 'external'])
-      expect(JSON.stringify(captureMessage.mock.calls)).not.toMatch(/secret-plan|example\.com/)
+      expect(gtagEvent).toHaveBeenCalledTimes(1)
+      expect(gtagEvent).toHaveBeenCalledWith('opfs_not_cached', {kind: 'external', condition: 'move-unavailable'})
+      expect(captureMessage).not.toHaveBeenCalled()
+      expect(JSON.stringify(gtagEvent.mock.calls)).not.toMatch(/secret-plan|example\.com/)
     })
 
     it('reports nothing for a download that was cached', async () => {
+      gtagEvent.mockClear()
       await downloadWithReply({completed: true, event: 'download', file: new Blob(['x'])})
 
       expect(captureMessage).not.toHaveBeenCalled()
+      expect(gtagEvent).not.toHaveBeenCalled()
     })
 
     it('rejects with the worker\'s condition and status and sends no event itself', async () => {

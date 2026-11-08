@@ -1,5 +1,6 @@
 import {captureMessage} from '@sentry/react'
 import {loadFailureCaptureContext} from '../loader/loadProgress'
+import {gtagEvent} from '../privacy/analytics'
 import {
   downloadSourceKind,
   reportOpfsDownloadFailed,
@@ -10,6 +11,7 @@ import {
 
 jest.mock('@sentry/react', () => ({captureMessage: jest.fn()}))
 jest.mock('../loader/loadProgress', () => ({loadFailureCaptureContext: jest.fn()}))
+jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn()}))
 
 const SECRET_PATH = 'secret-org/secret-repo/main/private.ifc'
 
@@ -17,6 +19,7 @@ const SECRET_PATH = 'secret-org/secret-repo/main/private.ifc'
 describe('reportOpfsSourceCondition', () => {
   beforeEach(() => {
     captureMessage.mockReset()
+    gtagEvent.mockReset()
     // What a live load hands over: CadView sets fileInfo from the raw
     // filepath, so for a private source it is the path.
     loadFailureCaptureContext.mockReset()
@@ -33,15 +36,12 @@ describe('reportOpfsSourceCondition', () => {
     })
   })
 
-  it('reports an eviction as one info event with a per-kind fingerprint', () => {
+  it('counts an eviction in GA with exactly kind and condition, and sends nothing to Sentry', () => {
     reportOpfsSourceEvicted('external')
 
-    expect(captureMessage).toHaveBeenCalledTimes(1)
-    const [message, context] = captureMessage.mock.calls[0]
-    expect(message).toBe('OPFS source entry was empty or truncated; evicted')
-    expect(context.level).toBe('info')
-    expect(context.fingerprint).toEqual(['opfs-source', 'evicted', 'external'])
-    expect(context.tags).toMatchObject({kind: 'external', condition: 'evicted'})
+    expect(gtagEvent).toHaveBeenCalledTimes(1)
+    expect(gtagEvent).toHaveBeenCalledWith('opfs_source_evicted', {kind: 'external', condition: 'evicted'})
+    expect(captureMessage).not.toHaveBeenCalled()
   })
 
   it('reports a failed download as one warning with the status as a tag', () => {
@@ -60,14 +60,19 @@ describe('reportOpfsSourceCondition', () => {
     expect(captureMessage.mock.calls[0][1].tags).not.toHaveProperty('http_status')
   })
 
-  it('reports an uncached download as one info event', () => {
-    reportOpfsNotCached('external')
+  it('counts an uncached download in GA with exactly kind and condition, and sends nothing to Sentry', () => {
+    reportOpfsNotCached('local')
+
+    expect(gtagEvent).toHaveBeenCalledTimes(1)
+    expect(gtagEvent).toHaveBeenCalledWith('opfs_not_cached', {kind: 'local', condition: 'move-unavailable'})
+    expect(captureMessage).not.toHaveBeenCalled()
+  })
+
+  it('sends a failed download to Sentry only, not GA', () => {
+    reportOpfsDownloadFailed({kind: 'external', condition: 'http-error', status: 404})
 
     expect(captureMessage).toHaveBeenCalledTimes(1)
-    const [, context] = captureMessage.mock.calls[0]
-    expect(context.level).toBe('info')
-    expect(context.fingerprint).toEqual(['opfs-source', 'not-cached', 'move-unavailable', 'external'])
-    expect(context.tags).toMatchObject({kind: 'external', condition: 'move-unavailable'})
+    expect(gtagEvent).not.toHaveBeenCalled()
   })
 
   it('carries no URL, host or file name, whatever the caller held', () => {
@@ -79,16 +84,16 @@ describe('reportOpfsSourceCondition', () => {
 
     const everything = JSON.stringify(captureMessage.mock.calls)
     expect(everything).not.toMatch(/https?:|\.ifc|\.obj|secret|\//)
+    // GA gets no load context either: its params are the seeded path's opposite.
+    expect(JSON.stringify(gtagEvent.mock.calls)).not.toMatch(/secret|private\.ifc|https?:|\.ifc|\//)
   })
 
   it('carries the load phase and report but not the load context\'s file identity', () => {
     // Red if the whole loadFailureCaptureContext() is spread back onto the
     // event: its `fileInfo` is the raw path of a private model.
-    reportOpfsSourceEvicted('github')
     reportOpfsDownloadFailed({kind: 'external', condition: 'http-error', status: 500})
-    reportOpfsNotCached('local')
 
-    expect(captureMessage).toHaveBeenCalledTimes(3)
+    expect(captureMessage).toHaveBeenCalledTimes(1)
     expect(JSON.stringify(captureMessage.mock.calls)).not.toMatch(/secret|private\.ifc/)
     const [, context] = captureMessage.mock.calls[0]
     expect(context.tags['load.phase']).toBe('download')
@@ -98,9 +103,25 @@ describe('reportOpfsSourceCondition', () => {
     })
   })
 
+  it('sends no load context, path or file name to GA', () => {
+    // The load context is seeded with a private-looking path in beforeEach.
+    reportOpfsSourceEvicted('github')
+    reportOpfsNotCached('external')
+
+    expect(gtagEvent).toHaveBeenCalledTimes(2)
+    for (const [, params] of gtagEvent.mock.calls) {
+      expect(Object.keys(params).sort()).toEqual(['condition', 'kind'])
+    }
+    expect(JSON.stringify(gtagEvent.mock.calls)).not.toMatch(/secret|private\.ifc/)
+  })
+
   it('never throws when Sentry does', () => {
     captureMessage.mockImplementation(() => {
       throw new Error('sentry down')
+    })
+
+    gtagEvent.mockImplementation(() => {
+      throw new Error('ga down')
     })
 
     expect(() => reportOpfsSourceEvicted('github')).not.toThrow()
