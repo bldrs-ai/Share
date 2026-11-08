@@ -217,8 +217,18 @@ function useFileHandle(FileHandle) {
  * @param {object|undefined} locks a lock manager, or undefined for none
  */
 function useWebLocks(locks) {
+  // Node 20 has no global `navigator` at all (Node 21 added it), and
+  // package.json allows >=20: give it a bare one for the test, and take it
+  // away again in afterEach, so the property below always has a target.
+  if (globalThis.navigator === undefined) {
+    globalThis.navigator = {}
+    createdNavigator = true
+  }
   Object.defineProperty(globalThis.navigator, 'locks', {value: locks, configurable: true, writable: true})
 }
+
+/** Whether useWebLocks made `globalThis.navigator` (Node 20), to undo it. */
+let createdNavigator = false
 
 
 // No Web Locks unless a test installs some: the age fallback decides.
@@ -229,7 +239,12 @@ beforeEach(() => {
 afterEach(() => {
   delete globalThis.FileSystemFileHandle
   // The own property goes; the runtime's own `locks`, if any, shows again.
-  delete globalThis.navigator.locks
+  if (createdNavigator) {
+    delete globalThis.navigator
+    createdNavigator = false
+  } else {
+    delete globalThis.navigator.locks
+  }
 })
 
 
