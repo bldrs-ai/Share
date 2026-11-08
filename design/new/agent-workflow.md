@@ -15,8 +15,31 @@ conway#520 — merge that before this doc, or the reference dangles).
 A **coordinator** session plans, defines issues and manages the
 queue; it dispatches one **sub-agent per issue** for the hands-on
 work — issue handling, PR authoring, review and release lifecycle.
-Use a Fable-class model for the coordinator and Opus-class for the
-sub-agents.
+Use a Fable-class model for the coordinator. Pick each sub-agent's
+model by the task, not by habit: quota is finite, and the
+cheapest model that can do the job well is the right one.
+
+| Task | Model | Examples |
+|---|---|---|
+| Simple | Haiku-class | pin bumps; a one-file test fix whose cause is already known; issue filing; mechanical edits and renames |
+| Normal | Sonnet-class | a well-scoped fix or feature; a reviewer's findings on an existing PR; a known-cause bug with a clear fix |
+| Complex | Opus-class | profiling or diagnosing an unknown cause; design choices with trade-offs; multi-repo chains (conway → npm → Share); measurement work that has to decide something |
+
+Haiku and Sonnet sub-agents need a **directed brief**: more explicit
+than an Opus brief, so they code to a plan instead of exploring. On
+top of [the dispatch brief](#the-dispatch-brief), give them:
+
+- the exact files to change, and the approach (the function to add,
+  the call site, the shape of the change);
+- the tests to write, each with the check that it fails without the
+  fix (rubric item 6);
+- the exact commands to run (lint, the Jest files, the Playwright
+  specs, and the bench lock where the shared box needs it);
+- the stop conditions: what to report, and when to stop and ask
+  instead of widening the change.
+
+An agent already running keeps its model. Re-tier at the next
+dispatch rather than restarting mid-task.
 
 Sequence agents that share a branch or files; parallelize only
 across disjoint trees. A burndown branch accumulating several
