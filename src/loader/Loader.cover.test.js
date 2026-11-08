@@ -606,6 +606,90 @@ describe('load() error/edge paths with OPFS enabled', () => {
   })
 
 
+  describe('a hosted or external OPFS source that is empty or truncated', () => {
+    // Hosted `/share/v/p/index.ifc` resolves to an absolute same-origin URL,
+    // so it takes the external branch, keyed `<file>.<host>` under
+    // BldrsLocalStorage/V1/Projects. The host never changes, so a 0-byte
+    // entry left there was served on every load ("OpenModel returned -1:
+    // empty file") until the guard stopped being GitHub-only.
+    const url = 'https://example.com/models/index.obj'
+    const objText = 'v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n'
+
+    beforeEach(() => {
+      dereferenceAndProxyDownloadContents.mockResolvedValue([url, '', false, false])
+    })
+
+    it('evicts a 0-byte entry under its own key and loads from the network', async () => {
+      downloadToOPFS.mockResolvedValue(new MockFile(''))
+      axios.get.mockResolvedValue({data: objText})
+
+      const model = await load(url, viewer, onProgress, true, setOpfsFile, '')
+
+      expect(model).toBeDefined()
+      expect(deleteFileFromOPFS).toHaveBeenCalledTimes(1)
+      expect(deleteFileFromOPFS).toHaveBeenCalledWith(
+        '/models/index.obj', 'example.com', 'BldrsLocalStorage', 'V1', 'Projects')
+      expect(axios.get).toHaveBeenCalledTimes(1)
+      expect(axios.get.mock.calls[0][0]).toBe(url)
+      // The store must not keep a handle to the evicted entry, or a later
+      // "Save" would write the empty file.
+      expect(setOpfsFile).toHaveBeenCalledWith(null)
+      expect(setOpfsFile).not.toHaveBeenCalledWith(expect.any(MockFile))
+    })
+
+    it('evicts a truncated part-21 entry and re-fetches', async () => {
+      const ifcUrl = 'https://example.com/index.ifc'
+      dereferenceAndProxyDownloadContents.mockResolvedValue([ifcUrl, '', false, false])
+      downloadToOPFS.mockResolvedValue(new MockFile(
+        'ISO-10303-21;\nHEADER;\nFILE_SCHEMA((\'IFC4\'));\nENDSEC;\nDATA;\n#1=IFCWALL();\n'))
+      axios.get.mockResolvedValue({data: new ArrayBuffer(64)})
+
+      // The re-fetched junk still fails to parse; what matters is the
+      // eviction and that the bytes came from the network, not OPFS.
+      await expect(load(ifcUrl, viewer, onProgress, true, setOpfsFile, '')).rejects.toThrow()
+
+      expect(deleteFileFromOPFS).toHaveBeenCalledWith(
+        '/index.ifc', 'example.com', 'BldrsLocalStorage', 'V1', 'Projects')
+      expect(axios.get).toHaveBeenCalledTimes(1)
+      expect(axios.get.mock.calls[0][0]).toBe(ifcUrl)
+    })
+
+    it('keeps a locally hosted 0-byte entry from being served too', async () => {
+      downloadToOPFS.mockResolvedValue(new MockFile(''))
+      axios.get.mockResolvedValue({data: objText})
+
+      await load('/index.obj', viewer, onProgress, true, setOpfsFile, '')
+
+      expect(deleteFileFromOPFS).toHaveBeenCalledWith(
+        '/index.obj', 'bldrs-ai', 'BldrsLocalStorage', 'V1', 'Projects')
+      expect(axios.get).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not evict an external OBJ whose header mentions ISO-10303-21', async () => {
+      downloadToOPFS.mockResolvedValue(new MockFile(`# exported from ISO-10303-21 STEP\n${objText}`))
+
+      await load(url, viewer, onProgress, true, setOpfsFile, '')
+
+      expect(deleteFileFromOPFS).not.toHaveBeenCalled()
+      expect(axios.get).not.toHaveBeenCalled()
+    })
+
+    it('never evicts an upload, whose OPFS entry is the only copy', async () => {
+      getModelFromOPFS.mockReset()
+      getModelFromOPFS.mockResolvedValue(new MockFile(''))
+      dereferenceAndProxyDownloadContents.mockResolvedValue([
+        'blob:http://localhost/uuid.obj', '', false, false,
+      ])
+
+      await expect(load('12345678-1234-4abc-9def-123456789abc.obj',
+        viewer, onProgress, true, setOpfsFile, '')).rejects.toThrow()
+
+      expect(deleteFileFromOPFS).not.toHaveBeenCalled()
+      expect(axios.get).not.toHaveBeenCalled()
+    })
+  })
+
+
   it('still throws when an uploaded file fails in OPFS (no fallback URL)', async () => {
     // Uploaded files only exist in OPFS — there's no remote URL to fall
     // back to. The resilience fix MUST re-throw rather than try axios
@@ -968,7 +1052,10 @@ describe('load() error/edge paths with OPFS enabled', () => {
       false,
       false,
     ])
-    downloadToOPFS.mockResolvedValue(new MockFile('ISO-10303-21 fake ifc'))
+    // Complete part-21 (it ends in END-ISO-10303-21;): a bare prefix on
+    // the external path is now evicted as truncated before it reaches the
+    // OOM-throwing OpenModel this test is about.
+    downloadToOPFS.mockResolvedValue(new MockFile('ISO-10303-21;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n'))
 
     try {
       await load('https://example.com/model.ifc', ifcViewer, onProgress, true, setOpfsFile, '')

@@ -19,6 +19,9 @@ let GITHUB_BASE_URL_UNAUTHENTICATED = null
 // pieces is to avoid materializing a large ArrayBuffer.
 // eslint-disable-next-line no-magic-numbers
 const COPY_CHUNK_BYTES = 4 * 1024 * 1024
+// Names a download still in flight in downloadModelToOPFS. Never a cache
+// hit: no lookup matches a name that doesn't start with the model's name.
+export const PARTIAL_DOWNLOAD_PREFIX = '.partial-'
 
 
 /**
@@ -1237,32 +1240,61 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       }
     }
   }
+  // Fetch BEFORE creating anything, and stream into a temporary name that
+  // no lookup can hit, moving it to `<name>.<commitHash>` only once every
+  // byte has landed. The "commit hash" here is not content-derived — for
+  // hosted and external models it is the URL's host, for `/index.ifc`-style
+  // local paths the constant 'bldrs-ai' — so the final name never changes
+  // and nothing ever invalidates it: whatever sits under it is served as a
+  // cache hit on every later load. This function used to create that final
+  // entry (0 bytes) before calling fetch(), so a reload or tab close during
+  // the round trip, a rejected fetch, a missing body, or an error response
+  // all left an empty or partial entry under the final name, and the next
+  // load handed Conway the empty file ("OpenModel returned -1: empty file").
+  // A short write already removed its entry (#2042); an interruption can't
+  // run cleanup, so the only defence there is never naming an in-flight
+  // file as if it were complete. The Loader side evicts what an older
+  // build left behind (Loader.js, opfsSourceHealth.js).
+  let response
   try {
-    [modelDirectoryHandle, modelBlobFileHandle] = await retrieveFileWithPath(
-      branchFolderHandle, originalFilePath, commitHash, true, requestId)
+    response = await fetch(objectUrl)
+  } catch (error) {
+    postReply({error: `downloadModelToOPFS: fetch failed for ${originalFilePath}: ${error}`}, requestId)
+    return
+  }
+  if (!response.ok) {
+    // An error page (a host's 404 HTML, a 5xx) is not the model; caching it
+    // under the final name would serve it forever.
+    postReply({error: `downloadModelToOPFS: HTTP ${response.status} for ${originalFilePath}; not cached`}, requestId)
+    return
+  }
+  if (!response.body) {
+    postReply({error: 'downloadModelToOPFS: ReadableStream not supported in this browser.'}, requestId)
+    return
+  }
+
+  const finalFileName = `${strippedFileName}.${commitHash}`
+  // Leading prefix, not a suffix: `retrieveFileWithPathNew` matches any name
+  // that starts with the file's name and contains the commit hash, so a
+  // `<name>.<commitHash>.partial` would still read back as a hit.
+  const tempFileName = `${PARTIAL_DOWNLOAD_PREFIX}${finalFileName}`
+  let tempFileHandle = null
+  try {
+    modelDirectoryHandle = await directoryForPath(branchFolderHandle, originalFilePath)
+    tempFileHandle = await modelDirectoryHandle.getFileHandle(tempFileName, {create: true})
     // Same Safari self-heal as in writeTemporaryFileToOPFS.
     const opened = await openSyncAccessHandleWithRetry(
-      modelDirectoryHandle, modelBlobFileHandle, modelBlobFileHandle.name)
+      modelDirectoryHandle, tempFileHandle, tempFileName)
     blobAccessHandle = opened.handle
-    modelBlobFileHandle = opened.fileHandle
+    tempFileHandle = opened.fileHandle
+    // A temp left by an interrupted earlier download is reused, not served;
+    // drop its bytes so a shorter body can't inherit its tail.
+    await blobAccessHandle.truncate(0)
   } catch (error) {
-    if (blobAccessHandle) {
-      try {
-        await blobAccessHandle.close()
-      } catch (_) {/* idempotent */}
-    }
+    await discardPartialEntry(blobAccessHandle, modelDirectoryHandle, tempFileHandle)
     const workerMessage = `Error getting file handle for ${originalFilePath}: ${error}`
     postReply({error: workerMessage}, requestId)
     return
-  }
-  // Fetch the file from the object URL
-  const response = await fetch(objectUrl)
-
-  if (!response.body) {
-    try {
-      await blobAccessHandle.close()
-    } catch (_) {/* idempotent */}
-    throw new Error('ReadableStream not supported in this browser.')
   }
 
   const reader = response.body.getReader()
@@ -1270,32 +1302,18 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
 
   let receivedLength = 0 // length of received bytes
 
-  let isDone = false
-
   try {
-    while (!isDone) {
+    for (;;) {
       const {done, value} = await reader.read()
-
       if (done) {
-        isDone = true
         break
       }
-
-      try {
-        if (value !== undefined) {
-          await writeAll(blobAccessHandle, value, {at: receivedLength})
-        }
-      } catch (error) {
-        // The entry already carries its final `<name>.<commitHash>` name, so
-        // a partial one left here is served as cached on the next load
-        // (#2042). Remove it.
-        reader.cancel()
-        await discardPartialEntry(blobAccessHandle, modelDirectoryHandle, modelBlobFileHandle)
-        const workerMessage = `Error writing to ${commitHash}: ${error}.`
-        postReply({error: workerMessage}, requestId)
-        return
+      if (value === undefined) {
+        continue
       }
-
+      // A short write throws here (#2042) and lands in the catch below,
+      // which removes the temp.
+      await writeAll(blobAccessHandle, value, {at: receivedLength})
       receivedLength += value.length
 
       if (onProgress) {
@@ -1311,30 +1329,29 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
         }, requestId)
       }
     }
-
-    if (isDone) {
-      // Close before getFile() so Safari isn't holding a write lock when we
-      // hand the File back. (Idempotent — the finally block is the safety net
-      // for the error paths above; this is the happy-path close.)
-      try {
-        await blobAccessHandle.close()
-      } catch (_) {/* idempotent */}
-      // if done, the file should be written. Write the metadata and signal the worker has completed.
-      try {
-        const blobFile = await modelBlobFileHandle.getFile()
-
-        postReply({completed: true, event: 'download', file: blobFile}, requestId)
-      } catch (error) {
-        const workerMessage = `Error Getting file handle: ${error}.`
-        postReply({error: workerMessage}, requestId)
-        return
-      }
+    if (receivedLength === 0) {
+      // Nothing to cache: an empty body is never a usable model, and stored
+      // under the final name it would be served on every later load.
+      throw new Error('empty response body; not cached')
     }
+    await blobAccessHandle.flush()
+    // Close before the move: an entry can't be moved (or, on Safari,
+    // read) while a sync access handle is open on it.
+    await blobAccessHandle.close()
+    blobAccessHandle = null
+    modelBlobFileHandle = await renameFileInOPFS(modelDirectoryHandle, tempFileHandle, finalFileName)
+    tempFileHandle = null
+    const blobFile = await modelBlobFileHandle.getFile()
+    postReply({completed: true, event: 'download', file: blobFile}, requestId)
   } catch (error) {
-    // A stream that dies mid-download leaves the same partial entry.
-    reader.cancel()
-    await discardPartialEntry(blobAccessHandle, modelDirectoryHandle, modelBlobFileHandle)
-    postReply({error: error}, requestId)
+    // A stream that dies mid-download, a short write, an empty body, or a
+    // failed move: drop the temp so it can't be mistaken for anything.
+    try {
+      await reader.cancel()
+    } catch (_) {/* already settled */}
+    await discardPartialEntry(blobAccessHandle, modelDirectoryHandle, tempFileHandle)
+    blobAccessHandle = null
+    postReply({error: `Error writing ${originalFilePath} (${commitHash}): ${error?.message ?? error}`}, requestId)
   } finally {
     // Always close the sync access handle. See writeTemporaryFileToOPFS for
     // the rationale (Safari InvalidStateError on subsequent loads if leaked).
@@ -1344,6 +1361,25 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       } catch (_) {/* idempotent */}
     }
   }
+}
+
+
+/**
+ * The directory `filePath`'s file lives in under `rootHandle`, creating
+ * any missing segments — the directory half of {@link retrieveFileWithPath},
+ * for a caller that names the file itself.
+ *
+ * @param {FileSystemDirectoryHandle} rootHandle
+ * @param {string} filePath
+ * @return {Promise<FileSystemDirectoryHandle>}
+ */
+async function directoryForPath(rootHandle, filePath) {
+  const segments = safePathSplit(filePath)
+  let current = rootHandle
+  for (let i = 0; i < segments.length - 1; i++) {
+    current = await current.getDirectoryHandle(segments[i], {create: true})
+  }
+  return current
 }
 
 /**
