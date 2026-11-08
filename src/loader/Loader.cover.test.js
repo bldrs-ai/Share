@@ -730,6 +730,30 @@ describe('load() error/edge paths with OPFS enabled', () => {
         expect(captureMessage).not.toHaveBeenCalled()
       })
 
+      it('sends no message when the direct fetch succeeds but readModel then throws', async () => {
+        // "Recovered" means a model came out. Junk bytes that fail to parse
+        // end in CadView's captureException, so a message here would make one
+        // failure two events.
+        const ifcUrl = 'https://example.com/index.ifc'
+        dereferenceAndProxyDownloadContents.mockResolvedValue([ifcUrl, '', false, false])
+        downloadToOPFS.mockResolvedValue(new MockFile(''))
+        axios.get.mockResolvedValue({data: new ArrayBuffer(64)})
+
+        await expect(load(ifcUrl, viewer, onProgress, true, setOpfsFile, '')).rejects.toThrow()
+
+        expect(axios.get).toHaveBeenCalledTimes(1)
+        expect(captureMessage).not.toHaveBeenCalled()
+      })
+
+      it('sends no message when the direct fetch succeeds but its bytes fail the LFS check', async () => {
+        downloadToOPFS.mockRejectedValue(downloadError('http-error', 404))
+        axios.get.mockResolvedValue({data: 'version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 12345\n'})
+
+        await expect(load(url, viewer, onProgress, true, setOpfsFile, '')).rejects.toThrow(/Git LFS/)
+
+        expect(captureMessage).not.toHaveBeenCalled()
+      })
+
       it('sends nothing for an OPFS failure that is not one of these conditions', async () => {
         downloadToOPFS.mockRejectedValue(new Error('Error getting file handle for /x: boom'))
         axios.get.mockResolvedValue({data: objText})

@@ -1,4 +1,5 @@
 import {captureMessage} from '@sentry/react'
+import {loadFailureCaptureContext} from '../loader/loadProgress'
 import {
   downloadSourceKind,
   reportOpfsDownloadFailed,
@@ -8,11 +9,28 @@ import {
 
 
 jest.mock('@sentry/react', () => ({captureMessage: jest.fn()}))
+jest.mock('../loader/loadProgress', () => ({loadFailureCaptureContext: jest.fn()}))
+
+const SECRET_PATH = 'secret-org/secret-repo/main/private.ifc'
 
 
 describe('reportOpfsSourceCondition', () => {
   beforeEach(() => {
     captureMessage.mockReset()
+    // What a live load hands over: CadView sets fileInfo from the raw
+    // filepath, so for a private source it is the path.
+    loadFailureCaptureContext.mockReset()
+    loadFailureCaptureContext.mockReturnValue({
+      tags: {'load.phase': 'download', 'load.file': SECRET_PATH},
+      contexts: {
+        load: {
+          phase: 'download', completed: 1, total: 2, unit: 'bytes', elapsedMs: 5, memoryMb: 10,
+          fileInfo: SECRET_PATH,
+          fileName: 'private.ifc',
+          report: 'Source: OPFS entry was truncated',
+        },
+      },
+    })
   })
 
   it('reports an eviction as one info event with a per-kind fingerprint', () => {
@@ -61,6 +79,23 @@ describe('reportOpfsSourceCondition', () => {
 
     const everything = JSON.stringify(captureMessage.mock.calls)
     expect(everything).not.toMatch(/https?:|\.ifc|\.obj|secret|\//)
+  })
+
+  it('carries the load phase and report but not the load context\'s file identity', () => {
+    // Red if the whole loadFailureCaptureContext() is spread back onto the
+    // event: its `fileInfo` is the raw path of a private model.
+    reportOpfsSourceEvicted('github')
+    reportOpfsDownloadFailed({kind: 'external', condition: 'http-error', status: 500})
+    reportOpfsNotCached('local')
+
+    expect(captureMessage).toHaveBeenCalledTimes(3)
+    expect(JSON.stringify(captureMessage.mock.calls)).not.toMatch(/secret|private\.ifc/)
+    const [, context] = captureMessage.mock.calls[0]
+    expect(context.tags['load.phase']).toBe('download')
+    expect(context.contexts.load).toEqual({
+      phase: 'download', completed: 1, total: 2, unit: 'bytes', elapsedMs: 5, memoryMb: 10,
+      report: 'Source: OPFS entry was truncated',
+    })
   })
 
   it('never throws when Sentry does', () => {

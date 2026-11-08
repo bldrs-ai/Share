@@ -753,14 +753,6 @@ export async function load(
     }
   }
 
-  if (opfsFallbackCondition !== null) {
-    if (opfsFallbackCondition.evictedKind) {
-      reportOpfsSourceEvicted(opfsFallbackCondition.evictedKind)
-    } else {
-      reportOpfsDownloadFailed(opfsFallbackCondition)
-    }
-  }
-
   // Git LFS pointer guard. GitHub-hosted models go through the Contents
   // API, which rewrites LFS pointers to media.githubusercontent.com
   // before download (net/github/lfs.js). A URL that skips that
@@ -827,7 +819,22 @@ export async function load(
     model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress,
       {onIndexed, onFirstMesh})
   } catch (e) {
+    // The OPFS condition is dropped, unreported: this load failed, so
+    // CadView's captureException already covers it, and a message as well
+    // would make one failure two events (Share#2103 review).
     throw markIfOutOfMemory(e)
+  }
+  // "Recovered" means the fallback actually produced a model: the direct
+  // fetch succeeded AND its bytes passed the LFS, gzip/archive and readModel
+  // steps above. Only then is the OPFS condition a degraded-but-working load
+  // worth a message (reportOpfsSourceCondition.js). Any throw before this
+  // point leaves the failure to CadView's captureException alone.
+  if (opfsFallbackCondition !== null) {
+    if (opfsFallbackCondition.evictedKind) {
+      reportOpfsSourceEvicted(opfsFallbackCondition.evictedKind)
+    } else {
+      reportOpfsDownloadFailed(opfsFallbackCondition)
+    }
   }
   // The session of the worker engine that parsed this model
   // (`?feature=engineWorker`), or null for a main-thread parse. No engine on
