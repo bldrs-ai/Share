@@ -16,7 +16,7 @@ import {NavigationModes} from './base-types'
 import {IfcMouse} from './mouse'
 import RenderDemand from '../renderDemand'
 import {attachSessionNets, createSceneProbe, installSceneHooks} from '../renderDemandHooks'
-import {isFeatureEnabled} from '../../../FeatureFlags'
+import {isRenderOnDemandOn} from '../renderOnDemandMode'
 
 
 /**
@@ -85,11 +85,13 @@ export class IfcContext {
     // Consulted by the render closure ThreeContext#setRenderUpdate installs;
     // inert (every frame paints) outside a progressive load.
     this.renderDemand = new RenderDemand()
-    // `?feature=renderOnDemand` (story #2055): on demand for the whole
+    // Render-on-demand (story #2055, on by default): on demand for the whole
     // session, so an idle viewer paints nothing. renderDemand.js's module
     // doc lists the layers that ask for a paint; these are its automatic ones.
+    // renderOnDemandMode.js decides, so its kill switch and prod rollback are
+    // the only ways this is skipped; nothing else reads the flags.
     this.endRenderSession = null
-    if (isFeatureEnabled('renderOnDemand')) {
+    if (isRenderOnDemandOn()) {
       installSceneHooks()
       const stopSession = this.renderDemand.startSession({
         controls: this.ifcCamera.cameraControls,

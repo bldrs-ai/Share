@@ -38,13 +38,16 @@
  * which only paints less while loading (design/new/in-app-model-switch.md
  * §4.2a has the numbers).
  *
- * Outside a load (`isOnDemand === false`) every frame paints, as before:
- * everything that changes the picture after a load (cut planes, isolation,
- * looks, hover, splat sorting) keeps working without having to ask.
+ * Without a session (below), outside a load (`isOnDemand === false`) every
+ * frame paints, as before #2055: everything that changes the picture after a
+ * load (cut planes, isolation, looks, hover, splat sorting) keeps working
+ * without having to ask. That is the mode `?feature=disableRenderOnDemand`
+ * and the prod rollback put back (renderOnDemandMode.js).
  *
- * **The whole session on demand (`?feature=renderOnDemand`, story #2055).**
- * With the flag, `startSession` keeps the viewer on demand between loads
- * too: an idle viewer paints nothing. Between loads there is no heartbeat
+ * **The whole session on demand (render-on-demand, story #2055, on by
+ * default).** `startSession` keeps the viewer on demand between loads too:
+ * an idle viewer paints nothing. `IfcContext` starts it when
+ * `renderOnDemandMode.js#isRenderOnDemandOn` says so. Between loads there is no heartbeat
  * and no frame budget; whatever asks paints on the next frame. Because a
  * source that forgets to ask leaves a stale frame on screen, which is the
  * worst failure here, asking is layered (renderDemandHooks.js has the
