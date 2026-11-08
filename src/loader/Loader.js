@@ -64,8 +64,10 @@ import {
 } from '../viewer/ifc/appliedCoordination'
 import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
 import {spillModelSource} from './opfsSourceByteStore'
+import {EvictedOpfsSourceError, isUnusableOpfsSource} from './opfsSourceHealth'
 import {PART21_LOADER_TYPES} from './part21Formats'
-import {STORE_DETECT_PREFIX_BYTES, conwayStoreOpenRequirement, looksLikeTruncatedPart21Blob} from './stepFormat'
+import {reportOpfsDownloadFailed, reportOpfsNotCached, reportOpfsSourceEvicted} from '../OPFS/reportOpfsSourceCondition'
+import {STORE_DETECT_PREFIX_BYTES, conwayStoreOpenRequirement} from './stepFormat'
 import {isEngineWorkerLoad} from '../viewer/ifc/ShareIfcLoader'
 import {
   externalCacheKey,
@@ -341,6 +343,14 @@ export async function load(
   }
 
   let modelData
+  // The OPFS condition (eviction, failed download) this load fell back from,
+  // reported to Sentry only once the direct fetch has succeeded: a load that
+  // fails outright is CadView's captureException, and a second event for it
+  // would double the volume (reportOpfsSourceCondition.js).
+  let opfsFallbackCondition = null
+  // Set when the OPFS download was served uncached (no move(); utils.js#downloadToOPFS
+  // marks the File). Held like opfsFallbackCondition and reported with it.
+  let opfsNotCachedKind = null
   // GLB export context: captured after the source file is in hand if the
   // `glb` feature is on and the source is IFC. Carries the cacheKeyArgs
   // (source-kind namespace + sourceHash) the post-parse writer will use.
@@ -378,6 +388,10 @@ export async function load(
       // Only set for GitHub sources — the only kind whose bytes can be
       // an LFS pointer.
       let opfsEntryKey = null
+      // Removes this load's OPFS source entry, for the kinds a re-fetch can
+      // repair: GitHub, hosted/external URLs, locally hosted paths. Stays null
+      // for uploads, whose OPFS entry is the only copy there is.
+      let evictOpfsSource = null
 
       if (isUploadedFile) {
         kindLabel = 'upload'
@@ -386,6 +400,7 @@ export async function load(
       } else if (isLocallyHostedFile) {
         kindLabel = 'local'
         debug().log('Loader#load: local file:', path)
+        evictOpfsSource = () => deleteFileFromOPFS(path, 'bldrs-ai', 'BldrsLocalStorage', 'V1', 'Projects')
         file = await downloadToOPFS(
           path,
           path,
@@ -414,6 +429,7 @@ export async function load(
           // Captured after the re-dereference above, which can replace
           // shaHash — the key must match the one the OPFS lookup uses.
           opfsEntryKey = {filePath, shaHash, owner, repo, branch}
+          evictOpfsSource = () => deleteFileFromOPFS(filePath, shaHash, owner, repo, branch)
 
           // GitHub gives us a stable upstream sha *before* we download — so
           // the GLB cache lookup can happen pre-download (fastest hit path).
@@ -455,34 +471,14 @@ export async function load(
                   updateRecentFileLastModified(sharePath, lastModifiedGithub)
                 })
             }
-            // GitHub HIT keys off remote sha + OPFS existence, not local
-            // completeness. A truncated part-21 prefix under the right sha
-            // is served forever and Conway reports every tail ref as
-            // "not in the index". Same eviction shape as the LFS-pointer
-            // guard: GitHub only, because a re-fetch can repair it.
-            // Footer sniff is IFC/STEP only — an OBJ whose first comment
-            // mentions ISO-10303-21 is a valid cache entry, not truncated
-            // part-21. 0-byte files of any type are always unusable.
-            const truncatedPart21 = PART21_LOADER_TYPES.has(loader.type) &&
-              await looksLikeTruncatedPart21Blob(file)
-            if (file && (file.size === 0 || truncatedPart21)) {
-              debug().warn(
-                'Loader#load: OPFS source is truncated part-21; evicting and re-fetching')
-              try {
-                await deleteFileFromOPFS(filePath, shaHash, owner, repo, branch)
-              } catch (evictError) {
-                debug().warn('Loader#load: could not evict truncated source:', evictError)
-              }
-              setOpfsFile(null)
-              reportSourceInfo(
-                'Source: OPFS entry was truncated — evicted, re-fetching from network')
-              file = null
-              glbExportContext = null
-            }
           }
         } else {
           kindLabel = 'external'
           const opfsFilename = pathUrl.pathname
+          // Same key downloadToOPFS stores under: `<file>.<host>` in
+          // BldrsLocalStorage/V1/Projects.
+          evictOpfsSource = () =>
+            deleteFileFromOPFS(opfsFilename, pathUrl.host, 'BldrsLocalStorage', 'V1', 'Projects')
           debug().log(`Loader#load: downloadToOPFS with opfsFilename:`, opfsFilename)
           file = await downloadToOPFS(
             path,
@@ -494,6 +490,33 @@ export async function load(
             onProgress)
         }
       }
+
+      // No source kind's cache key says the bytes are complete. GitHub's is
+      // the upstream sha plus the entry's existence. Hosted and external
+      // URLs key on the host, which never changes. So an entry left empty or
+      // truncated (by an interrupted download, or a short write from an older
+      // build; OPFS.worker.js#downloadModelToOPFS) would be served on every
+      // load: Conway reports `OpenModel returned -1: empty file` for 0 bytes,
+      // or every tail ref "not in the index" for a part-21 prefix. One check
+      // for every kind that can re-fetch (opfsSourceHealth.js). Skipped on a
+      // GLB cache hit, where `file` is the artifact, not the source.
+      if (evictOpfsSource !== null && !cameFromGlbCache &&
+          await isUnusableOpfsSource(file, loader.type)) {
+        debug().warn(
+          `Loader#load: ${kindLabel} OPFS source is empty or truncated; evicting and re-fetching`)
+        try {
+          await evictOpfsSource()
+        } catch (evictError) {
+          debug().warn('Loader#load: could not evict truncated source:', evictError)
+        }
+        setOpfsFile(null)
+        reportSourceInfo(
+          'Source: OPFS entry was truncated — evicted, re-fetching from network')
+        // The catch below takes it to the direct fetch; the next load stores
+        // a fresh entry.
+        throw new EvictedOpfsSourceError(kindLabel)
+      }
+      opfsNotCachedKind = file?.opfsNotCachedKind ?? null
       debug().log('Loader#load: File from OPFS:', file)
       setOpfsFile(file)
 
@@ -683,12 +706,23 @@ export async function load(
       if (opfsError?.message?.startsWith('Invalid URL path')) {
         throw opfsError
       }
-      debug().warn(
-        `Loader#load: OPFS path failed (${opfsError?.message || opfsError}); ` +
+      if (opfsError instanceof EvictedOpfsSourceError) {
+        opfsFallbackCondition = {evictedKind: opfsError.kindLabel}
+      } else if (opfsError?.opfsCondition) {
+        opfsFallbackCondition = {
+          kind: opfsError.opfsKind,
+          condition: opfsError.opfsCondition,
+          status: opfsError.opfsStatus,
+        }
+      }
+      if (!(opfsError instanceof EvictedOpfsSourceError)) {
+        debug().warn(
+          `Loader#load: OPFS path failed (${opfsError?.message || opfsError}); ` +
         'falling back to direct fetch. ' +
         'The OPFS cache is treated as best-effort — corrupt or browser- ' +
         'rejected entries (Safari InvalidStateError, leaked sync handles, ' +
         'half-written files from previous sessions) should not block load.')
+      }
       // A GLB writer-side artifact context only makes sense for a load that
       // actually came through the OPFS path. Drop it on fallback so we don't
       // try to associate the freshly-fetched bytes with the failed cache key.
@@ -789,7 +823,25 @@ export async function load(
     model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress,
       {onIndexed, onFirstMesh})
   } catch (e) {
+    // The OPFS condition is dropped, unreported: this load failed, so
+    // CadView's captureException already covers it, and a message as well
+    // would make one failure two events (Share#2103 review).
     throw markIfOutOfMemory(e)
+  }
+  // "Recovered" means the fallback actually produced a model: the direct
+  // fetch succeeded AND its bytes passed the LFS, gzip/archive and readModel
+  // steps above. Only then is the OPFS condition a degraded-but-working load
+  // worth a message (reportOpfsSourceCondition.js). Any throw before this
+  // point leaves the failure to CadView's captureException alone.
+  if (opfsNotCachedKind !== null) {
+    reportOpfsNotCached(opfsNotCachedKind)
+  }
+  if (opfsFallbackCondition !== null) {
+    if (opfsFallbackCondition.evictedKind) {
+      reportOpfsSourceEvicted(opfsFallbackCondition.evictedKind)
+    } else {
+      reportOpfsDownloadFailed(opfsFallbackCondition)
+    }
   }
   // The session of the worker engine that parsed this model
   // (`?feature=engineWorker`), or null for a main-thread parse. No engine on

@@ -209,3 +209,61 @@ describeMobileAndDesktop('OPFS stores a model whole or not at all (#2042)', () =
     expect((await listOpfs(page)).filter((f) => f.size === WRITE_LIMIT)).toEqual([])
   })
 })
+
+
+/**
+ * An empty hosted entry is evicted, not served forever.
+ *
+ * A hosted model is cached as `BldrsLocalStorage/V1/Projects/<file>.<host>`.
+ * The host never changes, so nothing invalidates that key, and whatever
+ * sits under it is a cache hit on every load. Before the fix, the worker
+ * created the entry under that name before it fetched, so a reload or tab
+ * close during the round trip left it at 0 bytes. The Loader's empty and
+ * truncated-source guard was GitHub-only, so the hosted demo then failed
+ * every load with `OpenModel returned -1: empty file`. The owner found this
+ * entry at 0 B on a deploy preview.
+ *
+ * The test seeds that exact entry, the way an older build left it.
+ */
+describeMobileAndDesktop('An empty hosted OPFS entry is evicted and re-fetched', () => {
+  const hosted = new Uint8Array(readFileSync(HOSTED_FILE))
+  const hostedSha256 = createHash('sha256').update(hosted).digest('hex')
+
+  test.beforeEach(async ({page, context}) => {
+    await homepageSetup(page)
+    await setIsReturningUser(context)
+  })
+
+  test('a 0-byte hosted index.ifc entry still loads, and the next load caches it whole', async ({page}) => {
+    test.setTimeout(TWO_LOADS_TIMEOUT_MS)
+    // Seed from a static page on the same origin, so OPFS is the app's own
+    // but no load is running to race the write.
+    await page.goto('/robots.txt', {waitUntil: 'domcontentloaded'})
+    const seeded = await page.evaluate(async () => {
+      const root = await navigator.storage.getDirectory()
+      const projects = await (await (await root.getDirectoryHandle('BldrsLocalStorage', {create: true}))
+        .getDirectoryHandle('V1', {create: true})).getDirectoryHandle('Projects', {create: true})
+      const name = `index.ifc.${location.host}`
+      const file = await (await projects.getFileHandle(name, {create: true})).getFile()
+      return {name, size: file.size}
+    })
+    expect(seeded.size).toBe(0)
+
+    await page.goto(HOSTED_PATH, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page)
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    expect(await loadReportLines(page)).toContain(
+      'Source: OPFS entry was truncated — evicted, re-fetching from network')
+    // Gone, not left for the next load.
+    expect((await listOpfs(page)).filter((f) => baseName(f) === seeded.name && f.size === 0)).toEqual([])
+
+    // Before, the next load served the empty entry again. Now it stores a
+    // complete copy under the same name.
+    await page.reload({waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page)
+    const cached = (await listOpfs(page)).filter((f) => baseName(f) === seeded.name)
+    expect(cached).toHaveLength(1)
+    expect(cached[0].size).toBe(hosted.length)
+    expect(cached[0].sha256).toBe(hostedSha256)
+  })
+})
