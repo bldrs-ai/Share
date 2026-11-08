@@ -65,7 +65,8 @@ import {
 import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
 import {spillModelSource} from './opfsSourceByteStore'
 import {EvictedOpfsSourceError, isUnusableOpfsSource} from './opfsSourceHealth'
-import {PART21_LOADER_TYPES} from './part21Formats'
+import {PART21_LOADER_TYPES, engineFormatOf} from './part21Formats'
+import {reportEngineSourceBuffered, reportPreviewUnitsSkipped} from './reportLoadDiagnostics'
 import {reportOpfsDownloadFailed, reportOpfsNotCached, reportOpfsSourceEvicted} from '../OPFS/reportOpfsSourceCondition'
 import {STORE_DETECT_PREFIX_BYTES, conwayStoreOpenRequirement} from './stepFormat'
 import {isEngineWorkerLoad} from '../viewer/ifc/ShareIfcLoader'
@@ -189,6 +190,59 @@ export async function canOpenFromStore(viewer, loaderType, file) {
   } catch (e) {
     debug().warn('Loader#canOpenFromStore: header sniff failed; buffering:', e)
     return false
+  }
+}
+
+
+/**
+ * The source kind of a load that never reached the OPFS path, which is where
+ * `kindLabel` is set: an in-memory upload, or a direct fetch (OPFS off, or
+ * fallen back from). Categories only, so nothing here can name the file.
+ *
+ * @param {string} path
+ * @param {boolean} isInMemory
+ * @param {boolean} isLocallyHosted
+ * @return {string} 'upload' | 'local' | 'github' | 'external'
+ */
+function fallbackSourceKind(path, isInMemory, isLocallyHosted) {
+  if (isInMemory || path.startsWith('blob:')) {
+    return 'upload'
+  }
+  if (isLocallyHosted) {
+    return 'local'
+  }
+  try {
+    return new URL(path).host === 'github.com' ? 'github' : 'external'
+  } catch {
+    return 'external'
+  }
+}
+
+
+/**
+ * The GA diagnostics of a load that succeeded (reportLoadDiagnostics.js,
+ * Share#2106 follow-ups): preview units its loader skipped
+ * (`model.previewUnitsSkipped`, ShareIfcLoader#parse), and an engine-worker
+ * source that opened buffered. The latter is the absence of the load
+ * report's `Engine source I/O` line (engineModelLoad.js#sourceIoLine): the
+ * worker's done summary has no source, or a `resident` one.
+ *
+ * @param {object} model the parsed model
+ * @param {object} context
+ * @param {string} context.format
+ * @param {string} context.kind
+ * @param {string} context.bufferedReason
+ * @param {number} context.sourceBytes size of the source, captured before the
+ *   open could transfer it away
+ */
+function reportLoadDiagnostics(model, {format, kind, bufferedReason, sourceBytes}) {
+  reportPreviewUnitsSkipped({format, kind, skipped: model?.previewUnitsSkipped})
+  const ifcAPI = model?.ifcManager?.ifcAPI
+  if (ifcAPI?.engineSession && ifcAPI.summary) {
+    const source = ifcAPI.summary.source
+    if (!source || source.kind === 'resident') {
+      reportEngineSourceBuffered({reason: bufferedReason, sizeBytes: sourceBytes})
+    }
   }
 }
 
@@ -351,6 +405,16 @@ export async function load(
   // Set when the OPFS download was served uncached (no move(); utils.js#downloadToOPFS
   // marks the File). Held like opfsFallbackCondition and reported with it.
   let opfsNotCachedKind = null
+  // Source kind and why an engine-worker source would be buffered, for the
+  // GA diagnostics reported with the OPFS conditions below
+  // (reportLoadDiagnostics.js). Kind stays null until the OPFS path names it.
+  let sourceKind = null
+  let bufferedReason = 'unknown'
+  if (inMemoryFile !== undefined) {
+    bufferedReason = 'in-memory'
+  } else if (!isOpfsAvailable) {
+    bufferedReason = 'opfs-unavailable'
+  }
   // GLB export context: captured after the source file is in hand if the
   // `glb` feature is on and the source is IFC. Carries the cacheKeyArgs
   // (source-kind namespace + sourceHash) the post-parse writer will use.
@@ -540,6 +604,7 @@ export async function load(
       // swap. Spill pages this File; the hash/parse ArrayBuffer is a
       // separate JS copy. An OPFS File pins nothing.
       const opfsSourceFile = file
+      sourceKind = kindLabel
 
       // One sniff, two decisions: whether to hash the File in slices
       // instead of buffering it (below) and whether to hand conway the
@@ -548,6 +613,7 @@ export async function load(
       // for the artifact; the second call site additionally guards on
       // `cameFromGlbCache` so a hit never takes the store path.
       const canStreamOpen = await canOpenFromStore(viewer, loader.type, opfsSourceFile)
+      bufferedReason = canStreamOpen ? 'store-open-refused' : 'not-store-openable'
 
       // Non-GitHub sources have no upstream sha. Hash the parse buffer
       // itself so we do not materialise the file twice (once for SHA-1,
@@ -728,6 +794,7 @@ export async function load(
       // try to associate the freshly-fetched bytes with the failed cache key.
       glbExportContext = null
       cameFromGlbCache = false
+      bufferedReason = 'opfs-failed'
       // modelData stays undefined — falls through to the direct-fetch block
       // below, same as when `isOpfsAvailable` was false to begin with.
     }
@@ -809,10 +876,13 @@ export async function load(
     // Extension-less upload paths — the loader was already resolved by
     // content sniffing in findLoader; the model line just omits the tag.
   }
+  // Read before readModel: a buffered worker open transfers the ArrayBuffer
+  // away, which leaves its byteLength 0 afterwards.
+  const sourceBytes = modelData?.byteLength ?? modelData?.length ?? modelData?.size
   reportModelInfo({
     fileName: path.substring(path.lastIndexOf('/') + 1) || path,
     schema: formatTag,
-    byteLength: modelData?.byteLength ?? modelData?.length ?? modelData?.size,
+    byteLength: sourceBytes,
   })
 
   // readModel throws on any falsy model (surfacing viewer.IFC.ifcLastError
@@ -843,6 +913,12 @@ export async function load(
       reportOpfsDownloadFailed(opfsFallbackCondition)
     }
   }
+  reportLoadDiagnostics(model, {
+    format: engineFormatOf(loader.type) ?? loader.type,
+    kind: sourceKind ?? fallbackSourceKind(path, inMemoryFile !== undefined, isLocallyHostedFile),
+    bufferedReason,
+    sourceBytes,
+  })
   // The session of the worker engine that parsed this model
   // (`?feature=engineWorker`), or null for a main-thread parse. No engine on
   // the page holds a worker load's model, so the GLB writer below reaches the
