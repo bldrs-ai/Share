@@ -388,8 +388,15 @@ export function createEngineHandler({
       if (sourceStore !== null) {
         // Windowed already (a store-backed open): conway reads through the
         // store this session holds, and a second one would only replace a
-        // sync access handle with whatever this open finds.
-        return {spilled: false, reason: 'windowed', source: sourceSummary()}
+        // sync access handle with whatever this open finds. What a windowed
+        // open can let go here is the Blob store's whole-file copy
+        // (engineSources.js#makeBlobStore, Share#2092): the writer's capture
+        // was the load's last sweep, so from here property reads page
+        // windows from the File again, as they do on a sync access handle.
+        // A load with no writer sends this too, with no `file`, once its
+        // parse is done (Loader.js#load): nothing here needs one.
+        const released = sourceStore.releaseResident?.() ?? false
+        return {spilled: false, reason: 'windowed', released, source: sourceSummary()}
       }
       if (typeof api.SpillModelSource !== 'function' || typeof file?.slice !== 'function') {
         return {spilled: false, reason: 'unsupported', source: sourceSummary()}
@@ -479,7 +486,10 @@ export function createEngineHandler({
     // worker finds itself, else the Blob store (engineSources.js#openSourceStore
     // says when and why).
     const opened = windowable ?
-      await openSourceStore(source, {allowSyncHandle: !flags.disableEngineSyncHandle, now, ...sourceOptions}) :
+      await openSourceStore(source, {
+        allowSyncHandle: !flags.disableEngineSyncHandle, holdResident: !flags.disableEngineResidentSource,
+        now, ...sourceOptions,
+      }) :
       null
     const store = opened?.store ?? null
     // A persisted sidecar for this entry, tried before the parse. Only for a
@@ -509,6 +519,9 @@ export function createEngineHandler({
         sidecar,
         store,
         loadBytes: async () => {
+          // The buffered fallback reads the file again for itself: let the
+          // windowed store's whole-file copy go first rather than hold both.
+          store?.releaseResident?.()
           const bytes = source?.bytes ?? (blob ? await blob.arrayBuffer() : null)
           if (!bytes) {
             throw new Error('engine: open needs source.file or source.bytes')
@@ -711,28 +724,43 @@ export function createEngineHandler({
   /**
    * Write the open model's index sidecar when it parsed (not when it opened
    * from one): the next open of the same OPFS entry then skips the parse.
+   * Either way, sweep the sidecar directory (sweepSidecars).
    * After the pump, so the export (a serialise of the index columns, ~0.2 s
    * on 106 MB of STEP) never competes with geometry. Best-effort: a failed
    * export or write leaves no sidecar, and the next open parses.
    */
   async function saveSidecar() {
-    if (sidecarState === null || sidecarState.source === 'sidecar' || api === null) {
+    if (sidecarState === null || api === null) {
+      return
+    }
+    if (sidecarState.source === 'sidecar') {
+      // Nothing to save, but the sweep runs on every open that keys a
+      // sidecar, so a model that always reopens from its sidecar still
+      // retires strays — a Safari write's abandoned temporary (codex review
+      // of Share#2095).
+      await sweepSidecars(sidecarState.getOpfsRoot)
       return
     }
     try {
       // eslint-disable-next-line new-cap
       const exported = await api.ExportIndexSidecar(modelID)
-      if (exported) {
-        sidecarState.bytes = exported.byteLength
-        sidecarState.saved =
-          await writeSidecar(sidecarState.entryPath, sidecarState.file, exported, sidecarState.getOpfsRoot)
-        // Retire the sidecars of entries that are gone (codex review of
-        // Share#2085): one file per entry path bounds a replaced entry's,
-        // and this bounds a deleted one's.
-        await sweepSidecars(sidecarState.getOpfsRoot)
+      if (!exported) {
+        sidecarState.saveError = 'the engine exported no sidecar'
+        return
       }
-    } catch {
-      // Left unsaved; reported as such.
+      sidecarState.bytes = exported.byteLength
+      const written =
+        await writeSidecar(sidecarState.entryPath, sidecarState.file, exported, sidecarState.getOpfsRoot)
+      sidecarState.saved = written.saved
+      sidecarState.writer = written.writer
+      sidecarState.saveError = written.error
+      // Retire the sidecars of entries that are gone (codex review of
+      // Share#2085): one file per entry path bounds a replaced entry's,
+      // and this bounds a deleted one's.
+      await sweepSidecars(sidecarState.getOpfsRoot)
+    } catch (e) {
+      // Left unsaved; reported as such, with why (Share#2093).
+      sidecarState.saveError = `export failed: ${e?.name ?? 'Error'}: ${e?.message ?? e}`
     }
   }
 
@@ -747,6 +775,15 @@ export function createEngineHandler({
     const summary = {...counts, wasmBytes: wasmBytesOf(api), source: sourceSummary()}
     if (sidecarState !== null) {
       summary.index = {source: sidecarState.source, bytes: sidecarState.bytes, saved: sidecarState.saved}
+      // Only when there is something to say, so a clean save's packet is
+      // the one it always was: the fallback writer that saved it (Safari
+      // before 26), or why nothing was saved (Share#2093).
+      if (sidecarState.writer && sidecarState.writer !== 'writable') {
+        summary.index.writer = sidecarState.writer
+      }
+      if (sidecarState.saveError) {
+        summary.index.saveError = sidecarState.saveError
+      }
     }
     if (typeof api.getStatistics === 'function') {
       summary.statistics = snapshotStatistics(api.getStatistics(modelID))

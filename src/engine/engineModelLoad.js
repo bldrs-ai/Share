@@ -532,7 +532,8 @@ const MS_PER_S = 1000
 /**
  * The load report's line for where the engine's index came from (§7 step
  * 8): a persisted sidecar (no parse), or the parse, and whether that parse
- * saved one for the next open. Absent when the open could not use one (a
+ * saved one for the next open — through which writer, when not the usual
+ * one, or why not. Absent when the open could not use one (a
  * buffered source, no OPFS entry, the kill switch).
  *
  * @param {object|undefined} index the `done` packet's `index`
@@ -547,14 +548,24 @@ export function indexLine(index) {
     return `Engine index: from sidecar (${size}), no parse`
   }
   const refused = index.source === 'sidecarRejected' ? 'sidecar refused, ' : ''
-  const saved = index.saved ? `sidecar saved (${size})` : 'no sidecar saved'
+  // Which writer saved it when it was not `createWritable` (Safari before
+  // 26 writes through a sync access handle), and why nothing was saved when
+  // nothing was (Share#2093): an unsupported browser reads apart from a
+  // quota or export error.
+  const via = index.writer === 'syncAccessHandle' ? ', via sync access handle' : ''
+  const saved = index.saved ?
+    `sidecar saved (${size}${via})` :
+    `no sidecar saved${index.saveError ? ` (${index.saveError})` : ''}`
   return `Engine index: ${refused}parsed; ${saved}`
 }
 
 
 /**
  * The load report's line for how the engine read its source (§7 step 4):
- * through an OPFS sync access handle, or the Blob store and why.
+ * through an OPFS sync access handle, or the Blob store and why — and, on
+ * the Blob store, whether it held the whole file for the load (Share#2092:
+ * `whole file held, N reads from memory`, with the one whole-file read in
+ * the counts that follow) or why not.
  *
  * @param {object|undefined} source the `done` packet's `source`
  * @return {string|undefined}
@@ -563,9 +574,19 @@ export function sourceIoLine(source) {
   if (!source || source.kind === 'resident') {
     return undefined
   }
-  const via = source.kind === 'syncHandle' ?
-    'OPFS sync access handle' :
-    `Blob store${source.fallbackReason ? ` (${source.fallbackReason})` : ''}`
+  let via = 'OPFS sync access handle'
+  if (source.kind !== 'syncHandle') {
+    const notes = []
+    if (source.fallbackReason) {
+      notes.push(source.fallbackReason)
+    }
+    if (source.residentBytes > 0) {
+      notes.push(`whole file held, ${source.residentReads} reads from memory`)
+    } else if (source.residentSkipped) {
+      notes.push(`whole file not held: ${source.residentSkipped}`)
+    }
+    via = `Blob store${notes.length > 0 ? ` (${notes.join('; ')})` : ''}`
+  }
   return `Engine source I/O: ${via}, ${source.reads} reads, ` +
     `${(source.bytes / MIB).toFixed(1)} MB, ${(source.ms / MS_PER_S).toFixed(2)}s`
 }
