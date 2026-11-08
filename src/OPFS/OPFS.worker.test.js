@@ -1117,7 +1117,16 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
         .toBe(CHUNKS * KIB)
     })
 
-    test('without move(), the model is served from memory and nothing is cached', async () => {
+    /** @return {Promise<Array<string>>} what is in the temp directory */
+    async function listTemps() {
+      try {
+        return await allFileNames(await rootDir.getDirectoryHandle(worker.PARTIAL_DOWNLOAD_DIR))
+      } catch (_) {
+        return []
+      }
+    }
+
+    test('without move(), the final name is never created and the model is served from the temp', async () => {
       global.fetch = jest.fn(() => Promise.resolve(streamedResponse(CHUNKS, KIB)))
       const dir = await projectsDir()
       const getFileHandle = jest.spyOn(dir, 'getFileHandle')
@@ -1132,7 +1141,69 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
         new Uint8Array(await streamedResponse(CHUNKS, KIB).arrayBuffer()))
       // A copy would have created the final name before it was complete.
       expect(getFileHandle).not.toHaveBeenCalledWith(finalName, {create: true})
-      expect(await allFileNames(rootDir)).toEqual([])
+      // Nothing under the final name: the one entry is the live temp.
+      const names = await allFileNames(rootDir)
+      expect(names).toHaveLength(1)
+      expect(names).not.toContain(finalName)
+      expect(await listTemps()).toEqual(names)
+    })
+
+    test('without move(), the reply is the temp\'s own File and the bytes are never buffered', async () => {
+      // Reading the temp into an ArrayBuffer needs one contiguous allocation
+      // the size of the model (codex review of Share#2103). Red if the reply
+      // goes back to arrayBuffer() + a copied File.
+      const files = []
+      const getFile = FileHandle.prototype.getFile
+      FileHandle.prototype.getFile = async function() {
+        const file = await getFile.call(this)
+        file.arrayBuffer = jest.fn(() => file.slice().arrayBuffer())
+        files.push(file)
+        return file
+      }
+      try {
+        global.fetch = jest.fn(() => Promise.resolve(streamedResponse(CHUNKS, KIB)))
+
+        const replies = await download('/index.ifc', 'r7a')
+
+        const done = replies.find((m) => m.completed)
+        expect(files).toContain(done.file)
+        expect(files.some((file) => file.arrayBuffer.mock.calls.length > 0)).toBe(false)
+        expect(done.file.size).toBe(CHUNKS * KIB)
+        // The temp is still there for the page to read.
+        expect(await listTemps()).toHaveLength(1)
+      } finally {
+        FileHandle.prototype.getFile = getFile
+      }
+    })
+
+    test('with Web Locks, another download\'s sweep leaves a served no-move temp, and its lock stays held', async () => {
+      const locks = fakeLocks()
+      global.navigator.locks = locks
+      global.fetch = jest.fn(() => Promise.resolve(streamedResponse(CHUNKS, KIB)))
+
+      await download('/a.ifc', 'r7b')
+      const [served] = await listTemps()
+      expect(locks.held.has(`${worker.PARTIAL_DOWNLOAD_LOCK_PREFIX}${served}`)).toBe(true)
+
+      // A second download in the same worker sweeps first.
+      await download('/b.ifc', 'r7c')
+
+      expect(await listTemps()).toContain(served)
+    })
+
+    test('without Web Locks, this worker\'s own sweep leaves a served no-move temp even past 10 minutes', async () => {
+      // Only the age rule runs here. A temp still being read must not be
+      // taken for abandoned just because its last write was long ago.
+      global.fetch = jest.fn(() => Promise.resolve(streamedResponse(CHUNKS, KIB)))
+      await download('/a.ifc', 'r7d')
+      const temps = await rootDir.getDirectoryHandle(worker.PARTIAL_DOWNLOAD_DIR)
+      const [served] = await listTemps()
+      const handle = await temps.getFileHandle(served)
+      handle.lastModified = Date.now() - worker.STALE_PARTIAL_DOWNLOAD_MS - 1
+
+      await download('/b.ifc', 'r7e')
+
+      expect(await listTemps()).toContain(served)
     })
 
     test('a copy killed partway never becomes a cache hit', async () => {

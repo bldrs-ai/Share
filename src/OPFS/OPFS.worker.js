@@ -46,6 +46,14 @@ export const STALE_PARTIAL_DOWNLOAD_MS = 10 * 60 * 1000
 // The empty-body failure's message, matched in downloadModelToOPFS's catch to
 // tell it from a stream or write error in the reply's `condition`.
 const EMPTY_BODY_MESSAGE = 'empty response body; not cached'
+// Temps of THIS worker that were handed out as the served file because the
+// engine has no move() (see downloadModelToOPFS), by temp name. This worker's
+// own sweep must not take them while the page still reads them: with Web
+// Locks the held lock protects a temp from every tab, but without
+// `navigator.locks` only the 10-minute age rule runs and would delete a temp
+// that is still being read. Never cleared: the temp lives as long as this
+// worker, and a later session's sweep removes it.
+const liveServedTemps = new Set()
 const SHORT_WRITE_PREFIX = 'OPFS write incomplete'
 
 /**
@@ -1321,12 +1329,36 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
   const tempFileName = crypto.randomUUID()
   const locks = webLocks()
   if (typeof locks?.request === 'function') {
-    await locks.request(`${PARTIAL_DOWNLOAD_LOCK_PREFIX}${tempFileName}`, streamToTempAndPlace)
+    // The callback normally ends with the download and releases the lock. When
+    // the temp is served as the file (no move(), below) it never ends: the
+    // lock stays held until this worker dies, which is what keeps another
+    // tab's sweep off a temp the page is still reading. The handler doesn't
+    // wait for that, only for the download.
+    await new Promise((resolve, reject) => {
+      locks.request(`${PARTIAL_DOWNLOAD_LOCK_PREFIX}${tempFileName}`, async () => {
+        let keepLock
+        try {
+          keepLock = await streamToTempAndPlace()
+        } catch (error) {
+          reject(error)
+          return
+        }
+        resolve()
+        if (keepLock) {
+          await new Promise(() => undefined)
+        }
+      }).catch(reject)
+    })
   } else {
     await streamToTempAndPlace()
   }
 
-  /** The rest of the download, under the temp's lock when there is one. */
+  /**
+   * The rest of the download, under the temp's lock when there is one.
+   *
+   * @return {Promise<boolean>} true when the temp was handed out as the served
+   *   file, so its lock must stay held
+   */
   async function streamToTempAndPlace() {
     let tempDirectoryHandle = null
     let tempFileHandle = null
@@ -1344,7 +1376,7 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       await discardPartialEntry(blobAccessHandle, tempDirectoryHandle, tempFileHandle)
       const workerMessage = `Error getting file handle for ${originalFilePath}: ${error}`
       postReply({error: workerMessage}, requestId)
-      return
+      return false
     }
 
     const reader = response.body.getReader()
@@ -1395,21 +1427,35 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
         modelBlobFileHandle = await modelDirectoryHandle.getFileHandle(finalFileName, {create: false})
         const blobFile = await modelBlobFileHandle.getFile()
         postReply({completed: true, event: 'download', file: blobFile}, requestId)
-        return
+        return false
       }
       // No atomic move: either this engine has no move(), or it refused
       // (the target is held, say). renameFileInOPFS's copy fallback would
       // create the final name first and fill it in chunks. A worker or tab
       // killed mid-copy would then leave a partial entry under the final
       // name, which the next load would serve (codex review of Share#2103).
-      // So nothing is cached. The bytes are served from memory and the temp
-      // is dropped, which costs a re-download next time.
-      const bytes = await (await tempFileHandle.getFile()).arrayBuffer()
-      await discardPartialEntry(null, tempDirectoryHandle, tempFileHandle)
+      // So nothing is cached.
+      //
+      // The model is served from the temp itself: `getFile()` is a File
+      // backed by the OPFS entry, so a large IFC or STEP stays on disk.
+      // Reading it into an ArrayBuffer first needed one contiguous
+      // allocation the size of the model, an OOM risk exactly where this
+      // path runs (codex review of Share#2103). The temp therefore has to
+      // outlive this load, and is NOT discarded here:
+      //   - its Web Lock stays held (see the caller) so no other tab's sweep
+      //     takes it, and liveServedTemps keeps this worker's own sweep off
+      //     it, which matters where there are no Web Locks;
+      //   - nobody removes it in this session. When the worker or page dies
+      //     its lock goes, and the next session's sweep removes the temp.
+      // Costs: the bytes sit on disk until then, and the next load downloads
+      // again, since nothing is cached under the final name.
+      const servedFile = await tempFileHandle.getFile()
+      liveServedTemps.add(tempFileName)
       tempFileHandle = null
-      // `cached: false` tells the page this load was served from memory
+      // `cached: false` tells the page this load was not cached
       // (reportOpfsNotCached).
-      postReply({completed: true, event: 'download', file: new File([bytes], strippedFileName), cached: false}, requestId)
+      postReply({completed: true, event: 'download', file: servedFile, cached: false}, requestId)
+      return true
     } catch (error) {
     // A stream that dies mid-download, a short write, an empty body: drop
     // the temp. A failure after the move leaves a complete final entry,
@@ -1428,6 +1474,7 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
           `downloadModelToOPFS: stream or write failed (${error?.name ?? 'Error'})`,
         condition: error?.message === EMPTY_BODY_MESSAGE ? 'empty-body' : 'stream-error',
       }, requestId)
+      return false
     } finally {
     // Always close the sync access handle. See writeTemporaryFileToOPFS for
     // the rationale (Safari InvalidStateError on subsequent loads if leaked).
@@ -1495,6 +1542,9 @@ async function sweepPartialDownloads(tempDirectory, locks) {
     }
   }
   for (const [name, handle] of entries) {
+    if (liveServedTemps.has(name)) {
+      continue
+    }
     const remove = async () => {
       try {
         await tempDirectory.removeEntry(name)
