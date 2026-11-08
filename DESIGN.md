@@ -139,13 +139,17 @@ new that changes the picture *during* a load and must show at once calls
 the session paints on demand too; next paragraph). Why:
 design/new/in-app-model-switch.md §4.2a.
 
-**On-demand painting for the whole session (`?feature=renderOnDemand`,
-story #2055, default off for burn-in).** With the flag, `IfcContext` calls
-`RenderDemand#startSession`, so between loads the loop still ticks but
-paints only when something asks, with no heartbeat and no budget: an idle
-viewer paints nothing (the flag-off loop paints every frame between loads,
-as before). A change that never asks leaves a stale frame up, so asking is
-layered, cheapest-to-forget last:
+**On-demand painting for the whole session (render-on-demand, story #2055,
+on by default since the flip after #2096).** `IfcContext` calls
+`RenderDemand#startSession` when `renderOnDemandMode.js#isRenderOnDemandOn`
+says so, so between loads the loop still ticks but paints only when
+something asks, with no heartbeat and no budget: an idle viewer paints
+nothing. That predicate is the only reader of the flags; everything else
+that behaves differently on demand reads `RenderDemand#isSession`. With it
+off (the switches below) the loop paints every frame between loads, as
+before #2055, and the hooks in layer 3 are not installed. A change that
+never asks leaves a stale frame up, so asking is layered,
+cheapest-to-forget last:
 
 1. The camera: camera-controls `update` (input, damping, transitions:
    ViewCube, fit, permalink pose), window resize. Between loads a
@@ -159,8 +163,8 @@ layered, cheapest-to-forget last:
    lights and look parameters, placemark colours, the cut-plane arrows.
    `renderOnDemandSources.test.js` lists every file that makes one of those
    mutations and fails on a new, unaudited one.
-3. Hooks on three's own change signals, installed only with the flag
-   (`renderDemandHooks.js#installSceneHooks`): `Object3D#add`/`attach`/
+3. Hooks on three's own change signals, installed only when the session
+   is on demand (`renderDemandHooks.js#installSceneHooks`): `Object3D#add`/`attach`/
    `remove`, the BatchedMesh mutators (`setColorAt`, `setVisibleAt`, …), and
    `needsUpdate` on materials, textures and attributes. They ask for a
    background paint (the next frame between loads, the budget during one),
@@ -181,11 +185,35 @@ layered, cheapest-to-forget last:
 Tests that a source does ask: `renderDemand.test.js`,
 `renderDemandHooks.test.js` and the behavioural half of
 `renderOnDemandSources.test.js` (hooks off, so only the source's own ask can
-pass); `renderOnDemand.spec.ts` (desktop + mobile) checks that an idle viewer
-stops painting and that a drag (through its damping tail), a selection and a
-resize repaint, with the last on-demand paint matching a forced fresh one.
-The E2E `captureRenderedFrame` asks for its own paint, so it works either
-way.
+pass); `renderOnDemandMode.test.js` (the default, the kill switch, the
+rollback beating a URL opt-in); `renderOnDemand.spec.ts` (desktop + mobile,
+on the default URL) checks that an idle viewer stops painting, that a drag
+(through its damping tail), a selection and a resize repaint, and that a
+fresh parse in the engine worker and a GLB cache hit each end on a current
+frame, with the last on-demand paint matching a forced fresh one; its
+`?feature=disableRenderOnDemand` leg checks that an idle viewer keeps
+painting. The E2E `captureRenderedFrame` asks for its own paint, so it works
+either way.
+
+**Rolling back.** Whether the session paints on demand is one decision,
+`viewer/three/renderOnDemandMode.js#paintEveryFrameReason`, read when the
+viewer is built (a theme change rebuilds it and reads it again).
+- *Prod-wide:* set `disableRenderOnDemand` to `isActive: true` in
+  `FeatureFlags.js` and deploy. The predicate reads that static value
+  before any URL flag, so every viewer paints every frame between loads,
+  including links that still carry `?feature=renderOnDemand`. Loads stay
+  on demand (#2043), as they were before #2055.
+- *Not* `renderOnDemand: false`. `isFeatureEnabled` ORs a static flag with
+  the URL, so that would leave every `?feature=renderOnDemand` link (the
+  burn-in links, older bug reports) on demand. The same trap as
+  `engineWorker` (engine-worker.md §7.2, Codex review on #2083).
+- *One session:* `?feature=disableRenderOnDemand`, the first thing to try
+  on a stale-frame report: if the frame is right with it and wrong without,
+  a change source isn't asking. Fix it at the source (`requestPaint()`, or
+  a hook) and add it to `renderOnDemandSources.test.js`.
+- *To confirm which mode a page is in:* `?feature=perf` reads 0 FPS on an
+  idle on-demand viewer and the display rate otherwise; from devtools,
+  `store.getState().viewer.context.getRenderDemand().isSession`.
 
 Perf instrumentation attaches at that seam, not inside the closure:
 
