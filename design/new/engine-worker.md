@@ -525,7 +525,8 @@ it, the host's budget accounting still runs on the control port (§9).
 
 **Not in v2:** document writes (the op log, model-edit.md L1). They slot
 in as more ops without changing the shape. The index-sidecar export
-(conway#756) arrives with eviction (§7 step 8) as an `exportIndex` op.
+(conway#756) needs no op: the worker writes the sidecar itself after a
+load's first parse (§5.3, "Rehydrate"), not at eviction.
 
 
 ## 5. Main-thread API, cap, and lifecycle
@@ -638,8 +639,8 @@ One `EngineHost` per page owns every session's worker.
   still loading and B still does not fit, A is cancelled into an explicit,
   user-visible **paused — will resume** state. It is not silently dropped:
   A's tab says so, and when A is foregrounded again its load resumes from
-  the OPFS-staged source, through the sidecar if one was written (§8 item
-  4) and otherwise by a re-parse. So in-app-model-switch.md §4.0's "come
+  the OPFS-staged source, through the sidecar if its first parse finished
+  and wrote one (§8 item 4), and otherwise by a re-parse. So in-app-model-switch.md §4.0's "come
   back to a finished load" becomes **a finished background load when the
   budget allows; otherwise paused — will resume**. This is a provisional
   call, revisable (§8 item 2).
@@ -663,12 +664,21 @@ One `EngineHost` per page owns every session's worker.
   geometry is already in the scene. Cost (§3): ~0.5 s to stand the worker
   up, then the open — ~1 s for SEESTRASSE, 13–17 s for PSB — and the engine
   comes back smaller than it left (PSB 1.6 GB index-only against 2.25 GB
-  after geometry). Decided (§8 item 4): before eviction the worker exports
-  an index sidecar (conway#756) into OPFS beside the staged source, and the
-  respawn opens with `OpenModelFromIndex`, skipping the parse. It falls
-  back to the re-parse when the sidecar is missing, or stale against the
-  source's size and modification time, or when the engine lacks the export
-  (a capability from `init`). A source that is not in OPFS (the no-OPFS
+  after geometry). Decided (§8 item 4): the respawn opens with
+  `OpenModelFromIndex` from an index sidecar (conway#756) in OPFS, skipping
+  the parse. **The sidecar is written after the model's first load, not at
+  eviction** (owner, 2026-11-07): the worker exports and writes it once the
+  first parse's pump has finished (`engineHandler.js#saveSidecar`, Share#2085),
+  so it is already on disk when an eviction comes. At eviction memory and
+  CPU are probably under load, which is why the engine is being evicted, so
+  pruning must be fast and cheap: `terminate()` and nothing else, with no
+  export (~0.2 s on 106 MB of STEP, more on PSB, plus a 144 MB write for
+  PSB) in the way. The same sidecar serves a page reload or a later visit.
+  The respawn falls back to the re-parse when the sidecar is missing (the
+  first load never finished, the write failed, the kill switch), or stale
+  against the source (its envelope's size and modification time, then
+  conway's full source hash), or when the engine lacks the export (a
+  capability from `init`). A source that is not in OPFS (the no-OPFS
   in-memory upload, #1906) re-opens from the `File` that `inMemoryUploads`
   already holds.
 - **Close** = `abort`, `terminate`, drop the scene and the session's state.
@@ -848,6 +858,25 @@ preview. #2083 is not merged before that.
      Today's switch reloads the page, so it doesn't need to; none of the
      existing callers await it, apart from `closeAllEngineSessions`.
    - Kill switch: `?feature=disableEngineSyncHandle`.
+   - **The Blob store holds the whole file for the load** (Share#2092).
+     Firefox and Safari have no read-only handles (`mode` is ignored, the
+     handle comes back `readwrite`, and is closed), so their engine always
+     reads through the Blob store. conway's windowed source reads PSB about
+     4.7× over, and each Blob read is slow there (Firefox: 11 s of I/O). So
+     over an OPFS entry, an open's Blob store reads the whole file once
+     (`engineSources.js#makeBlobStore` `holdResident`, awaited before the
+     parse) and copies every read out of that. The GLB writer's spill, the
+     load's last sweep, releases the copy, and later property reads page
+     windows from the File again. A load that schedules no writer (a GLB
+     cache lookup that failed, a source with no cache key) sends the same
+     spill, with no File, as soon as the parse resolves after `done`
+     (`Loader.js#load`), so the copy never outlives the load either way,
+     and is released exactly once (codex review of Share#2095). The copy is not taken off OPFS (a File
+     already in memory reads cheaply), for a spill, or above
+     `RESIDENT_SOURCE_MAX_BYTES` (1 GiB). A buffered fallback lets it go
+     before it reads the file for itself. The `Engine source I/O:` line
+     says `whole file held, N reads from memory`, or why not. Kill switch:
+     `?feature=disableEngineResidentSource`. Numbers in §7.1, "Blob store".
 5. **GLB writer capture in the worker.** The `capture` job (properties,
    spatial tree, face ids), then spill and release worker-side, then the
    flag's cache write turns on. E2E: `batchedGlbCache.spec.ts` under the
@@ -978,7 +1007,8 @@ preview. #2083 is not merged before that.
    will resume" and foregrounding it completes the load.
 8. **Close and eviction** (#2031, absorbed). `EngineHost`, the budget and
    LRU, `terminate`, the artifact fallback, lazy index-only rehydrate
-   through the conway#756 sidecar (re-parse fallback). E2E:
+   through the conway#756 sidecar the first load already wrote (re-parse
+   fallback; the eviction itself writes nothing, §5.3). E2E:
    #2023's memory spec, asserting the evicted worker's memory is gone
    (`measureUserAgentSpecificMemory` breakdown in an isolated test server,
    or the renderer's RSS) and that properties still answer.
@@ -1003,7 +1033,7 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 | 4 — sync-access-handle source | merged (#2072). Measured flag on, Blob store vs read-only sync handle, at medians: PSB (n=3) source I/O 19.1 → 3.8 s, Parsing 28.3 → 20.2 s, time to index 44.2 → 35.8 s, Total 96.5 → 82.9 s; sp-231MB (n=2) I/O 8.5 → 2.1 s, Parsing 14.0 → 9.9 s, Total 64.8 → 60.1 s; SEESTRASSE (n=1) I/O 0.32 → 0.07 s, Total flat. Geometry, main-thread long tasks and page heap unchanged. Every leg was windowed, checked by its `Engine source I/O:` line, in a persistent profile. Caveat: the Blob store's per-read time includes event-loop wait as well as I/O (each read is an async round trip), so the I/O figures are not pure I/O. The wall-clock stages (Parsing, time to index, Total) carry the claim |
 | 6 — STEP in the worker | merged (#2067). Since conway#757 (Share#2085) a STEP staged in OPFS opens windowed in the worker through step 4's sync access handle, as an IFC does; conway faults AP214's synchronous reads in through the store's `readSync`. Measured: in the reopen table under §11 ("Measured, conway#757") |
 | 5 — GLB capture in the worker | merged (#2081), after #2073 (#2038: the capture dropped every record a windowed source did not have resident). n=1 each, flag off → on, `RAF_THROTTLE_MS=3600000`, persistent profile. PSB: time to artifact 171.6 → 118.9 s; the writer 38.1 → 31.0 s, of which the worker's capture is 7.6 s; main-thread long tasks before ready 536 (81.6 s) → 35 (13.7 s), and during the write 71 (7.85 s, max 624 ms) → 4 (0.43 s, max 208 ms); page heap (`performance.memory`) at the end 1,127 → 522 MB, sampled peak 1,766 → 848 MB; the worker's JS heap peaked at 140 MB, beside 899 MB of wasm. 58 MB STEP: time to artifact 47.6 → 43.2 s; writer 7.6 → 6.8 s, capture 2.5 s; long tasks before ready 292 (35.8 s) → 10 (3.6 s), during the write 4 (0.35 s) → 1 (0.07 s); page heap at the end 688 → 148 MB; worker JS heap peak 322 MB beside 515 MB of wasm. **Byte identity:** after the batch colour column became float64 (step 5 above), the two engines' whole PSB artifacts are identical, 86,341,686 B each with one SHA-256 (re-measured 2026-11-06, n=1 per side, on a less loaded machine: time to artifact 68.6 → 58.9 s, long tasks before ready 222 (27.8 s) → 13 (6.7 s)). Review fixes: protocol v2, so a stale cached worker without `capture` is refused at hello and the load runs in process (§4); `close()` waits for a spill still in flight before it decides whether to close politely |
-| 8 (part) — index sidecar reopen | Share#2085: a worker load from an OPFS entry saves conway's index sidecar, and the next open of the same entry opens from it instead of parsing, IFC and STEP alike (`engine/engineSidecars.js`). Eviction itself is still deferred. The reopen runs conway's full source check, which the owner chose over the sampled one. Measured with it: on the 58 and 106 MB STEP models, Parsing goes from 1.3–1.8 s and 2.6–2.8 s to 0.31–0.39 s and 0.65–0.70 s, and the tree arrives 2.1–3.3 s and 2.9–3.7 s sooner (§11) |
+| 8 (part) — index sidecar reopen | Share#2085: a worker load from an OPFS entry saves conway's index sidecar, and the next open of the same entry opens from it instead of parsing, IFC and STEP alike (`engine/engineSidecars.js`). It is written after the first load, not at eviction (§5.3). Since Share#2093 a browser without `createWritable` (Safari before 26) writes it through a read-write sync access handle, and a failed save says why on the `Engine index:` line. Eviction itself is still deferred. The reopen runs conway's full source check, which the owner chose over the sampled one. Measured with it: on the 58 and 106 MB STEP models, Parsing goes from 1.3–1.8 s and 2.6–2.8 s to 0.31–0.39 s and 0.65–0.70 s, and the tree arrives 2.1–3.3 s and 2.9–3.7 s sooner (§11) |
 | 7, 8 | deferred; only in-app switching needs them |
 | 9 | in flight (#2083, draft): default on, the kill switch and rollback, the main-thread routes. #2061 explained (below). Waits on the real-GPU, Safari and Firefox checks |
 
@@ -1022,6 +1052,49 @@ On PSB the first pickable thing was already its preview; the durable
 batches are now pickable from ~19–24 s instead of at ready (~46–56 s). On
 the main-thread engine a STEP pump holds the page from its first batch to
 ready, so the gain needs the worker (step 9).
+
+**Blob store (Share#2092).** Firefox and Safari read the source through
+the Blob store (step 4). The owner's check of the flip had PSB's
+`Engine source I/O` at 738 reads, 3374 MB, 11.09 s in Firefox (Parsing
+41.4 s, against 30.8 s on prod's main-thread engine) and 900 reads,
+4022 MB, 2.94 s in Safari. Where the reads come from, from a trace of every
+store read on one Chromium load: the parse sweeps the file once (~8 MiB
+reads). At its end comes a burst of ~540 reads, 2.2 GB in ~4 s: two
+interleaved whole-file sweeps about ten 4 MiB chunks apart, whose reuse
+distance (~20 chunks) is just over conway's 16-chunk window, plus several
+sparse passes over the same hot chunks. Then the pump re-reads ~1.2 GB in
+file order. Replaying that trace against a store-side cache: an LRU of
+256 MB still reads 3.3× the file, 512 MB 3.0×, and a never-evicting 512 MB
+cache 2.6×. Only the whole file reads 1×, because the passes are cyclic
+sweeps longer than any partial cache. So the store holds the whole file for
+the load. Measured in headless Chromium with the Blob store forced
+(`disableEngineSyncHandle`), PSB, persistent profile, render loop frozen,
+n=3 interleaved, medians:
+
+| PSB, cold (parse) | Blob store, windowed (before) | Blob store, whole file held | sync access handle |
+|---|---|---|---|
+| `Engine source I/O` | 892 reads, 3990 MB, 7.17 s | 1 read, 861 MB, 0.69 s (+ ~927 copies from memory) | 926 reads, 4126 MB, 2.24 s |
+| Parsing | 16.7 s | 14.0 s | 14.0 s |
+| Geometry | 24.9 s | 23.1 s | 22.8 s |
+| Total | 48.9 s | 45.1 s | 44.0 s |
+
+The reopen from the sidecar (n=1) gives the same picture: the windowed Blob
+store read 973 reads, 3874 MB, 7.36 s (Parsing 5.9 s, Total 37.8 s), the
+held file 0.68 s (Parsing 3.2 s, Total 33.0 s), and the sync handle 2.15 s
+(Parsing 3.2 s, Total 32.4 s). Starting the whole-file read in the
+background instead of awaiting it was worse: it contended with the parse's
+own reads (n=3: Parsing 15.6 s, Total 47.1 s), against ~0.7 s of
+"Opening model" it saved. The cost is memory: the worker holds the file
+(861 MB on PSB) beside the engine from the open to the GLB writer's spill
+(or to the end of the parse, when no writer runs),
+which is what prod's buffered main-thread open held for every model. Not
+yet measured: Firefox and Safari themselves, which the deploy preview's
+A/B (`?feature=disableEngineResidentSource`) settles. What belongs in
+conway: the amplification itself, which costs every store (the sync handle
+also reads 4.7×). The post-parse double sweep and sparse passes could be
+fused or narrowed, and the adaptive window grows too late for the burst
+(its 4,096-request interval; it reached 252 MB only in the pump). No conway
+change is made here.
 
 **Known issues.**
 
@@ -1242,7 +1315,8 @@ These were the open questions of the scope. The user decided each one.
    before a background load is cancelled. §5.2 reconciles this with
    #2031's "eviction cancels".
 4. **Rehydrate: an index-sidecar export** from the open model (conway#756),
-   consumed by `OpenModelFromIndex`. A re-parse is the fallback when the
+   consumed by `OpenModelFromIndex`. Written after the first load, not at
+   eviction, so an eviction stays a bare `terminate()` (§5.3). A re-parse is the fallback when the
    sidecar is missing or stale. If conway#756 has not landed by step 8,
    step 8 ships the re-parse and keeps the sidecar consumer behind its
    capability check.
@@ -1351,7 +1425,7 @@ and the other lacks.
 | Open failure | `classifyOpenFailure` → `unsupportedSchema.js#openModelFailure`, classified where the statistics are (§2.4 G3) | — | — | shared |
 | Engine worker | `engine/engineModelLoad.js` + `engineHandler.js` + `EngineSession` + the remembered in-process fallback (`spawnEngine.js`); `format` is a label | — | — | shared (§7 steps 3, 6) |
 | Index | `onIndexed` → `makeIndexedModelHandle` (`indexedModel`, #2037), started beside the pump | the deferred index | the AP214 assembly tree, built at open | shared |
-| Reopen without a re-parse | `engine/engineSidecars.js`: a worker load from an OPFS entry saves conway's sidecar (`ExportIndexSidecar`, v3, schema-stamped) under `engine-index-sidecars/`, one per entry path (an envelope records which version of the entry it describes; sidecars of entries that are gone are swept after each save), and the next open of the entry tries `OpenModelFromIndex` with the full source check (`VERIFY_INDEX_SOURCE_HASH: true`, one hashing pass over the file) before parsing; the load report's `Engine index:` line says which (`engineModelLoad.js#indexLine`); kill switch `?feature=disableEngineSidecar` | conway#756 | conway#757 | shared |
+| Reopen without a re-parse | `engine/engineSidecars.js`: a worker load from an OPFS entry saves conway's sidecar (`ExportIndexSidecar`, v3, schema-stamped) after its first load's pump, through `createWritable` or, where that is missing (Safari before 26, Share#2093), a read-write sync access handle, under `engine-index-sidecars/`, one per entry path (an envelope records which version of the entry it describes; sidecars of entries that are gone are swept after each save), and the next open of the entry tries `OpenModelFromIndex` with the full source check (`VERIFY_INDEX_SOURCE_HASH: true`, one hashing pass over the file) before parsing; the load report's `Engine index:` line says which (`engineModelLoad.js#indexLine`); kill switch `?feature=disableEngineSidecar` | conway#756 | conway#757 | shared |
 | Tree | `properties.getSpatialStructure(id, 'names', {includeSolids: true})`, through the indexed handle and `EngineSession#propertiesApi` | `includeSolids` ignored | multibody sub-solids as ephemeral `solid` nodes | shared call; data |
 | Ids and refs | `e` / `o` / `n` refs (`viewer/tools/refs.js`); selection joins on whichever key both sides carry | express IDs; tree id = geometry parent | tree id = the NAUO, geometry parent = the shared `product_definition_shape`; the join key is the occurrence path (step-occurrence-selection.md) | **data**: an assembly's reuse has no IFC equivalent, so the key differs, not the code |
 | Properties | `getItemProperties` / `getPropertySets`; the panel's tables through `propertyTable.js`, behind the worker's `propertyTables` op or on the page (§7.1, #2070) | IFC entities and psets | AP214 records | shared |

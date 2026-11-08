@@ -186,10 +186,23 @@ export const flags = [
   // Render on demand for the whole session (open-205 story #2055,
   // design/new/offscreen-rendering.md §7.1): between loads as well as during
   // them (#2043), the viewer paints only when something changed, so an idle
-  // viewer paints nothing. Off for burn-in; the default paints every frame
-  // between loads. src/viewer/three/renderDemand.js has the layers that ask
-  // for a paint; DESIGN.md §"Render loop & perf monitor" the summary.
-  {name: 'renderOnDemand', isActive: false},
+  // viewer paints nothing. On by default since the flip after #2096's
+  // burn-in. src/viewer/three/renderDemand.js has the layers that ask for a
+  // paint; DESIGN.md §"Render loop & perf monitor" the summary; and
+  // viewer/three/renderOnDemandMode.js is the one predicate the viewer reads.
+  // Do NOT roll back by setting this to false: `?feature=renderOnDemand` in a
+  // URL would still turn it on for that link. Roll back with
+  // `disableRenderOnDemand` below.
+  {name: 'renderOnDemand', isActive: true},
+  // OFF-switch for render-on-demand above, the same inverted shape as
+  // `disableEngineWorker`: `?feature=` can only turn flags ON, so
+  // `?feature=disableRenderOnDemand` is the per-session way back to painting
+  // every frame between loads, for a stale-frame report or an A/B. Setting
+  // it `isActive: true` here is the PROD ROLLBACK: renderOnDemandMode.js
+  // reads the static value before any URL flag, so no link can opt back into
+  // on-demand painting (DESIGN.md §"Render loop & perf monitor", "Rolling
+  // back").
+  {name: 'disableRenderOnDemand', isActive: false},
   // Kill switch for the engine worker's OPFS sync access handle
   // (engine-worker.md §7 step 4): read the source through the Blob store
   // instead, as on the main thread. `?feature=` can only turn flags on, so
@@ -199,6 +212,13 @@ export const flags = [
   // §7 step 8, §11; engine/engineSidecars.js): neither reopen a model from
   // its persisted sidecar nor write one, so every open parses.
   {name: 'disableEngineSidecar', isActive: false},
+  // Kill switch for the Blob store's whole-file read (Share#2092;
+  // engine/engineSources.js#makeBlobStore): where the engine reads its OPFS
+  // source through the Blob store (Firefox and Safari, which have no
+  // read-only sync access handles), read windows from the Blob for the
+  // whole load instead of holding the file for it. Also the A/B for
+  // measuring what the whole-file read buys.
+  {name: 'disableEngineResidentSource', isActive: false},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-

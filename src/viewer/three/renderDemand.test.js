@@ -334,6 +334,25 @@ describe('viewer/three/renderDemand session', () => {
     expect(frame()).toBe(true)
   })
 
+  // The load's end, with render-on-demand on by default: when the last scope
+  // closes the session paints once even with nothing asking and the probe
+  // quiet, because a change the load made without a signal (one that waited
+  // on a budget the load no longer has) would otherwise stay off screen.
+  // The E2E's load-end leg can't isolate this paint: the store change the
+  // load ends with opens a settle window that paints anyway.
+  it('paints exactly once when the last load scope closes, with nothing pending', () => {
+    demand.startSession({probe})
+    const endOuter = demand.begin()
+    const endInner = demand.begin()
+    // Everything the load asked for has painted, and the heartbeat is far off.
+    paintsIn(2)
+    expect(paintsIn(3)).toBe(0)
+    endInner()
+    expect(paintsIn(3), 'an inner scope closing leaves the load on its budget').toBe(0)
+    endOuter()
+    expect(paintsIn(10)).toBe(1)
+  })
+
   it('paints a background ask on the next frame between loads, with no budget', () => {
     demand.startSession({probe})
     paintsIn(2)

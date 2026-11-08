@@ -411,10 +411,12 @@ export class EngineSession {
 
   /**
    * Release a resident source (a buffered open) to windows read from `file`,
-   * the OPFS File it was parsed from. A no-op answer for a windowed session.
+   * the OPFS File it was parsed from. For a windowed session nothing is
+   * spilled, but a Blob store's whole-file copy held for the load is let go
+   * (`released`; engineSources.js#makeBlobStore, Share#2092).
    *
    * @param {File|Blob} file
-   * @return {Promise<{spilled: boolean, reason: (string|null), source: object}>}
+   * @return {Promise<{spilled: boolean, reason: (string|null), released: (boolean|undefined), source: object}>}
    */
   spill(file) {
     if (this.closing) {

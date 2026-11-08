@@ -3,9 +3,9 @@ import {requestBackgroundPaint} from './renderDemand'
 
 
 /**
- * The automatic half of render-on-demand (`?feature=renderOnDemand`, story
- * #2055; renderDemand.js's module doc lists the layers). With the whole
- * session on demand, a change nobody asks to paint stays off screen until
+ * The automatic half of render-on-demand (story #2055, on by default:
+ * renderOnDemandMode.js decides; renderDemand.js's module doc lists the
+ * layers). With the whole session on demand, a change nobody asks to paint stays off screen until
  * something else paints. These are the backstops that ask without the
  * changing code knowing about painting at all:
  *
@@ -62,7 +62,9 @@ let uninstallHooks = null
  * page-wide: three is one instance (singleThreeInstance.test.js), so the
  * hooks see the ViewCube's scene too, whose changes then cost the main
  * viewer a paint it didn't need; that is the safe direction. Installed only
- * when the flag is on, so the default path runs three unpatched.
+ * when the viewer paints on demand (renderOnDemandMode.js, the default), so
+ * `?feature=disableRenderOnDemand` and the prod rollback run three
+ * unpatched.
  *
  * @return {Function} restores the originals (for tests)
  */
