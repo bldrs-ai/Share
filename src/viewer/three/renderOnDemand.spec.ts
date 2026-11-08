@@ -2,16 +2,20 @@
 import {Page, expect, test} from '@playwright/test'
 import {CanvasFrame, SAME_FRAME_TOLERANCE, frameDifference} from '../../tests/e2e/canvasFrame'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
+import {watchEngineWorker} from '../../tests/e2e/engineWorker'
+import {captureGlbLogs, resetGlbLogs, waitForGlbLog} from '../../tests/e2e/glbLogs'
 import {waitForModelReady} from '../../tests/e2e/models'
-import {captureRenderedFrame, homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
+import {captureRenderedFrame, clearOpfs, homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
 
 
 const {beforeEach} = test
 
 
 /**
- * Render-on-demand for the whole session (`?feature=renderOnDemand`, story
- * #2055; src/viewer/three/renderDemand.js). Two promises, both read off the
+ * Render-on-demand for the whole session (story #2055, on by default;
+ * src/viewer/three/renderDemand.js, renderOnDemandMode.js). These run on the
+ * plain URL, with no `?feature=`, so they test what prod ships. Two
+ * promises, both read off the
  * viewer's own paint counter (`RenderDemand#stats`, counted at the render
  * seam, DESIGN.md §"Render loop & perf monitor"):
  *
@@ -33,7 +37,7 @@ describeMobileAndDesktop('viewer/three/renderOnDemand', () => {
   beforeEach(async ({page}) => {
     await homepageSetup(page)
     await setIsReturningUser(page.context())
-    await page.goto('/share/v/p/index.ifc?feature=renderOnDemand')
+    await page.goto('/share/v/p/index.ifc')
     await waitForModelReady(page)
     await waitForIdle(page)
   })
@@ -147,6 +151,87 @@ describeMobileAndDesktop('viewer/three/renderOnDemand', () => {
 })
 
 
+/**
+ * The load's end on demand (#2043 inside a session): CadView's load scope and
+ * the progressive parse's nested one close, and the session must leave the
+ * finished model on screen, not the last frame the load's budget happened to
+ * paint. Both ways a model arrives: a fresh parse in its engine worker (the
+ * default since #2083, whose batches stream in over the worker's port), and a
+ * GLB cache hit from OPFS, which builds the scene with no engine geometry at
+ * all. The recorder goes in from page start (`recordFromPageStart`), so it
+ * sees the load's own paints and the ones after its scope closed.
+ */
+describeMobileAndDesktop('viewer/three/renderOnDemand: the load ends on a current frame', () => {
+  beforeEach(async ({page}) => {
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+    // Each test gets a fresh context, so OPFS is normally empty already: the
+    // fresh-parse leg must not be a cache hit left by a run killed mid-write.
+    await clearOpfs(page)
+  })
+
+
+  test('a fresh parse in the engine worker, then a GLB cache hit', async ({page}) => {
+    // Two loads, the first also writing the cache.
+    test.setTimeout(120_000)
+    const CACHE_TIMEOUT_MS = 30_000
+    const glbLogs = captureGlbLogs(page)
+    const engine = watchEngineWorker(page)
+    await recordFromPageStart(page)
+
+    await page.goto('/share/v/p/index.ifc?feature=glbVerbose')
+    await waitForModelReady(page)
+    await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_TIMEOUT_MS)
+    expect(glbLogs.some((l) => l.includes('cache MISS')), 'the first load parsed').toBe(true)
+    await engine.expectWorkerEngine()
+    const parsed = await stopRecordingWhenIdle(page)
+    expect(parsed.isSession, 'the viewer paints on demand by default').toBe(true)
+    expect(parsed.paintsAfterLoad, 'the session painted after the load scope closed').toBeGreaterThan(0)
+    await expectLastPaintCurrent(page, parsed.last)
+
+    resetGlbLogs(glbLogs)
+    await page.goto('/share/v/p/index.ifc?feature=glbVerbose')
+    await waitForModelReady(page)
+    await waitForGlbLog(glbLogs, 'cache HIT', CACHE_TIMEOUT_MS)
+    const cached = await stopRecordingWhenIdle(page)
+    expect(cached.paintsAfterLoad, 'the session painted after the load scope closed').toBeGreaterThan(0)
+    await expectLastPaintCurrent(page, cached.last)
+  })
+})
+
+
+/**
+ * `?feature=disableRenderOnDemand`, the per-session kill switch
+ * (renderOnDemandMode.js): the loop paints every frame between loads, as it
+ * did before #2055. The prod rollback (`disableRenderOnDemand: true` in
+ * FeatureFlags.js) takes the same path; renderOnDemandMode.test.js covers
+ * that it beats a URL opt-in.
+ */
+describeMobileAndDesktop('viewer/three/renderOnDemand: ?feature=disableRenderOnDemand', () => {
+  beforeEach(async ({page}) => {
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+    // The old opt-in is named too: the kill switch must win over it.
+    await page.goto('/share/v/p/index.ifc?feature=renderOnDemand,disableRenderOnDemand')
+    await waitForModelReady(page)
+  })
+
+
+  test('an idle viewer keeps painting', async ({page}) => {
+    const isSession = await page.evaluate(() =>
+      (window as unknown as RodWindow).store?.getState().viewer?.context?.getRenderDemand?.()?.isSession)
+    expect(isSession, 'the session is not on demand').toBe(false)
+    const before = await readStats(page)
+    await page.waitForTimeout(IDLE_QUIET_MS)
+    const after = await readStats(page)
+    const frames = after.frames - before.frames
+    expect(frames, 'the render loop kept running').toBeGreaterThan(10)
+    // Every frame the loop ran painted: nothing asked, and nothing needed to.
+    expect(after.paints - before.paints, 'an idle viewer painted every frame').toBe(frames)
+  })
+})
+
+
 /** How long the viewer must paint nothing to count as idle. */
 const IDLE_QUIET_MS = 1500
 /** How long a test waits for the viewer to go idle. */
@@ -208,66 +293,111 @@ async function waitForIdle(page: Page) {
  * @param page
  */
 async function startRecording(page: Page) {
-  await page.evaluate((cols) => {
-    const w = window as unknown as RodWindow
-    const context = w.store?.getState().viewer?.context
-    const painting = context?.getLegacyRendererWrapper?.().update
-    const demand = context?.getRenderDemand?.()
-    const gl = context?.getRenderer?.().getContext()
-    if (!context?.setRenderUpdate || typeof painting !== 'function' || !demand || !gl) {
-      throw new Error('startRecording: no render seam, RenderDemand or WebGL context')
-    }
-    const read = (): CanvasFrame => {
-      const width = gl.drawingBufferWidth
-      const height = gl.drawingBufferHeight
-      const pixels = new Uint8Array(width * height * 4)
-      const bound = gl.getParameter(gl.FRAMEBUFFER_BINDING)
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-      gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
-      gl.bindFramebuffer(gl.FRAMEBUFFER, bound)
-      const rows = Math.max(1, Math.round(cols * height / width))
-      const rgb = new Array(cols * rows * 3).fill(0)
-      const counts = new Array(cols * rows).fill(0)
-      for (let py = 0; py < height; py++) {
-        const cy = Math.min(rows - 1, Math.floor(py * rows / height))
-        for (let px = 0; px < width; px++) {
-          const cell = (cy * cols) + Math.min(cols - 1, Math.floor(px * cols / width))
-          const at = ((py * width) + px) * 4
-          rgb[cell * 3] += pixels[at]
-          rgb[(cell * 3) + 1] += pixels[at + 1]
-          rgb[(cell * 3) + 2] += pixels[at + 2]
-          counts[cell]++
-        }
+  await page.evaluate(installRecorder, FRAME_COLS)
+}
+
+
+/**
+ * {@link startRecording} from the start of every navigation, for a test that
+ * must see a load's paints and the ones after it: an init script polls until
+ * the viewer is built and installs the same recorder. The viewer's own update
+ * (IfcHighlighter's) is in place by then, since ShareViewer builds the
+ * highlighter in its constructor and CadView stores the viewer after.
+ *
+ * @param page
+ */
+async function recordFromPageStart(page: Page) {
+  await page.addInitScript(`(() => {
+    const install = ${installRecorder.toString()}
+    const poll = () => {
+      if (window.store?.getState().viewer?.context?.getRenderDemand?.()) {
+        install(${FRAME_COLS})
+      } else {
+        setTimeout(poll, 10)
       }
-      for (let cell = 0; cell < counts.length; cell++) {
-        for (let c = 0; c < 3; c++) {
-          rgb[(cell * 3) + c] = Math.round(rgb[(cell * 3) + c] / Math.max(1, counts[cell]))
-        }
+    }
+    poll()
+  })()`)
+}
+
+
+/**
+ * The recorder itself, run in the page. Self-contained, because it is
+ * serialized twice: by `page.evaluate` and into an init script.
+ *
+ * Besides each paint's frame it notes whether a paint came after a load
+ * scope closed (`paintsAfterLoad`): a frame that ran with a scope open,
+ * then a paint with none.
+ *
+ * @param cols cells across a recorded frame
+ */
+function installRecorder(cols: number) {
+  const w = window as unknown as RodWindow
+  const context = w.store?.getState().viewer?.context
+  const painting = context?.getLegacyRendererWrapper?.().update
+  const demand = context?.getRenderDemand?.()
+  const gl = context?.getRenderer?.().getContext()
+  if (!context?.setRenderUpdate || typeof painting !== 'function' || !demand || !gl) {
+    throw new Error('startRecording: no render seam, RenderDemand or WebGL context')
+  }
+  const read = (): CanvasFrame => {
+    const width = gl.drawingBufferWidth
+    const height = gl.drawingBufferHeight
+    const pixels = new Uint8Array(width * height * 4)
+    const bound = gl.getParameter(gl.FRAMEBUFFER_BINDING)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, bound)
+    const rows = Math.max(1, Math.round(cols * height / width))
+    const rgb = new Array(cols * rows * 3).fill(0)
+    const counts = new Array(cols * rows).fill(0)
+    for (let py = 0; py < height; py++) {
+      const cy = Math.min(rows - 1, Math.floor(py * rows / height))
+      for (let px = 0; px < width; px++) {
+        const cell = (cy * cols) + Math.min(cols - 1, Math.floor(px * cols / width))
+        const at = ((py * width) + px) * 4
+        rgb[cell * 3] += pixels[at]
+        rgb[(cell * 3) + 1] += pixels[at + 1]
+        rgb[(cell * 3) + 2] += pixels[at + 2]
+        counts[cell]++
       }
-      return {cols, rows, rgb}
     }
-    const pose = (): number[] => {
-      const camera = context.getCamera?.()
-      return camera ? [...camera.position.toArray(), ...camera.quaternion.toArray()] : []
-    }
-    const markerScales = (): number[] =>
-      (w.store?.getState().placeMark?.getPlacemarks() ?? []).map((mark) => mark.scale.x)
-    const recording = {
-      paints: 0, last: null as CanvasFrame | null, lastPose: [] as number[], lastMarkerScales: [] as number[],
-      painting, pose,
-    }
-    w.__rodRecording = recording
-    context.setRenderUpdate((...args: unknown[]) => {
-      const paintsBefore = demand.stats.paints
-      painting(...args)
-      if (demand.stats.paints !== paintsBefore) {
-        recording.paints++
-        recording.last = read()
-        recording.lastPose = pose()
-        recording.lastMarkerScales = markerScales()
+    for (let cell = 0; cell < counts.length; cell++) {
+      for (let c = 0; c < 3; c++) {
+        rgb[(cell * 3) + c] = Math.round(rgb[(cell * 3) + c] / Math.max(1, counts[cell]))
       }
-    })
-  }, FRAME_COLS)
+    }
+    return {cols, rows, rgb}
+  }
+  const pose = (): number[] => {
+    const camera = context.getCamera?.()
+    return camera ? [...camera.position.toArray(), ...camera.quaternion.toArray()] : []
+  }
+  const markerScales = (): number[] =>
+    (w.store?.getState().placeMark?.getPlacemarks() ?? []).map((mark) => mark.scale.x)
+  const recording = {
+    paints: 0, last: null as CanvasFrame | null, lastPose: [] as number[], lastMarkerScales: [] as number[],
+    paintsAfterLoad: 0, wasLoading: false,
+    painting, pose,
+  }
+  w.__rodRecording = recording
+  context.setRenderUpdate((...args: unknown[]) => {
+    const paintsBefore = demand.stats.paints
+    const isLoading = demand.scopes.size > 0
+    painting(...args)
+    if (isLoading) {
+      recording.wasLoading = true
+    }
+    if (demand.stats.paints !== paintsBefore) {
+      recording.paints++
+      recording.last = read()
+      recording.lastPose = pose()
+      recording.lastMarkerScales = markerScales()
+      if (recording.wasLoading && !isLoading) {
+        recording.paintsAfterLoad++
+      }
+    }
+  })
 }
 
 
@@ -286,11 +416,13 @@ async function stopRecordingWhenIdle(page: Page): Promise<Recorded> {
     if (!recording) {
       throw new Error('stopRecordingWhenIdle: not recording')
     }
-    w.store?.getState().viewer?.context?.setRenderUpdate?.(recording.painting)
+    const context = w.store?.getState().viewer?.context
+    context?.setRenderUpdate?.(recording.painting)
     delete w.__rodRecording
     return {
       paints: recording.paints, last: recording.last, lastPose: recording.lastPose, poseNow: recording.pose(),
-      lastMarkerScales: recording.lastMarkerScales,
+      lastMarkerScales: recording.lastMarkerScales, paintsAfterLoad: recording.paintsAfterLoad,
+      isSession: context?.getRenderDemand?.()?.isSession === true,
     }
   })
   expect(recorded.last, 'the viewer painted while recording').not.toBeNull()
@@ -308,6 +440,10 @@ type Recorded = {
   poseNow: number[]
   /** Each note marker's scale at the last paint. */
   lastMarkerScales: number[]
+  /** Paints after a load scope the recording saw open had closed. */
+  paintsAfterLoad: number
+  /** Whether the viewer is on demand between loads (`RenderDemand#isSession`). */
+  isSession: boolean
 }
 
 
@@ -388,7 +524,7 @@ type RodWindow = Window & {
       setRenderUpdate?: (fn: (...args: unknown[]) => void) => void
       getLegacyRendererWrapper?: () => {update?: (...args: unknown[]) => void}
       getRenderer?: () => {getContext: () => WebGLRenderingContext}
-      getRenderDemand?: () => {stats: {paints: number, frames: number}} | null
+      getRenderDemand?: () => {stats: {paints: number, frames: number}, scopes: Set<unknown>, isSession: boolean} | null
       getCamera?: () => {
         position: Vec3, up: Vec3, quaternion: {toArray: () => number[]}, getWorldDirection: (out: Vec3) => Vec3,
       }
@@ -399,6 +535,8 @@ type RodWindow = Window & {
     last: CanvasFrame | null
     lastPose: number[]
     lastMarkerScales: number[]
+    paintsAfterLoad: number
+    wasLoading: boolean
     painting: (...args: unknown[]) => void
     pose: () => number[]
   }

@@ -3,7 +3,9 @@
 import {ENGINE_CLOSE_TIMEOUT_MS, EngineSession} from './EngineSession'
 import {createEngineHandler} from './engineHandler'
 import {sourceIoLine} from './engineModelLoad'
-import {findOpfsEntry, makeBlobStore, makeSyncHandleStore, openSourceStore} from './engineSources'
+import {
+  RESIDENT_SOURCE_MAX_BYTES, findOpfsEntry, makeBlobStore, makeSyncHandleStore, openSourceStore,
+} from './engineSources'
 import {ENGINE_PROTOCOL_VERSION, Ev} from './protocol'
 import {makeWorkerTransport} from './transports'
 
@@ -220,12 +222,80 @@ describe('engine/engineSources', () => {
     expect(store.counters).toMatchObject({reads: 2, bytes: 16})
   })
 
+  it('over an OPFS entry the Blob store reads the whole file once for the load, and reads the Blob again after the release', async () => {
+    // Share#2092: conway re-reads PSB ~4.7× over, and each Blob read is slow
+    // in Firefox, so the load reads the file once and copies out of that.
+    const root = fakeDir({[NAME]: fakeEntry()})
+    const {store, fallbackReason} = await openIn(root, {allowSyncHandle: false, holdResident: true})
+    expect(fallbackReason).toBe('disabled')
+    expect(store.counters).toMatchObject({reads: 1, bytes: BYTES.length, residentBytes: BYTES.length})
+    const first = await store.read(4, 3)
+    await store.read(60, 8)
+    expect(Array.from(first)).toEqual([4, 5, 6])
+    // A standalone copy: a view would pin the whole file past the release.
+    expect(first.buffer.byteLength).toBe(3)
+    expect(store.counters).toMatchObject({reads: 1, residentReads: 2})
+    expect(store.releaseResident()).toBe(true)
+    expect(Array.from(await store.read(4, 3))).toEqual([4, 5, 6])
+    expect(store.counters).toMatchObject({reads: 2, bytes: BYTES.length + 3, residentReads: 2})
+    expect(store.releaseResident()).toBe(false)
+  })
+
+  it('a synchronous read is served from the whole-file copy too', async () => {
+    // STEP's windowed open faults windows in through readSync (conway#757).
+    const reader = jest.fn(function ReaderSync() {
+      this.readAsArrayBuffer = () => {
+        throw new Error('read the Blob')
+      }
+    })
+    const store = makeBlobStore(new Blob([BYTES]), undefined, reader)
+    await store.holdResident()
+    expect(Array.from(store.readSync(1, 2))).toEqual([1, 2])
+    expect(store.counters).toMatchObject({reads: 1, residentReads: 1})
+  })
+
+  it('holds no whole-file copy off OPFS, for a spill, over the ceiling, or when the read fails', async () => {
+    const offOpfs = await openSourceStore({file: snapshot()},
+      {getOpfsRoot: async () => fakeDir({}), canSyncHandle: () => true, holdResident: true})
+    expect(offOpfs.store.counters).toMatchObject({reads: 0, residentBytes: 0})
+    // A spill does not ask (holdResident defaults off): it exists to free memory.
+    const spill = await openIn(fakeDir({[NAME]: fakeEntry()}), {allowSyncHandle: false})
+    expect(spill.store.counters).toMatchObject({reads: 0, residentBytes: 0})
+
+    // An entry over the ceiling: a File stand-in that only claims the size.
+    const huge = RESIDENT_SOURCE_MAX_BYTES + 1
+    const arrayBuffer = jest.fn()
+    const big = {name: NAME, size: huge, lastModified: MTIME, slice: () => new Blob([BYTES]), arrayBuffer}
+    const bigEntry = {kind: 'file', name: NAME, getFile: async () => ({size: huge, lastModified: MTIME})}
+    const over = await openSourceStore({file: big},
+      {getOpfsRoot: async () => fakeDir({[NAME]: bigEntry}), allowSyncHandle: false, holdResident: true})
+    expect(arrayBuffer).not.toHaveBeenCalled()
+    expect(over.store.counters).toMatchObject({residentBytes: 0, residentSkipped: 'over 1024 MB'})
+
+    const stale = new File([BYTES], NAME, {lastModified: MTIME})
+    stale.arrayBuffer = async () => {
+      throw Object.assign(new Error('changed'), {name: 'NotReadableError'})
+    }
+    const failed = await openSourceStore({file: stale},
+      {getOpfsRoot: async () => fakeDir({[NAME]: fakeEntry()}), allowSyncHandle: false, holdResident: true})
+    expect(failed.store.counters).toMatchObject({reads: 0, residentBytes: 0, residentSkipped: 'NotReadableError: changed'})
+    expect(Array.from(await failed.store.read(0, 2))).toEqual([0, 1])
+  })
+
   it('sourceIoLine says which store, how much, and why it fell back', () => {
     expect(sourceIoLine({kind: 'syncHandle', reads: 3, bytes: 2 * 1024 * 1024, ms: 1500}))
       .toBe('Engine source I/O: OPFS sync access handle, 3 reads, 2.0 MB, 1.50s')
     expect(sourceIoLine({kind: 'blob', fallbackReason: 'not an OPFS file', reads: 1, bytes: 0, ms: 0}))
       .toBe('Engine source I/O: Blob store (not an OPFS file), 1 reads, 0.0 MB, 0.00s')
     expect(sourceIoLine({kind: 'resident'})).toBeUndefined()
+    // Share#2092: whether the Blob store held the whole file for the load.
+    expect(sourceIoLine({kind: 'blob', fallbackReason: 'read-only sync access handles unsupported', reads: 1,
+      bytes: 860 * 1024 * 1024, ms: 680, residentBytes: 860 * 1024 * 1024, residentReads: 927}))
+      .toBe('Engine source I/O: Blob store (read-only sync access handles unsupported; whole file held, ' +
+        '927 reads from memory), 1 reads, 860.0 MB, 0.68s')
+    expect(sourceIoLine({kind: 'blob', fallbackReason: 'disabled', reads: 2, bytes: 0, ms: 0, residentBytes: 0,
+      residentSkipped: 'over 1024 MB'}))
+      .toBe('Engine source I/O: Blob store (disabled; whole file not held: over 1024 MB), 2 reads, 0.0 MB, 0.00s')
   })
 })
 
@@ -367,6 +437,52 @@ describe('engine/engineHandler reads a windowed source through the sync handle',
     const session = await workerSession(api, fakeDir({[NAME]: entry}), log)
     await expect(session.open({file: snapshot()})).rejects.toThrow()
     expect(entry.access.closed).toBe(true)
+  })
+
+  it('a Blob-store open holds the whole file for the load, and the writer\'s spill lets it go', async () => {
+    const log = []
+    const api = readingApi(log)
+    const session = await workerSession(api, fakeDir({[NAME]: fakeEntry({log})}), log, {disableEngineSyncHandle: true})
+    const opened = await session.open({file: snapshot()})
+    expect(api.seen).toEqual([0, 1, 2, 3])
+    expect(opened.source).toMatchObject({kind: 'blob', reads: 1, bytes: BYTES.length, residentBytes: BYTES.length,
+      residentReads: 1})
+    // The GLB writer's spill (Loader.js#spillEngineSource) is the release.
+    expect(await session.spill(snapshot())).toMatchObject({spilled: false, reason: 'windowed', released: true})
+    expect(await session.spill(snapshot())).toMatchObject({released: false})
+    await session.close()
+  })
+
+  it('a load with no GLB writer lets the whole-file copy go with a spill that names no file', async () => {
+    // Loader.js#load sends this when it schedules no writer (a failed cache
+    // lookup, no cache key): without it the copy stayed until close (codex
+    // review of Share#2095). There is no File to name on that path.
+    const log = []
+    const api = readingApi(log)
+    const open = api.OpenModelStream
+    api.OpenModelStream = async function(store) {
+      this.store = store
+      return open.call(this, store)
+    }
+    const session = await workerSession(api, fakeDir({[NAME]: fakeEntry({log})}), log, {disableEngineSyncHandle: true})
+    await session.open({file: snapshot()})
+    expect(api.store.counters).toMatchObject({reads: 1, residentReads: 1})
+    expect(await session.spill(null)).toMatchObject({spilled: false, reason: 'windowed', released: true})
+    // Let go: the next read is a Blob read, not a copy out of the held file.
+    expect(Array.from(await api.store.read(0, 4))).toEqual([0, 1, 2, 3])
+    expect(api.store.counters).toMatchObject({reads: 2, residentReads: 1})
+    expect(await session.spill(null)).toMatchObject({released: false})
+    await session.close()
+  })
+
+  it('disableEngineResidentSource reads windows from the Blob for the whole load', async () => {
+    const log = []
+    const api = readingApi(log)
+    const session = await workerSession(api, fakeDir({[NAME]: fakeEntry({log})}), log,
+      {disableEngineSyncHandle: true, disableEngineResidentSource: true})
+    expect((await session.open({file: snapshot()})).source)
+      .toMatchObject({kind: 'blob', reads: 1, bytes: 4, residentBytes: 0, residentReads: 0})
+    await session.close()
   })
 
   it('the kill switch in the init flags keeps the Blob store and never opens a sync handle', async () => {

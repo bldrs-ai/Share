@@ -58,7 +58,11 @@ describeMobileAndDesktop('Engine worker: OPFS sync access handle', () => {
 
   test('with the kill switch the same worker load reads through the Blob store, and still opens', async ({page}) => {
     const engine = watchEngineWorker(page)
-    await page.goto(`${MODEL}?feature=disableEngineSyncHandle`)
+    // With the Blob store's whole-file read off too (Share#2092), so this is
+    // still the windowed Blob path: what a source over the store's ceiling
+    // takes, and the A/B against the whole-file read (engineSidecar.spec.ts
+    // covers that one).
+    await page.goto(`${MODEL}?feature=disableEngineSyncHandle,disableEngineResidentSource`)
     // engineSourceLine waits for the model to be ready: it opened.
     const line = await engineSourceLine(page)
     expect(line).toMatch(/^Engine source I\/O: Blob store \(disabled\), [1-9]\d* reads/)
