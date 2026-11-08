@@ -4,6 +4,17 @@ import {normalizeMessageDigits} from './messageGrouping'
 
 
 /**
+ * Marks an alert's Sentry event as already counted in GA (the `alert` event
+ * below), so sentry.js#shadowReportedCondition doesn't count the same
+ * failure a second time as `reported_condition`. An event-local tag, set
+ * through the capture context, so it never sticks to the scope. The shadow
+ * would also have taken this fingerprint's message-derived key as its
+ * category, which is free text.
+ */
+const GA_COUNTED = {ga_counted: 'alert'}
+
+
+/**
  * Tracks an alert message in both Sentry and Google Analytics.
  * In Sentry, it captures the full error with stack trace.
  * In Google Analytics, it only tracks the message.
@@ -17,7 +28,7 @@ export function trackAlert(message, error = null) {
     // No fingerprint here on purpose: a real error carries the stack of
     // wherever it was actually thrown, which discriminates better than its
     // message text does. Only the synthesized branch below needs help.
-    Sentry.captureException(error)
+    Sentry.captureException(error, {tags: GA_COUNTED})
   } else {
     // Create a new error with the current stack trace
     const stackError = new Error(message)
@@ -31,6 +42,7 @@ export function trackAlert(message, error = null) {
     // per-upload byte size can't split one family into an issue per file.
     Sentry.captureException(stackError, {
       fingerprint: ['alert', alertFingerprintKey(String(message))],
+      tags: GA_COUNTED,
     })
   }
 
