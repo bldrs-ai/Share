@@ -4,7 +4,7 @@ import {redactBreadcrumb} from '../privacy/sentryRedaction'
 import setupSentry, {shouldSendSentryEvent, shadowReportedCondition, _resetSentryFilterStateForTests} from './sentry'
 
 
-jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn()}))
+jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn(), isAllowed: jest.fn(() => true)}))
 jest.mock('@sentry/react', () => ({
   ...jest.requireActual('@sentry/react'),
   init: jest.fn(),
@@ -451,6 +451,17 @@ describe('shadowReportedCondition', () => {
     })
     shadowReportedCondition({exception: {values: [{type: 'Error'}]}, tags: {ga_counted: 'alert'}})
     expect(gtagEvent).not.toHaveBeenCalled()
+  })
+
+  it('does not consume a condition while analytics consent is off', () => {
+    const {isAllowed} = jest.requireMock('../privacy/analytics')
+    const event = {level: 'warning', exception: {values: [{type: 'TypeError'}]}}
+    isAllowed.mockReturnValueOnce(false)
+    shadowReportedCondition(event)
+    expect(gtagEvent).not.toHaveBeenCalled()
+    // Consent granted later in the same page session: the condition still sends.
+    shadowReportedCondition(event)
+    expect(gtagEvent).toHaveBeenCalledTimes(1)
   })
 
   it('retries a condition whose GA send threw', () => {

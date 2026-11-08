@@ -1,7 +1,7 @@
 import {init, reactRouterV6BrowserTracingIntegration} from '@sentry/react'
 import {useEffect} from 'react'
 import {useLocation, useNavigationType, createRoutesFromChildren, matchRoutes} from 'react-router-dom'
-import {gtagEvent} from '../privacy/analytics'
+import {gtagEvent, isAllowed} from '../privacy/analytics'
 import {redactBreadcrumb} from '../privacy/sentryRedaction'
 // Named import (rather than `import pkg from '../../package.json'`) so
 // esbuild can prune the rest of the JSON — we only care about `version`.
@@ -296,6 +296,12 @@ export function shadowReportedCondition(event) {
     category = String(category).slice(0, SHADOW_CATEGORY_MAX)
     const key = `${level}|${category}`
     if (shadowedConditions.has(key)) {
+      return
+    }
+    // gtagEvent silently drops the event without analytics consent. Don't
+    // record the key then, or a user who opts in later in this page session
+    // would never get the condition shadowed.
+    if (!isAllowed()) {
       return
     }
     // No load phase: by the time beforeSend runs, `event.tags` already
