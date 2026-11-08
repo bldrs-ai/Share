@@ -273,6 +273,8 @@ class DirectoryHandle {
         throw new Error('not found')
       }
       const file = new FileHandle(name)
+      // Only the move() stub below reads it.
+      file.parent = this
       this.entriesMap.set(name, file)
       return file
     }
@@ -780,6 +782,11 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
   const SMALL_BYTES = 64
   const SMALL_LIMIT = 16
   let savedCreateSyncAccessHandle
+  let originalFetch
+
+  beforeEach(() => {
+    originalFetch = global.fetch
+  })
 
   /**
    * @param {number} limit Bytes the "storage" accepts before writes start failing.
@@ -809,7 +816,10 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
       FileHandle.prototype.createSyncAccessHandle = savedCreateSyncAccessHandle
       savedCreateSyncAccessHandle = null
     }
-    delete global.fetch
+    // Restore, not delete: MSW's afterAll (tools/jest/setupTests.js) puts
+    // back the fetch it patched, and throws if the property is gone, which
+    // is the last thing a filtered run (`-t`) of these tests does.
+    global.fetch = originalFetch
   })
 
   /**
@@ -888,14 +898,14 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
   /*
    * Hosted and external models are keyed `<file>.<host>` (local paths
    * `<file>.bldrs-ai`), a key nothing ever invalidates, so any entry under
-   * the final name is served as a hit. downloadModelToOPFS used to create
-   * that entry before fetch(), so every way a download could stop short left
-   * a 0-byte or partial entry there for good. These pin the write-then-move.
+   * the final name is served as a hit (#2102). downloadModelToOPFS used to
+   * create that entry before fetch(), so every way a download could stop
+   * short left a 0-byte or partial entry there for good. These pin the
+   * write-to-temp-then-move.
    */
   describe('downloadModelToOPFS never leaves an incomplete entry under the final name', () => {
     const args = ['BldrsLocalStorage', 'V1', 'Projects', false]
     const finalName = 'index.ifc.preview.example'
-    const tempName = `${worker.PARTIAL_DOWNLOAD_PREFIX}${finalName}`
 
     /** @return {Promise<object>} the Projects dir handle */
     async function projectsDir() {
@@ -903,13 +913,41 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
         .getDirectoryHandle('V1', {create: true})).getDirectoryHandle('Projects', {create: true})
     }
 
+    /**
+     * @param {string} path hosted path, e.g. '/index.ifc'
+     * @param {string} requestId
+     * @return {Promise<Array<object>>} the replies
+     */
+    async function download(path, requestId) {
+      self.postMessage.mockClear()
+      await worker.downloadModelToOPFS(
+        `https://preview.example${path}`, 'preview.example', path, ...args, requestId)
+      return self.postMessage.mock.calls.map(([m]) => m)
+    }
+
+    /**
+     * Give the stub FileHandle the `move(directory, name)` every current
+     * engine has for OPFS. Without it, the stub models one that lacks it.
+     */
+    function withMove() {
+      FileHandle.prototype.move = async function(directory, name) {
+        await Promise.resolve()
+        this.parent.entriesMap.delete(this.name)
+        this.name = name
+        this.parent = directory
+        directory.entriesMap.set(name, this)
+      }
+    }
+
+    afterEach(() => {
+      delete FileHandle.prototype.move
+    })
+
     test('a fetch that rejects creates nothing', async () => {
       global.fetch = jest.fn(() => Promise.reject(new TypeError('Failed to fetch')))
 
-      await worker.downloadModelToOPFS(
-        'https://preview.example/index.ifc', 'preview.example', '/index.ifc', ...args, 'r1')
+      const replies = await download('/index.ifc', 'r1')
 
-      const replies = self.postMessage.mock.calls.map(([m]) => m)
       expect(replies.some((m) => m.completed)).toBe(false)
       expect(replies.some((m) => /fetch failed/.test(String(m.error)))).toBe(true)
       expect(await allFileNames(rootDir)).toEqual([])
@@ -918,27 +956,25 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
     test('an error response is not cached', async () => {
       global.fetch = jest.fn(() => Promise.resolve(new Response('<html>Not found</html>', {status: 404})))
 
-      await worker.downloadModelToOPFS(
-        'https://preview.example/index.ifc', 'preview.example', '/index.ifc', ...args, 'r2')
+      const replies = await download('/index.ifc', 'r2')
 
-      const replies = self.postMessage.mock.calls.map(([m]) => m)
       expect(replies.some((m) => /HTTP 404/.test(String(m.error)))).toBe(true)
       expect(await allFileNames(rootDir)).toEqual([])
     })
 
     test('an empty body is not cached', async () => {
+      withMove()
       global.fetch = jest.fn(() => Promise.resolve(streamedResponse(0, KIB)))
 
-      await worker.downloadModelToOPFS(
-        'https://preview.example/index.ifc', 'preview.example', '/index.ifc', ...args, 'r3')
+      const replies = await download('/index.ifc', 'r3')
 
-      const replies = self.postMessage.mock.calls.map(([m]) => m)
       expect(replies.some((m) => m.completed)).toBe(false)
       expect(replies.some((m) => /empty response body/.test(String(m.error)))).toBe(true)
       expect(await allFileNames(rootDir)).toEqual([])
     })
 
     test('a stream that dies mid-download leaves nothing', async () => {
+      withMove()
       let sent = 0
       const body = new ReadableStream({
         pull(controller) {
@@ -951,17 +987,16 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
       })
       global.fetch = jest.fn(() => Promise.resolve(new Response(body)))
 
-      await worker.downloadModelToOPFS(
-        'https://preview.example/index.ifc', 'preview.example', '/index.ifc', ...args, 'r4')
+      const replies = await download('/index.ifc', 'r4')
 
-      const replies = self.postMessage.mock.calls.map(([m]) => m)
       expect(replies.some((m) => m.completed)).toBe(false)
       expect(await allFileNames(rootDir)).toEqual([])
     })
 
-    test('while bytes are still arriving, the final name does not exist', async () => {
-      // What a reload or tab close mid-download leaves behind is whatever
-      // exists at that moment; no cleanup runs. It must not be the final name.
+    test('the final name appears only once every byte has landed', async () => {
+      // A reload or tab close mid-download leaves whatever exists at that
+      // moment, and no cleanup runs. That must never be the final name.
+      withMove()
       const seenMidStream = []
       let sent = 0
       const body = new ReadableStream({
@@ -970,39 +1005,105 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
             controller.close()
             return
           }
-          seenMidStream.push(...await allFileNames(rootDir))
+          seenMidStream.push(await allFileNames(rootDir))
           sent++
           controller.enqueue(new Uint8Array(KIB).fill(sent))
         },
       })
       global.fetch = jest.fn(() => Promise.resolve(new Response(body)))
 
-      await worker.downloadModelToOPFS(
-        'https://preview.example/index.ifc', 'preview.example', '/index.ifc', ...args, 'r5')
+      const replies = await download('/index.ifc', 'r5')
 
-      expect(seenMidStream).toContain(tempName)
-      expect(seenMidStream).not.toContain(finalName)
-      const done = self.postMessage.mock.calls.map(([m]) => m).find((m) => m.completed)
+      // From the second pull on, the temp exists; the final name never does.
+      expect(seenMidStream.slice(1).every((names) => names.length === 1)).toBe(true)
+      expect(seenMidStream.flat()).not.toContain(finalName)
+      const done = replies.find((m) => m.completed)
       expect(done.event).toBe('download')
       expect(done.file.size).toBe(CHUNKS * KIB)
       expect(await allFileNames(rootDir)).toEqual([finalName])
+      // ...and the next load is a hit, with no fetch.
+      global.fetch.mockClear()
+      expect((await download('/index.ifc', 'r5b')).find((m) => m.completed).event).toBe('exists')
+      expect(global.fetch).not.toHaveBeenCalled()
     })
 
-    test('a temp left by an interrupted download is overwritten, never served', async () => {
+    test('a model whose name looks like a temp is never touched by another download', async () => {
+      // A hosted `/.partial-model.glb` is a legitimate name, and it was
+      // exactly what `/model.glb`'s temp used to be called.
+      withMove()
       const dir = await projectsDir()
-      const stale = await dir.getFileHandle(tempName, {create: true})
-      stale.data = new Uint8Array(10 * KIB).fill(9)
+      const other = await dir.getFileHandle('.partial-model.glb.preview.example', {create: true})
+      other.data = new Uint8Array(Buffer.from('a different model'))
       global.fetch = jest.fn(() => Promise.resolve(streamedResponse(CHUNKS, KIB)))
 
-      await worker.downloadModelToOPFS(
-        'https://preview.example/index.ifc', 'preview.example', '/index.ifc', ...args, 'r6')
+      await download('/model.glb', 'r6')
 
-      expect(global.fetch).toHaveBeenCalledTimes(1)
-      const done = self.postMessage.mock.calls.map(([m]) => m).find((m) => m.completed)
-      // No stale tail from the longer leftover.
+      const kept = await dir.getFileHandle('.partial-model.glb.preview.example', {create: false})
+      expect(await (await kept.getFile()).text()).toBe('a different model')
+      expect((await (await dir.getFileHandle('model.glb.preview.example', {create: false})).getFile()).size)
+        .toBe(CHUNKS * KIB)
+    })
+
+    test('without move(), the model is served from memory and nothing is cached', async () => {
+      global.fetch = jest.fn(() => Promise.resolve(streamedResponse(CHUNKS, KIB)))
+      const dir = await projectsDir()
+      const getFileHandle = jest.spyOn(dir, 'getFileHandle')
+
+      const replies = await download('/index.ifc', 'r7')
+
+      const done = replies.find((m) => m.completed)
+      expect(done.event).toBe('download')
+      expect(new Uint8Array(await done.file.arrayBuffer())).toEqual(
+        new Uint8Array(await streamedResponse(CHUNKS, KIB).arrayBuffer()))
+      // A copy would have created the final name before it was complete.
+      expect(getFileHandle).not.toHaveBeenCalledWith(finalName, {create: true})
+      expect(await allFileNames(rootDir)).toEqual([])
+    })
+
+    test('a copy killed partway never becomes a cache hit', async () => {
+      // A worker or tab killed mid-copy runs no cleanup. Model that: every
+      // write to a file under the final name dies, and so does its removal.
+      // The copy used to create that name first, so the 0-byte copy it left
+      // was served as 'exists' on the next load.
+      savedCreateSyncAccessHandle = FileHandle.prototype.createSyncAccessHandle
+      FileHandle.prototype.createSyncAccessHandle = async function() {
+        const real = await savedCreateSyncAccessHandle.call(this)
+        if (this.name === finalName) {
+          this.remove = () => Promise.reject(new Error('killed'))
+          real.write = () => Promise.reject(new Error('killed mid-copy'))
+        }
+        return real
+      }
+      const dir = await projectsDir()
+      const removeEntry = dir.removeEntry.bind(dir)
+      dir.removeEntry = (name) => name === finalName ? Promise.reject(new Error('killed')) : removeEntry(name)
+      global.fetch = jest.fn(() => Promise.resolve(streamedResponse(CHUNKS, KIB)))
+
+      await download('/index.ifc', 'r8')
+      const replies = await download('/index.ifc', 'r8b')
+
+      expect(replies.some((m) => m.event === 'exists')).toBe(false)
+      expect(global.fetch).toHaveBeenCalledTimes(2)
+    })
+
+    test('what interrupted downloads left behind is swept, and one still writing is not', async () => {
+      withMove()
+      const temps = await rootDir.getDirectoryHandle(worker.PARTIAL_DOWNLOAD_DIR, {create: true})
+      const stale = await temps.getFileHandle('stale', {create: true})
+      stale.data = new Uint8Array(10 * KIB).fill(9)
+      await temps.getFileHandle('held', {create: true})
+      const removeEntry = temps.removeEntry.bind(temps)
+      // An open sync access handle makes removal fail.
+      temps.removeEntry = (name) => name === 'held' ?
+        Promise.reject(new DOMException('held', 'NoModificationAllowedError')) : removeEntry(name)
+      global.fetch = jest.fn(() => Promise.resolve(streamedResponse(CHUNKS, KIB)))
+
+      const replies = await download('/index.ifc', 'r9')
+
+      const done = replies.find((m) => m.completed)
       expect(done.file.size).toBe(CHUNKS * KIB)
       expect(new Uint8Array(await done.file.arrayBuffer()).includes(9)).toBe(false)
-      expect(await allFileNames(rootDir)).toEqual([finalName])
+      expect((await allFileNames(rootDir)).sort()).toEqual(['held', finalName])
     })
 
     test('a complete entry is served without a fetch', async () => {
@@ -1011,12 +1112,10 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
       entry.data = new Uint8Array(KIB).fill(1)
       global.fetch = jest.fn()
 
-      await worker.downloadModelToOPFS(
-        'https://preview.example/index.ifc', 'preview.example', '/index.ifc', ...args, 'r7')
+      const replies = await download('/index.ifc', 'r10')
 
       expect(global.fetch).not.toHaveBeenCalled()
-      const done = self.postMessage.mock.calls.map(([m]) => m).find((m) => m.completed)
-      expect(done.event).toBe('exists')
+      expect(replies.find((m) => m.completed).event).toBe('exists')
     })
   })
 

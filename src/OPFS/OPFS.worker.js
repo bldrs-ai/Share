@@ -19,9 +19,15 @@ let GITHUB_BASE_URL_UNAUTHENTICATED = null
 // pieces is to avoid materializing a large ArrayBuffer.
 // eslint-disable-next-line no-magic-numbers
 const COPY_CHUNK_BYTES = 4 * 1024 * 1024
-// Names a download still in flight in downloadModelToOPFS. Never a cache
-// hit: no lookup matches a name that doesn't start with the model's name.
-export const PARTIAL_DOWNLOAD_PREFIX = '.partial-'
+// The root-level OPFS directory downloadModelToOPFS streams into before an
+// entry is complete. It is a sibling of the model namespaces, not inside
+// one, so no model's name can collide with a temp (a hosted
+// `/.partial-model.glb` did, when temps were prefixed names beside the
+// entries; codex review of Share#2103). It is dot-named because nothing
+// else at the root can start with '.': not a GitHub owner, not an upload's
+// `<uuid>.<ext>`, not `BldrsLocalStorage`. Every lookup goes through a
+// namespace directory, so none ever reads in here.
+export const PARTIAL_DOWNLOAD_DIR = '.bldrs-partial-downloads'
 
 
 /**
@@ -1240,21 +1246,22 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       }
     }
   }
-  // Fetch BEFORE creating anything, and stream into a temporary name that
-  // no lookup can hit, moving it to `<name>.<commitHash>` only once every
-  // byte has landed. The "commit hash" here is not content-derived — for
-  // hosted and external models it is the URL's host, for `/index.ifc`-style
-  // local paths the constant 'bldrs-ai' — so the final name never changes
-  // and nothing ever invalidates it: whatever sits under it is served as a
-  // cache hit on every later load. This function used to create that final
-  // entry (0 bytes) before calling fetch(), so a reload or tab close during
-  // the round trip, a rejected fetch, a missing body, or an error response
-  // all left an empty or partial entry under the final name, and the next
-  // load handed Conway the empty file ("OpenModel returned -1: empty file").
-  // A short write already removed its entry (#2042); an interruption can't
-  // run cleanup, so the only defence there is never naming an in-flight
-  // file as if it were complete. The Loader side evicts what an older
-  // build left behind (Loader.js, opfsSourceHealth.js).
+  // Fetch BEFORE creating anything. Stream into a temp in
+  // PARTIAL_DOWNLOAD_DIR, and expose `<name>.<commitHash>` only through an
+  // atomic move once every byte has landed. The "commit hash" here is not
+  // content-derived. For hosted and external models it is the URL's host;
+  // for `/index.ifc`-style local paths it is the constant 'bldrs-ai'. So
+  // the final name never changes and nothing ever invalidates it: whatever
+  // sits under it is served as a cache hit on every later load (#2102).
+  // This function used to create that final entry (0 bytes) before calling
+  // fetch(). A reload or tab close during the round trip, a rejected fetch,
+  // a missing body, or an error response then left an empty or partial
+  // entry under the final name, and the next load handed Conway the empty
+  // file ("OpenModel returned -1: empty file"). A short write already
+  // removed its entry (#2042). An interruption can't run cleanup, so the
+  // only defence there is that nothing incomplete ever carries the final
+  // name. The Loader side evicts what an older build left behind
+  // (Loader.js, opfsSourceHealth.js).
   let response
   try {
     response = await fetch(objectUrl)
@@ -1274,24 +1281,23 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
   }
 
   const finalFileName = `${strippedFileName}.${commitHash}`
-  // Leading prefix, not a suffix: `retrieveFileWithPathNew` matches any name
-  // that starts with the file's name and contains the commit hash, so a
-  // `<name>.<commitHash>.partial` would still read back as a hit.
-  const tempFileName = `${PARTIAL_DOWNLOAD_PREFIX}${finalFileName}`
+  let tempDirectoryHandle = null
   let tempFileHandle = null
   try {
     modelDirectoryHandle = await directoryForPath(branchFolderHandle, originalFilePath)
-    tempFileHandle = await modelDirectoryHandle.getFileHandle(tempFileName, {create: true})
+    tempDirectoryHandle = await opfsRoot.getDirectoryHandle(PARTIAL_DOWNLOAD_DIR, {create: true})
+    await sweepPartialDownloads(tempDirectoryHandle)
+    // A fresh name per download. Two tabs fetching the same model never
+    // share a temp, and a sweep can never take one that is in use.
+    const tempFileName = crypto.randomUUID()
+    tempFileHandle = await tempDirectoryHandle.getFileHandle(tempFileName, {create: true})
     // Same Safari self-heal as in writeTemporaryFileToOPFS.
     const opened = await openSyncAccessHandleWithRetry(
-      modelDirectoryHandle, tempFileHandle, tempFileName)
+      tempDirectoryHandle, tempFileHandle, tempFileName)
     blobAccessHandle = opened.handle
     tempFileHandle = opened.fileHandle
-    // A temp left by an interrupted earlier download is reused, not served;
-    // drop its bytes so a shorter body can't inherit its tail.
-    await blobAccessHandle.truncate(0)
   } catch (error) {
-    await discardPartialEntry(blobAccessHandle, modelDirectoryHandle, tempFileHandle)
+    await discardPartialEntry(blobAccessHandle, tempDirectoryHandle, tempFileHandle)
     const workerMessage = `Error getting file handle for ${originalFilePath}: ${error}`
     postReply({error: workerMessage}, requestId)
     return
@@ -1339,17 +1345,33 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
     // read) while a sync access handle is open on it.
     await blobAccessHandle.close()
     blobAccessHandle = null
-    modelBlobFileHandle = await renameFileInOPFS(modelDirectoryHandle, tempFileHandle, finalFileName)
+
+    if (await moveIntoPlace(tempFileHandle, modelDirectoryHandle, finalFileName)) {
+      tempFileHandle = null
+      modelBlobFileHandle = await modelDirectoryHandle.getFileHandle(finalFileName, {create: false})
+      const blobFile = await modelBlobFileHandle.getFile()
+      postReply({completed: true, event: 'download', file: blobFile}, requestId)
+      return
+    }
+    // No atomic move: either this engine has no move(), or it refused
+    // (the target is held, say). renameFileInOPFS's copy fallback would
+    // create the final name first and fill it in chunks. A worker or tab
+    // killed mid-copy would then leave a partial entry under the final
+    // name, which the next load would serve (codex review of Share#2103).
+    // So nothing is cached. The bytes are served from memory and the temp
+    // is dropped, which costs a re-download next time.
+    const bytes = await (await tempFileHandle.getFile()).arrayBuffer()
+    await discardPartialEntry(null, tempDirectoryHandle, tempFileHandle)
     tempFileHandle = null
-    const blobFile = await modelBlobFileHandle.getFile()
-    postReply({completed: true, event: 'download', file: blobFile}, requestId)
+    postReply({completed: true, event: 'download', file: new File([bytes], strippedFileName)}, requestId)
   } catch (error) {
-    // A stream that dies mid-download, a short write, an empty body, or a
-    // failed move: drop the temp so it can't be mistaken for anything.
+    // A stream that dies mid-download, a short write, an empty body: drop
+    // the temp. A failure after the move leaves a complete final entry,
+    // which is fine to keep.
     try {
       await reader.cancel()
     } catch (_) {/* already settled */}
-    await discardPartialEntry(blobAccessHandle, modelDirectoryHandle, tempFileHandle)
+    await discardPartialEntry(blobAccessHandle, tempDirectoryHandle, tempFileHandle)
     blobAccessHandle = null
     postReply({error: `Error writing ${originalFilePath} (${commitHash}): ${error?.message ?? error}`}, requestId)
   } finally {
@@ -1360,6 +1382,57 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
         await blobAccessHandle.close()
       } catch (_) {/* idempotent */}
     }
+  }
+}
+
+
+/**
+ * Move a completed temp to its final name in one step, or report that it
+ * couldn't. Unlike {@link renameFileInOPFS}, this never falls back to a
+ * copy. A copy creates the final name before it is complete, which is
+ * exactly what downloadModelToOPFS must never leave behind.
+ *
+ * `move(directory, name)` is the only form that crosses directories. The
+ * single-argument rename some engines accept stays in the temp directory,
+ * so it doesn't help here.
+ *
+ * @param {FileSystemFileHandle} tempHandle
+ * @param {FileSystemDirectoryHandle} directory
+ * @param {string} name
+ * @return {Promise<boolean>} true once the entry is at `directory/name`
+ */
+export async function moveIntoPlace(tempHandle, directory, name) {
+  if (typeof tempHandle?.move !== 'function') {
+    return false
+  }
+  try {
+    await tempHandle.move(directory, name)
+    return true
+  } catch (_) {
+    return false
+  }
+}
+
+
+/**
+ * Remove what interrupted downloads left in PARTIAL_DOWNLOAD_DIR. A temp is
+ * never read, so a leftover only costs disk until the next download sweeps
+ * it. An in-flight download's temp is held by its open sync access handle,
+ * which makes removal fail, so that temp stays; the error is ignored.
+ *
+ * @param {FileSystemDirectoryHandle} tempDirectory
+ */
+async function sweepPartialDownloads(tempDirectory) {
+  const names = []
+  for await (const [name, handle] of tempDirectory.entries()) {
+    if (handle.kind === 'file') {
+      names.push(name)
+    }
+  }
+  for (const name of names) {
+    try {
+      await tempDirectory.removeEntry(name)
+    } catch (_) {/* held by a download still writing it */}
   }
 }
 
