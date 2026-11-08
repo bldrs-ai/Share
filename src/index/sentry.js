@@ -292,12 +292,12 @@ export function shadowReportedCondition(event) {
     if (shadowedConditions.has(key)) {
       return
     }
-    const loadPhase = event.tags?.['load.phase']
-    gtagEvent('reported_condition', {
-      level,
-      category,
-      ...(typeof loadPhase === 'string' ? {load_phase: loadPhase} : {}),
-    })
+    // No load phase: by the time beforeSend runs, `event.tags` already
+    // includes the global scope, where loadProgress#applySentryLoadState
+    // leaves a sticky `load.phase` after a stall or failure. An unrelated
+    // later event would carry that stale phase into GA. GA's own timestamp
+    // says roughly when; Sentry keeps the phase on the event.
+    gtagEvent('reported_condition', {level, category})
     // Only a send that returned counts, so a later event of the same
     // condition retries after a throw (as in reportRenderMode, #2109).
     shadowedConditions.add(key)

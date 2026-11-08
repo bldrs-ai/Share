@@ -389,19 +389,15 @@ describe('shadowReportedCondition', () => {
     ...extra,
   })
 
-  it('sends one GA event for a custom-fingerprint warning, with load_phase', () => {
+  it('sends one GA event for a custom-fingerprint warning, with exactly level and category', () => {
+    // A load.phase tag (possibly a sticky one from an earlier stalled load)
+    // must not reach GA.
     shadowReportedCondition(fingerprinted({tags: {'load.phase': 'download'}}))
     expect(gtagEvent).toHaveBeenCalledTimes(1)
-    expect(gtagEvent).toHaveBeenCalledWith('reported_condition', {
+    expect(gtagEvent.mock.calls[0]).toEqual(['reported_condition', {
       level: 'warning',
       category: 'opfs-source/download-failed',
-      load_phase: 'download',
-    })
-  })
-
-  it('omits load_phase when untagged', () => {
-    shadowReportedCondition(fingerprinted())
-    expect(gtagEvent.mock.calls[0][1]).toEqual({level: 'warning', category: 'opfs-source/download-failed'})
+    }])
   })
 
   it('uses the exception type when there is no custom fingerprint', () => {
