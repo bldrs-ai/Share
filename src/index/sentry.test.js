@@ -216,6 +216,14 @@ describe('shouldSendSentryEvent — once-per-session GA signal', () => {
     expect(gtagEvent).toHaveBeenCalledWith('netlify_rum_blocked', {})
   })
 
+  it('still drops the noise event when reading consent throws', () => {
+    isAllowed.mockImplementationOnce(() => {
+      throw new DOMException('cookies blocked', 'SecurityError')
+    })
+    expect(() => shouldSendSentryEvent(rumEvent())).not.toThrow()
+    expect(gtagEvent).not.toHaveBeenCalled()
+  })
+
   it('leaves the signal unrecorded when gtagEvent throws, so the next drop retries', () => {
     gtagEvent.mockImplementationOnce(() => {
       throw new Error('gtag blew up')

@@ -84,6 +84,14 @@ describe('viewer/three/reportRenderMode', () => {
     expect(gtagEvent).toHaveBeenCalledTimes(2)
   })
 
+  it('never throws when reading consent throws (sandboxed iframe cookies)', () => {
+    isAllowed.mockImplementationOnce(() => {
+      throw new DOMException('cookies blocked', 'SecurityError')
+    })
+    expect(() => reportRenderMode()).not.toThrow()
+    expect(setTag).toHaveBeenCalledWith('render_mode', 'on-demand')
+  })
+
   it('does not consume the GA event while consent is off, but still tags Sentry', () => {
     isAllowed.mockReturnValueOnce(false)
     reportRenderMode()

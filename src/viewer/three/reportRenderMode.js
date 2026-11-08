@@ -35,12 +35,15 @@ export function reportRenderMode() {
   if (sentGaEvent) {
     return
   }
-  // gtagEvent drops the event without consent; don't set sentGaEvent then, so
-  // a later opt-in still sends it (same rationale as shadowReportedCondition, #2110).
-  if (!isAllowed()) {
-    return
-  }
   try {
+    // gtagEvent drops the event without consent; don't set sentGaEvent then,
+    // so a later opt-in still sends it (same rationale as
+    // shadowReportedCondition, #2110). Inside the try: isAllowed reads
+    // document.cookie, which throws in a sandboxed iframe, and nothing here
+    // may throw into viewer construction.
+    if (!isAllowed()) {
+      return
+    }
     gtagEvent('render_mode', {mode})
     // Only a call that returned counts as sent, so a later viewer rebuild
     // retries after a throw instead of losing the page's one event.
