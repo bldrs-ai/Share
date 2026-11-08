@@ -8,7 +8,7 @@
 // module flag keeps an in-app viewer rebuild (model switch, theme change) from
 // resending it, while re-setting the tag is harmless.
 import {setTag} from '@sentry/react'
-import {gtagEvent} from '../../privacy/analytics'
+import {gtagEvent, isAllowed} from '../../privacy/analytics'
 import {paintEveryFrameReason} from './renderOnDemandMode'
 
 
@@ -33,6 +33,11 @@ export function reportRenderMode() {
     // Reporting is best-effort.
   }
   if (sentGaEvent) {
+    return
+  }
+  // gtagEvent drops the event without consent; don't set sentGaEvent then, so
+  // a later opt-in still sends it (same rationale as shadowReportedCondition, #2110).
+  if (!isAllowed()) {
     return
   }
   try {
