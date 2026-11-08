@@ -84,6 +84,7 @@ import xyzToThree from './xyz'
 import {isFeatureEnabled} from '../FeatureFlags'
 import useStore from '../store/useStore'
 import {sha1Hex, sha1HexFromBlob} from '../utils/contentHash'
+import {verifiedSourceSha} from '../utils/verifiedSourceSha'
 import {markIfOutOfMemory} from '../utils/oom'
 
 
@@ -577,7 +578,11 @@ export async function load(
           }
           const contentSha = modelData !== undefined ?
             await sha1Hex(modelData) :
-            await sha1HexFromBlob(file)
+            // Streaming opens only: `file` is the OPFS entry itself, whose
+            // size+lastModified identify it, so a reopen of an unchanged
+            // entry reuses the recorded digest and never reads the source
+            // (Share#2101). The buffered branch already holds the bytes.
+            await verifiedSourceSha(kindLabel, path, file, sha1HexFromBlob)
           cacheKeyArgs = buildNonGitHubCacheArgs(kindLabel, path, contentSha)
           if (cacheKeyArgs) {
             glbVerbose(
