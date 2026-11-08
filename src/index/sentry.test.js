@@ -443,6 +443,16 @@ describe('shadowReportedCondition', () => {
     expect(JSON.stringify(gtagEvent.mock.calls)).not.toMatch(/secret|private\.ifc/)
   })
 
+  it('skips an event its reporter already counted in GA (trackAlert)', () => {
+    shadowReportedCondition({
+      level: 'error',
+      fingerprint: ['alert', 'Failed to parse model'],
+      tags: {ga_counted: 'alert'},
+    })
+    shadowReportedCondition({exception: {values: [{type: 'Error'}]}, tags: {ga_counted: 'alert'}})
+    expect(gtagEvent).not.toHaveBeenCalled()
+  })
+
   it('retries a condition whose GA send threw', () => {
     gtagEvent.mockImplementationOnce(() => {
       throw new Error('gtag boom')

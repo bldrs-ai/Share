@@ -17,6 +17,15 @@ describe('trackAlert', () => {
    * Sentry's stack-based grouping had no way to tell them apart and filed
    * them all under one issue (SHARE-1EA).
    */
+  it('marks both alert captures as already counted in GA, on the event only', () => {
+    // sentry.js#shadowReportedCondition skips ga_counted events, so the
+    // alert stays one GA event (`alert`), not two.
+    trackAlert('Failed to parse model')
+    trackAlert('boom', new Error('boom'))
+    const contexts = Sentry.captureException.mock.calls.map(([, ctx]) => ctx)
+    expect(contexts.map((ctx) => ctx.tags)).toEqual([{ga_counted: 'alert'}, {ga_counted: 'alert'}])
+  })
+
   it('fingerprints a string alert by its message, not by the shared stack', () => {
     trackAlert('Failed to parse model')
     trackAlert('Could not read full model structure.')
@@ -74,7 +83,7 @@ describe('trackAlert', () => {
   it('leaves a real error to Sentry default grouping', () => {
     const error = new Error('Load failed: out of memory')
     trackAlert(error.message, error)
-    expect(Sentry.captureException).toHaveBeenCalledWith(error)
+    expect(Sentry.captureException).toHaveBeenCalledWith(error, {tags: {ga_counted: 'alert'}})
   })
 
   it('reports the raw message to analytics, un-normalized', () => {

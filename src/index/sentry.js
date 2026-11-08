@@ -280,6 +280,12 @@ export function shadowReportedCondition(event) {
     if (!SHADOW_LEVELS.has(level)) {
       return
     }
+    // A reporter that already counts this failure in GA marks its event
+    // `ga_counted` (alertTracking.js#trackAlert and its `alert` event), so
+    // one failure stays one GA event.
+    if (typeof event.tags?.ga_counted === 'string') {
+      return
+    }
     let category
     if (Array.isArray(event.fingerprint) && !event.fingerprint.includes('{{ default }}') &&
         event.fingerprint.length > 0) {
