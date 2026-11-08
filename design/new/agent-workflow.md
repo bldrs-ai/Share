@@ -25,14 +25,25 @@ cheapest model that can do the job well is the right one.
 | Normal | Sonnet-class | a well-scoped fix or feature; a reviewer's findings on an existing PR; a known-cause bug with a clear fix |
 | Complex | Opus-class | profiling or diagnosing an unknown cause; design choices with trade-offs; multi-repo chains (conway → npm → Share); measurement work that has to decide something |
 
+A **fallback reviewer** ([§"Review"](#review-codex-first-sub-agent-on-timeout))
+is Sonnet-class by default, given the hazard-pointing brief that
+section requires. Use Opus-class when the change rests on an
+invariant a diff read can miss: concurrency and locking, a
+zero-digest-churn claim, cross-repo ordering, or a design trade-off.
+
 Haiku and Sonnet sub-agents need a **directed brief**: more explicit
-than an Opus brief, so they code to a plan instead of exploring. On
+than an Opus brief, so they work to a plan instead of exploring. On
 top of [the dispatch brief](#the-dispatch-brief), give them:
 
-- the exact files to change, and the approach (the function to add,
-  the call site, the shape of the change);
-- the tests to write, each with the check that it fails without the
-  fix (rubric item 6);
+- for a code change:
+  - the exact files to change, and the approach (the function to add,
+    the call site, the shape of the change);
+  - the tests to write, each with the check that it fails without the
+    fix (rubric item 6). A change with no new test, such as a pin bump
+    or a pure rename, names the existing checks that cover it instead;
+- for a task that changes no code (filing an issue, posting a status):
+  the exact output expected and where it goes, and the facts to put in
+  it, with their sources;
 - the exact commands to run (lint, the Jest files, the Playwright
   specs, and the bench lock where the shared box needs it);
 - the stop conditions: what to report, and when to stop and ask
