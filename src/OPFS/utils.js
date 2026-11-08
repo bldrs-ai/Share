@@ -178,7 +178,11 @@ export function downloadToOPFS(
       opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, !!(onProgress), requestId),
     (data, settle) => {
       if (data.error) {
-        debug().error('Error from worker:', data.error)
+        // A conditioned error is logged by its structured fields alone: the
+        // console line becomes a Sentry breadcrumb, and the text could name
+        // the user's file if a producer ever put it there.
+        debug().error('Error from worker:',
+          data.condition ? `${data.condition}${data.status ? ` (HTTP ${data.status})` : ''}` : data.error)
         const error = new Error(data.error)
         // Which download condition the worker hit, for Loader.js#load to
         // report once its direct-fetch fallback has succeeded. Never the text.

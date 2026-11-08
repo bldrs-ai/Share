@@ -46,6 +46,16 @@ export const STALE_PARTIAL_DOWNLOAD_MS = 10 * 60 * 1000
 // The empty-body failure's message, matched in downloadModelToOPFS's catch to
 // tell it from a stream or write error in the reply's `condition`.
 const EMPTY_BODY_MESSAGE = 'empty response body; not cached'
+const SHORT_WRITE_PREFIX = 'OPFS write incomplete'
+
+/**
+ * @param {string} [message] a caught error's message
+ * @return {boolean} whether it is one of this file's own texts, which carry no path
+ */
+function isOwnPathFreeMessage(message) {
+  return typeof message === 'string' &&
+    (message === EMPTY_BODY_MESSAGE || message.startsWith(SHORT_WRITE_PREFIX))
+}
 
 
 /**
@@ -1286,13 +1296,17 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
   } catch (error) {
     // `condition`/`status` let the page report this to Sentry without parsing
     // the text (the worker has no Sentry; reportOpfsSourceCondition.js).
-    postReply({error: `downloadModelToOPFS: fetch failed for ${originalFilePath}: ${error}`, condition: 'fetch-rejected'}, requestId)
+    // The text names no path, host or URL, and not the caught error's message
+    // either (some engines put the URL in it): utils.js logs it, and a console
+    // line that names a private model's file reaches Sentry as a breadcrumb
+    // (privacy/sentryRedaction.js).
+    postReply({error: `downloadModelToOPFS: fetch failed (${error?.name ?? 'Error'})`, condition: 'fetch-rejected'}, requestId)
     return
   }
   if (!response.ok) {
     // An error page (a host's 404 HTML, a 5xx) is not the model; caching it
     // under the final name would serve it forever.
-    postReply({error: `downloadModelToOPFS: HTTP ${response.status} for ${originalFilePath}; not cached`,
+    postReply({error: `downloadModelToOPFS: HTTP ${response.status}; not cached`,
       condition: 'http-error', status: response.status}, requestId)
     return
   }
@@ -1406,7 +1420,12 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       await discardPartialEntry(blobAccessHandle, tempDirectoryHandle, tempFileHandle)
       blobAccessHandle = null
       postReply({
-        error: `Error writing ${originalFilePath} (${commitHash}): ${error?.message ?? error}`,
+        // Path-free like the replies above: only our own two texts are kept
+        // (the empty body, writeAll's short-write report, which name sizes
+        // only); a stream error's own message may carry a URL.
+        error: isOwnPathFreeMessage(error?.message) ?
+          `downloadModelToOPFS: ${error.message}` :
+          `downloadModelToOPFS: stream or write failed (${error?.name ?? 'Error'})`,
         condition: error?.message === EMPTY_BODY_MESSAGE ? 'empty-body' : 'stream-error',
       }, requestId)
     } finally {

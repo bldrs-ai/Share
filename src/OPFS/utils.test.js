@@ -20,6 +20,13 @@ import {
 
 jest.mock('../OPFS/OPFSService.js')
 jest.mock('@sentry/react', () => ({captureMessage: jest.fn()}))
+// Captures what utils.js logs: a console.error line becomes a Sentry breadcrumb.
+const mockDebugError = jest.fn()
+jest.mock('../utils/debug', () => ({
+  __esModule: true,
+  default: () => ({log: jest.fn(), warn: jest.fn(), error: mockDebugError, time: jest.fn(), timeEnd: jest.fn()}),
+  WARN: 2,
+}))
 
 
 /**
@@ -237,6 +244,21 @@ describe('OPFS Test Suite', () => {
       expect(error.opfsStatus).toBe(HTTP_NOT_FOUND)
       expect(error.opfsKind).toBe('local')
       expect(captureMessage).not.toHaveBeenCalled()
+    })
+
+    it('logs a conditioned worker error without the text that could name the file', async () => {
+      // Red if the line goes back to logging data.error: the console line
+      // becomes a Sentry breadcrumb, and a private model's path must not.
+      mockDebugError.mockClear()
+      await downloadWithReply({
+        error: 'HTTP 404 for /secret-plan.ifc https://example.com/secret-plan.ifc',
+        condition: 'http-error',
+        status: HTTP_NOT_FOUND,
+      }).catch(() => {})
+
+      expect(mockDebugError).toHaveBeenCalledTimes(1)
+      expect(JSON.stringify(mockDebugError.mock.calls)).not.toMatch(/secret-plan|example\.com/)
+      expect(JSON.stringify(mockDebugError.mock.calls)).toMatch(/http-error/)
     })
 
     it('should call onProgress with progress data', async () => {

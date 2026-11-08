@@ -995,6 +995,33 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
       expect(await allFileNames(rootDir)).toEqual([])
     })
 
+    test('no failure reply names the file, its host or the engine error text', async () => {
+      // utils.js logs these, and a console line that names a private model
+      // reaches Sentry as a breadcrumb. Red if a path, host or the caught
+      // error's own text (which engines may fill with the URL) comes back.
+      withMove()
+      const secretPath = '/secret-plan.ifc'
+      const leaky = 'https://preview.example/secret-plan.ifc'
+      const brokenBody = () => new ReadableStream({
+        pull(controller) {
+          controller.error(new TypeError(`network error ${leaky}`))
+        },
+      })
+      const fetches = [
+        () => Promise.reject(new TypeError(`Failed to fetch ${leaky}`)),
+        () => Promise.resolve(new Response('nope', {status: 404})),
+        () => Promise.resolve(streamedResponse(0, KIB)),
+        () => Promise.resolve(new Response(brokenBody())),
+      ]
+      for (const [i, fetchImpl] of fetches.entries()) {
+        global.fetch = jest.fn(fetchImpl)
+        const replies = await download(secretPath, `leak${i}`)
+        const failure = replies.find((m) => m.error)
+        expect(failure).toBeDefined()
+        expect(JSON.stringify(failure)).not.toMatch(/secret-plan|preview\.example/)
+      }
+    })
+
     test('an error response is not cached', async () => {
       global.fetch = jest.fn(() => Promise.resolve(new Response('<html>Not found</html>', {status: 404})))
 
