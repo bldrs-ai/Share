@@ -447,6 +447,17 @@ describe('shadowReportedCondition', () => {
     expect(JSON.stringify(gtagEvent.mock.calls)).not.toMatch(/secret|private\.ifc/)
   })
 
+  it('retries a condition whose GA send threw', () => {
+    gtagEvent.mockImplementationOnce(() => {
+      throw new Error('gtag boom')
+    })
+    const event = {level: 'warning', exception: {values: [{type: 'TypeError'}]}}
+    shadowReportedCondition(event)
+    shadowReportedCondition(event)
+    shadowReportedCondition(event)
+    expect(gtagEvent).toHaveBeenCalledTimes(2)
+  })
+
   it('a throwing gtagEvent does not change beforeSend\'s return', () => {
     gtagEvent.mockImplementationOnce(() => {
       throw new Error('gtag boom')

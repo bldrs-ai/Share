@@ -109,9 +109,9 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   error/warning also sends one coarse `reported_condition` GA event per
   session per (level, category), automatically from `beforeSend`
   (`src/index/sentry.js`), so a reporter sends to Sentry or to GA, never
-  both. **One failure,
-  one event:** report a recovered fallback only once the load has
-  succeeded, and leave a failed load to CadView's `captureException`.
+  both. **One failure, one event:** report a recovered fallback only
+  once the load has succeeded, and leave a failed load to CadView's
+  `captureException`.
   **Privacy:** neither sink ever gets a private model's file name, URL
   or path. Send structured fields (source kind, condition, HTTP status)
   rather than free text, and redact (`src/privacy/sentryRedaction.js`)

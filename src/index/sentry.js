@@ -292,13 +292,15 @@ export function shadowReportedCondition(event) {
     if (shadowedConditions.has(key)) {
       return
     }
-    shadowedConditions.add(key)
     const loadPhase = event.tags?.['load.phase']
     gtagEvent('reported_condition', {
       level,
       category,
       ...(typeof loadPhase === 'string' ? {load_phase: loadPhase} : {}),
     })
+    // Only a send that returned counts, so a later event of the same
+    // condition retries after a throw (as in reportRenderMode, #2109).
+    shadowedConditions.add(key)
   } catch {
     // Best-effort: never affect what Sentry receives.
   }
