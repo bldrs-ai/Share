@@ -521,6 +521,10 @@ export default class ShareIfcLoader {
       // whose placement never resolved), so it must never decide where
       // the durable model renders.
       const coordination = {offset: undefined}
+      // Preview units skipped by the two best-effort handlers below. Counted,
+      // not reported here: Loader.js#load sends ONE GA event per load, and
+      // only once the load succeeded (loader/reportLoadDiagnostics.js).
+      let previewUnitsSkipped = 0
       // `byExpressID` is the replace key for spatial imposters: conway's
       // store path emits each spatial node early and again at parse end
       // (conway#519), and the second emission must refine the first plate
@@ -550,6 +554,7 @@ export default class ShareIfcLoader {
           }
           session.addPreviewMesh(mesh)
         } catch (e) {
+          previewUnitsSkipped++
           debug(WARN).warn('parse preview mesh skipped:', e)
         }
       }
@@ -586,6 +591,7 @@ export default class ShareIfcLoader {
               flatMeshToBufferGeometry(batch, ifcAPI, batchModelID, {coordination})
             session.addPreviewMesh(new Mesh(assembled.geometry, assembled.materials))
           } catch (previewError) {
+            previewUnitsSkipped++
             debug(WARN).warn('demand preview batch skipped:', previewError)
           }
         }
@@ -891,6 +897,8 @@ export default class ShareIfcLoader {
         `skippedPlaced=${buildStats.skippedPlacedGeometries} ` +
         `skippedCoincident=${buildStats.skippedCoincidentPlacements ?? 0}`)
 
+      // Read by Loader.js#load after the whole load succeeded.
+      ifcModel.previewUnitsSkipped = previewUnitsSkipped
       return ifcModel
     } catch (err) {
       session.abort()
