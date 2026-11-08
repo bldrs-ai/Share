@@ -987,8 +987,8 @@ describe('loadProgress', () => {
         expect(reportBvhDepthCapToGa).not.toHaveBeenCalled()
       })
 
-      // The diagnostics event is still titled by the console's top message;
-      // the cap rides along as context, and is counted in GA as well.
+      // The diagnostics event is still titled by the console's top message,
+      // and carries no cap field: the cap is counted in GA alone.
       it('titles a cap hit with console diagnostics by the diagnostics', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
         beginLoadProgress({fileInfo: 'index.stp'})
@@ -1000,7 +1000,7 @@ describe('loadProgress', () => {
         const [message, context] = diagnosticsCall()
         expect(message).toBe('Load diagnostics: No basis found for brep!')
         expect(context.level).toBe('warning')
-        expect(context.contexts.loadDiagnostics.bvhDepthCap).toEqual(expect.objectContaining({trees: 1}))
+        expect(context.contexts.loadDiagnostics).not.toHaveProperty('bvhDepthCap')
         expect(reportBvhDepthCapToGa).toHaveBeenCalledTimes(1)
         warnSpy.mockRestore()
       })

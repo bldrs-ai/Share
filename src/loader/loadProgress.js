@@ -964,11 +964,10 @@ class LoadProgressReporter {
           consoleTotal: summary.total,
           consoleDistinct: summary.distinct,
           messages: this.topDiagnostics(MAX_SENTRY_DIAGNOSTICS),
-          // How big the leaves three-mesh-bvh capped are, the number for
-          // deciding whether to retune its build (viewer/ifc/bvhBuild.js).
-          // Context on this event only; the cap is counted in GA
-          // (reportBvhDepthCapOnce).
-          bvhDepthCap: this.bvhDepthCap ?? undefined,
+          // No BVH depth-cap field: the cap is counted in GA alone
+          // (reportBvhDepthCapOnce), one sink per condition (AGENTS.md,
+          // Reported Conditions). The report below keeps its Health line,
+          // as the load log it is.
           report: this.sentryLines.join('\n'),
         },
       },
@@ -1736,7 +1735,8 @@ const FRAMING_NOTE = 'stray geometry far from the model was left out of the zoom
  * Record BVH trees that reached three-mesh-bvh's depth cap
  * (`viewer/ifc/bvhBuild.js`). Accumulates across the load's builds, a batched
  * model building one tree per geometry, and becomes one `Health:` line after
- * Total plus a `bvhDepthCap` field on the diagnostics event. Safe no-op with
+ * Total and, on a successful load, one GA `bvh_depth_cap` event
+ * (reportBvhDepthCapOnce). Safe no-op with
  * no active load, or after it ended.
  *
  * @param {{trees: number, maxLeafTriangles: number, maxDepth: number}} capped
