@@ -757,6 +757,36 @@ describe('load() error/edge paths with OPFS enabled', () => {
         expect(captureMessage).not.toHaveBeenCalled()
       })
 
+      it('counts a no-move download once in GA when the model loads', async () => {
+        const file = new MockFile(objText)
+        file.opfsNotCachedKind = 'external'
+        downloadToOPFS.mockResolvedValue(file)
+        gtagEvent.mockClear()
+
+        await load(url, viewer, onProgress, true, setOpfsFile, '')
+
+        expect(gtagEvent.mock.calls.filter(([name]) => name === 'opfs_not_cached'))
+          .toEqual([['opfs_not_cached', {kind: 'external', condition: 'move-unavailable'}]])
+        expect(captureMessage).not.toHaveBeenCalled()
+      })
+
+      it('counts nothing for a no-move download whose readModel throws', async () => {
+        // CadView's captureException owns this load; a GA count of a load that
+        // never succeeded would be a second event for it.
+        const ifcUrl = 'https://example.com/index.ifc'
+        dereferenceAndProxyDownloadContents.mockResolvedValue([ifcUrl, '', false, false])
+        const file = new MockFile(
+          'ISO-10303-21;\nHEADER;\nFILE_SCHEMA((\'IFC4\'));\nENDSEC;\nDATA;\n#1=IFCWALL();\nENDSEC;\nEND-ISO-10303-21;\n')
+        file.opfsNotCachedKind = 'external'
+        downloadToOPFS.mockResolvedValue(file)
+        gtagEvent.mockClear()
+
+        await expect(load(ifcUrl, viewer, onProgress, true, setOpfsFile, '')).rejects.toThrow()
+
+        expect(deleteFileFromOPFS).not.toHaveBeenCalled()
+        expect(gtagEvent.mock.calls.filter(([name]) => name === 'opfs_not_cached')).toEqual([])
+      })
+
       it('sends nothing for an OPFS failure that is not one of these conditions', async () => {
         downloadToOPFS.mockRejectedValue(new Error('Error getting file handle for /x: boom'))
         axios.get.mockResolvedValue({data: objText})

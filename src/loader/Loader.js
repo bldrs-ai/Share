@@ -66,7 +66,7 @@ import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToB
 import {spillModelSource} from './opfsSourceByteStore'
 import {EvictedOpfsSourceError, isUnusableOpfsSource} from './opfsSourceHealth'
 import {PART21_LOADER_TYPES} from './part21Formats'
-import {reportOpfsDownloadFailed, reportOpfsSourceEvicted} from '../OPFS/reportOpfsSourceCondition'
+import {reportOpfsDownloadFailed, reportOpfsNotCached, reportOpfsSourceEvicted} from '../OPFS/reportOpfsSourceCondition'
 import {STORE_DETECT_PREFIX_BYTES, conwayStoreOpenRequirement} from './stepFormat'
 import {isEngineWorkerLoad} from '../viewer/ifc/ShareIfcLoader'
 import {
@@ -348,6 +348,9 @@ export async function load(
   // fails outright is CadView's captureException, and a second event for it
   // would double the volume (reportOpfsSourceCondition.js).
   let opfsFallbackCondition = null
+  // Set when the OPFS download was served uncached (no move(); utils.js#downloadToOPFS
+  // marks the File). Held like opfsFallbackCondition and reported with it.
+  let opfsNotCachedKind = null
   // GLB export context: captured after the source file is in hand if the
   // `glb` feature is on and the source is IFC. Carries the cacheKeyArgs
   // (source-kind namespace + sourceHash) the post-parse writer will use.
@@ -513,6 +516,7 @@ export async function load(
         // a fresh entry.
         throw new EvictedOpfsSourceError(kindLabel)
       }
+      opfsNotCachedKind = file?.opfsNotCachedKind ?? null
       debug().log('Loader#load: File from OPFS:', file)
       setOpfsFile(file)
 
@@ -829,6 +833,9 @@ export async function load(
   // steps above. Only then is the OPFS condition a degraded-but-working load
   // worth a message (reportOpfsSourceCondition.js). Any throw before this
   // point leaves the failure to CadView's captureException alone.
+  if (opfsNotCachedKind !== null) {
+    reportOpfsNotCached(opfsNotCachedKind)
+  }
   if (opfsFallbackCondition !== null) {
     if (opfsFallbackCondition.evictedKind) {
       reportOpfsSourceEvicted(opfsFallbackCondition.evictedKind)

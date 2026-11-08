@@ -15,7 +15,7 @@ import {
   opfsWriteBase64Model,
 } from '../OPFS/OPFSService.js'
 import {assertDefined} from '../utils/assert'
-import {downloadSourceKind, reportOpfsNotCached} from './reportOpfsSourceCondition'
+import {downloadSourceKind} from './reportOpfsSourceCondition'
 import debug, {WARN} from '../utils/debug'
 
 
@@ -205,8 +205,14 @@ export function downloadToOPFS(
       if (data.completed) {
         if (data.event === 'download') {
           debug().warn('Worker finished downloading file')
-          if (data.cached === false) {
-            reportOpfsNotCached(downloadSourceKind(commitHash))
+          if (data.cached === false && data.file) {
+            // Carried on the File, not reported here: the load can still fail
+            // after this (LFS, decode, readModel), and CadView's exception
+            // would then be a second event for it. Loader.js#load reports
+            // once readModel succeeds. A property on the resolved file is the
+            // smallest shape: downloadToOPFS keeps returning the File its
+            // callers already take, and no caller has to learn a new tuple.
+            data.file.opfsNotCachedKind = downloadSourceKind(commitHash)
           }
         } else if (data.event === 'exists') {
           debug().warn('Commit exists in OPFS.')

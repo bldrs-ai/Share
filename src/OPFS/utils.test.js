@@ -219,14 +219,15 @@ describe('OPFS Test Suite', () => {
         'BldrsLocalStorage', 'V1', 'Projects')
     }
 
-    it('counts a download served from memory (no move) in GA, not Sentry', async () => {
+    it('carries the not-cached fact on the file and reports nothing itself', async () => {
+      // Loader.js#load reports it once readModel succeeds; a report here would
+      // double a load that fails afterwards.
       gtagEvent.mockClear()
-      await downloadWithReply({completed: true, event: 'download', cached: false, file: new Blob(['x'])})
+      const file = await downloadWithReply({completed: true, event: 'download', cached: false, file: new Blob(['x'])})
 
-      expect(gtagEvent).toHaveBeenCalledTimes(1)
-      expect(gtagEvent).toHaveBeenCalledWith('opfs_not_cached', {kind: 'external', condition: 'move-unavailable'})
+      expect(file.opfsNotCachedKind).toBe('external')
+      expect(gtagEvent).not.toHaveBeenCalled()
       expect(captureMessage).not.toHaveBeenCalled()
-      expect(JSON.stringify(gtagEvent.mock.calls)).not.toMatch(/secret-plan|example\.com/)
     })
 
     it('reports nothing for a download that was cached', async () => {
