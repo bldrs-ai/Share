@@ -84,6 +84,36 @@ describe('PerfMonitor — flag on (?feature=perf)', () => {
     expect(fn).toHaveBeenCalledTimes(1)
   })
 
+  // Render-on-demand (`?feature=renderOnDemand`): the render closure returns
+  // false for a frame it didn't paint, and those count for nothing.
+  test('counts painted frames only, so an idle on-demand viewer reads 0 FPS', () => {
+    let clock = 1000
+    const nowSpy = jest.spyOn(performance, 'now').mockImplementation(() => clock)
+    try {
+      jest.resetModules()
+      mod = require('./PerfMonitor')
+      let paints = true
+      const wrapped = mod.withPerf(() => paints)
+      const framesPerSecond = 60
+      const frameMs = 17
+      const runSecond = () => {
+        for (let i = 0; i < framesPerSecond; i++) {
+          clock += frameMs
+          wrapped()
+        }
+      }
+      runSecond()
+      expect(window.perf.fps()).toBeGreaterThan(framesPerSecond / 2)
+      paints = false
+      // The first idle window can still hold the last painted frame.
+      runSecond()
+      runSecond()
+      expect(window.perf.fps()).toBe(0)
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
   test('window.perf exposes on/off/toggle', () => {
     expect(typeof window.perf.on).toBe('function')
     expect(typeof window.perf.off).toBe('function')

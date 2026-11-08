@@ -135,8 +135,57 @@ the paint to the next frame, because the draw call itself returns long
 before the GPU work behind it is done) for arriving geometry, the camera
 follow's refits and a one-second heartbeat. Anything
 new that changes the picture *during* a load and must show at once calls
-`getRenderDemand().invalidate()`; after the load nothing needs to. Why:
+`getRenderDemand().invalidate()`; after the load nothing needs to (unless
+the session paints on demand too; next paragraph). Why:
 design/new/in-app-model-switch.md §4.2a.
+
+**On-demand painting for the whole session (`?feature=renderOnDemand`,
+story #2055, default off for burn-in).** With the flag, `IfcContext` calls
+`RenderDemand#startSession`, so between loads the loop still ticks but
+paints only when something asks, with no heartbeat and no budget: an idle
+viewer paints nothing (the flag-off loop paints every frame between loads,
+as before). A change that never asks leaves a stale frame up, so asking is
+layered, cheapest-to-forget last:
+
+1. The camera: camera-controls `update` (input, damping, transitions:
+   ViewCube, fit, permalink pose), window resize. Between loads a
+   `controlstart` alone doesn't paint (the move after it does), and the
+   camera updates before the renderer in the frame rather than after it
+   (`IfcContext#updateAllComponents`), so a frame shows this frame's pose.
+   Both cut the first input from idle by a frame.
+2. `requestPaint()` (`renderDemand.js`), callable from anywhere, for what
+   three gives no signal for: `visible`, material colour, opacity and
+   wireframe, outline selections (IfcHighlighter, the isolation outline),
+   lights and look parameters, placemark colours, the cut-plane arrows.
+   `renderOnDemandSources.test.js` lists every file that makes one of those
+   mutations and fails on a new, unaudited one.
+3. Hooks on three's own change signals, installed only with the flag
+   (`renderDemandHooks.js#installSceneHooks`): `Object3D#add`/`attach`/
+   `remove`, the BatchedMesh mutators (`setColorAt`, `setVisibleAt`, …), and
+   `needsUpdate` on materials, textures and attributes. They ask for a
+   background paint (the next frame between loads, the budget during one),
+   and ignore what three mutates while it draws (`runPaint`; BatchedMesh
+   rebuilds its indirect texture in `onBeforeRender`).
+4. A per-frame probe of what a paint reads that costs microseconds
+   (`createSceneProbe`): camera pose and projection, drawing-buffer size and
+   pixel ratio, cut planes, scene background/environment/root children,
+   tone mapping. Snapshotted at each paint.
+5. A settle window (`SETTLE_MS`, 200 ms of painting) after user input on
+   the page (not a bare press), a pointer move over the canvas, and any
+   store change
+   (CadView subscribes): for the change a React effect applies a frame
+   after the event. During a load these are background asks.
+6. `keepPainting()` for what changes on its own clock: a scene with Spark
+   splats paints every frame, since the sort lands asynchronously.
+
+Tests that a source does ask: `renderDemand.test.js`,
+`renderDemandHooks.test.js` and the behavioural half of
+`renderOnDemandSources.test.js` (hooks off, so only the source's own ask can
+pass); `renderOnDemand.spec.ts` (desktop + mobile) checks that an idle viewer
+stops painting and that a drag (through its damping tail), a selection and a
+resize repaint, with the last on-demand paint matching a forced fresh one.
+The E2E `captureRenderedFrame` asks for its own paint, so it works either
+way.
 
 Perf instrumentation attaches at that seam, not inside the closure:
 
@@ -152,7 +201,9 @@ context.setRenderUpdate(withPerf(newUpdateFunction(context, getComposer)))
   render closure has no perf code; `window.perf` is not defined; no DOM
   or sampling state is created. Zero per-frame cost.
 - **Flag on:** `withPerf` returns a wrapper that brackets `fn()` with
-  `monitor.begin()` / `monitor.end()`. The Monitor singleton is built
+  `monitor.begin()` / `monitor.end(painted)`. The render closure returns
+  whether it painted, and only painted frames count toward FPS and MS, so
+  a viewer painting on demand reads 0 FPS when idle. The Monitor singleton is built
   at module load but **not** attached to the DOM yet; sampling runs on
   the offscreen canvases regardless. `window.perf` is installed for
   show/hide/toggle from devtools.
@@ -179,7 +230,7 @@ The panel is **on by default** when `?feature=perf` is set — the
 canvas wrapper is created without `display:none` and `mountPerfPanel`
 just `appendChild`s it. `window.perf.off()` / `on()` /  `toggle()`
 remain available for developers who want to hide/show it without
-reloading.
+reloading, and `window.perf.fps()` reads the FPS it shows.
 
 Three panels rotate on click — FPS, frame time (ms), JS heap MB (the
 last only where Chromium's `performance.memory` is available). The

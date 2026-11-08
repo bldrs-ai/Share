@@ -183,6 +183,13 @@ export const flags = [
   // reads the static value before any URL flag, so no link can opt back into
   // the worker (engine-worker.md §7.2, "Rolling back").
   {name: 'disableEngineWorker', isActive: false},
+  // Render on demand for the whole session (open-205 story #2055,
+  // design/new/offscreen-rendering.md §7.1): between loads as well as during
+  // them (#2043), the viewer paints only when something changed, so an idle
+  // viewer paints nothing. Off for burn-in; the default paints every frame
+  // between loads. src/viewer/three/renderDemand.js has the layers that ask
+  // for a paint; DESIGN.md §"Render loop & perf monitor" the summary.
+  {name: 'renderOnDemand', isActive: false},
   // Kill switch for the engine worker's OPFS sync access handle
   // (engine-worker.md §7 step 4): read the source through the Blob store
   // instead, as on the main thread. `?feature=` can only turn flags on, so
