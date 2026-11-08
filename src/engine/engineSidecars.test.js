@@ -206,9 +206,30 @@ function useFileHandle(FileHandle) {
 }
 
 
-beforeEach(() => useFileHandle(WorkerFileHandle))
+/**
+ * Install `locks` as the global `navigator.locks` for one test, which is what
+ * the sweep and the sync-handle writer read when not handed one. Shadows
+ * whatever the runtime has, as an own property of `navigator`: Node 24
+ * ships Web Locks (CI), older Node and jsdom do not, and a sweep's verdict on
+ * a fresh temporary differs between the two (the lock path removes it when
+ * free, the age fallback keeps it). So every test here states which it gets.
+ *
+ * @param {object|undefined} locks a lock manager, or undefined for none
+ */
+function useWebLocks(locks) {
+  Object.defineProperty(globalThis.navigator, 'locks', {value: locks, configurable: true, writable: true})
+}
+
+
+// No Web Locks unless a test installs some: the age fallback decides.
+beforeEach(() => {
+  useFileHandle(WorkerFileHandle)
+  useWebLocks(undefined)
+})
 afterEach(() => {
   delete globalThis.FileSystemFileHandle
+  // The own property goes; the runtime's own `locks`, if any, shows again.
+  delete globalThis.navigator.locks
 })
 
 
@@ -490,10 +511,26 @@ describe('engine/engineSidecars', () => {
     root.children[SIDECAR_DIR].children['stale.cidx.1.tmp'] = memoryFile('stale.cidx.1.tmp', kept.bytes)
     root.children[SIDECAR_DIR].children['fresh.cidx.2.tmp'] =
       memoryFile('fresh.cidx.2.tmp', kept.bytes, {lastModified: NOW - 1000})
+    // No Web Locks (the file's beforeEach), so age decides.
     expect(await sweepSidecars(getOpfsRoot, () => NOW)).toBe(4)
     expect(Object.keys(root.children[SIDECAR_DIR].children))
       .toEqual([await sidecarKey(`owner/${NAME}`), 'fresh.cidx.2.tmp'])
     expect(Array.from(await readSidecar(`owner/${NAME}`, snapshot(), getOpfsRoot))).toEqual([1])
+  })
+
+  it('with the runtime\'s own Web Locks the sweep takes the lock path: a fresh, unlocked temporary goes', async () => {
+    // The case CI's Node 24 hit through the global, made explicit: the sweep
+    // reads `navigator.locks` when not handed a manager.
+    const root = memoryDir({owner: memoryDir({[NAME]: memoryFile(NAME, BYTES)})})
+    const getOpfsRoot = async () => root
+    await writeSidecar(`owner/${NAME}`, snapshot(), Uint8Array.of(1), getOpfsRoot)
+    const NOW = MTIME + (2 * STALE_TMP_MS)
+    const kept = root.children[SIDECAR_DIR].children[await sidecarKey(`owner/${NAME}`)]
+    root.children[SIDECAR_DIR].children['fresh.cidx.2.tmp'] =
+      memoryFile('fresh.cidx.2.tmp', kept.bytes, {lastModified: NOW - 1000})
+    useWebLocks(fakeLocks())
+    expect(await sweepSidecars(getOpfsRoot, () => NOW)).toBe(1)
+    expect(Object.keys(root.children[SIDECAR_DIR].children)).toEqual([await sidecarKey(`owner/${NAME}`)])
   })
 
   it('Clear cache leaves no sidecar behind', async () => {
@@ -737,8 +774,9 @@ describe('engine/engineHandler: index sidecar reopen (engine-worker.md §7 step 
     const api = sidecarApi([])
     const root = memoryDir({owner: memoryDir({[NAME]: memoryFile(NAME, BYTES)})})
     await loadOnce(api, root)
-    // An interrupted Safari write's temporary, long abandoned (node has no
-    // navigator.locks, so the age fallback decides).
+    // An interrupted Safari write's temporary, long abandoned (no
+    // navigator.locks here, the file's beforeEach, so the age fallback
+    // decides).
     root.children[SIDECAR_DIR].children['x.cidx.1.tmp'] = memoryFile('x.cidx.1.tmp', Uint8Array.of(0))
     expect((await loadOnce(api, root)).index.source).toBe('sidecar')
     expect(Object.keys(root.children[SIDECAR_DIR].children)).toEqual([await sidecarKey(`owner/${NAME}`)])
