@@ -5,7 +5,7 @@
 // cache hit used to read the whole source first just to build the key
 // (PSB, 860 MB: 1.0-3.6 s of "Hashing model") although a hit itself needs
 // no source bytes. Here the digest is remembered against the OPFS File's
-// identity, {kind, path, size, lastModified}: all must match on lookup, so
+// identity, {kind, path, size, lastModified, probe}: all must match on lookup, so
 // a replaced or rewritten entry (new bytes => new size or a new
 // lastModified, which OPFS stamps on every write) is hashed afresh.
 //
@@ -36,10 +36,7 @@
 // raw dropped File has no stable identity until it is stored.
 
 
-// v1 keyed records by the raw path; v2 by its digest. v1 is ignored and
-// removed once.
 const STORAGE_KEY = 'bldrs:verifiedSourceSha:v2'
-const LEGACY_STORAGE_KEY = 'bldrs:verifiedSourceSha:v1'
 // Oldest-first eviction keeps the record bounded for users who open many
 // files.
 const MAX_ENTRIES = 64
@@ -67,7 +64,7 @@ async function recordKey(kindLabel, path) {
 }
 
 
-/** @return {object} the stored key -> {size, lastModified, sha} map, or {} on any failure */
+/** @return {object} the stored key -> {size, lastModified, probe, sha} map, or {} on any failure */
 function readAll() {
   try {
     const parsed = JSON.parse(globalThis.localStorage.getItem(STORAGE_KEY))
@@ -80,7 +77,7 @@ function readAll() {
 
 /**
  * @param {string} key
- * @param {object} entry {size, lastModified, sha}
+ * @param {object} entry {size, lastModified, probe, sha}
  */
 function record(key, entry) {
   try {
@@ -98,12 +95,41 @@ function record(key, entry) {
 }
 
 
-/** Drop the v1 record, which holds raw paths. */
-function removeLegacy() {
+const PROBE_BYTES = 64 * 1024 // eslint-disable-line no-magic-numbers
+
+
+/**
+ * A cheap content fingerprint: SHA-256 over the first and last 64 KiB.
+ *
+ * Why size + lastModified are not enough (Share#2112 review): an engine
+ * with coarse OPFS mtime can stamp a same-size rewrite (a re-download, or
+ * `writeAll` in place) with the same lastModified. A stale SHA would then
+ * not merely miss: it is the GLB cache key, so the lookup could serve the
+ * OLD model's GLB, and on a miss the NEW model's GLB would be written under
+ * the stale key, poisoning it. Header and trailer differ for the files
+ * that matter (IFC/STEP headers carry timestamps; the trailer is the end
+ * of the data section), and the read is 128 KiB per reopen against the
+ * ~860 MB the full hash costs.
+ *
+ * @param {Blob} file
+ * @return {Promise<string|null>} hex digest, or null when it cannot be read
+ */
+async function probeOf(file) {
   try {
-    globalThis.localStorage.removeItem(LEGACY_STORAGE_KEY)
+    const subtle = globalThis.crypto?.subtle
+    if (!subtle || typeof file.slice !== 'function') {
+      return null
+    }
+    const {size} = file
+    const head = new Uint8Array(await file.slice(0, Math.min(PROBE_BYTES, size)).arrayBuffer())
+    const tail = new Uint8Array(await file.slice(Math.max(0, size - PROBE_BYTES), size).arrayBuffer())
+    const both = new Uint8Array(head.length + tail.length)
+    both.set(head)
+    both.set(tail, head.length)
+    const digest = new Uint8Array(await subtle.digest('SHA-256', both))
+    return Array.from(digest, (b) => b.toString(HEX_BASE).padStart(HEX_WIDTH, '0')).join('')
   } catch (e) {
-    // Best-effort.
+    return null
   }
 }
 
@@ -122,7 +148,6 @@ const SHA1_HEX = /^[0-9a-f]{40}$/
  * @return {Promise<string>}
  */
 export async function verifiedSourceSha(kindLabel, path, file, hash) {
-  removeLegacy()
   const {size, lastModified} = file
   if (typeof size !== 'number' || typeof lastModified !== 'number' || !Number.isFinite(lastModified)) {
     return hash(file)
@@ -131,12 +156,16 @@ export async function verifiedSourceSha(kindLabel, path, file, hash) {
   if (key === null) {
     return hash(file)
   }
+  const probe = await probeOf(file)
+  if (probe === null) {
+    return hash(file)
+  }
   const known = readAll()[key]
   if (known !== null && typeof known === 'object' && known.size === size &&
-      known.lastModified === lastModified && typeof known.sha === 'string' && SHA1_HEX.test(known.sha)) {
+      known.lastModified === lastModified && known.probe === probe && typeof known.sha === 'string' && SHA1_HEX.test(known.sha)) {
     return known.sha
   }
   const sha = await hash(file)
-  record(key, {size, lastModified, sha})
+  record(key, {size, lastModified, probe, sha})
   return sha
 }

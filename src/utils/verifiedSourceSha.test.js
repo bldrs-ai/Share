@@ -2,11 +2,12 @@ import {verifiedSourceSha} from './verifiedSourceSha'
 
 
 const STORAGE_KEY = 'bldrs:verifiedSourceSha:v2'
-const LEGACY_KEY = 'bldrs:verifiedSourceSha:v1'
 /* eslint-disable no-magic-numbers -- fixture sizes, times and digest width */
 const SHA_A = 'a'.repeat(40)
 const SHA_B = 'b'.repeat(40)
 const SIZE = 1234
+const BIG = 300 * 1024
+const MAX_RECORDS = 64
 const MTIME = 1700000000000
 /* eslint-enable no-magic-numbers */
 
@@ -14,10 +15,13 @@ const MTIME = 1700000000000
 /**
  * @param {number} size
  * @param {number} lastModified
+ * @param {number} fill byte value the file is filled with
  * @return {object} OPFS-File-shaped stand-in
  */
-function fakeFile(size = SIZE, lastModified = MTIME) {
-  return {size, lastModified}
+function fakeFile(size = SIZE, lastModified = MTIME, fill = 1) {
+  const bytes = new Uint8Array(size).fill(fill)
+  const blob = new Blob([bytes])
+  return {size, lastModified, slice: (a, b) => blob.slice(a, b)}
 }
 
 
@@ -75,7 +79,7 @@ describe('utils/verifiedSourceSha', () => {
     await verifiedSourceSha('upload', 'p/1', fakeFile(), hash)
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY))
     const [key] = Object.keys(stored)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({[key]: {size: SIZE, lastModified: MTIME, sha: 'zzz'}}))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({[key]: {...stored[key], sha: 'zzz'}}))
     expect(await verifiedSourceSha('upload', 'p/1', fakeFile(), hash)).toBe(SHA_A)
     expect(hash).toHaveBeenCalledTimes(2)
   })
@@ -98,8 +102,8 @@ describe('utils/verifiedSourceSha', () => {
 
   it('does not cache a File with no lastModified identity', async () => {
     const hash = jest.fn().mockResolvedValue(SHA_A)
-    await verifiedSourceSha('upload', 'p/1', {size: SIZE}, hash)
-    await verifiedSourceSha('upload', 'p/1', {size: SIZE}, hash)
+    await verifiedSourceSha('upload', 'p/1', {size: SIZE, slice: () => new Blob([])}, hash)
+    await verifiedSourceSha('upload', 'p/1', {size: SIZE, slice: () => new Blob([])}, hash)
     expect(hash).toHaveBeenCalledTimes(2)
   })
 
@@ -124,14 +128,6 @@ describe('utils/verifiedSourceSha', () => {
     expect(Object.keys(JSON.parse(localStorage.getItem(STORAGE_KEY)))).toHaveLength(2)
   })
 
-  it('removes the v1 record that held raw paths, and ignores it', async () => {
-    localStorage.setItem(LEGACY_KEY, JSON.stringify({'["upload","p/1",1234,1700000000000]': SHA_B}))
-    const hash = jest.fn().mockResolvedValue(SHA_A)
-    expect(await verifiedSourceSha('upload', 'p/1', fakeFile(), hash)).toBe(SHA_A)
-    expect(localStorage.getItem(LEGACY_KEY)).toBeNull()
-    expect(hash).toHaveBeenCalledTimes(1)
-  })
-
   it('hashes and stores nothing when crypto.subtle is unavailable', async () => {
     const original = Object.getOwnPropertyDescriptor(globalThis, 'crypto')
     Object.defineProperty(globalThis, 'crypto', {value: {}, configurable: true})
@@ -148,5 +144,36 @@ describe('utils/verifiedSourceSha', () => {
         delete globalThis.crypto
       }
     }
+  })
+
+  // Same size and lastModified (coarse OPFS mtime, same-size rewrite): the
+  // probe is the only thing that tells the files apart.
+  describe.each([['head', 0], ['tail', BIG - 1]])('same size and mtime, different %s', (_name, at) => {
+    it('hashes again and returns the new digest', async () => {
+      const a = new Uint8Array(BIG)
+      const b = new Uint8Array(BIG)
+      b[at] = 1
+      const asFile = (bytes) => {
+        const blob = new Blob([bytes])
+        return {size: BIG, lastModified: MTIME, slice: (x, y) => blob.slice(x, y)}
+      }
+      const hash = jest.fn().mockResolvedValueOnce(SHA_A).mockResolvedValueOnce(SHA_B)
+      expect(await verifiedSourceSha('upload', 'p/1', asFile(a), hash)).toBe(SHA_A)
+      expect(await verifiedSourceSha('upload', 'p/1', asFile(b), hash)).toBe(SHA_B)
+      expect(hash).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it('keeps at most 64 records, evicting the oldest', async () => {
+    const hash = jest.fn().mockResolvedValue(SHA_A)
+    for (let i = 0; i < MAX_RECORDS + 1; i++) {
+      await verifiedSourceSha('upload', `p/${i}`, fakeFile(), hash)
+    }
+    expect(Object.keys(JSON.parse(localStorage.getItem(STORAGE_KEY)))).toHaveLength(MAX_RECORDS)
+    hash.mockClear()
+    await verifiedSourceSha('upload', `p/${MAX_RECORDS}`, fakeFile(), hash)
+    expect(hash).not.toHaveBeenCalled()
+    await verifiedSourceSha('upload', 'p/0', fakeFile(), hash)
+    expect(hash).toHaveBeenCalledTimes(1)
   })
 })
