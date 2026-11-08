@@ -150,8 +150,11 @@ async function settledCamera(page: Page): Promise<{pose: number[], distance: num
 
 
 /**
- * Preview meshes whose centres are on screen, one per element, spread over
- * the preview: what a user could double-click during the parse.
+ * Preview meshes with a point on screen, one per element, spread over the
+ * preview: what a user could double-click during the parse. The point is the
+ * centroid of the mesh's first triangle, which is on the mesh; a bounding
+ * box's centre can be empty space, or another element's surface in front of
+ * it (#2087). A point under a panel (the phone's drawer) is not offered.
  *
  * @param page
  * @return targets
@@ -162,8 +165,8 @@ async function previewTargets(page: Page): Promise<PreviewTarget[]> {
     const viewer = (window as any).store.getState().viewer
     const scene = viewer.context.getScene()
     const camera = viewer.context.getCamera()
-    const rect = (document.querySelector('canvas') as HTMLCanvasElement).getBoundingClientRect()
-    const Vector3 = camera.position.constructor
+    const canvas = document.querySelector('canvas') as HTMLCanvasElement
+    const rect = canvas.getBoundingClientRect()
     const seen = new Set<number>()
     const out: Array<{id: number, x: number, y: number}> = []
     const ON_SCREEN = 0.9
@@ -171,15 +174,25 @@ async function previewTargets(page: Page): Promise<PreviewTarget[]> {
       group.updateMatrixWorld(true)
       for (const mesh of group.children) {
         const id = mesh.userData?.previewExpressID
-        if (id === undefined || seen.has(id)) {
+        const position = mesh.geometry?.attributes?.position
+        if (id === undefined || seen.has(id) || !position) {
           continue
         }
-        mesh.geometry.computeBoundingBox()
-        const centre = mesh.geometry.boundingBox.getCenter(new Vector3())
-          .applyMatrix4(mesh.matrixWorld).project(camera)
-        if (Math.abs(centre.x) < ON_SCREEN && Math.abs(centre.y) < ON_SCREEN && centre.z < 1) {
+        const index = mesh.geometry.index
+        const vertex = (k: number) => (index ? index.getX(k) : k)
+        const point = camera.position.clone().set(0, 0, 0)
+        for (let k = 0; k < 3; k++) {
+          point.x += position.getX(vertex(k)) / 3
+          point.y += position.getY(vertex(k)) / 3
+          point.z += position.getZ(vertex(k)) / 3
+        }
+        const ndc = point.applyMatrix4(mesh.matrixWorld).project(camera)
+        const x = rect.left + (((ndc.x + 1) / 2) * rect.width)
+        const y = rect.top + (((1 - ndc.y) / 2) * rect.height)
+        if (Math.abs(ndc.x) < ON_SCREEN && Math.abs(ndc.y) < ON_SCREEN && ndc.z < 1 &&
+            document.elementFromPoint(x, y) === canvas) {
           seen.add(id)
-          out.push({id, x: rect.left + (((centre.x + 1) / 2) * rect.width), y: rect.top + (((1 - centre.y) / 2) * rect.height)})
+          out.push({id, x, y})
         }
       }
     }
@@ -192,17 +205,55 @@ async function previewTargets(page: Page): Promise<PreviewTarget[]> {
 
 
 /**
+ * The element of the preview mesh a double-click at (x, y) would pick right
+ * now: moves the pointer there and casts the viewer's own ray
+ * (`ThreeContext#castRay`, as CadView's double-click does) at the preview
+ * groups, as stepPreviewPick.spec.ts does.
+ *
+ * @param page
+ * @param x
+ * @param y
+ * @return the nearest preview mesh's element id, or null
+ */
+async function previewElementAt(page: Page, x: number, y: number): Promise<number | null> {
+  await page.mouse.move(x, y)
+  return await page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const viewer = (window as any).store.getState().viewer
+    const targets = viewer.context.getScene().children.filter((c: any) => c.userData?.isLoadPreview)
+    targets.forEach((t: any) => t.updateMatrixWorld(true))
+    for (const hit of viewer.context.castRay(targets)) {
+      const id = hit.object?.userData?.previewExpressID
+      if (id !== undefined) {
+        return id
+      }
+    }
+    return null
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
+
+
+/**
  * Double-click preview meshes until one selects its element, as a user does
- * during the parse. A mesh's centre can be covered by another element, so
- * some click selecting its own element is the assertion.
+ * during the parse. Each try re-aims (a selection opens the drawer on a
+ * phone, which moves the canvas) and clicks only where the viewer's own ray
+ * reaches the element aimed at. A projected centre at a fixed moment, with
+ * the camera still easing into its fit, often hit nothing: that was the
+ * #2087 flake, worst where the preview is a handful of meshes.
  *
  * @param page
  * @return the selected element's express id
  */
 async function doubleClickSelectsAPreviewElement(page: Page): Promise<number> {
-  const targets = await previewTargets(page)
-  expect(targets.length, 'a preview mesh must be on screen').toBeGreaterThan(0)
-  for (const {id, x, y} of targets.slice(0, MAX_PICK_TRIES)) {
+  await settledCamera(page)
+  for (let attempt = 0; attempt < MAX_PICK_TRIES; attempt++) {
+    const targets = await previewTargets(page)
+    expect(targets.length, 'a preview mesh must be on screen').toBeGreaterThan(0)
+    const {id, x, y} = targets[attempt % targets.length]
+    if (await previewElementAt(page, x, y) !== id) {
+      continue
+    }
     await page.mouse.dblclick(x, y)
     const selected = await page.waitForFunction((target) =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
