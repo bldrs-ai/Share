@@ -1,5 +1,7 @@
 // Mock the entire module
+import {captureMessage} from '@sentry/react'
 import * as OPFSService from '../OPFS/OPFSService.js'
+import {HTTP_NOT_FOUND} from '../net/http'
 import {
   writeSavedGithubModelOPFS,
   getModelFromOPFS,
@@ -17,6 +19,7 @@ import {
 
 
 jest.mock('../OPFS/OPFSService.js')
+jest.mock('@sentry/react', () => ({captureMessage: jest.fn()}))
 
 
 /**
@@ -187,6 +190,53 @@ describe('OPFS Test Suite', () => {
       )
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalledTimes(1) // Ensure it's called to clean up
+    })
+
+    /**
+     * Run downloadToOPFS against a worker that sends one reply.
+     *
+     * @param {object} reply fields the worker sends, besides the request id
+     * @param {string} [commitHash]
+     * @return {Promise<*>}
+     */
+    function downloadWithReply(reply, commitHash = 'example.com') {
+      OPFSService.initializeWorker.mockReturnValue({
+        addEventListener: jest.fn((_, handler) => {
+          process.nextTick(() => handler({data: {requestId: currentRequestId(), ...reply}}))
+        }),
+        removeEventListener: jest.fn(),
+      })
+      return downloadToOPFS('https://example.com/secret-plan.ifc', '/secret-plan.ifc', commitHash,
+        'BldrsLocalStorage', 'V1', 'Projects')
+    }
+
+    it('reports a download served from memory (no move) as one info event', async () => {
+      await downloadWithReply({completed: true, event: 'download', cached: false, file: new Blob(['x'])})
+
+      expect(captureMessage).toHaveBeenCalledTimes(1)
+      const [, context] = captureMessage.mock.calls[0]
+      expect(context.level).toBe('info')
+      expect(context.fingerprint).toEqual(['opfs-source', 'not-cached', 'move-unavailable', 'external'])
+      expect(JSON.stringify(captureMessage.mock.calls)).not.toMatch(/secret-plan|example\.com/)
+    })
+
+    it('reports nothing for a download that was cached', async () => {
+      await downloadWithReply({completed: true, event: 'download', file: new Blob(['x'])})
+
+      expect(captureMessage).not.toHaveBeenCalled()
+    })
+
+    it('rejects with the worker\'s condition and status and sends no event itself', async () => {
+      // A failed download is reported by Loader.js#load, once its direct
+      // fetch has succeeded; reporting here too would double a failed load.
+      const error = await downloadWithReply(
+        {error: 'downloadModelToOPFS: HTTP 404 for /index.ifc; not cached', condition: 'http-error', status: HTTP_NOT_FOUND},
+        'bldrs-ai').catch((e) => e)
+
+      expect(error.opfsCondition).toBe('http-error')
+      expect(error.opfsStatus).toBe(HTTP_NOT_FOUND)
+      expect(error.opfsKind).toBe('local')
+      expect(captureMessage).not.toHaveBeenCalled()
     })
 
     it('should call onProgress with progress data', async () => {

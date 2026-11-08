@@ -990,6 +990,8 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
 
       expect(replies.some((m) => m.completed)).toBe(false)
       expect(replies.some((m) => /fetch failed/.test(String(m.error)))).toBe(true)
+      // The page reports this to Sentry from the reply's condition (the worker has no Sentry).
+      expect(replies.find((m) => m.error).condition).toBe('fetch-rejected')
       expect(await allFileNames(rootDir)).toEqual([])
     })
 
@@ -999,6 +1001,7 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
       const replies = await download('/index.ifc', 'r2')
 
       expect(replies.some((m) => /HTTP 404/.test(String(m.error)))).toBe(true)
+      expect(replies.find((m) => m.error)).toMatchObject({condition: 'http-error', status: 404})
       expect(await allFileNames(rootDir)).toEqual([])
     })
 
@@ -1010,6 +1013,7 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
 
       expect(replies.some((m) => m.completed)).toBe(false)
       expect(replies.some((m) => /empty response body/.test(String(m.error)))).toBe(true)
+      expect(replies.find((m) => m.error).condition).toBe('empty-body')
       expect(await allFileNames(rootDir)).toEqual([])
     })
 
@@ -1030,6 +1034,7 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
       const replies = await download('/index.ifc', 'r4')
 
       expect(replies.some((m) => m.completed)).toBe(false)
+      expect(replies.find((m) => m.error).condition).toBe('stream-error')
       expect(await allFileNames(rootDir)).toEqual([])
     })
 
@@ -1059,6 +1064,7 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
       expect(seenMidStream.flat()).not.toContain(finalName)
       const done = replies.find((m) => m.completed)
       expect(done.event).toBe('download')
+      expect(done).not.toHaveProperty('cached')
       expect(done.file.size).toBe(CHUNKS * KIB)
       expect(await allFileNames(rootDir)).toEqual([finalName])
       // ...and the next load is a hit, with no fetch.
@@ -1093,6 +1099,8 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
 
       const done = replies.find((m) => m.completed)
       expect(done.event).toBe('download')
+      // Tells the page to count it (reportOpfsNotCached); a cached download omits it.
+      expect(done.cached).toBe(false)
       expect(new Uint8Array(await done.file.arrayBuffer())).toEqual(
         new Uint8Array(await streamedResponse(CHUNKS, KIB).arrayBuffer()))
       // A copy would have created the final name before it was complete.

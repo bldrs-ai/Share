@@ -43,6 +43,9 @@ export const PARTIAL_DOWNLOAD_LOCK_PREFIX = 'bldrs-download-tmp:'
 // bumps lastModified, and moves within milliseconds of its last one.
 // eslint-disable-next-line no-magic-numbers
 export const STALE_PARTIAL_DOWNLOAD_MS = 10 * 60 * 1000
+// The empty-body failure's message, matched in downloadModelToOPFS's catch to
+// tell it from a stream or write error in the reply's `condition`.
+const EMPTY_BODY_MESSAGE = 'empty response body; not cached'
 
 
 /**
@@ -1281,17 +1284,20 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
   try {
     response = await fetch(objectUrl)
   } catch (error) {
-    postReply({error: `downloadModelToOPFS: fetch failed for ${originalFilePath}: ${error}`}, requestId)
+    // `condition`/`status` let the page report this to Sentry without parsing
+    // the text (the worker has no Sentry; reportOpfsSourceCondition.js).
+    postReply({error: `downloadModelToOPFS: fetch failed for ${originalFilePath}: ${error}`, condition: 'fetch-rejected'}, requestId)
     return
   }
   if (!response.ok) {
     // An error page (a host's 404 HTML, a 5xx) is not the model; caching it
     // under the final name would serve it forever.
-    postReply({error: `downloadModelToOPFS: HTTP ${response.status} for ${originalFilePath}; not cached`}, requestId)
+    postReply({error: `downloadModelToOPFS: HTTP ${response.status} for ${originalFilePath}; not cached`,
+      condition: 'http-error', status: response.status}, requestId)
     return
   }
   if (!response.body) {
-    postReply({error: 'downloadModelToOPFS: ReadableStream not supported in this browser.'}, requestId)
+    postReply({error: 'downloadModelToOPFS: ReadableStream not supported in this browser.', condition: 'no-body'}, requestId)
     return
   }
 
@@ -1362,7 +1368,7 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       if (receivedLength === 0) {
       // Nothing to cache: an empty body is never a usable model, and stored
       // under the final name it would be served on every later load.
-        throw new Error('empty response body; not cached')
+        throw new Error(EMPTY_BODY_MESSAGE)
       }
       await blobAccessHandle.flush()
       // Close before the move: an entry can't be moved (or, on Safari,
@@ -1387,7 +1393,9 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       const bytes = await (await tempFileHandle.getFile()).arrayBuffer()
       await discardPartialEntry(null, tempDirectoryHandle, tempFileHandle)
       tempFileHandle = null
-      postReply({completed: true, event: 'download', file: new File([bytes], strippedFileName)}, requestId)
+      // `cached: false` tells the page this load was served from memory
+      // (reportOpfsNotCached).
+      postReply({completed: true, event: 'download', file: new File([bytes], strippedFileName), cached: false}, requestId)
     } catch (error) {
     // A stream that dies mid-download, a short write, an empty body: drop
     // the temp. A failure after the move leaves a complete final entry,
@@ -1397,7 +1405,10 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       } catch (_) {/* already settled */}
       await discardPartialEntry(blobAccessHandle, tempDirectoryHandle, tempFileHandle)
       blobAccessHandle = null
-      postReply({error: `Error writing ${originalFilePath} (${commitHash}): ${error?.message ?? error}`}, requestId)
+      postReply({
+        error: `Error writing ${originalFilePath} (${commitHash}): ${error?.message ?? error}`,
+        condition: error?.message === EMPTY_BODY_MESSAGE ? 'empty-body' : 'stream-error',
+      }, requestId)
     } finally {
     // Always close the sync access handle. See writeTemporaryFileToOPFS for
     // the rationale (Safari InvalidStateError on subsequent loads if leaked).

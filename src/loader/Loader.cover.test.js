@@ -5,6 +5,7 @@
 // reach. Axios and the OPFS utilities are mocked so we can force specific
 // error shapes.
 
+import {captureException, captureMessage} from '@sentry/react'
 import axios from 'axios'
 import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 import {
@@ -23,6 +24,11 @@ import {dereferenceAndProxyDownloadContents} from './urls'
 
 
 jest.mock('axios')
+jest.mock('@sentry/react', () => ({
+  ...jest.requireActual('@sentry/react'),
+  captureMessage: jest.fn(),
+  captureException: jest.fn(),
+}))
 
 // Mock OPFS utils so we can steer the isOpfsAvailable=true path without
 // needing a real worker or cache.
@@ -663,6 +669,75 @@ describe('load() error/edge paths with OPFS enabled', () => {
       expect(deleteFileFromOPFS).toHaveBeenCalledWith(
         '/index.obj', 'bldrs-ai', 'BldrsLocalStorage', 'V1', 'Projects')
       expect(axios.get).toHaveBeenCalledTimes(1)
+    })
+
+    describe('Sentry reports for the OPFS condition a load fell back from', () => {
+      const downloadError = (condition, status) => Object.assign(
+        new Error('downloadModelToOPFS: HTTP for /models/private-tower.obj https://example.com/models/private-tower.obj'),
+        {opfsCondition: condition, opfsStatus: status, opfsKind: 'external'})
+
+      beforeEach(() => {
+        captureMessage.mockClear()
+        captureException.mockClear()
+      })
+
+      it('counts an eviction once, at info, after the re-fetch succeeded', async () => {
+        downloadToOPFS.mockResolvedValue(new MockFile(''))
+        axios.get.mockResolvedValue({data: objText})
+
+        await load(url, viewer, onProgress, true, setOpfsFile, '')
+
+        expect(captureMessage).toHaveBeenCalledTimes(1)
+        const [, context] = captureMessage.mock.calls[0]
+        expect(context.level).toBe('info')
+        expect(context.fingerprint).toEqual(['opfs-source', 'evicted', 'external'])
+        expect(context.tags).toMatchObject({kind: 'external', condition: 'evicted'})
+        expect(JSON.stringify(captureMessage.mock.calls)).not.toMatch(/example\.com|index\.obj/)
+      })
+
+      it('warns once for a hosted 404 that the direct fetch then got past', async () => {
+        downloadToOPFS.mockRejectedValue(downloadError('http-error', 404))
+        axios.get.mockResolvedValue({data: objText})
+
+        await load(url, viewer, onProgress, true, setOpfsFile, '')
+
+        expect(captureMessage).toHaveBeenCalledTimes(1)
+        const [, context] = captureMessage.mock.calls[0]
+        expect(context.level).toBe('warning')
+        expect(context.fingerprint).toEqual(['opfs-source', 'download-failed', 'http-error', 'external'])
+        expect(context.tags).toMatchObject({kind: 'external', condition: 'http-error', http_status: '404'})
+        // The worker's text names the file and URL; none of it may reach Sentry.
+        expect(JSON.stringify(captureMessage.mock.calls)).not.toMatch(/private-tower|example\.com/)
+      })
+
+      it('sends no message when the load fails outright after a failed download', async () => {
+        downloadToOPFS.mockRejectedValue(downloadError('http-error', 404))
+        axios.get.mockRejectedValue({response: {status: 404}})
+
+        await expect(load(url, viewer, onProgress, true, setOpfsFile, '')).rejects.toThrow(NotFoundError)
+
+        // CadView's captureException owns this load; a message here would be
+        // a second event for one failure.
+        expect(captureMessage).not.toHaveBeenCalled()
+      })
+
+      it('sends no message when the re-fetch after an eviction fails', async () => {
+        downloadToOPFS.mockResolvedValue(new MockFile(''))
+        axios.get.mockRejectedValue({response: {status: 404}})
+
+        await expect(load(url, viewer, onProgress, true, setOpfsFile, '')).rejects.toThrow(NotFoundError)
+
+        expect(captureMessage).not.toHaveBeenCalled()
+      })
+
+      it('sends nothing for an OPFS failure that is not one of these conditions', async () => {
+        downloadToOPFS.mockRejectedValue(new Error('Error getting file handle for /x: boom'))
+        axios.get.mockResolvedValue({data: objText})
+
+        await load(url, viewer, onProgress, true, setOpfsFile, '')
+
+        expect(captureMessage).not.toHaveBeenCalled()
+      })
     })
 
     it('does not evict an external OBJ whose header mentions ISO-10303-21', async () => {

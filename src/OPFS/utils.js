@@ -15,6 +15,7 @@ import {
   opfsWriteBase64Model,
 } from '../OPFS/OPFSService.js'
 import {assertDefined} from '../utils/assert'
+import {downloadSourceKind, reportOpfsNotCached} from './reportOpfsSourceCondition'
 import debug, {WARN} from '../utils/debug'
 
 
@@ -178,7 +179,13 @@ export function downloadToOPFS(
     (data, settle) => {
       if (data.error) {
         debug().error('Error from worker:', data.error)
-        settle.reject(new Error(data.error))
+        const error = new Error(data.error)
+        // Which download condition the worker hit, for Loader.js#load to
+        // report once its direct-fetch fallback has succeeded. Never the text.
+        error.opfsCondition = data.condition
+        error.opfsStatus = data.status
+        error.opfsKind = downloadSourceKind(commitHash)
+        settle.reject(error)
         return
       }
       if (data.progressEvent) {
@@ -194,6 +201,9 @@ export function downloadToOPFS(
       if (data.completed) {
         if (data.event === 'download') {
           debug().warn('Worker finished downloading file')
+          if (data.cached === false) {
+            reportOpfsNotCached(downloadSourceKind(commitHash))
+          }
         } else if (data.event === 'exists') {
           debug().warn('Commit exists in OPFS.')
         }

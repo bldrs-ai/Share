@@ -66,6 +66,7 @@ import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToB
 import {spillModelSource} from './opfsSourceByteStore'
 import {EvictedOpfsSourceError, isUnusableOpfsSource} from './opfsSourceHealth'
 import {PART21_LOADER_TYPES} from './part21Formats'
+import {reportOpfsDownloadFailed, reportOpfsSourceEvicted} from '../OPFS/reportOpfsSourceCondition'
 import {STORE_DETECT_PREFIX_BYTES, conwayStoreOpenRequirement} from './stepFormat'
 import {isEngineWorkerLoad} from '../viewer/ifc/ShareIfcLoader'
 import {
@@ -342,6 +343,11 @@ export async function load(
   }
 
   let modelData
+  // The OPFS condition (eviction, failed download) this load fell back from,
+  // reported to Sentry only once the direct fetch has succeeded: a load that
+  // fails outright is CadView's captureException, and a second event for it
+  // would double the volume (reportOpfsSourceCondition.js).
+  let opfsFallbackCondition = null
   // GLB export context: captured after the source file is in hand if the
   // `glb` feature is on and the source is IFC. Carries the cacheKeyArgs
   // (source-kind namespace + sourceHash) the post-parse writer will use.
@@ -696,6 +702,15 @@ export async function load(
       if (opfsError?.message?.startsWith('Invalid URL path')) {
         throw opfsError
       }
+      if (opfsError instanceof EvictedOpfsSourceError) {
+        opfsFallbackCondition = {evictedKind: opfsError.kindLabel}
+      } else if (opfsError?.opfsCondition) {
+        opfsFallbackCondition = {
+          kind: opfsError.opfsKind,
+          condition: opfsError.opfsCondition,
+          status: opfsError.opfsStatus,
+        }
+      }
       if (!(opfsError instanceof EvictedOpfsSourceError)) {
         debug().warn(
           `Loader#load: OPFS path failed (${opfsError?.message || opfsError}); ` +
@@ -735,6 +750,14 @@ export async function load(
       const fetchUrl = derefPath || path
       modelData = await axiosDownload(fetchUrl, isFormatText, onProgress)
       debug().log('Loader#load: modelData from axios download:', modelData)
+    }
+  }
+
+  if (opfsFallbackCondition !== null) {
+    if (opfsFallbackCondition.evictedKind) {
+      reportOpfsSourceEvicted(opfsFallbackCondition.evictedKind)
+    } else {
+      reportOpfsDownloadFailed(opfsFallbackCondition)
     }
   }
 
