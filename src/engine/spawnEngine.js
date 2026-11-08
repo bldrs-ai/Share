@@ -60,6 +60,7 @@ export function engineFlagSnapshot() {
     disableStreamOpen: isFeatureEnabled('disableStreamOpen'),
     disableEngineSyncHandle: isFeatureEnabled('disableEngineSyncHandle'),
     disableEngineSidecar: isFeatureEnabled('disableEngineSidecar'),
+    disableEngineResidentSource: isFeatureEnabled('disableEngineResidentSource'),
   }
 }
 

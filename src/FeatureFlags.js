@@ -199,6 +199,13 @@ export const flags = [
   // §7 step 8, §11; engine/engineSidecars.js): neither reopen a model from
   // its persisted sidecar nor write one, so every open parses.
   {name: 'disableEngineSidecar', isActive: false},
+  // Kill switch for the Blob store's whole-file read (Share#2092;
+  // engine/engineSources.js#makeBlobStore): where the engine reads its OPFS
+  // source through the Blob store (Firefox and Safari, which have no
+  // read-only sync access handles), read windows from the Blob for the
+  // whole load instead of holding the file for it. Also the A/B for
+  // measuring what the whole-file read buys.
+  {name: 'disableEngineResidentSource', isActive: false},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-

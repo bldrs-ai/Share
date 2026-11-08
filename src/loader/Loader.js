@@ -1091,6 +1091,20 @@ export async function load(
       })
     }
     scheduleIdleWork(runWriter)
+  } else if (engineSession) {
+    // No writer follows, so the writer's spill (above) never comes: a GLB
+    // cache lookup that failed (a hash or OPFS error, which leaves no cache
+    // key), a GitHub source with no upstream sha, the `glb` flag off. On a
+    // windowed Blob-store open the worker still holds the whole source file
+    // for the load (engine/engineSources.js#makeBlobStore, Share#2092, up to
+    // RESIDENT_SOURCE_MAX_BYTES), and only a SPILL lets it go — so without
+    // this it stayed until the session closed (codex review of Share#2095).
+    // `readModel` resolved after the pump's `done`, so the load-time sweeps
+    // are over and this is that release's safe point; nothing races it,
+    // since no writer was scheduled. The same request as the writer's, with
+    // no file: a windowed store answers `released`, a buffered open
+    // `unsupported` (kept resident, as it was).
+    spillEngineSource(engineSession, null)
   }
 
   return model
@@ -1104,19 +1118,31 @@ export async function load(
  * the main-thread spill: a refusal or a closed session keeps the source
  * resident, which is the pre-spill behaviour.
  *
+ * The one release path for a worker load's source, called once per load:
+ * by the GLB writer once its capture is done, or straight after the parse
+ * when no writer was scheduled (`load`, below the writer). With no
+ * `sourceFile` it still asks: a windowed Blob-store open lets its whole-file
+ * copy go (`released`) without one, and a buffered open answers
+ * `unsupported`, keeping its source resident.
+ *
  * @param {object} engineSession
  * @param {Blob|null|undefined} sourceFile
  * @return {Promise<void>} settles with the spill, never rejects
  */
 function spillEngineSource(engineSession, sourceFile) {
-  if (!sourceFile) {
-    return Promise.resolve()
-  }
-  return engineSession.spill(sourceFile).then((result) => {
+  return engineSession.spill(sourceFile ?? null).then((result) => {
     if (result?.spilled) {
       glbInfo(
-        `source spill (engine worker): released resident source buffer (${sourceFile.size}B); ` +
+        `source spill (engine worker): released resident source buffer (${sourceFile?.size}B); ` +
         `property reads now page windows through ${result.source?.kind ?? 'a store'}`)
+    } else if (result?.released) {
+      // A windowed open on the Blob store, which held the whole file for the
+      // load (engine/engineSources.js#makeBlobStore, Share#2092). Its size
+      // is the store's own count, there being no File on the no-writer path.
+      const bytes = result.source?.residentBytes ?? sourceFile?.size
+      glbInfo(
+        `source spill (engine worker): released the Blob store's whole-file copy (${bytes}B); ` +
+        'property reads now page windows from the File')
     } else {
       glbVerbose(`source spill (engine worker): kept resident (${result?.reason ?? 'no reason given'})`)
     }

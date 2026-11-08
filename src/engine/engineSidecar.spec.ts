@@ -94,6 +94,18 @@ async function engineIndexLine(page: Page): Promise<string> {
 
 /**
  * @param page
+ * @return the finished load's `Engine source I/O:` line (read after
+ *   engineIndexLine, which waits for the load)
+ */
+async function sourceIoLine(page: Page): Promise<string | undefined> {
+  return await page.evaluate(() =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((window as any).store.getState().loadReportLines as string[]).find((line) => line.startsWith('Engine source I/O:')))
+}
+
+
+/**
+ * @param page
  * @return the finished load's `Engine index:` lines (none on the main thread)
  */
 async function indexLines(page: Page): Promise<string[]> {
@@ -127,6 +139,33 @@ describeMobileAndDesktop('Engine worker: index sidecar reopen', () => {
       await reopen.expectWorkerEngine()
       expect(glbLogs.some((line) => line.includes('cache MISS')), 'the reopen went to the engine').toBe(true)
     })
+  }
+
+  // Firefox and Safari have no read-only sync access handles, so their engine
+  // reads the source through the Blob store; `disableEngineSyncHandle` puts
+  // Chromium on the same path. That store holds the whole file for the load
+  // (Share#2092: one read, every window copied out of memory) and lets it go
+  // at the GLB writer's spill, and the sidecar reopen works through it as
+  // through the handle.
+  for (const {name, path} of MODELS) {
+    test(`a ${name} read through the Blob store holds the file for its load and reopens from its sidecar`,
+      async ({page}) => {
+        test.setTimeout(3 * LOAD_TIMEOUT_MS)
+        const glbLogs = captureGlbLogs(page)
+        await page.goto(`${path}?feature=disableEngineSyncHandle`)
+        expect(await engineIndexLine(page)).toMatch(/^Engine index: parsed; sidecar saved \(\d+\.\d MB\)$/)
+        expect(await sourceIoLine(page)).toMatch(
+          /^Engine source I\/O: Blob store \(disabled; whole file held, \d+ reads from memory\), 1 reads, /)
+        expect(await dropGlbArtifact(page, glbLogs), 'the worker load cached one artifact').toBe(1)
+        await pauseViewerRendering(page)
+        await waitForGlbLog(glbLogs, 'released the Blob store\'s whole-file copy', CACHE_TIMEOUT_MS)
+        await resumeViewerRendering(page)
+
+        resetGlbLogs(glbLogs)
+        await page.reload()
+        expect(await engineIndexLine(page)).toMatch(/^Engine index: from sidecar \(\d+\.\d MB\), no parse$/)
+        expect(await sourceIoLine(page)).toMatch(/^Engine source I\/O: Blob store \(disabled; whole file held, /)
+      })
   }
 
   // The main-thread engine (the engine worker's kill switch) has no index
