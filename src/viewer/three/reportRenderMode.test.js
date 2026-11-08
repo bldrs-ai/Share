@@ -69,4 +69,14 @@ describe('viewer/three/reportRenderMode', () => {
     expect(() => reportRenderMode()).not.toThrow()
     expect(gtagEvent).toHaveBeenCalledTimes(2)
   })
+
+  it('retries GA on a rebuild when the first send threw', () => {
+    gtagEvent.mockImplementationOnce(() => {
+      throw new Error('ga down')
+    })
+    reportRenderMode()
+    reportRenderMode()
+    reportRenderMode()
+    expect(gtagEvent).toHaveBeenCalledTimes(2)
+  })
 })

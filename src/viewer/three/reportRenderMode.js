@@ -35,9 +35,11 @@ export function reportRenderMode() {
   if (sentGaEvent) {
     return
   }
-  sentGaEvent = true
   try {
     gtagEvent('render_mode', {mode})
+    // Only a call that returned counts as sent, so a later viewer rebuild
+    // retries after a throw instead of losing the page's one event.
+    sentGaEvent = true
   } catch (e) {
     // Reporting is best-effort.
   }
