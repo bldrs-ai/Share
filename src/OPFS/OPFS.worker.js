@@ -1374,6 +1374,14 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       tempFileHandle = opened.fileHandle
     } catch (error) {
       await discardPartialEntry(blobAccessHandle, tempDirectoryHandle, tempFileHandle)
+      // The fetch already resolved, and the Loader's direct fetch is about to
+      // start the same download again, so let go of this body now instead of
+      // leaving its connection open until GC.
+      try {
+        await response.body?.cancel()
+      } catch {
+        // Best-effort: the reply below is what matters.
+      }
       const workerMessage = `Error getting file handle for ${originalFilePath}: ${error}`
       postReply({error: workerMessage}, requestId)
       return false

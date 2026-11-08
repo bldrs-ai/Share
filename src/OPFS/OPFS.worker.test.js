@@ -1206,6 +1206,30 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
       expect(await listTemps()).toContain(served)
     })
 
+    test('a temp that cannot be opened cancels the fetched body and caches nothing', async () => {
+      // Safari can refuse createSyncAccessHandle. The Loader then fetches the
+      // model again directly, so the first response must not stay open.
+      withMove()
+      savedCreateSyncAccessHandle = FileHandle.prototype.createSyncAccessHandle
+      FileHandle.prototype.createSyncAccessHandle = () =>
+        Promise.reject(new DOMException('no handle', 'NoModificationAllowedError'))
+      const cancel = jest.fn()
+      const body = new ReadableStream({
+        pull(controller) {
+          controller.enqueue(new Uint8Array(KIB))
+        },
+        cancel,
+      })
+      global.fetch = jest.fn(() => Promise.resolve(new Response(body)))
+
+      const replies = await download('/index.ifc', 'rCancel')
+
+      expect(replies.some((m) => m.completed)).toBe(false)
+      expect(replies.some((m) => m.error)).toBe(true)
+      expect(cancel).toHaveBeenCalledTimes(1)
+      expect(await allFileNames(rootDir)).toEqual([])
+    })
+
     test('a copy killed partway never becomes a cache hit', async () => {
       // A worker or tab killed mid-copy runs no cleanup. Model that: every
       // write to a file under the final name dies, and so does its removal.
