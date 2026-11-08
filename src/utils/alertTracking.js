@@ -59,10 +59,19 @@ export function trackAlert(message, error = null) {
  * would send it to Sentry anyway, as a plain object with neither the
  * original stack nor the load context.
  *
+ * Expected outcomes are counted here and nowhere else (AGENTS.md, "PRs: a
+ * Reported Conditions section"): GA, never an info-level Sentry message. The
+ * structured fields that used to ride such a message as tags come along as
+ * `params`, so the one event carries them. They must be closed-set or
+ * bucketed values, never a file name, URL or path; `message` must be a
+ * constant for any alert whose text names the user's file.
+ *
  * @param {string} message The alert message to count
+ * @param {object} [params] Extra structured GA params, string values only
  */
-export function trackAlertEvent(message) {
+export function trackAlertEvent(message, params = {}) {
   gtagEvent('alert', {
+    ...params,
     message: message,
   })
 }

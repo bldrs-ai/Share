@@ -715,7 +715,7 @@ describe('CadView', () => {
     expect(captureExceptionSpy).not.toHaveBeenCalledWith(oomErr)
   })
 
-  it('alerts on a refused IFC4X3 model, and counts it in Sentry as info rather than an error', async () => {
+  it('alerts on a refused IFC4X3 model, counted in GA and never in Sentry', async () => {
     const schemaErr = new UnsupportedSchemaError('IFC4X3_RC2')
     jest.spyOn(Loader, 'load').mockImplementation(() => {
       throw schemaErr
@@ -737,10 +737,13 @@ describe('CadView', () => {
     // A deliberate schema refusal (bldrs-ai/conway#713) is a documented limit
     // already explained to the user, not a defect — same reasoning as OOM.
     expect(captureExceptionSpy).not.toHaveBeenCalledWith(schemaErr)
-    // …but it is counted, to rank the IFC 4.3 work (Share#1879).
-    expect(captureMessageSpy).toHaveBeenCalledWith(
-      'Unsupported IFC schema: IFC4X3_RC2',
-      expect.objectContaining({level: 'info', fingerprint: ['unsupported-schema', 'IFC4X3_RC2']}))
+    // …but it is counted, to rank the IFC 4.3 work (Share#1879): in GA, by
+    // AlertDialog, from the params the alert carries. Not in Sentry at all.
+    // This route carries no `kind`, so its source reads as `unknown`
+    // (unsupportedSchema.js#modelSourceOf is tested per kind on its own).
+    expect(result.current.alert.ga).toEqual({schema: 'IFC4X3_RC2', model_source: 'unknown'})
+    expect(result.current.alert.repeat).toBe(false)
+    expect(captureMessageSpy).not.toHaveBeenCalled()
   })
 
   // conway#742: an open failure that carries a reason. The alert says it in
@@ -817,7 +820,7 @@ describe('CadView', () => {
   // a defect with the worker's raw "Folder <id> not found" string. The
   // loader only raises the typed error once OPFS confirms the upload is
   // absent, so it's user state: explain it, and keep it out of Sentry.
-  it('explains an upload that is not in this browser, and counts it in Sentry as info rather than an error', async () => {
+  it('explains an upload that is not in this browser, counted in GA and never in Sentry', async () => {
     const goneErr = new UploadNotInBrowserError('12345678-1234-4abc-9def-123456789abc.ifc')
     const loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
       throw goneErr
@@ -844,10 +847,10 @@ describe('CadView', () => {
       expect(alert.message).toMatch(/isn't in this browser/)
     })
     expect(captureExceptionSpy).not.toHaveBeenCalledWith(goneErr)
-    // …but its volume stays visible in Sentry, as info, in one issue (#1956).
-    expect(captureMessageSpy).toHaveBeenCalledWith(
-      'Upload not in this browser',
-      expect.objectContaining({level: 'info', fingerprint: ['upload-not-in-browser']}))
+    // Its volume is counted in GA, by AlertDialog's `alert` event (#1956):
+    // a first sighting, so not a repeat. Nothing goes to Sentry.
+    expect(result.current.alert.repeat).toBe(false)
+    expect(captureMessageSpy).not.toHaveBeenCalled()
     // The route's provenance is what lets the loader reclassify at all.
     expect(loadSpy.mock.calls[0][6]).toEqual(expect.objectContaining({isUploadedRoute: true}))
   })
@@ -861,7 +864,6 @@ describe('CadView', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {})
     const Sentry = require('@sentry/react')
     jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
-    const captureMessageSpy = jest.spyOn(Sentry, 'captureMessage').mockImplementation(() => {})
     const {result} = renderHook(() => useStore((state) => state))
     // OPFS present, entry absent. Without this the state leaks in from an
     // earlier no-OPFS test, and the route would raise InMemoryUploadGoneError
@@ -874,13 +876,15 @@ describe('CadView', () => {
     render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
     await actAsyncFlush()
     await waitFor(() => expect(result.current.alert?.type).toBe('uploadNotInBrowser'))
+    const first = result.current.alert
+    expect(first.repeat).toBe(false)
     const loadsBefore = loadSpy.mock.calls.length
     await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
     await actAsyncFlush()
     await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
-    const reports = captureMessageSpy.mock.calls
-      .filter(([title]) => title === 'Upload not in this browser')
-    expect(reports).toHaveLength(1)
+    // Shown again, as a repeat, which AlertDialog doesn't count.
+    await waitFor(() => expect(result.current.alert).not.toBe(first))
+    expect(result.current.alert).toEqual(expect.objectContaining({type: 'uploadNotInBrowser', repeat: true}))
   })
 
   // A hosted file whose NAME is a UUID looks like an upload to the loader's
@@ -1116,21 +1120,22 @@ describe('CadView', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {})
     const Sentry = require('@sentry/react')
     jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
-    const captureMessageSpy = jest.spyOn(Sentry, 'captureMessage').mockImplementation(() => {})
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
     await actAsyncFlush()
     await waitFor(() => expect(result.current.alert?.type).toBe('unsupportedSchema'))
+    const first = result.current.alert
+    expect(first.repeat).toBe(false)
     const loadsBefore = loadSpy.mock.calls.length
     await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
     await actAsyncFlush()
     // The reload really happened, so the single count below is the dedupe
     // at work and not a reload that never ran.
     await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
-    const refusalReports = captureMessageSpy.mock.calls
-      .filter(([title]) => title === 'Unsupported IFC schema: IFC4X3_RC2')
-    expect(refusalReports).toHaveLength(1)
+    // Shown again, as a repeat: AlertDialog counts only the first.
+    await waitFor(() => expect(result.current.alert).not.toBe(first))
+    expect(result.current.alert).toEqual(expect.objectContaining({type: 'unsupportedSchema', repeat: true}))
   })
 
   // Same dedupe, for the other rerun trigger: view settings from the Widget
@@ -1143,19 +1148,20 @@ describe('CadView', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {})
     const Sentry = require('@sentry/react')
     jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
-    const captureMessageSpy = jest.spyOn(Sentry, 'captureMessage').mockImplementation(() => {})
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
     await actAsyncFlush()
     await waitFor(() => expect(result.current.alert?.type).toBe('unsupportedSchema'))
+    const first = result.current.alert
+    expect(first.repeat).toBe(false)
     const loadsBefore = loadSpy.mock.calls.length
     await act(() => result.current.setCustomViewSettings({foo: 'bar'}))
     await actAsyncFlush()
     await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
-    const refusalReports = captureMessageSpy.mock.calls
-      .filter(([title]) => title === 'Unsupported IFC schema: IFC4X3_RC2')
-    expect(refusalReports).toHaveLength(1)
+    // Shown again, as a repeat: AlertDialog counts only the first.
+    await waitFor(() => expect(result.current.alert).not.toBe(first))
+    expect(result.current.alert).toEqual(expect.objectContaining({type: 'unsupportedSchema', repeat: true}))
   })
 
   // Share#1954: GA must see loads that fail and loads that display nothing,

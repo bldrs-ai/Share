@@ -13,6 +13,7 @@ import {version as shareVersion} from '../../package.json'
 // the 1.381.1195 pin shipped this module.
 import {LoadLogAccumulator, formatMb} from '@bldrs-ai/conway/src/core/progress_log'
 import {SENTRY_MODEL_LINE_PREFIX, redactConsoleMessage} from '../privacy/sentryRedaction'
+import {reportBvhDepthCapToGa} from './reportLoadDiagnostics'
 // Conway's static Logger, for the data-defect marker (conway#712) on the
 // entries it logs — see installDefectProxy. This is the SAME module instance
 // the engine logs through: `@bldrs-ai/conway/web-ifc` (ShareIfc's import)
@@ -197,6 +198,8 @@ class LoadProgressReporter {
     // BVH trees that reached three-mesh-bvh's depth cap during the load
     // (reportBvhDepthCap), or null when none did.
     this.bvhDepthCap = null
+    // Set once the cap has been counted in GA (reportBvhDepthCapOnce).
+    this.bvhDepthCapReported = false
     // Base messages (conway LogEntry.message, whitespace-collapsed like the
     // tee's text) conway logged during this load, split by whether the entry
     // carried the data-defect marker — what isDataDefectDiagnostic matches
@@ -825,6 +828,41 @@ class LoadProgressReporter {
   }
 
   /**
+   * The model's format as a short token: its file extension, else the
+   * declared content type, else undefined.
+   *
+   * CadView populates content_type as `loadedModel.type || 'undefined'`, so
+   * the literal string is what an unknown type looks like by the time it
+   * reaches here: report nothing rather than that.
+   *
+   * @param {string} [contentType]
+   * @return {string|undefined}
+   */
+  modelFormat(contentType) {
+    const declaredType = contentType === undefined || contentType === null ?
+      '' : String(contentType).toLowerCase()
+    return extensionOf(this.fallbackName) ??
+      (declaredType !== '' && declaredType !== 'undefined' ?
+        declaredType.slice(0, MAX_TAG_CHARS) : undefined)
+  }
+
+  /**
+   * Count this load's BVH depth-cap hits in GA, once
+   * (reportLoadDiagnostics.js#reportBvhDepthCapToGa). No-op when no tree hit
+   * the cap.
+   *
+   * @param {string} [contentType]
+   */
+  reportBvhDepthCapOnce(contentType) {
+    if (!this.bvhDepthCap || this.bvhDepthCapReported) {
+      return
+    }
+    this.bvhDepthCapReported = true
+    const {trees, maxLeafTriangles} = this.bvhDepthCap
+    reportBvhDepthCapToGa({format: this.modelFormat(contentType) ?? 'unknown', trees, maxLeafTriangles})
+  }
+
+  /**
    * Build and send this load's Sentry diagnostics event (issue #1767).
    * Called only via captureLoadDiagnostics — see there for why the
    * counts are the caller's rather than this reporter's.
@@ -877,14 +915,7 @@ class LoadProgressReporter {
     if (this.schema !== undefined) {
       tags.model_schema = this.schema.slice(0, MAX_TAG_CHARS)
     }
-    // CadView populates content_type as `loadedModel.type || 'undefined'`, so
-    // the literal string is what an unknown type looks like by the time it
-    // reaches here — tag nothing rather than tag that.
-    const declaredType = contentType === undefined || contentType === null ?
-      '' : String(contentType).toLowerCase()
-    const format = extensionOf(this.fallbackName) ??
-      (declaredType !== '' && declaredType !== 'undefined' ?
-        declaredType.slice(0, MAX_TAG_CHARS) : undefined)
+    const format = this.modelFormat(contentType)
     if (format !== undefined) {
       tags.model_format = format
     }
@@ -902,11 +933,7 @@ class LoadProgressReporter {
     if (this.isDataDefectDiagnostic(summary.topText)) {
       tags.data_defect = 'true'
     }
-    // With no console diagnostics, the event exists for the depth cap alone
-    // (captureLoadDiagnostics): title it by that, and send it at info, since
-    // a capped leaf slows picks without breaking them.
-    const capOnly = summary.total === 0 && Boolean(this.bvhDepthCap)
-    captureMessage(capOnly ? BVH_DEPTH_CAP_TITLE : diagnosticsTitle(summary.topText), {
+    captureMessage(diagnosticsTitle(summary.topText), {
       // A file with nothing to draw is an input property, not a defect, so
       // it stays out of the error stream like the 4.3 refusal does; the
       // event is still sent because the chip it backs is coloured by the
@@ -914,7 +941,7 @@ class LoadProgressReporter {
       level: {
         [LOAD_OUTCOMES.UNUSABLE]: 'error',
         [LOAD_OUTCOMES.NO_GEOMETRY]: 'info',
-      }[loadOutcome] ?? (capOnly ? 'info' : 'warning'),
+      }[loadOutcome] ?? 'warning',
       tags,
       contexts: {
         loadDiagnostics: {
@@ -939,6 +966,8 @@ class LoadProgressReporter {
           messages: this.topDiagnostics(MAX_SENTRY_DIAGNOSTICS),
           // How big the leaves three-mesh-bvh capped are, the number for
           // deciding whether to retune its build (viewer/ifc/bvhBuild.js).
+          // Context on this event only; the cap is counted in GA
+          // (reportBvhDepthCapOnce).
           bvhDepthCap: this.bvhDepthCap ?? undefined,
           report: this.sentryLines.join('\n'),
         },
@@ -1065,10 +1094,6 @@ function ellipsize(text) {
     `${text.slice(0, MAX_DIAGNOSTIC_SAMPLE_CHARS - 1)}…` :
     text
 }
-
-
-/** Diagnostics-event title for a load whose only finding is the BVH depth cap. */
-const BVH_DEPTH_CAP_TITLE = 'Load diagnostics: picking index hit its depth cap'
 
 
 /**
@@ -1636,10 +1661,12 @@ export function captureLoadDiagnostics({
   if (activeReporter === null) {
     return
   }
-  // A depth-cap hit is sent on its own too: bvhBuild.js silences
-  // three-mesh-bvh's warning, so a load whose only finding is the cap now
-  // has zero console counts, and its leaf size is what the record is for.
-  if (errorCount + warningCount === 0 && !activeReporter.bvhDepthCap) {
+  // A depth-cap hit goes to GA whether or not the load had anything for
+  // Sentry: it is volume-only signal (AGENTS.md, "PRs: a Reported Conditions
+  // section"). Here, on a successful real open, so a failed load never also
+  // counts it.
+  activeReporter.reportBvhDepthCapOnce(contentType)
+  if (errorCount + warningCount === 0) {
     return
   }
   try {

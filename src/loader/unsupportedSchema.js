@@ -1,8 +1,7 @@
-import {captureMessage} from '@sentry/react'
 import {stepSchemaName} from '../Filetype'
 import {isLocalOnlyPath} from '../routes/localOnly'
 import {EngineOpenFailureError} from './engineOpenFailure'
-import {loadFailureCaptureContext} from './loadProgress'
+import {sizeClass} from './reportLoadDiagnostics'
 
 
 // The engine-side half (marking an open, reading its refusal and failure
@@ -30,9 +29,9 @@ export {beginOpenAttempt, conwayOpenFailure, conwayRefusedSchema} from './openAt
  *
  * Handled like the OOM and NeedsReconnect alerts in CadView: its own dialog
  * text, and kept out of Sentry's ERROR stream, because an unsupported schema
- * is an expected outcome and not a code defect. It is still counted there,
- * as an `info` message ({@link reportUnsupportedSchema}), because how often
- * users hit it is what ranks the IFC 4.3 work (Share#1879).
+ * is an expected outcome and not a code defect. It is counted in GA instead
+ * ({@link unsupportedSchemaAlert}), because how often users hit it is what
+ * ranks the IFC 4.3 work (Share#1879).
  */
 export class UnsupportedSchemaError extends Error {
   /**
@@ -49,59 +48,55 @@ export class UnsupportedSchemaError extends Error {
 }
 
 
+/** GA `alert` message for a schema refusal: a constant, as the dialog text is. */
+export const UNSUPPORTED_SCHEMA_ALERT_EVENT = 'Unsupported IFC schema'
+
+
+/** A FILE_SCHEMA spelling short and plain enough to be a GA param value. */
+const SCHEMA_TOKEN = /^[A-Z0-9_]{1,32}$/
+
+
 /**
- * Count one refusal in Sentry, to rank the IFC 4.3 work
- * (bldrs-ai/conway#716) by how often users actually hit it (Share#1879).
+ * The dialog for a schema refusal, carrying the GA params AlertDialog counts
+ * it with: the schema, where the model came from, and its size class.
  *
- * A message at level `info`, never an exception: this is demand, not a
- * defect, and must not count toward crash-free rates or read as an engine
- * bug in triage. One issue per schema spelling (the fingerprint), so the
- * issue list reads as a ranking — `IFC4X3_RC2` vs `IFC4X3_ADD2` — with
- * Sentry's own event and user counts on each.
+ * Counted to rank the IFC 4.3 work (bldrs-ai/conway#716) by how often users
+ * actually hit it (Share#1879). Demand, not a defect, so it goes to GA and
+ * never to Sentry (AGENTS.md, "PRs: a Reported Conditions section"). Until
+ * 2026-11 it was an info-level Sentry message (SHARE-1SP), one issue per
+ * schema; the `schema` param keeps that ranking.
  *
- * The load context (`load.phase` tag, `load` context with the report) is
- * the same a failed load's exception gets, so an event can be traced back
- * to the file without user contact — but attached to this event only, never
- * to the session's scope.
+ * Every param is closed-set or bucketed. `schema` comes from the file's
+ * header, so anything but a short upper-case token reads as `other`; conway
+ * only names 4x3 spellings here (`IFC4X3_RC2`, `IFC4X3_ADD2`, …) in practice.
  *
  * What it does not carry yet is WHICH 4.3 features caused the refusal
- * (alignments, spirals, sectioned solids, …) — the thing that maps a
- * refusal onto a #716 phase. conway computes those reasons but does not
- * hand them to Share; bldrs-ai/conway#720 tracks exposing them, and they
- * belong on this event as a tag when it lands.
+ * (alignments, spirals, sectioned solids, …), the thing that maps a refusal
+ * onto a #716 phase. conway computes those reasons but does not hand them
+ * to Share; bldrs-ai/conway#720 tracks exposing them, and they belong on
+ * this event as a param when it lands.
  *
  * @param {UnsupportedSchemaError} err the refusal
  * @param {object|null} routeResult the route the model was opened from
  *   (src/routes/routes.ts#RouteResult)
+ * @return {{type: 'unsupportedSchema', message: string, ga: object}} `ga` holds
+ *   the GA params, string values only
  */
-export function reportUnsupportedSchema(err, routeResult) {
-  try {
-    // The load context goes on THIS event only: applying it to the scope
-    // (attachLoadFailureContext) would leave the refused model's load
-    // details on every later event in the session.
-    const load = loadFailureCaptureContext()
-    const tags = {
-      ...load.tags,
-      schema: err.schema,
-      model_source: modelSourceOf(routeResult),
-    }
-    if (Number.isFinite(err.sizeBytes)) {
-      tags.model_size_mb = Math.round(err.sizeBytes / BYTES_PER_MB)
-    }
-    captureMessage(`Unsupported IFC schema: ${err.schema}`, {
-      level: 'info',
-      fingerprint: ['unsupported-schema', err.schema],
-      tags,
-      contexts: load.contexts,
-    })
-  } catch (_) {
-    // Reporting is best-effort; the user already has the dialog.
+export function unsupportedSchemaAlert(err, routeResult) {
+  const schema = String(err?.schema ?? '').toUpperCase()
+  const ga = {
+    schema: SCHEMA_TOKEN.test(schema) ? schema : 'other',
+    model_source: modelSourceOf(routeResult),
   }
+  if (Number.isFinite(err?.sizeBytes)) {
+    ga.size_class = sizeClass(err.sizeBytes)
+  }
+  return {type: 'unsupportedSchema', message: err.message, ga}
 }
 
 
 /**
- * Where the refused model came from, as a low-cardinality Sentry tag.
+ * Where the refused model came from, as a low-cardinality GA param.
  *
  * @param {object|null} routeResult
  * @return {string} 'upload' | 'hosted' | 'github' | 'google' | 'url' | 'unknown'
@@ -126,7 +121,6 @@ export function modelSourceOf(routeResult) {
  * section, which on any real model ends well inside this.
  */
 const BYTES_PER_KIB = 1024
-const BYTES_PER_MB = BYTES_PER_KIB * BYTES_PER_KIB
 const HEADER_SNIFF_KIB = 64
 // Exported for engine/engineModelLoad.js#openFailureSource, which keeps
 // exactly this much of a source whose bytes it transfers to a worker.

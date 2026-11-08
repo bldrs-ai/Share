@@ -127,9 +127,9 @@ and its `onError` would open Help on top. The chooser names any `.ifc` with a sa
 sibling a Revit export writes (#1087). The `.txt` is not listed, and the
 note says why.
 
-**No model.** It stays an `unrecognizedFormat` alert, so it is one info
-event tagged `upload.ext` from the archive's own name (`zip` for a `.zip`)
-and never an entry name. It carries `archive: {exts}` — each tagged by
+**No model.** It stays an `unrecognizedFormat` alert, so it is one GA
+`alert` event with `upload_ext` from the archive's own name (`zip` for a
+`.zip`) and never an entry name. It carries `archive: {exts}` — each tagged by
 `unrecognizedFormat.js#extensionTag`, so a short alphanumeric or `other`,
 because the text after an entry's last dot can be a name fragment — from which
 `formatGuidance.js#archiveGuidance` says *"This archive has no model Share

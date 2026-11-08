@@ -10,8 +10,8 @@ import {gtagEvent} from '../privacy/analytics'
  * Owner rubric: only an immediately actionable condition goes to Sentry, as
  * an error or warning; diagnostic info that is useful after the fact goes to
  * GA. So a download that failed (a hosted model unreachable or answering an
- * error) is a Sentry warning with a fixed message and fingerprint, modelled
- * on {@link ./reportUploadNotInBrowser.js}, while the two expected states
+ * error) is a Sentry warning with a fixed message and fingerprint, while the
+ * two expected states
  * (an entry evicted and re-fetched, a download served from memory because
  * `move()` is missing) are GA events, `opfs_source_evicted` and
  * `opfs_not_cached`, whose params are exactly `kind` and `condition`. Those

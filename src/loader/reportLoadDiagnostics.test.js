@@ -2,6 +2,8 @@
 import {gtagEvent} from '../privacy/analytics'
 import {
   ENGINE_BUFFERED_REASONS,
+  leafBucket,
+  reportBvhDepthCapToGa,
   reportEngineSourceBuffered,
   reportPreviewUnitsSkipped,
   sizeClass,
@@ -75,6 +77,24 @@ describe('loader/reportLoadDiagnostics', () => {
     it('documents a small fixed reason enum', () => {
       expect(ENGINE_BUFFERED_REASONS).toContain('opfs-unavailable')
       expect(ENGINE_BUFFERED_REASONS).toContain('unknown')
+    })
+  })
+
+  describe('reportBvhDepthCapToGa', () => {
+    it('sends exactly format and bucketed tree and leaf counts', () => {
+      reportBvhDepthCapToGa({format: 'step', trees: 3, maxLeafTriangles: 3400})
+      expect(gtagEvent.mock.calls).toEqual([['bvh_depth_cap', {format: 'step', trees: '2-10', max_leaf: '1001-10000'}]])
+    })
+
+    it('sends nothing when no tree hit the cap', () => {
+      reportBvhDepthCapToGa({format: 'ifc', trees: 0, maxLeafTriangles: 0})
+      expect(gtagEvent).not.toHaveBeenCalled()
+    })
+
+    it('buckets the leaf size at its boundaries', () => {
+      expect([1, 100, 101, 1000, 1001, 10000, 10001].map(leafBucket)).toEqual([
+        '<=100', '<=100', '101-1000', '101-1000', '1001-10000', '1001-10000', '>10000',
+      ])
     })
   })
 })

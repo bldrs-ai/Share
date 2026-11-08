@@ -158,10 +158,12 @@ Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 trian
      largest capped leaf, which decides whether raising `maxDepth` or
      building with the SAH strategy is worth it. Only leaves at the cap
      count: an earlier leaf of identical centroids isn't something a deeper
-     cap would split. The same figures go to Sentry as
-     `loadDiagnostics.bvhDepthCap`, including from a load with no other
-     diagnostics, which sends an `info` event titled `Load diagnostics:
-     picking index hit its depth cap`.
+     cap would split. A successful load that hit the cap is counted in GA,
+     once, as `bvh_depth_cap {format, trees, max_leaf}` with both counts
+     bucketed (`loader/reportLoadDiagnostics.js`). It is volume-only signal,
+     so it has no Sentry event of its own (AGENTS.md, "Reported
+     Conditions"); when the load sends a diagnostics event anyway, the exact
+     figures ride on it as `loadDiagnostics.bvhDepthCap`.
 
 **Precision** — seconds to millisecond precision (3 decimals), memory to
 byte precision (6 decimals of MB), per the report's diagnostic purpose.

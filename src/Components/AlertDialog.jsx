@@ -5,7 +5,8 @@ import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
 import {archiveGuidance, formatGuidance} from '../loader/formatGuidance'
 import {ARCHIVE_ENTRY_CHOICE, ARCHIVE_UNREADABLE} from '../loader/modelArchive'
 import {NotFoundError} from '../loader/Loader'
-import {UNRECOGNIZED_FORMAT_ALERT_EVENT, reportUnrecognizedFormat} from '../loader/unrecognizedFormat'
+import {UNRECOGNIZED_FORMAT_ALERT_EVENT, unrecognizedFormatGaParams} from '../loader/unrecognizedFormat'
+import {UNSUPPORTED_SCHEMA_ALERT_EVENT} from '../loader/unsupportedSchema'
 import {getProvider} from '../connections/registry'
 import {CACHE_CLEAR_SKIPPED} from '../OPFS/messages'
 import useStore from '../store/useStore'
@@ -52,6 +53,12 @@ export default function AlertDialog({onClose}) {
     if (typeof alert !== 'object') {
       return
     }
+    if (alert.repeat === true) {
+      // Shown again for a model it was already counted for: CadView's
+      // re-runs of the same route (reportedRefusalRef) mark it so the demand
+      // counts below stay one per model.
+      return
+    }
     if (alert.type === ARCHIVE_ENTRY_CHOICE || alert.type === CACHE_CLEAR_SKIPPED) {
       // A question, or a cache clear another tab held back (ProfileControl):
       // not a failure, nothing to count. Its entry names are the
@@ -66,7 +73,13 @@ export default function AlertDialog({onClose}) {
       // object would be a context-less duplicate; and load_failed carries
       // the closed-set reason_class.
       trackAlertEvent(ENGINE_FAILURE_ALERT_EVENT)
-    } else if (alert.type === 'unsupportedSchema' || alert.type === 'inMemoryUploadGone' ||
+    } else if (alert.type === 'unsupportedSchema') {
+      // Demand, not a defect (Share#1879): GA only. A constant message, with
+      // the schema, source and size class as params (unsupportedSchema.js
+      // #unsupportedSchemaAlert); the dialog text names the schema, which is
+      // header text.
+      trackAlertEvent(UNSUPPORTED_SCHEMA_ALERT_EVENT, alert.ga ?? {})
+    } else if (alert.type === 'inMemoryUploadGone' ||
         alert.type === 'uploadNotInBrowser' || alert.type === 'noGeometry' || alert.type === ARCHIVE_UNREADABLE) {
       // Expected outcome, not a defect: analytics only, never Sentry
       // (alertTracking.js#trackAlertEvent). `inMemoryUploadGone` is a
@@ -79,11 +92,10 @@ export default function AlertDialog({onClose}) {
       // IFC (loader/modelArchive.js); its message never names the file.
       trackAlertEvent(alert.message)
     } else if (alert.type === 'unrecognizedFormat') {
-      // Also an expected outcome, but counted in Sentry too, as one info
-      // issue tagged by extension (loader/unrecognizedFormat.js). GA gets the
-      // constant, since the picker's message names the user's file.
-      reportUnrecognizedFormat(alert)
-      trackAlertEvent(UNRECOGNIZED_FORMAT_ALERT_EVENT)
+      // Also an expected outcome, GA only: the constant, since the picker's
+      // message names the user's file, with the extension and entry as
+      // params (loader/unrecognizedFormat.js#unrecognizedFormatGaParams).
+      trackAlertEvent(UNRECOGNIZED_FORMAT_ALERT_EVENT, unrecognizedFormatGaParams(alert))
     } else if (alert.type === 'oom' || alert.type === 'needsReconnect') {
       trackAlert(alert.message, alert)
     } else if (alert instanceof NotFoundError || alert instanceof Error) {
