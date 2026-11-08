@@ -214,6 +214,9 @@ viewer is built (a theme change rebuilds it and reads it again).
 - *To confirm which mode a page is in:* `?feature=perf` reads 0 FPS on an
   idle on-demand viewer and the display rate otherwise; from devtools,
   `store.getState().viewer.context.getRenderDemand().isSession`.
+  The mode is also on every Sentry event as the `render_mode` tag and
+  counted in GA as the `render_mode` event (`reportRenderMode.js`, once per
+  page load): `on-demand` or `every-frame:<reason>`.
 
 Perf instrumentation attaches at that seam, not inside the closure:
 

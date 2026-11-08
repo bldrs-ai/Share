@@ -17,6 +17,7 @@ import {IfcMouse} from './mouse'
 import RenderDemand from '../renderDemand'
 import {attachSessionNets, createSceneProbe, installSceneHooks} from '../renderDemandHooks'
 import {isRenderOnDemandOn} from '../renderOnDemandMode'
+import {reportRenderMode} from '../reportRenderMode'
 
 
 /**
@@ -91,6 +92,8 @@ export class IfcContext {
     // renderOnDemandMode.js decides, so its kill switch and prod rollback are
     // the only ways this is skipped; nothing else reads the flags.
     this.endRenderSession = null
+    // Tag Sentry and tell GA which mode this session runs in (best-effort).
+    reportRenderMode()
     if (isRenderOnDemandOn()) {
       installSceneHooks()
       const stopSession = this.renderDemand.startSession({
