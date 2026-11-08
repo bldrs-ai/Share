@@ -92,6 +92,40 @@ describe('utils/contentHash sha1HexFromBlob', () => {
     expect(await sha1HexFromBlob(blob, chunk)).toBe(await sha1HexFromBlob(blob, chunk))
   })
 
+  it('never requests a slice larger than the chunk size', async () => {
+    const chunk = MIB
+    const bytes = new Uint8Array((3 * chunk) + OVERSIZE_TAIL)
+    const blob = new Blob([bytes])
+    const sliceSpy = jest.spyOn(Blob.prototype, 'slice')
+    try {
+      await sha1HexFromBlob(blob, chunk)
+      expect(sliceSpy).toHaveBeenCalledTimes(4)
+      for (const [start, end] of sliceSpy.mock.calls) {
+        expect(end - start).toBeLessThanOrEqual(chunk)
+      }
+    } finally {
+      sliceSpy.mockRestore()
+    }
+  })
+
+  it('never reads the whole blob at once via arrayBuffer()', async () => {
+    const chunk = MIB
+    const blob = new Blob([new Uint8Array((2 * chunk) + OVERSIZE_TAIL)])
+    const abSpy = jest.spyOn(Blob.prototype, 'arrayBuffer')
+    try {
+      await sha1HexFromBlob(blob, chunk)
+      expect(abSpy.mock.calls.length).toBeGreaterThan(0)
+      expect(abSpy.mock.instances.every((b) => b.size <= chunk)).toBe(true)
+    } finally {
+      abSpy.mockRestore()
+    }
+  })
+
+  it('digests a known buffer to its known SHA-1 (default chunk, single slice)', async () => {
+    const blob = new Blob([new TextEncoder().encode('abc')])
+    expect(await sha1HexFromBlob(blob)).toBe('a9993e364706816aba3e25717850c26c9cd0d89d')
+  })
+
   it('throws on null input', async () => {
     await expect(sha1HexFromBlob(null)).rejects.toThrow(/blob/)
   })
