@@ -31,6 +31,7 @@ jest.mock('./urls', () => ({dereferenceAndProxyDownloadContents: jest.fn()}))
 
 const IFC_TEXT = 'ISO-10303-21;\nHEADER;\nFILE_SCHEMA((\'IFC4\'));\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n'
 const SECRET_PATH = 'https://github.com/secret-org/secret-repo/blob/main/private.ifc'
+const EXTERNAL_PATH = 'https://example.com/private.ifc'
 const GA_PATTERN = /secret|private\.ifc/
 
 
@@ -68,15 +69,16 @@ class FakeOpfsFile {
 /**
  * @param {object} modelExtras fields the parsed model carries
  * @param {Error} [parseError] makes the IFC loader throw instead
+ * @param {object} [viewerIfcAPI] the main-thread engine `canOpenFromStore` probes for `OpenModelStream`
  * @return {object} a viewer whose IFC loader returns the model
  */
-function makeViewer(modelExtras, parseError) {
+function makeViewer(modelExtras, parseError, viewerIfcAPI = {}) {
   const viewer = {
     IFC: {
       type: null,
       ifcLastError: null,
       addIfcModel: jest.fn(),
-      loader: {ifcManager: {state: {models: []}, ifcAPI: {}}},
+      loader: {ifcManager: {state: {models: []}, ifcAPI: viewerIfcAPI}},
       context: {items: {ifcModels: []}, fitToFrame: jest.fn()},
     },
   }
@@ -156,6 +158,37 @@ describe('Loader#load GA diagnostics', () => {
     await load(SECRET_PATH, viewer, () => {}, false, () => {})
     expect(diagnosticEvents()).toEqual([
       ['engine_source_buffered', {reason: 'opfs-unavailable', size_class: '<10MB'}],
+    ])
+  })
+
+  // The three reasons below are derived inside `load` from where the open
+  // went: an OPFS path that threw, an OPFS File the store open declined, and
+  // an OPFS File the store open took which the engine still held resident.
+  it('reports opfs-failed when the OPFS path threw and the load fetched directly', async () => {
+    downloadToOPFS.mockRejectedValue(new Error('createSyncAccessHandle failed'))
+    const viewer = makeViewer(workerModel({source: {kind: 'resident'}}))
+    await load(EXTERNAL_PATH, viewer, () => {}, true, () => {})
+    expect(axios.get).toHaveBeenCalled()
+    expect(diagnosticEvents()).toEqual([
+      ['engine_source_buffered', {reason: 'opfs-failed', size_class: '<10MB'}],
+    ])
+  })
+
+  it('reports not-store-openable when the OPFS File could not be opened from the store', async () => {
+    // The viewer's engine has no OpenModelStream, so canOpenFromStore says no.
+    const viewer = makeViewer(workerModel({source: {kind: 'resident'}}))
+    await load(EXTERNAL_PATH, viewer, () => {}, true, () => {})
+    expect(axios.get).not.toHaveBeenCalled()
+    expect(diagnosticEvents()).toEqual([
+      ['engine_source_buffered', {reason: 'not-store-openable', size_class: '<10MB'}],
+    ])
+  })
+
+  it('reports store-open-refused when the store open was chosen but the engine held the source resident', async () => {
+    const viewer = makeViewer(workerModel({source: {kind: 'resident'}}), undefined, {OpenModelStream: jest.fn()})
+    await load(EXTERNAL_PATH, viewer, () => {}, true, () => {})
+    expect(diagnosticEvents()).toEqual([
+      ['engine_source_buffered', {reason: 'store-open-refused', size_class: '<10MB'}],
     ])
   })
 
