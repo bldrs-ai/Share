@@ -28,6 +28,21 @@ const COPY_CHUNK_BYTES = 4 * 1024 * 1024
 // `<uuid>.<ext>`, not `BldrsLocalStorage`. Every lookup goes through a
 // namespace directory, so none ever reads in here.
 export const PARTIAL_DOWNLOAD_DIR = '.bldrs-partial-downloads'
+// The Web Lock a download holds on its temp, `<prefix><temp name>`, from
+// before the temp is created until after its move. The sweep removes a temp
+// only when it can take this lock, which is exactly when no live download
+// holds it. That covers the moments no file lock does: between
+// getFileHandle({create: true}) and createSyncAccessHandle(), and between
+// the handle's close and the move. A killed worker's locks are released
+// with it (codex review of Share#2103). Same scheme as the engine's sidecar
+// temporaries (engineSidecars.js, Share#2095); Web Locks are in workers in
+// Chromium, Firefox and Safari 15.4+.
+export const PARTIAL_DOWNLOAD_LOCK_PREFIX = 'bldrs-download-tmp:'
+// Where `navigator.locks` is missing: how long a temp must go unwritten
+// before the sweep removes it. A live download writes every chunk, which
+// bumps lastModified, and moves within milliseconds of its last one.
+// eslint-disable-next-line no-magic-numbers
+export const STALE_PARTIAL_DOWNLOAD_MS = 10 * 60 * 1000
 
 
 /**
@@ -1281,108 +1296,124 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
   }
 
   const finalFileName = `${strippedFileName}.${commitHash}`
-  let tempDirectoryHandle = null
-  let tempFileHandle = null
-  try {
-    modelDirectoryHandle = await directoryForPath(branchFolderHandle, originalFilePath)
-    tempDirectoryHandle = await opfsRoot.getDirectoryHandle(PARTIAL_DOWNLOAD_DIR, {create: true})
-    await sweepPartialDownloads(tempDirectoryHandle)
-    // A fresh name per download. Two tabs fetching the same model never
-    // share a temp, and a sweep can never take one that is in use.
-    const tempFileName = crypto.randomUUID()
-    tempFileHandle = await tempDirectoryHandle.getFileHandle(tempFileName, {create: true})
-    // Same Safari self-heal as in writeTemporaryFileToOPFS.
-    const opened = await openSyncAccessHandleWithRetry(
-      tempDirectoryHandle, tempFileHandle, tempFileName)
-    blobAccessHandle = opened.handle
-    tempFileHandle = opened.fileHandle
-  } catch (error) {
-    await discardPartialEntry(blobAccessHandle, tempDirectoryHandle, tempFileHandle)
-    const workerMessage = `Error getting file handle for ${originalFilePath}: ${error}`
-    postReply({error: workerMessage}, requestId)
-    return
+  // A fresh name per download, so two tabs fetching the same model never
+  // share a temp.
+  const tempFileName = crypto.randomUUID()
+  const locks = webLocks()
+  if (typeof locks?.request === 'function') {
+    await locks.request(`${PARTIAL_DOWNLOAD_LOCK_PREFIX}${tempFileName}`, streamToTempAndPlace)
+  } else {
+    await streamToTempAndPlace()
   }
 
-  const reader = response.body.getReader()
-  const contentLength = response.headers.get('Content-Length')
-
-  let receivedLength = 0 // length of received bytes
-
-  try {
-    for (;;) {
-      const {done, value} = await reader.read()
-      if (done) {
-        break
-      }
-      if (value === undefined) {
-        continue
-      }
-      // A short write throws here (#2042) and lands in the catch below,
-      // which removes the temp.
-      await writeAll(blobAccessHandle, value, {at: receivedLength})
-      receivedLength += value.length
-
-      if (onProgress) {
-        // Variable names reflect MDN ProgressEvent field names
-        // https://developer.mozilla.org/en-US/docs/Web/API/ProgressEvent
-        postReply({
-          progressEvent: onProgress, // REVIEW: should this really be a function
-          // value for an event varname, and tests
-          // pass it a boolean?
-          lengthComputable: contentLength !== 0,
-          total: contentLength,
-          loaded: receivedLength,
-        }, requestId)
-      }
-    }
-    if (receivedLength === 0) {
-      // Nothing to cache: an empty body is never a usable model, and stored
-      // under the final name it would be served on every later load.
-      throw new Error('empty response body; not cached')
-    }
-    await blobAccessHandle.flush()
-    // Close before the move: an entry can't be moved (or, on Safari,
-    // read) while a sync access handle is open on it.
-    await blobAccessHandle.close()
-    blobAccessHandle = null
-
-    if (await moveIntoPlace(tempFileHandle, modelDirectoryHandle, finalFileName)) {
-      tempFileHandle = null
-      modelBlobFileHandle = await modelDirectoryHandle.getFileHandle(finalFileName, {create: false})
-      const blobFile = await modelBlobFileHandle.getFile()
-      postReply({completed: true, event: 'download', file: blobFile}, requestId)
+  /** The rest of the download, under the temp's lock when there is one. */
+  async function streamToTempAndPlace() {
+    let tempDirectoryHandle = null
+    let tempFileHandle = null
+    try {
+      modelDirectoryHandle = await directoryForPath(branchFolderHandle, originalFilePath)
+      tempDirectoryHandle = await opfsRoot.getDirectoryHandle(PARTIAL_DOWNLOAD_DIR, {create: true})
+      await sweepPartialDownloads(tempDirectoryHandle, locks)
+      tempFileHandle = await tempDirectoryHandle.getFileHandle(tempFileName, {create: true})
+      // Same Safari self-heal as in writeTemporaryFileToOPFS.
+      const opened = await openSyncAccessHandleWithRetry(
+        tempDirectoryHandle, tempFileHandle, tempFileName)
+      blobAccessHandle = opened.handle
+      tempFileHandle = opened.fileHandle
+    } catch (error) {
+      await discardPartialEntry(blobAccessHandle, tempDirectoryHandle, tempFileHandle)
+      const workerMessage = `Error getting file handle for ${originalFilePath}: ${error}`
+      postReply({error: workerMessage}, requestId)
       return
     }
-    // No atomic move: either this engine has no move(), or it refused
-    // (the target is held, say). renameFileInOPFS's copy fallback would
-    // create the final name first and fill it in chunks. A worker or tab
-    // killed mid-copy would then leave a partial entry under the final
-    // name, which the next load would serve (codex review of Share#2103).
-    // So nothing is cached. The bytes are served from memory and the temp
-    // is dropped, which costs a re-download next time.
-    const bytes = await (await tempFileHandle.getFile()).arrayBuffer()
-    await discardPartialEntry(null, tempDirectoryHandle, tempFileHandle)
-    tempFileHandle = null
-    postReply({completed: true, event: 'download', file: new File([bytes], strippedFileName)}, requestId)
-  } catch (error) {
+
+    const reader = response.body.getReader()
+    const contentLength = response.headers.get('Content-Length')
+
+    let receivedLength = 0 // length of received bytes
+
+    try {
+      for (;;) {
+        const {done, value} = await reader.read()
+        if (done) {
+          break
+        }
+        if (value === undefined) {
+          continue
+        }
+        // A short write throws here (#2042) and lands in the catch below,
+        // which removes the temp.
+        await writeAll(blobAccessHandle, value, {at: receivedLength})
+        receivedLength += value.length
+
+        if (onProgress) {
+        // Variable names reflect MDN ProgressEvent field names
+        // https://developer.mozilla.org/en-US/docs/Web/API/ProgressEvent
+          postReply({
+            progressEvent: onProgress, // REVIEW: should this really be a function
+            // value for an event varname, and tests
+            // pass it a boolean?
+            lengthComputable: contentLength !== 0,
+            total: contentLength,
+            loaded: receivedLength,
+          }, requestId)
+        }
+      }
+      if (receivedLength === 0) {
+      // Nothing to cache: an empty body is never a usable model, and stored
+      // under the final name it would be served on every later load.
+        throw new Error('empty response body; not cached')
+      }
+      await blobAccessHandle.flush()
+      // Close before the move: an entry can't be moved (or, on Safari,
+      // read) while a sync access handle is open on it.
+      await blobAccessHandle.close()
+      blobAccessHandle = null
+
+      if (await moveIntoPlace(tempFileHandle, modelDirectoryHandle, finalFileName)) {
+        tempFileHandle = null
+        modelBlobFileHandle = await modelDirectoryHandle.getFileHandle(finalFileName, {create: false})
+        const blobFile = await modelBlobFileHandle.getFile()
+        postReply({completed: true, event: 'download', file: blobFile}, requestId)
+        return
+      }
+      // No atomic move: either this engine has no move(), or it refused
+      // (the target is held, say). renameFileInOPFS's copy fallback would
+      // create the final name first and fill it in chunks. A worker or tab
+      // killed mid-copy would then leave a partial entry under the final
+      // name, which the next load would serve (codex review of Share#2103).
+      // So nothing is cached. The bytes are served from memory and the temp
+      // is dropped, which costs a re-download next time.
+      const bytes = await (await tempFileHandle.getFile()).arrayBuffer()
+      await discardPartialEntry(null, tempDirectoryHandle, tempFileHandle)
+      tempFileHandle = null
+      postReply({completed: true, event: 'download', file: new File([bytes], strippedFileName)}, requestId)
+    } catch (error) {
     // A stream that dies mid-download, a short write, an empty body: drop
     // the temp. A failure after the move leaves a complete final entry,
     // which is fine to keep.
-    try {
-      await reader.cancel()
-    } catch (_) {/* already settled */}
-    await discardPartialEntry(blobAccessHandle, tempDirectoryHandle, tempFileHandle)
-    blobAccessHandle = null
-    postReply({error: `Error writing ${originalFilePath} (${commitHash}): ${error?.message ?? error}`}, requestId)
-  } finally {
+      try {
+        await reader.cancel()
+      } catch (_) {/* already settled */}
+      await discardPartialEntry(blobAccessHandle, tempDirectoryHandle, tempFileHandle)
+      blobAccessHandle = null
+      postReply({error: `Error writing ${originalFilePath} (${commitHash}): ${error?.message ?? error}`}, requestId)
+    } finally {
     // Always close the sync access handle. See writeTemporaryFileToOPFS for
     // the rationale (Safari InvalidStateError on subsequent loads if leaked).
-    if (blobAccessHandle) {
-      try {
-        await blobAccessHandle.close()
-      } catch (_) {/* idempotent */}
+      if (blobAccessHandle) {
+        try {
+          await blobAccessHandle.close()
+        } catch (_) {/* idempotent */}
+      }
     }
   }
+}
+
+
+/** @return {object|undefined} this global's `LockManager` */
+function webLocks() {
+  return globalThis.navigator?.locks
 }
 
 
@@ -1417,22 +1448,36 @@ export async function moveIntoPlace(tempHandle, directory, name) {
 /**
  * Remove what interrupted downloads left in PARTIAL_DOWNLOAD_DIR. A temp is
  * never read, so a leftover only costs disk until the next download sweeps
- * it. An in-flight download's temp is held by its open sync access handle,
- * which makes removal fail, so that temp stays; the error is ignored.
+ * it. A live download's temp is never taken. With Web Locks, a temp is
+ * removed only while holding its lock, taken with `ifAvailable`, so no
+ * download can be using it meanwhile. Without them, a temp is removed only
+ * once it has gone {@link STALE_PARTIAL_DOWNLOAD_MS} unwritten. Never
+ * throws.
  *
  * @param {FileSystemDirectoryHandle} tempDirectory
+ * @param {object} [locks] `navigator.locks`
  */
-async function sweepPartialDownloads(tempDirectory) {
-  const names = []
+async function sweepPartialDownloads(tempDirectory, locks) {
+  const entries = []
   for await (const [name, handle] of tempDirectory.entries()) {
     if (handle.kind === 'file') {
-      names.push(name)
+      entries.push([name, handle])
     }
   }
-  for (const name of names) {
+  for (const [name, handle] of entries) {
+    const remove = async () => {
+      try {
+        await tempDirectory.removeEntry(name)
+      } catch (_) {/* already gone, or held by a sync access handle */}
+    }
     try {
-      await tempDirectory.removeEntry(name)
-    } catch (_) {/* held by a download still writing it */}
+      if (typeof locks?.request === 'function') {
+        await locks.request(`${PARTIAL_DOWNLOAD_LOCK_PREFIX}${name}`, {ifAvailable: true},
+          (lock) => (lock ? remove() : null))
+      } else if (Date.now() - (await handle.getFile()).lastModified > STALE_PARTIAL_DOWNLOAD_MS) {
+        await remove()
+      }
+    } catch (_) {/* an age that can't be read (locked mid-write) keeps it */}
   }
 }
 

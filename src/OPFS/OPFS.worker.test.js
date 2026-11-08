@@ -90,7 +90,8 @@ class FileHandle {
    */
   async getFile() {
     await Promise.resolve()
-    return new File([this.data], this.name)
+    // `lastModified` is set only by tests that age an entry.
+    return new File([this.data], this.name, this.lastModified === undefined ? {} : {lastModified: this.lastModified})
   }
 
   /* eslint-disable require-await */
@@ -932,12 +933,51 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
     function withMove() {
       FileHandle.prototype.move = async function(directory, name) {
         await Promise.resolve()
+        // As OPFS does: an entry removed from under its handle can't move.
+        if (this.parent.entriesMap.get(this.name) !== this) {
+          throw new DOMException('entry is gone', 'NotFoundError')
+        }
         this.parent.entriesMap.delete(this.name)
         this.name = name
         this.parent = directory
         directory.entriesMap.set(name, this)
       }
     }
+
+    /**
+     * A LockManager for one test. CI's Node has a global `navigator.locks`
+     * and Node 20 has no `navigator` at all, so every test here pins it
+     * (Share#2095 was bitten by both). Requests never contend in these
+     * tests except through `ifAvailable`, so there is no queue.
+     *
+     * @return {object}
+     */
+    function fakeLocks() {
+      const held = new Set()
+      return {
+        held,
+        async request(name, optionsOrCallback, maybeCallback) {
+          const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback
+          const options = typeof optionsOrCallback === 'function' ? {} : optionsOrCallback
+          if (held.has(name)) {
+            if (options.ifAvailable) {
+              return await callback(null)
+            }
+            throw new Error(`fakeLocks: ${name} is already held`)
+          }
+          held.add(name)
+          try {
+            return await callback({name})
+          } finally {
+            held.delete(name)
+          }
+        },
+      }
+    }
+
+    beforeEach(() => {
+      global.navigator.locks = undefined
+    })
 
     afterEach(() => {
       delete FileHandle.prototype.move
@@ -1086,16 +1126,71 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
       expect(global.fetch).toHaveBeenCalledTimes(2)
     })
 
-    test('what interrupted downloads left behind is swept, and one still writing is not', async () => {
+    test('a download still in progress keeps its temp through another download\'s sweep', async () => {
+      // Its temp can be between getFileHandle and createSyncAccessHandle,
+      // or between close and move, with no file lock on it. Only its Web
+      // Lock says it is live (codex review of Share#2103).
       withMove()
+      global.navigator.locks = fakeLocks()
+      let release
+      const gate = new Promise((resolve) => {
+        release = resolve
+      })
+      let sent = 0
+      const slowBody = new ReadableStream({
+        async pull(controller) {
+          if (sent === 2) {
+            await gate
+          }
+          if (sent === CHUNKS) {
+            controller.close()
+            return
+          }
+          sent++
+          controller.enqueue(new Uint8Array(KIB).fill(sent))
+        },
+      })
+      global.fetch = jest.fn((url) => Promise.resolve(
+        url.endsWith('/a.ifc') ? new Response(slowBody) : streamedResponse(CHUNKS, KIB)))
+      const tempNames = async () => {
+        try {
+          return await allFileNames(await rootDir.getDirectoryHandle(worker.PARTIAL_DOWNLOAD_DIR))
+        } catch (_) {
+          return []
+        }
+      }
+
+      const first = worker.downloadModelToOPFS(
+        'https://preview.example/a.ifc', 'preview.example', '/a.ifc', ...args, 'a')
+      const MAX_TICKS = 100
+      for (let i = 0; i < MAX_TICKS && sent < 2; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+      const [liveTemp] = await tempNames()
+      expect(liveTemp).toBeDefined()
+
+      await download('/b.ifc', 'b')
+
+      expect(await tempNames()).toEqual([liveTemp])
+      release()
+      await first
+      const dir = await projectsDir()
+      for (const name of ['a.ifc.preview.example', 'b.ifc.preview.example']) {
+        expect((await (await dir.getFileHandle(name, {create: false})).getFile()).size).toBe(CHUNKS * KIB)
+      }
+      expect(await tempNames()).toEqual([])
+    })
+
+    test('with Web Locks, an abandoned temp is swept and a locked one is not', async () => {
+      withMove()
+      const locks = fakeLocks()
+      global.navigator.locks = locks
       const temps = await rootDir.getDirectoryHandle(worker.PARTIAL_DOWNLOAD_DIR, {create: true})
       const stale = await temps.getFileHandle('stale', {create: true})
       stale.data = new Uint8Array(10 * KIB).fill(9)
       await temps.getFileHandle('held', {create: true})
-      const removeEntry = temps.removeEntry.bind(temps)
-      // An open sync access handle makes removal fail.
-      temps.removeEntry = (name) => name === 'held' ?
-        Promise.reject(new DOMException('held', 'NoModificationAllowedError')) : removeEntry(name)
+      // Another tab's download, mid-write.
+      locks.held.add(`${worker.PARTIAL_DOWNLOAD_LOCK_PREFIX}held`)
       global.fetch = jest.fn(() => Promise.resolve(streamedResponse(CHUNKS, KIB)))
 
       const replies = await download('/index.ifc', 'r9')
@@ -1104,6 +1199,21 @@ describe('OPFS writes that fail without throwing (#2042)', () => {
       expect(done.file.size).toBe(CHUNKS * KIB)
       expect(new Uint8Array(await done.file.arrayBuffer()).includes(9)).toBe(false)
       expect((await allFileNames(rootDir)).sort()).toEqual(['held', finalName])
+    })
+
+    test('without Web Locks, only a temp unwritten for 10 minutes is swept', async () => {
+      withMove()
+      const temps = await rootDir.getDirectoryHandle(worker.PARTIAL_DOWNLOAD_DIR, {create: true})
+      const old = await temps.getFileHandle('old', {create: true})
+      old.lastModified = Date.now() - worker.STALE_PARTIAL_DOWNLOAD_MS - 1
+      const recent = await temps.getFileHandle('recent', {create: true})
+      const A_SECOND_MS = 1000
+      recent.lastModified = Date.now() - A_SECOND_MS
+      global.fetch = jest.fn(() => Promise.resolve(streamedResponse(CHUNKS, KIB)))
+
+      await download('/index.ifc', 'r9b')
+
+      expect((await allFileNames(rootDir)).sort()).toEqual([finalName, 'recent'])
     })
 
     test('a complete entry is served without a fetch', async () => {
