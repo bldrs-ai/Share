@@ -95,6 +95,12 @@ const ALLOWED = {
   // Display colour, not identity (module doc).
   'src/viewer/display/colorMode.js': [write('instanceColors')],
   'src/viewer/ifc/productPalette.js': [write('instanceColors')],
+  // Render-on-demand's hooks (story #2055): wrap three's mutators on the
+  // prototype to ask for a paint and call the original unchanged. They name
+  // the methods to wrap them and mutate nothing themselves.
+  'src/viewer/three/renderDemandHooks.js': ['addGeometry', 'addInstance', 'deleteGeometry',
+    'deleteInstance', 'optimize', 'setGeometryAt', 'setGeometryIdAt', 'setGeometrySize',
+    'setInstanceCount', 'setMatrixAt'],
   // Test fixture building an artifact's source batch.
   'src/loader/glbArtifact.fixture.js': [...BUILDER.filter((n) => n !== 'writeRow'),
     ...TABLES.filter((t) => t !== 'occurrencePathToBatchIds').map(write)],

@@ -1,6 +1,7 @@
 import GUI from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import {ToneMappingMode} from 'postprocessing'
 import {LOOKS, DEFAULT_LOOK, forEachLookManagedMaterial} from '../looks'
+import {requestPaint} from './renderDemand'
 
 
 // Tone-mapping operators offered in the dropdown (label → enum value). The
@@ -132,6 +133,9 @@ export default class LightingGui {
 
     const gui = new GUI({title: 'Look — §6e filmic'})
     this._gui = gui
+    // Every control changes lights, uniforms or the composer, none of which
+    // the render-on-demand hooks see: one ask for any change in the panel.
+    gui.onChange(() => requestPaint())
     // Inset the auto-placed panel inside the app chrome (below the top
     // control row, clear of the right-edge buttons); scroll if it runs tall.
     gui.domElement.style.top = PANEL_INSET_TOP

@@ -1,6 +1,7 @@
 import {ShareViewer} from '../ShareViewer'
 import {unsortedArraysAreEqual, arrayRemove} from '../../utils/arrays'
 import {clearBatchedSelection} from '../ifc/batchedHighlight'
+import {requestPaint} from './renderDemand'
 import {BatchEditKind, onBatchEdit} from '../ifc/batchedEdit'
 import {forEachActiveInstance, instanceIdSpan, isActive} from '../ifc/batchedInstanceTables'
 import {eachBatch, isBatchedModel} from '../ifc/batchedModel'
@@ -974,7 +975,7 @@ export default class IfcIsolator {
     if (sceneGraph) {
       // Isolate in place, like the batched path; `includedIds` explicitly for
       // the same BotChat reason given there. Outline the isolated meshes.
-      this.isolationOutlineEffect.setSelection(applySceneGraphVisibility(
+      this.setIsolationOutline_(applySceneGraphVisibility(
         this.ifcModel, {hiddenIds: this.hiddenIds, isolatedIds: includedIds}))
       return
     }
@@ -1002,7 +1003,7 @@ export default class IfcIsolator {
       // outline pass's mask traces exactly the isolated geometry.
       const batches = []
       eachBatch(this.ifcModel, (mesh) => batches.push(mesh))
-      this.isolationOutlineEffect.setSelection(batches)
+      this.setIsolationOutline_(batches)
       return
     }
     this.isolationSubset = this.ifcModel.createSubset({
@@ -1024,7 +1025,7 @@ export default class IfcIsolator {
     // Conway-direct path returns Mesh[]; the wit-three path returns
     // a single Mesh. Normalise so the postprocess pass sees a flat
     // list either way.
-    this.isolationOutlineEffect.setSelection(this._subsetMeshes(this.isolationSubset))
+    this.setIsolationOutline_(this._subsetMeshes(this.isolationSubset))
   }
 
   /**
@@ -1649,7 +1650,7 @@ export default class IfcIsolator {
     } else {
       this._restoreModelToScene()
     }
-    this.isolationOutlineEffect.setSelection([])
+    this.setIsolationOutline_([])
     // Rebuild the cyan selection visual. Covers the hide-then-
     // isolate-then-deisolate flow: hide cleared the visual, isolate
     // didn't touch it, and resetTempIsolation now restores it from
@@ -1659,6 +1660,19 @@ export default class IfcIsolator {
     // setSelection clears + rebuilds at the same position).
     this._rebuildSelectionVisualFromStore()
   }
+
+  /**
+   * Outline the isolated meshes. The outline's selection is layers on the
+   * meshes, which the render-on-demand hooks don't see, so ask for a paint
+   * (renderDemandHooks.js).
+   *
+   * @param {Array<object>} meshes
+   */
+  setIsolationOutline_(meshes) {
+    this.isolationOutlineEffect.setSelection(meshes)
+    requestPaint()
+  }
+
 
   /**
    * Release every batched visibility mask this isolator installed, handing the
