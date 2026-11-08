@@ -92,6 +92,28 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   or for a decision the measurements genuinely don't settle, and say
   which it is.
 - **IFC and STEP converge.** The two pipelines (open, index, tree, properties, geometry pump, engine worker, export) should mostly converge over time. When you touch one, look for the shared seam first: extract shared modules rather than adding a format-specific copy, and route both formats through it. A format difference that has to stay is data (e.g. STEP's buffered source and occurrence paths vs IFC's express IDs), and the code that keeps it says why. New engine work lands for both formats, or names the follow-up for the other.
+- **PRs: a "Reported Conditions" section.** A PR that adds or changes
+  a failure path, a fallback or a degraded state says, in a
+  `## Reported Conditions` table in its description, one row per
+  condition: what the user sees, what reaches Sentry (level,
+  fingerprint, tags, call site), what reaches GA (event, params), and
+  why. A PR with none says so in one line; a null result is a result.
+  **Routing:** Sentry gets only *immediately actionable* conditions, at
+  `error` or `warning` — something someone should go fix (a hosted
+  model answering 404, a fallback that broke). Diagnostic signal that
+  is only useful after the fact — expected, self-healing, or
+  volume-only (an evicted cache entry, a browser limit, a skipped
+  preview unit) — goes to GA through `gtagEvent`
+  (`src/privacy/analytics.js`), not as an info-level Sentry message;
+  migrate an existing info reporter when you touch it. **One failure,
+  one event:** report a recovered fallback only once the load has
+  succeeded, and leave a failed load to CadView's `captureException`.
+  **Privacy:** neither sink ever gets a private model's file name, URL
+  or path. Send structured fields (source kind, condition, HTTP status)
+  rather than free text, and redact (`src/privacy/sentryRedaction.js`)
+  so the console keeps the real names. Workers have no Sentry: reply
+  with structured fields and report from the page. Worked example:
+  Share#2103.
 - **PRs: auto-subscribe to CI / review activity.** Immediately after `create_pull_request` succeeds, call `subscribe_pr_activity` for that PR without asking. The default-prompt asks first — for this repo, skip that question and just subscribe. Babysitting is the expected mode here: watch CI, autofix tractable failures, respond to review comments per the system-prompt rules (small + confident → push the fix; ambiguous or architecturally significant → `AskUserQuestion` first; no-op-able → skip silently). Only `unsubscribe_pr_activity` when the user explicitly says to stop.
 
 
