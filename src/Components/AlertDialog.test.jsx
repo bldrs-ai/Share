@@ -11,11 +11,8 @@ import {getProvider} from '../connections/registry'
 import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
 import {NO_GEOMETRY_ALERT, noGeometryAlert} from '../loader/loadProgress'
 import {cacheClearSkippedAlert} from '../OPFS/messages'
-import {
-  UNRECOGNIZED_FORMAT_ALERT_EVENT,
-  reportUnrecognizedFormat,
-  unrecognizedFormatAlert,
-} from '../loader/unrecognizedFormat'
+import {UNRECOGNIZED_FORMAT_ALERT_EVENT, unrecognizedFormatAlert} from '../loader/unrecognizedFormat'
+import {UNSUPPORTED_SCHEMA_ALERT_EVENT, UnsupportedSchemaError, unsupportedSchemaAlert} from '../loader/unsupportedSchema'
 import {REVIT} from '../loader/formatGuidance'
 import {ARCHIVE_ENTRY_CHOICE, ARCHIVE_UNREADABLE, noModelInArchiveAlert} from '../loader/modelArchive'
 import useStore from '../store/useStore'
@@ -25,10 +22,6 @@ import AlertDialog from './AlertDialog'
 
 jest.mock('../connections/registry')
 jest.mock('../utils/alertTracking', () => ({trackAlert: jest.fn(), trackAlertEvent: jest.fn()}))
-jest.mock('../loader/unrecognizedFormat', () => ({
-  ...jest.requireActual('../loader/unrecognizedFormat'),
-  reportUnrecognizedFormat: jest.fn(),
-}))
 
 
 /**
@@ -245,11 +238,26 @@ describe('AlertDialog — unsupportedSchema alert type', () => {
   // review of Share#1875). Analytics only.
   it('counts the alert in analytics only, never through the Sentry path', () => {
     act(() => {
-      useStore.getState().setAlert({type: 'unsupportedSchema', message: 'Not displayable yet.'})
+      useStore.getState().setAlert(unsupportedSchemaAlert(
+        new UnsupportedSchemaError('IFC4X3_ADD2'), {kind: 'provider', provider: 'github'}))
     })
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
-    expect(trackAlertEvent).toHaveBeenCalledWith('Not displayable yet.')
+    // A constant label, the schema as a param: the dialog text is header text.
+    expect(trackAlertEvent.mock.calls).toEqual([
+      [UNSUPPORTED_SCHEMA_ALERT_EVENT, {schema: 'IFC4X3_ADD2', model_source: 'github'}],
+    ])
     expect(trackAlert).not.toHaveBeenCalled()
+  })
+
+  // CadView re-runs the same route after a refusal; the alert it shows again
+  // is marked `repeat` so one model is counted once (reportedRefusalRef).
+  it('does not count an alert marked as a repeat', () => {
+    act(() => {
+      useStore.getState().setAlert({...unsupportedSchemaAlert(new UnsupportedSchemaError('IFC4X3'), null), repeat: true})
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText(/IFC 4\.3/)).toBeInTheDocument()
+    expect(trackAlertEvent).not.toHaveBeenCalled()
   })
 })
 
@@ -542,17 +550,16 @@ describe('AlertDialog — unrecognizedFormat alert type', () => {
   })
 
   // As a string this went through trackAlert, whose fingerprint is the
-  // message text — with the file name in it, one Sentry issue per pick.
-  it('counts the alert once as an info report, with a constant analytics label', () => {
-    const alert = unrecognizedFormatAlert(message, 'Tower.rvt', 'picker')
+  // message text — with the file name in it, one Sentry issue per pick. Now
+  // GA only: a constant label, with the extension and entry as params.
+  it('counts the alert once in analytics, with a constant label and the extension', () => {
     act(() => {
-      useStore.getState().setAlert(alert)
+      useStore.getState().setAlert(unrecognizedFormatAlert(message, 'Tower.rvt', 'picker'))
     })
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
-    expect(reportUnrecognizedFormat).toHaveBeenCalledTimes(1)
-    expect(reportUnrecognizedFormat).toHaveBeenCalledWith(alert)
-    expect(trackAlertEvent).toHaveBeenCalledTimes(1)
-    expect(trackAlertEvent).toHaveBeenCalledWith(UNRECOGNIZED_FORMAT_ALERT_EVENT)
+    expect(trackAlertEvent.mock.calls).toEqual([
+      [UNRECOGNIZED_FORMAT_ALERT_EVENT, {upload_ext: 'rvt', upload_entry: 'picker'}],
+    ])
     expect(trackAlert).not.toHaveBeenCalled()
   })
 })
@@ -641,7 +648,6 @@ describe('AlertDialog — archives', () => {
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
     expect(trackAlert).not.toHaveBeenCalled()
     expect(trackAlertEvent).not.toHaveBeenCalled()
-    expect(reportUnrecognizedFormat).not.toHaveBeenCalled()
   })
 
   it('says what an archive with no model holds, and is counted as an unrecognized format', () => {
@@ -653,8 +659,10 @@ describe('AlertDialog — archives', () => {
     expect(screen.getByText('No model in this archive')).toBeInTheDocument()
     expect(screen.getByText('This archive has no model Share can open (it contains .dwg and .pdf).'))
       .toBeInTheDocument()
-    expect(reportUnrecognizedFormat).toHaveBeenCalledWith(alert)
-    expect(trackAlertEvent).toHaveBeenCalledWith(UNRECOGNIZED_FORMAT_ALERT_EVENT)
+    // The archive's own extension, never its name.
+    expect(trackAlertEvent.mock.calls).toEqual([
+      [UNRECOGNIZED_FORMAT_ALERT_EVENT, {upload_ext: 'zip', upload_entry: 'drop'}],
+    ])
   })
 
   // An archive of only empty files — a 0-byte a.ifc among them — reads as
@@ -728,7 +736,6 @@ describe('AlertDialog — archives', () => {
     expect(screen.queryByText(/Discord/)).not.toBeInTheDocument()
     expect(trackAlertEvent).toHaveBeenCalledWith(message)
     expect(trackAlert).not.toHaveBeenCalled()
-    expect(reportUnrecognizedFormat).not.toHaveBeenCalled()
   })
 
   it('says why an archive can\'t be read', () => {

@@ -1,8 +1,4 @@
-import {captureMessage} from '@sentry/react'
-import {reportUnrecognizedFormat, unrecognizedFormatAlert, uploadExtension} from './unrecognizedFormat'
-
-
-jest.mock('@sentry/react', () => ({captureMessage: jest.fn()}))
+import {unrecognizedFormatAlert, unrecognizedFormatGaParams, uploadExtension} from './unrecognizedFormat'
 
 
 describe('loader/unrecognizedFormat', () => {
@@ -51,25 +47,11 @@ describe('loader/unrecognizedFormat', () => {
     })
   })
 
-  // One issue for the whole family, whatever the file was called; the
-  // extension tag's distribution is the ranking of formats users bring.
-  it('reports one info message per rejection, fingerprinted as one family', () => {
-    reportUnrecognizedFormat(unrecognizedFormatAlert('x', 'a.rvt', 'picker'))
-    reportUnrecognizedFormat(unrecognizedFormatAlert('y', 'b.dwg', 'drop'))
-    expect(captureMessage).toHaveBeenCalledTimes(2)
-    expect(captureMessage).toHaveBeenNthCalledWith(1, 'Unrecognized model format', {
-      level: 'info',
-      fingerprint: ['unrecognized-format'],
-      tags: {'upload.ext': 'rvt', 'upload.entry': 'picker'},
-    })
-    expect(captureMessage.mock.calls[1][1].fingerprint).toEqual(['unrecognized-format'])
-    expect(captureMessage.mock.calls[1][1].tags).toEqual({'upload.ext': 'dwg', 'upload.entry': 'drop'})
-  })
-
-  it('never throws, so a reporting failure can\'t hide the dialog', () => {
-    captureMessage.mockImplementationOnce(() => {
-      throw new Error('sentry down')
-    })
-    expect(() => reportUnrecognizedFormat({ext: 'rvt', entry: 'drop'})).not.toThrow()
+  // The GA alert's params are the ranking SHARE-1X5's `upload.ext` tag used
+  // to be: the extension and the entry, never the file name.
+  it('gives GA the extension and entry as params, never the name', () => {
+    const params = unrecognizedFormatGaParams(unrecognizedFormatAlert('Cannot open Tower.rvt', 'Tower.rvt', 'picker'))
+    expect(params).toEqual({upload_ext: 'rvt', upload_entry: 'picker'})
+    expect(JSON.stringify(params)).not.toContain('Tower')
   })
 })

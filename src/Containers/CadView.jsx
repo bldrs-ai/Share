@@ -47,7 +47,7 @@ import {buildOutcomeParams, loadFailureParams} from '../loader/loadAnalytics'
 import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
 import {EngineOpenFailureError, engineFailureCaptureContext} from '../loader/engineOpenFailure'
-import {UnsupportedSchemaError, reportUnsupportedSchema} from '../loader/unsupportedSchema'
+import {UnsupportedSchemaError, unsupportedSchemaAlert} from '../loader/unsupportedSchema'
 import {hasInMemoryUpload} from '../loader/inMemoryUploads'
 import {ARCHIVE_UNREADABLE} from '../loader/modelArchive'
 import {ZipArchiveError} from '../loader/zipArchive'
@@ -57,7 +57,6 @@ import {
   inMemoryUploadGoneAlert,
   uploadNotInBrowserAlert,
 } from '../OPFS/messages'
-import {reportUploadNotInBrowser} from '../OPFS/reportUploadNotInBrowser'
 import {getBrowser} from '../connections/registry'
 import {installEngineDevHook} from '../engine/engineDevHook'
 import useLegacyViewRulesNotice from '../engine/useLegacyViewRulesNotice'
@@ -214,8 +213,8 @@ export default function CadView({
   // has already left; left up, it would sit over the replayed model, and
   // dismissing it navigates home (codex review on #1957).
   const alertAtLoadStartRef = useRef(null)
-  // The model a schema refusal was last counted in Sentry for
-  // (unsupportedSchema.js#reportUnsupportedSchema). The auth-state effect
+  // The model a schema refusal was last counted for (in GA, by AlertDialog;
+  // the alert is marked `repeat` after that). The auth-state effect
   // below can re-run onViewer for the SAME route after a refusal —
   // isViewerLoaded stays false on failure — and each re-run would count
   // the refusal again, inflating the demand numbers the report exists for
@@ -677,15 +676,14 @@ export default function CadView({
         // can't read correctly — bldrs-ai/conway#713), not because the file
         // or the engine is broken. Say what happened in the user's terms
         // instead of the raw "OpenModel returned -1".
-        setAlert({type: 'unsupportedSchema', message: e.message})
-        // Counted, not reported as a defect: an info-level message grouped
-        // by schema, to rank the IFC 4.3 work (Share#1879). The
-        // captureException below stays skipped for it.
+        // Counted, not reported as a defect: AlertDialog counts it in GA,
+        // with the schema as a param, to rank the IFC 4.3 work (Share#1879).
+        // The captureException below stays skipped for it. A re-run for the
+        // same model shows it again as a `repeat`, which isn't counted.
         const refusalKey = modelIdentity(modelPath, installPrefix)
-        if (reportedRefusalRef.current !== refusalKey) {
-          reportedRefusalRef.current = refusalKey
-          reportUnsupportedSchema(e, modelPath)
-        }
+        const repeat = reportedRefusalRef.current === refusalKey
+        reportedRefusalRef.current = refusalKey
+        setAlert({...unsupportedSchemaAlert(e, modelPath), repeat})
       } else if (e instanceof ZipArchiveError) {
         // A hosted `.ifczip` that isn't one IFC in a readable zip
         // (loader/modelArchive.js#unwrapIfcZip). The user's file, not a
@@ -716,14 +714,13 @@ export default function CadView({
         // A /v/local-only/ URL whose upload this browser never held or no longer
         // holds (#1955). Explain it and offer to open a file, instead of
         // the worker's raw "Folder <id> not found" under an Error header.
-        setAlert(uploadNotInBrowserAlert())
-        // Counted at info level, not captured as a defect: see
-        // reportUploadNotInBrowser. Once per route, like a schema refusal.
+        // User state, not a defect (#1956): AlertDialog counts it in GA, how
+        // often stale or shared local-file links are opened, and so how much
+        // #705 is worth. Once per route, like a schema refusal.
         const goneKey = `upload-not-in-browser:${modelIdentity(modelPath, installPrefix)}`
-        if (reportedRefusalRef.current !== goneKey) {
-          reportedRefusalRef.current = goneKey
-          reportUploadNotInBrowser()
-        }
+        const repeat = reportedRefusalRef.current === goneKey
+        reportedRefusalRef.current = goneKey
+        setAlert({...uploadNotInBrowserAlert(), repeat})
       } else {
         setAlert(e)
       }

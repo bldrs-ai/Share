@@ -2,10 +2,10 @@ import {gtagEvent} from '../privacy/analytics'
 
 
 /**
- * GA reports for two degraded-but-working states of a Conway load: preview
- * units the viewer skipped, and an engine-worker source that opened buffered
- * instead of windowed from OPFS. Both are the follow-ups Share#2106 listed
- * in its Reported Conditions table.
+ * GA reports for degraded-but-working states of a load: preview units the
+ * viewer skipped and an engine-worker source that opened buffered instead of
+ * windowed from OPFS (both the follow-ups Share#2106 listed in its Reported
+ * Conditions table), and a picking index that hit its depth cap.
  *
  * Why GA and not Sentry: the owner rubric (AGENTS.md, "PRs: a Reported
  * Conditions section") sends only immediately actionable conditions to
@@ -31,6 +31,9 @@ const MIB = 1024 * 1024
 const GIB = 1024 * MIB
 const TEN_MIB = 10 * MIB
 const HUNDRED_MIB = 100 * MIB
+const LEAF_SMALL = 100
+const LEAF_MEDIUM = 1000
+const LEAF_LARGE = 10000
 /* eslint-enable no-magic-numbers */
 
 /**
@@ -110,6 +113,49 @@ export function reportPreviewUnitsSkipped({format, kind, skipped}) {
 export function reportEngineSourceBuffered({reason, sizeBytes}) {
   const size = Number.isFinite(sizeBytes) ? sizeBytes : 0
   sendToGa('engine_source_buffered', {reason, size_class: sizeClass(size)})
+}
+
+
+/**
+ * Coarse size of the largest capped BVH leaf; never the raw number. A leaf
+ * three-mesh-bvh splits normally holds about 10 triangles, so the classes
+ * read as "a bit", "a lot" and "far" past that.
+ *
+ * @param {number} triangles at least 1
+ * @return {string} '<=100' | '101-1000' | '1001-10000' | '>10000'
+ */
+export function leafBucket(triangles) {
+  if (triangles <= LEAF_SMALL) {
+    return '<=100'
+  }
+  if (triangles <= LEAF_MEDIUM) {
+    return '101-1000'
+  }
+  return triangles <= LEAF_LARGE ? '1001-10000' : '>10000'
+}
+
+
+/**
+ * One event for a load whose picking index hit three-mesh-bvh's depth cap
+ * (viewer/ifc/bvhBuild.js, recorded by loadProgress.js#reportBvhDepthCap).
+ * Picks stay correct, but a ray reaching a capped leaf tests its triangles
+ * one by one; the leaf size is what decides whether raising `maxDepth` or
+ * building with SAH is worth it. Volume-only diagnostic signal, so GA, not
+ * Sentry. Until 2026-11 a load with nothing else to report sent it as an
+ * info-level Sentry message.
+ *
+ * The cap itself (`BVH_MAX_DEPTH`, 40) is a constant, so it is not a param.
+ *
+ * @param {object} args
+ * @param {string} args.format the model's format, e.g. 'ifc', 'step', 'glb'
+ * @param {number} args.trees trees that hit the cap this load
+ * @param {number} args.maxLeafTriangles the largest leaf at the cap
+ */
+export function reportBvhDepthCapToGa({format, trees, maxLeafTriangles}) {
+  if (!(trees > 0)) {
+    return
+  }
+  sendToGa('bvh_depth_cap', {format, trees: skippedBucket(trees), max_leaf: leafBucket(maxLeafTriangles)})
 }
 
 

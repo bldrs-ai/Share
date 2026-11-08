@@ -5,7 +5,9 @@ jest.mock('@sentry/react', () => ({
   setTag: jest.fn(),
 }))
 
+jest.mock('./reportLoadDiagnostics', () => ({reportBvhDepthCapToGa: jest.fn()}))
 import Cookies from 'js-cookie'
+import {reportBvhDepthCapToGa} from './reportLoadDiagnostics'
 import Logger, {DATA_DEFECT} from '@bldrs-ai/conway/src/logging/logger'
 import {captureMessage, setContext, setTag} from '@sentry/react'
 import {_resetGaClientIdForTests} from '../privacy/analytics'
@@ -964,29 +966,29 @@ describe('loadProgress', () => {
         warnSpy.mockRestore()
       })
 
-      // bvhBuild.js silences three-mesh-bvh's depth-cap warning, so a load
-      // whose only finding is the cap has zero console counts; without its
-      // own admission the leaf size this event exists for would never send.
-      it('sends a cap-only load at info, titled by the cap', () => {
+      // A depth-cap hit is volume-only signal (AGENTS.md, Reported
+      // Conditions): GA, once per load, and no Sentry event of its own.
+      it('counts a cap hit in GA once, and sends nothing to Sentry for it', () => {
         beginLoadProgress({fileInfo: 'index.stp'})
         reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
         endLoadProgress()
         captureLoadDiagnostics({})
+        captureLoadDiagnostics({})
 
-        const [message, context] = diagnosticsCall()
-        expect(message).toBe('Load diagnostics: picking index hit its depth cap')
-        expect(context.level).toBe('info')
-        expect(context.contexts.loadDiagnostics.bvhDepthCap)
-          .toEqual({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
+        expect(reportBvhDepthCapToGa.mock.calls).toEqual([[{format: 'stp', trees: 2, maxLeafTriangles: 3400}]])
+        expect(diagnosticsCall()).toBeUndefined()
       })
 
-      it('sends nothing for a clean load that did not hit the cap', () => {
+      it('sends nothing anywhere for a clean load that did not hit the cap', () => {
         beginLoadProgress({fileInfo: 'index.stp'})
         endLoadProgress()
         captureLoadDiagnostics({})
         expect(diagnosticsCall()).toBeUndefined()
+        expect(reportBvhDepthCapToGa).not.toHaveBeenCalled()
       })
 
+      // The diagnostics event is still titled by the console's top message,
+      // and carries no cap field: the cap is counted in GA alone.
       it('titles a cap hit with console diagnostics by the diagnostics', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
         beginLoadProgress({fileInfo: 'index.stp'})
@@ -998,7 +1000,8 @@ describe('loadProgress', () => {
         const [message, context] = diagnosticsCall()
         expect(message).toBe('Load diagnostics: No basis found for brep!')
         expect(context.level).toBe('warning')
-        expect(context.contexts.loadDiagnostics.bvhDepthCap).toEqual(expect.objectContaining({trees: 1}))
+        expect(context.contexts.loadDiagnostics).not.toHaveProperty('bvhDepthCap')
+        expect(reportBvhDepthCapToGa).toHaveBeenCalledTimes(1)
         warnSpy.mockRestore()
       })
 
