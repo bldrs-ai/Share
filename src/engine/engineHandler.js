@@ -393,6 +393,8 @@ export function createEngineHandler({
         // (engineSources.js#makeBlobStore, Share#2092): the writer's capture
         // was the load's last sweep, so from here property reads page
         // windows from the File again, as they do on a sync access handle.
+        // A load with no writer sends this too, with no `file`, once its
+        // parse is done (Loader.js#load): nothing here needs one.
         const released = sourceStore.releaseResident?.() ?? false
         return {spilled: false, reason: 'windowed', released, source: sourceSummary()}
       }

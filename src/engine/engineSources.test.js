@@ -453,6 +453,28 @@ describe('engine/engineHandler reads a windowed source through the sync handle',
     await session.close()
   })
 
+  it('a load with no GLB writer lets the whole-file copy go with a spill that names no file', async () => {
+    // Loader.js#load sends this when it schedules no writer (a failed cache
+    // lookup, no cache key): without it the copy stayed until close (codex
+    // review of Share#2095). There is no File to name on that path.
+    const log = []
+    const api = readingApi(log)
+    const open = api.OpenModelStream
+    api.OpenModelStream = async function(store) {
+      this.store = store
+      return open.call(this, store)
+    }
+    const session = await workerSession(api, fakeDir({[NAME]: fakeEntry({log})}), log, {disableEngineSyncHandle: true})
+    await session.open({file: snapshot()})
+    expect(api.store.counters).toMatchObject({reads: 1, residentReads: 1})
+    expect(await session.spill(null)).toMatchObject({spilled: false, reason: 'windowed', released: true})
+    // Let go: the next read is a Blob read, not a copy out of the held file.
+    expect(Array.from(await api.store.read(0, 4))).toEqual([0, 1, 2, 3])
+    expect(api.store.counters).toMatchObject({reads: 2, residentReads: 1})
+    expect(await session.spill(null)).toMatchObject({released: false})
+    await session.close()
+  })
+
   it('disableEngineResidentSource reads windows from the Blob for the whole load', async () => {
     const log = []
     const api = readingApi(log)

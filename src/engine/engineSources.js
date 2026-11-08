@@ -50,7 +50,9 @@ function newCounters() {
  *
  * Why there is a ceiling at all: the whole-file copy is held beside the
  * engine's wasm heap until the GLB writer's spill (engineHandler.js, SPILL),
- * so a load holds the file once more than a sync-access-handle load does.
+ * or, when no writer runs, the same spill sent at the end of the parse
+ * (Loader.js#load). So a load holds the file once more than a
+ * sync-access-handle load does.
  * That is what the main-thread engine held for every model before the flip
  * (a buffered open), so it is no regression against prod; the ceiling only
  * bounds it. 1 GiB keeps PSB (861 MB), the largest model measured, inside.

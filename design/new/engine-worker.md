@@ -867,7 +867,11 @@ preview. #2083 is not merged before that.
      (`engineSources.js#makeBlobStore` `holdResident`, awaited before the
      parse) and copies every read out of that. The GLB writer's spill, the
      load's last sweep, releases the copy, and later property reads page
-     windows from the File again. The copy is not taken off OPFS (a File
+     windows from the File again. A load that schedules no writer (a GLB
+     cache lookup that failed, a source with no cache key) sends the same
+     spill, with no File, as soon as the parse resolves after `done`
+     (`Loader.js#load`), so the copy never outlives the load either way,
+     and is released exactly once (codex review of Share#2095). The copy is not taken off OPFS (a File
      already in memory reads cheaply), for a spill, or above
      `RESIDENT_SOURCE_MAX_BYTES` (1 GiB). A buffered fallback lets it go
      before it reads the file for itself. The `Engine source I/O:` line
@@ -1081,7 +1085,8 @@ held file 0.68 s (Parsing 3.2 s, Total 33.0 s), and the sync handle 2.15 s
 background instead of awaiting it was worse: it contended with the parse's
 own reads (n=3: Parsing 15.6 s, Total 47.1 s), against ~0.7 s of
 "Opening model" it saved. The cost is memory: the worker holds the file
-(861 MB on PSB) beside the engine from the open to the GLB writer's spill,
+(861 MB on PSB) beside the engine from the open to the GLB writer's spill
+(or to the end of the parse, when no writer runs),
 which is what prod's buffered main-thread open held for every model. Not
 yet measured: Firefox and Safari themselves, which the deploy preview's
 A/B (`?feature=disableEngineResidentSource`) settles. What belongs in
