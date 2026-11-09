@@ -207,6 +207,15 @@ came before, `Hashing model`. The fixups are one synchronous call, so
 otherwise the snackbar's live line kept showing the previous stage until
 they were done.
 
+A batched model (Conway-direct IFC and STEP, and their GLB cache hits) drawn
+by a renderer without `WEBGL_multi_draw` gets a `Renderer: WEBGL_multi_draw
+unsupported; batched meshes draw one instance at a time` line during the load
+(`loader/reportRendererLimits.js`, Share#2094). three then issues one draw
+per instance: the load is unaffected, every frame is slower on a large model.
+Firefox 159 is the case seen so far. GA counts it, once per such load, as
+`renderer_fallback {condition: 'no_multi_draw', format}`; it is the browser's
+capability, nothing to fix on our side, so Sentry gets nothing.
+
 Mechanics: engine phases arrive as structured `ProgressEvent`s
 (`{phase, completed, total?, elapsedMs, memoryMb?}`); Share-side stages and
 legacy string milestones ("Converting model format...") are normalized into

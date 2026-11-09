@@ -1597,6 +1597,20 @@ export function currentLoadSerial() {
 
 
 /**
+ * Report a renderer limit the load will draw under, as its own report line
+ * during the load (reportRendererLimits.js: no `WEBGL_multi_draw`). Safe
+ * no-op with no active load.
+ *
+ * @param {string} line e.g. 'Renderer: WEBGL_multi_draw unsupported; …'
+ */
+export function reportRendererInfo(line) {
+  if (activeReporter && !activeReporter.ended && line) {
+    activeReporter.addReportLine(line)
+  }
+}
+
+
+/**
  * Report where the model bytes came from — OPFS cache vs network — as its
  * own report line (PR #1727 feedback: reloads served from OPFS should say
  * "cache HIT" for every format, not just the GLB-artifact path's console
