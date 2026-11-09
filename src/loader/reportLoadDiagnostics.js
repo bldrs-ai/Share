@@ -150,12 +150,14 @@ export function leafBucket(triangles) {
  * @param {string} args.format the model's format, e.g. 'ifc', 'step', 'glb'
  * @param {number} args.trees trees that hit the cap this load
  * @param {number} args.maxLeafTriangles the largest leaf at the cap
+ * @return {boolean} whether the event was sent; true too when there was nothing
+ *   to send (no tree hit the cap), so the caller has nothing left to retry
  */
 export function reportBvhDepthCapToGa({format, trees, maxLeafTriangles}) {
   if (!(trees > 0)) {
-    return
+    return true
   }
-  sendToGa('bvh_depth_cap', {format, trees: skippedBucket(trees), max_leaf: leafBucket(maxLeafTriangles)})
+  return sendToGa('bvh_depth_cap', {format, trees: skippedBucket(trees), max_leaf: leafBucket(maxLeafTriangles)})
 }
 
 
@@ -164,11 +166,13 @@ export function reportBvhDepthCapToGa({format, trees, maxLeafTriangles}) {
  *
  * @param {string} name
  * @param {object} params
+ * @return {boolean} whether gtagEvent handed the event to gtag
  */
 function sendToGa(name, params) {
   try {
-    gtagEvent(name, params)
+    return gtagEvent(name, params)
   } catch (_) {
     // Reporting must never fail a load.
+    return false
   }
 }

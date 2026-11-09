@@ -787,6 +787,9 @@ export async function load(
         }
       }
       if (!(opfsError instanceof EvictedOpfsSourceError)) {
+        // The text is withheld from the Sentry breadcrumb by its prefix
+        // (sentryRedaction.js OPFS_FALLBACK_LINE): the worker's messages can
+        // name the cache key or file path.
         debug().warn(
           `Loader#load: OPFS path failed (${opfsError?.message || opfsError}); ` +
         'falling back to direct fetch. ' +

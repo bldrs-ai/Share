@@ -45,6 +45,10 @@ export function setIsAllowed(allowed) {
 /**
  * @param {string} eventName
  * @param {object} parameters
+ * @return {boolean} whether the event was handed to `window.gtag`. False when
+ *   gtag/js is not loaded yet (or is blocked) or consent is off, in which case
+ *   the event is dropped. A once-per-session sender must mark itself sent only
+ *   on true, or a call made before the tag loads uses up its one event.
  */
 export function gtagEvent(eventName, parameters) {
   if (window.location.hostname.startsWith('deploy-preview-') &&
@@ -57,7 +61,9 @@ export function gtagEvent(eventName, parameters) {
   }
   if (window.gtag && isAllowed()) {
     window.gtag('event', eventName, parameters)
+    return true
   }
+  return false
 }
 
 
@@ -458,10 +464,11 @@ export const GATE_EVENTS = Object.freeze({
  *
  * @param {string} eventName
  * @param {object} [parameters]
+ * @return {boolean} as {@link gtagEvent}
  */
 export function gtagEventWithCid(eventName, parameters = {}) {
   const openCid = getOpenCid()
-  gtagEvent(eventName, openCid ? {...parameters, [OPEN_CID_PARAM]: openCid} : parameters)
+  return gtagEvent(eventName, openCid ? {...parameters, [OPEN_CID_PARAM]: openCid} : parameters)
 }
 
 

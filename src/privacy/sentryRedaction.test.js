@@ -1,5 +1,7 @@
+import fs from 'fs'
+import path from 'path'
 import {formatModelLine} from '@bldrs-ai/conway/src/core/progress_log'
-import {SENTRY_MODEL_LINE_PREFIX, consoleFileName, redactBreadcrumb, redactConsoleMessage} from './sentryRedaction'
+import {SENTRY_MODEL_LINE_PREFIX, consoleFileName, redactBreadcrumb, redactConsoleMessage, workerErrorLabel} from './sentryRedaction'
 
 
 /**
@@ -87,5 +89,38 @@ describe('privacy/sentryRedaction', () => {
     const noMessage = {category: 'console', data: {arguments: [{}]}}
     expect(redactBreadcrumb(noMessage)).toBe(noMessage)
     expect(redactBreadcrumb(undefined)).toBe(undefined)
+  })
+
+  // Share#2107: the OPFS worker's text interpolates cache keys, paths and file
+  // names; its structured condition is what Sentry keeps.
+  describe('OPFS worker errors', () => {
+    const SECRET = 'Error getting file handle for /Acme/secret-plan.ifc: NotFoundError'
+
+    it('keeps the condition and status of a worker error line and withholds its text', () => {
+      const data = {error: SECRET, condition: 'file-handle', status: 404}
+      const line = `${workerErrorLabel(data)} ${data.error}`
+      expect(line).toMatch(/secret-plan/)
+      const crumb = redactBreadcrumb({...consoleCrumb(line, 'error'), data: {arguments: [workerErrorLabel(data), data.error]}})
+      expect(crumb.message).toBe('Error from worker [condition=file-handle status=404]: (details withheld)')
+      expect(JSON.stringify(crumb)).not.toMatch(/Acme|secret-plan/)
+    })
+
+    it('withholds the text of a worker error with no condition, and of a logged Error', () => {
+      expect(redactConsoleMessage(`${workerErrorLabel({})} ${SECRET}`)).toBe('Error from worker: (details withheld)')
+      expect(redactConsoleMessage(`Error from worker: Error: ${SECRET}`)).toBe('Error from worker: (details withheld)')
+    })
+
+    it('does not let free text in `condition` into the label', () => {
+      expect(workerErrorLabel({condition: 'a b: /secret-plan.ifc'})).toBe('Error from worker:')
+    })
+
+    it('withholds the loader\'s OPFS fallback warning text', () => {
+      // The pattern is tied to the producer: Loader.js must still write this prefix.
+      expect(fs.readFileSync(path.join(__dirname, '../loader/Loader.js'), 'utf8')).toContain('`Loader#load: OPFS path failed (${')
+      const line = `Loader#load: OPFS path failed (${SECRET}); falling back to direct fetch. The OPFS cache is best-effort`
+      const crumb = redactBreadcrumb(consoleCrumb(line, 'warning'))
+      expect(crumb.message).toBe('Loader#load: OPFS path failed (details withheld); falling back to direct fetch.')
+      expect(JSON.stringify(crumb)).not.toMatch(/Acme|secret-plan/)
+    })
   })
 })

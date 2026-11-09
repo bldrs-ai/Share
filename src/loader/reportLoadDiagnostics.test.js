@@ -81,6 +81,19 @@ describe('loader/reportLoadDiagnostics', () => {
   })
 
   describe('reportBvhDepthCapToGa', () => {
+    it('returns whether GA took the event, so a caller can retry a dropped one', () => {
+      gtagEvent.mockReturnValueOnce(false)
+      expect(reportBvhDepthCapToGa({format: 'ifc', trees: 1, maxLeafTriangles: 5})).toBe(false)
+      gtagEvent.mockReturnValueOnce(true)
+      expect(reportBvhDepthCapToGa({format: 'ifc', trees: 1, maxLeafTriangles: 5})).toBe(true)
+      gtagEvent.mockImplementationOnce(() => {
+        throw new Error('gtag down')
+      })
+      expect(reportBvhDepthCapToGa({format: 'ifc', trees: 1, maxLeafTriangles: 5})).toBe(false)
+      // Nothing to send is nothing left to retry.
+      expect(reportBvhDepthCapToGa({format: 'ifc', trees: 0, maxLeafTriangles: 0})).toBe(true)
+    })
+
     it('sends exactly format and bucketed tree and leaf counts', () => {
       reportBvhDepthCapToGa({format: 'step', trees: 3, maxLeafTriangles: 3400})
       expect(gtagEvent.mock.calls).toEqual([['bvh_depth_cap', {format: 'step', trees: '2-10', max_leaf: '1001-10000'}]])

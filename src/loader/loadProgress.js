@@ -12,6 +12,7 @@ import {version as shareVersion} from '../../package.json'
 // (dependency-free — no wasm). Was an interim byte-identical local copy until
 // the 1.381.1195 pin shipped this module.
 import {LoadLogAccumulator, formatMb} from '@bldrs-ai/conway/src/core/progress_log'
+import {nonIdentifyingLoadContext} from './loadCaptureContext'
 import {SENTRY_MODEL_LINE_PREFIX, redactConsoleMessage} from '../privacy/sentryRedaction'
 import {reportBvhDepthCapToGa} from './reportLoadDiagnostics'
 // Conway's static Logger, for the data-defect marker (conway#712) on the
@@ -706,7 +707,9 @@ class LoadProgressReporter {
    * phase and diagnosable without user contact.
    */
   applySentryLoadState() {
-    const {tags, contexts} = this.sentryLoadState()
+    // Allowlisted: the raw state carries `fileInfo`, the route path or URL,
+    // which names a private model's file (Share#2107).
+    const {tags, contexts} = nonIdentifyingLoadContext(this.sentryLoadState())
     setTag('load.phase', tags['load.phase'])
     setContext('load', contexts.load)
   }
@@ -857,9 +860,11 @@ class LoadProgressReporter {
     if (!this.bvhDepthCap || this.bvhDepthCapReported) {
       return
     }
-    this.bvhDepthCapReported = true
     const {trees, maxLeafTriangles} = this.bvhDepthCap
-    reportBvhDepthCapToGa({format: this.modelFormat(contentType) ?? 'unknown', trees, maxLeafTriangles})
+    // Counted as reported only once GA took it: with gtag/js not loaded yet
+    // (or no consent) a later call for this load may still send it.
+    this.bvhDepthCapReported =
+      reportBvhDepthCapToGa({format: this.modelFormat(contentType) ?? 'unknown', trees, maxLeafTriangles})
   }
 
   /**

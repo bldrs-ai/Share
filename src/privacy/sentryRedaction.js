@@ -20,6 +20,12 @@
  *   `alt` and `name` values. Share puts file names in some of them (the
  *   recent-files list's `title`, the projects drawer's remove button).
  *
+ * - OPFS worker error replies, logged by `OPFS/utils.js` as `Error from worker`
+ *   lines, and the loader's "OPFS path failed" fallback warning. The worker's
+ *   text interpolates the cache key, the original file path or the file name
+ *   (Share#2107). Sentry keeps the line's structured `condition`/`status`
+ *   (see {@link workerErrorLabel}) and loses the text.
+ *
  * The console and the page keep all of it, since there the user is reading
  * their own file's details; only what Sentry records is rewritten. The load
  * report's Sentry context has its own copy for the same reason
@@ -53,6 +59,12 @@ const QUOTED_FILE_NAME = /^([A-Za-z_$][\w$.#-]*): file "(.*)"(.*)$/s
 // `p.MuiTypography-root[title="Tower.ifc"]`, without escaping quotes in the
 // value; the lazy match up to `"]` takes a value with quotes in it whole,
 // and `s` takes one with a newline in it.
+// `Error from worker[ [condition=<c> status=<n>]]: <text>`, the shape
+// workerErrorLabel writes. The bracket is built only from the worker's own
+// condition constants and an HTTP status, so it is safe to keep.
+const WORKER_ERROR_LINE = /^(Error from worker(?: \[condition=[\w-]+(?: status=\d+)?\])?):/
+const OPFS_FALLBACK_LINE = /^Loader#load: OPFS path failed \(/
+const OPFS_FALLBACK_REDACTED = 'Loader#load: OPFS path failed (details withheld); falling back to direct fetch.'
 const NAMED_ATTRIBUTE = /\[(title|aria-label|alt|name)=".*?"\]/gs
 
 
@@ -66,6 +78,28 @@ const NAMED_ATTRIBUTE = /\[(title|aria-label|alt|name)=".*?"\]/gs
  */
 export function consoleFileName(name) {
   return `file "${name}"`
+}
+
+
+/**
+ * The label of a console line that logs an OPFS worker error reply, so that
+ * {@link redactConsoleMessage} can keep the reply's structured fields and
+ * withhold its text. Write the line as `console.error(workerErrorLabel(data), data.error)`.
+ *
+ * @param {object} data the worker's reply, with its optional `condition` and `status`
+ * @return {string} the label: with the condition and status when the reply has
+ *   them, else just `Error from worker:`
+ */
+export function workerErrorLabel(data) {
+  // Only a plain condition identifier and a numeric status are echoed, so a
+  // producer that put free text in `condition` can't smuggle it into the
+  // label (and past the redaction's own pattern).
+  const condition = typeof data?.condition === 'string' && /^[\w-]+$/.test(data.condition) ? data.condition : ''
+  if (!condition) {
+    return 'Error from worker:'
+  }
+  const status = Number.isInteger(data.status) ? ` status=${data.status}` : ''
+  return `Error from worker [condition=${condition}${status}]:`
 }
 
 
@@ -114,6 +148,13 @@ export function redactConsoleMessage(message) {
     // report context already carries the safe fields; the prefix alone says
     // where in the load this breadcrumb fell.
     return SENTRY_MODEL_LINE_PREFIX
+  }
+  const worker = WORKER_ERROR_LINE.exec(message)
+  if (worker) {
+    return `${worker[1]}: (details withheld)`
+  }
+  if (OPFS_FALLBACK_LINE.test(message)) {
+    return OPFS_FALLBACK_REDACTED
   }
   const quoted = QUOTED_FILE_NAME.exec(message)
   if (quoted) {
