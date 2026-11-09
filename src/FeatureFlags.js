@@ -8,6 +8,12 @@ export const flags = [
   // smoke tests. Branch deploys and local builds remain excluded, and
   // navigator.webdriver still suppresses automated traffic.
   {name: 'gaEnableInPreview', isActive: false},
+  // Records main-thread long animation frames, long tasks, rAF cadence and
+  // input delay from page start, with load milestones, for the render-worker
+  // decision (open-205, design/new/offscreen-rendering.md §9.1). Adds a small
+  // Mark / Summary / Download overlay; the trace stays on the page until the
+  // user downloads it. Pairs with the replay page in tools/spikes/offscreen/.
+  {name: 'mainThreadTrace', isActive: false},
   // Multi-user sharing UI (Share dialog, visibility chip). Provider scaffolding
   // ships unconditionally; this flag gates the consumer surface in PR2+.
   // See design/new/multi-user-sharing.md.

@@ -83,6 +83,17 @@ const engineWorkerBuild = esbuild.build({
   define: {...config.define, 'process.env.FORCE_SINGLE_THREAD': '"true"'},
 })
 
+// Render-worker spike (open-205 §9.1, draft PR only; tools/spikes/offscreen/
+// README.md): the replay page's two bundles, beside its static index.html in
+// public/spike/offscreen/, so a deploy preview serves it at /spike/offscreen/.
+const spikeBuilds = ['main', 'renderWorker'].map((name) => esbuild.build({
+  ...config,
+  entryPoints: [path.resolve(repoRoot, 'tools', 'spikes', 'offscreen', `${name}.js`)],
+  outdir: undefined,
+  outfile: path.join(buildDir, 'spike', 'offscreen', `${name}.js`),
+  format: 'esm',
+}))
+
 // Pro modules — premium export code, built OUTSIDE `docs/` so it is never
 // published; the authenticated `pro-module` Netlify Function is the only
 // thing that can hand it out. See `proModules.js` and
@@ -91,7 +102,7 @@ const proBuilds = proModuleBuilds()
 
 
 // Wait for every build to complete
-Promise.all([mainBuild, ...opfsBuilds, ...glbWriterBuilds, engineWorkerBuild, ...proBuilds])
+Promise.all([mainBuild, ...opfsBuilds, ...glbWriterBuilds, engineWorkerBuild, ...proBuilds, ...spikeBuilds])
   .then(([result]) => {
     // Remove development resources from non-development builds
     if (config.define['process.env.MSW_IS_ENABLED'] !== 'true') {

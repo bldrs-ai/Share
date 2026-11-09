@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Render worker spike</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; padding: 16px; font: 14px/1.4 system-ui, sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 8px; }
+  fieldset { margin: 0 0 8px; border: 1px solid #8884; border-radius: 6px; }
+  label { margin-right: 12px; white-space: nowrap; }
+  input[type=number] { width: 7em; }
+  #stage { margin: 8px 0; min-height: 40px; touch-action: none; cursor: grab; }
+  #stage canvas { display: block; max-width: 100%; }
+  #status { font-weight: 600; }
+  #traceInfo { white-space: pre-wrap; font-size: 12px; }
+  table { border-collapse: collapse; font-size: 12px; margin: 8px 0; }
+  th, td { border: 1px solid #8886; padding: 2px 6px; text-align: right; }
+  th:nth-child(2), td:nth-child(2) { text-align: left; }
+  textarea { width: 100%; height: 160px; font: 11px monospace; }
+</style>
+</head>
+<body>
+<h1>Render worker spike (open-205 §9.1)</h1>
+<p>Draws one scene on the main thread or in a worker while the main thread does busy work: a trace from
+Share (<code>?feature=mainThreadTrace</code>, then <em>Download trace</em>) or the container spike's synthetic pump.
+Drag across the picture during each run. Protocol: <code>tools/spikes/offscreen/README.md</code>.</p>
+
+<fieldset><legend>Busy main thread</legend>
+  <label>Source <select id="busySource"><option value="trace">Share trace</option><option value="synthetic" selected>synthetic pump</option></select></label>
+  <label>Trace <input type="file" id="traceFile" accept=".json,application/json"></label>
+  <label>Window <select id="window"><option value="load">load (start → end)</option><option value="whole">whole trace</option><option value="custom">custom</option></select></label>
+  <label>from <input type="number" id="winFrom" placeholder="ms"></label>
+  <label>to <input type="number" id="winTo" placeholder="ms"></label>
+  <label>Synthetic total <input type="number" id="syntheticMs" value="12000"> ms</label>
+  <div id="traceInfo"></div>
+</fieldset>
+
+<fieldset><legend>Scene</legend>
+  <label>Preset <select id="preset">
+    <option value="cpu">CPU-bound: 300k instances, culled (§5 scene B)</option>
+    <option value="raster">raster-bound: 3k heavy instances, MSAA + log depth</option>
+    <option value="custom">custom</option></select></label>
+  <label>instances <input type="number" id="instances" value="100000"></label>
+  <label><input type="checkbox" id="cull" checked> cull</label>
+  <label><input type="checkbox" id="heavy"> heavy</label>
+  <label>Pacing <select id="pace"><option value="fence">fence (one frame in flight)</option><option value="none">none (as Share today)</option><option value="finish">gl.finish</option></select></label>
+  <label>CSS size <input type="number" id="cssW" value="960"> × <input type="number" id="cssH" value="600"></label>
+  <label>DPR <input type="number" id="dpr" step="0.25"></label>
+  <label>Idle runs <input type="number" id="idleMs" value="8000"> ms</label>
+</fieldset>
+
+<fieldset><legend>Runs</legend>
+  <label><input type="checkbox" id="sc-R0" checked> R0 no render, busy</label>
+  <label><input type="checkbox" id="sc-R1" checked> R1 main, busy</label>
+  <label><input type="checkbox" id="sc-R2" checked> R2 worker, busy</label>
+  <label><input type="checkbox" id="sc-I1" checked> I1 main, idle</label>
+  <label><input type="checkbox" id="sc-I2" checked> I2 worker, idle</label>
+  <button id="run">Run</button> <button id="clear">Clear results</button>
+</fieldset>
+
+<fieldset><legend>Many views, one active (sessions × model layers)</legend>
+  <label>Views <input type="number" id="vCount" value="20"></label>
+  <label>Instances per view <input type="number" id="vInstances" value="20000"></label>
+  <label>Random switches <input type="number" id="vSwitches" value="30"></label>
+  <label><input type="checkbox" id="vPerView" checked> one worker + context per view</label>
+  <label><input type="checkbox" id="vShared" checked> one worker, one context, many scenes</label>
+  <button id="runViews">Run views</button>
+  <div><small>Uses the scene preset's cull/heavy flags and size; no dragging needed. Watch the
+  <em>lost contexts</em> column: that is the browser's cap on live WebGL contexts.</small></div>
+</fieldset>
+
+<div id="status"></div>
+<div id="stage"></div>
+<div id="results"></div>
+<textarea id="json" readonly></textarea>
+<button id="copy">Copy JSON</button>
+<script type="module" src="main.js"></script>
+</body>
+</html>

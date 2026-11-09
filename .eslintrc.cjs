@@ -49,6 +49,15 @@ module.exports = {
         'no-empty-function': ['error', {allow: ['arrowFunctions']}],
       },
     },
+    // Throwaway measurement spikes (`tools/spikes/**`, open-205 §9.1): scene
+    // constants and percentiles read better inline than as named constants,
+    // and the code is built only for a deploy preview, never shipped in the app.
+    {
+      files: ['tools/spikes/**/*.js'],
+      rules: {
+        'no-magic-numbers': 'off',
+      },
+    },
     // Vendored IfcContext family (`src/viewer/three/context/**`) — code
     // copied from `web-ifc-viewer/dist/components/context/*` in slice
     // 5d.3. Kept intentionally close to the upstream shape so future

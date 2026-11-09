@@ -8,12 +8,14 @@ import Auth0ProviderWithHistory from './Auth0/Auth0ProviderWithHistory'
 import BaseRoutes from './BaseRoutes'
 import ApplicationError from './Components/ApplicationError'
 import Auth0BridgeRegistrar from './connections/Auth0BridgeRegistrar'
-import {flags} from './FeatureFlags'
+import {flags, isFeatureEnabled} from './FeatureFlags'
 import './compat'
 import setupEsbuildWatch from './index/esbuild'
 import setupGa from './index/ga'
 import setupMSW from './index/msw'
 import setupSentry from './index/sentry'
+import useStore from './store/useStore'
+import {installMainThreadTrace} from './utils/mainThreadTrace'
 import './index.css'
 import '@fontsource/roboto/latin-300.css'
 import '@fontsource/roboto/latin-400.css'
@@ -21,6 +23,11 @@ import '@fontsource/roboto/latin-500.css'
 import '@fontsource/roboto/latin-700.css'
 
 
+// First, so its buffered observers and rAF clock cover as much of startup
+// as possible (open-205 §9.1 measurement; utils/mainThreadTrace.js).
+if (isFeatureEnabled('mainThreadTrace')) {
+  installMainThreadTrace({store: useStore})
+}
 setupSentry()
 // After setupSentry: ga.js reports init failures via captureException.
 setupGa()
