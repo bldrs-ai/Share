@@ -1,6 +1,6 @@
 import {init} from '@sentry/react'
 import {gtagEvent} from '../privacy/analytics'
-import {redactBreadcrumb} from '../privacy/sentryRedaction'
+import {redactBreadcrumb, withSentrySafeMessage} from '../privacy/sentryRedaction'
 import setupSentry, {shouldSendSentryEvent, shadowReportedCondition, _resetSentryFilterStateForTests} from './sentry'
 
 
@@ -464,6 +464,16 @@ describe('shadowReportedCondition', () => {
     const real = {exception: {values: [{type: 'TypeError'}]}}
     expect(beforeSend(real)).toBe(real)
     expect(gtagEvent).toHaveBeenCalledWith('reported_condition', {level: 'error', category: 'TypeError'})
+  })
+
+  // Share#2107: an error whose message names the user's file carries a safe
+  // one, and beforeSend records that.
+  it('beforeSend records an error\'s safe message in place of its own', () => {
+    setupSentry()
+    const {beforeSend} = init.mock.calls[0][0]
+    const error = withSentrySafeMessage(new Error('Error writing to Tower-of-Secrets.ifc'), 'withheld')
+    const event = {exception: {values: [{type: 'Error', value: error.message}]}}
+    expect(beforeSend(event, {originalException: error}).exception.values[0].value).toBe('withheld')
   })
 
   it('never sends message, exception value or breadcrumb text to GA', () => {

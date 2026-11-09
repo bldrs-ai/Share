@@ -3,7 +3,7 @@ import {captureMessage} from '@sentry/react'
 import * as OPFSService from '../OPFS/OPFSService.js'
 import {HTTP_NOT_FOUND} from '../net/http'
 import {gtagEvent} from '../privacy/analytics'
-import {redactBreadcrumb} from '../privacy/sentryRedaction'
+import {redactBreadcrumb, redactEventExceptions} from '../privacy/sentryRedaction'
 import {
   writeSavedGithubModelOPFS,
   getModelFromOPFS,
@@ -160,6 +160,27 @@ describe('OPFS Test Suite', () => {
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalled()
     })
+  })
+
+  // The rejection's message is the worker's text, which can name the user's
+  // file; it reaches CadView's captureException for an upload (Share#2107).
+  it('rejects with the worker\'s text, which Sentry records only as the reply\'s label', async () => {
+    const mockWorker = {
+      addEventListener: jest.fn((_, handler) => {
+        process.nextTick(() => handler({data: {
+          error: 'Error getting file handle for Tower-of-Secrets.ifc', condition: 'file-handle',
+          requestId: currentRequestId(),
+        }}))
+      }),
+      removeEventListener: jest.fn(),
+    }
+    OPFSService.initializeWorker.mockReturnValue(mockWorker)
+    const error = await getModelFromOPFS('owner', 'repo', 'branch', 'path/to/Tower-of-Secrets.ifc')
+      .then(() => null, (e) => e)
+    expect(error.message).toBe('Error getting file handle for Tower-of-Secrets.ifc')
+    const event = redactEventExceptions({exception: {values: [{type: 'Error', value: error.message}]}},
+      {originalException: error})
+    expect(event.exception.values[0].value).toBe('Error from worker [condition=file-handle]: (details withheld)')
   })
 
   describe('downloadToOPFS', () => {

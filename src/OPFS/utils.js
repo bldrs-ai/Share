@@ -15,9 +15,25 @@ import {
   opfsWriteBase64Model,
 } from '../OPFS/OPFSService.js'
 import {assertDefined} from '../utils/assert'
-import {workerErrorLabel} from '../privacy/sentryRedaction'
+import {withSentrySafeMessage, workerErrorLabel} from '../privacy/sentryRedaction'
 import {OPFS_DOWNLOAD_FAILURE_CONDITIONS, downloadSourceKind} from './reportOpfsSourceCondition'
 import debug, {WARN} from '../utils/debug'
+
+
+/**
+ * The Error a worker error reply rejects with. Its message is the worker's
+ * text, which can name the user's file: kept for the page, the console and
+ * the user's alert, while Sentry records only the reply's structured label
+ * (privacy/sentryRedaction.js#withSentrySafeMessage, Share#2107). An upload's
+ * OPFS failure is rethrown by Loader.js#load and reported by CadView, so this
+ * one reaches an exception event, not just a breadcrumb.
+ *
+ * @param {object} data the worker's reply
+ * @return {Error}
+ */
+function workerError(data) {
+  return withSentrySafeMessage(new Error(data.error), `${workerErrorLabel(data)} (details withheld)`)
+}
 
 
 /**
@@ -134,7 +150,7 @@ export function getModelFromOPFS(owner, repo, branch, filepath) {
     (data, settle) => {
       if (data.error) {
         debug().error(workerErrorLabel(data), data.error)
-        settle.reject(new Error(data.error))
+        settle.reject(workerError(data))
         return
       }
       if (data.completed) {
@@ -182,7 +198,7 @@ export function downloadToOPFS(
         // The console keeps the worker's text; the Sentry breadcrumb of this
         // line keeps only the label's condition/status (sentryRedaction.js).
         debug().error(workerErrorLabel(data), data.error)
-        const error = new Error(data.error)
+        const error = workerError(data)
         // Which download condition the worker hit, for Loader.js#load to
         // report once its direct-fetch fallback has succeeded. Never the text.
         // Only the download-failure conditions: the worker's other replies
@@ -281,7 +297,7 @@ function awaitTerminalWorkerEvent(kickoff, {setOpfsFile, onProgress, onLastModif
   return workerRequest(kickoff, (data, settle) => {
     if (data.error) {
       debug().error(workerErrorLabel(data), data.error)
-      settle.reject(new Error(data.error))
+      settle.reject(workerError(data))
       return
     }
     if (data.progressEvent) {
@@ -371,7 +387,7 @@ function makePromise(kickoff, eventStatus) {
   return workerRequest(kickoff, (data, settle) => {
     if (data.error) {
       debug().error(workerErrorLabel(data), data.error)
-      settle.reject(new Error(data.error))
+      settle.reject(workerError(data))
       return
     }
     if (!data.completed) {
@@ -437,7 +453,7 @@ export function writeGlbBytesToOPFS(bytes, originalFilePath, commitHash, owner, 
     (data, settle) => {
       if (data.error) {
         debug().error(workerErrorLabel(data), data.error)
-        settle.reject(new Error(data.error))
+        settle.reject(workerError(data))
         return
       }
       if (data.completed && data.event === 'wrote') {
@@ -466,7 +482,7 @@ export function readModelByPathFromOPFS(originalFilePath, commitHash, owner, rep
     (data, settle) => {
       if (data.error) {
         debug().error(workerErrorLabel(data), data.error)
-        settle.reject(new Error(data.error))
+        settle.reject(workerError(data))
         return
       }
       if (data.completed) {
@@ -501,7 +517,7 @@ export function clearOPFSCache() {
   return workerRequest((requestId) => opfsClearCache(requestId), (data, settle) => {
     if (data.error) {
       debug().error(workerErrorLabel(data), data.error)
-      settle.reject(new Error(data.error))
+      settle.reject(workerError(data))
       return
     }
     if (data.completed && data.event === 'clear') {
@@ -565,7 +581,7 @@ export function saveDnDFileToOpfs(file, type, callback, onFailed) {
     (requestId) => opfsWriteModel(tmpUrl, originalFilename, filename, requestId),
     (data, settle) => {
       if (data.error) {
-        settle.reject(new Error(data.error))
+        settle.reject(workerError(data))
         return
       }
       if (data.completed) {

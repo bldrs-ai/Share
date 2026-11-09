@@ -104,6 +104,66 @@ export function workerErrorLabel(data) {
 
 
 /**
+ * The text Sentry gets for errors whose own message names the user's file,
+ * by error object (see {@link withSentrySafeMessage}).
+ */
+const sentrySafeMessages = new WeakMap()
+
+
+/**
+ * Give `error` the message Sentry should record in place of its own, and
+ * return it. The page, the console and the user's alert keep `error.message`.
+ *
+ * For errors built from text that can name the user's file, and that can
+ * reach a `captureException`: an OPFS worker's error reply rethrown for an
+ * upload (Loader.js#load), which CadView reports when the load fails
+ * (Share#2107). `redactEventExceptions` applies it in `beforeSend`.
+ *
+ * @param {Error} error
+ * @param {string} message what Sentry records instead
+ * @return {Error} the same error
+ */
+export function withSentrySafeMessage(error, message) {
+  if (error && typeof error === 'object') {
+    sentrySafeMessages.set(error, message)
+  }
+  return error
+}
+
+
+/**
+ * Sentry `beforeSend` step: replace the exception values of an error given a
+ * safe message by {@link withSentrySafeMessage}, for the error itself and
+ * every `cause` it chains to. Every other event passes unchanged.
+ *
+ * @param {object} event Sentry event
+ * @param {object} [hint] Sentry hint, whose `originalException` is the error
+ * @return {object} the event
+ */
+export function redactEventExceptions(event, hint) {
+  const values = event?.exception?.values
+  if (!Array.isArray(values)) {
+    return event
+  }
+  const seen = new Set()
+  for (let error = hint?.originalException; error && typeof error === 'object' && !seen.has(error);
+    error = error.cause) {
+    seen.add(error)
+    const safe = sentrySafeMessages.get(error)
+    if (safe === undefined || typeof error.message !== 'string' || error.message === '') {
+      continue
+    }
+    for (const value of values) {
+      if (typeof value?.value === 'string' && value.value.includes(error.message)) {
+        value.value = value.value.split(error.message).join(safe)
+      }
+    }
+  }
+  return event
+}
+
+
+/**
  * Sentry `beforeBreadcrumb`: rewrite a console or click breadcrumb that names
  * the user's file, and pass every other breadcrumb through unchanged.
  *

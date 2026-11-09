@@ -1,7 +1,15 @@
 import fs from 'fs'
 import path from 'path'
 import {formatModelLine} from '@bldrs-ai/conway/src/core/progress_log'
-import {SENTRY_MODEL_LINE_PREFIX, consoleFileName, redactBreadcrumb, redactConsoleMessage, workerErrorLabel} from './sentryRedaction'
+import {
+  SENTRY_MODEL_LINE_PREFIX,
+  consoleFileName,
+  redactBreadcrumb,
+  redactConsoleMessage,
+  redactEventExceptions,
+  withSentrySafeMessage,
+  workerErrorLabel,
+} from './sentryRedaction'
 
 
 /**
@@ -124,3 +132,47 @@ describe('privacy/sentryRedaction', () => {
     })
   })
 })
+
+
+// An error whose message names the user's file can reach an exception event,
+// not just a breadcrumb: an upload's OPFS failure is rethrown by the loader and
+// captured by CadView (Share#2107).
+describe('privacy/sentryRedaction redactEventExceptions', () => {
+  /**
+   * @param {string} value
+   * @return {object} a Sentry event with one exception value
+   */
+  function exceptionEvent(value) {
+    return {exception: {values: [{type: 'Error', value}]}}
+  }
+
+  it('records the safe message in place of the error\'s own', () => {
+    const error = withSentrySafeMessage(new Error('Error getting file handle for Tower-of-Secrets.ifc'),
+      'Error from worker [condition=file-handle]: (details withheld)')
+    const event = redactEventExceptions(exceptionEvent(error.message), {originalException: error})
+    expect(event.exception.values[0].value).toBe('Error from worker [condition=file-handle]: (details withheld)')
+    // The page keeps the real text.
+    expect(error.message).toContain('Tower-of-Secrets.ifc')
+  })
+
+  it('reaches a safe error down a cause chain, inside a longer value', () => {
+    const inner = withSentrySafeMessage(new Error('Error writing to Tower-of-Secrets.ifc'), 'withheld')
+    const outer = new Error('load failed', {cause: inner})
+    const event = {exception: {values: [
+      {type: 'Error', value: `Caused by: ${inner.message}`},
+      {type: 'Error', value: outer.message},
+    ]}}
+    redactEventExceptions(event, {originalException: outer})
+    expect(event.exception.values.map((v) => v.value)).toEqual(['Caused by: withheld', 'load failed'])
+  })
+
+  it('leaves every other event alone', () => {
+    const error = new Error('plain failure')
+    const event = exceptionEvent(error.message)
+    expect(redactEventExceptions(event, {originalException: error}).exception.values[0].value).toBe('plain failure')
+    const message = {message: 'no exception here'}
+    expect(redactEventExceptions(message, {})).toBe(message)
+    expect(redactEventExceptions(message, undefined)).toBe(message)
+  })
+})
+

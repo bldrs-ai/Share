@@ -2,7 +2,7 @@ import {init, reactRouterV6BrowserTracingIntegration} from '@sentry/react'
 import {useEffect} from 'react'
 import {useLocation, useNavigationType, createRoutesFromChildren, matchRoutes} from 'react-router-dom'
 import {gtagEvent} from '../privacy/analytics'
-import {redactBreadcrumb} from '../privacy/sentryRedaction'
+import {redactBreadcrumb, redactEventExceptions} from '../privacy/sentryRedaction'
 // Named import (rather than `import pkg from '../../package.json'`) so
 // esbuild can prune the rest of the JSON — we only care about `version`.
 import {version as pkgVersion} from '../../package.json'
@@ -339,12 +339,14 @@ export default function setupSentry() {
     // shipped it. Prefix with the project slug so the same Sentry org can
     // host multiple bldrs apps without release-tag collisions.
     release: `bldrs-share@${pkgVersion}`,
-    beforeSend(event) {
+    beforeSend(event, hint) {
       if (!shouldSendSentryEvent(event)) {
         return null
       }
       shadowReportedCondition(event)
-      return event
+      // An error whose message names the user's file carries a safe one for
+      // Sentry (privacy/sentryRedaction.js#withSentrySafeMessage).
+      return redactEventExceptions(event, hint)
     },
     // Console and click breadcrumbs that name the user's file are rewritten
     // before they're recorded (privacy/sentryRedaction.js); the page and the
