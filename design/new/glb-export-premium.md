@@ -772,6 +772,17 @@ canonical corner ROTATION, because Meshopt's (lossless) index codec may rotate a
 triangle's corners — the Export tab's Meshopt download of `index.ifc` was
 refused until that, while the tiny jest fixtures never triggered it.
 
+**What the reader's re-hash costs.** It walks every vertex and index of every
+collapsed table on each cache hit: ~55M words on PSB (7.8M vertices, 1,986
+tables). `rangeCanaryOf` reads the float32 POSITION and the index straight from
+their typed arrays (`rowFromArrays`), plain or interleaved, and keeps the
+running hash in a local. Anything else falls back to the accessor path. Before
+#2101 it went through `getX` closures, built three arrays per triangle for the
+rotation, and boxed the hash on every word. That was 2.9 s of a 6.8 s
+"Applying model fixups" in Chromium; it is now 0.19 s. The digest is the same
+bit for bit (`bldrsInstanceTables.test.js` pins it), so artifacts cached before
+the change still hit.
+
 **Draco exports carry a lossy witness instead** (the owner's smoke on #1872: a
 Draco download of DSA and of Right_Hand rendered perfectly and could not be
 selected). Measured on a DSA-shaped strip through the real codec: Draco MERGES
