@@ -73,7 +73,11 @@ function hasBatchedMesh(model) {
       return true
     }
     if (Array.isArray(object.children)) {
-      pending.push(...object.children)
+      // One at a time: a spread of a huge flat group's children (an OBJ of
+      // 100k+ meshes) would overflow the call's argument limit.
+      for (const child of object.children) {
+        pending.push(child)
+      }
     }
   }
   return false
