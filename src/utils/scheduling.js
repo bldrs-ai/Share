@@ -45,3 +45,46 @@ export function yieldToBrowser() {
   }
   return new Promise((resolve) => setTimeout(resolve, 0))
 }
+
+
+/**
+ * Resolve once the browser has had a chance to paint what is on the page
+ * now, before a long synchronous block starts.
+ *
+ * {@link yieldToBrowser} ends the task, but a frame is not drawn between
+ * every two tasks, so a status line set just before a multi-second
+ * synchronous step can still sit unpainted behind it: the load snackbar
+ * showed "Hashing model" through PSB's whole 4 s "Applying model fixups"
+ * stage, which is synchronous (Share#2101). Waiting for an animation frame
+ * and then one more task gets past that frame's paint.
+ *
+ * A hidden tab runs no animation frames, and there is nothing to paint, so
+ * there it is just {@link yieldToBrowser}; `maxWaitMs` bounds the wait
+ * anywhere else rAF does not come (a throttled iframe).
+ *
+ * @param {object} [opts]
+ * @param {number} [opts.maxWaitMs]
+ * @return {Promise<void>}
+ */
+export function yieldForPaint({maxWaitMs = 100} = {}) {
+  const raf = globalThis.requestAnimationFrame
+  if (typeof raf !== 'function' || globalThis.document?.visibilityState === 'hidden') {
+    return yieldToBrowser()
+  }
+  return new Promise((resolve) => {
+    let settled = false
+    const settle = () => {
+      if (!settled) {
+        settled = true
+        resolve()
+      }
+    }
+    const timer = setTimeout(settle, maxWaitMs)
+    raf(() => {
+      yieldToBrowser().then(() => {
+        clearTimeout(timer)
+        settle()
+      })
+    })
+  })
+}

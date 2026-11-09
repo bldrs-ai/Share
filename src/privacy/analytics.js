@@ -45,6 +45,12 @@ export function setIsAllowed(allowed) {
 /**
  * @param {string} eventName
  * @param {object} parameters
+ * @return {boolean} whether the event was handed to `window.gtag`. False when
+ *   consent is off, the case that matters in practice: index.html defines a
+ *   `window.gtag` stub that queues into `dataLayer` before gtag/js loads, so a
+ *   missing `window.gtag` only happens without that page (tests, an embed). A
+ *   once-per-session sender must mark itself sent only on true, or a call made
+ *   while consent is off uses up its one event.
  */
 export function gtagEvent(eventName, parameters) {
   if (window.location.hostname.startsWith('deploy-preview-') &&
@@ -57,7 +63,9 @@ export function gtagEvent(eventName, parameters) {
   }
   if (window.gtag && isAllowed()) {
     window.gtag('event', eventName, parameters)
+    return true
   }
+  return false
 }
 
 
@@ -458,10 +466,11 @@ export const GATE_EVENTS = Object.freeze({
  *
  * @param {string} eventName
  * @param {object} [parameters]
+ * @return {boolean} as {@link gtagEvent}
  */
 export function gtagEventWithCid(eventName, parameters = {}) {
   const openCid = getOpenCid()
-  gtagEvent(eventName, openCid ? {...parameters, [OPEN_CID_PARAM]: openCid} : parameters)
+  return gtagEvent(eventName, openCid ? {...parameters, [OPEN_CID_PARAM]: openCid} : parameters)
 }
 
 

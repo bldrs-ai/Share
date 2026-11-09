@@ -3,6 +3,7 @@ import {captureMessage} from '@sentry/react'
 import * as OPFSService from '../OPFS/OPFSService.js'
 import {HTTP_NOT_FOUND} from '../net/http'
 import {gtagEvent} from '../privacy/analytics'
+import {redactBreadcrumb, redactEventExceptions} from '../privacy/sentryRedaction'
 import {
   writeSavedGithubModelOPFS,
   getModelFromOPFS,
@@ -161,6 +162,27 @@ describe('OPFS Test Suite', () => {
     })
   })
 
+  // The rejection's message is the worker's text, which can name the user's
+  // file; it reaches CadView's captureException for an upload (Share#2107).
+  it('rejects with the worker\'s text, which Sentry records only as the reply\'s label', async () => {
+    const mockWorker = {
+      addEventListener: jest.fn((_, handler) => {
+        process.nextTick(() => handler({data: {
+          error: 'Error getting file handle for Tower-of-Secrets.ifc', condition: 'file-handle',
+          requestId: currentRequestId(),
+        }}))
+      }),
+      removeEventListener: jest.fn(),
+    }
+    OPFSService.initializeWorker.mockReturnValue(mockWorker)
+    const error = await getModelFromOPFS('owner', 'repo', 'branch', 'path/to/Tower-of-Secrets.ifc')
+      .then(() => null, (e) => e)
+    expect(error.message).toBe('Error getting file handle for Tower-of-Secrets.ifc')
+    const event = redactEventExceptions({exception: {values: [{type: 'Error', value: error.message}]}},
+      {originalException: error})
+    expect(event.exception.values[0].value).toBe('Error from worker [condition=file-handle]: (details withheld)')
+  })
+
   describe('downloadToOPFS', () => {
     it('should resolve with file when download completes', async () => {
       const mockFile = new Blob(['dummy content'], {type: 'application/octet-stream'})
@@ -251,9 +273,10 @@ describe('OPFS Test Suite', () => {
       expect(captureMessage).not.toHaveBeenCalled()
     })
 
-    it('logs a conditioned worker error without the text that could name the file', async () => {
-      // Red if the line goes back to logging data.error: the console line
-      // becomes a Sentry breadcrumb, and a private model's path must not.
+    it('logs the worker text to the console, but a Sentry breadcrumb of it keeps only condition and status', async () => {
+      // Red if the line stops using workerErrorLabel, or the label's shape
+      // stops matching sentryRedaction's pattern: the console line becomes a
+      // Sentry breadcrumb, and a private model's path must not.
       mockDebugError.mockClear()
       await downloadWithReply({
         error: 'HTTP 404 for /secret-plan.ifc https://example.com/secret-plan.ifc',
@@ -262,8 +285,19 @@ describe('OPFS Test Suite', () => {
       }).catch(() => {})
 
       expect(mockDebugError).toHaveBeenCalledTimes(1)
-      expect(JSON.stringify(mockDebugError.mock.calls)).not.toMatch(/secret-plan|example\.com/)
-      expect(JSON.stringify(mockDebugError.mock.calls)).toMatch(/http-error/)
+      const message = mockDebugError.mock.calls[0].join(' ')
+      expect(message).toMatch(/secret-plan/)
+      const crumb = redactBreadcrumb({category: 'console', level: 'error', message, data: {arguments: mockDebugError.mock.calls[0]}})
+      expect(JSON.stringify(crumb)).not.toMatch(/secret-plan|example\.com/)
+      expect(crumb.message).toBe('Error from worker [condition=http-error status=404]: (details withheld)')
+    })
+
+    it('does not mark a housekeeping condition as a reportable download failure', async () => {
+      // Loader.js#load reports opfsCondition as a Sentry warning; the worker's
+      // other conditions (Share#2107) are not that.
+      const error = await downloadWithReply(
+        {error: 'Error getting file handle for /secret.ifc: x', condition: 'file-handle'}).catch((e) => e)
+      expect(error.opfsCondition).toBeUndefined()
     })
 
     it('should call onProgress with progress data', async () => {

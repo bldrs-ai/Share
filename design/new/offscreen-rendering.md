@@ -26,8 +26,8 @@ smooth while the main thread is busy (model loads, React updates, workspace
 switches), and so rendering stops competing with the load. It inventories
 everything that touches the renderer from the main thread, checks the
 platform, reports a spike, and recommends an order of work. The scope was
-written at `86f9908`; **line numbers are re-read at `9759fd8`** (origin/main
-on 2026-11-09). Where a row names a function, the name is the anchor and the
+written at `86f9908`; **line numbers are re-read at `0ce98dfc`** (origin/main
+on 2026-11-09, after #2117, #2118 and #2119 merged). Where a row names a function, the name is the anchor and the
 number is a convenience: they drift.
 
 
@@ -149,7 +149,7 @@ Classes:
 
 | # | What | Where | Class | Note |
 |---|---|---|---|---|
-| 25 | Raycaster, three-mesh-bvh BVH build and raycast | `context/raycaster.js:8-12`, `Picker.js:8-45`, `buildBatchedConwayModel.js:81-160` (`decorateBatchMeshes`), `ifc/bvhBuild.js` | M | Pure. The 2.2–2.4 s BVH/bounds task (in-app-model-switch.md §4.4 item 2) leaves main for good. **In flux (#2117, in review, not merged at `9759fd8`):** it builds the per-geometry BVHs *after* the model is on screen, in `requestIdleCallback` slices and INDIRECT mode so the index is never reordered under the GLB writer's sliced snapshot (`viewer/ifc/deferredBatchedBvh.js`), and seeds per-geometry bounds from the typed arrays (`viewer/ifc/batchedBounds.js`). Both are scene-side and pure, so they move into the render worker as they are; §7.5 builds on them rather than around them. |
+| 25 | Raycaster, three-mesh-bvh BVH build and raycast | `context/raycaster.js:8-12`, `Picker.js:8-45`, `buildBatchedConwayModel.js:84-168` (`decorateBatchMeshes`), `ifc/bvhBuild.js` | M | Pure. The 2.2–2.4 s BVH/bounds task (in-app-model-switch.md §4.4 item 2) leaves main for good. **Changed since the scope (#2117, merged):** it builds the per-geometry BVHs *after* the model is on screen, in `requestIdleCallback` slices and INDIRECT mode so the index is never reordered under the GLB writer's sliced snapshot (`viewer/ifc/deferredBatchedBvh.js`), and seeds per-geometry bounds from the typed arrays (`viewer/ifc/batchedBounds.js`). Both are scene-side and pure, so they move into the render worker as they are; §7.5 builds on them rather than around them. |
 | 26 | Selection / preselection painting (`setColorAt`, subsets, outline) | `ShareViewer.js:887-1110, 1358-1600, 1859-1900`, `ifc/batchedHighlight.js:325-400`, `three/elementSubsets.js` | M | Worker side. Main sends `select({modelKey, expressIds | instanceIds})`. |
 | 27 | Occurrence → instance lookups used by selection and the assistant | `ShareViewer.js:1127-1356` (`getInstanceIdsForOccurrencePath` `:1127`, `getRootLevelInstances` `:1239`, `getGeometryIdsForOccurrencePath` `:1299`) | P | These are table lookups, not rendering. Answer them in the worker by async RPC, or keep a copy of the per-batch tables on main. Open decision §9.5. |
 | 28 | Isolation / hide masks | `three/IfcIsolator.js` (1705 lines; `onBatchEdit` at `:751`) | M + P | Masks move. The logical state CadView, refs and the Widget API read synchronously (`canBePickedInScene`, `hiddenIds`, `visualElementsIds`; `Containers/selection.js:27`, `viewer/tools/refs.js:98-99, 159`, `WidgetApi/event-handlers/*`) needs a main-side mirror. |
@@ -171,9 +171,9 @@ Classes:
 
 | # | What | Where | Class | Note |
 |---|---|---|---|---|
-| 37 | Conway-direct batched build (`IncrementalBatchedBuilder`, `flatMeshToBatchedModel`, `assembleBatchedModel`) | `viewer/ifc/incrementalBatchedBuilder.js:186`, `buildBatchedConwayModel.js:57-172` | M | Fed by geometry buffers from the engine worker (§6.4). That takes Share's ~4 s of PSB batch building off main. |
+| 37 | Conway-direct batched build (`IncrementalBatchedBuilder`, `flatMeshToBatchedModel`, `assembleBatchedModel`) | `viewer/ifc/incrementalBatchedBuilder.js:186`, `buildBatchedConwayModel.js:60-180` | M | Fed by geometry buffers from the engine worker (§6.4). That takes Share's ~4 s of PSB batch building off main. |
 | 38 | Progressive preview group | `viewer/ProgressiveLoadSession.js:112-117` | M | Same stream. |
-| 39 | GLB / glTF (+ DRACO, meshopt), STL, OBJ, PLY, PDB, XYZ, BLD, ADF, 3DM | `src/loader/Loader.js:2330-2520` (`findLoader`) | M | `GLTFLoader` picks `ImageBitmapLoader` whenever `createImageBitmap` exists (`GLTFLoader.js:2579-2606`), which is true in workers. `DRACOLoader` spawns its own (nested) workers, which works. 3DM fetches `rhino3dm` from jsDelivr (`Loader.js:2465`). |
+| 39 | GLB / glTF (+ DRACO, meshopt), STL, OBJ, PLY, PDB, XYZ, BLD, ADF, 3DM | `src/loader/Loader.js:2351-2541` (`findLoader`) | M | `GLTFLoader` picks `ImageBitmapLoader` whenever `createImageBitmap` exists (`GLTFLoader.js:2579-2606`), which is true in workers. `DRACOLoader` spawns its own (nested) workers, which works. 3DM fetches `rhino3dm` from jsDelivr (`Loader.js:2486`). |
 | 40 | FBX and USDZ textures | `FBXLoader.js:173` (`TextureLoader` → `ImageLoader` → `document.createElementNS`), `usd/USDComposer.js:3866` (`new Image()`; both unchanged, three is still r184) | B (minor) | Shim `TextureLoader` with an `ImageBitmapLoader` in the worker realm, or parse these two formats on main and transfer the result. Open decision §9.7. |
 | 41 | Gaussian splats (Spark 2.1.0) | `loader/splats.js:68-74, 160-163` (the `SparkRenderer` now gets `onDirty: requestPaint`) | M, verify | Share passes `fileBytes`, so Spark's `window.location` URL resolution (`spark.module.js:11184, 13765`) isn't reached. Spark spawns its own workers from blob URLs; check it on Safari. |
 | 42 | Loader/CadView install the model into the scene and the store | `CadView.jsx:1087-1126`, `Loader.js` (many reads of three-object fields on `model`; not recounted) | B | See #46. |
@@ -184,7 +184,7 @@ Classes:
 |---|---|---|---|---|
 | 43 | `takeScreenshot` → second `WebGLRenderer` on a cloned canvas → `toDataURL` | `ShareViewer.js:1965`, `renderer.js:66-91` (`tempRenderer`; `runPaint` at `:90`, `toDataURL` at `:91`), used by `Components/Notes/NoteFooter.jsx:170` | P | Becomes async: render into a render target in the worker, `readPixels`, `OffscreenCanvas.convertToBlob()`. NoteFooter awaits it. |
 | 44 | Sample thumbnails | `tools/thumbnails/generate.mjs:193-229` | P | Clears `scene.background` through `window.store` (needs a probe, #48). The element screenshot of `#viewer-container canvas` still works: the compositor shows an offscreen canvas like any other. |
-| 45 | GLB cache writer reads the live scene: `exportBatchedModelAsInstancedGlb`, `GLTFExporter` | `Loader.js:1160-1200` (`exportAndCacheGlb`), `loader/glbExport.js:110-140, 237-379`, `loader/glbBatchedSnapshot.js`, `loader/glbBatchedExport.js` | P | **Partly done since the scope (#2030 target 1):** the batched writer is now two halves. `glbBatchedSnapshot.js` is the main-thread half: it copies out of the live `BatchedMesh` batches exactly what the builder needs, as typed arrays, *sliced* (it yields every `budgetMs` and checks `batchEditRevision` across the slices), and transfers them to `GlbWriter.worker.js`, which does the build. So the 6.0 s single task (in-app-model-switch.md §4.4 item 1) is cut into slices, not gone. With a render worker the snapshot runs where the batches are and posts the arrays to the writer worker (or they go render → writer directly), which takes the slices off main entirely. Property capture already runs inside the engine worker (engine-worker.md §7 step 5, #2081), and the engine's `capture` op is unaffected. The Pro export reads the OPFS artifact, not the scene, so it doesn't change (glb-export-premium.md §1.1). |
+| 45 | GLB cache writer reads the live scene: `exportBatchedModelAsInstancedGlb`, `GLTFExporter` | `Loader.js:1171-1211` (`exportAndCacheGlb`), `loader/glbExport.js:110-140, 237-379`, `loader/glbBatchedSnapshot.js`, `loader/glbBatchedExport.js` | P | **Partly done since the scope (#2030 target 1):** the batched writer is now two halves. `glbBatchedSnapshot.js` is the main-thread half: it copies out of the live `BatchedMesh` batches exactly what the builder needs, as typed arrays, *sliced* (it yields every `budgetMs` and checks `batchEditRevision` across the slices), and transfers them to `GlbWriter.worker.js`, which does the build. So the 6.0 s single task (in-app-model-switch.md §4.4 item 1) is cut into slices, not gone. With a render worker the snapshot runs where the batches are and posts the arrays to the writer worker (or they go render → writer directly), which takes the slices off main entirely. Property capture already runs inside the engine worker (engine-worker.md §7 step 5, #2081), and the engine's `capture` op is unaffected. The Pro export reads the OPFS artifact, not the scene, so it doesn't change (glb-export-premium.md §1.1). |
 | 46 | Perf panel (`withPerf`, `?feature=perf`) | `src/utils/PerfMonitor.js:77, 146-155, 224-242, 345-354` | P | The panel stays a DOM element on main. The worker times its frames and posts samples (e.g. 4 Hz). Show worker frame time *and* main-thread long tasks, since FPS alone stops describing jank. |
 | 47 | `?feature=look` lil-gui panel; `applyLook`, env/shadow setters | `three/LightingGui.js:110-140` (its `onChange` now calls `requestPaint()`, `:138`), `ShareViewer.js:335-630` | P | lil-gui is DOM: the panel stays on main and its controllers call RPC setters. |
 
@@ -201,7 +201,7 @@ Classes:
 | # | What | Where | Class | Note |
 |---|---|---|---|---|
 | 51 | The store's `model` is the scene's `Object3D` | `CadView.jsx:1087-1092`, `src/store/IFCSlice.js:111-112` (`model`, `setModel`; `selectReadModel` `:146`); 20 files read `state.model`/`selectReadModel` | B | Main needs a `ModelHandle`: capabilities, bounds, the `ifcManager` property surface (which the engine worker makes async anyway), and a `modelKey` the render worker understands. Scene consumers (clipper, isolator, ViewCube) talk to the render worker by key. |
-| 52 | `ShareViewer` builds the engine and the renderer together | `ShareViewer.js:255-270`; `Loader.js:171, 241, 933-943` reach `viewer.IFC.loader.ifcManager.ifcAPI` | B | #2019 (open) moves the engine into the session. The engine worker (#2083, on by default) has already moved the engine off main for IFC and STEP: `Loader.js` reads `model.ifcManager.ifcAPI.engineSession` (`:241, 933`), and main talks to the worker through the async read surface (engine-worker.md §5.1), which is the property surface a `ModelHandle` needs. What is left is that `ShareViewer` still builds both, and the store still holds the `Object3D`. The render worker needs the same split, so sequence it with #2019 (§8). |
+| 52 | `ShareViewer` builds the engine and the renderer together | `ShareViewer.js:255-270`; `Loader.js:173, 243, 941-951` reach `viewer.IFC.loader.ifcManager.ifcAPI` | B | #2019 (open) moves the engine into the session. The engine worker (#2083, on by default) has already moved the engine off main for IFC and STEP: `Loader.js` reads `model.ifcManager.ifcAPI.engineSession` (`:243, 941`), and main talks to the worker through the async read surface (engine-worker.md §5.1), which is the property surface a `ModelHandle` needs. What is left is that `ShareViewer` still builds both, and the store still holds the `Object3D`. The render worker needs the same split, so sequence it with #2019 (§8). |
 | 53 | Synchronous viewer API returning scene results | `castRayToIfcScene` (`ShareViewer.js:887`), `takeScreenshot`, `getCameraControls().getPosition()`, isolator getters | P | Each becomes a mirror read (camera, isolation, planes) or an `await` (pick, screenshot). Listed in §6.6. |
 
 ### 2.10 Totals
@@ -231,7 +231,7 @@ CutPlaneMenu, MarkerControl, ViewCube, PlaceMark, `Filetype.js`,
 | `RenderDemand` and its hooks: the paint gate, `requestPaint()`, `runPaint()`, the scene probe, the DOM nets, `invalidateSoon` on store changes | `viewer/three/renderDemand.js`, `renderDemandHooks.js`, `renderOnDemandMode.js`, `reportRenderMode.js` | M + P | The gate and probe run next to the loop in the worker. What feeds it from main is **input** (the nets watch the canvas's DOM events and `invalidateSoon` fires on any page input and store change), so main forwards "something happened" and the proxied events; `USER_CAMERA_EVENT`/`noteUserCamera` (`CameraControl.jsx:134`, `ViewCube.jsx:211`, `CadView.jsx:1705`) become messages. A source that forgets to ask leaves a stale frame, so the worker's API must ask on every state-changing message by construction (§6.6). |
 | `requestPaint()` callers | `ShareViewer.js` (`:371, 384, 488, 507, 521, 570, 589, 604, 1535, 1612`), `display/shadingMode.js:148`, `display/colorMode.js:164`, `three/sceneGraphVisibility.js:158`, `three/IfcIsolator.js:1673`, `three/IfcHighlighter.js:53, 66, 89`, `three/MeshClipper.js:405`, `three/CutPlaneArrowHelper.ts:88`, `three/LightingGui.js:138`, `residency/ResidencyController.js:299`, `Components/Markers/MarkerControl.jsx:100, 241, 267, 316, 341`, `Infrastructure/PlaceMark.js:216, 331`, `loader/splats.js:163` | M, except MarkerControl and PlaceMark (P) | Scene-side callers move with the scene. MarkerControl's become the `markers([...])` message, which asks for the paint worker-side. |
 | `ProgressiveLoadSession` as a `RenderDemand` scope (`begin`, `invalidate`, `invalidateBackground`, `runFollowMove`; the load's own follow vs the user's camera) | `viewer/ProgressiveLoadSession.js:92-129, 238-353, 547, 676-742`; `CadView.jsx:618` (`getRenderDemand().begin(...)`) | M + P | The session and the follow run where the camera is. `CadView.jsx:618` is a main-side call into the render demand: it becomes a message, or moves with the session into the render worker (§7.5). |
-| Renderer capability reads from the loader | `src/loader/reportRendererLimits.js` (PR #2118, in review, not on main at `9759fd8`; for #2094), reading `renderer.extensions` (`WEBGL_multi_draw`) from `Loader.js` | P | In a worker, main has no renderer. The capability (extensions, max texture size) must come from the render core: `ready` in §6.6 carries the list (`extensions`, alongside `webgl2` and `maxTextureSize`), and `reportRendererLimits` reads that mirror. Same for any future check of this kind. |
+| Renderer capability reads from the loader | `src/loader/reportRendererLimits.js` (#2118, merged; for #2094), reading `renderer.extensions` (`WEBGL_multi_draw`) from `Loader.js` | P | In a worker, main has no renderer. The capability (extensions, max texture size) must come from the render core: `ready` in §6.6 carries the list (`extensions`, alongside `webgl2` and `maxTextureSize`), and `reportRendererLimits` reads that mirror. Same for any future check of this kind. |
 | `getRenderer()` reads | `ShareViewer.js:270, 336, 401` (IBL, shadow, ground), `Containers/viewer.js:82` (dispose, `forceContextLoss`), `context.js:64-66, 178-191` (`getRenderer`, `getDomElement`) | M / P | Dispose posts `dispose`; the DOM element stays main's (the canvas). |
 | Second `WebGLRenderer`s | `renderer.js:72` (`tempRenderer` for screenshots, row 43), `ViewCube.jsx:116` (the cube's own, row 24) | P | As before. |
 
@@ -373,7 +373,7 @@ From in-app-model-switch.md §4.1, P1.0 and the #2043 framing:
   on main. End-of-load assembly (BVH + robust bounds) is 2.2–2.4 s and the
   GLB writer's preparation is 6.0 s on sp-231MB, both main-thread single
   tasks. *Since this was written:* the writer's snapshot is sliced
-  (`glbBatchedSnapshot.js`, #2030), and #2117 (in review) moves the BVH
+  (`glbBatchedSnapshot.js`, #2030), and #2117 (merged) moves the BVH
   build after the model is shown, in idle slices. Neither is gone from main;
   both are shorter tasks. The engine worker's measured effect on PSB (main
   long tasks before ready 267 → 17, 34.9 s → 10.3 s) is in the #2083 PR
@@ -605,7 +605,7 @@ buffers transferred) go to that sink instead of the worker's own port. Its §9
 reaches the same topology as this section, and **where the two docs differ
 on the engine side, engine-worker.md is the source** (the points below
 follow it). **The sink is protocol only today:** `src/engine/` has no
-`sink` use at `9759fd8`, so batches still arrive on the worker's own port
+`sink` use at `0ce98dfc`, so batches still arrive on the worker's own port
 and main assembles them. §7.5 is the step that wires it.
 
 - **Geometry route: MessageChannel, engine → render, transferred.** At
@@ -860,7 +860,7 @@ the plan it was built from.
 
 - `attachEngine(modelKey, port)`: batches and previews go engine → render
   over the engine's `open({stream: {sink}})` port. Batch build, BVH
-  (`deferredBatchedBvh.js`, once #2117 lands) and robust bounds
+  (`deferredBatchedBvh.js`, from #2117) and robust bounds
   (`batchedBounds.js`) run in the render worker.
 - The engine posts `account` events on its control port and the render worker
   posts drain acks to the host, so the host's memory budget and `pump`
@@ -884,7 +884,9 @@ the plan it was built from.
   mode as `reportRenderMode.js` does.
 - Firefox and Safari follow-ups on the engine side that interact with this
   step: #2092 (Firefox's Blob-store reads), #2094 (no `WEBGL_multi_draw` on
-  Firefox, so batched models draw without multi-draw; #2118 reports it).
+  Firefox, so batched models draw without multi-draw; #2118 reports it in the
+  load report and GA; closed after the owner's Firefox check found frame
+  times fine, so it is a smoke item, not a blocker).
 
 
 ## 8. Dependencies and order
@@ -900,8 +902,8 @@ State as of 2026-11-09:
   default; #2081, #2085, #2095), so §7.5 is unblocked from the engine side;
   the sink wiring is still to be done.
 - **#2030** (no blocking calls, open) is independent and stays necessary:
-  its chunking has started (the sliced GLB snapshot; #2117's deferred BVH is
-  in review). §7.5 moves what is left of those tasks off main, but until then
+  its chunking has started (the sliced GLB snapshot; #2117's deferred BVH has
+  merged). §7.5 moves what is left of those tasks off main, but until then
   they block both input and frames.
 - **#2031** (close and eviction, open) is not a blocker for §7.2–7.4. It
   needs `removeModel(modelKey)` (§6.4) when §7.5 lands. engine-worker.md
@@ -910,7 +912,8 @@ State as of 2026-11-09:
   with one depth buffer worth having; it is not a prerequisite.
 - **#2043** (interactive at first mesh) is closed; §6.4's pick-during-parse
   behaviour builds on it.
-- Firefox and Safari: #2092, #2094 (both open) affect §7.6's smoke.
+- Firefox and Safari: #2092 (open) and #2094 (closed; see §7.6) affect §7.6's
+  smoke.
 
 
 ## 9. Open decisions
@@ -963,13 +966,14 @@ it on for everyone.
 
 ## 10. Evidence status
 
-- **Read from code** at `86f9908` (the scope), and **re-read at `9759fd8`
+- **Read from code** at `86f9908` (the scope), **re-read at `9759fd8`
   (origin/main, 2026-11-09)**: every §2 row's `file:line`, plus the new
-  touchpoints table. The three/camera-controls/postprocessing/Spark source
-  lines cited in §2–3 are in `node_modules` and were spot-checked (three
-  r184, unchanged). #2117 and #2118 were not merged at that commit, so what
-  this doc says of `deferredBatchedBvh.js`, `batchedBounds.js` and
-  `reportRendererLimits.js` comes from their PRs, not from code on main.
+  touchpoints table; then **re-checked at `0ce98dfc`** once #2117, #2118 and
+  #2119 merged, shifting the `Loader.js` and `buildBatchedConwayModel.js`
+  numbers those PRs moved. What this doc says of `deferredBatchedBvh.js`,
+  `batchedBounds.js` and `reportRendererLimits.js` is now read from main.
+  The three/camera-controls/postprocessing/Spark source lines cited in §2–3
+  are in `node_modules` and were spot-checked (three r184, unchanged).
 - **From MDN browser-compat-data** (read 2026-11-03): §3.1's version table.
   caniuse.com and bugs.webkit.org were unreachable from the container; the
   Ventura caveat comes from search results that quote WebKit bug 183720's

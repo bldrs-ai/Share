@@ -12,7 +12,8 @@ import {version as shareVersion} from '../../package.json'
 // (dependency-free — no wasm). Was an interim byte-identical local copy until
 // the 1.381.1195 pin shipped this module.
 import {LoadLogAccumulator, formatMb} from '@bldrs-ai/conway/src/core/progress_log'
-import {SENTRY_MODEL_LINE_PREFIX, redactConsoleMessage} from '../privacy/sentryRedaction'
+import {nonIdentifyingLoadContext} from './loadCaptureContext'
+import {SENTRY_MODEL_LINE_PREFIX, redactConsoleMessage, sentrySafeMessageOf} from '../privacy/sentryRedaction'
 import {reportBvhDepthCapToGa} from './reportLoadDiagnostics'
 // Conway's static Logger, for the data-defect marker (conway#712) on the
 // entries it logs — see installDefectProxy. This is the SAME module instance
@@ -200,6 +201,14 @@ class LoadProgressReporter {
     this.bvhDepthCap = null
     // Set once the cap has been counted in GA (reportBvhDepthCapOnce).
     this.bvhDepthCapReported = false
+    // Set when the load succeeded and its cap may go to GA, with the content
+    // type to send it under, so a cap that arrives after the load (a batched
+    // model's deferred trees, deferredBatchedBvh.js) is still counted.
+    this.bvhDepthCapGaArmed = false
+    this.bvhDepthCapContentType = undefined
+    // Where the cap's Health line sits in the report, so a later update
+    // replaces it instead of adding a second one.
+    this.bvhDepthCapLineIndex = -1
     // Base messages (conway LogEntry.message, whitespace-collapsed like the
     // tee's text) conway logged during this load, split by whether the entry
     // carried the data-defect marker — what isDataDefectDiagnostic matches
@@ -243,7 +252,7 @@ class LoadProgressReporter {
       // Keying the tally by the redacted text also folds the same warning
       // about different files into one diagnostic.
       const text = redactConsoleMessage(collapseWhitespace(args
-        .map((arg) => (arg instanceof Error ? arg.message : String(arg)))
+        .map((arg) => (arg instanceof Error ? sentrySafeMessageOf(arg) ?? arg.message : String(arg)))
         .join(' ')))
       if (text !== '') {
         this.diagnostics.set(text, (this.diagnostics.get(text) ?? 0) + 1)
@@ -706,7 +715,9 @@ class LoadProgressReporter {
    * phase and diagnosable without user contact.
    */
   applySentryLoadState() {
-    const {tags, contexts} = this.sentryLoadState()
+    // Allowlisted: the raw state carries `fileInfo`, the route path or URL,
+    // which names a private model's file (Share#2107).
+    const {tags, contexts} = nonIdentifyingLoadContext(this.sentryLoadState())
     setTag('load.phase', tags['load.phase'])
     setContext('load', contexts.load)
   }
@@ -757,10 +768,7 @@ class LoadProgressReporter {
     const total = this.log.totalLine()
     this.addReportLine(this.summary ? `${total} | ${this.summary}` : total)
     if (this.bvhDepthCap) {
-      const {trees, maxLeafTriangles, maxDepth} = this.bvhDepthCap
-      this.addReportLine(`Health: picking index hit its depth cap (${maxDepth}) in ` +
-        `${trees} ${trees === 1 ? 'tree' : 'trees'}; largest leaf ${maxLeafTriangles} triangles, ` +
-        'tested one by one per pick')
+      this.writeBvhDepthCapLine(true)
     }
 
     // Warnings & errors captured from the console during the load, appended
@@ -854,12 +862,16 @@ class LoadProgressReporter {
    * @param {string} [contentType]
    */
   reportBvhDepthCapOnce(contentType) {
+    this.bvhDepthCapGaArmed = true
+    this.bvhDepthCapContentType = contentType
     if (!this.bvhDepthCap || this.bvhDepthCapReported) {
       return
     }
-    this.bvhDepthCapReported = true
     const {trees, maxLeafTriangles} = this.bvhDepthCap
-    reportBvhDepthCapToGa({format: this.modelFormat(contentType) ?? 'unknown', trees, maxLeafTriangles})
+    // Counted as reported only once GA took it: with gtag/js not loaded yet
+    // (or no consent) a later call for this load may still send it.
+    this.bvhDepthCapReported =
+      reportBvhDepthCapToGa({format: this.modelFormat(contentType) ?? 'unknown', trees, maxLeafTriangles})
   }
 
   /**
@@ -1011,6 +1023,49 @@ class LoadProgressReporter {
     const sample = ellipsize(topText)
     const sampleNote = topCount > 1 ? `${sample} (×${topCount})` : sample
     this.addReportLine(`Warnings & errors (${total}${distinctNote}): ${sampleNote}`, false)
+  }
+
+  /**
+   * Add the BVH depth-cap Health line, or replace it if it is already there.
+   *
+   * @param {boolean} echo whether to echo it to the console (only while the
+   *   console tee is still ours, during finishReport)
+   */
+  writeBvhDepthCapLine(echo) {
+    const {trees, maxLeafTriangles, maxDepth} = this.bvhDepthCap
+    const line = `Health: picking index hit its depth cap (${maxDepth}) in ` +
+      `${trees} ${trees === 1 ? 'tree' : 'trees'}; largest leaf ${maxLeafTriangles} triangles, ` +
+      'tested one by one per pick'
+    if (this.bvhDepthCapLineIndex >= 0) {
+      this.lines[this.bvhDepthCapLineIndex] = line
+      this.sentryLines[this.bvhDepthCapLineIndex] = line
+      this.publishReport()
+      return
+    }
+    this.bvhDepthCapLineIndex = this.lines.length
+    this.addReportLine(line, echo)
+  }
+
+  /**
+   * A depth cap that arrived after the load ended: a batched model builds its
+   * trees once it is on screen (deferredBatchedBvh.js). Same Health line,
+   * after Total like reportFramingExclusion's, and the same one GA event once
+   * the load is known to have succeeded. A cap already counted in GA during
+   * the load is not counted again; the line still shows the sum.
+   *
+   * @param {{trees: number, maxLeafTriangles: number, maxDepth: number}} capped
+   */
+  addLateBvhDepthCap({trees, maxLeafTriangles, maxDepth}) {
+    const previous = this.bvhDepthCap
+    this.bvhDepthCap = {
+      trees: (previous?.trees ?? 0) + trees,
+      maxLeafTriangles: Math.max(previous?.maxLeafTriangles ?? 0, maxLeafTriangles),
+      maxDepth,
+    }
+    this.writeBvhDepthCapLine(false)
+    if (this.bvhDepthCapGaArmed) {
+      this.reportBvhDepthCapOnce(this.bvhDepthCapContentType)
+    }
   }
 
   /** Stop watching (load finished or failed); restore the console tee. */
@@ -1547,6 +1602,20 @@ export function currentLoadSerial() {
 
 
 /**
+ * Report a renderer limit the load will draw under, as its own report line
+ * during the load (reportRendererLimits.js: no `WEBGL_multi_draw`). Safe
+ * no-op with no active load.
+ *
+ * @param {string} line e.g. 'Renderer: WEBGL_multi_draw unsupported; …'
+ */
+export function reportRendererInfo(line) {
+  if (activeReporter && !activeReporter.ended && line) {
+    activeReporter.addReportLine(line)
+  }
+}
+
+
+/**
  * Report where the model bytes came from — OPFS cache vs network — as its
  * own report line (PR #1727 feedback: reloads served from OPFS should say
  * "cache HIT" for every format, not just the GLB-artifact path's console
@@ -1732,17 +1801,41 @@ const FRAMING_NOTE = 'stray geometry far from the model was left out of the zoom
 
 
 /**
+ * Which load is being reported now, as an opaque token: for work that
+ * finishes after the load and must report against that load or not at all
+ * (reportBvhDepthCap).
+ *
+ * @return {object|null}
+ */
+export function loadReportToken() {
+  return activeReporter
+}
+
+
+/**
  * Record BVH trees that reached three-mesh-bvh's depth cap
  * (`viewer/ifc/bvhBuild.js`). Accumulates across the load's builds, a batched
  * model building one tree per geometry, and becomes one `Health:` line after
  * Total and, on a successful load, one GA `bvh_depth_cap` event
- * (reportBvhDepthCapOnce). Safe no-op with
- * no active load, or after it ended.
+ * (reportBvhDepthCapOnce). Safe no-op with no active load.
+ *
+ * Without a token, a no-op after the load ended too: a tree built later (an
+ * edit's new geometry, batchedEdit.js) is not part of the load. With the
+ * token a deferred build took when it was scheduled (loadReportToken), the
+ * cap is that load's however late it lands, and is dropped if another load
+ * has started since.
  *
  * @param {{trees: number, maxLeafTriangles: number, maxDepth: number}} capped
+ * @param {object} [token] from loadReportToken
  */
-export function reportBvhDepthCap({trees, maxLeafTriangles, maxDepth}) {
-  if (!activeReporter || activeReporter.ended) {
+export function reportBvhDepthCap({trees, maxLeafTriangles, maxDepth}, token = undefined) {
+  if (!activeReporter || (token !== undefined && token !== activeReporter)) {
+    return
+  }
+  if (activeReporter.ended) {
+    if (token !== undefined) {
+      activeReporter.addLateBvhDepthCap({trees, maxLeafTriangles, maxDepth})
+    }
     return
   }
   const previous = activeReporter.bvhDepthCap

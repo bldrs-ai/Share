@@ -505,7 +505,7 @@ test('deleteModelFromOPFS answers a held entry with an error, not a false \'dele
   await lockedModelEntry('m.ifc', 'c1')
   await worker.deleteModelFromOPFS('c1', 'm.ifc', 'owner', 'repo', 'main', 3)
   expect(self.postMessage.mock.calls.map(([m]) => m)).toEqual([
-    {error: 'deleteModelFromOPFS: m.ifc.c1 is open in an engine; not deleted', requestId: 3},
+    {error: 'deleteModelFromOPFS: m.ifc.c1 is open in an engine; not deleted', condition: 'entry-locked', requestId: 3},
   ])
 })
 
@@ -518,7 +518,7 @@ test('downloadModelToOPFS answers a held stale copy with an error instead of thr
   global.fetch = jest.fn()
   await worker.downloadModelToOPFS('https://x/a.ifc', 'a.ifc.x', 'a.ifc', 'owner', 'repo', 'main', false, 4)
   expect(self.postMessage.mock.calls.map(([m]) => m)).toEqual([
-    {error: 'downloadModelToOPFS: a.ifc.a.ifc.x is open in an engine; not replaced', requestId: 4},
+    {error: 'downloadModelToOPFS: a.ifc.a.ifc.x is open in an engine; not replaced', condition: 'entry-locked', requestId: 4},
   ])
   expect(global.fetch).not.toHaveBeenCalled()
 })
@@ -688,7 +688,7 @@ describe('OPFS writes on a handle without createWritable (Safari)', () => {
     await worker.writeBytesByPathToOPFS(
       new Uint8Array([1]), 'c1', 'model.ifc', 'owner', 'repo', 'main', 'opfs-8')
     expect(self.postMessage).toHaveBeenCalledWith(
-      {error: 'writeBytesByPath: opfs unavailable', requestId: 'opfs-8'})
+      {error: 'writeBytesByPath: opfs unavailable', condition: 'write-failed', requestId: 'opfs-8'})
   })
 
   test('writeBytesByPathToOPFS truncates a longer previous entry', async () => {

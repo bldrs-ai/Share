@@ -29,6 +29,7 @@ import {assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
 import {navigateBaseOnModelPath, parseGitHubPath} from '../utils/location'
+import {yieldForPaint} from '../utils/scheduling'
 import {loadAllRecentFiles, updateRecentFileLastModified} from '../connections/persistence'
 import {testUuid} from '../utils/strings'
 import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
@@ -67,6 +68,7 @@ import {spillModelSource} from './opfsSourceByteStore'
 import {EvictedOpfsSourceError, isUnusableOpfsSource} from './opfsSourceHealth'
 import {PART21_LOADER_TYPES, engineFormatOf} from './part21Formats'
 import {reportEngineSourceBuffered, reportPreviewUnitsSkipped} from './reportLoadDiagnostics'
+import {reportRendererLimits} from './reportRendererLimits'
 import {reportOpfsDownloadFailed, reportOpfsNotCached, reportOpfsSourceEvicted} from '../OPFS/reportOpfsSourceCondition'
 import {STORE_DETECT_PREFIX_BYTES, conwayStoreOpenRequirement} from './stepFormat'
 import {isEngineWorkerLoad} from '../viewer/ifc/ShareIfcLoader'
@@ -662,6 +664,9 @@ export async function load(
               ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
               file = glbFile
               cameFromGlbCache = true
+              // Its own stage, so reading the artifact out of OPFS isn't
+              // counted as hashing the source (Share#2101).
+              onProgress('Reading model data...')
               modelData = await glbFile.arrayBuffer()
             } else {
               glbInfo(`reader: ${kindLabel} cache MISS, will export after parse`)
@@ -787,6 +792,9 @@ export async function load(
         }
       }
       if (!(opfsError instanceof EvictedOpfsSourceError)) {
+        // The text is withheld from the Sentry breadcrumb by its prefix
+        // (sentryRedaction.js OPFS_FALLBACK_LINE): the worker's messages can
+        // name the cache key or file path.
         debug().warn(
           `Loader#load: OPFS path failed (${opfsError?.message || opfsError}); ` +
         'falling back to direct fetch. ' +
@@ -1058,6 +1066,9 @@ export async function load(
   // (`stats_cacheHit`). Read here, after the OPFS block, because the stale
   // Git LFS pointer path above can still reset it to false.
   reportCacheHit(cameFromGlbCache)
+  // A batched model on a renderer without WEBGL_multi_draw draws per
+  // instance: say so in the report (Share#2094).
+  reportRendererLimits(model, () => viewer?.context?.getRenderer?.(), loader.type)
 
   // ShareModel decoration (see src/viewer/ShareModel.js): adds
   // `format` + `capabilities` so call-sites can branch on intrinsic
@@ -2230,6 +2241,12 @@ export async function readModel(
   // TODO(pablo): GLTF also generates errors for texture loads, but
   // that seems to be deep in the promise stack within the loader.
   if (loader instanceof GLTFLoader) {
+    // Inflating and parsing a GLB is a stage of its own. Without this line a
+    // cache hit's whole parse, and its heap (+1 GB on PSB), was reported
+    // under whatever stage came before, "Hashing model" (Share#2101).
+    if (onProgress) {
+      onProgress('Parsing model data...')
+    }
     if (isBldrsGlbContainer(modelData)) {
       model = await parseBldrsGlbContainer(loader, modelData)
     } else {
@@ -2287,6 +2304,10 @@ export async function readModel(
   if (fixupCb) {
     if (onProgress) {
       onProgress('Applying model fixups...')
+      // The fixups are synchronous (a GLB hit's hydration is seconds of it
+      // on a large model), so without a paint first the snackbar keeps
+      // showing the previous stage until they are done (Share#2101).
+      await yieldForPaint()
     }
     model = fixupCb(model, viewer)
   }

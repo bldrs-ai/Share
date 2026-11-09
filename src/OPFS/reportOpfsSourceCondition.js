@@ -1,5 +1,6 @@
 import {captureMessage} from '@sentry/react'
 import {loadFailureCaptureContext} from '../loader/loadProgress'
+import {nonIdentifyingLoadContext} from '../loader/loadCaptureContext'
 import {gtagEvent} from '../privacy/analytics'
 
 
@@ -43,6 +44,15 @@ import {gtagEvent} from '../privacy/analytics'
 
 /** Source kinds a download can have. `local` is a Share-hosted path such as `/index.ifc`. */
 export const OPFS_SOURCE_KINDS = ['local', 'external', 'github']
+
+/**
+ * The worker conditions downloadModelToOPFS replies with for a download that
+ * failed, i.e. those {@link reportOpfsDownloadFailed} reports. The worker's
+ * other error replies carry a `condition` too (OPFS.worker.js; Share#2107),
+ * but those are the best-effort housekeeping family this file deliberately
+ * does not report.
+ */
+export const OPFS_DOWNLOAD_FAILURE_CONDITIONS = ['fetch-rejected', 'http-error', 'no-body', 'empty-body', 'stream-error']
 
 const COMPONENT_TAG = 'opfs-source'
 
@@ -103,43 +113,6 @@ export function reportOpfsDownloadFailed({kind, condition, status}) {
  */
 export function reportOpfsNotCached(kind) {
   sendToGa('opfs_not_cached', {kind, condition: 'move-unavailable'})
-}
-
-
-// The only `contexts.load` fields these events carry. An allowlist, so a field
-// a later change adds to the load state is withheld until someone decides it
-// is safe. NOT here: `fileInfo` (the raw route path or URL, set in
-// CadView.jsx from the filepath: for a private GitHub or external model it is
-// the path), and anything else that could name the file. `report` is the
-// Sentry copy of the load report (model line withheld, privacy/
-// sentryRedaction.js), the same text CadView's exception carries.
-const LOAD_CONTEXT_FIELDS = ['phase', 'completed', 'total', 'unit', 'elapsedMs', 'memoryMb', 'report']
-
-/**
- * The active load's capture context minus anything that identifies the
- * model: `load.*` tags (phase only) and the allowlisted `load` fields.
- *
- * @param {{tags: object, contexts: object}} load loadFailureCaptureContext()
- * @return {{tags: object, contexts: object}}
- */
-function nonIdentifyingLoadContext(load) {
-  const tags = {}
-  for (const [key, value] of Object.entries(load?.tags ?? {})) {
-    if (key === 'load.phase') {
-      tags[key] = value
-    }
-  }
-  const source = load?.contexts?.load
-  if (!source) {
-    return {tags, contexts: {}}
-  }
-  const loadContext = {}
-  for (const field of LOAD_CONTEXT_FIELDS) {
-    if (source[field] !== undefined) {
-      loadContext[field] = source[field]
-    }
-  }
-  return {tags, contexts: {load: loadContext}}
 }
 
 

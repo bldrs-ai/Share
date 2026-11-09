@@ -5,13 +5,14 @@ jest.mock('@sentry/react', () => ({
   setTag: jest.fn(),
 }))
 
-jest.mock('./reportLoadDiagnostics', () => ({reportBvhDepthCapToGa: jest.fn()}))
+// reportBvhDepthCapToGa returns whether GA took the event.
+jest.mock('./reportLoadDiagnostics', () => ({reportBvhDepthCapToGa: jest.fn(() => true)}))
 import Cookies from 'js-cookie'
 import {reportBvhDepthCapToGa} from './reportLoadDiagnostics'
 import Logger, {DATA_DEFECT} from '@bldrs-ai/conway/src/logging/logger'
 import {captureMessage, setContext, setTag} from '@sentry/react'
 import {_resetGaClientIdForTests} from '../privacy/analytics'
-import {consoleFileName} from '../privacy/sentryRedaction'
+import {consoleFileName, withSentrySafeMessage} from '../privacy/sentryRedaction'
 import useStore from '../store/useStore'
 import {
   STALL_TIMEOUT_MS,
@@ -29,6 +30,7 @@ import {
   isModelInfoProgress,
   isStructuredProgress,
   loadFailureCaptureContext,
+  loadReportToken,
   noGeometryAlert,
   reportBvhDepthCap,
   reportCacheHit,
@@ -331,6 +333,20 @@ describe('loadProgress', () => {
       // One line only: counts + the message. A single distinct message drops
       // the "N distinct" note.
       expect(lines[diagIndex]).toBe('Warnings & errors (2): CDT Exception (hemisphere: 0) (×2)')
+      consoleErrorSpy.mockRestore()
+    })
+
+    // Share#2107: an Error logged during the load whose text names the user's
+    // file is tallied by its safe message; the console still prints it whole.
+    it('tallies a marked Error by its safe message', () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      console.error(withSentrySafeMessage(new Error('Error writing to Tower-of-Secrets.ifc'),
+        'Error from worker [condition=write-failed]: (details withheld)'))
+      endLoadProgress()
+      const line = reportLines().find((l) => /^Warnings & errors/.test(l))
+      expect(line).toBe('Warnings & errors (1): Error from worker [condition=write-failed]: (details withheld)')
+      expect(consoleErrorSpy.mock.calls[0][0].message).toContain('Tower-of-Secrets')
       consoleErrorSpy.mockRestore()
     })
 
@@ -791,17 +807,18 @@ describe('loadProgress', () => {
       expect(setTag).toHaveBeenCalledWith('load.phase', 'geometry')
     })
 
-    it('failure context includes the accumulated report text', () => {
-      beginLoadProgress({fileInfo: 'index.ifc'})
+    it('failure context includes the accumulated report text, and not the file path', () => {
+      // fileInfo is the route path or URL: the name of a private model (Share#2107).
+      beginLoadProgress({fileInfo: 'secret/plan.ifc'})
       reportLoadProgress({phase: 'dataParse', completed: 1, total: 4, elapsedMs: 10})
       endLoadProgress()
       attachLoadFailureContext()
       expect(setTag).toHaveBeenCalledWith('load.phase', 'dataParse')
       expect(setContext).toHaveBeenCalledWith('load', expect.objectContaining({
         phase: 'dataParse',
-        fileInfo: 'index.ifc',
         report: expect.stringContaining('Share v'),
       }))
+      expect(JSON.stringify(setContext.mock.calls)).not.toMatch(/secret|plan\.ifc/)
     })
 
     // The per-event counterpart (Share#1899): the same tags and context,
@@ -968,6 +985,17 @@ describe('loadProgress', () => {
 
       // A depth-cap hit is volume-only signal (AGENTS.md, Reported
       // Conditions): GA, once per load, and no Sentry event of its own.
+      it('retries a cap hit that GA dropped (gtag/js not loaded yet), and stops once it is sent', () => {
+        reportBvhDepthCapToGa.mockReturnValueOnce(false)
+        beginLoadProgress({fileInfo: 'index.stp'})
+        reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
+        endLoadProgress()
+        captureLoadDiagnostics({})
+        captureLoadDiagnostics({})
+        captureLoadDiagnostics({})
+        expect(reportBvhDepthCapToGa).toHaveBeenCalledTimes(2)
+      })
+
       it('counts a cap hit in GA once, and sends nothing to Sentry for it', () => {
         beginLoadProgress({fileInfo: 'index.stp'})
         reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
@@ -977,6 +1005,77 @@ describe('loadProgress', () => {
 
         expect(reportBvhDepthCapToGa.mock.calls).toEqual([[{format: 'stp', trees: 2, maxLeafTriangles: 3400}]])
         expect(diagnosticsCall()).toBeUndefined()
+      })
+
+      // A batched model builds its trees once it is on screen
+      // (deferredBatchedBvh.js), so its cap usually lands after the load
+      // ended. It keeps its Health line and its one GA event.
+      describe('a depth cap that lands after the load', () => {
+        const healthLines = () => reportLines().filter((line) => line.startsWith('Health: picking'))
+
+        it('gets its Health line after Total and is counted in GA once', () => {
+          const reporter = beginLoadProgress({fileInfo: 'index.stp'})
+          const token = loadReportToken()
+          expect(token).toBe(reporter)
+          endLoadProgress()
+          captureLoadDiagnostics({})
+          expect(reportBvhDepthCapToGa).not.toHaveBeenCalled()
+
+          reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40}, token)
+          const lines = reportLines()
+          expect(healthLines()).toEqual([
+            'Health: picking index hit its depth cap (40) in 2 trees; largest leaf 3400 triangles, ' +
+            'tested one by one per pick'])
+          expect(lines.indexOf(healthLines()[0])).toBeGreaterThan(lines.findIndex((l) => l.startsWith('Total')))
+          expect(reportBvhDepthCapToGa.mock.calls).toEqual([[{format: 'stp', trees: 2, maxLeafTriangles: 3400}]])
+        })
+
+        it('replaces the Health line rather than adding a second one', () => {
+          beginLoadProgress({fileInfo: 'index.stp'})
+          const token = loadReportToken()
+          reportBvhDepthCap({trees: 1, maxLeafTriangles: 90, maxDepth: 40})
+          endLoadProgress()
+          captureLoadDiagnostics({})
+          reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40}, token)
+
+          expect(healthLines()).toEqual([
+            'Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 triangles, ' +
+            'tested one by one per pick'])
+          // GA counted the in-load cap; the late one is not counted again.
+          expect(reportBvhDepthCapToGa).toHaveBeenCalledTimes(1)
+        })
+
+        it('waits for the load to be known good before counting it in GA', () => {
+          beginLoadProgress({fileInfo: 'index.stp'})
+          const token = loadReportToken()
+          endLoadProgress()
+          reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40}, token)
+          expect(healthLines()).toHaveLength(1)
+          expect(reportBvhDepthCapToGa).not.toHaveBeenCalled()
+          captureLoadDiagnostics({})
+          expect(reportBvhDepthCapToGa).toHaveBeenCalledTimes(1)
+        })
+
+        it('is dropped once another load has started', () => {
+          beginLoadProgress({fileInfo: 'first.stp'})
+          const token = loadReportToken()
+          endLoadProgress()
+          beginLoadProgress({fileInfo: 'second.stp'})
+          reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40}, token)
+          endLoadProgress()
+          captureLoadDiagnostics({})
+          expect(healthLines()).toEqual([])
+          expect(reportBvhDepthCapToGa).not.toHaveBeenCalled()
+        })
+
+        it('needs the token: a later tree of an edit is not the load\'s', () => {
+          beginLoadProgress({fileInfo: 'index.stp'})
+          endLoadProgress()
+          captureLoadDiagnostics({})
+          reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
+          expect(healthLines()).toEqual([])
+          expect(reportBvhDepthCapToGa).not.toHaveBeenCalled()
+        })
       })
 
       it('sends nothing anywhere for a clean load that did not hit the cap', () => {

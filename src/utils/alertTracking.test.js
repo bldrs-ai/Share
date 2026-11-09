@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/react'
 import {gtagEvent} from '../privacy/analytics'
+import {withSentrySafeMessage} from '../privacy/sentryRedaction'
 import {trackAlert, trackAlertEvent} from './alertTracking'
 
 
@@ -91,6 +92,18 @@ describe('trackAlert', () => {
     expect(gtagEvent).toHaveBeenCalledWith('alert', {
       message: 'File upload of unknown type: type() size(180384)',
     })
+  })
+})
+
+
+// Share#2107: an upload's OPFS failure reaches the alert with the worker's
+// text, which can name the file; GA gets the error's safe message.
+describe('trackAlert with a marked error', () => {
+  it('sends the safe message to GA, not the error\'s text', () => {
+    const error = withSentrySafeMessage(new Error('Error writing to Tower-of-Secrets.ifc'), 'withheld')
+    trackAlert(error.message, error)
+    expect(gtagEvent).toHaveBeenCalledWith('alert', {message: 'withheld'})
+    expect(JSON.stringify(gtagEvent.mock.calls)).not.toContain('Tower-of-Secrets')
   })
 })
 
