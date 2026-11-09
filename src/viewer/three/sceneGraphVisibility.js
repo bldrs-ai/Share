@@ -1,4 +1,5 @@
 import {isBatchedModel} from '../ifc/batchedModel'
+import {requestPaint} from './renderDemand'
 
 
 /**
@@ -153,5 +154,7 @@ export function applySceneGraphVisibility(model, {hiddenIds, isolatedIds = null}
     }
   }
   visit(model, false, true)
+  // `visible` is no change the render-on-demand hooks see.
+  requestPaint()
   return outlined
 }

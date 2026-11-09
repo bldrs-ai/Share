@@ -4,6 +4,17 @@ import {normalizeMessageDigits} from './messageGrouping'
 
 
 /**
+ * Marks an alert's Sentry event as already counted in GA (the `alert` event
+ * below), so sentry.js#shadowReportedCondition doesn't count the same
+ * failure a second time as `reported_condition`. An event-local tag, set
+ * through the capture context, so it never sticks to the scope. The shadow
+ * would also have taken this fingerprint's message-derived key as its
+ * category, which is free text.
+ */
+const GA_COUNTED = {ga_counted: 'alert'}
+
+
+/**
  * Tracks an alert message in both Sentry and Google Analytics.
  * In Sentry, it captures the full error with stack trace.
  * In Google Analytics, it only tracks the message.
@@ -17,7 +28,7 @@ export function trackAlert(message, error = null) {
     // No fingerprint here on purpose: a real error carries the stack of
     // wherever it was actually thrown, which discriminates better than its
     // message text does. Only the synthesized branch below needs help.
-    Sentry.captureException(error)
+    Sentry.captureException(error, {tags: GA_COUNTED})
   } else {
     // Create a new error with the current stack trace
     const stackError = new Error(message)
@@ -31,6 +42,7 @@ export function trackAlert(message, error = null) {
     // per-upload byte size can't split one family into an issue per file.
     Sentry.captureException(stackError, {
       fingerprint: ['alert', alertFingerprintKey(String(message))],
+      tags: GA_COUNTED,
     })
   }
 
@@ -47,10 +59,19 @@ export function trackAlert(message, error = null) {
  * would send it to Sentry anyway, as a plain object with neither the
  * original stack nor the load context.
  *
+ * Expected outcomes are counted here and nowhere else (AGENTS.md, "PRs: a
+ * Reported Conditions section"): GA, never an info-level Sentry message. The
+ * structured fields that used to ride such a message as tags come along as
+ * `params`, so the one event carries them. They must be closed-set or
+ * bucketed values, never a file name, URL or path; `message` must be a
+ * constant for any alert whose text names the user's file.
+ *
  * @param {string} message The alert message to count
+ * @param {object} [params] Extra structured GA params, string values only
  */
-export function trackAlertEvent(message) {
+export function trackAlertEvent(message, params = {}) {
   gtagEvent('alert', {
+    ...params,
     message: message,
   })
 }

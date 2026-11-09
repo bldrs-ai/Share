@@ -286,6 +286,22 @@ landed, so `?feature=conwayDirectIfc` is now redundant):
   `viewer.setSelection(0, ids)` then
   `viewer.setInstanceSelection(0, instanceIds)`.
 
+  *During a load* the same handler raycasts what is on screen before
+  the model exists: the parse-time preview group
+  (`viewer/previewSelection.js`) and the durable BatchedMeshes the
+  demand pump is still filling (`viewer/streamingBatchPick.js`). The
+  incremental builder offers each row it writes on its root
+  (`root.userData.streamingBatches`, withdrawn at `finalize`), and a hit
+  on one reads the same `{parent, instance, occurrence path, geometry}`
+  the finished model's batched pick reads from the stamped tables, so it
+  goes through the same `selectFromInstancePick`. Before the tree is up
+  the row waits (`pendingPreviewPickRef`) like a preview pick. The
+  highlight is painted on the streaming rows by
+  `ShareViewer#setPreviewSelection` (instance colours, restored at
+  `finalize`) and repainted on the finished model by
+  `reapplySelectionToGeometry`. Format- and engine-neutral: a worker
+  load's batches feed the same builder.
+
 **Cache round-trip** (`conwayDirectIfc` + `glb`, both default-on):
 
 Per-vertex `instanceID` rides through the IFC→GLB→IFC cache
@@ -1133,7 +1149,8 @@ forced tree-wide via `resolutions` — so the original "bump `three`" goal
 is met; what remains under **5e** is shedding the fork-era color/lighting
 compat scaffolding + wit-three leftovers (see below). **5f** is reframed:
 the `web-ifc` shim is **kept** as the Conway↔web-ifc engine flag, not a
-deletion target. **5g** renamed the test mock off the `web-ifc-viewer`
+deletion target (**superseded 2026-11-01:** the product call was made and
+the real-`web-ifc` build was removed; see slice 5f's note). **5g** renamed the test mock off the `web-ifc-viewer`
 name (5d.4 had parked it behind a jest `moduleNameMapper`). The slice
 numbering below matches the `5d.N` tags in the committed source comments
 (`grep -rn "5d\." src/`).
@@ -1388,6 +1405,17 @@ removed here. Eventual removal of the shim is a **product call** (once
 Conway is confidently shown to fully supersede web-ifc), not blocked on
 imports.
 
+  > **Removed 2026-11-01 (product-owner decision).** That product call
+  > has been made: the comparison build, `webIfcSingleThreadPlugin`,
+  > `serveStaticIsolated.mjs`, the `USE_WEBIFC_SHIM` switch, the
+  > `*-webifc` scripts, `webIfcEngine.webifc.spec.ts` and the
+  > `playwright-webifc-run` job are gone, and Share imports
+  > `@bldrs-ai/conway/web-ifc` directly. The MT follow-up below is moot.
+  > The `'web-ifc'` → Conway alias that stayed for `@bldrs-ai/ifclib`'s
+  > transitive import went on 2026-11-04 with ifclib 6.0.0. See
+  > `adapter-removal.md`'s status note.
+  > The rest of this slice is the historical record.
+
   **Done (2026-06).** The flag was secretly *dead*: `isWebIfcShimEnabled`
   in `tools/esbuild/defines.js` was hardcoded `true` (`// TODO: kill
   this`), so the `web-ifc → conway` alias was always applied and
@@ -1481,10 +1509,10 @@ production coupling.
 - ~~Delete `src/Infrastructure/IfcIsolator.js`'s `IfcContext` import.~~ Done — `IfcIsolator` moved to `src/viewer/three/` and no longer imports the fork's `IfcContext`.
 - Delete the §8.3 deprecation shim once the GLB-scene PR has cut over.
 - Update `DESIGN.md` and `CLAUDE.md` to point at `src/viewer/`.
-- ~~Drop `web-ifc` from build scripts.~~ **Superseded by the reframed slice 5f:** the `web-ifc` shim is kept as the Conway↔web-ifc engine flag; its eventual removal is a product call once Conway fully supersedes web-ifc, not a mechanical cleanup.
+- ~~Drop `web-ifc` from build scripts.~~ **Superseded by the reframed slice 5f:** the `web-ifc` shim is kept as the Conway↔web-ifc engine flag; its eventual removal is a product call once Conway fully supersedes web-ifc, not a mechanical cleanup. **Done 2026-11-01** by product-owner decision (slice 5f note).
 
 ### Phase 7 — OffscreenCanvas render worker (separate spec, post-merge)
-- Per §8.4 Move B. Becomes tractable only once the viewer is wholly under `src/viewer/`, because the worker boundary corresponds exactly to the `ShareViewer` facade. Out of scope for this doc; will get its own design.
+- Per §8.4 Move B. Becomes tractable only once the viewer is wholly under `src/viewer/`, because the worker boundary corresponds exactly to the `ShareViewer` facade. Out of scope for this doc; **it has its own design now: [offscreen-rendering.md](offscreen-rendering.md)** (inventory, platform check, spike, migration plan; story #2055, step 1 render-on-demand done in #2104).
 
 ---
 
@@ -1976,6 +2004,8 @@ The UI freezes on big models because Conway parse, geometry conversion, and BVH 
   - HMR for the render worker is more brittle; need a dedicated esbuild entry.
   - Firefox `OffscreenCanvas` for WebGL2 needs flag in older versions; Safari ≥17 only. Fall back to main-thread renderer behind a runtime check.
 - Cost: ~2 weeks. Risk: high if we want full feature parity.
+
+**Move B is specced in [offscreen-rendering.md](offscreen-rendering.md)** (it supersedes the bullets above; the engine worker it composes with is [engine-worker.md](engine-worker.md)).
 
 **Recommendation: do Move A inside Phase 3** (it falls naturally out of the `IfcModelService` worker boundary). **Spec Move B as a Phase 7** (post-three-bump, separate doc). Move A delivers most of the "UI doesn't freeze" win because Conway parse is the dominant blocker today.
 

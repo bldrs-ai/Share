@@ -186,3 +186,41 @@ closure that providers can call from anywhere via `getAuth0AccessToken()`.
 
 Full design rationale: `design/new/identity-decoupling-decisions.md`
 under "PR2 scope" and "Quota implementation".
+
+
+## Auth0 custom error page
+
+When a login fails before Auth0 can hand control back to the app (denied
+consent, a malformed authorize request, tenant misconfiguration, an outage),
+Auth0 shows an error page instead of redirecting. Ours is
+`public/auth/error/`, set in the Auth0 Dashboard → Settings → General →
+Error Pages → "Redirect users to your own error page" as
+**`https://bldrs.ai/auth/error/`**. Keep the trailing slash: that path is
+the directory's `index.html`, served as-is with no redirect hop. The tenant
+setting is per tenant, not per deploy, so previews can't be pointed at it;
+check a preview by hand with a URL like
+`/auth/error/?error=access_denied&error_description=test&tracking=abc123`.
+
+It is a static page (HTML + `error.css` + `error.js`), like
+`auth/gh/callback.html`, rather than an SPA route: it needs none of the
+viewer bundle and has to load when that bundle is the thing that's broken.
+Styles follow the design system, with values copied from `src/theme/`.
+
+Auth0 appends `error`, `error_description`, `tracking`, `client_id`,
+`connection` and `lang`, and anyone can craft that query, so `error.js`
+treats all of it as hostile:
+
+- It writes only `textContent` and attributes it builds itself.
+- `error`, `tracking`, `client_id` and `connection` are shown only when they
+  match a narrow charset allowlist. A value that doesn't is dropped, not
+  escaped.
+- The message is looked up from the `error` code in a fixed table.
+  `error_description` is **never rendered**, even as text, because that would
+  let a crafted link put any words it likes on a bldrs.ai page. It goes only
+  into the prefilled support email (cleaned of control and bidi characters
+  and capped), where the user reads it before sending.
+- `netlify.toml` gives `/auth/error/*` a same-origin-only CSP (no inline
+  script or style, no framing) plus `noindex` and `no-referrer`.
+
+Tests: `auth0ErrorPage.test.js` (jsdom, the sanitizing) and
+`auth0ErrorPage.spec.ts` (the real page in a browser, desktop + mobile).

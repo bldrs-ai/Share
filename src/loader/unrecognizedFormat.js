@@ -1,6 +1,3 @@
-import {captureMessage} from '@sentry/react'
-
-
 /**
  * The analytics label for every unrecognized-format alert, whichever way the
  * file arrived. A constant on purpose: the picker's alert text names the
@@ -9,7 +6,7 @@ import {captureMessage} from '@sentry/react'
 export const UNRECOGNIZED_FORMAT_ALERT_EVENT = 'Unrecognized model format'
 
 
-/** Longest extension kept as a tag; anything longer reads as `other`. */
+/** Longest extension kept as a token; anything longer reads as `other`. */
 const MAX_EXT_LENGTH = 12
 
 
@@ -24,7 +21,8 @@ const MAX_EXT_LENGTH = 12
  * fingerprint is the message text: the picker's text carries the file name,
  * so every rejected pick minted its own Sentry issue (95 of them, nearly all
  * one event, by 2026-11-01), and the family's volume was unreadable.
- * `message` is still what the dialog shows, unchanged.
+ * `message` is still what the dialog shows, unchanged; GA gets the constant
+ * {@link UNRECOGNIZED_FORMAT_ALERT_EVENT} and {@link unrecognizedFormatGaParams}.
  *
  * @param {string} message The text the dialog shows
  * @param {string} fileName The user's file name, reduced here to an
@@ -38,42 +36,38 @@ export function unrecognizedFormatAlert(message, fileName, entry) {
 
 
 /**
- * Count one rejected file in Sentry, as an `info` message rather than an
- * exception.
+ * The structured fields of one rejected file, as params on its GA `alert`
+ * event (AlertDialog, with {@link UNRECOGNIZED_FORMAT_ALERT_EVENT} as the
+ * message).
  *
  * Choosing a .rvt, .dwg or .zip is user input Share doesn't support yet, not
- * a code defect, so it must not count toward crash-free rates or read as a
- * bug in triage — the same call made for the unsupported IFC schema
- * (`loader/unsupportedSchema.js`) and the missing local upload
- * (`OPFS/reportUploadNotInBrowser.js`). It is still counted, because which
- * extensions users bring is a ranking of the formats worth adding: one issue
- * (the fingerprint), with the `upload.ext` tag's distribution as the ranking.
+ * a code defect, so it is counted in GA only (AGENTS.md, "PRs: a Reported
+ * Conditions section"). Until 2026-11 it was also an info-level Sentry
+ * message (SHARE-1X5); the `upload_ext` distribution is the same ranking of
+ * the formats worth adding that issue's `upload.ext` tag was.
+ *
+ * Both values are closed-ish tokens ({@link uploadExtension}, the `entry`
+ * enum), never the file name.
  *
  * @param {{ext: string, entry: string}} alert From {@link unrecognizedFormatAlert}
+ * @return {{upload_ext: string, upload_entry: string}}
  */
-export function reportUnrecognizedFormat(alert) {
-  try {
-    captureMessage('Unrecognized model format', {
-      level: 'info',
-      fingerprint: ['unrecognized-format'],
-      tags: {'upload.ext': alert.ext, 'upload.entry': alert.entry},
-    })
-  } catch (_) {
-    // Reporting is best-effort; the user already has the dialog.
-  }
+export function unrecognizedFormatGaParams(alert) {
+  return {upload_ext: String(alert?.ext ?? 'none'), upload_entry: String(alert?.entry ?? 'unknown')}
 }
 
 
 /**
- * A file name's last extension, lowercased, safe to use as a Sentry tag.
+ * A file name's last extension, lowercased, safe to use as an analytics param.
  *
- * Only the extension: the name is the user's own text and stays out of the
- * event's tags and grouping (the drop path's console warning still reaches
- * Sentry as a breadcrumb; see `utils/dragAndDrop.js`). A trailing `.gz` is
- * looked through, because the gzip envelope keeps the user's name
- * (`loader/gzipEnvelope.js`): `Tower.rvt.gz` is a rejected .rvt, and tagging
- * it `gz` would fold every compressed upload into one bucket. Bounded to a short alphanumeric token so the tag's value set stays
- * a closed-ish list of formats — `Tower_rev03.IFC.RVT` → `rvt`,
+ * Only the extension: the name is the user's own text and stays out of
+ * every analytics param (the console warnings that name it have it withheld
+ * from Sentry's breadcrumbs; see `privacy/sentryRedaction.js`). A trailing
+ * `.gz` is looked through, because the gzip envelope keeps the user's name
+ * (`loader/gzipEnvelope.js`): `Tower.rvt.gz` is a rejected .rvt, and counting
+ * it as `gz` would fold every compressed upload into one bucket. Bounded to a
+ * short alphanumeric token so the param's value set stays a closed-ish list
+ * of formats — `Tower_rev03.IFC.RVT` → `rvt`,
  * `model.ifc.log.html` → `html`; a name with no extension → `none`, and one
  * whose extension isn't a short ASCII token → `other`.
  *

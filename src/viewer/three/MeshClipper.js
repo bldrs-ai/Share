@@ -2,6 +2,7 @@ import {Vector3, Plane, Raycaster, Vector2, Box3, Sphere, Matrix3} from 'three'
 import {getMeshMaterials} from '../ShareModel'
 import debug from '../../utils/debug'
 import CutPlaneArrowHelper from './CutPlaneArrowHelper'
+import {requestPaint} from './renderDemand'
 
 
 /**
@@ -400,6 +401,8 @@ export default class MeshClipper {
         child.material.color.setHex(color)
       }
     })
+    // A colour is no change the render-on-demand hooks see.
+    requestPaint()
   }
 
 

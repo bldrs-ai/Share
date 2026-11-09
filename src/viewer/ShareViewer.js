@@ -36,7 +36,11 @@ import ThreeContext from './three/ThreeContext'
 import debug from '../utils/debug'
 import {occurrencePathKey} from '../utils/occurrencePaths'
 import {modelHasCapability} from './ShareModel'
+import {paintPreviewSelection} from './previewSelection'
+import {paintStreamingSelection, streamingTablesModel} from './streamingBatchPick'
 import {isFeatureEnabled} from '../FeatureFlags'
+import {requestPaint} from './three/renderDemand'
+import {viewRules} from './legacyViewRules'
 import {
   applyBatchedInstancePreselection,
   applyBatchedInstanceSelection,
@@ -157,10 +161,6 @@ ColorManagement.enabled = true
 const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
 
 
-const viewRules = {
-  'default': [],
-  'ch.sia380-1.heatmap': ['Rule1', 'Rule2'],
-}
 /* eslint-disable jsdoc/no-undefined-types */
 /**
  * ShareViewer — the top-level viewer facade for Bldrs Share.
@@ -368,6 +368,7 @@ export class ShareViewer {
   setEnvironmentBlur(sigma) {
     this._envBlur = sigma
     this._buildEnvironment(sigma, this._envType)
+    requestPaint()
   }
 
 
@@ -380,6 +381,7 @@ export class ShareViewer {
   setEnvironmentType(type) {
     this._envType = type
     this._buildEnvironment(this._envBlur, type)
+    requestPaint()
   }
 
 
@@ -481,6 +483,9 @@ export class ShareViewer {
         obj.castShadow = true
       }
     })
+    // Ground visibility, light pose and shadow casting: none of it is a
+    // change the render-on-demand hooks see (renderDemandHooks.js).
+    requestPaint()
   }
 
 
@@ -499,6 +504,7 @@ export class ShareViewer {
     if (key) {
       key.castShadow = enabled
     }
+    requestPaint()
   }
 
 
@@ -512,6 +518,7 @@ export class ShareViewer {
     if (this._groundPlane?.material) {
       this._groundPlane.material.opacity = opacity
     }
+    requestPaint()
   }
 
 
@@ -558,6 +565,9 @@ export class ShareViewer {
     for (const model of models) {
       this.applyLookToModel(model)
     }
+    // Tone mapping lives in the composer, lights and material params in
+    // uniforms: nothing here is a change the hooks see.
+    requestPaint()
   }
 
 
@@ -576,6 +586,7 @@ export class ShareViewer {
       m.roughness = config.roughness
       m.metalness = config.metalness
     })
+    requestPaint()
   }
 
 
@@ -590,6 +601,7 @@ export class ShareViewer {
     const light = this.context.getScene()?.getObjectByName?.(name)
     if (light) {
       light.intensity = value
+      requestPaint()
     }
   }
 
@@ -1114,7 +1126,7 @@ export class ShareViewer {
    */
   getInstanceIdsForOccurrencePath(
     modelID, occurrencePath, {includeDescendants = true, geometryExpressId = null} = {}) {
-    const model = this._modelById(modelID)
+    const model = this._modelOrStreamingTables_(modelID)
     if (!model || !Array.isArray(occurrencePath) || occurrencePath.length === 0) {
       return []
     }
@@ -1216,17 +1228,24 @@ export class ShareViewer {
    * all of them belong to the sole root of a one-product file, and in a
    * multi-root file `instanceOwners[i]`, the owner of `instanceIds[i]`, says
    * which part (`utils/occurrencePaths.js#rootLevelInstancesOfProduct`).
+   * `instanceGeometryIds[i]` is its geometry (shell) express id, null where
+   * the tables carry none: with the owner, it names the one shell a pick
+   * that carries no instance hit (a STEP preview mesh, CadView#selectFromInstancePick).
    *
    * @param {number} modelID
-   * @return {{instanceIds: number[], parentExpressIds: number[], instanceOwners: number[]}}
+   * @return {{instanceIds: number[], parentExpressIds: number[], instanceOwners: number[],
+   *   instanceGeometryIds: Array<number|null>}}
    */
   getRootLevelInstances(modelID) {
     const instanceIds = []
     const instanceOwners = []
+    // Not `instanceGeometryIds`: a push to that name reads as a batch side
+    // table write to batchedEditGuard.test.js.
+    const geometryIds = []
     const parentExpressIds = new Set()
-    const model = this._modelById(modelID)
+    const model = this._modelOrStreamingTables_(modelID)
     if (!model || typeof model.traverse !== 'function') {
-      return {instanceIds, parentExpressIds: [], instanceOwners}
+      return {instanceIds, parentExpressIds: [], instanceOwners, instanceGeometryIds: geometryIds}
     }
     model.traverse((obj) => {
       // BatchedMesh render path: per-batch tables, instance id = global
@@ -1236,6 +1255,7 @@ export class ShareViewer {
           if (obj.instanceOccurrencePaths[batchId]?.length === 0) {
             instanceIds.push(obj.instanceOccurrenceIds[batchId])
             instanceOwners.push(obj.instanceParents[batchId])
+            geometryIds.push(obj.instanceGeometryIds?.[batchId] ?? null)
             parentExpressIds.add(obj.instanceParents[batchId])
           }
         }
@@ -1250,11 +1270,12 @@ export class ShareViewer {
           const owner = map.getParentExpressIdByInstance(instanceId)
           instanceIds.push(instanceId)
           instanceOwners.push(owner)
+          geometryIds.push(map.getGeometryExpressIdByInstance?.(instanceId) ?? null)
           parentExpressIds.add(owner)
         }
       }
     })
-    return {instanceIds, parentExpressIds: [...parentExpressIds], instanceOwners}
+    return {instanceIds, parentExpressIds: [...parentExpressIds], instanceOwners, instanceGeometryIds: geometryIds}
   }
 
 
@@ -1510,6 +1531,8 @@ export class ShareViewer {
     }
     pool.mesh.userData.sourceMesh = pickedMesh
     pool.mesh.visible = true
+    // `visible` is no change the hooks see (renderDemandHooks.js).
+    requestPaint()
 
     if (!pool.inHighlighter) {
       this.highlighter.addToHighlighting(pool.mesh)
@@ -1584,7 +1607,33 @@ export class ShareViewer {
       this.highlighter.removeFromHighlighting(pool.mesh)
       pool.inHighlighter = false
     }
+    // Called on every hover miss, so ask only when this hid something.
+    if (pool.mesh.visible) {
+      requestPaint()
+    }
     pool.mesh.visible = false
+  }
+
+
+  /**
+   * The model, or while a load is still streaming and has none, its rows
+   * (`streamingBatchPick.js#streamingTablesModel`): the per-instance queries
+   * then answer for what is on screen, as they will for the finished model.
+   *
+   * @param {number} modelID
+   * @return {object|null} something with `traverse`
+   */
+  _modelOrStreamingTables_(modelID) {
+    const model = this._modelById(modelID)
+    if (model) {
+      return model
+    }
+    try {
+      return streamingTablesModel(this.context?.getScene?.() ?? null)
+    } catch {
+      // A disposed viewer.
+      return null
+    }
   }
 
 
@@ -1824,6 +1873,55 @@ export class ShareViewer {
   /** @param {Array<Mesh>} meshes */
   setHighlighted(meshes) {
     this.highlighter.setHighlighted(meshes)
+  }
+
+
+  /**
+   * Paint a selection made while a Conway load is still in flight, before
+   * there is a model for `setSelection` to paint: on the parse-time preview
+   * meshes (open-205 #2043), and on the durable batches streaming in
+   * (`streamingBatchPick.js`), which keep painting rows that arrive later. A
+   * no-op once the load has finished; the finished model's highlight is
+   * `setSelection`'s.
+   *
+   * @param {Array<number>} expressIds the selected elements
+   * @param {object} [narrowing]
+   * @param {Array<number>} [narrowing.instanceIds] a scene pick's instance:
+   *   on the streaming batches, only it is painted
+   * @param {Array<number>|null} [narrowing.occurrencePath] a STEP
+   *   occurrence: its rows, and its descendants', are painted, including
+   *   rows that stream in later
+   * @param {number|null} [narrowing.solidExpressId] the occurrence's one
+   *   named body, when the selection is a body
+   * @param {boolean} [narrowing.instancesExact] `instanceIds` are a scene
+   *   pick's own, which then decide alone
+   * @param {number|null} [narrowing.rootGeometryId] the shell a root-level
+   *   STEP pick hit (NavTreeSlice#selectedRootGeometryId), which alone tells
+   *   it from the product's other root shells
+   * @return {number} preview meshes and streaming rows painted
+   */
+  setPreviewSelection(expressIds, {
+    instanceIds = [], occurrencePath = null, solidExpressId = null, instancesExact = false,
+    rootGeometryId = null,
+  } = {}) {
+    let scene = null
+    try {
+      scene = this.context?.getScene?.() ?? null
+    } catch {
+      // A disposed viewer (a selection effect outliving a model switch).
+      return 0
+    }
+    if (scene === null) {
+      return 0
+    }
+    const material = this.selector?.getSelectionMaterial?.() ?? null
+    const painted = paintPreviewSelection(scene, expressIds, material, occurrencePath, solidExpressId, rootGeometryId) +
+      paintStreamingSelection(scene,
+        {parents: expressIds, instances: instanceIds, occurrencePath, solidExpressId, instancesExact, rootGeometryId},
+        material?.color ?? null)
+    // The scene changed under a viewer that may be painting on demand.
+    this.context.getRenderDemand?.()?.invalidate()
+    return painted
   }
 
 

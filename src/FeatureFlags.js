@@ -158,6 +158,67 @@ export const flags = [
   // milestone: PSB 77s -> 57s); `?feature=disableStreamOpen` remains
   // the classic-path escape hatch and this flag the demand kill switch.
   {name: 'demandGeometry', isActive: true},
+  // Per-model engine worker (design/new/engine-worker.md, open-205 #2053):
+  // each model's Conway engine runs in its own module Worker and is freed
+  // by terminate(). An IFC or STEP load parses, pumps, answers property
+  // reads and captures its GLB artifact in the worker
+  // (engine/engineModelLoad.js); `window.__bldrsEngine` (engineDevHook.js)
+  // drives sessions directly when the URL names this flag.
+  // Default-ON since §7 step 9. Where a load's engine runs is decided in ONE
+  // place, `engine/engineRoute.js#mainThreadEngineReason`: the main-thread
+  // engine stays permanently (§8 item 6) for `disableEngineWorker` below,
+  // for the legacy `?view=` rules and for the legacy `?feature=bot` chat,
+  // both of which read the main-thread engine directly. Where module workers
+  // are missing, or a worker fails to start, the same handler runs in
+  // process on this thread (spawnEngine.js).
+  // Do NOT roll back by setting this to false: `?feature=engineWorker` in a
+  // URL would still turn it on for that link. Roll back with
+  // `disableEngineWorker` below.
+  {name: 'engineWorker', isActive: true},
+  // OFF-switch for the engine worker above, same inverted shape and reason as
+  // `disableStreamOpen`: `?feature=` can only turn flags ON, so
+  // `?feature=disableEngineWorker` is the per-session way back to the
+  // main-thread engine (parseIfcWithConway), for one A/B or one bad model.
+  // Setting it `isActive: true` here is the PROD ROLLBACK: engineRoute.js
+  // reads the static value before any URL flag, so no link can opt back into
+  // the worker (engine-worker.md §7.2, "Rolling back").
+  {name: 'disableEngineWorker', isActive: false},
+  // Render on demand for the whole session (open-205 story #2055,
+  // design/new/offscreen-rendering.md §7.1): between loads as well as during
+  // them (#2043), the viewer paints only when something changed, so an idle
+  // viewer paints nothing. On by default since the flip after #2096's
+  // burn-in. src/viewer/three/renderDemand.js has the layers that ask for a
+  // paint; DESIGN.md §"Render loop & perf monitor" the summary; and
+  // viewer/three/renderOnDemandMode.js is the one predicate the viewer reads.
+  // Do NOT roll back by setting this to false: `?feature=renderOnDemand` in a
+  // URL would still turn it on for that link. Roll back with
+  // `disableRenderOnDemand` below.
+  {name: 'renderOnDemand', isActive: true},
+  // OFF-switch for render-on-demand above, the same inverted shape as
+  // `disableEngineWorker`: `?feature=` can only turn flags ON, so
+  // `?feature=disableRenderOnDemand` is the per-session way back to painting
+  // every frame between loads, for a stale-frame report or an A/B. Setting
+  // it `isActive: true` here is the PROD ROLLBACK: renderOnDemandMode.js
+  // reads the static value before any URL flag, so no link can opt back into
+  // on-demand painting (DESIGN.md §"Render loop & perf monitor", "Rolling
+  // back").
+  {name: 'disableRenderOnDemand', isActive: false},
+  // Kill switch for the engine worker's OPFS sync access handle
+  // (engine-worker.md §7 step 4): read the source through the Blob store
+  // instead, as on the main thread. `?feature=` can only turn flags on, so
+  // this is phrased as the off switch.
+  {name: 'disableEngineSyncHandle', isActive: false},
+  // Kill switch for the engine worker's index sidecars (engine-worker.md
+  // §7 step 8, §11; engine/engineSidecars.js): neither reopen a model from
+  // its persisted sidecar nor write one, so every open parses.
+  {name: 'disableEngineSidecar', isActive: false},
+  // Kill switch for the Blob store's whole-file read (Share#2092;
+  // engine/engineSources.js#makeBlobStore): where the engine reads its OPFS
+  // source through the Blob store (Firefox and Safari, which have no
+  // read-only sync access handles), read windows from the Blob for the
+  // whole load instead of holding the file for it. Also the A/B for
+  // measuring what the whole-file read buys.
+  {name: 'disableEngineResidentSource', isActive: false},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-
@@ -302,12 +363,17 @@ export const flags = [
   // `?feature=disableLoadOverlay` leaves the canvas live so a load can be
   // inspected while it streams.
   //
-  // Note when using it: taking the camera fires `controlstart`, which
-  // stops ProgressiveLoadSession's camera follow permanently (by design
-  // — the user outranks the follow). So the first interaction freezes
-  // the camera for the rest of the load. That is what makes the flag
-  // useful for "where did it go", and also why the follow's own framing
-  // can't be observed in the same run.
+  // Since open-205 the overlay lifts by itself at the first mesh (#2043),
+  // during the parse, so this only adds the stretch before it: download,
+  // wasm init, and the parse of a model too small to preview.
+  //
+  // Note when using it: taking the camera (a drag's `controlstart`, a
+  // wheel's `control`) stops ProgressiveLoadSession's camera follow
+  // permanently, and skips the end-of-load fit (by design — the user
+  // outranks the follow; design/new/in-app-model-switch.md §4.2a). So the
+  // first interaction freezes the camera for the rest of the load. That is
+  // what makes the flag useful for "where did it go", and also why the
+  // follow's own framing can't be observed in the same run.
   //
   // Inverted semantics on purpose: `?feature=` can only turn flags ON,
   // so an off-switch for default-on behavior has to be an off-flag.

@@ -1,5 +1,8 @@
 // Mock the entire module
+import {captureMessage} from '@sentry/react'
 import * as OPFSService from '../OPFS/OPFSService.js'
+import {HTTP_NOT_FOUND} from '../net/http'
+import {gtagEvent} from '../privacy/analytics'
 import {
   writeSavedGithubModelOPFS,
   getModelFromOPFS,
@@ -17,6 +20,15 @@ import {
 
 
 jest.mock('../OPFS/OPFSService.js')
+jest.mock('@sentry/react', () => ({captureMessage: jest.fn()}))
+// Captures what utils.js logs: a console.error line becomes a Sentry breadcrumb.
+jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn()}))
+const mockDebugError = jest.fn()
+jest.mock('../utils/debug', () => ({
+  __esModule: true,
+  default: () => ({log: jest.fn(), warn: jest.fn(), error: mockDebugError, time: jest.fn(), timeEnd: jest.fn()}),
+  WARN: 2,
+}))
 
 
 /**
@@ -187,6 +199,71 @@ describe('OPFS Test Suite', () => {
       )
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalledTimes(1) // Ensure it's called to clean up
+    })
+
+    /**
+     * Run downloadToOPFS against a worker that sends one reply.
+     *
+     * @param {object} reply fields the worker sends, besides the request id
+     * @param {string} [commitHash]
+     * @return {Promise<*>}
+     */
+    function downloadWithReply(reply, commitHash = 'example.com') {
+      OPFSService.initializeWorker.mockReturnValue({
+        addEventListener: jest.fn((_, handler) => {
+          process.nextTick(() => handler({data: {requestId: currentRequestId(), ...reply}}))
+        }),
+        removeEventListener: jest.fn(),
+      })
+      return downloadToOPFS('https://example.com/secret-plan.ifc', '/secret-plan.ifc', commitHash,
+        'BldrsLocalStorage', 'V1', 'Projects')
+    }
+
+    it('carries the not-cached fact on the file and reports nothing itself', async () => {
+      // Loader.js#load reports it once readModel succeeds; a report here would
+      // double a load that fails afterwards.
+      gtagEvent.mockClear()
+      const file = await downloadWithReply({completed: true, event: 'download', cached: false, file: new Blob(['x'])})
+
+      expect(file.opfsNotCachedKind).toBe('external')
+      expect(gtagEvent).not.toHaveBeenCalled()
+      expect(captureMessage).not.toHaveBeenCalled()
+    })
+
+    it('reports nothing for a download that was cached', async () => {
+      gtagEvent.mockClear()
+      await downloadWithReply({completed: true, event: 'download', file: new Blob(['x'])})
+
+      expect(captureMessage).not.toHaveBeenCalled()
+      expect(gtagEvent).not.toHaveBeenCalled()
+    })
+
+    it('rejects with the worker\'s condition and status and sends no event itself', async () => {
+      // A failed download is reported by Loader.js#load, once its direct
+      // fetch has succeeded; reporting here too would double a failed load.
+      const error = await downloadWithReply(
+        {error: 'downloadModelToOPFS: HTTP 404 for /index.ifc; not cached', condition: 'http-error', status: HTTP_NOT_FOUND},
+        'bldrs-ai').catch((e) => e)
+
+      expect(error.opfsCondition).toBe('http-error')
+      expect(error.opfsStatus).toBe(HTTP_NOT_FOUND)
+      expect(error.opfsKind).toBe('local')
+      expect(captureMessage).not.toHaveBeenCalled()
+    })
+
+    it('logs a conditioned worker error without the text that could name the file', async () => {
+      // Red if the line goes back to logging data.error: the console line
+      // becomes a Sentry breadcrumb, and a private model's path must not.
+      mockDebugError.mockClear()
+      await downloadWithReply({
+        error: 'HTTP 404 for /secret-plan.ifc https://example.com/secret-plan.ifc',
+        condition: 'http-error',
+        status: HTTP_NOT_FOUND,
+      }).catch(() => {})
+
+      expect(mockDebugError).toHaveBeenCalledTimes(1)
+      expect(JSON.stringify(mockDebugError.mock.calls)).not.toMatch(/secret-plan|example\.com/)
+      expect(JSON.stringify(mockDebugError.mock.calls)).toMatch(/http-error/)
     })
 
     it('should call onProgress with progress data', async () => {
@@ -587,7 +664,8 @@ describe('OPFS Test Suite', () => {
 
       const result = await clearOPFSCache()
 
-      expect(result).toBe(true)
+      // Nothing was locked: nothing left behind.
+      expect(result).toEqual([])
       expect(OPFSService.initializeWorker).toHaveBeenCalled()
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalledTimes(1)

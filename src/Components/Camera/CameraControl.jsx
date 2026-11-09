@@ -9,6 +9,7 @@ import {
   removeHashListener,
 } from '../../utils/location'
 import {roundCoord} from '../../utils/math'
+import {noteUserCamera} from '../../viewer/three/renderDemand'
 import {
   HASH_PREFIX_CAMERA,
   removeCameraUrlParams,
@@ -128,6 +129,9 @@ export function setCameraFromParams(encodedParams, cameraControls) {
   const coords = parseHashParams(encodedParams)
   // console.trace('setCameraFromParams', coords, new Error())
   if (coords) {
+    // A pose the user asked for, by link or by navigating to one: theirs, not
+    // a load's camera follow's to overwrite (renderDemand.js#noteUserCamera).
+    noteUserCamera(cameraControls)
     cameraControls.setPosition(coords[0], coords[1], coords[2], true)
     const extendedCoordsSize = 6
     if (coords.length === extendedCoordsSize) {

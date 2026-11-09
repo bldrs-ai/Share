@@ -15,8 +15,42 @@ conway#520 — merge that before this doc, or the reference dangles).
 A **coordinator** session plans, defines issues and manages the
 queue; it dispatches one **sub-agent per issue** for the hands-on
 work — issue handling, PR authoring, review and release lifecycle.
-Use a Fable-class model for the coordinator and Opus-class for the
-sub-agents.
+Use an Opus-class model for the coordinator. Pick each sub-agent's
+model by the task, not by habit: quota is finite, and the
+cheapest model that can do the job well is the right one.
+
+| Task | Model | Examples |
+|---|---|---|
+| Simple | Haiku-class | pin bumps; a one-file test fix whose cause is already known; issue filing; mechanical edits and renames |
+| Normal | Sonnet-class | a well-scoped fix or feature; a reviewer's findings on an existing PR; a known-cause bug with a clear fix |
+| Complex | Opus-class | profiling or diagnosing an unknown cause; design choices with trade-offs; multi-repo chains (conway → npm → Share); measurement work that has to decide something |
+
+A **fallback reviewer** ([§"Review"](#review-codex-first-sub-agent-on-timeout))
+is Sonnet-class by default, given the hazard-pointing brief that
+section requires. Use Opus-class when the change rests on an
+invariant a diff read can miss: concurrency and locking, a
+zero-digest-churn claim, cross-repo ordering, or a design trade-off.
+
+Haiku and Sonnet sub-agents need a **directed brief**: more explicit
+than an Opus brief, so they work to a plan instead of exploring. On
+top of [the dispatch brief](#the-dispatch-brief), give them:
+
+- for a code change:
+  - the exact files to change, and the approach (the function to add,
+    the call site, the shape of the change);
+  - the tests to write, each with the check that it fails without the
+    fix (rubric item 6). A change with no new test, such as a pin bump
+    or a pure rename, names the existing checks that cover it instead;
+- for a task that changes no code (filing an issue, posting a status):
+  the exact output expected and where it goes, and the facts to put in
+  it, with their sources;
+- the exact commands to run (lint, the Jest files, the Playwright
+  specs, and the bench lock where the shared box needs it);
+- the stop conditions: what to report, and when to stop and ask
+  instead of widening the change.
+
+An agent already running keeps its model. Re-tier at the next
+dispatch rather than restarting mid-task.
 
 Sequence agents that share a branch or files; parallelize only
 across disjoint trees. A burndown branch accumulating several

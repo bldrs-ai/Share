@@ -578,6 +578,45 @@ describe('loader/glbExport', () => {
       expect(ifcManager.getSpatialStructure).toHaveBeenCalledWith(2, true)
     })
 
+    // A worker-engine load (engine-worker.md §7 step 5): no engine on the
+    // page holds the model, so its captures come back from the worker's
+    // `capture` op instead of being read through `ifcManager`.
+    it('embeds what a `capture` job returns, and never reads ifcManager', async () => {
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(fakeGlbBytes.buffer))
+      let injected = null
+      mockInjectGlbExtensions.mockImplementation((bytes, extensions) => {
+        injected = extensions
+        return {bytes, stats: {
+          addedExtensions: 0, addedBinBytes: 0, addedSceneExtras: 0,
+          addedSceneName: 0, skippedNames: [],
+        }}
+      })
+      const tree = {expressID: 9, type: 'IFCPROJECT'}
+      const container = new Uint8Array([1, 2, 3])
+      const capture = jest.fn(() => Promise.resolve(
+        {spatialTree: tree, elementProperties: container, geometryItemIdentities: null}))
+      const ifcManager = {getSpatialStructure: jest.fn(), getItemProperties: jest.fn(), getPropertySets: jest.fn()}
+
+      const ok = await exportAndCacheGlb({model: {fake: 'model'}, ...ctx, ifcManager: null, capture})
+
+      expect(ok).toBe(true)
+      expect(capture).toHaveBeenCalledWith({geometryExpressIds: null})
+      expect(ifcManager.getSpatialStructure).not.toHaveBeenCalled()
+      expect(injected.find((e) => e.name === 'BLDRS_spatial_tree').data).toBe(tree)
+      expect(injected.find((e) => e.name === 'BLDRS_element_properties').precompressed).toBe(container)
+    })
+
+    it('writes nothing when the capture job throws (an artifact without properties would be served on)', async () => {
+      // e.g. the worker session closed under the idle writer.
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(fakeGlbBytes.buffer))
+      const capture = () => Promise.reject(new Error('engine session closed'))
+
+      const ok = await exportAndCacheGlb({model: {fake: 'model'}, ...ctx, capture})
+
+      expect(ok).toBe(false)
+      expect(mockWriteGlbBytesToOPFS).not.toHaveBeenCalled()
+    })
+
     it('returns false (no throw) when the exporter produces no bytes', async () => {
       mockExporterParse.mockImplementation((_input, _onDone, onError) => onError(new Error('nope')))
       const ok = await exportAndCacheGlb({model: {}, ...ctx})

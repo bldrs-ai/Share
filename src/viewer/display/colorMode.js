@@ -3,6 +3,7 @@ import {forEachActiveInstance} from '../ifc/batchedInstanceTables'
 import {eachBatch} from '../ifc/batchedModel'
 import {repaintBatchedColors} from '../ifc/batchedHighlight'
 import {computePartPalette, paletteUnit, writePaletteColors} from '../ifc/productPalette'
+import {requestPaint} from '../three/renderDemand'
 
 
 /**
@@ -158,5 +159,8 @@ export function setColorMode(model, mode) {
   }
 
   repaintBatchedColors(model)
+  // setColorAt is hooked (renderDemandHooks.js); ask anyway, as every
+  // display axis does, so the mode never rests on a hook to show.
+  requestPaint()
   return palette !== null
 }

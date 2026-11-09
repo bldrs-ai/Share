@@ -25,6 +25,8 @@
 import {analyzeHeader, supportedTypes} from '../Filetype'
 import debug, {WARN} from '../utils/debug'
 import {archiveGuidance} from './formatGuidance'
+import {consoleFileName} from '../privacy/sentryRedaction'
+import {PART21_LOADER_TYPES} from './part21Formats'
 import {extensionTag, unrecognizedFormatAlert} from './unrecognizedFormat'
 import {
   MAX_TOTAL_INFLATED_BYTES,
@@ -62,10 +64,6 @@ const ZIP_MODEL_TYPES = new Set(['usdz', 'sog'])
 // The archive type in `supportedTypes`. Inside another archive it is opened
 // one level down, and no further.
 const IFC_ZIP = 'ifczip'
-
-// What a `.ifczip` may hold: conway's part-21 formats, the ones the IFC arm
-// of `findLoader` that it shares can parse.
-const PART21_TYPES = new Set(['ifc', 'step', 'stp'])
 
 
 // A `.gltf` names its buffers and textures by URI. Out of an archive it is
@@ -238,8 +236,11 @@ export function openUploadThroughArchive(file, {entry, alert, open}) {
     }
     if (resolution.kind === 'none') {
       // The console's record of which file, as the drop seam keeps for any
-      // rejected upload; the alert carries only extensions.
-      debug(WARN).warn(`modelArchive: "${file.name}" holds no model Share opens (${resolution.exts.join(', ')})`)
+      // rejected upload; the alert carries only extensions. consoleFileName
+      // marks the name for withholding from Sentry's breadcrumb of this line
+      // (`privacy/sentryRedaction.js`).
+      debug(WARN).warn(
+        `modelArchive: ${consoleFileName(file.name)} holds no model Share opens (${resolution.exts.join(', ')})`)
       alert(noModelInArchiveAlert(file.name, entry, resolution.exts))
       return 'refused'
     }
@@ -293,7 +294,7 @@ export async function unwrapIfcZip(modelData) {
   if (resolution.kind === 'model' && resolution.ext === undefined) {
     return {modelData, type: 'ifc'}
   }
-  if (resolution.kind === 'model' && PART21_TYPES.has(resolution.ext)) {
+  if (resolution.kind === 'model' && PART21_LOADER_TYPES.has(resolution.ext)) {
     // An ArrayBuffer, as every other path hands the IFC parser. The entry's
     // buffer is exactly its bytes: `extractZipEntry` sizes it to the entry.
     return {modelData: resolution.bytes.buffer, type: resolution.ext}

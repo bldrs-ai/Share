@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Bldrs Share — IFC/CAD model viewer in the browser, with multiple cloud sources (GitHub, Google Drive). React + MUI front end, Conway and web-ifc engines.
+Bldrs Share — IFC/CAD model viewer in the browser, with multiple cloud sources (GitHub, Google Drive). React + MUI front end, Conway engine.
 
 This file is the router for AI assistants working in this repo. Keep it small. Topic docs are linked below; read on demand, not eagerly.
 
@@ -42,8 +42,8 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   then close or narrow its issues (partly-addressed → a comment saying
   what's left, not a close).
   **What the gate covers:** `build` (main.yml) and the `test-flows` jobs
-  (`playwright-run` — the required aggregator over four shards — and
-  `playwright-webifc-run`) are skipped on drafts. **Netlify deploy previews still run** —
+  (`playwright-run` — the required aggregator over four shards) are
+  skipped on drafts. **Netlify deploy previews still run** —
   they come from Netlify's GitHub integration, not Actions — so a draft
   normally has a preview URL to click through. (`tools/netlify/ignore-build.sh`
   skips the deploy when every changed file matches `.md` / `design/` /
@@ -91,6 +91,34 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   re-blessing regression baselines, closing issues someone else filed —
   or for a decision the measurements genuinely don't settle, and say
   which it is.
+- **IFC and STEP converge.** The two pipelines (open, index, tree, properties, geometry pump, engine worker, export) should mostly converge over time. When you touch one, look for the shared seam first: extract shared modules rather than adding a format-specific copy, and route both formats through it. A format difference that has to stay is data (e.g. STEP's buffered source and occurrence paths vs IFC's express IDs), and the code that keeps it says why. New engine work lands for both formats, or names the follow-up for the other.
+- **PRs: a "Reported Conditions" section.** A PR that adds or changes
+  a failure path, a fallback or a degraded state says, in a
+  `## Reported Conditions` table in its description, one row per
+  condition: what the user sees, what reaches Sentry (level,
+  fingerprint, tags, call site), what reaches GA (event, params), and
+  why. A PR with none says so in one line; a null result is a result.
+  **Routing:** Sentry gets only *immediately actionable* conditions, at
+  `error` or `warning` — something someone should go fix (a hosted
+  model answering 404, a fallback that broke). Diagnostic signal that
+  is only useful after the fact — expected, self-healing, or
+  volume-only (an evicted cache entry, a browser limit, a skipped
+  preview unit) — goes to GA through `gtagEvent`
+  (`src/privacy/analytics.js`), not as an info-level Sentry message;
+  migrate an existing info reporter when you touch it. Every Sentry
+  error/warning also sends one coarse `reported_condition` GA event per
+  session per (level, category), automatically from `beforeSend`
+  (`src/index/sentry.js`), so a reporter sends to Sentry or to GA, never
+  both; one that must do both (`trackAlert`'s `alert` event) tags its
+  Sentry capture `ga_counted` so the shadow skips it. **One failure, one
+  event:** report a recovered fallback only once the load has
+  succeeded, and leave a failed load to CadView's `captureException`.
+  **Privacy:** neither sink ever gets a private model's file name, URL
+  or path. Send structured fields (source kind, condition, HTTP status)
+  rather than free text, and redact (`src/privacy/sentryRedaction.js`)
+  so the console keeps the real names. Workers have no Sentry: reply
+  with structured fields and report from the page. Worked example:
+  Share#2103.
 - **PRs: auto-subscribe to CI / review activity.** Immediately after `create_pull_request` succeeds, call `subscribe_pr_activity` for that PR without asking. The default-prompt asks first — for this repo, skip that question and just subscribe. Babysitting is the expected mode here: watch CI, autofix tractable failures, respond to review comments per the system-prompt rules (small + confident → push the fix; ambiguous or architecturally significant → `AskUserQuestion` first; no-op-able → skip silently). Only `unsubscribe_pr_activity` when the user explicitly says to stop.
 
 
@@ -99,7 +127,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | If you're working on… | Read |
 |---|---|
 | Module boundaries, top-level architecture | [DESIGN.md](DESIGN.md) |
-| Render loop, `setRenderUpdate` seam, `?feature=perf` panel | [DESIGN.md](DESIGN.md) §"Render loop & perf monitor" |
+| Render loop, `setRenderUpdate` seam, `?feature=perf` panel, render-on-demand (on by default; `disableRenderOnDemand` is the kill switch and prod rollback): what must ask for a paint (`requestPaint`), what the hooks and probe catch, and how to roll back | [DESIGN.md](DESIGN.md) §"Render loop & perf monitor" |
 | Code style, lint rules | [STYLE.md](STYLE.md) |
 | Writing an assertion that can actually fail — the vacuous-assertion shapes seen in practice, the break-it-and-watch-it-go-red check, and why a feature needs one test of the user's own action (not just proxies), across every way its artifact reaches the viewer | [STYLE.md](STYLE.md) §"Assertions must be able to fail" |
 | Build, dev server, CI, Playwright setup | [PLAYBOOK.md](PLAYBOOK.md) |
@@ -115,7 +143,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Route schemas, URL parsing | [src/routes/README.md](src/routes/README.md) |
 | Keeping the test console clean — fix `act()` warnings, divert+assert expected `[glb]` output, narrow `suppressActWarnings()`, back a global mute with a static test (`singleThreeInstance.test.js`), jsdom canvas stubs | [PLAYBOOK.md](PLAYBOOK.md) §"Keep the test console clean" (+ [STYLE.md](STYLE.md) §"Console hygiene") |
 | Dev HTTPS certificate setup | [tools/esbuild/certificates/README.md](tools/esbuild/certificates/README.md) |
-| Cloud sources, OAuth flows, token storage, Auth0 gate | [src/connections/README.md](src/connections/README.md) |
+| Cloud sources, OAuth flows, token storage, Auth0 gate, the Auth0 custom error page (`public/auth/error/`, the URL set in the Auth0 tenant, why `error_description` is never rendered) | [src/connections/README.md](src/connections/README.md) |
 | Sharing PR3 (GitHub adapter) carry-over notes | [design/new/sharing-pr3-github.md](design/new/sharing-pr3-github.md) |
 | Marketing / blog site (Next.js SSG, sibling build to the viewer SPA), MDX content collections, SEO pipeline | [marketing/README.md](marketing/README.md) |
 | AdSense / ads strategy, route policy, test-hermeticity rules | [design/new/ads.md](design/new/ads.md) |
@@ -132,13 +160,15 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Usage quotas: what "private" means, tiers (one definition, `src/quota/limits.js`; signed-out users are never metered, and signing out forgets Drive so that can't be a bypass), rolling 7-day window, `record-load` server gate, the same slots deciding free GLB exports (§"Exports use the same slots"), GitHub privacy detection, Drive visibility (link-shared files are public; the client classifies, the server trusts it: §"Drive visibility"), OPFS local fallback, `quotas` feature flag; why local files are unmetered and the `meterLocalFiles` abuse switch (§"Metering local files again"); how the pricing page's quota copy is built from the enforced constants (`marketing/src/lib/pricingPlans.mjs`) and tripwired by `tools/marketing/pricingTiers.test.js` (§"Pricing copy"); the GA4 growth-funnel events (`quota_limit_reached`, `login`, `begin_checkout`, `subscription_started`/`_ended`) the bizdev dashboard reads, where each fires and how each is deduped (§"Funnel analytics"); `subscription_started`/`_ended` sent server-side by stripe-webhook via the Measurement Protocol once per subscription status transition, attributed through checkout's `client-reference-id`, the owner's GA secret + Netlify env setup, and why the browser's own sighting is now `subscription_*_client` (§"Server-side subscription events"); the normalized `model_view` / `model_share` / `model_export` events (tier × source × gate, `trackModelAction`) and which legacy event each shadows (§"Analytics: normalized tier events") | [design/new/quotas.md](design/new/quotas.md) |
 | Conway-direct IFC pipeline, IfcInstanceMap, per-instance picking, `?feature=conwayDirectIfc` | [design/new/viewer-replacement.md](design/new/viewer-replacement.md) §3b |
 | Opening a model without a page reload (`open-205`, #2011): what `navigateToModel`'s reload frees today (one Conway WASM instance per viewer, `CloseModel` frees ~nothing, what pins the old engine), per-model state that goes stale in-app, cancellable teardown, "once per page load" semantics, the GC-backed memory E2E, and the hard-coded `modelID = 0` blocking multi-model | [design/new/in-app-model-switch.md](design/new/in-app-model-switch.md) |
-| Moving three.js rendering off the main thread (`open-205`): the inventory of everything that touches the renderer, scene or camera from main (file:line, classed moves / proxy / blocks / dead), OffscreenCanvas + WebGL2-in-worker support per browser incl. the Ventura and nested-worker caveats, context loss and the one-shot canvas transfer, camera-controls' DOM shims, the spike's frame-time and input-latency ratios, why one render worker beside the per-model engine workers (geometry over a `MessageChannel`, transferred, no SharedArrayBuffer), why a render worker alone doesn't fix input latency, the main↔worker API, the same-thread fallback, and the render-on-demand first step | [design/new/offscreen-rendering.md](design/new/offscreen-rendering.md) |
+| Moving three.js rendering off the main thread (`open-205`): the inventory of everything that touches the renderer, scene or camera from main (file:line, classed moves / proxy / blocks / dead), OffscreenCanvas + WebGL2-in-worker support per browser incl. the Ventura and nested-worker caveats, context loss and the one-shot canvas transfer, camera-controls' DOM shims, the spike's frame-time and input-latency ratios, why one render worker beside the per-model engine workers (geometry over the engine's `open({stream: {sink}})` `MessageChannel`, transferred, with `account` events and drain acks keeping the host's memory budget; no SharedArrayBuffer; engine-worker.md §9 is the engine-side source), why a render worker alone doesn't fix input latency, the main↔worker API, the same-thread fallback, and the migration plan with each step's status: step 1 render-on-demand is done (#2104), steps 7.2–7.6 are open sub-issues of #2055 | [design/new/offscreen-rendering.md](design/new/offscreen-rendering.md) |
+| Picking open-205 / engine-worker work back up after a break | [design/new/engine-worker.md](design/new/engine-worker.md) §"Resume here" |
+| Running each model's Conway engine in its own Web Worker (`open-205`, absorbs #2031): the audit of main-thread engine assumptions in Share and Conway (sync heap reads in the batch builder, the GLB writer's property capture, the load report's engine-side signals; conway#540's `isWebPlatform` shim), the per-worker memory floor and what `terminate()` frees, the message protocol and async read surface, the live-worker cap with LRU eviction and index-only rehydrate from OPFS, what survives an eviction, STEP vs the mesh loaders, where it meets OffscreenCanvas rendering, and the IFC/STEP pipeline map — every stage from route to cache hit, what one seam serves both formats, what differs as data and why, and what is left to converge (§11) | [design/new/engine-worker.md](design/new/engine-worker.md) |
 | Editing a loaded model (Create verb group, Track T12, `create-300`/`310`/`320`): the immutable-source + op-log decision, layers L0–L3, view-vs-document ops, stable refs (`e`/`o`/`n` + minted `g<GlobalId>`, never a `batchId`), and L0's mutation-safe batches — `batchedEdit.js` as the ONLY way to mutate a loaded batch (one revision + synchronous `onBatchEdit` push to highlight/residency/isolation, the static guard test), required + minted instance ids, side tables in `batchedInstanceTables.js`, post-load `addGeometry` headroom without three's spread-limited `setGeometrySize` check, collapsed range batches, the deleted-id BVH raycast fix, no OPFS cache write for an edited model | [design/new/model-edit.md](design/new/model-edit.md) |
 | Generating geometry for `create-320` (#1921): why not CADAM as engine / iframe / service, the Tier 1 extrusion and Tier 2 OpenSCAD-WASM generators and their op payloads, GlobalId minting, Conway's missing writer and the smallest splice-writer slice | [design/new/create-engine.md](design/new/create-engine.md) |
 | STEP occurrence-keyed selection (NavTree↔scene per-occurrence), `PlacedGeometry.occurrencePath`, why one nut highlights all | [design/new/step-occurrence-selection.md](design/new/step-occurrence-selection.md) |
 | The `?feature=look` render look — PBR materials + gradient IBL + tone-mapping, Neutral/Flat toggle, `looks.js`/`lookMaterial.js`, `LightingGui`, why it's all behind one flag (default off) | [design/new/viewer-replacement.md](design/new/viewer-replacement.md) §6e |
-| Removing the `conway-web-ifc-adapter` shim, the `web-ifc` engine seam (`webIfcShimAlias`/`USE_WEBIFC_SHIM`), Conway version-lag, runtime engine swap | [design/new/adapter-removal.md](design/new/adapter-removal.md) |
-| Load-log report format (CLI + console + snackbar expando + "i" report dialog), stage/Total line semantics, per-format cascade, `loadProgress.js` (deep-imports conway `core/progress_log`)/`AlertDialogAndSnackbar.jsx` (live expando)/`LoadReportControl` | [design/new/load-log-format.md](design/new/load-log-format.md) |
+| The retired `conway-web-ifc-adapter` shim and real-`web-ifc` engine (both removed; Share imports `@bldrs-ai/conway/web-ifc`, and since ifclib 6.0.0 nothing resolves a bare `web-ifc`), Conway version-lag | [design/new/adapter-removal.md](design/new/adapter-removal.md) |
+| Load-log report format (CLI + console + snackbar expando + "i" report dialog), stage/Total line semantics, per-format cascade, `loadProgress.js` (deep-imports conway `core/progress_log`)/`AlertDialogAndSnackbar.jsx` (live expando)/`LoadReportControl`; what Sentry's copy of the report and its console breadcrumbs withhold (the header's file name and free text, a dropped file's name; `privacy/sentryRedaction.js`) | [design/new/load-log-format.md](design/new/load-log-format.md) |
 | Model display controls (`view-140`): auto-color toggle + wireframe, scoped to sub-tree/part/mesh, residency backends for non-batched formats, the `#d:` permalink token, incl. hide/isolate state (`hide=`/`show=`/`iso=` with `e`/`o`/`n` refs — IFC ids, STEP occurrence paths, scene-graph name paths; §6.3, #1250) | [design/new/model-display-controls.md](design/new/model-display-controls.md) |
 | Why a model renders wrong (spikes, missing or exploded parts); geometry-health signals and which ones to surface in Share (load-report health lines, diagnostics attached to a bug report, outlier-robust auto-framing) | conway repo: `scripts/debug/README.md` (the tool — start here before writing a tracer), [conway `design/new/model-diagnostics.md`](https://github.com/bldrs-ai/conway/blob/main/design/new/model-diagnostics.md) (the signals + Share candidates) |
 | Epic/Story/Track catalogue, milestone tier rubric (§2.1), MVP bar + phase plan (§6, ex-"Pro-MVP"), growth-funnel Phase G, AI-workspace pivot (§7), post-MVP loveables | [design/roadmap.md](design/roadmap.md) |
@@ -147,7 +177,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Persistence direction: OPFS as a git-versioned workspace (repo-as-workspace, LFS-pointer blobs, record-vs-stream convo split, wasm-git vs isomorphic-git investigation, exit plan) | [design/new/workspace-store.md](design/new/workspace-store.md) |
 | Headless MVC core for a CLI/MCP — why `src/loader` + `src/viewer` are one web view, and the session / op-log / manifest cut over Conway | [design/new/reviews/2026-10-29-mvc-core-review_grok-4.7.md](design/new/reviews/2026-10-29-mvc-core-review_grok-4.7.md) |
 | Measuring a real browser model load — first-mesh/first-pixel timing, the `Preview:` line cross-check against conway's Node harness (conway #544), and the CPU-versus-bandwidth A/B rig (conway #541); how to point it at another model and how to read the JSON record | [design/new/browser-load-measurement.md](design/new/browser-load-measurement.md) |
-| Working an issue queue with AI agents — coordinator + per-issue sub-agents, model tiers (Fable coordinates, Opus executes), the dispatch-brief requirements, the 10-point rubric, and the review lifecycle — the single source for who reviews a PR, when review is skipped, and how rounds are capped | [design/new/agent-workflow.md](design/new/agent-workflow.md) |
+| Working an issue queue with AI agents — coordinator + per-issue sub-agents, model tiers (Fable coordinates; Haiku/Sonnet/Opus sub-agents by task complexity, with directed briefs for Haiku and Sonnet), the dispatch-brief requirements, the 10-point rubric, and the review lifecycle — the single source for who reviews a PR, when review is skipped, and how rounds are capped | [design/new/agent-workflow.md](design/new/agent-workflow.md) |
 
 Anything not in this table is invisible to the router. When you create a doc that future assistants should consult, add a row above with a one-line "when to read" hint. Don't rely on filesystem discovery.
 

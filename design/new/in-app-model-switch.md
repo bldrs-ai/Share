@@ -188,6 +188,9 @@ back to a finished load, not a cancelled one. So:
   model's session.
 - **Close, or eviction under memory pressure, → cancel.** This is the only
   cancel path (§4.5, #2031), and both are rare and explicit.
+  With the engine in a per-model worker (engine-worker.md §5.2), eviction
+  first terminates idle engines, which cancels nothing; it cancels a load
+  only when no idle engine is left to evict.
 - **Interactive at the index.** A model becomes usable — tree, properties,
   search, the assistant's `model.*` reads — once its index and spatial tree
   exist; geometry streams in after (§4.2, #2029).
@@ -305,10 +308,151 @@ Mid-stream property reads worked in the Node harness. Concurrent reads against S
   - a failure, which also takes the tree down;
   - the user leaving the model (the identity change, `forgetLoadedModel`), which takes the tree down too. The left load still runs to its end (#2019) and holds the next one back until it does, so without this the panels would serve its tree under the next model's URL. `installModelTree` re-checks that the load is current after its one await, so a load the user left never republishes its tree.
 - **The tree is walked and installed once.** The end-of-load path waits for the index's delivery, which can finish after the geometry, and `onModel` reuses its tree instead of reading the finished model again. A walk that settles after the user has left, or after the load has failed, installs nothing. The model is not ready until its tree is, as in prod.
-- **The loading overlay lifts at the index;** it swallowed every click. The camera follow's "first interaction stops it" caveat (`disableLoadOverlay`) applies from then on.
+- **The loading overlay lifts at the index;** it swallowed every click. Since #2043 it lifts earlier still, at the first preview mesh (§4.2a), and the index matters for it only on a model too small to preview.
 - **Selections made while geometry streams are kept and painted at the end.** The logical selection, Properties and the URL path work at once. The scene highlight finds nothing to paint until the geometry is in, so `reapplySelectionToGeometry` re-runs the selection through the usual funnel once the model is installed. That includes STEP occurrence rows, whose instances only exist then.
 - **Hide and isolate wait for the finished model.** The isolator gets its model at the load's end, so the tree's eye icons appear then. Making them work on streamed geometry is a session concern (§4.3).
 - **For sessions (§4.3),** the stages map onto a session's lifecycle: *indexed* (`onIndexed`; tree and properties live), *streaming* (the pump; previews and durable batches), *ready* (`setModel`, isolator, link state). `indexedModel` is the first piece of state a session would own.
+
+### 4.2a Interactive at first mesh (#2043)
+
+On a large model, geometry is on screen well before the index: conway's
+parse-time preview channel (`ON_PREVIEW_MESH`) streams render-only meshes
+while the parse runs, and on PSB the parse alone is 15–25 s. #2043 makes the
+canvas usable from the first of them: the camera, and a double-click that
+selects an element. Tree, properties and search still need the index
+(§4.2).
+
+- **The overlay lifts at the load's first mesh** (`isFirstMeshShown`, set by
+  CadView from the session's `onFirstMesh` and cleared when the load ends;
+  `LoadingBackdrop`). Only while the load is the one shown
+  (`isLoadSuperseded`): a load the user has left keeps running (#2019), and
+  its first mesh must not lift the overlay over the next model (codex review
+  on #2052). The snackbar's live load line stays up as the non-blocking
+  progress indicator.
+- **Preview meshes say which element they are.** `parsePreviewMesh` keeps the
+  payload's `expressID` (the product the scene walk reached the placement
+  through, the same id the durable batch records in `instanceParents`) as
+  `userData.previewExpressID`. AABB imposters (spatial plates, off anyway)
+  carry none. `ProgressiveLoadSession` marks its group
+  (`userData.isLoadPreview`) so the pick finds it without a scene walk.
+- **The pick** (`CadView#canvasDoubleClickHandler`, installed when the load
+  starts, not at its end) raycasts only the preview while one is in the
+  scene, and takes the nearest hit that names an element
+  (`viewer/previewSelection.js`). The durable batches streaming beside it get
+  their pick tables only at the load's end
+  (`incrementalBatchedBuilder#finalize`), so they are not raycast: a spot
+  only they cover selects nothing until the model is in. That is the main gap
+  left, and matters only where the preview's unit and byte caps left
+  geometry out of it.
+- **Before the index the pick is pending.** The bare id is selected
+  (`selectItemsInScene([id], false)`: no URL path, which can't be resolved
+  yet), the preview paints it (`ShareViewer#setPreviewSelection` swaps the
+  element's preview meshes to the selection material; the pooled originals
+  are kept on the mesh and are what teardown disposes), and Properties
+  waits: the engine is still parsing, so the selection effect does not ask
+  it. When the tree installs at the index, `resolvePendingPreviewPick`
+  re-runs the pick through `elementSelection` — the finished model's own
+  funnel — which writes the URL path, expands the tree to the row and so
+  re-runs the selection effect, which reads properties from the model at its
+  index. A pick something else has since replaced is dropped, and that
+  selection re-run instead. Shift is a plain pick before the index: a toggle
+  needs the rows it would toggle. After the index a preview pick is
+  `elementSelection` directly.
+- **Hand-off.** The preview is torn down when the durable model installs, and
+  the end of the load repaints the selection on it — the #2029 path,
+  `reapplySelectionToGeometry`, now also taken when the load had a preview
+  pick and no index tree. A preview pick in a load the user leaves, or that
+  fails, is cleared like a selection made at the index.
+- **Camera follow — chosen for #2043 (2026-11-03): the user's first touch
+  hands them the camera for the rest of the load.** A drag (`controlstart`) or a wheel zoom
+  (`control`; camera-controls sends no `controlstart` for a wheel, and before
+  this a zoom left the follow running) stops `ProgressiveLoadSession`'s
+  follow, as before, and so does a camera UI of ours — a ViewCube drag,
+  snap, orbit or fit, a `#c:` pose — which sends no control event and calls
+  `renderDemand.js#noteUserCamera` at the moment of input instead (codex
+  review on #2052, closed at the round cap: with the follow stopped before
+  the UI queues its move, no refit can flush or overwrite it). A touch before
+  the first mesh counts too: the follow, which attaches its listeners only
+  when it starts, reads the load's `RenderDemand#isUserDriving`, set from
+  CadView's load-long scope, and never starts. It now also
+  **skips the end-of-load auto-fit**
+  (`CadView#watchCameraTakenDuringLoad`); the camera limits are still sized to
+  the model. A user who has orbited during a 60 s load is looking at
+  something, and a fit at the end would yank it away; one who hasn't gets
+  the follow and the fit as before. No resume-follow: the ViewCube's fit
+  reframes on request, and a follow that came back after a fit would undo
+  the next touch. An untouched load keeps the fit; a `#c:` link keeps its
+  pose.
+- **On-demand painting while the model streams in**
+  (`viewer/three/renderDemand.js`, DESIGN.md §"Render loop & perf
+  monitor"). Lifting the overlay during the parse means frames paint while
+  loading on every device — they always did under the overlay, but nobody
+  could use them. On software WebGL each frame competes with the parse and
+  the pump for the main thread and costs more as the scene grows
+  (browser-load-measurement.md §Confounders). So for the length of the load
+  (from CadView's load start, through the download and OPFS staging, to the
+  session's finish as the durable model goes in) the loop paints only when
+  asked: at once for the user (camera
+  moves, selection, resize) and for the first geometry, within a budget for
+  the load (geometry, the follow's refits, a 1 s heartbeat; at least 100 ms
+  apart and four times the last paint's cost, so background painting takes
+  about a fifth of the time). After the load every frame paints, as before,
+  so nothing outside the load has to ask. Scopes nest: CadView holds one for
+  the load and the session one for the parse, so an aborted first attempt
+  that CadView retries leaves the retry on demand. A camera move paints at
+  once unless the follow made it. A ViewCube snap or a fit moves the camera
+  with no control event and is the user's; the follow's own fits are snaps,
+  made synchronously inside `RenderDemand#runFollowMove`, which attributes
+  exactly the updates made in the call (codex review on #2052: a time window
+  after each fit, the first cut, swallowed a ViewCube snap inside it).
+  On-demand painting starts at CadView's load start, not the session's,
+  because the empty scene's paints during the download and OPFS staging cost
+  as much: at native rate they put PSB's `Opening
+  model` 48 s after navigation, against 12 s with them gone (13 s with the
+  loop frozen).
+  The cost is measured from a paint to the next frame, not around the draw
+  call. A first cut timed `composer.render()`: ~27 ms a paint on
+  SwiftShader, while the paints behind it kept sp-231MB loading past
+  15 minutes at native frame rate. With painting switched off and the loop
+  still ticking, the same build loaded it in 53 s, the frozen-loop time: the
+  ticks are free, and the GPU-process work behind each paint, which holds
+  back the next frame, is the whole cost. The gap has no upper bound: a 2 s
+  cap, meant to keep streaming geometry visibly moving on a slow GPU, took
+  sp-231MB's Geometry from 42 s back to 624 s, its paints costing more than
+  two seconds each. The load's first geometry paints at once, whatever the
+  budget, so first pixels never wait on it.
+
+**Measured 2026-11-03** (same container and build method as §4.1:
+playwright builds of `main` and of this change, served locally, fresh
+context per run, persistent profile for PSB's windowed open; interleaved
+main/new pairs; times in seconds from the `Opening model` line).
+
+| RAF | model | build | n | camera (overlay lifts) | pick possible | first geometry painted | ready | Parsing | Geometry | Total | paints before ready |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| frozen | PSB | main | 3 | 26.9 (26.3–27.4) | 83.5 (80.1–86.1) | — | 83.4 (80.0–86.0) | 27.3 (26.6–27.8) | 47.3 (45.1–50.1) | 93.7 (89.0–95.7) | 0 |
+| frozen | PSB | new | 3 | 0.6 (0.4–0.6) | 0.6 (0.4–0.6) | — | 79.6 (79.1–84.5) | 26.2 (25.5–26.3) | 46.0 (46.0–49.8) | 88.8 (88.3–94.1) | 0 |
+| frozen | SEESTRASSE | main | 3 | 1.2 (1.2–1.3) | 5.2 (5.1–5.6) | — | 5.1 (5.0–5.5) | 1.2 (1.2–1.3) | 3.1 (3.0–3.4) | 5.9 (5.6–6.1) | 0 |
+| frozen | SEESTRASSE | new | 3 | 0.3 (0.3–0.4) | 0.3 (0.3–0.4) | — | 5.0 (4.8–5.2) | 1.3 (1.2–1.4) | 3.0 (2.9–3.2) | 5.7 (5.5–5.8) | 0 |
+| frozen | sp-231MB | main | 3 | 9.2 (9.1–9.5) | 51.0 (45.7–51.8) | — | 50.9 (45.5–51.7) | 10.5 (10.4–10.6) | 37.1 (31.7–38.0) | 57.6 (53.1–59.4) | 0 |
+| frozen | sp-231MB | new | 3 | 0.3 (0.2–0.3) | 0.3 (0.2–0.3) | — | 43.8 (42.4–50.8) | 9.8 (9.5–10.6) | 30.3 (29.7–36.8) | 50.8 (49.9–58.5) | 0 |
+| native | PSB | new | 1 | 0.5 | 0.5 | 0.5 | 97.1 | 26.5 | 64.0 | 105.7 | 61.0 |
+| native | SEESTRASSE | main | 2 | 6.9 (6.7–7.1) | 32.4 (29.0–35.8) | 1.4 (1.3–1.4) | 31.2 (27.8–34.5) | 6.8 (6.6–7.1) | 23.3 (19.9–26.8) | 34.6 (31.4–37.7) | 142.5 (140.0–145.0) |
+| native | SEESTRASSE | new | 2 | 0.4 (0.4–0.4) | 0.4 (0.4–0.4) | 0.4 (0.4–0.4) | 6.4 (6.3–6.4) | 1.5 (1.5–1.5) | 4.2 (4.1–4.2) | 7.1 (7.0–7.2) | 7.0 (7.0–7.0) |
+| native | sp-231MB | main | 1 (1 timed out) | 121.6 | > 875 | — | > 875 | 132.2 | > 875 | > 875 | 1626.0 |
+| native | sp-231MB | new | 2 | 0.3 (0.3–0.3) | 0.3 (0.3–0.3) | 0.3 (0.3–0.3) | 57.5 (53.9–61.0) | 11.4 (11.1–11.7) | 43.3 (40.3–46.4) | 64.4 (60.9–67.9) | 35.0 (34.0–36.0) |
+| native + orbit | PSB | new | 1 | 0.5 | 0.5 | 0.5 | 267.2 | 125.6 | 135.7 | 275.9 | 1805.0 |
+| native + orbit | SEESTRASSE | new | 2 | 0.4 (0.4–0.4) | 0.4 (0.4–0.4) | 0.4 (0.4–0.4) | 8.1 (7.8–8.3) | 3.8 (3.8–3.8) | 3.6 (3.4–3.8) | 9.0 (8.7–9.3) | 29.0 (28.0–30.0) |
+| native + orbit | sp-231MB | new | 1 | 0.3 | 0.3 | 0.4 | 215.5 | 71.9 | 140.6 | 224.5 | 694.0 |
+
+Medians, with the range when n > 1. *frozen* = `RAF_THROTTLE_MS=3600000` (no frames at all: the load-time comparison); *native* = Chromium's own frame rate; *native + orbit* = the camera kept turning from the overlay lift to ready (in-page: one `controlstart`, then `rotate` every 33 ms), the worst case of a user interacting. *camera* = the overlay lifts; *pick* = a double-click can select (`main` installs the handler at the load's end); *first geometry painted* = the first paint with model geometry in the scene (not measurable with the loop frozen). "paints before ready" counts render-closure calls that did work. `main` was not run at native rate on PSB: it does not finish sp-231MB in 900 s.
+
+- **First interaction possible**, loop frozen: the camera from 1.2 / 9.2 / 26.9 s to 0.3 / 0.3 / 0.6 s (SEESTRASSE / sp-231MB / PSB), a pick from 5.2 / 51 / 83.5 s to the same 0.3–0.6 s. The stages themselves are unchanged within the run-to-run spread.
+- **On-demand painting** is what lets a native-rate load on software GL come near the frozen-loop one: SEESTRASSE 34.6 → 7.1 s total, sp-231MB from not finishing in 900 s to 64 s, PSB 106 s against 89 s frozen.
+- **Interacting costs what its frames cost.** Orbiting non-stop paints every frame: on SwiftShader that took sp-231MB from 64 to 225 s and PSB from 106 to 276 s. A real GPU's paint is far cheaper; not measurable here.
+
+**Not covered:** picking durable batches mid-stream (above); a pick's
+properties before the index; shift multi-select before the index; real-GPU
+frame cost, which on-demand painting only bounds from above.
 
 ### 4.3 Per-model sessions (#2019)
 
@@ -523,6 +667,8 @@ only on close/eviction).
 - stage times, index vs all geometry;
 - main-thread blocking, with the long tasks attributed;
 - per-model memory, and the fact that WASM `Memory` never shrinks, even after `ReleaseModelGeometry` (whether that call enables reuse within the same instance was not measured).
+
+**Measured (#2043, 2026-11-03, §4.2a):** first-interaction times on three models, frozen and native frame rate, interleaved pairs; the cost of painting during a load, and of orbiting through it.
 
 These were measured in a cloud container with software WebGL, so the absolute browser times are environment-dependent; the ratios and the attributions carry over.
 

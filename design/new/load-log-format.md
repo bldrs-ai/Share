@@ -56,9 +56,33 @@ hugged box renders them as a narrow clipped column. Expanding also grows
 MUI's message slot (`flexGrow`), which otherwise stays content-sized and turns
 the extra width into empty space on the right.
 
-A user pasting any of these into a bug report produces the same text; Sentry
-receives the same trail as breadcrumbs plus the final report string in the
-`load` context.
+A user pasting any of these into a bug report produces the same text. Sentry
+receives the same trail as breadcrumbs, plus the final report string in the
+`load` context (stall and failure events) and the `loadDiagnostics` context
+(diagnostics events), **with one line changed: the model line.** conway's
+`Model: <header FILE_NAME> — <schema>, <size>, <originating system>
+(<preprocessor>)` is the exporter's free text, and in the wild that has
+included a full UNC path to a company file share, with its private IP and
+project folder names (SHARE-1MT). Sentry's server-side scrubber left it alone.
+So Sentry's copy reads `Model: (name withheld) — <schema>, <size>, <tool>`,
+built from the reporter's latched fields with the tool taken from the
+`authoring_tool` allowlist (`LoadProgressReporter#sentryModelLine`). `privacy/sentryRedaction.js` is Sentry's
+`beforeBreadcrumb`, and rewrites three things as breadcrumbs:
+- the model line's console echo;
+- any console line that names a user's file through `consoleFileName`, i.e.
+  `<prefix>: file "<name>" …` (the drop path's rejected-upload warning, the
+  no-model-in-archive warning). These have the quoted name withheld. The
+  `file ` marker keeps ordinary library warnings such as three.js's
+  `THREE.Sprite: "Raycaster.camera" …` from matching;
+- click breadcrumbs' `title`, `aria-label`, `alt` and `name` values, which
+  carry file names in the recent-files list and the projects drawer.
+
+The reporter's console tee runs teed text through the same redaction, because
+teed warnings reach the diagnostics event's title and `messages` without
+passing through `beforeBreadcrumb`. That makes the report's own `Warnings &
+errors` line redacted as well; the console prints the warning whole. The model
+line keeps the full header text in the report dialog, the snackbar and the
+console: that is the user reading their own file's header.
 
 Canonical implementation: conway `src/core/progress_log.ts`
 (`LoadLogAccumulator` + formatters), consumed by the conway CLI renderer.
@@ -79,6 +103,7 @@ Parsing: 3.201s, +210.512000 MB heap
 Geometry [0%........56%] 41.004s, +388.250000 MB heap   ← live OR failed-at-56% stage
 Total: 46.310s, 214.000000 → 852.000000 MB heap   ← 5. separate before/after
 Warnings & errors (1247, 224 distinct): CDT Exception (hemisphere: 0) (×892)  ← 6. one-line summary
+Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 triangles, tested one by one per pick  ← 7. optional
 ```
 
 1. **Host line** — Share version + used-JS-heap before the load begins
@@ -117,6 +142,28 @@ Warnings & errors (1247, 224 distinct): CDT Exception (hemisphere: 0) (×892)  �
    the report in the snackbar expando and the copyable "i" report alike.
    Nothing is lost: the console tee passes every message through to the real
    console, so full detail is one devtools panel away.
+7. **Health** — optional lines after Total, each for a condition the load
+   survived but that someone triaging the model wants to know about:
+   - `Health: stray geometry excluded from view framing (…)` — auto-framing
+     left outliers out (`reportFramingExclusion`; added post-load, since
+     framing runs after the load settles).
+   - `Health: picking index hit its depth cap (40) in N trees; largest leaf
+     M triangles, tested one by one per pick` (`reportBvhDepthCap`).
+     three-mesh-bvh stops splitting at `maxDepth` and makes one leaf of whatever is left, so a ray reaching
+     that leaf tests its triangles linearly; picks stay correct. Share builds
+     BVHs with `verbose: false` (`viewer/ifc/bvhBuild.js`) because the
+     library's console warning said only that the cap was hit, and as a
+     load-time warn it became the title of the diagnostics event
+     (SHARE-1MT). The line records the number the warning left out, the
+     largest capped leaf, which decides whether raising `maxDepth` or
+     building with the SAH strategy is worth it. Only leaves at the cap
+     count: an earlier leaf of identical centroids isn't something a deeper
+     cap would split. A successful load that hit the cap is counted in GA,
+     once, as `bvh_depth_cap {format, trees, max_leaf}` with both counts
+     bucketed (`loader/reportLoadDiagnostics.js`). It is volume-only signal,
+     so GA is its only sink (AGENTS.md, "Reported Conditions"): no Sentry
+     event and no field on one. Sentry's copy of the report still has the
+     Health line, since that is the load log.
 
 **Precision** — seconds to millisecond precision (3 decimals), memory to
 byte precision (6 decimals of MB), per the report's diagnostic purpose.

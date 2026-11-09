@@ -15,6 +15,7 @@ import {
   opfsWriteBase64Model,
 } from '../OPFS/OPFSService.js'
 import {assertDefined} from '../utils/assert'
+import {downloadSourceKind} from './reportOpfsSourceCondition'
 import debug, {WARN} from '../utils/debug'
 
 
@@ -177,8 +178,18 @@ export function downloadToOPFS(
       opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, !!(onProgress), requestId),
     (data, settle) => {
       if (data.error) {
-        debug().error('Error from worker:', data.error)
-        settle.reject(new Error(data.error))
+        // A conditioned error is logged by its structured fields alone: the
+        // console line becomes a Sentry breadcrumb, and the text could name
+        // the user's file if a producer ever put it there.
+        debug().error('Error from worker:',
+          data.condition ? `${data.condition}${data.status ? ` (HTTP ${data.status})` : ''}` : data.error)
+        const error = new Error(data.error)
+        // Which download condition the worker hit, for Loader.js#load to
+        // report once its direct-fetch fallback has succeeded. Never the text.
+        error.opfsCondition = data.condition
+        error.opfsStatus = data.status
+        error.opfsKind = downloadSourceKind(commitHash)
+        settle.reject(error)
         return
       }
       if (data.progressEvent) {
@@ -194,6 +205,15 @@ export function downloadToOPFS(
       if (data.completed) {
         if (data.event === 'download') {
           debug().warn('Worker finished downloading file')
+          if (data.cached === false && data.file) {
+            // Carried on the File, not reported here: the load can still fail
+            // after this (LFS, decode, readModel), and CadView's exception
+            // would then be a second event for it. Loader.js#load reports
+            // once readModel succeeds. A property on the resolved file is the
+            // smallest shape: downloadToOPFS keeps returning the File its
+            // callers already take, and no caller has to learn a new tuple.
+            data.file.opfsNotCachedKind = downloadSourceKind(commitHash)
+          }
         } else if (data.event === 'exists') {
           debug().warn('Commit exists in OPFS.')
         }
@@ -467,12 +487,25 @@ export function snapshotOPFS(previewWindow = 0) {
 }
 
 /**
- * Deletes entirety of OPFS cache
+ * Deletes entirety of OPFS cache, except entries another handle holds: an
+ * engine worker reading its model through a read-only sync access handle
+ * locks that entry (engine-worker.md §7 step 4), in this tab or another.
  *
- * @return {boolean}
+ * @return {Promise<Array<string>>} OPFS paths left behind (locked); empty
+ *   when everything went
  */
 export function clearOPFSCache() {
-  return makePromise((requestId) => opfsClearCache(requestId), 'clear')
+  return workerRequest((requestId) => opfsClearCache(requestId), (data, settle) => {
+    if (data.error) {
+      debug().error('Error from worker:', data.error)
+      settle.reject(new Error(data.error))
+      return
+    }
+    if (data.completed && data.event === 'clear') {
+      console.warn('OPFS cache cleared.')
+      settle.resolve(Array.isArray(data.skipped) ? data.skipped : [])
+    }
+  })
 }
 
 /**

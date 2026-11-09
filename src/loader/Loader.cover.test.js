@@ -5,6 +5,7 @@
 // reach. Axios and the OPFS utilities are mocked so we can force specific
 // error shapes.
 
+import {captureException, captureMessage} from '@sentry/react'
 import axios from 'axios'
 import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 import {
@@ -20,9 +21,16 @@ import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
 import useStore from '../store/useStore'
 import {constructUploadedBlobPath, load, NotFoundError} from './Loader'
 import {dereferenceAndProxyDownloadContents} from './urls'
+import {gtagEvent} from '../privacy/analytics'
 
 
 jest.mock('axios')
+jest.mock('../privacy/analytics', () => ({...jest.requireActual('../privacy/analytics'), gtagEvent: jest.fn()}))
+jest.mock('@sentry/react', () => ({
+  ...jest.requireActual('@sentry/react'),
+  captureMessage: jest.fn(),
+  captureException: jest.fn(),
+}))
 
 // Mock OPFS utils so we can steer the isOpfsAvailable=true path without
 // needing a real worker or cache.
@@ -606,6 +614,214 @@ describe('load() error/edge paths with OPFS enabled', () => {
   })
 
 
+  describe('a hosted or external OPFS source that is empty or truncated', () => {
+    // Hosted `/share/v/p/index.ifc` resolves to an absolute same-origin URL,
+    // so it takes the external branch, keyed `<file>.<host>` under
+    // BldrsLocalStorage/V1/Projects. The host never changes, so a 0-byte
+    // entry left there was served on every load ("OpenModel returned -1:
+    // empty file") until the guard stopped being GitHub-only.
+    const url = 'https://example.com/models/index.obj'
+    const objText = 'v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n'
+
+    beforeEach(() => {
+      dereferenceAndProxyDownloadContents.mockResolvedValue([url, '', false, false])
+    })
+
+    it('evicts a 0-byte entry under its own key and loads from the network', async () => {
+      downloadToOPFS.mockResolvedValue(new MockFile(''))
+      axios.get.mockResolvedValue({data: objText})
+
+      const model = await load(url, viewer, onProgress, true, setOpfsFile, '')
+
+      expect(model).toBeDefined()
+      expect(deleteFileFromOPFS).toHaveBeenCalledTimes(1)
+      expect(deleteFileFromOPFS).toHaveBeenCalledWith(
+        '/models/index.obj', 'example.com', 'BldrsLocalStorage', 'V1', 'Projects')
+      expect(axios.get).toHaveBeenCalledTimes(1)
+      expect(axios.get.mock.calls[0][0]).toBe(url)
+      // The store must not keep a handle to the evicted entry, or a later
+      // "Save" would write the empty file.
+      expect(setOpfsFile).toHaveBeenCalledWith(null)
+      expect(setOpfsFile).not.toHaveBeenCalledWith(expect.any(MockFile))
+    })
+
+    it('evicts a truncated part-21 entry and re-fetches', async () => {
+      const ifcUrl = 'https://example.com/index.ifc'
+      dereferenceAndProxyDownloadContents.mockResolvedValue([ifcUrl, '', false, false])
+      downloadToOPFS.mockResolvedValue(new MockFile(
+        'ISO-10303-21;\nHEADER;\nFILE_SCHEMA((\'IFC4\'));\nENDSEC;\nDATA;\n#1=IFCWALL();\n'))
+      axios.get.mockResolvedValue({data: new ArrayBuffer(64)})
+
+      // The re-fetched junk still fails to parse; what matters is the
+      // eviction and that the bytes came from the network, not OPFS.
+      await expect(load(ifcUrl, viewer, onProgress, true, setOpfsFile, '')).rejects.toThrow()
+
+      expect(deleteFileFromOPFS).toHaveBeenCalledWith(
+        '/index.ifc', 'example.com', 'BldrsLocalStorage', 'V1', 'Projects')
+      expect(axios.get).toHaveBeenCalledTimes(1)
+      expect(axios.get.mock.calls[0][0]).toBe(ifcUrl)
+    })
+
+    it('keeps a locally hosted 0-byte entry from being served too', async () => {
+      downloadToOPFS.mockResolvedValue(new MockFile(''))
+      axios.get.mockResolvedValue({data: objText})
+
+      await load('/index.obj', viewer, onProgress, true, setOpfsFile, '')
+
+      expect(deleteFileFromOPFS).toHaveBeenCalledWith(
+        '/index.obj', 'bldrs-ai', 'BldrsLocalStorage', 'V1', 'Projects')
+      expect(axios.get).toHaveBeenCalledTimes(1)
+    })
+
+    describe('Sentry reports for the OPFS condition a load fell back from', () => {
+      const downloadError = (condition, status) => Object.assign(
+        new Error('downloadModelToOPFS: HTTP for /models/private-tower.obj https://example.com/models/private-tower.obj'),
+        {opfsCondition: condition, opfsStatus: status, opfsKind: 'external'})
+
+      beforeEach(() => {
+        captureMessage.mockClear()
+        captureException.mockClear()
+        gtagEvent.mockClear()
+      })
+
+      it('counts an eviction once in GA, after the re-fetch succeeded, and not in Sentry', async () => {
+        downloadToOPFS.mockResolvedValue(new MockFile(''))
+        axios.get.mockResolvedValue({data: objText})
+        gtagEvent.mockClear()
+
+        await load(url, viewer, onProgress, true, setOpfsFile, '')
+
+        const opfsEvents = gtagEvent.mock.calls.filter(([name]) => name.startsWith('opfs_'))
+        expect(opfsEvents).toEqual([['opfs_source_evicted', {kind: 'external', condition: 'evicted'}]])
+        expect(captureMessage).not.toHaveBeenCalled()
+        expect(JSON.stringify(opfsEvents)).not.toMatch(/example\.com|index\.obj/)
+      })
+
+      it('warns once for a hosted 404 that the direct fetch then got past', async () => {
+        downloadToOPFS.mockRejectedValue(downloadError('http-error', 404))
+        axios.get.mockResolvedValue({data: objText})
+
+        await load(url, viewer, onProgress, true, setOpfsFile, '')
+
+        expect(captureMessage).toHaveBeenCalledTimes(1)
+        const [, context] = captureMessage.mock.calls[0]
+        expect(context.level).toBe('warning')
+        expect(context.fingerprint).toEqual(['opfs-source', 'download-failed', 'http-error', 'external'])
+        expect(context.tags).toMatchObject({kind: 'external', condition: 'http-error', http_status: '404'})
+        expect(gtagEvent.mock.calls.filter(([name]) => name.startsWith('opfs_'))).toEqual([])
+        // The worker's text names the file and URL; none of it may reach Sentry.
+        expect(JSON.stringify(captureMessage.mock.calls)).not.toMatch(/private-tower|example\.com/)
+      })
+
+      it('sends no message when the load fails outright after a failed download', async () => {
+        downloadToOPFS.mockRejectedValue(downloadError('http-error', 404))
+        axios.get.mockRejectedValue({response: {status: 404}})
+
+        await expect(load(url, viewer, onProgress, true, setOpfsFile, '')).rejects.toThrow(NotFoundError)
+
+        // CadView's captureException owns this load; a message here would be
+        // a second event for one failure.
+        expect(captureMessage).not.toHaveBeenCalled()
+      })
+
+      it('sends no message when the re-fetch after an eviction fails', async () => {
+        downloadToOPFS.mockResolvedValue(new MockFile(''))
+        axios.get.mockRejectedValue({response: {status: 404}})
+
+        await expect(load(url, viewer, onProgress, true, setOpfsFile, '')).rejects.toThrow(NotFoundError)
+
+        expect(captureMessage).not.toHaveBeenCalled()
+      })
+
+      it('sends no message when the direct fetch succeeds but readModel then throws', async () => {
+        // "Recovered" means a model came out. Junk bytes that fail to parse
+        // end in CadView's captureException, so a message here would make one
+        // failure two events.
+        const ifcUrl = 'https://example.com/index.ifc'
+        dereferenceAndProxyDownloadContents.mockResolvedValue([ifcUrl, '', false, false])
+        downloadToOPFS.mockResolvedValue(new MockFile(''))
+        axios.get.mockResolvedValue({data: new ArrayBuffer(64)})
+
+        await expect(load(ifcUrl, viewer, onProgress, true, setOpfsFile, '')).rejects.toThrow()
+
+        expect(axios.get).toHaveBeenCalledTimes(1)
+        expect(captureMessage).not.toHaveBeenCalled()
+      })
+
+      it('sends no message when the direct fetch succeeds but its bytes fail the LFS check', async () => {
+        downloadToOPFS.mockRejectedValue(downloadError('http-error', 404))
+        axios.get.mockResolvedValue({data: 'version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 12345\n'})
+
+        await expect(load(url, viewer, onProgress, true, setOpfsFile, '')).rejects.toThrow(/Git LFS/)
+
+        expect(captureMessage).not.toHaveBeenCalled()
+      })
+
+      it('counts a no-move download once in GA when the model loads', async () => {
+        const file = new MockFile(objText)
+        file.opfsNotCachedKind = 'external'
+        downloadToOPFS.mockResolvedValue(file)
+        gtagEvent.mockClear()
+
+        await load(url, viewer, onProgress, true, setOpfsFile, '')
+
+        expect(gtagEvent.mock.calls.filter(([name]) => name === 'opfs_not_cached'))
+          .toEqual([['opfs_not_cached', {kind: 'external', condition: 'move-unavailable'}]])
+        expect(captureMessage).not.toHaveBeenCalled()
+      })
+
+      it('counts nothing for a no-move download whose readModel throws', async () => {
+        // CadView's captureException owns this load; a GA count of a load that
+        // never succeeded would be a second event for it.
+        const ifcUrl = 'https://example.com/index.ifc'
+        dereferenceAndProxyDownloadContents.mockResolvedValue([ifcUrl, '', false, false])
+        const file = new MockFile(
+          'ISO-10303-21;\nHEADER;\nFILE_SCHEMA((\'IFC4\'));\nENDSEC;\nDATA;\n#1=IFCWALL();\nENDSEC;\nEND-ISO-10303-21;\n')
+        file.opfsNotCachedKind = 'external'
+        downloadToOPFS.mockResolvedValue(file)
+        gtagEvent.mockClear()
+
+        await expect(load(ifcUrl, viewer, onProgress, true, setOpfsFile, '')).rejects.toThrow()
+
+        expect(deleteFileFromOPFS).not.toHaveBeenCalled()
+        expect(gtagEvent.mock.calls.filter(([name]) => name === 'opfs_not_cached')).toEqual([])
+      })
+
+      it('sends nothing for an OPFS failure that is not one of these conditions', async () => {
+        downloadToOPFS.mockRejectedValue(new Error('Error getting file handle for /x: boom'))
+        axios.get.mockResolvedValue({data: objText})
+
+        await load(url, viewer, onProgress, true, setOpfsFile, '')
+
+        expect(captureMessage).not.toHaveBeenCalled()
+      })
+    })
+
+    it('does not evict an external OBJ whose header mentions ISO-10303-21', async () => {
+      downloadToOPFS.mockResolvedValue(new MockFile(`# exported from ISO-10303-21 STEP\n${objText}`))
+
+      await load(url, viewer, onProgress, true, setOpfsFile, '')
+
+      expect(deleteFileFromOPFS).not.toHaveBeenCalled()
+      expect(axios.get).not.toHaveBeenCalled()
+    })
+
+    it('never evicts an upload, whose OPFS entry is the only copy', async () => {
+      getModelFromOPFS.mockReset()
+      getModelFromOPFS.mockResolvedValue(new MockFile(''))
+      dereferenceAndProxyDownloadContents.mockResolvedValue([
+        'blob:http://localhost/uuid.obj', '', false, false,
+      ])
+
+      await expect(load('12345678-1234-4abc-9def-123456789abc.obj',
+        viewer, onProgress, true, setOpfsFile, '')).rejects.toThrow()
+
+      expect(deleteFileFromOPFS).not.toHaveBeenCalled()
+      expect(axios.get).not.toHaveBeenCalled()
+    })
+  })
+
+
   it('still throws when an uploaded file fails in OPFS (no fallback URL)', async () => {
     // Uploaded files only exist in OPFS — there's no remote URL to fall
     // back to. The resilience fix MUST re-throw rather than try axios
@@ -771,14 +987,16 @@ describe('load() error/edge paths with OPFS enabled', () => {
   })
 
 
-  it('buffers an uploaded STEP file rather than offering it to the store open', async () => {
-    // Conway's store-backed open is IFC-only, and it reserves the model
-    // handle before it sniffs the format — so handing it a STEP file burns
-    // handle 0 on a model that never opens and the buffered retry parses as
-    // handle 1. Every Share call site that passes the scene-level id 0 then
-    // addresses a model Conway does not have, which is how a STEP model's
-    // cached GLB ended up with no NavTree and no Properties (#1776). Nothing
-    // is lost by buffering here: the store path had no STEP implementation.
+  it('buffers an uploaded STEP file on the main-thread engine rather than offering it to the store open', async () => {
+    // Conway's store-backed STEP open needs a store that reads synchronously
+    // (conway#757), which the main-thread engine's Blob store cannot, and a
+    // refused store open still reserves the model handle — so handing it a
+    // STEP file burns handle 0 on a model that never opens and the buffered
+    // retry parses as handle 1. Every Share call site that passes the
+    // scene-level id 0 then addresses a model Conway does not have, which is
+    // how a STEP model's cached GLB ended up with no NavTree and no
+    // Properties (#1776). The engine worker takes the File instead
+    // (canOpenFromStore.test.js).
     const file = new MockFile(STEP_SOURCE)
     const arrayBufferSpy = jest.spyOn(file, 'arrayBuffer')
     getModelFromOPFS.mockReset()
@@ -900,7 +1118,7 @@ describe('load() error/edge paths with OPFS enabled', () => {
   // TODO: Loader.js tags errors with `isOutOfMemory` by calling
   // `isOutOfMemoryError(err)` from src/utils/oom.js, which is message-
   // sniffing based. The refactor should confirm the OOM shapes it looks
-  // for still match the engines (Conway, web-ifc) we're actually using.
+  // for still match the engine (Conway) we're actually using.
   it('tags out-of-memory errors from the IFC loader with isOutOfMemory', async () => {
     // Build a viewer with a Conway IfcAPI whose OpenModel throws an
     // OOM. newIfcLoader's hot-patched parse catches, tags, and
@@ -966,7 +1184,10 @@ describe('load() error/edge paths with OPFS enabled', () => {
       false,
       false,
     ])
-    downloadToOPFS.mockResolvedValue(new MockFile('ISO-10303-21 fake ifc'))
+    // Complete part-21 (it ends in END-ISO-10303-21;): a bare prefix on
+    // the external path is now evicted as truncated before it reaches the
+    // OOM-throwing OpenModel this test is about.
+    downloadToOPFS.mockResolvedValue(new MockFile('ISO-10303-21;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n'))
 
     try {
       await load('https://example.com/model.ifc', ifcViewer, onProgress, true, setOpfsFile, '')

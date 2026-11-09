@@ -10,6 +10,7 @@ import {getOrganizations} from '../../net/github/Organizations'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
 import {getBranches} from '../../net/github/Branches'
 import useStore from '../../store/useStore'
+import debug, {WARN} from '../../utils/debug'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../../connections/persistence'
 import {clearGrantedGithubScope, getGrantedGithubScope, saveGrantedGithubScope} from '../../Auth0/githubGrant'
 import {getOAuthScopes} from '../../net/github/OAuthScopes'
@@ -172,11 +173,18 @@ export default function GitHubFileBrowser({
     let cancelled = false
     /** Asynchronously fetch organizations */
     async function fetchOrganizations() {
-      const orgs = await getOrganizations(accessToken)
+      let orgNamesFetched = []
+      try {
+        const orgs = await getOrganizations(accessToken)
+        orgNamesFetched = Object.keys(orgs).map((key) => orgs[key].login)
+      } catch (err) {
+        // An expired or revoked GitHub token rejects here with a 401 (SHARE-1X6);
+        // see SaveModelControl. Browse the user's own account instead.
+        debug(WARN).warn('GitHubFileBrowser: could not list GitHub organizations', err?.status ?? err?.message)
+      }
       if (cancelled) {
         return
       }
-      const orgNamesFetched = Object.keys(orgs).map((key) => orgs[key].login)
       const orgNames = [...orgNamesFetched, user && user.nickname].filter(Boolean)
       setOrgNamesArr(orgNames.length > 0 ? orgNames : [''])
     }

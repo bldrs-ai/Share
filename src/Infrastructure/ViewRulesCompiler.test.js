@@ -1,18 +1,11 @@
 /* eslint-disable no-magic-numbers */
 // Tests for the pure-logic helper `calculateElementColor` inside
-// ViewRulesCompiler.js. The function is not directly exported, so we
-// exercise it indirectly through `compileViewRules()` with a minimal
-// mock of the web-ifc API. The heavy web-ifc import is mocked to avoid
-// pulling in the WASM binary.
+// ViewRulesCompiler.js. The function is not exported and this file does
+// not import ViewRulesCompiler.js (nor its IFC-constant import), so it
+// needs no engine mock.
 
 import IfcColor from './IfcColor'
 import {parseColor, interpolateColors} from './ColorHelperFunctions'
-
-
-jest.mock('web-ifc', () => ({
-  IFCPROPERTYSET: 1,
-  IFCRELDEFINESBYPROPERTIES: 2,
-}))
 
 
 // Since calculateElementColor is not exported, we test its behavior by

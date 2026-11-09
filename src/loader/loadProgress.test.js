@@ -5,10 +5,13 @@ jest.mock('@sentry/react', () => ({
   setTag: jest.fn(),
 }))
 
+jest.mock('./reportLoadDiagnostics', () => ({reportBvhDepthCapToGa: jest.fn()}))
 import Cookies from 'js-cookie'
+import {reportBvhDepthCapToGa} from './reportLoadDiagnostics'
 import Logger, {DATA_DEFECT} from '@bldrs-ai/conway/src/logging/logger'
 import {captureMessage, setContext, setTag} from '@sentry/react'
 import {_resetGaClientIdForTests} from '../privacy/analytics'
+import {consoleFileName} from '../privacy/sentryRedaction'
 import useStore from '../store/useStore'
 import {
   STALL_TIMEOUT_MS,
@@ -27,10 +30,12 @@ import {
   isStructuredProgress,
   loadFailureCaptureContext,
   noGeometryAlert,
+  reportBvhDepthCap,
   reportCacheHit,
   reportEngineVersion,
   reportFirstMesh,
   reportFramingExclusion,
+  reportEngineLog,
   reportGeometryStats,
   reportLoadProgress,
   reportModelInfo,
@@ -174,6 +179,21 @@ describe('loadProgress', () => {
       reportLoadProgress({modelInfo: {fileName: 'index.ifc', schema: 'IFC4'}})
       expect(reportLines()).toContain('Conway v1.379.1190')
       expect(reportLines()).toContain('Model: index.ifc — IFC4')
+    })
+
+    // A BVH that hit three-mesh-bvh's depth cap becomes one Health line,
+    // summed over the load's builds, instead of the console warning that
+    // titled its diagnostics event (viewer/ifc/bvhBuild.js).
+    it('adds one Health line for BVH trees that hit the depth cap', () => {
+      beginLoadProgress({fileInfo: 'big.stp'})
+      reportBvhDepthCap({trees: 1, maxLeafTriangles: 120, maxDepth: 40})
+      reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
+      endLoadProgress()
+      expect(reportLines()).toContain(
+        'Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 triangles, tested one by one per pick')
+      // After the load it is a no-op.
+      reportBvhDepthCap({trees: 9, maxLeafTriangles: 9, maxDepth: 40})
+      expect(reportLines().filter((line) => line.startsWith('Health: picking'))).toHaveLength(1)
     })
 
     it('reportModelInfo works for non-engine formats', () => {
@@ -417,6 +437,35 @@ describe('loadProgress', () => {
           engineErrorDistinct: 2,
           engineWarnDistinct: 2,
           dataDefectTotal: 2,
+        })
+      })
+
+      it('counts an engine WORKER\'s forwarded log exactly as the main-thread Logger would', () => {
+        // engine-worker.md §2.4 G3: the same entries as the test above, but
+        // arriving folded with counts from a worker's Logger, which this
+        // module's proxy cannot see.
+        beginLoadProgress({fileInfo: 'part.step'})
+        reportGeometryStats({vertexCount: 8, triangleCount: 4})
+        reportEngineLog({
+          entries: [
+            {level: 'error', message: 'Error extracting face', count: 3},
+            {level: 'error', message: 'Error extracting product', count: 1},
+            {level: 'warning', message: 'Unsupported type: IfcFoo', count: 2},
+            {level: 'warning', message: 'Unsupported type: IfcBar', count: 1},
+            {level: 'error', message: DEFECT, category: DATA_DEFECT, count: 1},
+            {level: 'warning', message: DEFECT, category: DATA_DEFECT, count: 1},
+          ],
+          lines: [{level: 'warning', text: 'Unsupported type: IfcFoo #5', count: 2}],
+        })
+        endLoadProgress()
+        expect(getCompletedLoadStats()).toMatchObject({
+          engineErrorTotal: 4,
+          engineErrorDistinct: 2,
+          engineWarnDistinct: 2,
+          dataDefectTotal: 2,
+          // The worker's console warnings count as page warnings, as the
+          // console tee counts a main-thread engine's.
+          pageWarnCount: 2,
         })
       })
 
@@ -776,6 +825,91 @@ describe('loadProgress', () => {
     })
 
     /*
+     * The header's FILE_NAME and author text reached Sentry verbatim in the
+     * report context, including a full UNC path to a company file share
+     * (SHARE-1MT). The report the user sees keeps them; the Sentry copy
+     * carries only fields already known to be safe.
+     */
+    describe('the Sentry copy of the report withholds header text', () => {
+      const header = {
+        fileName: '\\\\10.0.0.5\\Projects\\ACME Tower\\Bracket rev2.stp',
+        schema: 'CONFIG_CONTROL_DESIGN',
+        byteLength: 127_611_699, // 121.7 MB
+        originatingSystem: 'CATIA V5 exported by jane@example.com',
+        preprocessorVersion: 'CATIA V5 STEP AP203 v1',
+      }
+
+      /** @param {string} report the report text Sentry would receive */
+      function expectWithheld(report) {
+        expect(report).toContain('Model: (name withheld) — CONFIG_CONTROL_DESIGN, 121.7 MB, Dassault CATIA')
+        expect(report).not.toContain('10.0.0.5')
+        expect(report).not.toContain('ACME')
+        expect(report).not.toContain('Bracket')
+        expect(report).not.toContain('jane@example.com')
+        expect(report).not.toContain('AP203')
+      }
+
+      it('keeps the full model line in the report the user sees', () => {
+        beginLoadProgress({fileInfo: 'a518f06c.stp'})
+        reportLoadProgress({modelInfo: header})
+        expect(reportLines().join('\n')).toContain('Bracket rev2.stp')
+      })
+
+      it('withholds it from the failure context', () => {
+        beginLoadProgress({fileInfo: 'a518f06c.stp'})
+        reportLoadProgress({modelInfo: header})
+        reportLoadProgress({phase: 'geometry', completed: 1, total: 4, elapsedMs: 10})
+        endLoadProgress()
+        const {report} = loadFailureCaptureContext().contexts.load
+        expect(report).toMatch(/^Share v/)
+        expectWithheld(report)
+      })
+
+      it('withholds it from the diagnostics event', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'a518f06c.stp'})
+        reportLoadProgress({modelInfo: header})
+        console.warn('No basis found for brep!')
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1})
+        const call = captureMessage.mock.calls.find(([message]) => message.startsWith('Load diagnostics'))
+        expectWithheld(call[1].contexts.loadDiagnostics.report)
+        warnSpy.mockRestore()
+      })
+
+      // The console tee feeds the diagnostics event's title, `messages` and
+      // the report's `Warnings & errors` line, none of which pass through
+      // beforeBreadcrumb; a warning naming a dropped file mid-load must
+      // arrive there with the name withheld.
+      it('withholds a teed warning\'s file name from the diagnostics event', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        try {
+          beginLoadProgress({fileInfo: 'a518f06c.stp'})
+          console.warn(`handleFileDrop: ${consoleFileName('Secret Tower.dwg')} (267 bytes) is not a recognized model format`)
+          endLoadProgress()
+        } finally {
+          warnSpy.mockRestore()
+        }
+        captureLoadDiagnostics({warningCount: 1})
+        const [title, context] = captureMessage.mock.calls.find(([message]) => message.startsWith('Load diagnostics'))
+        expect(title).toContain('handleFileDrop: file (name withheld)')
+        expect(JSON.stringify([title, context])).not.toContain('Secret Tower')
+      })
+
+      // The non-engine path (reportModelInfo) carries the user's own file
+      // name, e.g. a Drive file's, so it is withheld the same way.
+      it('withholds a non-engine format\'s file name too', () => {
+        beginLoadProgress({fileInfo: 'gdrive:abc123'})
+        reportModelInfo({fileName: 'Client site survey.glb', schema: 'GLB', byteLength: 39_950_000})
+        endLoadProgress()
+        const {report} = loadFailureCaptureContext().contexts.load
+        expect(report).toContain('Model: (name withheld) — GLB, 38.1 MB')
+        expect(report).not.toContain('Client site survey')
+        expect(reportLines()).toContain('Model: Client site survey.glb — GLB, 38.1 MB')
+      })
+    })
+
+    /*
      * The end-of-load diagnostics event (issue #1767): the counterpart
      * a dashboard model-open chip with non-zero errors/warnings links
      * to. CadView drives it from inside the real_model_open branch, so
@@ -829,6 +963,45 @@ describe('loadProgress', () => {
           messages: ['2× No basis found for brep!'],
           report: expect.stringContaining('Share v'),
         }))
+        warnSpy.mockRestore()
+      })
+
+      // A depth-cap hit is volume-only signal (AGENTS.md, Reported
+      // Conditions): GA, once per load, and no Sentry event of its own.
+      it('counts a cap hit in GA once, and sends nothing to Sentry for it', () => {
+        beginLoadProgress({fileInfo: 'index.stp'})
+        reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
+        endLoadProgress()
+        captureLoadDiagnostics({})
+        captureLoadDiagnostics({})
+
+        expect(reportBvhDepthCapToGa.mock.calls).toEqual([[{format: 'stp', trees: 2, maxLeafTriangles: 3400}]])
+        expect(diagnosticsCall()).toBeUndefined()
+      })
+
+      it('sends nothing anywhere for a clean load that did not hit the cap', () => {
+        beginLoadProgress({fileInfo: 'index.stp'})
+        endLoadProgress()
+        captureLoadDiagnostics({})
+        expect(diagnosticsCall()).toBeUndefined()
+        expect(reportBvhDepthCapToGa).not.toHaveBeenCalled()
+      })
+
+      // The diagnostics event is still titled by the console's top message,
+      // and carries no cap field: the cap is counted in GA alone.
+      it('titles a cap hit with console diagnostics by the diagnostics', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'index.stp'})
+        console.warn('No basis found for brep!')
+        reportBvhDepthCap({trees: 1, maxLeafTriangles: 90, maxDepth: 40})
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1})
+
+        const [message, context] = diagnosticsCall()
+        expect(message).toBe('Load diagnostics: No basis found for brep!')
+        expect(context.level).toBe('warning')
+        expect(context.contexts.loadDiagnostics).not.toHaveProperty('bvhDepthCap')
+        expect(reportBvhDepthCapToGa).toHaveBeenCalledTimes(1)
         warnSpy.mockRestore()
       })
 

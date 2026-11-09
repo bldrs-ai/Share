@@ -1,12 +1,22 @@
-import {gtagEvent} from '../privacy/analytics'
-import {shouldSendSentryEvent, _resetSentryFilterStateForTests} from './sentry'
+import {init} from '@sentry/react'
+import {gtagEvent, isAllowed} from '../privacy/analytics'
+import {redactBreadcrumb} from '../privacy/sentryRedaction'
+import setupSentry, {shouldSendSentryEvent, shadowReportedCondition, _resetSentryFilterStateForTests} from './sentry'
 
 
-jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn()}))
+jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn(), isAllowed: jest.fn(() => true)}))
+jest.mock('@sentry/react', () => ({
+  ...jest.requireActual('@sentry/react'),
+  init: jest.fn(),
+}))
 
 
 beforeEach(() => {
   jest.clearAllMocks()
+  // clearAllMocks keeps queued mockReturnValueOnce values, so a consent test
+  // that fails early must not leak `false` into the next test.
+  isAllowed.mockReset()
+  isAllowed.mockReturnValue(true)
   _resetSentryFilterStateForTests()
 })
 
@@ -195,6 +205,33 @@ describe('shouldSendSentryEvent — once-per-session GA signal', () => {
     })
     expect(shouldSendSentryEvent(rumEvent())).toBe(false)
   })
+
+  it('does not consume the once-per-session signal while consent is off', () => {
+    isAllowed.mockReturnValueOnce(false)
+    expect(shouldSendSentryEvent(rumEvent())).toBe(false)
+    expect(gtagEvent).not.toHaveBeenCalled()
+    // Consent granted later in the same page session: the signal still sends.
+    expect(shouldSendSentryEvent(rumEvent())).toBe(false)
+    expect(gtagEvent).toHaveBeenCalledTimes(1)
+    expect(gtagEvent).toHaveBeenCalledWith('netlify_rum_blocked', {})
+  })
+
+  it('still drops the noise event when reading consent throws', () => {
+    isAllowed.mockImplementationOnce(() => {
+      throw new DOMException('cookies blocked', 'SecurityError')
+    })
+    expect(() => shouldSendSentryEvent(rumEvent())).not.toThrow()
+    expect(gtagEvent).not.toHaveBeenCalled()
+  })
+
+  it('leaves the signal unrecorded when gtagEvent throws, so the next drop retries', () => {
+    gtagEvent.mockImplementationOnce(() => {
+      throw new Error('gtag blew up')
+    })
+    shouldSendSentryEvent(rumEvent())
+    shouldSendSentryEvent(rumEvent())
+    expect(gtagEvent).toHaveBeenCalledTimes(2)
+  })
 })
 
 
@@ -323,5 +360,159 @@ describe('shouldSendSentryEvent — anonymous onerror heuristic (SHARE-152 / SHA
     expect(gtagEvent).toHaveBeenCalledTimes(2)
     expect(gtagEvent).toHaveBeenCalledWith('netlify_rum_blocked', {})
     expect(gtagEvent).toHaveBeenCalledWith('anonymous_injected_error', {})
+  })
+})
+
+
+// The redaction is only as good as its wiring: without this, console
+// breadcrumbs naming the user's file reach Sentry however correct
+// privacy/sentryRedaction.js is.
+describe('setupSentry', () => {
+  it('rewrites breadcrumbs through redactBreadcrumb', () => {
+    setupSentry()
+    expect(init).toHaveBeenCalledTimes(1)
+    expect(init.mock.calls[0][0].beforeBreadcrumb).toBe(redactBreadcrumb)
+  })
+})
+
+
+describe('shouldSendSentryEvent — in-app browser bridge globals (SHARE-1X7)', () => {
+  /*
+   * SHARE-1X7's shape: Zalo's iOS WKWebView host evaluates its bridge
+   * script against the page, so the frame is the page's own URL at line 1
+   * rather than `<anonymous>`, which the anonymous heuristic would catch.
+   */
+  const bridgeEvent = ({type = 'ReferenceError', value = 'Can\'t find variable: zaloJSV2', mechanism = 'onerror'} = {}) => ({
+    exception: {
+      values: [{
+        type,
+        value,
+        mechanism: {type: mechanism, handled: false},
+        stacktrace: {frames: [{filename: '/share/v/p/index.ifc', lineno: 1, colno: 21}]},
+      }],
+    },
+  })
+
+  it('drops the Zalo bridge ReferenceError and fires its GA signal once', () => {
+    expect(shouldSendSentryEvent(bridgeEvent())).toBe(false)
+    expect(shouldSendSentryEvent(bridgeEvent({value: 'zaloJSV2 is not defined'}))).toBe(false)
+    expect(gtagEvent).toHaveBeenCalledTimes(1)
+    expect(gtagEvent).toHaveBeenCalledWith('in_app_browser_bridge_error', {})
+  })
+
+  it('keeps a ReferenceError naming any other variable', () => {
+    expect(shouldSendSentryEvent(bridgeEvent({value: 'Can\'t find variable: zaloJSV2Helper'}))).toBe(true)
+    expect(shouldSendSentryEvent(bridgeEvent({value: 'Can\'t find variable: shareViewer'}))).toBe(true)
+  })
+
+  it('keeps the bridge name when it is not an uncaught ReferenceError', () => {
+    expect(shouldSendSentryEvent(bridgeEvent({type: 'TypeError'}))).toBe(true)
+    expect(shouldSendSentryEvent(bridgeEvent({mechanism: 'onunhandledrejection'}))).toBe(true)
+    expect(gtagEvent).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('shadowReportedCondition', () => {
+  const fingerprinted = (extra = {}) => ({
+    level: 'warning',
+    fingerprint: ['opfs-source', 'download-failed', 'http-error', 'external'],
+    ...extra,
+  })
+
+  it('sends one GA event for a custom-fingerprint warning, with exactly level and category', () => {
+    // A load.phase tag (possibly a sticky one from an earlier stalled load)
+    // must not reach GA.
+    shadowReportedCondition(fingerprinted({tags: {'load.phase': 'download'}}))
+    expect(gtagEvent).toHaveBeenCalledTimes(1)
+    expect(gtagEvent.mock.calls[0]).toEqual(['reported_condition', {
+      level: 'warning',
+      category: 'opfs-source/download-failed',
+    }])
+  })
+
+  it('uses the exception type when there is no custom fingerprint', () => {
+    shadowReportedCondition({exception: {values: [{type: 'TypeError', value: 'x'}]}})
+    expect(gtagEvent).toHaveBeenCalledWith('reported_condition', {level: 'error', category: 'TypeError'})
+    shadowReportedCondition({fingerprint: ['{{ default }}', 'x'], exception: {values: [{type: 'RangeError'}]}})
+    expect(gtagEvent).toHaveBeenLastCalledWith('reported_condition', {level: 'error', category: 'RangeError'})
+  })
+
+  it('does not fire for info-level events', () => {
+    shadowReportedCondition(fingerprinted({level: 'info'}))
+    expect(gtagEvent).not.toHaveBeenCalled()
+  })
+
+  it('fires once per (level, category), again for a different category', () => {
+    shadowReportedCondition(fingerprinted())
+    shadowReportedCondition(fingerprinted())
+    expect(gtagEvent).toHaveBeenCalledTimes(1)
+    shadowReportedCondition(fingerprinted({fingerprint: ['opfs-source', 'other']}))
+    expect(gtagEvent).toHaveBeenCalledTimes(2)
+  })
+
+  it('beforeSend does not report events dropped as third-party noise', () => {
+    setupSentry()
+    const {beforeSend} = init.mock.calls[0][0]
+    const noise = {exception: {values: [{type: 'TypeError', stacktrace: {frames: [{filename: '/.netlify/scripts/rum'}]}}]}}
+    expect(beforeSend(noise)).toBeNull()
+    expect(gtagEvent).not.toHaveBeenCalledWith('reported_condition', expect.anything())
+    const real = {exception: {values: [{type: 'TypeError'}]}}
+    expect(beforeSend(real)).toBe(real)
+    expect(gtagEvent).toHaveBeenCalledWith('reported_condition', {level: 'error', category: 'TypeError'})
+  })
+
+  it('never sends message, exception value or breadcrumb text to GA', () => {
+    const secret = 'secret-org/secret-repo/main/private.ifc'
+    shadowReportedCondition({
+      message: `failed ${secret}`,
+      exception: {values: [{type: 'Error', value: `404 ${secret}`}]},
+      breadcrumbs: [{message: `fetch ${secret}`}],
+    })
+    shadowReportedCondition(fingerprinted({message: secret, breadcrumbs: [{message: secret}]}))
+    expect(gtagEvent).toHaveBeenCalled()
+    expect(JSON.stringify(gtagEvent.mock.calls)).not.toMatch(/secret|private\.ifc/)
+  })
+
+  it('skips an event its reporter already counted in GA (trackAlert)', () => {
+    shadowReportedCondition({
+      level: 'error',
+      fingerprint: ['alert', 'Failed to parse model'],
+      tags: {ga_counted: 'alert'},
+    })
+    shadowReportedCondition({exception: {values: [{type: 'Error'}]}, tags: {ga_counted: 'alert'}})
+    expect(gtagEvent).not.toHaveBeenCalled()
+  })
+
+  it('does not consume a condition while analytics consent is off', () => {
+    const event = {level: 'warning', exception: {values: [{type: 'TypeError'}]}}
+    isAllowed.mockReturnValueOnce(false)
+    shadowReportedCondition(event)
+    expect(gtagEvent).not.toHaveBeenCalled()
+    // Consent granted later in the same page session: the condition still sends.
+    shadowReportedCondition(event)
+    expect(gtagEvent).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries a condition whose GA send threw', () => {
+    gtagEvent.mockImplementationOnce(() => {
+      throw new Error('gtag boom')
+    })
+    const event = {level: 'warning', exception: {values: [{type: 'TypeError'}]}}
+    shadowReportedCondition(event)
+    shadowReportedCondition(event)
+    shadowReportedCondition(event)
+    expect(gtagEvent).toHaveBeenCalledTimes(2)
+  })
+
+  it('a throwing gtagEvent does not change beforeSend\'s return', () => {
+    gtagEvent.mockImplementationOnce(() => {
+      throw new Error('gtag boom')
+    })
+    setupSentry()
+    const {beforeSend} = init.mock.calls[0][0]
+    const event = {exception: {values: [{type: 'TypeError'}]}}
+    expect(beforeSend(event)).toBe(event)
+    expect(gtagEvent).toHaveBeenCalled()
   })
 })

@@ -80,8 +80,11 @@ export function withPerf(fn) {
   }
   return function perfWrappedUpdate() {
     monitor.begin()
-    fn()
-    monitor.end()
+    // The render closure returns false for a frame it didn't paint (on
+    // demand, renderDemand.js): the panel counts paints, so an idle viewer
+    // reads 0 FPS rather than the display's refresh rate.
+    const painted = fn()
+    monitor.end(painted !== false)
   }
 }
 
@@ -247,6 +250,8 @@ class Monitor {
     this.beginTime = performance.now()
     this.prevTime = this.beginTime
     this.frames = 0
+    // The FPS last shown, for `window.perf.fps()`.
+    this.lastFps = null
   }
 
   /** Advance to the next sub-panel and update which canvas is visible. */
@@ -264,18 +269,23 @@ class Monitor {
 
   /**
    * Stamp the frame-end time and push samples into the sub-panels.
-   * MS updates every frame; FPS and MB update once per `FPS_REFRESH_MS`
-   * so the displayed numbers don't strobe.
+   * MS updates every painted frame; FPS and MB update once per
+   * `FPS_REFRESH_MS` so the displayed numbers don't strobe.
+   *
+   * @param {boolean} [painted] whether this frame painted; one that didn't
+   *   (render-on-demand) counts toward neither FPS nor MS
    */
-  end() {
-    this.frames++
+  end(painted = true) {
     const time = performance.now()
-
-    this.panels[I_MS].update(time - this.beginTime, MS_MAX)
+    if (painted) {
+      this.frames++
+      this.panels[I_MS].update(time - this.beginTime, MS_MAX)
+    }
 
     if (time >= this.prevTime + FPS_REFRESH_MS) {
       const fps = (this.frames * FPS_REFRESH_MS) / (time - this.prevTime)
       this.panels[I_FPS].update(fps, FPS_MAX)
+      this.lastFps = fps
 
       // Chromium-only — `performance.memory` is non-standard.  Skip when
       // unavailable so Firefox / Safari just don't update the MB panel.
@@ -318,6 +328,10 @@ if (isPerfEnabled) {
       const hidden = monitor.dom.style.display === 'none'
       monitor.dom.style.display = hidden ? '' : 'none'
       return hidden
+    },
+    /** @return {number|null} the FPS the panel shows: paints per second */
+    fps() {
+      return monitor.lastFps
     },
   }
 }

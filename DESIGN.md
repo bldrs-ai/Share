@@ -74,7 +74,7 @@ GitHub API integration for model versioning and collaboration:
 
 ## Build System
 - **ESBuild** configuration in `tools/esbuild/`
-- Dual build targets: Conway engine (default) and web-ifc
+- Single engine: Conway (web-ifc-shaped API via `@bldrs-ai/conway/web-ifc`; the real-web-ifc comparison build was removed 2026-11-01, see design/new/adapter-removal.md)
 - Environment-specific configs: dev, prod, cypress
 - Multi-threading support with Conway engine
 - Bundle analysis and optimization tools
@@ -99,7 +99,7 @@ GitHub API integration for model versioning and collaboration:
 ## Model Processing Pipeline
 1. URL parsing and model path resolution (`Share.jsx`, `src/utils/urlHelpers.js`)
 2. File loading through format-specific loaders (`src/loader/`)
-3. IFC processing with Conway or web-ifc engines
+3. IFC processing with the Conway engine
 4. 3D scene setup and rendering (`Infrastructure/`)
 5. UI state synchronization and user interactions
 
@@ -118,6 +118,106 @@ future refactor pulls render-driving out of the highlighter — e.g. into
 a dedicated `RenderLoop` module — `setRenderUpdate` is the seam that
 moves with it.
 
+**On-demand painting while a model streams in (open-205 #2043).** The
+closure consults the viewer's `RenderDemand` (`src/viewer/three/renderDemand.js`,
+one per `IfcContext`, `ThreeContext#getRenderDemand`). Outside a load it is
+inert and every frame paints, as before. For the length of a load (CadView
+opens a scope as the load starts and closes it when the load settles;
+`ProgressiveLoadSession` holds a nested one for the parse) the loop keeps
+ticking — camera-controls still updates in it — but paints
+only when asked: on the next frame for camera moves (all but the load's
+camera follow, which snaps inside `runFollowMove` so its updates are told
+apart by call), a selection
+change (`ShareViewer#setPreviewSelection`), a resize or the load's first
+geometry; within a frame budget
+(at least 100 ms apart and four times the last paint's cost, measured from
+the paint to the next frame, because the draw call itself returns long
+before the GPU work behind it is done) for arriving geometry, the camera
+follow's refits and a one-second heartbeat. Anything
+new that changes the picture *during* a load and must show at once calls
+`getRenderDemand().invalidate()`; after the load nothing needs to (unless
+the session paints on demand too; next paragraph). Why:
+design/new/in-app-model-switch.md §4.2a.
+
+**On-demand painting for the whole session (render-on-demand, story #2055,
+on by default since the flip after #2096).** `IfcContext` calls
+`RenderDemand#startSession` when `renderOnDemandMode.js#isRenderOnDemandOn`
+says so, so between loads the loop still ticks but paints only when
+something asks, with no heartbeat and no budget: an idle viewer paints
+nothing. That predicate is the only reader of the flags; everything else
+that behaves differently on demand reads `RenderDemand#isSession`. With it
+off (the switches below) the loop paints every frame between loads, as
+before #2055, and the hooks in layer 3 are not installed. A change that
+never asks leaves a stale frame up, so asking is layered,
+cheapest-to-forget last:
+
+1. The camera: camera-controls `update` (input, damping, transitions:
+   ViewCube, fit, permalink pose), window resize. Between loads a
+   `controlstart` alone doesn't paint (the move after it does), and the
+   camera updates before the renderer in the frame rather than after it
+   (`IfcContext#updateAllComponents`), so a frame shows this frame's pose.
+   Both cut the first input from idle by a frame.
+2. `requestPaint()` (`renderDemand.js`), callable from anywhere, for what
+   three gives no signal for: `visible`, material colour, opacity and
+   wireframe, outline selections (IfcHighlighter, the isolation outline),
+   lights and look parameters, placemark colours, the cut-plane arrows.
+   `renderOnDemandSources.test.js` lists every file that makes one of those
+   mutations and fails on a new, unaudited one.
+3. Hooks on three's own change signals, installed only when the session
+   is on demand (`renderDemandHooks.js#installSceneHooks`): `Object3D#add`/`attach`/
+   `remove`, the BatchedMesh mutators (`setColorAt`, `setVisibleAt`, …), and
+   `needsUpdate` on materials, textures and attributes. They ask for a
+   background paint (the next frame between loads, the budget during one),
+   and ignore what three mutates while it draws (`runPaint`; BatchedMesh
+   rebuilds its indirect texture in `onBeforeRender`).
+4. A per-frame probe of what a paint reads that costs microseconds
+   (`createSceneProbe`): camera pose and projection, drawing-buffer size and
+   pixel ratio, cut planes, scene background/environment/root children,
+   tone mapping. Snapshotted at each paint.
+5. A settle window (`SETTLE_MS`, 200 ms of painting) after user input on
+   the page (not a bare press), a pointer move over the canvas, and any
+   store change
+   (CadView subscribes): for the change a React effect applies a frame
+   after the event. During a load these are background asks.
+6. `keepPainting()` for what changes on its own clock: a scene with Spark
+   splats paints every frame, since the sort lands asynchronously.
+
+Tests that a source does ask: `renderDemand.test.js`,
+`renderDemandHooks.test.js` and the behavioural half of
+`renderOnDemandSources.test.js` (hooks off, so only the source's own ask can
+pass); `renderOnDemandMode.test.js` (the default, the kill switch, the
+rollback beating a URL opt-in); `renderOnDemand.spec.ts` (desktop + mobile,
+on the default URL) checks that an idle viewer stops painting, that a drag
+(through its damping tail), a selection and a resize repaint, and that a
+fresh parse in the engine worker and a GLB cache hit each end on a current
+frame, with the last on-demand paint matching a forced fresh one; its
+`?feature=disableRenderOnDemand` leg checks that an idle viewer keeps
+painting. The E2E `captureRenderedFrame` asks for its own paint, so it works
+either way.
+
+**Rolling back.** Whether the session paints on demand is one decision,
+`viewer/three/renderOnDemandMode.js#paintEveryFrameReason`, read when the
+viewer is built (a theme change rebuilds it and reads it again).
+- *Prod-wide:* set `disableRenderOnDemand` to `isActive: true` in
+  `FeatureFlags.js` and deploy. The predicate reads that static value
+  before any URL flag, so every viewer paints every frame between loads,
+  including links that still carry `?feature=renderOnDemand`. Loads stay
+  on demand (#2043), as they were before #2055.
+- *Not* `renderOnDemand: false`. `isFeatureEnabled` ORs a static flag with
+  the URL, so that would leave every `?feature=renderOnDemand` link (the
+  burn-in links, older bug reports) on demand. The same trap as
+  `engineWorker` (engine-worker.md §7.2, Codex review on #2083).
+- *One session:* `?feature=disableRenderOnDemand`, the first thing to try
+  on a stale-frame report: if the frame is right with it and wrong without,
+  a change source isn't asking. Fix it at the source (`requestPaint()`, or
+  a hook) and add it to `renderOnDemandSources.test.js`.
+- *To confirm which mode a page is in:* `?feature=perf` reads 0 FPS on an
+  idle on-demand viewer and the display rate otherwise; from devtools,
+  `store.getState().viewer.context.getRenderDemand().isSession`.
+  The mode is also on every Sentry event as the `render_mode` tag and
+  counted in GA as the `render_mode` event (`reportRenderMode.js`, once per
+  page load): `on-demand` or `every-frame:<reason>`.
+
 Perf instrumentation attaches at that seam, not inside the closure:
 
 ```js
@@ -132,7 +232,9 @@ context.setRenderUpdate(withPerf(newUpdateFunction(context, getComposer)))
   render closure has no perf code; `window.perf` is not defined; no DOM
   or sampling state is created. Zero per-frame cost.
 - **Flag on:** `withPerf` returns a wrapper that brackets `fn()` with
-  `monitor.begin()` / `monitor.end()`. The Monitor singleton is built
+  `monitor.begin()` / `monitor.end(painted)`. The render closure returns
+  whether it painted, and only painted frames count toward FPS and MS, so
+  a viewer painting on demand reads 0 FPS when idle. The Monitor singleton is built
   at module load but **not** attached to the DOM yet; sampling runs on
   the offscreen canvases regardless. `window.perf` is installed for
   show/hide/toggle from devtools.
@@ -159,7 +261,7 @@ The panel is **on by default** when `?feature=perf` is set — the
 canvas wrapper is created without `display:none` and `mountPerfPanel`
 just `appendChild`s it. `window.perf.off()` / `on()` /  `toggle()`
 remain available for developers who want to hide/show it without
-reloading.
+reloading, and `window.perf.fps()` reads the FPS it shows.
 
 Three panels rotate on click — FPS, frame time (ms), JS heap MB (the
 last only where Chromium's `performance.memory` is available). The

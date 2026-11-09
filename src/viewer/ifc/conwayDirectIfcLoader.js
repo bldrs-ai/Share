@@ -55,10 +55,12 @@
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {reportEngineVersion} from '../../loader/loadProgress'
 import {makeBlobByteStore} from '../../loader/opfsSourceByteStore'
+import {openDeferred} from '../../loader/conwayOpen'
 import {beginOpenAttempt, conwayOpenFailure, conwayRefusedSchema, openModelFailure} from '../../loader/unsupportedSchema'
 import debug, {WARN} from '../../utils/debug'
 import {attachInstanceMapSubsets} from '../three/elementSubsets'
 import {instanceMapFromGeometry} from './IfcInstanceMap'
+import {enableStepPreviewFinishParse, testPumpBatchSize, testStepPreviewFinishParse} from './pumpTestSeams'
 
 
 /**
@@ -91,7 +93,7 @@ import {instanceMapFromGeometry} from './IfcInstanceMap'
  * @param {Function} [onProgress] receives conway's structured
  *   ProgressEvents ({phase, completed, total?, unit, elapsedMs}) during
  *   the parse — a conway `Loadersettings.ON_PROGRESS` extension (#301);
- *   silently ignored by engines that predate it (real web-ifc, old pins).
+ *   silently ignored by engine pins that predate it.
  * @param {Function} [onMeshBatch] demand/tiled slice A: receives
  *   `(flatMeshes, modelID, {done, total})` — the batch, its model, and
  *   the pump's product progress — for each extracted batch as it lands (only
@@ -135,7 +137,7 @@ export async function parseIfcWithConway(
   }
   applyEngineLogLevel(ifcAPI)
   // Engine identity line for the load report (log line 2) — e.g.
-  // "Conway v1.379.1190". Feature-detected; real web-ifc lacks it.
+  // "Conway v1.379.1190". Feature-detected, like the other engine extensions.
   if (typeof ifcAPI.getConwayVersion === 'function') {
     reportEngineVersion(ifcAPI.getConwayVersion())
   }
@@ -197,9 +199,10 @@ export async function parseIfcWithConway(
       // callback to an engine without the channel is harmless (unknown
       // settings are ignored), so no feature detection is needed here.
       deferSettings.ON_PREVIEW_MESH = onPreviewMesh
+      if (testStepPreviewFinishParse()) {
+        enableStepPreviewFinishParse()
+      }
     }
-    let modelID
-    let openData = data
     // Did the open land on a WINDOWED source — bytes paged on demand out of
     // an OPFS/Blob store — rather than a resident buffer? Load-bearing for
     // the retention decision below, and knowable only here: conway exposes
@@ -208,36 +211,22 @@ export async function parseIfcWithConway(
     // this loader produces a windowed model. Nothing later flips it — the
     // one call that would (`spillModelSource`) runs from the GLB writer's
     // `finally`, long after `parse` has returned.
-    let windowedSource = false
-    // The LAST open below, marked immediately before it is made — how a
-    // refusal's load status is found (unsupportedSchema.js#beginOpenAttempt).
-    let attempt
-    if (store !== null) {
-      attempt = beginOpenAttempt(ifcAPI)
-      // eslint-disable-next-line new-cap
-      modelID = await ifcAPI.OpenModelStream(store, deferSettings)
-      windowedSource = typeof modelID === 'number' && modelID >= 0
-      // A schema refusal is final: the buffered fallback would only reach
-      // the same refusal after up to two more whole-file parses (conway's
-      // streamed open falls back to the classic one), and a large file
-      // could run out of memory before refusing.
-      if (!windowedSource && !conwayRefusedSchema(ifcAPI, attempt)) {
-        // IFC-only store path: STEP / failed sniff falls back to a
-        // buffered streamed open (conway#510 contract).
-        openData = await bytesFromSource(buffer)
-        attempt = beginOpenAttempt(ifcAPI)
-        // eslint-disable-next-line new-cap
-        modelID = await ifcAPI.OpenModelStreamed(openData, deferSettings)
-      }
-    } else {
-      attempt = beginOpenAttempt(ifcAPI)
-      // eslint-disable-next-line new-cap
-      modelID = await ifcAPI.OpenModelStreamed(openData, deferSettings)
-    }
+    //
+    // The open sequence itself (windowed, then buffered unless the windowed
+    // open was a schema refusal) is shared with the engine worker
+    // (loader/conwayOpen.js#openDeferred), so the two engines cannot drift.
+    // `data` is null on the store path; the buffered fallback reads the
+    // source then.
+    const {modelID, windowed: windowedSource, attempt} = await openDeferred(ifcAPI, {
+      store,
+      loadBytes: async () => data ?? await bytesFromSource(buffer),
+      settings: deferSettings,
+    })
     if (typeof modelID !== 'number' || modelID < 0) {
       throw await openModelFailure(modelID, buffer, conwayRefusedSchema(ifcAPI, attempt),
         conwayOpenFailure(ifcAPI, attempt))
     }
+    await holdIndexForTest()
     if (onIndexed) {
       // Started, not awaited (codex/PSB review on #2037). The caller's tree
       // walk is conway's `properties.getSpatialStructure(modelID, 'names')`.
@@ -270,7 +259,7 @@ export async function parseIfcWithConway(
     // decides the retention question below. Feature-detected rather than
     // version-gated: the pin this landed on (1.1578.666-g39d59784) does NOT
     // have it, so the new regime is dormant until the next routine bump,
-    // and an engine swap (real web-ifc, an older pin, a future one) picks
+    // and an engine swap (an older pin, a future one) picks
     // its regime by what it actually implements.
     const hasAsyncWholeModelAsk = typeof ifcAPI.StreamAllMeshesAsync === 'function'
     // Retention decision (conway#638, completed by conway#660). `captured`
@@ -371,13 +360,13 @@ export async function parseIfcWithConway(
         // the per-batch scene update.
         // eslint-disable-next-line new-cap
         const pumped = await ifcAPI.ExtractGeometryBatchAsync(
-          modelID, ASYNC_DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
+          modelID, testPumpBatchSize() ?? ASYNC_DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
         extracted = pumped.extracted
         remaining = pumped.remaining
       } else {
         // eslint-disable-next-line new-cap
         const pumped = ifcAPI.ExtractGeometryBatch(
-          modelID, DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
+          modelID, testPumpBatchSize() ?? DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
         extracted = pumped.extracted
         remaining = pumped.remaining
       }
@@ -405,6 +394,7 @@ export async function parseIfcWithConway(
           // first pump call has returned, which is also the first call
           // that can produce a batch, so in practice it is always set here.
           onMeshBatch(batch, modelID, {done: geometryDone, total: geometryTotal})
+          await holdMidPumpForTest()
         }
         // `batch` itself goes out of scope on the next iteration, so on the
         // streaming path the last reference to this batch's FlatMeshes is
@@ -537,7 +527,7 @@ export async function parseIfcWithConway(
   //   2. OpenModelAsync (conway #301 §2): yields to the event loop
   //      between progress ticks, so the backdrop/snackbar actually
   //      repaint and the browser stops flagging the tab as stalled.
-  //   3. OpenModel: classic synchronous open (real web-ifc, old pins).
+  //   3. OpenModel: classic synchronous open (old pins).
   // All feature-detected, so any engine pin keeps loading.
   let modelID
   // As in the deferred path above: the last open, marked immediately
@@ -856,6 +846,49 @@ async function holdGeometryPumpForTest() {
 
 
 /**
+ * Test seam for picking during the pump (streamingBatchPick.js): awaited
+ * after EVERY batch has gone to `onMeshBatch`, so a spec can hold the load
+ * with the durable model partly on screen and not finished — the state a
+ * large model's whole geometry pass is in, which on a shippable fixture lasts
+ * well under a second — and step it a batch at a time (the hook resolves at
+ * once for the batches it lets through). `streamingBatchPick.spec.ts`
+ * installs `window.__bldrsTestHoldMidPump` with `addInitScript`; the engine
+ * worker honours the same hook (engine/engineModelLoad.js). Absent in
+ * production, where this is a property read per batch.
+ *
+ * @return {Promise<void>}
+ */
+async function holdMidPumpForTest() {
+  const hold = globalThis.__bldrsTestHoldMidPump
+  if (typeof hold === 'function') {
+    await hold()
+  }
+}
+
+
+/**
+ * Test seam for open-205 #2043: hold the load between the end of the parse and
+ * the index, i.e. before `onIndexed` publishes the model at its index. The
+ * parse-time preview meshes are on screen by then and nothing else is: no
+ * tree, no properties, no durable geometry — the state a user is in for the
+ * whole parse of a large model, which on any fixture small enough to ship
+ * lasts well under a second. The E2E that proves the canvas is live from the
+ * first preview mesh (orbit, pick, the pick surviving into the finished
+ * model) installs `window.__bldrsTestHoldIndex` with `addInitScript` and
+ * resolves it to let the load go on. Absent in production, where this is a
+ * property read. Same shape as {@link holdGeometryPumpForTest}.
+ *
+ * @return {Promise<void>}
+ */
+async function holdIndexForTest() {
+  const hold = globalThis.__bldrsTestHoldIndex
+  if (typeof hold === 'function') {
+    await hold()
+  }
+}
+
+
+/**
  * The model as it is at the index (open-205 #2029): a plain object carrying
  * the property and spatial surface the finished model will have, before any
  * geometry exists. It is what the NavTree, Properties and search read while
@@ -880,8 +913,8 @@ export function makeIndexedModelHandle(ifcAPI, modelID) {
 }
 
 
-// web-ifc numeric log levels (conway's SetLogLevel shim uses the same
-// numbering so an engine swap keeps working).
+// web-ifc numeric log levels (conway's SetLogLevel shim keeps web-ifc's
+// numbering).
 const ENGINE_LOG_LEVEL_DEBUG = 1
 const ENGINE_LOG_LEVEL_WARN = 3
 
@@ -889,8 +922,8 @@ const ENGINE_LOG_LEVEL_WARN = 3
 /**
  * Quiet the engine's console for a clean load (#301 §6): warnings/errors
  * only by default, everything (deduped log table included) under the
- * `glbVerbose` diagnostics flag. Feature-detected — old engine pins and
- * real web-ifc's wasm-side SetLogLevel both tolerate or lack this call.
+ * `glbVerbose` diagnostics flag. Feature-detected — old engine pins may
+ * lack this call.
  *
  * @param {object} ifcAPI
  */

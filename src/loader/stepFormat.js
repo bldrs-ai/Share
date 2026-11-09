@@ -3,6 +3,7 @@
 // itself and not a re-implementation — see the note on `isConwayIfcFormat`.
 import ModelFormatDetector, {ModelFormatType} from '@bldrs-ai/conway/src/format_detection/model_format_detector'
 import ParsingBuffer from '@bldrs-ai/conway/src/parsing/parsing_buffer'
+import {storeOpenRequirementOf} from '@bldrs-ai/conway/src/compat/web-ifc/store_open_support'
 import debug from '../utils/debug'
 
 
@@ -177,9 +178,14 @@ function endsWithBytesIgnoringTrailingWs(haystack, start, end, needle) {
  * these bytes — i.e. when its detector reads them as IFC rather than
  * AP214/AP203/AP242 or as no format at all.
  *
+ * The main-thread engine's store open takes IFC only (a STEP needs a store
+ * that reads synchronously, conway#757 — see
+ * {@link conwayStoreOpenRequirement}, which `Loader.js#canOpenFromStore`
+ * asks), and is what this answers for.
+ *
  * **This calls conway's detector rather than mirroring it, and that is the
- * whole point.** `fromStore` reserves the model handle BEFORE it sniffs and
- * is IFC-only, so a "yes" it then refuses burns handle 0 and pushes the
+ * whole point.** `fromStore` reserves the model handle BEFORE it sniffs, so
+ * a "yes" it then refuses burns handle 0 and pushes the
  * buffered retry onto handle 1 — misaddressing every Share call site that
  * passes the scene-level id 0, the GLB writer's spatial-tree and
  * element-properties captures among them (bldrs-ai/Share#1776). Only a
@@ -211,3 +217,27 @@ export function isConwayIfcFormat(prefix) {
     return false
   }
 }
+
+
+/**
+ * What conway's store-backed open needs of its store for this file:
+ * `'any'` (IFC), `'synchronous'` (the AP214 family — STEP, and AP203/AP242
+ * files, since conway#757), or `undefined` when it does not take the file
+ * at all. Conway's own table over conway's own detector
+ * (`compat/web-ifc/store_open_support`), for the same reason
+ * {@link isConwayIfcFormat} calls the detector rather than mirroring it:
+ * the store open decides from exactly this, so asking it is the only way
+ * to agree with it.
+ *
+ * @param {Uint8Array} prefix the file's first {@link STORE_DETECT_PREFIX_BYTES}
+ * @return {('any'|'synchronous'|undefined)}
+ */
+export function conwayStoreOpenRequirement(prefix) {
+  try {
+    return storeOpenRequirementOf(prefix)
+  } catch (e) {
+    debug().warn('stepFormat#conwayStoreOpenRequirement: detect threw; buffering:', e)
+    return undefined
+  }
+}
+

@@ -109,6 +109,99 @@ function rotl(value, bits) {
 
 
 /**
+ * One murmur3 round: `hash` with `value` mixed in.
+ *
+ * A pure function over int32s, so the hot loops below can carry the running
+ * hash in a LOCAL, which TurboFan keeps unboxed. The first version stored it
+ * in the hasher's closure after every word. A closure slot holds a tagged
+ * value, and a hash spans the whole int32 range, past V8's 31-bit Smis, so
+ * such a store can mean a HeapNumber allocation per word. Together with the
+ * getter closures and per-triangle arrays `rangeCanaryOf` no longer uses, the
+ * old walk was 2.9 s of PSB's 6.8 s cache-hit hydration in Chromium; it is
+ * now 0.19 s (Share#2101).
+ *
+ * @param {number} hash int32
+ * @param {number} value
+ * @return {number} int32
+ */
+function mixWord(hash, value) {
+  let k = Math.imul(value | 0, CANARY_C1)
+  k = rotl(k, ROTL_K)
+  k = Math.imul(k, CANARY_C2)
+  const h = rotl(hash ^ k, ROTL_H)
+  return (Math.imul(h, CANARY_ROUND_MUL) + CANARY_ROUND_ADD) | 0
+}
+
+
+/**
+ * Mix one triangle's corners in, in its CANONICAL rotation: the one whose
+ * corner sequence is lexicographically smallest. Meshopt's index codec is
+ * lossless but may rotate a triangle's corners to compress better — the
+ * Export tab's Meshopt download of index.ifc came back refused until this,
+ * while the tiny jest fixtures happened not to trigger it. A rotation keeps
+ * winding and the triangle, so it is not a change the canary exists to see;
+ * a REFLECTION (winding flip) still is.
+ *
+ * Compares in place instead of building the three rotations as arrays: this
+ * runs once per triangle of every collapsed primitive.
+ *
+ * @param {number} hash int32
+ * @param {number} a
+ * @param {number} b
+ * @param {number} c
+ * @return {number} int32
+ */
+function mixTriangle(hash, a, b, c) {
+  // The rotations are (a,b,c), (b,c,a) and (c,a,b). Take each in turn when
+  // it is strictly smaller, as the array version did; which of two EQUAL
+  // triples wins cannot change the words.
+  let x = a
+  let y = b
+  let z = c
+  if (b < x || (b === x && (c < y || (c === y && a < z)))) {
+    x = b
+    y = c
+    z = a
+  }
+  if (c < x || (c === x && (a < y || (a === y && b < z)))) {
+    x = c
+    y = a
+    z = b
+  }
+  return mixWord(mixWord(mixWord(hash, x), y), z)
+}
+
+
+/**
+ * The murmur3-style word stream both canaries hash with.
+ *
+ * `state` is exposed so a row-sized loop can take the hash into a local, mix
+ * the whole row, and store it back once (see {@link mixWord}).
+ *
+ * @return {{word: Function, digest: Function, state: {hash: number, words: number}}}
+ */
+function makeWordHash() {
+  const state = {hash: CANARY_SEED, words: 0}
+  return {
+    state,
+    word(value) {
+      state.hash = mixWord(state.hash, value)
+      state.words++
+    },
+    digest() {
+      let h = state.hash ^ state.words
+      h ^= h >>> FMIX_SHIFT_A
+      h = Math.imul(h, FMIX_1)
+      h ^= h >>> FMIX_SHIFT_B
+      h = Math.imul(h, FMIX_2)
+      h ^= h >>> FMIX_SHIFT_A
+      return h >>> 0
+    },
+  }
+}
+
+
+/**
  * A streaming hash over collapsed rows — see the module doc for what it
  * witnesses and why it is exact.
  *
@@ -119,13 +212,27 @@ function rotl(value, bits) {
  * two rows carry identical geometry: moving a boundary changes which words
  * land in which row.
  *
- * @return {{row: Function, digest: Function}}
+ * @return {{row: Function, rowFromArrays: Function, digest: Function}}
  */
 export function makeRangeCanary() {
   const float = new Float32Array(1)
   const bits = new Uint32Array(float.buffer)
   const hasher = makeWordHash()
-  const {word} = hasher
+  const {word, state} = hasher
+
+  /**
+   * The identity and count words that open every row.
+   *
+   * @param {object} identity
+   * @param {number} vertexCount
+   * @param {number} indexCount
+   */
+  function rowHeader(identity, vertexCount, indexCount) {
+    identityWords(identity, word)
+    word(vertexCount)
+    word(indexCount)
+  }
+
   return {
     /**
      * @param {object} identity `{parent, occurrenceId, geometryId,
@@ -137,89 +244,74 @@ export function makeRangeCanary() {
      * @param {function(number): number} localIndexAt
      */
     row(identity, vertexCount, positionAt, indexCount, localIndexAt) {
-      identityWords(identity, word)
-      word(vertexCount)
-      word(indexCount)
-      // Triangle by triangle, each in a CANONICAL rotation: the one whose
-      // corner sequence is lexicographically smallest. Meshopt's index codec
-      // is lossless but may rotate a triangle's corners to compress better —
-      // the Export tab's Meshopt download of index.ifc came back refused
-      // until this, while the tiny jest fixtures happened not to trigger it.
-      // A rotation keeps winding and the triangle, so it is not a change the
-      // canary exists to see; a REFLECTION (winding flip) still is.
+      rowHeader(identity, vertexCount, indexCount)
+      let h = state.hash
       const whole = indexCount - (indexCount % TRIANGLE_CORNERS)
       for (let t = 0; t < whole; t += TRIANGLE_CORNERS) {
-        const a = localIndexAt(t)
-        const b = localIndexAt(t + 1)
-        const c = localIndexAt(t + 2)
-        const [x, y, z] = smallestRotation(a, b, c)
-        word(x)
-        word(y)
-        word(z)
+        h = mixTriangle(h, localIndexAt(t), localIndexAt(t + 1), localIndexAt(t + 2))
       }
       for (let i = whole; i < indexCount; i++) {
-        word(localIndexAt(i))
+        h = mixWord(h, localIndexAt(i))
       }
       for (let v = 0; v < vertexCount; v++) {
         for (let c = 0; c < COMPONENTS_PER_POSITION; c++) {
           float[0] = positionAt(v, c)
-          word(bits[0])
+          h = mixWord(h, bits[0])
         }
       }
+      state.hash = h
+      state.words += indexCount + (vertexCount * COMPONENTS_PER_POSITION)
+    },
+
+    /**
+     * {@link row} over a merged primitive's own arrays: the same words in the
+     * same order, so the same digest, without a callback per word. This is
+     * the reader's path (`rangeCanaryOf`), which on a cache hit walks every
+     * vertex and index of every collapsed table — ~55M words on PSB
+     * (Share#2101).
+     *
+     * @param {object} identity as in {@link row}
+     * @param {Float32Array} positions vertex v's component c is at
+     *   `(v * stride) + offset + c`
+     * @param {number} stride
+     * @param {number} offset
+     * @param {number} vertexStart the row's first vertex
+     * @param {number} vertexCount
+     * @param {Uint32Array|Uint16Array} indices ABSOLUTE vertex indices; the row's
+     *   local ones are these minus `vertexStart`
+     * @param {number} indexStart
+     * @param {number} indexCount
+     */
+    rowFromArrays(identity, positions, stride, offset, vertexStart, vertexCount,
+      indices, indexStart, indexCount) {
+      rowHeader(identity, vertexCount, indexCount)
+      let h = state.hash
+      const indexEnd = indexStart + indexCount
+      const wholeEnd = indexEnd - (indexCount % TRIANGLE_CORNERS)
+      let i = indexStart
+      for (; i < wholeEnd; i += TRIANGLE_CORNERS) {
+        h = mixTriangle(h,
+          indices[i] - vertexStart, indices[i + 1] - vertexStart, indices[i + 2] - vertexStart)
+      }
+      for (; i < indexEnd; i++) {
+        h = mixWord(h, indices[i] - vertexStart)
+      }
+      // Through the float32 scratch, as `row` does, rather than off a Uint32
+      // view of `positions`: the two agree for every bit pattern but a
+      // signalling or non-canonical NaN, which this way hashes the same as
+      // `row` would hash it too.
+      const vertexEnd = vertexStart + vertexCount
+      for (let v = vertexStart; v < vertexEnd; v++) {
+        const at = (v * stride) + offset
+        for (let c = 0; c < COMPONENTS_PER_POSITION; c++) {
+          float[0] = positions[at + c]
+          h = mixWord(h, bits[0])
+        }
+      }
+      state.hash = h
+      state.words += indexCount + (vertexCount * COMPONENTS_PER_POSITION)
     },
     digest: hasher.digest,
-  }
-}
-
-
-/**
- * The rotation of a triangle's corners that is lexicographically smallest.
- *
- * @param {number} a
- * @param {number} b
- * @param {number} c
- * @return {Array<number>}
- */
-function smallestRotation(a, b, c) {
-  const rotations = [[a, b, c], [b, c, a], [c, a, b]]
-  let best = rotations[0]
-  for (const r of rotations) {
-    if (r[0] < best[0] || (r[0] === best[0] && (r[1] < best[1] ||
-        (r[1] === best[1] && r[2] < best[2])))) {
-      best = r
-    }
-  }
-  return best
-}
-
-
-/**
- * The murmur3-style word stream both canaries hash with.
- *
- * @return {{word: Function, digest: Function}}
- */
-function makeWordHash() {
-  let hash = CANARY_SEED
-  let words = 0
-  return {
-    word(value) {
-      let k = Math.imul(value | 0, CANARY_C1)
-      k = rotl(k, ROTL_K)
-      k = Math.imul(k, CANARY_C2)
-      hash ^= k
-      hash = rotl(hash, ROTL_H)
-      hash = (Math.imul(hash, CANARY_ROUND_MUL) + CANARY_ROUND_ADD) | 0
-      words++
-    },
-    digest() {
-      let h = hash ^ words
-      h ^= h >>> FMIX_SHIFT_A
-      h = Math.imul(h, FMIX_1)
-      h ^= h >>> FMIX_SHIFT_B
-      h = Math.imul(h, FMIX_2)
-      h ^= h >>> FMIX_SHIFT_A
-      return h >>> 0
-    },
   }
 }
 
@@ -266,6 +358,44 @@ export function tableRowIdentity(table, row) {
 
 
 /**
+ * The typed arrays behind a float32 POSITION and its index, for
+ * `rowFromArrays`; or null when either has to be read through its accessor,
+ * and the canary takes the getter path instead.
+ *
+ * Covers the two layouts GLTFLoader gives an uncompressed (or Meshopt)
+ * artifact: a plain `BufferAttribute`, and an `InterleavedBufferAttribute`
+ * when POSITION shares a strided bufferView with NORMAL, which is the
+ * writer's layout. A normalized or integer POSITION (KHR_mesh_quantization)
+ * stays on `getX`, which denormalizes it, as does an index that is not a
+ * plain one-wide typed array.
+ *
+ * @param {object} position
+ * @param {object} index
+ * @return {object|null} `{positions, stride, offset, indices}`: the
+ *   Float32Array POSITION is read from, its stride and offset in floats, and
+ *   the index's typed array
+ */
+function float32ArraysOf(position, index) {
+  if (position.normalized || index.isInterleavedBufferAttribute || index.normalized ||
+      index.itemSize !== 1 || !ArrayBuffer.isView(index.array) ||
+      position.itemSize < COMPONENTS_PER_POSITION) {
+    return null
+  }
+  const interleaved = position.isInterleavedBufferAttribute === true
+  const positions = interleaved ? position.data?.array : position.array
+  if (!(positions instanceof Float32Array)) {
+    return null
+  }
+  return {
+    positions,
+    stride: interleaved ? position.data.stride : position.itemSize,
+    offset: interleaved ? position.offset : 0,
+    indices: index.array,
+  }
+}
+
+
+/**
  * The canary a collapsed table produces over a merged geometry — the READER
  * half, compared against the `canary` the writer stored.
  *
@@ -287,6 +417,7 @@ export function rangeCanaryOf(geometry, table) {
     return null
   }
   const canary = makeRangeCanary()
+  const arrays = float32ArraysOf(position, index)
   const read = [
     (v) => position.getX(v),
     (v) => position.getY(v),
@@ -297,10 +428,15 @@ export function rangeCanaryOf(geometry, table) {
     if (vertexStart + vertexCount > position.count || indexStart + indexCount > index.count) {
       return null
     }
-    canary.row(
-      tableRowIdentity(table, r),
-      vertexCount, (v, c) => read[c](vertexStart + v),
-      indexCount, (i) => index.getX(indexStart + i) - vertexStart)
+    if (arrays) {
+      canary.rowFromArrays(tableRowIdentity(table, r), arrays.positions, arrays.stride,
+        arrays.offset, vertexStart, vertexCount, arrays.indices, indexStart, indexCount)
+    } else {
+      canary.row(
+        tableRowIdentity(table, r),
+        vertexCount, (v, c) => read[c](vertexStart + v),
+        indexCount, (i) => index.getX(indexStart + i) - vertexStart)
+    }
   }
   return canary.digest()
 }
