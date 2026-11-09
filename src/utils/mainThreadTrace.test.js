@@ -1,6 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {
-  compactLoaf, loadWindow, percentile, replayBlocks, sanitizeInvoker, sourceBasename,
+  compactLoaf, hiddenPeriods, loadWindow, markWindow, percentile, replayBlocks, sanitizeInvoker, sourceBasename,
   summarizeWindow, topScripts,
 } from './mainThreadTrace'
 
@@ -92,13 +92,38 @@ describe('utils/mainThreadTrace', () => {
       }
       const s = summarizeWindow(trace, {from: 0, to: 1000})
       expect(s.frames).toBe(5)
-      expect(s.frameIntervalMs).toEqual({p50: 16, p95: 100, max: 100, over50: 1})
+      expect(s.frameIntervalMs).toEqual({p50: 16, p95: 100, max: 100, over50: 1, hiddenGaps: 0})
       expect(s.loaf).toEqual({count: 1, nonRenderMs: 90, renderMs: 10, maxNonRenderMs: 90})
       expect(s.longTasks).toEqual({count: 1, totalMs: 100, maxMs: 100})
       expect(s.pointermoveDelayMs).toMatchObject({n: 1, p50: 80})
       expect(s.discreteInputDelayMs).toEqual({n: 1, p95: 70})
       expect(s.topScripts).toEqual([{key: 'user-callback · build · i.js', ms: 80, count: 1}])
     })
+  })
+
+  describe('hidden tab', () => {
+    const trace = {
+      stoppedAt: 10000,
+      frames: [0, 16, 32, 6032, 6048],
+      events: [{t: 40, name: 'hidden'}, {t: 6000, name: 'visible'}, {t: 9000, name: 'hidden'}],
+    }
+
+    it('turns hidden/visible events into spans, an open one running to the end', () => {
+      expect(hiddenPeriods(trace)).toEqual([[40, 6000], [9000, 10000]])
+    })
+
+    it('leaves out a frame gap the tab spent hidden, instead of calling it a stall', () => {
+      const s = summarizeWindow(trace, {from: 0, to: 10000})
+      expect(s.frameIntervalMs).toEqual({p50: 16, p95: 16, max: 16, over50: 0, hiddenGaps: 1})
+      // Without the events, the same frames read as a 6 s stall.
+      expect(summarizeWindow({...trace, events: []}, {from: 0, to: 10000}).frameIntervalMs.max).toBe(6000)
+    })
+  })
+
+  it('markWindow spans the first to the last Mark, or is null without two', () => {
+    expect(markWindow({events: [{t: 5, name: 'mark'}, {t: 9, name: 'loadEnd'}, {t: 20, name: 'mark'}]}))
+      .toEqual({from: 5, to: 20, label: 'between marks'})
+    expect(markWindow({events: [{t: 5, name: 'mark'}]})).toBeNull()
   })
 
   it('topScripts ranks attribution by total time', () => {

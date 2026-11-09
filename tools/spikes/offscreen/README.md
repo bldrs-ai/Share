@@ -40,6 +40,8 @@ serves it.
 ## Protocol
 
 Use Chrome or Edge, on a laptop on power, with nothing else heavy running.
+Brave works, but it masks the GPU's name (it reports "Brave") and its core
+count.
 
 ### A. Capture what Share's main thread still does
 
@@ -63,9 +65,11 @@ Use Chrome or Edge, on a laptop on power, with nothing else heavy running.
 ### B. Replay it against a render worker
 
 1. Open `/spike/offscreen/` on the same preview. Load the trace and pick the
-   window: **load** (start to end), **whole**, or **custom** (the times
-   between two Marks).
-2. Use the scene preset **CPU-bound**, as in §5. Set pacing to **fence**.
+   window: **load** (start to end), **between Marks** (the first to the last
+   Mark), **whole**, or **custom**.
+2. Use the scene preset **CPU-bound**, as in §5. Leave pacing at **fence,
+   two frames in flight**. One frame in flight capped every run at half the
+   display rate on an M2: the fence hadn't signalled by the next frame.
    Leave the size at the default (960×600 CSS, at your DPR).
 3. Click **Run**, and drag across the picture for the whole of each run.
    The runs are:
@@ -124,5 +128,8 @@ from A.4 for each capture. Both include the GPU name and the browser.
   dispatch.
 - With fence pacing, a frame's "done" time is the first rAF tick that sees
   its fence signalled. That is up to a frame late, on both threads alike.
+- The trace records the tab going hidden and visible. Summaries leave out
+  frame gaps the tab spent hidden, and count them separately. A hidden tab
+  gets no rAF at all, so an unmarked gap reads as a multi-second stall.
 - GPU memory per context is not measurable from a page. Watch Chrome's task
   manager (GPU process) during C if it matters.

@@ -22,7 +22,9 @@ export function createLoop(scene, inputWidth) {
   const busy = []
   const completions = []
   let skipped = 0
-  let pendingSeq = null
+  // Input seqs of drawn frames not yet known finished, oldest first (fence
+  // pacing keeps up to two in flight; scene.js).
+  const pending = []
   const abs = (t) => performance.timeOrigin + t
 
   const loop = (now) => {
@@ -31,23 +33,21 @@ export function createLoop(scene, inputWidth) {
     }
     scene.setInput(latest.x / inputWidth)
     const r = scene.tick(now)
+    for (let i = 0; i < r.completed && pending.length > 0; i++) {
+      completions.push([pending.shift(), abs(now)])
+    }
     if (!r.drawn) {
       skipped++
       requestAnimationFrame(loop)
       return
     }
-    if (r.previousDoneAt !== null && pendingSeq !== null) {
-      // Fence pacing: the previous frame is now known complete.
-      completions.push([pendingSeq, abs(r.previousDoneAt)])
-      pendingSeq = null
-    }
     frames.push(now)
     busy.push(r.busy)
-    if (r.previousDoneAt === null && scene.pacedByFence !== true) {
+    if (scene.fenced) {
+      pending.push(latest.seq)
+    } else {
       // finish/none: the draw's end is the best completion time we have.
       completions.push([latest.seq, abs(r.drawEnd)])
-    } else {
-      pendingSeq = latest.seq
     }
     requestAnimationFrame(loop)
   }
@@ -58,7 +58,7 @@ export function createLoop(scene, inputWidth) {
       busy.length = 0
       completions.length = 0
       skipped = 0
-      pendingSeq = null
+      pending.length = 0
       running = true
       requestAnimationFrame(loop)
     },

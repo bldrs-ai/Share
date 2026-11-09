@@ -27,13 +27,20 @@ function rng(seed) {
  *
  * Pacing, because §5 found a worker's rAF is not back-pressured by a slow GPU
  * the way main's is (frames queued, then the worker blocked for 2–8 s):
- * - `fence`: one frame in flight. A frame is drawn only once the previous
- *   frame's WebGL2 fence has signalled; otherwise the rAF tick is skipped.
- *   The frame's "done" time is the tick that first sees its fence signalled
- *   (up to a frame late; equally so on both threads).
+ * - `fence2` (default): at most two frames in flight, each with a WebGL2
+ *   fence. A tick draws only if fewer than two frames are still unfinished;
+ *   otherwise it is skipped. One frame in flight (`fence`) capped every run at
+ *   half the display rate on a real GPU (an M2, 2026-11-09): a frame's fence
+ *   had not signalled by the next rAF, because the browser presents it
+ *   asynchronously, so every other tick was skipped even when idle.
+ * - `fence`: at most one frame in flight (§3.3's original rule).
  * - `finish`: `gl.finish()` after each frame (what the container spike did;
  *   on a real GPU it serialises CPU and GPU, so it is pessimistic).
  * - `none`: draw on every tick, as Share does today.
+ *
+ * Fence pacing reports a frame "done" at the first tick that sees its fence
+ * signalled (up to a frame late, equally on both threads). Without a fence,
+ * the draw's end stands in.
  *
  * @param {object} canvas
  * @param {object} opts
@@ -42,15 +49,16 @@ function rng(seed) {
  * @param {number} opts.instances
  * @param {boolean} [opts.cull] camera inside the grid with a short far plane
  * @param {boolean} [opts.heavy] MSAA, log depth and denser geometry
- * @param {string} [opts.pace] 'fence' | 'finish' | 'none'
+ * @param {string} [opts.pace] 'fence2' | 'fence' | 'finish' | 'none'
  * @param {object} [opts.renderer] draw with this renderer instead of making one on `canvas`
- * @return {object} `{tris, gpu, pacedByFence, setInput(x), tick(now)}`
+ * @return {object} `{tris, renderer, gpu, setInput(x), tick(now)}`
  */
 export function makeScene(canvas, opts) {
   const {width, height, instances} = opts
   const heavy = opts.heavy === true
   const cull = opts.cull === true
-  const pace = opts.pace ?? 'fence'
+  const pace = opts.pace ?? 'fence2'
+  const maxInFlight = {fence2: 2, fence: 1}[pace] ?? 0
   // `opts.renderer`: several scenes sharing one context (the "one render
   // worker, many scenes" option of the many-views test in main.js).
   const renderer = opts.renderer ?? new WebGLRenderer({canvas, antialias: heavy, logarithmicDepthBuffer: heavy})
@@ -104,8 +112,8 @@ export function makeScene(canvas, opts) {
   })
   const radius = cull ? side * 0.4 : side * 2.6
   let azimuth = 0
-  let fence = null
-  let fenceDrawnAt = 0
+  // Unfinished frames, oldest first: their fences.
+  const inFlight = []
 
   const draw = (now) => {
     const a = azimuth + (now * 0.0002)
@@ -114,8 +122,8 @@ export function makeScene(canvas, opts) {
     renderer.render(scene, camera)
     if (pace === 'finish') {
       gl.finish()
-    } else if (pace === 'fence') {
-      fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0)
+    } else if (maxInFlight > 0) {
+      inFlight.push(gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0))
       gl.flush()
     }
   }
@@ -124,7 +132,6 @@ export function makeScene(canvas, opts) {
     tris,
     renderer,
     gpu: rendererName(gl),
-    pacedByFence: pace === 'fence',
     setInput(x) {
       azimuth = x * Math.PI * 2
     },
@@ -132,26 +139,28 @@ export function makeScene(canvas, opts) {
      * One rAF tick.
      *
      * @param {number} now the tick's timestamp
-     * @return {object} `{drawn, busy, previousDoneAt, drawEnd}`:
-     *   `previousDoneAt` is when the previous drawn frame was known complete
-     *   (fence pacing only; null otherwise), `drawEnd` when this draw returned
+     * @return {object} `{drawn, busy, completed, drawEnd}`. `completed` is
+     *   how many earlier frames this tick found finished, oldest first (fence
+     *   pacing; they finished by `now`). `drawEnd` is when this tick's draw
+     *   returned, or null if it was skipped.
      */
     tick(now) {
-      let previousDoneAt = null
-      if (pace === 'fence' && fence !== null) {
-        const status = gl.clientWaitSync(fence, 0, 0)
-        if (status === gl.TIMEOUT_EXPIRED) {
-          return {drawn: false, busy: 0, previousDoneAt: null, drawEnd: null}
-        }
-        gl.deleteSync(fence)
-        fence = null
-        previousDoneAt = Math.max(now, fenceDrawnAt)
+      let completed = 0
+      while (inFlight.length > 0 && gl.clientWaitSync(inFlight[0], 0, 0) !== gl.TIMEOUT_EXPIRED) {
+        gl.deleteSync(inFlight.shift())
+        completed++
+      }
+      if (maxInFlight > 0 && inFlight.length >= maxInFlight) {
+        return {drawn: false, busy: 0, completed, drawEnd: null}
       }
       const t0 = performance.now()
       draw(now)
       const t1 = performance.now()
-      fenceDrawnAt = t1
-      return {drawn: true, busy: t1 - t0, previousDoneAt, drawEnd: t1}
+      return {drawn: true, busy: t1 - t0, completed, drawEnd: t1}
+    },
+    /** @return {boolean} whether frames finish later than their draw (fence pacing) */
+    get fenced() {
+      return maxInFlight > 0
     },
   }
 }

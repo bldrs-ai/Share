@@ -31,7 +31,7 @@ Drag across the picture during each run. Protocol: <code>tools/spikes/offscreen/
 <fieldset><legend>Busy main thread</legend>
   <label>Source <select id="busySource"><option value="trace">Share trace</option><option value="synthetic" selected>synthetic pump</option></select></label>
   <label>Trace <input type="file" id="traceFile" accept=".json,application/json"></label>
-  <label>Window <select id="window"><option value="load">load (start → end)</option><option value="whole">whole trace</option><option value="custom">custom</option></select></label>
+  <label>Window <select id="window"><option value="load">load (start → end)</option><option value="marks">between Marks</option><option value="whole">whole trace</option><option value="custom">custom</option></select></label>
   <label>from <input type="number" id="winFrom" placeholder="ms"></label>
   <label>to <input type="number" id="winTo" placeholder="ms"></label>
   <label>Synthetic total <input type="number" id="syntheticMs" value="12000"> ms</label>
@@ -46,7 +46,7 @@ Drag across the picture during each run. Protocol: <code>tools/spikes/offscreen/
   <label>instances <input type="number" id="instances" value="100000"></label>
   <label><input type="checkbox" id="cull" checked> cull</label>
   <label><input type="checkbox" id="heavy"> heavy</label>
-  <label>Pacing <select id="pace"><option value="fence">fence (one frame in flight)</option><option value="none">none (as Share today)</option><option value="finish">gl.finish</option></select></label>
+  <label>Pacing <select id="pace"><option value="fence2">fence, two frames in flight</option><option value="fence">fence, one frame in flight</option><option value="none">none (as Share today)</option><option value="finish">gl.finish</option></select></label>
   <label>CSS size <input type="number" id="cssW" value="960"> × <input type="number" id="cssH" value="600"></label>
   <label>DPR <input type="number" id="dpr" step="0.25"></label>
   <label>Idle runs <input type="number" id="idleMs" value="8000"> ms</label>

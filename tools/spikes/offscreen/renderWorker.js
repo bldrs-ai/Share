@@ -68,16 +68,15 @@ function viewShow(index) {
   const scene = views.scenes[index]
   const first = !views.shown.has(index)
   views.shown.add(index)
-  let drawn = 0
+  let drawn = false
   const tick = (now) => {
     const r = scene.tick(now)
-    if (r.drawn) {
-      drawn++
-    }
-    if (r.previousDoneAt !== null && drawn >= 2) {
-      self.postMessage({type: 'viewShown', index, first, doneAt: performance.timeOrigin + r.previousDoneAt})
+    // Done at the first tick that finds the shown scene's first frame finished.
+    if (drawn && r.completed > 0) {
+      self.postMessage({type: 'viewShown', index, first, doneAt: performance.timeOrigin + now})
       return
     }
+    drawn = drawn || r.drawn
     requestAnimationFrame(tick)
   }
   requestAnimationFrame(tick)

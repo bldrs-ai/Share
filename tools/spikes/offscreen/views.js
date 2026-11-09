@@ -40,6 +40,7 @@ export async function runViews(opts) {
   const lost = []
   const buildMs = []
   const errors = []
+  let gpu = ''
   for (let w = 0; w < nWorkers; w++) {
     opts.onProgress?.(`building view ${w + 1}/${nWorkers}`)
     const canvas = document.createElement('canvas')
@@ -72,6 +73,7 @@ export async function runViews(opts) {
     // Wall time to a live view: worker start, context, scene build (the
     // upload happens on the first show).
     buildMs.push(performance.now() - t0)
+    gpu = gpu || ready.gpu || ''
     workers.push(view)
   }
 
@@ -125,5 +127,6 @@ export async function runViews(opts) {
     reShowP95: percentile(reShow, 95),
     lostContexts: lost,
     errors,
+    gpu,
   }
 }

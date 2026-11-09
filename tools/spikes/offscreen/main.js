@@ -8,7 +8,7 @@
 // input → frame latency and how much the busy work was stretched. See
 // README.md for the protocol. Not product code.
 import {
-  loadWindow, percentile, replayBlocks, summarizeWindow, TRACE_KIND,
+  loadWindow, markWindow, percentile, replayBlocks, summarizeWindow, TRACE_KIND,
 } from '../../../src/utils/mainThreadTrace.js'
 import {createLoop} from './loop.js'
 import {calibrate, runBlocks, syntheticBlocks} from './pump.js'
@@ -86,6 +86,9 @@ function traceWindow() {
   const choice = $('window').value
   if (choice === 'load') {
     return loadWindow(state.trace)
+  }
+  if (choice === 'marks') {
+    return markWindow(state.trace) ?? {from: 0, to: state.trace.stoppedAt, label: 'whole trace (fewer than two Marks)'}
   }
   if (choice === 'custom') {
     return {from: Number($('winFrom').value) || 0, to: Number($('winTo').value) || state.trace.stoppedAt, label: 'custom'}
@@ -348,7 +351,9 @@ function resultsJson() {
   return {
     kind: 'bldrs-offscreen-spike-results',
     version: 1,
-    env: {userAgent: navigator.userAgent, gpu: state.results[0]?.gpu || '', dpr: window.devicePixelRatio,
+    env: {userAgent: navigator.userAgent,
+      brands: (navigator.userAgentData?.brands ?? []).map((b) => `${b.brand} ${b.version}`).join(', '),
+      gpu: state.results.find((r) => r.gpu)?.gpu || state.views.find((v) => v.gpu)?.gpu || '', dpr: window.devicePixelRatio,
       hardwareConcurrency: navigator.hardwareConcurrency, itersPerMs: Math.round(state.itersPerMs)},
     trace: state.trace ?
       {env: state.trace.env, window: traceWindow(), summary: summarizeWindow(state.trace, traceWindow())} :
@@ -372,6 +377,15 @@ async function loadTrace(file) {
 }
 
 
+/**
+ * @param {number} gaps frame intervals left out because the tab was hidden
+ * @return {string}
+ */
+function hiddenNote(gaps) {
+  return gaps ? ` (${gaps} gaps left out: tab hidden)` : ''
+}
+
+
 /** Summarise the loaded trace and what would be replayed. */
 function showTraceInfo() {
   if (!state.trace) {
@@ -384,7 +398,7 @@ function showTraceInfo() {
     `Captured on: ${state.trace.env?.gpu || 'unknown GPU'} · ${state.trace.env?.userAgent ?? ''}`,
     `Window: ${win.label}, ${fmt(s.spanMs)} ms. Share's own frames there: ${fmt(s.fps)} fps, interval p50/p95/max ` +
       `${fmt(s.frameIntervalMs.p50)} / ${fmt(s.frameIntervalMs.p95)} / ${fmt(s.frameIntervalMs.max)} ms, ` +
-      `${s.frameIntervalMs.over50} over 50 ms.`,
+      `${s.frameIntervalMs.over50} over 50 ms${hiddenNote(s.frameIntervalMs.hiddenGaps)}.`,
     `Main-thread work outside rendering: ${fmt(s.loaf.nonRenderMs)} ms in ${s.loaf.count} long frames ` +
       `(max ${fmt(s.loaf.maxNonRenderMs)} ms); rendering in them: ${fmt(s.loaf.renderMs)} ms. ` +
       `Long tasks: ${s.longTasks.count}, ${fmt(s.longTasks.totalMs)} ms.`,

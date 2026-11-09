@@ -195,9 +195,16 @@ export function loadWindow(trace) {
 export function summarizeWindow(trace, win) {
   const inWin = (t) => t >= win.from && t < win.to
   const frames = (trace.frames ?? []).filter(inWin)
+  const hiddenSpans = hiddenPeriods(trace)
+  const spansHidden = (a, b) => hiddenSpans.some(([h0, h1]) => h0 < b && h1 > a)
   const intervals = []
+  let hiddenGaps = 0
   for (let i = 1; i < frames.length; i++) {
-    intervals.push(frames[i] - frames[i - 1])
+    if (spansHidden(frames[i - 1], frames[i])) {
+      hiddenGaps++
+    } else {
+      intervals.push(frames[i] - frames[i - 1])
+    }
   }
   const loaf = (trace.loaf ?? []).filter((f) => inWin(f.t))
   const longTasks = (trace.longTasks ?? []).filter((lt) => inWin(lt.t))
@@ -214,6 +221,8 @@ export function summarizeWindow(trace, win) {
       p95: round(percentile(intervals, P95)),
       max: round(intervals.length ? Math.max(...intervals) : null),
       over50: intervals.filter((x) => x > STALL_MS).length,
+      // Intervals left out because the tab was hidden during them.
+      hiddenGaps,
     },
     longTasks: {count: longTasks.length, totalMs: round(sum(longTasks.map((lt) => lt.d))),
       maxMs: round(longTasks.length ? Math.max(...longTasks.map((lt) => lt.d)) : null)},
@@ -228,6 +237,44 @@ export function summarizeWindow(trace, win) {
     discreteInputDelayMs: {n: discrete.length, p95: round(percentile(discrete.map((i) => i.delay), P95))},
     topScripts: topScripts(loaf, 8),
   }
+}
+
+
+/**
+ * @param {object} trace
+ * @return {Array<Array<number>>} `[from, to]` spans during which the tab was
+ *   hidden; one still open at the end runs to the trace's end
+ */
+export function hiddenPeriods(trace) {
+  const spans = []
+  let from = null
+  for (const e of trace.events ?? []) {
+    if (e.name === 'hidden' && from === null) {
+      from = e.t
+    } else if (e.name === 'visible' && from !== null) {
+      spans.push([from, e.t])
+      from = null
+    }
+  }
+  if (from !== null) {
+    spans.push([from, trace.stoppedAt ?? Infinity])
+  }
+  return spans
+}
+
+
+/**
+ * The window between the first and last manual Mark, if there are two.
+ *
+ * @param {object} trace
+ * @return {{from: number, to: number, label: string}|null}
+ */
+export function markWindow(trace) {
+  const marks = (trace.events ?? []).filter((e) => e.name === 'mark')
+  if (marks.length < 2) {
+    return null
+  }
+  return {from: marks[0].t, to: marks[marks.length - 1].t, label: 'between marks'}
 }
 
 
@@ -303,6 +350,9 @@ export function installMainThreadTrace({store} = {}) {
     stoppedAt: null,
     env: {
       userAgent: navigator.userAgent,
+      // Brave reports Chrome's UA and masks the GPU name; its brand list
+      // says which browser it really was.
+      brands: (navigator.userAgentData?.brands ?? []).map((b) => `${b.brand} ${b.version}`).join(', '),
       gpu: gpuName(),
       hardwareConcurrency: navigator.hardwareConcurrency ?? null,
       devicePixelRatio: window.devicePixelRatio,
@@ -356,6 +406,14 @@ export function installMainThreadTrace({store} = {}) {
     requestAnimationFrame(frame)
   }
   requestAnimationFrame(frame)
+
+  // A hidden tab gets no rAF at all, so its gap would read as a multi-second
+  // stall (the first M2 PSB trace had a 5.8 s one with no main-thread work
+  // and no input). Recorded so summaries can drop intervals that span it.
+  document.addEventListener('visibilitychange', () => event(document.hidden ? 'hidden' : 'visible'))
+  if (document.hidden) {
+    event('hidden')
+  }
 
   if (store?.subscribe) {
     let prev = store.getState()
