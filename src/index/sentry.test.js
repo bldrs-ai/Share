@@ -1,5 +1,5 @@
 import {init} from '@sentry/react'
-import {gtagEvent} from '../privacy/analytics'
+import {gtagEvent, isAllowed} from '../privacy/analytics'
 import {redactBreadcrumb} from '../privacy/sentryRedaction'
 import setupSentry, {shouldSendSentryEvent, shadowReportedCondition, _resetSentryFilterStateForTests} from './sentry'
 
@@ -13,6 +13,10 @@ jest.mock('@sentry/react', () => ({
 
 beforeEach(() => {
   jest.clearAllMocks()
+  // clearAllMocks keeps queued mockReturnValueOnce values, so a consent test
+  // that fails early must not leak `false` into the next test.
+  isAllowed.mockReset()
+  isAllowed.mockReturnValue(true)
   _resetSentryFilterStateForTests()
 })
 
@@ -200,6 +204,33 @@ describe('shouldSendSentryEvent — once-per-session GA signal', () => {
       throw new Error('gtag blew up')
     })
     expect(shouldSendSentryEvent(rumEvent())).toBe(false)
+  })
+
+  it('does not consume the once-per-session signal while consent is off', () => {
+    isAllowed.mockReturnValueOnce(false)
+    expect(shouldSendSentryEvent(rumEvent())).toBe(false)
+    expect(gtagEvent).not.toHaveBeenCalled()
+    // Consent granted later in the same page session: the signal still sends.
+    expect(shouldSendSentryEvent(rumEvent())).toBe(false)
+    expect(gtagEvent).toHaveBeenCalledTimes(1)
+    expect(gtagEvent).toHaveBeenCalledWith('netlify_rum_blocked', {})
+  })
+
+  it('still drops the noise event when reading consent throws', () => {
+    isAllowed.mockImplementationOnce(() => {
+      throw new DOMException('cookies blocked', 'SecurityError')
+    })
+    expect(() => shouldSendSentryEvent(rumEvent())).not.toThrow()
+    expect(gtagEvent).not.toHaveBeenCalled()
+  })
+
+  it('leaves the signal unrecorded when gtagEvent throws, so the next drop retries', () => {
+    gtagEvent.mockImplementationOnce(() => {
+      throw new Error('gtag blew up')
+    })
+    shouldSendSentryEvent(rumEvent())
+    shouldSendSentryEvent(rumEvent())
+    expect(gtagEvent).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -454,7 +485,6 @@ describe('shadowReportedCondition', () => {
   })
 
   it('does not consume a condition while analytics consent is off', () => {
-    const {isAllowed} = jest.requireMock('../privacy/analytics')
     const event = {level: 'warning', exception: {values: [{type: 'TypeError'}]}}
     isAllowed.mockReturnValueOnce(false)
     shadowReportedCondition(event)

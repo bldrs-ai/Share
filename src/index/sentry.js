@@ -232,9 +232,18 @@ function emitOncePerSession(eventName) {
   if (!eventName || reportedNoiseSessions.has(eventName)) {
     return
   }
-  reportedNoiseSessions.add(eventName)
   try {
+    // Don't consume the once-per-session slot while consent is off: gtagEvent
+    // would drop the event and a later opt-in would never send it (same
+    // rationale as shadowReportedCondition, #2110). Inside the try because
+    // isAllowed reads document.cookie, which throws in a sandboxed iframe,
+    // and this runs inside Sentry's beforeSend.
+    if (!isAllowed()) {
+      return
+    }
     gtagEvent(eventName, {})
+    // Record only after the call returned, so a throw retries (#2109).
+    reportedNoiseSessions.add(eventName)
   } catch {
     // GA not ready / consent declined / blocked — the Sentry drop
     // happens regardless. Best-effort signal capture.

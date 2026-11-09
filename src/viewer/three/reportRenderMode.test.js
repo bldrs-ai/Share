@@ -1,11 +1,11 @@
 import {setTag} from '@sentry/react'
 import {flags} from '../../FeatureFlags'
-import {gtagEvent} from '../../privacy/analytics'
+import {gtagEvent, isAllowed} from '../../privacy/analytics'
 import {reportRenderMode, resetRenderModeReportForTest} from './reportRenderMode'
 
 
 jest.mock('@sentry/react', () => ({setTag: jest.fn()}))
-jest.mock('../../privacy/analytics', () => ({gtagEvent: jest.fn()}))
+jest.mock('../../privacy/analytics', () => ({gtagEvent: jest.fn(), isAllowed: jest.fn(() => true)}))
 
 
 describe('viewer/three/reportRenderMode', () => {
@@ -18,6 +18,10 @@ describe('viewer/three/reportRenderMode', () => {
     setSearch('')
     resetRenderModeReportForTest()
     jest.clearAllMocks()
+    // clearAllMocks keeps queued mockReturnValueOnce values, so a consent test
+    // that fails early must not leak `false` into the next test.
+    isAllowed.mockReset()
+    isAllowed.mockReturnValue(true)
   })
   afterEach(() => {
     Object.defineProperty(window, 'location', {writable: true, value: originalLocation})
@@ -78,5 +82,24 @@ describe('viewer/three/reportRenderMode', () => {
     reportRenderMode()
     reportRenderMode()
     expect(gtagEvent).toHaveBeenCalledTimes(2)
+  })
+
+  it('never throws when reading consent throws (sandboxed iframe cookies)', () => {
+    isAllowed.mockImplementationOnce(() => {
+      throw new DOMException('cookies blocked', 'SecurityError')
+    })
+    expect(() => reportRenderMode()).not.toThrow()
+    expect(setTag).toHaveBeenCalledWith('render_mode', 'on-demand')
+  })
+
+  it('does not consume the GA event while consent is off, but still tags Sentry', () => {
+    isAllowed.mockReturnValueOnce(false)
+    reportRenderMode()
+    expect(setTag).toHaveBeenCalledWith('render_mode', 'on-demand')
+    expect(gtagEvent).not.toHaveBeenCalled()
+    // Consent granted later in the same page session: the event still sends.
+    reportRenderMode()
+    expect(gtagEvent).toHaveBeenCalledTimes(1)
+    expect(gtagEvent).toHaveBeenCalledWith('render_mode', {mode: 'on-demand'})
   })
 })
