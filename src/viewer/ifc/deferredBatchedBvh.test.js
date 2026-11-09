@@ -8,6 +8,7 @@ import {
   Raycaster,
   Vector3,
 } from 'three'
+import {captureException} from '@sentry/react'
 import {computeBatchedBoundsTree} from 'three-mesh-bvh'
 import {reportBvhDepthCap} from '../../loader/loadProgress'
 import {withBvhPrototypes} from './batchedModel.fixture'
@@ -21,6 +22,11 @@ import {
 } from './deferredBatchedBvh'
 
 
+jest.mock('@sentry/react', () => ({captureException: jest.fn()}))
+jest.mock('three-mesh-bvh', () => {
+  const actual = jest.requireActual('three-mesh-bvh')
+  return {...actual, computeBatchedBoundsTree: jest.fn(actual.computeBatchedBoundsTree)}
+})
 jest.mock('../../loader/loadProgress', () => ({
   loadReportToken: jest.fn(() => 'load-token'),
   reportBvhDepthCap: jest.fn(),
@@ -228,6 +234,28 @@ describe('viewer/ifc/deferredBatchedBvh', () => {
       expect(reportBvhDepthCap).toHaveBeenCalledWith(
         {trees: GEOMETRIES * 2, maxLeafTriangles: 12, maxDepth: 40}, 'load-token')
       expect(second.boundsTrees.every(Boolean)).toBe(true)
+    })
+  })
+
+  // Built synchronously, a throw here failed the load and CadView reported
+  // it. Deferred, the build reports its own first failure.
+  it('keeps picking a geometry whose tree failed, and reports the first failure once', () => {
+    withBvhPrototypes(raycastActiveInstances, () => {
+      const {mesh, triangles} = scatteredBatch()
+      computeBatchedBoundsTree.mockImplementationOnce(() => {
+        throw new Error('bvh build failed')
+      }).mockImplementationOnce(() => {
+        throw new Error('bvh build failed again')
+      })
+      scheduleBatchedBoundsTrees([mesh], {schedule: () => undefined})
+      finishBatchedBoundsTrees(mesh)
+
+      expect(mesh.boundsTrees.filter(Boolean)).toHaveLength(GEOMETRIES - 2)
+      expect(captureException).toHaveBeenCalledTimes(1)
+      expect(captureException).toHaveBeenCalledWith(expect.objectContaining({message: 'bvh build failed'}),
+        expect.objectContaining({level: 'warning', fingerprint: ['deferred-bvh-build-failed'],
+          extra: {geometryId: 0, indexCount: TRIANGLES_PER_GEOMETRY * 3}}))
+      expect(triangles.map(({x, y}) => pickAt(mesh, x, y))).toEqual(triangles.map(({batchId}) => batchId))
     })
   })
 

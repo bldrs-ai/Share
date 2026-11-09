@@ -1,3 +1,4 @@
+import {captureException} from '@sentry/react'
 import {Box3} from 'three'
 import {computeBatchedBoundsTree, disposeBatchedBoundsTree} from 'three-mesh-bvh'
 import debug from '../../utils/debug'
@@ -189,6 +190,7 @@ function makeJob(meshes, schedule) {
   let maxLeafTriangles = 0
   let cancelled = false
   let pending = false
+  let failures = 0
 
   const job = {
     done: false,
@@ -279,8 +281,21 @@ function makeJob(meshes, schedule) {
       }
     } catch (e) {
       // The slot stays null, so this geometry is picked by the per-triangle
-      // fallback: slower, still correct. Nothing for the user to act on.
+      // fallback: slower, still correct, and nothing for the user to do. It
+      // is ours to fix, though. Built synchronously, this throw failed the
+      // load and CadView reported it; deferred, nothing would. So the first
+      // failure of each model goes to Sentry as a warning (the rest would be
+      // the same bug again), with its size and no names.
+      failures++
       debug().log('deferredBatchedBvh: tree build failed for one geometry:', e)
+      if (failures === 1) {
+        captureException(e, {
+          level: 'warning',
+          fingerprint: ['deferred-bvh-build-failed'],
+          tags: {bvh_build: 'deferred'},
+          extra: {geometryId: id, indexCount: info?.count ?? null},
+        })
+      }
     }
   }
 
