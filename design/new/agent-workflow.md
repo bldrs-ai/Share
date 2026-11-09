@@ -15,7 +15,7 @@ conway#520 — merge that before this doc, or the reference dangles).
 A **coordinator** session plans, defines issues and manages the
 queue; it dispatches one **sub-agent per issue** for the hands-on
 work — issue handling, PR authoring, review and release lifecycle.
-Use a Fable-class model for the coordinator. Pick each sub-agent's
+Use an Opus-class model for the coordinator. Pick each sub-agent's
 model by the task, not by habit: quota is finite, and the
 cheapest model that can do the job well is the right one.
 
