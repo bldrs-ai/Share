@@ -166,6 +166,23 @@ describe('privacy/sentryRedaction redactEventExceptions', () => {
     expect(event.exception.values.map((v) => v.value)).toEqual(['Caused by: withheld', 'load failed'])
   })
 
+  // Codex on #2119: CadView logs the load's error with console.error(e)
+  // before capturing it, so the console breadcrumb carries the text too.
+  it('withholds a marked Error logged to the console, wrapped or bare', () => {
+    const inner = withSentrySafeMessage(new Error('Error writing to Tower-of-Secrets.ifc'),
+      'Error from worker [condition=write-failed]: (details withheld)')
+    const bare = redactBreadcrumb(consoleCrumb(`Error: ${inner.message}`, 'error'))
+    expect(bare.message).toBe('Error: Error writing to Tower-of-Secrets.ifc')
+    const crumb = consoleCrumb(`Error: ${inner.message}`, 'error')
+    crumb.data.arguments = [inner]
+    const redacted = redactBreadcrumb(crumb)
+    expect(redacted.message).toBe('Error: Error from worker [condition=write-failed]: (details withheld)')
+    expect(JSON.stringify(redacted.data.arguments)).not.toContain('Tower-of-Secrets')
+    const wrapped = consoleCrumb(`load failed Error: ${inner.message}`, 'error')
+    wrapped.data.arguments = ['load failed', new Error('outer', {cause: inner})]
+    expect(redactBreadcrumb(wrapped).message).not.toContain('Tower-of-Secrets')
+  })
+
   it('leaves every other event alone', () => {
     const error = new Error('plain failure')
     const event = exceptionEvent(error.message)

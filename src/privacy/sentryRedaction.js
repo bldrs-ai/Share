@@ -145,21 +145,37 @@ export function redactEventExceptions(event, hint) {
   if (!Array.isArray(values)) {
     return event
   }
-  const seen = new Set()
-  for (let error = hint?.originalException; error && typeof error === 'object' && !seen.has(error);
-    error = error.cause) {
-    seen.add(error)
-    const safe = sentrySafeMessages.get(error)
-    if (safe === undefined || typeof error.message !== 'string' || error.message === '') {
-      continue
-    }
-    for (const value of values) {
-      if (typeof value?.value === 'string' && value.value.includes(error.message)) {
-        value.value = value.value.split(error.message).join(safe)
-      }
+  const roots = [hint?.originalException]
+  for (const value of values) {
+    if (typeof value?.value === 'string') {
+      value.value = withSafeMessages(value.value, roots)
     }
   }
   return event
+}
+
+
+/**
+ * `text` with the message of every error in `roots`, and in their `cause`
+ * chains, that carries a safe message replaced by that safe message.
+ *
+ * @param {string} text
+ * @param {Array<*>} roots values that may be such errors
+ * @return {string}
+ */
+function withSafeMessages(text, roots) {
+  let out = text
+  const seen = new Set()
+  for (const root of roots) {
+    for (let error = root; error && typeof error === 'object' && !seen.has(error); error = error.cause) {
+      seen.add(error)
+      const safe = sentrySafeMessages.get(error)
+      if (safe !== undefined && typeof error.message === 'string' && error.message !== '') {
+        out = out.split(error.message).join(safe)
+      }
+    }
+  }
+  return out
 }
 
 
@@ -179,7 +195,13 @@ export function redactBreadcrumb(breadcrumb) {
     return breadcrumb
   }
   if (breadcrumb.category === 'console') {
-    const redacted = redactConsoleMessage(breadcrumb.message)
+    // A logged Error that carries a safe message (withSentrySafeMessage) is
+    // replaced first: CadView logs the load's error with console.error(e)
+    // before it captures it, and the console integration records it as
+    // `Error: <its message>`, which names the file however the line starts.
+    const args = breadcrumb.data?.arguments
+    const message = Array.isArray(args) ? withSafeMessages(breadcrumb.message, args) : breadcrumb.message
+    const redacted = redactConsoleMessage(message)
     if (redacted === breadcrumb.message) {
       return breadcrumb
     }
