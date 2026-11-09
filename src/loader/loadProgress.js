@@ -13,7 +13,7 @@ import {version as shareVersion} from '../../package.json'
 // the 1.381.1195 pin shipped this module.
 import {LoadLogAccumulator, formatMb} from '@bldrs-ai/conway/src/core/progress_log'
 import {nonIdentifyingLoadContext} from './loadCaptureContext'
-import {SENTRY_MODEL_LINE_PREFIX, redactConsoleMessage} from '../privacy/sentryRedaction'
+import {SENTRY_MODEL_LINE_PREFIX, redactConsoleMessage, sentrySafeMessageOf} from '../privacy/sentryRedaction'
 import {reportBvhDepthCapToGa} from './reportLoadDiagnostics'
 // Conway's static Logger, for the data-defect marker (conway#712) on the
 // entries it logs — see installDefectProxy. This is the SAME module instance
@@ -244,7 +244,7 @@ class LoadProgressReporter {
       // Keying the tally by the redacted text also folds the same warning
       // about different files into one diagnostic.
       const text = redactConsoleMessage(collapseWhitespace(args
-        .map((arg) => (arg instanceof Error ? arg.message : String(arg)))
+        .map((arg) => (arg instanceof Error ? sentrySafeMessageOf(arg) ?? arg.message : String(arg)))
         .join(' ')))
       if (text !== '') {
         this.diagnostics.set(text, (this.diagnostics.get(text) ?? 0) + 1)

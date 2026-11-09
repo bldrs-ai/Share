@@ -12,7 +12,7 @@ import {reportBvhDepthCapToGa} from './reportLoadDiagnostics'
 import Logger, {DATA_DEFECT} from '@bldrs-ai/conway/src/logging/logger'
 import {captureMessage, setContext, setTag} from '@sentry/react'
 import {_resetGaClientIdForTests} from '../privacy/analytics'
-import {consoleFileName} from '../privacy/sentryRedaction'
+import {consoleFileName, withSentrySafeMessage} from '../privacy/sentryRedaction'
 import useStore from '../store/useStore'
 import {
   STALL_TIMEOUT_MS,
@@ -332,6 +332,20 @@ describe('loadProgress', () => {
       // One line only: counts + the message. A single distinct message drops
       // the "N distinct" note.
       expect(lines[diagIndex]).toBe('Warnings & errors (2): CDT Exception (hemisphere: 0) (×2)')
+      consoleErrorSpy.mockRestore()
+    })
+
+    // Share#2107: an Error logged during the load whose text names the user's
+    // file is tallied by its safe message; the console still prints it whole.
+    it('tallies a marked Error by its safe message', () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      console.error(withSentrySafeMessage(new Error('Error writing to Tower-of-Secrets.ifc'),
+        'Error from worker [condition=write-failed]: (details withheld)'))
+      endLoadProgress()
+      const line = reportLines().find((l) => /^Warnings & errors/.test(l))
+      expect(line).toBe('Warnings & errors (1): Error from worker [condition=write-failed]: (details withheld)')
+      expect(consoleErrorSpy.mock.calls[0][0].message).toContain('Tower-of-Secrets')
       consoleErrorSpy.mockRestore()
     })
 

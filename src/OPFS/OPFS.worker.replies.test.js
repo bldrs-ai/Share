@@ -65,8 +65,17 @@ function callArguments(source, callee) {
  * @return {boolean} whether its payload is an error reply
  */
 function isErrorReply(call) {
-  return /(^|[{,\s])error\s*:/.test(call)
+  // `error: …`, or the shorthand `{error}` / `{…, error}`.
+  return /(^|[{,\s])error\s*(:|[,}])/.test(call)
 }
+
+
+// A condition the page can trust is a literal, or a choice between two
+// literals (`isLockedEntryError(error) ? 'entry-locked' : 'delete-failed'`).
+// Anything else (`condition: x`, `condition: x || 'a'`) could carry the
+// worker's text.
+const LITERAL_CONDITION =
+  /\bcondition\s*:\s*(?:'[a-z][a-z-]*'|[^,{}?:]+\?\s*'[a-z][a-z-]*'\s*:\s*'[a-z][a-z-]*')\s*[,}]/
 
 
 /**
@@ -74,7 +83,7 @@ function isErrorReply(call) {
  * @return {string[]} the error replies with no literal `condition`
  */
 function errorRepliesWithoutCondition(calls) {
-  return calls.filter((call) => isErrorReply(call) && !/\bcondition\s*:[^,}]*'[a-z][a-z-]*'/.test(call))
+  return calls.filter((call) => isErrorReply(call) && !LITERAL_CONDITION.test(call))
 }
 
 
@@ -88,6 +97,13 @@ describe('OPFS.worker error replies (Share#2107)', () => {
 
   it('gives every error reply a literal structured condition', () => {
     expect(errorRepliesWithoutCondition(calls)).toEqual([])
+  })
+
+  it('builds every reply in the call, where this test can see it', () => {
+    // A payload made elsewhere (`postReply(reply, id)`) is invisible to the
+    // checks above. The definition itself is the one call that isn't one.
+    const hidden = calls.filter((call) => !call.trimStart().startsWith('{') && call !== 'message, requestId')
+    expect(hidden).toEqual([])
   })
 
   it('posts no error except through postReply', () => {
@@ -104,5 +120,21 @@ describe('OPFS.worker error replies (Share#2107)', () => {
     const fixed = callArguments(
       'postReply({error: `Error writing ${originalFilePath}`, condition: \'write-failed\'}, requestId)', 'postReply')
     expect(errorRepliesWithoutCondition(fixed)).toEqual([])
+  })
+
+  it('catches the shapes a looser check let through', () => {
+    const shapes = [
+      // Shorthand key, no condition.
+      'postReply({error}, requestId)',
+      // A condition that is not a literal, or could fall through to text.
+      'postReply({error: text, condition: kind}, requestId)',
+      'postReply({error: text, condition: kind || \'write-failed\'}, requestId)',
+    ]
+    for (const shape of shapes) {
+      expect(errorRepliesWithoutCondition(callArguments(shape, 'postReply'))).toHaveLength(1)
+    }
+    // The ternary of two literals the worker uses passes.
+    const ternary = 'postReply({error: text, condition: isLocked(e) ? \'entry-locked\' : \'delete-failed\'}, id)'
+    expect(errorRepliesWithoutCondition(callArguments(ternary, 'postReply'))).toEqual([])
   })
 })

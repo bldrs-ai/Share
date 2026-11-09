@@ -46,9 +46,11 @@ export function setIsAllowed(allowed) {
  * @param {string} eventName
  * @param {object} parameters
  * @return {boolean} whether the event was handed to `window.gtag`. False when
- *   gtag/js is not loaded yet (or is blocked) or consent is off, in which case
- *   the event is dropped. A once-per-session sender must mark itself sent only
- *   on true, or a call made before the tag loads uses up its one event.
+ *   consent is off, the case that matters in practice: index.html defines a
+ *   `window.gtag` stub that queues into `dataLayer` before gtag/js loads, so a
+ *   missing `window.gtag` only happens without that page (tests, an embed). A
+ *   once-per-session sender must mark itself sent only on true, or a call made
+ *   while consent is off uses up its one event.
  */
 export function gtagEvent(eventName, parameters) {
   if (window.location.hostname.startsWith('deploy-preview-') &&

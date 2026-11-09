@@ -165,17 +165,59 @@ export function redactEventExceptions(event, hint) {
  */
 function withSafeMessages(text, roots) {
   let out = text
+  for (const {message, safe} of markedErrors(roots)) {
+    if (out.includes(message)) {
+      out = out.split(message).join(safe)
+    } else if (out.endsWith(TRUNCATION_MARK) && out.length > TRUNCATION_MARK.length &&
+      message.startsWith(out.slice(0, -TRUNCATION_MARK.length))) {
+      // Sentry cuts an exception value to `maxValueLength` (250) and appends
+      // '...' before beforeSend runs (@sentry/core prepareEvent), so a long
+      // message is no longer in the value whole. The value is then a prefix
+      // of it, the part that names the file included: replace all of it.
+      out = safe
+    }
+  }
+  return out
+}
+
+
+/** What Sentry appends to a value it truncated. */
+const TRUNCATION_MARK = '...'
+
+
+/**
+ * The errors among `roots` and their `cause` chains that carry a safe
+ * message, each once.
+ *
+ * @param {Array<*>} roots
+ * @return {Array<{message: string, safe: string}>}
+ */
+function markedErrors(roots) {
+  const found = []
   const seen = new Set()
   for (const root of roots) {
     for (let error = root; error && typeof error === 'object' && !seen.has(error); error = error.cause) {
       seen.add(error)
       const safe = sentrySafeMessages.get(error)
       if (safe !== undefined && typeof error.message === 'string' && error.message !== '') {
-        out = out.split(error.message).join(safe)
+        found.push({message: error.message, safe})
       }
     }
   }
-  return out
+  return found
+}
+
+
+/**
+ * The safe message `error` or an error in its `cause` chain carries, for a
+ * sink other than Sentry that reports the error's text (GA's `alert` event,
+ * the load report's console tally), or undefined when there is none.
+ *
+ * @param {*} error
+ * @return {string|undefined}
+ */
+export function sentrySafeMessageOf(error) {
+  return markedErrors([error])[0]?.safe
 }
 
 

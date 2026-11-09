@@ -183,6 +183,18 @@ describe('privacy/sentryRedaction redactEventExceptions', () => {
     expect(redactBreadcrumb(wrapped).message).not.toContain('Tower-of-Secrets')
   })
 
+  // Sentry truncates an exception value to 250 characters plus '...' before
+  // beforeSend, so a long message is no longer in the value whole.
+  it('records the safe message for a value Sentry truncated', () => {
+    const MAX_VALUE_LENGTH = 250
+    const longPath = `${'deep/'.repeat(MAX_VALUE_LENGTH / 'deep/'.length)}Tower-of-Secrets.ifc`
+    const error = withSentrySafeMessage(new Error(`Error writing to ${longPath}`), 'withheld')
+    const truncated = `${error.message.slice(0, MAX_VALUE_LENGTH)}...`
+    expect(truncated).toContain('deep/deep')
+    const event = redactEventExceptions(exceptionEvent(truncated), {originalException: error})
+    expect(event.exception.values[0].value).toBe('withheld')
+  })
+
   it('leaves every other event alone', () => {
     const error = new Error('plain failure')
     const event = exceptionEvent(error.message)
