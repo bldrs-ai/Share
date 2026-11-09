@@ -392,19 +392,44 @@ worktree that gets deleted.
 
 **2. Anything resolution-sensitive gives the wrong answer there.** A
 worktree starts with no `node_modules` at all, so the reflex is to symlink
-or copy the main checkout's. Both make the worktree lie about anything that
-depends on *where* a module resolves from:
+or copy the main checkout's. Done the wrong way, that makes the worktree lie
+about anything that depends on *where* a module resolves from:
 
-- `singleThreeInstance.test.js` failed in a worktree and passed in the main
-  checkout, on identical source — it asserts a single resolved `three`, and
-  a symlinked tree gives it two.
+- **A symlinked `node_modules` fails the hook.** `singleThreeInstance.test.js`
+  is the guard behind the muted "Multiple instances of Three.js being
+  imported" warning (`tools/jest/setupTests.js` silences it, so this test
+  is what still catches a duplicate three). It runs
+  `find node_modules -type d -name three …` and expects exactly
+  `['node_modules/three']`. Without `-L`, `find` does not descend into a
+  symlink given as its starting point, so a linked tree yields **no** match
+  and the test fails on source that is fine. Checked on a scratch tree:
+  linked, `[]`; hardlink-copied, `[node_modules/three]`.
+- **A partial copy fails it differently.** A `node_modules` that was only
+  partly hardlink-copied (some packages real directories, some missing or
+  linked from elsewhere) let the deferred-BVH picking tests load two copies
+  of three, which is exactly the duplicate the muted warning would have
+  named. Seen in a worktree while committing the #2054 doc refresh,
+  2026-11-09.
+- **What passed:** a *full* hardlinked copy of a sibling checkout's tree,
+  plus the untracked husky shim the hook sources:
+
+  ```sh
+  cp -al ../Share-other/node_modules ./node_modules
+  mkdir -p .husky && cp -a ../Share-other/.husky/_ .husky/
+  ```
+
+  `cp -al` shares the file data, so it costs inodes but almost no disk —
+  the reason to prefer it over a second `yarn install` on a tight sandbox.
+  It is only right when the worktree's `package.json`/`yarn.lock` match the
+  sibling's; if the branch changes dependencies, `yarn install` instead.
 - An eslint probe run in a worktree did **not** reproduce the plugin-
   uniqueness error that motivated #1792's `root: true`, because the config
   cascade above the worktree is a different set of directories.
 
 So a worktree is fine for reading and editing. Confirm any result about
 module resolution, the eslint/babel config cascade, or the hook in the main
-checkout before you believe it — and before you write it into a PR body.
+checkout (or a worktree set up as above) before you believe it — and before
+you write it into a PR body.
 
 
 ## Drive Picker fails on Brave with Shields up
