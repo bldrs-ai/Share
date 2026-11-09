@@ -41,11 +41,12 @@
 // off yet.
 
 import {BatchedMesh, BufferGeometry, Mesh} from 'three'
-import {acceleratedRaycast, disposeBatchedBoundsTree, disposeBoundsTree} from 'three-mesh-bvh'
+import {acceleratedRaycast, disposeBoundsTree} from 'three-mesh-bvh'
 import {IfcAPI} from '@bldrs-ai/conway/web-ifc'
 import ShareIfcManager from './ShareIfcManager'
 import {raycastActiveInstances} from './batchedRaycast'
 import {computeQuietBatchedBoundsTree, computeQuietBoundsTree} from './bvhBuild'
+import {disposeDeferredBatchedBoundsTree} from './deferredBatchedBvh'
 
 
 // Install three-mesh-bvh's accelerated raycasting globally. The fork's
@@ -77,9 +78,11 @@ Mesh.prototype.raycast = acceleratedRaycast
 // is safe even on batches we never call `computeBoundsTree()` on.
 // `raycastActiveInstances` is that same call, made safe for a batch with a
 // deleted instance, which the library's walk would otherwise throw on
-// (create-300 L0, #1915 — see batchedRaycast.js).
+// (create-300 L0, #1915 — see batchedRaycast.js). A model's trees are
+// built after it is on screen (deferredBatchedBvh.js), so the dispose also
+// stops a build still running for a model being torn down.
 BatchedMesh.prototype.computeBoundsTree = computeQuietBatchedBoundsTree
-BatchedMesh.prototype.disposeBoundsTree = disposeBatchedBoundsTree
+BatchedMesh.prototype.disposeBoundsTree = disposeDeferredBatchedBoundsTree
 BatchedMesh.prototype.raycast = raycastActiveInstances
 
 

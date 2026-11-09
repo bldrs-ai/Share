@@ -200,6 +200,14 @@ class LoadProgressReporter {
     this.bvhDepthCap = null
     // Set once the cap has been counted in GA (reportBvhDepthCapOnce).
     this.bvhDepthCapReported = false
+    // Set when the load succeeded and its cap may go to GA, with the content
+    // type to send it under, so a cap that arrives after the load (a batched
+    // model's deferred trees, deferredBatchedBvh.js) is still counted.
+    this.bvhDepthCapGaArmed = false
+    this.bvhDepthCapContentType = undefined
+    // Where the cap's Health line sits in the report, so a later update
+    // replaces it instead of adding a second one.
+    this.bvhDepthCapLineIndex = -1
     // Base messages (conway LogEntry.message, whitespace-collapsed like the
     // tee's text) conway logged during this load, split by whether the entry
     // carried the data-defect marker — what isDataDefectDiagnostic matches
@@ -757,10 +765,7 @@ class LoadProgressReporter {
     const total = this.log.totalLine()
     this.addReportLine(this.summary ? `${total} | ${this.summary}` : total)
     if (this.bvhDepthCap) {
-      const {trees, maxLeafTriangles, maxDepth} = this.bvhDepthCap
-      this.addReportLine(`Health: picking index hit its depth cap (${maxDepth}) in ` +
-        `${trees} ${trees === 1 ? 'tree' : 'trees'}; largest leaf ${maxLeafTriangles} triangles, ` +
-        'tested one by one per pick')
+      this.writeBvhDepthCapLine(true)
     }
 
     // Warnings & errors captured from the console during the load, appended
@@ -854,6 +859,8 @@ class LoadProgressReporter {
    * @param {string} [contentType]
    */
   reportBvhDepthCapOnce(contentType) {
+    this.bvhDepthCapGaArmed = true
+    this.bvhDepthCapContentType = contentType
     if (!this.bvhDepthCap || this.bvhDepthCapReported) {
       return
     }
@@ -1011,6 +1018,49 @@ class LoadProgressReporter {
     const sample = ellipsize(topText)
     const sampleNote = topCount > 1 ? `${sample} (×${topCount})` : sample
     this.addReportLine(`Warnings & errors (${total}${distinctNote}): ${sampleNote}`, false)
+  }
+
+  /**
+   * Add the BVH depth-cap Health line, or replace it if it is already there.
+   *
+   * @param {boolean} echo whether to echo it to the console (only while the
+   *   console tee is still ours, during finishReport)
+   */
+  writeBvhDepthCapLine(echo) {
+    const {trees, maxLeafTriangles, maxDepth} = this.bvhDepthCap
+    const line = `Health: picking index hit its depth cap (${maxDepth}) in ` +
+      `${trees} ${trees === 1 ? 'tree' : 'trees'}; largest leaf ${maxLeafTriangles} triangles, ` +
+      'tested one by one per pick'
+    if (this.bvhDepthCapLineIndex >= 0) {
+      this.lines[this.bvhDepthCapLineIndex] = line
+      this.sentryLines[this.bvhDepthCapLineIndex] = line
+      this.publishReport()
+      return
+    }
+    this.bvhDepthCapLineIndex = this.lines.length
+    this.addReportLine(line, echo)
+  }
+
+  /**
+   * A depth cap that arrived after the load ended: a batched model builds its
+   * trees once it is on screen (deferredBatchedBvh.js). Same Health line,
+   * after Total like reportFramingExclusion's, and the same one GA event once
+   * the load is known to have succeeded. A cap already counted in GA during
+   * the load is not counted again; the line still shows the sum.
+   *
+   * @param {{trees: number, maxLeafTriangles: number, maxDepth: number}} capped
+   */
+  addLateBvhDepthCap({trees, maxLeafTriangles, maxDepth}) {
+    const previous = this.bvhDepthCap
+    this.bvhDepthCap = {
+      trees: (previous?.trees ?? 0) + trees,
+      maxLeafTriangles: Math.max(previous?.maxLeafTriangles ?? 0, maxLeafTriangles),
+      maxDepth,
+    }
+    this.writeBvhDepthCapLine(false)
+    if (this.bvhDepthCapGaArmed) {
+      this.reportBvhDepthCapOnce(this.bvhDepthCapContentType)
+    }
   }
 
   /** Stop watching (load finished or failed); restore the console tee. */
@@ -1746,17 +1796,41 @@ const FRAMING_NOTE = 'stray geometry far from the model was left out of the zoom
 
 
 /**
+ * Which load is being reported now, as an opaque token: for work that
+ * finishes after the load and must report against that load or not at all
+ * (reportBvhDepthCap).
+ *
+ * @return {object|null}
+ */
+export function loadReportToken() {
+  return activeReporter
+}
+
+
+/**
  * Record BVH trees that reached three-mesh-bvh's depth cap
  * (`viewer/ifc/bvhBuild.js`). Accumulates across the load's builds, a batched
  * model building one tree per geometry, and becomes one `Health:` line after
  * Total and, on a successful load, one GA `bvh_depth_cap` event
- * (reportBvhDepthCapOnce). Safe no-op with
- * no active load, or after it ended.
+ * (reportBvhDepthCapOnce). Safe no-op with no active load.
+ *
+ * Without a token, a no-op after the load ended too: a tree built later (an
+ * edit's new geometry, batchedEdit.js) is not part of the load. With the
+ * token a deferred build took when it was scheduled (loadReportToken), the
+ * cap is that load's however late it lands, and is dropped if another load
+ * has started since.
  *
  * @param {{trees: number, maxLeafTriangles: number, maxDepth: number}} capped
+ * @param {object} [token] from loadReportToken
  */
-export function reportBvhDepthCap({trees, maxLeafTriangles, maxDepth}) {
-  if (!activeReporter || activeReporter.ended) {
+export function reportBvhDepthCap({trees, maxLeafTriangles, maxDepth}, token = undefined) {
+  if (!activeReporter || (token !== undefined && token !== activeReporter)) {
+    return
+  }
+  if (activeReporter.ended) {
+    if (token !== undefined) {
+      activeReporter.addLateBvhDepthCap({trees, maxLeafTriangles, maxDepth})
+    }
     return
   }
   const previous = activeReporter.bvhDepthCap

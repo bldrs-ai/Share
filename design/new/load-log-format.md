@@ -164,6 +164,15 @@ Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 trian
      so GA is its only sink (AGENTS.md, "Reported Conditions"): no Sentry
      event and no field on one. Sentry's copy of the report still has the
      Health line, since that is the load log.
+     A batched model (Conway-direct IFC and STEP, and their GLB cache hits)
+     builds its trees after it is on screen, in idle time
+     (`viewer/ifc/deferredBatchedBvh.js`), so its cap usually arrives after
+     Total. The build reports once, when its last tree is built, with the
+     token of the load that scheduled it (`loadReportToken`): the line is
+     added after Total, as the framing line is, or replaces the one the load
+     wrote; GA counts it once the load is known to have succeeded; a cap
+     from a load that has since been replaced is dropped. A tree built for
+     an edit's new geometry later carries no token and is not the load's.
 
 **Precision** — seconds to millisecond precision (3 decimals), memory to
 byte precision (6 decimals of MB), per the report's diagnostic purpose.
@@ -186,6 +195,17 @@ Every format gets the format-independent core; richer formats add layers:
 | Parse stage | indeterminate (opaque three.js parse) | determinate (bytes) | determinate (bytes) |
 | Geometry stage | — (part of parse) | determinate (products) | indeterminate heartbeat (thunk-tree walk) |
 | Convert / fixup stages | as they occur | as they occur | as they occur |
+
+A GLB cache hit is a GLB load from then on: `Reading model data` (the
+artifact out of OPFS, on a local or Drive source; a GitHub hit reads it
+under `Buffering model bytes`), then `Parsing model data` (the container's
+inflate and GLTFLoader's parse), then `Applying model fixups` (hydrating the
+batched model). Before Share#2101 the parse had no line of its own, so its
+time and its heap (over 1 GB on PSB) were reported under whichever stage
+came before, `Hashing model`. The fixups are one synchronous call, so
+`readModel` waits for a paint (`yieldForPaint`) after announcing them;
+otherwise the snackbar's live line kept showing the previous stage until
+they were done.
 
 A batched model (Conway-direct IFC and STEP, and their GLB cache hits) drawn
 by a renderer without `WEBGL_multi_draw` gets a `Renderer: WEBGL_multi_draw

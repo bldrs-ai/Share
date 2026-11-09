@@ -29,6 +29,7 @@ import {assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
 import {navigateBaseOnModelPath, parseGitHubPath} from '../utils/location'
+import {yieldForPaint} from '../utils/scheduling'
 import {loadAllRecentFiles, updateRecentFileLastModified} from '../connections/persistence'
 import {testUuid} from '../utils/strings'
 import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
@@ -663,6 +664,9 @@ export async function load(
               ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
               file = glbFile
               cameFromGlbCache = true
+              // Its own stage, so reading the artifact out of OPFS isn't
+              // counted as hashing the source (Share#2101).
+              onProgress('Reading model data...')
               modelData = await glbFile.arrayBuffer()
             } else {
               glbInfo(`reader: ${kindLabel} cache MISS, will export after parse`)
@@ -2234,6 +2238,12 @@ export async function readModel(
   // TODO(pablo): GLTF also generates errors for texture loads, but
   // that seems to be deep in the promise stack within the loader.
   if (loader instanceof GLTFLoader) {
+    // Inflating and parsing a GLB is a stage of its own. Without this line a
+    // cache hit's whole parse, and its heap (+1 GB on PSB), was reported
+    // under whatever stage came before, "Hashing model" (Share#2101).
+    if (onProgress) {
+      onProgress('Parsing model data...')
+    }
     if (isBldrsGlbContainer(modelData)) {
       model = await parseBldrsGlbContainer(loader, modelData)
     } else {
@@ -2291,6 +2301,10 @@ export async function readModel(
   if (fixupCb) {
     if (onProgress) {
       onProgress('Applying model fixups...')
+      // The fixups are synchronous (a GLB hit's hydration is seconds of it
+      // on a large model), so without a paint first the snackbar keeps
+      // showing the previous stage until they are done (Share#2101).
+      await yieldForPaint()
     }
     model = fixupCb(model, viewer)
   }

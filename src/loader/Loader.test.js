@@ -950,6 +950,43 @@ describe('Loader', () => {
       expect(onProgress).toHaveBeenCalledWith('Applying model fixups...')
       expect(fixupCb).toHaveBeenCalled()
     })
+
+    // The fixups are synchronous, seconds of them on a large GLB hit, so the
+    // "Applying model fixups" line has to be painted before they start or
+    // the snackbar shows the previous stage throughout (Share#2101).
+    it('lets the fixups line paint before running the fixups', async () => {
+      const mockModel = {geometry: new BufferGeometry(), isObject3D: true}
+      const mockLoader = {parse: jest.fn().mockReturnValue(mockModel)}
+      const events = []
+      const onProgress = (line) => events.push(line)
+      const fixupCb = jest.fn(() => {
+        events.push('fixups')
+        return mockModel
+      })
+      const originalRaf = globalThis.requestAnimationFrame
+      const visibility = jest.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+      globalThis.requestAnimationFrame = (cb) => {
+        events.push('frame')
+        setTimeout(() => cb(0), 0)
+        return 1
+      }
+      try {
+        await readModel(mockLoader, 'test-data', './', false, false, mockViewer, fixupCb, onProgress)
+      } finally {
+        globalThis.requestAnimationFrame = originalRaf
+        visibility.mockRestore()
+      }
+      expect(events).toEqual(['Processing model data...', 'Applying model fixups...', 'frame', 'fixups'])
+    })
+
+    it('reports parsing a GLB as its own stage', async () => {
+      const loader = new GLTFLoader()
+      const mockModel = {geometry: new BufferGeometry(), material: new Material(), isObject3D: true}
+      loader.parse = jest.fn((data, path, onLoad) => onLoad(mockModel))
+      const onProgress = jest.fn()
+      await readModel(loader, 'test-data', './', false, false, null, null, onProgress)
+      expect(onProgress.mock.calls.map((call) => call[0])).toEqual(['Parsing model data...'])
+    })
   })
 })
 
