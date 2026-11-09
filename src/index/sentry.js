@@ -1,8 +1,8 @@
 import {init, reactRouterV6BrowserTracingIntegration} from '@sentry/react'
 import {useEffect} from 'react'
 import {useLocation, useNavigationType, createRoutesFromChildren, matchRoutes} from 'react-router-dom'
-import {gtagEvent, isAllowed} from '../privacy/analytics'
-import {redactBreadcrumb} from '../privacy/sentryRedaction'
+import {gtagEvent} from '../privacy/analytics'
+import {redactBreadcrumb, redactEventExceptions} from '../privacy/sentryRedaction'
 // Named import (rather than `import pkg from '../../package.json'`) so
 // esbuild can prune the rest of the JSON — we only care about `version`.
 import {version as pkgVersion} from '../../package.json'
@@ -233,15 +233,15 @@ function emitOncePerSession(eventName) {
     return
   }
   try {
-    // Don't consume the once-per-session slot while consent is off: gtagEvent
-    // would drop the event and a later opt-in would never send it (same
+    // Don't consume the once-per-session slot unless gtagEvent actually sent:
+    // it returns false when gtag/js isn't loaded yet or blocked, or consent is
+    // off, and a later call (or opt-in) must still get the event (same
     // rationale as shadowReportedCondition, #2110). Inside the try because
-    // isAllowed reads document.cookie, which throws in a sandboxed iframe,
-    // and this runs inside Sentry's beforeSend.
-    if (!isAllowed()) {
+    // isAllowed reads document.cookie, which throws in a sandboxed iframe, and
+    // this runs inside Sentry's beforeSend.
+    if (!gtagEvent(eventName, {})) {
       return
     }
-    gtagEvent(eventName, {})
     // Record only after the call returned, so a throw retries (#2109).
     reportedNoiseSessions.add(eventName)
   } catch {
@@ -307,20 +307,18 @@ export function shadowReportedCondition(event) {
     if (shadowedConditions.has(key)) {
       return
     }
-    // gtagEvent silently drops the event without analytics consent. Don't
-    // record the key then, or a user who opts in later in this page session
-    // would never get the condition shadowed.
-    if (!isAllowed()) {
-      return
-    }
     // No load phase: by the time beforeSend runs, `event.tags` already
     // includes the global scope, where loadProgress#applySentryLoadState
     // leaves a sticky `load.phase` after a stall or failure. An unrelated
     // later event would carry that stale phase into GA. GA's own timestamp
     // says roughly when; Sentry keeps the phase on the event.
-    gtagEvent('reported_condition', {level, category})
-    // Only a send that returned counts, so a later event of the same
-    // condition retries after a throw (as in reportRenderMode, #2109).
+    // Record the key only when gtagEvent actually sent (it returns false with
+    // no gtag/js or no consent), so a user who opts in later, or an event after
+    // gtag/js loads, still gets the condition shadowed; and after a throw (as
+    // in reportRenderMode, #2109).
+    if (!gtagEvent('reported_condition', {level, category})) {
+      return
+    }
     shadowedConditions.add(key)
   } catch {
     // Best-effort: never affect what Sentry receives.
@@ -341,12 +339,14 @@ export default function setupSentry() {
     // shipped it. Prefix with the project slug so the same Sentry org can
     // host multiple bldrs apps without release-tag collisions.
     release: `bldrs-share@${pkgVersion}`,
-    beforeSend(event) {
+    beforeSend(event, hint) {
       if (!shouldSendSentryEvent(event)) {
         return null
       }
       shadowReportedCondition(event)
-      return event
+      // An error whose message names the user's file carries a safe one for
+      // Sentry (privacy/sentryRedaction.js#withSentrySafeMessage).
+      return redactEventExceptions(event, hint)
     },
     // Console and click breadcrumbs that name the user's file are rewritten
     // before they're recorded (privacy/sentryRedaction.js); the page and the

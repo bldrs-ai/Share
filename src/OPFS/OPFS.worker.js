@@ -182,7 +182,7 @@ self.addEventListener('message', async (event) => {
       await snapshotCache(Number.isFinite(previewWindow) && previewWindow > 0 ? previewWindow : 0, requestId)
     }
   } catch (error) {
-    postReply({error: error.message}, requestId)
+    postReply({error: error.message, condition: 'request-failed'}, requestId)
   } finally {
     // Close out the request even if the handler returned without replying.
     // Several paths can do that — `writeBase64Model` with a falsy shaHash or an
@@ -673,7 +673,7 @@ export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag
       } catch (_) {/* idempotent */}
     }
     const workerMessage = `Error getting file handle for ${originalFilePath}: ${error}`
-    postReply({error: workerMessage}, requestId)
+    postReply({error: workerMessage, condition: 'file-handle'}, requestId)
     return
   }
 
@@ -711,7 +711,7 @@ export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag
         reader.cancel()
         await discardPartialEntry(blobAccessHandle, modelDirectoryHandle, modelBlobFileHandle)
         const workerMessage = `Error writing to ${response.headers.etag}: ${error}.`
-        postReply({error: workerMessage}, requestId)
+        postReply({error: workerMessage, condition: 'write-failed'}, requestId)
         return
       }
 
@@ -735,7 +735,7 @@ export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag
     // A stream that dies mid-download leaves the same partial entry.
     reader.cancel()
     await discardPartialEntry(blobAccessHandle, modelDirectoryHandle, modelBlobFileHandle)
-    postReply({error: error}, requestId)
+    postReply({error: error, condition: 'temp-write-failed'}, requestId)
   } finally {
     // Always close the sync access handle. Leaking it leaves the OPFS file
     // in a state Safari refuses subsequent createSyncAccessHandle() calls
@@ -792,7 +792,7 @@ export async function writeTemporaryBase64BlobFileToOPFS(blob, originalFilePath,
     // Don't leave a partial entry for the etag lookup above to serve (#2042).
     await discardPartialEntry(blobAccessHandle, modelDirectoryHandle, modelBlobFileHandle)
     const workerMessage = `Error writing file handle for ${originalFilePath}: ${error}`
-    postReply({error: workerMessage}, requestId)
+    postReply({error: workerMessage, condition: 'write-failed'}, requestId)
   } finally {
     // Always close — see note in writeTemporaryFileToOPFS.
     if (blobAccessHandle) {
@@ -1029,7 +1029,7 @@ export async function writeBase64Model(content, shaHash, originalFilePath, owner
       }
     } catch (error) {
       const workerMessage = `Error writing base64 model for ${cacheKey}: ${error}`
-      postReply({error: workerMessage}, requestId)
+      postReply({error: workerMessage, condition: 'write-failed'}, requestId)
     }
   }
 }
@@ -1124,14 +1124,14 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
         // reachable for Git LFS models, which now take this download
         // path rather than the inline-base64 one.
         if (result === null) {
-          postReply({error: `Failed to download model from ${objectUrl}`}, requestId)
+          postReply({error: `Failed to download model from ${objectUrl}`, condition: 'download-failed'}, requestId)
           return
         }
 
         [modelDirectoryHandle, modelBlobFileHandle] = await writeTemporaryFileToOPFS(result, cacheKey, shaHash, onProgress, requestId)
 
         if (!modelBlobFileHandle) {
-          postReply({error: `Failed to write downloaded model to OPFS: ${originalFilePath}`}, requestId)
+          postReply({error: `Failed to write downloaded model to OPFS: ${originalFilePath}`, condition: 'write-failed'}, requestId)
           return
         }
 
@@ -1150,7 +1150,7 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
       // single-terminal-event contract; with the new contract, the listener
       // relies on either a `completed` or an `error` message.)
       const workerMessage = `Error in downloadModel for ${cacheKey}: ${error}`
-      postReply({error: workerMessage}, requestId)
+      postReply({error: workerMessage, condition: 'download-failed'}, requestId)
       return
     }
 
@@ -1196,7 +1196,7 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       ownerFolderHandle = await opfsRoot.getDirectoryHandle(owner, {create: true})
     } catch (error) {
       const workerMessage = `Error getting folder handle for ${owner}: ${error}`
-      postReply({error: workerMessage}, requestId)
+      postReply({error: workerMessage, condition: 'directory-handle'}, requestId)
       return
     }
   }
@@ -1213,7 +1213,7 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       repoFolderHandle = await ownerFolderHandle.getDirectoryHandle(repo, {create: true})
     } catch (error) {
       const workerMessage = `Error getting folder handle for ${repo}: ${error}`
-      postReply({error: workerMessage}, requestId)
+      postReply({error: workerMessage, condition: 'directory-handle'}, requestId)
       return
     }
   }
@@ -1230,7 +1230,7 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
       branchFolderHandle = await repoFolderHandle.getDirectoryHandle(branch, {create: true})
     } catch (error) {
       const workerMessage = `Error getting folder handle for ${branch}: ${error}`
-      postReply({error: workerMessage}, requestId)
+      postReply({error: workerMessage, condition: 'directory-handle'}, requestId)
       return
     }
   }
@@ -1276,8 +1276,8 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
         // A stale commit's copy that an engine worker still reads (this tab
         // or another): it cannot be replaced until that model closes. Say
         // so; the page loads from the network instead (Loader.js).
-        postReply({error: `downloadModelToOPFS: ${modelBlobFileHandle.name} is open in an engine; not replaced`},
-          requestId)
+        postReply({error: `downloadModelToOPFS: ${modelBlobFileHandle.name} is open in an engine; not replaced`,
+          condition: 'entry-locked'}, requestId)
         return
       }
     }
@@ -1383,7 +1383,7 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
         // Best-effort: the reply below is what matters.
       }
       const workerMessage = `Error getting file handle for ${originalFilePath}: ${error}`
-      postReply({error: workerMessage}, requestId)
+      postReply({error: workerMessage, condition: 'file-handle'}, requestId)
       return false
     }
 
@@ -1612,7 +1612,7 @@ export async function writeFileToPath(rootHandle, filePath, etag, commitHash = n
         currentHandle = await currentHandle.getDirectoryHandle(segment, {create: true})
       } catch (error) {
         const workerMessage = `Error getting/creating directory handle for segment(${segment}): ${error}.`
-        postReply({error: workerMessage}, requestId)
+        postReply({error: workerMessage, condition: 'directory-handle'}, requestId)
         return null
       }
     } else {
@@ -1625,7 +1625,7 @@ export async function writeFileToPath(rootHandle, filePath, etag, commitHash = n
         return [currentHandle, fileHandle] // Return the file handle for further processing
       } catch (error) {
         const workerMessage = `Error getting/creating file handle for file(${segment}): ${error}.`
-        postReply({error: workerMessage}, requestId)
+        postReply({error: workerMessage, condition: 'file-handle'}, requestId)
         return null
       }
     }
@@ -1657,7 +1657,7 @@ export async function retrieveFileWithPath(rootHandle, filePath, commitHash, sho
         currentHandle = await currentHandle.getDirectoryHandle(segment, {create: true})
       } catch (error) {
         const workerMessage = `Error getting/creating directory handle for segment(${segment}): ${error}.`
-        postReply({error: workerMessage}, requestId)
+        postReply({error: workerMessage, condition: 'directory-handle'}, requestId)
         return null
       }
     } else {
@@ -1671,7 +1671,7 @@ export async function retrieveFileWithPath(rootHandle, filePath, commitHash, sho
           return null
         }
         const workerMessage = `Error getting/creating file handle for file(${segment}): ${error}.`
-        postReply({error: workerMessage}, requestId)
+        postReply({error: workerMessage, condition: 'file-handle'}, requestId)
         return null
       }
     }
@@ -1703,7 +1703,7 @@ export async function retrieveFileWithPathNew(rootHandle, filePath, etag, commit
         currentHandle = await currentHandle.getDirectoryHandle(segment, {create: true})
       } catch (error) {
         const workerMessage = `Error getting/creating directory handle for segment(${segment}): ${error}.`
-        postReply({error: workerMessage}, requestId)
+        postReply({error: workerMessage, condition: 'directory-handle'}, requestId)
         return [null, null]
       }
     } else {
@@ -1767,7 +1767,7 @@ export async function writeFileToHandle(blobAccessHandle, modelFile, requestId) 
     return true
   } catch (error) {
     const workerMessage = `Error writing file to handle: ${error}`
-    postReply({error: workerMessage}, requestId)
+    postReply({error: workerMessage, condition: 'write-failed'}, requestId)
     return false
   }
 }
@@ -1818,7 +1818,7 @@ export async function writeModelToOPFSFromFile(modelFile, objectKey, originalFil
     }
   } catch (error) {
     const workerMessage = `Error getting file handle for ${originalFilePath}: ${error}`
-    postReply({error: workerMessage}, requestId)
+    postReply({error: workerMessage, condition: 'file-handle'}, requestId)
   } finally {
     // writeFileToHandle closes the handle on success, but bails without
     // closing if its own try fails — and there's no close at all if create
@@ -2037,7 +2037,7 @@ export async function writeBytesByPathToOPFS(bytes, commitHash, originalFilePath
     }
     postReply({completed: true, event: 'wrote', commitHash: commitHash}, requestId)
   } catch (error) {
-    postReply({error: `writeBytesByPath: ${error.message || error}`}, requestId)
+    postReply({error: `writeBytesByPath: ${error.message || error}`, condition: 'write-failed'}, requestId)
   }
 }
 
@@ -2067,7 +2067,7 @@ export async function readModelByPathFromOPFS(commitHash, originalFilePath, owne
     [, modelBlobFileHandle] = await retrieveFileWithPathNew(
       opfsRoot, cacheKey, null, commitHash, false, requestId)
   } catch (error) {
-    postReply({error: `readModelByPath: ${error.message || error}`}, requestId)
+    postReply({error: `readModelByPath: ${error.message || error}`, condition: 'read-failed'}, requestId)
     return
   }
 
@@ -2084,7 +2084,7 @@ export async function readModelByPathFromOPFS(commitHash, originalFilePath, owne
     }
     postReply({completed: true, event: 'read', file: file}, requestId)
   } catch (error) {
-    postReply({error: `readModelByPath: ${error.message || error}`}, requestId)
+    postReply({error: `readModelByPath: ${error.message || error}`, condition: 'read-failed'}, requestId)
   }
 }
 
@@ -2175,6 +2175,7 @@ export async function deleteModelFromOPFS(commitHash, originalFilePath, owner, r
         error: isLockedEntryError(error) ?
           `deleteModelFromOPFS: ${modelBlobFileHandle.name} is open in an engine; not deleted` :
           `deleteModelFromOPFS: ${error?.message ?? error}`,
+        condition: isLockedEntryError(error) ? 'entry-locked' : 'delete-failed',
       }, requestId)
       return
     }
@@ -2203,7 +2204,7 @@ export async function writeModelToOPFS(objectUrl, objectKey, requestId) {
       newFolderHandle = await opfsRoot.getDirectoryHandle(objectKey, {create: true})
     } catch (error) {
       const workerMessage = `Error getting folder handle for ${objectKey}: ${error}`
-      postReply({error: workerMessage}, requestId)
+      postReply({error: workerMessage, condition: 'directory-handle'}, requestId)
       return
     }
 
@@ -2215,7 +2216,7 @@ export async function writeModelToOPFS(objectUrl, objectKey, requestId) {
       modelBlobFileHandle = await newFolderHandle.getFileHandle(objectKey, {create: true})
     } catch (error) {
       const workerMessage = `Error getting file handle for ${objectKey}: ${error}`
-      postReply({error: workerMessage}, requestId)
+      postReply({error: workerMessage, condition: 'file-handle'}, requestId)
       return
     }
 
@@ -2238,7 +2239,7 @@ export async function writeModelToOPFS(objectUrl, objectKey, requestId) {
       // Don't leave a partial entry for readModelFromOPFS to serve (#2042).
       await discardPartialEntry(blobAccessHandle, newFolderHandle, modelBlobFileHandle)
       const workerMessage = `Error writing to ${objectKey}: ${error}.`
-      postReply({error: workerMessage}, requestId)
+      postReply({error: workerMessage, condition: 'write-failed'}, requestId)
       return
     } finally {
       // See writeTemporaryFileToOPFS for the Safari rationale.
@@ -2250,7 +2251,7 @@ export async function writeModelToOPFS(objectUrl, objectKey, requestId) {
     }
   } catch (error) {
     const workerMessage = `Error writing object URL to file: ${error}`
-    postReply({error: workerMessage}, requestId)
+    postReply({error: workerMessage, condition: 'write-failed'}, requestId)
   }
 }
 
@@ -2272,7 +2273,7 @@ export async function readModelFromOPFS(objectKey, requestId) {
       modelFolderHandle = await opfsRoot.getDirectoryHandle(objectKey)
     } catch (error) {
       const errorMessage = `Folder ${objectKey} not found: ${error}`
-      postReply({error: errorMessage}, requestId)
+      postReply({error: errorMessage, condition: 'not-found'}, requestId)
       return // Exit if the file is not found
     }
 
@@ -2285,12 +2286,12 @@ export async function readModelFromOPFS(objectKey, requestId) {
       postReply({completed: true, event: 'read', file: blobFile}, requestId)
     } catch (error) {
       const errorMessage = `Error retrieving File from ${objectKey}: ${error}.`
-      postReply({error: errorMessage}, requestId)
+      postReply({error: errorMessage, condition: 'read-failed'}, requestId)
       return
     }
   } catch (error) {
     const errorMessage = `Error retrieving File: ${error}.`
-    postReply({error: errorMessage}, requestId)
+    postReply({error: errorMessage, condition: 'read-failed'}, requestId)
   }
 }
 
@@ -2315,7 +2316,7 @@ export async function writeFileToOPFS(objectUrl, fileName, requestId) {
       newFileHandle = await opfsRoot.getFileHandle(fileName, {create: true})
     } catch (error) {
       const workerMessage = `Error getting file handle for ${fileName}: ${error}`
-      postReply({error: workerMessage}, requestId)
+      postReply({error: workerMessage, condition: 'file-handle'}, requestId)
       return
     }
 
@@ -2338,7 +2339,7 @@ export async function writeFileToOPFS(objectUrl, fileName, requestId) {
       // Don't leave a partial entry for readFileFromOPFS to serve (#2042).
       await discardPartialEntry(accessHandle, opfsRoot, newFileHandle)
       const workerMessage = `Error writing to ${fileName}: ${error}.`
-      postReply({error: workerMessage}, requestId)
+      postReply({error: workerMessage, condition: 'write-failed'}, requestId)
       return
     } finally {
       // See writeTemporaryFileToOPFS for the Safari rationale.
@@ -2350,7 +2351,7 @@ export async function writeFileToOPFS(objectUrl, fileName, requestId) {
     }
   } catch (error) {
     const workerMessage = `Error writing object URL to file: ${error}`
-    postReply({error: workerMessage}, requestId)
+    postReply({error: workerMessage, condition: 'write-failed'}, requestId)
   }
 }
 
@@ -2372,7 +2373,7 @@ export async function readFileFromOPFS(fileName, requestId) {
       newFileHandle = await opfsRoot.getFileHandle(fileName)
     } catch (error) {
       const errorMessage = `File ${fileName} not found: ${error}`
-      postReply({error: errorMessage}, requestId)
+      postReply({error: errorMessage, condition: 'not-found'}, requestId)
       return // Exit if the file is not found
     }
 
@@ -2382,12 +2383,12 @@ export async function readFileFromOPFS(fileName, requestId) {
       postReply({completed: true, event: 'read', file: fileHandle}, requestId)
     } catch (error) {
       const errorMessage = `Error retrieving File from ${fileName}: ${error}.`
-      postReply({error: errorMessage}, requestId)
+      postReply({error: errorMessage, condition: 'read-failed'}, requestId)
       return
     }
   } catch (error) {
     const errorMessage = `Error retrieving File: ${error}.`
-    postReply({error: errorMessage}, requestId)
+    postReply({error: errorMessage, condition: 'read-failed'}, requestId)
   }
 }
 

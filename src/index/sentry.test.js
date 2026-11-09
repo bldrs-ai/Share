@@ -1,10 +1,11 @@
 import {init} from '@sentry/react'
-import {gtagEvent, isAllowed} from '../privacy/analytics'
-import {redactBreadcrumb} from '../privacy/sentryRedaction'
+import {gtagEvent} from '../privacy/analytics'
+import {redactBreadcrumb, withSentrySafeMessage} from '../privacy/sentryRedaction'
 import setupSentry, {shouldSendSentryEvent, shadowReportedCondition, _resetSentryFilterStateForTests} from './sentry'
 
 
-jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn(), isAllowed: jest.fn(() => true)}))
+// gtagEvent returns whether it handed the event to window.gtag; false is a dropped send.
+jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn(() => true)}))
 jest.mock('@sentry/react', () => ({
   ...jest.requireActual('@sentry/react'),
   init: jest.fn(),
@@ -13,10 +14,10 @@ jest.mock('@sentry/react', () => ({
 
 beforeEach(() => {
   jest.clearAllMocks()
-  // clearAllMocks keeps queued mockReturnValueOnce values, so a consent test
-  // that fails early must not leak `false` into the next test.
-  isAllowed.mockReset()
-  isAllowed.mockReturnValue(true)
+  // clearAllMocks keeps queued mockReturnValueOnce values, so a dropped-send
+  // test that fails early must not leak `false` into the next test.
+  gtagEvent.mockReset()
+  gtagEvent.mockReturnValue(true)
   _resetSentryFilterStateForTests()
 })
 
@@ -206,22 +207,25 @@ describe('shouldSendSentryEvent — once-per-session GA signal', () => {
     expect(shouldSendSentryEvent(rumEvent())).toBe(false)
   })
 
-  it('does not consume the once-per-session signal while consent is off', () => {
-    isAllowed.mockReturnValueOnce(false)
-    expect(shouldSendSentryEvent(rumEvent())).toBe(false)
-    expect(gtagEvent).not.toHaveBeenCalled()
-    // Consent granted later in the same page session: the signal still sends.
+  it('does not consume the once-per-session signal while gtagEvent drops it (no consent, or gtag/js not loaded yet)', () => {
+    gtagEvent.mockReturnValueOnce(false)
     expect(shouldSendSentryEvent(rumEvent())).toBe(false)
     expect(gtagEvent).toHaveBeenCalledTimes(1)
-    expect(gtagEvent).toHaveBeenCalledWith('netlify_rum_blocked', {})
+    // gtag/js loaded (or consent granted) later in the same page session: the signal still sends.
+    expect(shouldSendSentryEvent(rumEvent())).toBe(false)
+    expect(gtagEvent).toHaveBeenCalledTimes(2)
+    expect(gtagEvent).toHaveBeenLastCalledWith('netlify_rum_blocked', {})
+    // Sent, so now spent.
+    expect(shouldSendSentryEvent(rumEvent())).toBe(false)
+    expect(gtagEvent).toHaveBeenCalledTimes(2)
   })
 
   it('still drops the noise event when reading consent throws', () => {
-    isAllowed.mockImplementationOnce(() => {
+    gtagEvent.mockImplementationOnce(() => {
       throw new DOMException('cookies blocked', 'SecurityError')
     })
     expect(() => shouldSendSentryEvent(rumEvent())).not.toThrow()
-    expect(gtagEvent).not.toHaveBeenCalled()
+    expect(shouldSendSentryEvent(rumEvent())).toBe(false)
   })
 
   it('leaves the signal unrecorded when gtagEvent throws, so the next drop retries', () => {
@@ -462,6 +466,16 @@ describe('shadowReportedCondition', () => {
     expect(gtagEvent).toHaveBeenCalledWith('reported_condition', {level: 'error', category: 'TypeError'})
   })
 
+  // Share#2107: an error whose message names the user's file carries a safe
+  // one, and beforeSend records that.
+  it('beforeSend records an error\'s safe message in place of its own', () => {
+    setupSentry()
+    const {beforeSend} = init.mock.calls[0][0]
+    const error = withSentrySafeMessage(new Error('Error writing to Tower-of-Secrets.ifc'), 'withheld')
+    const event = {exception: {values: [{type: 'Error', value: error.message}]}}
+    expect(beforeSend(event, {originalException: error}).exception.values[0].value).toBe('withheld')
+  })
+
   it('never sends message, exception value or breadcrumb text to GA', () => {
     const secret = 'secret-org/secret-repo/main/private.ifc'
     shadowReportedCondition({
@@ -484,14 +498,17 @@ describe('shadowReportedCondition', () => {
     expect(gtagEvent).not.toHaveBeenCalled()
   })
 
-  it('does not consume a condition while analytics consent is off', () => {
+  it('does not consume a condition while gtagEvent drops it (no consent, or gtag/js not loaded yet)', () => {
     const event = {level: 'warning', exception: {values: [{type: 'TypeError'}]}}
-    isAllowed.mockReturnValueOnce(false)
-    shadowReportedCondition(event)
-    expect(gtagEvent).not.toHaveBeenCalled()
-    // Consent granted later in the same page session: the condition still sends.
+    gtagEvent.mockReturnValueOnce(false)
     shadowReportedCondition(event)
     expect(gtagEvent).toHaveBeenCalledTimes(1)
+    // gtag/js loaded (or consent granted) later in the same page session: the condition still sends.
+    shadowReportedCondition(event)
+    expect(gtagEvent).toHaveBeenCalledTimes(2)
+    // Sent, so now spent.
+    shadowReportedCondition(event)
+    expect(gtagEvent).toHaveBeenCalledTimes(2)
   })
 
   it('retries a condition whose GA send threw', () => {

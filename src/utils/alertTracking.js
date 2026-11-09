@@ -1,4 +1,5 @@
 import * as Sentry from '@sentry/react'
+import {sentrySafeMessageOf} from '../privacy/sentryRedaction'
 import {gtagEvent} from '../privacy/analytics'
 import {normalizeMessageDigits} from './messageGrouping'
 
@@ -46,7 +47,10 @@ export function trackAlert(message, error = null) {
     })
   }
 
-  trackAlertEvent(message)
+  // An error whose text names the user's file (an upload's OPFS failure)
+  // carries a safe message for the sinks (privacy/sentryRedaction.js), and
+  // GA is one: the alert itself still shows the real text.
+  trackAlertEvent(sentrySafeMessageOf(error) ?? message)
 }
 
 

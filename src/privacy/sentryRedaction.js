@@ -20,6 +20,12 @@
  *   `alt` and `name` values. Share puts file names in some of them (the
  *   recent-files list's `title`, the projects drawer's remove button).
  *
+ * - OPFS worker error replies, logged by `OPFS/utils.js` as `Error from worker`
+ *   lines, and the loader's "OPFS path failed" fallback warning. The worker's
+ *   text interpolates the cache key, the original file path or the file name
+ *   (Share#2107). Sentry keeps the line's structured `condition`/`status`
+ *   (see {@link workerErrorLabel}) and loses the text.
+ *
  * The console and the page keep all of it, since there the user is reading
  * their own file's details; only what Sentry records is rewritten. The load
  * report's Sentry context has its own copy for the same reason
@@ -53,6 +59,12 @@ const QUOTED_FILE_NAME = /^([A-Za-z_$][\w$.#-]*): file "(.*)"(.*)$/s
 // `p.MuiTypography-root[title="Tower.ifc"]`, without escaping quotes in the
 // value; the lazy match up to `"]` takes a value with quotes in it whole,
 // and `s` takes one with a newline in it.
+// `Error from worker[ [condition=<c> status=<n>]]: <text>`, the shape
+// workerErrorLabel writes. The bracket is built only from the worker's own
+// condition constants and an HTTP status, so it is safe to keep.
+const WORKER_ERROR_LINE = /^(Error from worker(?: \[condition=[\w-]+(?: status=\d+)?\])?):/
+const OPFS_FALLBACK_LINE = /^Loader#load: OPFS path failed \(/
+const OPFS_FALLBACK_REDACTED = 'Loader#load: OPFS path failed (details withheld); falling back to direct fetch.'
 const NAMED_ATTRIBUTE = /\[(title|aria-label|alt|name)=".*?"\]/gs
 
 
@@ -66,6 +78,146 @@ const NAMED_ATTRIBUTE = /\[(title|aria-label|alt|name)=".*?"\]/gs
  */
 export function consoleFileName(name) {
   return `file "${name}"`
+}
+
+
+/**
+ * The label of a console line that logs an OPFS worker error reply, so that
+ * {@link redactConsoleMessage} can keep the reply's structured fields and
+ * withhold its text. Write the line as `console.error(workerErrorLabel(data), data.error)`.
+ *
+ * @param {object} data the worker's reply, with its optional `condition` and `status`
+ * @return {string} the label: with the condition and status when the reply has
+ *   them, else just `Error from worker:`
+ */
+export function workerErrorLabel(data) {
+  // Only a plain condition identifier and a numeric status are echoed, so a
+  // producer that put free text in `condition` can't smuggle it into the
+  // label (and past the redaction's own pattern).
+  const condition = typeof data?.condition === 'string' && /^[\w-]+$/.test(data.condition) ? data.condition : ''
+  if (!condition) {
+    return 'Error from worker:'
+  }
+  const status = Number.isInteger(data.status) ? ` status=${data.status}` : ''
+  return `Error from worker [condition=${condition}${status}]:`
+}
+
+
+/**
+ * The text Sentry gets for errors whose own message names the user's file,
+ * by error object (see {@link withSentrySafeMessage}).
+ */
+const sentrySafeMessages = new WeakMap()
+
+
+/**
+ * Give `error` the message Sentry should record in place of its own, and
+ * return it. The page, the console and the user's alert keep `error.message`.
+ *
+ * For errors built from text that can name the user's file, and that can
+ * reach a `captureException`: an OPFS worker's error reply rethrown for an
+ * upload (Loader.js#load), which CadView reports when the load fails
+ * (Share#2107). `redactEventExceptions` applies it in `beforeSend`.
+ *
+ * @param {Error} error
+ * @param {string} message what Sentry records instead
+ * @return {Error} the same error
+ */
+export function withSentrySafeMessage(error, message) {
+  if (error && typeof error === 'object') {
+    sentrySafeMessages.set(error, message)
+  }
+  return error
+}
+
+
+/**
+ * Sentry `beforeSend` step: replace the exception values of an error given a
+ * safe message by {@link withSentrySafeMessage}, for the error itself and
+ * every `cause` it chains to. Every other event passes unchanged.
+ *
+ * @param {object} event Sentry event
+ * @param {object} [hint] Sentry hint, whose `originalException` is the error
+ * @return {object} the event
+ */
+export function redactEventExceptions(event, hint) {
+  const values = event?.exception?.values
+  if (!Array.isArray(values)) {
+    return event
+  }
+  const roots = [hint?.originalException]
+  for (const value of values) {
+    if (typeof value?.value === 'string') {
+      value.value = withSafeMessages(value.value, roots)
+    }
+  }
+  return event
+}
+
+
+/**
+ * `text` with the message of every error in `roots`, and in their `cause`
+ * chains, that carries a safe message replaced by that safe message.
+ *
+ * @param {string} text
+ * @param {Array<*>} roots values that may be such errors
+ * @return {string}
+ */
+function withSafeMessages(text, roots) {
+  let out = text
+  for (const {message, safe} of markedErrors(roots)) {
+    if (out.includes(message)) {
+      out = out.split(message).join(safe)
+    } else if (out.endsWith(TRUNCATION_MARK) && out.length > TRUNCATION_MARK.length &&
+      message.startsWith(out.slice(0, -TRUNCATION_MARK.length))) {
+      // Sentry cuts an exception value to `maxValueLength` (250) and appends
+      // '...' before beforeSend runs (@sentry/core prepareEvent), so a long
+      // message is no longer in the value whole. The value is then a prefix
+      // of it, the part that names the file included: replace all of it.
+      out = safe
+    }
+  }
+  return out
+}
+
+
+/** What Sentry appends to a value it truncated. */
+const TRUNCATION_MARK = '...'
+
+
+/**
+ * The errors among `roots` and their `cause` chains that carry a safe
+ * message, each once.
+ *
+ * @param {Array<*>} roots
+ * @return {Array<{message: string, safe: string}>}
+ */
+function markedErrors(roots) {
+  const found = []
+  const seen = new Set()
+  for (const root of roots) {
+    for (let error = root; error && typeof error === 'object' && !seen.has(error); error = error.cause) {
+      seen.add(error)
+      const safe = sentrySafeMessages.get(error)
+      if (safe !== undefined && typeof error.message === 'string' && error.message !== '') {
+        found.push({message: error.message, safe})
+      }
+    }
+  }
+  return found
+}
+
+
+/**
+ * The safe message `error` or an error in its `cause` chain carries, for a
+ * sink other than Sentry that reports the error's text (GA's `alert` event,
+ * the load report's console tally), or undefined when there is none.
+ *
+ * @param {*} error
+ * @return {string|undefined}
+ */
+export function sentrySafeMessageOf(error) {
+  return markedErrors([error])[0]?.safe
 }
 
 
@@ -85,7 +237,13 @@ export function redactBreadcrumb(breadcrumb) {
     return breadcrumb
   }
   if (breadcrumb.category === 'console') {
-    const redacted = redactConsoleMessage(breadcrumb.message)
+    // A logged Error that carries a safe message (withSentrySafeMessage) is
+    // replaced first: CadView logs the load's error with console.error(e)
+    // before it captures it, and the console integration records it as
+    // `Error: <its message>`, which names the file however the line starts.
+    const args = breadcrumb.data?.arguments
+    const message = Array.isArray(args) ? withSafeMessages(breadcrumb.message, args) : breadcrumb.message
+    const redacted = redactConsoleMessage(message)
     if (redacted === breadcrumb.message) {
       return breadcrumb
     }
@@ -114,6 +272,13 @@ export function redactConsoleMessage(message) {
     // report context already carries the safe fields; the prefix alone says
     // where in the load this breadcrumb fell.
     return SENTRY_MODEL_LINE_PREFIX
+  }
+  const worker = WORKER_ERROR_LINE.exec(message)
+  if (worker) {
+    return `${worker[1]}: (details withheld)`
+  }
+  if (OPFS_FALLBACK_LINE.test(message)) {
+    return OPFS_FALLBACK_REDACTED
   }
   const quoted = QUOTED_FILE_NAME.exec(message)
   if (quoted) {
