@@ -30,6 +30,7 @@ import {
   isModelInfoProgress,
   isStructuredProgress,
   loadFailureCaptureContext,
+  loadReportToken,
   noGeometryAlert,
   reportBvhDepthCap,
   reportCacheHit,
@@ -1004,6 +1005,77 @@ describe('loadProgress', () => {
 
         expect(reportBvhDepthCapToGa.mock.calls).toEqual([[{format: 'stp', trees: 2, maxLeafTriangles: 3400}]])
         expect(diagnosticsCall()).toBeUndefined()
+      })
+
+      // A batched model builds its trees once it is on screen
+      // (deferredBatchedBvh.js), so its cap usually lands after the load
+      // ended. It keeps its Health line and its one GA event.
+      describe('a depth cap that lands after the load', () => {
+        const healthLines = () => reportLines().filter((line) => line.startsWith('Health: picking'))
+
+        it('gets its Health line after Total and is counted in GA once', () => {
+          const reporter = beginLoadProgress({fileInfo: 'index.stp'})
+          const token = loadReportToken()
+          expect(token).toBe(reporter)
+          endLoadProgress()
+          captureLoadDiagnostics({})
+          expect(reportBvhDepthCapToGa).not.toHaveBeenCalled()
+
+          reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40}, token)
+          const lines = reportLines()
+          expect(healthLines()).toEqual([
+            'Health: picking index hit its depth cap (40) in 2 trees; largest leaf 3400 triangles, ' +
+            'tested one by one per pick'])
+          expect(lines.indexOf(healthLines()[0])).toBeGreaterThan(lines.findIndex((l) => l.startsWith('Total')))
+          expect(reportBvhDepthCapToGa.mock.calls).toEqual([[{format: 'stp', trees: 2, maxLeafTriangles: 3400}]])
+        })
+
+        it('replaces the Health line rather than adding a second one', () => {
+          beginLoadProgress({fileInfo: 'index.stp'})
+          const token = loadReportToken()
+          reportBvhDepthCap({trees: 1, maxLeafTriangles: 90, maxDepth: 40})
+          endLoadProgress()
+          captureLoadDiagnostics({})
+          reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40}, token)
+
+          expect(healthLines()).toEqual([
+            'Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 triangles, ' +
+            'tested one by one per pick'])
+          // GA counted the in-load cap; the late one is not counted again.
+          expect(reportBvhDepthCapToGa).toHaveBeenCalledTimes(1)
+        })
+
+        it('waits for the load to be known good before counting it in GA', () => {
+          beginLoadProgress({fileInfo: 'index.stp'})
+          const token = loadReportToken()
+          endLoadProgress()
+          reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40}, token)
+          expect(healthLines()).toHaveLength(1)
+          expect(reportBvhDepthCapToGa).not.toHaveBeenCalled()
+          captureLoadDiagnostics({})
+          expect(reportBvhDepthCapToGa).toHaveBeenCalledTimes(1)
+        })
+
+        it('is dropped once another load has started', () => {
+          beginLoadProgress({fileInfo: 'first.stp'})
+          const token = loadReportToken()
+          endLoadProgress()
+          beginLoadProgress({fileInfo: 'second.stp'})
+          reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40}, token)
+          endLoadProgress()
+          captureLoadDiagnostics({})
+          expect(healthLines()).toEqual([])
+          expect(reportBvhDepthCapToGa).not.toHaveBeenCalled()
+        })
+
+        it('needs the token: a later tree of an edit is not the load\'s', () => {
+          beginLoadProgress({fileInfo: 'index.stp'})
+          endLoadProgress()
+          captureLoadDiagnostics({})
+          reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
+          expect(healthLines()).toEqual([])
+          expect(reportBvhDepthCapToGa).not.toHaveBeenCalled()
+        })
       })
 
       it('sends nothing anywhere for a clean load that did not hit the cap', () => {

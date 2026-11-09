@@ -195,6 +195,16 @@ The allowlist holds `batchedEdit.js`, the table owner, the load-time builders,
 decoration, and the two display-colour writers (colour is display state, not
 identity). Each entry is checked for still being used.
 
+The per-geometry BVHs are the one thing built into a loaded batch afterwards:
+`decorateBatchMeshes` hands them to `deferredBatchedBvh.js`, which builds them
+in idle time once the model is on screen (Share#2101). It builds them
+INDIRECT, keeping each tree's triangle order in a buffer of its own, so the
+build never changes what the batch holds. A direct build sorts the index in
+place, and done between the slices of a sliced reader (the GLB writer's
+`snapshotBatchedModel`) that would be a change no revision announces.
+`addBatchedGeometry` still builds its new id's tree directly, inside the op
+and its revision bump.
+
 `batchedInstanceTables.js` keeps the side tables: `isActive`,
 `forEachActiveInstance`, `ensureInstanceCapacity`, and the row writers.
 

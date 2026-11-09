@@ -1,5 +1,6 @@
 import {Group} from 'three'
 import {isFeatureEnabled} from '../../FeatureFlags'
+import {seedBatchedGeometryBounds} from './batchedBounds'
 import {buildOccurrencePathIndex} from './batchedInstanceTables'
 import {linkBatchedModel} from './batchedModel'
 import {attachBatchedSubsets} from './batchedSubset'
@@ -8,6 +9,7 @@ import {
   attachConwayDirectModelMethods,
   makeConwayDirectIfcManager,
 } from './conwayDirectIfcLoader'
+import {scheduleBatchedBoundsTrees} from './deferredBatchedBvh'
 import {applyProductPalette} from './productPalette'
 
 
@@ -25,8 +27,9 @@ import {applyProductPalette} from './productPalette'
  * The merged path's `IfcInstanceMap` / per-vertex subset construction
  * doesn't apply to a `BatchedMesh`. Instead this model gets:
  *   - native `batchId` picking (CadView resolves it via the per-batch tables),
- *   - per-geometry three-mesh-bvh bounds trees (`computeBoundsTree`) so the
- *     accelerated raycast stays sub-linear and still emits `batchId`,
+ *   - per-geometry three-mesh-bvh bounds trees, built once the model is on
+ *     screen (`deferredBatchedBvh.js`), so the accelerated raycast stays
+ *     sub-linear and still emits `batchId`,
  *   - in-place selection / hover highlight by recoloring the picked product's
  *     instances (`setColorAt`, via `batchedHighlight`) — a coplanar overlay
  *     subset z-fights the opaque batch and won't render reliably, so the
@@ -127,18 +130,23 @@ export function decorateBatchMeshes(batches) {
     batch.mesh.instanceGeometryIds = batch.instanceGeometryIds ?? null
     batch.mesh.instanceOccurrencePaths = batch.instanceOccurrencePaths ?? null
     batch.mesh.occurrencePathToBatchIds = buildOccurrencePathIndex(batch.mesh)
+    // Each geometry's box and sphere straight from the batch arrays, so the
+    // two calls after it only combine them (batchedBounds.js, Share#2101).
+    seedBatchedGeometryBounds(batch.mesh)
     batch.mesh.computeBoundingBox?.()
     batch.mesh.computeBoundingSphere?.()
-    // Per-geometry BVH for the batch. `ShareIfc` patches
-    // `BatchedMesh.prototype.computeBoundsTree = computeBatchedBoundsTree`
-    // (+ `raycast = acceleratedRaycast`), so picking on a many-instance
-    // batch resolves through the bounds trees instead of brute force —
-    // and `acceleratedBatchedMeshRaycast` still sets `intersection.batchId`
-    // (validated against three-mesh-bvh r0.9), so the CadView pick branch
-    // is unaffected. Guarded: the method is absent under the Jest `three`
-    // mock and present only in the production prototype patch.
-    batch.mesh.computeBoundsTree?.()
   }
+  // Per-geometry BVHs for the batches. `ShareIfc` patches
+  // `BatchedMesh.prototype.computeBoundsTree` (+ `raycast`), so picking on a
+  // many-instance batch resolves through the bounds trees instead of brute
+  // force — and `acceleratedBatchedMeshRaycast` still sets
+  // `intersection.batchId` (validated against three-mesh-bvh r0.9), so the
+  // CadView pick branch is unaffected. Built after the model is on screen,
+  // in idle slices, rather than here: on PSB's cache hit they were 2.7 s of
+  // the stage, and picks stay correct while they build
+  // (deferredBatchedBvh.js). Meshes without the patch (the Jest `three`
+  // harness) are skipped, as the old `computeBoundsTree?.()` skipped them.
+  scheduleBatchedBoundsTrees(batches.map((batch) => batch.mesh))
   // These batches are one model: an edit that mints a model-global id on one
   // of them must see the others' ids too (batchedEdit `mintOccurrenceId`).
   linkBatchedModel(batches.map((batch) => batch.mesh))
