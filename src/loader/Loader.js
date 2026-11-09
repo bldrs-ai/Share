@@ -67,6 +67,7 @@ import {spillModelSource} from './opfsSourceByteStore'
 import {EvictedOpfsSourceError, isUnusableOpfsSource} from './opfsSourceHealth'
 import {PART21_LOADER_TYPES, engineFormatOf} from './part21Formats'
 import {reportEngineSourceBuffered, reportPreviewUnitsSkipped} from './reportLoadDiagnostics'
+import {reportRendererLimits} from './reportRendererLimits'
 import {reportOpfsDownloadFailed, reportOpfsNotCached, reportOpfsSourceEvicted} from '../OPFS/reportOpfsSourceCondition'
 import {STORE_DETECT_PREFIX_BYTES, conwayStoreOpenRequirement} from './stepFormat'
 import {isEngineWorkerLoad} from '../viewer/ifc/ShareIfcLoader'
@@ -1058,6 +1059,9 @@ export async function load(
   // (`stats_cacheHit`). Read here, after the OPFS block, because the stale
   // Git LFS pointer path above can still reset it to false.
   reportCacheHit(cameFromGlbCache)
+  // A batched model on a renderer without WEBGL_multi_draw draws per
+  // instance: say so in the report (Share#2094).
+  reportRendererLimits(model, () => viewer?.context?.getRenderer?.(), loader.type)
 
   // ShareModel decoration (see src/viewer/ShareModel.js): adds
   // `format` + `capabilities` so call-sites can branch on intrinsic
