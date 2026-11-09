@@ -1512,7 +1512,7 @@ production coupling.
 - ~~Drop `web-ifc` from build scripts.~~ **Superseded by the reframed slice 5f:** the `web-ifc` shim is kept as the Conway↔web-ifc engine flag; its eventual removal is a product call once Conway fully supersedes web-ifc, not a mechanical cleanup. **Done 2026-11-01** by product-owner decision (slice 5f note).
 
 ### Phase 7 — OffscreenCanvas render worker (separate spec, post-merge)
-- Per §8.4 Move B. Becomes tractable only once the viewer is wholly under `src/viewer/`, because the worker boundary corresponds exactly to the `ShareViewer` facade. Out of scope for this doc; will get its own design.
+- Per §8.4 Move B. Becomes tractable only once the viewer is wholly under `src/viewer/`, because the worker boundary corresponds exactly to the `ShareViewer` facade. Out of scope for this doc; **it has its own design now: [offscreen-rendering.md](offscreen-rendering.md)** (inventory, platform check, spike, migration plan; story #2055, step 1 render-on-demand done in #2104).
 
 ---
 
@@ -2004,6 +2004,8 @@ The UI freezes on big models because Conway parse, geometry conversion, and BVH 
   - HMR for the render worker is more brittle; need a dedicated esbuild entry.
   - Firefox `OffscreenCanvas` for WebGL2 needs flag in older versions; Safari ≥17 only. Fall back to main-thread renderer behind a runtime check.
 - Cost: ~2 weeks. Risk: high if we want full feature parity.
+
+**Move B is specced in [offscreen-rendering.md](offscreen-rendering.md)** (it supersedes the bullets above; the engine worker it composes with is [engine-worker.md](engine-worker.md)).
 
 **Recommendation: do Move A inside Phase 3** (it falls naturally out of the `IfcModelService` worker boundary). **Spec Move B as a Phase 7** (post-three-bump, separate doc). Move A delivers most of the "UI doesn't freeze" win because Conway parse is the dominant blocker today.
 

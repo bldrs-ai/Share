@@ -13,8 +13,9 @@ eviction.
 pool, draft), conway#540 (no Worker branch in `isWebPlatform`), conway#541
 (`OpenModelFromIndex`, landed), conway#390 (M1 "parse still on the main
 thread"), Share#1610 / #2047 (MT wasm; not used here).
-**Parallel work:** OffscreenCanvas rendering is being scoped separately (§9
-says where the two meet).
+**Parallel work:** OffscreenCanvas rendering (story #2055, scoped in
+[offscreen-rendering.md](offscreen-rendering.md); §9 says where the two
+meet, and that doc's §6.4 is the render side of the same seam).
 
 Read on code at `origin/main` `86f9908`, conway pinned at
 `1.1632.753-g409bb50d` (read from `node_modules/@bldrs-ai/conway/compiled`,
@@ -1348,7 +1349,11 @@ These were the open questions of the scope. The user decided each one.
 ## 9. Where this meets OffscreenCanvas rendering
 
 The engine worker and a render worker meet at the geometry stream and at
-picking:
+picking. The render side of this seam, the render worker's migration plan
+(its `attachEngine(modelKey, port)` and drain acks, steps 7.2–7.6) and its
+inventory of what moves, are in [offscreen-rendering.md](offscreen-rendering.md)
+§6.4 and §7; this section is the source for the engine side. Note the sink is
+protocol only at `9759fd8`: nothing in `src/engine/` passes one yet.
 
 - **Geometry goes engine → render directly.** `open`'s `stream.sink`
   accepts a `MessagePort`. With a render worker, the main thread creates a
