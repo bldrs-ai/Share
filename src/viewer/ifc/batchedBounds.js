@@ -17,7 +17,9 @@ import {Box3, Sphere, Vector3} from 'three'
  * This does the same two walks over the same indices, reading the arrays
  * directly, and stores the results where three keeps its own
  * (`_geometryInfo[id].boundingBox` / `.boundingSphere`), so three's getters
- * find them and skip their walk. The values are three's exactly: the box is
+ * find them and skip their walk. The values are three's, but for the sign
+ * of a zero (a comparison keeps whichever of +0 and -0 came first, where
+ * Math.min prefers -0; they are the same number): the box is
  * the component-wise min and max of the same float32 corners, the sphere is
  * centred on that box (the origin for an empty one, as `Box3#getCenter`
  * gives) with the square root of the largest squared distance, computed in
@@ -71,8 +73,9 @@ const HALF = 0.5
  * index), as getBoundingBoxAt builds it.
  *
  * Plain comparisons rather than Box3#expandByPoint's Math.min/max, about a
- * third faster here, and the same box for every corner but a NaN: Math.min
- * passes a NaN on, a comparison skips it. So a NaN corner, which three's box
+ * third faster here, and the same box for every corner but a NaN (and the
+ * sign of a zero, which is no difference in value): Math.min passes a NaN
+ * on, a comparison skips it. So a NaN corner, which three's box
  * turns NaN, sends the geometry to {@link boxOverWithNaN}, which is three's
  * arithmetic exactly.
  *

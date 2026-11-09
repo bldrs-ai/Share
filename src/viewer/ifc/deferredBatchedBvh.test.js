@@ -196,6 +196,46 @@ describe('viewer/ifc/deferredBatchedBvh', () => {
     })
   })
 
+  // A page that never goes idle runs each callback off its timeout, with no
+  // idle time left; the slice still gets a budget of its own.
+  it('keeps building several trees a slice when idle callbacks only time out', () => {
+    withBvhPrototypes(raycastActiveInstances, () => {
+      const {mesh} = scatteredBatch()
+      const queue = []
+      scheduleBatchedBoundsTrees([mesh], {schedule: (run) => queue.push(run)})
+      queue.shift()({didTimeout: true, timeRemaining: () => 0})
+      // The fixture's trees take well under a slice to build.
+      expect(mesh.boundsTrees.every(Boolean)).toBe(true)
+      expect(queue).toHaveLength(0)
+    })
+  })
+
+  it('leaves the batch draw range as it was after a pick through the fallback', () => {
+    withBvhPrototypes(raycastActiveInstances, () => {
+      const {mesh, triangles} = scatteredBatch()
+      scheduleBatchedBoundsTrees([mesh], {schedule: () => undefined})
+      const before = {...mesh.geometry.drawRange}
+      const {x, y, batchId} = triangles[TRIANGLES_PER_GEOMETRY]
+      expect(pickAt(mesh, x, y)).toBe(batchId)
+      expect({...mesh.geometry.drawRange}).toEqual(before)
+    })
+  })
+
+  it('carries on building when one tree is disposed', () => {
+    withBvhPrototypes(raycastActiveInstances, () => {
+      const {mesh} = scatteredBatch()
+      const idle = manualSchedule()
+      scheduleBatchedBoundsTrees([mesh], {schedule: idle.schedule})
+      idle.runOne()
+      disposeDeferredBatchedBoundsTree.call(mesh, 0)
+      expect(isBatchedBoundsTreeBuildDone(mesh)).toBe(false)
+      while (idle.pending() > 0) {
+        idle.runOne()
+      }
+      expect(mesh.boundsTrees.slice(1).every(Boolean)).toBe(true)
+    })
+  })
+
   it('stops building when the trees are disposed mid-build', () => {
     withBvhPrototypes(raycastActiveInstances, () => {
       const {mesh} = scatteredBatch()

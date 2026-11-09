@@ -790,7 +790,7 @@ per-geometry bounds (0.62 s), the partition's upload into the BatchedMesh
 screen, in idle time, INDIRECT so that it never reorders the index under the
 writer's sliced snapshot (`viewer/ifc/deferredBatchedBvh.js`; picks stay
 correct meanwhile, through the library's per-geometry fallback). The bounds are
-seeded from the batch's typed arrays, to three's own values exactly
+seeded from the batch's typed arrays, to three's own values (to the sign of a zero)
 (`viewer/ifc/batchedBounds.js`). Both run in `decorateBatchMeshes`, so the
 cache miss gets them too, for IFC and STEP alike. The partition was left as
 it is: what it spends is three's own `setGeometryAt`, which copies the index

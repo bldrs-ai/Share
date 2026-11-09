@@ -120,8 +120,9 @@ export function cancelBatchedBoundsTrees(mesh) {
 
 /**
  * `BatchedMesh.prototype.disposeBoundsTree`, as ShareIfc installs it:
- * three-mesh-bvh's, after stopping the mesh's deferred build, which would
- * otherwise go on filling the slots the dispose just emptied.
+ * three-mesh-bvh's, after stopping the mesh's deferred build when every tree
+ * goes (index -1), which would otherwise go on filling the slots the dispose
+ * just emptied.
  *
  * Installed as a prototype method, so `this` is the BatchedMesh.
  *
@@ -129,7 +130,10 @@ export function cancelBatchedBoundsTrees(mesh) {
  * @param {number} [index] geometry id, or -1 for every geometry
  */
 export function disposeDeferredBatchedBoundsTree(index = -1) {
-  cancelBatchedBoundsTrees(this)
+  // One tree disposed leaves the rest of the build to carry on.
+  if (index < 0) {
+    cancelBatchedBoundsTrees(this)
+  }
   disposeBatchedBoundsTree.call(this, index)
 }
 
@@ -228,9 +232,10 @@ function makeJob(meshes, schedule) {
     if (cancelled || job.done) {
       return
     }
+    const start = now()
     while (hasMore()) {
       buildOne(meshes[meshIndex], geometryId++)
-      if (deadline && deadline.timeRemaining() <= 0 && hasMore()) {
+      if (deadline && isSpent(deadline, start) && hasMore()) {
         job.next()
         return
       }
@@ -300,6 +305,25 @@ function makeJob(meshes, schedule) {
   }
 
   return job
+}
+
+
+/**
+ * Whether a slice has used its time. Normally the idle deadline's. A
+ * callback that ran because its `timeout` passed, the page never having gone
+ * idle (the user orbiting the whole time), has no idle time left
+ * (`timeRemaining()` is 0) yet must still make progress, or a model with
+ * thousands of geometries builds one tree a second: it gets `SLICE_MS`.
+ *
+ * @param {object} deadline `{timeRemaining(): number, didTimeout?: boolean}`
+ * @param {number} start `now()` when the slice began
+ * @return {boolean}
+ */
+function isSpent(deadline, start) {
+  if (deadline.didTimeout) {
+    return now() - start >= SLICE_MS
+  }
+  return deadline.timeRemaining() <= 0
 }
 
 
