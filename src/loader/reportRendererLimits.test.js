@@ -36,10 +36,21 @@ describe('loader/reportRendererLimits', () => {
     expect(gtagEvent).toHaveBeenCalledWith('renderer_fallback', {condition: 'no_multi_draw', format: 'glb'})
   })
 
-  it('says nothing when the renderer has WEBGL_multi_draw', () => {
-    reportRendererLimits(batchedModel(), rendererWith(true), 'glb')
+  it('says nothing when the renderer has WEBGL_multi_draw, and never walks the model', () => {
+    const model = batchedModel()
+    const children = model.children
+    let walked = 0
+    Object.defineProperty(model, 'children', {get: () => {
+      walked++
+      return children
+    }})
+    reportRendererLimits(model, rendererWith(true), 'glb')
+    expect(walked).toBe(0)
     expect(reportRendererInfo).not.toHaveBeenCalled()
     expect(gtagEvent).not.toHaveBeenCalled()
+    // Non-vacuity: without the extension, the same model is walked.
+    reportRendererLimits(model, rendererWith(false), 'glb')
+    expect(walked).toBeGreaterThan(0)
   })
 
   it('says nothing for a model with no BatchedMesh, which draws the same either way', () => {

@@ -39,12 +39,14 @@ export const NO_MULTI_DRAW_LINE =
 export function reportRendererLimits(model, getRenderer, format) {
   try {
     const extensions = getRenderer?.()?.extensions
-    if (typeof extensions?.has !== 'function' || !hasBatchedMesh(model)) {
+    // The extension first: it is the rare case (Firefox), so on every other
+    // renderer the model is never walked. `has` asks the context for the
+    // extension, and three's own `get` is what warns; asking here adds no
+    // console line.
+    if (typeof extensions?.has !== 'function' || extensions.has('WEBGL_multi_draw')) {
       return
     }
-    // `has` asks the context for the extension, and three's own `get` is
-    // what warns; asking here adds no console line.
-    if (extensions.has('WEBGL_multi_draw')) {
+    if (!hasBatchedMesh(model)) {
       return
     }
     reportRendererInfo(NO_MULTI_DRAW_LINE)
@@ -56,17 +58,23 @@ export function reportRendererLimits(model, getRenderer, format) {
 
 
 /**
+ * Walked by hand rather than with `Object3D#traverse`, which can't stop: a
+ * batched model's BatchedMesh is the root or one of its first children, so
+ * this answers at once for exactly the models that get the line.
+ *
  * @param {object} model
  * @return {boolean} whether the model draws through a BatchedMesh
  */
 function hasBatchedMesh(model) {
-  let found = false
-  if (typeof model?.traverse === 'function') {
-    model.traverse((object) => {
-      found = found || Boolean(object.isBatchedMesh)
-    })
-  } else {
-    found = Boolean(model?.isBatchedMesh)
+  const pending = model ? [model] : []
+  while (pending.length > 0) {
+    const object = pending.pop()
+    if (object.isBatchedMesh) {
+      return true
+    }
+    if (Array.isArray(object.children)) {
+      pending.push(...object.children)
+    }
   }
-  return found
+  return false
 }
