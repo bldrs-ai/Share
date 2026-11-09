@@ -1,3 +1,4 @@
+import {Box3} from 'three'
 import {acceleratedRaycast} from 'three-mesh-bvh'
 import {hasInactiveInstances, isActive} from './batchedInstanceTables'
 
@@ -30,6 +31,7 @@ import {hasInactiveInstances, isActive} from './batchedInstanceTables'
  * @param {Array<object>} intersects
  */
 export function raycastActiveInstances(raycaster, intersects) {
+  ensureFallbackBoundingBox(this)
   if (!this.isBatchedMesh || !hasInactiveInstances(this)) {
     acceleratedRaycast.call(this, raycaster, intersects)
     return
@@ -47,5 +49,29 @@ export function raycastActiveInstances(raycaster, intersects) {
     } else {
       delete this.getVisibleAt
     }
+  }
+}
+
+
+/**
+ * Give the batch geometry a `boundingBox` for three-mesh-bvh's per-geometry
+ * fallback to write into.
+ *
+ * For an instance whose geometry has no tree yet, the batched raycast does
+ * `this.getBoundingBoxAt(geometryId, this.geometry.boundingBox)`
+ * (node_modules/three-mesh-bvh/src/utils/ExtensionUtilities.js:121-126), and
+ * `getBoundingBoxAt` copies into its target, so a null box throws. It never
+ * came up while every tree was built at load, because the first tree's build
+ * sets the box. Now trees are built after the model is shown
+ * (deferredBatchedBvh.js), so a pick can arrive before the first one; and a
+ * capacity grow (batchedGeometryCapacity.js) swaps in a fresh geometry with
+ * no box. The library overwrites the box per pick, so its value means
+ * nothing; it only has to exist.
+ *
+ * @param {object} mesh
+ */
+function ensureFallbackBoundingBox(mesh) {
+  if (mesh.isBatchedMesh && Array.isArray(mesh.boundsTrees) && mesh.geometry?.boundingBox === null) {
+    mesh.geometry.boundingBox = new Box3()
   }
 }

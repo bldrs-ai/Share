@@ -783,6 +783,26 @@ rotation, and boxed the hash on every word. That was 2.9 s of a 6.8 s
 bit for bit (`bldrsInstanceTables.test.js` pins it), so artifacts cached before
 the change still hit.
 
+**What the rest of the hydration costs.** After the canary, PSB's 4.05 s
+"Applying model fixups" was the per-geometry BVH build (2.73 s), the
+per-geometry bounds (0.62 s), the partition's upload into the BatchedMesh
+(0.43 s) and the join (0.22 s). The BVH is now built after the model is on
+screen, in idle time, INDIRECT so that it never reorders the index under the
+writer's sliced snapshot (`viewer/ifc/deferredBatchedBvh.js`; picks stay
+correct meanwhile, through the library's per-geometry fallback). The bounds are
+seeded from the batch's typed arrays, to three's own values exactly
+(`viewer/ifc/batchedBounds.js`). Both run in `decorateBatchMeshes`, so the
+cache miss gets them too, for IFC and STEP alike. The partition was left as
+it is: what it spends is three's own `setGeometryAt`, which copies the index
+one `getX`/`setX` at a time and an interleaved attribute one component at a
+time. A faster copy means writing three's private bookkeeping ourselves,
+or de-interleaving into a second copy of POSITION and NORMAL first, which on
+PSB is a transient ~190 MB. Neither is worth ~0.2 s. Measured A/B on PSB in
+headless Chromium (two runs each, twice): fixups 3.9–4.1 s → 1.0–1.1 s,
+Total 5.5–6.0 s → 2.6–2.9 s, the trees done ~2.9 s after the load, and
+848 MB retained after a forced GC against 805 MB, the indirect buffers'
+4 bytes per triangle.
+
 **Draco exports carry a lossy witness instead** (the owner's smoke on #1872: a
 Draco download of DSA and of Right_Hand rendered perfectly and could not be
 selected). Measured on a DSA-shaped strip through the real codec: Draco MERGES
