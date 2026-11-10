@@ -1,15 +1,14 @@
 # Off-main-thread rendering — three.js in an OffscreenCanvas worker (open-205)
 
-**Status (2026-11-10):** scoped; **go/no-go on steps 2–6 is pending one
-measurement (§9.1)**. On 2026-11-09 the owner decided to proceed, then
-paused before starting: the case wasn't clear enough. The real-GPU spike
-(§5a) and the work it led to (hover, residency) settled most of it. What is
-still open is how much main-thread blocking Share has left now that hover is
-fixed. Step 1 (§7.1, render-on-demand) is **done** and on by default (#2104).
-Steps 2–6 (§7.2–7.6) are open sub-issues of story #2055 (#2120–#2124), not
-started. The engine worker has landed (§6.4), so §7.5 is unblocked from the
-engine side. Synthetic spike measured 2026-11-03 (§5); real-GPU spike
-2026-11-09 (§5a, Share#2126).
+**Status (2026-11-10): deferred.** Steps 2–6 (§7.2–7.6) are not started.
+§9.1's re-capture of Share on main came back: single-session Share is
+fine on main except for a handful of long synchronous tasks. A render
+worker would hide those, but doubles input latency throughout. Splitting
+the tasks fixes both, and is #2030's work. The worker is revisited with
+the multi-session UI (§5a, §9.1). Step 1 (§7.1, render-on-demand) is
+**done** and on by default (#2104). The engine worker has landed (§6.4).
+Measured: synthetic spike 2026-11-03 (§5); real-GPU spike and re-capture
+2026-11-09/10 (§5a, Share#2126).
 **Epic:** `open-205` (#2011). Story: #2055 (reopened; it auto-closed when #2104
 merged). **Related:** #2043 (interactive at first mesh, closed), #2030 (no
 blocking calls, open), #2019 (per-model sessions, open), #2031 (close and
@@ -54,10 +53,12 @@ number is a convenience: they drift.
    frames off main when the camera moves or a load streams: that is this
    doc's remaining work. PlaceMark's and the ViewCube's rAF loops still run
    beside the main one (§2.5, #24).
-2. **Then, if §9.1 says so, a single render worker, separate from the
-   per-model engine workers (option (a), §6).** The engine worker has
-   landed. Whether to start is now §9.1's decision rule, read off a fresh
-   trace of Share on main (§5a explains why). Geometry goes engine worker → render worker
+2. **A single render worker, separate from the per-model engine workers
+   (option (a), §6), is the design if and when it is built. It is
+   deferred (§9.1).** The re-capture on main (§5a) found Share's
+   remaining blocks are a few long synchronous tasks, which splitting
+   fixes more cheaply and without the worker's latency cost. Revisit with
+   the multi-session UI. Geometry goes engine worker → render worker
    over a `MessageChannel` as transferred `ArrayBuffer`s. Main brokers the
    port and never holds the geometry. Picking, hover, highlight, residency,
    isolation masks and the cut planes live in the render worker. Selection,
@@ -575,6 +576,88 @@ and every scene's CPU work off one thread — is the remaining argument, and
 it is strongest exactly where Share isn't yet: several sessions on screen.
 
 
+**Re-capture on main, after the hover fixes (2026-11-10).** The owner
+re-ran the capture on the #2126 preview rebuilt on main (`206a7485`), then
+replayed it. In Brave 157 on the M2, the replay scene was CPU-bound, with
+fence pacing and two frames in flight.
+
+*PSB, GLB cache hit* (the 2.3 s load window):
+
+| Run | Frames/s | Frame interval p95 / max (ms) | Frames > 50 ms | Input → frame p50 / p95 (ms) |
+|---|---|---|---|---|
+| R1 render on main | 11.6 | 1051 / 1383 | 3 | 39 / 1394 |
+| R2 render worker | 44.2 | 34 / 83 | 1 | 72 / 1255 |
+| I1 main, idle | 51.5 | 33 / 67 | 1 | 38 / 55 |
+| I2 worker, idle | 43.6 | 34 / 83 | 1 | 55 / 88 |
+
+The whole window is two tasks: 1328 ms and 1044 ms.
+- The first resumes from `scheduler.yield`. That is `yieldForPaint()` in
+  `Loader.js` right before `fixupCb(model, viewer)`, the GLB hit's
+  synchronous hydration (#2101).
+- The second is an anonymous promise continuation, not attributed. The
+  build is minified; GLB parse is the likely candidate.
+- Input waits on main in both runs: R2's dispatch p95 is 1192 ms.
+
+*PSB, first load, dragging throughout* (58.5 s). Share's own trace:
+- 50 fps, frame interval p50 17 ms, p95 33 ms, max 750 ms; 75 frames
+  over 50 ms.
+- Main busy 5.4 s in 18 long tasks, the largest 1.15 s.
+- Real pointermove delay p50 4.7 ms, p95 15.5 ms. The engine worker keeps
+  input responsive through almost all of the load.
+
+The replay:
+
+| Run | Frames/s | Frame interval p95 / max (ms) | Frames > 50 ms | Input → frame p50 / p95 (ms) |
+|---|---|---|---|---|
+| R1 render on main | 51.6 | 33 / 1183 | 55 | 38 / 54 |
+| R2 render worker | 44.8 | 33 / 83 | 1 | 92 / 109 |
+| I1 main, idle | 54.2 | 33 / 67 | 1 | 38 / 50 |
+| I2 worker, idle | 45.5 | 34 / 84 | 1 | 92 / 109 |
+
+*Seestrasse, the whole 15.5 s trace* (not replayed): 45 fps, frame interval
+p95 34 ms, 4 long tasks of which the largest is 183 ms, 16 frames over
+50 ms, pointer delay p95 16 ms. On a mid-weight model, main is effectively
+free.
+
+*Eight Seestrasse-sized views* (44k instances, about 1 M triangles each,
+1920×1200; two runs agreed to within a millisecond):
+
+| Mode | Live contexts | Lost | First show (ms) | Re-show p50 / p95 (ms) |
+|---|---|---|---|---|
+| One worker and context per view | 8 | 0 | 46–47 | 15–16 / 15–17 |
+| One shared context | 1 | 0 | 32 | 31–32 / 32–33 |
+
+Memory and the 16 and 32 runs:
+- The GPU process grew about 100 MB for the eight views, by Task Manager.
+- That is mostly each context's drawing buffers (about 12 MB a view at
+  this size). It is not model geometry: the spike scene reuses three
+  shapes across every instance.
+- A real model's geometry costs the same under either arrangement. A
+  shared context saves it only if idle models are dropped and re-uploaded,
+  and the switch then costs the upload, which this didn't measure.
+- The 16 and 32 runs weren't taken, so the context cap is still unknown
+  (20 held in the first spike).
+
+What the re-capture says:
+- **A worker trades latency for smoothness, all the time.** It removes the
+  stalls (55 → 1 frames over 50 ms on the cold load, and a worst stall of
+  1.2 s → 83 ms). But input → frame goes from 38 to 92 ms at p50 in every
+  phase, idle included, and the frame rate falls about 15%. Part of that
+  is the spike's two-frames-in-flight pacing, which a production worker
+  might tighten.
+- **The stalls have a cheaper fix.** They come from a countable set of long
+  synchronous tasks: 2 on the cache hit (2.4 s, the largest 1.3 s) and 18
+  on the cold load (3.9 s, the largest 1.15 s). Splitting them into
+  ≤ 50 ms slices removes the stalls for frames *and* input, keeps main's
+  38 ms latency, and needs no new architecture. That is #2030.
+- **Multi-session switching is cheap either way:** one frame with a context
+  per session, two with a shared one. It doesn't force the design. The
+  open multi-session question is what N real Share sessions cost on one
+  main thread (React, N render loops, N engine workers). That needs a
+  harness of N same-origin iframes, taken when the multi-session UI is
+  designed.
+
+
 ## 6. Design
 
 ### 6.1 Options
@@ -1005,29 +1088,31 @@ State as of 2026-11-09:
 ## 9. Open decisions
 
 **Since the scope:** the owner decided to proceed (2026-11-09), then paused
-before starting, to get a definitive result first. §5a has most of it.
-§9.1 is again "whether", and says what decides it.
+before starting, to get a definitive result first. §5a has it, and §9.1
+records the decision: **deferred**.
 
-1. **Is a render worker worth starting now?** Re-capture Share on main,
-   since hover was the largest block in the 2026-11-09 trace and is now
-   fixed (§5a), and decide from that.
-   - **Capture** (owner, M2, the #2126 preview rebuilt on main,
-     `?feature=mainThreadTrace`): PSB cold and as a GLB cache hit, dragging
-     throughout; NavTree expand and select; a model switch between Marks.
-   - **Replay** each window on `/spike/offscreen/` (scene CPU-bound,
-     fence pacing two frames in flight), and compare R1 (render on main)
-     with R2 (worker).
-   - **Go** if R1 still shows **more than ~5 frames over 50 ms per 10 s of
-     interaction, or a p95 frame interval above 2× the display frame**,
-     where R2 doesn't. Then the remaining main-thread work costs visible
-     frames today, and §7.2–7.4 are worth starting.
-   - **Defer** if R1 and R2 are within noise of each other. Then single
-     session is fine on main. The render worker waits for the
-     multi-session UI, designed around one render worker, one shared
-     context, cached idle frames and one shared residency budget (§5a),
-     and is measured against React's real cost there.
-   - Either way, a GPU-bound frame (a big model at full detail) is
-     residency's to fix, not this doc's.
+1. **Is a render worker worth starting now? Decided 2026-11-10: no,
+   deferred.** The rule, as amended after the re-capture:
+   - **Capture** Share on main with `?feature=mainThreadTrace` and replay
+     each window on `/spike/offscreen/`, comparing R1 (render on main) with
+     R2 (worker).
+   - **First**, for each block behind R1's stalls, ask whether a cheaper
+     fix removes it: splitting a long task, yielding, moving it to a
+     worker of its own. A block with such a fix doesn't count toward the
+     render worker.
+   - **Go** if R1 still shows more than ~5 frames over 50 ms per 10 s of
+     interaction, or a p95 frame interval above 2× the display frame,
+     where R2 doesn't, and the worker's own cost is acceptable. That cost
+     is input → frame latency in every phase (+54 ms p50 measured, §5a)
+     and about 15% fewer frames at idle.
+   - **Outcome:** every stall measured is a long synchronous task with a
+     cheaper fix (§5a), so the worker isn't justified for single-session
+     Share. Split the tasks under #2030, starting with the PSB cache
+     hit's hydration. Revisit the worker with the multi-session UI, after
+     the N-session iframe harness (§5a), designed around one render
+     worker, cached idle frames and one shared residency budget.
+   - A GPU-bound frame (a big model at full detail) is residency's to fix,
+     not this doc's.
 2. **Camera follow vs the first user interaction** (#2043). Unchanged by
    this doc, but the follow runs in the worker.
 3. **Streaming draw cap while the camera is idle** (§7.1): settled by what
@@ -1071,7 +1156,10 @@ before starting, to get a definitive result first. §5a has most of it.
 - **Measured**: §5's spike, on SwiftShader. Ratios only. §5a, on the owner's
   M2 (Chromium 157): the replay runs, 20 views, Share's main thread on PSB,
   and the repaint probe on three models (Share#2126's attached JSON).
-- **Not measured**: Share's main thread after the hover fixes (§9.1, the
-  open decision); more than 20 contexts; real-GPU frame cost on phones; context loss on Safari/Firefox
+- **Measured on main after the hover fixes** (§5a, 2026-11-10): PSB as a
+  cache hit and as a first load, a Seestrasse trace, and 8 Seestrasse-sized
+  views.
+- **Not measured**: N real Share sessions on one page; contexts beyond 20,
+  and GPU memory for real model geometry; real-GPU frame cost on phones; context loss on Safari/Firefox
   workers; Spark in a worker; iOS memory with a worker-held scene; postMessage
   cost for a full pump stream (it's a transfer, so expected small).
