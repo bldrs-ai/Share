@@ -1,9 +1,15 @@
 # Per-model engine worker — one Conway engine per model, in its own Web Worker (open-205)
 
-**Status:** decided 2026-11-03 (§8); being built behind
-`?feature=engineWorker` in the §7 order. Steps 1–6 have landed: IFC
-and STEP both load in the worker, and a worker load writes the GLB
-artifact (step 5, #2081). Step 9 (default on) is next.
+**Status (2026-11-10):** decided 2026-11-03 (§8). The worker is **on by
+default** since step 9 (#2083): `engineWorker` is `isActive: true` in
+`FeatureFlags.js`, and `disableEngineWorker` is the per-session kill switch
+(`?feature=disableEngineWorker`) and the prod rollback (§7.2, "Rolling
+back"). IFC and STEP both load in the worker, and a worker load writes the
+GLB artifact (step 5, #2081). The main-thread engine stays, by
+`engine/engineRoute.js`, for the kill switch, the legacy `?view=` rules and
+the legacy `?feature=bot` chat; where module workers are missing or a worker
+fails to start, the same handler runs in process (`spawnEngine.js`). Steps
+7–8 (sessions own their worker; close and eviction) are not built.
 **Epic:** `open-205` (#2011). Story: #2053. Absorbs #2031 (close and
 eviction): with an engine in a worker, terminating the worker *is* the
 eviction.
@@ -738,13 +744,15 @@ are not re-minted by an engine respawn because the scene is not rebuilt.
 
 ## 7. Migration plan
 
-### Resume here (2026-11-06)
+### Resume here (2026-11-10)
 
 Picking `open-205` back up after a break? Read this, then §7.1 (numbers)
 and §7.2 (step-9 criteria). Docs #2064, #2068 and #2071 are merged.
 
-**Release goal.** `?feature=engineWorker` on by default. That is step 9,
-the only thing left that users would see.
+**Release goal: met.** The engine worker is on by default (step 9, #2083).
+Per Pablo, 2026-11-10, the last couple of weeks went into the groundwork
+for multi-session use (loading and unloading models quickly, with cached
+state), and he treats this doc as current and the flip as a milestone.
 
 **Merged.**
 - Steps 0–4: this doc (#2056), conway#540 (conway#759), protocol and
@@ -768,23 +776,38 @@ the only thing left that users would see.
   model's index sidecar, and the next open of the same file comes up from
   it without a parse.
 
-**In flight.** Step 9, the flip itself (#2083, draft): `engineWorker`
-on by default, the `disableEngineWorker` kill switch and prod rollback, and
-the `?view=` and legacy `?feature=bot` routes to the main-thread engine
-(`engine/engineRoute.js`). #2061 is explained (§7.1).
+- Step 9, the flip itself (#2083): `engineWorker` on by default, the
+  `disableEngineWorker` kill switch and prod rollback, and the `?view=` and
+  legacy `?feature=bot` routes to the main-thread engine
+  (`engine/engineRoute.js`). #2061 is explained (§7.1).
 
-**Flip gates (step 9).** §7.2 is the list. What is left is the human's:
-a real-GPU check, plus Safari and Firefox by hand, on #2083's deploy
-preview. #2083 is not merged before that.
+**Flip gates (step 9).** §7.2 was the list. The doc does not record the
+human's gates, a real-GPU check plus Safari and Firefox by hand (§7.2 item
+7, §10 "Not measured"). *To confirm:* were they run before the merge, and
+what did they show?
 
-**Next after the flip.**
+**Next.**
+- Steps 7–8 (sessions own their worker, close and eviction; index-only
+  rehydrate). The doc tied them to in-app model switching (#2011, with
+  #2019 and #2031), and the workspace's multi-model tabs now need them
+  (below).
 - STEP convergence in conway (§11): the STEP index sidecar and windowed
   open (conway#757, landed in conway#769) and occurrence paths on preview
   payloads (conway#772) are in conway 1.1639.773; STEP previews themselves
   are parked until conway#773.
 - #2077 and #2078 (priority residency), then #2076.
-- Steps 7–8 (sessions own their worker, close and eviction) only when
-  in-app model switching (#2011) is picked up. They do not gate the flip.
+
+**What this unblocks (2026-11-10).** Per Pablo, the consumer of the
+multi-session groundwork is the workspace (`?feature=workspace`). The agreed
+direction is a Claude-Code-style layout: sessions on the left, grouped by
+project, and several models open as tabs, each tab with its own inner
+layout. That layout is owned by [conversational-cad.md](conversational-cad.md).
+From this doc it needs per-model sessions that outlive a view (steps 7–8;
+[in-app-model-switch.md](in-app-model-switch.md)), the live-worker cap and
+LRU eviction of §5.2, and a cheap re-open from the index sidecar (§7.1,
+row 8). The legacy bot chat still pins a page to the main-thread engine, so
+the assistant port in [ai-workspace.md](ai-workspace.md) §13 has to move
+onto the async read surface of §5.1.
 
 1. **conway: recognise a worker** (conway#540): `WorkerGlobalScope` in
    `isWebPlatform`, `self.crossOriginIsolated` in `pThreadsAllowed`. Small;
@@ -1036,7 +1059,7 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 | 5 — GLB capture in the worker | merged (#2081), after #2073 (#2038: the capture dropped every record a windowed source did not have resident). n=1 each, flag off → on, `RAF_THROTTLE_MS=3600000`, persistent profile. PSB: time to artifact 171.6 → 118.9 s; the writer 38.1 → 31.0 s, of which the worker's capture is 7.6 s; main-thread long tasks before ready 536 (81.6 s) → 35 (13.7 s), and during the write 71 (7.85 s, max 624 ms) → 4 (0.43 s, max 208 ms); page heap (`performance.memory`) at the end 1,127 → 522 MB, sampled peak 1,766 → 848 MB; the worker's JS heap peaked at 140 MB, beside 899 MB of wasm. 58 MB STEP: time to artifact 47.6 → 43.2 s; writer 7.6 → 6.8 s, capture 2.5 s; long tasks before ready 292 (35.8 s) → 10 (3.6 s), during the write 4 (0.35 s) → 1 (0.07 s); page heap at the end 688 → 148 MB; worker JS heap peak 322 MB beside 515 MB of wasm. **Byte identity:** after the batch colour column became float64 (step 5 above), the two engines' whole PSB artifacts are identical, 86,341,686 B each with one SHA-256 (re-measured 2026-11-06, n=1 per side, on a less loaded machine: time to artifact 68.6 → 58.9 s, long tasks before ready 222 (27.8 s) → 13 (6.7 s)). Review fixes: protocol v2, so a stale cached worker without `capture` is refused at hello and the load runs in process (§4); `close()` waits for a spill still in flight before it decides whether to close politely |
 | 8 (part) — index sidecar reopen | Share#2085: a worker load from an OPFS entry saves conway's index sidecar, and the next open of the same entry opens from it instead of parsing, IFC and STEP alike (`engine/engineSidecars.js`). It is written after the first load, not at eviction (§5.3). Since Share#2093 a browser without `createWritable` (Safari before 26) writes it through a read-write sync access handle, and a failed save says why on the `Engine index:` line. Eviction itself is still deferred. The reopen runs conway's full source check, which the owner chose over the sampled one. Measured with it: on the 58 and 106 MB STEP models, Parsing goes from 1.3–1.8 s and 2.6–2.8 s to 0.31–0.39 s and 0.65–0.70 s, and the tree arrives 2.1–3.3 s and 2.9–3.7 s sooner (§11) |
 | 7, 8 | deferred; only in-app switching needs them |
-| 9 | in flight (#2083, draft): default on, the kill switch and rollback, the main-thread routes. #2061 explained (below). Waits on the real-GPU, Safari and Firefox checks |
+| 9 | landed (#2083): default on, the kill switch and rollback, the main-thread routes. #2061 explained (below). The real-GPU, Safari and Firefox checks: to confirm (not recorded here) |
 
 **Picking during the pump (#2084).** The durable batches are pickable from
 the row they are written, on both engines (§11, "Pick during the pump").
@@ -1218,7 +1241,8 @@ change is made here.
 
 ### 7.2 Step 9 (default on): the criteria
 
-Every item needs either a merged PR or a measurement in a PR body.
+These were the gate for the flip, which has landed (#2083). They stay as the
+record. Every item needed either a merged PR or a measurement in a PR body.
 
 1. **Steps 2–6 merged**, each behind the flag, each with its desktop and
    mobile E2E. Met: step 5 merged last (#2081). Steps 7–8 are deferred (they serve
