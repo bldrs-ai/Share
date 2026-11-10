@@ -55,10 +55,11 @@ describeMobileAndDesktop('viewer/residency/motionResidency', () => {
     // Nothing is evicted until the camera moves.
     expect(await stillFrame(page)).toEqual(before)
 
-    const moving = await dragCamera(page)
-    expect(moving.length, 'the drag painted').toBeGreaterThan(0)
+    const moving = inMotion(await dragCamera(page))
+    expect(moving.length, 'the drag painted while the camera moved').toBeGreaterThan(0)
     expect(Math.max(...moving.map((f) => f.triangles)),
-      'every frame of the drag drew fewer triangles than the still view').toBeLessThan(before.triangles)
+      'every frame painted while the camera moved drew fewer triangles than the still view')
+      .toBeLessThan(before.triangles)
 
     const after = await settledFrame(page)
     expect(after.triangles, 'at rest the full set is drawn again').toBe(before.triangles)
@@ -81,7 +82,8 @@ describeMobileAndDesktop('viewer/residency/motionResidency', () => {
     }
     await closeDisplayMenu(page)
     const before = await stillFrame(page)
-    const moving = await dragCamera(page)
+    const moving = inMotion(await dragCamera(page))
+    expect(moving.length, 'the drag painted while the camera moved').toBeGreaterThan(0)
     expect(Math.max(...moving.map((f) => f.triangles))).toBeLessThan(before.triangles)
     await settledFrame(page)
 
@@ -134,6 +136,11 @@ const MANUAL_PERCENT = 20
 // Longer than MotionResidency's REST_MS (200 ms) plus camera-controls'
 // damping tail after a fling.
 const SETTLE_MS = 1500
+// MotionResidency.js REST_MS: no camera change for this long (and for
+// REST_FRAMES frames) is rest, and only at rest is the full set drawn again.
+// Kept as a copy rather than imported, since the spec runs in Node and the
+// module drags in three.
+const REST_MS = 200
 
 
 // Share of pixels an overlay frame may differ from a full repaint of the
@@ -149,10 +156,18 @@ const HOVER_PAINT_MS = 15000
 
 type Frame = {triangles: number, visible: number}
 
+/**
+ * One painted frame as the recorder saw it. `sinceMoveMs` is how long before
+ * the paint the camera last changed (camera-controls `update`, the same event
+ * that starts and extends motion), or null if it hasn't since the recorder
+ * was installed.
+ */
+type PaintedFrame = {triangles: number, overlay: boolean, sinceMoveMs: number | null}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type RecorderWindow = Window & {
   store?: {getState: () => any}
-  __motionFrames?: Array<{triangles: number, overlay: boolean}>
+  __motionFrames?: Array<PaintedFrame>
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -173,7 +188,11 @@ async function installTriangleRecorder(page: Page) {
     }
     const demand = win.store?.getState().viewer?.context?.getRenderDemand?.()
     win.__motionFrames = []
-    let frame: {triangles: number, overlay: boolean} | null = null
+    let lastMoveAt: number | null = null
+    win.store?.getState().viewer?.context?.getCameraControls?.()?.addEventListener?.('update', () => {
+      lastMoveAt = performance.now()
+    })
+    let frame: PaintedFrame | null = null
     // The hover overlay (#2129) draws the hovered instances with their own
     // render call on camera layer 31 (hoverOverlay.js OVERLAY_LAYER), into
     // full paints as well as its own overlay-only ones. That draw is the
@@ -181,12 +200,18 @@ async function installTriangleRecorder(page: Page) {
     const OVERLAY_LAYER_MASK = (1 << 31) >>> 0
     const original = renderer.render
     renderer.render = function(...args: unknown[]) {
+      // Read before the draw, so a slow render doesn't count toward the time
+      // since the camera moved. Still after MotionResidency's rest check (its
+      // frame() runs before the paint), so it never reads less than the
+      // controller's own and a rest frame can't pass as one in motion.
+      const startedAt = performance.now()
       try {
         return original.apply(this, args)
       } finally {
         if (frame === null) {
           const overlayPaints = demand?.stats?.overlayPaints ?? 0
-          frame = {triangles: 0, overlay: false}
+          frame = {triangles: 0, overlay: false,
+            sinceMoveMs: lastMoveAt === null ? null : startedAt - lastMoveAt}
           const open = frame
           win.__motionFrames?.push(open)
           // Closes after this rAF callback's render calls (and the
@@ -210,7 +235,7 @@ async function installTriangleRecorder(page: Page) {
  * @param page
  * @return frames recorded since the last call, and resets the buffer
  */
-async function takeFrames(page: Page): Promise<Array<{triangles: number, overlay: boolean}>> {
+async function takeFrames(page: Page): Promise<Array<PaintedFrame>> {
   return await page.evaluate(() => {
     const win = window as unknown as RecorderWindow
     const frames = win.__motionFrames ?? []
@@ -291,7 +316,7 @@ async function settledFrame(page: Page): Promise<Frame> {
  * @param page
  * @return the painted frames of the drag
  */
-async function dragCamera(page: Page): Promise<Array<{triangles: number, overlay: boolean}>> {
+async function dragCamera(page: Page): Promise<Array<PaintedFrame>> {
   const box = await page.locator('#viewer-container canvas').first().boundingBox()
   if (box === null) {
     throw new Error('dragCamera: the viewer canvas is not laid out')
@@ -312,6 +337,23 @@ async function dragCamera(page: Page): Promise<Array<{triangles: number, overlay
   const frames = await takeFrames(page)
   await page.mouse.up()
   return frames
+}
+
+
+/**
+ * The frames of a drag painted while the camera was in motion by definition:
+ * inside REST_MS of a camera change, so before MotionResidency can have
+ * called rest. Under CPU load Playwright's pointer moves can arrive 200+ ms
+ * apart, and a pause that long mid-drag IS rest: the full set is drawn again,
+ * correctly, until the next move restarts motion. Those frames say nothing
+ * about eviction, so a "fewer triangles while moving" check leaves them out
+ * (CI saw them as an intermittent full-count frame mid-drag).
+ *
+ * @param frames a drag's painted frames
+ * @return the ones painted while the camera moved
+ */
+function inMotion(frames: Array<PaintedFrame>): Array<PaintedFrame> {
+  return frames.filter((f) => f.sinceMoveMs !== null && f.sinceMoveMs < REST_MS)
 }
 
 
