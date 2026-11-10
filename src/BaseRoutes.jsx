@@ -11,6 +11,7 @@ import PopupAuth from './Components/Auth/PopupAuth'
 import PopupCallback from './Components/Auth/PopupCallback'
 import {checkOPFSAvailability, setUpGlobalDebugFunctions} from './OPFS/utils'
 import pruneMissingLocalRecents from './connections/pruneLocalRecents'
+import {seedUploadLedgerFromRecents} from './OPFS/uploadLedger'
 import ShareRoutes from './ShareRoutes'
 import Styles from './Styles'
 import About from './pages/About'
@@ -182,6 +183,12 @@ export default function BaseRoutes({testElt = null}) {
 
       if (available) {
         setUpGlobalDebugFunctions()
+        // Ordering requirement: seed the upload ledger from the local recents
+        // BEFORE the prune below deletes the recents of uploads OPFS has lost,
+        // or those lost uploads would never be recognised as "held here once"
+        // (OPFS/uploadLedger.js). Synchronous, so it finishes before the
+        // prune's first read.
+        seedUploadLedgerFromRecents()
         // Fire-and-forget: a handful of handle lookups, off the load path.
         // The Open dialog re-runs it when shown, so a sweep still in flight
         // here can't leave a dead row on screen.

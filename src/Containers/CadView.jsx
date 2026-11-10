@@ -16,12 +16,15 @@ import {
   getLocalHour,
   getOpenCid,
   gtagEvent,
+  gtagEventWithCid,
   gtagFunnelEvent,
   isRealModelOpen,
+  LOCAL_LINK_EVENTS,
   modelContentId,
   modelRouteSource,
   startModelEngagement,
 } from '../privacy/analytics'
+import {hasSeenLocalUpload, recordLocalUpload} from '../OPFS/uploadLedger'
 import {trackEngagementOnOpen} from '../privacy/engagementTracking'
 import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
 import {getRenderMode} from '../privacy/preferences'
@@ -315,6 +318,11 @@ export default function CadView({
   useEffect(() => {
     isAuthenticatedRef.current = isAuthenticated
   }, [isAuthenticated])
+  // Whether this URL arrived through ShareRoutes#LegacyUploadRedirect (the
+  // pre-#1959 `/v/new/` form), for local_link_missing's legacy_route. A ref
+  // for the same closure reason as isAuthenticatedRef.
+  const isLegacyUploadRouteRef = useRef(false)
+  isLegacyUploadRouteRef.current = location.state?.legacyUploadRoute === true
   // Soft quota gate for models opened straight from a URL (codex P1 on
   // Share#1971): records the load, never blocks it. Called after each
   // successful load below.
@@ -720,7 +728,21 @@ export default function CadView({
         const goneKey = `upload-not-in-browser:${modelIdentity(modelPath, installPrefix)}`
         const repeat = reportedRefusalRef.current === goneKey
         reportedRefusalRef.current = goneKey
-        setAlert({...uploadNotInBrowserAlert(), repeat})
+        // `origin` says whether this browser once held the file
+        // (OPFS/uploadLedger.js) or the link's source is unknown; it rides on
+        // the alert so AlertDialog's follow-up action event can repeat it.
+        const origin = hasSeenLocalUpload(e.storageId) ? 'this_browser' : 'unknown'
+        setAlert({...uploadNotInBrowserAlert(), repeat, origin})
+        // Beside, never instead of, AlertDialog's `alert` event. Same
+        // first-sighting rule as that one, and the same isRealModelOpen guard
+        // as load_failed above so deploy previews stay quiet.
+        if (!repeat && isRealModelOpen(modelPath)) {
+          gtagEventWithCid(LOCAL_LINK_EVENTS.MISSING, {
+            origin,
+            legacy_route: isLegacyUploadRouteRef.current,
+            signed_in: isAuthenticatedRef.current === true,
+          })
+        }
       } else {
         setAlert(e)
       }
@@ -1170,6 +1192,13 @@ export default function CadView({
         reportedRefusalRef.current = noGeometryKey
         setAlert(noGeometryAlert())
       }
+    }
+    // Every way an upload opens (picker, drop, reload, recents) lands here,
+    // so this one seam keeps the ledger complete. Deliberately outside the
+    // isRealModelOpen guard: it is bookkeeping, not an analytics send, and
+    // the same storage id derivation as the loader (Loader.js#uploadStorageId).
+    if (routeResult.isUploadedFile === true) {
+      recordLocalUpload(routeResult.filepath.split('/').pop())
     }
     if (isRealModelOpen(routeResult)) {
       const eventParams = {

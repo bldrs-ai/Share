@@ -128,7 +128,10 @@ function LegacyUploadRedirect() {
   useEffect(() => {
     const dest = toLocalOnlyPath(location.pathname)
     debug().log('ShareRoutes#LegacyUploadRedirect: forwarding to: ', dest)
-    navigate(`${dest}${location.search}${location.hash}`, {replace: true})
+    // The state marks the arrival as a legacy link for CadView's
+    // `local_link_missing` analytics (legacy_route); it reads it with
+    // useLocation(). Nothing else depends on it.
+    navigate(`${dest}${location.search}${location.hash}`, {replace: true, state: {legacyUploadRoute: true}})
   }, [location, navigate])
 
   return null

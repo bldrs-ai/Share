@@ -887,6 +887,68 @@ describe('CadView', () => {
     expect(result.current.alert).toEqual(expect.objectContaining({type: 'uploadNotInBrowser', repeat: true}))
   })
 
+  // local_link_missing: what GA could not say about the alert above. The
+  // ledger (OPFS/uploadLedger.js) decides origin; the event is first-sighting
+  // only, like the `alert` event it sits beside.
+  describe('local_link_missing analytics', () => {
+    const ID = '12345678-1234-4abc-9def-123456789abc.ifc'
+    const gaEvents = () => window.gtag.mock.calls.map(([, name, params]) => [name, params])
+    const missingEvents = () => gaEvents().filter(([name]) => name === 'local_link_missing')
+
+    beforeEach(() => {
+      window.gtag = jest.fn()
+      localStorage.removeItem('bldrs:local-upload-ledger')
+      jest.spyOn(Loader, 'load').mockImplementation(() => {
+        throw new UploadNotInBrowserError(ID)
+      })
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+      const Sentry = require('@sentry/react')
+      jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    })
+
+    afterEach(() => {
+      delete window.gtag
+      localStorage.removeItem('bldrs:local-upload-ledger')
+    })
+
+    /** @return {Promise<object>} the store hook result, after the alert shows */
+    async function openMissingUpload() {
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setIsOpfsAvailable(true))
+      await act(() => result.current.setModelPath({filepath: ID, isUploadedFile: true}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert?.type).toBe('uploadNotInBrowser'))
+      return result
+    }
+
+    it('reports origin unknown when the ledger never saw the id', async () => {
+      const result = await openMissingUpload()
+      expect(missingEvents()).toEqual([['local_link_missing',
+        {origin: 'unknown', legacy_route: false, signed_in: false}]])
+      expect(result.current.alert.origin).toBe('unknown')
+    })
+
+    it('reports origin this_browser when the ledger holds the id', async () => {
+      localStorage.setItem('bldrs:local-upload-ledger', JSON.stringify([ID]))
+      const result = await openMissingUpload()
+      expect(missingEvents()).toEqual([['local_link_missing',
+        {origin: 'this_browser', legacy_route: false, signed_in: false}]])
+      expect(result.current.alert.origin).toBe('this_browser')
+    })
+
+    it('sends nothing for the repeat an auth change causes', async () => {
+      const result = await openMissingUpload()
+      expect(missingEvents()).toHaveLength(1)
+      const first = result.current.alert
+      await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert).not.toBe(first))
+      expect(result.current.alert.repeat).toBe(true)
+      expect(missingEvents()).toHaveLength(1)
+    })
+  })
+
   // A hosted file whose NAME is a UUID looks like an upload to the loader's
   // path heuristic; only the route knows it isn't (codex review on #1956).
   // A private model needs a Bldrs sign-in AND the provider's authorization

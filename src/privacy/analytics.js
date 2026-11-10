@@ -458,6 +458,32 @@ export const GATE_EVENTS = Object.freeze({
   QUOTA_SOFT_LIMIT_EXCEEDED: 'quota_soft_limit_exceeded',
 })
 
+/*
+ * The "File not in this browser" outcome and what the visitor does next, for
+ * a `/v/local-only/` link whose upload this browser doesn't hold. The
+ * existing `alert` event (AlertDialog) keeps firing unchanged; these add the
+ * two things it can't say. Sent through gtagEventWithCid. Closed-set values
+ * only: never a file name, URL, path or storage id.
+ *
+ *   MISSING  {origin: 'this_browser'|'unknown', legacy_route, signed_in}
+ *            CadView, on the first UploadNotInBrowserError per route.
+ *            origin: 'this_browser' when the upload ledger
+ *            (OPFS/uploadLedger.js) shows this browser held the id and lost
+ *            it; 'unknown' otherwise (another machine, or site data fully
+ *            wiped, which clears the ledger too). legacy_route: the URL
+ *            arrived as the pre-#1959 `/v/new/` form.
+ *   ACTION   {action: 'open_file'|'dismiss', origin}  AlertDialog, once per
+ *            shown dialog: the "Open a file" button, or any other close.
+ *            origin repeats the paired MISSING event's value.
+ *
+ * Names are queried verbatim GA-side; GA4 has no rename. design/new/quotas.md
+ * §"Funnel analytics".
+ */
+export const LOCAL_LINK_EVENTS = Object.freeze({
+  MISSING: 'local_link_missing',
+  ACTION: 'local_link_missing_action',
+})
+
 
 /**
  * gtagEvent plus OPEN_CID_PARAM (getOpenCid()), omitted rather than blank

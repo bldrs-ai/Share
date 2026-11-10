@@ -15,12 +15,19 @@ import {UNRECOGNIZED_FORMAT_ALERT_EVENT, unrecognizedFormatAlert} from '../loade
 import {UNSUPPORTED_SCHEMA_ALERT_EVENT, UnsupportedSchemaError, unsupportedSchemaAlert} from '../loader/unsupportedSchema'
 import {REVIT} from '../loader/formatGuidance'
 import {ARCHIVE_ENTRY_CHOICE, ARCHIVE_UNREADABLE, noModelInArchiveAlert} from '../loader/modelArchive'
+import {gtagEventWithCid} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
 import AlertDialog from './AlertDialog'
 
 
 jest.mock('../connections/registry')
+// Only gtagEventWithCid is stubbed: the rest of analytics (LOCAL_LINK_EVENTS
+// and friends) stays real.
+jest.mock('../privacy/analytics', () => ({
+  ...jest.requireActual('../privacy/analytics'),
+  gtagEventWithCid: jest.fn(),
+}))
 jest.mock('../utils/alertTracking', () => ({trackAlert: jest.fn(), trackAlertEvent: jest.fn()}))
 
 
@@ -386,6 +393,46 @@ describe('AlertDialog — uploadNotInBrowser alert type (#1955)', () => {
     expect(trackAlertEvent).toHaveBeenCalledTimes(1)
     expect(trackAlertEvent).toHaveBeenCalledWith(UPLOAD_NOT_IN_BROWSER_ALERT)
     expect(trackAlert).not.toHaveBeenCalled()
+  })
+
+  describe('local_link_missing_action', () => {
+    const show = (extra = {}) => {
+      act(() => {
+        useStore.getState().setAlert({...uploadNotInBrowserAlert(), ...extra})
+      })
+      render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    }
+
+    it('"Open a file" sends one open_file with the alert\'s origin', () => {
+      show({origin: 'this_browser'})
+      fireEvent.click(screen.getByText('Open a file'))
+      expect(gtagEventWithCid.mock.calls).toEqual([
+        ['local_link_missing_action', {action: 'open_file', origin: 'this_browser'}],
+      ])
+    })
+
+    it('closing any other way sends one dismiss, defaulting origin to unknown', () => {
+      show()
+      fireEvent.click(screen.getByRole('button', {name: /close/i}))
+      expect(gtagEventWithCid.mock.calls).toEqual([
+        ['local_link_missing_action', {action: 'dismiss', origin: 'unknown'}],
+      ])
+    })
+
+    it('sends nothing for a repeat alert', () => {
+      show({repeat: true, origin: 'unknown'})
+      fireEvent.click(screen.getByText('Open a file'))
+      expect(gtagEventWithCid).not.toHaveBeenCalled()
+    })
+
+    it('sends nothing when an unrelated alert is closed', () => {
+      act(() => {
+        useStore.getState().setAlert(new Error('boom'))
+      })
+      render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+      fireEvent.click(screen.getByRole('button', {name: /close/i}))
+      expect(gtagEventWithCid).not.toHaveBeenCalled()
+    })
   })
 })
 

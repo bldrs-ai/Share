@@ -643,6 +643,8 @@ events, so a gate hit joins the same client's `real_model_open`, `login` and
 | `export_failed` | `format`, `reason`: `no_slot` \| `denied` \| `unavailable` \| `error` | `useExport`, once per run that delivers no file (`unavailable`: the cached artifact is gone; `no_slot`: refused for want of a free model slot, replacing `free_limit` on 2026-10-27) |
 | `share_gated` | `reason`: `local_file`; `signed_in` | `ShareControl`, when the local-only Share gate's help opens |
 | `share_interest` | `feature`: `save_to_cloud`; `signed_in` | `ShareControl`, the "Save to Google Drive or GitHub to share — coming soon" line; at most once per opening of the help |
+| `local_link_missing` | `origin`: `this_browser` \| `unknown`; `legacy_route`; `signed_in` | `CadView`, the first `UploadNotInBrowserError` per route, beside (never instead of) AlertDialog's `alert` event. `legacy_route`: the URL arrived as the pre-#1959 `/v/new/` form (`ShareRoutes#LegacyUploadRedirect` marks the redirect in router state). Same `isRealModelOpen` guard as `load_failed` |
+| `local_link_missing_action` | `action`: `open_file` \| `dismiss`; `origin` (the paired `local_link_missing`'s) | `AlertDialog`, once per shown "File not in this browser" dialog: the "Open a file" button, or any other close. Skipped for a repeat alert, like `alert` |
 | `quota_soft_limit_exceeded` | `tier`, `used`, `limit`, `route_kind`: `gdrive` \| `github` | `quota/useDirectLinkQuota.js`, when a model opened from its URL is over the limit; the load is not blocked (§"Direct links: soft gate") |
 
 A sign-in started from a gate (`Auth0/gateLogin.js`) adds `from: 'gate'` and
@@ -661,11 +663,23 @@ A sign-in started from a gate (`Auth0/gateLogin.js`) adds `from: 'gate'` and
 
 GA-side these params need **event-scoped custom dimensions** before they
 appear in reports: `reason`, `signed_in`, `format`, `source_kind`,
-`portable`, `free_export`, `slot_taken` and `bytes_bucket`. `feature` and `from` are
+`portable`, `free_export`, `slot_taken`, `bytes_bucket`, `origin`,
+`legacy_route` and `action`. `feature` and `from` are
 already on the funnel's list below; GA4 keys a dimension by parameter name,
 so one registration covers these events too, and the same goes for
 `open_cid`. They are added to the GA4-admin follow-ups at the end of this
 section.
+
+`origin` on `local_link_missing` comes from the upload ledger
+(`OPFS/uploadLedger.js`), a never-pruned localStorage list of the local-only
+storage ids this browser has held. It is written when an upload loads
+successfully (CadView) and seeded from local recents at app start, before
+`pruneLocalRecents` deletes the recents of lost uploads. Profile -> Clear Local
+Cache does not clear it, because "held it, lost it" is the case it measures.
+A full site-data wipe clears the ledger with OPFS, so a miss in it means
+another machine or a full wipe; that is why the value is `unknown` and not
+`other_browser`. The ledger holds UUID-derived ids only, and only the
+closed-set verdict reaches GA.
 
 The parts that aren't obvious:
 
@@ -1040,7 +1054,8 @@ has a backfill, so these only start accruing data once registered:
 - Register **event-scoped custom dimensions** for `method`, `tier`, `feature`,
   `from` and `destination`, and, for the gate events (§"Gate events",
   Share#1964), `reason`, `signed_in`, `format`, `source_kind`, `portable`,
-  `free_export`, `slot_taken` and `bytes_bucket`. `open_cid` needs nothing new: GA4 keys an
+  `free_export`, `slot_taken`, `bytes_bucket`, `origin`, `legacy_route` and
+  `action`. `open_cid` needs nothing new: GA4 keys an
   event-scoped dimension by parameter name, not by event, so the one
   registered for `real_model_open` applies to these events too.
 - Mark **`login`** and **`subscription_started`** as **key events**.
