@@ -310,6 +310,9 @@ export default class RenderDemand {
     this.settleUntilMs = -Infinity
     // Open `keepPainting` holds (layer 6).
     this.holds = 0
+    // `observePaints` observers: told around every paint, during a load or
+    // not, on demand or not.
+    this.paintObservers = new Set()
     liveDemands.add(this)
     this.onUserControl = () => {
       this.isUserDriving = true
@@ -427,6 +430,44 @@ export default class RenderDemand {
 
 
   /**
+   * Be told around each paint the render closure makes
+   * (IfcHighlighter#newUpdateFunction): `beforePaint()` just before the
+   * draw, `afterPaint(costMs, kind)` just after it, in the same task, each
+   * with the frame's `PaintKind`. For what
+   * needs to bracket the GL commands of a frame — the motion-residency GPU
+   * timer (residency/gpuFrameTimer.js) places its timer query or fence here.
+   * An observer must not ask for a paint; one that throws is dropped from
+   * that call only, so a broken observer can't stop the viewer painting.
+   *
+   * @param {object} observer `{beforePaint?, afterPaint?}`
+   * @return {Function} stops observing; idempotent
+   */
+  observePaints(observer) {
+    this.paintObservers.add(observer)
+    return () => {
+      this.paintObservers.delete(observer)
+    }
+  }
+
+
+  /**
+   * The render closure is about to draw: tell the paint observers.
+   *
+   * @param {string} [kind] what it will paint (the hover overlay's
+   *   `PaintKind`); undefined is a full paint
+   */
+  paintStarting(kind) {
+    for (const observer of this.paintObservers) {
+      try {
+        observer.beforePaint?.(kind)
+      } catch (error) {
+        console.warn('[renderDemand] paint observer failed:', error)
+      }
+    }
+  }
+
+
+  /**
    * Attach the camera half of the demand to `controls`.
    *
    * @param {CameraEvents} controls camera-controls instance
@@ -532,6 +573,7 @@ export default class RenderDemand {
   /** Leave `requestPaint`'s reach and drop every listener; for a disposed viewer. */
   dispose() {
     liveDemands.delete(this)
+    this.paintObservers.clear()
     this.stopSession_()
     for (const token of [...this.scopes]) {
       this.end_(token)
@@ -624,6 +666,13 @@ export default class RenderDemand {
     this.stats.paintMs += drawMs
     // What this paint showed is the baseline the probe compares against.
     this.probe?.snapshot?.()
+    for (const observer of this.paintObservers) {
+      try {
+        observer.afterPaint?.(drawMs, kind)
+      } catch (error) {
+        console.warn('[renderDemand] paint observer failed:', error)
+      }
+    }
   }
 
 

@@ -182,6 +182,139 @@ drag from 100→10→100 re-infills smoothly with a stable frame rate;
 no leaks across evict/re-extract cycles (pool accounting invariants
 already tested conway-side).
 
+**B3 — adaptive residency during camera motion (#2130).** B2's slider
+trims draw cost for as long as the user leaves it down; B3 trims it only
+while the camera moves, which is when a slow frame is felt, and puts the full
+picture back the moment it stops.
+
+*Why (the owner's measurements, M2 MacBook Air, real GPU).* A repaint probe
+forced 60 repaints of a still view and timed the CPU (three's render calls)
+and the GPU (a WebGL2 fence placed after the draw, polled from a
+MessageChannel loop):
+
+| Model | Triangles | CPU p50 | GPU p50 (p95) |
+|---|---|---|---|
+| Momentum | 72k | 0.2 ms | 9.2 ms (22) |
+| Seestrasse | 1.06 M | 4 ms | 21.7 ms (27) |
+| PSB (large private IFC) | 12.0 M | 4.9 ms | 47 ms (106) |
+| PSB, small window | 12.0 M | 5.5 ms | 46.5 ms (97) |
+| PSB, residency slider at 25% by screen occupancy | 2.36 M | 1.3 ms | **14.4 ms** (18.5) |
+
+PSB is triangle-bound, not fill-bound (shrinking the window changed
+nothing): GPU time is about 6 ms + 3.4 ms per million triangles. At full
+detail it orbits at about 20 fps (47 ms a frame); at 25% occupancy residency
+the owner reports it "feels instant".
+
+*The controls.* The Display menu's residency section becomes the **at rest**
+setting, unchanged in default (100%) and behaviour. Behind
+`?feature=motionResidency` (default off, for the owner's A/B) a second
+section, **While moving**, has the same percent slider and priority metric
+plus **Auto**, the default. Manual 100% is "no change while moving" and is
+exactly today's viewer. Both persist the same way: the display-override
+stack (`motionResidency: {mode, percent, metric}`,
+model-display-controls.md §2) and the `#d:` token (`mres=25`,
+`mres=auto.memory`; Auto + occupancy is the default and writes nothing).
+
+*The overlay (ResidencyController).* A record carries two verdicts,
+`restKept` (what `apply` computes for the at-rest target, as before) and
+`motionKept`; an instance is shown iff both hold. The motion set is the top
+of the motion metric's ordering drawn only from the at-rest set, so motion
+can take parts away but never add one, and `endMotion` restores exactly the
+at-rest set — the still picture is what it is without B3. It composes with
+hide/isolate for free: every write goes through `setVisibleAt`, which
+IfcIsolator's mask already arbitrates (a user-hidden part stays hidden, a
+part evicted for motion comes back at rest). An edit during motion
+re-applies, rebuilding the overlay over the fresh records at its fraction.
+Picks at rest see the full at-rest set; hover is off during drags.
+
+*No sort on the camera's critical path.* Sorting 300k records costs
+150–270 ms in V8, so a gesture walks an ordering built beforehand: the
+at-rest order filtered to what it kept (O(n)) when the metrics match, or
+one built in idle time (`prepareMotion`) when they don't. Moving the motion
+fraction moves one cut along that ordering, flipping only the instances
+between the old and the new cut — bounded per frame (20k) after a gesture's
+first frame. A selection change drops the prepared DISTANCE ordering, which is
+rebuilt in idle time (`ResidencyController#selectionChanged`). The owner's
+preview run found that the motion ordering kept ranking by the old selection.
+The at-rest DISTANCE set now also re-ranks on a deselect, which B2 had skipped.
+The first frame and the restore at rest are unbounded, since
+the first must already be cheap to draw and the restore must be the whole
+picture.
+
+*Motion and rest (MotionResidency).* camera-controls' `update` (input,
+damping, transitions, ViewCube snaps, fits) starts motion; 200 ms *and*
+three frames without one is rest. Time alone failed on SwiftShader: at
+~380 ms a frame camera-controls skips an `update` on some frames of a
+steady drag, one quiet frame was already past 200 ms, and every gesture
+ended after two frames — too few for Auto to step. Not `controlstart`, or every click-to-select would flicker the
+model. `update` fires inside `controls.update()`, which runs before the
+frame's paint (`IfcContext#updateAllComponents`), so the first moved pose
+is already drawn reduced; rest is noticed in a `ThreeContext#onFrame` hook,
+also before the paint, and every instance the restore shows asks for a
+paint (`ResidencyController#setVisible_` calls `requestPaint`, on top of
+the `setVisibleAt` hook's background ask), so
+the full set lands in the frame that found the camera still. The load's own
+camera follow is not motion (`RenderDemand#isFollowMoving`). Any cached
+frame a hover overlay keeps is invalidated the normal way: every eviction
+and restore is a hooked `setVisibleAt` plus a `requestPaint()`.
+
+*Auto (autoResidency.js).* Under Auto, while moving, each painted frame's
+GPU time is measured (gpuFrameTimer.js): an `EXT_disjoint_timer_query_webgl2`
+query around the paint where the browser exposes it, else the owner's fence
+technique, one fence in flight, polled from MessageChannel tasks, given up at
+500 ms. The paint is bracketed by `RenderDemand#observePaints`, called from
+the render closure around `composer.render()`. The budget is one display
+interval, read off the loop's idle animation frames, not assumed (16.7 ms at
+60 Hz, 8.3 ms at 120 Hz). Intervals after a paint are ignored,
+or a 47 ms orbit would read as a 21 Hz display. Each step scales the
+fraction by budget/measured. GPU cost is a + b·f, so that proportional step
+under-predicts a cut's saving and over-predicts a growth's cost: from either
+side the walk is monotone toward the budget and does not cross it. The
+smoothness rules carried over from B2 handle the noise:
+
+- the median of at least 3 frames painted at the current fraction (each
+  change opens a new epoch);
+- at most one step per 150 ms;
+- shrink above the budget, grow only below 0.7 of it;
+- ×0.5 to ×1.25 per step, aiming at 0.85 of the budget;
+- a ceiling at the smallest fraction seen over budget, which relaxes ×1.1
+  after 2 s held under budget;
+- a 10% floor.
+
+The fraction persists across gestures, so the next drag starts from the last
+good target and its first frames are already cheap.
+
+*Tuning, from the owner's preview run (M2 Air, 60 Hz, DPR 2).* The first
+cut budgeted 0.8 of the interval (13.3 ms) with a 5% floor. On PSB, Auto went
+to the floor and the menu read "Auto (5%)", which the owner called "a bit
+liberal with the threshold". The repaint probe there puts the GPU at about
+6.4 ms fixed + 3.4 ms per million triangles. Momentum's whole frame is
+already 9.2 ms, so with each step aiming at 0.85 of the budget, 13.3 ms
+leaves little room above the fixed cost. A full interval (the step aims at
+~14.2 ms) is about 2.3 M triangles: PSB at 25%, measured at 14.4 ms, the
+trade-off the owner found good. The floor rose to 10%, below which an orbit
+stops reading as the model. On the owner's re-test with this tuning (M2 Air,
+60 Hz) PSB settled near the 10% floor with the main massing preserved;
+the owner accepted that as the trade-off. `MIN_FRACTION` is the knob if it
+ever proves too aggressive.
+
+*Follow-up, not B3.* With several sessions or views visible at once, the
+budget has to be one GPU budget shared across them, not a full interval
+each.
+
+*Rollback.* `motionResidency` is default off. Off, no driver is built and
+nothing listens to the camera. Manual 100% is the per-user off switch.
+
+*Known limits.* `ResidencyControl` hands the controller
+`viewer.context.ifcCamera.perspectiveCamera`, a field `ThreeContext` does not
+have, so in the app OCCUPANCY scores by part size alone, without regard to
+the view. The owner's 25% measurement was therefore by size. B3 keeps the
+at-rest behaviour as it is and follows it; a camera-aware occupancy is a
+separate change. Hover after a fling, while damping is still moving the
+camera, can pick against the motion set; picks at rest never do. With
+render-on-demand off every frame paints, so there are no idle frames to read
+the display rate from and Auto assumes 60 Hz.
+
 ### Parallelism plan (consistent with the #1612 spike findings)
 
 The isolation spike (Share #1612, parked) proved the COOP/COEP + MT

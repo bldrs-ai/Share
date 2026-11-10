@@ -13,7 +13,7 @@ import {ResidencyMetric} from '../../viewer/residency/ResidencyController'
 
 const {AUTO, SOURCE} = ColorMode
 const {SHADED, WIREFRAME} = ShadingMode
-const {MEMORY, DISTANCE} = ResidencyMetric
+const {MEMORY, DISTANCE, OCCUPANCY} = ResidencyMetric
 
 /**
  * A location double that emulates the browser's `hash` normalization:
@@ -106,6 +106,15 @@ describe('#d: round-trip', () => {
       {residency: {percent: 0}}],
     ['all three', {color: SOURCE, shading: WIREFRAME, residency: {percent: 25, metric: MEMORY}},
       {color: SOURCE, shading: WIREFRAME, residency: {percent: 25, metric: MEMORY}}],
+    ['manual motion residency', {motionResidency: {mode: 'manual', percent: 25, metric: OCCUPANCY}},
+      {motionResidency: {mode: 'manual', percent: 25}}],
+    ['manual motion residency + metric', {motionResidency: {mode: 'manual', percent: 0, metric: MEMORY}},
+      {motionResidency: {mode: 'manual', percent: 0, metric: MEMORY}}],
+    ['auto motion residency, non-default metric', {motionResidency: {mode: 'auto', percent: 60, metric: DISTANCE}},
+      {motionResidency: {mode: 'auto', metric: DISTANCE}}],
+    ['at rest and in motion together', {residency: {percent: 50, metric: OCCUPANCY},
+      motionResidency: {mode: 'manual', percent: 20, metric: OCCUPANCY}},
+    {residency: {percent: 50}, motionResidency: {mode: 'manual', percent: 20}}],
   ]
   it.each(cases)('write then read: %s', (_label, patch, expected) => {
     const location = loc()
@@ -162,6 +171,29 @@ describe('#d: round-trip', () => {
     writeModelDisplayHash(location, appearance({color: SOURCE}))
     expect(location.hash).toContain('c:1,2,3,4,5,6')
     expect(readModelDisplayHash(location)).toEqual({color: SOURCE})
+  })
+})
+
+
+describe('the motion residency term', () => {
+  it('writes nothing for Auto + occupancy, whatever the inert percent', () => {
+    expect(modelDisplayParams(appearance({motionResidency: {mode: 'auto', percent: 30, metric: OCCUPANCY}})))
+      .toEqual({})
+  })
+
+  it('spells the terms res=, then mres=', () => {
+    const location = loc()
+    writeModelDisplayHash(location, appearance({
+      residency: {percent: 50, metric: OCCUPANCY},
+      motionResidency: {mode: 'manual', percent: 20, metric: MEMORY},
+    }))
+    expect(location.hash).toBe('#d:res=50,mres=20.memory')
+  })
+
+  it('drops a junk amount but keeps a good metric, and ignores a bare mres', () => {
+    expect(readModelDisplayHash(loc('d:mres=lots.distance'))).toEqual({motionResidency: {metric: DISTANCE}})
+    expect(readModelDisplayHash(loc('d:mres=140'))).toEqual({})
+    expect(readModelDisplayHash(loc('d:mres'))).toEqual({})
   })
 })
 

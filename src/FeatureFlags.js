@@ -283,6 +283,17 @@ export const flags = [
   // both of which now run in the default configuration.
   // See design/new/model-display-controls.md §7.
   {name: 'displayControls', isActive: true},
+  // Adaptive residency during camera motion (B3 of
+  // design/new/demand-tiled-rendering.md; viewer/residency/MotionResidency.js):
+  // while the camera moves, the Display menu's residency controller holds a
+  // smaller set — Auto (the default) picks it from measured GPU frame time
+  // against the display's frame budget, or a manual percent — and the camera
+  // coming to rest restores the at-rest residency with a full-detail paint.
+  // Gates the menu's "While moving" section and the driver behind it; off,
+  // the viewer is exactly as before (no camera listener, no timer). Default
+  // OFF for the owner's A/B on a real GPU: SwiftShader, where CI runs,
+  // cannot say whether Auto's budget is the right one.
+  {name: 'motionResidency', isActive: false},
   // Batched-native GLB cache artifact (view-140 S9 / viewer-replacement
   // §3b.v): the writer serializes the batched model via
   // EXT_mesh_gpu_instancing + BLDRS_instance_tables instead of the merged

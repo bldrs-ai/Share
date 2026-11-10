@@ -269,6 +269,16 @@ picks on every frame again, on any model. The cache costs one colour +
 depth target at drawing-buffer size, 6 bytes a pixel (RGBA8 + 16-bit depth):
 ~25 MB at 2560×1600, ~30 MB at 2940×1676.
 
+**Paint observers.** `RenderDemand#observePaints({beforePaint, afterPaint})`
+is told around every paint the render closure makes, on demand or not: the
+closure calls `paintStarting(kind)` just before the draw and
+`rendered(cost, kind)` just after, with the frame's `PaintKind`. It exists for what must bracket a frame's GL
+commands — the motion-residency GPU timer places its timer query or fence
+there (`viewer/residency/gpuFrameTimer.js`;
+design/new/demand-tiled-rendering.md §B3), and skips overlay-only paints,
+which say nothing about the scene's cost. An observer must not ask for a
+paint.
+
 **Rolling back.** Whether the session paints on demand is one decision,
 `viewer/three/renderOnDemandMode.js#paintEveryFrameReason`, read when the
 viewer is built (a theme change rebuilds it and reads it again).

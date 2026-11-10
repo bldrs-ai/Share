@@ -8,17 +8,20 @@ import {
   RadioGroup,
   Slider,
   Stack,
+  Switch,
   Typography,
 } from '@mui/material'
 import {Visibility as ResidencyIcon} from '@mui/icons-material'
 import {TooltipIconButton} from '../Buttons'
 import useStore from '../../store/useStore'
 import {ResidencyController, ResidencyMetric} from '../../viewer/residency/ResidencyController'
+import {MotionResidency, MotionResidencyMode} from '../../viewer/residency/MotionResidency'
 import {ColorMode} from '../../viewer/display/colorMode'
 import {RESIDENCY_FULL} from '../../viewer/display/residencyMode'
 import {ShadingMode} from '../../viewer/display/shadingMode'
 import {
   applyDisplayOverrides,
+  applyMotionResidencyOverrides,
   applyResidencyOverrides,
   modelHasColorChoice,
   modelHasShadingChoice,
@@ -44,6 +47,12 @@ import {readModelDisplayHash, writeModelDisplayHash} from './displayHash'
  *   - **Residency** (B2 / #1613) — a slider (100% = whole model … 0% = fully
  *     evicted) plus the priority metric that orders what survives in between.
  *     Doubles as the instrumentation surface for picking a default policy.
+ *   - **While moving** (B3, `?feature=motionResidency`) — the same slider and
+ *     metric for while the camera moves, plus Auto (on by default), which
+ *     picks the percent from measured GPU frame time. The Residency section
+ *     above becomes the at-rest setting and keeps its default and behaviour;
+ *     the camera coming to rest always restores it. Shown only where the
+ *     Residency section is, since it drives the same controller.
  *
  * One popover with sections rather than a button each: they answer adjacent
  * questions ("how does it look" / "how much of it do I see") and the bottom
@@ -80,8 +89,9 @@ export default function ResidencyControl() {
   // where there is one — so a freshly loaded (default auto-colored) model
   // shows Auto without the store having to seed an override.
   const appearance = resolvedAppearance(model, overrideList)
-  const {color: colorMode, shading: shadingMode, residency} = appearance
+  const {color: colorMode, shading: shadingMode, residency, motionResidency} = appearance
   const {percent, metric} = residency
+  const isMotionAuto = motionResidency.mode === MotionResidencyMode.AUTO
 
   // Color is offered only when the synthetic palette actually applies — on a
   // model that shipped its own colors both options render identically, and an
@@ -113,19 +123,55 @@ export default function ResidencyControl() {
     return () => instance.dispose()
   }, [model, viewer])
 
+  // Camera-motion residency (B3), behind `motionResidency`. Its own effect,
+  // keyed on the controller it drives, so it is rebuilt — and its overlay
+  // dropped — whenever the controller is. `autoPercent` is what Auto last
+  // settled on, reported at each rest so the menu can show it.
+  const showMotion = isFeatureEnabled('motionResidency')
+  const [motionDriver, setMotionDriver] = useState(null)
+  const [autoPercent, setAutoPercent] = useState(null)
+  useEffect(() => {
+    const context = viewer?.context
+    if (!showMotion || !controller || !context) {
+      setMotionDriver(null)
+      return undefined
+    }
+    const driver = new MotionResidency(controller, {
+      controls: context.getCameraControls?.() ?? null,
+      onFrame: (fn) => context.onFrame?.(fn) ?? null,
+      renderDemand: context.getRenderDemand?.() ?? null,
+      gl: context.getRenderer?.()?.getContext?.() ?? null,
+      onGestureEnd: (fraction) => setAutoPercent(Math.round(fraction * RESIDENCY_FULL)),
+    })
+    setMotionDriver(driver)
+    return () => driver.dispose()
+  }, [showMotion, controller, viewer])
+
   // Selection center for the DISTANCE metric — resolved lazily from the
   // controller's own instance table (first instance of the selected id).
+  //
+  // Both layers re-rank on every selection change, deselect included (no
+  // selection falls back to occupancy ordering): at rest by re-applying when
+  // the at-rest metric is DISTANCE — which before #2130 skipped the deselect
+  // — and in motion by dropping the prepared DISTANCE ordering and building
+  // it again in idle time, which before the owner's preview check on #2130
+  // never happened at all.
   useEffect(() => {
     selectedRef.current = null
+    if (!controller) {
+      return
+    }
     const expressID = selectedElement?.expressID
-    if (controller && expressID !== undefined && expressID !== null) {
+    if (expressID !== undefined && expressID !== null) {
       const match = controller.instances.find((entry) => entry.expressID === Number(expressID))
       selectedRef.current = match ? match.center : null
-      if (metric === ResidencyMetric.DISTANCE) {
-        controller.apply()
-      }
     }
-  }, [controller, selectedElement, metric])
+    if (metric === ResidencyMetric.DISTANCE) {
+      controller.apply()
+    }
+    controller.selectionChanged()
+    motionDriver?.schedulePrepare()
+  }, [controller, selectedElement, metric, motionDriver])
 
   // Residency reaches the scene from HERE rather than from the slider
   // handler, because the controller is built in its own effect and does not
@@ -137,7 +183,15 @@ export default function ResidencyControl() {
   // this effect takes on unrelated axes (a color click) cost a comparison.
   useEffect(() => {
     applyResidencyOverrides(controller, Object.values(displayOverrides))
-  }, [controller, displayOverrides])
+    // An at-rest change drops the controller's prepared motion orderings.
+    motionDriver?.schedulePrepare()
+  }, [controller, displayOverrides, motionDriver])
+
+  // The motion setting reaches the driver the same way, for the same
+  // ordering reason (a `#d:mres=` term can arrive before the driver exists).
+  useEffect(() => {
+    applyMotionResidencyOverrides(motionDriver, Object.values(displayOverrides))
+  }, [motionDriver, displayOverrides])
 
   // Cold-load: apply a shared `#d:` permalink's display state to the freshly
   // loaded model, and seed the store so the controls reflect it. Mirrors how
@@ -190,6 +244,25 @@ export default function ResidencyControl() {
   }
   const onMetric = (event) => {
     setModelAppearance({residency: {percent, metric: event.target.value}})
+  }
+  // The motion section's handlers mirror the at-rest ones: store while the
+  // slider drags, `#d:` on commit, and every patch carries the whole axis.
+  const onMotionSlider = (event, value) => {
+    setDisplayOverride({kind: 'model'},
+      {motionResidency: {...motionResidency, mode: MotionResidencyMode.MANUAL, percent: value}})
+  }
+  const onMotionSliderCommitted = (event, value) => {
+    writeModelDisplayHash(window.location, {
+      ...appearance,
+      motionResidency: {...motionResidency, mode: MotionResidencyMode.MANUAL, percent: value},
+    })
+  }
+  const onMotionAuto = (event) => {
+    const mode = event.target.checked ? MotionResidencyMode.AUTO : MotionResidencyMode.MANUAL
+    setModelAppearance({motionResidency: {...motionResidency, mode}})
+  }
+  const onMotionMetric = (event) => {
+    setModelAppearance({motionResidency: {...motionResidency, metric: event.target.value}})
   }
   const onColorMode = (event) => {
     setModelAppearance({color: event.target.value})
@@ -278,7 +351,9 @@ export default function ResidencyControl() {
 
           {controller &&
             <>
-              <Typography variant='subtitle2'>Residency: {percent}%</Typography>
+              <Typography variant='subtitle2'>
+                {motionDriver ? 'Residency at rest' : 'Residency'}: {percent}%
+              </Typography>
               <Slider
                 value={percent}
                 onChange={onSlider}
@@ -317,6 +392,66 @@ export default function ResidencyControl() {
                   {controller.instanceCount.toLocaleString()} parts under control
                 </Typography>
               </Box>
+            </>}
+
+          {/*
+            * While moving (B3). Under Auto the slider is disabled and shows
+            * what Auto last settled on, so the menu doubles as the readout
+            * for tuning the policy, as the at-rest slider does for B2.
+            */}
+          {controller && motionDriver &&
+            <>
+              <Divider/>
+              <Typography variant='subtitle2' data-testid='motion-residency-label'>
+                While moving: {isMotionAuto ?
+                  `Auto${autoPercent === null ? '' : ` (${autoPercent}%)`}` :
+                  `${motionResidency.percent}%`}
+              </Typography>
+              <FormControlLabel
+                control={
+                  <Switch
+                    size='small'
+                    checked={isMotionAuto}
+                    onChange={onMotionAuto}
+                    data-testid='motion-residency-auto'
+                  />
+                }
+                label='Auto (frame budget)'
+              />
+              <Slider
+                value={isMotionAuto && autoPercent !== null ? autoPercent : motionResidency.percent}
+                onChange={onMotionSlider}
+                onChangeCommitted={onMotionSliderCommitted}
+                disabled={isMotionAuto}
+                min={0}
+                max={RESIDENCY_FULL}
+                data-testid='motion-residency-slider'
+              />
+              <Typography variant='caption'>Priority while moving</Typography>
+              <RadioGroup
+                value={motionResidency.metric}
+                onChange={onMotionMetric}
+                data-testid='motion-residency-metric-group'
+              >
+                <FormControlLabel
+                  value={ResidencyMetric.OCCUPANCY}
+                  control={<Radio size='small'/>}
+                  label='Screen occupancy'
+                  data-testid='motion-residency-metric-occupancy'
+                />
+                <FormControlLabel
+                  value={ResidencyMetric.MEMORY}
+                  control={<Radio size='small'/>}
+                  label='Memory budget'
+                  data-testid='motion-residency-metric-memory'
+                />
+                <FormControlLabel
+                  value={ResidencyMetric.DISTANCE}
+                  control={<Radio size='small'/>}
+                  label='Distance from selection'
+                  data-testid='motion-residency-metric-distance'
+                />
+              </RadioGroup>
             </>}
         </Stack>
       </Popover>

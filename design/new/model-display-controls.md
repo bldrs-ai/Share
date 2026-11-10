@@ -128,8 +128,19 @@ appearance = {
   opacity?:  0..1,
   hidden?:   boolean,
   residency?: {percent: 0..100, metric: 'occupancy'|'memory'|'distance'},
+  motionResidency?: {mode: 'auto'|'manual', percent: 0..100,
+                     metric: 'occupancy'|'memory'|'distance'},
 }
 ```
+
+`residency` is the **at-rest** setting; `motionResidency` (B3 of
+demand-tiled-rendering.md, behind `?feature=motionResidency`) is what holds
+while the camera moves — a subset of the at-rest set, restored when the
+camera stops. Under `mode: 'auto'` the percent is inert and the frame
+budget picks the fraction. Defaults: `{percent: 100, metric: 'occupancy'}`
+at rest and `{mode: 'auto', metric: 'occupancy'}` in motion. Neither is
+serialized at its default. The `#d:` terms are `res=` and `mres=`
+(`mres=25`, `mres=auto.memory`).
 
 Resolution is **last-writer-wins by specificity**: `model` < `subtree` (longer
 occurrence path wins over shorter) < `element` / `occurrence` < `mesh`. Every

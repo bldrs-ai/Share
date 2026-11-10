@@ -148,12 +148,16 @@ export function newUpdateFunction(context, composer, overlay = null) {
       return false
     }
     const isOverlayOnly = kind === PaintKind.OVERLAY && overlay !== null && overlay.canCompose()
+    const paintKind = isOverlayOnly ? PaintKind.OVERLAY : PaintKind.FULL
+    // Paint observers (RenderDemand#observePaints: the motion-residency GPU
+    // timer) bracket the draw's GL commands, told which kind it is.
+    demand?.paintStarting?.(paintKind)
     const startMs = performance.now()
     // runPaint: what three mutates while drawing (BatchedMesh's indirect
     // texture, the overlay's colour swap) must not count as a change that
     // asks for the next paint.
     runPaint(() => (overlay === null ? composer.render() : overlay.paint(isOverlayOnly)))
-    demand?.rendered(performance.now() - startMs, isOverlayOnly ? PaintKind.OVERLAY : PaintKind.FULL)
+    demand?.rendered(performance.now() - startMs, paintKind)
     return true
   }
 }
