@@ -303,6 +303,30 @@ describe('ResidencyControl residency section', () => {
     }
   })
 
+  it('treats a disposed viewer\'s camera as none, instead of throwing out of a re-rank', async () => {
+    // A disposed ThreeContext throws from getCamera (its legacy context is
+    // gone); the store can still hold it until the next setViewer.
+    const model = residencyModel()
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setViewer({context: {getCamera: () => {
+        throw new TypeError('disposed')
+      }}})
+    })
+    try {
+      window.location.hash = '#d:res=34'
+      await renderWithModel(model)
+      // Ranked by size, as with no camera: the largest (2) is kept.
+      expect(model.setVisibleAt).toHaveBeenCalledWith(0, false)
+      expect(model.setVisibleAt).toHaveBeenCalledWith(1, false)
+      expect(model.setVisibleAt).not.toHaveBeenCalledWith(2, false)
+    } finally {
+      await act(() => {
+        result.current.setViewer(null)
+      })
+    }
+  })
+
   it('exposes the metric through the store, not local state', async () => {
     const {getByTestId} = await renderWithModel(residencyModel())
     fireEvent.click(getByTestId('control-button-residency'))

@@ -315,9 +315,12 @@ change, a selection under DISTANCE (which falls back to OCCUPANCY with none),
 an edit, and, when the while-moving metric differs from the at-rest one, the
 motion order's first sort after each of those. It is not re-ranked as the
 camera orbits, so after a large move the at-rest set still reflects the
-earlier view until the slider is touched again. Hover after a fling, while
-damping is still moving the camera, can pick against the motion set; picks at rest never do. With
-render-on-demand off every frame paints, so there are no idle frames to read
+earlier view until the slider is touched again. The eye is the camera's
+position, which is right for a perspective view; in an orthographic one
+apparent size doesn't fall off with distance, so OCCUPANCY still favours
+parts near the camera position there. Hover after a fling, while damping is
+still moving the camera, can pick against the motion set; picks at rest never
+do. With render-on-demand off every frame paints, so there are no idle frames to read
 the display rate from and Auto assumes 60 Hz.
 
 ### Parallelism plan (consistent with the #1612 spike findings)
