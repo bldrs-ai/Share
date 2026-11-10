@@ -1705,6 +1705,30 @@ describe('viewer/three/IfcIsolator', () => {
       expect(visibility(mesh)).toEqual([true, true, true, true])
     })
 
+    it('keeps a user hide through a camera-motion overlay and brings back only what motion evicted', () => {
+      // B3: the motion overlay writes the same setVisibleAt bit, through the
+      // same mask, so a part the user hid stays hidden at rest and in motion,
+      // and the restore at rest shows only what motion took away.
+      const {iso, mesh} = setupBatchedIsolator()
+      const residency = new ResidencyController(mesh)
+      iso.hiddenIds = [300]
+      iso.initHideOperationsSubset(iso.visualElementsIds.filter((e) => e !== 300))
+      expect(visibility(mesh)).toEqual([true, true, true, false])
+
+      residency.beginMotion()
+      residency.setMotionFraction(0.5)
+      expect(visibility(mesh).filter(Boolean).length).toBeLessThan(3)
+      // Motion can only take away: the hidden part is never drawn.
+      expect(visibility(mesh)[3]).toBe(false)
+      residency.endMotion()
+      expect(visibility(mesh)).toEqual([true, true, true, false])
+
+      // And the hide still lifts to the full set, residency's intent intact.
+      iso.hiddenIds = []
+      iso.initHideOperationsSubset(iso.visualElementsIds)
+      expect(visibility(mesh)).toEqual([true, true, true, true])
+    })
+
     it('restores residency\'s exact visibility on un-isolate, not everything-visible', () => {
       const {iso, mesh} = setupBatchedIsolator()
       // Simulate an eviction of instance 3 — setVisibleAt is residency's only

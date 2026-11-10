@@ -430,3 +430,38 @@ describe('viewer/three/renderDemand session', () => {
     expect(paintsIn(10)).toBe(10)
   })
 })
+
+
+describe('RenderDemand paint observers', () => {
+  it('brackets each paint, in order, and stops on unsubscribe', () => {
+    const demand = new RenderDemand({now: () => 0})
+    const calls = []
+    const stop = demand.observePaints({
+      beforePaint: () => calls.push('before'),
+      afterPaint: (costMs) => calls.push(`after ${costMs}`),
+    })
+    demand.paintStarting()
+    demand.rendered(3)
+    expect(calls).toEqual(['before', 'after 3'])
+    stop()
+    demand.paintStarting()
+    demand.rendered(3)
+    expect(calls).toHaveLength(2)
+    demand.dispose()
+  })
+
+  it('keeps painting when an observer throws', () => {
+    const demand = new RenderDemand({now: () => 0})
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const after = jest.fn()
+    demand.observePaints({afterPaint: () => {
+      throw new Error('broken observer')
+    }})
+    demand.observePaints({afterPaint: after})
+    expect(() => demand.rendered(1)).not.toThrow()
+    expect(after).toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith('[renderDemand] paint observer failed:', expect.any(Error))
+    warn.mockRestore()
+    demand.dispose()
+  })
+})

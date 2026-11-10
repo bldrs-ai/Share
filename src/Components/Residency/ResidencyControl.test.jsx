@@ -284,3 +284,94 @@ describe('ResidencyControl residency section', () => {
       .toEqual({percent: 100, metric: ResidencyMetric.DISTANCE})
   })
 })
+
+
+describe('ResidencyControl while-moving section (motionResidency)', () => {
+  /**
+   * A viewer context double: the seams MotionResidency attaches to.
+   *
+   * @return {object} viewer double with `context`
+   */
+  function viewerDouble() {
+    const listeners = []
+    return {
+      context: {
+        getCameraControls: () => ({
+          addEventListener: (type, fn) => listeners.push([type, fn]),
+          removeEventListener: () => undefined,
+        }),
+        onFrame: () => () => undefined,
+        getRenderDemand: () => ({observePaints: () => () => undefined}),
+        getRenderer: () => null,
+      },
+      listeners,
+    }
+  }
+
+  /**
+   * @param {boolean} flag motionResidency on or off
+   * @return {Promise<object>} render result
+   */
+  async function renderWithViewer(flag) {
+    mockIsFeatureEnabled.mockImplementation((name) => (name === 'motionResidency' ? flag : false))
+    const viewer = viewerDouble()
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setViewer(viewer)
+    })
+    const rendered = await renderWithModel(residencyModel())
+    return {...rendered, viewer}
+  }
+
+  afterEach(async () => {
+    mockIsFeatureEnabled.mockReset()
+    window.location.hash = ''
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setModel(null)
+      result.current.setViewer(null)
+      result.current.resetDisplayOverrides()
+    })
+  })
+
+  it('is absent with the flag off, and the at-rest section keeps its title', async () => {
+    const {getByTestId, queryByTestId, viewer} = await renderWithViewer(false)
+    fireEvent.click(getByTestId('control-button-residency'))
+    expect(queryByTestId('motion-residency-slider')).toBeNull()
+    expect(getByTestId('residency-slider')).toBeTruthy()
+    expect(viewer.listeners).toEqual([])
+  })
+
+  it('defaults to Auto with the slider disabled, and listens to the camera', async () => {
+    const {getByTestId, getByText, viewer} = await renderWithViewer(true)
+    fireEvent.click(getByTestId('control-button-residency'))
+    expect(getByText('Residency at rest: 100%')).toBeTruthy()
+    expect(getByTestId('motion-residency-label').textContent).toBe('While moving: Auto')
+    expect(getByTestId('motion-residency-auto').querySelector('input').checked).toBe(true)
+    expect(getByTestId('motion-residency-slider').querySelector('input').disabled).toBe(true)
+    expect(viewer.listeners.map(([type]) => type)).toContain('update')
+    // Untouched, it writes no token.
+    expect(window.location.hash).not.toContain('d:')
+  })
+
+  it('persists a manual choice and its metric to the store and the #d: token', async () => {
+    const {getByTestId} = await renderWithViewer(true)
+    fireEvent.click(getByTestId('control-button-residency'))
+    fireEvent.click(getByTestId('motion-residency-auto').querySelector('input'))
+    fireEvent.click(getByTestId('motion-residency-metric-memory').querySelector('input'))
+    expect(window.location.hash).toContain('mres=100.memory')
+    const {result} = renderHook(() => useStore((state) => state.displayOverrides))
+    expect(result.current.model.appearance.motionResidency)
+      .toEqual({mode: 'manual', percent: 100, metric: ResidencyMetric.MEMORY})
+    expect(getByTestId('motion-residency-slider').querySelector('input').disabled).toBe(false)
+  })
+
+  it('restores a manual percent from a #d: permalink on cold load', async () => {
+    window.location.hash = '#d:mres=30.distance'
+    const {getByTestId} = await renderWithViewer(true)
+    fireEvent.click(getByTestId('control-button-residency'))
+    expect(getByTestId('motion-residency-label').textContent).toBe('While moving: 30%')
+    expect(getByTestId('motion-residency-slider').querySelector('input').value).toBe('30')
+    expect(getByTestId('motion-residency-metric-distance').querySelector('input').checked).toBe(true)
+  })
+})

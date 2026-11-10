@@ -5,7 +5,6 @@ import {ResidencyMetric} from './ResidencyController'
 
 /** The percent at which the whole at-rest set is kept. */
 const FULL_PERCENT = 100
-import {requestPaint} from '../three/renderDemand'
 
 
 /** How the motion residency is chosen. */
@@ -46,9 +45,10 @@ const PREPARE_DELAY_MS = 100
  * fires inside `controls.update()`, which IfcContext#updateAllComponents runs
  * before the frame's paint, so the eviction it starts lands in the same frame
  * as the first moved pose. Rest is noticed in the per-frame hook
- * (ThreeContext#onFrame, which also runs before the paint) and the restore
- * asks for a paint itself, so the full set is on screen in the frame that
- * found the camera still. The load's own camera follow is not motion
+ * (ThreeContext#onFrame, which also runs before the paint), and each
+ * instance the restore shows asks for a paint (ResidencyController's
+ * `requestPaint`), so the full set is on screen in the frame that found the
+ * camera still. The load's own camera follow is not motion
  * (`RenderDemand#isFollowMoving`).
  *
  * **What is measured.** Only under Auto, only while moving: the GPU time of
@@ -126,6 +126,9 @@ export class MotionResidency {
         }
       },
     }) ?? null
+    // The first gesture needs an ordering too (a controller never applied
+    // has none to reuse).
+    this.schedulePrepare()
   }
 
 
@@ -247,10 +250,11 @@ export class MotionResidency {
   endMotion_() {
     this.moving = false
     this.timer?.stop()
+    // Each instance the restore shows asks for a paint on the next frame
+    // (ResidencyController#setVisible_ calls requestPaint, beside the
+    // `setVisibleAt` hook's background ask), so the at-rest picture lands in
+    // the frame that found the camera still.
     this.controller.endMotion()
-    // `setVisibleAt` asks too (renderDemandHooks), but only for a background
-    // paint; the at-rest picture is what the user stopped to look at.
-    requestPaint()
     this.onGestureEnd?.(this.auto.fraction)
     this.schedulePrepare()
   }
@@ -264,7 +268,7 @@ export class MotionResidency {
    */
   schedulePrepare() {
     const metric = this.settings.metric
-    if (!this.isActive_() || metric === this.controller.metric) {
+    if (!this.isActive_()) {
       return
     }
     this.cancelPrepare_?.()

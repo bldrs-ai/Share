@@ -250,8 +250,11 @@ export class ResidencyController {
 
   /**
    * Build a motion metric's ordering ahead of the gesture that needs it, so
-   * `beginMotion` doesn't sort. Call from idle time; a no-op when it is
-   * already built or is the at-rest metric (which reuses the at-rest order).
+   * `beginMotion` doesn't sort. Call from idle time. A no-op when it is
+   * already built, and an O(n) filter when it is the at-rest metric and the
+   * at-rest order exists; a sort otherwise — including the at-rest metric on
+   * a controller never applied (target 1 since construction or an edit),
+   * which has no order to reuse.
    *
    * @param {string} metric a {@link ResidencyMetric}
    */

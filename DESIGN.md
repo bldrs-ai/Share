@@ -195,6 +195,15 @@ frame, with the last on-demand paint matching a forced fresh one; its
 painting. The E2E `captureRenderedFrame` asks for its own paint, so it works
 either way.
 
+**Paint observers.** `RenderDemand#observePaints({beforePaint, afterPaint})`
+is told around every paint the render closure makes, on demand or not: the
+closure calls `paintStarting()` just before `composer.render()` and
+`rendered()` just after. It exists for what must bracket a frame's GL
+commands — the motion-residency GPU timer places its timer query or fence
+there (`viewer/residency/gpuFrameTimer.js`;
+design/new/demand-tiled-rendering.md §B3). An observer must not ask for a
+paint.
+
 **Rolling back.** Whether the session paints on demand is one decision,
 `viewer/three/renderOnDemandMode.js#paintEveryFrameReason`, read when the
 viewer is built (a theme change rebuilds it and reads it again).
