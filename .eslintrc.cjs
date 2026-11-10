@@ -51,7 +51,8 @@ module.exports = {
     },
     // Measurement tools (`tools/spikes/**`, open-205 §9.1; offscreen-rendering.md
     // §5b): scene constants and percentiles read better inline than as named
-    // constants, and the code is a standalone page beside the app, not part of it.
+    // constants, and the code is a standalone page, built only with
+    // MEASUREMENT_TOOLS (tools/esbuild/vars.prod.js), never part of the app.
     {
       files: ['tools/spikes/**/*.js'],
       rules: {

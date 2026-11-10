@@ -84,14 +84,22 @@ const engineWorkerBuild = esbuild.build({
 })
 
 // Render-worker measurement page (open-205 §9.1; offscreen-rendering.md §5b,
-// tools/spikes/offscreen/README.md): the replay page's two bundles, beside its
-// static index.html in public/spike/offscreen/, served at /spike/offscreen/.
-const spikeBuilds = ['main', 'renderWorker'].map((name) => esbuild.build({
+// tools/spikes/offscreen/README.md), served at /spike/offscreen/: its two
+// bundles and its static index.html. Only when MEASUREMENT_TOOLS is set
+// (vars.prod.js), so a normal build ships none of it. The page lives beside
+// its source rather than in public/, which every build copies whole.
+const withMeasurementTools = config.define['process.env.MEASUREMENT_TOOLS'] === 'true'
+const spikeDir = path.resolve(repoRoot, 'tools', 'spikes', 'offscreen')
+const spikeOutDir = path.join(buildDir, 'spike', 'offscreen')
+const spikeBuilds = !withMeasurementTools ? [] : ['main', 'renderWorker'].map((name) => esbuild.build({
   ...config,
-  entryPoints: [path.resolve(repoRoot, 'tools', 'spikes', 'offscreen', `${name}.js`)],
+  entryPoints: [path.join(spikeDir, `${name}.js`)],
   outdir: undefined,
-  outfile: path.join(buildDir, 'spike', 'offscreen', `${name}.js`),
+  outfile: path.join(spikeOutDir, `${name}.js`),
   format: 'esm',
+}).then((result) => {
+  fs.copyFileSync(path.join(spikeDir, 'index.html'), path.join(spikeOutDir, 'index.html'))
+  return result
 }))
 
 // Pro modules — premium export code, built OUTSIDE `docs/` so it is never

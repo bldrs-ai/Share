@@ -15,7 +15,6 @@ import setupGa from './index/ga'
 import setupMSW from './index/msw'
 import setupSentry from './index/sentry'
 import useStore from './store/useStore'
-import {installMainThreadTrace} from './utils/mainThreadTrace'
 import {requestPaint} from './viewer/three/renderDemand'
 import './index.css'
 import '@fontsource/roboto/latin-300.css'
@@ -26,8 +25,14 @@ import '@fontsource/roboto/latin-700.css'
 
 // First, so its buffered observers and rAF clock cover as much of startup
 // as possible (open-205 §9.1 measurement; utils/mainThreadTrace.js).
-if (isFeatureEnabled('mainThreadTrace')) {
-  installMainThreadTrace({store: useStore, requestPaint})
+// Only in a build made with MEASUREMENT_TOOLS (tools/esbuild/vars.prod.js):
+// the define folds this branch away otherwise, and esbuild drops the module
+// with it, so a normal build carries none of the tracer. The build doesn't
+// code-split, so this import is inlined, not fetched.
+if (process.env.MEASUREMENT_TOOLS && isFeatureEnabled('mainThreadTrace')) {
+  import('./utils/mainThreadTrace').then(({installMainThreadTrace}) => {
+    installMainThreadTrace({store: useStore, requestPaint})
+  })
 }
 setupSentry()
 // After setupSentry: ga.js reports init failures via captureException.

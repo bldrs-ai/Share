@@ -659,12 +659,19 @@ What the re-capture says:
 
 ### 5b. Measurement tools, ready to reuse (Share#2126)
 
-The tools behind §5a are checked in. To use them again on a build, open that
-build's deploy preview, or prod, and follow `tools/spikes/offscreen/README.md`
-(the protocol, and how to read each column).
+The tools behind §5a are checked in, but **left out of normal builds**. They
+are gated on the build-time switch `MEASUREMENT_TOOLS`
+(`tools/esbuild/vars.prod.js`, default `false`), so production ships neither
+the tracer nor the page. To use them again:
+1. Build with the switch on: `MEASUREMENT_TOOLS=true yarn build-prod`
+   locally, or on a deploy preview through a throwaway branch whose
+   `netlify.toml` sets it for `context.deploy-preview`.
+2. Follow `tools/spikes/offscreen/README.md`, which has the exact snippet,
+   the protocol, and how to read each column.
 
-- **`?feature=mainThreadTrace`** (`src/utils/mainThreadTrace.js`; off by
-  default, about 4 KB gzipped in the app bundle). It records Share's main
+- **`?feature=mainThreadTrace`** (`src/utils/mainThreadTrace.js`). It only
+  does anything in a build with `MEASUREMENT_TOOLS`; otherwise the module is
+  folded out of the bundle (about 10 KB). It records Share's main
   thread from page start: long animation frames split into non-render and
   render work, long tasks, its own rAF cadence, input delay, load milestones
   and tab visibility. The overlay has **Mark**, **Summary** (console),
@@ -674,8 +681,8 @@ build's deploy preview, or prod, and follow `tools/spikes/offscreen/README.md`
   inside `renderer.render` and the GPU up to a WebGL2 fence. Triangles and
   draw calls are summed per frame. This is what showed big models are
   GPU-bound (§5a).
-- **`/spike/offscreen/` replay page** (`tools/spikes/offscreen/`, with
-  `public/spike/offscreen/index.html`; `noindex`).
+- **`/spike/offscreen/` replay page** (`tools/spikes/offscreen/`, its
+  `index.html` included; `noindex`; built only with `MEASUREMENT_TOOLS`).
   - It replays a trace's non-render blocks (load window, between Marks,
     whole trace, or custom) or a synthetic pump, against one `BatchedMesh`
     scene rendered on main or in a worker (runs R0–I2), with selectable
