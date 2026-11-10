@@ -62,6 +62,29 @@ count.
 
    Press **Download trace** to save the trace.
 
+### A2. Measure what one repaint costs on your GPU
+
+This step decides the hover-highlight overlay: drawing only the highlight
+over a cached frame instead of redrawing the model.
+
+1. Load the model, as in A, and wait for it to settle.
+2. Stop the camera, then press **Repaint probe** in the overlay.
+
+The probe forces 60 repaints of the still view. For each one it records:
+- the CPU time spent in three's `render` calls;
+- the GPU time: from the draw's return until a WebGL2 fence placed after it
+  signals;
+- the triangles and draw calls, summed over the frame's render calls.
+
+The result appears in an alert, the console and the trace (`repaintProbe`
+event).
+
+Do this for PSB, a mid-size model and a small one:
+- if PSB's GPU p50 is far above a display frame while its CPU p50 is small,
+  the repaint is what a hover change waits for, and the overlay is worth
+  building;
+- if the GPU time is small too, it isn't.
+
 ### B. Replay it against a render worker
 
 1. Open `/spike/offscreen/` on the same preview. Load the trace and pick the

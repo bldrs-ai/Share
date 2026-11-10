@@ -53,6 +53,8 @@ const P95 = 95
 const PERCENT = 100
 const MS_PER_S = 1000
 const REVOKE_MS = 10000
+/** The repaint probe gives up after this, e.g. on a lost context. */
+const PROBE_TIMEOUT_MS = 30000
 
 
 /**
@@ -327,19 +329,125 @@ function gpuName() {
 }
 
 
+/**
+ * Repaint probe (open-205; the hover-highlight overlay decision). Forces
+ * `frames` repaints of the current view with the camera still, and times
+ * each one two ways:
+ *
+ * - `cpuMs`: the time spent inside `renderer.render` calls that frame (the
+ *   composer can render more than once per paint), i.e. what main pays;
+ * - `gpuMs`: from the frame's last render call returning to a WebGL2 fence
+ *   placed right after it signalling. That is the GPU work the draw queued,
+ *   which the JS time doesn't show. A frame can't reach the screen before it.
+ *
+ * The fence is polled from a MessageChannel loop (no setTimeout clamping),
+ * so `gpuMs` is good to about a millisecond. Nothing here changes what is
+ * drawn: `renderer.render` is wrapped for the probe and restored after.
+ *
+ * @param {object} store the zustand store, for the viewer
+ * @param {object} [opts]
+ * @param {number} [opts.frames] frames to measure
+ * @param {Function} [opts.requestPaint] asks the viewer for a paint
+ * @return {Promise<object>} a summary, or `{error}` when there is no viewer
+ */
+export async function probeRepaint(store, {frames = 60, requestPaint} = {}) {
+  const renderer = store?.getState?.()?.viewer?.context?.getRenderer?.()
+  const gl = renderer?.getContext?.()
+  if (!renderer || typeof gl?.fenceSync !== 'function' || typeof requestPaint !== 'function') {
+    return {error: 'no WebGL2 viewer to probe (open a model first)'}
+  }
+  // A zero-delay macrotask. setTimeout clamps to ~4 ms once nested, which
+  // would blur gpuMs; jsdom has no MessageChannel, hence the fallback.
+  const port = typeof MessageChannel === 'function' ? new MessageChannel() : null
+  const tick = () => new Promise((resolve) => {
+    if (port) {
+      port.port1.onmessage = () => resolve()
+      port.port2.postMessage(0)
+    } else {
+      setTimeout(resolve, 0)
+    }
+  })
+  const samples = []
+  let frame = null
+  const original = renderer.render
+  renderer.render = function(...args) {
+    const t0 = performance.now()
+    try {
+      return original.apply(this, args)
+    } finally {
+      const t1 = performance.now()
+      if (frame === null) {
+        frame = {cpuMs: 0, lastEnd: t1, triangles: 0, calls: 0}
+        // After this rAF callback (and every render call in it) returns.
+        queueMicrotask(() => {
+          const f = frame
+          frame = null
+          const fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0)
+          gl.flush()
+          f.fence = fence
+          samples.push(f)
+        })
+      }
+      frame.cpuMs += t1 - t0
+      frame.lastEnd = t1
+      // three resets info.render at every render() (autoReset), and the
+      // composer renders more than once a paint: sum them per frame.
+      frame.triangles += this.info?.render?.triangles ?? 0
+      frame.calls += this.info?.render?.calls ?? 0
+    }
+  }
+  const deadline = performance.now() + PROBE_TIMEOUT_MS
+  try {
+    let measured = 0
+    while (measured < frames && performance.now() < deadline) {
+      requestPaint()
+      await new Promise((resolve) => requestAnimationFrame(() => resolve()))
+      // Wait for every pending fence before asking for the next paint, so
+      // frames don't overlap and each gpuMs is that frame's alone.
+      for (const f of samples) {
+        while (f.fence && gl.clientWaitSync(f.fence, 0, 0) === gl.TIMEOUT_EXPIRED) {
+          await tick()
+        }
+        if (f.fence) {
+          f.gpuMs = performance.now() - f.lastEnd
+          gl.deleteSync(f.fence)
+          f.fence = null
+          measured++
+        }
+      }
+    }
+  } finally {
+    renderer.render = original
+  }
+  const done = samples.filter((f) => f.gpuMs !== undefined)
+  const cpu = done.map((f) => f.cpuMs)
+  const gpu = done.map((f) => f.gpuMs)
+  return {
+    frames: done.length,
+    cpuMs: {p50: round(percentile(cpu, P50)), p95: round(percentile(cpu, P95))},
+    gpuMs: {p50: round(percentile(gpu, P50)), p95: round(percentile(gpu, P95))},
+    triangles: done.length ? Math.max(...done.map((f) => f.triangles)) : null,
+    calls: done.length ? Math.max(...done.map((f) => f.calls)) : null,
+    drawingBuffer: [gl.drawingBufferWidth ?? null, gl.drawingBufferHeight ?? null],
+  }
+}
+
+
 let installed = null
 
 
 /**
  * Start recording. Idempotent. Installs `window.__bldrsMainThreadTrace`
- * (`snapshot()`, `download()`, `mark(name)`, `summary()`) and a small
- * overlay with Mark / Download buttons.
+ * (`snapshot()`, `download()`, `mark(name)`, `summary()`, `repaint()`) and a
+ * small overlay with Mark / Summary / Repaint probe / Download buttons.
  *
  * @param {object} [deps]
  * @param {object} [deps.store] the zustand store (`useStore`), for load milestones
+ *   and the viewer the repaint probe draws with
+ * @param {Function} [deps.requestPaint] renderDemand.js#requestPaint, for the probe
  * @return {object} the trace handle
  */
-export function installMainThreadTrace({store} = {}) {
+export function installMainThreadTrace({store, requestPaint} = {}) {
   if (installed) {
     return installed
   }
@@ -455,9 +563,17 @@ export function installMainThreadTrace({store} = {}) {
       mark('alt-m')
     }
   })
-  addOverlay({mark, download, summary})
+  const repaint = async () => {
+    event('repaintProbeStart')
+    const result = await probeRepaint(store, {requestPaint})
+    event('repaintProbe', {result})
+    // eslint-disable-next-line no-console
+    console.log('[mainThreadTrace] repaint probe', JSON.stringify(result))
+    return result
+  }
+  addOverlay({mark, download, summary, repaint})
 
-  installed = {snapshot, summary, download, mark}
+  installed = {snapshot, summary, download, mark, repaint}
   window.__bldrsMainThreadTrace = installed
   // eslint-disable-next-line no-console
   console.log('[mainThreadTrace] recording; window.__bldrsMainThreadTrace.{summary,download,mark}()')
@@ -471,7 +587,7 @@ export function installMainThreadTrace({store} = {}) {
  *
  * @param {object} api
  */
-function addOverlay({mark, download, summary}) {
+function addOverlay({mark, download, summary, repaint}) {
   const box = document.createElement('div')
   box.setAttribute('data-testid', 'main-thread-trace')
   box.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:100000;display:flex;gap:4px;' +
@@ -489,6 +605,12 @@ function addOverlay({mark, download, summary}) {
   button('Mark', () => mark('button'))
   // eslint-disable-next-line no-console
   button('Summary', () => console.log('[mainThreadTrace]', JSON.stringify(summary(), null, 2)))
+  button('Repaint probe', () => {
+    repaint().then((r) => {
+      window.alert(r.error ?? `Repaint, ${r.frames} frames: CPU p50 ${r.cpuMs.p50} ms, GPU p50 ${r.gpuMs.p50} ms ` +
+        `(p95 ${r.cpuMs.p95} / ${r.gpuMs.p95}); ${r.triangles} triangles, ${r.calls} draw calls`)
+    })
+  })
   button('Download trace', download)
   const attach = () => document.body.appendChild(box)
   if (document.body) {

@@ -1,6 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {
-  compactLoaf, hiddenPeriods, loadWindow, markWindow, percentile, replayBlocks, sanitizeInvoker, sourceBasename,
+  compactLoaf, hiddenPeriods, probeRepaint, loadWindow, markWindow, percentile, replayBlocks, sanitizeInvoker, sourceBasename,
   summarizeWindow, topScripts,
 } from './mainThreadTrace'
 
@@ -129,5 +129,48 @@ describe('utils/mainThreadTrace', () => {
   it('topScripts ranks attribution by total time', () => {
     const loaf = [{scripts: [{d: 10, type: 'a', fn: 'x'}, {d: 30, type: 'b', fn: 'y'}]}, {scripts: [{d: 15, type: 'a', fn: 'x'}]}]
     expect(topScripts(loaf, 1)).toEqual([{key: 'b · y', ms: 30, count: 1}])
+  })
+
+  describe('probeRepaint', () => {
+    it('says so when there is no viewer to probe', async () => {
+      expect(await probeRepaint({getState: () => ({viewer: null})}, {requestPaint: () => undefined}))
+        .toEqual({error: expect.stringContaining('no WebGL2 viewer')})
+    })
+
+    it('times each forced repaint on the CPU and until its fence signals, then restores render', async () => {
+      let polls = 0
+      const gl = {
+        SYNC_GPU_COMMANDS_COMPLETE: 1, TIMEOUT_EXPIRED: 2, ALREADY_SIGNALED: 3,
+        fenceSync: () => ({}),
+        flush: () => undefined,
+        deleteSync: () => undefined,
+        // Each fence signals on its third poll: the probe must wait for it.
+        clientWaitSync: () => ((++polls % 3) === 0 ? 3 : 2),
+      }
+      const draws = []
+      const renderer = {
+        getContext: () => gl,
+        info: {render: {triangles: 12, calls: 2}},
+        render() {
+          draws.push(1)
+        },
+      }
+      const original = renderer.render
+      const store = {getState: () => ({viewer: {context: {getRenderer: () => renderer}}})}
+      // A "paint" is two render calls in one frame, as the composer makes.
+      const requestPaint = () => requestAnimationFrame(() => {
+        renderer.render()
+        renderer.render()
+      })
+      const result = await probeRepaint(store, {frames: 3, requestPaint})
+      expect(result.frames).toBe(3)
+      expect(result.gpuMs.p50).toEqual(expect.any(Number))
+      expect(result.cpuMs.p50).toEqual(expect.any(Number))
+      // Two render calls a frame, summed (three resets info per call).
+      expect(result).toMatchObject({triangles: 24, calls: 4})
+      expect(polls).toBeGreaterThanOrEqual(9)
+      expect(draws.length).toBeGreaterThanOrEqual(6)
+      expect(renderer.render).toBe(original)
+    })
   })
 })

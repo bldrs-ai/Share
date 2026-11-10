@@ -16,6 +16,7 @@ import setupMSW from './index/msw'
 import setupSentry from './index/sentry'
 import useStore from './store/useStore'
 import {installMainThreadTrace} from './utils/mainThreadTrace'
+import {requestPaint} from './viewer/three/renderDemand'
 import './index.css'
 import '@fontsource/roboto/latin-300.css'
 import '@fontsource/roboto/latin-400.css'
@@ -26,7 +27,7 @@ import '@fontsource/roboto/latin-700.css'
 // First, so its buffered observers and rAF clock cover as much of startup
 // as possible (open-205 §9.1 measurement; utils/mainThreadTrace.js).
 if (isFeatureEnabled('mainThreadTrace')) {
-  installMainThreadTrace({store: useStore})
+  installMainThreadTrace({store: useStore, requestPaint})
 }
 setupSentry()
 // After setupSentry: ga.js reports init failures via captureException.
