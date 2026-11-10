@@ -66,6 +66,37 @@ describeMobileAndDesktop('viewer/residency/motionResidency', () => {
   })
 
 
+  test('a hover right after rest is drawn on the at-rest set, not on a frame cached in motion', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+    // The hover overlay (#2129, on by default) draws a hover on the cached
+    // frame of the last FULL paint. Had the restore at rest reached the
+    // screen as anything but a full paint, that cache would still be a frame
+    // of the motion set, and the hover below would show it.
+    await openDisplayMenu(page)
+    await page.getByTestId('motion-residency-auto').locator('input').uncheck()
+    const slider = page.getByTestId('motion-residency-slider').getByRole('slider')
+    await slider.press('Home')
+    for (let i = 0; i < MANUAL_PERCENT; i++) {
+      await slider.press('ArrowRight')
+    }
+    await closeDisplayMenu(page)
+    const before = await stillFrame(page)
+    const moving = await dragCamera(page)
+    expect(Math.max(...moving.map((f) => f.triangles))).toBeLessThan(before.triangles)
+    await settledFrame(page)
+
+    await installHoverTools(page)
+    const kind = await hoverSomething(page)
+    expect(kind, 'the hover painted an overlay frame (the cached path)').toBe('overlay')
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    expect(await page.evaluate(() => (window as any).__mrHover.next('full', true))).toBe('full')
+    const off = await page.evaluate(() => (window as any).__mrHover.diff('hover', 'full'))
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    expect(off, 'the overlay frame matches a full repaint of the at-rest scene')
+      .toBeLessThanOrEqual(SAME_FRAME_PIXELS)
+  })
+
+
   test('Auto (the default) sheds detail while dragging and restores it at rest', async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS)
     const before = await stillFrame(page)
@@ -103,6 +134,16 @@ const MANUAL_PERCENT = 20
 // Longer than MotionResidency's REST_MS (200 ms) plus camera-controls'
 // damping tail after a fling.
 const SETTLE_MS = 1500
+
+
+// Share of pixels an overlay frame may differ from a full repaint of the
+// same state (hoverOverlay.spec.ts's tolerance), and the channel step that
+// counts as a changed pixel.
+const SAME_FRAME_PIXELS = 0.0005
+const CHANNEL_TOLERANCE = 2
+// Longer than the slowest hover interval, so a trailing pick has fired.
+const HOVER_SETTLE_MS = 600
+const HOVER_GRID = 8
 
 
 type Frame = {triangles: number, visible: number}
@@ -255,6 +296,120 @@ async function dragCamera(page: Page): Promise<Array<{triangles: number}>> {
   const frames = await takeFrames(page)
   await page.mouse.up()
   return frames
+}
+
+
+/**
+ * In-page tools, after hoverOverlay.spec.ts's: catch the next frame the viewer
+ * paints (and whether it was an overlay paint), and count differing pixels
+ * between two catches.
+ *
+ * @param page
+ */
+async function installHoverTools(page: Page) {
+  await page.evaluate((tolerance) => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const w = window as any
+    const context = w.store.getState().viewer.context
+    const demand = context.getRenderDemand()
+    const gl = context.getRenderer().getContext()
+    const frames: Record<string, Uint8Array> = {}
+    const read = () => {
+      const pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4)
+      const bound = gl.getParameter(gl.FRAMEBUFFER_BINDING)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+      gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, bound)
+      return pixels
+    }
+    w.__mrHover = {
+      next: (name: string, askFull: boolean) => new Promise((resolve, reject) => {
+        const painting = context.getLegacyRendererWrapper().update
+        const timer = setTimeout(() => {
+          context.setRenderUpdate(painting)
+          reject(new Error(`no paint for ${name}`))
+        }, 15000)
+        context.setRenderUpdate((...args: unknown[]) => {
+          const overlayPaints = demand.stats.overlayPaints
+          const painted = painting(...args)
+          if (painted) {
+            frames[name] = read()
+            clearTimeout(timer)
+            context.setRenderUpdate(painting)
+            resolve(demand.stats.overlayPaints > overlayPaints ? 'overlay' : 'full')
+          }
+          return painted
+        })
+        if (askFull) {
+          demand.invalidate()
+        }
+      }),
+      diff: (a: string, b: string) => {
+        const x = frames[a]
+        const y = frames[b]
+        let n = 0
+        for (let at = 0; at < x.length; at += 4) {
+          if (Math.abs(x[at] - y[at]) > tolerance || Math.abs(x[at + 1] - y[at + 1]) > tolerance ||
+            Math.abs(x[at + 2] - y[at + 2]) > tolerance) {
+            n++
+          }
+        }
+        return n / (x.length / 4)
+      },
+      // Take the hover off, as the cursor leaving the model does, so the
+      // next hover is a change that paints.
+      clearHover: () => w.store.getState().viewer._clearPreselectionForAllModels(),
+      hoverCount: () => {
+        const hover = w.store.getState().viewer.highlighter.hoverOverlay?.hover
+        return hover ? hover.resolve().reduce((sum: number, {batchIds}: any) => sum + batchIds.length, 0) : 0
+      },
+    }
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  }, CHANNEL_TOLERANCE)
+}
+
+
+/**
+ * Hover the first canvas point over a batched part, as the user does, and
+ * catch the frame that hover painted as `hover`.
+ *
+ * @param page
+ * @return the kind of paint the hover made
+ */
+async function hoverSomething(page: Page): Promise<string> {
+  const box = await page.locator('#viewer-container canvas').first().boundingBox()
+  if (box === null) {
+    throw new Error('hoverSomething: the viewer canvas is not laid out')
+  }
+  for (let i = 1; i < HOVER_GRID; i++) {
+    for (let j = 1; j < HOVER_GRID; j++) {
+      const x = Math.round(box.x + (box.width * i / HOVER_GRID))
+      const y = Math.round(box.y + (box.height * j / HOVER_GRID))
+      const onCanvas = await page.evaluate(([px, py]) =>
+        document.elementFromPoint(px, py)?.tagName === 'CANVAS', [x, y])
+      if (!onCanvas) {
+        continue
+      }
+      // A move beside the point first, so the hover's own move is a real one.
+      await page.mouse.move(x - 1, y)
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      const onBatch = await page.evaluate(() =>
+        (window as any).store.getState().viewer.context.castRayIfc()?.object?.isBatchedMesh === true)
+      if (!onBatch) {
+        continue
+      }
+      await page.evaluate(() => (window as any).__mrHover.clearHover())
+      await page.waitForTimeout(HOVER_SETTLE_MS)
+      const caught = page.evaluate(() => (window as any).__mrHover.next('hover', false))
+      await page.mouse.move(x, y)
+      await page.waitForTimeout(HOVER_SETTLE_MS)
+      if (await page.evaluate(() => (window as any).__mrHover.hoverCount()) > 0) {
+        return await caught as string
+      }
+      /* eslint-enable @typescript-eslint/no-explicit-any */
+    }
+  }
+  throw new Error('hoverSomething: no canvas point hovers a batched part')
 }
 
 

@@ -1,6 +1,7 @@
 import {AutoResidency, FrameRateEstimate} from './autoResidency'
 import {createGpuFrameTimer} from './gpuFrameTimer'
 import {ResidencyMetric} from './ResidencyController'
+import {PaintKind} from '../three/renderDemand'
 
 
 /** The percent at which the whole at-rest set is kept. */
@@ -36,8 +37,6 @@ export const REST_FRAMES = 3
  * be the full at-rest picture, and each is one pass.
  */
 export const MAX_FLIPS_PER_FRAME = 20000
-/** RenderDemand's `PaintKind.OVERLAY` (renderDemand.js, #2129). */
-const OVERLAY_PAINT = 'overlay'
 /** With no idle callback, prepare a motion ordering this long after rest. */
 const PREPARE_DELAY_MS = 100
 
@@ -136,13 +135,13 @@ export class MotionResidency {
       // costs to draw, so it is never timed; it would read as a cheap frame
       // and walk Auto up.
       beforePaint: (kind) => {
-        if (this.isMeasuring_() && kind !== OVERLAY_PAINT) {
+        if (this.isMeasuring_() && kind !== PaintKind.OVERLAY) {
           this.timer.beforePaint(this.auto.epoch)
         }
       },
       afterPaint: (costMs, kind) => {
         this.paintedSinceFrame_ = true
-        if (this.isMeasuring_() && kind !== OVERLAY_PAINT) {
+        if (this.isMeasuring_() && kind !== PaintKind.OVERLAY) {
           this.timer.afterPaint(this.auto.epoch)
         }
       },

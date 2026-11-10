@@ -207,13 +207,76 @@ frame, with the last on-demand paint matching a forced fresh one; its
 painting. The E2E `captureRenderedFrame` asks for its own paint, so it works
 either way.
 
+**Overlay paints (the hover overlay, on by default since #2129; off with
+`?feature=disableHoverOverlay`, prod rollback `disableHoverOverlay:
+isActive: true`).** On a batched
+model a hover change used to recolour the hovered instance in place
+(`batchedHighlight.js`), which the hooks turn into a full paint: the whole
+model redrawn for one element's colour. Measured on an M2 Air (a repaint
+probe forcing 60 repaints of a still view; GPU time to a WebGL2 fence after
+the draw): Momentum (72 k triangles) 9.2 ms GPU p50, of which ~9 ms is the
+screen-size floor at DPR 2; Seestrasse (1.06 M) 21.7 ms; PSB (12.0 M)
+47 ms, p95 106 ms, so on PSB the hover landed about three frames late.
+`viewer/three/hoverOverlay.js` keeps a copy of the scene's
+colour and depth as the RenderPass left them at every full paint, and a
+hover change asks for a third kind of paint, `requestOverlayPaint()`
+(`RenderDemand#frameKind` returns `PaintKind.OVERLAY`): the frame copies
+that cache back into the composer's input buffer instead of running the
+scene passes (RenderPass, and the AO NormalPass when on), draws only the
+hovered instances on it with their own batch, material and program
+(narrowed draw list, colour swapped for the draw and back), depth-tested
+LEQUAL against the cached depth, then runs the post passes as any frame
+does. A full paint draws the overlay too, so the hover looks the same on
+either kind of frame; the one difference from the recolour is that where
+another surface lies at the same 16-bit depth code, the hovered one wins.
+Where the overlay can't draw a hover (a transparent or transmissive
+batch, no per-instance colours) the hover recolours as before. The A/B
+is in the PR that added it, and design/new/glb-export-premium.md §1.1d
+"What a hover pick costs after it" has the summary.
+
+*The invalidation rule:* a frame is an overlay frame only when the overlay's
+ask is the ONLY thing pending in a session between loads. Anything else
+makes it a full paint, which re-captures the cache: any `requestPaint()`
+(visibility, material colour, outlines, lights, looks, cut-plane arrows,
+residency), any hook (`add`/`attach`/`remove`, so model load and unload;
+`setColorAt`, so selection and colour modes; `setVisibleAt`, so hide,
+isolate and residency; `setMatrixAt` and the rest of `batchedEdit`;
+`needsUpdate` on materials, textures and attributes), a camera `update`
+(damping included), a resize, a probe change (pose, projection, canvas size
+and DPR, cut planes, background, tone mapping), a settle window, a
+`keepPainting` hold, a load scope and a restored context. On top of that
+`HoverOverlay#canCompose` refuses (and a full paint is drawn) with no
+capture yet, after a resize (`setSize` drops the cache) or a context loss,
+from a multisampled buffer, or when the camera pose, projection or buffer
+size differ from the capture's. `hoverOverlay.test.js` has one test per
+source; `renderOnDemandSources.test.js` holds the overlay-only asks to the
+one file allowed to make them. With the overlay on, a canvas `pointermove` no
+longer opens a settle window (it would repaint in full for 200 ms after
+every move, and the overlay would save nothing; #2128 already drops it while
+paints are expensive); what a canvas pointer move
+changes asks for itself instead (`ShareViewer#highlightIfcItem`, a full
+`requestPaint` on every hover path but the overlay's, and
+`MeshClipper#setArrowColor`). The overlay is off while the viewer paints
+every frame (`hoverOverlayMode.js`), and off for a session with
+`?feature=disableHoverOverlay`, the first thing to try on a hover that looks
+wrong; `disableHoverOverlay: isActive: true` in FeatureFlags.js is the prod
+rollback (a static `true` beats every URL). A throw in the overlay's render path
+turns it off for the viewer's life (GA `hover_overlay_disabled {stage}`),
+repaints in full and lets the hover recolour. The overlay's paints count as
+paints for `RenderDemand#paintCostMs`, so once one has run, the hover
+picker's fast-move gate (#2128, `EXPENSIVE_PAINT_MS`) sees a cheap paint and
+picks on every frame again, on any model. The cache costs one colour +
+depth target at drawing-buffer size, 6 bytes a pixel (RGBA8 + 16-bit depth):
+~25 MB at 2560×1600, ~30 MB at 2940×1676.
+
 **Paint observers.** `RenderDemand#observePaints({beforePaint, afterPaint})`
 is told around every paint the render closure makes, on demand or not: the
-closure calls `paintStarting()` just before `composer.render()` and
-`rendered()` just after. It exists for what must bracket a frame's GL
+closure calls `paintStarting(kind)` just before the draw and
+`rendered(cost, kind)` just after, with the frame's `PaintKind`. It exists for what must bracket a frame's GL
 commands — the motion-residency GPU timer places its timer query or fence
 there (`viewer/residency/gpuFrameTimer.js`;
-design/new/demand-tiled-rendering.md §B3). An observer must not ask for a
+design/new/demand-tiled-rendering.md §B3), and skips overlay-only paints,
+which say nothing about the scene's cost. An observer must not ask for a
 paint.
 
 **Rolling back.** Whether the session paints on demand is one decision,
