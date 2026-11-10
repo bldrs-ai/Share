@@ -301,6 +301,21 @@ describe('MotionResidency', () => {
       expect(Math.abs(visibleCount(mesh, 200) - settled)).toBeLessThanOrEqual(1)
     })
 
+    it('never times an overlay-only paint (the hover overlay\'s cached frame)', () => {
+      const {driver, controls, observers, frames, clock} = rig(20)
+      controls.dispatchEvent({type: 'update'})
+      expect(driver.moving).toBe(true)
+      clock.t += 16
+      frames.forEach((fn) => fn())
+      observers.forEach((o) => o.beforePaint?.('overlay'))
+      observers.forEach((o) => o.afterPaint?.(1, 'overlay'))
+      // A fence would have been placed for a full paint: the timer is idle.
+      expect(driver.timer.fence_).toBeNull()
+      observers.forEach((o) => o.beforePaint?.('full'))
+      observers.forEach((o) => o.afterPaint?.(1, 'full'))
+      expect(driver.timer.fence_).not.toBeNull()
+    })
+
     it('measures nothing while the camera is still', () => {
       const {driver, frame} = rig(20)
       for (let i = 0; i < 30; i++) {

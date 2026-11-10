@@ -293,7 +293,10 @@ already 9.2 ms, so with each step aiming at 0.85 of the budget, 13.3 ms
 leaves little room above the fixed cost. A full interval (the step aims at
 ~14.2 ms) is about 2.3 M triangles: PSB at 25%, measured at 14.4 ms, the
 trade-off the owner found good. The floor rose to 10%, below which an orbit
-stops reading as the model.
+stops reading as the model. On the owner's re-test with this tuning (M2 Air,
+60 Hz) PSB settled near the 10% floor with the main massing preserved;
+the owner accepted that as the trade-off. `MIN_FRACTION` is the knob if it
+ever proves too aggressive.
 
 *Follow-up, not B3.* With several sessions or views visible at once, the
 budget has to be one GPU budget shared across them, not a full interval

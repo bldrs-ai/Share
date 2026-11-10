@@ -421,11 +421,16 @@ export default class RenderDemand {
   }
 
 
-  /** The render closure is about to draw: tell the paint observers. */
-  paintStarting() {
+  /**
+   * The render closure is about to draw: tell the paint observers.
+   *
+   * @param {string} [kind] what it will paint (the hover overlay's
+   *   `PaintKind`); undefined is a full paint
+   */
+  paintStarting(kind) {
     for (const observer of this.paintObservers) {
       try {
-        observer.beforePaint?.()
+        observer.beforePaint?.(kind)
       } catch (error) {
         console.warn('[renderDemand] paint observer failed:', error)
       }
