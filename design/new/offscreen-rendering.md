@@ -570,8 +570,8 @@ worker per view parallelizes CPU work only (scene traversal, culling lists,
 uploads, picks), not drawing. If idle views are cached frames, they cost no
 GPU time; the active view gets the whole frame budget; several views moving
 at once would each get a share of one budget, which Auto residency can
-already target. The missing piece is that shared budget (a follow-up noted
-in demand-tiled-rendering.md B3). The isolation a render worker gives — React
+already target. The missing piece is that shared budget (#2135, a
+sub-issue of #1613). The isolation a render worker gives — React
 and every scene's CPU work off one thread — is the remaining argument, and
 it is strongest exactly where Share isn't yet: several sessions on screen.
 
@@ -656,6 +656,43 @@ What the re-capture says:
   main thread (React, N render loops, N engine workers). That needs a
   harness of N same-origin iframes, taken when the multi-session UI is
   designed.
+
+
+### 5b. Measurement tools, ready to reuse (Share#2126)
+
+The tools behind §5a live on the spike branch
+`claude/open-205-render-worker-gpu-spike`, in draft PR #2126 (do not merge;
+kept open as the toolbox). To use them again:
+1. Merge main into the branch.
+2. Push. The PR's deploy preview rebuilds.
+3. Follow `tools/spikes/offscreen/README.md` on the branch: the protocol,
+   and how to read each column.
+
+What's there:
+- **`?feature=mainThreadTrace`** (`src/utils/mainThreadTrace.js`). It
+  records Share's main thread from page start: long animation frames split
+  into non-render and render work, long tasks, its own rAF cadence, input
+  delay, load milestones and tab visibility. The overlay has **Mark**,
+  **Summary** (console), **Repaint probe** and **Download trace**. The
+  trace carries no model name, URL or path.
+- **Repaint probe.** 60 forced repaints of the still view, timing the CPU
+  inside `renderer.render` and the GPU up to a WebGL2 fence. Triangles and
+  draw calls are summed per frame. This is what showed big models are
+  GPU-bound (§5a).
+- **`/spike/offscreen/` replay page.**
+  - It replays a trace's non-render blocks (load window, between Marks,
+    whole trace, or custom) or a synthetic pump, against one `BatchedMesh`
+    scene rendered on main or in a worker (runs R0–I2), with selectable
+    frame pacing.
+  - Its **Many views** test compares one worker and context per view with
+    one shared context: live and lost contexts, first show, re-show.
+  - **Copy JSON** gives the result.
+- **Gaps worth closing before the next use:**
+  - Production builds are minified, so trace attribution names `r` in
+    `index.js`. Building the spike branch with esbuild `keepNames` would
+    name the real functions.
+  - Nothing yet measures N real Share sessions on one page. That needs a
+    harness of N same-origin iframes (§5a), for the multi-session decision.
 
 
 ## 6. Design
@@ -1108,9 +1145,12 @@ records the decision: **deferred**.
    - **Outcome:** every stall measured is a long synchronous task with a
      cheaper fix (§5a), so the worker isn't justified for single-session
      Share. Split the tasks under #2030, starting with the PSB cache
-     hit's hydration. Revisit the worker with the multi-session UI, after
-     the N-session iframe harness (§5a), designed around one render
-     worker, cached idle frames and one shared residency budget.
+     hit's hydration. The measured targets and the suggested order are in
+     [#2030's comment of 2026-11-10](https://github.com/bldrs-ai/Share/issues/2030#issuecomment-6775984778),
+     to come back to. Revisit the worker with the multi-session UI, after
+     the N-session iframe harness (§5a, §5b), designed around one render
+     worker, cached idle frames and one shared residency budget (#2135).
+     Re-measure with the §5b tools.
    - A GPU-bound frame (a big model at full detail) is residency's to fix,
      not this doc's.
 2. **Camera follow vs the first user interaction** (#2043). Unchanged by
