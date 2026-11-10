@@ -903,6 +903,59 @@ first, and showed what the pointer was over. It goes red with the timer
 scheduler, and with a 33 ms floor restored in the frame scheduler (44–56 of
 ~375 frames painted unpicked).
 
+**Fast moves skip the highlight while paints are expensive.** The owner's
+preview of the above showed hover essentially instant on Momentum, middling on
+Seestrasse (a public sample) and "a little better" on PSB. The lag grew with model size, so what
+was left is the repaint, which is GPU-bound on PSB, not the pick. A sweep
+queued one repaint per frame for highlights the pointer had already left, and
+the highlight it stopped on waited behind them. Two changes engage only above
+`EXPENSIVE_PAINT_MS` (33 ms, `three/renderDemand.js`): the last paint's cost,
+measured from its start to the next frame (`RenderDemand#paintCostMs`), as
+the load budget measures it.
+
+- **The hover gate** (`hoverPick.js`). While the paint is expensive and the
+  pointer moved faster than `FAST_POINTER_PX_PER_MS` (1.5 CSS px/ms between
+  two frames' mouse events, 25 px a 60 Hz frame), the frame scheduler skips
+  the pick and its recolour and keeps the move pending. The first frame the
+  pointer is slower, or hasn't moved, picks, so the final highlight is never
+  lost. Speed is measured from the last mouse event, so the first move after
+  a rest always picks.
+- **The canvas pointermove stops opening a settle window**
+  (`renderDemandHooks.js#attachSessionNets`). Without this, the window would
+  repaint the unchanged picture every frame of the sweep anyway. What a
+  pointer move changes asks for its own paint: the hover recolour through the
+  `setColorAt` hook, a cut plane's arrow through `MeshClipper#setArrowColor`.
+
+With cheap paints neither engages, so Momentum on a GPU is exactly as above.
+
+Measured in headless Chromium at 1280×800. A fast sweep is ~40 raw pointer
+events 4 ms apart across about half the canvas (~3 px/ms), ending on an
+element. "Settle" is the wall-clock time from the last raw event sent to the
+first frame after the paint that showed the final highlight. The no-gate leg
+is the frame scheduler without the gate:
+
+| | no gate | gate |
+|---|---|---|
+| PSB (paint ~2.6 s in SwiftShader), settle | 5.2–5.3 s | 2.7–3.1 s |
+| PSB, paints per sweep (during + after) | 2 + 1 | 0 + 1–2 |
+| PSB, mousemoves the page got during the sweep | 3 | 23–25 |
+| Momentum (paint ~85 ms in SwiftShader), settle | 116–158 ms | 116–143 ms |
+| Momentum, paints per sweep (during + after) | 3 + 2–3 | 0 + 1 |
+
+On PSB the settle drops to one paint's cost (~1.8× faster). Without the gate
+the final highlight's paint queued behind the sweep's last one. The input
+itself was starved too: three mousemoves reached the page in a 200 ms sweep,
+against 23–25 with the gate. On Momentum each queued paint is short, so the
+settle gain is small, but the sweep's repaints drop from 5–6 to 1.
+
+The units break each half of the condition (a pointer-only gate fires on cheap
+paints; a cost-only gate fires on a slow pointer), dropping the move instead
+of deferring it (no settle pick), and an always-on pointermove window. Each
+goes red. `hoverPick.spec.ts` sweeps fast at the full pixel ratio, where a
+desktop SwiftShader frame of Momentum is expensive, and checks the highlight
+where the pointer stops. It goes red with the move dropped instead of
+deferred.
+
  (the owner's smoke on #1872: a
 Draco download of DSA and of Right_Hand rendered perfectly and could not be
 selected). Measured on a DSA-shaped strip through the real codec: Draco MERGES

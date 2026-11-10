@@ -163,7 +163,12 @@ cheapest-to-forget last:
    only marks the pointer, so the hover recolour, which asks through the
    `setColorAt` hook, paints in the frame of the move that caused it
    (glb-export-premium.md §1.1d "What a hover pick costs after it").
-   `?feature=disableFrameHover` puts back the old timer-driven pick.
+   `?feature=disableFrameHover` puts back the old timer-driven pick. While
+   the last paint cost more than `EXPENSIVE_PAINT_MS` (33 ms,
+   `RenderDemand#paintCostMs`), fast hover moves skip the pick, and a
+   canvas pointermove opens no settle window (layer 5): what the pointer
+   changes asks for itself, and a sweep shouldn't queue repaints of an
+   unchanged picture on the GPU.
 2. `requestPaint()` (`renderDemand.js`), callable from anywhere, for what
    three gives no signal for: `visible`, material colour, opacity and
    wireframe, outline selections (IfcHighlighter, the isolation outline),
@@ -182,8 +187,8 @@ cheapest-to-forget last:
    pixel ratio, cut planes, scene background/environment/root children,
    tone mapping. Snapshotted at each paint.
 5. A settle window (`SETTLE_MS`, 200 ms of painting) after user input on
-   the page (not a bare press), a pointer move over the canvas, and any
-   store change
+   the page (not a bare press), a pointer move over the canvas (only while
+   paints are cheap; layer 1), and any store change
    (CadView subscribes): for the change a React effect applies a frame
    after the event. During a load these are background asks.
 6. `keepPainting()` for what changes on its own clock: a scene with Spark
