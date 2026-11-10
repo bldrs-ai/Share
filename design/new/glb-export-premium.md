@@ -829,6 +829,16 @@ same build A/B'd:
 - per pick: median 9.2–10 ms → 0.2 ms, worst 26 ms → 4.4 ms;
 - a 5,082-event pointer sweep: mousemove handlers 65 s → 0.09 s.
 
+With the pick down to ~0.2 ms, what a hover change cost was the repaint
+behind it: the recolour (`batchedHighlight.js`) repainted the whole model,
+47 ms of GPU p50 on PSB on an M2 against 9.2 ms on Momentum, so the
+highlight landed about three frames late. `?feature=hoverOverlay`
+(`viewer/three/hoverOverlay.js`, default off for the owner's A/B) draws the
+hover on a cached frame of the last full paint instead, so a hover change
+costs the hovered instances plus the screen-size passes on any model
+(DESIGN.md §"Render loop & perf monitor", "Overlay paints"; the A/B is in
+the PR that added it).
+
  (the owner's smoke on #1872: a
 Draco download of DSA and of Right_Hand rendered perfectly and could not be
 selected). Measured on a DSA-shaped strip through the real codec: Draco MERGES

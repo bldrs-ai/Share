@@ -48,6 +48,7 @@ import {
   applyBatchedSelection,
   clearBatchedPreselection,
   clearBatchedSelection,
+  resolveBatchedHighlight,
 } from './ifc/batchedHighlight'
 
 
@@ -206,6 +207,14 @@ export class ShareViewer {
   // keeps one Mesh/BufferGeometry/Uint32Array alive across calls and
   // updates the index buffer in place rather than allocating per hover.
   _conwayPreselectionPool = null
+  // Whether the batched hover is a recolour (the preselection layer) rather
+  // than the hover overlay's draw, under `?feature=hoverOverlay`: the overlay
+  // falls back to recolouring a hover it can't draw, and the next hover it
+  // can draw must take that recolour off first.
+  _isHoverRecoloured = false
+  // Whether the hover showing was painted by a full paint `_askForHoverPaint`
+  // asked for, so taking it off needs one too (`?feature=hoverOverlay` only).
+  _isHoverPaintedInFull = false
   // The `?feature=look` lighting/material tuning GUI (LightingGui). Null
   // unless the flag is set; lazily code-split in (see `_initLookGui`).
   _lookGui = null
@@ -293,6 +302,13 @@ export class ShareViewer {
     this._createGroundPlane()
     this.postProcessor = new CustomPostProcessor(renderer, scene, camera)
     this.highlighter = new IfcHighlighter(this.context, this.postProcessor)
+    if (this.highlighter.hoverOverlay) {
+      // The overlay turned itself off after a failure (hoverOverlay.js
+      // `fail_`): drop the dedup so the next pick recolours the hover.
+      this.highlighter.hoverOverlay.onDisabled = () => {
+        this._lastBatchedPreselectKey = undefined
+      }
+    }
     this.isolator = new IfcIsolator(this.context, this)
     // Selector — §3c.iv facade over `IFC.selector`. Every call-site that
     // poked at `viewer.IFC.selector.X` routes through `viewer.selector.X`.
@@ -1664,6 +1680,12 @@ export class ShareViewer {
     if (!found) {
       this.selector.togglePreselectionVisibility(false)
       this._clearPreselectionForAllModels()
+      // A hover the overlay drew asked for its own clear; one painted any
+      // other way needs a full paint to come off (`_askForHoverPaint`).
+      if (this._isHoverPaintedInFull) {
+        this._isHoverPaintedInFull = false
+        requestPaint()
+      }
       return
     }
     const id = this.getPickedItemId(found)
@@ -1706,10 +1728,29 @@ export class ShareViewer {
       if (hovered.key !== this._lastBatchedPreselectKey) {
         this._lastBatchedPreselectKey = hovered.key
         const preMat = this.selector.getPreselectionMaterial()
-        if (hovered.occurrenceId !== null) {
-          applyBatchedInstancePreselection(model, [hovered.occurrenceId], preMat?.color)
+        const byOccurrence = hovered.occurrenceId !== null
+        const ids = byOccurrence ? [hovered.occurrenceId] : [id]
+        // `?feature=hoverOverlay` (three/hoverOverlay.js): draw the hover on
+        // the cached frame rather than recolour the batch, which would repaint
+        // the whole model. The overlay asks for its own (overlay-only) paint.
+        // Where it can't draw this hover (a transparent batch, …) it says so
+        // and the recolour below runs instead, as without the flag.
+        const overlay = this.highlighter?.hoverOverlay ?? null
+        const isOverlaid = overlay !== null &&
+          overlay.setHover(() => resolveBatchedHighlight(model, ids, byOccurrence), preMat?.color)
+        if (isOverlaid) {
+          if (this._isHoverRecoloured) {
+            clearBatchedPreselection(model)
+            this._isHoverRecoloured = false
+          }
         } else {
-          applyBatchedPreselection(model, [id], preMat?.color)
+          if (byOccurrence) {
+            applyBatchedInstancePreselection(model, ids, preMat?.color)
+          } else {
+            applyBatchedPreselection(model, ids, preMat?.color)
+          }
+          this._isHoverRecoloured = true
+          this._askForHoverPaint()
         }
       }
     } else if (modelHasCapability(model, 'ifcSubsets')) {
@@ -1736,6 +1777,27 @@ export class ShareViewer {
       for (const mesh of subsetMeshes) {
         this.highlighter.addToHighlighting(mesh)
       }
+    }
+    if (!modelHasCapability(model, 'batchedPicking')) {
+      this._askForHoverPaint()
+    }
+  }
+
+
+  /**
+   * With the hover overlay on, a canvas pointer move opens no settle window
+   * (renderDemandHooks.js#attachSessionNets), so a hover that changes the
+   * picture other than through the overlay asks for a full paint itself:
+   * every non-batched hover path, the recolour fallback, and the clear when
+   * the cursor leaves the model. Without the overlay the settle window still
+   * covers them, so this asks for nothing and those paths are as before.
+   *
+   * @private
+   */
+  _askForHoverPaint() {
+    if (this.highlighter?.hoverOverlay) {
+      this._isHoverPaintedInFull = true
+      requestPaint()
     }
   }
 
@@ -1796,6 +1858,9 @@ export class ShareViewer {
     this._clearConwayPreselectionSubsets()
     // Reset the batched hover-dedup so re-entering the same instance repaints.
     this._lastBatchedPreselectKey = undefined
+    // The overlay's hover, if one is up: it asks for its own overlay paint.
+    this.highlighter?.hoverOverlay?.clear()
+    this._isHoverRecoloured = false
     const models = this.IFC?.context?.items?.ifcModels
     if (!Array.isArray(models)) {
       return

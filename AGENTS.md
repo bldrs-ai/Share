@@ -127,7 +127,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | If you're working on… | Read |
 |---|---|
 | Module boundaries, top-level architecture | [DESIGN.md](DESIGN.md) |
-| Render loop, `setRenderUpdate` seam, `?feature=perf` panel, render-on-demand (on by default; `disableRenderOnDemand` is the kill switch and prod rollback): what must ask for a paint (`requestPaint`), what the hooks and probe catch, and how to roll back | [DESIGN.md](DESIGN.md) §"Render loop & perf monitor" |
+| Render loop, `setRenderUpdate` seam, `?feature=perf` panel, render-on-demand (on by default; `disableRenderOnDemand` is the kill switch and prod rollback): what must ask for a paint (`requestPaint`), what the hooks and probe catch, and how to roll back; the `?feature=hoverOverlay` overlay paint (hover drawn on a cached frame, `requestOverlayPaint`) and the invalidation rule that makes every other ask a full paint | [DESIGN.md](DESIGN.md) §"Render loop & perf monitor" |
 | Code style, lint rules | [STYLE.md](STYLE.md) |
 | Writing an assertion that can actually fail — the vacuous-assertion shapes seen in practice, the break-it-and-watch-it-go-red check, and why a feature needs one test of the user's own action (not just proxies), across every way its artifact reaches the viewer | [STYLE.md](STYLE.md) §"Assertions must be able to fail" |
 | Build, dev server, CI, Playwright setup | [PLAYBOOK.md](PLAYBOOK.md) |
