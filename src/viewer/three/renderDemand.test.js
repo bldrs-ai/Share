@@ -241,7 +241,7 @@ describe('viewer/three/renderDemand', () => {
     paint(3)
     demand.invalidate()
     paint(4)
-    expect(demand.stats).toEqual({paints: 2, paintMs: 7, frames: 4})
+    expect(demand.stats).toEqual({paints: 2, paintMs: 7, frames: 4, overlayPaints: 0})
   })
 })
 

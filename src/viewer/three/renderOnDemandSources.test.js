@@ -74,6 +74,7 @@ const AUDITED = {
   'Containers/CadView.jsx': 'calls ShareViewer#setSelection, which paints through IfcHighlighter',
   'Components/ViewCube/ViewCube.jsx': 'its own renderer and scene, painted by its own dirty-flag loop',
   'Components/HideToggleButton.jsx': 'a CSS icon style, not the scene',
+  'viewer/three/hoverOverlay.js': 'layers and background changed for its own draw, inside a paint, and put back before it returns',
   'viewer/three/context/context.js': 'the clipping-plane array at construction; the probe reads it each frame',
   'viewer/three/context/renderer/postproduction.js': 'never activated (offscreen-rendering.md inventory #10)',
   'viewer/ifc/parsePreviewMesh.js': 'materials set up before the mesh is added, which the hooked add covers',
@@ -108,6 +109,42 @@ function sourceFiles(dir, out = []) {
   }
   return out
 }
+
+
+/**
+ * The paint asks that only redraw the hover overlay on the cached frame
+ * (hoverOverlay.js). An overlay frame shows the last full paint, so an ask
+ * here that also changed the scene would leave the change off screen. Every
+ * other ask (`requestPaint`, `requestBackgroundPaint`, `invalidate*`,
+ * `keepPainting`) is a full paint. Paths relative to src/.
+ */
+const OVERLAY_ONLY_ASKS = {
+  'viewer/three/hoverOverlay.js': 'HoverOverlay#setHover / #clear: the hovered instances, drawn by the overlay alone',
+}
+// The definition and its one route into RenderDemand, which aren't callers.
+const OVERLAY_ASK_DEFINITION = 'viewer/three/renderDemand.js'
+const OVERLAY_ASK = /requestOverlayPaint\(|\.invalidateOverlay\(/
+
+
+describe('render-on-demand sources: overlay-only asks', () => {
+  const askers = sourceFiles(SRC).filter((file) => file !== OVERLAY_ASK_DEFINITION &&
+    OVERLAY_ASK.test(fs.readFileSync(path.join(SRC, file), 'utf8')))
+
+  it('finds overlay-only asks in exactly the files allowed to make them', () => {
+    // A file here asks for an overlay-only paint: the next frame may redraw
+    // just the hover on the cached frame, so it must change nothing else
+    // the picture shows. If it does, ask with requestPaint() instead.
+    expect(askers.sort()).toEqual(Object.keys(OVERLAY_ONLY_ASKS).sort())
+  })
+
+  it('keeps every other source a full paint: none of the audited askers asks for an overlay', () => {
+    const overlayAskers = Object.entries(AUDITED)
+      .filter(([file, how]) => how === ASKS_FOR_PAINT && !(file in OVERLAY_ONLY_ASKS))
+      .filter(([file]) => OVERLAY_ASK.test(fs.readFileSync(path.join(SRC, file), 'utf8')))
+      .map(([file]) => file)
+    expect(overlayAskers).toEqual([])
+  })
+})
 
 
 describe('render-on-demand sources: static guard', () => {

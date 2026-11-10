@@ -139,6 +139,13 @@ export const SETTLE_MS = 200
  * repaints, not the picks, being what the sweep queued up on the GPU.
  */
 export const EXPENSIVE_PAINT_MS = 33
+/**
+ * What a frame paints (`RenderDemand#frameKind`). `FULL` redraws the scene;
+ * `OVERLAY` asks only that the hover overlay be redrawn on the cached frame
+ * of the last full paint (hoverOverlay.js). The render closure turns an
+ * `OVERLAY` frame into a full one whenever the overlay can't compose it.
+ */
+export const PaintKind = Object.freeze({FULL: 'full', OVERLAY: 'overlay'})
 
 
 // Every live RenderDemand, so `requestPaint` reaches the viewer without the
@@ -160,6 +167,22 @@ let paintDepth = 0
 export function requestPaint() {
   for (const demand of liveDemands) {
     demand.invalidate()
+  }
+}
+
+
+/**
+ * Only the hover overlay changed: the hovered instance(s), not the scene
+ * under them (hoverOverlay.js). Between loads, with nothing else asking and
+ * the probe still, the next frame redraws just the overlay on the cached
+ * frame; anything else that asks in the same frame makes it a full paint,
+ * which draws the overlay too. During a load, or off a session, it is a
+ * plain `requestPaint`. The only caller is the overlay itself, and
+ * `renderOnDemandSources.test.js` holds it to that.
+ */
+export function requestOverlayPaint() {
+  for (const demand of liveDemands) {
+    demand.invalidateOverlay()
   }
 }
 
@@ -254,6 +277,9 @@ export default class RenderDemand {
     this.isOnDemand = false
     this.isDirty = false
     this.isBackgroundDirty = false
+    // Only the hover overlay asked (`invalidateOverlay`): the one ask that
+    // doesn't need the scene redrawn.
+    this.isOverlayDirty = false
     this.lastPaintStartMs = -Infinity
     this.lastPaintCostMs = 0
     // Set by a paint, cleared by the next frame, which measures it.
@@ -270,7 +296,9 @@ export default class RenderDemand {
     // measurement probes to show what on-demand painting saved.
     // `frames` counts the frames that asked, painted or not, so a probe can
     // tell an idle viewer (frames rising, paints not) from a stopped loop.
-    this.stats = {paints: 0, paintMs: 0, frames: 0}
+    // `overlayPaints` counts the paints of those that only redrew the hover
+    // overlay (`rendered(…, PaintKind.OVERLAY)`).
+    this.stats = {paints: 0, paintMs: 0, frames: 0, overlayPaints: 0}
     // Session mode (`startSession`, `?feature=renderOnDemand`): on demand
     // between loads too.
     this.isSession = false
@@ -466,6 +494,20 @@ export default class RenderDemand {
   }
 
 
+  /**
+   * Redraw the hover overlay on the next frame (`requestOverlayPaint`). Only
+   * a session between loads can paint the overlay alone; otherwise this is
+   * `invalidate`, so a hover during a load or off a session repaints in full.
+   */
+  invalidateOverlay() {
+    if (!this.isSession || this.scopes.size > 0) {
+      this.invalidate()
+      return
+    }
+    this.isOverlayDirty = true
+  }
+
+
   /** Paint when the frame budget allows: the load changed the scene. */
   invalidateBackground() {
     this.isBackgroundDirty = true
@@ -505,6 +547,22 @@ export default class RenderDemand {
    * @return {boolean}
    */
   shouldRender() {
+    return this.frameKind() !== null
+  }
+
+
+  /**
+   * What this animation frame should paint: nothing (`null`), the whole
+   * scene, or only the hover overlay on the cached frame. `OVERLAY` only
+   * when the overlay is the one thing that asked: any other ask, an open
+   * settle window, a hold or a probe that moved makes the frame `FULL`, since
+   * each of them may have changed the scene the cached frame shows. During a
+   * load `invalidateOverlay` sets `isDirty` instead, so the budget logic
+   * below never sees an overlay ask.
+   *
+   * @return {string|null} a `PaintKind`, or null to skip the frame
+   */
+  frameKind() {
     const now = this.now()
     this.stats.frames++
     if (this.isAwaitingFrameAfterPaint) {
@@ -512,26 +570,31 @@ export default class RenderDemand {
       this.lastPaintCostMs = Math.max(this.lastPaintCostMs, now - this.lastPaintStartMs)
     }
     if (!this.isOnDemand || this.isDirty) {
-      return true
+      return PaintKind.FULL
     }
     if (this.scopes.size === 0) {
       // A session between loads: no heartbeat and no budget. Whatever asked
       // paints now; with nothing asking, the probe has the last word. A hold
       // counts only here: during a load the load's budget still decides.
       if (this.holds > 0 || this.isBackgroundDirty || now < this.settleUntilMs) {
-        return true
+        return PaintKind.FULL
       }
-      return this.probe?.changed?.() === true
+      // Read on an overlay ask too: a camera or canvas change nobody
+      // announced must not be papered over with the old frame.
+      if (this.probe?.changed?.() === true) {
+        return PaintKind.FULL
+      }
+      return this.isOverlayDirty ? PaintKind.OVERLAY : null
     }
     const sinceLastPaint = now - this.lastPaintStartMs
     if (sinceLastPaint >= HEARTBEAT_MS) {
       this.isBackgroundDirty = true
     }
     if (!this.isBackgroundDirty) {
-      return false
+      return null
     }
     const gap = Math.max(BACKGROUND_MIN_GAP_MS, BACKGROUND_COST_FACTOR * this.lastPaintCostMs)
-    return sinceLastPaint >= gap
+    return sinceLastPaint >= gap ? PaintKind.FULL : null
   }
 
 
@@ -541,11 +604,19 @@ export default class RenderDemand {
    * module doc).
    *
    * @param {number} costMs how long the draw call took on the main thread
+   * @param {string} [kind] the `PaintKind` it painted. A full paint draws the
+   *   overlay as well, so either kind answers an overlay ask; only a full one
+   *   answers the rest.
    */
-  rendered(costMs) {
+  rendered(costMs, kind = PaintKind.FULL) {
     const drawMs = Number.isFinite(costMs) && costMs > 0 ? costMs : 0
-    this.isDirty = false
-    this.isBackgroundDirty = false
+    this.isOverlayDirty = false
+    if (kind === PaintKind.OVERLAY) {
+      this.stats.overlayPaints++
+    } else {
+      this.isDirty = false
+      this.isBackgroundDirty = false
+    }
     this.lastPaintStartMs = this.now() - drawMs
     this.lastPaintCostMs = drawMs
     this.isAwaitingFrameAfterPaint = true
