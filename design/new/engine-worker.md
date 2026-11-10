@@ -781,10 +781,33 @@ state), and he treats this doc as current and the flip as a milestone.
   legacy `?feature=bot` routes to the main-thread engine
   (`engine/engineRoute.js`). #2061 is explained (§7.1).
 
-**Flip gates (step 9).** §7.2 was the list. The doc does not record the
-human's gates, a real-GPU check plus Safari and Firefox by hand (§7.2 item
-7, §10 "Not measured"). *To confirm:* were they run before the merge, and
-what did they show?
+**Flip gates (step 9).** §7.2 was the list. Per Pablo, 2026-11-10, the
+checks were run and "tested extensively", and the flip was a real win:
+mostly smooth frame rate even on the large (~900 MB) IFC model,
+interactivity during load, and real-time mouse-over highlighting from a held
+frame. That is his statement, not a measurement: per-browser (Safari,
+Firefox) and real-GPU numbers are still not recorded in this doc, so §10
+"Not measured" stands as it is.
+
+**Since the flip (2026-10-26 to 2026-11-10).** Per Pablo, the groundwork is
+for multi-session use. PR references from a title-level sweep:
+- *Frame rate on large models:* render on demand by default (Share#2104);
+  residency and motion residency (Share#2130, #2132, #2136). Owned by
+  [offscreen-rendering.md](offscreen-rendering.md) and DESIGN.md.
+- *Interactivity during load:* Share#2037 (tree, properties, search at the
+  index), #2052 (camera and picking at first mesh), #2106; conway#772,
+  #777, #778 (the preview channel).
+- *Held-frame hover:* Share#2127, #2128, #2129 (DESIGN.md, "Render loop &
+  perf monitor").
+- *Re-open from cached state:* the index sidecar and cache-hit re-open
+  (conway#760, conway#769; Share#2085, #2095, #2112, #2113, #2117).
+
+**Steps 7–8: what has and has not landed.** What has landed toward
+multi-session use is the cheap re-open (index sidecar, cache hit). Ownership
+(a session owns its worker), close and eviction by `terminate()`, the
+live-worker cap and in-app switching are not built: no merged PR found in a
+title-level sweep of 2026-10-26 to 2026-11-10 (only Share#2026, state fixes
+plus the switch design, and Share#2032, a decision doc).
 
 **Next.**
 - Steps 7–8 (sessions own their worker, close and eviction; index-only
@@ -1059,7 +1082,7 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 | 5 — GLB capture in the worker | merged (#2081), after #2073 (#2038: the capture dropped every record a windowed source did not have resident). n=1 each, flag off → on, `RAF_THROTTLE_MS=3600000`, persistent profile. PSB: time to artifact 171.6 → 118.9 s; the writer 38.1 → 31.0 s, of which the worker's capture is 7.6 s; main-thread long tasks before ready 536 (81.6 s) → 35 (13.7 s), and during the write 71 (7.85 s, max 624 ms) → 4 (0.43 s, max 208 ms); page heap (`performance.memory`) at the end 1,127 → 522 MB, sampled peak 1,766 → 848 MB; the worker's JS heap peaked at 140 MB, beside 899 MB of wasm. 58 MB STEP: time to artifact 47.6 → 43.2 s; writer 7.6 → 6.8 s, capture 2.5 s; long tasks before ready 292 (35.8 s) → 10 (3.6 s), during the write 4 (0.35 s) → 1 (0.07 s); page heap at the end 688 → 148 MB; worker JS heap peak 322 MB beside 515 MB of wasm. **Byte identity:** after the batch colour column became float64 (step 5 above), the two engines' whole PSB artifacts are identical, 86,341,686 B each with one SHA-256 (re-measured 2026-11-06, n=1 per side, on a less loaded machine: time to artifact 68.6 → 58.9 s, long tasks before ready 222 (27.8 s) → 13 (6.7 s)). Review fixes: protocol v2, so a stale cached worker without `capture` is refused at hello and the load runs in process (§4); `close()` waits for a spill still in flight before it decides whether to close politely |
 | 8 (part) — index sidecar reopen | Share#2085: a worker load from an OPFS entry saves conway's index sidecar, and the next open of the same entry opens from it instead of parsing, IFC and STEP alike (`engine/engineSidecars.js`). It is written after the first load, not at eviction (§5.3). Since Share#2093 a browser without `createWritable` (Safari before 26) writes it through a read-write sync access handle, and a failed save says why on the `Engine index:` line. Eviction itself is still deferred. The reopen runs conway's full source check, which the owner chose over the sampled one. Measured with it: on the 58 and 106 MB STEP models, Parsing goes from 1.3–1.8 s and 2.6–2.8 s to 0.31–0.39 s and 0.65–0.70 s, and the tree arrives 2.1–3.3 s and 2.9–3.7 s sooner (§11) |
 | 7, 8 | deferred; only in-app switching needs them |
-| 9 | landed (#2083): default on, the kill switch and rollback, the main-thread routes. #2061 explained (below). The real-GPU, Safari and Firefox checks: to confirm (not recorded here) |
+| 9 | landed (#2083): default on, the kill switch and rollback, the main-thread routes. #2061 explained (below). Per Pablo, 2026-11-10, the real-GPU and browser checks were run and it was a real win (statement only; per-browser and real-GPU numbers are not recorded here) |
 
 **Picking during the pump (#2084).** The durable batches are pickable from
 the row they are written, on both engines (§11, "Pick during the pump").
