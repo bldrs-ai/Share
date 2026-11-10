@@ -789,7 +789,7 @@ frame. That is his statement, not a measurement: per-browser (Safari,
 Firefox) and real-GPU numbers are still not recorded in this doc, so §10
 "Not measured" stands as it is.
 
-**Since the flip (2026-10-26 to 2026-11-10).** Per Pablo, the groundwork is
+**Recent work (2026-10-26 to 2026-11-10).** Per Pablo, the groundwork is
 for multi-session use. PR references from a title-level sweep:
 - *Frame rate on large models:* render on demand by default (Share#2104);
   residency and motion residency (Share#2130, #2132, #2136). Owned by
