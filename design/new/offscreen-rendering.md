@@ -496,8 +496,7 @@ here rather than committed, per the dispatch.
 
 ## 5a. Real-GPU spike, and what it changed (2026-11-09/10, Share#2126)
 
-§5 ran on SwiftShader with a synthetic pump. Share#2126 (draft, not for
-merge) re-ran it on the owner's MacBook Air M2 in Chromium 157, at DPR 2. It
+§5 ran on SwiftShader with a synthetic pump. Share#2126 re-ran it on the owner's MacBook Air M2 in Chromium 157, at DPR 2. It
 added three things: a capture of Share's own main thread
 (`?feature=mainThreadTrace`: long animation frames split into non-render and
 render work, its own rAF cadence, input delay); a replay page
@@ -660,26 +659,30 @@ What the re-capture says:
 
 ### 5b. Measurement tools, ready to reuse (Share#2126)
 
-The tools behind §5a live on the spike branch
-`claude/open-205-render-worker-gpu-spike`, in draft PR #2126 (do not merge;
-kept open as the toolbox). To use them again:
-1. Merge main into the branch.
-2. Push. The PR's deploy preview rebuilds.
-3. Follow `tools/spikes/offscreen/README.md` on the branch: the protocol,
-   and how to read each column.
+The tools behind §5a are checked in, but **left out of normal builds**. They
+are gated on the build-time switch `MEASUREMENT_TOOLS`
+(`tools/esbuild/vars.prod.js`, default `false`), so production ships neither
+the tracer nor the page. To use them again:
+1. Build with the switch on: `MEASUREMENT_TOOLS=true yarn build-prod`
+   locally, or on a deploy preview through a throwaway branch whose
+   `netlify.toml` sets it for `context.deploy-preview`.
+2. Follow `tools/spikes/offscreen/README.md`, which has the exact snippet,
+   the protocol, and how to read each column.
 
-What's there:
-- **`?feature=mainThreadTrace`** (`src/utils/mainThreadTrace.js`). It
-  records Share's main thread from page start: long animation frames split
-  into non-render and render work, long tasks, its own rAF cadence, input
-  delay, load milestones and tab visibility. The overlay has **Mark**,
-  **Summary** (console), **Repaint probe** and **Download trace**. The
-  trace carries no model name, URL or path.
+- **`?feature=mainThreadTrace`** (`src/utils/mainThreadTrace.js`). It only
+  does anything in a build with `MEASUREMENT_TOOLS`; otherwise the module is
+  folded out of the bundle (about 10 KB). It records Share's main
+  thread from page start: long animation frames split into non-render and
+  render work, long tasks, its own rAF cadence, input delay, load milestones
+  and tab visibility. The overlay has **Mark**, **Summary** (console),
+  **Repaint probe** and **Download trace**. The trace carries no model name,
+  URL or path.
 - **Repaint probe.** 60 forced repaints of the still view, timing the CPU
   inside `renderer.render` and the GPU up to a WebGL2 fence. Triangles and
   draw calls are summed per frame. This is what showed big models are
   GPU-bound (§5a).
-- **`/spike/offscreen/` replay page.**
+- **`/spike/offscreen/` replay page** (`tools/spikes/offscreen/`, its
+  `index.html` included; `noindex`; built only with `MEASUREMENT_TOOLS`).
   - It replays a trace's non-render blocks (load window, between Marks,
     whole trace, or custom) or a synthetic pump, against one `BatchedMesh`
     scene rendered on main or in a worker (runs R0–I2), with selectable
@@ -689,8 +692,8 @@ What's there:
   - **Copy JSON** gives the result.
 - **Gaps worth closing before the next use:**
   - Production builds are minified, so trace attribution names `r` in
-    `index.js`. Building the spike branch with esbuild `keepNames` would
-    name the real functions.
+    `index.js`. A preview built with esbuild `keepNames` would name the
+    real functions.
   - Nothing yet measures N real Share sessions on one page. That needs a
     harness of N same-origin iframes (§5a), for the multi-session decision.
 

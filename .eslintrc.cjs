@@ -49,6 +49,16 @@ module.exports = {
         'no-empty-function': ['error', {allow: ['arrowFunctions']}],
       },
     },
+    // Measurement tools (`tools/spikes/**`, open-205 §9.1; offscreen-rendering.md
+    // §5b): scene constants and percentiles read better inline than as named
+    // constants, and the code is a standalone page, built only with
+    // MEASUREMENT_TOOLS (tools/esbuild/vars.prod.js), never part of the app.
+    {
+      files: ['tools/spikes/**/*.js'],
+      rules: {
+        'no-magic-numbers': 'off',
+      },
+    },
     // Vendored IfcContext family (`src/viewer/three/context/**`) — code
     // copied from `web-ifc-viewer/dist/components/context/*` in slice
     // 5d.3. Kept intentionally close to the upstream shape so future
