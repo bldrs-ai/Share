@@ -131,6 +131,44 @@ describeMobileAndDesktop('viewer/residency/motionResidency', () => {
 })
 
 
+describeMobileAndDesktop('viewer/residency/motionResidency with render on demand off', () => {
+  beforeEach(async ({page}) => {
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+    // Render on demand's own kill switch (and prod rollback): the loop paints
+    // every frame. Motion residency doesn't depend on it (motionResidencyMode
+    // .js#isMotionResidencyOn): the paint observers and the per-frame hook it
+    // runs on fire either way, so rolling one back must not break the other.
+    await openModel(page, '?feature=disableRenderOnDemand')
+  })
+
+
+  test('a manual percent still draws less while dragging and everything again at rest', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+    const before = await stillFrame(page)
+    await openDisplayMenu(page)
+    await page.getByTestId('motion-residency-auto').locator('input').uncheck()
+    const slider = page.getByTestId('motion-residency-slider').getByRole('slider')
+    await slider.press('Home')
+    for (let i = 0; i < MANUAL_PERCENT; i++) {
+      await slider.press('ArrowRight')
+    }
+    await expect(slider).toHaveAttribute('aria-valuenow', `${MANUAL_PERCENT}`)
+    await closeDisplayMenu(page)
+
+    const moving = inMotion(await dragCamera(page))
+    expect(moving.length, 'the drag painted while the camera moved').toBeGreaterThan(0)
+    expect(Math.max(...moving.map((f) => f.visible)),
+      'every frame painted while the camera moved showed fewer instances than the still view')
+      .toBeLessThan(before.visible)
+    const after = await settledFrame(page)
+    expect(after.triangles, 'at rest the full set is drawn again').toBe(before.triangles)
+    expect(after.visible).toBe(before.visible)
+  })
+})
+
+
 describeMobileAndDesktop('viewer/residency/motionResidency kill switch', () => {
   beforeEach(async ({page}) => {
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
@@ -252,7 +290,7 @@ async function installTriangleRecorder(page: Page) {
     // hover, not the resident set, so it isn't counted.
     const OVERLAY_LAYER_MASK = (1 << 31) >>> 0
     // What visibleInstances() below reads, once per painted frame. The
-    // sample model has a few hundred instances, so the walk is cheap.
+    // sample model has a handful of instances, so the walk is cheap.
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const countVisible = () => {
       const model = win.store?.getState().model as any
