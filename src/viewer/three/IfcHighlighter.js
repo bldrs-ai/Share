@@ -121,6 +121,9 @@ export function newUpdateFunction(context, composer) {
     if (demand !== null && !demand.shouldRender()) {
       return false
     }
+    // Paint observers (RenderDemand#observePaints: the motion-residency GPU
+    // timer) bracket the draw's GL commands.
+    demand?.paintStarting?.()
     const startMs = performance.now()
     // runPaint: what three mutates while drawing (BatchedMesh's indirect
     // texture) must not count as a change that asks for the next paint.

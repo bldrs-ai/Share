@@ -198,12 +198,19 @@ describe('resolvedAppearance', () => {
         color: ColorMode.SOURCE,
         shading: ShadingMode.WIREFRAME,
         residency: {percent: 40, metric: ResidencyMetric.MEMORY},
+        motionResidency: {mode: 'manual', percent: 25, metric: ResidencyMetric.DISTANCE},
       },
     }])).toEqual({
       color: ColorMode.SOURCE,
       shading: ShadingMode.WIREFRAME,
       residency: {percent: 40, metric: ResidencyMetric.MEMORY},
+      motionResidency: {mode: 'manual', percent: 25, metric: ResidencyMetric.DISTANCE},
     })
+  })
+
+  it('fills the motion axis with Auto + occupancy when nothing sets it', () => {
+    expect(resolvedAppearance(null, []).motionResidency)
+      .toEqual({mode: 'auto', percent: 100, metric: ResidencyMetric.OCCUPANCY})
   })
 
   it('reports the default for an axis the model offers no choice on', () => {

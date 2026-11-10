@@ -1,4 +1,5 @@
 import {ColorMode, activeColorMode, hasAutoColor, setColorMode} from './colorMode'
+import {motionResidencyOrDefault, setMotionResidencyMode} from './motionResidencyMode'
 import {residencyOrDefault, setResidencyMode} from './residencyMode'
 import {ShadingMode, activeShadingMode, modelSupportsShading, setShadingMode} from './shadingMode'
 import {resolveAppearance} from './overrideStack'
@@ -8,9 +9,11 @@ import {resolveAppearance} from './overrideStack'
  * DisplayController — turns the resolved override stack (overrideStack.js)
  * into scene mutations on a loaded model.
  *
- * Three model-scope axes are wired: **color** (Auto/Source), **shading**
- * (Shaded/Wireframe), and **residency** (percent + priority metric), each
- * delegating to its own module. Scoped application (S5) adds per-scope
+ * Four model-scope axes are wired: **color** (Auto/Source), **shading**
+ * (Shaded/Wireframe), **residency** (percent + priority metric, at rest) and
+ * **motionResidency** (the same while the camera moves, plus Auto; B3), each
+ * delegating to its own module. Both residency axes are applied through
+ * their own entry points (below), for the reason given next. Scoped application (S5) adds per-scope
  * targets here; the stack + resolver already carry them, so that's a new
  * per-target pass, not a new state mechanism.
  *
@@ -148,6 +151,31 @@ export function applyResidencyOverrides(controller, overrides) {
 
 
 /**
+ * The model-scope camera-motion residency (B3) the stack resolves to, filled
+ * out with the defaults (Auto, occupancy). Like `resolvedResidency`, there is
+ * no scene state to fall back to.
+ *
+ * @param {Array<{scope: object, appearance: object}>} overrides
+ * @return {{mode: string, percent: number, metric: string}}
+ */
+export function resolvedMotionResidency(overrides) {
+  return motionResidencyOrDefault(resolveAppearance(overrides, {}).motionResidency)
+}
+
+
+/**
+ * Apply the model-scope motion residency to a MotionResidency driver. No-ops
+ * without one (no batched instances, or `motionResidency` off).
+ *
+ * @param {object} driver a MotionResidency, or null
+ * @param {Array<{scope: object, appearance: object}>} overrides
+ */
+export function applyMotionResidencyOverrides(driver, overrides) {
+  setMotionResidencyMode(driver, resolveAppearance(overrides, {}).motionResidency)
+}
+
+
+/**
  * The whole model-scope appearance — every axis at once, for the callers that
  * need the complete picture rather than one axis: the `#d:` serializer and
  * the Share dialog's "Display settings" toggle.
@@ -166,7 +194,8 @@ export function applyResidencyOverrides(controller, overrides) {
  *
  * @param {object} model BatchedMesh or Group, may be null
  * @param {Array<{scope: object, appearance: object}>} overrides
- * @return {{color: string, shading: string, residency: object}}
+ * @return {{color: string, shading: string, residency: object,
+ *   motionResidency: object}}
  */
 export function resolvedAppearance(model, overrides) {
   return {
@@ -177,5 +206,6 @@ export function resolvedAppearance(model, overrides) {
       resolvedShadingMode(model, overrides) :
       ShadingMode.SHADED,
     residency: resolvedResidency(overrides),
+    motionResidency: resolvedMotionResidency(overrides),
   }
 }
