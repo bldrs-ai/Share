@@ -274,6 +274,59 @@ describe('ResidencyControl residency section', () => {
     expect(window.location.hash).toContain('color=src')
   })
 
+  it('ranks occupancy from the viewer\'s camera, so a small part near the eye outranks a large far one', async () => {
+    // The one case where occupancy and plain size disagree: instance 0 is the
+    // smallest (r=1) but 2 from the eye; 1 and 2 (r=2, r=3) are 100 away. By
+    // angular size 0 is the largest on screen (0.5 vs 0.02 / 0.03). With no
+    // camera the metric falls back to radius alone and keeps 2 instead, which
+    // is what shipped while this read `context.ifcCamera` — a field the
+    // ThreeContext facade doesn't have.
+    const model = residencyModel()
+    const offsets = [new Vector3(0, 0, 2), new Vector3(0, 0, 100), new Vector3(0, 0, -100)]
+    model.getMatrixAt = (index, matrix) => matrix.makeTranslation(offsets[index])
+    const camera = {position: new Vector3(0, 0, 0)}
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setViewer({context: {getCamera: () => camera}})
+    })
+    try {
+      // 34% of 3 instances rounds to one kept: the top of the ranking.
+      window.location.hash = '#d:res=34'
+      await renderWithModel(model)
+      expect(model.setVisibleAt).not.toHaveBeenCalledWith(0, false)
+      expect(model.setVisibleAt).toHaveBeenCalledWith(1, false)
+      expect(model.setVisibleAt).toHaveBeenCalledWith(2, false)
+    } finally {
+      await act(() => {
+        result.current.setViewer(null)
+      })
+    }
+  })
+
+  it('treats a disposed viewer\'s camera as none, instead of throwing out of a re-rank', async () => {
+    // A disposed ThreeContext throws from getCamera (its legacy context is
+    // gone); the store can still hold it until the next setViewer.
+    const model = residencyModel()
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setViewer({context: {getCamera: () => {
+        throw new TypeError('disposed')
+      }}})
+    })
+    try {
+      window.location.hash = '#d:res=34'
+      await renderWithModel(model)
+      // Ranked by size, as with no camera: the largest (2) is kept.
+      expect(model.setVisibleAt).toHaveBeenCalledWith(0, false)
+      expect(model.setVisibleAt).toHaveBeenCalledWith(1, false)
+      expect(model.setVisibleAt).not.toHaveBeenCalledWith(2, false)
+    } finally {
+      await act(() => {
+        result.current.setViewer(null)
+      })
+    }
+  })
+
   it('exposes the metric through the store, not local state', async () => {
     const {getByTestId} = await renderWithModel(residencyModel())
     fireEvent.click(getByTestId('control-button-residency'))
@@ -282,5 +335,169 @@ describe('ResidencyControl residency section', () => {
     const {result} = renderHook(() => useStore((state) => state.displayOverrides))
     expect(result.current.model.appearance.residency)
       .toEqual({percent: 100, metric: ResidencyMetric.DISTANCE})
+  })
+})
+
+
+describe('ResidencyControl while-moving section (motionResidency)', () => {
+  /**
+   * A viewer context double: the seams MotionResidency attaches to.
+   *
+   * @return {object} viewer double with `context`
+   */
+  function viewerDouble() {
+    const listeners = []
+    return {
+      context: {
+        getCameraControls: () => ({
+          addEventListener: (type, fn) => listeners.push([type, fn]),
+          removeEventListener: () => undefined,
+        }),
+        onFrame: () => () => undefined,
+        getRenderDemand: () => ({observePaints: () => () => undefined}),
+        getRenderer: () => null,
+      },
+      listeners,
+    }
+  }
+
+  /**
+   * @param {boolean} flag motionResidency on or off
+   * @return {Promise<object>} render result
+   */
+  async function renderWithViewer(flag) {
+    mockIsFeatureEnabled.mockImplementation((name) => (name === 'motionResidency' ? flag : false))
+    const viewer = viewerDouble()
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setViewer(viewer)
+    })
+    const rendered = await renderWithModel(residencyModel())
+    return {...rendered, viewer}
+  }
+
+  afterEach(async () => {
+    mockIsFeatureEnabled.mockReset()
+    window.location.hash = ''
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setModel(null)
+      result.current.setViewer(null)
+      result.current.resetDisplayOverrides()
+    })
+  })
+
+  it('is absent with the flag off, and the at-rest section keeps its title', async () => {
+    const {getByTestId, queryByTestId, viewer} = await renderWithViewer(false)
+    fireEvent.click(getByTestId('control-button-residency'))
+    expect(queryByTestId('motion-residency-slider')).toBeNull()
+    expect(getByTestId('residency-slider')).toBeTruthy()
+    expect(viewer.listeners).toEqual([])
+  })
+
+  it('defaults to Auto with the slider disabled, and listens to the camera', async () => {
+    const {getByTestId, getByText, viewer} = await renderWithViewer(true)
+    fireEvent.click(getByTestId('control-button-residency'))
+    expect(getByText('Residency at rest: 100%')).toBeTruthy()
+    expect(getByTestId('motion-residency-label').textContent).toBe('While moving: Auto')
+    expect(getByTestId('motion-residency-auto').querySelector('input').checked).toBe(true)
+    expect(getByTestId('motion-residency-slider').querySelector('input').disabled).toBe(true)
+    expect(viewer.listeners.map(([type]) => type)).toContain('update')
+    // Untouched, it writes no token.
+    expect(window.location.hash).not.toContain('d:')
+  })
+
+  it('persists a manual choice and its metric to the store and the #d: token', async () => {
+    const {getByTestId} = await renderWithViewer(true)
+    fireEvent.click(getByTestId('control-button-residency'))
+    fireEvent.click(getByTestId('motion-residency-auto').querySelector('input'))
+    fireEvent.click(getByTestId('motion-residency-metric-memory').querySelector('input'))
+    expect(window.location.hash).toContain('mres=100.memory')
+    const {result} = renderHook(() => useStore((state) => state.displayOverrides))
+    expect(result.current.model.appearance.motionResidency)
+      .toEqual({mode: 'manual', percent: 100, metric: ResidencyMetric.MEMORY})
+    expect(getByTestId('motion-residency-slider').querySelector('input').disabled).toBe(false)
+  })
+
+  it('re-ranks the motion distance ordering when the selection changes', async () => {
+    jest.useFakeTimers()
+    try {
+      // Three instances 10 apart on X; the double's `getMatrixAt` places them.
+      const model = residencyModel()
+      model.getMatrixAt = (index, matrix) => matrix.makeTranslation(index * 10, 0, 0)
+      const {getByTestId, viewer} = await renderWithViewer(true)
+      await act(() => {
+        useStore.getState().setModel(model)
+      })
+      fireEvent.click(getByTestId('control-button-residency'))
+      fireEvent.click(getByTestId('motion-residency-auto').querySelector('input'))
+      fireEvent.click(getByTestId('motion-residency-metric-distance').querySelector('input'))
+      // A manual 34%: one of three instances kept while moving.
+      await act(() => {
+        useStore.getState().setDisplayOverride({kind: 'model'},
+          {motionResidency: {mode: 'manual', percent: 34, metric: ResidencyMetric.DISTANCE}})
+      })
+      const kept = async (expressID) => {
+        await act(() => {
+          useStore.getState().setSelectedElement({expressID})
+        })
+        // The prepared ordering is rebuilt in idle time.
+        await act(() => {
+          jest.advanceTimersByTime(1000)
+        })
+        model.setVisibleAt.mockClear()
+        const update = viewer.listeners.filter(([type]) => type === 'update').at(-1)[1]
+        update()
+        const shown = new Set([0, 1, 2])
+        for (const [index, visible] of model.setVisibleAt.mock.calls) {
+          if (!visible) {
+            shown.delete(index)
+          }
+        }
+        return [...shown]
+      }
+      // Instance i has parent instanceParents[i] = [11, 12, 20][i].
+      expect(await kept(11)).toEqual([0])
+      // Let the gesture rest: no frames run in this double, so end it by
+      // turning the setting over (a change mid-gesture restores).
+      await act(() => {
+        useStore.getState().setDisplayOverride({kind: 'model'},
+          {motionResidency: {mode: 'manual', percent: 33, metric: ResidencyMetric.DISTANCE}})
+      })
+      expect(await kept(20)).toEqual([2])
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('re-ranks the at-rest distance ordering on a deselect too (B2 gap)', async () => {
+    // Before #2130 a deselect left the at-rest set ranked by the old
+    // selection; with no selection DISTANCE falls back to occupancy (the
+    // biggest part, instance 2).
+    window.location.hash = '#d:res=34.distance'
+    const model = residencyModel()
+    model.getMatrixAt = (index, matrix) => matrix.makeTranslation(index * 10, 0, 0)
+    await renderWithViewer(false)
+    await act(() => {
+      useStore.getState().setModel(model)
+    })
+    const shownAfter = async (selected) => {
+      model.setVisibleAt.mockClear()
+      await act(() => {
+        useStore.getState().setSelectedElement(selected)
+      })
+      return model.setVisibleAt.mock.calls.filter(([, visible]) => visible).map(([index]) => index)
+    }
+    expect(await shownAfter({expressID: 11})).toEqual([0])
+    expect(await shownAfter(null)).toEqual([2])
+  })
+
+  it('restores a manual percent from a #d: permalink on cold load', async () => {
+    window.location.hash = '#d:mres=30.distance'
+    const {getByTestId} = await renderWithViewer(true)
+    fireEvent.click(getByTestId('control-button-residency'))
+    expect(getByTestId('motion-residency-label').textContent).toBe('While moving: 30%')
+    expect(getByTestId('motion-residency-slider').querySelector('input').value).toBe('30')
+    expect(getByTestId('motion-residency-metric-distance').querySelector('input').checked).toBe(true)
   })
 })

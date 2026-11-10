@@ -16,6 +16,7 @@ import {NavigationModes} from './base-types'
 import {IfcMouse} from './mouse'
 import RenderDemand from '../renderDemand'
 import {attachSessionNets, createSceneProbe, installSceneHooks} from '../renderDemandHooks'
+import {isHoverOverlayOn} from '../hoverOverlayMode'
 import {isRenderOnDemandOn} from '../renderOnDemandMode'
 import {reportRenderMode} from '../reportRenderMode'
 
@@ -100,7 +101,10 @@ export class IfcContext {
         controls: this.ifcCamera.cameraControls,
         probe: createSceneProbe(this),
       })
-      const detachNets = attachSessionNets(this.renderDemand, this.renderer.renderer.domElement)
+      // With the hover overlay a canvas pointer move asks for its own paint
+      // instead of opening a settle window (attachSessionNets has why).
+      const detachNets = attachSessionNets(this.renderDemand, this.renderer.renderer.domElement,
+        {pointerMoveSettles: !isHoverOverlayOn()})
       this.endRenderSession = () => {
         detachNets()
         stopSession()

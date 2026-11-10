@@ -12,6 +12,12 @@ import {
   residencyOrDefault,
 } from '../../viewer/display/residencyMode'
 import {ShadingMode} from '../../viewer/display/shadingMode'
+import {
+  MOTION_RESIDENCY_DEFAULT,
+  isDefaultMotionResidency,
+  motionResidencyOrDefault,
+} from '../../viewer/display/motionResidencyMode'
+import {MotionResidencyMode} from '../../viewer/residency/MotionResidency'
 import {ResidencyMetric} from '../../viewer/residency/ResidencyController'
 
 
@@ -29,6 +35,8 @@ import {ResidencyMetric} from '../../viewer/residency/ResidencyController'
  *   #d:res=40.memory       40% resident, memory-budget priority
  *   #d:res=100.distance    fully resident, distance priority
  *   #d:color=src,wire=1,res=40   all three
+ *   #d:mres=25             25% resident while the camera moves (B3)
+ *   #d:mres=auto.memory    Auto while moving, memory-budget priority
  *
  * `res` follows §6.1's `res=<pct>[.<metric>]`: the metric is appended only
  * when it isn't the default, and spelled out (`memory`, not `m`) so parsing
@@ -49,6 +57,11 @@ import {ResidencyMetric} from '../../viewer/residency/ResidencyController'
  * found it, so a Display-menu click doesn't drop the hidden list and a hide
  * doesn't drop the colors.
  *
+ * `mres` is the camera-motion residency (motionResidencyMode.js) in the same
+ * shape: `auto` or a percent, then `.<metric>` when it isn't the default.
+ * Auto + occupancy is the default and writes nothing; under Auto the percent
+ * is not written (it is inert there).
+ *
  * FORWARD COMPAT (not yet emitted): §6.1's grammar also has scoped terms
  * (`e<id>=…`, `o<pathKey>=…`, `m<idx>=…`). They slot into the same `d:` token
  * as extra comma-separated entries when S5 (the scoped overrides) lands.
@@ -61,10 +74,13 @@ export const HASH_PREFIX_DISPLAY = 'd'
 
 // The order terms are written in, so a token reads the same whichever writer
 // touched it last. Keys a newer writer added follow these, as found.
-const TERM_ORDER = ['color', 'wire', 'res', 'hide', 'show', 'iso']
+const TERM_ORDER = ['color', 'wire', 'res', 'mres', 'hide', 'show', 'iso']
 
 // The keys `writeModelDisplayHash` owns.
-const MODEL_DISPLAY_KEYS = ['color', 'wire', 'res']
+const MODEL_DISPLAY_KEYS = ['color', 'wire', 'res', 'mres']
+
+// `mres`'s spelling of Auto.
+const MOTION_AUTO_TERM = 'auto'
 
 
 /**
@@ -121,7 +137,7 @@ export function mergeDisplayTerms(location, terms) {
  * so the next axis — opacity, `hidden` (#1250) — widens the object instead of
  * the signature.
  *
- * @param {object} [appearance] `{color?, shading?, residency?}`
+ * @param {object} [appearance] `{color?, shading?, residency?, motionResidency?}`
  * @return {object} params like `{color: 'src', wire: '1', res: '40.memory'}`
  */
 export function modelDisplayParams(appearance = {}) {
@@ -140,6 +156,11 @@ export function modelDisplayParams(appearance = {}) {
     params.res = metric === RESIDENCY_DEFAULT.metric ?
       `${percent}` :
       `${percent}.${metric}`
+  }
+  if (!isDefaultMotionResidency(appearance.motionResidency)) {
+    const {mode, percent, metric} = motionResidencyOrDefault(appearance.motionResidency)
+    const amount = mode === MotionResidencyMode.AUTO ? MOTION_AUTO_TERM : `${percent}`
+    params.mres = metric === MOTION_RESIDENCY_DEFAULT.metric ? amount : `${amount}.${metric}`
   }
   return params
 }
@@ -193,6 +214,36 @@ function readResidency(obj) {
 
 
 /**
+ * Parse the motion-residency term (`mres`) out of a `#d:` token's params,
+ * with `readResidency`'s per-half tolerance.
+ *
+ * @param {object} obj decoded token params
+ * @return {object|undefined} `{mode?, percent?, metric?}`, or undefined
+ */
+function readMotionResidency(obj) {
+  if (typeof obj.mres !== 'string') {
+    return undefined
+  }
+  const [amountPart, metricPart] = obj.mres.split('.')
+  const motion = {}
+  if (amountPart === MOTION_AUTO_TERM) {
+    motion.mode = MotionResidencyMode.AUTO
+  } else {
+    const percent = Number(amountPart)
+    if (amountPart !== '' && Number.isFinite(percent) &&
+        percent >= 0 && percent <= RESIDENCY_FULL) {
+      motion.mode = MotionResidencyMode.MANUAL
+      motion.percent = Math.round(percent)
+    }
+  }
+  if (Object.values(ResidencyMetric).includes(metricPart)) {
+    motion.metric = metricPart
+  }
+  return Object.keys(motion).length > 0 ? motion : undefined
+}
+
+
+/**
  * Parse the model-scope appearance out of the current `#d:` token. Unknown or
  * malformed values are dropped (an axis simply stays unset), so a
  * hand-edited or future-versioned token degrades to "apply what I understand"
@@ -223,6 +274,10 @@ export function readModelDisplayHash(location) {
   const residency = readResidency(obj)
   if (residency) {
     appearance.residency = residency
+  }
+  const motionResidency = readMotionResidency(obj)
+  if (motionResidency) {
+    appearance.motionResidency = motionResidency
   }
   return appearance
 }

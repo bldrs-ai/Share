@@ -1,5 +1,5 @@
 import {BatchedMesh, BufferAttribute, InterleavedBuffer, Material, Object3D, Texture} from 'three'
-import {requestBackgroundPaint} from './renderDemand'
+import {EXPENSIVE_PAINT_MS, requestBackgroundPaint} from './renderDemand'
 
 
 /**
@@ -216,14 +216,29 @@ const WINDOW_INPUT_EVENTS = ['pointerup', 'wheel', 'keydown', 'keyup', 'touchend
 /**
  * The event half of the backstops (module doc): user input anywhere on the
  * page opens a settle window; a pointer moving over the canvas does too
- * (hover, a cut plane's arrow), but not one moving over the panels; a DPR
+ * (hover, a cut plane's arrow) while paints are cheap, but not one moving
+ * over the panels; a DPR
  * change, a restored context and the tab coming back each paint.
+ *
+ * With the hover overlay on (hoverOverlayMode.js), a pointer moving over the
+ * canvas opens no settle window (`pointerMoveSettles: false`): a settle
+ * window paints in full every frame for `SETTLE_MS`, so hovering would keep
+ * redrawing the whole model and the overlay would save nothing. What a
+ * canvas pointer move changes asks for itself instead: the hover, through
+ * ShareViewer#highlightIfcItem (an overlay paint on a batched model, a full
+ * `requestPaint` on every other path), and a cut plane's arrow, through
+ * MeshClipper#setArrowColor. Those are every canvas pointer/mouse move
+ * handler in src/ that changes the picture (the others track a position or a
+ * flag: context/mouse.js, Camera/CameraControl.jsx).
  *
  * @param {object} demand the viewer's RenderDemand
  * @param {object} canvas the viewer's canvas
+ * @param {object} [options]
+ * @param {boolean} [options.pointerMoveSettles] whether a canvas pointer
+ *   move opens a settle window (default true)
  * @return {Function} removes every listener
  */
-export function attachSessionNets(demand, canvas) {
+export function attachSessionNets(demand, canvas, {pointerMoveSettles = true} = {}) {
   const soon = () => demand.invalidateSoon()
   const now = () => demand.invalidate()
   const options = {capture: true, passive: true}
@@ -237,7 +252,22 @@ export function attachSessionNets(demand, canvas) {
     }
   }
   WINDOW_INPUT_EVENTS.forEach((type) => listen(globalThis, type, soon, options))
-  listen(canvas, 'pointermove', soon, {passive: true})
+  // A pointer moving over the canvas settles only while paints are cheap,
+  // and never with the hover overlay on (`pointerMoveSettles: false`, the
+  // module doc above has why). What it changes asks for itself — the hover
+  // through the overlay's own ask or the BatchedMesh `setColorAt` hook, a cut
+  // plane's arrow through MeshClipper#setArrowColor, both in
+  // renderOnDemandSources.test.js — so the window is a backstop; on a model
+  // whose paint is expensive (EXPENSIVE_PAINT_MS) it repainted the same
+  // picture every frame of a sweep and left the GPU busy when the pointer
+  // stopped, delaying the highlight it stopped on.
+  if (pointerMoveSettles) {
+    listen(canvas, 'pointermove', () => {
+      if (!(demand.paintCostMs?.() > EXPENSIVE_PAINT_MS)) {
+        demand.invalidateSoon()
+      }
+    }, {passive: true})
+  }
   listen(canvas, 'webglcontextrestored', now)
   listen(globalThis.document, 'visibilitychange', now)
   // matchMedia fires once per DPR change, for the DPR it was made with, so

@@ -55,6 +55,20 @@ describe('viewer/three/renderDemand', () => {
     return demand.shouldRender()
   }
 
+  it('reports a paint\'s cost to the next frame, even before that frame\'s shouldRender', () => {
+    expect(demand.paintCostMs()).toBe(0)
+    expect(demand.shouldRender()).toBe(true)
+    demand.rendered(2)
+    // In the next frame, before shouldRender measures it: the draw call plus
+    // the wait for the frame (what a per-frame component reads).
+    clock += 40
+    expect(demand.paintCostMs()).toBe(42)
+    demand.shouldRender()
+    clock += 1000
+    // Measured once; a long idle afterwards doesn't grow it.
+    expect(demand.paintCostMs()).toBe(42)
+  })
+
   it('paints every frame outside a load', () => {
     demand.rendered(50)
     expect(demand.shouldRender()).toBe(true)
@@ -227,7 +241,7 @@ describe('viewer/three/renderDemand', () => {
     paint(3)
     demand.invalidate()
     paint(4)
-    expect(demand.stats).toEqual({paints: 2, paintMs: 7, frames: 4})
+    expect(demand.stats).toEqual({paints: 2, paintMs: 7, frames: 4, overlayPaints: 0})
   })
 })
 
@@ -428,5 +442,40 @@ describe('viewer/three/renderDemand session', () => {
     expect(demand.isOnDemand).toBe(false)
     expect(controls.listeners.update.size).toBe(0)
     expect(paintsIn(10)).toBe(10)
+  })
+})
+
+
+describe('RenderDemand paint observers', () => {
+  it('brackets each paint, in order, and stops on unsubscribe', () => {
+    const demand = new RenderDemand({now: () => 0})
+    const calls = []
+    const stop = demand.observePaints({
+      beforePaint: () => calls.push('before'),
+      afterPaint: (costMs) => calls.push(`after ${costMs}`),
+    })
+    demand.paintStarting()
+    demand.rendered(3)
+    expect(calls).toEqual(['before', 'after 3'])
+    stop()
+    demand.paintStarting()
+    demand.rendered(3)
+    expect(calls).toHaveLength(2)
+    demand.dispose()
+  })
+
+  it('keeps painting when an observer throws', () => {
+    const demand = new RenderDemand({now: () => 0})
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const after = jest.fn()
+    demand.observePaints({afterPaint: () => {
+      throw new Error('broken observer')
+    }})
+    demand.observePaints({afterPaint: after})
+    expect(() => demand.rendered(1)).not.toThrow()
+    expect(after).toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith('[renderDemand] paint observer failed:', expect.any(Error))
+    warn.mockRestore()
+    demand.dispose()
   })
 })

@@ -3,7 +3,8 @@
  * (design/new/model-display-controls.md §2).
  *
  * A display override is `{scope, appearance}`: an appearance decision
- * (color / shading / opacity / hidden / residency) applied to a scope (the
+ * (color / shading / opacity / hidden / residency / motionResidency) applied
+ * to a scope (the
  * whole model, a NavTree sub-tree, a leaf element/occurrence, or one mesh).
  * Overrides are kept keyed by scope — one entry per scope, so setting a
  * scope's appearance merges rather than stacking duplicates — and resolved
@@ -32,7 +33,7 @@ const RANK = Object.freeze(Object.fromEntries(SCOPE_KINDS.map((k, i) => [k, i]))
 
 /** Appearance axes an override may carry. Each resolves independently. */
 export const APPEARANCE_AXES = Object.freeze(
-  ['color', 'shading', 'opacity', 'hidden', 'residency'])
+  ['color', 'shading', 'opacity', 'hidden', 'residency', 'motionResidency'])
 
 
 /**

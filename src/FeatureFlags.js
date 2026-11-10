@@ -216,6 +216,23 @@ export const flags = [
   // per-session A/B (the before/after in that module's PR was measured with
   // it), and `isActive: true` here is the prod rollback.
   {name: 'disableInstanceBvh', isActive: false},
+  // OFF-switch for the frame-aligned hover pick (viewer/hoverPick.js
+  // #createFrameHoverPicker): with it on, hover picks in the mousemove
+  // handler at most every 33 ms with a setTimeout trailing pick
+  // (#createTimerHoverPicker), as #2127 shipped. Same inverted shape:
+  // `?feature=disableFrameHover` is the per-session A/B for a hover-lag
+  // report, and `isActive: true` here is the prod rollback.
+  {name: 'disableFrameHover', isActive: false},
+  // OFF-switch for the hover overlay (viewer/three/hoverOverlay.js), on by
+  // default since #2129: on a batched model a hover change presents the last
+  // full paint's colour + depth and draws only the hovered instance(s) on
+  // top, instead of recolouring the batch and redrawing the whole model. Same
+  // inverted shape as the switches above: `?feature=disableHoverOverlay` is
+  // the per-session way back to the recolour (an A/B, or a hover that looks
+  // wrong), and `isActive: true` here is the PROD ROLLBACK. The overlay only
+  // runs while the viewer paints on demand; hoverOverlayMode.js is the one
+  // predicate. DESIGN.md §"Render loop & perf monitor", "Overlay paints".
+  {name: 'disableHoverOverlay', isActive: false},
   // Kill switch for the engine worker's OPFS sync access handle
   // (engine-worker.md §7 step 4): read the source through the Blob store
   // instead, as on the main thread. `?feature=` can only turn flags on, so
@@ -272,6 +289,17 @@ export const flags = [
   // both of which now run in the default configuration.
   // See design/new/model-display-controls.md §7.
   {name: 'displayControls', isActive: true},
+  // Adaptive residency during camera motion (B3 of
+  // design/new/demand-tiled-rendering.md; viewer/residency/MotionResidency.js):
+  // while the camera moves, the Display menu's residency controller holds a
+  // smaller set — Auto (the default) picks it from measured GPU frame time
+  // against the display's frame budget, or a manual percent — and the camera
+  // coming to rest restores the at-rest residency with a full-detail paint.
+  // Gates the menu's "While moving" section and the driver behind it; off,
+  // the viewer is exactly as before (no camera listener, no timer). Default
+  // OFF for the owner's A/B on a real GPU: SwiftShader, where CI runs,
+  // cannot say whether Auto's budget is the right one.
+  {name: 'motionResidency', isActive: false},
   // Batched-native GLB cache artifact (view-140 S9 / viewer-replacement
   // §3b.v): the writer serializes the batched model via
   // EXT_mesh_gpu_instancing + BLDRS_instance_tables instead of the merged
