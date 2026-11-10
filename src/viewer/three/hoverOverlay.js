@@ -5,7 +5,8 @@ import {PaintKind, requestOverlayPaint, requestPaint} from './renderDemand'
 
 
 /**
- * Hover highlight as an overlay on a cached frame (`?feature=hoverOverlay`,
+ * Hover highlight as an overlay on a cached frame (on by default since #2129;
+ * `?feature=disableHoverOverlay` and the prod rollback turn it off,
  * hoverOverlayMode.js decides).
  *
  * **Why.** On a batched model the hover recolours the hovered instance in
@@ -415,6 +416,29 @@ export function blitColorAndDepth(renderer, source, destination) {
 
 
 /**
+ * Throw unless GL says the cache's framebuffer is complete (see
+ * `HoverOverlay#compose_`). WebGL2 makes everything the cache uses core
+ * (depth textures, RGBA8 and sRGB8_ALPHA8 colour, `blitFramebuffer` with the
+ * depth bit), and the composer's own stable-depth blit (postprocessing's
+ * `EffectComposer#blitDepthBuffer`, run after every RenderPass) already
+ * depends on the same depth blit in every browser, so this is a guard
+ * against a driver surprise rather than an expected path.
+ *
+ * @param {object} renderer WebGLRenderer
+ * @param {object} target the cache target, already set up by a copy into it
+ */
+export function checkCacheComplete(renderer, target) {
+  const gl = renderer.getContext()
+  renderer.setRenderTarget(target)
+  const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER)
+  renderer.setRenderTarget(null)
+  if (status !== gl.FRAMEBUFFER_COMPLETE) {
+    throw new Error(`cache framebuffer incomplete: status ${status}`)
+  }
+}
+
+
+/**
  * A render target `blitColorAndDepth` can copy `input` into and back: same
  * size, colour type and colour space (so the internal formats match, which a
  * blit needs), and a depth texture of the same type and format, or a depth
@@ -490,11 +514,14 @@ export default class HoverOverlay {
    * @param {Function} [options.copy] `blitColorAndDepth`; tests pass a stand-in
    * @param {Function} [options.draw] `drawInstances`; tests pass a stand-in
    * @param {Function} [options.makeTarget] `makeCacheTarget`; tests pass a stand-in
+   * @param {Function} [options.checkCache] `checkCacheComplete`; tests pass a stand-in
    */
   constructor(composer, {canvas = null, copy = blitColorAndDepth, draw = drawInstances,
-    makeTarget = makeCacheTarget} = {}) {
+    makeTarget = makeCacheTarget, checkCache = checkCacheComplete} = {}) {
     this.composer = composer
     this.copy = copy
+    this.checkCache = checkCache
+    this.isCacheChecked = false
     this.draw = draw
     this.makeTarget = makeTarget
     this.enabled = true
@@ -634,6 +661,17 @@ export default class HoverOverlay {
       } else {
         this.ensureCache_(input)
         this.copy(renderer, input, this.cache)
+        if (!this.isCacheChecked) {
+          // Once per cache target: a blit into a framebuffer GL won't
+          // complete raises no exception, only a GL error nobody reads, and
+          // every overlay frame would then show garbage. Asked once, after
+          // the first copy has made the framebuffer, so the cost is one
+          // query per target, not per frame.
+          stage = 'incomplete'
+          this.checkCache(renderer, this.cache)
+          this.isCacheChecked = true
+          stage = 'capture'
+        }
         this.fingerprint.record(this.renderPass.camera, input)
         this.hasBase = true
       }
@@ -654,6 +692,7 @@ export default class HoverOverlay {
     }
     if (this.cache === null) {
       this.cache = this.makeTarget(input)
+      this.isCacheChecked = false
     }
   }
 
@@ -690,7 +729,8 @@ export default class HoverOverlay {
    * to is the shipped behaviour, so nothing is broken for the user beyond a
    * frame, and the count is what the A/B needs.
    *
-   * @param {string} stage where it threw: 'capture', 'restore' or 'draw'
+   * @param {string} stage where it threw: 'capture', 'incomplete' (the cache's
+   *   framebuffer, `checkCacheComplete`), 'restore' or 'draw'
    * @param {Error} error
    */
   fail_(stage, error) {

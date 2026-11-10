@@ -96,7 +96,8 @@ async function canvasPoints(page: Page): Promise<{x: number, y: number}[]> {
 
 /**
  * Hover each point, as the user does, and read what the hover highlight
- * painted (`batchedHighlight`'s preselection layer).
+ * painted (the hover overlay's instances, or `batchedHighlight`'s
+ * preselection layer where the overlay fell back to the recolour).
  *
  * @param page
  * @param points
@@ -110,7 +111,13 @@ async function hoverEach(page: Page, points: {x: number, y: number}[]): Promise<
     const hovered = await page.evaluate(() => {
       /* eslint-disable @typescript-eslint/no-explicit-any */
       const parents = new Set<number>()
-      ;(window as any).store.getState().model?.traverse?.((o: any) => {
+      const store = (window as any).store.getState()
+      // The hover overlay's draw (three/hoverOverlay.js, on by default), or
+      // the recolour it falls back to: whichever is showing the hover.
+      for (const {mesh, batchIds} of store.viewer?.highlighter?.hoverOverlay?.hover?.resolve?.() ?? []) {
+        batchIds.forEach((batchId: number) => parents.add(mesh.instanceParents[batchId]))
+      }
+      store.model?.traverse?.((o: any) => {
         for (const batchId of o.userData?.batchedHighlight?.preSet ?? []) {
           parents.add(o.instanceParents[batchId])
         }

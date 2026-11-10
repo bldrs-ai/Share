@@ -16,7 +16,7 @@ export default class IfcHighlighter {
   highlightedMeshes = null
   _selectionOutlineEffect = null
   // The hover overlay (hoverOverlay.js), or null when hover recolours the
-  // batch as before: `?feature=hoverOverlay` off, render on demand off
+  // batch as before: `disableHoverOverlay` on, render on demand off
   // (hoverOverlayMode.js), or no renderer (the Jest context mock).
   hoverOverlay = null
 

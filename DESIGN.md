@@ -195,15 +195,17 @@ frame, with the last on-demand paint matching a forced fresh one; its
 painting. The E2E `captureRenderedFrame` asks for its own paint, so it works
 either way.
 
-**Overlay paints (`?feature=hoverOverlay`, default off).** On a batched
+**Overlay paints (the hover overlay, on by default since #2129; off with
+`?feature=disableHoverOverlay`, prod rollback `disableHoverOverlay:
+isActive: true`).** On a batched
 model a hover change used to recolour the hovered instance in place
 (`batchedHighlight.js`), which the hooks turn into a full paint: the whole
 model redrawn for one element's colour. Measured on an M2 Air (a repaint
 probe forcing 60 repaints of a still view; GPU time to a WebGL2 fence after
 the draw): Momentum (72 k triangles) 9.2 ms GPU p50, of which ~9 ms is the
 screen-size floor at DPR 2; Seestrasse (1.06 M) 21.7 ms; PSB (12.0 M)
-47 ms, p95 106 ms, so on PSB the hover landed about three frames late. With
-the flag on, `viewer/three/hoverOverlay.js` keeps a copy of the scene's
+47 ms, p95 106 ms, so on PSB the hover landed about three frames late.
+`viewer/three/hoverOverlay.js` keeps a copy of the scene's
 colour and depth as the RenderPass left them at every full paint, and a
 hover change asks for a third kind of paint, `requestOverlayPaint()`
 (`RenderDemand#frameKind` returns `PaintKind.OVERLAY`): the frame copies
@@ -236,16 +238,20 @@ capture yet, after a resize (`setSize` drops the cache) or a context loss,
 from a multisampled buffer, or when the camera pose, projection or buffer
 size differ from the capture's. `hoverOverlay.test.js` has one test per
 source; `renderOnDemandSources.test.js` holds the overlay-only asks to the
-one file allowed to make them. With the flag on, a canvas `pointermove` no
+one file allowed to make them. With the overlay on, a canvas `pointermove` no
 longer opens a settle window (it would repaint in full for 200 ms after
 every move, and the overlay would save nothing); what a canvas pointer move
 changes asks for itself instead (`ShareViewer#highlightIfcItem`, a full
 `requestPaint` on every hover path but the overlay's, and
-`MeshClipper#setArrowColor`). The flag does nothing while the viewer paints
-every frame (`hoverOverlayMode.js`). A throw in the overlay's render path
+`MeshClipper#setArrowColor`). The overlay is off while the viewer paints
+every frame (`hoverOverlayMode.js`), and off for a session with
+`?feature=disableHoverOverlay`, the first thing to try on a hover that looks
+wrong; `disableHoverOverlay: isActive: true` in FeatureFlags.js is the prod
+rollback (a static `true` beats every URL). A throw in the overlay's render path
 turns it off for the viewer's life (GA `hover_overlay_disabled {stage}`),
 repaints in full and lets the hover recolour. The cache costs one colour +
-depth target at drawing-buffer size (~25 MB at 2560×1600).
+depth target at drawing-buffer size, 6 bytes a pixel (RGBA8 + 16-bit depth):
+~25 MB at 2560×1600, ~30 MB at 2940×1676.
 
 **Rolling back.** Whether the session paints on demand is one decision,
 `viewer/three/renderOnDemandMode.js#paintEveryFrameReason`, read when the

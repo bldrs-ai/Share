@@ -11,15 +11,24 @@ const {beforeEach} = test
 
 // A real IFC of a few hundred instances, loaded as a batched model, so the
 // hover goes through ShareViewer's batched branch and the overlay draws it.
-// Copied to `__test_fixtures__/` by `yarn test-flows-build`.
-const MODEL_URL = '/share/v/p/__test_fixtures__/Momentum.ifc?feature=hoverOverlay'
+// Copied to `__test_fixtures__/` by `yarn test-flows-build`. The default URL:
+// the overlay is on by default (`disableHoverOverlay` turns it off).
+const MODEL_URL = '/share/v/p/__test_fixtures__/Momentum.ifc'
+// The hosted STEP logo: seven block occurrences of two part shapes, so a
+// hover that went by part (or product) would light more than one block.
+const STEP_URL = '/share/v/p/index.step'
+// Smaller than either form factor's viewport, for the resize leg.
+const RESIZED_VIEWPORT = {width: 360, height: 640}
+const RESTORE_AFTER_MS = 100
 const TEST_TIMEOUT_MS = 240_000
 const MODEL_TIMEOUT_MS = 120_000
 // Longer than the slowest hover interval (hoverPick.js MAX_INTERVAL_MS), so
 // any trailing pick has fired.
 const HOVER_SETTLE_MS = 600
-const GRID_COLUMNS = 5
-const GRID_ROWS = 4
+// Dense enough to land on the small STEP logo at the phone viewport; points
+// that miss the model are skipped cheaply (`findHoverPoint`).
+const GRID_COLUMNS = 8
+const GRID_ROWS = 10
 // A channel step above this is a changed pixel. The same scene from the same
 // camera on the same renderer draws the same pixels, so this only has to
 // absorb blending rounding.
@@ -141,7 +150,9 @@ async function installFrameTools(page: Page) {
       isolateHovered: (showHovered: boolean) => {
         const live = viewer.highlighter.hoverOverlay.hover.resolve()
         const keep = new Map<any, Set<number>>(live.map(({mesh, batchIds}: any) => [mesh, new Set<number>(batchIds)]))
-        const saved: Array<() => void> = []
+        // Saved by the first call only, so a second call (hovered shown,
+        // then hidden) still restores the model as it was before either.
+        const saved: Array<() => void> | null = w.__ovlRestore ? null : []
         w.store.getState().model.traverse((o: any) => {
           if (!o.isBatchedMesh) {
             return
@@ -150,13 +161,18 @@ async function installFrameTools(page: Page) {
             if (info.active) {
               const was = info.visible
               o.setVisibleAt(id, showHovered && keep.get(o)?.has(id) === true)
-              saved.push(() => o.setVisibleAt(id, was))
+              saved?.push(() => o.setVisibleAt(id, was))
             }
           })
         })
-        w.__ovlRestore = () => saved.forEach((undo) => undo())
+        if (saved !== null) {
+          w.__ovlRestore = () => saved.forEach((undo) => undo())
+        }
       },
-      restore: () => w.__ovlRestore?.(),
+      restore: () => {
+        w.__ovlRestore?.()
+        w.__ovlRestore = null
+      },
       // Mask `name` = pixels set in mask `a` and not in mask `b`.
       andNot: (name: string, a: string, b: string) => {
         masks[name] = masks[a].map((v: number, p: number) => (v && !masks[b][p] ? 1 : 0))
@@ -240,8 +256,8 @@ async function canvasPoints(page: Page): Promise<{x: number, y: number}[]> {
  *
  * @param page
  */
-async function openModel(page: Page) {
-  await page.goto(MODEL_URL)
+async function openModel(page: Page, url: string = MODEL_URL) {
+  await page.goto(url)
   await waitForModelReady(page, MODEL_TIMEOUT_MS)
   await expect.poll(() => page.evaluate(() => {
     const w = window as any
@@ -286,6 +302,15 @@ async function hoverAndCatch(page: Page, point: {x: number, y: number}, name: st
 async function findHoverPoint(page: Page,
   accept: (p: {x: number, y: number}) => Promise<boolean> = () => Promise.resolve(true)) {
   for (const point of await canvasPoints(page)) {
+    // Skip a point whose ray meets no batch, without the full capture dance.
+    // Read a pixel beside it, so the hover's own move below is a real move
+    // (the picker skips a pointer that hasn't moved).
+    await page.mouse.move(point.x - 1, point.y)
+    const isOnBatch = await page.evaluate(() =>
+      (window as any).store.getState().viewer.context.castRayIfc()?.object?.isBatchedMesh === true)
+    if (!isOnBatch) {
+      continue
+    }
     await page.evaluate(() => (window as any).__ovl.clearHover())
     await page.waitForTimeout(HOVER_SETTLE_MS)
     await nextFrame(page, 'base', 'full')
@@ -299,7 +324,23 @@ async function findHoverPoint(page: Page,
 
 
 /**
- * The hover overlay (viewer/three/hoverOverlay.js, `?feature=hoverOverlay`):
+ * Hover somewhere the overlay draws, and check the frame the hover painted
+ * was an overlay frame that matches a full repaint of the same state.
+ *
+ * @param page
+ */
+async function expectOverlayHoverMatchesFull(page: Page) {
+  const {kind} = await findHoverPoint(page)
+  expect(kind).toBe('overlay')
+  expect(await mask(page, 'shown', 'base', 'hover')).toBeGreaterThan(MIN_HIGHLIGHT_PIXELS)
+  expect(await nextFrame(page, 'full', 'full')).toBe('full')
+  const off = await mask(page, 'off', 'hover', 'full')
+  expect(off / await pixelCount(page)).toBeLessThanOrEqual(SAME_FRAME_PIXELS)
+}
+
+
+/**
+ * The hover overlay (viewer/three/hoverOverlay.js, on by default):
  * a hover change on a batched model is drawn on the cached frame of the last
  * full paint, not by repainting the model. The frame the user sees after a
  * hover must be the one a full repaint of the same state would draw.
@@ -339,6 +380,9 @@ describeMobileAndDesktop('viewer/three/hoverOverlay', (ff) => {
       await nextFrame(page, 'empty', 'full')
       await page.evaluate(() => (window as any).__ovl.restore())
       await nextFrame(page, 'restored', 'full')
+      // Back as it was: the restored scene, hover and all, is the hover frame.
+      expect(await mask(page, 'unrestored', 'hover', 'restored')).toBeLessThanOrEqual(
+        Math.ceil(SAME_FRAME_PIXELS * await pixelCount(page)))
       await mask(page, 'silhouette', 'alone', 'empty')
       const shown = await mask(page, 'shown', 'base', 'hover')
       occluded = await page.evaluate(() => (window as any).__ovl.both('silhouette', 'shown', true))
@@ -419,6 +463,65 @@ describeMobileAndDesktop('viewer/three/hoverOverlay', (ff) => {
       return ids.length > 0 ? ids.map(Number) : null
     }, null, {timeout: 10_000})
     expect(await handle.jsonValue()).toEqual(expect.arrayContaining(parents))
+    // Hovering the element that is now selected draws the hover over the
+    // selection colour, as the recolour did (preselection wins): an overlay
+    // frame that differs from the selected one and matches a full repaint.
+    const stillCanvas = await page.evaluate(({x, y}) =>
+      document.elementFromPoint(x, y) === document.querySelector('canvas'), point)
+    if (stillCanvas) {
+      await page.evaluate(() => (window as any).__ovl.clearHover())
+      await page.waitForTimeout(HOVER_SETTLE_MS)
+      await nextFrame(page, 'selected', 'full')
+      // A pointer move to a pixel beside it re-picks the same element (the
+      // clear reset the hover's dedup), and that pick is the frame caught.
+      expect(await hoverAndCatch(page, {x: point.x + 1, y: point.y}, 'selectedHover')).toBe('overlay')
+      expect(await mask(page, 'onSelected', 'selected', 'selectedHover')).toBeGreaterThan(MIN_HIGHLIGHT_PIXELS)
+      await nextFrame(page, 'selectedFull', 'full')
+      const off = await mask(page, 'off', 'selectedHover', 'selectedFull')
+      expect(off / await pixelCount(page)).toBeLessThanOrEqual(SAME_FRAME_PIXELS)
+    }
+  })
+
+  test('a STEP hover lights one occurrence, as an overlay that matches a full repaint', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+    await openModel(page, STEP_URL)
+    await expectOverlayHoverMatchesFull(page)
+    // One block, not every occurrence of its part shape.
+    expect((await hovered(page)).count).toBe(1)
+  })
+
+  test('after a resize, hover still composes a frame that matches a full repaint', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+    await openModel(page)
+    await expectOverlayHoverMatchesFull(page)
+    const before = await pixelCount(page)
+    await page.setViewportSize(RESIZED_VIEWPORT)
+    await expect.poll(() => pixelCount(page)).not.toBe(before)
+    await page.waitForTimeout(HOVER_SETTLE_MS)
+    await expectOverlayHoverMatchesFull(page)
+  })
+
+  test('after a WebGL context loss and restore, hover still matches a full repaint', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+    await openModel(page)
+    await expectOverlayHoverMatchesFull(page)
+    const hadBaseWhenLost = await page.evaluate((restoreAfterMs) => new Promise<boolean>((resolve) => {
+      const viewer = (window as any).store.getState().viewer
+      const canvas = viewer.context.getRenderer().domElement
+      const lose = viewer.context.getRenderer().getContext().getExtension('WEBGL_lose_context')
+      let hadBase = true
+      // Registered after the overlay's own listener, so this reads what it did.
+      canvas.addEventListener('webglcontextlost', () => {
+        hadBase = viewer.highlighter.hoverOverlay.hasBase
+        setTimeout(() => lose.restoreContext(), restoreAfterMs)
+      }, {once: true})
+      canvas.addEventListener('webglcontextrestored', () => resolve(hadBase), {once: true})
+      lose.loseContext()
+    }), RESTORE_AFTER_MS)
+    // Lost, the overlay may not compose from a cache GL threw away.
+    expect(hadBaseWhenLost).toBe(false)
+    await page.waitForTimeout(HOVER_SETTLE_MS)
+    await expectOverlayHoverMatchesFull(page)
   })
 
   if (ff.isMobile) {

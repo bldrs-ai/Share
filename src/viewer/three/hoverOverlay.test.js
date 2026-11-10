@@ -355,6 +355,7 @@ function makeOverlay(overrides = {}) {
     canvas,
     copy: (renderer, from, to) => copies.push([from, to]),
     draw: (renderer, scene, camera, target, live) => draws.push(live),
+    checkCache: () => {},
     makeTarget: (input) => {
       const target = {width: input.width, height: input.height, dispose: jest.fn()}
       targets.push(target)
@@ -527,6 +528,30 @@ describe('viewer/three/hoverOverlay: HoverOverlay', () => {
     overlay.clear()
     expect(demand.frameKind()).toBe(null)
     demand.dispose()
+  })
+
+  it('checks a new cache target\'s framebuffer once, and turns itself off when GL says it is incomplete', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const checks = []
+    const {overlay, composer} = makeOverlay({checkCache: (renderer, target) => {
+      checks.push(target)
+      if (checks.length === 2) {
+        throw new Error('cache framebuffer incomplete: 0x8cd6')
+      }
+    }})
+    overlay.paint(false)
+    overlay.paint(false)
+    expect(checks).toHaveLength(1)
+    expect(overlay.canCompose()).toBe(true)
+    // A resize makes a new target, which is checked again.
+    composer.inputBuffer.width = 1600
+    overlay.pass.setSize(1600, 600)
+    overlay.paint(false)
+    expect(checks).toHaveLength(2)
+    expect(overlay.enabled).toBe(false)
+    expect(overlay.canCompose()).toBe(false)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('failure in incomplete'), expect.any(Error))
+    warn.mockRestore()
   })
 
   it('turns itself off after a throw, repaints in full and lets the hover recolour', () => {

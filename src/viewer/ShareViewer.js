@@ -208,12 +208,12 @@ export class ShareViewer {
   // updates the index buffer in place rather than allocating per hover.
   _conwayPreselectionPool = null
   // Whether the batched hover is a recolour (the preselection layer) rather
-  // than the hover overlay's draw, under `?feature=hoverOverlay`: the overlay
+  // than the hover overlay's draw (three/hoverOverlay.js, on by default): the overlay
   // falls back to recolouring a hover it can't draw, and the next hover it
   // can draw must take that recolour off first.
   _isHoverRecoloured = false
   // Whether the hover showing was painted by a full paint `_askForHoverPaint`
-  // asked for, so taking it off needs one too (`?feature=hoverOverlay` only).
+  // asked for, so taking it off needs one too (with the hover overlay only).
   _isHoverPaintedInFull = false
   // The `?feature=look` lighting/material tuning GUI (LightingGui). Null
   // unless the flag is set; lazily code-split in (see `_initLookGui`).
@@ -1730,7 +1730,8 @@ export class ShareViewer {
         const preMat = this.selector.getPreselectionMaterial()
         const byOccurrence = hovered.occurrenceId !== null
         const ids = byOccurrence ? [hovered.occurrenceId] : [id]
-        // `?feature=hoverOverlay` (three/hoverOverlay.js): draw the hover on
+        // The hover overlay (three/hoverOverlay.js, on by default; off with
+        // `?feature=disableHoverOverlay` or the prod rollback): draw the hover on
         // the cached frame rather than recolour the batch, which would repaint
         // the whole model. The overlay asks for its own (overlay-only) paint.
         // Where it can't draw this hover (a transparent batch, …) it says so

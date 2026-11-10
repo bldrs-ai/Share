@@ -210,15 +210,16 @@ export const flags = [
   // per-session A/B (the before/after in that module's PR was measured with
   // it), and `isActive: true` here is the prod rollback.
   {name: 'disableInstanceBvh', isActive: false},
-  // Hover highlight as an overlay on a cached frame (viewer/three/hoverOverlay.js):
-  // on a batched model, a hover change presents the last full paint's colour
-  // + depth and draws only the hovered instance(s) on top, instead of
-  // recolouring the batch and redrawing the whole model. Default OFF, for the
-  // owner's A/B on the deploy preview; `?feature=hoverOverlay` opts in. Only
-  // takes effect while the viewer paints on demand (renderOnDemandMode.js):
-  // hoverOverlayMode.js is the one predicate. DESIGN.md §"Render loop & perf
-  // monitor", "Overlay paints".
-  {name: 'hoverOverlay', isActive: false},
+  // OFF-switch for the hover overlay (viewer/three/hoverOverlay.js), on by
+  // default since #2129: on a batched model a hover change presents the last
+  // full paint's colour + depth and draws only the hovered instance(s) on
+  // top, instead of recolouring the batch and redrawing the whole model. Same
+  // inverted shape as the switches above: `?feature=disableHoverOverlay` is
+  // the per-session way back to the recolour (an A/B, or a hover that looks
+  // wrong), and `isActive: true` here is the PROD ROLLBACK. The overlay only
+  // runs while the viewer paints on demand; hoverOverlayMode.js is the one
+  // predicate. DESIGN.md §"Render loop & perf monitor", "Overlay paints".
+  {name: 'disableHoverOverlay', isActive: false},
   // Kill switch for the engine worker's OPFS sync access handle
   // (engine-worker.md §7 step 4): read the source through the Blob store
   // instead, as on the main thread. `?feature=` can only turn flags on, so

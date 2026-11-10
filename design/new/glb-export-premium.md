@@ -832,8 +832,9 @@ same build A/B'd:
 With the pick down to ~0.2 ms, what a hover change cost was the repaint
 behind it: the recolour (`batchedHighlight.js`) repainted the whole model,
 47 ms of GPU p50 on PSB on an M2 against 9.2 ms on Momentum, so the
-highlight landed about three frames late. `?feature=hoverOverlay`
-(`viewer/three/hoverOverlay.js`, default off for the owner's A/B) draws the
+highlight landed about three frames late. The hover overlay
+(`viewer/three/hoverOverlay.js`, #2129, on by default; `?feature=disableHoverOverlay`
+is the A/B and the rollback) draws the
 hover on a cached frame of the last full paint instead, so a hover change
 costs the hovered instances plus the screen-size passes on any model
 (DESIGN.md §"Render loop & perf monitor", "Overlay paints"; the A/B is in
