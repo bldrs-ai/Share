@@ -116,7 +116,21 @@ export default function ResidencyControl() {
       return undefined
     }
     const instance = new ResidencyController(model, {
-      getCamera: () => viewer?.context?.ifcCamera?.perspectiveCamera ?? null,
+      // `viewer.context` is the ThreeContext facade (three/ThreeContext.js),
+      // which has no `ifcCamera`: that lives on the legacy context it wraps.
+      // Reading `context.ifcCamera` here always gave null, so OCCUPANCY
+      // silently ranked by world-space radius alone, ignoring the eye.
+      // A disposed viewer can still be in the store until the next
+      // `setViewer` (a model switch); its `getCamera` throws once
+      // `ThreeContext.dispose` drops the legacy context, so that reads as
+      // "no camera", as it always did, rather than throwing out of a re-rank.
+      getCamera: () => {
+        try {
+          return viewer?.context?.getCamera?.() ?? null
+        } catch {
+          return null
+        }
+      },
       getSelectionCenter: () => selectedRef.current,
     })
     setController(instance.instanceCount > 0 ? instance : null)

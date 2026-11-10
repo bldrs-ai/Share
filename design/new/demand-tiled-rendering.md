@@ -198,7 +198,7 @@ MessageChannel loop):
 | Seestrasse | 1.06 M | 4 ms | 21.7 ms (27) |
 | PSB (large private IFC) | 12.0 M | 4.9 ms | 47 ms (106) |
 | PSB, small window | 12.0 M | 5.5 ms | 46.5 ms (97) |
-| PSB, residency slider at 25% by screen occupancy | 2.36 M | 1.3 ms | **14.4 ms** (18.5) |
+| PSB, residency slider at 25% by "screen occupancy" (by size in fact, see *Known limits*) | 2.36 M | 1.3 ms | **14.4 ms** (18.5) |
 
 PSB is triangle-bound, not fill-bound (shrinking the window changed
 nothing): GPU time is about 6 ms + 3.4 ms per million triangles. At full
@@ -305,14 +305,22 @@ each.
 *Rollback.* `motionResidency` is default off. Off, no driver is built and
 nothing listens to the camera. Manual 100% is the per-user off switch.
 
-*Known limits.* `ResidencyControl` hands the controller
-`viewer.context.ifcCamera.perspectiveCamera`, a field `ThreeContext` does not
-have, so in the app OCCUPANCY scores by part size alone, without regard to
-the view. The owner's 25% measurement was therefore by size. B3 keeps the
-at-rest behaviour as it is and follows it; a camera-aware occupancy is a
-separate change. Hover after a fling, while damping is still moving the
-camera, can pick against the motion set; picks at rest never do. With
-render-on-demand off every frame paints, so there are no idle frames to read
+*Known limits.* Until the follow-up to B3, `ResidencyControl` handed the
+controller `viewer.context.ifcCamera.perspectiveCamera`, a field `ThreeContext`
+does not have, so in the app OCCUPANCY scored by part size alone, without
+regard to the view. The owner's 25% measurement above was therefore by size.
+It now reads `context.getCamera()`, so OCCUPANCY is angular size from the eye.
+The ranking is taken from the camera when a set is chosen: a slider or metric
+change, a selection under DISTANCE (which falls back to OCCUPANCY with none),
+an edit, and, when the while-moving metric differs from the at-rest one, the
+motion order's first sort after each of those. It is not re-ranked as the
+camera orbits, so after a large move the at-rest set still reflects the
+earlier view until the slider is touched again. The eye is the camera's
+position, which is right for a perspective view; in an orthographic one
+apparent size doesn't fall off with distance, so OCCUPANCY still favours
+parts near the camera position there. Hover after a fling, while damping is
+still moving the camera, can pick against the motion set; picks at rest never
+do. With render-on-demand off every frame paints, so there are no idle frames to read
 the display rate from and Auto assumes 60 Hz.
 
 ### Parallelism plan (consistent with the #1612 spike findings)
