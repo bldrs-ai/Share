@@ -200,13 +200,18 @@ async function installTriangleRecorder(page: Page) {
     const OVERLAY_LAYER_MASK = (1 << 31) >>> 0
     const original = renderer.render
     renderer.render = function(...args: unknown[]) {
+      // Read before the draw, so a slow render doesn't count toward the time
+      // since the camera moved. Still after MotionResidency's rest check (its
+      // frame() runs before the paint), so it never reads less than the
+      // controller's own and a rest frame can't pass as one in motion.
+      const startedAt = performance.now()
       try {
         return original.apply(this, args)
       } finally {
         if (frame === null) {
           const overlayPaints = demand?.stats?.overlayPaints ?? 0
           frame = {triangles: 0, overlay: false,
-            sinceMoveMs: lastMoveAt === null ? null : performance.now() - lastMoveAt}
+            sinceMoveMs: lastMoveAt === null ? null : startedAt - lastMoveAt}
           const open = frame
           win.__motionFrames?.push(open)
           // Closes after this rAF callback's render calls (and the
