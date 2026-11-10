@@ -206,10 +206,12 @@ detail it orbits at about 20 fps (47 ms a frame); at 25% occupancy residency
 the owner reports it "feels instant".
 
 *The controls.* The Display menu's residency section becomes the **at rest**
-setting, unchanged in default (100%) and behaviour. Behind
-`?feature=motionResidency` (default off, for the owner's A/B) a second
-section, **While moving**, has the same percent slider and priority metric
-plus **Auto**, the default. Manual 100% is "no change while moving" and is
+setting, unchanged in default (100%) and behaviour. A second section,
+**While moving**, has the same percent slider and priority metric plus
+**Auto**, the default. It shipped behind the opt-in `?feature=motionResidency`
+for the owner's A/B and is now on by default, with `disableMotionResidency`
+as the off switch (*Rollback* below); the owner's reason for the flip was
+large models on mobile. Manual 100% is "no change while moving" and is
 exactly today's viewer. Both persist the same way: the display-override
 stack (`motionResidency: {mode, percent, metric}`,
 model-display-controls.md §2) and the `#d:` token (`mres=25`,
@@ -302,8 +304,49 @@ ever proves too aggressive.
 budget has to be one GPU budget shared across them, not a full interval
 each.
 
-*Rollback.* `motionResidency` is default off. Off, no driver is built and
-nothing listens to the camera. Manual 100% is the per-user off switch.
+*On mobile: the fence path.* Phones and tablets rarely expose
+`EXT_disjoint_timer_query_webgl2` (iOS Safari never does; Chrome on Android
+depends on the GPU), so there Auto runs on the fence path:
+`createGpuFrameTimer` takes it whenever the extension is absent and the
+context has `fenceSync`, which every WebGL2 context does and three r184 only
+makes WebGL2 ones. SwiftShader takes the same path, so CI's Auto E2E
+(`motionResidency.spec.ts`, desktop and mobile viewports) is a fence-path run
+that sheds detail while dragging and reports a settled percent. The fence
+gives one sample per frame while the GPU keeps up, and one every other frame
+when it doesn't (one fence in flight); 3 samples and 150 ms per step is still
+a few steps a second, so Auto walks to the budget rather than staying where
+the gesture started. A frame the GPU never finishes within 500 ms is reported
+as 500 ms and cuts. Two biases to know about, neither of which pins it:
+
+- the fence sample is the GPU work *still queued* when the paint returns,
+  not the frame's whole cost. Where a frame is CPU-bound instead (the main
+  thread's draw-list rebuild on a big batch, on a slow phone CPU), the tail
+  is short, Auto reads the frame as cheap and keeps more than a CPU budget
+  would. Auto then errs toward detail, which is today's viewer; it never
+  cuts below what the GPU needs. Adding the draw call's own time
+  (`afterPaint`'s `costMs`) to fence samples is the obvious follow-up if a
+  device shows it, and would need re-tuning against the owner's numbers,
+  which came from the fence probe;
+- the fence is polled from MessageChannel tasks, so a busy main thread
+  delays the poll and inflates the sample, which errs toward cutting. The
+  ceiling relaxes after 2 s held under budget, so a burst doesn't hold the
+  fraction down for the rest of the session.
+
+If a context could measure neither way (no WebGL2), `createGpuFrameTimer`
+returns null, Auto takes no samples and holds its starting fraction of 100%,
+i.e. the viewer without B3. That is a capability limit with nothing to act
+on, so it is not reported anywhere.
+
+*Rollback.* On by default; `disableMotionResidency` is the off switch, the
+same inverted shape as `disableRenderOnDemand` and `disableHoverOverlay`
+(`viewer/display/motionResidencyMode.js#isMotionResidencyOn` is the one
+predicate). `?feature=disableMotionResidency` turns it off for a session;
+`isActive: true` in FeatureFlags.js is the prod rollback, which no URL can
+override, since `isFeatureEnabled` ORs the static value with the URL's and
+there is no longer an opt-in flag for a link to name (a leftover
+`?feature=motionResidency` is an unknown name and does nothing). Off, the
+Display menu has no While-moving section, no driver is built and nothing
+listens to the camera. Manual 100% is the per-user off switch.
 
 *Known limits.* Until the follow-up to B3, `ResidencyControl` handed the
 controller `viewer.context.ifcCamera.perspectiveCamera`, a field `ThreeContext`
