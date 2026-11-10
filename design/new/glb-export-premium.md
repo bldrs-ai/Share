@@ -829,6 +829,80 @@ same build A/B'd:
 - per pick: median 9.2–10 ms → 0.2 ms, worst 26 ms → 4.4 ms;
 - a 5,082-event pointer sweep: mousemove handlers 65 s → 0.09 s.
 
+**Hover picks run in the frame (follow-up to #2127).** With the pick
+cheap, the highlight still lagged the pointer about as much as before, and
+the scheduler was why. Chrome dispatches mousemove once per frame, ahead of
+that frame's rAF callbacks. #2127's scheduler picked in the handler at most
+every 33 ms, a pick every other frame at 60 Hz, and its `setTimeout`
+trailing pick wasn't frame-aligned, so the repaint waited for the next frame.
+Now the window's mousemove only marks the pointer dirty, and
+`createFrameHoverPicker` picks from the render loop through
+`ThreeContext#onFrame`. That is a component of `IfcContext`'s frame, which
+under render-on-demand runs after the camera update and before the renderer's
+paint decision (`IfcContext#updateAllComponents`, DESIGN.md §"Render loop &
+perf monitor"). The recolour's `setColorAt` asks for its paint through the
+BatchedMesh hook (renderDemandHooks.js), so it paints in that same frame.
+
+- **Cheap picks run every frame.** At a median of `CHEAP_PICK_MS` (2 ms) or
+  less, which is every pick through the instance tree, the scheduler picks on
+  every frame the pointer moved. There is no 33 ms floor.
+- **Dear picks back off.** That is a model without the tree, or the tree not
+  built yet. The `COST_FACTOR × median` interval, capped at 500 ms, is read
+  on the frame clock. The move stays pending, so the first frame the wait
+  ends on is the "pointer stopped" pick, with no trailing timer.
+- **Unchanged:** the mouseup catch-up (the next frame after it), no pick while
+  dragging or with the canvas pointer unmoved, and so no pick and no paint
+  from hover on an idle viewer.
+
+`?feature=disableFrameHover` (FeatureFlags.js) puts the timer scheduler back
+(`createTimerHoverPicker`). It is the A/B below and the rollback. With
+`disableRenderOnDemand` the loop keeps the vendored order, the renderer
+before its components, so a hover pick paints on the next frame: one frame
+later than on demand, still with no 33 ms wait.
+
+Measured on Momentum in headless Chromium:
+
+- the sweep was 8 rows of 1,000 raw pointer events 4 ms apart (a 250 Hz
+  mouse), which Chrome coalesces to about 41 mousemoves a second;
+- the drawing area was 320×200, the size at which SwiftShader paints within a
+  60 Hz frame. At the default 1280×800 a SwiftShader frame takes ~80 ms,
+  longer than the old floor, so both schedulers pick every frame there and
+  can't be told apart;
+- latency runs from the event's `timeStamp` to the end of the paint (the
+  draw call's return in `RenderDemand#rendered`) that showed its highlight.
+
+main, the PR with `disableFrameHover`, and the PR:
+
+| | main | timer (kill switch), 2 runs | frame-aligned, 2 runs |
+|---|---|---|---|
+| pointer → painted pick, p50 / p95 | 5.0 / 37.3 ms | 4.7–4.8 / 36.8–38.7 ms | 3.5–3.6 / 6.5–6.7 ms |
+| element change → its highlight painted, p50 / p95 | 4.8 / 38.1 ms | 5.6–27.2 / 42–59 ms | 3.6–4.0 / 5.9–7.4 ms |
+| element changes never shown | 11 of 66 | 14 of 64, 10 of 62 | 4 of 64, 4 of 68 |
+| paints showing a highlight older than their frame's pointer | 1.7 % | 2.9 %, 1.9 % | 0 of ~1,200, twice |
+| picks / paints / mousemoves per second | 17 / 29 / 41 | 17–18 / 28–30 / 40–42 | 28–29 / 29–30 / 41 |
+| picks and paints in 1 s with the pointer still | 0 / 0 | 0 / 0 | 0 / 0 |
+
+So the p95 lag drops ~5.6× (37 → 6.6 ms). The highlight now updates on every
+painted frame the pointer moved (picks per paint 0.6 → 0.97), at the
+display's rate rather than 30 Hz. The browser's own share is the same in
+every leg: ~2 ms p50 from the event's timestamp to its handler. The four
+changes the frame-aligned leg never shows are elements the pointer crossed
+between two frames. On a GPU, frames come at the display's rate and picks
+cost what they cost here (~0.1 ms on Momentum, ~0.2 ms on PSB through the
+tree), so the same ratio should hold.
+
+PSB (cold load, the same rig) is paint-bound in SwiftShader. One paint of its
+11.6 M triangles takes ~2 s even at 320×200, so a 30 s sweep painted 15–16
+frames in either leg. In those frames main showed a stale highlight in 2 of 15
+and the PR in none of 16. That is too few samples for a latency figure. The
+median pick there is 0.2–0.3 ms, so the PR takes the every-frame path.
+
+`hoverPick.spec.ts` checks the frame-aligned behaviour on the user's own
+sweep, desktop and mobile: every frame painted after a move picked for it
+first, and showed what the pointer was over. It goes red with the timer
+scheduler, and with a 33 ms floor restored in the frame scheduler (44–56 of
+~375 frames painted unpicked).
+
  (the owner's smoke on #1872: a
 Draco download of DSA and of Right_Hand rendered perfectly and could not be
 selected). Measured on a DSA-shaped strip through the real codec: Draco MERGES

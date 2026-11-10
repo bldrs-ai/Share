@@ -156,7 +156,14 @@ cheapest-to-forget last:
    `controlstart` alone doesn't paint (the move after it does), and the
    camera updates before the renderer in the frame rather than after it
    (`IfcContext#updateAllComponents`), so a frame shows this frame's pose.
-   Both cut the first input from idle by a frame.
+   Both cut the first input from idle by a frame. Per-frame upkeep added
+   with `ThreeContext#onFrame` runs in the same place, after the camera and
+   before the paint decision: PlaceMark's sprite scale, and the hover pick
+   (`viewer/hoverPick.js#createFrameHoverPicker`). The window's mousemove
+   only marks the pointer, so the hover recolour, which asks through the
+   `setColorAt` hook, paints in the frame of the move that caused it
+   (glb-export-premium.md §1.1d "What a hover pick costs after it").
+   `?feature=disableFrameHover` puts back the old timer-driven pick.
 2. `requestPaint()` (`renderDemand.js`), callable from anywhere, for what
    three gives no signal for: `visible`, material colour, opacity and
    wireframe, outline selections (IfcHighlighter, the isolation outline),

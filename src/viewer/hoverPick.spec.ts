@@ -25,6 +25,24 @@ const TREES_TIMEOUT_MS = 60_000
 const HOVER_SETTLE_MS = 600
 const GRID_COLUMNS = 4
 const GRID_ROWS = 3
+// The frame-aligned leg sweeps the pointer across the canvas along these
+// rows, from one side to the other, in this many mouse steps each (all
+// fractions of the canvas).
+/* eslint-disable no-magic-numbers */
+const SWEEP_ROWS = [0.4, 0.5, 0.6]
+const SWEEP_FROM = 0.1
+const SWEEP_TO = 0.9
+/* eslint-enable no-magic-numbers */
+const SWEEP_STEPS = 120
+// The drawing-buffer pixel ratio the frame-aligned leg paints at. Headless
+// Chromium's WebGL is SwiftShader, on the CPU, where a full-size Momentum
+// frame takes ~80 ms: longer than the timer scheduler's 33 ms floor, so the
+// two schedulers would pick every frame alike and nothing could tell them
+// apart. A quarter of the pixels paints within a 60 Hz frame, as a GPU does.
+// Only the paint's resolution changes: the canvas keeps its CSS size, so the
+// layout and the pointer's normalized position (what the ray is cast from)
+// are untouched.
+const SWEEP_PIXEL_RATIO = 0.25
 
 
 /** What hovering and then double-clicking one canvas point did. */
@@ -151,7 +169,168 @@ async function doubleClickSelects(page: Page, point: {x: number, y: number}): Pr
  * pick walked every instance. The same page is loaded twice, once with the
  * walk forced (`disableInstanceBvh`), and the two compared point for point.
  */
-describeMobileAndDesktop('viewer/hoverPick', () => {
+/** What one sweep recorded (see {@link recordSweep}). */
+interface Sweep {
+  // Paints during the sweep, each with the hover key it showed and the key
+  // the latest pointer move before it was over.
+  paints: {shown: string | null, current: string | null}[]
+  // Paints that came after a pointer move with no hover pick between the
+  // move and the paint: frames that showed a highlight older than their input.
+  unpicked: number
+  // Element changes along the pointer's path.
+  changes: number
+  picks: number
+  frames: number
+}
+
+
+/**
+ * Instrument the page for {@link recordSweep}: record each paint
+ * (`RenderDemand#rendered`, the end of a painted frame) with the hover key
+ * it showed (`ShareViewer#_lastBatchedPreselectKey`), each window mousemove
+ * with the canvas position it moved to, each hover pick, and each frame.
+ * Also lowers the drawing buffer's resolution ({@link SWEEP_PIXEL_RATIO}).
+ *
+ * @param page
+ */
+async function instrumentSweep(page: Page) {
+  await page.evaluate((pixelRatio) => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const w = window as any
+    const viewer = w.store.getState().viewer
+    const demand = viewer.context.getRenderDemand()
+    const canvas = viewer.context.getDomElement()
+    const renderer = viewer.context.getRenderer()
+    renderer.setPixelRatio(pixelRatio)
+    viewer.postProcessor.getComposer.setSize(canvas.clientWidth, canvas.clientHeight, false)
+    const rec: any = {on: false, paints: [], moves: [], picks: [], frames: 0}
+    w.__hoverSweep = rec
+    const rendered = demand.rendered.bind(demand)
+    demand.rendered = (cost: number) => {
+      rendered(cost)
+      if (rec.on) {
+        rec.paints.push({t: performance.now(), shown: viewer._lastBatchedPreselectKey ?? null})
+      }
+    }
+    const pick = viewer.highlightIfcItem
+    const pointer = viewer.context.getNormalizedMousePosition()
+    viewer.highlightIfcItem = function(...args: any[]) {
+      if (rec.on) {
+        rec.picks.push({t: performance.now(), x: pointer.x, y: pointer.y})
+      }
+      return pick.apply(this, args)
+    }
+    window.addEventListener('mousemove', (e: MouseEvent) => {
+      if (rec.on) {
+        const b = canvas.getBoundingClientRect()
+        rec.moves.push({
+          t: performance.now(),
+          x: (((e.clientX - b.left) / (b.right - b.left)) * 2) - 1,
+          y: -(((e.clientY - b.top) / (b.bottom - b.top)) * 2) + 1,
+        })
+      }
+    }, {capture: true})
+    const tick = () => {
+      if (rec.on) {
+        rec.frames++
+      }
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  }, SWEEP_PIXEL_RATIO)
+}
+
+
+/**
+ * Sweep the pointer across the canvas along one row, as the user does, and
+ * read back what every painted frame showed against what the pointer was over
+ * when that frame began: the key a pick at the latest move's position makes,
+ * computed afterwards with the pointer still (the camera doesn't move).
+ *
+ * @param page
+ * @param row fraction of the canvas height
+ * @return the sweep
+ */
+async function recordSweep(page: Page, row: number): Promise<Sweep> {
+  const box = await page.evaluate(() => {
+    const r = (document.querySelector('canvas') as HTMLCanvasElement).getBoundingClientRect()
+    return {left: r.left, top: r.top, width: r.width, height: r.height}
+  })
+  const rowY = box.top + (box.height * row)
+  await page.mouse.move(box.left + (box.width * SWEEP_FROM), rowY)
+  await page.waitForTimeout(HOVER_SETTLE_MS)
+  await page.evaluate(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__hoverSweep.on = true
+  })
+  await page.mouse.move(box.left + (box.width * SWEEP_TO), rowY, {steps: SWEEP_STEPS})
+  await page.waitForTimeout(HOVER_SETTLE_MS)
+  return await page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const w = window as any
+    const rec = w.__hoverSweep
+    rec.on = false
+    const viewer = w.store.getState().viewer
+    const position = viewer.context.getNormalizedMousePosition()
+    const [stillX, stillY] = [position.x, position.y]
+    const keyAt = (x: number, y: number) => {
+      position.x = x
+      position.y = y
+      const found = viewer.context.castRayIfc()
+      return found ? (viewer._batchedHoverTarget(found).key ?? null) : null
+    }
+    const current = rec.moves.map((m: any) => keyAt(m.x, m.y))
+    position.x = stillX
+    position.y = stillY
+    let changes = 0
+    for (let i = 1; i < current.length; i++) {
+      changes += current[i] !== current[i - 1] ? 1 : 0
+    }
+    // Each paint against the latest move handled before it; paints before
+    // the sweep's first move are the hover it started from.
+    const paints = []
+    let m = -1
+    for (const paint of rec.paints) {
+      while (m + 1 < rec.moves.length && rec.moves[m + 1].t < paint.t) {
+        m++
+      }
+      if (m >= 0) {
+        paints.push({shown: paint.shown, current: current[m]})
+      }
+    }
+    // A paint after a move must have had a pick between them, unless the
+    // move left the canvas position where the last pick saw it.
+    let unpicked = 0
+    let prev = -Infinity
+    for (const paint of rec.paints) {
+      const since = prev
+      prev = paint.t
+      const moved = rec.moves.filter((mv: any) => mv.t > since && mv.t < paint.t)
+      if (moved.length === 0) {
+        continue
+      }
+      const last = moved[moved.length - 1]
+      const picked = rec.picks.filter((pk: any) => pk.t < paint.t)
+      const lastPick = picked[picked.length - 1]
+      if (lastPick === undefined || lastPick.t < last.t) {
+        if (lastPick === undefined || lastPick.x !== last.x || lastPick.y !== last.y) {
+          unpicked++
+        }
+      }
+    }
+    const out = {paints, unpicked, changes, picks: rec.picks.length, frames: rec.frames}
+    rec.paints = []
+    rec.moves = []
+    rec.picks = []
+    rec.frames = 0
+    return out
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
+
+
+describeMobileAndDesktop('viewer/hoverPick', (ff) => {
   beforeEach(async ({page}) => {
     await homepageSetup(page)
     await setIsReturningUser(page.context())
@@ -218,5 +397,63 @@ describeMobileAndDesktop('viewer/hoverPick', () => {
     expect(walk.hover.filter((p) => p.hovered.length > 0).length).toBeGreaterThanOrEqual(2)
     expect(tree.hover).toEqual(walk.hover)
     expect(tree.selected).toEqual(walk.selected)
+  })
+
+  // Frame-aligned hover (hoverPick.js#createFrameHoverPicker): the pick runs
+  // in the render loop's frame, before its paint, so every frame painted
+  // while the pointer moves shows what the pointer is over in that frame.
+  // The timer scheduler (`?feature=disableFrameHover`) picked at most every
+  // 33 ms, and a trailing pick's repaint waited for the frame after it, so at
+  // 60 Hz some frames painted the element the pointer had just left.
+  test('the highlight follows the pointer frame by frame, and a click selects what it shows', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS * 2)
+    await openSettled(page, TREE_QUERY)
+    await instrumentSweep(page)
+    const sweeps: Sweep[] = []
+    for (const row of SWEEP_ROWS) {
+      sweeps.push(await recordSweep(page, row))
+    }
+    const paints = sweeps.flatMap((sw) => sw.paints)
+    const changes = sweeps.reduce((n, sw) => n + sw.changes, 0)
+    const picks = sweeps.reduce((n, sw) => n + sw.picks, 0)
+    const frames = sweeps.reduce((n, sw) => n + sw.frames, 0)
+    const unpicked = sweeps.reduce((n, sw) => n + sw.unpicked, 0)
+    // The sweep means something: the pointer crossed elements, and the
+    // viewer painted while it moved.
+    expect(changes, 'the pointer crosses elements').toBeGreaterThanOrEqual(4)
+    expect(paints.length, 'the viewer paints while the pointer moves').toBeGreaterThanOrEqual(SWEEP_STEPS)
+    // At most one pick per frame, and one on every frame the pointer moved:
+    // no frame painted after a move without picking for it first.
+    expect(picks).toBeLessThanOrEqual(frames)
+    expect(unpicked, 'frames painted after a pointer move without a hover pick').toBe(0)
+    // Every painted frame shows what the pointer was over when it began.
+    const stale = paints.filter((p) => p.shown !== p.current)
+    expect(stale, `${stale.length} of ${paints.length} paints showed a stale hover`).toEqual([])
+
+    // Hover and click agree: the element the pointer rests on is the one a
+    // double-click selects (on a phone, a double tap).
+    const points = await canvasPoints(page)
+    const [hover] = await hoverEach(page, points.slice(0, 1))
+    let target = hover
+    if (target.hovered.length === 0) {
+      const more = await hoverEach(page, points)
+      target = more.find((p) => p.hovered.length > 0) as PointResult
+    }
+    expect(target, 'the pointer must find the model somewhere').toBeDefined()
+    let selected: number[]
+    if (ff.isMobile) {
+      await page.touchscreen.tap(target.x, target.y)
+      await page.touchscreen.tap(target.x, target.y)
+      const handle = await page.waitForFunction(() => {
+        /* eslint-disable @typescript-eslint/no-explicit-any */
+        const ids = (window as any).store.getState().selectedElements ?? []
+        return ids.length > 0 ? ids.map(Number) : null
+        /* eslint-enable @typescript-eslint/no-explicit-any */
+      }, null, {timeout: 10_000})
+      selected = await handle.jsonValue()
+    } else {
+      selected = await doubleClickSelects(page, target)
+    }
+    expect(selected).toEqual(expect.arrayContaining(target.hovered))
   })
 })
