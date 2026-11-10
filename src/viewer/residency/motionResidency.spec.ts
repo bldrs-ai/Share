@@ -11,7 +11,9 @@ const {beforeEach} = test
 /**
  * Adaptive residency during camera motion (B3 of
  * design/new/demand-tiled-rendering.md; viewer/residency/MotionResidency.js),
- * behind `?feature=motionResidency`.
+ * on by default: the first suite navigates with no `?feature=`, so it is the
+ * shipped default that is proved, and the second proves the kill switch,
+ * `?feature=disableMotionResidency`.
  *
  * The user's action end to end: set the Display menu's "While moving"
  * control, drag the camera on the canvas, let go. What is asserted is what
@@ -28,9 +30,7 @@ describeMobileAndDesktop('viewer/residency/motionResidency', () => {
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
     await homepageSetup(page)
     await setIsReturningUser(page.context())
-    await page.goto('/share/v/p/index.ifc?feature=motionResidency')
-    await waitForModelReady(page)
-    await installTriangleRecorder(page)
+    await openModel(page, '')
   })
 
 
@@ -131,6 +131,84 @@ describeMobileAndDesktop('viewer/residency/motionResidency', () => {
 })
 
 
+describeMobileAndDesktop('viewer/residency/motionResidency with render on demand off', () => {
+  beforeEach(async ({page}) => {
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+    // Render on demand's own kill switch (and prod rollback): the loop paints
+    // every frame. Motion residency doesn't depend on it (motionResidencyMode
+    // .js#isMotionResidencyOn): the paint observers and the per-frame hook it
+    // runs on fire either way, so rolling one back must not break the other.
+    await openModel(page, '?feature=disableRenderOnDemand')
+  })
+
+
+  test('a manual percent still draws less while dragging and everything again at rest', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+    const before = await stillFrame(page)
+    await openDisplayMenu(page)
+    await page.getByTestId('motion-residency-auto').locator('input').uncheck()
+    const slider = page.getByTestId('motion-residency-slider').getByRole('slider')
+    await slider.press('Home')
+    for (let i = 0; i < MANUAL_PERCENT; i++) {
+      await slider.press('ArrowRight')
+    }
+    await expect(slider).toHaveAttribute('aria-valuenow', `${MANUAL_PERCENT}`)
+    await closeDisplayMenu(page)
+
+    const moving = inMotion(await dragCamera(page))
+    expect(moving.length, 'the drag painted while the camera moved').toBeGreaterThan(0)
+    expect(Math.max(...moving.map((f) => f.visible)),
+      'every frame painted while the camera moved showed fewer instances than the still view')
+      .toBeLessThan(before.visible)
+    const after = await settledFrame(page)
+    expect(after.triangles, 'at rest the full set is drawn again').toBe(before.triangles)
+    expect(after.visible).toBe(before.visible)
+  })
+})
+
+
+describeMobileAndDesktop('viewer/residency/motionResidency kill switch', () => {
+  beforeEach(async ({page}) => {
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+    await openModel(page, '?feature=disableMotionResidency')
+  })
+
+
+  test('?feature=disableMotionResidency hides While moving and a drag evicts nothing', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+    const before = await stillFrame(page)
+    expect(before.visible, 'the still view shows the model').toBeGreaterThan(0)
+
+    // The Display menu is still there (the at-rest Residency section is not
+    // behind this switch), without its While-moving section.
+    await page.getByTestId('control-button-residency').click()
+    await expect(page.getByTestId('residency-slider')).toBeVisible()
+    await expect(page.getByTestId('motion-residency-slider')).toHaveCount(0)
+    await expect(page.getByTestId('motion-residency-auto')).toHaveCount(0)
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('residency-slider')).toBeHidden()
+
+    // Two drags, as the Auto test above makes: with the driver built, the
+    // second starts from the level the first found and evicts from its first
+    // frame. Here every frame painted while the camera moved shows every
+    // instance the still view did. Instances, not triangles, because the
+    // orbit's own frustum culling changes the triangle count without
+    // anything being evicted.
+    await dragCamera(page)
+    await settledFrame(page)
+    const moving = inMotion(await dragCamera(page))
+    expect(moving.length, 'the drag painted while the camera moved').toBeGreaterThan(0)
+    expect(Math.min(...moving.map((f) => f.visible)),
+      'no instance was evicted while the camera moved').toBe(before.visible)
+    expect((await settledFrame(page)).visible).toBe(before.visible)
+  })
+})
+
+
 const TEST_TIMEOUT_MS = 90_000
 const MANUAL_PERCENT = 20
 // Longer than MotionResidency's REST_MS (200 ms) plus camera-controls'
@@ -160,9 +238,9 @@ type Frame = {triangles: number, visible: number}
  * One painted frame as the recorder saw it. `sinceMoveMs` is how long before
  * the paint the camera last changed (camera-controls `update`, the same event
  * that starts and extends motion), or null if it hasn't since the recorder
- * was installed.
+ * was installed. `visible` is the batched instances visible when it painted.
  */
-type PaintedFrame = {triangles: number, overlay: boolean, sinceMoveMs: number | null}
+type PaintedFrame = {triangles: number, visible: number, overlay: boolean, sinceMoveMs: number | null}
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type RecorderWindow = Window & {
@@ -170,6 +248,19 @@ type RecorderWindow = Window & {
   __motionFrames?: Array<PaintedFrame>
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
+
+
+/**
+ * Open the sample model with `search` and install the recorder.
+ *
+ * @param page
+ * @param search the URL's query, e.g. `?feature=...`, or ''
+ */
+async function openModel(page: Page, search: string) {
+  await page.goto(`/share/v/p/index.ifc${search}`)
+  await waitForModelReady(page)
+  await installTriangleRecorder(page)
+}
 
 
 /**
@@ -198,6 +289,23 @@ async function installTriangleRecorder(page: Page) {
     // full paints as well as its own overlay-only ones. That draw is the
     // hover, not the resident set, so it isn't counted.
     const OVERLAY_LAYER_MASK = (1 << 31) >>> 0
+    // What visibleInstances() below reads, once per painted frame. The
+    // sample model has a handful of instances, so the walk is cheap.
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const countVisible = () => {
+      const model = win.store?.getState().model as any
+      const meshes: any[] = model?.isBatchedMesh ? [model] :
+        (model?.children ?? []).filter((child: any) => child?.isBatchedMesh)
+      let visible = 0
+      for (const mesh of meshes) {
+        const count = mesh.instanceParents?.length ?? 0
+        for (let index = 0; index < count; index++) {
+          visible += mesh.getVisibleAt(index) ? 1 : 0
+        }
+      }
+      return visible
+    }
+    /* eslint-enable @typescript-eslint/no-explicit-any */
     const original = renderer.render
     renderer.render = function(...args: unknown[]) {
       // Read before the draw, so a slow render doesn't count toward the time
@@ -210,7 +318,7 @@ async function installTriangleRecorder(page: Page) {
       } finally {
         if (frame === null) {
           const overlayPaints = demand?.stats?.overlayPaints ?? 0
-          frame = {triangles: 0, overlay: false,
+          frame = {triangles: 0, visible: countVisible(), overlay: false,
             sinceMoveMs: lastMoveAt === null ? null : startedAt - lastMoveAt}
           const open = frame
           win.__motionFrames?.push(open)

@@ -110,12 +110,15 @@ describe('Residency slider', () => {
     expect(atHalf.visible).toBeGreaterThan(0)
     expect(atHalf.visible).toBeLessThan(atHalf.total)
 
-    await page.getByLabel('Memory budget').check()
+    // Scoped to the at-rest group: the While-moving section (on by default)
+    // has radios with the same labels.
+    const atRestMetric = page.getByTestId('residency-metric-group')
+    await atRestMetric.getByLabel('Memory budget').check()
     const memoryHalf = await batchedVisibility(page)
     expect(memoryHalf.visible).toBeGreaterThan(0)
     expect(memoryHalf.visible).toBeLessThanOrEqual(memoryHalf.total)
 
-    await page.getByLabel('Distance from selection').check()
+    await atRestMetric.getByLabel('Distance from selection').check()
     const distanceHalf = await batchedVisibility(page)
     expect(distanceHalf.visible).toBeGreaterThan(0)
     expect(distanceHalf.visible).toBeLessThan(distanceHalf.total)

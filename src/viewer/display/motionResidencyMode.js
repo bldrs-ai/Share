@@ -1,3 +1,4 @@
+import {isFeatureEnabled} from '../../FeatureFlags'
 import {ResidencyMetric} from '../residency/ResidencyController'
 import {MotionResidencyMode} from '../residency/MotionResidency'
 import {RESIDENCY_FULL} from './residencyMode'
@@ -72,4 +73,30 @@ export function isDefaultMotionResidency(motion) {
  */
 export function setMotionResidencyMode(driver, motion) {
   driver?.setSettings(motionResidencyOrDefault(motion))
+}
+
+
+/**
+ * Whether this viewer adapts residency while the camera moves (B3): the
+ * Display menu's "While moving" section and the MotionResidency driver behind
+ * it. One decision, read by ResidencyControl when it builds the driver.
+ *
+ * On by default (it was the opt-in `motionResidency` flag until the owner's
+ * A/B on a real GPU). `disableMotionResidency` is the off switch, the same
+ * inverted shape as hoverOverlayMode.js's `disableHoverOverlay`:
+ * `?feature=disableMotionResidency` for one session, `isActive: true` in
+ * FeatureFlags.js for prod (a static `true` wins over any URL, since
+ * `isFeatureEnabled` ORs the static value with the URL's). There is no
+ * positive flag left for a URL to opt back in with, so unlike
+ * renderOnDemandMode.js nothing has to be read ahead of the URL.
+ *
+ * Independent of render-on-demand: the driver runs off the per-frame hook and
+ * the paint observers, which a viewer painting every frame has too. What it
+ * loses there is the display-rate estimate (autoResidency.js
+ * FrameRateEstimate's "Known limit"), so Auto aims at a 60 Hz budget.
+ *
+ * @return {boolean}
+ */
+export function isMotionResidencyOn() {
+  return !isFeatureEnabled('disableMotionResidency')
 }
