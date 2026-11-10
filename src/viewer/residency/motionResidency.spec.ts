@@ -143,7 +143,8 @@ const SAME_FRAME_PIXELS = 0.0005
 const CHANNEL_TOLERANCE = 2
 // Longer than the slowest hover interval, so a trailing pick has fired.
 const HOVER_SETTLE_MS = 600
-const HOVER_GRID = 8
+// How long a hover move may take to paint.
+const HOVER_PAINT_MS = 15000
 
 
 type Frame = {triangles: number, visible: number}
@@ -151,7 +152,7 @@ type Frame = {triangles: number, visible: number}
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type RecorderWindow = Window & {
   store?: {getState: () => any}
-  __motionFrames?: Array<{triangles: number}>
+  __motionFrames?: Array<{triangles: number, overlay: boolean}>
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -170,23 +171,35 @@ async function installTriangleRecorder(page: Page) {
     if (!renderer) {
       throw new Error('installTriangleRecorder: no viewer renderer')
     }
+    const demand = win.store?.getState().viewer?.context?.getRenderDemand?.()
     win.__motionFrames = []
-    let frame: {triangles: number} | null = null
+    let frame: {triangles: number, overlay: boolean} | null = null
+    // The hover overlay (#2129) draws the hovered instances with their own
+    // render call on camera layer 31 (hoverOverlay.js OVERLAY_LAYER), into
+    // full paints as well as its own overlay-only ones. That draw is the
+    // hover, not the resident set, so it isn't counted.
+    const OVERLAY_LAYER_MASK = (1 << 31) >>> 0
     const original = renderer.render
     renderer.render = function(...args: unknown[]) {
       try {
         return original.apply(this, args)
       } finally {
         if (frame === null) {
-          frame = {triangles: 0}
+          const overlayPaints = demand?.stats?.overlayPaints ?? 0
+          frame = {triangles: 0, overlay: false}
           const open = frame
           win.__motionFrames?.push(open)
-          // Closes after this rAF callback's render calls have all run.
+          // Closes after this rAF callback's render calls (and the
+          // RenderDemand bookkeeping after them) have all run.
           queueMicrotask(() => {
+            open.overlay = (demand?.stats?.overlayPaints ?? 0) > overlayPaints
             frame = null
           })
         }
-        frame.triangles += this.info?.render?.triangles ?? 0
+        const camera = args[1] as {layers?: {mask?: number}} | undefined
+        if (camera?.layers?.mask !== OVERLAY_LAYER_MASK) {
+          frame.triangles += this.info?.render?.triangles ?? 0
+        }
       }
     }
   })
@@ -197,7 +210,7 @@ async function installTriangleRecorder(page: Page) {
  * @param page
  * @return frames recorded since the last call, and resets the buffer
  */
-async function takeFrames(page: Page): Promise<Array<{triangles: number}>> {
+async function takeFrames(page: Page): Promise<Array<{triangles: number, overlay: boolean}>> {
   return await page.evaluate(() => {
     const win = window as unknown as RecorderWindow
     const frames = win.__motionFrames ?? []
@@ -260,7 +273,10 @@ async function stillFrame(page: Page): Promise<Frame> {
  */
 async function settledFrame(page: Page): Promise<Frame> {
   await page.waitForTimeout(SETTLE_MS)
-  const frames = await takeFrames(page)
+  // The last FULL paint: an overlay-only frame after it (a hover where the
+  // pointer let go) redraws the hover on that paint's cached frame, and its
+  // scene is that paint's scene.
+  const frames = (await takeFrames(page)).filter((f) => !f.overlay)
   if (frames.length === 0) {
     throw new Error('settledFrame: nothing painted after the drag')
   }
@@ -275,7 +291,7 @@ async function settledFrame(page: Page): Promise<Frame> {
  * @param page
  * @return the painted frames of the drag
  */
-async function dragCamera(page: Page): Promise<Array<{triangles: number}>> {
+async function dragCamera(page: Page): Promise<Array<{triangles: number, overlay: boolean}>> {
   const box = await page.locator('#viewer-container canvas').first().boundingBox()
   if (box === null) {
     throw new Error('dragCamera: the viewer canvas is not laid out')
@@ -323,12 +339,12 @@ async function installHoverTools(page: Page) {
       return pixels
     }
     w.__mrHover = {
-      next: (name: string, askFull: boolean) => new Promise((resolve, reject) => {
+      next: (name: string, askFull: boolean, timeoutMs = 15000) => new Promise((resolve, reject) => {
         const painting = context.getLegacyRendererWrapper().update
         const timer = setTimeout(() => {
           context.setRenderUpdate(painting)
           reject(new Error(`no paint for ${name}`))
-        }, 15000)
+        }, timeoutMs)
         context.setRenderUpdate((...args: unknown[]) => {
           const overlayPaints = demand.stats.overlayPaints
           const painted = painting(...args)
@@ -356,9 +372,6 @@ async function installHoverTools(page: Page) {
         }
         return n / (x.length / 4)
       },
-      // Take the hover off, as the cursor leaving the model does, so the
-      // next hover is a change that paints.
-      clearHover: () => w.store.getState().viewer._clearPreselectionForAllModels(),
       hoverCount: () => {
         const hover = w.store.getState().viewer.highlighter.hoverOverlay?.hover
         return hover ? hover.resolve().reduce((sum: number, {batchIds}: any) => sum + batchIds.length, 0) : 0
@@ -370,46 +383,78 @@ async function installHoverTools(page: Page) {
 
 
 /**
- * Hover the first canvas point over a batched part, as the user does, and
- * catch the frame that hover painted as `hover`.
+ * Hover a batched part as the user does, and catch the frame that hover
+ * painted as `hover`. The pointer first rests on empty canvas, so the hover
+ * below is a change (cursor-leave cleared the last one through the viewer's
+ * own path); then it moves onto the projected centre of the model's largest
+ * part.
  *
  * @param page
  * @return the kind of paint the hover made
  */
 async function hoverSomething(page: Page): Promise<string> {
-  const box = await page.locator('#viewer-container canvas').first().boundingBox()
-  if (box === null) {
-    throw new Error('hoverSomething: the viewer canvas is not laid out')
-  }
-  for (let i = 1; i < HOVER_GRID; i++) {
-    for (let j = 1; j < HOVER_GRID; j++) {
-      const x = Math.round(box.x + (box.width * i / HOVER_GRID))
-      const y = Math.round(box.y + (box.height * j / HOVER_GRID))
-      const onCanvas = await page.evaluate(([px, py]) =>
-        document.elementFromPoint(px, py)?.tagName === 'CANVAS', [x, y])
-      if (!onCanvas) {
-        continue
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const targets = await page.evaluate(() => {
+    const w = window as any
+    const context = w.store.getState().viewer.context
+    const canvas = context.getRenderer().domElement as HTMLCanvasElement
+    const rect = canvas.getBoundingClientRect()
+    const camera = context.getCamera()
+    let best: any = null
+    w.store.getState().model.traverse((o: any) => {
+      if (!o.isBatchedMesh) {
+        return
       }
-      // A move beside the point first, so the hover's own move is a real one.
-      await page.mouse.move(x - 1, y)
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      const onBatch = await page.evaluate(() =>
-        (window as any).store.getState().viewer.context.castRayIfc()?.object?.isBatchedMesh === true)
-      if (!onBatch) {
-        continue
+      o._instanceInfo.forEach((info: any, id: number) => {
+        if (!info.active || !o.getVisibleAt(id)) {
+          return
+        }
+        const sphere = o.getBoundingSphereAt(o.getGeometryIdAt(id), new (o.boundingSphere.constructor)())
+        const matrix = new (o.matrixWorld.constructor)()
+        o.getMatrixAt(id, matrix)
+        sphere.applyMatrix4(matrix).applyMatrix4(o.matrixWorld)
+        if (best === null || sphere.radius > best.radius) {
+          best = sphere
+        }
+      })
+    })
+    const at = best.center.clone().project(camera)
+    const hit = {x: rect.left + ((at.x + 1) / 2 * rect.width), y: rect.top + ((1 - at.y) / 2 * rect.height)}
+    // Empty canvas: the first grid point over the canvas whose ray meets
+    // nothing, checked later from the page side.
+    const empties = []
+    for (let i = 1; i < 8; i++) {
+      for (let j = 1; j < 8; j++) {
+        const x = Math.round(rect.left + (rect.width * i / 8))
+        const y = Math.round(rect.top + (rect.height * j / 8))
+        if (document.elementFromPoint(x, y) === canvas) {
+          empties.push({x, y})
+        }
       }
-      await page.evaluate(() => (window as any).__mrHover.clearHover())
-      await page.waitForTimeout(HOVER_SETTLE_MS)
-      const caught = page.evaluate(() => (window as any).__mrHover.next('hover', false))
-      await page.mouse.move(x, y)
-      await page.waitForTimeout(HOVER_SETTLE_MS)
-      if (await page.evaluate(() => (window as any).__mrHover.hoverCount()) > 0) {
-        return await caught as string
-      }
-      /* eslint-enable @typescript-eslint/no-explicit-any */
+    }
+    return {hit, empties}
+  })
+  let isEmptyFound = false
+  for (const point of targets.empties) {
+    await page.mouse.move(point.x, point.y)
+    const onModel = await page.evaluate(() =>
+      (window as any).store.getState().viewer.context.castRayIfc()?.object !== undefined)
+    if (!onModel) {
+      isEmptyFound = true
+      break
     }
   }
-  throw new Error('hoverSomething: no canvas point hovers a batched part')
+  if (!isEmptyFound) {
+    throw new Error('hoverSomething: no empty canvas point to start from')
+  }
+  await page.waitForTimeout(HOVER_SETTLE_MS)
+  expect(await page.evaluate(() => (window as any).__mrHover.hoverCount()), 'no hover on empty canvas').toBe(0)
+  const caught = page.evaluate((ms) => (window as any).__mrHover.next('hover', false, ms), HOVER_PAINT_MS)
+  await page.mouse.move(Math.round(targets.hit.x), Math.round(targets.hit.y))
+  await page.waitForTimeout(HOVER_SETTLE_MS)
+  expect(await page.evaluate(() => (window as any).__mrHover.hoverCount()), 'the part is hovered').toBeGreaterThan(0)
+  return await caught as string
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 }
 
 
