@@ -116,7 +116,11 @@ export default function ResidencyControl() {
       return undefined
     }
     const instance = new ResidencyController(model, {
-      getCamera: () => viewer?.context?.ifcCamera?.perspectiveCamera ?? null,
+      // `viewer.context` is the ThreeContext facade (three/ThreeContext.js),
+      // which has no `ifcCamera`: that lives on the legacy context it wraps.
+      // Reading `context.ifcCamera` here always gave null, so OCCUPANCY
+      // silently ranked by world-space radius alone, ignoring the eye.
+      getCamera: () => viewer?.context?.getCamera?.() ?? null,
       getSelectionCenter: () => selectedRef.current,
     })
     setController(instance.instanceCount > 0 ? instance : null)

@@ -274,6 +274,35 @@ describe('ResidencyControl residency section', () => {
     expect(window.location.hash).toContain('color=src')
   })
 
+  it('ranks occupancy from the viewer\'s camera, so a small part near the eye outranks a large far one', async () => {
+    // The one case where occupancy and plain size disagree: instance 0 is the
+    // smallest (r=1) but 2 from the eye; 1 and 2 (r=2, r=3) are 100 away. By
+    // angular size 0 is the largest on screen (0.5 vs 0.02 / 0.03). With no
+    // camera the metric falls back to radius alone and keeps 2 instead, which
+    // is what shipped while this read `context.ifcCamera` — a field the
+    // ThreeContext facade doesn't have.
+    const model = residencyModel()
+    const offsets = [new Vector3(0, 0, 2), new Vector3(0, 0, 100), new Vector3(0, 0, -100)]
+    model.getMatrixAt = (index, matrix) => matrix.makeTranslation(offsets[index])
+    const camera = {position: new Vector3(0, 0, 0)}
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setViewer({context: {getCamera: () => camera}})
+    })
+    try {
+      // 34% of 3 instances rounds to one kept: the top of the ranking.
+      window.location.hash = '#d:res=34'
+      await renderWithModel(model)
+      expect(model.setVisibleAt).not.toHaveBeenCalledWith(0, false)
+      expect(model.setVisibleAt).toHaveBeenCalledWith(1, false)
+      expect(model.setVisibleAt).toHaveBeenCalledWith(2, false)
+    } finally {
+      await act(() => {
+        result.current.setViewer(null)
+      })
+    }
+  })
+
   it('exposes the metric through the store, not local state', async () => {
     const {getByTestId} = await renderWithModel(residencyModel())
     fireEvent.click(getByTestId('control-button-residency'))
