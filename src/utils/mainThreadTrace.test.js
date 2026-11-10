@@ -21,6 +21,9 @@ describe('utils/mainThreadTrace', () => {
       expect(sanitizeInvoker('https://bldrs.ai/share/v/gh/org/repo/main/private.ifc')).toBe('(url)')
       expect(sanitizeInvoker('blob:https://bldrs.ai/abc')).toBe('(url)')
       expect(sanitizeInvoker(undefined)).toBe('')
+      // An element id is page content: the tag and handler stay, the id goes.
+      expect(sanitizeInvoker('BUTTON#private-model-name.onclick')).toBe('BUTTON#….onclick')
+      expect(sanitizeInvoker('DIV#a.onpointermove')).toBe('DIV#….onpointermove')
     })
 
     it('keeps only a source file\'s basename', () => {

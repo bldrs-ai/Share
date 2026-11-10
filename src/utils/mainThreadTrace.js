@@ -87,7 +87,10 @@ export function sanitizeInvoker(invoker) {
   if (/[a-z]+:\/\//i.test(invoker) || invoker.includes('/')) {
     return '(url)'
   }
-  return invoker.slice(0, MAX_NAME)
+  // A long animation frame names an event-listener invoker by its element,
+  // e.g. `BUTTON#some-id.onclick`. Keep the tag and the handler, drop the id:
+  // an id is page content, and the trace promises no model names.
+  return invoker.replace(/#[^.\s]*/g, '#…').slice(0, MAX_NAME)
 }
 
 
