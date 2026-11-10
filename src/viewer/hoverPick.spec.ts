@@ -229,6 +229,12 @@ async function instrumentSweep(page: Page) {
       },
     }
     w.__hoverSweep = rec
+    // And it reads every paint as cheap. Over a paint that costs more than
+    // EXPENSIVE_PAINT_MS the frame scheduler skips the picks of fast moves on
+    // purpose (hoverPick.js, the fast-move gate), so on a loaded runner the
+    // invariant below would not be the spec. The gate has its own leg (the
+    // fast sweep below) and units.
+    demand.paintCostMs = () => 0
     const rendered = demand.rendered.bind(demand)
     demand.rendered = (cost: number) => {
       rendered(cost)
