@@ -366,6 +366,79 @@ describe('ResidencyControl while-moving section (motionResidency)', () => {
     expect(getByTestId('motion-residency-slider').querySelector('input').disabled).toBe(false)
   })
 
+  it('re-ranks the motion distance ordering when the selection changes', async () => {
+    jest.useFakeTimers()
+    try {
+      // Three instances 10 apart on X; the double's `getMatrixAt` places them.
+      const model = residencyModel()
+      model.getMatrixAt = (index, matrix) => matrix.makeTranslation(index * 10, 0, 0)
+      const {getByTestId, viewer} = await renderWithViewer(true)
+      await act(() => {
+        useStore.getState().setModel(model)
+      })
+      fireEvent.click(getByTestId('control-button-residency'))
+      fireEvent.click(getByTestId('motion-residency-auto').querySelector('input'))
+      fireEvent.click(getByTestId('motion-residency-metric-distance').querySelector('input'))
+      // A manual 34%: one of three instances kept while moving.
+      await act(() => {
+        useStore.getState().setDisplayOverride({kind: 'model'},
+          {motionResidency: {mode: 'manual', percent: 34, metric: ResidencyMetric.DISTANCE}})
+      })
+      const kept = async (expressID) => {
+        await act(() => {
+          useStore.getState().setSelectedElement({expressID})
+        })
+        // The prepared ordering is rebuilt in idle time.
+        await act(() => {
+          jest.advanceTimersByTime(1000)
+        })
+        model.setVisibleAt.mockClear()
+        const update = viewer.listeners.filter(([type]) => type === 'update').at(-1)[1]
+        update()
+        const shown = new Set([0, 1, 2])
+        for (const [index, visible] of model.setVisibleAt.mock.calls) {
+          if (!visible) {
+            shown.delete(index)
+          }
+        }
+        return [...shown]
+      }
+      // Instance i has parent instanceParents[i] = [11, 12, 20][i].
+      expect(await kept(11)).toEqual([0])
+      // Let the gesture rest: no frames run in this double, so end it by
+      // turning the setting over (a change mid-gesture restores).
+      await act(() => {
+        useStore.getState().setDisplayOverride({kind: 'model'},
+          {motionResidency: {mode: 'manual', percent: 33, metric: ResidencyMetric.DISTANCE}})
+      })
+      expect(await kept(20)).toEqual([2])
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('re-ranks the at-rest distance ordering on a deselect too (B2 gap)', async () => {
+    // Before #2130 a deselect left the at-rest set ranked by the old
+    // selection; with no selection DISTANCE falls back to occupancy (the
+    // biggest part, instance 2).
+    window.location.hash = '#d:res=34.distance'
+    const model = residencyModel()
+    model.getMatrixAt = (index, matrix) => matrix.makeTranslation(index * 10, 0, 0)
+    await renderWithViewer(false)
+    await act(() => {
+      useStore.getState().setModel(model)
+    })
+    const shownAfter = async (selected) => {
+      model.setVisibleAt.mockClear()
+      await act(() => {
+        useStore.getState().setSelectedElement(selected)
+      })
+      return model.setVisibleAt.mock.calls.filter(([, visible]) => visible).map(([index]) => index)
+    }
+    expect(await shownAfter({expressID: 11})).toEqual([0])
+    expect(await shownAfter(null)).toEqual([2])
+  })
+
   it('restores a manual percent from a #d: permalink on cold load', async () => {
     window.location.hash = '#d:mres=30.distance'
     const {getByTestId} = await renderWithViewer(true)

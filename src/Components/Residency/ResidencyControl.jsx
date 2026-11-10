@@ -149,17 +149,29 @@ export default function ResidencyControl() {
 
   // Selection center for the DISTANCE metric — resolved lazily from the
   // controller's own instance table (first instance of the selected id).
+  //
+  // Both layers re-rank on every selection change, deselect included (no
+  // selection falls back to occupancy ordering): at rest by re-applying when
+  // the at-rest metric is DISTANCE — which before #2130 skipped the deselect
+  // — and in motion by dropping the prepared DISTANCE ordering and building
+  // it again in idle time, which before the owner's preview check on #2130
+  // never happened at all.
   useEffect(() => {
     selectedRef.current = null
+    if (!controller) {
+      return
+    }
     const expressID = selectedElement?.expressID
-    if (controller && expressID !== undefined && expressID !== null) {
+    if (expressID !== undefined && expressID !== null) {
       const match = controller.instances.find((entry) => entry.expressID === Number(expressID))
       selectedRef.current = match ? match.center : null
-      if (metric === ResidencyMetric.DISTANCE) {
-        controller.apply()
-      }
     }
-  }, [controller, selectedElement, metric])
+    if (metric === ResidencyMetric.DISTANCE) {
+      controller.apply()
+    }
+    controller.selectionChanged()
+    motionDriver?.schedulePrepare()
+  }, [controller, selectedElement, metric, motionDriver])
 
   // Residency reaches the scene from HERE rather than from the slider
   // handler, because the controller is built in its own effect and does not

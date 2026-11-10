@@ -171,6 +171,21 @@ describe('gpuFrameTimer', () => {
       expect(gl.beginQuery).toHaveBeenCalledTimes(2)
     })
 
+    it('closes an open query on stop, so a later start begins cleanly', () => {
+      const gl = fakeGl({timerQuery: true})
+      const timer = createGpuFrameTimer(gl, {onSample: () => undefined})
+      timer.start()
+      timer.beforePaint()
+      timer.stop()
+      expect(gl.endQuery).toHaveBeenCalledTimes(1)
+      expect(gl.deleteQuery).toHaveBeenCalledTimes(1)
+      timer.start()
+      timer.beforePaint()
+      // No second endQuery was needed to clear a stale one.
+      expect(gl.endQuery).toHaveBeenCalledTimes(1)
+      expect(gl.beginQuery).toHaveBeenCalledTimes(2)
+    })
+
     it('falls back to fences when asked to', () => {
       const gl = fakeGl({timerQuery: true})
       const timer = createGpuFrameTimer(gl, {useTimerQuery: false, onSample: () => undefined})

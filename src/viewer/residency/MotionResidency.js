@@ -259,7 +259,7 @@ export class MotionResidency {
     this.stats.gestures++
     let fraction = settings.percent / FULL_PERCENT
     if (settings.mode === MotionResidencyMode.AUTO) {
-      this.auto.startGesture(controller.motionCapacity())
+      this.auto.startGesture(controller.motionCapacity(settings.metric))
       fraction = this.auto.fraction
       this.timer?.start()
     }

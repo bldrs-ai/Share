@@ -37,10 +37,24 @@
  */
 
 
-/** Share of a display interval the GPU may spend on a frame. */
-export const BUDGET_SHARE = 0.8
-/** Never keep less than this while moving: the model must not vanish. */
-export const MIN_FRACTION = 0.05
+/**
+ * Share of a display interval the GPU may spend on a frame: all of it.
+ *
+ * The first cut used 0.8 (13.3 ms at 60 Hz) and the owner's preview run on
+ * PSB (M2 Air, 60 Hz, DPR 2) drove Auto to the floor: the GPU's fixed cost
+ * there is about 6.4 ms + 3.4 ms per million triangles, Momentum's whole
+ * frame is already 9.2 ms, and with the step aiming at `AIM` of the budget
+ * 13.3 ms leaves too few triangles. A full frame (16.7 ms; the step aims at
+ * ~14.2 ms) is about 2.3 M triangles — PSB at 25% (2.36 M, measured
+ * 14.4 ms), which is the trade-off the owner found good.
+ */
+export const BUDGET_SHARE = 1
+/**
+ * Never keep less than this while moving: the model must not vanish, and
+ * below about a tenth the orbit stops being legible as the model at all
+ * (5% on PSB read as too aggressive in the owner's preview run).
+ */
+export const MIN_FRACTION = 0.1
 /** At most one step per this long (B2's rescore throttle). */
 export const UPDATE_MS = 150
 /** Frames at the current fraction a step needs. */
@@ -87,6 +101,13 @@ const MAX_FRAME_INTERVAL_MS = MS_PER_S / MIN_HZ
  * loop ticks every animation frame whether it paints or not
  * (IfcContext#render), so idle intervals are plentiful between gestures, and
  * the estimate holds through one.
+ *
+ * Known limit: with render-on-demand off (`?feature=disableRenderOnDemand`)
+ * every frame paints, there is no idle interval to read, and the estimate
+ * stays at {@link DEFAULT_FRAME_INTERVAL_MS} — on a 120 Hz display Auto then
+ * aims at a 60 Hz budget. Counting painted intervals instead would read a
+ * slow GPU as a slow display, which is the worse error; render-on-demand is
+ * the default, and its kill switch is a diagnostic mode.
  */
 export class FrameRateEstimate {
   /** Starts at {@link DEFAULT_FRAME_INTERVAL_MS} until idle frames are seen. */

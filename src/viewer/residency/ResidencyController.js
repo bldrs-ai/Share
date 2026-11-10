@@ -266,6 +266,22 @@ export class ResidencyController {
 
 
   /**
+   * The selection moved: the DISTANCE metric's scores are stale.
+   *
+   * At rest that is B2's job and B2 already does it — ResidencyControl
+   * re-applies on a selection change when the at-rest metric is DISTANCE,
+   * and `apply` drops every prepared motion ordering. What it missed is a
+   * DISTANCE *motion* ordering under another at-rest metric: prepared once,
+   * it kept ranking by the old selection until something else dropped it
+   * (the owner's preview check on #2130). This drops it; the caller then
+   * reschedules `prepareMotion` (MotionResidency#schedulePrepare).
+   */
+  selectionChanged() {
+    this.motionOrders_.delete(ResidencyMetric.DISTANCE)
+  }
+
+
+  /**
    * Start a camera-motion overlay. Shows exactly what is shown now; the
    * first `setMotionFraction` evicts. Never sorts (class doc): with no
    * ordering prepared for `metric` the at-rest one is used for this gesture.

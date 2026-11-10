@@ -116,6 +116,24 @@ describe('ResidencyController motion overlay', () => {
     expect(visibility(mesh, 4)).toEqual([true, true, true, true])
   })
 
+  it('follows a new selection once told it moved and re-prepared', () => {
+    const {group, mesh} = makeModel([1, 2, 3, 4])
+    const selection = new Vector3(10, 0, 0)
+    const controller = new ResidencyController(group, {
+      getCamera: () => camera,
+      getSelectionCenter: () => selection,
+    })
+    controller.prepareMotion(ResidencyMetric.DISTANCE)
+    selection.set(30, 0, 0)
+    controller.selectionChanged()
+    controller.prepareMotion(ResidencyMetric.DISTANCE)
+    controller.beginMotion(ResidencyMetric.DISTANCE)
+    controller.setMotionFraction(0.25)
+    // Nearest the new selection (instance 3 at x = 30), not the old one.
+    expect(visibility(mesh, 4)).toEqual([false, false, false, true])
+    controller.endMotion()
+  })
+
   it('orders a never-applied controller by its metric once prepared', () => {
     // Target 1 since construction: there is no at-rest order to reuse, and
     // without the prepared one a gesture would drop parts in batch order.

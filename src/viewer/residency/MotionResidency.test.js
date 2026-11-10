@@ -1,7 +1,7 @@
 /* eslint-disable no-magic-numbers */
 import {BatchedMesh, BoxGeometry, EventDispatcher, Group, Matrix4, Vector3} from 'three'
 import {requestPaint} from '../three/renderDemand'
-import {BUDGET_SHARE} from './autoResidency'
+import {BUDGET_SHARE, MIN_FRACTION} from './autoResidency'
 import {MotionResidency, MotionResidencyMode, REST_FRAMES, REST_MS} from './MotionResidency'
 import {ResidencyController, ResidencyMetric} from './ResidencyController'
 
@@ -281,7 +281,7 @@ describe('MotionResidency', () => {
       }
       const share = visibleCount(mesh, 200) / 200
       expect(psb(share)).toBeLessThanOrEqual(budget)
-      expect(share).toBeGreaterThan(0.05)
+      expect(share).toBeGreaterThan(MIN_FRACTION)
       expect(driver.stats.samples).toBeGreaterThan(20)
     })
 

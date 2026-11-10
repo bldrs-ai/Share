@@ -116,9 +116,13 @@ export class GpuFrameTimer {
   }
 
 
-  /** Stop measuring; anything in flight is dropped. */
+  /**
+   * Stop measuring; anything in flight is dropped, including a query a
+   * throwing paint left open (so stop and dispose leave the same state).
+   */
   stop() {
     this.running = false
+    this.closeActiveQuery_()
     this.dropQueries_()
     this.dropFence_()
   }
@@ -134,13 +138,9 @@ export class GpuFrameTimer {
       return
     }
     const gl = this.gl
-    if (this.activeQuery_) {
-      // The last paint threw before `afterPaint`: close its query unread,
-      // or `beginQuery` below is an INVALID_OPERATION.
-      gl.endQuery(this.ext.TIME_ELAPSED_EXT)
-      gl.deleteQuery(this.activeQuery_.query)
-      this.activeQuery_ = null
-    }
+    // The last paint threw before `afterPaint`: close its query unread, or
+    // `beginQuery` below is an INVALID_OPERATION.
+    this.closeActiveQuery_()
     if (this.pendingQueries_.length >= MAX_PENDING_QUERIES) {
       return
     }
@@ -210,15 +210,21 @@ export class GpuFrameTimer {
   /** Detach everything; the timer is not used again. */
   dispose() {
     this.stop()
-    if (this.activeQuery_) {
-      try {
-        this.gl.endQuery(this.ext.TIME_ELAPSED_EXT)
-        this.gl.deleteQuery(this.activeQuery_.query)
-      } catch {
-        // A lost context: nothing to free.
-      }
-      this.activeQuery_ = null
+  }
+
+
+  /** @private */
+  closeActiveQuery_() {
+    if (!this.activeQuery_) {
+      return
     }
+    try {
+      this.gl.endQuery(this.ext.TIME_ELAPSED_EXT)
+      this.gl.deleteQuery(this.activeQuery_.query)
+    } catch {
+      // A lost context: nothing to free.
+    }
+    this.activeQuery_ = null
   }
 
 
