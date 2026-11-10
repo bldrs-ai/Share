@@ -283,17 +283,22 @@ export const flags = [
   // both of which now run in the default configuration.
   // See design/new/model-display-controls.md §7.
   {name: 'displayControls', isActive: true},
-  // Adaptive residency during camera motion (B3 of
-  // design/new/demand-tiled-rendering.md; viewer/residency/MotionResidency.js):
-  // while the camera moves, the Display menu's residency controller holds a
-  // smaller set — Auto (the default) picks it from measured GPU frame time
-  // against the display's frame budget, or a manual percent — and the camera
-  // coming to rest restores the at-rest residency with a full-detail paint.
-  // Gates the menu's "While moving" section and the driver behind it; off,
-  // the viewer is exactly as before (no camera listener, no timer). Default
-  // OFF for the owner's A/B on a real GPU: SwiftShader, where CI runs,
-  // cannot say whether Auto's budget is the right one.
-  {name: 'motionResidency', isActive: false},
+  // OFF-switch for adaptive residency during camera motion (B3 of
+  // design/new/demand-tiled-rendering.md; viewer/residency/MotionResidency.js),
+  // on by default since the owner's A/B on a real GPU (it was the opt-in
+  // `motionResidency` flag until then): while the camera moves, the Display
+  // menu's residency controller holds a smaller set — Auto (the default)
+  // picks it from measured GPU frame time against the display's frame
+  // budget, or a manual percent — and the camera coming to rest restores the
+  // at-rest residency with a full-detail paint. Same inverted shape as the
+  // switches above: `?feature=disableMotionResidency` is the per-session way
+  // back (the menu's "While moving" section and the driver behind it are not
+  // built, so the viewer is exactly as before: no camera listener, no timer),
+  // and `isActive: true` here is the PROD ROLLBACK, which no URL can
+  // override. A leftover `?feature=motionResidency` in a link is an unknown
+  // name and changes nothing. viewer/display/motionResidencyMode.js
+  // #isMotionResidencyOn is the one predicate.
+  {name: 'disableMotionResidency', isActive: false},
   // Batched-native GLB cache artifact (view-140 S9 / viewer-replacement
   // §3b.v): the writer serializes the batched model via
   // EXT_mesh_gpu_instancing + BLDRS_instance_tables instead of the merged

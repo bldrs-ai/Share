@@ -28,6 +28,7 @@ import {
   resolvedAppearance,
 } from '../../viewer/display/DisplayController'
 import {isFeatureEnabled} from '../../FeatureFlags'
+import {isMotionResidencyOn} from '../../viewer/display/motionResidencyMode'
 import {readModelDisplayHash, writeModelDisplayHash} from './displayHash'
 
 
@@ -47,9 +48,10 @@ import {readModelDisplayHash, writeModelDisplayHash} from './displayHash'
  *   - **Residency** (B2 / #1613) — a slider (100% = whole model … 0% = fully
  *     evicted) plus the priority metric that orders what survives in between.
  *     Doubles as the instrumentation surface for picking a default policy.
- *   - **While moving** (B3, `?feature=motionResidency`) — the same slider and
- *     metric for while the camera moves, plus Auto (on by default), which
- *     picks the percent from measured GPU frame time. The Residency section
+ *   - **While moving** (B3; on by default, `?feature=disableMotionResidency`
+ *     hides it and builds no driver) — the same slider and metric for while
+ *     the camera moves, plus Auto (on by default), which picks the percent
+ *     from measured GPU frame time. The Residency section
  *     above becomes the at-rest setting and keeps its default and behaviour;
  *     the camera coming to rest always restores it. Shown only where the
  *     Residency section is, since it drives the same controller.
@@ -137,11 +139,12 @@ export default function ResidencyControl() {
     return () => instance.dispose()
   }, [model, viewer])
 
-  // Camera-motion residency (B3), behind `motionResidency`. Its own effect,
+  // Camera-motion residency (B3), on unless `disableMotionResidency`
+  // (motionResidencyMode.js#isMotionResidencyOn). Its own effect,
   // keyed on the controller it drives, so it is rebuilt — and its overlay
   // dropped — whenever the controller is. `autoPercent` is what Auto last
   // settled on, reported at each rest so the menu can show it.
-  const showMotion = isFeatureEnabled('motionResidency')
+  const showMotion = isMotionResidencyOn()
   const [motionDriver, setMotionDriver] = useState(null)
   const [autoPercent, setAutoPercent] = useState(null)
   useEffect(() => {
