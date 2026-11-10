@@ -156,7 +156,19 @@ cheapest-to-forget last:
    `controlstart` alone doesn't paint (the move after it does), and the
    camera updates before the renderer in the frame rather than after it
    (`IfcContext#updateAllComponents`), so a frame shows this frame's pose.
-   Both cut the first input from idle by a frame.
+   Both cut the first input from idle by a frame. Per-frame upkeep added
+   with `ThreeContext#onFrame` runs in the same place, after the camera and
+   before the paint decision: PlaceMark's sprite scale, and the hover pick
+   (`viewer/hoverPick.js#createFrameHoverPicker`). The window's mousemove
+   only marks the pointer, so the hover recolour, which asks through the
+   `setColorAt` hook, paints in the frame of the move that caused it
+   (glb-export-premium.md §1.1d "What a hover pick costs after it").
+   `?feature=disableFrameHover` puts back the old timer-driven pick. While
+   the last paint cost more than `EXPENSIVE_PAINT_MS` (33 ms,
+   `RenderDemand#paintCostMs`), fast hover moves skip the pick, and a
+   canvas pointermove opens no settle window (layer 5): what the pointer
+   changes asks for itself, and a sweep shouldn't queue repaints of an
+   unchanged picture on the GPU.
 2. `requestPaint()` (`renderDemand.js`), callable from anywhere, for what
    three gives no signal for: `visible`, material colour, opacity and
    wireframe, outline selections (IfcHighlighter, the isolation outline),
@@ -175,8 +187,8 @@ cheapest-to-forget last:
    pixel ratio, cut planes, scene background/environment/root children,
    tone mapping. Snapshotted at each paint.
 5. A settle window (`SETTLE_MS`, 200 ms of painting) after user input on
-   the page (not a bare press), a pointer move over the canvas, and any
-   store change
+   the page (not a bare press), a pointer move over the canvas (only while
+   paints are cheap; layer 1), and any store change
    (CadView subscribes): for the change a React effect applies a frame
    after the event. During a load these are background asks.
 6. `keepPainting()` for what changes on its own clock: a scene with Spark
@@ -240,7 +252,8 @@ size differ from the capture's. `hoverOverlay.test.js` has one test per
 source; `renderOnDemandSources.test.js` holds the overlay-only asks to the
 one file allowed to make them. With the overlay on, a canvas `pointermove` no
 longer opens a settle window (it would repaint in full for 200 ms after
-every move, and the overlay would save nothing); what a canvas pointer move
+every move, and the overlay would save nothing; #2128 already drops it while
+paints are expensive); what a canvas pointer move
 changes asks for itself instead (`ShareViewer#highlightIfcItem`, a full
 `requestPaint` on every hover path but the overlay's, and
 `MeshClipper#setArrowColor`). The overlay is off while the viewer paints
@@ -249,7 +262,10 @@ every frame (`hoverOverlayMode.js`), and off for a session with
 wrong; `disableHoverOverlay: isActive: true` in FeatureFlags.js is the prod
 rollback (a static `true` beats every URL). A throw in the overlay's render path
 turns it off for the viewer's life (GA `hover_overlay_disabled {stage}`),
-repaints in full and lets the hover recolour. The cache costs one colour +
+repaints in full and lets the hover recolour. The overlay's paints count as
+paints for `RenderDemand#paintCostMs`, so once one has run, the hover
+picker's fast-move gate (#2128, `EXPENSIVE_PAINT_MS`) sees a cheap paint and
+picks on every frame again, on any model. The cache costs one colour +
 depth target at drawing-buffer size, 6 bytes a pixel (RGBA8 + 16-bit depth):
 ~25 MB at 2560×1600, ~30 MB at 2940×1676.
 

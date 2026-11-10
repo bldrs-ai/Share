@@ -128,6 +128,18 @@ export const USER_CAMERA_EVENT = 'bldrsusercamera'
  */
 export const SETTLE_MS = 200
 /**
+ * A paint that takes longer than this, measured to the next frame as the
+ * load budget measures it, is an expensive one: two 60 Hz frames, so the
+ * display is already showing every other frame at best. Above it, what only
+ * the pointer moving would repaint is left to ask for itself: the canvas
+ * pointermove no longer opens a settle window (renderDemandHooks.js
+ * #attachSessionNets), and the hover pick skips fast moves
+ * (viewer/hoverPick.js#createFrameHoverPicker). Below it, nothing changes.
+ * The owner's PSB preview: hover lag that grew with model size, the
+ * repaints, not the picks, being what the sweep queued up on the GPU.
+ */
+export const EXPENSIVE_PAINT_MS = 33
+/**
  * What a frame paints (`RenderDemand#frameKind`). `FULL` redraws the scene;
  * `OVERLAY` asks only that the hover overlay be redrawn on the cached frame
  * of the last full paint (hoverOverlay.js). The render closure turns an
@@ -612,6 +624,23 @@ export default class RenderDemand {
     this.stats.paintMs += drawMs
     // What this paint showed is the baseline the probe compares against.
     this.probe?.snapshot?.()
+  }
+
+
+  /**
+   * What the last paint cost, measured as `shouldRender` measures it: from
+   * its start to the next frame. Read in the frame after a paint, before
+   * that frame's `shouldRender` has extended the draw call's own cost, it
+   * extends it here the same way, so a per-frame component sees the whole
+   * cost. 0 before the first paint.
+   *
+   * @return {number} ms
+   */
+  paintCostMs() {
+    if (this.isAwaitingFrameAfterPaint) {
+      return Math.max(this.lastPaintCostMs, this.now() - this.lastPaintStartMs)
+    }
+    return this.lastPaintCostMs
   }
 
 

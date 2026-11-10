@@ -829,6 +829,133 @@ same build A/B'd:
 - per pick: median 9.2–10 ms → 0.2 ms, worst 26 ms → 4.4 ms;
 - a 5,082-event pointer sweep: mousemove handlers 65 s → 0.09 s.
 
+**Hover picks run in the frame (follow-up to #2127).** With the pick
+cheap, the highlight still lagged the pointer about as much as before, and
+the scheduler was why. Chrome dispatches mousemove once per frame, ahead of
+that frame's rAF callbacks. #2127's scheduler picked in the handler at most
+every 33 ms, a pick every other frame at 60 Hz, and its `setTimeout`
+trailing pick wasn't frame-aligned, so the repaint waited for the next frame.
+Now the window's mousemove only marks the pointer dirty, and
+`createFrameHoverPicker` picks from the render loop through
+`ThreeContext#onFrame`. That is a component of `IfcContext`'s frame, which
+under render-on-demand runs after the camera update and before the renderer's
+paint decision (`IfcContext#updateAllComponents`, DESIGN.md §"Render loop &
+perf monitor"). The recolour's `setColorAt` asks for its paint through the
+BatchedMesh hook (renderDemandHooks.js), so it paints in that same frame.
+
+- **Cheap picks run every frame.** At a median of `CHEAP_PICK_MS` (2 ms) or
+  less, which is every pick through the instance tree, the scheduler picks on
+  every frame the pointer moved. There is no 33 ms floor.
+- **Dear picks back off.** That is a model without the tree, or the tree not
+  built yet. The `COST_FACTOR × median` interval, capped at 500 ms, is read
+  on the frame clock. The move stays pending, so the first frame the wait
+  ends on is the "pointer stopped" pick, with no trailing timer.
+- **Unchanged:** the mouseup catch-up (the next frame after it), no pick while
+  dragging or with the canvas pointer unmoved, and so no pick and no paint
+  from hover on an idle viewer.
+
+`?feature=disableFrameHover` (FeatureFlags.js) puts the timer scheduler back
+(`createTimerHoverPicker`). It is the A/B below and the rollback. With
+`disableRenderOnDemand` the loop keeps the vendored order, the renderer
+before its components, so a hover pick paints on the next frame: one frame
+later than on demand, still with no 33 ms wait.
+
+Measured on Momentum in headless Chromium:
+
+- the sweep was 8 rows of 1,000 raw pointer events 4 ms apart (a 250 Hz
+  mouse), which Chrome coalesces to about 41 mousemoves a second;
+- the drawing area was 320×200, the size at which SwiftShader paints within a
+  60 Hz frame. At the default 1280×800 a SwiftShader frame takes ~80 ms,
+  longer than the old floor, so both schedulers pick every frame there and
+  can't be told apart;
+- latency runs from the event's `timeStamp` to the end of the paint (the
+  draw call's return in `RenderDemand#rendered`) that showed its highlight.
+
+main, the PR with `disableFrameHover`, and the PR:
+
+| | main | timer (kill switch), 2 runs | frame-aligned, 2 runs |
+|---|---|---|---|
+| pointer → painted pick, p50 / p95 | 5.0 / 37.3 ms | 4.7–4.8 / 36.8–38.7 ms | 3.5–3.6 / 6.5–6.7 ms |
+| element change → its highlight painted, p50 / p95 | 4.8 / 38.1 ms | 5.6–27.2 / 42–59 ms | 3.6–4.0 / 5.9–7.4 ms |
+| element changes never shown | 11 of 66 | 14 of 64, 10 of 62 | 4 of 64, 4 of 68 |
+| paints showing a highlight older than their frame's pointer | 1.7 % | 2.9 %, 1.9 % | 0 of ~1,200, twice |
+| picks / paints / mousemoves per second | 17 / 29 / 41 | 17–18 / 28–30 / 40–42 | 28–29 / 29–30 / 41 |
+| picks and paints in 1 s with the pointer still | 0 / 0 | 0 / 0 | 0 / 0 |
+
+So the p95 lag drops ~5.6× (37 → 6.6 ms). The highlight now updates on every
+painted frame the pointer moved (picks per paint 0.6 → 0.97), at the
+display's rate rather than 30 Hz. The browser's own share is the same in
+every leg: ~2 ms p50 from the event's timestamp to its handler. The four
+changes the frame-aligned leg never shows are elements the pointer crossed
+between two frames. On a GPU, frames come at the display's rate and picks
+cost what they cost here (~0.1 ms on Momentum, ~0.2 ms on PSB through the
+tree), so the same ratio should hold.
+
+PSB (cold load, the same rig) is paint-bound in SwiftShader. One paint of its
+11.6 M triangles takes ~2 s even at 320×200, so a 30 s sweep painted 15–16
+frames in either leg. In those frames main showed a stale highlight in 2 of 15
+and the PR in none of 16. That is too few samples for a latency figure. The
+median pick there is 0.2–0.3 ms, so the PR takes the every-frame path.
+
+`hoverPick.spec.ts` checks the frame-aligned behaviour on the user's own
+sweep, desktop and mobile: every frame painted after a move picked for it
+first, and showed what the pointer was over. It goes red with the timer
+scheduler, and with a 33 ms floor restored in the frame scheduler (44–56 of
+~375 frames painted unpicked).
+
+**Fast moves skip the highlight while paints are expensive.** The owner's
+preview of the above showed hover essentially instant on Momentum, middling on
+Seestrasse (a public sample) and "a little better" on PSB. The lag grew with model size, so what
+was left is the repaint, which is GPU-bound on PSB, not the pick. A sweep
+queued one repaint per frame for highlights the pointer had already left, and
+the highlight it stopped on waited behind them. Two changes engage only above
+`EXPENSIVE_PAINT_MS` (33 ms, `three/renderDemand.js`): the last paint's cost,
+measured from its start to the next frame (`RenderDemand#paintCostMs`), as
+the load budget measures it.
+
+- **The hover gate** (`hoverPick.js`). While the paint is expensive and the
+  pointer moved faster than `FAST_POINTER_PX_PER_MS` (1.5 CSS px/ms between
+  two frames' mouse events, 25 px a 60 Hz frame), the frame scheduler skips
+  the pick and its recolour and keeps the move pending. The first frame the
+  pointer is slower, or hasn't moved, picks, so the final highlight is never
+  lost. Speed is measured from the last mouse event, so the first move after
+  a rest always picks.
+- **The canvas pointermove stops opening a settle window**
+  (`renderDemandHooks.js#attachSessionNets`). Without this, the window would
+  repaint the unchanged picture every frame of the sweep anyway. What a
+  pointer move changes asks for its own paint: the hover recolour through the
+  `setColorAt` hook, a cut plane's arrow through `MeshClipper#setArrowColor`.
+
+With cheap paints neither engages, so Momentum on a GPU is exactly as above.
+
+Measured in headless Chromium at 1280×800. A fast sweep is ~40 raw pointer
+events 4 ms apart across about half the canvas (~3 px/ms), ending on an
+element. "Settle" is the wall-clock time from the last raw event sent to the
+first frame after the paint that showed the final highlight. The no-gate leg
+is the frame scheduler without the gate:
+
+| | no gate | gate |
+|---|---|---|
+| PSB (paint ~2.6 s in SwiftShader), settle | 5.2–5.3 s | 2.7–3.1 s |
+| PSB, paints per sweep (during + after) | 2 + 1 | 0 + 1–2 |
+| PSB, mousemoves the page got during the sweep | 3 | 23–25 |
+| Momentum (paint ~85 ms in SwiftShader), settle | 116–158 ms | 116–143 ms |
+| Momentum, paints per sweep (during + after) | 3 + 2–3 | 0 + 1 |
+
+On PSB the settle drops to one paint's cost (~1.8× faster). Without the gate
+the final highlight's paint queued behind the sweep's last one. The input
+itself was starved too: three mousemoves reached the page in a 200 ms sweep,
+against 23–25 with the gate. On Momentum each queued paint is short, so the
+settle gain is small, but the sweep's repaints drop from 5–6 to 1.
+
+The units break each half of the condition (a pointer-only gate fires on cheap
+paints; a cost-only gate fires on a slow pointer), dropping the move instead
+of deferring it (no settle pick), and an always-on pointermove window. Each
+goes red. `hoverPick.spec.ts` sweeps fast at the full pixel ratio, where a
+desktop SwiftShader frame of Momentum is expensive, and checks the highlight
+where the pointer stops. It goes red with the move dropped instead of
+deferred.
+
 With the pick down to ~0.2 ms, what a hover change cost was the repaint
 behind it: the recolour (`batchedHighlight.js`) repainted the whole model,
 47 ms of GPU p50 on PSB on an M2 against 9.2 ms on Momentum, so the
