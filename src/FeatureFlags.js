@@ -210,6 +210,13 @@ export const flags = [
   // per-session A/B (the before/after in that module's PR was measured with
   // it), and `isActive: true` here is the prod rollback.
   {name: 'disableInstanceBvh', isActive: false},
+  // OFF-switch for the frame-aligned hover pick (viewer/hoverPick.js
+  // #createFrameHoverPicker): with it on, hover picks in the mousemove
+  // handler at most every 33 ms with a setTimeout trailing pick
+  // (#createTimerHoverPicker), as #2127 shipped. Same inverted shape:
+  // `?feature=disableFrameHover` is the per-session A/B for a hover-lag
+  // report, and `isActive: true` here is the prod rollback.
+  {name: 'disableFrameHover', isActive: false},
   // Kill switch for the engine worker's OPFS sync access handle
   // (engine-worker.md §7 step 4): read the source through the Blob store
   // instead, as on the main thread. `?feature=` can only turn flags on, so

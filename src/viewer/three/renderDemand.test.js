@@ -55,6 +55,20 @@ describe('viewer/three/renderDemand', () => {
     return demand.shouldRender()
   }
 
+  it('reports a paint\'s cost to the next frame, even before that frame\'s shouldRender', () => {
+    expect(demand.paintCostMs()).toBe(0)
+    expect(demand.shouldRender()).toBe(true)
+    demand.rendered(2)
+    // In the next frame, before shouldRender measures it: the draw call plus
+    // the wait for the frame (what a per-frame component reads).
+    clock += 40
+    expect(demand.paintCostMs()).toBe(42)
+    demand.shouldRender()
+    clock += 1000
+    // Measured once; a long idle afterwards doesn't grow it.
+    expect(demand.paintCostMs()).toBe(42)
+  })
+
   it('paints every frame outside a load', () => {
     demand.rendered(50)
     expect(demand.shouldRender()).toBe(true)

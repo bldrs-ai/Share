@@ -1,5 +1,5 @@
 import {BatchedMesh, BufferAttribute, InterleavedBuffer, Material, Object3D, Texture} from 'three'
-import {requestBackgroundPaint} from './renderDemand'
+import {EXPENSIVE_PAINT_MS, requestBackgroundPaint} from './renderDemand'
 
 
 /**
@@ -216,7 +216,8 @@ const WINDOW_INPUT_EVENTS = ['pointerup', 'wheel', 'keydown', 'keyup', 'touchend
 /**
  * The event half of the backstops (module doc): user input anywhere on the
  * page opens a settle window; a pointer moving over the canvas does too
- * (hover, a cut plane's arrow), but not one moving over the panels; a DPR
+ * (hover, a cut plane's arrow) while paints are cheap, but not one moving
+ * over the panels; a DPR
  * change, a restored context and the tab coming back each paint.
  *
  * @param {object} demand the viewer's RenderDemand
@@ -237,7 +238,19 @@ export function attachSessionNets(demand, canvas) {
     }
   }
   WINDOW_INPUT_EVENTS.forEach((type) => listen(globalThis, type, soon, options))
-  listen(canvas, 'pointermove', soon, {passive: true})
+  // A pointer moving over the canvas settles only while paints are cheap.
+  // What it changes asks for itself — the hover recolour through the
+  // BatchedMesh `setColorAt` hook, a cut plane's arrow through
+  // MeshClipper#setArrowColor, both in renderOnDemandSources.test.js — so
+  // the window is a backstop; on a model whose paint is expensive
+  // (EXPENSIVE_PAINT_MS) it repainted the same picture every frame of a
+  // sweep and left the GPU busy when the pointer stopped, delaying the
+  // highlight it stopped on.
+  listen(canvas, 'pointermove', () => {
+    if (!(demand.paintCostMs?.() > EXPENSIVE_PAINT_MS)) {
+      demand.invalidateSoon()
+    }
+  }, {passive: true})
   listen(canvas, 'webglcontextrestored', now)
   listen(globalThis.document, 'visibilitychange', now)
   // matchMedia fires once per DPR change, for the DPR it was made with, so

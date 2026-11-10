@@ -1,7 +1,8 @@
 import {Color} from 'three'
 import {getMeshMaterials} from '../viewer/ShareModel'
 import {ShareViewer} from '../viewer/ShareViewer'
-import {createHoverPicker} from '../viewer/hoverPick'
+import {isFeatureEnabled} from '../FeatureFlags'
+import {createFrameHoverPicker, createTimerHoverPicker} from '../viewer/hoverPick'
 
 
 // Track the current viewer for cleanup so a subsequent call to
@@ -12,6 +13,7 @@ let mouseDownHandler = null
 let mouseUpHandler = null
 let mouseMoveHandler = null
 let hoverPicker = null
+let stopHoverFrame = null
 
 
 // Texture map slots that may exist on a Three.js material; iterated by
@@ -48,6 +50,8 @@ export function disposeViewer() {
     if (mouseMoveHandler) {
       window.removeEventListener('mousemove', mouseMoveHandler)
     }
+    stopHoverFrame?.()
+    stopHoverFrame = null
     hoverPicker?.dispose()
     hoverPicker = null
     mouseDownHandler = null
@@ -148,21 +152,35 @@ export function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   }
   mouseUpHandler = () => {
     viewer.clipper.clickDrag = false
-    // A hover dropped while the button was down (a trailing pick that came
-    // due mid-press, or the moves of a drag) is caught up now, where the
-    // pointer let go; a click that didn't move it picks nothing.
+    // A hover dropped while the button was down (the moves of a drag) is
+    // caught up where the pointer let go: on the next frame under the frame
+    // scheduler, at once under the timer one. A click that didn't move it
+    // picks nothing.
     hoverPicker?.onMove()
   }
 
-  // Highlight items when hovering over them: the pick is expensive on a
-  // large model, so it is sampled, skipped while dragging (rotation) and
-  // while the pointer hasn't moved over the canvas, and spaced out by its
-  // own measured cost (viewer/hoverPick.js).
-  hoverPicker = createHoverPicker({
+  // Highlight items when hovering over them (viewer/hoverPick.js). The
+  // window's mousemove only marks the pointer dirty; the pick runs in the
+  // render loop's frame, after the camera moves and before the paint
+  // decision (ThreeContext#onFrame), so the highlight changes in the frame
+  // whose input moved the pointer. Skipped while dragging (rotation) and while
+  // the pointer hasn't moved over the canvas, spaced out by its own measured
+  // cost when picks are dear, and skipped while the pointer sweeps fast over
+  // a model whose paint is expensive (the last paint's cost, from the
+  // viewer's RenderDemand). `?feature=disableFrameHover` puts back the timer
+  // scheduler, which picks in the mousemove handler.
+  const hoverDeps = {
     pick: () => viewer.highlightIfcItem(),
     isDragging: () => Boolean(viewer.clipper.clickDrag),
     pointer: () => viewer.context.getNormalizedMousePosition?.() ?? null,
-  })
+    paintCostMs: () => viewer.context.getRenderDemand?.()?.paintCostMs?.() ?? 0,
+  }
+  if (isFeatureEnabled('disableFrameHover')) {
+    hoverPicker = createTimerHoverPicker(hoverDeps)
+  } else {
+    hoverPicker = createFrameHoverPicker(hoverDeps)
+    stopHoverFrame = viewer.context.onFrame?.(hoverPicker.onFrame) ?? null
+  }
   mouseMoveHandler = hoverPicker.onMove
 
   window.addEventListener('mousedown', mouseDownHandler)
