@@ -15,8 +15,18 @@ export const MotionResidencyMode = Object.freeze({
   MANUAL: 'manual',
 })
 
-/** No camera change for this long and the camera is at rest. */
+/** No camera change for this long, and for `REST_FRAMES` frames, is rest. */
 export const REST_MS = 200
+/**
+ * Consecutive frames without a camera change rest also needs. Time alone
+ * is not enough on a slow GPU: at SwiftShader's ~380 ms per frame of a 1M-
+ * triangle model, camera-controls skips an `update` on some frames of a
+ * steady drag, and a single quiet frame is already past `REST_MS` — every
+ * gesture ended after two frames, so Auto never saw the three samples a step
+ * needs. Measured while building B3 (#2130). On a 60 Hz display three frames
+ * are 50 ms, so `REST_MS` still decides there.
+ */
+export const REST_FRAMES = 3
 /**
  * Most instances one frame's step may flip after a gesture's first (B2's
  * bounded-churn rule). A flip is a `setVisibleAt` plus three rebuilding its
@@ -39,7 +49,8 @@ const PREPARE_DELAY_MS = 100
  *
  * **Motion and rest.** camera-controls' `update` event (input, damping,
  * transitions, ViewCube snaps and fits — everything that moves the camera
- * goes through it) starts motion; `REST_MS` without one is rest. Not
+ * goes through it) starts motion; `REST_MS` and `REST_FRAMES` frames
+ * without one is rest. Not
  * `controlstart`: a click on the canvas is a pointerdown that moves nothing,
  * and evicting on it would flicker the model under every selection. `update`
  * fires inside `controls.update()`, which IfcContext#updateAllComponents runs
@@ -101,6 +112,10 @@ export class MotionResidency {
     })
     this.moving = false
     this.lastMoveMs_ = -Infinity
+    // Whether the camera changed since the last frame, and how many frames
+    // in a row it hasn't.
+    this.changedSinceFrame_ = false
+    this.quietFrames_ = 0
     this.paintedSinceFrame_ = false
     this.cancelPrepare_ = null
     // Read by tests and the PR's measurements; cheap counters only.
@@ -164,6 +179,8 @@ export class MotionResidency {
       return
     }
     this.lastMoveMs_ = this.now()
+    this.changedSinceFrame_ = true
+    this.quietFrames_ = 0
     if (!this.moving) {
       this.startMotion_()
     }
@@ -178,7 +195,12 @@ export class MotionResidency {
     if (!this.moving) {
       return
     }
-    if (now - this.lastMoveMs_ >= REST_MS) {
+    if (this.changedSinceFrame_) {
+      this.changedSinceFrame_ = false
+    } else {
+      this.quietFrames_++
+    }
+    if (now - this.lastMoveMs_ >= REST_MS && this.quietFrames_ >= REST_FRAMES) {
       this.endMotion_()
       return
     }

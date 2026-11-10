@@ -2,7 +2,7 @@
 import {BatchedMesh, BoxGeometry, EventDispatcher, Group, Matrix4, Vector3} from 'three'
 import {requestPaint} from '../three/renderDemand'
 import {BUDGET_SHARE} from './autoResidency'
-import {MotionResidency, MotionResidencyMode, REST_MS} from './MotionResidency'
+import {MotionResidency, MotionResidencyMode, REST_FRAMES, REST_MS} from './MotionResidency'
 import {ResidencyController, ResidencyMetric} from './ResidencyController'
 
 
@@ -178,6 +178,30 @@ describe('MotionResidency', () => {
     // Exactly the at-rest set, and a paint was asked for to show it.
     expect(visibleCount(mesh, 8)).toBe(6)
     expect(requestPaint).toHaveBeenCalled()
+  })
+
+  it('stays in motion through a slow GPU\'s frames that miss an update', () => {
+    // SwiftShader-like: 380 ms frames, the camera changing on every other
+    // one. Each quiet frame alone is past REST_MS; it is not rest.
+    const {mesh, driver, controls, frames, clock} = rig(8)
+    driver.setSettings(MANUAL_25)
+    const slowFrame = (move) => {
+      clock.t += 380
+      if (move) {
+        controls.dispatchEvent({type: 'update'})
+      }
+      frames.forEach((fn) => fn())
+    }
+    for (let i = 0; i < 10; i++) {
+      slowFrame(i % 2 === 0)
+      expect(driver.moving).toBe(true)
+    }
+    expect(visibleCount(mesh, 8)).toBe(2)
+    for (let i = 0; i < REST_FRAMES; i++) {
+      slowFrame(false)
+    }
+    expect(driver.moving).toBe(false)
+    expect(visibleCount(mesh, 8)).toBe(8)
   })
 
   it('changes nothing at manual 100%, today\'s behaviour', () => {

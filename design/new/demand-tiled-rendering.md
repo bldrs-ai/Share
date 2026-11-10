@@ -238,8 +238,11 @@ the first must already be cheap to draw and the restore must be the whole
 picture.
 
 *Motion and rest (MotionResidency).* camera-controls' `update` (input,
-damping, transitions, ViewCube snaps, fits) starts motion; 200 ms without
-one is rest. Not `controlstart`, or every click-to-select would flicker the
+damping, transitions, ViewCube snaps, fits) starts motion; 200 ms *and*
+three frames without one is rest. Time alone failed on SwiftShader: at
+~380 ms a frame camera-controls skips an `update` on some frames of a
+steady drag, one quiet frame was already past 200 ms, and every gesture
+ended after two frames — too few for Auto to step. Not `controlstart`, or every click-to-select would flicker the
 model. `update` fires inside `controls.update()`, which runs before the
 frame's paint (`IfcContext#updateAllComponents`), so the first moved pose
 is already drawn reduced; rest is noticed in a `ThreeContext#onFrame` hook,
