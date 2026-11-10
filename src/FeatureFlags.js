@@ -203,6 +203,13 @@ export const flags = [
   // on-demand painting (DESIGN.md §"Render loop & perf monitor", "Rolling
   // back").
   {name: 'disableRenderOnDemand', isActive: false},
+  // OFF-switch for the instance tree hover and click picks go through on a
+  // batched model (viewer/ifc/batchedInstanceBvh.js): with it on, no tree is
+  // built and every pick walks every instance, as before the tree. Same
+  // inverted shape as the two above: `?feature=disableInstanceBvh` is the
+  // per-session A/B (the before/after in that module's PR was measured with
+  // it), and `isActive: true` here is the prod rollback.
+  {name: 'disableInstanceBvh', isActive: false},
   // Kill switch for the engine worker's OPFS sync access handle
   // (engine-worker.md §7 step 4): read the source through the Blob store
   // instead, as on the main thread. `?feature=` can only turn flags on, so

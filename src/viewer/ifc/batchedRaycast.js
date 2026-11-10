@@ -1,5 +1,6 @@
-import {Box3} from 'three'
+import {Box3, Mesh, Sphere} from 'three'
 import {acceleratedRaycast} from 'three-mesh-bvh'
+import {instanceCandidates} from './batchedInstanceBvh'
 import {hasInactiveInstances, isActive} from './batchedInstanceTables'
 
 
@@ -60,6 +61,15 @@ export function raycastActiveInstances(raycaster, intersects) {
  * @param {Array<object>} intersects
  */
 function raycastSkippingDeleted(mesh, raycaster, intersects) {
+  // The instance tree, once built, names the few instances the ray can reach
+  // (batchedInstanceBvh.js); until then, and for a batch three-mesh-bvh would
+  // not take its per-instance path on, the library walks them all.
+  const candidates = mesh.isBatchedMesh && mesh.boundsTrees ?
+    instanceCandidates(mesh, raycaster.ray) : null
+  if (candidates !== null) {
+    raycastInstances(mesh, raycaster, intersects, candidates)
+    return
+  }
   if (!mesh.isBatchedMesh || !hasInactiveInstances(mesh)) {
     acceleratedRaycast.call(mesh, raycaster, intersects)
     return
@@ -77,6 +87,73 @@ function raycastSkippingDeleted(mesh, raycaster, intersects) {
     } else {
       delete mesh.getVisibleAt
     }
+  }
+}
+
+
+const _mesh = new Mesh()
+const _batchIntersects = []
+
+
+/**
+ * three-mesh-bvh 0.9.10's `acceleratedBatchedMeshRaycast`
+ * (node_modules/three-mesh-bvh/src/utils/ExtensionUtilities.js:86-160), line
+ * for line, over the ids `batchedInstanceBvh` names instead of every id, so
+ * the hits it pushes are the library's own, in the library's order (ascending
+ * id). The one change is the visibility test, which asks {@link isActive}
+ * first: three's `getVisibleAt` throws on a deleted id (see
+ * {@link raycastActiveInstances}). Keep it in step with the library on an
+ * upgrade; `batchedInstanceBvh.test.js` compares the two hit for hit.
+ *
+ * `_mesh` is a scratch Mesh of our own rather than the library's, so its
+ * `raycast` is whatever `Mesh.prototype.raycast` is: three-mesh-bvh's
+ * accelerated one in production (ShareIfc.js), as for the library's scratch.
+ *
+ * @param {object} mesh BatchedMesh with `boundsTrees` armed
+ * @param {object} raycaster
+ * @param {Array<object>} intersects
+ * @param {Array<number>} ids ascending batch ids
+ */
+function raycastInstances(mesh, raycaster, intersects, ids) {
+  const boundsTrees = mesh.boundsTrees
+  const drawInfo = mesh._instanceInfo
+  const drawRanges = mesh._geometryInfo
+  const matrixWorld = mesh.matrixWorld
+  _mesh.material = mesh.material
+  _mesh.geometry = mesh.geometry
+  const oldBoundsTree = _mesh.geometry.boundsTree
+  const oldDrawRange = _mesh.geometry.drawRange
+  if (_mesh.geometry.boundingSphere === null) {
+    _mesh.geometry.boundingSphere = new Sphere()
+  }
+  try {
+    for (const i of ids) {
+      if (i >= drawInfo.length || !isActive(mesh, i) || !mesh.getVisibleAt(i)) {
+        continue
+      }
+      const geometryId = drawInfo[i].geometryIndex
+      _mesh.geometry.boundsTree = boundsTrees[geometryId]
+      mesh.getMatrixAt(i, _mesh.matrixWorld).premultiply(matrixWorld)
+      if (!_mesh.geometry.boundsTree) {
+        mesh.getBoundingBoxAt(geometryId, _mesh.geometry.boundingBox)
+        mesh.getBoundingSphereAt(geometryId, _mesh.geometry.boundingSphere)
+        const drawRange = drawRanges[geometryId]
+        _mesh.geometry.setDrawRange(drawRange.start, drawRange.count)
+      }
+      _mesh.raycast(raycaster, _batchIntersects)
+      for (const intersect of _batchIntersects) {
+        intersect.object = mesh
+        intersect.batchId = i
+        intersects.push(intersect)
+      }
+      _batchIntersects.length = 0
+    }
+  } finally {
+    _batchIntersects.length = 0
+    _mesh.geometry.boundsTree = oldBoundsTree
+    _mesh.geometry.drawRange = oldDrawRange
+    _mesh.material = null
+    _mesh.geometry = null
   }
 }
 
