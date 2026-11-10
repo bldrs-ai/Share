@@ -2,7 +2,7 @@ import {
   BatchedMesh, BoxGeometry, BufferAttribute, Color, Group, Mesh, MeshBasicMaterial, PerspectiveCamera, Plane, Scene,
   Texture, Vector3,
 } from 'three'
-import RenderDemand, {SETTLE_MS, runPaint} from './renderDemand'
+import RenderDemand, {EXPENSIVE_PAINT_MS, SETTLE_MS, runPaint} from './renderDemand'
 import {attachSessionNets, createSceneProbe, installSceneHooks} from './renderDemandHooks'
 
 
@@ -251,6 +251,25 @@ describe('viewer/three/renderDemandHooks', () => {
     it('opens it for a pointer moving over the canvas, not over the panels', () => {
       document.body.dispatchEvent(new Event('pointermove', {bubbles: true}))
       expect(paintsOverSettle()).toBe(0)
+      canvas.dispatchEvent(new Event('pointermove', {bubbles: true}))
+      expect(paintsOverSettle()).toBeGreaterThan(0)
+    })
+
+    it('leaves a canvas pointer move to ask for itself while paints are expensive', () => {
+      // A paint that took longer than EXPENSIVE_PAINT_MS to the next frame.
+      demand.invalidate()
+      expect(demand.shouldRender()).toBe(true)
+      demand.rendered(1)
+      clock += EXPENSIVE_PAINT_MS + 10
+      demand.shouldRender()
+      canvas.dispatchEvent(new Event('pointermove', {bubbles: true}))
+      expect(paintsOverSettle()).toBe(0)
+      // A cheap paint again: the move settles as before.
+      demand.invalidate()
+      expect(demand.shouldRender()).toBe(true)
+      demand.rendered(1)
+      clock += FRAME_MS
+      demand.shouldRender()
       canvas.dispatchEvent(new Event('pointermove', {bubbles: true}))
       expect(paintsOverSettle()).toBeGreaterThan(0)
     })

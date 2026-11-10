@@ -10,7 +10,9 @@
  * render-on-demand runs every component before the renderer:
  * `IfcContext#updateAllComponents`). The recolour the pick makes
  * (`setColorAt`, which asks for a paint through renderDemandHooks.js) is so
- * painted in the frame whose input moved the pointer. Chrome dispatches
+ * painted in the frame whose input moved the pointer — between loads. While
+ * a load holds a RenderDemand scope open, that ask is a background one and
+ * paints on the load's frame budget, as it did with the timer scheduler. Chrome dispatches
  * mousemove once per frame, ahead of that frame's rAF callbacks, so a move
  * and the highlight it causes land in the same frame: the browser's own floor.
  *
@@ -46,7 +48,25 @@
  *    pointer moved. Its interval is read on the frame clock, so a dear pick
  *    waits for the first frame at or after it, and the frame that ends the
  *    wait is the "pointer stopped" pick: no trailing timer.
+ *
+ * **Fast moves over an expensive paint (frame scheduler only).** The owner's
+ * preview of the above: instant on Momentum, "a little better" on PSB, the
+ * lag growing with model size. There the repaint is what's slow (GPU-bound),
+ * not the pick, and a sweep queued a repaint per frame for highlights the
+ * pointer had left before they showed, so the one it stopped on waited
+ * behind them. While the last paint cost more than `EXPENSIVE_PAINT_MS`
+ * (three/renderDemand.js, two 60 Hz frames) AND the pointer moves faster than
+ * `FAST_POINTER_PX_PER_MS`, the pick and its recolour are skipped and the
+ * move stays pending. The first frame the pointer is slower, or hasn't moved
+ * since the last frame, picks: the highlight it rests on is never lost, and
+ * the GPU is idle when that pick's paint is queued. The canvas pointermove's
+ * settle window is skipped on the same paint cost (renderDemandHooks.js
+ * #attachSessionNets), or it would repaint the unchanged picture every frame
+ * of the sweep anyway. With cheap paints (Momentum) neither engages.
  */
+
+
+import {EXPENSIVE_PAINT_MS} from './three/renderDemand'
 
 
 /**
@@ -75,6 +95,18 @@ export const COST_SAMPLES = 5
  * one ~8.3 ms. Above it the `COST_FACTOR` back-off applies.
  */
 export const CHEAP_PICK_MS = 2
+
+export {EXPENSIVE_PAINT_MS}
+
+/**
+ * Frame scheduler: a pointer faster than this, in CSS px per ms, is
+ * sweeping, not aiming: 25 px a 60 Hz frame, a 1280 px canvas crossed in
+ * under a second, and 50 px or more between the frames of a paint over
+ * `EXPENSIVE_PAINT_MS`, enough to cross several elements of a dense model
+ * between two highlights. Aiming at an element is slower than this, so the
+ * gate (module doc) only drops highlights the user isn't looking at.
+ */
+export const FAST_POINTER_PX_PER_MS = 1.5
 
 
 /**
@@ -140,16 +172,21 @@ function createPointerMemo(pointer) {
  *   normalized pointer; null when the viewer has none, in which case every
  *   marked move counts as a move
  * @param {Function} [deps.now] ms clock
+ * @param {Function} [deps.paintCostMs] `() => number`, the last paint's cost
+ *   (RenderDemand#paintCostMs); without one paints count as cheap and fast
+ *   moves are never skipped
  * @return {{onMove: Function, onFrame: Function, dispose: Function}}
- *   `onMove` is the mousemove (and mouseup) listener and only marks the
- *   pointer dirty; `onFrame` is the per-frame hook, which picks when it
- *   should and returns whether it did; `dispose` stops both
+ *   `onMove(event?)` is the mousemove (and mouseup) listener and only marks
+ *   the pointer dirty, noting where and when a mouse event put it;
+ *   `onFrame` is the per-frame hook, which picks when it should and returns
+ *   whether it did; `dispose` stops both
  */
 export function createFrameHoverPicker({
   pick,
   isDragging,
   pointer,
   now = () => performance.now(),
+  paintCostMs = () => 0,
 }) {
   const memo = createPointerMemo(pointer)
   const cost = createCostWindow()
@@ -157,14 +194,40 @@ export function createFrameHoverPicker({
   let isDisposed = false
   let lastPickAt = -Infinity
   let interval = 0
+  // The latest mouse event's client position and time, and the one that was
+  // latest at the previous frame: the pointer's speed between two frames.
+  let lastMove = null
+  let moveAtLastFrame = null
+
+  /**
+   * @return {number} px/ms the pointer moved between the previous frame and
+   *   this one; 0 when no mouse event came in between
+   */
+  function frameSpeed() {
+    const from = moveAtLastFrame
+    moveAtLastFrame = lastMove
+    if (lastMove === null || from === null || lastMove === from) {
+      return 0
+    }
+    const ms = lastMove.t - from.t
+    const px = Math.hypot(lastMove.x - from.x, lastMove.y - from.y)
+    return ms > 0 ? px / ms : 0
+  }
 
   return {
-    onMove() {
-      if (!isDisposed) {
-        isPending = true
+    onMove(event) {
+      if (isDisposed) {
+        return
+      }
+      isPending = true
+      if (Number.isFinite(event?.clientX) && Number.isFinite(event?.timeStamp)) {
+        lastMove = {x: event.clientX, y: event.clientY, t: event.timeStamp}
       }
     },
     onFrame() {
+      // Every frame, pending or not, so a move's speed is always measured
+      // against the frame before it, never against one seconds ago.
+      const speed = frameSpeed()
       // The idle case, every frame the pointer didn't move: one branch.
       if (!isPending) {
         return false
@@ -173,6 +236,11 @@ export function createFrameHoverPicker({
       // mouseup that ends it marks the pointer again (Containers/viewer.js).
       if (isDragging() || memo.unmoved()) {
         isPending = false
+        return false
+      }
+      // A sweep over an expensive paint (module doc): deferred, so the first
+      // slower or still frame picks where the pointer is then.
+      if (speed > FAST_POINTER_PX_PER_MS && paintCostMs() > EXPENSIVE_PAINT_MS) {
         return false
       }
       // Dear picks only: still pending, so the first frame at or after the

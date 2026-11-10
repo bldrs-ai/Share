@@ -1,7 +1,7 @@
 /* eslint-disable no-magic-numbers */
 import {
-  CHEAP_PICK_MS, COST_FACTOR, COST_SAMPLES, MAX_INTERVAL_MS, MIN_INTERVAL_MS,
-  createFrameHoverPicker, createTimerHoverPicker,
+  CHEAP_PICK_MS, COST_FACTOR, COST_SAMPLES, EXPENSIVE_PAINT_MS, FAST_POINTER_PX_PER_MS, MAX_INTERVAL_MS,
+  MIN_INTERVAL_MS, createFrameHoverPicker, createTimerHoverPicker,
 } from './hoverPick'
 import {IfcContext} from './three/context/context'
 import {newUpdateFunction} from './three/IfcHighlighter'
@@ -406,6 +406,112 @@ describe('viewer/hoverPick#createFrameHoverPicker', () => {
     h.move(0.2, 0.2)
     h.frame()
     expect(h.state.picks).toHaveLength(0)
+  })
+})
+
+
+/**
+ * A frame hover picker fed real mouse-event positions (CSS px) and times,
+ * over frames `frameMs` apart and a last paint costing `paintMs`.
+ *
+ * @param {object} opts
+ * @param {number} opts.frameMs
+ * @param {number} opts.paintMs
+ * @return {object}
+ */
+function sweepHarness({frameMs, paintMs}) {
+  const state = {t: 0, px: 0, picks: [], paintMs}
+  const picker = createFrameHoverPicker({
+    pick: () => state.picks.push(state.px),
+    isDragging: () => false,
+    pointer: () => ({x: state.px, y: 0}),
+    now: () => state.t,
+    paintCostMs: () => state.paintMs,
+  })
+  return {
+    state,
+    /**
+     * One frame in which the pointer moved `dx` px, its mousemove landing
+     * just before the frame (Chrome dispatches it ahead of rAF).
+     *
+     * @param {number} dx px this frame; 0 for a still pointer
+     * @return {boolean} whether the frame picked
+     */
+    frame(dx) {
+      state.t += frameMs
+      if (dx !== 0) {
+        state.px += dx
+        picker.onMove({clientX: state.px, clientY: 0, timeStamp: state.t - 1})
+      }
+      return picker.onFrame()
+    },
+  }
+}
+
+
+describe('viewer/hoverPick#createFrameHoverPicker fast moves over an expensive paint', () => {
+  const SLOW_FRAME_MS = 100
+  const FAST_FRAME_MS = 16.7
+  // Per frame, faster and slower than FAST_POINTER_PX_PER_MS.
+  const fastDx = (frameMs) => Math.ceil(FAST_POINTER_PX_PER_MS * frameMs * 2)
+  const slowDx = (frameMs) => Math.max(1, Math.floor(FAST_POINTER_PX_PER_MS * frameMs / 4))
+
+  it('skips the pick while both hold: the paint is expensive and the pointer fast', () => {
+    const h = sweepHarness({frameMs: SLOW_FRAME_MS, paintMs: EXPENSIVE_PAINT_MS * 3})
+    // From rest the first move's speed is measured against a still pointer.
+    h.frame(1)
+    const before = h.state.picks.length
+    for (let i = 0; i < 10; i++) {
+      expect(h.frame(fastDx(SLOW_FRAME_MS))).toBe(false)
+    }
+    expect(h.state.picks).toHaveLength(before)
+  })
+
+  it('picks where the pointer stops, on the first still frame', () => {
+    const h = sweepHarness({frameMs: SLOW_FRAME_MS, paintMs: EXPENSIVE_PAINT_MS * 3})
+    h.frame(1)
+    for (let i = 0; i < 10; i++) {
+      h.frame(fastDx(SLOW_FRAME_MS))
+    }
+    expect(h.frame(0)).toBe(true)
+    expect(h.state.picks.at(-1)).toBe(h.state.px)
+  })
+
+  it('picks as soon as the pointer slows down', () => {
+    const h = sweepHarness({frameMs: SLOW_FRAME_MS, paintMs: EXPENSIVE_PAINT_MS * 3})
+    h.frame(1)
+    h.frame(fastDx(SLOW_FRAME_MS))
+    h.frame(fastDx(SLOW_FRAME_MS))
+    expect(h.frame(slowDx(SLOW_FRAME_MS))).toBe(true)
+    expect(h.state.picks.at(-1)).toBe(h.state.px)
+  })
+
+  it('never skips while paints are cheap, however fast the pointer', () => {
+    const h = sweepHarness({frameMs: FAST_FRAME_MS, paintMs: EXPENSIVE_PAINT_MS / 4})
+    h.frame(1)
+    for (let i = 0; i < 20; i++) {
+      expect(h.frame(fastDx(FAST_FRAME_MS))).toBe(true)
+    }
+  })
+
+  it('never skips a slow pointer, however expensive the paint', () => {
+    const h = sweepHarness({frameMs: SLOW_FRAME_MS, paintMs: EXPENSIVE_PAINT_MS * 3})
+    for (let i = 0; i < 20; i++) {
+      expect(h.frame(slowDx(SLOW_FRAME_MS))).toBe(true)
+    }
+  })
+
+  it('measures speed from the last mouse event, so the first move after a rest picks', () => {
+    const h = sweepHarness({frameMs: SLOW_FRAME_MS, paintMs: EXPENSIVE_PAINT_MS * 3})
+    h.frame(1)
+    for (let i = 0; i < 50; i++) {
+      h.frame(0)
+    }
+    // One frame's worth of a fast move, but measured from the event the
+    // pointer rested at, seconds ago: slow, so it picks.
+    expect(h.frame(fastDx(SLOW_FRAME_MS))).toBe(true)
+    // Keep sweeping and the gate holds.
+    expect(h.frame(fastDx(SLOW_FRAME_MS))).toBe(false)
   })
 })
 

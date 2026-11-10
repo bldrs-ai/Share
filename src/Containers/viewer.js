@@ -164,13 +164,16 @@ export function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   // render loop's frame, after the camera moves and before the paint
   // decision (ThreeContext#onFrame), so the highlight changes in the frame
   // whose input moved the pointer. Skipped while dragging (rotation) and while
-  // the pointer hasn't moved over the canvas, and spaced out by its own
-  // measured cost when picks are dear. `?feature=disableFrameHover` puts back
-  // the timer scheduler, which picks in the mousemove handler.
+  // the pointer hasn't moved over the canvas, spaced out by its own measured
+  // cost when picks are dear, and skipped while the pointer sweeps fast over
+  // a model whose paint is expensive (the last paint's cost, from the
+  // viewer's RenderDemand). `?feature=disableFrameHover` puts back the timer
+  // scheduler, which picks in the mousemove handler.
   const hoverDeps = {
     pick: () => viewer.highlightIfcItem(),
     isDragging: () => Boolean(viewer.clipper.clickDrag),
     pointer: () => viewer.context.getNormalizedMousePosition?.() ?? null,
+    paintCostMs: () => viewer.context.getRenderDemand?.()?.paintCostMs?.() ?? 0,
   }
   if (isFeatureEnabled('disableFrameHover')) {
     hoverPicker = createTimerHoverPicker(hoverDeps)

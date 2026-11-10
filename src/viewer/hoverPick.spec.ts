@@ -43,6 +43,12 @@ const SWEEP_STEPS = 120
 // layout and the pointer's normalized position (what the ray is cast from)
 // are untouched.
 const SWEEP_PIXEL_RATIO = 0.25
+// The fast-sweep leg crosses the canvas in this few mouse steps, one a
+// frame: hundreds of px per frame, far over hoverPick.js
+// FAST_POINTER_PX_PER_MS.
+const FAST_SWEEP_STEPS = 4
+// Frames the highlight has to settle in once the pointer stops.
+const SETTLE_FRAMES = 3
 
 
 /** What hovering and then double-clicking one canvas point did. */
@@ -203,7 +209,25 @@ async function instrumentSweep(page: Page) {
     const renderer = viewer.context.getRenderer()
     renderer.setPixelRatio(pixelRatio)
     viewer.postProcessor.getComposer.setSize(canvas.clientWidth, canvas.clientHeight, false)
-    const rec: any = {on: false, paints: [], moves: [], picks: [], frames: 0}
+    // While recording, the viewer is held painting every frame
+    // (RenderDemand#keepPainting): what is checked is what EVERY frame shows,
+    // and the canvas pointermove's settle window, which otherwise paints
+    // those frames, steps aside whenever a paint costs more than
+    // EXPENSIVE_PAINT_MS (renderDemandHooks.js), as a slow CI runner's might.
+    const rec: any = {
+      paints: [], moves: [], picks: [], frames: 0, release: null,
+      get on() {
+        return this.release !== null
+      },
+      set on(isOn: boolean) {
+        if (isOn && this.release === null) {
+          this.release = demand.keepPainting()
+        } else if (!isOn && this.release !== null) {
+          this.release()
+          this.release = null
+        }
+      },
+    }
     w.__hoverSweep = rec
     const rendered = demand.rendered.bind(demand)
     demand.rendered = (cost: number) => {
@@ -274,6 +298,7 @@ async function recordSweep(page: Page, row: number): Promise<Sweep> {
     const viewer = w.store.getState().viewer
     const position = viewer.context.getNormalizedMousePosition()
     const [stillX, stillY] = [position.x, position.y]
+    const POSITION_EPSILON = 1e-9
     const keyAt = (x: number, y: number) => {
       position.x = x
       position.y = y
@@ -314,7 +339,11 @@ async function recordSweep(page: Page, row: number): Promise<Sweep> {
       const picked = rec.picks.filter((pk: any) => pk.t < paint.t)
       const lastPick = picked[picked.length - 1]
       if (lastPick === undefined || lastPick.t < last.t) {
-        if (lastPick === undefined || lastPick.x !== last.x || lastPick.y !== last.y) {
+        // The two positions are the same arithmetic on the same event
+        // (three/context/mouse.js); a tolerance only guards float noise.
+        const same = lastPick !== undefined &&
+          Math.abs(lastPick.x - last.x) < POSITION_EPSILON && Math.abs(lastPick.y - last.y) < POSITION_EPSILON
+        if (!same) {
           unpicked++
         }
       }
@@ -455,5 +484,52 @@ describeMobileAndDesktop('viewer/hoverPick', (ff) => {
       selected = await doubleClickSelects(page, target)
     }
     expect(selected).toEqual(expect.arrayContaining(target.hovered))
+  })
+
+  // Fast moves over an expensive paint (hoverPick.js module doc): a sweep
+  // across the canvas at the full pixel ratio, where a SwiftShader frame of
+  // Momentum costs more than EXPENSIVE_PAINT_MS on desktop, skips the picks
+  // of its fast frames; the frame after the pointer stops must still pick,
+  // so the highlight it rests on is never lost.
+  test('a fast sweep ends on the highlight of the element the pointer stops on', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS * 2)
+    await openSettled(page, TREE_QUERY)
+    const box = await page.evaluate(() => {
+      const r = (document.querySelector('canvas') as HTMLCanvasElement).getBoundingClientRect()
+      return {left: r.left, top: r.top, width: r.width, height: r.height}
+    })
+    // Where the sweeps stop: points on the model, so the highlight they must
+    // end on is an element's, not the empty one.
+    const targets = (await hoverEach(page, await canvasPoints(page)))
+      .filter((p) => p.hovered.length > 0)
+      .slice(0, SWEEP_ROWS.length)
+    expect(targets.length, 'the pointer must find the model somewhere').toBeGreaterThan(0)
+    for (const target of targets) {
+      // From the far side of the canvas, so the sweep crosses it.
+      const fromX = target.x - box.left > box.width / 2 ?
+        box.left + (box.width * SWEEP_FROM) :
+        box.left + (box.width * SWEEP_TO)
+      await page.mouse.move(fromX, target.y)
+      await page.waitForTimeout(HOVER_SETTLE_MS)
+      await page.mouse.move(target.x, target.y, {steps: FAST_SWEEP_STEPS})
+      // A few frames, not a timeout: the settle pick is the next frame's.
+      await page.evaluate(async (frames) => {
+        for (let i = 0; i < frames; i++) {
+          await new Promise((resolve) => requestAnimationFrame(resolve))
+        }
+      }, SETTLE_FRAMES)
+      const {shown, current} = await page.evaluate(() => {
+        /* eslint-disable @typescript-eslint/no-explicit-any */
+        const viewer = (window as any).store.getState().viewer
+        const found = viewer.context.castRayIfc()
+        return {
+          shown: viewer._lastBatchedPreselectKey ?? null,
+          current: found ? (viewer._batchedHoverTarget(found).key ?? null) : null,
+        }
+        /* eslint-enable @typescript-eslint/no-explicit-any */
+      })
+      expect(current, 'the sweep stops on an element').not.toBeNull()
+      expect(shown, `the highlight where the sweep to ${target.x},${target.y} stopped`).toBe(current)
+    }
   })
 })
