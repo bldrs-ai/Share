@@ -1,10 +1,11 @@
 # AI workspace — runtime, providers, credits, sovereignty (AI.0)
 
-**Status:** v0.3 draft (2026-10-06; §12 rewritten after Jev research; D7
-confirmed by spike #1927; D3 allowlist, free list and D14 calibration
-set by eval #1929; D15 repo plan, use-case map and Assist API surface
-added; amended 2026-11-01 to place the document session in D15, add the
-`model.*` namespace and fix the op-log write path, after the
+**Status:** v0.4 (2026-11-10: status synced with what has shipped; design
+body unchanged since the 2026-11-01 amendment). History: v0.3 draft
+2026-10-06 (§12 rewritten after Jev research; D7 confirmed by spike #1927;
+D3 allowlist and D14 calibration set by eval #1929; D15 repo plan added);
+amended 2026-11-01 (document session in D15, `model.*` namespace, op-log
+write path, after the
 [MVC-core review](reviews/2026-10-29-mvc-core-review_grok-4.7.md)). Story
 [#1671](https://github.com/bldrs-ai/Share/issues/1671) under epic `assist-310`
 [#1659](https://github.com/bldrs-ai/Share/issues/1659). Roadmap §7.4 AI.0,
@@ -25,7 +26,67 @@ Facts measured by the client-library spike carry **(spike #1927,
 2026-10-06)**; its results are posted on #1927. Facts measured by the model
 eval carry **(eval #1929, 2026-10-06)**; results on #1929.
 Anything not verified is marked **UNVERIFIED** and becomes a spike item (§14).
-Share code is cited as `path:line` at `main` @ `9577fdd`.
+Share code is cited as `path:line` at `main` @ `9577fdd`; line numbers are
+as of that commit and have drifted since.
+
+
+## Status (2026-11-10)
+
+Facts marked "per Pablo" are the owner's statement of 2026-11-10; the rest
+were checked against `main` at `880be3e`.
+
+**Built** (all behind flags unless noted):
+
+- **Legacy bot, `?feature=bot`.** A basic bot with an API connection to
+  openrouter.ai (per Pablo, 2026-11-10). This is the prototype §13 plans to
+  port. It still uses the `new Function` eval path (`src/Components/Bot/eval.ts`,
+  `BotChat.jsx`). There is no `bot` entry in `src/FeatureFlags.js`: it is
+  switched on by the URL parameter (or a `#bot:` permalink) alone. The
+  engine route sends such a page to the **main-thread engine**
+  (`src/engine/engineRoute.js`: "the legacy bot chat needs the main-thread
+  engine").
+- **Assist package boundary and viewer tool registry v0, `?feature=assist`.**
+  `src/assist/` (registry, policy, schema, json, errors, with an
+  import-boundary test) and `src/viewer/tools/` (`assistHost.js`,
+  `viewTools.js`, `shareTools.js`, `refs.js`, `selectionFunnel.js`, specs).
+  The `assist` flag, default off, gates only the dev hook
+  `window.__bldrsAssistTools`. No tray, no agent loop, nothing user-facing.
+  Partly lands #1674, which is still open.
+- **Workspace shell, `?feature=workspace`.** Keeps the same inner layout,
+  [NavTree + Versions] - [Canvas + Tools] - [Notes + Element properties],
+  and adds a left nav for multiple models (per Pablo, 2026-11-10).
+- **Engine worker, on by default** (`engineWorker` is `isActive: true`;
+  `disableEngineWorker` is the kill switch). The last couple of weeks went
+  into this as groundwork for multi-session use: loading and unloading
+  models quickly with cached state ([engine-worker.md](engine-worker.md);
+  per Pablo, 2026-11-10).
+
+**Not built:**
+
+- Agent loop and streaming (#1675); provider abstraction and BYOK store
+  (#1930); OpenRouter PKCE (#1931).
+- Hosted relay `ai-chat` and anonymous identity (#1932): there is no
+  `ai-chat` under `netlify/functions/`. Credits ledger (#1933), model
+  selector (#1934), CSP `connect-src` (#1935).
+- Jev intent layer (#1937) and generative UI (#1938).
+- The bot port itself (D13) and the `assist` -> `bot` alias (D12): see §13.
+
+**Changed since this doc was written:**
+
+- **Workspace direction** (per Pablo, 2026-11-10): adopt a Claude-Code-style
+  layout, with **sessions on the left, grouped by project**, and
+  **multi-model as a tabbed multi-inner-layout**, each tab being one of the
+  three-part inner layouts above. This puts a tension on D10 (conversations
+  "per model") and on the tray position in #1672. Not redesigned here:
+  conversational-cad.md owns the layout decision; see the "Open (2026-11-10)"
+  notes in §10 and the new §15 items 11-13.
+- **Engine worker is the default, the prototype bot still needs the
+  main-thread engine.** The port must move the tools onto the worker's async
+  read surface ([engine-worker.md](engine-worker.md) §5.1) before the legacy
+  path can go.
+- **Billing rails are live** (the roadmap states Stripe billing and quotas
+  are live in production), so the hosted half is no longer waiting on them
+  (§14 "Sequencing").
 
 
 ## 1. Scope
@@ -39,7 +100,7 @@ Share code is cited as `path:line` at `main` @ `9577fdd`.
   the user's own key (BYOK).
 - A local, per-model conversation log.
 - Porting the `?feature=bot` prototype into this shape rather than building
-  beside it.
+  beside it (not started as of 2026-11-10; see Status).
 
 **Later, and only seamed here:**
 
@@ -95,7 +156,7 @@ browser chat turn. Worked example: §9 "Worked example".
 | D7 | **Vercel AI SDK**, lazy-loaded behind the flag, with the pinned set in §9. Fallback: thin hand-rolled adapters. **Confirmed by spike #1927** (2026-10-06), with three amendments (§9, §8, §5) | It handles Anthropic native, Gemini thought signatures and OpenAI-compatible endpoints. Measured cost is a 167 KB gz core plus 15–60 KB per provider (336 KB monolithic), paid only when the tray opens, **and only if the build splits assist out** (§9 Amendment 1) |
 | D8 | Typed in-page **tool registry in MCP shape**. v0 is read/annotate only, replaces the bot's `new Function` eval, and needs `selectItemsInScene` exposed | One contract, so `assist-320` can serve it over postMessage MCP later |
 | D9 | **Model bytes never leave the machine.** Conversation and tool results do. Tools return summaries, never geometry. A per-transport "what the AI can see" disclosure. CSP `connect-src` is a hardening story | Sovereignty is the enterprise wedge (roadmap §7.2) |
-| D10 | Conversations are local, per model, file-shaped (JSONL) and store AI SDK `responseMessages` whole, with `providerOptions` (§10), behind the `workspace/persistence.ts` seam, alongside the Tier-1 project struct | Durable and shared storage is `assist-400`'s problem. File-shaped now means the repo store adopts it later. **Amended by D15:** the host reaches it through Collab's conversation-store interface (local implementation first), which supersedes the storage *location* here |
+| D10 | Conversations are local, per model, file-shaped (JSONL) and store AI SDK `responseMessages` whole, with `providerOptions` (§10), behind the `workspace/persistence.ts` seam, alongside the Tier-1 project struct | Durable and shared storage is `assist-400`'s problem. File-shaped now means the repo store adopts it later. **Amended by D15:** the host reaches it through Collab's conversation-store interface (local implementation first), which supersedes the storage *location* here. **Open (2026-11-10):** "per model" conflicts with the agreed sessions-and-projects layout, see §10 and §15 item 11 |
 | D11 | Assist is the front door. Create plugs in as a **tool provider** (`create.design` → job). Create owns its own long-running loop, built on Assist's core (providers + ledger), and review checkpoints surface in the Collab thread (amended by D15) | Synthesis runs for minutes and iterates, which a chat turn cannot. One billing story |
 | D12 | Flag `assist`, with `bot` aliased via `FEATURE_IMPLICATIONS` during the port, then removed | Matches #1659/#1672. Fixes the `convo` drift |
 | D13 | Port `?feature=bot`: keep the tray, slice, bubbles, MSW mocks and network guard. Evolve the client and settings. Delete the eval and the plaintext key | The scope outgrew the prototype, but its UI and test scaffolding are sound |
@@ -1121,6 +1182,14 @@ GA), so it is its own story, #1935: start in `Report-Only` mode, then enforce.
 
 **D10: Conversation store.**
 
+> **Open (2026-11-10).** This section keys a conversation to a model. The
+> workspace direction agreed since (per Pablo, 2026-11-10) makes a *session*
+> the primary unit, listed on the left and grouped by project, with several
+> models open as tabs inside it. A conversation may then span more than one
+> model. Not redesigned here: the JSONL format and the store interface are
+> unaffected, but the key and where the tab state lives are undecided.
+> conversational-cad.md owns the layout decision; §15 item 11 asks it.
+
 - **Through Collab's conversation-store interface (D15).** Assist talks to
   a `store` it is handed (§9 `createAssist`), not to Share's persistence
   directly. The local, file-shaped implementation below is the first
@@ -1351,7 +1420,8 @@ This stays a separate, later story (#1938). The code path waits for
 
 **D12: Flag.**
 
-- Add `{name: 'assist', isActive: false}` to `src/FeatureFlags.js`.
+- Add `{name: 'assist', isActive: false}` to `src/FeatureFlags.js` (done by
+  #1674's dev hook, 2026-11; see Status).
 - During the port, alias the old name with `FEATURE_IMPLICATIONS.assist =
   ['bot']`, so `?feature=bot` links keep working. The map's key is the
   *implied* flag.
@@ -1360,6 +1430,14 @@ This stays a separate, later story (#1938). The code path waits for
 - Remove the alias when the port lands.
 - conversational-cad.md and roadmap §4.11 said `?feature=convo`; both are
   corrected to `assist` in this PR, matching #1659 and #1672.
+
+> **Status (2026-11-10).** The `assist` flag exists (default off, dev hook
+> only). The alias does not: `FEATURE_IMPLICATIONS` in `src/FeatureFlags.js`
+> holds only `glb`, and there is no `bot` flag entry. `?feature=bot` works
+> because the bot's call sites (`BottomBar.jsx`, `TabbedPanels.jsx`,
+> `NotesAndPropertiesDrawer.jsx`, `ViewCube.jsx`, `engineRoute.js`) test the
+> name `bot` directly against the URL. `useExistInFeature.js`'s mirror map is
+> still `glb` only (and still lacks `glbbatched`/`glbcollapse`).
 
 **D13: Port plan from `?feature=bot`** (`src/Components/Bot/`,
 `src/store/BotSlice.js`):
@@ -1376,6 +1454,14 @@ This stays a separate, later story (#1938). The code path waits for
 | `BotChat.jsx` `new Function(client_code)` + `eval.ts` JSON-in-codeblock + `BASE_SYSTEM_MSG` | **Delete**, replaced by the tool registry (§9). `eval.test.ts` goes with it |
 | `localStorage['openrouter_api_key']` (plaintext, persistent by default) | **Delete**. Migrate once into the session store (prompt "remember?"), then remove the key |
 | `BotChat.test.tsx`, `BotSettings.test.tsx`, `BotChat.spec.ts` | **Rewrite** against the new tray. Keep the MSW pattern |
+| `src/engine/engineRoute.js` (`MainThreadReason.LEGACY_BOT`, `isLegacyBotRequested`) | **Added 2026-11-10.** Today it pins any page with the legacy bot to the main-thread engine. The port must move the tools onto the worker's async read surface (engine-worker.md §5.1), then **delete this reason** |
+
+> **Status (2026-11-10).** No row above has been executed: `BotChat.jsx`,
+> `eval.ts` (with `eval.test.ts`), `BotSettings.tsx` and `openRouterClient.ts`
+> are all still in `src/Components/Bot/`, so the `new Function` eval and the
+> plaintext-key path remain. The registry the eval is to be replaced with
+> exists (`src/assist/`, `src/viewer/tools/`) but nothing calls it except the
+> dev hook.
 
 
 ## 14. Testing and story breakdown
@@ -1428,6 +1514,15 @@ This stays a separate, later story (#1938). The code path waits for
   6. DevTools network: no request carries model bytes, and no key goes to
      any non-provider host.
 
+**Status (2026-11-10).** Per the issue index (snapshot of 2026-11-10), every
+story below except #1671 is still open. #1927 and #1929 are described below
+as done, but their issues are open: close or narrow them. #1674 has code on
+main (the `src/assist/` package with its import-boundary test, and
+`src/viewer/tools/` with `assistHost.js`, `viewTools.js`, `shareTools.js`,
+`refs.js`, `selectionFunnel.js` and specs, behind the dev hook) but is open:
+which of its v0 tools and the lint rule or separate esbuild entry are
+complete is to confirm.
+
 **Stories.** The existing sub-issues of #1659, and the following additional ones also filed as sub-issues of #1659:
 Dependencies are in brackets.
 
@@ -1474,7 +1569,9 @@ Dependencies are in brackets.
 server. That is enough for the AI.2 demo on a large model (#1677). #1928 + #1929
 → #1932 → #1933 → #1934 then add the funnel ("drop a model, get free help") and the Pro
 anchor. Per conversational-cad.md §6, the hosted half lands after Phase D,
-because it rides the quota and billing rails.
+because it rides the quota and billing rails. *(2026-11-10: the roadmap
+states billing and quotas are live in production, so that condition is met
+on the billing side; Phase D as a whole is to confirm.)*
 
 
 ## 15. Open questions for Pablo
@@ -1510,6 +1607,16 @@ because it rides the quota and billing rails.
    30 a day, about 9 turns).
 10. **Generative UI (§12.2).** When does it ship: with `assist-310` or
     later?
+11. **Conversation key (2026-11-10).** With sessions on the left grouped by
+    project, and several models as tabs, is a conversation keyed to a model,
+    a session, or a project (D10 says model)? Where does the multi-model tab
+    state live: the Tier-1 project struct, the session, or Collab?
+12. **Port order vs the engine worker (2026-11-10).** Keep the legacy bot on
+    the main-thread route until the port lands, or port first (tools onto the
+    worker's async read surface) so the main-thread route can go?
+13. **Tray position (2026-11-10).** Do the tray position and thread list
+    planned in #1672 still hold under the sessions-on-the-left layout, or
+    does the session list subsume the thread list?
 
 
 ## 16. Deferred (named so they are not lost)
