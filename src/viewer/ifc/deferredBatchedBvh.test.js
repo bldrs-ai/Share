@@ -12,6 +12,7 @@ import {captureException} from '@sentry/react'
 import {computeBatchedBoundsTree} from 'three-mesh-bvh'
 import {reportBvhDepthCap} from '../../loader/loadProgress'
 import {withBvhPrototypes} from './batchedModel.fixture'
+import {hasInstanceBoundsTree} from './batchedInstanceBvh'
 import {raycastActiveInstances} from './batchedRaycast'
 import {depthCapExtremes} from './bvhBuild'
 import {
@@ -296,6 +297,65 @@ describe('viewer/ifc/deferredBatchedBvh', () => {
         expect.objectContaining({level: 'warning', fingerprint: ['deferred-bvh-build-failed'],
           extra: {geometryId: 0, indexCount: TRIANGLES_PER_GEOMETRY * 3}}))
       expect(triangles.map(({x, y}) => pickAt(mesh, x, y))).toEqual(triangles.map(({batchId}) => batchId))
+    })
+  })
+
+  // The instance tree is built first in the same slices: a throw there must
+  // neither stop the per-geometry trees nor leave a half-built tree in use.
+  it('drops an instance tree whose build failed, builds the rest, and reports once', () => {
+    withBvhPrototypes(raycastActiveInstances, () => {
+      const {mesh, triangles} = scatteredBatch()
+      const getMatrixAt = mesh.getMatrixAt.bind(mesh)
+      let calls = 0
+      mesh.getMatrixAt = (id, target) => {
+        if (calls++ === 0) {
+          throw new Error('instance box failed')
+        }
+        return getMatrixAt(id, target)
+      }
+      scheduleBatchedBoundsTrees([mesh], {schedule: () => undefined})
+      finishBatchedBoundsTrees(mesh)
+
+      expect(hasInstanceBoundsTree(mesh)).toBe(false)
+      expect(mesh.boundsTrees.every(Boolean)).toBe(true)
+      expect(captureException).toHaveBeenCalledTimes(1)
+      expect(captureException).toHaveBeenCalledWith(expect.objectContaining({message: 'instance box failed'}),
+        expect.objectContaining({level: 'warning', fingerprint: ['instance-bvh-build-failed'],
+          tags: {bvh_build: 'instance'}, extra: {instanceCount: GEOMETRIES}}))
+      for (const {batchId, x, y} of triangles.slice(0, 8)) {
+        expect(pickAt(mesh, x, y)).toBe(batchId)
+      }
+    })
+  })
+
+  it('keeps a sibling batch\'s finished instance tree when one batch\'s trees are disposed', () => {
+    withBvhPrototypes(raycastActiveInstances, () => {
+      const first = scatteredBatch().mesh
+      const second = scatteredBatch().mesh
+      const idle = manualSchedule()
+      scheduleBatchedBoundsTrees([first, second], {schedule: idle.schedule})
+      // The first slice builds both small instance trees, then yields after
+      // one per-geometry tree: the job is still running.
+      idle.runOne()
+      expect(hasInstanceBoundsTree(first)).toBe(true)
+      expect(hasInstanceBoundsTree(second)).toBe(true)
+      expect(isBatchedBoundsTreeBuildDone(second)).toBe(false)
+      // Disposing the first batch's trees cancels the shared job.
+      disposeDeferredBatchedBoundsTree.call(first)
+      expect(hasInstanceBoundsTree(first)).toBe(false)
+      expect(hasInstanceBoundsTree(second)).toBe(true)
+    })
+  })
+
+  it('builds the instance tree in the first slice, before any per-geometry tree', () => {
+    withBvhPrototypes(raycastActiveInstances, () => {
+      const {mesh} = scatteredBatch()
+      const idle = manualSchedule()
+      scheduleBatchedBoundsTrees([mesh], {schedule: idle.schedule})
+      expect(hasInstanceBoundsTree(mesh)).toBe(false)
+      idle.runOne()
+      expect(hasInstanceBoundsTree(mesh)).toBe(true)
+      expect(mesh.boundsTrees.filter(Boolean).length).toBeLessThan(GEOMETRIES)
     })
   })
 

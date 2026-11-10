@@ -1,8 +1,10 @@
 import {captureException} from '@sentry/react'
 import {Box3} from 'three'
 import {computeBatchedBoundsTree, disposeBatchedBoundsTree} from 'three-mesh-bvh'
+import {isFeatureEnabled} from '../../FeatureFlags'
 import debug from '../../utils/debug'
 import {loadReportToken, reportBvhDepthCap} from '../../loader/loadProgress'
+import {beginInstanceBoundsTree, disposeInstanceBoundsTree} from './batchedInstanceBvh'
 import {BVH_MAX_DEPTH, depthCapExtremes} from './bvhBuild'
 
 
@@ -37,6 +39,11 @@ import {BVH_MAX_DEPTH, depthCapExtremes} from './bvhBuild'
  * order in a Uint32 buffer per tree: 4 bytes per triangle. On PSB the model
  * retains 848 MB after a forced GC against 805 MB before, the price of the
  * index never changing under a reader. Picks resolve the same.
+ *
+ * Each batch's instance tree (`batchedInstanceBvh.js`) is built first, in the
+ * same slices: it is milliseconds where the per-geometry trees are seconds,
+ * and it is what takes a hover pick from walking every instance to visiting
+ * the few the ray reaches.
  *
  * The depth-cap Health line still reaches the load report: the job adds up
  * its trees' caps and reports once when it finishes, which is usually after
@@ -133,6 +140,7 @@ export function disposeDeferredBatchedBoundsTree(index = -1) {
   // One tree disposed leaves the rest of the build to carry on.
   if (index < 0) {
     cancelBatchedBoundsTrees(this)
+    disposeInstanceBoundsTree(this)
   }
   disposeBatchedBoundsTree.call(this, index)
 }
@@ -195,6 +203,13 @@ function makeJob(meshes, schedule) {
   let cancelled = false
   let pending = false
   let failures = 0
+  // Begun now, not at the first slice, so each tree's edit listener is
+  // registered before anything can edit the batch. `disableInstanceBvh` is
+  // the kill switch (FeatureFlags.js): no tree, and every pick walks.
+  const instanceTrees = isFeatureEnabled('disableInstanceBvh') ? [] :
+    meshes.map((mesh) => beginInstanceBoundsTree(mesh))
+  let instanceTreeIndex = 0
+  let instanceTreeFailed = false
 
   const job = {
     done: false,
@@ -214,6 +229,13 @@ function makeJob(meshes, schedule) {
     cancel() {
       cancelled = true
       job.done = true
+      // An instance tree still building goes; a finished one stays, being
+      // correct whatever becomes of this job. So disposing one batch's trees
+      // (`disposeDeferredBatchedBoundsTree`, which drops that batch's own
+      // instance tree itself) doesn't take its siblings' hover speed with it.
+      for (const tree of instanceTrees) {
+        tree.cancel()
+      }
       for (const mesh of meshes) {
         if (jobs.get(mesh) === job) {
           jobs.delete(mesh)
@@ -233,6 +255,15 @@ function makeJob(meshes, schedule) {
       return
     }
     const start = now()
+    const spent = () => deadline !== null && isSpent(deadline, start)
+    while (instanceTreeIndex < instanceTrees.length) {
+      if (stepInstanceTree(instanceTreeIndex, spent)) {
+        instanceTreeIndex++
+      } else {
+        job.next()
+        return
+      }
+    }
     while (hasMore()) {
       buildOne(meshes[meshIndex], geometryId++)
       if (deadline && isSpent(deadline, start) && hasMore()) {
@@ -248,6 +279,39 @@ function makeJob(meshes, schedule) {
     }
     if (trees > 0) {
       reportBvhDepthCap({trees, maxLeafTriangles, maxDepth: BVH_MAX_DEPTH}, token)
+    }
+  }
+
+  /**
+   * One step of mesh `index`'s instance tree.
+   *
+   * A build that throws drops that tree and carries on: its batch's picks
+   * walk every instance, as they did before the tree, and the per-geometry
+   * trees after it still get built (an exception escaping the slice would
+   * stop them too). Like a failed tree below, it is ours to fix and nothing
+   * the user sees, so it goes to Sentry once per model, as a warning, with
+   * its size and no names.
+   *
+   * @param {number} index
+   * @param {Function} spent
+   * @return {boolean} whether this mesh's instance tree is finished with
+   */
+  function stepInstanceTree(index, spent) {
+    try {
+      return instanceTrees[index].step(spent)
+    } catch (e) {
+      instanceTrees[index].cancel()
+      debug().log('deferredBatchedBvh: instance tree build failed:', e)
+      if (!instanceTreeFailed) {
+        instanceTreeFailed = true
+        captureException(e, {
+          level: 'warning',
+          fingerprint: ['instance-bvh-build-failed'],
+          tags: {bvh_build: 'instance'},
+          extra: {instanceCount: meshes[index]._instanceInfo?.length ?? null},
+        })
+      }
+      return true
     }
   }
 

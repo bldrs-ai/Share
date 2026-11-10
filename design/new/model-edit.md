@@ -297,6 +297,14 @@ layer).
   after one delete every pick and hover on that batch threw.
   `batchedRaycast.js#raycastActiveInstances`, installed by `ShareIfc.js`,
   answers "not visible" for inactive ids for the duration of the call.
+  The instance tree that picks now go through once it is built
+  (`batchedInstanceBvh.js`, built after load by `deferredBatchedBvh.js`) runs
+  the same per-instance raycast over just the ids a ray's box test names, and
+  asks `isActive` before `getVisibleAt`, so a deleted id is skipped there too.
+  It is an `onBatchEdit` listener: an id an edit adds, moves or reshapes is
+  walked on every ray besides the tree's own candidates, and a revision the
+  listener has not seen turns the tree off. `batchedInstanceBvh.test.js`
+  compares its hits with the full walk's after each kind of edit.
 - **The isolation mask grows.** IfcIsolator's `base`/`allow` masks are indexed
   by batch id and were sized once, so a paste past their end read as hidden.
   They now extend to the batch's id span.
