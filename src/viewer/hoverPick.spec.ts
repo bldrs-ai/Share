@@ -180,21 +180,27 @@ describeMobileAndDesktop('viewer/hoverPick', () => {
         points = await canvasPoints(page)
       }
       // The leg is what it says: the default one picks through the tree, the
-      // walk leg through none (batchedInstanceBvh.js INSTANCE_TREE_FLAG).
-      const treeBatches = await page.evaluate(() => {
-        let n = 0
+      // walk leg through none (batchedInstanceBvh.js INSTANCE_TREE_FLAG). The
+      // batch count anchors the walk leg's zero.
+      const treeState = () => page.evaluate(() => {
+        let batches = 0
+        let trees = 0
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(window as any).store.getState().model?.traverse?.((o: any) => {
-          if (o.isBatchedMesh && o.userData?.instanceBoundsTree === true) {
-            n++
+          if (o.isBatchedMesh) {
+            batches++
+            trees += o.userData?.instanceBoundsTree === true ? 1 : 0
           }
         })
-        return n
+        return {batches, trees}
       })
       if (query === TREE_QUERY) {
-        expect(treeBatches, 'the tree leg picks through an instance tree').toBeGreaterThan(0)
+        await expect.poll(async () => (await treeState()).trees,
+          {message: 'the tree leg picks through an instance tree', timeout: TREES_TIMEOUT_MS}).toBeGreaterThan(0)
       } else {
-        expect(treeBatches, 'the walk leg builds no instance tree').toBe(0)
+        const {batches, trees} = await treeState()
+        expect(batches, 'the model is batched').toBeGreaterThan(0)
+        expect(trees, 'the walk leg builds no instance tree').toBe(0)
       }
       const hover = await hoverEach(page, points)
       // Double-click the first point the hover found something at: last,

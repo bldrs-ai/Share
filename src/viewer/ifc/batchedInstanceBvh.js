@@ -343,11 +343,13 @@ function newBuild(mesh, state) {
  * Write instance `id`'s padded batch-local box into `boxes`.
  *
  * A box with a NaN or infinite coordinate is never put in the tree: one bad
- * vertex makes three's `getBoundingBoxAt` box all NaN (`Box3#expandByPoint`),
- * every slab comparison against NaN is false, and the instance would never
- * be a candidate, while the library still hits its sound triangles through
- * the per-geometry tree (whose builder skips NaN with `<`/`>`). Such an
- * instance is walked on every ray instead.
+ * vertex makes that coordinate of three's `getBoundingBoxAt` box NaN
+ * (`Box3#expandByPoint`), and, once transformed, usually every coordinate.
+ * Every slab comparison against NaN is false, so the instance would never be
+ * a candidate, while the library still hits its sound triangles through the
+ * per-geometry tree (whose builder skips NaN with `<`/`>`). Such an instance
+ * is walked on every ray instead: as dear as the full walk for that one id,
+ * and uncounted against `MAX_EXTRA_FRACTION`, since it is not an edit.
  *
  * @param {object} mesh
  * @param {number} id

@@ -328,6 +328,25 @@ describe('viewer/ifc/deferredBatchedBvh', () => {
     })
   })
 
+  it('keeps a sibling batch\'s finished instance tree when one batch\'s trees are disposed', () => {
+    withBvhPrototypes(raycastActiveInstances, () => {
+      const first = scatteredBatch().mesh
+      const second = scatteredBatch().mesh
+      const idle = manualSchedule()
+      scheduleBatchedBoundsTrees([first, second], {schedule: idle.schedule})
+      // The first slice builds both small instance trees, then yields after
+      // one per-geometry tree: the job is still running.
+      idle.runOne()
+      expect(hasInstanceBoundsTree(first)).toBe(true)
+      expect(hasInstanceBoundsTree(second)).toBe(true)
+      expect(isBatchedBoundsTreeBuildDone(second)).toBe(false)
+      // Disposing the first batch's trees cancels the shared job.
+      disposeDeferredBatchedBoundsTree.call(first)
+      expect(hasInstanceBoundsTree(first)).toBe(false)
+      expect(hasInstanceBoundsTree(second)).toBe(true)
+    })
+  })
+
   it('builds the instance tree in the first slice, before any per-geometry tree', () => {
     withBvhPrototypes(raycastActiveInstances, () => {
       const {mesh} = scatteredBatch()
