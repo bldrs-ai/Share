@@ -803,7 +803,33 @@ Total 5.5–6.0 s → 2.6–2.9 s, the trees done ~2.9 s after the load, and
 848 MB retained after a forced GC against 805 MB, the indirect buffers'
 4 bytes per triangle.
 
-**Draco exports carry a lossy witness instead** (the owner's smoke on #1872: a
+**What a hover pick costs after it.** The per-geometry trees speed up only
+the triangle tests. three-mesh-bvh's batched raycast still walks every
+instance on every ray, reading, multiplying and inverting its matrix before
+any tree can reject it, so a ray on PSB still cost 6–8 ms on an M2. Hover
+fires that ray up to 30 times a second. The owner's trace had 1.7 s of
+mousemove handlers in 16 s, one of them 99 ms.
+
+Each batch now also gets a tree over its INSTANCES
+(`viewer/ifc/batchedInstanceBvh.js`, #2127). The deferred job builds it first,
+in the same idle slices: about 150 ms of slice work per 16k instances,
+measured in Node. A ray then runs the library's own per-instance raycast on
+just the ids whose padded box it crosses, in ascending id order. The hit list,
+and so the pick, is the full walk's entry for entry.
+
+Edits are tracked through `onBatchEdit`; see model-edit.md L0's raycast entry.
+The hover scheduler (`viewer/hoverPick.js`) also stopped re-casting while the
+canvas pointer stands still, and it spaces picks by their median cost.
+`?feature=disableInstanceBvh` is the A/B and the rollback.
+
+On PSB, measured in headless Chromium on a cold load (23,453 instances), the
+same build A/B'd:
+
+- 40 rays aimed at the model: 348–467 ms → 4.5–7.3 ms, ~65×;
+- per pick: median 9.2–10 ms → 0.2 ms, worst 26 ms → 4.4 ms;
+- a 5,082-event pointer sweep: mousemove handlers 65 s → 0.09 s.
+
+ (the owner's smoke on #1872: a
 Draco download of DSA and of Right_Hand rendered perfectly and could not be
 selected). Measured on a DSA-shaped strip through the real codec: Draco MERGES
 coincident vertices across elements whatever the method (600 → 202), so no row's
