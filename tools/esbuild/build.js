@@ -83,9 +83,9 @@ const engineWorkerBuild = esbuild.build({
   define: {...config.define, 'process.env.FORCE_SINGLE_THREAD': '"true"'},
 })
 
-// Render-worker spike (open-205 §9.1, draft PR only; tools/spikes/offscreen/
-// README.md): the replay page's two bundles, beside its static index.html in
-// public/spike/offscreen/, so a deploy preview serves it at /spike/offscreen/.
+// Render-worker measurement page (open-205 §9.1; offscreen-rendering.md §5b,
+// tools/spikes/offscreen/README.md): the replay page's two bundles, beside its
+// static index.html in public/spike/offscreen/, served at /spike/offscreen/.
 const spikeBuilds = ['main', 'renderWorker'].map((name) => esbuild.build({
   ...config,
   entryPoints: [path.resolve(repoRoot, 'tools', 'spikes', 'offscreen', `${name}.js`)],

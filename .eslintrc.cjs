@@ -49,9 +49,9 @@ module.exports = {
         'no-empty-function': ['error', {allow: ['arrowFunctions']}],
       },
     },
-    // Throwaway measurement spikes (`tools/spikes/**`, open-205 §9.1): scene
-    // constants and percentiles read better inline than as named constants,
-    // and the code is built only for a deploy preview, never shipped in the app.
+    // Measurement tools (`tools/spikes/**`, open-205 §9.1; offscreen-rendering.md
+    // §5b): scene constants and percentiles read better inline than as named
+    // constants, and the code is a standalone page beside the app, not part of it.
     {
       files: ['tools/spikes/**/*.js'],
       rules: {

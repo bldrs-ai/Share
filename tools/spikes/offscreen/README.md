@@ -13,8 +13,11 @@ two questions with Share's real numbers.
    worker drawing many scenes into a single context a better shape than one
    worker per canvas?
 
-Neither part is product code. The page is built only so that a deploy preview
-serves it.
+Neither part is product code. Both are checked in as measurement tools: the
+trace sits behind a flag that is off by default, and the page is served beside
+the app at `/spike/offscreen/` (on prod and on every deploy preview) with
+`noindex`. What they found, and when to use them again, is
+`design/new/offscreen-rendering.md` §5a and §5b.
 
 ## Pieces
 
@@ -31,8 +34,8 @@ serves it.
   console) and **Download trace**. The trace has no model name, URL or path.
   Long animation frames are Chromium-only (123+). In Firefox and Safari the
   trace has frames, input and milestones, but nothing to replay.
-- **The replay page**, `/spike/offscreen/` on the deploy preview (this
-  directory, plus `public/spike/offscreen/index.html`).
+- **The replay page**, `/spike/offscreen/` (this directory, plus
+  `public/spike/offscreen/index.html`).
   - It replays a trace's non-render main-thread blocks at their original
     times, as fixed calibrated work, or runs the §5 synthetic pump.
   - Meanwhile it draws one `BatchedMesh` scene, on main or in a worker.
@@ -45,8 +48,9 @@ count.
 
 ### A. Capture what Share's main thread still does
 
-1. Open a large model on the deploy preview with the trace on, e.g.
-   `https://deploy-preview-NNNN--bldrs-share-prod.netlify.app/share/v/…?feature=mainThreadTrace`.
+1. Open a large model with the trace on, on prod or on the deploy preview
+   of the build you are measuring, e.g.
+   `https://bldrs.ai/share/v/…?feature=mainThreadTrace`.
    Do a cold load first. Repeat it as a GLB cache hit after the cache write
    finishes.
 2. While it loads, drag the camera continuously. That gives the trace real
@@ -87,7 +91,7 @@ Do this for PSB, a mid-size model and a small one:
 
 ### B. Replay it against a render worker
 
-1. Open `/spike/offscreen/` on the same preview. Load the trace and pick the
+1. Open `/spike/offscreen/` on the same build. Load the trace and pick the
    window: **load** (start to end), **between Marks** (the first to the last
    Mark), **whole**, or **custom**.
 2. Use the scene preset **CPU-bound**, as in §5. Leave pacing at **fence,
