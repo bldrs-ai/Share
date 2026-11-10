@@ -1,5 +1,16 @@
 /* eslint-disable no-magic-numbers */
-import {BufferAttribute, BufferGeometry, Matrix4, PerspectiveCamera, Quaternion, Raycaster, Vector2, Vector3} from 'three'
+import {
+  Box3,
+  BufferAttribute,
+  BufferGeometry,
+  Matrix4,
+  OrthographicCamera,
+  PerspectiveCamera,
+  Quaternion,
+  Raycaster,
+  Vector2,
+  Vector3,
+} from 'three'
 import {
   addBatchedGeometry,
   addBatchedInstance,
@@ -74,11 +85,25 @@ function boxShape(sx, sy, sz) {
 }
 
 
-/** @return {object} mock Conway IfcAPI serving CUBE, BEAM and PLATE */
-function shapesApi() {
+/**
+ * @param {object} [opts]
+ * @param {boolean} [opts.withNaN] append a NaN vertex, in a triangle of its
+ *   own, to the beam
+ * @return {object} mock Conway IfcAPI serving CUBE, BEAM and PLATE
+ */
+function shapesApi({withNaN = false} = {}) {
+  const beam = boxShape(2.5, 0.2, 0.3)
+  if (withNaN) {
+    const n = beam.verts.length / 6
+    const verts = new Float32Array(beam.verts.length + 18)
+    verts.set(beam.verts)
+    verts.set([NaN, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0.1, 0, 0, 0, 1], beam.verts.length)
+    beam.verts = verts
+    beam.indices = new Uint32Array([...beam.indices, n, n + 1, n + 2])
+  }
   const shapes = {
     [CUBE]: boxShape(1, 1, 1),
-    [BEAM]: boxShape(2.5, 0.2, 0.3),
+    [BEAM]: beam,
     [PLATE]: shape([0, 0, 0, 1.5, 0, 0, 1.5, 1.5, 0, 0, 1.5, 0], [0, 1, 2, 0, 2, 3]),
   }
   return {
@@ -116,10 +141,20 @@ function lcg(seed) {
  * the pick. Decorated by the production `decorateBatchMeshes`, so the tables
  * an edit needs are the ones a load leaves.
  *
- * @return {object} the decorated THREE.BatchedMesh, under a non-identity
- *   `matrixWorld` (rotated, scaled, far from the origin)
+ * By default the batch sits under a rotated, uniformly scaled `matrixWorld`
+ * far from the origin. `plain` leaves it at identity, so a lattice-axis ray
+ * stays axis-parallel in batch space too (exactly zero direction components,
+ * the slab test's `d === 0` branches); `skewed` scales it non-uniformly and
+ * mirrors every third placement (a negative-determinant instance matrix).
+ *
+ * @param {object} [opts]
+ * @param {boolean} [opts.plain]
+ * @param {boolean} [opts.skewed]
+ * @param {boolean} [opts.withNaN] give the beam a NaN vertex beside its
+ *   sound triangles, so its box comes out NaN
+ * @return {object} the decorated THREE.BatchedMesh
  */
-function latticeBatch() {
+function latticeBatch({plain = false, skewed = false, withNaN = false} = {}) {
   const rand = lcg(7)
   const shapes = [CUBE, BEAM, PLATE]
   const flatMeshes = []
@@ -135,8 +170,9 @@ function latticeBatch() {
           q.identity()
         }
         const s = 0.5 + rand()
+        const mirror = skewed && (x + y + z) % 3 === 0 ? -1 : 1
         const m = new Matrix4().compose(
-          new Vector3(x * STEP, y * STEP, z * STEP), q, new Vector3(s, s, s))
+          new Vector3(x * STEP, y * STEP, z * STEP), q, new Vector3(s * mirror, s, s))
         const geometryExpressID = shapes[(x + (y * 2) + z) % shapes.length]
         const color = {x: rand(), y: rand(), z: rand(), w: 1}
         flatMeshes.push({
@@ -152,12 +188,14 @@ function latticeBatch() {
       }
     }
   }
-  const {batches} = flatMeshToBatchedModel(flatMeshes, shapesApi(), 0)
+  const {batches} = flatMeshToBatchedModel(flatMeshes, shapesApi({withNaN}), 0)
   decorateBatchMeshes(batches)
   const mesh = batches[0].mesh
-  mesh.position.set(1.0e4, -2.0e3, 5.0e2)
-  mesh.quaternion.setFromAxisAngle(new Vector3(0, 0, 1), 0.3)
-  mesh.scale.set(1.5, 1.5, 1.5)
+  if (!plain) {
+    mesh.position.set(1.0e4, -2.0e3, 5.0e2)
+    mesh.quaternion.setFromAxisAngle(new Vector3(0, 0, 1), 0.3)
+    mesh.scale.set(1.5, skewed ? 0.4 : 1.5, skewed ? 2.5 : 1.5)
+  }
   mesh.updateMatrixWorld(true)
   return mesh
 }
@@ -206,11 +244,20 @@ function raysAt(mesh) {
   camera.up.set(0, 0, 1)
   camera.lookAt(toWorld(new Vector3(extent / 2, extent / 2, extent / 2)))
   camera.updateMatrixWorld(true)
-  for (let i = 0; i < SCREEN_RAYS; i++) {
-    for (let j = 0; j < SCREEN_RAYS; j++) {
-      const r = new Raycaster()
-      r.setFromCamera(new Vector2(((i + 0.5) / SCREEN_RAYS * 2) - 1, ((j + 0.5) / SCREEN_RAYS * 2) - 1), camera)
-      rays.push(r)
+  // And an orthographic camera's, whose rays start on its near plane, inside
+  // the lattice here.
+  const ortho = new OrthographicCamera(-extent, extent, extent, -extent, -extent, 4 * extent)
+  ortho.position.copy(toWorld(new Vector3(extent * 0.6, extent * 0.4, extent * 0.5)))
+  ortho.up.set(0, 0, 1)
+  ortho.lookAt(toWorld(new Vector3(extent, extent * 0.9, 0)))
+  ortho.updateMatrixWorld(true)
+  for (const cam of [camera, ortho]) {
+    for (let i = 0; i < SCREEN_RAYS; i++) {
+      for (let j = 0; j < SCREEN_RAYS; j++) {
+        const r = new Raycaster()
+        r.setFromCamera(new Vector2(((i + 0.5) / SCREEN_RAYS * 2) - 1, ((j + 0.5) / SCREEN_RAYS * 2) - 1), cam)
+        rays.push(r)
+      }
     }
   }
   return rays
@@ -326,6 +373,48 @@ describe('viewer/ifc/batchedInstanceBvh', () => {
       // The rays did reach the cases the comparison is about.
       expect(hits).toBeGreaterThan(rays.length / 3)
       expect(ties).toBeGreaterThan(10)
+    })
+  })
+
+  it('picks exactly as the full walk does with an identity batch and axis-parallel rays', () => {
+    withBvhPrototypes(raycastActiveInstances, () => {
+      const accelerated = built(latticeBatch({plain: true}))
+      const reference = walking(latticeBatch({plain: true}))
+      const rays = raysAt(accelerated)
+      // The lattice-axis rays really are axis-parallel in batch space.
+      expect(rays.some((r) => r.ray.direction.x === 0 && r.ray.direction.y === 0)).toBe(true)
+      const {hits} = expectSamePicks(accelerated, reference, rays)
+      expect(hits).toBeGreaterThan(rays.length / 3)
+    })
+  })
+
+  it('picks exactly as the full walk does with mirrored instances under a non-uniform batch scale', () => {
+    withBvhPrototypes(raycastActiveInstances, () => {
+      const accelerated = built(latticeBatch({skewed: true}))
+      const reference = walking(latticeBatch({skewed: true}))
+      expect(accelerated._instanceInfo.some((_, id) =>
+        accelerated.getMatrixAt(id, new Matrix4()).determinant() < 0)).toBe(true)
+      const rays = raysAt(accelerated)
+      const {hits} = expectSamePicks(accelerated, reference, rays)
+      expect(hits).toBeGreaterThan(rays.length / 3)
+    })
+  })
+
+  it('still picks an instance whose box is NaN, through its sound triangles', () => {
+    withBvhPrototypes(raycastActiveInstances, () => {
+      const accelerated = built(latticeBatch({withNaN: true}))
+      const reference = walking(latticeBatch({withNaN: true}))
+      expect(hasInstanceBoundsTree(accelerated)).toBe(true)
+      const beamGeometry = accelerated._instanceInfo.find((info, id) =>
+        accelerated.instanceGeometryIds?.[id] === BEAM || info.geometryIndex === 1)?.geometryIndex
+      expect(Number.isNaN(accelerated.getBoundingBoxAt(beamGeometry, new Box3()).min.x)).toBe(true)
+      const rays = raysAt(accelerated)
+      const {hits} = expectSamePicks(accelerated, reference, rays)
+      expect(hits).toBeGreaterThan(rays.length / 3)
+      // And the beams are among what those rays hit.
+      const beamHit = rays.some((r) => hitsOf(reference, r).some((h) =>
+        reference._instanceInfo[h.batchId].geometryIndex === beamGeometry))
+      expect(beamHit).toBe(true)
     })
   })
 
@@ -471,17 +560,24 @@ describe('viewer/ifc/batchedInstanceBvh', () => {
     })
   })
 
-  it('a build begun again replaces the tree, and its edits are tracked', () => {
+  it('a build begun again replaces the tree; cancelling it unfinished leaves none, finished keeps it', () => {
     withBvhPrototypes(raycastActiveInstances, () => {
       const mesh = built(latticeBatch())
-      const builder = beginInstanceBoundsTree(mesh)
+      expect(mesh.userData.instanceBoundsTree).toBe(true)
+      const unfinished = beginInstanceBoundsTree(mesh)
       expect(hasInstanceBoundsTree(mesh)).toBe(false)
+      expect(mesh.userData.instanceBoundsTree).toBeUndefined()
+      unfinished.step(() => true)
+      unfinished.cancel()
+      expect(hasInstanceBoundsTree(mesh)).toBe(false)
+      const builder = beginInstanceBoundsTree(mesh)
       while (!builder.step(() => true)) {
         // a step at a time, as an idle slice with no time left runs it
       }
       expect(hasInstanceBoundsTree(mesh)).toBe(true)
+      expect(mesh.userData.instanceBoundsTree).toBe(true)
       builder.cancel()
-      expect(hasInstanceBoundsTree(mesh)).toBe(false)
+      expect(hasInstanceBoundsTree(mesh)).toBe(true)
     })
   })
 

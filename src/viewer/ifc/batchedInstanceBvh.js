@@ -44,7 +44,8 @@ import {batchEditRevision, BatchEditKind, onBatchEdit} from './batchedEdit'
  * deleted id on the next add (BatchedMesh.js:580-591), which arrives as an
  * `addInstance` event, so it goes on the list too. A delete needs nothing:
  * the raycast skips an inactive id, as it skips a hidden one, at query time.
- * Any id past what the tree was built over is walked as well, and if the
+ * Any id past what the tree was built over is walked as well, as is any
+ * instance whose box came out non-finite (a NaN vertex), and if the
  * batch's edit revision is ever ahead of what the listener has seen, the
  * tree is not used at all. Past `MAX_EXTRA_FRACTION` of the batch on
  * the list, the tree is dropped and picks walk every instance again; a bulk
@@ -79,6 +80,18 @@ const PAD_ABSOLUTE = 1e-9
 /** How many instances or nodes a build step does between deadline checks. */
 const STEP_WORK = 256
 
+/** `instanceBox` results. */
+const IN_TREE = 0
+const OUT_OF_TREE = 1
+const UNBOXED = 2
+
+/**
+ * Set on `mesh.userData` while the mesh has a built tree: a read-only
+ * diagnostic, so an E2E can tell a leg that used the tree from one that
+ * walked (`hoverPick.spec.ts`). Nothing reads it to decide anything.
+ */
+export const INSTANCE_TREE_FLAG = 'instanceBoundsTree'
+
 
 const trees = new WeakMap()
 const _box = new Box3()
@@ -108,7 +121,14 @@ export function beginInstanceBoundsTree(mesh) {
       }
       return build.step(isSpent)
     },
-    cancel: () => disposeInstanceBoundsTree(mesh),
+    // A build cancelled before it finished leaves no tree. One that finished
+    // is left alone: it is correct whatever happens to the job that built it,
+    // and goes with the mesh (or its own `disposeInstanceBoundsTree`).
+    cancel: () => {
+      if (!state.built && trees.get(mesh) === state) {
+        disposeInstanceBoundsTree(mesh)
+      }
+    },
   }
 }
 
@@ -127,6 +147,9 @@ export function disposeInstanceBoundsTree(mesh) {
   state.disposed = true
   state.unsubscribe()
   trees.delete(mesh)
+  if (mesh.userData) {
+    delete mesh.userData[INSTANCE_TREE_FLAG]
+  }
 }
 
 
@@ -167,6 +190,9 @@ export function instanceCandidates(mesh, ray) {
   for (const id of state.extra) {
     out.push(id)
   }
+  for (const id of state.unboxed) {
+    out.push(id)
+  }
   out.sort(ascending)
   return dedupeSorted(out)
 }
@@ -194,6 +220,9 @@ function newState(mesh) {
     // One past the largest id the tree was built over.
     span: 0,
     extra: new Set(),
+    // Ids whose box came out non-finite at build (see `instanceBox`), walked
+    // on every ray. Not edits, so they don't count toward the `extra` limit.
+    unboxed: [],
     seenRevision: batchEditRevision(mesh),
     // Per-instance boxes, 6 doubles each (min xyz, max xyz); an instance
     // left out of the tree (inactive or empty at build) is never read.
@@ -262,8 +291,11 @@ function newBuild(mesh, state) {
     while (nextId < span) {
       const end = Math.min(span, nextId + STEP_WORK)
       for (; nextId < end; nextId++) {
-        if (instanceBox(mesh, nextId, boxes)) {
+        const kind = instanceBox(mesh, nextId, boxes)
+        if (kind === IN_TREE) {
           order[inTree++] = nextId
+        } else if (kind === UNBOXED) {
+          state.unboxed.push(nextId)
         }
       }
       if (nextId < span && isSpent()) {
@@ -297,6 +329,9 @@ function newBuild(mesh, state) {
     state.order = order
     state.inTree = inTree
     state.built = true
+    if (mesh.userData) {
+      mesh.userData[INSTANCE_TREE_FLAG] = true
+    }
     return true
   }
 
@@ -307,23 +342,37 @@ function newBuild(mesh, state) {
 /**
  * Write instance `id`'s padded batch-local box into `boxes`.
  *
+ * A box with a NaN or infinite coordinate is never put in the tree: one bad
+ * vertex makes three's `getBoundingBoxAt` box all NaN (`Box3#expandByPoint`),
+ * every slab comparison against NaN is false, and the instance would never
+ * be a candidate, while the library still hits its sound triangles through
+ * the per-geometry tree (whose builder skips NaN with `<`/`>`). Such an
+ * instance is walked on every ray instead.
+ *
  * @param {object} mesh
  * @param {number} id
  * @param {Float64Array} boxes
- * @return {boolean} false when the instance belongs out of the tree: inactive
+ * @return {number} IN_TREE; OUT_OF_TREE when no ray can hit it: inactive
  *   (three reuses its id through an `addInstance` the listener sees) or an
- *   empty geometry, which no ray hits
+ *   empty geometry; or UNBOXED
  */
 function instanceBox(mesh, id, boxes) {
   const info = mesh._instanceInfo[id]
   if (!info || info.active === false) {
-    return false
+    return OUT_OF_TREE
   }
+  // `isEmpty` is false for a NaN box (every comparison with NaN is), so this
+  // only drops a geometry with no vertices.
   if (mesh.getBoundingBoxAt(info.geometryIndex, _box) === null || _box.isEmpty()) {
-    return false
+    return OUT_OF_TREE
   }
   _box.applyMatrix4(mesh.getMatrixAt(id, _matrix))
   const {min, max} = _box
+  const finite = Number.isFinite(min.x) && Number.isFinite(min.y) && Number.isFinite(min.z) &&
+    Number.isFinite(max.x) && Number.isFinite(max.y) && Number.isFinite(max.z)
+  if (!finite) {
+    return UNBOXED
+  }
   const pad = padOf(min, max)
   const o = id * 6
   boxes[o] = min.x - pad
@@ -332,7 +381,7 @@ function instanceBox(mesh, id, boxes) {
   boxes[o + 3] = max.x + pad
   boxes[o + 4] = max.y + pad
   boxes[o + 5] = max.z + pad
-  return true
+  return IN_TREE
 }
 
 

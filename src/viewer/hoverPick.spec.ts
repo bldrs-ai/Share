@@ -179,6 +179,23 @@ describeMobileAndDesktop('viewer/hoverPick', () => {
       if (points.length === 0) {
         points = await canvasPoints(page)
       }
+      // The leg is what it says: the default one picks through the tree, the
+      // walk leg through none (batchedInstanceBvh.js INSTANCE_TREE_FLAG).
+      const treeBatches = await page.evaluate(() => {
+        let n = 0
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(window as any).store.getState().model?.traverse?.((o: any) => {
+          if (o.isBatchedMesh && o.userData?.instanceBoundsTree === true) {
+            n++
+          }
+        })
+        return n
+      })
+      if (query === TREE_QUERY) {
+        expect(treeBatches, 'the tree leg picks through an instance tree').toBeGreaterThan(0)
+      } else {
+        expect(treeBatches, 'the walk leg builds no instance tree').toBe(0)
+      }
       const hover = await hoverEach(page, points)
       // Double-click the first point the hover found something at: last,
       // because on a phone a selection opens the drawer over the canvas.

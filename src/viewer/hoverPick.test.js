@@ -1,5 +1,5 @@
 /* eslint-disable no-magic-numbers */
-import {COST_FACTOR, MAX_INTERVAL_MS, MIN_INTERVAL_MS, createHoverPicker} from './hoverPick'
+import {COST_FACTOR, COST_SAMPLES, MAX_INTERVAL_MS, MIN_INTERVAL_MS, createHoverPicker} from './hoverPick'
 
 
 /**
@@ -132,6 +132,35 @@ describe('viewer/hoverPick', () => {
     glacial.move(0, 0.1, 0.1)
     glacial.move(MAX_INTERVAL_MS - glacial.state.t + 1, 0.2, 0.2)
     expect(glacial.state.picks).toHaveLength(2)
+  })
+
+  it('one slow pick does not stall the next; a run of them does', () => {
+    const h = harness({cost: 5})
+    let x = 0
+    const pickNow = () => {
+      // Far enough past any interval that the move picks at once.
+      h.move(MAX_INTERVAL_MS + 1, (x += 0.01), 0)
+    }
+    for (let i = 0; i < COST_SAMPLES; i++) {
+      pickNow()
+    }
+    h.state.cost = 100
+    pickNow()
+    h.state.cost = 5
+    const before = h.state.picks.length
+    // The median is still 5 ms, so the next pick may come one minimum
+    // interval later, not 4 × 100 ms.
+    h.move(MIN_INTERVAL_MS, (x += 0.01), 0)
+    expect(h.state.picks.length).toBe(before + 1)
+    // A majority of slow picks does slow it.
+    h.state.cost = 100
+    for (let i = 0; i < COST_SAMPLES; i++) {
+      pickNow()
+    }
+    const slow = h.state.picks.length
+    h.move(MIN_INTERVAL_MS, (x += 0.01), 0)
+    expect(h.state.picks.length).toBe(slow)
+    expect(100 * COST_FACTOR).toBeGreaterThan(MIN_INTERVAL_MS)
   })
 
   it('treats a viewer with no pointer as always moved', () => {

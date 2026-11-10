@@ -229,6 +229,10 @@ function makeJob(meshes, schedule) {
     cancel() {
       cancelled = true
       job.done = true
+      // An instance tree still building goes; a finished one stays, being
+      // correct whatever becomes of this job. So disposing one batch's trees
+      // (`disposeDeferredBatchedBoundsTree`, which drops that batch's own
+      // instance tree itself) doesn't take its siblings' hover speed with it.
       for (const tree of instanceTrees) {
         tree.cancel()
       }

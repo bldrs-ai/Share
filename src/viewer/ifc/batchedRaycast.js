@@ -100,9 +100,11 @@ const _batchIntersects = []
  * (node_modules/three-mesh-bvh/src/utils/ExtensionUtilities.js:86-160), line
  * for line, over the ids `batchedInstanceBvh` names instead of every id, so
  * the hits it pushes are the library's own, in the library's order (ascending
- * id). The one change is the visibility test, which asks {@link isActive}
- * first: three's `getVisibleAt` throws on a deleted id (see
- * {@link raycastActiveInstances}). Keep it in step with the library on an
+ * id). The changes are in the visibility test: it asks {@link isActive}
+ * first, because three's `getVisibleAt` throws on a deleted id (see
+ * {@link raycastActiveInstances}), and it skips an id past three's span,
+ * which `instanceCandidates` never names. That skip is a guard, so a
+ * candidate list that ever did name one costs a miss rather than a throw. Keep it in step with the library on an
  * upgrade; `batchedInstanceBvh.test.js` compares the two hit for hit.
  *
  * `_mesh` is a scratch Mesh of our own rather than the library's, so its

@@ -10,17 +10,20 @@
  * built; this bounds what is left, and what a pick costs before it is:
  *
  *  - **Not while dragging.** A drag orbits the camera, and nothing hovered
- *    survives it.
+ *    survives it. `Containers/viewer.js` calls `onMove` again on mouseup, so
+ *    a pick skipped while the button was down is made where it let go.
  *  - **Not when the pointer hasn't moved over the canvas.** The canvas
  *    position the ray is cast from only changes on the CANVAS's mousemove
  *    (`three/context/mouse.js`), while this listens on the window, so
  *    moving over a drawer or the NavTree re-cast the same ray, at the same
  *    cost, for the same answer.
  *  - **At most once per `MIN_INTERVAL_MS`, and less often when picks
- *    are dear.** After each pick the interval becomes `COST_FACTOR`
- *    times what it took (capped at `MAX_INTERVAL_MS`), so hover can
- *    take at most about 1 / (1 + COST_FACTOR) of the main thread however
- *    slow a pick is, and the frames between picks are left to the renderer.
+ *    are dear.** After each pick the interval becomes `COST_FACTOR` times
+ *    the median of the last `COST_SAMPLES` picks' cost (capped at
+ *    `MAX_INTERVAL_MS`), so hover's own synchronous work — the raycast and
+ *    the highlight's recolour, not the repaint that recolour asks for — takes
+ *    at most about 1 / (1 + COST_FACTOR) of the main thread however slow a
+ *    pick is, and the frames between picks are left to the renderer.
  *  - **With a trailing pick.** A move that lands inside the interval is
  *    picked when it ends, so the highlight settles on where the pointer
  *    stopped rather than where it was one interval earlier.
@@ -33,8 +36,15 @@ export const MIN_INTERVAL_MS = 33
 /** The slowest: a pick that slow is a bug, but hover should still answer. */
 export const MAX_INTERVAL_MS = 500
 
-/** Interval as a multiple of the last pick's cost (see module doc). */
+/** Interval as a multiple of the recent pick cost (see module doc). */
 export const COST_FACTOR = 4
+
+/**
+ * How many recent picks the cost is the median of. A median, not the last
+ * pick: one slow pick (a GC pause, the trace's 99 ms outlier among ~7 ms
+ * picks) would otherwise stall hover for 4× its cost, then let it jump.
+ */
+export const COST_SAMPLES = 5
 
 
 /**
@@ -63,6 +73,7 @@ export function createHoverPicker({
   let lastX = NaN
   let lastY = NaN
   let trailing = null
+  const costs = []
 
   /** @return {boolean} whether the pointer is where the last pick saw it */
   function unmoved() {
@@ -80,8 +91,13 @@ export function createHoverPicker({
     try {
       pick()
     } finally {
-      const cost = now() - start
-      interval = Math.min(MAX_INTERVAL_MS, Math.max(MIN_INTERVAL_MS, cost * COST_FACTOR))
+      costs.push(now() - start)
+      if (costs.length > COST_SAMPLES) {
+        costs.shift()
+      }
+      const sorted = [...costs].sort((a, b) => a - b)
+      const median = sorted[sorted.length >> 1]
+      interval = Math.min(MAX_INTERVAL_MS, Math.max(MIN_INTERVAL_MS, median * COST_FACTOR))
     }
   }
 

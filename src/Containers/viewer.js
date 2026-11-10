@@ -148,6 +148,10 @@ export function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   }
   mouseUpHandler = () => {
     viewer.clipper.clickDrag = false
+    // A hover dropped while the button was down (a trailing pick that came
+    // due mid-press, or the moves of a drag) is caught up now, where the
+    // pointer let go; a click that didn't move it picks nothing.
+    hoverPicker?.onMove()
   }
 
   // Highlight items when hovering over them: the pick is expensive on a
