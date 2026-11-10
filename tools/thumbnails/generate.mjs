@@ -310,6 +310,8 @@ async function main() {
     // Skip the first-run splash so the viewer is the whole page.
     await context.addCookies([
       {name: 'isFirstTime', value: '1', domain: 'localhost', path: '/'},
+      // About also opens for a visitor with no privacy choice yet.
+      {name: 'consentLevel', value: '1.restricted', domain: 'localhost', path: '/'},
     ])
 
     const page = await context.newPage()

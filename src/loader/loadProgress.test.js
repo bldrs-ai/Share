@@ -948,7 +948,7 @@ describe('loadProgress', () => {
 
       afterEach(() => {
         Cookies.remove('_ga')
-        Cookies.remove('isAnalyticsAllowed')
+        Cookies.set('consentLevel', '1.functional')
       })
 
       it('sends one event per noisy load, tagged with the bare cid, content_id and type', () => {
@@ -1533,7 +1533,7 @@ describe('loadProgress', () => {
 
       it('omits the cid tag when analytics consent is withheld', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-        Cookies.set('isAnalyticsAllowed', 'false')
+        Cookies.set('consentLevel', '1.restricted')
         beginLoadProgress({fileInfo: 'index.ifc'})
         console.warn('No basis found for brep!')
         endLoadProgress()
