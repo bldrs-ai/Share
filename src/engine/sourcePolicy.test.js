@@ -1,7 +1,7 @@
 /* eslint-disable no-magic-numbers */
 import {
   BUFFERED_SOURCE_BYTES_PER_DEVICE_GIB, BUFFERED_SOURCE_CAP_DESKTOP_BYTES, BUFFERED_SOURCE_CAP_PHONE_BYTES,
-  BUFFERED_SOURCE_MAX_BYTES,
+  BUFFERED_SOURCE_MAX_BYTES, SMALL_DEVICE_BUFFERED_SOURCE_MAX_BYTES, SMALL_DEVICE_MEMORY_GIB,
   SourceModeReason, StoreKind, bufferedSourceCap, chooseSourceMode,
 } from './sourcePolicy'
 
@@ -25,7 +25,14 @@ describe('engine/sourcePolicy#bufferedSourceCap', () => {
   it('is 128 MiB per GiB of deviceMemory where the browser reports it', () => {
     expect(BUFFERED_SOURCE_BYTES_PER_DEVICE_GIB).toBe(128 * MIB)
     expect(bufferedSourceCap({deviceMemoryGiB: 8, isMobile: false})).toBe(1024 * MIB)
-    expect(bufferedSourceCap({deviceMemoryGiB: 4, isMobile: false})).toBe(512 * MIB)
+  })
+
+  it('on a device of 4 GiB or less, never above conway\'s 256 MiB windowed residency ceiling', () => {
+    expect(SMALL_DEVICE_MEMORY_GIB).toBe(4)
+    expect(SMALL_DEVICE_BUFFERED_SOURCE_MAX_BYTES).toBe(256 * MIB)
+    const caps = [0.25, 0.5, 1, 2, 4, 8].map((gib) => bufferedSourceCap({deviceMemoryGiB: gib, isMobile: false}) / MIB)
+    expect(caps).toEqual([32, 64, 128, 256, 256, 1024])
+    // A phone's flag does not enter once deviceMemory is known.
     expect(bufferedSourceCap({deviceMemoryGiB: 0.5, isMobile: true})).toBe(64 * MIB)
   })
 
@@ -60,7 +67,8 @@ describe('engine/sourcePolicy#chooseSourceMode', () => {
     // PSB (860.7 MiB) buffers on an 8 GiB desktop and windows on a 4 GiB one.
     const psb = Math.round(860.7 * MIB)
     expect(chooseSourceMode(input({bytes: psb})).mode).toBe('buffered')
-    expect(chooseSourceMode(input({bytes: psb, deviceMemoryGiB: 4})).mode).toBe('windowed')
+    expect(chooseSourceMode(input({bytes: psb, deviceMemoryGiB: 4})))
+      .toMatchObject({mode: 'windowed', capBytes: 256 * MIB})
     // A phone without deviceMemory: 256 MiB.
     expect(chooseSourceMode(input({bytes: 300 * MIB, deviceMemoryGiB: null, isMobile: true})))
       .toMatchObject({mode: 'windowed', capBytes: 256 * MIB})

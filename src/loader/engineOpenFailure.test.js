@@ -2,7 +2,9 @@ import {
   EngineOpenFailureError,
   STATUS_UNRECOGNIZED_FORMAT,
   engineFailureCaptureContext,
+  engineSourceTags,
 } from './engineOpenFailure'
+import {withEngineSource} from '../engine/engineModelLoad'
 
 
 /* eslint-disable no-magic-numbers */
@@ -64,5 +66,25 @@ describe('loader/engineOpenFailure — engineFailureCaptureContext', () => {
       },
       fingerprint: ['{{ default }}', 'UNRECOGNIZED_FORMAT'],
     })
+  })
+})
+
+
+// Share#2139: a failed engine-worker open says how its source was read, so a
+// failed buffered open can be told from any other open failure in Sentry.
+describe('loader/engineOpenFailure — engine_source tags', () => {
+  it('a failed open stamped by the engine load carries engine_source and its reason, structured only', () => {
+    const err = withEngineSource(new EngineOpenFailureError(-1, 'OPEN_FAIL', 'Unexpected token'),
+      {mode: 'buffered', reason: 'underCap', bytes: 123456, format: 'ifc'})
+    const {tags} = engineFailureCaptureContext(err)
+    expect(tags).toMatchObject({engine_source: 'buffered', engine_source_reason: 'underCap'})
+    // Never the size (or anything else of the file).
+    expect(JSON.stringify(tags)).not.toContain('123456')
+  })
+
+  it('nothing for an error without a source mode (main thread, an older worker)', () => {
+    expect(engineSourceTags(new Error('x'))).toEqual({})
+    expect(Object.keys(engineFailureCaptureContext(new EngineOpenFailureError(-1, 'OPEN_FAIL', 'r')).tags))
+      .toEqual(['engine.load_status', 'engine.failure_reason'])
   })
 })

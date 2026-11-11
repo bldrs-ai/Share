@@ -2,7 +2,7 @@
 /* eslint-disable no-magic-numbers, require-await */
 import {flags as staticFlags, isFeatureEnabled} from '../FeatureFlags'
 import {EngineSession} from './EngineSession'
-import {createEngineHandler, windowedOpenSurvives} from './engineHandler'
+import {createEngineHandler, isAllocationFailure} from './engineHandler'
 import {sourceModeLine} from './engineModelLoad'
 import {ENGINE_PROTOCOL_VERSION, Ev} from './protocol'
 import {SourceModeReason} from './sourcePolicy'
@@ -215,6 +215,30 @@ async function load(s) {
 }
 
 
+/**
+ * Make `api`'s buffered open fail as conway 1.1645.781's does on a wasm OOM:
+ * the open's own statistics (a new object under the attempted id, as
+ * openAttempt.js#beginOpenAttempt expects) get OPEN_FAIL and the caught
+ * error's message, and OpenModelStreamed returns -1.
+ *
+ * @param {object} api from policyApi
+ * @param {Array<string>} log
+ * @param {string} [reason] the message conway recorded
+ * @return {object} the same api
+ */
+function conwayOomApi(api, log, reason = 'Aborted(OOM). Build with -sASSERTIONS for more info.') {
+  const statistics = new Map()
+  api.globalModelIDCounter = 0
+  api.getStatistics = (id) => statistics.get(id)
+  api.OpenModelStreamed = async () => {
+    log.push('streamed')
+    statistics.set(api.globalModelIDCounter++, {getLoadStatus: () => 'OPEN_FAIL', getLoadFailureReason: () => reason})
+    return -1
+  }
+  return api
+}
+
+
 // writeSidecar picks its writer off this prototype (engineSidecars.js
 // #sidecarWriter), which node lacks.
 beforeEach(() => {
@@ -333,25 +357,47 @@ describe('engine/engineHandler: the source policy', () => {
     await s.close()
   })
 
-  it('a buffered open that runs out of memory retries windowed, without reading the file again', async () => {
+  it('a buffered open that runs out of memory fails as real conway does: -1, reason recorded, no same-engine retry', async () => {
+    // conway 1.1645.781: `fromStreamed` catches the parse's error and falls
+    // back to the classic open, whose `fromAsync` catches again and calls
+    // `recordOpenFailure` (status OPEN_FAIL, reason = the error's message),
+    // so OpenModelStreamed RETURNS -1. Nothing here throws. The windowed
+    // retry is the page's, on a fresh engine (engineModelLoad.js#parse).
     const log = []
-    const api = policyApi(log)
-    api.OpenModelStreamed = async () => {
-      log.push('streamed')
-      throw new Error('Aborted(OOM)')
-    }
+    const api = conwayOomApi(policyApi(log), log)
     const s = await session(api, opfs(log))
-    const {opened, summary} = await load(s)
+    const failed = []
+    s.on(Ev.FAILED, (msg) => failed.push(msg))
+    const opening = s.open({file: snapshot()}, {format: 'ifc', stream: {previews: false}})
+    await expect(opening).rejects.toThrow('engine: open failed (-1)')
+    const failure = await opening.catch((e) => e.engineFailure)
+    expect(log.filter((line) => line.startsWith('stream'))).toEqual(['streamed'])
+    // The failure says the open was the policy's buffered one, and what
+    // conway recorded: what the page's retry keys on.
+    expect(failure.sourceMode).toMatchObject({mode: 'buffered', reason: SourceModeReason.UNDER_CAP})
+    expect(failure.openFailure).toEqual({status: 'OPEN_FAIL', reason: 'Aborted(OOM). Build with -sASSERTIONS for more info.'})
+    expect(failed[0]).toMatchObject({kind: 'openFailure', sourceMode: {mode: 'buffered'}})
+    expect(log).toContain('access.close')
+  })
+
+  it('the page\'s retry override opens windowed, saying the buffered open ran out of memory', async () => {
+    const log = []
+    const s = await session(policyApi(log), opfs(log))
+    const done = new Promise((resolve) => s.on(Ev.DONE, (msg) => resolve(msg.summary)))
+    const opened = await s.open({file: snapshot()},
+      {format: 'ifc', stream: {previews: false}, sourceOverride: {windowed: true, failure: 'outOfMemory'}})
+    const summary = await done
     expect(opened.windowed).toBe(true)
-    // The retry reads through the same handle, still open: one whole-file
-    // read, and no close until the session's.
-    expect(log.slice(0, 3)).toEqual(['whole read', 'streamed', 'stream syncHandle recordHash=true'])
-    expect(log).not.toContain('access.close')
-    expect(summary.sourceMode).toMatchObject({reason: SourceModeReason.BUFFERED_FAILED, failure: 'outOfMemory'})
+    // No whole-file read: the override is decided before it.
+    expect(log[0]).toBe('stream syncHandle recordHash=true')
+    expect(log).not.toContain('whole read')
+    expect(summary.sourceMode).toMatchObject({mode: 'windowed', reason: SourceModeReason.BUFFERED_FAILED,
+      failure: 'outOfMemory'})
+    expect(sourceModeLine(summary.sourceMode)).toBe('Engine source: windowed (buffered open failed: out of memory)')
     await s.close()
   })
 
-  it('a buffered open that fails for any other reason is not retried', async () => {
+  it('an open that throws (not a conway failure) is not retried here either', async () => {
     const log = []
     const api = policyApi(log)
     api.OpenModelStreamed = async () => {
@@ -363,16 +409,35 @@ describe('engine/engineHandler: the source policy', () => {
     expect(log.filter((line) => line.startsWith('stream '))).toEqual([])
     expect(log).toContain('access.close')
   })
+
+  it('a windowed open over the cap that fails falls through to buffered, labelled windowedFailed', async () => {
+    // Pre-dates the policy (conwayOpen.js#openDeferred buffers after any
+    // non-schema store-open failure); the label says what happened.
+    const log = []
+    const api = policyApi(log)
+    api.OpenModelStream = async () => {
+      log.push('stream')
+      return -1
+    }
+    const s = await session(api, opfs(log), {device: {deviceMemoryGiB: 3e-7, isMobile: false}})
+    const {opened, summary} = await load(s)
+    expect(opened.windowed).toBe(false)
+    expect(summary.sourceMode).toMatchObject({mode: 'buffered', reason: SourceModeReason.WINDOWED_FAILED})
+    expect(sourceModeLine(summary.sourceMode)).toMatch(/^Engine source: buffered \(0\.0 MB, windowed open failed\)$/)
+    await s.close()
+  })
 })
 
 
-describe('engine/engineHandler#windowedOpenSurvives', () => {
-  it('only memory failures', () => {
-    expect(windowedOpenSurvives(new RangeError('Array buffer allocation failed'))).toBe(true)
-    expect(windowedOpenSurvives(new Error('Aborted(OOM)'))).toBe(true)
-    expect(windowedOpenSurvives(new Error('Cannot enlarge memory arrays'))).toBe(true)
-    expect(windowedOpenSurvives(new Error('malformed'))).toBe(false)
-    expect(windowedOpenSurvives(new TypeError('x is not a function'))).toBe(false)
+describe('engine/engineHandler#isAllocationFailure', () => {
+  it('a failed whole-file allocation, and not any RangeError', () => {
+    expect(isAllocationFailure(new RangeError('Array buffer allocation failed'))).toBe(true)
+    expect(isAllocationFailure(new RangeError('Out of memory'))).toBe(true)
+    expect(isAllocationFailure(new RangeError('invalid array length'))).toBe(true)
+    expect(isAllocationFailure(new Error('Aborted(OOM)'))).toBe(true)
+    expect(isAllocationFailure(new RangeError('Maximum call stack size exceeded'))).toBe(false)
+    expect(isAllocationFailure(new RangeError('Offset is outside the bounds of the DataView'))).toBe(false)
+    expect(isAllocationFailure(new Error('malformed'))).toBe(false)
   })
 })
 

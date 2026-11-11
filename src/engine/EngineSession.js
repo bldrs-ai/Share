@@ -263,12 +263,15 @@ export class EngineSession {
    * @param {object} [options.stream] `{previews, batchSize, startPaused}` to
    *   stream the geometry after the index; `startPaused` waits for
    *   {@link pump}`('run')` before the first batch
+   * @param {object|null} [options.sourceOverride] `{windowed: true, failure}`
+   *   for this open only: the windowed retry after a buffered open ran out
+   *   of memory on an earlier engine (engineModelLoad.js#parse)
    * @return {Promise<object>} `{modelID, windowed, format, openMs, wasmBytes}`
    */
-  async open(source, {format = null, stream = null} = {}) {
+  async open(source, {format = null, stream = null, sourceOverride = null} = {}) {
     const {source: sent, transfer} = transferableSource(source)
     try {
-      const result = await this.request(Op.OPEN, {source: sent, format, stream}, transfer)
+      const result = await this.request(Op.OPEN, {source: sent, format, stream, sourceOverride}, transfer)
       if (result.failure) {
         // The engine's classification, for unsupportedSchema.js#openModelFailure
         // to turn into the user-facing error, as the main-thread path does.

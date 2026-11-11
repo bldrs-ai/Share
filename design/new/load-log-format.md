@@ -184,10 +184,14 @@ Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 trian
      cap 512 MB)` above it; `buffered (231.4 MB, held by the Blob store)`
      (Firefox, Safari); `windowed (index reopen)` from a sidecar;
      `windowed (disableBufferedSource)` under the kill switch;
-     `windowed (buffered open failed: RangeError)` after the memory
-     fallback; and `buffered (…, no store to window over)` /
-     `(…, disableStreamOpen)` / `(…, windowed open refused)` where no
-     windowed open was possible. Absent from a worker bundle older than the
+     `windowed (buffered open failed: RangeError)` when the whole-file
+     buffer could not be allocated, and `windowed (buffered open failed: out
+     of memory)` on the page's retry after a buffered open ran out of
+     memory (engine-worker.md §5.6); `buffered (…, no store to window
+     over)` / `(…, disableStreamOpen)` / `(…, windowed open refused)` where
+     no windowed open was possible; and `buffered (…, windowed open
+     failed)` where conway's windowed open failed and the whole file was
+     buffered instead. Absent from a worker bundle older than the
      policy. MB here is MiB, as on the lines below.
    - `Engine source I/O: <store> …, N reads, M MB, Ts` — only after a
      windowed open: the store it pages through (sync access handle, or the

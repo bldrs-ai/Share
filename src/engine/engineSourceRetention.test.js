@@ -107,9 +107,12 @@ function retainingApi() {
  *
  * @param {object} api
  * @param {object|null} [root] the OPFS root the source lookup searches
+ * @param {boolean} [syncHandles] whether this "worker" can open sync access
+ *   handles (Chromium); without, a File source gets the Blob store, which
+ *   holds the file whole when `root` has its entry (Firefox, Safari)
  * @return {{request: function(string, object): Promise<object>, events: Array}}
  */
-function drive(api, root = null) {
+function drive(api, root = null, syncHandles = false) {
   const events = []
   const waiting = new Map()
   let id = 0
@@ -126,9 +129,7 @@ function drive(api, root = null) {
       }
     },
     yieldToLoop: () => Promise.resolve(),
-    // No sync access handles: a File source gets the Blob store, which
-    // holds the file whole when `root` has its entry.
-    sourceOptions: {getOpfsRoot: async () => root, canSyncHandle: () => false},
+    sourceOptions: {getOpfsRoot: async () => root, canSyncHandle: () => syncHandles},
   })
   const request = (op, args) => new Promise((resolve) => {
     const re = ++id
@@ -151,7 +152,24 @@ const MTIME = 1_700_000_000_000
  * @return {object} a FileSystemDirectoryHandle stand-in
  */
 function opfsWith(file) {
-  const entry = {kind: 'file', getFile: async () => file}
+  const entry = {
+    kind: 'file',
+    getFile: async () => file,
+    // Read-only, over a copy of the File's bytes, as the real handle reads
+    // the entry: what the sync-handle store's `takeWhole` reads through.
+    createSyncAccessHandle: async () => {
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      return {
+        mode: 'read-only',
+        getSize: () => bytes.length,
+        read: (into, {at}) => {
+          into.set(bytes.subarray(at, at + into.length))
+          return into.length
+        },
+        close: () => null,
+      }
+    },
+  }
   return {
     kind: 'directory',
     async* entries() {
@@ -204,6 +222,37 @@ describe('engine/engineHandler: a buffered open lets its source go at the spill 
     expect(opened.result.windowed).toBe(false)
     await untilDone(events)
     expect((await request(Op.SPILL, {file})).result.spilled).toBe(true)
+    expect(await collected(api.sourceRef)).toBe(true)
+  })
+
+  it('a File read whole through the sync access handle is collectable once the model has spilled', async () => {
+    // Chromium's default: one whole-file read through the handle
+    // (engineSources.js#makeSyncHandleStore takeWhole) into a buffer the
+    // store keeps no reference to.
+    const api = retainingApi()
+    const SIZE = 1 << 20
+    const file = new File([new Uint8Array(SIZE)], NAME, {lastModified: MTIME})
+    const {request, events} = drive(api, opfsWith(file), true)
+    await request(Op.INIT, {flags: {disableEngineSidecar: true}, device: {deviceMemoryGiB: 8, isMobile: false}})
+    const opened = await request(Op.OPEN, {source: {file}, stream: {previews: true}})
+    expect(opened.result.windowed).toBe(false)
+    expect(opened.result.sourceMode).toMatchObject({mode: 'buffered', reason: 'underCap'})
+    await untilDone(events)
+    expect((await request(Op.SPILL, {file})).result).toMatchObject({spilled: true, source: {kind: 'syncHandle'}})
+    expect(await collected(api.sourceRef)).toBe(true)
+  })
+
+  it('a spill that names no File (a load with no GLB writer) still lets the source go', async () => {
+    // Loader.js#load sends SPILL with no File when no writer was scheduled;
+    // the handler spills onto the policy-buffered open's own File.
+    const api = retainingApi()
+    const SIZE = 1 << 20
+    const file = new File([new Uint8Array(SIZE)], NAME, {lastModified: MTIME})
+    const {request, events} = drive(api, opfsWith(file), true)
+    await request(Op.INIT, {flags: {disableEngineSidecar: true}, device: {deviceMemoryGiB: 8, isMobile: false}})
+    await request(Op.OPEN, {source: {file}, stream: {previews: false}})
+    await untilDone(events)
+    expect((await request(Op.SPILL, {})).result.spilled).toBe(true)
     expect(await collected(api.sourceRef)).toBe(true)
   })
 

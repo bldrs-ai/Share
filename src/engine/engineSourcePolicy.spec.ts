@@ -221,7 +221,8 @@ describeMobileAndDesktop('Engine source policy', () => {
 
   for (const {name, path} of MODELS) {
     test(`on the Blob store (the Firefox/Safari path) a ${name} opens buffered over the held bytes`, async ({page}) => {
-      test.setTimeout(LOAD_TIMEOUT_MS)
+      test.setTimeout(LOAD_TIMEOUT_MS + CACHE_TIMEOUT_MS)
+      const glbLogs = captureGlbLogs(page)
       const pump = watchPumpLines(page)
       const engine = watchEngineWorker(page)
       await page.goto(`${path}?feature=disableEngineSyncHandle`)
@@ -233,6 +234,11 @@ describeMobileAndDesktop('Engine source policy', () => {
       expect(signals.indexLine).toMatch(/^Engine index: parsed; sidecar saved/)
       const model = await modelSignature(page)
       expect(model.props).toContain(`"expressID":${model.leafId}`)
+      // The writer's spill releases the held bytes the open was given: the
+      // default path on Firefox and Safari must not keep the file resident.
+      await pauseViewerRendering(page)
+      await waitForGlbLog(glbLogs, 'released resident source buffer', CACHE_TIMEOUT_MS)
+      await resumeViewerRendering(page)
     })
   }
 })

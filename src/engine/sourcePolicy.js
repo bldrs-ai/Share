@@ -46,6 +46,24 @@ export const BUFFERED_SOURCE_BYTES_PER_DEVICE_GIB = 128 * MIB
 // eslint-disable-next-line no-magic-numbers
 export const BUFFERED_SOURCE_MAX_BYTES = 1024 * MIB
 
+/**
+ * Devices reporting this much memory or less get a cap no larger than
+ * {@link SMALL_DEVICE_BUFFERED_SOURCE_MAX_BYTES}: no device this small has
+ * been measured (every run was on a 17 GB container).
+ */
+export const SMALL_DEVICE_MEMORY_GIB = 4
+
+/**
+ * The cap's ceiling on a small device: 256 MiB, conway's windowed provider's
+ * own adaptive residency ceiling (`ADAPTIVE_MAX_RESIDENT_BYTES`,
+ * `src/step/step_buffer_provider.ts`, 256 MiB in conway 1.1645.781). So on
+ * those devices a buffered open never holds more source than a windowed open
+ * may come to hold anyway. Caps: 0.25 GiB → 32 MiB, 0.5 → 64, 1 → 128,
+ * 2 → 256, 4 → 256, 8 and up → 1 GiB.
+ */
+// eslint-disable-next-line no-magic-numbers
+export const SMALL_DEVICE_BUFFERED_SOURCE_MAX_BYTES = 256 * MIB
+
 /** The cap where `navigator.deviceMemory` is absent, on a desktop. */
 // eslint-disable-next-line no-magic-numbers
 export const BUFFERED_SOURCE_CAP_DESKTOP_BYTES = 1024 * MIB
@@ -98,13 +116,23 @@ export const SourceModeReason = Object.freeze({
   UNDER_CAP: 'underCap',
   // Sync access handle, file over the cap.
   OVER_CAP: 'overCap',
-  // Set by the handler, not here: the policy chose buffered, the whole-file
-  // read or the buffered open failed for a reason a windowed open survives
-  // (an allocation failure, out of memory), and the open went windowed.
+  // Set by the handler, not here: the policy chose buffered and it failed
+  // for memory, so the open went windowed. Either the whole-file read could
+  // not be allocated (`failure: 'RangeError'`, same engine: the engine was
+  // never touched), or a buffered open on an earlier engine ran out of
+  // memory and the page retried windowed on a fresh one
+  // (`failure: 'outOfMemory'`, engineModelLoad.js#parse).
   BUFFERED_FAILED: 'bufferedFailed',
+  // Set by the handler, not here: the policy chose windowed over a store and
+  // conway's windowed open failed for some other reason than a schema
+  // refusal, so openDeferred fell through to its buffered open of the whole
+  // file (conwayOpen.js), over the cap too when it was over the cap.
+  // Pre-dates the policy; engine-worker.md §5.6 names it as a follow-up.
+  WINDOWED_FAILED: 'windowedFailed',
   // Set by the handler, not here: the policy chose windowed, conway refused
-  // the store open (a STEP over a store that cannot read synchronously, in
-  // process) and opened buffered (conwayOpen.js#openDeferred).
+  // the store open as one it cannot do (STORE_NOT_SYNCHRONOUS: a STEP over a
+  // store that cannot read synchronously, in process) and opened buffered
+  // (conwayOpen.js#openDeferred).
   WINDOWED_REFUSED: 'windowedRefused',
 })
 
@@ -127,7 +155,9 @@ export const POLICY_BUFFERED_REASONS = Object.freeze([SourceModeReason.UNDER_CAP
  */
 export function bufferedSourceCap({deviceMemoryGiB, isMobile}) {
   if (Number.isFinite(deviceMemoryGiB) && deviceMemoryGiB > 0) {
-    return Math.min(Math.round(BUFFERED_SOURCE_BYTES_PER_DEVICE_GIB * deviceMemoryGiB), BUFFERED_SOURCE_MAX_BYTES)
+    const ceiling = deviceMemoryGiB <= SMALL_DEVICE_MEMORY_GIB ?
+      SMALL_DEVICE_BUFFERED_SOURCE_MAX_BYTES : BUFFERED_SOURCE_MAX_BYTES
+    return Math.min(Math.round(BUFFERED_SOURCE_BYTES_PER_DEVICE_GIB * deviceMemoryGiB), ceiling)
   }
   return isMobile ? BUFFERED_SOURCE_CAP_PHONE_BYTES : BUFFERED_SOURCE_CAP_DESKTOP_BYTES
 }

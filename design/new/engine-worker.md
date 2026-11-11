@@ -762,15 +762,23 @@ a V8 context with the source bytes (fixed; the measurements doc has the
 heap snapshot and the after-fix numbers).
 
 **The cap.** `BUFFERED_SOURCE_BYTES_PER_DEVICE_GIB` = 128 MiB ×
-`navigator.deviceMemory` (8 GiB → 1 GiB, which buffers PSB at 860.7 MiB;
-4 GiB → 512 MiB), never above `BUFFERED_SOURCE_MAX_BYTES`, 1 GiB, the
+`navigator.deviceMemory`, never above `BUFFERED_SOURCE_MAX_BYTES`, 1 GiB, the
 largest size anything has been measured buffered at (`deviceMemory` is not
-capped at 8: headless Chromium 153 on a 17 GB machine reports 16); without
-`deviceMemory`, 1 GiB on a desktop and 256 MiB on a phone (the repo's form factor rule,
-`MOBILE_WIDTH`). The page snapshots both (`spawnEngine.js#engineDeviceSnapshot`),
-since the worker has no window. **Provisional:** it is static per device,
-and the PSB renderer peak with it is in the measurements doc's
-§"Source policy as built".
+capped at 8: headless Chromium 153 on a 17 GB machine reports 16). On a
+device reporting 4 GiB or less it is also never above
+`SMALL_DEVICE_BUFFERED_SOURCE_MAX_BYTES`, 256 MiB, conway's windowed
+provider's own adaptive residency ceiling (`ADAPTIVE_MAX_RESIDENT_BYTES`),
+so there a buffered open never holds more source than a windowed one may:
+no device that small has been measured. The caps: 0.25 GiB → 32 MiB, 0.5 →
+64, 1 → 128, 2 → 256, 4 → 256, 8 and up → 1 GiB (8 GiB buffers PSB at
+860.7 MiB). Without `deviceMemory`, 1 GiB on a desktop and 256 MiB on a
+phone (the repo's form factor rule, `MOBILE_WIDTH`); that branch is only
+consulted when `deviceMemory` is absent, which today means never on a
+browser with sync access handles (Chromium has it), so the phone value is
+a backstop, not a measured choice. The page snapshots both
+(`spawnEngine.js#engineDeviceSnapshot`), since the worker has no window.
+**Provisional:** it is static per device, and the PSB renderer peak with it
+is in the measurements doc's §"Source policy as built".
 
 **How the bytes are read.** `store.takeWhole()` (engineSources.js): on the
 sync access handle one read of the whole file into one buffer; on the Blob
@@ -780,13 +788,49 @@ a buffered parse still exports its sidecar (`sidecarState`), and the next
 open after an eviction or with the artifact gone comes up from the index,
 windowed (rule 2). The sync access handle is closed once the open has run.
 
-**Fallback.** A whole-file read or a buffered open that fails for memory
-(`RangeError`, an OOM message by `utils/oom.js`) falls back to the windowed
-open over the same store, without a second whole-file read; anything else
-(a malformed file, a schema refusal) stands. The load report says so
-(`Engine source: windowed (buffered open failed: RangeError)`) and the page
-sends one GA `engine_source_fallback` event once the load succeeded
-(Loader.js#reportLoadDiagnostics, structured fields only).
+**Fallback.** Two memory failures, two places:
+- **The whole-file buffer cannot be allocated** (`takeWhole()` throws a
+  RangeError: `isAllocationFailure` in engineHandler.js, asked of that call
+  only, so a corrupt file's bounds error or a stack overflow is never read as
+  memory). The engine has not been touched, so the same worker opens
+  windowed over the same store: `Engine source: windowed (buffered open
+  failed: RangeError)`.
+- **The buffered open runs out of memory.** conway does not throw for it
+  (1.1645.781: `fromStreamed` catches the parse's error and falls back to
+  the classic open, `fromAsync` catches again and calls
+  `recordOpenFailure`, status `OPEN_FAIL` with the error's message as the
+  reason, and the open returns -1), and an Emscripten OOM abort leaves the
+  wasm unusable. So the handler only reports it: the `FAILED` packet and the
+  open's `engineFailure` carry the `sourceMode`. The page
+  (`engineModelLoad.js#parse`, `shouldRetryWindowed`) retries ONCE, on a NEW
+  engine (the failed worker is terminated), with a per-open override that
+  makes that open windowed and forbids openDeferred's buffered fall-through
+  (`bufferedFallback: false`), when the failed open was the policy's own
+  buffered one (`POLICY_BUFFERED_REASONS`) and conway's recorded reason
+  classifies as out of memory by `utils/oom.js` (`Aborted(OOM)`, `Array
+  buffer allocation failed`, `out of memory`, …). A schema refusal or any
+  other failure (a corrupt file) is not retried. The report then says
+  `Engine source: windowed (buffered open failed: out of memory)`. If the
+  retry fails too, its failure is the load's, reported once.
+  Caveats: the classic open conway falls back to re-parses the same bytes,
+  so the recorded reason is that second parse's; if it fails some other
+  way, no retry happens. Previews the failed open had posted stay on
+  screen until the retry's model replaces them.
+- **Not covered:** an out-of-memory in the geometry pump, after a
+  successful open, has no fallback; it fails the load as before.
+
+Either fallback sends one GA `engine_source_fallback {format, store,
+failure, size_class}` event once the load succeeded
+(Loader.js#reportLoadDiagnostics). A failed open's Sentry event carries
+`engine_source` (`buffered` | `windowed`) and `engine_source_reason` as tags
+(engineOpenFailure.js#engineSourceTags), so a failed buffered open can be
+told from any other.
+
+**The spill with no File.** A load with no GLB writer sends SPILL with no
+File (Loader.js#load); for the policy's buffered open the handler spills
+onto the open's own File. Only for that open: a `disableStreamOpen` or
+fall-through buffered open still answers `unsupported` and keeps its
+source, as before the policy.
 
 **Reported.** `Engine source: <mode> (<why>)`, before `Engine source I/O:`
 (load-log-format.md). A buffered open the policy chose is the default path
@@ -809,6 +853,13 @@ One session: `?feature=disableBufferedSource`.
   against live usage across workers.
 - Whether Firefox and Safari should stop holding the file at all above some
   size. Neither browser has been measured with the policy.
+- **A windowed open that fails falls through to buffered, even over the
+  cap.** conwayOpen.js#openDeferred buffers the whole file after any
+  non-schema store-open failure; this pre-dates the policy, and the report
+  now names it (`Engine source: buffered (…, windowed open failed)`, reason
+  `windowedFailed`, distinct from in-process STEP's `windowedRefused`). On
+  an over-cap file it buffers more than the cap. The page's OOM retry turns
+  it off for its own open.
 
 ## 6. The one-worker-per-model choice, against the alternatives
 

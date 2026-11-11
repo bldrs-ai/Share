@@ -263,7 +263,7 @@ export function createEngineHandler({
       }
     },
 
-    async [Op.OPEN]({source, format = null, stream = null} = {}) {
+    async [Op.OPEN]({source, format = null, stream = null, sourceOverride = null} = {}) {
       if (api === null) {
         throw new Error('engine: init has not run')
       }
@@ -274,7 +274,7 @@ export function createEngineHandler({
       }
       opening = true
       try {
-        return await openModel(source, stream, format)
+        return await openModel(source, stream, format, sourceOverride)
       } finally {
         opening = false
       }
@@ -464,9 +464,12 @@ export function createEngineHandler({
    *   conway detects the schema from the bytes, and the source kind (not
    *   this) decides whether the open is windowed, so a mislabelled file
    *   opens as what it is. It is echoed in the reply and the `done` packet.
+   * @param {object|null} [sourceOverride] `{windowed: true, failure}`: the
+   *   page's windowed retry after a buffered open ran out of memory on an
+   *   earlier engine (engineModelLoad.js#parse)
    * @return {Promise<object>}
    */
-  async function openModel(source, stream, format) {
+  async function openModel(source, stream, format, sourceOverride = null) {
     // Built in its own function, never inline here: conway keeps `settings`
     // and its callbacks on the model for the session, and a closure created
     // in THIS scope would keep this scope's whole V8 context alive with it,
@@ -534,6 +537,15 @@ export function createEngineHandler({
       isMobile: device.isMobile,
       flags,
     })
+    if (sourceOverride?.windowed === true && sourceMode.mode === 'buffered' && store !== null) {
+      // The page's retry of a load whose buffered open ran out of memory on
+      // an earlier engine (engineModelLoad.js#parse): this open is windowed,
+      // and says why. Per open, so nothing else on the page changes.
+      sourceMode = {
+        ...sourceMode, mode: 'windowed', reason: SourceModeReason.BUFFERED_FAILED,
+        failure: sourceOverride.failure ?? 'outOfMemory',
+      }
+    }
     let whole = null
     let adopted = false
     let id
@@ -546,10 +558,16 @@ export function createEngineHandler({
         try {
           whole = store.takeWhole()
         } catch (e) {
-          if (!windowedOpenSurvives(e)) {
+          // The one buffered failure that can be caught here: the whole-file
+          // buffer did not fit. The engine was never touched, so its windowed
+          // open over this same store is safe. Anything else stands. (A
+          // buffered OPEN that runs out of memory does not throw: conway
+          // records the failure and returns -1, and the wasm may be aborted,
+          // so that retry is the page's, on a fresh engine.)
+          if (!isAllocationFailure(e)) {
             throw e
           }
-          sourceMode = bufferedFailed(sourceMode, e)
+          sourceMode = {...sourceMode, mode: 'windowed', reason: SourceModeReason.BUFFERED_FAILED, failure: 'RangeError'}
         }
         // The whole-file read's cost before the open: the sync access
         // handle's one read here, or the Blob store's hold, already paid in
@@ -561,42 +579,39 @@ export function createEngineHandler({
           sourceMode = {...sourceMode, mode: 'windowed', reason: SourceModeReason.BLOB_NOT_HELD}
         }
       }
-      try {
-        ({modelID: id, windowed, attempt, index} = await openDeferred(engine, {
-          sidecar,
-          store: whole !== null ? null : store,
-          loadBytes: bytesLoader(source, store, whole),
-          settings,
-        }))
-      } catch (e) {
-        // A buffered open over the whole file that ran out of memory: the
-        // windowed open needs only its window, so it may still get there.
-        // The bytes are dropped first. Its own buffered fallback is not
-        // taken: that would read the whole file a second time.
-        if (whole === null || disposed || !windowedOpenSurvives(e)) {
-          throw e
-        }
-        whole = null
-        sourceMode = bufferedFailed(sourceMode, e)
-        ;({modelID: id, windowed, attempt, index} = await openDeferred(engine, {
-          sidecar: null, store, loadBytes: rejectingLoader(e), settings,
-        }))
-      }
+      let storeFailure
+      ;({modelID: id, windowed, attempt, index, storeFailure} = await openDeferred(engine, {
+        sidecar,
+        store: whole !== null ? null : store,
+        loadBytes: bytesLoader(source, store, whole),
+        settings,
+        // The page's retry after an out-of-memory buffered open: its windowed
+        // open is the last try, never followed by another whole-file buffer.
+        bufferedFallback: sourceOverride?.windowed !== true,
+      }))
       const openedModel = !disposed && typeof id === 'number' && id >= 0
       if (openedModel && !windowed && sourceMode.mode === 'windowed') {
-        // The policy said windowed, and conway refused the store open (a STEP
-        // over a store that cannot read synchronously, in process) and
-        // buffered instead (conwayOpen.js#openDeferred).
-        sourceMode = {...sourceMode, mode: 'buffered', reason: SourceModeReason.WINDOWED_REFUSED}
+        // The policy said windowed, and conway's store open did not take, so
+        // openDeferred buffered the whole file instead: refused as one conway
+        // cannot do (a STEP over a store that cannot read synchronously, in
+        // process), or failed some other way (which buffers even over the
+        // cap: engine-worker.md §5.6 names it as a follow-up).
+        sourceMode = {
+          ...sourceMode, mode: 'buffered',
+          reason: storeFailure?.status === 'STORE_NOT_SYNCHRONOUS' ?
+            SourceModeReason.WINDOWED_REFUSED : SourceModeReason.WINDOWED_FAILED,
+        }
       }
       if (openedModel && whole !== null && !windowed && entryPath !== null) {
         // The buffered parse still exports a sidecar, so a reopen after
         // eviction can come back from the index (Share#2139).
         sidecarState = {entryPath, file: blob, getOpfsRoot, source: 'parse', bytes: 0, saved: false}
       }
-      if (openedModel && !windowed && blob) {
+      if (openedModel && whole !== null) {
         // What the SPILL releases a buffered source to when the page sends
         // no File of its own (a load with no GLB writer, Loader.js#load).
+        // Only for the policy's buffered open: a `disableStreamOpen` or
+        // fallback buffered open answers that spill `unsupported`, as before.
         bufferedFile = blob
       }
       if (openedModel && windowed) {
@@ -636,7 +651,10 @@ export function createEngineHandler({
       // Classified here, where conway's statistics are (§2.4 G3); the page
       // builds the user-facing error from it with
       // unsupportedSchema.js#openModelFailure, as the main-thread path does.
-      const failure = classifyOpenFailure(engine, attempt, id)
+      // With the source mode, so the page can tell a failed buffered open
+      // from any other (and retry an out-of-memory one windowed, on a fresh
+      // engine: engineModelLoad.js#parse), and Sentry can tag it.
+      const failure = {...classifyOpenFailure(engine, attempt, id), sourceMode}
       emit(Ev.FAILED, {
         kind: failure.refusedSchema ? 'refusedSchema' : 'openFailure',
         message: `engine: open failed (${id})`,
@@ -1050,50 +1068,19 @@ function bytesLoader(source, store, whole) {
 
 
 /**
- * A `loadBytes` for the windowed retry after a buffered open ran out of
- * memory: openDeferred's own buffered fallback must not read the whole file
- * again, so it fails with the buffered open's error.
- *
- * @param {*} error
- * @return {function(): Promise<never>}
- */
-function rejectingLoader(error) {
-  return () => Promise.reject(error)
-}
-
-
-/**
- * Could a windowed open still succeed where a buffered one failed? Only
- * when the failure was memory: an allocation that did not fit (the
- * whole-file buffer's RangeError) or the engine running out. Anything else
- * (a malformed file, a schema refusal) would fail windowed too, so it
- * stands.
+ * Did allocating the whole-file buffer fail for want of memory? Only ever
+ * asked of `store.takeWhole()`, whose size is the store's own, so a
+ * RangeError there is the allocation: V8's "Array buffer allocation failed",
+ * Firefox's and Safari's "out of memory" / "invalid array length". A
+ * RangeError from anywhere else (a corrupt file's bounds error, a stack
+ * overflow) is never asked about here.
  *
  * @param {*} e
  * @return {boolean}
  */
-export function windowedOpenSurvives(e) {
-  return e instanceof RangeError || isOutOfMemoryError(e)
-}
-
-
-/**
- * The policy's decision once its buffered open failed and the open went
- * windowed: the reason is the fallback, and `failure` says what failed as an
- * error NAME only (a structured field for the load report and GA, which an
- * engine message could not be trusted to stay free of a file name).
- *
- * @param {object} decided from sourcePolicy.js#chooseSourceMode
- * @param {*} error
- * @return {object}
- */
-function bufferedFailed(decided, error) {
-  return {
-    ...decided,
-    mode: 'windowed',
-    reason: SourceModeReason.BUFFERED_FAILED,
-    failure: error instanceof RangeError ? 'RangeError' : 'outOfMemory',
-  }
+export function isAllocationFailure(e) {
+  return (e instanceof RangeError && /alloc|memory|invalid (typed )?array length/i.test(e.message ?? '')) ||
+    isOutOfMemoryError(e)
 }
 
 

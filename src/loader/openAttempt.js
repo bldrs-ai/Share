@@ -97,6 +97,24 @@ export function conwayRefusedSchema(ifcAPI, attempt) {
 
 
 /**
+ * The load status conway recorded for the open marked by `attempt`
+ * (`STORE_NOT_SYNCHRONOUS`, `OPEN_FAIL`, …), reason or no reason.
+ *
+ * @param {object} ifcAPI
+ * @param {OpenAttempt|undefined} attempt from {@link beginOpenAttempt}
+ * @return {string|undefined}
+ */
+export function conwayLoadStatus(ifcAPI, attempt) {
+  try {
+    const status = attemptStatistics(ifcAPI, attempt)?.getLoadStatus?.()
+    return typeof status === 'string' ? status : undefined
+  } catch (_) {
+    return undefined
+  }
+}
+
+
+/**
  * What conway recorded about WHY the open marked by `attempt` failed
  * (conway#742): its load status (`UNRECOGNIZED_FORMAT`, `OPEN_FAIL`,
  * `INDEX_RESTORE_FAIL`, …) and `getLoadFailureReason()`, read from the same
