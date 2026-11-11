@@ -29,11 +29,11 @@
       "Bash(git log:*)",
       "Bash(git show:*)",
       "Bash(git fetch:*)",
-      "Bash(yarn lint:*)",
-      "Bash(yarn typecheck:*)",
-      "Bash(yarn test:*)",
-      "Bash(yarn test-flows:*)",
-      "Bash(yarn jest:*)"
+      "Bash(bun run lint:*)",
+      "Bash(bun run typecheck:*)",
+      "Bash(bun run test:*)",
+      "Bash(bun run test-flows:*)",
+      "Bash(npx jest:*)"
     ]
   }
 }

@@ -23,7 +23,7 @@ const marketingOutAvailable = fs.existsSync(MARKETING_OUT)
 if (!marketingOutAvailable) {
   console.warn(
     'proxy: marketing/out not found — /about, /pricing, /blog, etc. will\n' +
-    '       fall through to the SPA. Run `cd marketing && yarn build` to\n' +
+    '       fall through to the SPA. Run `cd marketing && bun run build` to\n' +
     '       enable the static marketing overlay.')
 }
 

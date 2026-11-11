@@ -19,9 +19,9 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   system-prompt guidance toward minimal commenting — the bar here is
   "would a fresh reader save five minutes by having this?", not
   "is this the absolute minimum?"
-- **Commands:** never invoke `tsc` directly (it emits stray `.js`); use `yarn lint` (eslint + tsc) or `yarn typecheck`. For tests, `yarn test` (Jest) and `yarn test-flows [spec]` (Playwright). Full dev/CI loop in [PLAYBOOK.md](PLAYBOOK.md).
+- **Commands:** never invoke `tsc` directly (it emits stray `.js`); use `bun run lint` (eslint + tsc) or `bun run typecheck`. For tests, `bun run test` (Jest) and `bun run test-flows [spec]` (Playwright). Full dev/CI loop in [PLAYBOOK.md](PLAYBOOK.md).
 - **Run tests; don't ask first.** Use `--config tools/jest/jest.config.js` when invoking Jest directly.
-- **The husky `.husky/pre-commit` hook runs `yarn precommit` (eslint + typecheck + jest) on every `git commit`.** Trust it — don't run `yarn precommit` yourself before `git commit` / `git push`. The hook is the gate; running it explicitly too is just doing the same multi-minute pass twice. It enforces the same checks CI's `build` job runs (`eslint src netlify tools --max-warnings 0 && yarn typecheck && yarn test`). If the hook isn't installed (fresh sandbox, `yarn install --ignore-scripts`, etc.), run `yarn install` to wire it in; don't paper over a missing hook by running the gate manually. Running a piece of the gate in isolation while iterating (e.g. one Jest file, `yarn eslint <path>`) is fine — that's a development inner loop, not the commit gate. **Only `git commit` fires the hook.** `githooks(5)` defines `pre-commit` as a `git commit` hook, so *every other* commit-producing command lands ungated: `merge`, `cherry-pick`, `revert`, `rebase`, `am` — all verified on git 2.43, where the hook prints on `git commit` and on none of them. The one you will actually hit is the routine "merge `main` into my branch" before pushing a rework (Share#1769). Nothing local has checked such a commit, so the first real signal is CI, and on a draft PR that means the flip to ready. To force the gate on one, `git commit --amend --no-edit` — that *is* a `git commit`, so `pre-commit` fires.
+- **The husky `.husky/pre-commit` hook runs `bun run precommit` (eslint + typecheck + jest) on every `git commit`.** Trust it — don't run `bun run precommit` yourself before `git commit` / `git push`. The hook is the gate; running it explicitly too is just doing the same multi-minute pass twice. It enforces the same checks CI's `build` job runs (`eslint src netlify tools --max-warnings 0 && bun run typecheck && bun run test`). If the hook isn't installed (fresh sandbox, `bun install --ignore-scripts`, etc.), run `bun install` to wire it in; don't paper over a missing hook by running the gate manually. Running a piece of the gate in isolation while iterating (e.g. one Jest file, `npx eslint <path>`) is fine — that's a development inner loop, not the commit gate. **Only `git commit` fires the hook.** `githooks(5)` defines `pre-commit` as a `git commit` hook, so *every other* commit-producing command lands ungated: `merge`, `cherry-pick`, `revert`, `rebase`, `am` — all verified on git 2.43, where the hook prints on `git commit` and on none of them. The one you will actually hit is the routine "merge `main` into my branch" before pushing a rework (Share#1769). Nothing local has checked such a commit, so the first real signal is CI, and on a draft PR that means the flip to ready. To force the gate on one, `git commit --amend --no-edit` — that *is* a `git commit`, so `pre-commit` fires.
 - **UI work: "if it's not doc'd, it doesn't exist; if it's not tested, it doesn't work."** Two standing requirements for any PR implementing UI epic/story/task work: (1) **doc** — the work is tracked as an epic-labeled issue with native sub-issues per story/task, all titles sharing the epic's name so the family is greppable; (2) **test** — an issue isn't done until each task/sub-issue has a happy-path E2E test on desktop *and* mobile, via `describeMobileAndDesktop` (`src/tests/e2e/formFactor.ts`). Cross-link the PR ↔ issues, and close the story/task sub-issues when the implementing PR is submitted. Full rule + worked example: [design/new/conversational-cad.md](design/new/conversational-cad.md) §7.1.
 - **PRs: open in draft, land in five steps.** Several PRs are usually
   in flight and CI runners are capped at 4 concurrent jobs, so a PR that
@@ -65,23 +65,23 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   only part of the gap. Three things it does not run, each of which will
   otherwise first fail at step 3 — after review has signed off, which
   is exactly the step-4 re-review this lifecycle is trying to avoid:
-  (a) `yarn build-prod`, so an esbuild-only breakage (missing asset
+  (a) `bun run build-prod`, so an esbuild-only breakage (missing asset
   loader, plugin misconfig) survives every draft commit; (b) coverage —
-  the hook's `yarn test` runs `test-src`, while CI runs `test-ci` →
+  the hook's `bun run test` runs `test-src`, while CI runs `test-ci` →
   `test-coverage` with thresholds enforced (`tools/jest/jest.config.js`);
   (c) **Playwright**, the big one — E2E specs never execute before step
   3, so the reviewer is reading specs that have never run, against this
   file's own mandatory desktop+mobile E2E rule. Before flipping to ready,
-  run `yarn build-prod`, `yarn test-ci`, and
-  `yarn test-flows-build-and-serve` + `yarn test-flows [spec]` — then undo
+  run `bun run build-prod`, `bun run test-ci`, and
+  `bun run test-flows-build-and-serve` + `bun run test-flows [spec]` — then undo
   what it did to `package.json`, because `tools/updateVersion.mjs` stamps
   a local version into that tracked file on every build and the stamp
   must never reach a commit (#1747). `git checkout -- package.json` if
   the version is the only change in it; if you also edited it — added a
   dependency, changed a script — restore just the `version` field by
   hand, since the checkout would silently drop the rest while
-  `yarn.lock` kept it. And if you're in a sandbox where the hook isn't
-  installed, `yarn install` first; nothing is being checked otherwise.
+  `bun.lock` kept it. And if you're in a sandbox where the hook isn't
+  installed, `bun install` first; nothing is being checked otherwise.
   conway uses the same lifecycle, gating `run-ifc-regression` and
   `visual-diff` while leaving its `build` job ungated.
 - **The chain is yours to drive.** A fix that spans conway-geom →
@@ -131,7 +131,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Code style, lint rules | [STYLE.md](STYLE.md) |
 | Writing an assertion that can actually fail — the vacuous-assertion shapes seen in practice, the break-it-and-watch-it-go-red check, and why a feature needs one test of the user's own action (not just proxies), across every way its artifact reaches the viewer | [STYLE.md](STYLE.md) §"Assertions must be able to fail" |
 | Build, dev server, CI, Playwright setup | [PLAYBOOK.md](PLAYBOOK.md) |
-| Bumping Node (why `NODE_VERSION` in `netlify.toml` also picks the Functions Lambda runtime, so Node 26 waits for Lambda GA) or trying Bun: measured Node 24/26/Bun timings for eslint/tsc/Jest/build/install, why Jest runs on neither Bun's runtime nor `bun test`, and what blocks `bun install` (hoisting duplicates es-abstract into the prod bundle; phantom `react-router`/`@mui/system` deps) | [design/new/toolchain-node-bun.md](design/new/toolchain-node-bun.md) |
+| Installing dependencies or changing them — Bun installs (`bun.lock`, `bunfig.toml`'s isolated linker, the `preinstall` guard that refuses npm/yarn), Node stays the runtime for every script, and why: what an undeclared import does under the isolated tree (and the seven that were declared when it landed), the Jest `transformIgnorePatterns` and single-three changes it needed; where Bun's version is pinned (three places); Node versions — why `NODE_VERSION` in `netlify.toml` also picks the Functions Lambda runtime (so Node 26 waits for Lambda GA), why the Playwright shards set up Node 24 inside the image's Node 22, and the action majors that cleared CI's Node 20 warning; measured Node 24/26/Bun timings, and why Jest runs on neither Bun's runtime nor `bun test` | [design/new/toolchain-node-bun.md](design/new/toolchain-node-bun.md) |
 | Playwright CI shards: why they are balanced by measured per-test duration (`tools/playwrightShards.mjs`, `tools/playwrightTimings.json`) instead of Playwright's count-based `--shard`, how a shard plans/runs/verifies, how unknown tests are handled, and how to refresh the timings from CI annotations | [PLAYBOOK.md](PLAYBOOK.md) §"Playwright shards are balanced by measured duration" |
 | Working in a `.claude/worktrees/` git worktree — why `git commit` aborts there, why `--no-verify` is the wrong fix, which results a worktree gets wrong, and why a symlinked or partial `node_modules` fails the hook's single-three check (and the `cp -al` setup that passes) | [PLAYBOOK.md](PLAYBOOK.md) §"A git worktree is not a place to commit from" |
 | Where to put an E2E `*.spec.ts` (co-locate near the subject; `src/tests/e2e` is shared helpers only) | [src/tests/e2e/README.md](src/tests/e2e/README.md) |

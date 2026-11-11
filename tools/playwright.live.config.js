@@ -9,7 +9,7 @@ import {LIVE_PROJECTS} from './live-smoke/accounts.js'
 // else. Design: design/new/live-browser-smoke.md.
 //
 //   LIVE_BASE_URL=https://deploy-preview-1939--bldrs-share-prod.netlify.app \
-//     yarn test-flows-live [--project=chromium] [spec]
+//     bun run test-flows-live [--project=chromium] [spec]
 //
 // There is no webServer: the target is whatever LIVE_BASE_URL names. Unset,
 // every spec skips and says so (tools/live-smoke/liveReporter.js).

@@ -35,7 +35,7 @@ const ADD_TO_PROJECT_TARGETS =
 
 // Kept as a literal rather than imported from HorizonResizerButton.jsx:
 // importing that module into a .ts spec pulls the whole untyped
-// component into the TS program and fails `yarn typecheck`.
+// component into the TS program and fails `bun run typecheck`.
 const ID_RESIZE_HANDLE_X = 'resize-handle-x'
 
 

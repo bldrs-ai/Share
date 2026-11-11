@@ -1096,7 +1096,7 @@ viewer.viewsManager = IfcViewsManager
 
 ## 4. Migration plan (phased, each phase ships green)
 
-Each phase ends with `yarn lint && yarn test && yarn test-flows` green and a working demo on a representative IFC + GLB.
+Each phase ends with `bun run lint && bun run test && bun run test-flows` green and a working demo on a representative IFC + GLB.
 
 ### Phase 0 — preflight (no code change)
 - Pin a baseline. Snapshot a few "golden" Playwright runs against Schependomlaan & a GLB model. These are the regression gates.

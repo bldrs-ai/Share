@@ -11,7 +11,7 @@ const {beforeEach} = test
 
 // A real IFC of a few hundred instances, loaded as a batched model, so the
 // hover goes through ShareViewer's batched branch and the overlay draws it.
-// Copied to `__test_fixtures__/` by `yarn test-flows-build`. The default URL:
+// Copied to `__test_fixtures__/` by `bun run test-flows-build`. The default URL:
 // the overlay is on by default (`disableHoverOverlay` turns it off).
 const MODEL_URL = '/share/v/p/__test_fixtures__/Momentum.ifc'
 // The hosted STEP logo: seven block occurrences of two part shapes, so a

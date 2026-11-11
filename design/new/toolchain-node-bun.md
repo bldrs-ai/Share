@@ -1,4 +1,9 @@
-# Toolchain evaluation: Node 26 and Bun (2026-11-11)
+# Toolchain: Node 26 and Bun (2026-11-11)
+
+An evaluation, then what was adopted from it: Bun installs (isolated
+linker), Node stays the runtime, Node 26 waits for Lambda. The adoption
+and everything it changed is §"What was adopted"; the measurements that
+led there are §Results.
 
 Measured on one cloud sandbox (4 vCPU, 15 GB), each step run alone so
 nothing else competed for the cores. One run per cell, so treat
@@ -13,8 +18,8 @@ Versions: Node **24.22.2** (what CI and Netlify pin today), Node
 
 ### Runtime: which program runs eslint / tsc / Jest / esbuild
 
-Same `node_modules`, same commands as `yarn precommit` / `yarn
-build-prod`. Bun is `bun --bun <script>` (forces Bun's runtime even
+Same `node_modules` (yarn's hoisted tree, before the switch), same
+commands as `precommit` / `build-prod`. Bun is `bun --bun <script>` (forces Bun's runtime even
 where a script's shebang says `node`).
 
 | Step | Node 24 | Node 26 | Bun 1.4.4 |
@@ -74,7 +79,9 @@ Both from the committed `yarn.lock`, fresh directory, Node 26 on PATH.
   nothing. It also catches drift: editing a `package.json` range
   without updating `yarn.lock` fails with `lockfile had changes, but
   lockfile is frozen`. (Without `--frozen-lockfile` it writes a
-  `bun.lock` — don't commit one unless the switch is wholesale.)
+  `bun.lock`. That option — Bun in CI over a yarn.lock — was dropped in
+  favour of switching outright: two installers would put CI and Netlify on
+  different trees, as the bundle difference below shows.)
 - **Lifecycle scripts:** Bun blocks scripts of packages not on its
   trust list. Here that's `core-js-pure` (a donation banner) and
   `@parcel/watcher` (a build-from-source fallback; the prebuilt binary
@@ -108,36 +115,96 @@ These are latent bugs under any installer: a dependency bump that
 changes hoisting can break the build. Declaring both (at the versions
 already in `yarn.lock`) fixes it.
 
-## Recommendations
+## What was adopted (2026-11-11)
 
-1. **Node 26: wait for Lambda GA, then bump everything together.**
-   `netlify.toml`'s `NODE_VERSION` isn't only the build runtime —
-   `tools/netlify/bundleFunctions.mjs` shows zip-it-and-ship-it uses it
-   to pick the Netlify Functions Lambda runtime. As of this writing
-   AWS's `nodejs26.x` is still a [public
-   preview](https://aws.amazon.com/blogs/compute/introducing-public-preview-runtimes-on-aws-lambda-starting-with-node-js-26-and-python-3-15/)
-   (GA indicated for November 2026). Netlify then falls back to Node 24
-   for functions, so bumping now would have CI test 26 while functions
-   ship on 24 — exactly the drift `netlify.toml`'s comment exists to
-   prevent. Once Lambda GA lands, bump `.nvmrc`, `netlify.toml` and the
-   four workflows' `node-version` in one PR; nothing in the repo needs
-   to change for it.
-2. **Bun for install only, and only after fixing the hoisting
-   difference.** It's the one place Bun wins, and by a lot: about
-   2 minutes off each cold CI install (`main.yml` `build`,
-   `test-flows.yml` `playwright-build`). Before switching:
-   - declare `react-router` and `@mui/system` (the phantom deps above);
-   - dedupe `es-abstract` (a `resolutions` pin to 1.24.0, or checking
-     whether `airbnb-js-shims` is still needed — its polyfills are what
-     pull in the copies), and re-check the metafile on both installers;
-   - switch **Netlify and CI together**, or CI's `build-prod` checks a
-     different tree from the one that ships. Netlify picks the package
-     manager from the lockfile it finds, so this probably means committing
-     `bun.lock` and retiring `yarn.lock`, plus `packageManager`, the
-     husky hook (`yarn precommit`) and the `yarn …` calls inside
-     package scripts — a real migration, not a CI one-liner.
-3. **Keep Jest on Node.** Neither Bun's runtime nor `bun test` can run
-   the suite as-is (above).
+Bun installs; Node is still the runtime for everything; Jest is unchanged.
+
+**Installs: `bun install`, isolated linker, `bun.lock`.** `yarn.lock` is
+gone, from the root and from `marketing/`. Both lockfiles were migrated
+from it, so they hold the same versions: 2459 and 538 entries, no
+differences once npm aliases are counted under their real names.
+`bunfig.toml` (and `marketing/bunfig.toml`, since Bun reads the one in
+the directory it installs) sets `linker = "isolated"` and `exact = true`.
+`package.json`'s `packageManager` is `bun@1.4.4`. A `preinstall` guard,
+`tools/requireBun.mjs`, makes `npm install` / `yarn install` fail loudly
+instead of laying out a hoisted tree from a stale resolution. Scripts call
+each other with `bun run`; `bun run` executes them with the `node` on
+PATH, so nothing runs under Bun's runtime. Bun is pinned to the same
+version in three places: `packageManager`, `netlify.toml`'s `BUN_VERSION`
+(plus `BUN_FLAGS = "--frozen-lockfile"`), and the `bun-version` of each
+workflow's `setup-bun` step.
+
+**Undeclared imports the isolated tree surfaced** — each was resolvable
+only because hoisting happened to put it at the top, and each is now
+declared at the version the lockfile already resolved:
+
+| Package | Imported by | Came in via |
+|---|---|---|
+| `react-router` 6.3.0 | `PropertiesPanel.jsx`, `Share.fixture.jsx` | `react-router-dom` |
+| `@mui/system` 5.16.8 | `VersionsTimeline.jsx` | `@mui/material` |
+| `regenerator-runtime` 0.13.11 (dev) | `tools/jest/setupTests.js` | `@babel/runtime` |
+| `@types/testing-library__jest-dom` 5.14.5 (dev) | `tsconfig.json` `types` | `@testing-library/jest-dom` |
+| `@auth0/auth0-spa-js` 2.0.2 (dev) | `src/Auth0/mockLogout.test.js` | `@auth0/auth0-react` |
+| `@netlify/config` 24.5.0 (dev) | `tools/netlify/bundleFunctions.mjs` | `netlify-cli` |
+| `@netlify/zip-it-and-ship-it` 14.5.4 (dev) | `tools/netlify/bundleFunctions.mjs` | `netlify-cli` |
+
+**Two layout assumptions changed with the tree:**
+
+- Jest's `transformIgnorePatterns` matched a hoisted path
+  (`/node_modules/(?!three|…/)`). Jest sees real paths, now
+  `node_modules/.bun/<name>@<version>/node_modules/<name>/…`, where the
+  first `/node_modules/` is followed by `.bun/` — so every ESM package it
+  exists to transform was skipped (346 suites failed to parse).
+  `tools/jest/common.js#transformIgnoreNodeModules` lets the lookahead
+  pass `.bun/`, which moves the decision to the inner segment.
+- `singleThreeInstance.test.js` expected the literal path
+  `node_modules/three`. It now resolves every `three` entry (directory or
+  link) to its real directory and expects exactly one.
+
+**Bundle:** `docs/index.js` is 15.60 MB, against 15.74 MB from yarn's
+tree and 16.24 MB from Bun's hoisted one; es-abstract is in it once.
+Packages still bundled at two or more versions (`@babel/runtime`,
+`react-is`, the `@emotion/*` set, `get-intrinsic`, …) are ones whose
+dependents ask for different ranges. Deduping them is separate work.
+
+**CI:**
+
+- `main.yml` `build`, `test-flows.yml` `playwright-build` and
+  `live-smoke.yml` install with `setup-bun` + `bun install
+  --frozen-lockfile`. setup-bun is the one third-party action and is
+  pinned by commit SHA. `playwright-build`'s install took 1 m 43 s with
+  yarn's cache, which setup-node no longer restores; a cold Bun install
+  measured 18–22 s here.
+- **"Node 20" in the Playwright logs** came from the *actions*, not the
+  tests. GitHub's annotation: `actions/checkout@v4`,
+  `download-artifact@v4` and `upload-artifact@v4` target the deprecated
+  node20 action runtime and are force-run on 24. All four first-party
+  actions moved to their current node24 majors — checkout v7, setup-node
+  v7, upload-artifact v7, download-artifact v8 — and these workflows don't
+  touch any of their breaking changes: checkout v7 refuses fork code only
+  under `pull_request_target` / `workflow_run`, which no workflow here
+  uses; setup-node v6/v7 change npm auto-caching and `NODE_AUTH_TOKEN`,
+  and nothing here sets `registry-url`; the artifact actions only add
+  inputs.
+- **What the shards actually ran was Node 22.** The
+  `mcr.microsoft.com/playwright:v1.56.1-noble` image installs nodesource
+  `node_22.x` (Playwright's `utils/docker/Dockerfile.noble`), and the
+  shards used it for the test runner, its npm install and
+  `tools/playwrightShards.mjs`. A `setup-node` 24 step in the shard job
+  now puts 24 first on PATH. The browsers are still the image's, so
+  screenshot baselines are unaffected.
+
+**Not adopted:**
+
+1. **Node 26** — still waiting on Lambda. `netlify.toml`'s
+   `NODE_VERSION` also picks the Netlify Functions Lambda runtime
+   (`tools/netlify/bundleFunctions.mjs`), and `nodejs26.x` is a
+   [public preview](https://aws.amazon.com/blogs/compute/introducing-public-preview-runtimes-on-aws-lambda-starting-with-node-js-26-and-python-3-15/)
+   (GA indicated for November 2026). Until then Netlify runs functions on
+   24, and CI on 26 would test something other than what ships. At GA,
+   bump `.nvmrc`, `netlify.toml` and the workflows' `node-version`
+   together.
+2. **Bun as runtime or test runner** — see Results; Jest stays on Node.
 
 ## Reproducing
 
@@ -153,10 +220,13 @@ R node_modules/jest/bin/jest.js --config tools/jest/jest.config.js
 SHARE_CONFIG=prod R tools/esbuild/build.js
 ```
 
-The build doesn't touch `package.json`. If you go through
-`yarn build-prod` instead, `git checkout -- package.json` afterwards
-(see CLAUDE.md, #1747). For install, copy `package.json` + `yarn.lock`
-into an empty directory and time each installer with an empty cache
-(`YARN_CACHE_FOLDER=…` / `BUN_INSTALL_CACHE_DIR=…`). To compare bundles,
+The `tsc` line is what `typecheck` runs, under the chosen runtime
+(tsconfig sets `noEmit`). The build doesn't touch `package.json`; through
+`bun run build-prod` instead, `git checkout -- package.json` afterwards
+(see CLAUDE.md, #1747). For install, the yarn side needs the pre-switch
+`package.json` + `yarn.lock` from git history (`git show <rev>:yarn.lock`;
+any commit before the Bun switch), copied into an empty directory with
+`tools/requireBun.mjs` left behind; time each installer with an empty
+cache (`YARN_CACHE_FOLDER=…` / `BUN_INSTALL_CACHE_DIR=…`). To compare bundles,
 build with `ANALYZE=true` and diff `outputs['docs/index.js'].inputs` of
 `tools/esbuild/bundle-analysis.json`, grouped by `node_modules/` path.
