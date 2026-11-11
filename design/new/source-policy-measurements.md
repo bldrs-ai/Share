@@ -7,8 +7,10 @@ do and don't show; the policy itself is written elsewhere. The harness is
 [tools/bench/sourceModes/](../../tools/bench/sourceModes/README.md), and its
 README is the record schema and the confounder list.
 
-**Status (2026-11-11):** small models (2 to 31 MiB, IFC and STEP) at n = 5
-and medium models (56 to 231 MiB) at n = 3 done; large in progress.
+**Status (2026-11-11):** done for 13 models, 2.3 to 860.7 MiB, IFC and
+STEP: small at n = 5, medium at n = 3, large at n = 2 (471 records, none
+failed, every one passed its arm check). The summary is next; each size
+class has its own section after it, and the full tables are at the end.
 
 
 ## Setup
@@ -56,6 +58,109 @@ index; *W spill* = backing store with a GC 2 s after the GLB writer's source
 spill; *W heap spill* = JS heap then; *wasm* = `engineWasmMb` from the Total
 line; *R peak* = renderer process peak RSS (page and workers, SwiftShader
 included). Cells are `median (min–max)`.
+
+
+## What the numbers show
+
+All on headless Chromium; 13 models, 2.3 to 860.7 MiB. Medians; the
+per-model sections and tables below give ranges and n.
+
+**Cold engine time, buffered and `heldBuffer` against `windowedHandle`
+(Chromium's default):**
+
+| Model | Format | MiB | n | windowedHandle | buffered | heldBuffer | windowedHeld | noSidecar |
+|---|---|---|---|---|---|---|---|---|
+| duplex | IFC | 2.3 | 5 | 0.91 s | −20 % | −12 % | +1 % | −8 % |
+| Right_Hand | STEP | 3.6 | 5 | 1.93 s | −3 % (noise) | −2 % (noise) | +2 % | −7 % |
+| gearbox | STEP | 6.2 | 5 | 1.55 s | −12 % (overlaps) | −8 % (overlaps) | −8 % | −9 % |
+| SEESTRASSE | IFC | 13.6 | 5–6 | 1.89 s | −13 % | −5 % (overlaps) | +3 % | +5 % |
+| FM_ARC_DigitalHub | IFC | 13.7 | 4–5 | 3.93 s | −17 % | −16 % | +1 % | −3 % |
+| MB-Khaya | IFC | 31.4 | 5 | 5.94 s | −43 % | −41 % | 0 % | −1 % |
+| Arty_Z7 | STEP | 55.5 | 3 | 14.12 s | −3 % (touching) | −3 % | −1 % | +1 % |
+| DSA2 | STEP | 105.7 | 3 | 8.26 s | −18 % | −11 % | −2 % | −4 % |
+| D3D | IFC | 213.6 | 3 | 55.27 s | −21 % | −21 % | −1 % | 0 % |
+| sp-231MB | IFC | 231.4 | 3 | 20.38 s | −24 % | −18 % | +3 % | 0 % |
+| BLSN_007 | STEP | 268.6 | 2 | 23.33 s | −10 % | −5 % | +2 % | −2 % |
+| DOWA | IFC | 398.4 | 2 | 27.08 s | −22 % | −10 % | −5 % | −9 % |
+| PSB | IFC | 860.7 | 2 | 36.45 s | −17 % | −11 % | +3 % | −9 % |
+
+- **Size below which windowed is not measurably different from buffered:**
+  - **IFC: none in this set.** Buffered was faster on every IFC, with
+    disjoint ranges, from 2.3 MiB (−0.18 s) up. The absolute gap is small
+    below ~15 MiB (0.2–0.7 s) and grows from there (−2.6 s at 31 MiB,
+    −5 to −12 s at 214–231 MiB, −6 s at 861 MiB).
+  - **STEP: up to ~56 MiB.** At 3.6, 6.2 and 55.5 MiB the arms are within
+    noise of each other (≤ 0.5 s); at 105.7 MiB buffered is 18 % faster and
+    at 268.6 MiB 10 %. Two models bracket the change; it is not located
+    more finely than 56–106 MiB.
+  - The gap is in Parse and Geometry on both formats (the windowed pump
+    pages each unit's closure through the window).
+- **Time to first pixels:** buffered draws its first mesh first, or ties,
+  on every model: 0.5–1.0 s after open up to 31 MiB, 1.0–2.5 s on the
+  medium models, 2.6 s PSB (against 3.5 windowed). The two arms that hold
+  the file and hash it (`windowedHeld`, `heldBuffer`) start ~0.4–1.6 s
+  later than buffered on the IFCs ≥ 214 MiB.
+- **Previews before the index:** buffered shows 2–4× the preview meshes of
+  windowed when the index lands on the large IFCs (PSB 2,173 against 669;
+  D3D 4,681 against 1,117; sp-231MB 2,185 against 1,879) and lands the
+  index sooner. STEP shows no preview meshes before its index on any arm.
+  Small models reach the index in 0.5–1.5 s, before previews matter.
+- **Worker memory (ArrayBuffer backing store; wasm excluded, reported
+  separately as `engineWasmMb`, which no arm changes):**
+  - Peak (un-GC'd, upper bound): windowed arms peak higher than buffered
+    on the medium IFCs (sp-231MB 926 MiB against 377); `windowedHeld` is
+    the highest arm on every model ≥ 100 MiB (PSB 2,326 MiB).
+  - **After the spill, the buffered arms retain source memory on six
+    models**, though they log `released resident source buffer`: PSB
+    +796 MiB (1,096 against 300 windowed), BLSN_007 +208, sp-231MB +168,
+    DOWA +143, D3D +16; nothing measurable on any model ≤ 106 MiB. This is
+    the conway source-retention bug Share#2139 step 1 is fixing, measured
+    before the fix, and it is **not IFC-only** (BLSN_007 is STEP). These
+    after-spill numbers for `buffered` and `heldBuffer` should be re-read
+    once the fix is pinned.
+  - Renderer peak RSS is higher for the buffered arms on PSB (6.4 GB
+    against 4.6 GB windowed), mixed elsewhere.
+- **Reopen paths:**
+  - **Artifact hit:** 0.07–0.26 s up to 31 MiB, 0.2–0.7 s on the medium
+    STEP, 0.4 s on BLSN_007, 2.0–3.2 s on the IFCs ≥ 214 MiB; no engine, independent of arm.
+  - **Sidecar reopen:** always cuts Parse (by 70–90 %) and lands the
+    index sooner, but its Geometry pages windowed, so against a **cold
+    buffered** load it is slower on MB-Khaya (+49 %), D3D (+20 %),
+    sp-231MB (+12 %), DOWA (+12 % `windowedHandle`, −2 % `heldBuffer`),
+    about equal on Arty_Z7, and faster on DSA2
+    (−12 %), BLSN_007 (−5 %) and PSB (−22 %).
+  - A sidecar reopen draws **no previews before its index**; on D3D and
+    sp-231MB its first mesh comes later than a cold load's (5.9 s against
+    1.3 s; 2.2 s against 1.2 s).
+  - **`heldBuffer` (arm 4) sidecar reopen verdict: works.** All 50
+    `heldBuffer` sidecar reopens across the 13 models opened from the index
+    (`Engine index: from sidecar (…), no parse`), windowed over the held
+    Blob store, and matched their cold load's tree (node count + hash) and
+    one property read. No record failed. (DSA2's tree is one node, so its
+    check rests on the property read.)
+- **What is inside the noise:** `windowedHeld` against `windowedHandle`
+  on every model (−5 % to +3 %, overlapping); `noSidecar` against
+  `windowedHandle` below ~400 MiB (the source hash costs ~3 s only on DOWA
+  and PSB, −9 % each); STEP buffered against windowed at ≤ 56 MiB;
+  `heldBuffer` against buffered on D3D. Typical within-arm spread was
+  ±3–5 % at n = 5; n = 2 on the large models gives a range, not a spread.
+
+**What these numbers don't show:**
+- **Firefox and Safari.** `windowedHeld` is the Firefox/Safari *path*
+  forced in Chromium; it does not carry Firefox's GC and JIT-tier costs
+  (Share#2139: 78.5 s windowed against 58.5 s buffered on PSB in Firefox).
+- **Software GL.** SwiftShader paints on the CPU; absolute times are not a
+  GPU browser's. Compare arms within this doc only.
+- **Cold storage.** The model file sits in the OS page cache after its
+  first load; OPFS reads here are memory-speed.
+- **Memory peaks** are 500 ms un-GC'd polls: an upper bound that can
+  still miss a spike. The renderer peak in reopen phases is the same
+  process as the cold load's, so it is not independent.
+- **Preview units.** The counts are scene meshes in the preview group;
+  conway's preview units are not exposed to the page.
+- **The ~20 s reading** is the after-spill reading (GC'd, 2 s after the
+  spill line, 5–17 s after Total on these models, up to 37 s on DOWA); no
+  separate fixed Total+20 s sample was taken.
 
 
 ## Small models (n = 5)
@@ -213,7 +318,100 @@ model). No trial was contended or failed; every record passed its arm check.
   single node, so its signature is weak (the property read of that node
   matched).
 
-### Small-model tables
+
+## Large models (n = 2)
+
+Models: `BLSN_007` (STEP, 268.6 MiB), `DOWA` (IFC, 398.4 MiB), `PSB` (IFC,
+860.7 MiB). Nothing was cut: every large model planned ran at n = 2.
+
+`PSB` (IFC, 860.7 MiB) is the model every earlier number is on.
+**Reproduction check:** the cold medians reproduce Share#2139's table
+within a second: `windowedHandle` 36.45 s (36.5 there), `windowedHeld`
+37.62 (38.9), `buffered` 30.24 (31.2), `heldBuffer` 32.26 (33.7).
+
+### What PSB shows
+
+- **Buffered is 17 % faster** (30.24 s against 36.45, −6.2 s); `heldBuffer`
+  11 % (−4.2 s). **`noSidecar` is 9 % faster** (33.26 s, −3.2 s): on PSB the
+  source hash is a real cost, unlike on every smaller model. `heldBuffer`
+  pays the same hash and lands 2.0 s behind buffered.
+- **First pixels:** first mesh at 2.63 s buffered, 3.19 `noSidecar`, 3.49
+  `windowedHandle`, 4.27 `heldBuffer`, 4.32 `windowedHeld`. The two arms that
+  hold the file and hash it before the open start drawing ~1.6 s after
+  buffered.
+- **Previews before the index:** 2,173 meshes buffered and 2,301
+  `heldBuffer` against 669 `windowedHandle`, 641 `windowedHeld`, 613
+  `noSidecar`, with the buffered index at 12.3 s against 15.9 s. These are
+  scene meshes, not conway's units, but they line up with Share#2092's
+  ~2,165 against ~640 units.
+- **Worker memory after the spill (GC'd, ~16–17 s after Total): 1,096 MiB
+  for `buffered` and `heldBuffer` against 300 MiB for every windowed arm.**
+  Both buffered arms logged `released resident source buffer
+  (902472037B)`, yet ~796 MiB more stays live: **the conway source-retention
+  bug** (Share#2139 step 1), reproduced, before the fix. At Total+3 s
+  (GC'd) the windowed-held arm still holds its copy (1,157 MiB) and frees it
+  at its spill (300).
+- **Peak backing store** (un-GC'd polls): `windowedHeld` 2,326 MiB,
+  `heldBuffer` 1,389, `noSidecar` 1,397, `buffered` 1,243,
+  `windowedHandle` 1,083. **Renderer peak RSS:** 6.4 GB for both buffered
+  arms against 4.6 GB `windowedHandle` and 5.5 GB `windowedHeld`.
+- **Long tasks before ready:** 42–45 buffered against 51–60 windowed;
+  total long-task time 13.6–16.8 s on every arm, `heldBuffer` lowest.
+
+### PSB reopen paths
+
+- **Artifact hit:** 3.2 s engine, ready 3.5 s.
+- **Sidecar reopen: 23.49 s (`windowedHandle`) and 25.82 s (`heldBuffer`),
+  faster than any cold arm** (−36 % and −29 % against the same arm's cold
+  load, −22 % and −15 % against cold buffered). Parse drops from ~12 s to
+  ~3 s and the index lands at 4.4 / 5.8 s against 15.9 s; first mesh
+  3.75 / 5.10 s, about the cold load's, with no preview meshes before the
+  index (the first mesh comes just before it).
+- **Arm-4 sidecar verdict, PSB:** both `heldBuffer` sidecar reopens opened
+  from the index (`Engine index: from sidecar (143.8 MB), no parse`),
+  windowed over the held Blob store (`Blob store (disabled; whole file held,
+  1006 reads from memory), 1 reads, 860.7 MB`), and matched the cold load's
+  tree and property read.
+
+### What DOWA (IFC, 398.4 MiB) shows
+
+- **Buffered 22 % faster** (21.21 s against 27.08, −5.9 s; ranges
+  disjoint); `heldBuffer` −10 %, `noSidecar` −9 %, `windowedHeld` −5 %
+  (ranges 25.28–25.96 against 26.14–28.01, touching at n = 2).
+- **First mesh** 5.9 s buffered, 6.3 `heldBuffer`, 7.2 `noSidecar`, 8.0
+  `windowedHandle`, 8.8 `windowedHeld`. DOWA's first mesh is late on every
+  arm (5–9 s); previews before the index vary 0–1,502 between rounds of
+  the same arm, so on this model that count is not an arm signal at n = 2.
+- **After the spill: 530 MiB buffered and `heldBuffer` against 387 for every
+  windowed arm** (+143 MiB), the same retention pattern as `sp-231MB` and
+  PSB.
+- **Sidecar reopen:** 23.72 s `windowedHandle` (−12 % against its cold
+  load) and 20.70 s `heldBuffer`, about cold buffered (21.21). Index at
+  3.4–4.1 s against 9.9 cold; first mesh 2.6–3.2 s, **sooner** than any cold
+  arm on this model. Both `heldBuffer` sidecar reopens matched the cold
+  tree (43,932 nodes) and property read.
+
+### What BLSN_007 (STEP, 268.6 MiB) shows
+
+- **Buffered 10 % faster** (20.98 s against 23.33, −2.35 s, disjoint at
+  n = 2); `heldBuffer` −5 %; `windowedHeld` and `noSidecar` within noise.
+  The gap is Parse (2.84 against 3.55 s) and Geometry (16.95 against 18.51).
+- **No preview meshes before the index** on any arm (as on every STEP
+  model); the index lands at 4.1–5.1 s and the first mesh just after it.
+  Buffered is first on both (4.13 / 4.14 s against 5.05 / 4.81).
+- **After the spill: 419 MiB buffered and `heldBuffer` against 211 for every
+  windowed arm** (+208 MiB). **The source retention is not IFC-only:** the
+  first STEP model where it shows (`Arty_Z7` and `DSA2` read the same on
+  every arm).
+- **Sidecar reopen:** 19.96 s / 19.69 s, −14 % against the cold
+  `windowedHandle` and ~1.3 s faster than cold buffered; index at 1.4–1.8 s.
+  Both `heldBuffer` sidecar reopens matched the cold tree (2,269 nodes) and
+  property read.
+
+
+## Tables
+
+### Small models
 
 #### SEESTRASSE (IFC, 13.6 MiB)
 
@@ -310,7 +508,7 @@ model). No trial was contended or failed; every record passed its arm check.
 | FM_ARC_DigitalHub (ifc) | 13.7 | 3.93 s | 3.96 s (+1 %) | 3.26 s (-17 %) | 3.32 s (-16 %) | 3.80 s (-3 %) |
 | MB-Khaya (ifc) | 31.4 | 5.94 s | 5.93 s (0 %) | 3.39 s (-43 %) | 3.52 s (-41 %) | 5.87 s (-1 %) |
 
-### Medium-model tables
+### Medium models
 
 #### Arty_Z7 (STEP, 55.5 MiB)
 
@@ -376,3 +574,55 @@ model). No trial was contended or failed; every record passed its arm check.
 | DSA2 (step) | 105.7 | 8.26 s | 8.13 s (-2 %) | 6.77 s (-18 %) | 7.35 s (-11 %) | 7.90 s (-4 %) |
 | sp-231MB (ifc) | 231.4 | 20.38 s | 20.94 s (+3 %) | 15.41 s (-24 %) | 16.72 s (-18 %) | 20.41 s (+0 %) |
 | D3D (ifc) | 213.6 | 55.27 s | 54.75 s (-1 %) | 43.70 s (-21 %) | 43.39 s (-21 %) | 55.30 s (+0 %) |
+
+### Large models
+
+#### PSB (IFC, 860.7 MiB)
+
+| Arm | Phase | n | Engine | Parse | Geometry | 1st mesh | Index | Ready | Prev@idx | LT n | LT s | W peak | W idx | W spill | W heap spill | wasm | R peak |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| windowedHandle | cold | 2 | 36.45 (35.84–37.06) | 12.08 (11.78–12.39) | 20.75 (20.62–20.88) | 3.49 (3.06–3.91) | 15.90 (15.24–16.57) | 39.74 (39.49–40.00) | 669 (665–673) | 60 (56–63) | 16.81 (16.72–16.90) | 1083 (1025–1141) | 863 (859–867) | 300 | 27 | 899 | 4621 (4610–4631) |
+| windowedHandle | artifact hit | 2 | 3.19 (3.13–3.26) | — | — | 3.52 (3.47–3.58) | — | 3.49 (3.44–3.54) | — | 9 | 3.95 (3.94–3.96) | — | — | — | — | — | 3941 (3909–3973) |
+| windowedHandle | sidecar reopen | 2 | 23.49 (23.24–23.73) | 3.04 (3.02–3.06) | 19.47 (19.29–19.65) | 3.75 (3.70–3.80) | 4.38 (4.37–4.38) | 26.82 (26.49–27.14) | 0 | 28 (27–29) | 12.16 (11.78–12.54) | 1372 (1141–1602) | 783 (783–784) | 300 | 27 | 899 | 5086 (4586–5586) |
+| windowedHeld | cold | 2 | 37.62 (37.42–37.83) | 11.89 (11.70–12.09) | 21.29 (21.00–21.57) | 4.32 (4.12–4.53) | 16.70 (16.20–17.21) | 41.19 (40.72–41.66) | 641 (637–645) | 55 (54–55) | 16.72 (16.58–16.85) | 2326 (2210–2443) | 1761 (1662–1860) | 300 | 27 | 899 | 5505 (5486–5524) |
+| buffered | cold | 2 | 30.24 (30.11–30.36) | 9.65 (9.48–9.83) | 17.80 (17.59–18.01) | 2.63 (2.49–2.77) | 12.29 (12.23–12.35) | 33.42 (33.36–33.48) | 2173 (2167–2178) | 42 (40–43) | 16.26 (16.20–16.32) | 1243 (1242–1243) | 1243 (1242–1243) | 1096 | 27 | 922 | 6413 (6409–6417) |
+| heldBuffer | cold | 2 | 32.26 (31.93–32.60) | 11.06 (11.04–11.09) | 16.50 (15.98–17.02) | 4.27 (4.14–4.41) | 15.49 (15.43–15.54) | 35.67 (35.39–35.95) | 2301 (2180–2421) | 45 (43–46) | 13.62 (13.57–13.68) | 1389 | 1241 (1240–1241) | 1096 | 27 (27–27) | 922 | 6412 (6410–6413) |
+| heldBuffer | artifact hit | 2 | 3.15 (3.09–3.20) | — | — | 3.51 (3.50–3.52) | — | 3.47 (3.46–3.48) | — | 10 (9–10) | 3.96 (3.91–4.02) | — | — | — | — | — | 2789 (2769–2809) |
+| heldBuffer | sidecar reopen | 2 | 25.82 (25.63–26.02) | 3.18 (3.09–3.27) | 20.54 (20.47–20.61) | 5.10 (4.87–5.33) | 5.79 (5.60–5.98) | 29.16 (28.78–29.55) | 0 | 29 | 12.39 (12.16–12.63) | 2464 (2322–2607) | 1675 (1643–1708) | 300 | 27 | 899 | 5449 (5439–5459) |
+| noSidecar | cold | 2 | 33.26 (33.07–33.45) | 10.73 (10.66–10.79) | 19.14 (18.96–19.32) | 3.19 (3.10–3.28) | 14.46 (14.38–14.54) | 36.55 | 613 (577–648) | 51 (50–51) | 14.99 (14.96–15.03) | 1397 (1325–1469) | 867 (866–868) | 300 | 27 (27–27) | 899 | 4555 (4517–4592) |
+
+#### DOWA (IFC, 398.4 MiB)
+
+| Arm | Phase | n | Engine | Parse | Geometry | 1st mesh | Index | Ready | Prev@idx | LT n | LT s | W peak | W idx | W spill | W heap spill | wasm | R peak |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| windowedHandle | cold | 2 | 27.08 (26.14–28.01) | 7.13 (7.00–7.26) | 17.95 (17.01–18.88) | 8.00 (7.01–8.98) | 9.88 (9.66–10.10) | 32.95 (31.73–34.16) | 216 (0–431) | 47 (41–52) | 16.53 (14.90–18.17) | 1068 | 689 (649–728) | 387 | 75 (74–75) | 429 | 3895 (3868–3922) |
+| windowedHandle | artifact hit | 2 | 2.06 (1.96–2.15) | — | — | 2.82 (2.74–2.90) | — | 2.74 (2.62–2.87) | — | 8 (6–9) | 3.14 (2.98–3.29) | — | — | — | — | — | 3084 (3073–3094) |
+| windowedHandle | sidecar reopen | 2 | 23.72 (23.70–23.74) | 1.96 (1.91–2.02) | 20.95 (20.86–21.04) | 2.64 (2.57–2.72) | 3.41 (3.35–3.47) | 29.17 (28.85–29.49) | 0 | 25 (24–25) | 16.25 (15.91–16.60) | 1171 (1162–1179) | 596 (565–628) | 387 | 75 (74–75) | 429 | 4239 (4127–4351) |
+| windowedHeld | cold | 2 | 25.62 (25.28–25.96) | 6.59 (6.53–6.64) | 16.69 (16.32–17.06) | 8.75 (8.72–8.77) | 9.62 (9.61–9.63) | 31.09 (30.66–31.53) | 0 | 44 (42–46) | 13.94 (13.72–14.16) | 1521 (1472–1570) | 1093 (951–1235) | 387 | 75 (74–75) | 429 | 4221 (4220–4221) |
+| buffered | cold | 2 | 21.21 (20.62–21.81) | 4.95 (4.85–5.04) | 14.45 (13.94–14.96) | 5.92 (5.09–6.75) | 7.17 (6.95–7.39) | 26.31 (26.22–26.41) | 323 (0–646) | 40 (39–41) | 15.76 (15.45–16.07) | 957 (932–982) | 561 (527–594) | 530 | 74 | 429 | 4471 (4462–4479) |
+| heldBuffer | cold | 2 | 24.25 (23.51–25.00) | 5.34 (5.30–5.39) | 16.50 (15.63–17.37) | 6.29 (5.96–6.63) | 8.24 (8.13–8.34) | 29.58 (28.19–30.97) | 860 (217–1502) | 41 (38–44) | 16.34 (15.00–17.69) | 911 (874–947) | 561 (527–594) | 530 | 74 | 429 | 4349 (4174–4523) |
+| heldBuffer | artifact hit | 2 | 2.00 (1.94–2.07) | — | — | 2.75 (2.66–2.83) | — | 2.70 (2.62–2.78) | — | 9 (7–10) | 3.18 (3.01–3.35) | — | — | — | — | — | 3101 (2917–3284) |
+| heldBuffer | sidecar reopen | 2 | 20.70 (19.74–21.66) | 2.11 (2.06–2.17) | 17.34 (16.52–18.15) | 3.17 (3.04–3.31) | 4.05 (3.92–4.17) | 26.23 (25.52–26.93) | 0 | 29 (25–33) | 12.40 (11.96–12.83) | 1537 (1513–1561) | 1017 (1007–1027) | 387 | 74 | 429 | 4493 (4288–4698) |
+| noSidecar | cold | 2 | 24.77 (24.15–25.39) | 6.26 (5.95–6.58) | 16.61 (16.34–16.88) | 7.21 (6.87–7.55) | 8.81 (8.34–9.28) | 30.08 (29.33–30.83) | 109 (0–217) | 41 (40–41) | 14.95 (13.77–16.12) | 1093 (1068–1117) | 623 (613–632) | 387 | 75 (74–75) | 429 | 3913 (3871–3955) |
+
+#### BLSN_007 (STEP, 268.6 MiB)
+
+| Arm | Phase | n | Engine | Parse | Geometry | 1st mesh | Index | Ready | Prev@idx | LT n | LT s | W peak | W idx | W spill | W heap spill | wasm | R peak |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| windowedHandle | cold | 2 | 23.33 (23.31–23.35) | 3.55 (3.55–3.56) | 18.51 (18.44–18.59) | 5.05 (5.01–5.09) | 4.81 (4.76–4.87) | 23.76 (23.72–23.80) | 0 | 44 (43–45) | 7.26 (7.22–7.30) | 709 | 244 (168–320) | 211 | 612 | 429 | 2952 (2918–2986) |
+| windowedHandle | artifact hit | 2 | 0.41 (0.40–0.42) | — | — | 0.56 (0.55–0.58) | — | 0.53 (0.52–0.55) | — | 6 (5–6) | 0.99 (0.94–1.03) | — | — | — | — | — | 2239 (2236–2242) |
+| windowedHandle | sidecar reopen | 2 | 19.96 (19.68–20.24) | 0.92 (0.91–0.93) | 18.52 (18.26–18.77) | 1.75 (1.70–1.79) | 1.44 (1.42–1.47) | 20.43 (20.12–20.74) | 0 | 31 | 5.88 (5.69–6.06) | 609 (601–616) | 319 (286–351) | 211 | 611 | 429 | 2943 (2921–2965) |
+| windowedHeld | cold | 2 | 23.89 (23.54–24.24) | 3.42 (3.42–3.42) | 18.96 (18.60–19.31) | 5.19 (5.18–5.20) | 4.94 (4.93–4.94) | 24.30 (23.96–24.64) | 0 | 45 | 7.50 (7.46–7.55) | 934 | 563 (557–569) | 211 | 612 | 429 | 3242 (3219–3265) |
+| buffered | cold | 2 | 20.98 (20.66–21.30) | 2.84 (2.82–2.87) | 16.95 (16.66–17.24) | 4.13 (4.07–4.20) | 4.14 (3.91–4.38) | 21.46 (21.08–21.83) | 0 | 41 (39–42) | 7.10 (7.05–7.15) | 420 (420–421) | 357 (357–357) | 419 | 611 | 429 | 2642 (2633–2651) |
+| heldBuffer | cold | 2 | 22.21 (22.07–22.35) | 3.25 (3.23–3.27) | 17.30 (17.08–17.53) | 5.06 (5.00–5.12) | 5.09 (4.89–5.29) | 22.64 (22.51–22.77) | 0 | 42 (41–43) | 6.94 (6.92–6.96) | 544 | 357 (356–357) | 419 | 612 (611–612) | 429 | 2632 (2630–2634) |
+| heldBuffer | artifact hit | 2 | 0.41 (0.41–0.41) | — | — | 0.56 (0.56–0.57) | — | 0.54 (0.53–0.54) | — | 8 (7–8) | 1.14 (1.10–1.17) | — | — | — | — | — | 2293 |
+| heldBuffer | sidecar reopen | 2 | 19.69 (19.68–19.70) | 0.98 (0.96–1.01) | 17.90 (17.87–17.93) | 2.09 (2.08–2.09) | 1.81 (1.79–1.82) | 20.10 (20.09–20.11) | 0 | 31 (30–31) | 5.82 (5.81–5.82) | 901 (889–913) | 590 (549–632) | 211 | 611 | 429 | 3214 (3169–3259) |
+| noSidecar | cold | 2 | 22.90 (22.85–22.95) | 3.15 (3.07–3.23) | 18.34 (18.26–18.43) | 4.74 (4.65–4.82) | 4.53 (4.49–4.58) | 23.35 (23.33–23.37) | 0 | 40 (39–41) | 7.01 (6.99–7.04) | 612 (608–616) | 340 | 211 | 612 | 429 | 2983 (2980–2986) |
+
+#### Cold engine time, median, relative to windowedHandle
+
+| Model | MiB | windowedHandle | windowedHeld | buffered | heldBuffer | noSidecar |
+|---|---|---|---|---|---|---|
+| PSB (ifc) | 860.7 | 36.45 s | 37.62 s (+3 %) | 30.24 s (-17 %) | 32.26 s (-11 %) | 33.26 s (-9 %) |
+| DOWA (ifc) | 398.4 | 27.08 s | 25.62 s (-5 %) | 21.21 s (-22 %) | 24.25 s (-10 %) | 24.77 s (-9 %) |
+| BLSN_007 (step) | 268.6 | 23.33 s | 23.89 s (+2 %) | 20.98 s (-10 %) | 22.21 s (-5 %) | 22.90 s (-2 %) |
