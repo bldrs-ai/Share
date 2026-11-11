@@ -762,9 +762,11 @@ a V8 context with the source bytes (fixed; the measurements doc has the
 heap snapshot and the after-fix numbers).
 
 **The cap.** `BUFFERED_SOURCE_BYTES_PER_DEVICE_GIB` = 128 MiB ×
-`navigator.deviceMemory` (8 GiB, Chromium's top bucket, → 1 GiB, which
-buffers PSB at 860.7 MiB; 4 GiB → 512 MiB); without `deviceMemory`, 1 GiB
-on a desktop and 256 MiB on a phone (the repo's form factor rule,
+`navigator.deviceMemory` (8 GiB → 1 GiB, which buffers PSB at 860.7 MiB;
+4 GiB → 512 MiB), never above `BUFFERED_SOURCE_MAX_BYTES`, 1 GiB, the
+largest size anything has been measured buffered at (`deviceMemory` is not
+capped at 8: headless Chromium 153 on a 17 GB machine reports 16); without
+`deviceMemory`, 1 GiB on a desktop and 256 MiB on a phone (the repo's form factor rule,
 `MOBILE_WIDTH`). The page snapshots both (`spawnEngine.js#engineDeviceSnapshot`),
 since the worker has no window. **Provisional:** it is static per device,
 and the PSB renderer peak with it is in the measurements doc's

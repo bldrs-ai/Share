@@ -1,6 +1,7 @@
 /* eslint-disable no-magic-numbers */
 import {
   BUFFERED_SOURCE_BYTES_PER_DEVICE_GIB, BUFFERED_SOURCE_CAP_DESKTOP_BYTES, BUFFERED_SOURCE_CAP_PHONE_BYTES,
+  BUFFERED_SOURCE_MAX_BYTES,
   SourceModeReason, StoreKind, bufferedSourceCap, chooseSourceMode,
 } from './sourcePolicy'
 
@@ -26,6 +27,15 @@ describe('engine/sourcePolicy#bufferedSourceCap', () => {
     expect(bufferedSourceCap({deviceMemoryGiB: 8, isMobile: false})).toBe(1024 * MIB)
     expect(bufferedSourceCap({deviceMemoryGiB: 4, isMobile: false})).toBe(512 * MIB)
     expect(bufferedSourceCap({deviceMemoryGiB: 0.5, isMobile: true})).toBe(64 * MIB)
+  })
+
+  it('never above 1 GiB, however much memory the device reports', () => {
+    expect(BUFFERED_SOURCE_MAX_BYTES).toBe(1024 * MIB)
+    // Headless Chromium 153 on a 17 GB machine reports 16.
+    expect(bufferedSourceCap({deviceMemoryGiB: 16, isMobile: false})).toBe(1024 * MIB)
+    expect(bufferedSourceCap({deviceMemoryGiB: 32, isMobile: false})).toBe(1024 * MIB)
+    expect(chooseSourceMode(input({bytes: 1100 * MIB, deviceMemoryGiB: 16})))
+      .toMatchObject({mode: 'windowed', reason: SourceModeReason.OVER_CAP, capBytes: 1024 * MIB})
   })
 
   it('without deviceMemory: 1 GiB on a desktop, 256 MiB on a phone', () => {

@@ -7,16 +7,17 @@ do and don't show; the policy itself is written elsewhere. The harness is
 [tools/bench/sourceModes/](../../tools/bench/sourceModes/README.md), and its
 README is the record schema and the confounder list.
 
-**Status (2026-11-11):** done for 13 models, 2.3 to 860.7 MiB, IFC and
-STEP: small at n = 5, medium at n = 3, large at n = 2 (471 records, none
-failed, every one passed its arm check), on conway `1.1643.778`. The summary is next; each size
-class has its own section after it, and the full tables are at the end.
-The re-measure on conway `1.1645.781` (the source-retention and window-LRU
-fixes) is done for 7 models (150 records):
-[After conway 1.1645.781](#after-conway-11645781-2026-11-11), before the
-size-class sections. It finds the buffered arms' after-spill retention
-unchanged, held by a Share-side retainer.
-
+**Status (2026-11-11):** done. Three runs, all headless Chromium:
+the first matrix (13 models, 2.3 to 860.7 MiB, IFC and STEP, 471 records,
+conway `1.1643.778`); the re-measure on conway `1.1645.781`
+([After conway 1.1645.781](#after-conway-11645781-2026-11-11), 7 models,
+150 records), which found the buffered arms' after-spill retention
+unchanged and traced it to Share; and the measure of the source policy as
+built, with that retainer fixed
+([Source policy as built](#source-policy-as-built-2026-11-11), 7 models,
+147 records). The policy itself is engine-worker.md §5.6. The summary
+of the first matrix is next; each size class has its own section after
+the two later runs, and the full tables are at the end.
 
 ## Setup
 
@@ -171,6 +172,164 @@ per-model sections and tables below give ranges and n.
 - **The ~20 s reading** is the after-spill reading (GC'd, 2 s after the
   spill line, 5–17 s after Total on these models, up to 37 s on DOWA); no
   separate fixed Total+20 s sample was taken.
+
+
+## Source policy as built (2026-11-11)
+
+The source policy (`src/engine/sourcePolicy.js`, engine-worker.md §5.6)
+with the after-spill retainer fixed (Share's `engineHandler.js#openModel`
+closure, [above](#why-the-buffered-arms-still-retain-the-source)). Three
+arms, each with its cold load; the first two also with both reopens:
+
+| Arm | `?feature=` | What it ran (checked per record) |
+|---|---|---|
+| `policyDefault` | none | `Engine source: buffered (…, cap 2048 MB)`: the whole file read once through the sync access handle, buffered open, sidecar saved |
+| `windowedHandle` | `disableBufferedSource` | windowed over the sync access handle, sidecar saved: Chromium's default before the policy |
+| `buffered` | `disableStreamOpen` | the classic buffered open, no store, no sidecar |
+
+**Setup.** Share `4339f1e` / `a527657` (the second differs in docs only),
+conway `1.1645.781-g15220b10`, the same machine, Chromium 153, build config,
+harness and contention guard as the runs above; 15:05–16:59 UTC. Records:
+`tools/measure/sourceModes/records-policy.jsonl` (git-ignored), log
+`run-policy.log`. 147 records, none failed, every one passed its arm check,
+none contended; every sidecar reopen (42 of 42) opened from the index and
+matched its cold load's tree and property read. n: MB-Khaya 5; DSA2,
+sp-231MB, D3D and PSB 3; BLSN_007 and DOWA 2.
+
+**Confounders.**
+- **This run is slower on every arm**, the forced ones included, than the
+  two earlier ones (`windowedHandle` cold: PSB 43.9 s against 34.6; sp-231MB
+  25.4 against 20.2; MB-Khaya 7.3 against 5.8). Nothing in the arms'
+  paths changed, so read it as the host (the session restarted between
+  runs); **compare arms within this run only**, and not its absolute times
+  with the tables above.
+- **The cap was 2 GiB here, not 1.** Headless Chromium 153 on this 17 GB
+  container reports `navigator.deviceMemory` = 16, so 128 MiB × 16. Every
+  model measured is under 1 GiB, so no arm or number depends on it; it is
+  why the policy now also caps at 1 GiB whatever the device reports
+  (`BUFFERED_SOURCE_MAX_BYTES`, added after this run).
+
+### (a) After the spill: the buffered source is released
+
+Worker ArrayBuffer backing store, GC'd 2 s after the spill (MiB, median):
+
+| Model | Format | MiB | `policyDefault` | `buffered` | `windowedHandle` | Before the fix: buffered / windowed |
+|---|---|---|---|---|---|---|
+| MB-Khaya | IFC | 31.4 | 23 | 23 | 55 | 55 / 55 |
+| DSA2 | STEP | 105.7 | 61 | 61 | 167 | 167 / 167 |
+| sp-231MB | IFC | 231.4 | 73 | 73 | 137 | 305 / 137 |
+| D3D | IFC | 213.6 | 92 | 92 | 290 | 306 / 290 |
+| BLSN_007 | STEP | 268.6 | 86 | 86 | 147 | 355 / 147 |
+| DOWA | IFC | 398.4 | 119 | 119 | 375 | 518 / 375 |
+| PSB | IFC | 860.7 | 232 | 232 | 296 | 1,093 / 296 |
+
+- The retention is gone, on IFC and on STEP (BLSN_007, the STEP the snapshot
+  did not cover, fell 355 → 86 MiB). The buffered arms now read **below**
+  the windowed one on every model: after a spill the buffered model pages
+  through a fresh store whose window is still empty, while the windowed
+  model keeps the window its load filled. ("Before" is the 1645 run.)
+- Until the spill the buffered worker still holds the file, by design: PSB
+  at Total + 3 s (GC'd) 1,093 MiB `policyDefault` and `buffered` against
+  293 windowed. The spill comes after the GLB writer, 17–21 s after Total
+  on PSB, 40–43 s on DOWA.
+
+### (b) Peak memory, PSB and DOWA
+
+| Model | Arm | Renderer peak RSS, per round (MiB) | Median | Worker backing-store peak, un-GC'd (MiB) |
+|---|---|---|---|---|
+| PSB | `policyDefault` | 6,399 / 5,317 / 5,318 | 5,318 | 1,389 |
+| PSB | `windowedHandle` | 5,579 / 5,578 / 5,574 | 5,578 | 1,313 |
+| PSB | `buffered` | 5,075 / 5,450 / 5,008 | 5,075 | 1,239 |
+| DOWA | `policyDefault` | 3,764 / 3,964 | 3,864 | 919 |
+| DOWA | `windowedHandle` | 3,799 / 3,778 | 3,789 | 1,089 |
+| DOWA | `buffered` | 4,082 / 3,964 | 4,023 | 903 |
+
+- **The PSB renderer peak is not ~1 GB above windowed in this run.** The
+  policy's median is 260 MiB *below* windowed, plain buffered 500 below; one
+  `policyDefault` round (the run's first PSB load) peaked at 6,399, 820 MiB
+  above windowed. DOWA: +75 MiB at the median, within its ranges.
+- **What changed is the windowed arm, not the buffered one.** The 1645 run
+  read PSB 6,402 buffered against 4,580 windowed; this one 5,075–5,318
+  against 5,578. The windowed arm's peak rose ~1 GB between runs (a single
+  traced windowed load in the 1645 run had already peaked at 5,516); the
+  buffered arms' fell 0.9–1.3 GB. The retention fix cannot explain either
+  move: it frees the source only at the spill, after the writer's peak,
+  and the buffered worker holds the source through that peak in both runs
+  (Total + 3 s, above). So **the excess the 1645 run reported is not
+  established as real**: on this host and run the peaks are bimodal, and
+  three loads per arm don't separate the arms. What can be said: on the
+  median of three, buffering PSB under the cap did not raise the renderer
+  peak here, and its worst load was 0.8 GB above windowed.
+- The worker's own peak is higher buffered on PSB (+76 MiB) and lower on
+  DOWA (−170), as before.
+
+### (c) Time: the new default against forced windowed and plain buffered
+
+Cold, median; % against `windowedHandle`, and against `buffered`:
+
+| Model | Format | MiB | Engine `policyDefault` | `windowedHandle` | `buffered` | vs windowed | vs buffered | 1st mesh (pol / win / buf, s) | Index (s) | Prev@idx |
+|---|---|---|---|---|---|---|---|---|---|---|
+| MB-Khaya | IFC | 31.4 | 4.92 | 7.27 | 4.59 | −32 % | +7 % | 1.43 / 1.56 / 1.28 | 1.64 / 1.77 / 1.50 | 0 / 0 / 0 |
+| DSA2 | STEP | 105.7 | 8.79 | 10.64 | 8.22 | −17 % | +7 % | 3.48 / 3.91 / 3.00 | 3.67 / 4.11 / 3.23 | 0 / 0 / 0 |
+| sp-231MB | IFC | 231.4 | 20.78 | 25.44 | 21.05 | −18 % | −1 % | 1.43 / 1.54 / 1.27 | 5.75 / 7.45 / 5.37 | 2,480 / 1,075 / 2,264 |
+| D3D | IFC | 213.6 | 64.22 | 68.33 | 63.65 | −6 % | +1 % | 1.50 / 1.54 / 1.30 | 10.65 / 12.29 / 9.96 | 4,681 / 1,055 / 4,421 |
+| BLSN_007 | STEP | 268.6 | 28.34 | 28.97 | 27.03 | −2 % | +5 % | 6.14 / 5.88 / 5.44 | 5.91 / 5.60 / 5.25 | 0 / 0 / 0 |
+| DOWA | IFC | 398.4 | 26.40 | 35.53 | 25.20 | −26 % | +5 % | 6.65 / 10.70 / 6.07 | 9.83 / 11.91 / 9.15 | 1,502 / 0 / 1,074 |
+| PSB | IFC | 860.7 | 39.05 | 43.89 | 35.48 | −11 % | +10 % | 4.33 / 3.99 / 2.98 | 17.73 / 19.06 / 14.82 | 2,179 / 651 / 1,930 |
+
+- **The default is faster than forced windowed on every model**, by 6–32 %
+  on the IFCs and 17 % on DSA2; BLSN_007 is within noise (−2 %, n = 2), as
+  the first matrix found for STEP on this model's arm pair once the
+  window-LRU fix landed (−7 % then). It is 1–10 % slower than plain
+  buffered: the source hash for the sidecar, the sidecar export, and the
+  page's sliced hash (below), all of which plain buffered skips.
+- **Index sooner, more previews** on every IFC: the index lands 0.1–2.1 s
+  earlier than windowed, with 2–7× the preview meshes at the index on the
+  large IFCs, as the first matrix found for the buffered arms.
+- **First mesh: the sync-handle read fixed the open's share, not all of
+  it.** "Opening model" is 0.93 s `policyDefault` against 0.48 plain
+  buffered and 0.55 windowed on PSB (the one read through the handle,
+  ~0.4 s), where the prototype's Blob-store read made it 1.25 against 0.36
+  in the 1645 run (+0.9). On the models ≤ 400 MiB the open costs 0.0–0.2 s
+  more than plain buffered. But the page's sliced cache-key hash still runs
+  first: "Hashing model" 3.25 s against plain buffered's 2.36 (one
+  ArrayBuffer) on PSB. Together, PSB's first mesh is 4.33 s against 2.98
+  plain buffered and **3.99 windowed: 0.3 s later than windowed**, the one
+  model where the policy draws later; on sp-231MB, D3D and DOWA it draws as
+  soon as or before windowed. The hash is a named follow-up (engine-worker.md
+  §5.6).
+- On BLSN_007 the first mesh is 0.3 s later than windowed (6.14 against
+  5.88), inside STEP's spread at n = 2; STEP draws nothing before its index
+  on any arm, as before.
+
+### (d) Reopens: unchanged
+
+| Model | Artifact hit, `policyDefault` / `windowedHandle` (s) | Sidecar reopen, `policyDefault` / `windowedHandle` (s) |
+|---|---|---|
+| MB-Khaya | 0.25 / 0.24 | 6.28 / 6.42 |
+| DSA2 | 0.23 / 0.19 | 7.98 / 7.61 |
+| sp-231MB | 3.40 / 3.14 | 21.68 / 20.95 |
+| D3D | 3.95 / 3.64 | 64.41 / 63.69 |
+| BLSN_007 | 0.50 / 0.51 | 24.12 / 24.15 |
+| DOWA | 2.37 / 2.49 | 27.17 / 25.88 |
+| PSB | 3.76 / 3.86 | 28.92 / 30.01 |
+
+- A sidecar saved by a **buffered** parse reopens exactly as one saved by
+  a windowed parse: windowed from the index, `Engine source: windowed
+  (index reopen)`, the same time within noise, and the same tree and
+  property read (42 of 42).
+- As the first matrix found, the sidecar reopen pages its geometry windowed,
+  so against the policy's cold load it is slower on MB-Khaya (+28 %),
+  sp-231MB (+4 %) and DOWA (+3 %), equal on D3D, and faster on DSA2
+  (−9 %), BLSN_007 (−15 %) and PSB (−26 %). Buffered geometry over a
+  sidecar index is the follow-up that would close it (engine-worker.md
+  §5.6).
+
+**What this does not show.** Firefox and Safari (only their path is
+reachable here, through `disableEngineSyncHandle`, and this run did not
+measure it; `heldBuffer` in the runs above is that path); a real GPU; a
+device with less memory than this container (every load here was far under
+its cap); iOS.
 
 
 ## After conway 1.1645.781 (2026-11-11)

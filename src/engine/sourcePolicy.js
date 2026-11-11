@@ -24,16 +24,27 @@ const MIB = 1024 * 1024
  * Buffered-source budget per GiB of `navigator.deviceMemory`: the cap under
  * which an open over an OPFS sync access handle reads the whole file.
  *
- * PROVISIONAL (Share#2139). Where it comes from: 128 MiB × 8 GiB (the
- * largest bucket Chromium reports) = 1 GiB, which buffers PSB (860.7 MiB,
- * the largest model measured) on an 8 GiB desktop; 4 GiB gives 512 MiB. What
- * it trades: a buffered PSB peaked at 6.4 GB renderer RSS against 4.6 GB
- * windowed before the after-spill retention fix (headless Chromium,
- * source-policy-measurements.md §"After conway 1.1645.781" (c)); the
- * re-measure after the fix is in that doc's §"Source policy as built".
+ * PROVISIONAL (Share#2139). Where it comes from: 128 MiB × 8 GiB = 1 GiB,
+ * which buffers PSB (860.7 MiB, the largest model measured) on an 8 GiB
+ * desktop; 4 GiB gives 512 MiB. Capped at BUFFERED_SOURCE_MAX_BYTES, since
+ * `deviceMemory` buckets go above 8 (headless Chromium 153 on a 17 GB
+ * machine reports 16). What it trades: the source stays in the worker until
+ * the GLB writer's spill, through the writer's renderer peak; on PSB that
+ * peak read 5.3 GB buffered against 5.6 GB windowed at the median (one
+ * buffered round 6.4), source-policy-measurements.md §"Source policy as
+ * built".
  */
 // eslint-disable-next-line no-magic-numbers
 export const BUFFERED_SOURCE_BYTES_PER_DEVICE_GIB = 128 * MIB
+
+/**
+ * The cap's ceiling, whatever the device: the largest file buffered in any
+ * measurement (PSB, 860.7 MiB) fits, and so does the Blob store's own
+ * whole-file ceiling (engineSources.js#RESIDENT_SOURCE_MAX_BYTES, the same
+ * 1 GiB). A larger file has never been measured buffered, so it windows.
+ */
+// eslint-disable-next-line no-magic-numbers
+export const BUFFERED_SOURCE_MAX_BYTES = 1024 * MIB
 
 /** The cap where `navigator.deviceMemory` is absent, on a desktop. */
 // eslint-disable-next-line no-magic-numbers
@@ -116,7 +127,7 @@ export const POLICY_BUFFERED_REASONS = Object.freeze([SourceModeReason.UNDER_CAP
  */
 export function bufferedSourceCap({deviceMemoryGiB, isMobile}) {
   if (Number.isFinite(deviceMemoryGiB) && deviceMemoryGiB > 0) {
-    return Math.round(BUFFERED_SOURCE_BYTES_PER_DEVICE_GIB * deviceMemoryGiB)
+    return Math.min(Math.round(BUFFERED_SOURCE_BYTES_PER_DEVICE_GIB * deviceMemoryGiB), BUFFERED_SOURCE_MAX_BYTES)
   }
   return isMobile ? BUFFERED_SOURCE_CAP_PHONE_BYTES : BUFFERED_SOURCE_CAP_DESKTOP_BYTES
 }
