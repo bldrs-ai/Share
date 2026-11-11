@@ -1,14 +1,14 @@
 # Bldrs Share Roadmap
 
-**Status:** Draft v0.11 — trimmed to a short roadmap; detail moved to issues and design docs
-**Date:** 2026-11-10
+**Status:** Draft v0.12 — model versioning and sharing design added as share-200
+**Date:** 2026-11-11
 **Owner:** Pablo
 **Source baseline:** `Share Requirements` Google Doc (Aug 2021, last updated Nov 2022); PDF extract is in this repo's history.
 
 This doc is the source of truth for Epic/Story/Track structure. The wiki page
 `Planning:-Requirements` and the `epic`-labeled GitHub issues mirror it; when they disagree, this doc wins and the others get updated.
 
-## Status (2026-11-10)
+## Status (2026-11-11)
 
 - **Viewer and engine:** rebuilt on Conway-direct with the GLB cache (T1/T2), default-on. The per-model engine worker, render on demand and motion residency are on by default (kill switches `disableEngineWorker`, `disableRenderOnDemand`, `disableMotionResidency`), and hover is drawn on a held frame. Per the owner (2026-11-10), this was tested extensively and gives a mostly smooth frame rate on a ~900 MB IFC, with interactivity during load.
 - **Billing and quotas:** live. Stripe (hosted pricing table, portal, webhook, daily reconcile) and the decided paywall: free viewing with no login for local and public models; a free account gets 2 private models per rolling 7 days (open, share and export); Pro has unlimited private models and exports. Rules: `design/new/quotas.md`.
@@ -18,6 +18,7 @@ This doc is the source of truth for Epic/Story/Track structure. The wiki page
 - **Workspace shell:** projects drawer, TopBar and Profile/Share relocation are shipped behind `?feature=workspace` (`assist-300`). Layout direction decided 2026-11-10: sessions on the left grouped by project, models as tabs (§4.11).
 - **AI assistant:** design doc landed (`design/new/ai-workspace.md`); the viewer tool registry v0 is on main behind `?feature=assist` as a dev hook, and a prototype bot sits behind `?feature=bot`. No panel, agent loop or relay yet. The arc stays post-MVP (§7).
 - **In flight:** identity/multi-account (T3), private sharing (T4), the remaining half of in-app model switching (`open-205`: session-owned workers, close and eviction, the switch itself), the model-edit substrate (`create-300`; L0 landed).
+- **Model versioning and sharing:** design planned as `share-200` ([#2144](https://github.com/bldrs-ai/Share/issues/2144), [design](new/model-versioning.md)); whole-file history and public pinned-version links first, semantic editing later. Implementation not started. Per-principal grants move to `share-201`; existing private-sharing scope stays in T4.
 - **Not started:** `/viewer/*` landing pages, OG link previews, the large-model positioning page (Phase G).
 - **MVP bar:** unchanged (§6.0). The paid offer is live; the working view is that the bar is met when users upgrade on their own as features improve. The six open items are in §6.0.
 
@@ -90,7 +91,8 @@ One row per Epic and Track; bodies are in §4 and §5. **Phase column:** A–E =
 | Share | `share-120` | Extended Share/Login flow | 🟡 | C, D | — | <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a> |
 | Share | `share-130` | Private link sharing + visibility chip | 🟡 | C | T4 | |
 | Share | `share-140` | GLB export with Pro entitlement and free model slots | 🟡 | D | T2, T8 | <a href="https://github.com/bldrs-ai/Share/issues/1831" target="_blank" rel="noopener noreferrer">#1831</a> |
-| Share | `share-200` | Grant/revoke per-principal sharing | 🟡 | C | T4 | |
+| Share | `share-200` | Model versioning and sharing: git + progressive decomposition | 🟡 | Post, AI | T2, T12 (V1+) | <a href="https://github.com/bldrs-ai/Share/issues/2144" target="_blank" rel="noopener noreferrer">#2144</a> |
+| Share | `share-201` | Grant/revoke per-principal sharing | 🟡 | C | T4 | |
 | Share | `share-400` | Folder-scoped boundaries | ⬜ | Post | T4 | |
 | Notes | `notes-100` | Anchored notes (GitHub-backed) | ✔ | — | — | |
 | Notes | `notes-200` | BCF round-trip | ⬜ | Post | — | |
@@ -137,8 +139,8 @@ One row per Epic and Track; bodies are in §4 and §5. **Phase column:** A–E =
 |---|---|---|---|---|
 | T1 | Viewer Replacement | 🟡 | A (launch gate) | `view-100`, `view-110`, `view-200`, `view-130`, `view-300`, `open-205`, T2 |
 | T2 | GLB Model Sharing | 🟡 | C (Ph 4 + 5) | `share-110`, `notes-300`, `view-130` |
-| T3 | Identity Decoupling | 🟡 | B (PR2 + PR3) | `identity-110`, `identity-120`, `identity-300`, `open-300`, `share-200`, `subscribe-120`, T4 PR3 |
-| T4 | Multi-User Sharing | 🟡 | C (PR2 + PR3) | `share-130`, `share-200`, `share-400`, `notes-300`, `versions-310` |
+| T3 | Identity Decoupling | 🟡 | B (PR2 + PR3) | `identity-110`, `identity-120`, `identity-300`, `open-300`, `share-201`, `subscribe-120`, T4 PR3 |
+| T4 | Multi-User Sharing | 🟡 | C (PR2 + PR3) | `share-130`, `share-201`, `share-400`, `notes-300`, `versions-310` |
 | T5 | Drive Recents HEAD-check | ⬜ | E (polish) | `open-200` |
 | T6 | Notes & Versions sidecar formats | ⬜ | Post | `notes-200`, `notes-300`, `versions-310` |
 | T7 | Ads | 🔮 | D | `subscribe-130` |
@@ -146,7 +148,7 @@ One row per Epic and Track; bodies are in §4 and §5. **Phase column:** A–E =
 | T9 | Growth funnel & SEO surfaces (NEW) | 🟡 | G | `grow-100`, `grow-200`, `grow-120` |
 | T10 | Agent runtime & conversation store (NEW) | 🟡 | AI (§7) | `assist-310`, `assist-400`, `search-310` |
 | T11 | App sandbox + MCP bridge (NEW) | 🟡 | AI (§7) | `assist-320`, `apps-300`, `apps-310` |
-| T12 | Model edit substrate (NEW) | 🟡 | AI (§7) | `create-300`, `create-310`, `create-320`, §7.4 AI.5 |
+| T12 | Model edit substrate (NEW) | 🟡 | AI (§7) | `create-300`, `create-310`, `create-320`, `share-200` V1+, §7.4 AI.5 |
 
 ## 4. Epic catalogue
 
@@ -184,7 +186,8 @@ User shares a model, a view, a note, or a region with another user — privately
 - **`share-120` Extended Share/Login flow** 🟡 (NEW). The dialog that picks between anonymous-public, free-public, and Pro-private; where the upgrade prompt lives. Share gate for local uploads has landed. <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>. **Required for MVP.**
 - **`share-130` Private link sharing + visibility chip** 🟡 (NEW). T4 PR1 landed; the Share dialog (PR2/PR3) remains; `sharing` flag is off. **Required for MVP** (private sharing is a paid feature).
 - **`share-140` GLB export with Pro entitlement and free model slots** 🟡 (NEW). Shipped and default-on; Pro exports unlimited, free users use public models freely and private/local models through their model slots. Remaining: residual manual cross-browser smoke checks. Epic <a href="https://github.com/bldrs-ai/Share/issues/1831" target="_blank" rel="noopener noreferrer">#1831</a>; rules in `design/new/quotas.md` and `design/new/glb-export-premium.md`.
-- **`share-200` Grant/revoke per-principal sharing** 🟡 (NEW). People panel in the Share dialog (T4 PR2/PR3); MLP band, not load-bearing for the trickle.
+- **`share-200` Model versioning and sharing: git + progressive decomposition** 🟡 (NEW; design only). [#2144](https://github.com/bldrs-ai/Share/issues/2144); [implementation design and dispatch plan](new/model-versioning.md). V0/S1: local whole-file IFC/STEP history, explicit public publication, immutable repo+commit links and opt-in updates; large bases live outside git. V1–V4: reuse the `create-300` op log, then prove progressive entity checkpoints, semantic merge/compaction and round trip. First gates: protected OPFS history, browser git/transport measurements, and a verified blob-hosting/retention choice. **Post-MVP**, with later semantic stages in the AI arc; V0/S1 do not wait for editing, private grants or rooms. This publishes original source bytes by explicit choice, distinct from T2 GLB sharing.
+- **`share-201` Grant/revoke per-principal sharing** 🟡 (NEW). People panel in the Share dialog (T4 PR2/PR3); MLP band, not load-bearing for the trickle. Renumbered from `share-200` in v0.12; scope unchanged.
 - **`share-400` Folder-scoped boundaries** ⬜ (NEW). T4 PR4. **Post-MVP.**
 
 ### 4.4 Notes & Versions
@@ -194,7 +197,7 @@ User leaves comments anchored to model elements, replies in a thread, and can re
 - `notes-100` Anchored notes (GitHub-backed) ✔ (anchoring flow <a href="https://github.com/bldrs-ai/Share/issues/892" target="_blank" rel="noopener noreferrer">#892</a> is tracked under `view-230`).
 - **`notes-200` BCF round-trip** ⬜. Issues interoperate with Solibri/Navisworks/Tekla. **Post-MVP.**
 - **`notes-300` Drive-backed notes (NotesProvider)** 🔮 (NEW). T4 Stretch. **Post-MVP.**
-- **`versions-100` Show specific version + branch/commit nav** 🟡. Enough for the free tier; open: <a href="https://github.com/bldrs-ai/Share/issues/850" target="_blank" rel="noopener noreferrer">#850</a>, <a href="https://github.com/bldrs-ai/Share/issues/890" target="_blank" rel="noopener noreferrer">#890</a>. Polish post-MVP.
+- **`versions-100` Show specific version + branch/commit nav** 🟡. Enough for the free tier; open: <a href="https://github.com/bldrs-ai/Share/issues/850" target="_blank" rel="noopener noreferrer">#850</a>, <a href="https://github.com/bldrs-ai/Share/issues/890" target="_blank" rel="noopener noreferrer">#890</a>. Polish post-MVP. `share-200` reuses the history/navigation seams for pointer-backed versions.
 - **`versions-300` Diff between versions** ⬜. Needs a structural IFC diff. **Post-MVP.**
 - **`versions-310` Portable versions for Drive** 🔮 (NEW). T4 Stretch Q3. **Post-MVP.**
 
@@ -295,7 +298,7 @@ Each track has a long-form design doc.
 - **Docs:** `design/new/identity-decoupling.md`, `identity-decoupling-decisions.md`.
 
 ### Track T4: Multi-User Sharing
-- **What:** Grants, visibility and folder-scoped routes, consistent across Drive and GitHub.
+- **What:** Grants (`share-201`), visibility and folder-scoped routes, consistent across Drive and GitHub. Public model-version storage (`share-200`) is a separate capability.
 - **Status:** PR1 merged; PR2 (Drive Share dialog), PR3 (GitHub adapter), PR4 (folder routes) open; PR5 (token-health parity) and PR6 (flag retire) follow.
 - **MVP impact:** PR2 + PR3 required; PR4 post-MVP.
 - **Docs:** `design/new/multi-user-sharing.md`, `sharing-pr3-github.md`.
@@ -367,7 +370,7 @@ The open 100-band work, exhaustively — this list is the MVP:
 5. **The free tier monetises and acquires** (Phase D): T7 ads (`subscribe-130`) — parked (2026-11-10), not part of the bar.
 6. **It's measurable and findable** (Phase G): `grow-120` events and GA hygiene, `grow-100` `/viewer/ifc` + `/viewer/step`, `community-110` feedback.
 
-Demoted out of the MVP band (not load-bearing for the trickle): `open-200`, `share-200`, `grow-200`, and the Assist/AI arc. Rationale: organic traffic is near zero and the one earned channel, shared links, is uninvested, so launching Pro into an unmeasured funnel wastes the launch.
+Demoted out of the MVP band (not load-bearing for the trickle): `open-200`, `share-201`, `grow-200`, and the Assist/AI arc. Rationale: organic traffic is near zero and the one earned channel, shared links, is uninvested, so launching Pro into an unmeasured funnel wastes the launch.
 
 ### Phase G (parallel, starts now): Growth funnel + SEO surfaces
 **Goal:** the funnel is measurable, share links unfurl, and search intent has a landing page.
@@ -396,7 +399,7 @@ Demoted out of the MVP band (not load-bearing for the trickle): `open-200`, `sha
 
 ### Phase C: Sharing v1
 **Goal:** in-app share with grants and visibility, parity Drive and GitHub.
-- T4 PR2, PR3, PR5 behind `sharing`; `share-130` and `share-200` surfaces in the Share dialog.
+- T4 PR2, PR3, PR5 behind `sharing`; `share-130` and `share-201` surfaces in the Share dialog.
 - T2 Phase 4 (notes + view-states in the artifact) and Phase 5 (originator share flow), wired to `share-120`.
 - `grow-200` OG image written with the share artifact, if that is the chosen mechanism; retire the `sharing` flag.
 
@@ -493,6 +496,7 @@ Held over for after Phase E; items marked **→ §7** ride the pivot instead. Ro
 17. PDF "Hangouts" (Miro, FPV, WebXR); out of scope until demand.
 18. PDF "Social Updates" (ActivityPub); no current pull.
 19. `assist-410` Social broadcast plugins; placeholder from `conversational-cad.md` §5.
+20. `share-200` Model versioning and sharing ([#2144](https://github.com/bldrs-ai/Share/issues/2144)): S0 feasibility → V0 whole-file history → S1 public links; V1+ semantic stages coordinate with T12 / AI.5. [Milestones and dispatch](new/model-versioning.md#8-milestones-and-acceptance-gates).
 
 ## 9. Issues and wiki
 
@@ -503,6 +507,7 @@ Standing convention (the original migration is done):
 
 ## 10. Open questions
 
+- **Model-version hosting.** `share-200` S1 needs a proven public blob provider, retention/operating policy and browser upload/read path; GitHub is the initial metadata-remote recommendation. No free/permanent-hosting promise or private-storage rollout is implied ([design](new/model-versioning.md)).
 - **Free-tier numbers.** Public anonymous share TTL, public hosting size ceiling (<10MB per <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>), refresh-token-mint rate.
 - **Auth0 enforcement on Netlify Functions** (`identity-decoupling-decisions.md` §Open Implementation Details): flagged as a prerequisite for quota tracking, which has since shipped; confirm.
 - **BCF priority.** Industry credibility vs cost; MVP scope or §8 item 7.
@@ -528,6 +533,8 @@ Standing convention (the original migration is done):
 
 # Changelog
 
+- **v0.12 (2026-11-11):** assigned #2144 model versioning and sharing to `share-200`, moved per-principal grants to `share-201` across current references, and added the implementation design/dispatch plan. Whole-file public sharing is independent of later T12 semantic editing; existing Phase C private-sharing scope and the MVP bar are unchanged.
+
 - **v0.3 (2026-07-02):** folded in implementation drift (adapter retired, GPU-instancing arc, STEP metadata, marketing SSG), the growth-strategy reconciliation (paid search was the only channel delivering real model opens, organic discovery near zero, shared links the best earned traffic; so funnel instrumentation, SEO surfaces and share-loop polish became Phase G, §4.10, T9), and the AI-workspace pivot (§4.11, T10–T11, §7).
 - **v0.4 (2026-07-03):** reconciled with the AI-strategy synthesis (private): commodity/moat split, the size/complexity quota proposal (never shipped), data sovereignty as a first-class feature (`grow-400`), the headline "AI iterates on models nobody else can even open".
 - **v0.5 (2026-07-03):** renumbered Epics so the hundreds digit encodes the tier (100s MVP, 200s MLP, 300s Pro, 400s Enterprise).
@@ -542,7 +549,7 @@ Standing convention (the original migration is done):
 
 Every epic that has ever been renumbered (all others have been stable since v0.2). Resolve any ID in an older branch, issue or PR through this table; several numbers were **reused across revisions** (`share-120`, `share-130`, `share-200`, `open-200`, `view-130`, `view-220`, `view-230`, `assist-300`), and `subscribe-100/110/120` were restored to their original meanings.
 
-| Epic (current name) | v0.2–v0.4 | v0.5 | v0.6 (current) |
+| Epic (current name) | v0.2–v0.4 | v0.5 | v0.6–v0.11 |
 |---|---|---|---|
 | Recents reliability | open-150 | open-130 | `open-200` |
 | Open multiple IFCs in one session | open-140 | open-200 | `open-210` |
@@ -577,3 +584,12 @@ Every epic that has ever been renumbered (all others have been stable since v0.2
 | Conversational agent panel | assist-110 (v0.3) | assist-110 | `assist-310` |
 | AI-apps toolbelt | assist-130 (v0.3) | assist-200 | `assist-320` |
 | Multi-user channels + AI modes | assist-120 (v0.3) | assist-300 | `assist-400` |
+
+### v0.12 amendments (2026-11-11)
+
+The user-requested reassignment below is deliberate; historical `share-200` references must be interpreted by revision and name, not blindly replaced.
+
+| Epic (current name) | v0.6–v0.11 | v0.12 (current) |
+|---|---|---|
+| Grant/revoke per-principal sharing | `share-200` | `share-201` |
+| Model versioning and sharing: git + progressive decomposition (#2144) | — (new) | `share-200` |
