@@ -61,6 +61,7 @@ export function engineFlagSnapshot() {
     disableEngineSyncHandle: isFeatureEnabled('disableEngineSyncHandle'),
     disableEngineSidecar: isFeatureEnabled('disableEngineSidecar'),
     disableEngineResidentSource: isFeatureEnabled('disableEngineResidentSource'),
+    engineHeldBufferOpen: isFeatureEnabled('engineHeldBufferOpen'),
   }
 }
 

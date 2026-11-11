@@ -249,6 +249,15 @@ export const flags = [
   // whole load instead of holding the file for it. Also the A/B for
   // measuring what the whole-file read buys.
   {name: 'disableEngineResidentSource', isActive: false},
+  // EXPERIMENTAL, off, and not safe to turn on yet (Share#2139): where the
+  // Blob store already holds the whole file (above), open conway BUFFERED
+  // over those bytes instead of windowed over them, keeping the source hash
+  // and sidecar export. On PSB in headless Chromium: 33.7 s against the
+  // windowed path's 38.9 s, sidecar saved. Blocked on a conway leak: a
+  // buffered IFC open's SPILL does not free the source (it stays pinned
+  // through `IfcApiProxyIfc.demandAggregates_`, ~900 MB on PSB), so this
+  // stays opt-in until conway releases it.
+  {name: 'engineHeldBufferOpen', isActive: false},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-
