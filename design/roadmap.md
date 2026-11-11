@@ -47,7 +47,7 @@ Where the plans disagree, the decision is tracked as a bizdev `decision` issue a
 | 🔮 | Loveable / post-MVP — held over from PDF's 🥇/❤️ markers or new. |
 | 🔒 | Pro gated — free users can see it exists but can't use the full capability. |
 
-From the PDF: 🥉 = MVP, 🥇 = MLP (Minimum Loveable Product), ❤️ = personal MLP (a named person). Those markers are kept in §4. Work added since the PDF is marked `(NEW)`.
+From the PDF: 🥉 = MVP, 🥇 = MLP (Minimum Loveable Product), ❤️ = personal MLP (a named person; the named people are former teammates, and the markers are kept as the record of their requests). Those markers are kept in §4. Work added since the PDF is marked `(NEW)`.
 
 ### 2.1 Tier rubric (Epic ID numbering)
 
@@ -320,7 +320,7 @@ Each track has a long-form design doc.
 
 ### Track T8: Pro/Billing (NEW)
 - **What:** Tier definitions, Stripe, quota infrastructure and feature gates; also the metering rails for §7 AI usage.
-- **Status:** Tiers, Stripe to Auth0 entitlement, portal, reconcile, default-on private-model quotas, GLB export entitlement and server-side subscription events are live; the three `subscribe-1x0` epics are done. Remaining: AI metering for §7 (not started), the only reason it stays 🟡. The size/complexity axis was not adopted (§4.9). 
+- **Status:** Tiers, Stripe to Auth0 entitlement, portal, reconcile, default-on private-model quotas, GLB export entitlement and server-side subscription events are live; the three `subscribe-1x0` epics are done. Remaining: AI metering for §7 (not started), the only reason it stays 🟡. The size/complexity axis was not adopted (§4.9).
 - **MVP impact:** Required end to end.
 - **Doc:** `design/new/quotas.md`, `design/new/glb-export-premium.md`, `design/new/netlify-functions-testing.md`; no separate billing doc is planned.
 
@@ -513,9 +513,8 @@ Standing convention (the original migration is done):
 - **Sandbox security model** for toolbelt apps: origin isolation, tool permissioning, provenance (T11).
 - **AI naming.** "Assist" is the working verb; the user-facing name is unpicked.
 - **OG image mechanism.** Edge injection on `/share/*` vs pre-render at share time; decides whether `grow-200` finishes in Phase G or Phase C.
-- **Design partners.** Do the named people markers (❤️ Markus, Oleg, Johannes, Kate) from the 2021–22 requirements doc still apply now that the company is solo-run?
 
-**Decided:** unplaced epics: <a href="https://github.com/bldrs-ai/Share/issues/1601" target="_blank" rel="noopener noreferrer">#1601</a> is a T1 sub-track and <a href="https://github.com/bldrs-ai/Share/issues/2048" target="_blank" rel="noopener noreferrer">#2048</a> attaches to `identity-300`. Paywall wording reconciled with the shipped rule (§4.9, Phase D); the size/complexity axis was not adopted. Agent runtime placement (2026-10): the loop runs client-side, a thin `ai-chat` relay holds the hosted key and meters credits, BYOK goes direct (`ai-workspace.md` D1, D2, D6). Edit-log location: an op log over the immutable source, Share-side (`model-edit.md`).
+**Decided:** the ❤️ name markers are kept as the record of former teammates' requests (2026-11-10). Unplaced epics: <a href="https://github.com/bldrs-ai/Share/issues/1601" target="_blank" rel="noopener noreferrer">#1601</a> is a T1 sub-track and <a href="https://github.com/bldrs-ai/Share/issues/2048" target="_blank" rel="noopener noreferrer">#2048</a> attaches to `identity-300`. Paywall wording reconciled with the shipped rule (§4.9, Phase D); the size/complexity axis was not adopted. Agent runtime placement (2026-10): the loop runs client-side, a thin `ai-chat` relay holds the hosted key and meters credits, BYOK goes direct (`ai-workspace.md` D1, D2, D6). Edit-log location: an op log over the immutable source, Share-side (`model-edit.md`).
 
 ## 11. Doc maintenance
 
