@@ -59,6 +59,16 @@ module.exports = {
         'no-magic-numbers': 'off',
       },
     },
+    // The source-mode bench (`tools/bench/**`, tools/bench/sourceModes/README.md):
+    // a measurement harness run by hand, never part of the app or of CI. Its
+    // numbers are poll intervals, timeouts, unit conversions and /proc field
+    // offsets, each next to the comment that says what it is.
+    {
+      files: ['tools/bench/**/*.mjs'],
+      rules: {
+        'no-magic-numbers': 'off',
+      },
+    },
     // Vendored IfcContext family (`src/viewer/three/context/**`) — code
     // copied from `web-ifc-viewer/dist/components/context/*` in slice
     // 5d.3. Kept intentionally close to the upstream shape so future

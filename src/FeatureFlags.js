@@ -249,6 +249,21 @@ export const flags = [
   // whole load instead of holding the file for it. Also the A/B for
   // measuring what the whole-file read buys.
   {name: 'disableEngineResidentSource', isActive: false},
+  // EXPERIMENTAL, off, and not safe to turn on yet (Share#2139): where the
+  // Blob store already holds the whole file (above), open conway BUFFERED
+  // over those bytes instead of windowed over them, keeping the source hash
+  // and sidecar export. On PSB in headless Chromium: 33.7 s against the
+  // windowed path's 38.9 s, sidecar saved. conway's own retainers of the
+  // source were fixed in 1.1645.781 (conway#781), but the spill still does
+  // not free it: `engineHandler.js#openModel`'s `loadBytes` closure shares a
+  // V8 context with the long-lived `settings.ON_PROGRESS` / `ON_MODEL_INFO` /
+  // `ON_PREVIEW_MESH` callbacks conway keeps on the model, so `source` and
+  // `heldBytes` stay pinned (~800 MiB on PSB; see
+  // design/new/source-policy-measurements.md §"After conway 1.1645.781").
+  // Stays opt-in until that closure stops retaining them. With the flag on
+  // the open goes buffered directly, with no windowed attempt, so a file too
+  // large to allocate buffered fails without a windowed fallback.
+  {name: 'engineHeldBufferOpen', isActive: false},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-

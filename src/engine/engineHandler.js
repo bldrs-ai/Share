@@ -509,6 +509,17 @@ export function createEngineHandler({
       // conway#760); a sidecar open adopts the sidecar's own.
       settings.RECORD_SOURCE_HASH = true
     }
+    // Share#2139 (experimental, `engineHeldBufferOpen`, default off): when
+    // the Blob store already holds the whole file, open buffered over those
+    // bytes rather than windowed over them. The windowed open's cost on a
+    // resident file is all overhead (4 MiB window copies, LRU bookkeeping,
+    // re-scans); the buffered one does none of it. RECORD_SOURCE_HASH is
+    // still set above, so the sidecar export below still has its digests.
+    // Not for a sidecar reopen, which needs the store to page from.
+    const heldBytes = flags.engineHeldBufferOpen && sidecar === null &&
+      typeof store?.takeResident === 'function' ?
+      store.takeResident() :
+      null
     let adopted = false
     let id
     let windowed
@@ -517,8 +528,8 @@ export function createEngineHandler({
     try {
       ({modelID: id, windowed, attempt, index} = await openDeferred(engine, {
         sidecar,
-        store,
-        loadBytes: async () => {
+        store: heldBytes ? null : store,
+        loadBytes: heldBytes ? () => Promise.resolve(heldBytes) : async () => {
           // The buffered fallback reads the file again for itself: let the
           // windowed store's whole-file copy go first rather than hold both.
           store?.releaseResident?.()
@@ -532,6 +543,11 @@ export function createEngineHandler({
         },
         settings,
       }))
+      if (heldBytes && !windowed && !disposed && typeof id === 'number' && id >= 0 && entryPath !== null) {
+        // The buffered open over held bytes still exports a sidecar, so a
+        // reopen after eviction can come back from the index (Share#2139).
+        sidecarState = {entryPath, file: blob, getOpfsRoot, source: 'parse', bytes: 0, saved: false}
+      }
       if (windowed && !disposed && typeof id === 'number' && id >= 0) {
         // Kept for the session: property reads page windows from it long
         // after the load. Released in dispose(), after CloseModel.

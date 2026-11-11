@@ -241,6 +241,17 @@ describe('engine/engineSources', () => {
     expect(store.releaseResident()).toBe(false)
   })
 
+  it('takeResident hands the whole-file copy over once, and later reads go to the Blob (Share#2139)', async () => {
+    const root = fakeDir({[NAME]: fakeEntry()})
+    const {store} = await openIn(root, {allowSyncHandle: false, holdResident: true})
+    const held = store.takeResident()
+    expect(Array.from(held)).toEqual(Array.from(BYTES))
+    expect(store.takeResident()).toBeNull()
+    expect(store.releaseResident()).toBe(false)
+    expect(Array.from(await store.read(4, 3))).toEqual([4, 5, 6])
+    expect(store.counters).toMatchObject({reads: 2, residentReads: 0})
+  })
+
   it('a synchronous read is served from the whole-file copy too', async () => {
     // STEP's windowed open faults windows in through readSync (conway#757).
     const reader = jest.fn(function ReaderSync() {
