@@ -2,6 +2,11 @@
 
 **Status:** Phase 0 landed (#2026). Phase 1 re-planned 2026-11-02 (§4);
 P1.0 measured (§4.1); Phase 2 planned.
+**Update 2026-11-10:** since this plan was written the engine moved into a
+per-model Web Worker, on by default (`engine-worker.md`, step 9, #2083),
+with the main-thread engine kept for the routes `FeatureFlags.js` names.
+Per `engine-worker.md`, sessions owning their worker (steps 7–8), close and
+eviction, and the in-app switch itself are not built yet.
 **Epic:** `open-205` (#2011). Stories: Phase 0 #2012 (tasks #2013–#2018,
 closed; #2017 moved to Phase 1), Phase 1 #2028 (measure), #2029
 (interactive at index), #2019 (sessions), #2030 (no blocking calls), #2031
@@ -490,6 +495,14 @@ construction.
 
 ### 4.4 No blocking calls (#2030)
 
+> **Note 2026-11-10:** the opening premise below is superseded. The engine
+> now runs in its own worker by default (`engine-worker.md`), so a background
+> parse no longer shares the main thread with the foreground model. What
+> still applies is the list of long blocks that are Share's own main-thread
+> work: moving the engine does not touch them. Item 1 is done (#2035, closed:
+> the batched-native GLB is built in the GlbWriter worker). Items 2 and 3 are
+> still open as written; #2030 is open.
+
 Conway runs on the main thread — the only workers are OPFS
 (`src/OPFS/OPFSService.js:54`) and the GLB writer
 (`src/loader/GlbWriterService.js:43`). Two loads at once therefore share
@@ -508,7 +521,7 @@ The suspect was a long synchronous initial parse, and P1.0 cleared it: Conway al
    - `robustBoundsFor` (`src/viewer/three/robustBounds.js:204`) shows up in the same task.
    - Fix: slice it across batches, or build the BVH lazily.
 3. **Conway's `prepareDemandExtraction` → `populateStyledItemsMap`: about 1 s on 231 MB in Node, 0.6–0.7 s in the browser.** It needs a Conway issue asking for it to be sliced.
-4. **A worker for the engine: deferred.**
+4. **A worker for the engine: deferred (landed: engine-worker.md).**
    - Even after 1–3, every 50–130 ms parse slice is a long task, so a background parse still drops some foreground frames.
    - A worker is needed only if background loads must not drop foreground frames at all.
    - Decide once there are two-concurrent-load numbers and real-GPU frame numbers; neither was measurable in the container.
@@ -556,7 +569,8 @@ disarm it), check Back/Forward through `Share.jsx`'s route effect (needs
 
 ### 4.7 Open risks
 
-- **Main-thread contention between concurrent loads (§4.4).**
+- **Main-thread contention between concurrent loads (§4.4).** *(2026-11-10: the
+  parse bullet below predates the engine worker; the Share-side blocks remain.)*
   - Conway yields in 50–130 ms slices, so every slice is a long task, and a background parse will drop some foreground frames.
   - Share's 6 s writer task and 2.3 s assembly task are the big blocks, and they're fixable.
   - Two concurrent loads have not been measured.
