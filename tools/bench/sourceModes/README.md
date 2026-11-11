@@ -170,8 +170,10 @@ starts.
 - `previewMeshes*` are meshes in the load-preview group, the visible count.
   They are not conway's preview units; one unit can emit several meshes.
 - Worker `backingMb` is `Runtime.getHeapUsage().backingStorageSize`:
-  ArrayBuffer backing stores, so the held file, window copies and the wasm
-  memory. `usedMb` is the JS heap. The 500 ms polls are not GC'd, so the peak
+  ArrayBuffer backing stores, so the held file and window copies. It does
+  NOT include the wasm memory: after the spill it reads below the Total
+  line's `engineWasmMb` on every model measured (SEESTRASSE 26 MiB against
+  69), so read `engineWasmMb` beside it. `usedMb` is the JS heap. The 500 ms polls are not GC'd, so the peak
   is an upper bound of live memory and can miss a spike between polls.
 - Renderer RSS covers the page and every worker (they are threads of it),
   SwiftShader's buffers included.

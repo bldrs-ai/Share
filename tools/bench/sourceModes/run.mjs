@@ -290,7 +290,8 @@ function sleep(ms) {
  * an upper bound of live memory) every 500 ms for the peak, and takes
  * GC'd readings (`HeapProfiler.collectGarbage` first) on request.
  * `backingStorageSize` is ArrayBuffer backing stores (the held file, window
- * copies, the wasm memory), `usedSize` the JS heap.
+ * copies; not the wasm memory, which the Total line's `engineWasmMb`
+ * reports), `usedSize` the JS heap.
  */
 class WorkerMemory {
   /** @param {object} cdp a page CDPSession */
