@@ -392,7 +392,10 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
             await openModelFailure(failure.code, failureSource, failure.refusedSchema, failure.openFailure),
             failure.sourceMode)
         }
-        throw e
+        // A direct open exception (no classified failure) still failed this
+        // open: carry the handler's source mode into the Sentry tags, as
+        // for a classified one. A missing mode is ignored.
+        throw withEngineSource(e, e?.sourceMode)
       }
     }
     const modelID = opened.modelID

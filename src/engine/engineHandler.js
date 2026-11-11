@@ -636,6 +636,16 @@ export function createEngineHandler({
           }
         }
       }
+    } catch (e) {
+      // A direct open exception (format detection threw, the windowed open
+      // after a failed whole-file read threw) is still a failed open: stamp
+      // the mode chosen so far so the page can tag it in Sentry, buffered
+      // told from windowed. Fixed codes only, never a name, path or size;
+      // serializeError carries it across the worker boundary.
+      if (e && typeof e === 'object') {
+        e.sourceMode = {mode: sourceMode.mode, reason: sourceMode.reason}
+      }
+      throw e
     } finally {
       // Not adopted (a buffered open, a failed or refused open, an open
       // that threw, or a close that came first): nothing reads it again, so

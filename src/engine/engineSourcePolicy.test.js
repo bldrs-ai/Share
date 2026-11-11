@@ -440,6 +440,36 @@ describe('engine/engineHandler: the source policy', () => {
     expect(log).toContain('access.close')
   })
 
+  it('an open that throws carries the chosen source mode on the rejection (Share#2139)', async () => {
+    // Not a conway failure, so no classified `failure` rides the reply: the
+    // mode still has to reach the page, for the Sentry tags.
+    const log = []
+    const api = policyApi(log)
+    api.OpenModelStreamed = async () => {
+      throw new Error('malformed')
+    }
+    const s = await session(api, opfs(log))
+    const error = await s.open({file: snapshot()}, {format: 'ifc', stream: {previews: false}}).catch((e) => e)
+    expect(error.message).toBe('malformed')
+    expect(error.sourceMode).toEqual({mode: 'buffered', reason: SourceModeReason.UNDER_CAP})
+    await s.close()
+  })
+
+  it('a throw before the mode is chosen carries none', async () => {
+    const log = []
+    const api = policyApi(log)
+    // A source whose size cannot be read: thrown by the policy's input,
+    // before any mode exists.
+    const file = {get size() {
+      throw new Error('size unreadable')
+    }}
+    const s = await session(api, opfs(log))
+    const error = await s.open({file}, {format: 'ifc', stream: {previews: false}}).catch((e) => e)
+    expect(error.message).toBe('size unreadable')
+    expect(error.sourceMode).toBeUndefined()
+    await s.close()
+  })
+
   it('a windowed open over the cap that fails falls through to buffered, labelled windowedFailed', async () => {
     // Pre-dates the policy (conwayOpen.js#openDeferred buffers after any
     // non-schema store-open failure); the label says what happened.

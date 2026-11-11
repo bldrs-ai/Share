@@ -290,6 +290,20 @@ describe('engine/engineModelLoad: a buffered open that runs out of memory (Share
     expect(error.engineSourceReason).toBe(SourceModeReason.UNDER_CAP)
   })
 
+  it('an open that throws (no classified failure) is tagged with the mode it ran in', async () => {
+    const log = []
+    const api = conwayDouble(log)
+    api.OpenModelStreamed = async () => {
+      throw new Error('malformed')
+    }
+    const {spawn, sessions} = spawner([api])
+    const error = await createEngineModelLoad({format: 'ifc', spawn}).parse(snapshot(), {}).catch((e) => e)
+    expect(error.message).toBe('malformed')
+    expect(sessions).toHaveLength(1)
+    expect(error.engineSource).toBe('buffered')
+    expect(error.engineSourceReason).toBe(SourceModeReason.UNDER_CAP)
+  })
+
   it('a schema refusal is never retried, whatever its message', async () => {
     const log = []
     const refused = {status: 'UNSUPPORTED_SCHEMA', reason: 'out of memory while refusing'}
