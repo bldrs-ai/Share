@@ -1,7 +1,9 @@
 # Share × Conversational CAD — epic plan
 
-**Status:** v0.2 — plan agreed; roadmap v0.7 deltas applied; tracking issues live
-**Date:** 2026-07-27
+**Status:** v0.3 (2026-11-10): shipped state synced; layout direction revised
+(§2.9); permissions questions gathered (§5.1). Plan otherwise as agreed
+2026-07-27.
+**Date:** 2026-07-27 (updated 2026-11-10)
 **Owner:** Pablo
 **Wireframes:** "Share × Conversational CAD — production merge wireframes"
 (2026-07). Legend markers cited below as **W1…W9** (W8 = BottomBar, W9 =
@@ -17,9 +19,44 @@ plan is agreed.
 **Division of labor with `ai-workspace.md`:** the roadmap (§7.4 AI.0) calls
 for `design/new/ai-workspace.md` to answer the *architecture* questions —
 agent runtime placement, LLM provider strategy, conversation-store choice,
-sandbox/MCP security model. Those stay there (still to be drafted). This doc
+sandbox/MCP security model. Those stay there; the doc now exists
+([ai-workspace.md](ai-workspace.md), story #1671, closed). This doc
 owns the *product* plan: UI decomposition, epic sequencing, and issue
-structure. Epic 3 depends on `ai-workspace.md` existing first.
+structure.
+
+
+## Status (2026-11-10)
+
+**Position.** This whole arc is post-MVP. It is scoped now mainly to
+understand the permissions model (§5.1), not because it is next to be built
+(per Pablo, 2026-11-10).
+
+- **Epic 1, workspace shell** (#1657, open): shipped behind
+  `?feature=workspace` are the ProjectsDrawer and its flows (#1661,
+  #1689–#1696), the TopBar (#1663) and the Profile + Share relocation
+  (#1665), all closed. Open: Tier 2 Auth0 sync (#1662), OpenModelControl
+  retiring (#1664), the logo popup's manage-account entry (#1666), icon
+  tokens (#1667).
+- **Epic 2, fluid nav + search** (#1658): not started; all stories open
+  (#1668–#1670, #1699, #1701, #1702).
+- **Epic 3, conversational agent** (#1659): the design doc is done
+  ([ai-workspace.md](ai-workspace.md), #1671 closed). A viewer tool registry
+  and its dev hook exist behind the `assist` flag, and a basic prototype
+  assistant (OpenRouter connection) sits behind `?feature=bot`. No tray and
+  no agent loop yet (#1672–#1677 open); see ai-workspace.md for what of the
+  assistant is built.
+- **Epic 4, multi-user** (#1660): not started; scoping only (#1678–#1680
+  open).
+
+**Layout decision.** Per Pablo, 2026-11-10: a Claude-Code-style layout with
+sessions on the left grouped by project, and multi-model as a tabbed
+multi-inner-layout. It replaces the current project → models left nav; see
+§2.9.
+
+**Depends on engine work.** The engine worker is on by default and
+re-opening a model from cached state is cheap. Closing or evicting a model's
+engine and in-app model switching are not built (`engine-worker.md`,
+"Resume here"; #2011), and tabs holding several models depend on them.
 
 
 ## 1. Mapping the sequence onto the roadmap
@@ -63,6 +100,9 @@ current `NavTreeAndVersionsDrawer`, in the Claude-Code position. Hierarchy:
 ```
 project → models (files) → conversations   (convos come in Epic 3)
 ```
+
+*Superseded in shape by §2.9, 2026-11-10: sessions grouped by project on the
+left, models in tabs.*
 
 - "New project" button; projects expand/collapse; models listed under each.
 - Opening happens here: `OpenModelControl` leaves `ControlsGroup.jsx` (W3);
@@ -140,6 +180,14 @@ today's screenshots.
 `src/Containers/ProjectsDrawer.spec.ts` covers all of that except the
 TopBar search and the flag-off screenshot, both of which wait on #1663.
 
+*Update 2026-11-10:* #1663 is closed and `src/Containers/TopBar.spec.ts`
+exists. By its test titles it covers: the flag gating the bar, the breadcrumb
+naming the model, Open / Save and Share in the bar, bar and drawer header on
+the same row, Notes opening beneath the bar, element permalinks on the
+breadcrumb, search opening from its anchor icon and closing on Escape, moving
+the anchor mid-search, and search from the TopBar setting the query param. A
+flag-off screenshot test is not among those titles.
+
 ### 2.8 Shipped deltas from this plan (#1684)
 
 The drawer landed as a sequence of flows, each with its own sub-issue
@@ -162,6 +210,33 @@ Tier-1 persistence (§2.2) shipped as part of these flows; Tier 2 (Auth0
 `user_metadata`) is untouched and stays #1662. The logo popup (§2.5)
 shipped without the manage-account entry, which still waits on
 `identity-300`.
+
+### 2.9 Layout direction (decided 2026-11-10)
+
+Per Pablo, 2026-11-10: adopt a Claude-Code-style layout with **sessions on
+the left, grouped by project**, and **multi-model as a tabbed
+multi-inner-layout**: each tab holds one model in the three-part inner layout
+([NavTree + Versions] – [Canvas + Tools] – [Notes + Element properties]).
+This replaces the current left nav of project → models. Not designed here;
+what it changes in this doc:
+
+- §2.1: the hierarchy `project → models → conversations` becomes sessions
+  grouped by project in the left nav, with models moving to tabs.
+- §2.3 and §3.1: the breadcrumb (`project / file`) and
+  `[workspace] / project / model / element-path` need a session level decided.
+- §4: "conversations become the third level of the ProjectsDrawer" and the
+  "per-model conversation log" are superseded in shape (a session can hold
+  several models). The storage key is an open question owned with
+  `ai-workspace.md` (D10 note and its §15 open questions).
+- §2.8: the "Ungrouped" landing spot needs an equivalent for sessions outside
+  a project.
+
+**Open**
+1. What is a session: a conversation, a working set of tabs, or both?
+2. Does a model belong to a project, a session, or both?
+3. What does the flag-off (single-model) layout keep?
+4. How many live models may the tabs allow? Defer to the live-worker cap in
+   `engine-worker.md` §5.2.
 
 
 ## 3. Epic 2 — Fluid Nav + scoped search (proposed `search-320`)
@@ -215,6 +290,7 @@ Slices, in order — each a story with desktop+mobile E2E per §7.1:
 1. **TopBar shell** (#1663, epic 1): ToolbarPaper becomes a real TopBar —
    breadcrumb (project / model from the workspace store) + relocated
    SearchBar — behind `?feature=workspace`. No NavTree changes.
+   *(Shipped: #1663 closed, 2026-11-10; see §2 Acceptance update.)*
 2. **Scope mechanic + SearchProvider seam** (#1669 UX + #1699 seam):
    anchor/scope UX per the celestiary pattern; provider interface;
    model-elements provider wraps today's `SearchIndex`; project provider
@@ -258,7 +334,7 @@ Epic 4.
 
 - **Convo tray + drawer threads (W6, W1b).** Conversations become the third
   level of the ProjectsDrawer hierarchy (project → models → convos, e.g.
-  "Roof plant access review"); the tray sits above the BottomBar (which
+  "Roof plant access review") *(superseded in shape by §2.9, 2026-11-10)*; the tray sits above the BottomBar (which
   could later absorb the Bot slot — W8). AI replies styled distinct (accent
   avatar + tinted bubble); composer carries a model-context chip.
 - **Conversation drives the UI.** The agent's tool surface is T11's MCP
@@ -277,14 +353,15 @@ Epic 4.
   Conversation toggle; top-left ControlsGroup hidden; full layout returns
   when the tray closes. Prototype it behind the same flag; keep it a
   separate story so it can be dropped without dragging the epic.
-- **Prereqs.** (a) `ai-workspace.md` drafted first — runtime placement,
+- **Prereqs.** (a) `ai-workspace.md` drafted first (done, 2026-11-10) — runtime placement,
   provider strategy, store choice, and the data-sovereignty boundary (model
   bytes stay client-side; only conversation + tool results cross the wire —
   roadmap §7.2) are decided there, not improvised mid-epic. (b) #1386
   iframe repair is a T11 pre-condition for the *sandbox* half but does not
   block the in-process agent — don't serialize on it.
 - **Persistence, initially:** per-model conversation log stored with the
-  Tier-1 project struct (local). Durable/shared storage is Epic 4's
+  Tier-1 project struct (local) *(superseded in shape by §2.9, 2026-11-10;
+  the storage key is open)*. Durable/shared storage is Epic 4's
   problem; don't build a throwaway backend here.
 - **Demo bar (roadmap §7.4 AI.2):** the sell-the-pivot demo runs on a large
   model. Keep a large-model fixture in the E2E loop from the start.
@@ -318,6 +395,50 @@ design, not code.
   something pulls on it — it shares the plugin seam with ChannelProvider
   but none of its urgency.
 
+### 5.1 Permissions model: what is decided and what is open (2026-11-10)
+
+Gathered, not designed. Per Pablo, 2026-11-10, this arc is scoped mainly to
+understand the permissions model.
+
+**What the docs already say**
+- Projects are local and per-user in Tier 1; per-user Auth0 `user_metadata`
+  in Tier 2; explicitly not per-org (§2.2).
+- Sharing or org scope is deferred to the conversation-store decision (§2.2).
+  `workspace-store.md` §1.3 pre-scopes it: the repo is the durable record, the
+  ChannelProvider is the live layer.
+- The ChannelProvider is specified as "permissions + persistence" with
+  pluggable backends; the backend's own ACLs act as grants (§5, above).
+- Model access follows the source (GitHub or Drive). `quotas.md` defines
+  private: a model the viewer can only see because the provider authorizes
+  them (a member of the private GitHub repo, or the Drive file shared with
+  their Google account or Workspace domain). Anything anyone with the URL can
+  open is public. The paid tier meters private loads by that definition.
+- Model bytes never leave the machine; only conversation and tool results
+  cross the wire (`ai-workspace.md` D9).
+
+**Objects that could carry permissions under the §2.9 layout**
+- *Project:* local per-user (Tier 1) or Auth0 per-user (Tier 2); sharing
+  undecided.
+- *Session:* undecided (new in §2.9).
+- *Model (source-hosted):* decided by the source's own ACL today.
+- *Conversation/thread:* local today (`ai-workspace.md` D10); sharing
+  undecided.
+- *Channel:* the ChannelProvider backend's ACLs (§5); not built.
+
+**Open questions**
+1. Is permission inherited down project → session → model, or does each model
+   keep only its source's ACL?
+2. When a session is shared, what does a recipient without access to one of
+   its models see?
+3. Is "private" for quota purposes per model (as today) or per
+   session/project?
+4. One grant store or several (Auth0, source-provider ACLs, ChannelProvider
+   backend), and which is authoritative?
+5. Does an AI agent act with the invoking user's permissions only?
+6. Can anonymous (signed-out) users hold projects and sessions that later
+   attach to an account?
+7. Org/team scope: where does it first appear?
+
 
 ## 6. Sequencing vs the MVP
 
@@ -329,8 +450,12 @@ band — the pivot follows the trickle (§6.0, §7.4). Practical consequences:
   so the two UI arcs can flip independently). Default-off until each arc's
   screenshot baselines + E2E are in.
 - Epic 1 and 2 are pure UI and may overlap MVP Phases A–E as capacity
-  allows. Epic 3 waits for `ai-workspace.md` and should land after Phase D
-  if agent usage is metered (the natural Pro anchor — §7.4). Epic 4 is last.
+  allows. Epic 3 waited for `ai-workspace.md` (now written) and should land
+  after Phase D if agent usage is metered (the natural Pro anchor — §7.4).
+  Epic 4 is last.
+- *Note 2026-11-10:* billing and private-model quotas are live (`quotas`
+  flag on; `quotas.md`), so the "after Phase D if metered" condition for
+  Epic 3 is met on that side. Per Pablo, 2026-11-10, the arc stays post-MVP.
 - Flag-off layout is a screenshot-tested invariant: the merge into
   production `RootLandscape` must be invisible until flipped.
 
