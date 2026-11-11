@@ -31,6 +31,11 @@ const MODELS = [
   {name: 'IFC', path: '/share/v/p/index.ifc'},
 ]
 
+// The source policy (engine/sourcePolicy.js, Share#2139) parses these tiny
+// models BUFFERED by default; the first and Blob-store legs below are of the
+// WINDOWED parse and its export, so they take the policy's kill switch.
+// engineSourcePolicy.spec.ts covers the buffered parse's sidecar and reopen.
+const WINDOWED = 'disableBufferedSource'
 const LOAD_TIMEOUT_MS = 90_000
 const CACHE_TIMEOUT_MS = 60_000
 
@@ -127,7 +132,7 @@ describeMobileAndDesktop('Engine worker: index sidecar reopen', () => {
       const glbLogs = captureGlbLogs(page)
       const first = watchEngineWorker(page)
       // The worker is the default engine (engine-worker.md §7 step 9).
-      await page.goto(path)
+      await page.goto(`${path}?feature=${WINDOWED}`)
       expect(await engineIndexLine(page)).toMatch(/^Engine index: parsed; sidecar saved \(\d+\.\d MB\)$/)
       await first.expectWorkerEngine()
       expect(await dropGlbArtifact(page, glbLogs), 'the worker load cached one artifact').toBe(1)
@@ -152,7 +157,7 @@ describeMobileAndDesktop('Engine worker: index sidecar reopen', () => {
       async ({page}) => {
         test.setTimeout(3 * LOAD_TIMEOUT_MS)
         const glbLogs = captureGlbLogs(page)
-        await page.goto(`${path}?feature=disableEngineSyncHandle`)
+        await page.goto(`${path}?feature=disableEngineSyncHandle,${WINDOWED}`)
         expect(await engineIndexLine(page)).toMatch(/^Engine index: parsed; sidecar saved \(\d+\.\d MB\)$/)
         expect(await sourceIoLine(page)).toMatch(
           /^Engine source I\/O: Blob store \(disabled; whole file held, \d+ reads from memory\), 1 reads, /)
