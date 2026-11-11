@@ -118,9 +118,11 @@ per-model sections and tables below give ranges and n.
   - **After the spill, the buffered arms retain source memory on six
     models**, though they log `released resident source buffer`: PSB
     +796 MiB (1,096 against 300 windowed), BLSN_007 +208, sp-231MB +168,
-    DOWA +143, D3D +16; nothing measurable on any model ≤ 106 MiB. This is
-    the conway source-retention bug Share#2139 step 1 is fixing, measured
-    before the fix, and it is **not IFC-only** (BLSN_007 is STEP). These
+    DOWA +143, D3D +16; nothing measurable on any model ≤ 106 MiB. A conway
+    retainer was present at this point (Share#2139 step 1), and the later
+    section finds a second, Share-side retainer pinning the same buffer, so
+    this excess cannot be attributed to conway alone. It is **not
+    IFC-only** (BLSN_007 is STEP). These
     after-spill numbers for `buffered` and `heldBuffer` should be re-read
     once the fix is pinned. *(Re-read: with the fix pinned the excess is
     unchanged on every model, and the remaining retainer is in Share's
@@ -666,8 +668,10 @@ MiB), `MB-Khaya` (IFC, 31.4 MiB).
   SEESTRASSE, 59 MB-Khaya), and every buffered and held arm logged its spill
   (`released resident source buffer (…B)`, or for `windowedHeld` `released
   the Blob store's whole-file copy`). At these sizes the buffered arms are
-  **not** seen retaining the source after spill. The conway retention bug
-  (Share#2139 step 1) was measured on PSB, 1,150 MB against 314; see the
+  **not** seen retaining the source after spill. The after-spill excess
+  was measured on PSB, 1,150 MB against 314, with a conway retainer present
+  then and a Share-side retainer pinning the same buffer (see
+  [the retainer subsection](#why-the-buffered-arms-still-retain-the-source) of the "After conway 1.1645.781" section), so it cannot be attributed to conway alone; see the
   large-model section for whether it shows here.
 - **Renderer peak RSS** is lower for buffered on the larger IFCs
   (MB-Khaya 821 MiB against 1,059), the same elsewhere.
@@ -742,10 +746,12 @@ model). No trial was contended or failed; every record passed its arm check.
   `sp-231MB` 321 MiB for `buffered` and `heldBuffer` against 153 for every
   windowed arm (+168 MiB, 0.73 of the file); `D3D` 371 against 355
   (+16 MiB). Both buffered arms logged `released resident source buffer
-  (…B)`. **This is consistent with the conway source-retention bug**
-  (Share#2139 step 1: demand state keeps subarrays of the source alive past
-  the spill), measured here before the fix; that `D3D` retains far less
-  than `sp-231MB` says the retained share depends on the model. On STEP,
+  (…B)`. **A conway retainer was present at this point** (Share#2139
+  step 1: demand state keeps subarrays of the source alive past the spill),
+  and the later section shows a second, Share-side retainer pinning the same
+  buffer (see [the retainer subsection](#why-the-buffered-arms-still-retain-the-source) of the "After conway 1.1645.781" section), so this excess cannot be attributed to conway
+  alone; that `D3D` retains far less than `sp-231MB` says the retained share
+  depends on the model. On STEP,
   all arms read the same after spill (`Arty_Z7` 120, `DSA2` 199).
 - **wasm and renderer:** `engineWasmMb` is the same in every arm of a
   model (`D3D` and `sp-231MB` 611/515, `Arty_Z7` 515, `DSA2` 83). Renderer
@@ -803,8 +809,11 @@ within a second: `windowedHandle` 36.45 s (36.5 there), `windowedHeld`
 - **Worker memory after the spill (GC'd, ~16–17 s after Total): 1,096 MiB
   for `buffered` and `heldBuffer` against 300 MiB for every windowed arm.**
   Both buffered arms logged `released resident source buffer
-  (902472037B)`, yet ~796 MiB more stays live: **the conway source-retention
-  bug** (Share#2139 step 1), reproduced, before the fix. At Total+3 s
+  (902472037B)`, yet ~796 MiB more stays live. A conway retainer was present at this
+  point (Share#2139 step 1) and the later section shows a second, Share-side
+  retainer pinning the same buffer (see [the retainer subsection](#why-the-buffered-arms-still-retain-the-source) of the "After conway 1.1645.781" section), so this excess **cannot be
+  attributed to conway alone**; it was observed, with that conway retainer
+  still in place. At Total+3 s
   (GC'd) the windowed-held arm still holds its copy (1,157 MiB) and frees it
   at its spill (300).
 - **Peak backing store** (un-GC'd polls): `windowedHeld` 2,326 MiB,

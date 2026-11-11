@@ -78,6 +78,23 @@ other benchmarks out; this keeps out what does not take the lock, such as a
 build. Each record says how long it waited and how busy the rest of the machine
 was during the load (`machine.foreignBusyCores`).
 
+**An interrupted run cleans up nothing.** Cleanup runs in `finally` blocks and
+on normal exit, so SIGINT or SIGKILL (a Ctrl-C, a timeout, an OOM kill) skips
+it and can leave behind:
+
+- the `http-server` child on the `--port` (a later run then fails to bind, or
+  talks to the old server): `pkill -f 'http-server.*-p <port>'`;
+- a Chromium profile under the OS temp dir (`bldrs-bench-profile-*`, plus a
+  `bldrs-bench-round-*` spec directory): `rm -rf "${TMPDIR:-/tmp}"/bldrs-bench-profile-* "${TMPDIR:-/tmp}"/bldrs-bench-round-*`;
+- the model symlinks under `<build>/__bench_models__/`, which are links to
+  your files, so removing the directory does not touch the models:
+  `rm -rf <build>/__bench_models__` (the next run recreates them).
+
+Separately, `lib.mjs` bundles the shared Share modules into a
+`bldrs-bench-lib-*` directory under the OS temp dir on every run and never
+removes it, on a clean exit too. It is small; clear them with
+`rm -rf "${TMPDIR:-/tmp}"/bldrs-bench-lib-*` when you like.
+
 
 ## What a trial does
 
