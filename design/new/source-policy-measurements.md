@@ -7,8 +7,8 @@ do and don't show; the policy itself is written elsewhere. The harness is
 [tools/bench/sourceModes/](../../tools/bench/sourceModes/README.md), and its
 README is the record schema and the confounder list.
 
-**Status (2026-11-11):** small models (2 to 31 MiB, IFC and STEP) done at
-n = 5; medium and large in progress, filled in below as they land.
+**Status (2026-11-11):** small models (2 to 31 MiB, IFC and STEP) at n = 5
+and medium models (56 to 231 MiB) at n = 3 done; large in progress.
 
 
 ## Setup
@@ -131,6 +131,88 @@ MiB), `MB-Khaya` (IFC, 31.4 MiB).
   leaf matched the cold load's. The same holds for every `windowedHandle`
   sidecar reopen.
 
+
+## Medium models (n = 3)
+
+Models: `Arty_Z7` (STEP, 55.5 MiB), `DSA2` (STEP, 105.7 MiB), `sp-231MB`
+(IFC, 231.4 MiB), `D3D` (IFC, 213.6 MiB, conway's known window-thrashing
+model). No trial was contended or failed; every record passed its arm check.
+
+### What the medium models show
+
+- **IFC: buffered stays 21–24 % faster.** `sp-231MB` 15.41 s against 20.38 s
+  (−4.97 s), `D3D` 43.70 s against 55.27 s (−11.6 s), ranges disjoint. As on
+  the small IFCs, the gap is Parse (3.0 against 4.5 s; 4.0 against 5.4 s) and
+  Geometry (11.0 against 14.2 s; 38.3 against 48.3 s).
+- **STEP: the gap opens between 56 and 106 MiB.** `Arty_Z7` (55.5 MiB):
+  13.63 s buffered against 14.12 s, −3 %, ranges touching (13.57–13.86
+  against 14.04–14.51): at most half a second, at the edge of the noise.
+  `DSA2` (105.7 MiB): 6.77 s against 8.26 s, −18 %, disjoint. Two STEP
+  models are not a curve; read this as "STEP's windowed overhead is small
+  until somewhere in 56–106 MiB", not as a threshold.
+- **`heldBuffer` costs 0.1–1.3 s over buffered** (`DSA2` +0.58 s, `sp-231MB`
+  +1.31 s, `D3D` −0.31 s within noise), most of it in Parse (the source
+  hash), and still beats windowed by 11–22 %.
+- **`windowedHeld` against `windowedHandle`:** within noise on all four
+  (−3 % to +3 %). In headless Chromium with the file in the page cache, the
+  Blob store holding the file costs no time against the sync handle at
+  these sizes; it costs memory (below).
+- **`noSidecar`** (no source hash): within noise of `windowedHandle` except
+  `DSA2` (−4 %, overlapping).
+- **First pixels:** the first mesh lands 1.0–3.0 s after open in every arm;
+  buffered is earliest (`sp-231MB` 1.03 s against 1.24; `D3D` 0.96 s against
+  1.28; `DSA2` 2.54 against 3.00). **Previews before the index:** the
+  windowed IFC arms show ~1,100–1,900 preview meshes when the index lands,
+  buffered 2,185 (`sp-231MB`) and 4,681 (`D3D`), `heldBuffer` 2,527 and
+  4,681; the buffered index also lands sooner (`D3D` 7.6 s against 9.7 s),
+  so buffered draws more before the index in less time. STEP shows no
+  preview meshes before the index on any arm.
+- **Long tasks before ready** follow the load's length: `D3D` 33 buffered
+  against 39 windowed (27 s against 32 s total); `sp-231MB` 8.6 s against
+  9.8 s.
+- **Worker memory.** Peak backing store (un-GC'd polls, an upper bound):
+  windowed arms far above buffered on the large IFC, `sp-231MB` 926 MiB
+  (`windowedHandle`) and 1,297 (`windowedHeld`) against 377 buffered,
+  417 `heldBuffer`; on `D3D` 565 / 790 against 657 / 658; on `DSA2`
+  371 / 523 against 205 / 275. The windowed peaks include dead window
+  copies a GC would collect; the GC'd reading at the index is lower but
+  shows the same order (`sp-231MB` 594 / 996 against 309 / 308).
+- **After the spill (GC'd), buffered IFC arms retain more than windowed:**
+  `sp-231MB` 321 MiB for `buffered` and `heldBuffer` against 153 for every
+  windowed arm (+168 MiB, 0.73 of the file); `D3D` 371 against 355
+  (+16 MiB). Both buffered arms logged `released resident source buffer
+  (…B)`. **This is consistent with the conway source-retention bug**
+  (Share#2139 step 1: demand state keeps subarrays of the source alive past
+  the spill), measured here before the fix; that `D3D` retains far less
+  than `sp-231MB` says the retained share depends on the model. On STEP,
+  all arms read the same after spill (`Arty_Z7` 120, `DSA2` 199).
+- **wasm and renderer:** `engineWasmMb` is the same in every arm of a
+  model (`D3D` and `sp-231MB` 611/515, `Arty_Z7` 515, `DSA2` 83). Renderer
+  peak RSS is 1.6–5.1 GB and doesn't order the arms consistently.
+
+### Reopen paths
+
+- **Artifact hit:** 0.17 s (`DSA2`) to 2.9 s (`D3D`) engine time; ready
+  0.4–5.1 s after open. The same for both reopen arms.
+- **Sidecar reopen:** Parse drops to 0.26–1.85 s and the index lands
+  sooner (`D3D` 5.6 s against 9.7 s cold), but **Geometry still pages
+  windowed, so the reopen is not faster than a cold buffered load**: `D3D`
+  52.5 s against 43.7 s cold buffered; `sp-231MB` 17.3 s against 15.4 s;
+  `DSA2` 5.97 s against 6.77 s (faster here); `Arty_Z7` 13.3 s against
+  13.6 s.
+- **A sidecar reopen draws nothing before its index.** Prev@idx is 0 on
+  every sidecar reopen, and on the large IFCs the first mesh comes *after*
+  the index: `D3D` 5.89 s against 1.28 s on its cold load, `sp-231MB` 2.17 s
+  against 1.24 s. A cold windowed or buffered load shows first pixels
+  sooner than the sidecar reopen of the same file. (Whether the reopen
+  skips the preview stream by design is not something these records say.)
+- **Arm-4 sidecar verdict, medium models:** every `heldBuffer` sidecar
+  reopen (12 of 12) opened from the index (`Engine index: from sidecar
+  (… MB), no parse`), windowed over the held Blob store, and its tree and
+  property read matched the cold load's. Caveat for `DSA2`: its tree is a
+  single node, so its signature is weak (the property read of that node
+  matched).
+
 ### Small-model tables
 
 #### SEESTRASSE (IFC, 13.6 MiB)
@@ -227,3 +309,70 @@ MiB), `MB-Khaya` (IFC, 31.4 MiB).
 | Right_Hand (step) | 3.6 | 1.93 s | 1.97 s (+2 %) | 1.88 s (-3 %) | 1.88 s (-2 %) | 1.79 s (-7 %) |
 | FM_ARC_DigitalHub (ifc) | 13.7 | 3.93 s | 3.96 s (+1 %) | 3.26 s (-17 %) | 3.32 s (-16 %) | 3.80 s (-3 %) |
 | MB-Khaya (ifc) | 31.4 | 5.94 s | 5.93 s (0 %) | 3.39 s (-43 %) | 3.52 s (-41 %) | 5.87 s (-1 %) |
+
+### Medium-model tables
+
+#### Arty_Z7 (STEP, 55.5 MiB)
+
+| Arm | Phase | n | Engine | Parse | Geometry | 1st mesh | Index | Ready | Prev@idx | LT n | LT s | W peak | W idx | W spill | W heap spill | wasm | R peak |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| windowedHandle | cold | 3 | 14.12 (14.04–14.51) | 0.98 (0.97–1.02) | 12.46 (12.42–12.80) | 1.75 (1.63–1.77) | 1.95 (1.82–1.99) | 14.79 (14.71–15.18) | 0 | 21 (21–23) | 5.50 (5.49–5.54) | 152 (152–152) | 74 (70–74) | 120 | 230 (230–230) | 515 | 2015 (2008–2061) |
+| windowedHandle | artifact hit | 3 | 0.65 (0.63–0.65) | — | — | 0.81 (0.79–0.81) | — | 0.78 (0.76–0.78) | — | 7 (7–8) | 1.34 (1.33–1.36) | — | — | — | — | — | 1519 (1518–1526) |
+| windowedHandle | sidecar reopen | 3 | 13.33 (13.31–13.66) | 0.26 (0.24–0.26) | 12.61 (12.59–12.88) | 0.86 (0.82–0.91) | 1.06 (1.01–1.14) | 14.03 (13.88–14.35) | 0 | 18 | 4.79 (4.63–4.94) | 121 (121–121) | 85 (74–86) | 120 | 230 (230–230) | 515 | 1938 (1923–1959) |
+| windowedHeld | cold | 3 | 14.04 (13.87–14.51) | 0.92 (0.91–0.97) | 12.45 (12.30–12.84) | 1.72 (1.72–1.84) | 1.92 (1.91–2.06) | 14.78 (14.54–15.20) | 0 | 23 (21–23) | 5.43 (5.36–5.49) | 207 (207–208) | 135 (130–135) | 120 | 230 (230–230) | 515 | 2092 (2090–2104) |
+| buffered | cold | 3 | 13.63 (13.57–13.86) | 0.84 (0.79–0.85) | 12.24 (12.16–12.46) | 1.54 (1.52–1.57) | 1.74 (1.73–1.76) | 14.36 (14.28–14.54) | 0 | 22 (21–22) | 5.55 (5.55–5.73) | 121 (121–121) | 92 (92–94) | 120 | 230 | 515 | 1960 (1577–1980) |
+| heldBuffer | cold | 3 | 13.74 (13.61–14.32) | 0.92 (0.83–0.98) | 12.16 (12.15–12.62) | 1.71 (1.64–1.83) | 1.93 (1.84–2.04) | 14.39 (14.26–15.05) | 0 | 21 (20–21) | 5.19 (4.97–5.37) | 152 (152–152) | 94 (92–106) | 120 | 230 | 515 | 1969 (1969–1978) |
+| heldBuffer | artifact hit | 3 | 0.62 (0.59–0.64) | — | — | 0.77 (0.74–0.81) | — | 0.74 (0.71–0.78) | — | 5 (5–8) | 1.13 (1.12–1.39) | — | — | — | — | — | 1521 (1517–1524) |
+| heldBuffer | sidecar reopen | 3 | 13.43 (13.15–13.71) | 0.27 (0.26–0.28) | 12.53 (12.27–12.89) | 1.04 (1.03–1.08) | 1.22 (1.20–1.27) | 14.07 (13.71–14.31) | 0 | 18 (18–19) | 4.52 (4.38–4.74) | 179 (176–179) | 132 (125–145) | 120 | 230 (230–230) | 515 | 1993 (1984–2001) |
+| noSidecar | cold | 3 | 14.28 (14.15–14.33) | 0.91 (0.88–0.96) | 12.62 (12.61–12.80) | 1.70 (1.53–1.76) | 1.92 (1.75–1.96) | 15.01 (14.86–15.06) | 0 | 22 (21–23) | 5.65 (5.62–5.67) | 121 (121–121) | 74 (71–74) | 120 | 230 (230–230) | 515 | 2023 (2000–2026) |
+
+#### DSA2 (STEP, 105.7 MiB)
+
+| Arm | Phase | n | Engine | Parse | Geometry | 1st mesh | Index | Ready | Prev@idx | LT n | LT s | W peak | W idx | W spill | W heap spill | wasm | R peak |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| windowedHandle | cold | 3 | 8.26 (7.98–9.03) | 2.08 (2.01–2.43) | 5.13 (5.03–6.10) | 3.00 (2.96–3.38) | 3.17 (3.13–3.59) | 9.16 (8.97–9.90) | 0 | 23 (23–25) | 4.06 (4.01–4.72) | 371 (365–405) | 357 (137–371) | 199 | 286 | 83 | 1802 (1791–1810) |
+| windowedHandle | artifact hit | 3 | 0.18 (0.16–0.18) | — | — | 0.45 (0.40–0.46) | — | 0.40 (0.35–0.41) | — | 6 | 1.03 (0.93–1.03) | — | — | — | — | — | 1494 (1488–1499) |
+| windowedHandle | sidecar reopen | 3 | 5.97 (5.88–6.30) | 0.75 (0.74–0.76) | 4.76 (4.60–4.98) | 1.43 (1.34–1.45) | 1.58 (1.48–1.61) | 6.85 (6.79–7.20) | 0 | 16 (15–18) | 2.92 (2.88–3.39) | 421 (409–451) | 409 (399–409) | 199 | 286 | 83 | 1642 (1616–1721) |
+| windowedHeld | cold | 3 | 8.13 (8.02–8.67) | 2.03 (2.01–2.16) | 5.27 (4.90–5.83) | 3.01 (2.95–3.28) | 3.17 (3.11–3.43) | 9.01 (8.74–9.56) | 0 | 23 (22–24) | 4.30 (3.83–4.62) | 523 (511–523) | 475 (467–479) | 199 | 286 | 83 | 1936 (1888–1976) |
+| buffered | cold | 3 | 6.77 (6.74–7.12) | 1.72 (1.70–1.96) | 4.40 (4.03–4.66) | 2.54 (2.39–2.75) | 2.70 (2.56–2.92) | 7.70 (7.63–8.03) | 0 | 22 (20–24) | 4.25 (4.00–4.45) | 205 (199–211) | 171 (171–175) | 199 | 286 | 83 | 1664 (1622–1669) |
+| heldBuffer | cold | 3 | 7.35 (7.25–7.39) | 2.00 (1.99–2.00) | 4.40 (4.36–4.41) | 2.99 (2.92–3.05) | 3.16 (3.14–3.24) | 8.21 (8.19–8.37) | 0 | 22 (22–23) | 4.00 (3.91–4.18) | 275 (275–275) | 171 (171–171) | 199 | 286 | 83 | 1728 (1598–1732) |
+| heldBuffer | artifact hit | 3 | 0.17 (0.17–0.17) | — | — | 0.46 (0.44–0.47) | — | 0.41 (0.39–0.41) | — | 6 (4–7) | 1.02 (0.87–1.07) | — | — | — | — | — | 1430 (1424–1431) |
+| heldBuffer | sidecar reopen | 3 | 6.36 (6.10–7.22) | 0.71 (0.69–0.77) | 5.08 (4.85–5.81) | 1.39 (1.36–1.56) | 1.53 (1.53–1.73) | 7.26 (7.01–8.17) | 0 | 16 (16–17) | 3.26 (2.94–3.69) | 526 | 510 (510–514) | 199 | 286 | 83 | 1721 (1716–1726) |
+| noSidecar | cold | 3 | 7.90 (7.18–8.07) | 1.90 (1.84–1.99) | 5.11 (4.61–5.22) | 2.81 (2.69–2.89) | 2.97 (2.85–3.05) | 8.82 (7.99–9.05) | 0 | 22 (20–24) | 4.44 (3.57–4.54) | 379 (371–387) | 371 (371–379) | 199 | 286 | 83 | 1781 (1750–1790) |
+
+#### sp-231MB (IFC, 231.4 MiB)
+
+| Arm | Phase | n | Engine | Parse | Geometry | 1st mesh | Index | Ready | Prev@idx | LT n | LT s | W peak | W idx | W spill | W heap spill | wasm | R peak |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| windowedHandle | cold | 3 | 20.38 (19.71–20.89) | 4.50 (4.30–4.68) | 14.18 (14.09–14.81) | 1.24 (1.13–1.26) | 5.94 (5.58–6.10) | 23.45 (22.10–23.56) | 1879 (1879–1914) | 32 (31–35) | 9.81 (9.62–10.29) | 926 (890–1065) | 594 (592–757) | 153 | 57 | 515 | 3797 (3759–4056) |
+| windowedHandle | artifact hit | 3 | 2.32 (2.09–2.36) | — | — | 2.67 (2.46–2.74) | — | 2.65 (2.43–2.71) | — | 8 (7–9) | 3.15 (2.99–3.15) | — | — | — | — | — | 3604 (3553–3853) |
+| windowedHandle | sidecar reopen | 3 | 17.31 (16.87–18.52) | 1.65 (1.64–1.69) | 14.82 (14.45–16.17) | 2.17 (2.14–2.26) | 2.40 (2.38–2.47) | 19.75 (19.45–21.12) | 0 | 26 (20–26) | 8.62 (8.26–9.26) | 1025 (985–1026) | 970 (592–972) | 153 | 57 | 515 | 4036 (4027–4270) |
+| windowedHeld | cold | 3 | 20.94 (20.77–21.41) | 4.53 (4.52–4.67) | 14.69 (14.53–15.26) | 1.44 (1.34–1.56) | 6.12 (6.06–6.46) | 23.69 (23.61–24.23) | 1879 (1075–1879) | 36 (32–36) | 10.34 (9.94–10.67) | 1297 (1256–1297) | 996 (860–1019) | 153 | 57 | 515 | 4362 (4067–4526) |
+| buffered | cold | 3 | 15.41 (15.01–15.66) | 3.01 (3.01–3.16) | 11.01 (10.62–11.33) | 1.03 (0.97–1.05) | 4.12 (4.05–4.16) | 18.02 (17.22–18.34) | 2185 (2185–2480) | 26 (26–28) | 8.60 (7.59–8.62) | 377 | 309 (309–310) | 321 | 57 | 515 | 4247 (3866–4389) |
+| heldBuffer | cold | 3 | 16.72 (16.34–16.95) | 3.40 (3.37–3.40) | 11.56 (11.41–11.91) | 1.43 (1.29–1.54) | 4.91 (4.72–4.94) | 19.32 (19.07–19.34) | 2527 (2480–2806) | 26 (26–30) | 9.49 (8.46–9.50) | 417 (417–418) | 308 (307–311) | 321 | 57 | 515 | 3945 (3894–4048) |
+| heldBuffer | artifact hit | 3 | 2.49 (2.33–2.54) | — | — | 2.87 (2.73–2.92) | — | 2.84 (2.69–2.89) | — | 8 (7–9) | 3.35 (3.11–3.43) | — | — | — | — | — | 3720 (3669–3823) |
+| heldBuffer | sidecar reopen | 3 | 17.79 (17.38–19.48) | 1.85 (1.82–1.86) | 14.80 (14.43–16.55) | 2.71 (2.63–2.85) | 3.06 (2.91–3.08) | 20.09 (20.06–21.78) | 0 | 27 (25–29) | 9.38 (8.19–9.86) | 1257 (1256–1257) | 1004 (1003–1010) | 153 | 57 | 515 | 4507 (4123–4609) |
+| noSidecar | cold | 3 | 20.41 (20.11–20.50) | 4.44 (4.37–4.49) | 14.29 (14.21–14.48) | 1.25 (1.24–1.28) | 5.86 (5.80–5.94) | 23.16 (22.17–23.37) | 1879 (1075–1879) | 30 (28–33) | 9.52 (9.00–9.86) | 940 (940–1025) | 833 (592–836) | 153 | 57 | 515 | 4183 (4041–4260) |
+
+#### D3D (IFC, 213.6 MiB)
+
+| Arm | Phase | n | Engine | Parse | Geometry | 1st mesh | Index | Ready | Prev@idx | LT n | LT s | W peak | W idx | W spill | W heap spill | wasm | R peak |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| windowedHandle | cold | 3 | 55.27 (54.54–55.39) | 5.42 (5.39–5.49) | 48.29 (47.42–48.30) | 1.28 (1.22–1.31) | 9.69 (9.54–9.82) | 65.34 (64.50–65.97) | 1117 (1110–1147) | 39 (38–43) | 31.71 (30.56–32.29) | 565 (550–574) | 423 (374–427) | 355 | 276 | 611 | 4662 (4639–4813) |
+| windowedHandle | artifact hit | 3 | 2.94 (2.92–3.56) | — | — | 5.13 (5.01–5.86) | — | 5.10 (4.98–5.83) | — | 10 (9–10) | 5.64 (5.43–6.42) | — | — | — | — | — | 2926 (2469–3017) |
+| windowedHandle | sidecar reopen | 3 | 52.46 (50.39–52.89) | 1.74 (1.68–1.86) | 49.81 (47.65–49.97) | 5.89 (5.47–6.27) | 5.60 (5.14–5.99) | 62.58 (59.49–63.75) | 0 | 40 (28–41) | 28.43 (27.39–30.32) | 543 (541–544) | 395 (383–411) | 355 | 276 | 611 | 4294 (3811–4324) |
+| windowedHeld | cold | 3 | 54.75 (53.82–55.23) | 5.52 (5.37–5.62) | 47.30 (46.66–47.73) | 1.58 (1.51–1.67) | 10.21 (9.68–10.29) | 65.68 (63.78–65.78) | 1129 (1058–1144) | 43 (43–45) | 31.93 (31.22–32.10) | 790 (778–956) | 636 (636–641) | 355 | 276 | 611 | 5069 (4846–5076) |
+| buffered | cold | 3 | 43.70 (41.24–43.99) | 3.97 (3.93–4.11) | 38.28 (35.70–38.47) | 0.96 (0.94–1.00) | 7.56 (7.43–7.64) | 54.19 (51.19–54.60) | 4681 (4675–4681) | 33 (33–36) | 27.06 (25.57–28.49) | 657 (654–664) | 386 (385–386) | 371 | 275 | 611 | 5117 (4999–5118) |
+| heldBuffer | cold | 3 | 43.39 (42.93–44.30) | 4.38 (4.13–4.39) | 37.26 (37.03–38.05) | 1.36 (1.29–1.42) | 8.35 (7.99–8.50) | 53.32 (53.14–53.82) | 4681 | 33 (32–36) | 25.87 (25.12–28.78) | 658 (649–660) | 385 (385–386) | 371 | 275 | 611 | 5065 (4954–5105) |
+| heldBuffer | artifact hit | 3 | 2.74 (2.57–2.96) | — | — | 4.87 (4.55–5.15) | — | 4.84 (4.52–5.12) | — | 10 (9–10) | 5.40 (4.99–5.61) | — | — | — | — | — | 3713 (3697–3735) |
+| heldBuffer | sidecar reopen | 3 | 50.71 (50.64–53.31) | 1.84 (1.74–2.06) | 47.82 (47.51–49.99) | 5.88 (5.69–6.90) | 5.60 (5.39–6.60) | 60.91 (60.62–64.21) | 0 | 37 (32–39) | 29.15 (28.93–29.65) | 785 (774–812) | 641 (636–641) | 355 | 276 | 611 | 5032 (5009–5203) |
+| noSidecar | cold | 3 | 55.30 (53.52–55.35) | 5.27 (5.15–5.47) | 48.06 (46.63–48.67) | 1.30 (1.19–1.32) | 9.59 (9.13–9.60) | 66.09 (63.37–66.81) | 1065 (1028–1097) | 40 (40–42) | 30.80 (29.70–32.42) | 538 (536–597) | 422 (387–423) | 355 | 276 (276–276) | 611 | 4808 (4695–4840) |
+
+#### Cold engine time, median, relative to windowedHandle
+
+| Model | MiB | windowedHandle | windowedHeld | buffered | heldBuffer | noSidecar |
+|---|---|---|---|---|---|---|
+| Arty_Z7 (step) | 55.5 | 14.12 s | 14.04 s (-1 %) | 13.63 s (-3 %) | 13.74 s (-3 %) | 14.28 s (+1 %) |
+| DSA2 (step) | 105.7 | 8.26 s | 8.13 s (-2 %) | 6.77 s (-18 %) | 7.35 s (-11 %) | 7.90 s (-4 %) |
+| sp-231MB (ifc) | 231.4 | 20.38 s | 20.94 s (+3 %) | 15.41 s (-24 %) | 16.72 s (-18 %) | 20.41 s (+0 %) |
+| D3D (ifc) | 213.6 | 55.27 s | 54.75 s (-1 %) | 43.70 s (-21 %) | 43.39 s (-21 %) | 55.30 s (+0 %) |
