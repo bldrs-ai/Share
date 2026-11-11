@@ -245,6 +245,117 @@ retention before and shows none now. First mesh 1.30 / 1.00 / 1.20 s
 | heldBuffer | artifact hit | 3 | 0.16 (0.16–0.19) | — | — | 0.45 (0.43–0.46) | — | 0.40 (0.38–0.42) | — | 6 (5–7) | 0.98 (0.95–1.06) | — | — | — | — | — | 1209 (1204–1231) |
 | heldBuffer | sidecar reopen | 3 | 6.09 (5.99–6.35) | 0.74 (0.69–0.80) | 4.77 (4.67–4.93) | 1.42 (1.41–1.54) | 1.58 (1.57–1.70) | 7.06 (6.86–7.23) | 0 | 16 (15–16) | 3.04 (3.02–3.25) | 518 (518–526) | 518 | 167 | 131 | 83 | 1531 (1519–1612) |
 
+### sp-231MB (IFC, 231.4 MiB), n = 3
+
+- **The buffered arms still retain the source after the spill: 305 MiB for
+  `buffered` and `heldBuffer` against 137 for `windowedHandle`, +168 MiB,
+  the same excess as before (321 against 153).** Every arm fell by 16 MiB;
+  the gap did not move. Both buffered arms logged `released resident
+  source buffer (242683483B)`. See
+  [Why the buffered arms still retain the source](#why-the-buffered-arms-still-retain-the-source)
+  for the heap snapshot.
+- **Time:** windowed cold 20.15 s (before 20.38), within noise; Geometry
+  14.21 against 14.18. `heldBuffer` 16.60 (16.72). `buffered` 16.57 s
+  against 15.41 before (+1.16 s, Geometry 12.22 against 11.01, ranges
+  disjoint at n = 3): a same-arm move between two runs hours apart on a
+  path neither conway change targets; read it as run-to-run drift until a
+  second run says otherwise. The gap is −3.6 s (−18 %) against −5.0 s
+  (−24 %) before, and that change is entirely the `buffered` arm's drift.
+- **Reopen:** `heldBuffer`'s sidecar reopen is 16.70 s against 17.79
+  (−1.1 s, disjoint) and its artifact hit 2.13 against 2.49;
+  `windowedHandle`'s sidecar reopen 16.66 against 17.31 (overlapping).
+- First mesh and previews: within noise (1.25 / 1.06 / 1.47 s).
+  Signatures match the first matrix; every `heldBuffer` sidecar reopen
+  matched its cold load.
+
+| Arm | Phase | n | Engine | Parse | Geometry | 1st mesh | Index | Ready | Prev@idx | LT n | LT s | W peak | W idx | W spill | W heap spill | wasm | R peak |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| windowedHandle | cold | 3 | 20.15 (19.73–20.42) | 4.47 (4.34–4.55) | 14.21 (13.75–14.62) | 1.25 (1.15–1.25) | 5.88 (5.76–6.05) | 23.07 (22.32–23.50) | 1879 (1879–1892) | 32 (29–35) | 10.28 (9.73–10.82) | 1033 (1033–1042) | 593 (591–593) | 137 | 57 | 515 | 4166 (3857–4169) |
+| windowedHandle | artifact hit | 3 | 2.20 (2.17–2.30) | — | — | 2.60 (2.54–2.66) | — | 2.57 (2.52–2.63) | — | 8 (7–9) | 3.06 (2.92–3.28) | — | — | — | — | — | 3947 (3634–3950) |
+| windowedHandle | sidecar reopen | 3 | 16.66 (16.55–17.16) | 1.62 (1.58–1.68) | 14.19 (14.11–14.66) | 2.27 (2.15–2.28) | 2.52 (2.35–2.53) | 19.31 (18.97–19.82) | 0 | 21 (20–23) | 7.62 (7.38–8.07) | 994 (909–1025) | 935 (833–986) | 137 | 57 | 515 | 4060 (4020–4179) |
+| buffered | cold | 3 | 16.57 (16.04–17.02) | 3.08 (3.07–3.38) | 12.22 (11.29–12.61) | 1.06 (1.02–1.14) | 4.30 (4.23–4.54) | 19.40 (18.82–19.76) | 2363 (2277–2402) | 27 (26–29) | 10.15 (9.15–10.29) | 361 | 310 (308–310) | 305 | 57 | 515 | 3932 (3915–4034) |
+| heldBuffer | cold | 3 | 16.60 (16.59–16.75) | 3.50 (3.47–3.59) | 11.40 (11.38–11.51) | 1.47 (1.39–1.49) | 4.98 (4.94–5.01) | 19.35 (19.13–19.46) | 2946 (2572–3118) | 28 (27–28) | 8.41 (8.33–9.60) | 417 (417–418) | 308 (308–308) | 305 | 57 (57–57) | 515 | 3969 (3922–4349) |
+| heldBuffer | artifact hit | 3 | 2.13 (2.02–2.22) | — | — | 2.49 (2.38–2.59) | — | 2.47 (2.36–2.56) | — | 7 (6–10) | 2.92 (2.77–3.17) | — | — | — | — | — | 3746 (3697–4123) |
+| heldBuffer | sidecar reopen | 3 | 16.70 (16.69–16.80) | 1.67 (1.53–1.72) | 14.16 (13.99–14.22) | 2.37 (2.33–2.47) | 2.62 (2.54–2.72) | 19.34 (18.70–19.48) | 0 | 24 (22–29) | 7.67 (7.57–8.55) | 1214 (1209–1282) | 952 (819–979) | 137 | 57 | 515 | 4343 (3981–4398) |
+
+### Why the buffered arms still retain the source
+
+A GC'd heap snapshot of the Engine worker (CDP `HeapProfiler.takeHeapSnapshot`
+on the worker target, 2 s after the spill line and two
+`HeapProfiler.collectGarbage` calls), one `buffered` and one `heldBuffer`
+load of sp-231MB, the smallest model in this set that shows the excess.
+Backing store at the snapshot: 319.6 MB (305 MiB) on both, as in the bench.
+The 231.4 MiB `JSArrayBufferData` (exactly the file) is alive, and **its
+only JS retainer is Share's, not conway's**:
+
+```
+(GC roots) → Engine.worker.js global → … → engine handler state
+  → models (Map) → [the model] → .settings → .ON_PROGRESS (closure)
+    → .context  (openModel's scope, engineHandler.js)
+      → `source` {bytes}  → .bytes   → ArrayBuffer (231.4 MiB)   [buffered]
+      → `heldBytes`       → Uint8Array → ArrayBuffer (231.4 MiB)  [heldBuffer]
+```
+
+The same context is also held through `.ON_MODEL_INFO`, `.ON_PREVIEW_MESH`
+and the model's `progressTracker_.onProgress`. Names are minified in the
+snapshot (`Me` for `source`, `cr` for `heldBytes`); the mapping to
+`engineHandler.js#openModel` is by shape: the closures named
+`ON_PROGRESS`/`ON_MODEL_INFO` and the unnamed preview closure are the ones
+`openModel` puts on `settings`, and their scope holds a `{bytes}` object
+(buffered) or a `Uint8Array` (heldBuffer). In `openModel`, the `loadBytes`
+closure references `source` and `heldBytes`, so V8 allocates both in the
+function's one shared context, and every closure created there, including
+the `settings` callbacks conway keeps on the model for the session, keeps
+that context, and with it the file, alive. conway's spill drops its own
+references (conway#781 removed those); this one is outside conway.
+
+**The arithmetic fits on every IFC, before and after the pin:** the
+buffered arms' after-spill excess over `windowedHandle` is the file minus
+the windowed arm's window (the Geometry line's `window=`), within 2–11 MiB:
+
+| Model | File (MiB) | Window (MiB) | File − window | Excess before | Excess after |
+|---|---|---|---|---|---|
+| sp-231MB | 231.4 | 61.0 | 170 | 168 | 168 |
+| D3D | 213.6 | 188.5 | 25 | 16 | 16 |
+| DOWA | 398.4 | 244.1 | 154 | 143 | (below) |
+| PSB | 860.7 | 57.9 | 803 | 796 | (below) |
+
+That is, on IFC the buffered arms keep the whole file after the spill, the
+windowed arm keeps its window, and the difference is what was measured.
+The conway retainers conway#781 removed were real (the earlier snapshot's
+path ran through `IfcApiProxyIfc.demandAggregates_`), but this Share
+retainer holds the same buffer, so removing them freed nothing measurable.
+STEP is not covered by the arithmetic (its Geometry line has no
+`window=`); the STEP models are in their own sections.
+
+### D3D (IFC, 213.6 MiB), n = 3
+
+- **After the spill:** 306 MiB both buffered arms against 290 windowed,
+  +16 MiB, the same as before (371 against 355); every arm −65 MiB. On
+  D3D the window (188.5 MiB) is nearly the file, so the retained source
+  shows as only +16.
+- **Time: the windowed arm was bimodal.** `windowedHandle` cold read 54.36,
+  60.53 and 61.52 s (Geometry 47.0, 53.6, 54.4; slow in rounds 1 and 2,
+  fast in round 3); before, 54.54–55.39. `buffered` read 53.14, 43.23 and
+  43.57 s, the slow one in round 1, right after round 1's slow windowed
+  load. The contention guard saw no other process (0.03–0.05 busy cores)
+  on any of them. The extra time is all in Geometry, and the fast loads
+  match the first matrix; this is not a measured effect of the pin,
+  and at n = 3 it can't be told from host-level noise the guard can't see.
+  `heldBuffer` 43.42 (43.39 before), unchanged.
+- Sidecar reopen and artifact hit within noise of before on both arms.
+  First mesh unchanged (1.25 / 1.02 / 1.43 s). Signatures match.
+
+| Arm | Phase | n | Engine | Parse | Geometry | 1st mesh | Index | Ready | Prev@idx | LT n | LT s | W peak | W idx | W spill | W heap spill | wasm | R peak |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| windowedHandle | cold | 3 | 60.53 (54.36–61.52) | 5.40 (5.40–5.57) | 53.56 (47.00–54.35) | 1.25 (1.22–1.41) | 9.54 (9.47–9.77) | 70.74 (65.19–71.36) | 1127 (1033–1156) | 46 (41–47) | 34.46 (32.03–34.81) | 583 (564–633) | 427 (423–435) | 290 | 257 | 611 | 4685 (3737–5040) |
+| windowedHandle | artifact hit | 3 | 2.93 (2.87–2.93) | — | — | 5.10 (5.00–5.16) | — | 5.07 (4.97–5.13) | — | 10 (9–10) | 5.64 (5.41–5.65) | — | — | — | — | — | 2425 (1938–3282) |
+| windowedHandle | sidecar reopen | 3 | 50.68 (49.89–52.86) | 1.77 (1.60–1.81) | 48.07 (47.11–50.05) | 5.68 (5.58–5.83) | 5.40 (5.28–5.51) | 61.16 (60.68–62.68) | 0 | 32 (31–40) | 30.94 (29.73–31.44) | 547 (496–550) | 422 (422–435) | 290 | 257 (257–257) | 611 | 4347 (4197–4863) |
+| buffered | cold | 3 | 43.57 (43.23–53.14) | 4.21 (4.10–4.43) | 38.04 (37.50–47.23) | 1.02 (0.96–1.11) | 8.14 (7.88–8.15) | 54.30 (53.71–63.97) | 4681 (4495–4681) | 38 (33–41) | 25.59 (24.01–33.76) | 629 (464–637) | 385 (385–386) | 306 | 257 | 611 | 4999 (4723–5068) |
+| heldBuffer | cold | 3 | 43.42 (42.57–44.57) | 4.43 (4.29–4.50) | 37.01 (36.59–38.24) | 1.43 (1.14–1.43) | 8.68 (8.43–8.78) | 54.01 (53.08–55.11) | 4681 | 35 (34–37) | 26.78 (23.64–28.15) | 633 (633–669) | 344 (343–386) | 306 | 257 | 611 | 5092 (5011–5124) |
+| heldBuffer | artifact hit | 3 | 3.03 (2.92–3.24) | — | — | 5.19 (5.02–5.45) | — | 5.16 (4.99–5.42) | — | 10 (9–10) | 5.70 (5.47–5.92) | — | — | — | — | — | 3630 (3257–3653) |
+| heldBuffer | sidecar reopen | 3 | 51.27 (49.37–54.70) | 1.90 (1.72–1.94) | 48.08 (46.48–51.55) | 6.28 (5.82–6.47) | 5.96 (5.52–6.17) | 62.72 (59.12–65.75) | 0 | 32 (31–35) | 31.47 (28.25–32.99) | 764 (732–825) | 636 | 290 | 257 | 611 | 4934 (4882–5211) |
+
 
 ## Small models (n = 5)
 
