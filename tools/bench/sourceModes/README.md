@@ -11,7 +11,7 @@ in [design/new/source-policy-measurements.md](../../../design/new/source-policy-
 
 It is a hand-run tool, outside every build and every test runner: Jest's roots
 are `src`, `__mocks__` and `netlify`, Playwright's `testDir` is `src`, and
-nothing imports it. `yarn lint` lints it (`.eslintrc.cjs` turns off
+nothing imports it. `bun run lint` lints it (`.eslintrc.cjs` turns off
 `no-magic-numbers` for `tools/bench/**`).
 
 | File | What it is |
@@ -35,7 +35,7 @@ for the URL. They are bundled at startup with the repo's esbuild.
 # 1. Build once. The playwright config is the production bundle (minified,
 #    same esbuild settings) plus window.store, which the probe reads, and OPFS
 #    on. Then restore package.json (tools/updateVersion.mjs stamps it, #1747).
-SKIP_MARKETING=true yarn test-flows-build && git checkout -- package.json
+SKIP_MARKETING=true bun run test-flows-build && git checkout -- package.json
 
 # 2. Run. Each --model is label=path; label names the record and the URL.
 node tools/bench/sourceModes/run.mjs --lock /tmp/bldrs-bench.lock \

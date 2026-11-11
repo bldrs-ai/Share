@@ -14,7 +14,7 @@ https://www.bldrs.dev/*  https://bldrs.ai/:splat  301!
 # pattern (/* /index.html 200) is a soft-404 SEO trap: Google can index the
 # SPA shell under typo URLs and flag the site.
 #
-# Marketing pages emitted by `marketing/yarn build` are overlaid into docs/
+# Marketing pages emitted by `cd marketing && bun run build` are overlaid into docs/
 # by the Netlify build (see netlify.toml). Netlify resolves static files
 # before consulting _redirects, so /about/, /blog/, /pricing/, etc. always
 # win as 200 pre-rendered HTML — these rules only fire for SPA-handled

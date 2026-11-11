@@ -27,10 +27,10 @@ only, `BaseRoutes.jsx`) or from the three.js scene reachable through it.
 
 ```bash
 # whole harness, both form factors, default fixture model
-yarn test-flows src/viewer/loadTiming.spec.ts --workers=1
+bun run test-flows src/viewer/loadTiming.spec.ts --workers=1
 
 # desktop only, five iterations
-BLDRS_MEASURE_ITERATIONS=5 yarn test-flows src/viewer/loadTiming.spec.ts \
+BLDRS_MEASURE_ITERATIONS=5 bun run test-flows src/viewer/loadTiming.spec.ts \
   --workers=1 -g "\[desktop\].*cross-check"
 ```
 
@@ -334,7 +334,7 @@ rather than a CPU-versus-bandwidth one. Playwright has no `page.metrics()`
   `node_modules/@bldrs-ai/conway/package.json` — the version actually
   linked, not the pin in `package.json` — and sits next to `env.engineLine`,
   the engine's own claim. Disagreement between them means the run measured
-  something other than what you think. Run `yarn install` first.
+  something other than what you think. Run `bun install` first.
 - **Model too small to preview.** The default fixture is 320 KB. Its first
   mesh lands *after* the parse ends, so it exercises the harness but says
   nothing about whether a parse-time preview helps. That question needs a

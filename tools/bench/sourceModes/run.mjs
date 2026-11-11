@@ -6,7 +6,7 @@
  * an arm or a model); design/new/source-policy-measurements.md is what it
  * was first run for.
  *
- *   SKIP_MARKETING=true yarn test-flows-build     # once; then restore package.json
+ *   SKIP_MARKETING=true bun run test-flows-build     # once; then restore package.json
  *   node tools/bench/sourceModes/run.mjs \
  *     --model duplex=/path/duplex.ifc --model psb=/path/PSB.ifc \
  *     --arms windowedHandle,windowedHeld,buffered,heldBuffer,noSidecar \
@@ -128,7 +128,7 @@ function defaultRounds(bytes) {
 function checkBuild(build) {
   for (const f of ['index.html', 'Engine.worker.js', '404.html']) {
     if (!existsSync(join(build, f))) {
-      throw new Error(`${build}/${f} missing: build first with \`SKIP_MARKETING=true yarn test-flows-build\` ` +
+      throw new Error(`${build}/${f} missing: build first with \`SKIP_MARKETING=true bun run test-flows-build\` ` +
         '(the playwright config exposes window.store, which the probe reads)')
     }
   }

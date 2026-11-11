@@ -498,7 +498,7 @@ Each phase is an independent landable PR (or stack on this branch).
 - Merge current `main` into this branch; resolve conflicts.
 - Restore Conway version from `main`. Remove the vendored `.tgz` files and
   the committed `public/static/js/ConwayGeom*.wasm` / `*.js`. Wire wasm copy
-  through the existing `build-share-copy-wasm-*` yarn scripts.
+  through the existing `build-share-copy-wasm-*` package scripts.
 - Strip `console.log` from `Loader.js`, `OPFS.worker.js`, `CadView.jsx`,
   `GlbClipper.js`, `ExtBldrsPropertiesPayload.js`.
 - Fix the `_malloc` leak for the gzipped properties pointer in

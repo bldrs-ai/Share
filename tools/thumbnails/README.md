@@ -17,7 +17,7 @@ Needs a playwright-config build first — that build exposes `window.store`
 `preserveDrawingBuffer`:
 
 ```
-yarn test-flows-build
+bun run test-flows-build
 node tools/thumbnails/generate.mjs                 # all samples
 node tools/thumbnails/generate.mjs --only Momentum # just one
 ```

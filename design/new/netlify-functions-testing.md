@@ -35,13 +35,13 @@ been passing it a dummy key that hid exactly that.
 
 | Layer | File(s) | Runs | Catches | Blind to |
 |---|---|---|---|---|
-| Unit, mocked | `netlify/functions/_tests/<fn>.test.js`, `_lib/auth0.test.js` | `yarn test-src` (hook, CI) | Branch logic, error mapping, what reaches Sentry and the log | Module format, packaging, real HTTP clients |
-| Source loads as ESM | `_tests/esmLoad.test.js` | `yarn test-src` | CommonJS under `"type": "module"`, module-scope crashes without secrets | Anything about the bundle |
-| **Replay, source** | `_tests/replaySource.test.js` + `_tests/replay/` | `yarn test-src` | Behaviour against recorded upstream traffic: real signatures, real axios/Stripe/fetch clients, exact outbound requests | Packaging |
-| Bundle config + load | `tools/netlify/functionBundler.test.js` | `yarn test-tools` (hook, CI) | Wrong bundler, a file missing from the zip at import time, `included_files` | Request-time failures |
-| **Replay, bundle** | same file, same scenarios | `yarn test-tools` | Everything replay-source catches, **against the zip a deploy ships**, including files first required at request time | Netlify's own bundler version and flags |
-| **Smoke, local HTTP** | same file + `tools/netlify/serveBundles.mjs` | `yarn test-tools` | The smoke contract holding, in strict mode, for the bundles | Same |
-| Smoke contract | `tools/netlify/smokeFunctions.test.js` | `yarn test-tools` | Probes drifting from tested behaviour; the smoke test failing to fail | — |
+| Unit, mocked | `netlify/functions/_tests/<fn>.test.js`, `_lib/auth0.test.js` | `bun run test-src` (hook, CI) | Branch logic, error mapping, what reaches Sentry and the log | Module format, packaging, real HTTP clients |
+| Source loads as ESM | `_tests/esmLoad.test.js` | `bun run test-src` | CommonJS under `"type": "module"`, module-scope crashes without secrets | Anything about the bundle |
+| **Replay, source** | `_tests/replaySource.test.js` + `_tests/replay/` | `bun run test-src` | Behaviour against recorded upstream traffic: real signatures, real axios/Stripe/fetch clients, exact outbound requests | Packaging |
+| Bundle config + load | `tools/netlify/functionBundler.test.js` | `bun run test-tools` (hook, CI) | Wrong bundler, a file missing from the zip at import time, `included_files` | Request-time failures |
+| **Replay, bundle** | same file, same scenarios | `bun run test-tools` | Everything replay-source catches, **against the zip a deploy ships**, including files first required at request time | Netlify's own bundler version and flags |
+| **Smoke, local HTTP** | same file + `tools/netlify/serveBundles.mjs` | `bun run test-tools` | The smoke contract holding, in strict mode, for the bundles | Same |
+| Smoke contract | `tools/netlify/smokeFunctions.test.js` | `bun run test-tools` | Probes drifting from tested behaviour; the smoke test failing to fail | — |
 | **Smoke, live** | `.github/workflows/functions-smoke.yml` | Each deploy preview, and hourly on production (`--strict`) | **Anything that stops a deployed function starting**: Netlify's buildbot bundler, server-side flags, missing env per context, runtime Node | Behaviour behind auth (that's the replays' job) |
 
 The layers in bold are new with ops#33. Two of them do the real work:

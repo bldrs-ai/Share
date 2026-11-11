@@ -9,7 +9,7 @@ const {beforeEach} = test
 
 // A real IFC of a few hundred instances, loaded as a batched model, so the
 // pick runs through the instance tree (ifc/batchedInstanceBvh.js) once it is
-// built. Copied to `__test_fixtures__/` by `yarn test-flows-build`.
+// built. Copied to `__test_fixtures__/` by `bun run test-flows-build`.
 const MODEL_PATH = '/share/v/p/__test_fixtures__/Momentum.ifc'
 // `disableInstanceBvh` (FeatureFlags.js) builds no instance tree, so every
 // pick walks every instance: the pick as it was before the tree. It is the
