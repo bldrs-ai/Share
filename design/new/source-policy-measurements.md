@@ -215,6 +215,36 @@ retention before and shows none now. First mesh 1.30 / 1.00 / 1.20 s
 | heldBuffer | artifact hit | 5 | 0.24 (0.20–0.36) | — | — | 0.43 (0.40–0.60) | — | 0.40 (0.38–0.57) | — | 7 (7–8) | 0.99 (0.98–1.13) | — | — | — | — | — | 782 (744–784) |
 | heldBuffer | sidecar reopen | 5 | 5.30 (5.12–5.63) | 0.17 (0.16–0.17) | 4.60 (4.47–4.96) | 0.85 (0.75–0.88) | 0.84 (0.81–1.02) | 5.85 (5.65–6.16) | 0 | 15 (12–16) | 2.53 (2.41–2.73) | 100 (100–104) | 83 (83–104) | 55 | 17 | 100 | 1031 (972–1070) |
 
+### DSA2 (STEP, 105.7 MiB), n = 3
+
+- **Windowed cold: 7.55 s against 8.26 before (−0.71 s, −9 %)**, Geometry
+  4.82 against 5.13, Parse unchanged (2.07). The ranges overlap (7.43–8.16
+  against 7.98–9.03), so at n = 3 this is a direction, not a measured gain.
+  The buffered arms did not move outside noise (`buffered` 7.07 against
+  6.77, `heldBuffer` 7.03 against 7.35). The buffered-vs-windowed gap is
+  −0.48 s (−6 %, ranges overlapping), against −1.49 s (−18 %, disjoint)
+  before.
+- **After the spill:** backing store 167 MiB on every arm (199 before,
+  every arm alike), and **the worker's JS heap after spill fell from 286 to
+  131 MiB on every arm**, windowed included. DSA2 showed no buffered-only
+  retention before and shows none now; the heap drop is new and is not
+  arm-specific.
+- First mesh within noise of before on every arm (2.92 / 2.72 / 2.87 s).
+  Sidecar reopen −0.1 to −0.3 s, within or at the edge of noise.
+- The tree and property-read signature of every cold load matches the
+  first matrix's (1 node; the property hash of leaf 5 is unchanged), and
+  every `heldBuffer` sidecar reopen matched its cold load.
+
+| Arm | Phase | n | Engine | Parse | Geometry | 1st mesh | Index | Ready | Prev@idx | LT n | LT s | W peak | W idx | W spill | W heap spill | wasm | R peak |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| windowedHandle | cold | 3 | 7.55 (7.43–8.16) | 2.07 (2.04–2.12) | 4.82 (4.52–5.28) | 2.92 (2.84–2.97) | 3.10 (3.00–3.15) | 8.55 (8.40–9.07) | 0 | 22 (21–23) | 4.10 (3.98–4.21) | 382 (301–382) | 366 (133–370) | 167 | 131 | 83 | 1534 (1519–1791) |
+| windowedHandle | artifact hit | 3 | 0.18 (0.17–0.18) | — | — | 0.46 (0.46–0.47) | — | 0.41 (0.41–0.42) | — | 6 (5–6) | 1.09 (0.99–1.10) | — | — | — | — | — | 1270 (1241–1274) |
+| windowedHandle | sidecar reopen | 3 | 5.84 (5.79–5.93) | 0.70 (0.70–0.71) | 4.67 (4.58–4.70) | 1.29 (1.28–1.30) | 1.44 (1.43–1.45) | 6.69 (6.67–6.83) | 0 | 16 (15–17) | 2.99 (2.93–3.07) | 417 (407–419) | 395 (361–407) | 167 | 131 | 83 | 1406 (1402–1458) |
+| buffered | cold | 3 | 7.07 (6.56–7.20) | 1.95 (1.92–2.02) | 4.41 (3.87–4.50) | 2.72 (2.63–2.77) | 2.90 (2.79–2.93) | 7.87 (7.42–8.12) | 0 | 22 (21–23) | 4.08 (4.06–4.25) | 243 (235–247) | 171 (171–201) | 167 | 131 (131–131) | 83 | 1636 (1324–1662) |
+| heldBuffer | cold | 3 | 7.03 (6.97–7.79) | 1.82 (1.81–1.86) | 4.27 (4.25–4.95) | 2.87 (2.76–2.92) | 3.04 (2.94–3.12) | 7.96 (7.91–8.71) | 0 | 23 (22–23) | 4.15 (3.76–4.52) | 275 | 171 (171–175) | 167 | 131 | 83 | 1728 (1656–1746) |
+| heldBuffer | artifact hit | 3 | 0.16 (0.16–0.19) | — | — | 0.45 (0.43–0.46) | — | 0.40 (0.38–0.42) | — | 6 (5–7) | 0.98 (0.95–1.06) | — | — | — | — | — | 1209 (1204–1231) |
+| heldBuffer | sidecar reopen | 3 | 6.09 (5.99–6.35) | 0.74 (0.69–0.80) | 4.77 (4.67–4.93) | 1.42 (1.41–1.54) | 1.58 (1.57–1.70) | 7.06 (6.86–7.23) | 0 | 16 (15–16) | 3.04 (3.02–3.25) | 518 (518–526) | 518 | 167 | 131 | 83 | 1531 (1519–1612) |
+
 
 ## Small models (n = 5)
 
