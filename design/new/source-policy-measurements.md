@@ -12,8 +12,10 @@ STEP: small at n = 5, medium at n = 3, large at n = 2 (471 records, none
 failed, every one passed its arm check), on conway `1.1643.778`. The summary is next; each size
 class has its own section after it, and the full tables are at the end.
 The re-measure on conway `1.1645.781` (the source-retention and window-LRU
-fixes) is in progress: [After conway 1.1645.781](#after-conway-11645781-2026-11-11),
-before the size-class sections.
+fixes) is done for 7 models (150 records):
+[After conway 1.1645.781](#after-conway-11645781-2026-11-11), before the
+size-class sections. It finds the buffered arms' after-spill retention
+unchanged, held by a Share-side retainer.
 
 
 ## Setup
@@ -120,7 +122,10 @@ per-model sections and tables below give ranges and n.
     the conway source-retention bug Share#2139 step 1 is fixing, measured
     before the fix, and it is **not IFC-only** (BLSN_007 is STEP). These
     after-spill numbers for `buffered` and `heldBuffer` should be re-read
-    once the fix is pinned.
+    once the fix is pinned. *(Re-read: with the fix pinned the excess is
+    unchanged on every model, and the remaining retainer is in Share's
+    engine handler, not conway; see
+    [After conway 1.1645.781](#after-conway-11645781-2026-11-11).)*
   - Renderer peak RSS is higher for the buffered arms on PSB (6.4 GB
     against 4.6 GB windowed), mixed elsewhere.
 - **Reopen paths:**
@@ -192,7 +197,163 @@ same day), on a container shared with other sessions' work. Same-arm
 differences of a few percent between the two runs are inside what that
 alone can move; read only differences larger than both runs' ranges.
 
-**Status:** in progress, model by model.
+**Status (2026-11-11):** done. 7 models, 150 records, none failed, every
+one passed its arm check, no trial contended, and every cold load's tree
+and property signature matches the first matrix's. n as planned, nothing
+cut: MB-Khaya 5; DSA2, sp-231MB, D3D and PSB 3; BLSN_007 and DOWA 2.
+
+### What moved and what didn't
+
+**(a) Worker memory after the spill, buffered arms: unchanged.** The
+buffered arms still keep the source after the spill, by the same amount
+as before, on every model that showed it:
+
+| Model | Format | MiB | Before: buffered / windowed (MiB) | After: buffered / windowed (MiB) | Excess before → after |
+|---|---|---|---|---|---|
+| MB-Khaya | IFC | 31.4 | 59 / 59 | 55 / 55 | 0 → 0 |
+| DSA2 | STEP | 105.7 | 199 / 199 | 167 / 167 | 0 → 0 |
+| D3D | IFC | 213.6 | 371 / 355 | 306 / 290 | +16 → +16 |
+| sp-231MB | IFC | 231.4 | 321 / 153 | 305 / 137 | +168 → +168 |
+| BLSN_007 | STEP | 268.6 | 419 / 211 | 355 / 147 | +208 → +208 |
+| DOWA | IFC | 398.4 | 530 / 387 | 518 / 375 | +143 → +143 |
+| PSB | IFC | 860.7 | 1,096 / 300 | 1,093 / 296 | +796 → +797 |
+
+(`buffered` and `heldBuffer` read the same on every model, before and
+after; "windowed" is `windowedHandle`.) A worker heap snapshot names the
+retainer, and it is Share's, not conway's: `engineHandler.js#openModel`'s
+closure scope, held by the `settings` callbacks conway keeps on the model
+([Why the buffered arms still retain the source](#why-the-buffered-arms-still-retain-the-source)).
+On every IFC the excess is the file minus the windowed arm's window, to
+within 2–11 MiB. What did move is the same on every arm, windowed
+included: backing store after spill −4 to −65 MiB, and on STEP the
+worker's JS heap after spill −155 MiB (DSA2) and −431 MiB (BLSN_007).
+
+**(b) Windowed time: no movement attributable to conway#780.** Cold
+engine time, before → after (median, n), and the buffered gap:
+
+| Model | windowedHandle | buffered | heldBuffer | Gap buffered vs windowed, before → after |
+|---|---|---|---|---|
+| MB-Khaya | 5.94 → 5.81 | 3.39 → 3.55 | 3.52 → 3.70 | −43 % → −39 % |
+| DSA2 | 8.26 → 7.55 | 6.77 → 7.07 | 7.35 → 7.03 | −18 % → −6 % |
+| sp-231MB | 20.38 → 20.15 | 15.41 → 16.57 | 16.72 → 16.60 | −24 % → −18 % |
+| D3D | 55.27 → 60.53 (bimodal) | 43.70 → 43.57 | 43.39 → 43.42 | −21 % → −28 % |
+| BLSN_007 | 23.33 → 22.87 | 20.98 → 21.35 | 22.21 → 22.16 | −10 % → −7 % |
+| DOWA | 27.08 → 26.25 | 21.21 → 20.07 | 24.25 → 21.10 | −22 % → −24 % |
+| PSB | 36.45 → 34.55 | 30.24 → 28.58 | 32.26 → 31.09 | −17 % → −17 % |
+
+- The windowed arm's medians are lower on six of seven models (−0.1 to
+  −1.9 s; D3D is the exception, two slow loads the guard didn't explain),
+  but only BLSN_007's (−0.46 s, n = 2) has ranges clear of before's and
+  of the other arms' own drift. On PSB, where conway#780's ~9.6 M
+  `acquire` calls are, every arm got faster by about the same amount:
+  `windowedHandle` −1.9 s, `windowedHeld` −1.6, `buffered` −1.7,
+  `heldBuffer` −1.2, all four with ranges clear of before's. A change
+  that only touches the windowed provider
+  can't speed up the buffered arm, so on PSB the move is the run, not
+  the pin, and the gap is −5.97 s against −6.21 s before: unchanged.
+- **The buffered-vs-windowed gap remains on every model where it was
+  measurable**: IFC −17 to −39 % (−2.3 s on MB-Khaya to −6.0 s on PSB),
+  STEP −6 % (DSA2, now inside the noise) and −7 % (BLSN_007). The DSA2
+  and sp-231MB gaps narrowed through the buffered arm reading slower,
+  not the windowed one faster.
+- Parse and Geometry, windowed: PSB 11.58 / 19.63 s (12.08 / 20.75
+  before); DSA2 2.07 / 4.82 (2.08 / 5.13); sp-231MB 4.47 / 14.21 (4.50 /
+  14.18); BLSN_007 3.55 / 17.92 (3.55 / 18.51).
+
+**(c) Peak memory, buffered against windowed: unchanged.** PSB renderer
+peak RSS 6,402 MiB `buffered` and 6,408 `heldBuffer` against 4,580
+`windowedHandle` and 5,444 `windowedHeld` (before 6,413 / 6,412 / 4,620 /
+5,505): still ~1.8 GiB above windowed. Worker backing-store peak (un-GC'd
+polls): 1,243 / 1,390 against 1,341 / 2,414 (before 1,243 / 1,389 /
+1,083 / 2,326). One traced load per arm on PSB (250 ms samples of the
+renderer's `VmRSS` and `VmHWM` and the worker's heap usage, with the
+report's stage times; a scratch script, not the harness) says when the
+peak happens:
+
+- **On every arm the peak is in the GLB writer's window, after Total:**
+  at Total + 8.8 s on `buffered` (6,120 MiB), + 8.4 s on `heldBuffer`
+  (6,346), + 8.8 s on `windowedHandle` (5,516; this one load peaked well
+  above the bench's 4.6 GB median, so a single trace bounds the windowed
+  peak loosely).
+- **The plain `buffered` arm's main-thread copy is not the peak.** Its
+  `Buffering model bytes` stage takes the renderer to 2,929 MiB at 8.9 s,
+  well under its later peak; `heldBuffer`, which has no such copy, peaks as
+  high. That is why the two read the same.
+- **Going into the writer, the buffered arms' worker still holds the
+  source**: worker backing store 1,093–1,389 MiB through the writer
+  against 457–697 windowed, measured. That is the retained source of (a),
+  and it is in the renderer's RSS at the moment the peak is reached.
+- What the trace can't say: how much of the ~1.8 GiB HWM gap the retained
+  source accounts for. Sampled at 250 ms, the traced peaks differ by
+  0.6–0.8 GiB, not 1.8, so short spikes between samples carry the rest,
+  and one trace per arm doesn't separate them from load-to-load spread.
+  That the retained source is the excess is consistent with everything
+  measured; that releasing it would close the gap is not measured.
+
+**(d) Why `heldBuffer` draws its first mesh late.** The first mesh lands
+~0.1 s after the Parsing stage starts on every arm of every large IFC, so
+the whole difference is before the parse, in two stages:
+
+| Model | Arm | n | Page hash stage (s) | Opening model (s) | Parse starts (s after open) | 1st mesh (s) |
+|---|---|---|---|---|---|---|
+| PSB | buffered | 3 | 2.06 | 0.36 | 2.42 | 2.52 |
+| PSB | heldBuffer | 3 | 2.67 | 1.25 | 3.92 | 4.02 |
+| PSB | windowedHandle | 3 | 2.55 | 0.42 | 2.96 | 3.14 |
+| PSB | windowedHeld | 3 | 2.49 | 1.27 | 3.75 | 4.04 |
+| sp-231MB | buffered | 3 | 0.56 | 0.39 | 0.99 | 1.06 |
+| sp-231MB | heldBuffer | 3 | 0.68 | 0.66 | 1.35 | 1.47 |
+| sp-231MB | windowedHandle | 3 | 0.73 | 0.38 | 1.11 | 1.25 |
+| D3D | buffered | 3 | 0.52 | 0.37 | 0.88 | 1.02 |
+| D3D | heldBuffer | 3 | 0.66 | 0.64 | 1.29 | 1.43 |
+| D3D | windowedHandle | 3 | 0.66 | 0.44 | 1.05 | 1.25 |
+
+- **Opening model, +0.9 s on PSB (+0.3 s on sp-231MB and D3D):** the Blob
+  store reads the whole file into the worker before the open
+  (`engineSources.js#holdResident`, `blob.arrayBuffer()`), on both arms
+  that use it: `windowedHeld`'s Opening is the same 1.27 s. The sync
+  handle and the buffered transfer don't.
+- **The page's cache-key hash, +0.6 s on PSB against buffered:** the
+  buffered path reads the file into one ArrayBuffer and hashes it
+  (`Buffering model bytes`, Loader.js); every other arm hashes the File in
+  slices (`Hashing model`), which is slower. `windowedHandle` pays it too
+  (2.55 s), so it is not `heldBuffer`'s own cost, but it is part of why
+  `heldBuffer` is later than plain buffered.
+- **Not the source hash.** `RECORD_SOURCE_HASH` runs inside the parse
+  (`heldBuffer`'s Parse is 1.6 s longer than buffered's on PSB) and the
+  first mesh comes 0.1 s into the parse on both arms, so it costs total
+  time, not first pixels.
+- These are the new run's numbers; the first matrix's PSB records show
+  the same split (round 1: hash 2.66 against 2.03 s buffered, Opening
+  1.39 against 0.34, first mesh 0.09 and 0.11 s after the parse started).
+  On DOWA, BLSN_007 and DSA2 the first mesh comes 2–6 s into the parse on
+  every arm, so the pre-parse split is not what orders them there.
+
+**(e) Reopen paths.** Artifact hits are unchanged within noise (PSB 3.06 /
+2.88 s against 3.19 / 3.15). Sidecar reopens read faster on the large
+models, `heldBuffer`'s most: PSB 23.06 against 25.83 s (ranges
+22.58–25.43 against 25.63–26.02, overlapping at the top), sp-231MB 16.70
+against 17.79 (disjoint), BLSN_007 and DOWA within noise;
+`windowedHandle`'s PSB sidecar reopen 22.31 against 23.49 (disjoint). The
+sidecar reopen pages windowed, so it is where conway#780 could show; on
+PSB it moved less than the cold buffered arm's drift (−1.7 s), so it is
+not separable from the run. Every sidecar reopen (21 of 21 `heldBuffer`,
+21 of 21 `windowedHandle`) opened from the index and matched its cold
+load's tree and property read, as before. BLSN_007's artifact hit peaks ~500 MiB lower in the renderer
+(1,714 against 2,239).
+
+**Confounders.** The two runs are hours apart on a shared container; the
+first ran 05:52–08:15 UTC, this one 08:47–10:41. Two models show
+Geometry-only slow loads the contention guard did not see (D3D: two
+`windowedHandle` loads +6 s and one `buffered` +9.6 s; DOWA: one load per
+arm +4 s), so a same-arm difference under ~5 % on one run is not a
+finding. Records carry `shareCommit` `f2d55cd`, `bfcc2d3` or `b6b81c7`
+(the commits after `f2d55cd` touch only this doc), and PSB's 24 records
+carry `shareDirty: true`: the harness stamps identity when an invocation
+starts, and PSB's started while this doc had uncommitted edits; the
+product code is the same on all of them. Doc commits (and their
+pre-commit hook) ran under the bench lock, between rounds. The two heap snapshots and the three
+traces ran under the same lock, between bench rounds, outside the
+records.
 
 ### MB-Khaya (IFC, 31.4 MiB), n = 5
 
@@ -318,7 +479,7 @@ the windowed arm's window (the Geometry line's `window=`), within 2–11 MiB:
 | sp-231MB | 231.4 | 61.0 | 170 | 168 | 168 |
 | D3D | 213.6 | 188.5 | 25 | 16 | 16 |
 | DOWA | 398.4 | 244.1 | 154 | 143 | 143 |
-| PSB | 860.7 | 57.9 | 803 | 796 | (below) |
+| PSB | 860.7 | 57.9 | 803 | 796 | 797 |
 
 That is, on IFC the buffered arms keep the whole file after the spill, the
 windowed arm keeps its window, and the difference is what was measured.
@@ -418,6 +579,44 @@ STEP is not covered by the arithmetic (its Geometry line has no
 | heldBuffer | cold | 2 | 21.10 (18.87–23.32) | 5.41 (5.40–5.43) | 13.48 (11.20–15.75) | 6.05 (5.52–6.58) | 8.11 (8.07–8.14) | 26.53 (24.05–29.01) | 967 (217–1716) | 41 (36–45) | 13.76 (11.23–16.29) | 893 (866–920) | 560 (527–594) | 518 | 70 | 429 | 4323 (4318–4328) |
 | heldBuffer | artifact hit | 2 | 2.08 (1.95–2.22) | — | — | 2.73 (2.67–2.79) | — | 2.70 (2.63–2.77) | — | 8 (7–9) | 3.11 (3.09–3.13) | — | — | — | — | — | 3040 (2875–3204) |
 | heldBuffer | sidecar reopen | 2 | 18.91 (17.81–20.01) | 1.97 (1.88–2.07) | 15.57 (14.81–16.33) | 3.16 (2.82–3.50) | 3.96 (3.59–4.33) | 23.95 (23.15–24.75) | 0 | 24 (22–26) | 10.92 (10.68–11.17) | 1507 (1451–1563) | 1139 (1011–1267) | 375 | 70 | 429 | 4510 (4230–4790) |
+
+### PSB (IFC, 860.7 MiB), n = 3
+
+Four arms (`windowedHeld` added, as the Firefox/Safari path); n = 3
+against the first matrix's 2.
+
+- **After the spill: 1,093 MiB both buffered arms against 296 for both
+  windowed arms**, +797 MiB (before 1,096 against 300). Both buffered arms
+  logged `released resident source buffer (902472037B)`. File minus window
+  is 803 MiB.
+- **Time: every arm 1.2–1.9 s faster than before, the buffered ones
+  too** (`windowedHandle` 34.55 s against 36.45, `windowedHeld` 35.99
+  against 37.62, `buffered` 28.58 against 30.24, `heldBuffer` 31.09
+  against 32.26; ranges disjoint on all four). As the
+  buffered arms don't run the code conway#780 changed, read the shift as
+  the run's; the gap is −17 % as before (−5.97 s against −6.21 s), and
+  `heldBuffer` is −10 % (−11 % before).
+- First mesh 3.14 / 4.04 / 2.52 / 4.02 s (before 3.49 / 4.32 / 2.63 /
+  4.27): the same order, see (d). Previews before the index 681 / 675 /
+  2,167 / 2,534 (before 669 / 641 / 2,173 / 2,301).
+- Peak memory: see (c). Renderer peak 4,580 / 5,444 / 6,402 / 6,408 MiB.
+  (`heldBuffer`'s sidecar reopen reads 6,435 MiB against 5,449 before;
+  the reopen phases share the cold load's process, so that is not an
+  independent reading.)
+- Sidecar reopen 22.31 / 23.06 s (23.49 / 25.83 before); artifact hit
+  3.06 / 2.88 (3.19 / 3.15). Signatures match; all three `heldBuffer`
+  sidecar reopens matched their cold load.
+
+| Arm | Phase | n | Engine | Parse | Geometry | 1st mesh | Index | Ready | Prev@idx | LT n | LT s | W peak | W idx | W spill | W heap spill | wasm | R peak |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| windowedHandle | cold | 3 | 34.55 (33.18–35.14) | 11.58 (11.33–11.60) | 19.63 (18.83–20.31) | 3.14 (2.86–3.25) | 15.11 (14.54–15.17) | 38.02 (36.22–38.22) | 681 (673–708) | 53 (52–60) | 15.77 (15.08–16.07) | 1341 (985–1558) | 860 (855–864) | 296 | 27 | 899 | 4580 (4565–4595) |
+| windowedHandle | artifact hit | 3 | 3.06 (2.98–3.17) | — | — | 3.36 (3.26–3.55) | — | 3.33 (3.23–3.51) | — | 9 (8–10) | 3.78 (3.61–3.93) | — | — | — | — | — | 3933 (3906–3960) |
+| windowedHandle | sidecar reopen | 3 | 22.31 (22.18–23.02) | 2.87 (2.70–2.94) | 18.55 (18.32–19.46) | 3.58 (3.42–3.69) | 4.17 (4.08–4.25) | 25.69 (25.28–26.00) | 0 | 28 (28–30) | 11.70 (11.56–12.30) | 1477 (1181–1529) | 903 (890–903) | 296 | 27 | 899 | 4540 (4501–4714) |
+| windowedHeld | cold | 3 | 35.99 (35.23–36.04) | 11.50 (11.28–11.65) | 20.58 (19.56–20.68) | 4.04 (3.77–4.15) | 15.91 (15.74–16.39) | 39.10 (38.17–39.26) | 675 (656–680) | 53 (51–55) | 15.38 (14.94–15.99) | 2414 (2374–2426) | 1664 (1649–1704) | 296 | 27 | 899 | 5444 (5407–5444) |
+| buffered | cold | 3 | 28.58 (27.27–28.97) | 9.16 (9.00–9.48) | 16.60 (15.43–16.81) | 2.52 (2.42–2.62) | 11.94 (11.59–12.01) | 31.60 (30.84–32.38) | 2167 (2167–2178) | 43 (41–44) | 15.76 (14.81–16.02) | 1243 (1241–1246) | 1241 (1241–1241) | 1093 | 27 | 922 | 6402 (6399–6411) |
+| heldBuffer | cold | 3 | 31.09 (30.28–31.73) | 10.74 (10.73–10.92) | 16.05 (15.54–16.11) | 4.02 (3.71–4.06) | 14.79 (14.50–15.01) | 34.21 (33.33–35.42) | 2534 (2529–2652) | 43 (42–43) | 14.19 (13.76–14.41) | 1390 (1389–1390) | 1241 (1239–1244) | 1093 | 27 | 922 | 6408 (5289–6418) |
+| heldBuffer | artifact hit | 3 | 2.88 (2.85–3.11) | — | — | 3.19 (3.16–3.42) | — | 3.15 (3.13–3.39) | — | 8 (8–9) | 3.58 (3.57–3.76) | — | — | — | — | — | 2912 (2836–4795) |
+| heldBuffer | sidecar reopen | 3 | 23.06 (22.58–25.43) | 3.04 (2.97–3.20) | 18.25 (17.71–20.20) | 4.61 (4.54–4.98) | 5.29 (5.19–5.64) | 26.25 (25.95–28.43) | 0 | 27 (25–31) | 10.35 (10.15–12.48) | 2543 (2471–2651) | 1644 (1644–1828) | 296 | 27 | 899 | 6435 (5262–6453) |
 
 
 ## Small models (n = 5)
