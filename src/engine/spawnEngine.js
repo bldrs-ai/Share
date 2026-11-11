@@ -3,7 +3,8 @@
 // `?feature=engineWorker`, or in process — on this thread, through the same
 // handler and protocol — where module workers are missing or the caller
 // asks for it.
-import {isFeatureEnabled} from '../FeatureFlags'
+import {flags, isFeatureEnabled} from '../FeatureFlags'
+import {MOBILE_WIDTH} from '../utils/constants'
 import {EngineSession} from './EngineSession'
 import {createEngineHandler} from './engineHandler'
 import {Ev} from './protocol'
@@ -61,6 +62,30 @@ export function engineFlagSnapshot() {
     disableEngineSyncHandle: isFeatureEnabled('disableEngineSyncHandle'),
     disableEngineSidecar: isFeatureEnabled('disableEngineSidecar'),
     disableEngineResidentSource: isFeatureEnabled('disableEngineResidentSource'),
+    // The static value first, as engineRoute.js reads `disableEngineWorker`:
+    // `isActive: true` in FeatureFlags.js is the prod rollback of the source
+    // policy, and must not depend on how the URL flags are read.
+    disableBufferedSource: Boolean(flags?.find((f) => f.name === 'disableBufferedSource')?.isActive) ||
+      isFeatureEnabled('disableBufferedSource'),
+  }
+}
+
+
+/**
+ * What the source policy's cap needs of the device (engine/sourcePolicy.js
+ * #bufferedSourceCap), read on the page: `navigator.deviceMemory` (Chromium
+ * only; a worker has it too, but not the page's form factor) and whether
+ * this is a phone, by the repo's one form-factor rule (`useIsMobile`: the
+ * window no wider than MOBILE_WIDTH).
+ *
+ * @return {{deviceMemoryGiB: (number|null), isMobile: boolean}}
+ */
+export function engineDeviceSnapshot() {
+  const memory = globalThis.navigator?.deviceMemory
+  const width = globalThis.innerWidth
+  return {
+    deviceMemoryGiB: Number.isFinite(memory) ? memory : null,
+    isMobile: Number.isFinite(width) && width <= MOBILE_WIDTH,
   }
 }
 
@@ -123,7 +148,9 @@ async function initSession(transport, timeoutMs = undefined) {
   liveSessions.add(session)
   session.on(Ev.FAILED, () => liveSessions.delete(session))
   try {
-    await session.init({verbose: isFeatureEnabled('glbVerbose'), flags: engineFlagSnapshot(), timeoutMs})
+    await session.init({
+      verbose: isFeatureEnabled('glbVerbose'), flags: engineFlagSnapshot(), device: engineDeviceSnapshot(), timeoutMs,
+    })
   } catch (e) {
     session.close()
     throw e

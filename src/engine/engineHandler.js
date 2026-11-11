@@ -33,6 +33,8 @@ import {openSourceStore, opfsRoot} from './engineSources'
 import {readSidecar, sweepSidecars, writeSidecar} from './engineSidecars'
 import {makeBatchEncoder, previewMessage, snapshotStatistics} from './engineStream'
 import {enableStepPreviewFinishParse} from '../viewer/ifc/pumpTestSeams'
+import {isOutOfMemoryError} from '../utils/oom'
+import {SourceModeReason, StoreKind, chooseSourceMode} from './sourcePolicy'
 
 
 /**
@@ -149,6 +151,16 @@ export function createEngineHandler({
   // Why the store is not the sync access handle, when it is not (reported
   // in the `open` reply and the `done` packet).
   let sourceFallback = null
+  // The source policy's decision for the open model (sourcePolicy.js), as it
+  // ran: reported in the `open` reply and the `done` packet.
+  let openSourceMode = null
+  // A buffered open's File, when it came from one: the SPILL's store is
+  // opened over it when the page sends none (a load with no GLB writer).
+  let bufferedFile = null
+  // What the page said of its device (spawnEngine.js#engineDeviceSnapshot),
+  // for the policy's cap. A worker could read `navigator.deviceMemory` for
+  // itself, but not the page's form factor, so both come from the page.
+  let device = {deviceMemoryGiB: null, isMobile: false}
 
   const send = (msg, transfer) => post({v: ENGINE_PROTOCOL_VERSION, epoch, ...msg}, transfer)
   const flushLog = () => {
@@ -207,6 +219,10 @@ export function createEngineHandler({
         epoch = args.epoch
       }
       flags = args.flags ?? {}
+      device = {
+        deviceMemoryGiB: args.device?.deviceMemoryGiB ?? globalThis.navigator?.deviceMemory ?? null,
+        isMobile: args.device?.isMobile === true,
+      }
       const t0 = now()
       let created
       try {
@@ -247,7 +263,7 @@ export function createEngineHandler({
       }
     },
 
-    async [Op.OPEN]({source, format = null, stream = null} = {}) {
+    async [Op.OPEN]({source, format = null, stream = null, sourceOverride = null} = {}) {
       if (api === null) {
         throw new Error('engine: init has not run')
       }
@@ -258,7 +274,7 @@ export function createEngineHandler({
       }
       opening = true
       try {
-        return await openModel(source, stream, format)
+        return await openModel(source, stream, format, sourceOverride)
       } finally {
         opening = false
       }
@@ -383,8 +399,12 @@ export function createEngineHandler({
       }, elementProperties ? [elementProperties.buffer] : [])
     },
 
-    async [Op.SPILL]({file = null} = {}) {
+    async [Op.SPILL]({file: pageFile = null} = {}) {
       requireModel()
+      // The page's File when it sent one (the GLB writer's source), else the
+      // buffered open's own (a load with no writer, Loader.js#load): without
+      // it a buffered source would stay resident for the session.
+      const file = pageFile ?? bufferedFile
       if (sourceStore !== null) {
         // Windowed already (a store-backed open): conway reads through the
         // store this session holds, and a second one would only replace a
@@ -423,6 +443,7 @@ export function createEngineHandler({
         // Kept for the session, as an open's store is: later reads page from
         // it, and a sync access handle's OPFS lock is released in dispose().
         sourceStore = opened.store
+        bufferedFile = null
         sourceFallback = opened.fallbackReason
       } else {
         opened.store.close()
@@ -443,30 +464,21 @@ export function createEngineHandler({
    *   conway detects the schema from the bytes, and the source kind (not
    *   this) decides whether the open is windowed, so a mislabelled file
    *   opens as what it is. It is echoed in the reply and the `done` packet.
+   * @param {object|null} [sourceOverride] `{windowed: true, failure}`: the
+   *   page's windowed retry after a buffered open ran out of memory on an
+   *   earlier engine (engineModelLoad.js#parse)
    * @return {Promise<object>}
    */
-  async function openModel(source, stream, format) {
-    const settings = {
-      ...BASE_OPEN_SETTINGS,
-      ON_PROGRESS: (event) => emit(Ev.PROGRESS, {event: plainProgress(event)}),
-      ON_MODEL_INFO: (info) => emit(Ev.MODEL_INFO, {info: plainProgress(info)}),
-    }
-    if (stream?.previews) {
-      settings.ON_PREVIEW_MESH = (payload) => {
-        try {
-          const {payload: out, transfer} = previewMessage(payload)
-          emit(Ev.PREVIEW, {payload: out}, transfer)
-        } catch {
-          // Best-effort, as on the main thread: a preview must never break
-          // the load (ShareIfcLoader#parse's onPreviewMesh).
-        }
-      }
-      // Test-only (pumpTestSeams.js#testStepPreviewFinishParse): the page
-      // asked for conway's parked parse-end preview tick.
-      if (stream.previewFinishParse === true) {
-        enableStepPreviewFinishParse()
-      }
-    }
+  async function openModel(source, stream, format, sourceOverride = null) {
+    // Built in its own function, never inline here: conway keeps `settings`
+    // and its callbacks on the model for the session, and a closure created
+    // in THIS scope would keep this scope's whole V8 context alive with it,
+    // `source` and the bytes handed to a buffered open included (Share#2139:
+    // the heap snapshot in source-policy-measurements.md §"Why the buffered
+    // arms still retain the source"). For the same reason the buffered
+    // open's `loadBytes` is made by `bytesLoader`, so no closure created
+    // here references the source at all.
+    const settings = openSettings(stream)
     const t0 = now()
     const blob = source?.file
     const windowable = Boolean(blob && typeof blob.slice === 'function') &&
@@ -487,7 +499,13 @@ export function createEngineHandler({
     // says when and why).
     const opened = windowable ?
       await openSourceStore(source, {
-        allowSyncHandle: !flags.disableEngineSyncHandle, holdResident: !flags.disableEngineResidentSource,
+        allowSyncHandle: !flags.disableEngineSyncHandle,
+        // Not on the page's windowed retry after a buffered open failed for
+        // memory (engineModelLoad.js#parse): on the Blob store that hold is
+        // the whole file again, then windowed over, the highest-memory arm
+        // measured, on a device that just ran out. Its reads are slower
+        // (each a Blob round trip), which is the price.
+        holdResident: !flags.disableEngineResidentSource && sourceOverride?.windowed !== true,
         now, ...sourceOptions,
       }) :
       null
@@ -509,30 +527,104 @@ export function createEngineHandler({
       // conway#760); a sidecar open adopts the sidecar's own.
       settings.RECORD_SOURCE_HASH = true
     }
+    // The source policy (sourcePolicy.js, Share#2139): buffered or windowed
+    // for this open. Buffered reads the whole file once into one buffer the
+    // store keeps no reference to (`takeWhole`: through the sync access
+    // handle, or the Blob store's held copy) and hands it to the buffered
+    // open, which is faster on every model measured; the spill later
+    // releases it to windows over a store (SPILL). RECORD_SOURCE_HASH is set
+    // above either way, so a buffered parse still exports its sidecar.
+    let sourceMode = chooseSourceMode({
+      bytes: sourceSizeOf(source, store),
+      format,
+      hasSidecar: sidecar !== null,
+      storeKind: storeKindOf(store),
+      deviceMemoryGiB: device.deviceMemoryGiB,
+      isMobile: device.isMobile,
+      flags,
+    })
+    // (On the Blob store the retry holds nothing, see openSourceStore above,
+    // so the policy itself already says windowed, `blobNotHeld`: the label is
+    // still the retry's.) A sidecar found meanwhile keeps its index reopen.
+    if (sourceOverride?.windowed === true && store !== null && sourceMode.reason !== SourceModeReason.INDEX_REOPEN) {
+      // The page's retry of a load whose buffered open ran out of memory on
+      // an earlier engine (engineModelLoad.js#parse): this open is windowed,
+      // and says why. Per open, so nothing else on the page changes.
+      sourceMode = {
+        ...sourceMode, mode: 'windowed', reason: SourceModeReason.BUFFERED_FAILED,
+        // Fixed codes only: it reaches the report line and GA.
+        failure: RETRY_FAILURE_CODES.has(sourceOverride.failure) ? sourceOverride.failure : 'outOfMemory',
+      }
+    }
+    let whole = null
     let adopted = false
     let id
     let windowed
     let attempt
     let index
     try {
-      ({modelID: id, windowed, attempt, index} = await openDeferred(engine, {
-        sidecar,
-        store,
-        loadBytes: async () => {
-          // The buffered fallback reads the file again for itself: let the
-          // windowed store's whole-file copy go first rather than hold both.
-          store?.releaseResident?.()
-          const bytes = source?.bytes ?? (blob ? await blob.arrayBuffer() : null)
-          if (!bytes) {
-            throw new Error('engine: open needs source.file or source.bytes')
+      if (sourceMode.mode === 'buffered' && store !== null) {
+        const tRead = now()
+        try {
+          whole = store.takeWhole()
+        } catch (e) {
+          // The one buffered failure that can be caught here: the whole-file
+          // buffer did not fit. The engine was never touched, so its windowed
+          // open over this same store is safe. Anything else stands. (A
+          // buffered OPEN that runs out of memory does not throw: conway
+          // records the failure and returns -1, and the wasm may be aborted,
+          // so that retry is the page's, on a fresh engine.)
+          if (!isAllocationFailure(e)) {
+            throw e
           }
-          // A transferred Uint8Array is used as it is: another copy here would
-          // briefly hold the file three times over on a buffered open.
-          return ArrayBuffer.isView(bytes) ? bytes : new Uint8Array(bytes)
-        },
+          sourceMode = {...sourceMode, mode: 'windowed', reason: SourceModeReason.BUFFERED_FAILED, failure: 'RangeError'}
+        }
+        // The whole-file read's cost before the open: the sync access
+        // handle's one read here, or the Blob store's hold, already paid in
+        // openSourceStore (its one counted read).
+        sourceMode.readMs = store.kind === 'syncHandle' ? now() - tRead : store.counters.ms
+        if (whole === null && sourceMode.mode === 'buffered') {
+          // The store had nothing to hand over after all: windowed, as the
+          // policy would have said for a store that holds nothing.
+          sourceMode = {...sourceMode, mode: 'windowed', reason: SourceModeReason.BLOB_NOT_HELD}
+        }
+      }
+      let storeFailure
+      ;({modelID: id, windowed, attempt, index, storeFailure} = await openDeferred(engine, {
+        sidecar,
+        store: whole !== null ? null : store,
+        loadBytes: bytesLoader(source, store, whole),
         settings,
+        // The page's retry after an out-of-memory buffered open: its windowed
+        // open is the last try, never followed by another whole-file buffer.
+        bufferedFallback: sourceOverride?.windowed !== true,
       }))
-      if (windowed && !disposed && typeof id === 'number' && id >= 0) {
+      const openedModel = !disposed && typeof id === 'number' && id >= 0
+      if (openedModel && !windowed && sourceMode.mode === 'windowed') {
+        // The policy said windowed, and conway's store open did not take, so
+        // openDeferred buffered the whole file instead: refused as one conway
+        // cannot do (a STEP over a store that cannot read synchronously, in
+        // process), or failed some other way (which buffers even over the
+        // cap: engine-worker.md §5.6 names it as a follow-up).
+        sourceMode = {
+          ...sourceMode, mode: 'buffered',
+          reason: storeFailure?.status === 'STORE_NOT_SYNCHRONOUS' ?
+            SourceModeReason.WINDOWED_REFUSED : SourceModeReason.WINDOWED_FAILED,
+        }
+      }
+      if (openedModel && whole !== null && !windowed && entryPath !== null) {
+        // The buffered parse still exports a sidecar, so a reopen after
+        // eviction can come back from the index (Share#2139).
+        sidecarState = {entryPath, file: blob, getOpfsRoot, source: 'parse', bytes: 0, saved: false}
+      }
+      if (openedModel && whole !== null) {
+        // What the SPILL releases a buffered source to when the page sends
+        // no File of its own (a load with no GLB writer, Loader.js#load).
+        // Only for the policy's buffered open: a `disableStreamOpen` or
+        // fallback buffered open answers that spill `unsupported`, as before.
+        bufferedFile = blob
+      }
+      if (openedModel && windowed) {
         // Kept for the session: property reads page windows from it long
         // after the load. Released in dispose(), after CloseModel.
         sourceStore = store
@@ -544,14 +636,25 @@ export function createEngineHandler({
           }
         }
       }
+    } catch (e) {
+      // A direct open exception (format detection threw, the windowed open
+      // after a failed whole-file read threw) is still a failed open: stamp
+      // the mode chosen so far so the page can tag it in Sentry, buffered
+      // told from windowed. Fixed codes only, never a name, path or size;
+      // serializeError carries it across the worker boundary.
+      if (e && typeof e === 'object') {
+        e.sourceMode = {mode: sourceMode.mode, reason: sourceMode.reason}
+      }
+      throw e
     } finally {
-      // Not adopted (a buffered fallback, a failed or refused open, an open
+      // Not adopted (a buffered open, a failed or refused open, an open
       // that threw, or a close that came first): nothing reads it again, so
       // a sync access handle's lock is let go now rather than at terminate.
       if (!adopted) {
         store?.close()
       }
     }
+    openSourceMode = sourceMode
     if (disposed) {
       // Closed while the open ran: release what it made, and stop.
       if (typeof id === 'number' && id >= 0) {
@@ -568,7 +671,10 @@ export function createEngineHandler({
       // Classified here, where conway's statistics are (§2.4 G3); the page
       // builds the user-facing error from it with
       // unsupportedSchema.js#openModelFailure, as the main-thread path does.
-      const failure = classifyOpenFailure(engine, attempt, id)
+      // With the source mode, so the page can tell a failed buffered open
+      // from any other (and retry an out-of-memory one windowed, on a fresh
+      // engine: engineModelLoad.js#parse), and Sentry can tag it.
+      const failure = {...classifyOpenFailure(engine, attempt, id), sourceMode}
       emit(Ev.FAILED, {
         kind: failure.refusedSchema ? 'refusedSchema' : 'openFailure',
         message: `engine: open failed (${id})`,
@@ -579,7 +685,7 @@ export function createEngineHandler({
     modelID = id
     const result = {
       modelID, windowed, format, openMs: now() - t0, wasmBytes: wasmBytesOf(api),
-      source: sourceSummary(),
+      source: sourceSummary(), sourceMode: openSourceMode,
     }
     emit(Ev.INDEXED, {modelID, windowed})
     if (stream) {
@@ -594,6 +700,40 @@ export function createEngineHandler({
       runPump({windowed, format, batchSize: stream.batchSize ?? PUMP_BATCH_SIZE})
     }
     return result
+  }
+
+  /**
+   * Conway open settings for one open, with the callbacks conway keeps on
+   * the model for the session. Its own function so those callbacks close
+   * over this handler's scope only, never over `openModel`'s, which holds
+   * the source (see the comment there; Share#2139).
+   *
+   * @param {object|null} stream the open's `stream` options
+   * @return {object}
+   */
+  function openSettings(stream) {
+    const settings = {
+      ...BASE_OPEN_SETTINGS,
+      ON_PROGRESS: (event) => emit(Ev.PROGRESS, {event: plainProgress(event)}),
+      ON_MODEL_INFO: (info) => emit(Ev.MODEL_INFO, {info: plainProgress(info)}),
+    }
+    if (stream?.previews) {
+      settings.ON_PREVIEW_MESH = (payload) => {
+        try {
+          const {payload: out, transfer} = previewMessage(payload)
+          emit(Ev.PREVIEW, {payload: out}, transfer)
+        } catch {
+          // Best-effort, as on the main thread: a preview must never break
+          // the load (ShareIfcLoader#parse's onPreviewMesh).
+        }
+      }
+      // Test-only (pumpTestSeams.js#testStepPreviewFinishParse): the page
+      // asked for conway's parked parse-end preview tick.
+      if (stream.previewFinishParse === true) {
+        enableStepPreviewFinishParse()
+      }
+    }
+    return settings
   }
 
   /** Abort INIT / OPEN after an await if dispose() ran meanwhile. */
@@ -772,7 +912,7 @@ export function createEngineHandler({
    * @return {Promise<object>}
    */
   async function summarize(counts) {
-    const summary = {...counts, wasmBytes: wasmBytesOf(api), source: sourceSummary()}
+    const summary = {...counts, wasmBytes: wasmBytesOf(api), source: sourceSummary(), sourceMode: openSourceMode}
     if (sidecarState !== null) {
       summary.index = {source: sidecarState.source, bytes: sidecarState.bytes, saved: sidecarState.saved}
       // Only when there is something to say, so a clean save's packet is
@@ -911,6 +1051,88 @@ export function createEngineHandler({
   }
 
   return {handle, dispose}
+}
+
+
+/**
+ * The buffered open's `loadBytes` (conwayOpen.js#openDeferred). Module-level
+ * on purpose: the closure it returns is the only thing that references the
+ * source, and it is dropped once the open has run, so nothing the model
+ * keeps for its session can reach the bytes (Share#2139; see
+ * engineHandler.js#openModel).
+ *
+ * @param {object} source the open's `{file}` or `{bytes}`
+ * @param {object|null} store the windowed open's byte store, if any
+ * @param {Uint8Array|null} whole the whole file, already read, for a
+ *   buffered open over it; null to read it here
+ * @return {function(): Promise<Uint8Array>}
+ */
+function bytesLoader(source, store, whole) {
+  if (whole !== null) {
+    return () => Promise.resolve(whole)
+  }
+  return async () => {
+    // The buffered fallback reads the file again for itself: let the
+    // windowed store's whole-file copy go first rather than hold both.
+    store?.releaseResident?.()
+    const blob = source?.file
+    const bytes = source?.bytes ?? (blob ? await blob.arrayBuffer() : null)
+    if (!bytes) {
+      throw new Error('engine: open needs source.file or source.bytes')
+    }
+    // A transferred Uint8Array is used as it is: another copy here would
+    // briefly hold the file three times over on a buffered open.
+    return ArrayBuffer.isView(bytes) ? bytes : new Uint8Array(bytes)
+  }
+}
+
+
+/** The failure codes a page retry may carry (engineModelLoad.js#retryableBufferedFailure). */
+const RETRY_FAILURE_CODES = new Set(['outOfMemory', 'engineException', 'engineAbort'])
+
+
+/**
+ * Did allocating the whole-file buffer fail for want of memory? Only ever
+ * asked of `store.takeWhole()`, whose size is the store's own, so a
+ * RangeError there is the allocation: V8's "Array buffer allocation failed",
+ * Firefox's and Safari's "out of memory" / "invalid array length". A
+ * RangeError from anywhere else (a corrupt file's bounds error, a stack
+ * overflow) is never asked about here.
+ *
+ * @param {*} e
+ * @return {boolean}
+ */
+export function isAllocationFailure(e) {
+  return (e instanceof RangeError && /alloc|memory|invalid (typed )?array length/i.test(e.message ?? '')) ||
+    isOutOfMemoryError(e)
+}
+
+
+/**
+ * @param {object|null} store from engineSources.js#openSourceStore
+ * @return {string|null} the policy's StoreKind, or null for no store
+ */
+function storeKindOf(store) {
+  if (store === null) {
+    return null
+  }
+  if (store.kind === 'syncHandle') {
+    return StoreKind.SYNC_HANDLE
+  }
+  return store.counters?.residentBytes > 0 ? StoreKind.BLOB_HELD : StoreKind.BLOB
+}
+
+
+/**
+ * @param {object} source `{file}` or `{bytes}`
+ * @param {object|null} store
+ * @return {number} the source's size in bytes, 0 when unknown
+ */
+function sourceSizeOf(source, store) {
+  if (store !== null) {
+    return store.byteLength
+  }
+  return source?.file?.size ?? source?.bytes?.byteLength ?? 0
 }
 
 

@@ -47,7 +47,7 @@ export const EXPORT_FLAGS = '?feature=export,glbVerbose'
 export const PRO_MODULE_PATTERN = '**/.netlify/functions/pro-module*'
 
 // Repo-root relative, like `models.ts`'s `fixturesDir`: playwright runs from
-// the repo root both locally (`yarn test-flows`) and in CI.
+// the repo root both locally (`bun run test-flows`) and in CI.
 export const PRO_MODULE_FILE = 'netlify/functions/_pro-modules/glbExport.js'
 
 export const GLTF_MAGIC = 'glTF'

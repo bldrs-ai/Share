@@ -720,6 +720,192 @@ forbids storing a `batchId` or any per-load id, and the scene's batch ids
 are not re-minted by an engine respawn because the scene is not rebuilt.
 
 
+### 5.6 Source policy: buffer for the parse, window at rest
+
+One decision per open, for IFC and STEP alike: does conway read the model
+**buffered** (the whole file in the worker for the parse and the geometry
+pump) or **windowed** (paged through a byte store from the start)? It is
+`engine/sourcePolicy.js#chooseSourceMode`, a pure function the handler
+(`engineHandler.js#openModel`) calls once it knows its store and whether a
+sidecar was found (Share#2139, Share#2092).
+
+**The rule, in order.**
+0. No store (a `{bytes}` source, not staged in OPFS; `?feature=disableStreamOpen`;
+   an engine without the store open): buffered, there being nothing to
+   window over. Not a choice, and `disableStreamOpen` keeps its meaning.
+1. **Kill switch** `disableBufferedSource`: windowed, wherever a windowed
+   open is possible. That is the behaviour before the policy.
+2. **Index-only reopen** (a sidecar was found): windowed. The reopen pages
+   from the store, unchanged.
+3. **Blob store** (Firefox and Safari, which have no read-only sync access
+   handles; also in process): buffered over the bytes the store already
+   holds (`holdResident`), whenever it holds them; windowed over the Blob
+   when it does not (over `RESIDENT_SOURCE_MAX_BYTES`, an allocation
+   failure, `disableEngineResidentSource`, a File not in OPFS).
+4. **Sync access handle** (Chromium): buffered when the file is within the
+   cap, else windowed.
+
+Rule 3 is bounded by the Blob store's own whole-file ceiling
+(`RESIDENT_SOURCE_MAX_BYTES`, 1 GiB), not by the device cap below: on a
+browser without a sync handle the small-device ceiling does not apply. That
+is unchanged from main, where that path held the file for its windowed open
+too.
+
+**Why.** The measurements
+([source-policy-measurements.md](source-policy-measurements.md)): buffered
+is faster than windowed on every IFC measured from 2.3 MiB up, and on STEP
+within noise up to ~56 MiB and faster above; never slower. Windowing over
+the Blob store's held copy costs the same time as the sync-handle arm and
+is the highest-memory arm from 100 MiB up, so rule 3 buffers there
+regardless of size: the memory is already paid. Windowing did not save peak
+worker memory on the medium IFCs either. What windowing buys is memory *at
+rest*, after the parse, and the spill gets that for a buffered open too:
+the GLB writer's SPILL (or the no-writer spill, Loader.js#load, which now
+falls back to the open's own File) releases the buffered source to windows
+over a fresh store. That release did not happen before Share#2139: the
+handler's `settings` callbacks, which conway keeps for the session, shared
+a V8 context with the source bytes (fixed; the measurements doc has the
+heap snapshot and the after-fix numbers).
+
+**The cap.** `BUFFERED_SOURCE_BYTES_PER_DEVICE_GIB` = 128 MiB ×
+`navigator.deviceMemory`, never above `BUFFERED_SOURCE_MAX_BYTES`, 1 GiB, the
+largest size anything has been measured buffered at (`deviceMemory` is not
+capped at 8: headless Chromium 153 on a 17 GB machine reports 16). On a
+device reporting 4 GiB or less it is also never above
+`SMALL_DEVICE_BUFFERED_SOURCE_MAX_BYTES`, 256 MiB, conway's windowed
+provider's own adaptive residency ceiling (`ADAPTIVE_MAX_RESIDENT_BYTES`),
+so there a buffered open never holds more source than a windowed one may:
+no device that small has been measured. The caps: 0.25 GiB → 32 MiB, 0.5 →
+64, 1 → 128, 2 → 256, 4 → 256, 8 and up → 1 GiB (8 GiB buffers PSB at
+860.7 MiB). Without `deviceMemory`, 1 GiB on a desktop and 256 MiB on a
+phone (the repo's form factor rule, `MOBILE_WIDTH`); that branch is only
+consulted when `deviceMemory` is absent, which today means never on a
+browser with sync access handles (Chromium has it), so the phone value is
+a backstop, not a measured choice. The page snapshots both
+(`spawnEngine.js#engineDeviceSnapshot`), since the worker has no window.
+**Provisional:** it is static per device, and the PSB renderer peak with it
+is in the measurements doc's §"Source policy as built".
+
+**How the bytes are read.** `store.takeWhole()` (engineSources.js): on the
+sync access handle one read of the whole file into one buffer; on the Blob
+store the held copy, handed over. Neither store keeps a reference, so the
+spill can free the bytes. The buffered open keeps `RECORD_SOURCE_HASH`, so
+a buffered parse still exports its sidecar (`sidecarState`), and the next
+open after an eviction or with the artifact gone comes up from the index,
+windowed (rule 2). The sync access handle is closed once the open has run.
+
+**Fallback.** Two memory failures, two places:
+- **The whole-file buffer cannot be allocated** (`takeWhole()` throws a
+  RangeError: `isAllocationFailure` in engineHandler.js, asked of that call
+  only, so a corrupt file's bounds error or a stack overflow is never read as
+  memory). The engine has not been touched, so the same worker opens
+  windowed over the same store: `Engine source: windowed (buffered open
+  failed: RangeError)`.
+- **The buffered open runs out of memory.** conway does not throw for it
+  (1.1645.781: `fromStreamed` catches the parse's error and falls back to
+  the classic open, `fromAsync` catches again and calls
+  `recordOpenFailure`, status `OPEN_FAIL` with the error's message, or
+  `String(error)` for a non-Error, as the reason, and the open returns -1),
+  and an Emscripten abort leaves the wasm unusable. So the handler only
+  reports it: the `FAILED` packet and the open's `engineFailure` carry the
+  `sourceMode`. The page (`engineModelLoad.js#parse`,
+  `retryableBufferedFailure`) retries ONCE, on a NEW engine (the failed
+  worker is terminated before the new one is spawned), with a per-open
+  override that makes that open windowed, holds no whole-file copy on the
+  Blob store, and forbids openDeferred's buffered fall-through
+  (`bufferedFallback: false`). It retries only the policy's own buffered
+  open (`POLICY_BUFFERED_REASONS`), never a schema refusal, and only for a
+  recorded reason that looks like a heap exhaustion **from this
+  conway-geom build** (`ConwayGeomWasmWeb.js`: heap growth on,
+  `_emscripten_resize_heap` returns false, no `abortOnCannotGrowMemory`,
+  so the ASSERTIONS-only `Aborted(OOM)` and "Cannot enlarge memory" are
+  never produced):
+  - `[object Object]`: a non-Error thrown out of wasm, which is how a failed
+    malloc's `std::bad_alloc` (`CppException`) arrives; code
+    `engineException`;
+  - `Aborted(…`: an Emscripten `abort()`; code `engineAbort`;
+  - `wasm _malloc returned an unusable address…`: conway's own guard
+    (`core/wasm_heap.js`), and anything `utils/oom.js` matches (V8's
+    "Array buffer allocation failed", Firefox's and Safari's "out of
+    memory", "WebAssembly.Memory(): could not allocate memory"); code
+    `outOfMemory`.
+
+  A C++ exception or abort that is not memory costs one wasted windowed
+  attempt, bounded to one, and then fails as before. A rebuild of
+  conway-geom can change these strings (they are constants in
+  `engineModelLoad.js`, with the glue as provenance). A schema refusal or
+  an ordinary error (a corrupt file) is never retried. The report says
+  `Engine retry: buffered open failed (<code>); retrying windowed on a fresh
+  engine`, then `Engine source: windowed (buffered open failed: <code>)`.
+  If the retry fails too, its failure is the load's, reported once.
+  **None of these has been produced for real**; the retry has run only
+  against doubles. Plain JS-heap exhaustion of the renderer kills the tab
+  and is not covered at all.
+  Costs and edges:
+  - **On the Blob store the retry holds no copy of the file**: its windowed
+    reads are Blob round trips, slower, which is the price on a device that
+    just ran out.
+  - The classic open conway falls back to re-parses the same bytes, so the
+    recorded reason is that second parse's; if it fails some other way, no
+    retry happens.
+  - **Previews:** the failed attempt's preview meshes stay in the preview
+    group and the retry adds its own, so preview memory roughly doubles
+    during the retry, until the durable model replaces them all.
+    `ProgressiveLoadSession` has no way to clear its preview group short of
+    finishing or aborting the session, and `parse` does not hold the
+    session, so this is left.
+  - **Engine log:** the failed attempt's warnings and errors ("Streamed open
+    failed…", "Error loading model…") stay in the load's tally; the `Engine
+    retry:` line, printed before the retry's lines, is what explains them.
+  - **In process** (no module worker), a STEP over the Blob store cannot
+    open windowed at all: the retry's windowed open fails with
+    `STORE_NOT_SYNCHRONOUS`, and that is the load's failure, not the
+    original out-of-memory one.
+- **Not covered:** an out-of-memory in the geometry pump, after a
+  successful open, has no fallback; it fails the load as before.
+
+Either fallback sends one GA `engine_source_fallback {format, store,
+failure, size_class}` event once the load succeeded
+(Loader.js#reportLoadDiagnostics). A failed open's Sentry event carries
+`engine_source` (`buffered` | `windowed`) and `engine_source_reason` as tags
+(engineOpenFailure.js#engineSourceTags), so a failed buffered open can be
+told from any other.
+
+**The spill with no File.** A load with no GLB writer sends SPILL with no
+File (Loader.js#load); for the policy's buffered open the handler spills
+onto the open's own File. Only for that open: a `disableStreamOpen` or
+fall-through buffered open still answers `unsupported` and keeps its
+source, as before the policy.
+
+**Reported.** `Engine source: <mode> (<why>)`, before `Engine source I/O:`
+(load-log-format.md). A buffered open the policy chose is the default path
+and is not counted as `engine_source_buffered`, which keeps counting the
+opens that could not window.
+
+**Rolling back.** Prod-wide: set `disableBufferedSource` to `isActive: true`
+in `FeatureFlags.js`; `engineFlagSnapshot` reads the static value first.
+One session: `?feature=disableBufferedSource`.
+
+**Deliberately not done (follow-ups).**
+- Buffered geometry over a sidecar index: a sidecar reopen with the artifact
+  absent pages geometry windowed and is slower than a cold buffered load on
+  the medium IFCs. Needs a conway API (open from the index, then adopt a
+  buffered source).
+- The page's sliced cache-key hash (+0.6 s before first pixels on PSB
+  against hashing one ArrayBuffer).
+- A live admission budget (§5.2, steps 7–8): the cap here is static per
+  device; once the engine host exists it should admit buffered opens
+  against live usage across workers.
+- Whether Firefox and Safari should stop holding the file at all above some
+  size. Neither browser has been measured with the policy.
+- **A windowed open that fails falls through to buffered, even over the
+  cap.** conwayOpen.js#openDeferred buffers the whole file after any
+  non-schema store-open failure; this pre-dates the policy, and the report
+  now names it (`Engine source: buffered (…, windowed open failed)`, reason
+  `windowedFailed`, distinct from in-process STEP's `windowedRefused`). On
+  an over-cap file it buffers more than the cap. The page's OOM retry turns
+  it off for its own open.
+
 ## 6. The one-worker-per-model choice, against the alternatives
 
 - **One shared engine worker for all models** would need Conway to close a
@@ -742,6 +928,14 @@ are not re-minted by an engine respawn because the scene is not rebuilt.
 
 Picking `open-205` back up after a break? Read this, then §7.1 (numbers)
 and §7.2 (step-9 criteria). Docs #2064, #2068 and #2071 are merged.
+
+**Since (2026-11-11): the source policy (§5.6, Share#2139).** A worker open
+is no longer windowed by default: it is buffered under a device cap (or
+over the Blob store's held copy) and released to windows at the spill;
+windowed is the over-cap, sidecar-reopen and kill-switch path. The windowed
+specs take `?feature=disableBufferedSource`. Open question carried from
+there: whether the cap is right (the measurements doc's
+§"Source policy as built").
 
 **Release goal.** `?feature=engineWorker` on by default. That is step 9,
 the only thing left that users would see.
@@ -1426,7 +1620,7 @@ and the other lacks.
 | Route | `Loader.js#findLoader`: one arm for `ifc`/`ifczip`/`step`/`stp` → `ShareIfcLoader`; one list of the part-21 types, `loader/part21Formats.js` (#2067), read by the Loader, `modelArchive.js`, `ShareModel.js` and the engine-worker routing | `.ifczip` unwrapped first (`Loader#load`) | — | shared |
 | Engine | conway's compat `IfcAPI` (`@bldrs-ai/conway/web-ifc`); it routes AP214 to `IfcApiProxyAP214` behind the same calls | `IfcApiProxyIfc` | `IfcApiProxyAP214` | shared surface; conway owns the split |
 | Source kind | `Loader.js#canOpenFromStore`: conway's own detector over the 64 KiB prefix, never the suffix, and conway's table of what the store open needs of the store (`storeOpenRequirementOf`, conway#757): IFC any store, STEP one that reads synchronously | a `File`, opened windowed from a `StepExternalByteStore` (in the worker, over a read-only sync access handle: `engineSources.js`, #2072) | the same `File` and the same stores in the worker (both offer `readSync`); on the main-thread engine, whose Blob store cannot read synchronously, an `ArrayBuffer`, buffered | **data**: one predicate; AP214's extraction reads synchronously, so conway faults its windows in and needs `readSync` (conway `streaming-federated-loader.md` §"STEP windowed: synchronous fault-in") |
-| Open | `loader/conwayOpen.js#openDeferred`, in both engines (main thread and worker): from the index sidecar when the worker has one, else windowed, else buffered; a schema refusal is final | `OpenModelFromIndex`, then `OpenModelStream`, then `OpenModelStreamed` | the same calls (`IfcApiProxyAP214.createFromIndex` / `createFromStore`, conway#757); `OpenModelStreamed` on the main-thread engine | shared |
+| Open | `loader/conwayOpen.js#openDeferred`, in both engines (main thread and worker): from the index sidecar when the worker has one, else windowed, else buffered; a schema refusal is final. In the worker the source policy (§5.6, `engine/sourcePolicy.js`) decides first, one rule for both formats: buffered under the device cap or over the Blob store's held copy, windowed over the cap, on a sidecar reopen and under `disableBufferedSource` | `OpenModelFromIndex`, then `OpenModelStream`, then `OpenModelStreamed` | the same calls (`IfcApiProxyAP214.createFromIndex` / `createFromStore`, conway#757); `OpenModelStreamed` on the main-thread engine | shared |
 | Open failure | `classifyOpenFailure` → `unsupportedSchema.js#openModelFailure`, classified where the statistics are (§2.4 G3) | — | — | shared |
 | Engine worker | `engine/engineModelLoad.js` + `engineHandler.js` + `EngineSession` + the remembered in-process fallback (`spawnEngine.js`); `format` is a label | — | — | shared (§7 steps 3, 6) |
 | Index | `onIndexed` → `makeIndexedModelHandle` (`indexedModel`, #2037), started beside the pump | the deferred index | the AP214 assembly tree, built at open | shared |

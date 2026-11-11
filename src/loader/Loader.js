@@ -67,7 +67,8 @@ import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToB
 import {spillModelSource} from './opfsSourceByteStore'
 import {EvictedOpfsSourceError, isUnusableOpfsSource} from './opfsSourceHealth'
 import {PART21_LOADER_TYPES, engineFormatOf} from './part21Formats'
-import {reportEngineSourceBuffered, reportPreviewUnitsSkipped} from './reportLoadDiagnostics'
+import {reportEngineSourceBuffered, reportEngineSourceFallback, reportPreviewUnitsSkipped} from './reportLoadDiagnostics'
+import {POLICY_BUFFERED_REASONS, SourceModeReason} from '../engine/sourcePolicy'
 import {reportRendererLimits} from './reportRendererLimits'
 import {reportOpfsDownloadFailed, reportOpfsNotCached, reportOpfsSourceEvicted} from '../OPFS/reportOpfsSourceCondition'
 import {STORE_DETECT_PREFIX_BYTES, conwayStoreOpenRequirement} from './stepFormat'
@@ -225,10 +226,15 @@ function fallbackSourceKind(path, isInMemory, isLocallyHosted) {
 /**
  * The GA diagnostics of a load that succeeded (reportLoadDiagnostics.js,
  * Share#2106 follow-ups): preview units its loader skipped
- * (`model.previewUnitsSkipped`, ShareIfcLoader#parse), and an engine-worker
- * source that opened buffered. The latter is the absence of the load
- * report's `Engine source I/O` line (engineModelLoad.js#sourceIoLine): the
- * worker's done summary has no source, or a `resident` one.
+ * (`model.previewUnitsSkipped`, ShareIfcLoader#parse), and how an
+ * engine-worker source opened, from the worker's done summary:
+ * - the source policy's buffered open fell back to windowed for memory
+ *   (`sourceMode.reason` `bufferedFailed`, engine/sourcePolicy.js):
+ *   `engine_source_fallback`;
+ * - buffered because it could not window (no `Engine source I/O` line,
+ *   engineModelLoad.js#sourceIoLine, and not a buffered open the policy
+ *   chose over a store): `engine_source_buffered`.
+ * At most one of the two per load.
  *
  * @param {object} model the parsed model
  * @param {object} context
@@ -242,8 +248,15 @@ function reportLoadDiagnostics(model, {format, kind, bufferedReason, sourceBytes
   reportPreviewUnitsSkipped({format, kind, skipped: model?.previewUnitsSkipped})
   const ifcAPI = model?.ifcManager?.ifcAPI
   if (ifcAPI?.engineSession && ifcAPI.summary) {
-    const source = ifcAPI.summary.source
-    if (!source || source.kind === 'resident') {
+    const {source, sourceMode} = ifcAPI.summary
+    if (sourceMode?.reason === SourceModeReason.BUFFERED_FAILED) {
+      reportEngineSourceFallback({
+        format: sourceMode.format, storeKind: sourceMode.storeKind, failure: sourceMode.failure,
+        sizeBytes: sourceMode.bytes,
+      })
+    } else if (POLICY_BUFFERED_REASONS.includes(sourceMode?.reason)) {
+      // The policy's default: nothing degraded to report.
+    } else if (!source || source.kind === 'resident') {
       reportEngineSourceBuffered({reason: bufferedReason, sizeBytes: sourceBytes})
     }
   }

@@ -2,8 +2,8 @@
 
 ## General Principles
 - Follow Google Style Guide as the base standard
-- Use `yarn lint` to check for style violations
-- Use `yarn typecheck` for TypeScript validation
+- Use `bun run lint` to check for style violations
+- Use `bun run typecheck` for TypeScript validation
 - All style rules are enforced automatically via ESLint
 
 ## File Layout and Organization
@@ -346,12 +346,12 @@ export default function ExampleComponent({title, onClose}) {
 ```
 
 ## Enforcement
-- **Pre-commit hooks**: Run `yarn precommit` (lint + test)  
+- **Pre-commit hooks**: Run `bun run precommit` (lint + test)  
 - **CI/CD**: All PRs must pass linting
 - **IDE integration**: Configure your editor to show ESLint warnings
-- **Auto-fix**: Use `yarn lint --fix` for automatic corrections
+- **Auto-fix**: Use `bun run lint --fix` for automatic corrections
 
 ### Misc
 - Remember 2 spaces after imports and always have a newline at EOF
 - For jest and playwright tests avoid specifying timeouts (use the default), or keep them short eg 5 seconds.
-- Always follow style rules as you go, and run yarn lint on the files you modify to identify style fixes to make
+- Always follow style rules as you go, and run `bun run lint` on the files you modify to identify style fixes to make

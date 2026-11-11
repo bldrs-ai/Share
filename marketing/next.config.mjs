@@ -23,7 +23,7 @@ const nextConfig = {
   images: {unoptimized: true},
   reactStrictMode: true,
   // Without this, Next walks up to the repo root and picks the SPA's
-  // yarn.lock + tsconfig + eslint config as the "workspace root", which
+  // bun.lock + tsconfig + eslint config as the "workspace root", which
   // pulls eslint-config-google into the marketing build by accident.
   outputFileTracingRoot: __dirname,
   // .mdx files are read at build time via gray-matter + next-mdx-remote,

@@ -72,8 +72,8 @@ jobs:
   # workers = 8 Chromiums.
   #
   # The SPA is built once (`playwright-build`) and downloaded by each
-  # shard as `yarn test-flows-build` left it (no map-stripping, no
-  # rewrite). Shards skip `yarn install` of the Share tree: they npm
+  # shard as `bun run test-flows-build` left it (no map-stripping, no
+  # rewrite). Shards skip `bun install` of the Share tree: they npm
   # install `@playwright/test@1.56.1` plus `http-server` (browsers
   # already in the image) and run `npx http-server` inside `docs/`.
   # Specs import the runner plus
@@ -82,7 +82,7 @@ jobs:
   #
   # Screenshots stay on the Playwright noble container (chromium 1194),
   # not the host image. 14 GB disk vs the old 150 GB is the thing to
-  # watch if a shard dies in yarn install; browsers come with the image.
+  # watch if a shard dies in its npm install; browsers come with the image.
   #
   # Branch protection requires the check name `playwright-run`. Matrix
   # jobs would rename it to `playwright-run (1)` / `(2)` and the required
@@ -96,23 +96,29 @@ jobs:
       SKIP_MARKETING: 'true'
       SHARE_CONFIG: playwright
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: 'yarn'
-          cache-dependency-path: 'yarn.lock'
+
+      # Bun installs (bun.lock, bunfig.toml); Node above stays the runtime.
+      # Keep bun-version in step with package.json's packageManager and
+      # netlify.toml's BUN_VERSION. The one third-party action here, so it is
+      # pinned to a commit rather than a movable tag.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
 
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      - run: yarn install --frozen-lockfile --prefer-offline
+      - run: bun install --frozen-lockfile
 
       - name: Build Playwright SPA
-        run: yarn test-flows-build
+        run: bun run test-flows-build
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: playwright-docs
           path: docs
@@ -159,12 +165,22 @@ jobs:
     # This is the hang guard; do not raise it to absorb an imbalance.
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      - uses: actions/download-artifact@v4
+      # The image brings its own Node (22 in v1.56.1-noble: Playwright's
+      # utils/docker/Dockerfile.noble installs nodesource node_22.x), which
+      # is not what the build job, Jest or Netlify run (24). Put 24 first on
+      # PATH so the test runner, npm and tools/playwrightShards.mjs match the
+      # rest of CI. Only Node changes: the browsers stay the image's, so
+      # screenshot baselines are unaffected.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v8
         with:
           name: playwright-docs
           path: docs
@@ -237,7 +253,7 @@ jobs:
       # Always upload the HTML report (handy to debug failures)
       - name: Upload Playwright HTML report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-${{ matrix.shard }}
           path: playwright-report
@@ -247,7 +263,7 @@ jobs:
       # Optionally upload traces from failed tests
       - name: Upload Playwright traces
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-traces-${{ matrix.shard }}
           path: test-results

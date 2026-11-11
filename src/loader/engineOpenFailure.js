@@ -110,10 +110,30 @@ export function engineFailureCaptureContext(err) {
     tags: {
       'engine.load_status': err.status,
       'engine.failure_reason': normalizeMessageDigits(err.reason).slice(0, MAX_TAG_CHARS),
+      ...engineSourceTags(err),
     },
     contexts: {
       engine_failure: {status: err.status, reason: err.rawReason},
     },
     fingerprint: ['{{ default }}', err.status],
   }
+}
+
+
+/**
+ * The source-mode tags a failed engine-worker open carries
+ * (engine/engineModelLoad.js#withEngineSource; the source policy,
+ * engine/sourcePolicy.js): `engine_source` `buffered` | `windowed`, and the
+ * policy's reason code, so a failed buffered open can be told from any other
+ * open failure. Structured values only; empty for an error without them (a
+ * main-thread load, a worker from before the policy).
+ *
+ * @param {Error} err
+ * @return {object}
+ */
+export function engineSourceTags(err) {
+  if (typeof err?.engineSource !== 'string') {
+    return {}
+  }
+  return {engine_source: err.engineSource, engine_source_reason: String(err.engineSourceReason ?? 'unknown')}
 }

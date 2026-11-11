@@ -56,7 +56,7 @@ export default {
   // Measurement tools (design/new/offscreen-rendering.md §5b,
   // tools/spikes/offscreen/README.md): `?feature=mainThreadTrace` and the
   // /spike/offscreen/ replay page. Left out of every build unless this is
-  // set, e.g. `MEASUREMENT_TOOLS=true yarn build-prod`; the README says how
+  // set, e.g. `MEASUREMENT_TOOLS=true bun run build-prod`; the README says how
   // to turn it on for a deploy preview.
   MEASUREMENT_TOOLS: false,
 }

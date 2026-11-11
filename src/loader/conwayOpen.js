@@ -2,7 +2,7 @@
 // (engine-worker.md §8 item 6: one path, not two): the main-thread
 // `conwayDirectIfcLoader.js#parseIfcWithConway` and the engine worker's
 // `engine/engineHandler.js`. Worker-safe: it imports only `openAttempt.js`.
-import {beginOpenAttempt, conwayOpenFailure, conwayRefusedSchema} from './openAttempt'
+import {beginOpenAttempt, conwayLoadStatus, conwayOpenFailure, conwayRefusedSchema} from './openAttempt'
 
 
 /**
@@ -32,14 +32,23 @@ import {beginOpenAttempt, conwayOpenFailure, conwayRefusedSchema} from './openAt
  * @param {Uint8Array|null} [options.sidecar] a persisted index sidecar for
  *   this store's file, tried first (`OpenModelFromIndex`) when there is a
  *   store; only the engine worker passes one (engine/engineSidecars.js)
- * @return {Promise<{modelID: number, windowed: boolean, attempt: object, index: (string|null)}>}
+ * @param {boolean} [options.bufferedFallback] false: a failed store open is
+ *   the answer, with no buffered open after it (the engine worker's windowed
+ *   retry after a buffered open ran out of memory, which must not buffer the
+ *   whole file again)
+ * @return {Promise<{modelID: number, windowed: boolean, attempt: object, index: (string|null),
+ *   storeFailure: (object|undefined)}>}
  *   `index` is `'sidecar'` when the model opened from the sidecar,
  *   `'sidecarRejected'` when one was offered and refused (the model was
- *   then parsed), else null
+ *   then parsed), else null. `storeFailure` is what conway recorded about a
+ *   store open that failed and fell through to the buffered one
+ *   (`conwayOpenFailure`: `{status, reason}`), so the caller can say which
+ *   kind of fall-through it was (engine/engineHandler.js)
  */
-export async function openDeferred(ifcAPI, {store, loadBytes, settings, sidecar = null}) {
+export async function openDeferred(ifcAPI, {store, loadBytes, settings, sidecar = null, bufferedFallback = true}) {
   let attempt
   let index = null
+  let storeFailure
   if (store !== null && sidecar !== null && typeof ifcAPI.OpenModelFromIndex === 'function') {
     // Index-first (engine-worker.md §7 step 8; conway#756, #757): the index
     // comes off the persisted sidecar, so there is no parse. The sidecar is
@@ -69,12 +78,16 @@ export async function openDeferred(ifcAPI, {store, loadBytes, settings, sidecar 
     if (windowed || conwayRefusedSchema(ifcAPI, attempt)) {
       return {modelID, windowed, attempt, index}
     }
+    storeFailure = conwayOpenFailure(ifcAPI, attempt) ?? {status: conwayLoadStatus(ifcAPI, attempt)}
+    if (!bufferedFallback) {
+      return {modelID, windowed: false, attempt, index, storeFailure}
+    }
   }
   const bytes = await loadBytes()
   attempt = beginOpenAttempt(ifcAPI)
   // eslint-disable-next-line new-cap
   const modelID = await ifcAPI.OpenModelStreamed(bytes, settings)
-  return {modelID, windowed: false, attempt, index}
+  return {modelID, windowed: false, attempt, index, storeFailure}
 }
 
 

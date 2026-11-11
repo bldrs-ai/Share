@@ -90,17 +90,24 @@ jobs:
       SHARE_CONFIG: dev
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - run: yarn install
-      - run: yarn build-prod
-      - run: yarn lint
-      - run: yarn test-ci
+      # Bun installs (bun.lock, bunfig.toml); Node above stays the runtime.
+      # Keep bun-version in step with package.json's packageManager and
+      # netlify.toml's BUN_VERSION. The one third-party action here, so it is
+      # pinned to a commit rather than a movable tag.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - run: bun run build-prod
+      - run: bun run lint
+      - run: bun run test-ci
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: coverage/

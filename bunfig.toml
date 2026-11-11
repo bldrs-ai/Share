@@ -1,0 +1,18 @@
+# Bun is this repo's package manager (bun.lock); Node stays the runtime for
+# every script (`bun run <script>` executes package scripts with the `node`
+# their bins name). Measurements and the reasons behind each setting:
+# design/new/toolchain-node-bun.md.
+
+[install]
+# One directory per name@version under node_modules/.bun/, symlinked into
+# each dependent (pnpm-style), instead of a hoisted tree:
+# - a package is importable only by what declares it, so a missing
+#   package.json entry fails the build here rather than whenever a hoisting
+#   change stops providing it (react-router and @mui/system were imported
+#   for years without being declared);
+# - each version exists once on disk, so esbuild bundles it once. Bun's
+#   hoisted layout nested 18 copies of es-abstract under the airbnb-js-shims
+#   polyfills, +0.5 MB in docs/index.js.
+linker = "isolated"
+# package.json pins exact versions; keep `bun add` from writing ^ranges.
+exact = true

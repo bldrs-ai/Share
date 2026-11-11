@@ -44,3 +44,18 @@ export const excludedNodeModules = [
   'vfile-message',
   'use-double-tap',
 ].join('|')
+
+
+/**
+ * The `transformIgnorePatterns` entry that leaves `excludedNodeModules` to be
+ * transformed and skips the rest of node_modules.
+ *
+ * bunfig.toml's isolated linker stores each package once, at
+ * `node_modules/.bun/<name>@<version>/node_modules/<name>/`, and jest matches
+ * against that real path. The lookahead therefore lets `.bun/` through, so the
+ * pattern is decided at the inner `/node_modules/<name>/`: a package listed
+ * above is transformed wherever it is stored, anything else is still ignored
+ * there. Without the `.bun/` arm the first `/node_modules/` of every store
+ * path matches and three, conway, uuid… reach jest as untransformed ESM.
+ */
+export const transformIgnoreNodeModules = `/node_modules/(?!\\.bun/|${excludedNodeModules}/)`

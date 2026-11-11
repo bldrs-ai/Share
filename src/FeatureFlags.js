@@ -249,6 +249,14 @@ export const flags = [
   // whole load instead of holding the file for it. Also the A/B for
   // measuring what the whole-file read buys.
   {name: 'disableEngineResidentSource', isActive: false},
+  // Kill switch for the engine's source policy (engine/sourcePolicy.js,
+  // Share#2139; engine-worker.md §"Source policy"): open every model the
+  // worker can window windowed, as before the policy, instead of buffered
+  // under the device's cap. `?feature=disableBufferedSource` reverts one
+  // session (and A/Bs the same build). Setting it `isActive: true` here is
+  // the PROD ROLLBACK: spawnEngine.js#engineFlagSnapshot reads the static
+  // value first, as engineRoute.js does `disableEngineWorker`.
+  {name: 'disableBufferedSource', isActive: false},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-

@@ -22,10 +22,13 @@ const {beforeEach} = test
 //
 // Hosted, so the model opens through OPFS and the worker reads it windowed;
 // `expectWindowedOpen` checks the load report says so, or the test would
-// pass on the buffered open it is not about. `yarn test-flows-build` copies
+// pass on the buffered open it is not about. `bun run test-flows-build` copies
 // Momentum.ifc to `__test_fixtures__/` (as previewInteraction.spec.ts
 // uses it).
-const MODEL_PATH = '/share/v/p/__test_fixtures__/Momentum.ifc'
+// `disableBufferedSource`: the source policy (engine/sourcePolicy.js,
+// Share#2139) would open this model buffered, and this spec is of the
+// windowed open's preview.
+const MODEL_PATH = '/share/v/p/__test_fixtures__/Momentum.ifc?feature=disableBufferedSource'
 const TEST_TIMEOUT_MS = 120_000
 const HELD_TIMEOUT_MS = 60_000
 

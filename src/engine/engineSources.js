@@ -84,7 +84,7 @@ export const RESIDENT_SOURCE_MAX_BYTES = 1024 * MIB
  * @param {function(): number} [now]
  * @param {Function} [ReaderSync] `FileReaderSync`, present only in a worker
  * @return {object} `{byteLength, read, readSync?, counters, kind, close,
- *   holdResident, releaseResident}`
+ *   holdResident, takeWhole, releaseResident}`
  */
 export function makeBlobStore(blob, now = () => performance.now(), ReaderSync = globalThis.FileReaderSync) {
   const counters = {...newCounters(), residentBytes: 0, residentReads: 0}
@@ -139,6 +139,20 @@ export function makeBlobStore(blob, now = () => performance.now(), ReaderSync = 
         counters.residentSkipped = `${e?.name ?? 'Error'}: ${e?.message ?? e}`
       }
     },
+    /**
+     * Hand the whole-file copy to the caller, and stop serving reads from it
+     * (later reads go to the Blob again). For a buffered open over bytes this
+     * store already holds (sourcePolicy.js, Share#2139): the engine then owns
+     * the bytes, so the store must not keep a second reference, or the
+     * spill could not free them.
+     *
+     * @return {Uint8Array|null} the copy, or null when none was held
+     */
+    takeWhole() {
+      const held = resident
+      resident = null
+      return held
+    },
     /** @return {boolean} whether a whole-file copy was held and is now let go */
     releaseResident() {
       const held = resident !== null
@@ -175,7 +189,7 @@ export function makeBlobStore(blob, now = () => performance.now(), ReaderSync = 
  * @param {object} access the sync access handle
  * @param {number} size the file's size, read once at open
  * @param {function(): number} [now]
- * @return {object} `{byteLength, read, readSync, counters, kind, close}`
+ * @return {object} `{byteLength, read, readSync, takeWhole, counters, kind, close}`
  */
 export function makeSyncHandleStore(access, size, now = () => performance.now()) {
   const counters = newCounters()
@@ -204,6 +218,19 @@ export function makeSyncHandleStore(access, size, now = () => performance.now())
     // eslint-disable-next-line require-await
     async read(offset, length) {
       return readNow(offset, length)
+    },
+    /**
+     * The whole file, read once through the handle into one buffer this
+     * store keeps no reference to, for a buffered open (sourcePolicy.js,
+     * Share#2139). One read, not the Blob store's `blob.arrayBuffer()`,
+     * which cost PSB ~0.9 s before its open (source-policy-measurements.md
+     * §"After conway 1.1645.781" (d)). An allocation failure throws
+     * (RangeError), and the open goes windowed over this same store.
+     *
+     * @return {Uint8Array}
+     */
+    takeWhole() {
+      return readNow(0, size)
     },
     // The same synchronous read. conway calls it from inside a synchronous
     // record read when a STEP model's window is missing (conway#757), on the

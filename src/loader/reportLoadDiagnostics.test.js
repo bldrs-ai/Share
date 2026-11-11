@@ -5,6 +5,7 @@ import {
   leafBucket,
   reportBvhDepthCapToGa,
   reportEngineSourceBuffered,
+  reportEngineSourceFallback,
   reportPreviewUnitsSkipped,
   sizeClass,
   skippedBucket,
@@ -43,6 +44,22 @@ describe('loader/reportLoadDiagnostics', () => {
         throw new Error('gtag blocked')
       })
       expect(() => reportPreviewUnitsSkipped({format: 'step', kind: 'local', skipped: 1})).not.toThrow()
+    })
+  })
+
+  describe('reportEngineSourceFallback', () => {
+    it('sends exactly format, store, failure and a size class', () => {
+      reportEngineSourceFallback({format: 'step', storeKind: 'blobHeld', failure: 'outOfMemory', sizeBytes: 2 * GIB})
+      expect(gtagEvent.mock.calls).toEqual([
+        ['engine_source_fallback', {format: 'step', store: 'blobHeld', failure: 'outOfMemory', size_class: '>=1GB'}],
+      ])
+    })
+
+    it('fills what it was not told with unknown, never undefined', () => {
+      reportEngineSourceFallback({})
+      expect(gtagEvent.mock.calls).toEqual([
+        ['engine_source_fallback', {format: 'unknown', store: 'unknown', failure: 'unknown', size_class: '<10MB'}],
+      ])
     })
   })
 

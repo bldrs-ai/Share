@@ -17,7 +17,7 @@ spacing). The rules that `--fix` can't satisfy are relaxed for this directory in
 `.eslintrc.cjs`.
 
 **Re-syncing:** copy the upstream files over these, run
-`yarn eslint --fix src/loader/adf`, delete the empty `/** */` stubs `--fix`
+`npx eslint --fix src/loader/adf`, delete the empty `/** */` stubs `--fix`
 inserts, then re-apply the three edits above.
 
 Share-side glue (the `findLoader` wrapper and the fixup) is in
