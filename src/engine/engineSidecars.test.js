@@ -686,7 +686,9 @@ function sidecarApi(log, {refuseIndex = false} = {}) {
  *
  * @param {object} api
  * @param {object} root
- * @param {object} [flags]
+ * @param {object} [flags] over `disableBufferedSource`: these tests are of
+ *   the windowed parse and its export; the source policy's buffered default
+ *   saves and reopens a sidecar too, tested in engineSourcePolicy.test.js
  * @return {Promise<object>} the `done` summary
  */
 async function loadOnce(api, root, flags = {}) {
@@ -707,7 +709,7 @@ async function loadOnce(api, root, flags = {}) {
   }
   const session = new EngineSession(makeWorkerTransport(fakeWorker), {epoch: 1})
   toPage({v: ENGINE_PROTOCOL_VERSION, epoch: 0, ev: Ev.HELLO, seq: 0})
-  await session.init({flags})
+  await session.init({flags: {disableBufferedSource: true, ...flags}})
   const done = new Promise((resolve) => session.on(Ev.DONE, (msg) => resolve(msg.summary)))
   await session.open({file: snapshot()}, {format: 'step', stream: {previews: false}})
   const summary = await done

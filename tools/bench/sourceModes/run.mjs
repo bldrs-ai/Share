@@ -9,8 +9,8 @@
  *   SKIP_MARKETING=true yarn test-flows-build     # once; then restore package.json
  *   node tools/bench/sourceModes/run.mjs \
  *     --model duplex=/path/duplex.ifc --model psb=/path/PSB.ifc \
- *     --arms windowedHandle,windowedHeld,buffered,heldBuffer,noSidecar \
- *     --reopen windowedHandle,heldBuffer --lock /tmp/bldrs-bench.lock
+ *     --arms policyDefault,windowedHandle,windowedHeld,buffered,heldBuffer,noSidecar \
+ *     --reopen policyDefault,windowedHandle,heldBuffer --lock /tmp/bldrs-bench.lock
  *
  * Shape of a run: for each model, `n` rounds; each round loads the model
  * once per arm, in the given order (ABCDE ABCDE …, so drift lands on every

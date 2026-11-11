@@ -33,6 +33,8 @@ import {openSourceStore, opfsRoot} from './engineSources'
 import {readSidecar, sweepSidecars, writeSidecar} from './engineSidecars'
 import {makeBatchEncoder, previewMessage, snapshotStatistics} from './engineStream'
 import {enableStepPreviewFinishParse} from '../viewer/ifc/pumpTestSeams'
+import {isOutOfMemoryError} from '../utils/oom'
+import {SourceModeReason, StoreKind, chooseSourceMode} from './sourcePolicy'
 
 
 /**
@@ -149,6 +151,16 @@ export function createEngineHandler({
   // Why the store is not the sync access handle, when it is not (reported
   // in the `open` reply and the `done` packet).
   let sourceFallback = null
+  // The source policy's decision for the open model (sourcePolicy.js), as it
+  // ran: reported in the `open` reply and the `done` packet.
+  let openSourceMode = null
+  // A buffered open's File, when it came from one: the SPILL's store is
+  // opened over it when the page sends none (a load with no GLB writer).
+  let bufferedFile = null
+  // What the page said of its device (spawnEngine.js#engineDeviceSnapshot),
+  // for the policy's cap. A worker could read `navigator.deviceMemory` for
+  // itself, but not the page's form factor, so both come from the page.
+  let device = {deviceMemoryGiB: null, isMobile: false}
 
   const send = (msg, transfer) => post({v: ENGINE_PROTOCOL_VERSION, epoch, ...msg}, transfer)
   const flushLog = () => {
@@ -207,6 +219,10 @@ export function createEngineHandler({
         epoch = args.epoch
       }
       flags = args.flags ?? {}
+      device = {
+        deviceMemoryGiB: args.device?.deviceMemoryGiB ?? globalThis.navigator?.deviceMemory ?? null,
+        isMobile: args.device?.isMobile === true,
+      }
       const t0 = now()
       let created
       try {
@@ -383,8 +399,12 @@ export function createEngineHandler({
       }, elementProperties ? [elementProperties.buffer] : [])
     },
 
-    async [Op.SPILL]({file = null} = {}) {
+    async [Op.SPILL]({file: pageFile = null} = {}) {
       requireModel()
+      // The page's File when it sent one (the GLB writer's source), else the
+      // buffered open's own (a load with no writer, Loader.js#load): without
+      // it a buffered source would stay resident for the session.
+      const file = pageFile ?? bufferedFile
       if (sourceStore !== null) {
         // Windowed already (a store-backed open): conway reads through the
         // store this session holds, and a second one would only replace a
@@ -423,6 +443,7 @@ export function createEngineHandler({
         // Kept for the session, as an open's store is: later reads page from
         // it, and a sync access handle's OPFS lock is released in dispose().
         sourceStore = opened.store
+        bufferedFile = null
         sourceFallback = opened.fallbackReason
       } else {
         opened.store.close()
@@ -497,36 +518,88 @@ export function createEngineHandler({
       // conway#760); a sidecar open adopts the sidecar's own.
       settings.RECORD_SOURCE_HASH = true
     }
-    // Share#2139 (experimental, `engineHeldBufferOpen`, default off): when
-    // the Blob store already holds the whole file, open buffered over those
-    // bytes rather than windowed over them. The windowed open's cost on a
-    // resident file is all overhead (4 MiB window copies, LRU bookkeeping,
-    // re-scans); the buffered one does none of it. RECORD_SOURCE_HASH is
-    // still set above, so the sidecar export below still has its digests.
-    // Not for a sidecar reopen, which needs the store to page from.
-    const heldBytes = flags.engineHeldBufferOpen && sidecar === null &&
-      typeof store?.takeResident === 'function' ?
-      store.takeResident() :
-      null
-    const isHeld = heldBytes !== null
+    // The source policy (sourcePolicy.js, Share#2139): buffered or windowed
+    // for this open. Buffered reads the whole file once into one buffer the
+    // store keeps no reference to (`takeWhole`: through the sync access
+    // handle, or the Blob store's held copy) and hands it to the buffered
+    // open, which is faster on every model measured; the spill later
+    // releases it to windows over a store (SPILL). RECORD_SOURCE_HASH is set
+    // above either way, so a buffered parse still exports its sidecar.
+    let sourceMode = chooseSourceMode({
+      bytes: sourceSizeOf(source, store),
+      format,
+      hasSidecar: sidecar !== null,
+      storeKind: storeKindOf(store),
+      deviceMemoryGiB: device.deviceMemoryGiB,
+      isMobile: device.isMobile,
+      flags,
+    })
+    let whole = null
     let adopted = false
     let id
     let windowed
     let attempt
     let index
     try {
-      ({modelID: id, windowed, attempt, index} = await openDeferred(engine, {
-        sidecar,
-        store: isHeld ? null : store,
-        loadBytes: bytesLoader(source, store, heldBytes),
-        settings,
-      }))
-      if (isHeld && !windowed && !disposed && typeof id === 'number' && id >= 0 && entryPath !== null) {
-        // The buffered open over held bytes still exports a sidecar, so a
-        // reopen after eviction can come back from the index (Share#2139).
+      if (sourceMode.mode === 'buffered' && store !== null) {
+        const tRead = now()
+        try {
+          whole = store.takeWhole()
+        } catch (e) {
+          if (!windowedOpenSurvives(e)) {
+            throw e
+          }
+          sourceMode = bufferedFailed(sourceMode, e)
+        }
+        // The whole-file read's cost before the open: the sync access
+        // handle's one read here, or the Blob store's hold, already paid in
+        // openSourceStore (its one counted read).
+        sourceMode.readMs = store.kind === 'syncHandle' ? now() - tRead : store.counters.ms
+        if (whole === null && sourceMode.mode === 'buffered') {
+          // The store had nothing to hand over after all: windowed, as the
+          // policy would have said for a store that holds nothing.
+          sourceMode = {...sourceMode, mode: 'windowed', reason: SourceModeReason.BLOB_NOT_HELD}
+        }
+      }
+      try {
+        ({modelID: id, windowed, attempt, index} = await openDeferred(engine, {
+          sidecar,
+          store: whole !== null ? null : store,
+          loadBytes: bytesLoader(source, store, whole),
+          settings,
+        }))
+      } catch (e) {
+        // A buffered open over the whole file that ran out of memory: the
+        // windowed open needs only its window, so it may still get there.
+        // The bytes are dropped first. Its own buffered fallback is not
+        // taken: that would read the whole file a second time.
+        if (whole === null || disposed || !windowedOpenSurvives(e)) {
+          throw e
+        }
+        whole = null
+        sourceMode = bufferedFailed(sourceMode, e)
+        ;({modelID: id, windowed, attempt, index} = await openDeferred(engine, {
+          sidecar: null, store, loadBytes: rejectingLoader(e), settings,
+        }))
+      }
+      const openedModel = !disposed && typeof id === 'number' && id >= 0
+      if (openedModel && !windowed && sourceMode.mode === 'windowed') {
+        // The policy said windowed, and conway refused the store open (a STEP
+        // over a store that cannot read synchronously, in process) and
+        // buffered instead (conwayOpen.js#openDeferred).
+        sourceMode = {...sourceMode, mode: 'buffered', reason: SourceModeReason.WINDOWED_REFUSED}
+      }
+      if (openedModel && whole !== null && !windowed && entryPath !== null) {
+        // The buffered parse still exports a sidecar, so a reopen after
+        // eviction can come back from the index (Share#2139).
         sidecarState = {entryPath, file: blob, getOpfsRoot, source: 'parse', bytes: 0, saved: false}
       }
-      if (windowed && !disposed && typeof id === 'number' && id >= 0) {
+      if (openedModel && !windowed && blob) {
+        // What the SPILL releases a buffered source to when the page sends
+        // no File of its own (a load with no GLB writer, Loader.js#load).
+        bufferedFile = blob
+      }
+      if (openedModel && windowed) {
         // Kept for the session: property reads page windows from it long
         // after the load. Released in dispose(), after CloseModel.
         sourceStore = store
@@ -539,13 +612,14 @@ export function createEngineHandler({
         }
       }
     } finally {
-      // Not adopted (a buffered fallback, a failed or refused open, an open
+      // Not adopted (a buffered open, a failed or refused open, an open
       // that threw, or a close that came first): nothing reads it again, so
       // a sync access handle's lock is let go now rather than at terminate.
       if (!adopted) {
         store?.close()
       }
     }
+    openSourceMode = sourceMode
     if (disposed) {
       // Closed while the open ran: release what it made, and stop.
       if (typeof id === 'number' && id >= 0) {
@@ -573,7 +647,7 @@ export function createEngineHandler({
     modelID = id
     const result = {
       modelID, windowed, format, openMs: now() - t0, wasmBytes: wasmBytesOf(api),
-      source: sourceSummary(),
+      source: sourceSummary(), sourceMode: openSourceMode,
     }
     emit(Ev.INDEXED, {modelID, windowed})
     if (stream) {
@@ -800,7 +874,7 @@ export function createEngineHandler({
    * @return {Promise<object>}
    */
   async function summarize(counts) {
-    const summary = {...counts, wasmBytes: wasmBytesOf(api), source: sourceSummary()}
+    const summary = {...counts, wasmBytes: wasmBytesOf(api), source: sourceSummary(), sourceMode: openSourceMode}
     if (sidecarState !== null) {
       summary.index = {source: sidecarState.source, bytes: sidecarState.bytes, saved: sidecarState.saved}
       // Only when there is something to say, so a clean save's packet is
@@ -972,6 +1046,82 @@ function bytesLoader(source, store, whole) {
     // briefly hold the file three times over on a buffered open.
     return ArrayBuffer.isView(bytes) ? bytes : new Uint8Array(bytes)
   }
+}
+
+
+/**
+ * A `loadBytes` for the windowed retry after a buffered open ran out of
+ * memory: openDeferred's own buffered fallback must not read the whole file
+ * again, so it fails with the buffered open's error.
+ *
+ * @param {*} error
+ * @return {function(): Promise<never>}
+ */
+function rejectingLoader(error) {
+  return () => Promise.reject(error)
+}
+
+
+/**
+ * Could a windowed open still succeed where a buffered one failed? Only
+ * when the failure was memory: an allocation that did not fit (the
+ * whole-file buffer's RangeError) or the engine running out. Anything else
+ * (a malformed file, a schema refusal) would fail windowed too, so it
+ * stands.
+ *
+ * @param {*} e
+ * @return {boolean}
+ */
+export function windowedOpenSurvives(e) {
+  return e instanceof RangeError || isOutOfMemoryError(e)
+}
+
+
+/**
+ * The policy's decision once its buffered open failed and the open went
+ * windowed: the reason is the fallback, and `failure` says what failed as an
+ * error NAME only (a structured field for the load report and GA, which an
+ * engine message could not be trusted to stay free of a file name).
+ *
+ * @param {object} decided from sourcePolicy.js#chooseSourceMode
+ * @param {*} error
+ * @return {object}
+ */
+function bufferedFailed(decided, error) {
+  return {
+    ...decided,
+    mode: 'windowed',
+    reason: SourceModeReason.BUFFERED_FAILED,
+    failure: error instanceof RangeError ? 'RangeError' : 'outOfMemory',
+  }
+}
+
+
+/**
+ * @param {object|null} store from engineSources.js#openSourceStore
+ * @return {string|null} the policy's StoreKind, or null for no store
+ */
+function storeKindOf(store) {
+  if (store === null) {
+    return null
+  }
+  if (store.kind === 'syncHandle') {
+    return StoreKind.SYNC_HANDLE
+  }
+  return store.counters?.residentBytes > 0 ? StoreKind.BLOB_HELD : StoreKind.BLOB
+}
+
+
+/**
+ * @param {object} source `{file}` or `{bytes}`
+ * @param {object|null} store
+ * @return {number} the source's size in bytes, 0 when unknown
+ */
+function sourceSizeOf(source, store) {
+  if (store !== null) {
+    return store.byteLength
+  }
+  return source?.file?.size ?? source?.bytes?.byteLength ?? 0
 }
 
 

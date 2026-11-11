@@ -199,7 +199,7 @@ describe('engine/engineHandler: a buffered open lets its source go at the spill 
     const SIZE = 1 << 20
     const file = new File([new Uint8Array(SIZE)], NAME, {lastModified: MTIME})
     const {request, events} = drive(api, opfsWith(file))
-    await request(Op.INIT, {flags: {engineHeldBufferOpen: true, disableEngineSidecar: true}})
+    await request(Op.INIT, {flags: {disableEngineSidecar: true}})
     const opened = await request(Op.OPEN, {source: {file}, stream: {previews: true}})
     expect(opened.result.windowed).toBe(false)
     await untilDone(events)

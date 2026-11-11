@@ -45,6 +45,7 @@ import {engineFormatOf} from '../loader/part21Formats'
 import {conwayDirectInfo, conwayDirectWarn} from '../viewer/ifc/conwayDirectLog'
 import {testPumpBatchSize, testStepPreviewFinishParse} from '../viewer/ifc/pumpTestSeams'
 import {Ev, Op} from './protocol'
+import {SourceModeReason} from './sourcePolicy'
 import {spawnEngineSession} from './spawnEngine'
 
 
@@ -381,6 +382,7 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
       session.close()
       throw e
     }
+    reportSourceInfo(sourceModeLine(ifcAPI.summary.sourceMode))
     reportSourceInfo(sourceIoLine(ifcAPI.summary.source))
     reportSourceInfo(indexLine(ifcAPI.summary.index))
     // The integration-boundary line conwayDirectIfcLoader prints for the
@@ -557,6 +559,39 @@ export function indexLine(index) {
     `sidecar saved (${size}${via})` :
     `no sidecar saved${index.saveError ? ` (${index.saveError})` : ''}`
   return `Engine index: ${refused}parsed; ${saved}`
+}
+
+
+/**
+ * The load report's line for the source policy's decision
+ * (sourcePolicy.js, Share#2139): which mode the open ran in and why, with
+ * the size and, over the sync access handle, the device's cap. Printed
+ * before `Engine source I/O:`, which follows only a windowed open (it is the
+ * store the windowed source pages from). Absent for an engine that sent no
+ * decision (a worker bundle from before the policy).
+ *
+ * @param {object|undefined} mode the `done` packet's `sourceMode`
+ * @return {string|undefined}
+ */
+export function sourceModeLine(mode) {
+  if (!mode?.mode) {
+    return undefined
+  }
+  const size = `${(mode.bytes / MIB).toFixed(1)} MB`
+  const cap = Number.isFinite(mode.capBytes) ? `${Math.round(mode.capBytes / MIB)} MB` : null
+  const why = {
+    [SourceModeReason.UNDER_CAP]: `${size}, cap ${cap}`,
+    [SourceModeReason.OVER_CAP]: `${size}, over cap ${cap}`,
+    [SourceModeReason.HELD_BY_BLOB_STORE]: `${size}, held by the Blob store`,
+    [SourceModeReason.BLOB_NOT_HELD]: `${size}, Blob store does not hold the file`,
+    [SourceModeReason.INDEX_REOPEN]: 'index reopen',
+    [SourceModeReason.KILL_SWITCH]: 'disableBufferedSource',
+    [SourceModeReason.STREAM_OPEN_DISABLED]: `${size}, disableStreamOpen`,
+    [SourceModeReason.NO_STORE]: `${size}, no store to window over`,
+    [SourceModeReason.WINDOWED_REFUSED]: `${size}, windowed open refused`,
+    [SourceModeReason.BUFFERED_FAILED]: `buffered open failed: ${mode.failure ?? 'unknown'}`,
+  }[mode.reason] ?? mode.reason
+  return `Engine source: ${mode.mode} (${why})`
 }
 
 
