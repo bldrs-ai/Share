@@ -40,8 +40,13 @@ module.exports = {
     'netlify/functions/_pro-modules/**',
   ],
   overrides: [
+    // ESLint 8 lints only `.js` in a directory argument (`eslint src netlify
+    // tools`) unless an override names more extensions, so every extension
+    // the repo writes code in has to appear in some override's `files` —
+    // `.cjs` included, or a require() in tools/jest/setupNodeFetch.cjs goes
+    // unchecked by everything below (codex on #2142).
     {
-      files: ['*.js', '*.mjs', '*.jsx'],
+      files: ['*.js', '*.mjs', '*.cjs', '*.jsx'],
     },
     {
       files: ['*.test.js', '*.test.jsx'],
@@ -239,8 +244,13 @@ module.exports = {
     // `packageDir` pins the check to the root manifest: the nested
     // `{"type": "module"}` package.json files under src/, netlify/ and tools/
     // declare nothing, and the rule would otherwise read the nearest one.
-    // App and function code may import only `dependencies`; tests, specs,
-    // fixtures, mocks and build tooling may also use `devDependencies`.
+    // App and function code may import only `dependencies` at runtime; tests,
+    // specs, fixtures, mocks and build tooling may also use `devDependencies`.
+    // Type-only imports (`import type`) are exempt by design, since they're
+    // erased before bundling, and @types/* packages belong in devDependencies.
+    // jest.mock()/requireActual() paths aren't checked here: jest throws
+    // "Cannot find module" for an undeclared package at run time, and every
+    // test runs in the gate.
     'import/no-extraneous-dependencies': ['error', {
       packageDir: [__dirname],
       optionalDependencies: false,
