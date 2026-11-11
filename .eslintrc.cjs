@@ -231,6 +231,41 @@ module.exports = {
     'eqeqeq': ['error', 'always'],
     'func-call-spacing': ['error', 'never'],
     'import/newline-after-import': ['error', {count: 2}],
+    // Every imported package must be declared in the root package.json. Under
+    // bunfig.toml's isolated linker an undeclared one doesn't resolve at all,
+    // but only on the paths that actually run it, so a rarely-run tool or a
+    // branch no test reaches fails at its user, not here; ten such imports
+    // were found when the linker landed (design/new/toolchain-node-bun.md).
+    // `packageDir` pins the check to the root manifest: the nested
+    // `{"type": "module"}` package.json files under src/, netlify/ and tools/
+    // declare nothing, and the rule would otherwise read the nearest one.
+    // App and function code may import only `dependencies`; tests, specs,
+    // fixtures, mocks and build tooling may also use `devDependencies`.
+    'import/no-extraneous-dependencies': ['error', {
+      packageDir: [__dirname],
+      optionalDependencies: false,
+      peerDependencies: false,
+      devDependencies: [
+        '**/*.test.*',
+        '**/*.spec.*',
+        '**/*.fixture.*',
+        '**/__mocks__/**',
+        '**/_tests/**',
+        'src/tests/**',
+        'src/utils/tests.js',
+        'tools/**',
+        'netlify/cors-proxy.js',
+        '.eslintrc.cjs',
+        '.dependency-cruiser.js',
+      ],
+    }],
+    // The rule above skips an import it can't resolve, and on the isolated
+    // tree an undeclared package is exactly that, so this is the half that
+    // catches it (sharp and express in tools, found in review on #2142).
+    // Relative paths are left out: this pair is about package declarations,
+    // and a broken relative import already fails the build or the tests
+    // wherever it is reachable.
+    'import/no-unresolved': ['error', {commonjs: true, ignore: ['^\\.']}],
     'indent': ['error', 2, {SwitchCase: 1}],
     'jsdoc/check-param-names': 'off',
     'jsdoc/check-types': 'error',

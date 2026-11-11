@@ -22,7 +22,7 @@
     "build-share-copy-wasm-conway-profile": "shx cp node_modules/@bldrs-ai/conway/compiled/dependencies/conway-geom/Dist/* docs/static/js",
     "build-share-analyze": "ANALYZE=true node tools/esbuild/build.js",
     "clean": "shx rm -rf docs",
-    "deps-graph": "npx dependency-cruiser src --include-only 'jsx?' --config --output-type dot | dot -T svg > deps.svg",
+    "deps-graph": "npx --yes dependency-cruiser@18.7.2 src --include-only 'jsx?' --config --output-type dot | dot -T svg > deps.svg",
     "husky-init": "husky install",
     "lint": "eslint src netlify tools && bun run typecheck",
     "precommit": "eslint src netlify tools --max-warnings 0 && bun run typecheck && bun run test",
@@ -167,6 +167,7 @@
     "eslint-plugin-react": "7.30.1",
     "eslint-plugin-react-hooks": "4.6.0",
     "eslint-plugin-testing-library": "5.9.1",
+    "express": "5.2.1",
     "get-port-please": "^3.2.0",
     "gltf-validator": "2.0.0-dev.3.10",
     "http-server": "14.1.1",
@@ -180,6 +181,7 @@
     "node-fetch": "2",
     "playwright": "1.56.1",
     "regenerator-runtime": "0.13.11",
+    "sharp": "0.34.5",
     "ts-jest": "29.4.4"
   },
   "engines": {

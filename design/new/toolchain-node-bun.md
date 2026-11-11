@@ -147,6 +147,20 @@ declared at the version the lockfile already resolved:
 | `@auth0/auth0-spa-js` 2.0.2 (dev) | `src/Auth0/mockLogout.test.js` | `@auth0/auth0-react` |
 | `@netlify/config` 24.5.0 (dev) | `tools/netlify/bundleFunctions.mjs` | `netlify-cli` |
 | `@netlify/zip-it-and-ship-it` 14.5.4 (dev) | `tools/netlify/bundleFunctions.mjs` | `netlify-cli` |
+| `sharp` 0.34.5 (dev) | `tools/thumbnails/generate.mjs` | `netlify-cli` and others |
+| `express` 5.2.1 (dev) | `netlify/cors-proxy.js` | `netlify-cli` |
+
+The last two run in no test or build, so the gate passed without them;
+codex found them in review on #2142. That is what lint now catches, for
+every file in `eslint src netlify tools`: `import/no-unresolved` (package
+imports only), because under the isolated linker an undeclared package
+doesn't resolve, and `import/no-extraneous-dependencies`, which also keeps
+app and function code to `dependencies` (tests, specs, fixtures, mocks and
+`tools/` may use `devDependencies`). Both read the root `package.json`
+(`packageDir`), not the nested `{"type": "module"}` manifests. The
+`deps-graph` script's `npx dependency-cruiser` was never in either
+lockfile, so it is pinned in the script (`dependency-cruiser@18.7.2`)
+rather than added to every install.
 
 **Two layout assumptions changed with the tree:**
 
