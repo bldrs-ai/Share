@@ -174,6 +174,27 @@ Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 trian
      from a load that has since been replaced is dropped. A tree built for
      an edit's new geometry later carries no token and is not the load's.
 
+8. **Engine source lines** — an engine-worker load (engine-worker.md
+   §5.6, §7) adds up to three lines after its stages, each a fact about how
+   the engine read its source, never the file's name or path:
+   - `Engine source: <buffered|windowed> (<why>)` — the source policy's
+     decision as it ran (`engineModelLoad.js#sourceModeLine`,
+     `engine/sourcePolicy.js`): `buffered (231.4 MB, cap 1024 MB)` over the
+     sync access handle within the device's cap; `windowed (860.7 MB, over
+     cap 512 MB)` above it; `buffered (231.4 MB, held by the Blob store)`
+     (Firefox, Safari); `windowed (index reopen)` from a sidecar;
+     `windowed (disableBufferedSource)` under the kill switch;
+     `windowed (buffered open failed: RangeError)` after the memory
+     fallback; and `buffered (…, no store to window over)` /
+     `(…, disableStreamOpen)` / `(…, windowed open refused)` where no
+     windowed open was possible. Absent from a worker bundle older than the
+     policy. MB here is MiB, as on the lines below.
+   - `Engine source I/O: <store> …, N reads, M MB, Ts` — only after a
+     windowed open: the store it pages through (sync access handle, or the
+     Blob store and why) and its read counts (`sourceIoLine`).
+   - `Engine index: …` — where the index came from (a sidecar, or the
+     parse) and whether the parse saved one (`indexLine`).
+
 **Precision** — seconds to millisecond precision (3 decimals), memory to
 byte precision (6 decimals of MB), per the report's diagnostic purpose.
 
