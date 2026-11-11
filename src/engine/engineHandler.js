@@ -446,27 +446,15 @@ export function createEngineHandler({
    * @return {Promise<object>}
    */
   async function openModel(source, stream, format) {
-    const settings = {
-      ...BASE_OPEN_SETTINGS,
-      ON_PROGRESS: (event) => emit(Ev.PROGRESS, {event: plainProgress(event)}),
-      ON_MODEL_INFO: (info) => emit(Ev.MODEL_INFO, {info: plainProgress(info)}),
-    }
-    if (stream?.previews) {
-      settings.ON_PREVIEW_MESH = (payload) => {
-        try {
-          const {payload: out, transfer} = previewMessage(payload)
-          emit(Ev.PREVIEW, {payload: out}, transfer)
-        } catch {
-          // Best-effort, as on the main thread: a preview must never break
-          // the load (ShareIfcLoader#parse's onPreviewMesh).
-        }
-      }
-      // Test-only (pumpTestSeams.js#testStepPreviewFinishParse): the page
-      // asked for conway's parked parse-end preview tick.
-      if (stream.previewFinishParse === true) {
-        enableStepPreviewFinishParse()
-      }
-    }
+    // Built in its own function, never inline here: conway keeps `settings`
+    // and its callbacks on the model for the session, and a closure created
+    // in THIS scope would keep this scope's whole V8 context alive with it,
+    // `source` and the bytes handed to a buffered open included (Share#2139:
+    // the heap snapshot in source-policy-measurements.md §"Why the buffered
+    // arms still retain the source"). For the same reason the buffered
+    // open's `loadBytes` is made by `bytesLoader`, so no closure created
+    // here references the source at all.
+    const settings = openSettings(stream)
     const t0 = now()
     const blob = source?.file
     const windowable = Boolean(blob && typeof blob.slice === 'function') &&
@@ -520,6 +508,7 @@ export function createEngineHandler({
       typeof store?.takeResident === 'function' ?
       store.takeResident() :
       null
+    const isHeld = heldBytes !== null
     let adopted = false
     let id
     let windowed
@@ -528,22 +517,11 @@ export function createEngineHandler({
     try {
       ({modelID: id, windowed, attempt, index} = await openDeferred(engine, {
         sidecar,
-        store: heldBytes ? null : store,
-        loadBytes: heldBytes ? () => Promise.resolve(heldBytes) : async () => {
-          // The buffered fallback reads the file again for itself: let the
-          // windowed store's whole-file copy go first rather than hold both.
-          store?.releaseResident?.()
-          const bytes = source?.bytes ?? (blob ? await blob.arrayBuffer() : null)
-          if (!bytes) {
-            throw new Error('engine: open needs source.file or source.bytes')
-          }
-          // A transferred Uint8Array is used as it is: another copy here would
-          // briefly hold the file three times over on a buffered open.
-          return ArrayBuffer.isView(bytes) ? bytes : new Uint8Array(bytes)
-        },
+        store: isHeld ? null : store,
+        loadBytes: bytesLoader(source, store, heldBytes),
         settings,
       }))
-      if (heldBytes && !windowed && !disposed && typeof id === 'number' && id >= 0 && entryPath !== null) {
+      if (isHeld && !windowed && !disposed && typeof id === 'number' && id >= 0 && entryPath !== null) {
         // The buffered open over held bytes still exports a sidecar, so a
         // reopen after eviction can come back from the index (Share#2139).
         sidecarState = {entryPath, file: blob, getOpfsRoot, source: 'parse', bytes: 0, saved: false}
@@ -610,6 +588,40 @@ export function createEngineHandler({
       runPump({windowed, format, batchSize: stream.batchSize ?? PUMP_BATCH_SIZE})
     }
     return result
+  }
+
+  /**
+   * Conway open settings for one open, with the callbacks conway keeps on
+   * the model for the session. Its own function so those callbacks close
+   * over this handler's scope only, never over `openModel`'s, which holds
+   * the source (see the comment there; Share#2139).
+   *
+   * @param {object|null} stream the open's `stream` options
+   * @return {object}
+   */
+  function openSettings(stream) {
+    const settings = {
+      ...BASE_OPEN_SETTINGS,
+      ON_PROGRESS: (event) => emit(Ev.PROGRESS, {event: plainProgress(event)}),
+      ON_MODEL_INFO: (info) => emit(Ev.MODEL_INFO, {info: plainProgress(info)}),
+    }
+    if (stream?.previews) {
+      settings.ON_PREVIEW_MESH = (payload) => {
+        try {
+          const {payload: out, transfer} = previewMessage(payload)
+          emit(Ev.PREVIEW, {payload: out}, transfer)
+        } catch {
+          // Best-effort, as on the main thread: a preview must never break
+          // the load (ShareIfcLoader#parse's onPreviewMesh).
+        }
+      }
+      // Test-only (pumpTestSeams.js#testStepPreviewFinishParse): the page
+      // asked for conway's parked parse-end preview tick.
+      if (stream.previewFinishParse === true) {
+        enableStepPreviewFinishParse()
+      }
+    }
+    return settings
   }
 
   /** Abort INIT / OPEN after an await if dispose() ran meanwhile. */
@@ -927,6 +939,39 @@ export function createEngineHandler({
   }
 
   return {handle, dispose}
+}
+
+
+/**
+ * The buffered open's `loadBytes` (conwayOpen.js#openDeferred). Module-level
+ * on purpose: the closure it returns is the only thing that references the
+ * source, and it is dropped once the open has run, so nothing the model
+ * keeps for its session can reach the bytes (Share#2139; see
+ * engineHandler.js#openModel).
+ *
+ * @param {object} source the open's `{file}` or `{bytes}`
+ * @param {object|null} store the windowed open's byte store, if any
+ * @param {Uint8Array|null} whole the whole file, already read, for a
+ *   buffered open over it; null to read it here
+ * @return {function(): Promise<Uint8Array>}
+ */
+function bytesLoader(source, store, whole) {
+  if (whole !== null) {
+    return () => Promise.resolve(whole)
+  }
+  return async () => {
+    // The buffered fallback reads the file again for itself: let the
+    // windowed store's whole-file copy go first rather than hold both.
+    store?.releaseResident?.()
+    const blob = source?.file
+    const bytes = source?.bytes ?? (blob ? await blob.arrayBuffer() : null)
+    if (!bytes) {
+      throw new Error('engine: open needs source.file or source.bytes')
+    }
+    // A transferred Uint8Array is used as it is: another copy here would
+    // briefly hold the file three times over on a buffered open.
+    return ArrayBuffer.isView(bytes) ? bytes : new Uint8Array(bytes)
+  }
 }
 
 
