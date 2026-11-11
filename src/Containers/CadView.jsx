@@ -46,7 +46,7 @@ import {
 import {buildOutcomeParams, loadFailureParams} from '../loader/loadAnalytics'
 import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
-import {EngineOpenFailureError, engineFailureCaptureContext} from '../loader/engineOpenFailure'
+import {EngineOpenFailureError, engineFailureCaptureContext, engineSourceTags} from '../loader/engineOpenFailure'
 import {UnsupportedSchemaError, unsupportedSchemaAlert} from '../loader/unsupportedSchema'
 import {hasInMemoryUpload} from '../loader/inMemoryUploads'
 import {ARCHIVE_UNREADABLE} from '../loader/modelArchive'
@@ -752,6 +752,10 @@ export default function CadView({
           // The engine's status and reason as tags/context on this event
           // only; the alert's GA count is AlertDialog's (trackAlertEvent).
           captureException(e, engineFailureCaptureContext(e))
+        } else if (e?.engineSource) {
+          // A failed engine-worker open without a recorded reason: still say
+          // how its source was read (engineOpenFailure.js#engineSourceTags).
+          captureException(e, {tags: engineSourceTags(e)})
         } else {
           captureException(e)
         }

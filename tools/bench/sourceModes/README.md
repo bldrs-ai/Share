@@ -48,8 +48,8 @@ node tools/bench/sourceModes/summarize.mjs tools/measure/sourceModes/records.jso
 | Option | Default | Meaning |
 |---|---|---|
 | `--model label=path` | (required, repeatable) | a local IFC/STEP file; symlinked into the build as `/__bench_models__/<label><ext>` and opened as `/share/v/p/__bench_models__/<label><ext>` |
-| `--arms a,b,…` | all five, in `arms.mjs` order | the arms of each round, in this order |
-| `--reopen a,b,…` / `none` | `windowedHandle,heldBuffer` | arms whose trial continues into the two reopen phases |
+| `--arms a,b,…` | all six, in `arms.mjs` order | the arms of each round, in this order |
+| `--reopen a,b,…` / `none` | `policyDefault,windowedHandle,heldBuffer` | arms whose trial continues into the two reopen phases |
 | `--n N` / `--n label=N` | by size: 5 under 100 MB, 3 to 300 MB, 2 above | rounds per model |
 | `--lock path` | none | run each round as a child under `flock path` |
 | `--out file` | `tools/measure/sourceModes/records.jsonl` (gitignored) | JSONL, appended |
@@ -60,7 +60,7 @@ node tools/bench/sourceModes/summarize.mjs tools/measure/sourceModes/records.jso
 | `--no-skip` | resume on | run every trial even when the output already holds it |
 
 **Rounds, not blocks.** A round loads the model once per arm, in arm order, so
-a run is ABCDE ABCDE …: drift (thermal, a neighbour's build) lands on every arm
+a run is ABCDEF ABCDEF …: drift (thermal, a neighbour's build) lands on every arm
 alike instead of on whichever arm ran last. Each round is one child process;
 with `--lock` it holds the lock for that round only, so other benchmarks on a
 shared machine wait minutes, not hours.
@@ -122,16 +122,22 @@ removes it, on a clean exit too. It is small; clear them with
 
 | Arm | `?feature=` | Expected |
 |---|---|---|
-| `windowedHandle` | (none) | windowed, OPFS sync access handle, sidecar saved: Chromium's default |
-| `windowedHeld` | `disableEngineSyncHandle` | windowed, Blob store holding the whole file, sidecar saved: Firefox's and Safari's default |
+| `policyDefault` | (none) | the source policy's default: buffered (the sync access handle read whole, under the cap), `Engine source: buffered`, sidecar saved |
+| `windowedHandle` | `disableBufferedSource` | windowed, OPFS sync access handle, sidecar saved: Chromium's default before the policy |
+| `windowedHeld` | `disableEngineSyncHandle,disableBufferedSource` | windowed, Blob store holding the whole file, sidecar saved: Firefox's and Safari's default before the policy |
 | `buffered` | `disableStreamOpen` | buffered, no store, no sidecar |
-| `heldBuffer` | `disableEngineSyncHandle,engineHeldBufferOpen` | buffered over the Blob store's held bytes, sidecar saved (Share#2139 prototype) |
-| `noSidecar` | `disableEngineSidecar` | windowed, sync handle, no source hash, no sidecar |
+| `heldBuffer` | `disableEngineSyncHandle` | buffered over the Blob store's held bytes, sidecar saved: the policy on Firefox and Safari (was the `engineHeldBufferOpen` prototype) |
+| `noSidecar` | `disableEngineSidecar,disableBufferedSource` | windowed, sync handle, no source hash, no sidecar |
+
+Records made before the policy carry the arms' old flags in `features`
+(`windowedHandle` had none; `heldBuffer` had `engineHeldBufferOpen`); the
+paths the names stand for are the same.
 
 **What the arm check means.** `checkArm` compares what the arm is named for
 with what the load did: the open kind from the engine worker's pump line
 (`windowed=yes|no`), the store from the `Engine source I/O:` line, the sidecar
-from the `Engine index:` line. A mismatch is recorded in `armCheck.problems`
+from the `Engine index:` line, and the policy's mode from the `Engine source:`
+line (`expect.sourceMode`). A mismatch is recorded in `armCheck.problems`
 and printed, not thrown: a flag that stopped applying, or a format a path
 doesn't cover, is a finding. `summarize.mjs` prints every problem under its
 table.
@@ -169,6 +175,7 @@ starts.
 | `report.totalSeconds`, `report.engineSeconds` | Total, and Total minus `Preparing file download` |
 | `report.engineWasmMb`, `report.windowMb` | from the Total line and the Geometry line's `window=` |
 | `report.sourceIoLine`, `report.storeKind` | the `Engine source I/O:` line verbatim, and `syncHandle` / `blobHeld` / `blob` / null |
+| `report.sourceModeLine`, `report.sourceMode` | the `Engine source:` line verbatim, and `buffered` / `windowed` from it |
 | `report.indexLine`, `report.sidecarSaved`, `report.fromSidecar` | the `Engine index:` line verbatim, and what it says |
 | `report.pumpLine`, `report.openKind` | the engine pump's console line, and `windowed` / `buffered` from it |
 | `armCheck` | `{ok, problems[]}` |

@@ -103,6 +103,9 @@ export function parseLoadReport(lines, parseReportLines, pumpLine) {
   const download = stages[DOWNLOAD_STAGE] ?? 0
   const sourceIoLine = lines.find((l) => l.startsWith('Engine source I/O:')) ?? null
   const indexLine = lines.find((l) => l.startsWith('Engine index:')) ?? null
+  // The source policy's line (Share#2139): `Engine source: buffered (…)`.
+  const sourceModeLine = lines.find((l) => l.startsWith('Engine source:')) ?? null
+  const sourceMode = sourceModeLine === null ? null : (/^Engine source: (\w+)/.exec(sourceModeLine)?.[1] ?? null)
   const wasm = parsed.total === null ? null : WASM_RE.exec(parsed.total.line)
   let openKind = null
   if (pumpLine) {
@@ -119,6 +122,8 @@ export function parseLoadReport(lines, parseReportLines, pumpLine) {
     windowMb,
     sourceIoLine,
     storeKind: storeKindOf(sourceIoLine),
+    sourceModeLine,
+    sourceMode,
     indexLine,
     sidecarSaved: indexLine === null ? null : /sidecar saved/.test(indexLine),
     fromSidecar: indexLine === null ? null : /^Engine index: from sidecar/.test(indexLine),
@@ -173,6 +178,9 @@ export function checkArm(arm, report, phase) {
   const {expect} = arm
   if (report.openKind !== expect.open) {
     problems.push(`open was ${report.openKind ?? 'unknown'}, expected ${expect.open}`)
+  }
+  if (expect.sourceMode && report.sourceMode !== expect.sourceMode) {
+    problems.push(`source mode was ${report.sourceMode ?? 'not reported'}, expected ${expect.sourceMode}`)
   }
   if (expect.store !== null && report.storeKind !== expect.store) {
     problems.push(`store was ${report.storeKind ?? 'none'}, expected ${expect.store}`)

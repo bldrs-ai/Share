@@ -45,6 +45,8 @@ import {engineFormatOf} from '../loader/part21Formats'
 import {conwayDirectInfo, conwayDirectWarn} from '../viewer/ifc/conwayDirectLog'
 import {testPumpBatchSize, testStepPreviewFinishParse} from '../viewer/ifc/pumpTestSeams'
 import {Ev, Op} from './protocol'
+import {POLICY_BUFFERED_REASONS, SourceModeReason} from './sourcePolicy'
+import {isOutOfMemoryError} from '../utils/oom'
 import {spawnEngineSession} from './spawnEngine'
 
 
@@ -269,55 +271,13 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
    * @return {Promise<{modelID: number, recapture: function(): Promise<Array>, summary: object}>}
    */
   async function parse(buffer, {onProgress, onMeshBatch, onPreviewMesh, onIndexed} = {}) {
-    const session = await spawn()
-    ifcAPI.engineSession = session
-    reportEngineVersion(session.info?.conwayVersion)
-
     let deliveredGeometries = 0
-    session.on(Ev.PROGRESS, (msg) => onProgress?.(msg.event))
-    session.on(Ev.MODEL_INFO, (msg) => onProgress?.({modelInfo: msg.info}))
-    session.on(Ev.LOG, (msg) => reportEngineLog(msg))
-    session.on(Ev.PREVIEW, (msg) => onPreviewMesh?.(msg.payload))
     // `window.__bldrsTestHoldMidPump` (conwayDirectIfcLoader.js
     // #holdMidPumpForTest): awaited after every batch, with durable geometry
     // on screen and the load not finished (streamingBatchPick.spec.ts). The
     // engine is stepped one batch at a time while the hook is installed.
     const holdMidPump = typeof globalThis.__bldrsTestHoldMidPump === 'function' ?
       globalThis.__bldrsTestHoldMidPump : null
-    session.on(Ev.BATCH, (msg) => {
-      for (const geometry of msg.geometries) {
-        store.put(geometry)
-      }
-      deliveredGeometries += msg.geometries.length
-      try {
-        // `session.modelID`, set by the `indexed` event, which the engine
-        // posts before its first batch; the `open` reply can arrive after the
-        // first batches (the pump starts before the reply is sent).
-        onMeshBatch?.(decodePlacements(msg.placements), session.modelID, msg.progress ?? {})
-      } finally {
-        store.drop(msg.geometries)
-      }
-      // The mid-pump test hold: the engine was stepped to this one batch and
-      // has paused itself; it steps on to the next when the test lets it.
-      if (holdMidPump !== null) {
-        Promise.resolve(holdMidPump()).then(() => session.pump('step')).catch(() => null)
-      }
-    })
-    // `done` or `failed`, whichever ends the stream. Open failures are
-    // answered by `open` itself (below), so only what comes after the index
-    // ends up here.
-    const finished = new Promise((resolve, reject) => {
-      session.on(Ev.DONE, (msg) => resolve(msg.summary))
-      session.on(Ev.FAILED, (msg) => {
-        if (msg.kind !== 'openFailure' && msg.kind !== 'refusedSchema') {
-          reject(engineLoadError(msg))
-        }
-      })
-    })
-    // Handled where it is awaited; this keeps an early rejection (a crash
-    // during the open) from surfacing as unhandled meanwhile.
-    finished.catch(() => null)
-
     // The same two test seams as conwayDirectIfcLoader.js, absent in
     // production (property reads):
     //   - `window.__bldrsTestHoldIndex` (#holdIndexForTest): hold between the
@@ -338,22 +298,105 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
     // transfers (detaches) a bytes source.
     const failureSource = openFailureSource(buffer)
     const source = sourceFor(buffer)
+    const stream = {
+      previews: Boolean(onPreviewMesh), startPaused, batchSize: testPumpBatchSize(),
+      // The worker's conway is its own; the page's seam reaches it here
+      // (pumpTestSeams.js#testStepPreviewFinishParse).
+      previewFinishParse: testStepPreviewFinishParse(),
+    }
+
+    /**
+     * Subscribe the load's callbacks to one session. Once per session: a
+     * windowed retry (below) wires its fresh session the same way.
+     *
+     * @param {object} session
+     * @return {Promise<object>} the `done` summary, or the stream's failure
+     */
+    const wire = (session) => {
+      ifcAPI.engineSession = session
+      session.on(Ev.PROGRESS, (msg) => onProgress?.(msg.event))
+      session.on(Ev.MODEL_INFO, (msg) => onProgress?.({modelInfo: msg.info}))
+      session.on(Ev.LOG, (msg) => reportEngineLog(msg))
+      session.on(Ev.PREVIEW, (msg) => onPreviewMesh?.(msg.payload))
+      session.on(Ev.BATCH, (msg) => {
+        for (const geometry of msg.geometries) {
+          store.put(geometry)
+        }
+        deliveredGeometries += msg.geometries.length
+        try {
+          // `session.modelID`, set by the `indexed` event, which the engine
+          // posts before its first batch; the `open` reply can arrive after the
+          // first batches (the pump starts before the reply is sent).
+          onMeshBatch?.(decodePlacements(msg.placements), session.modelID, msg.progress ?? {})
+        } finally {
+          store.drop(msg.geometries)
+        }
+        // The mid-pump test hold: the engine was stepped to this one batch and
+        // has paused itself; it steps on to the next when the test lets it.
+        if (holdMidPump !== null) {
+          Promise.resolve(holdMidPump()).then(() => session.pump('step')).catch(() => null)
+        }
+      })
+      // `done` or `failed`, whichever ends the stream. Open failures are
+      // answered by `open` itself (below), so only what comes after the index
+      // ends up here.
+      const finishedLoad = new Promise((resolve, reject) => {
+        session.on(Ev.DONE, (msg) => resolve(msg.summary))
+        session.on(Ev.FAILED, (msg) => {
+          if (msg.kind !== 'openFailure' && msg.kind !== 'refusedSchema') {
+            reject(engineLoadError(msg))
+          }
+        })
+      })
+      // Handled where it is awaited; this keeps an early rejection (a crash
+      // during the open) from surfacing as unhandled meanwhile.
+      finishedLoad.catch(() => null)
+      return finishedLoad
+    }
+
+    let session = await spawn()
+    reportEngineVersion(session.info?.conwayVersion)
+    let finished = wire(session)
     let opened
-    try {
-      opened = await session.open(source,
-        {format, stream: {
-          previews: Boolean(onPreviewMesh), startPaused, batchSize: testPumpBatchSize(),
-          // The worker's conway is its own; the page's seam reaches it here
-          // (pumpTestSeams.js#testStepPreviewFinishParse).
-          previewFinishParse: testStepPreviewFinishParse(),
-        }})
-    } catch (e) {
-      session.close()
-      const failure = e.engineFailure
-      if (failure) {
-        throw await openModelFailure(failure.code, failureSource, failure.refusedSchema, failure.openFailure)
+    let sourceOverride = null
+    for (;;) {
+      try {
+        opened = await session.open(source, {format, stream, sourceOverride})
+        break
+      } catch (e) {
+        session.close()
+        const failure = e.engineFailure
+        const retryFailure = sourceOverride === null ? retryableBufferedFailure(failure) : null
+        if (retryFailure !== null) {
+          // The policy's buffered open failed in a way a heap exhaustion
+          // looks like (retryableBufferedFailure says which). conway does not
+          // throw for it: it records the failure and the open returns -1, and
+          // an Emscripten abort leaves that engine's wasm unusable, so the
+          // retry is windowed on a NEW engine, once (`sourceOverride` is set
+          // from here on, so the retry's own failure is final). The failed
+          // worker is terminated above, BEFORE the respawn, so the two heaps
+          // never coexist. If this open fails too, its failure is the load's,
+          // reported once like any other.
+          sourceOverride = {windowed: true, failure: retryFailure}
+          // Said in the report before the retry's lines, so the failed
+          // attempt's engine warnings and errors in the load's tally read as
+          // that attempt's (loadProgress.js#reportEngineLog counts both).
+          reportSourceInfo(`Engine retry: buffered open failed (${FAILURE_TEXT[retryFailure]}); ` +
+            'retrying windowed on a fresh engine')
+          session = await spawn()
+          finished = wire(session)
+          continue
+        }
+        if (failure) {
+          throw withEngineSource(
+            await openModelFailure(failure.code, failureSource, failure.refusedSchema, failure.openFailure),
+            failure.sourceMode)
+        }
+        // A direct open exception (no classified failure) still failed this
+        // open: carry the handler's source mode into the Sentry tags, as
+        // for a classified one. A missing mode is ignored.
+        throw withEngineSource(e, e?.sourceMode)
       }
-      throw e
     }
     const modelID = opened.modelID
     if (holdIndex !== null) {
@@ -381,6 +424,7 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
       session.close()
       throw e
     }
+    reportSourceInfo(sourceModeLine(ifcAPI.summary.sourceMode))
     reportSourceInfo(sourceIoLine(ifcAPI.summary.source))
     reportSourceInfo(indexLine(ifcAPI.summary.index))
     // The integration-boundary line conwayDirectIfcLoader prints for the
@@ -476,6 +520,107 @@ export function openFailureSource(buffer) {
 
 
 /**
+ * What a heap exhaustion looks like from this conway-geom build
+ * (`@bldrs-ai/conway/compiled/dependencies/conway-geom/Dist/ConwayGeomWasmWeb.js`,
+ * in conway 1.1645.781), as conway records it (`recordOpenFailure` stores
+ * `error.message`, or `String(error)` for a non-Error). Heap growth is on,
+ * `_emscripten_resize_heap` returns false when it can't grow, and there is
+ * no `abortOnCannotGrowMemory`, so the ASSERTIONS-only texts
+ * (`Aborted(OOM)`, "Cannot enlarge memory") are never produced. Instead:
+ * - a failed malloc in C++ throws `std::bad_alloc` as a `CppException`,
+ *   which is not an Error, so the recorded reason is `"[object Object]"`;
+ * - `abort()` throws `"Aborted(). Build with -sASSERTIONS for more info."`;
+ * - conway's own guard on `_malloc` (`core/wasm_heap.js`) throws
+ *   `"wasm _malloc returned an unusable address for N bytes - …"`.
+ * A conway-geom rebuild can change all three; re-read the glue then.
+ */
+export const CPP_EXCEPTION_REASON = '[object Object]'
+export const WASM_ABORT_PREFIX = 'Aborted('
+export const CONWAY_MALLOC_FAILURE_PREFIX = 'wasm _malloc returned an unusable address'
+
+
+/**
+ * Should a failed open be retried windowed, on a fresh engine, and with
+ * which failure code? Only when the source policy itself chose buffered over
+ * a store (sourcePolicy.js#POLICY_BUFFERED_REASONS: not `disableStreamOpen`,
+ * not a bytes source, which have nothing to window over), it was not a
+ * schema refusal, and conway's recorded reason looks like memory.
+ *
+ * The signal is conway's own record of the failure: a buffered open that
+ * fails in its parse does not throw (`fromStreamed` catches, falls back to
+ * the classic open, whose `fromAsync` catches again and calls
+ * `recordOpenFailure`, so the open returns -1), and what it caught is in
+ * `openFailure.reason` (openAttempt.js#conwayOpenFailure). Codes:
+ * - `outOfMemory`: the app's OOM classifier matches (utils/oom.js: V8's
+ *   "Array buffer allocation failed", Firefox's and Safari's "out of
+ *   memory", "WebAssembly.Memory(): could not allocate memory", …) or
+ *   conway's `_malloc` guard fired;
+ * - `engineException`: a non-Error thrown out of wasm ({@link
+ *   CPP_EXCEPTION_REASON}), which in this build is how `std::bad_alloc`
+ *   arrives;
+ * - `engineAbort`: an Emscripten `abort()` ({@link WASM_ABORT_PREFIX}).
+ * The last two are not always memory: a C++ exception or abort for another
+ * reason costs one wasted windowed attempt, bounded to one, and then fails
+ * as before. The shared `utils/oom.js` patterns are deliberately not
+ * widened for these: other callers use them to tell the user their device
+ * ran out of memory.
+ *
+ * @param {object|undefined} failure the open's `engineFailure`
+ * @return {string|null} the failure code, or null for no retry
+ */
+export function retryableBufferedFailure(failure) {
+  if (!failure || failure.refusedSchema) {
+    return null
+  }
+  if (failure.sourceMode?.mode !== 'buffered' || !POLICY_BUFFERED_REASONS.includes(failure.sourceMode.reason)) {
+    return null
+  }
+  const reason = failure.openFailure?.reason
+  if (typeof reason !== 'string') {
+    return null
+  }
+  if (reason.startsWith(CONWAY_MALLOC_FAILURE_PREFIX) || isOutOfMemoryError({message: reason})) {
+    return 'outOfMemory'
+  }
+  if (reason === CPP_EXCEPTION_REASON) {
+    return 'engineException'
+  }
+  if (reason.startsWith(WASM_ABORT_PREFIX)) {
+    return 'engineAbort'
+  }
+  return null
+}
+
+
+/**
+ * @param {object|undefined} failure the open's `engineFailure`
+ * @return {boolean} whether {@link retryableBufferedFailure} would retry it
+ */
+export function shouldRetryWindowed(failure) {
+  return retryableBufferedFailure(failure) !== null
+}
+
+
+/**
+ * Stamp a failed open's error with how its source was read, as structured
+ * values only (`buffered` / `windowed` and the policy's reason code), for
+ * the Sentry tags CadView puts on it (engineOpenFailure.js
+ * #engineSourceTags). Never the file's name or size.
+ *
+ * @param {Error} error
+ * @param {object|undefined} sourceMode the failure's `sourceMode`
+ * @return {Error} the same error
+ */
+export function withEngineSource(error, sourceMode) {
+  if (error && typeof error === 'object' && sourceMode?.mode) {
+    error.engineSource = sourceMode.mode
+    error.engineSourceReason = sourceMode.reason
+  }
+  return error
+}
+
+
+/**
  * @param {object} msg a `failed` event
  * @return {Error} the message verbatim, so `isOutOfMemoryError` and the
  *   load report classify a worker's failure as they would a main-thread one
@@ -557,6 +702,47 @@ export function indexLine(index) {
     `sidecar saved (${size}${via})` :
     `no sidecar saved${index.saveError ? ` (${index.saveError})` : ''}`
   return `Engine index: ${refused}parsed; ${saved}`
+}
+
+
+/** How each `bufferedFailed` failure code reads on the report line. */
+const FAILURE_TEXT = {
+  RangeError: 'RangeError', outOfMemory: 'out of memory', engineException: 'engine exception',
+  engineAbort: 'engine abort',
+}
+
+
+/**
+ * The load report's line for the source policy's decision
+ * (sourcePolicy.js, Share#2139): which mode the open ran in and why, with
+ * the size and, over the sync access handle, the device's cap. Printed
+ * before `Engine source I/O:`, which follows only a windowed open (it is the
+ * store the windowed source pages from). Absent for an engine that sent no
+ * decision (a worker bundle from before the policy).
+ *
+ * @param {object|undefined} mode the `done` packet's `sourceMode`
+ * @return {string|undefined}
+ */
+export function sourceModeLine(mode) {
+  if (!mode?.mode) {
+    return undefined
+  }
+  const size = `${(mode.bytes / MIB).toFixed(1)} MB`
+  const cap = Number.isFinite(mode.capBytes) ? `${Math.round(mode.capBytes / MIB)} MB` : null
+  const why = {
+    [SourceModeReason.UNDER_CAP]: `${size}, cap ${cap}`,
+    [SourceModeReason.OVER_CAP]: `${size}, over cap ${cap}`,
+    [SourceModeReason.HELD_BY_BLOB_STORE]: `${size}, held by the Blob store`,
+    [SourceModeReason.BLOB_NOT_HELD]: `${size}, Blob store does not hold the file`,
+    [SourceModeReason.INDEX_REOPEN]: 'index reopen',
+    [SourceModeReason.KILL_SWITCH]: 'disableBufferedSource',
+    [SourceModeReason.STREAM_OPEN_DISABLED]: `${size}, disableStreamOpen`,
+    [SourceModeReason.NO_STORE]: `${size}, no store to window over`,
+    [SourceModeReason.WINDOWED_REFUSED]: `${size}, windowed open refused`,
+    [SourceModeReason.WINDOWED_FAILED]: `${size}, windowed open failed`,
+    [SourceModeReason.BUFFERED_FAILED]: `buffered open failed: ${FAILURE_TEXT[mode.failure] ?? 'unknown'}`,
+  }[mode.reason] ?? mode.reason
+  return `Engine source: ${mode.mode} (${why})`
 }
 
 

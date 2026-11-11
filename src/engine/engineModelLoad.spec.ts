@@ -113,7 +113,10 @@ describeMobileAndDesktop('Engine worker: model load', () => {
     const engine = watchEngineWorker(page)
     const pumpLines = watchPumpLines(page)
 
-    await page.goto(STEP_PATH)
+    // The source policy (engine/sourcePolicy.js) buffers this small model by
+    // default; this leg is of the windowed STEP open, so it takes the kill
+    // switch (engineSourcePolicy.spec.ts covers STEP buffered).
+    await page.goto(`${STEP_PATH},disableBufferedSource`)
     await waitForModelReady(page)
     await engine.expectWorkerEngine()
     // The STEP open ran in the worker, windowed from its OPFS copy as an IFC
