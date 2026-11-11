@@ -745,6 +745,12 @@ sidecar was found (Share#2139, Share#2092).
 4. **Sync access handle** (Chromium): buffered when the file is within the
    cap, else windowed.
 
+Rule 3 is bounded by the Blob store's own whole-file ceiling
+(`RESIDENT_SOURCE_MAX_BYTES`, 1 GiB), not by the device cap below: on a
+browser without a sync handle the small-device ceiling does not apply. That
+is unchanged from main, where that path held the file for its windowed open
+too.
+
 **Why.** The measurements
 ([source-policy-measurements.md](source-policy-measurements.md)): buffered
 is faster than windowed on every IFC measured from 2.3 MiB up, and on STEP
@@ -798,24 +804,63 @@ windowed (rule 2). The sync access handle is closed once the open has run.
 - **The buffered open runs out of memory.** conway does not throw for it
   (1.1645.781: `fromStreamed` catches the parse's error and falls back to
   the classic open, `fromAsync` catches again and calls
-  `recordOpenFailure`, status `OPEN_FAIL` with the error's message as the
-  reason, and the open returns -1), and an Emscripten OOM abort leaves the
-  wasm unusable. So the handler only reports it: the `FAILED` packet and the
-  open's `engineFailure` carry the `sourceMode`. The page
-  (`engineModelLoad.js#parse`, `shouldRetryWindowed`) retries ONCE, on a NEW
-  engine (the failed worker is terminated), with a per-open override that
-  makes that open windowed and forbids openDeferred's buffered fall-through
-  (`bufferedFallback: false`), when the failed open was the policy's own
-  buffered one (`POLICY_BUFFERED_REASONS`) and conway's recorded reason
-  classifies as out of memory by `utils/oom.js` (`Aborted(OOM)`, `Array
-  buffer allocation failed`, `out of memory`, …). A schema refusal or any
-  other failure (a corrupt file) is not retried. The report then says
-  `Engine source: windowed (buffered open failed: out of memory)`. If the
-  retry fails too, its failure is the load's, reported once.
-  Caveats: the classic open conway falls back to re-parses the same bytes,
-  so the recorded reason is that second parse's; if it fails some other
-  way, no retry happens. Previews the failed open had posted stay on
-  screen until the retry's model replaces them.
+  `recordOpenFailure`, status `OPEN_FAIL` with the error's message, or
+  `String(error)` for a non-Error, as the reason, and the open returns -1),
+  and an Emscripten abort leaves the wasm unusable. So the handler only
+  reports it: the `FAILED` packet and the open's `engineFailure` carry the
+  `sourceMode`. The page (`engineModelLoad.js#parse`,
+  `retryableBufferedFailure`) retries ONCE, on a NEW engine (the failed
+  worker is terminated before the new one is spawned), with a per-open
+  override that makes that open windowed, holds no whole-file copy on the
+  Blob store, and forbids openDeferred's buffered fall-through
+  (`bufferedFallback: false`). It retries only the policy's own buffered
+  open (`POLICY_BUFFERED_REASONS`), never a schema refusal, and only for a
+  recorded reason that looks like a heap exhaustion **from this
+  conway-geom build** (`ConwayGeomWasmWeb.js`: heap growth on,
+  `_emscripten_resize_heap` returns false, no `abortOnCannotGrowMemory`,
+  so the ASSERTIONS-only `Aborted(OOM)` and "Cannot enlarge memory" are
+  never produced):
+  - `[object Object]`: a non-Error thrown out of wasm, which is how a failed
+    malloc's `std::bad_alloc` (`CppException`) arrives; code
+    `engineException`;
+  - `Aborted(…`: an Emscripten `abort()`; code `engineAbort`;
+  - `wasm _malloc returned an unusable address…`: conway's own guard
+    (`core/wasm_heap.js`), and anything `utils/oom.js` matches (V8's
+    "Array buffer allocation failed", Firefox's and Safari's "out of
+    memory", "WebAssembly.Memory(): could not allocate memory"); code
+    `outOfMemory`.
+
+  A C++ exception or abort that is not memory costs one wasted windowed
+  attempt, bounded to one, and then fails as before. A rebuild of
+  conway-geom can change these strings (they are constants in
+  `engineModelLoad.js`, with the glue as provenance). A schema refusal or
+  an ordinary error (a corrupt file) is never retried. The report says
+  `Engine retry: buffered open failed (<code>); retrying windowed on a fresh
+  engine`, then `Engine source: windowed (buffered open failed: <code>)`.
+  If the retry fails too, its failure is the load's, reported once.
+  **None of these has been produced for real**; the retry has run only
+  against doubles. Plain JS-heap exhaustion of the renderer kills the tab
+  and is not covered at all.
+  Costs and edges:
+  - **On the Blob store the retry holds no copy of the file**: its windowed
+    reads are Blob round trips, slower, which is the price on a device that
+    just ran out.
+  - The classic open conway falls back to re-parses the same bytes, so the
+    recorded reason is that second parse's; if it fails some other way, no
+    retry happens.
+  - **Previews:** the failed attempt's preview meshes stay in the preview
+    group and the retry adds its own, so preview memory roughly doubles
+    during the retry, until the durable model replaces them all.
+    `ProgressiveLoadSession` has no way to clear its preview group short of
+    finishing or aborting the session, and `parse` does not hold the
+    session, so this is left.
+  - **Engine log:** the failed attempt's warnings and errors ("Streamed open
+    failed…", "Error loading model…") stay in the load's tally; the `Engine
+    retry:` line, printed before the retry's lines, is what explains them.
+  - **In process** (no module worker), a STEP over the Blob store cannot
+    open windowed at all: the retry's windowed open fails with
+    `STORE_NOT_SYNCHRONOUS`, and that is the load's failure, not the
+    original out-of-memory one.
 - **Not covered:** an out-of-memory in the geometry pump, after a
   successful open, has no fallback; it fails the load as before.
 

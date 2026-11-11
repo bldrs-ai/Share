@@ -1,5 +1,5 @@
 /** @jest-environment node */ // eslint-disable-line jsdoc/check-tag-names
-/* eslint-disable require-await */
+/* eslint-disable require-await, no-magic-numbers */
 import {reportSourceInfo} from '../loader/loadProgress'
 import {EngineSession} from './EngineSession'
 import {createEngineHandler} from './engineHandler'
@@ -32,7 +32,13 @@ jest.mock('../loader/loadProgress', () => ({
 const BYTES = Uint8Array.from({length: 64}, (_, i) => i)
 const NAME = 'model.ifc.etag.commit'
 const MTIME = 1_700_000_000_000
-const WASM_OOM = 'Aborted(OOM). Build with -sASSERTIONS for more info.'
+// What this conway-geom build actually records for a heap exhaustion
+// (engineModelLoad.js#CPP_EXCEPTION_REASON and its siblings): never the
+// ASSERTIONS-only `Aborted(OOM)`.
+const CPP_BAD_ALLOC = '[object Object]'
+const WASM_ABORT = 'Aborted(). Build with -sASSERTIONS for more info.'
+const MALLOC_GUARD = 'wasm _malloc returned an unusable address for 1048576 bytes - the heap is exhausted'
+const WASM_OOM = CPP_BAD_ALLOC
 
 
 /** @return {File} the OPFS snapshot the Loader hands the engine load */
@@ -122,7 +128,12 @@ function conwayDouble(log, {buffered = null, windowed = null} = {}) {
  */
 function spawner(engines, flags = {}) {
   const sessions = []
+  // Whether every earlier session was already closed at each spawn: the
+  // failed engine must be gone before the next one starts (two heaps at
+  // once on a device that just ran out is what the retry must not do).
+  const closedBeforeSpawn = []
   const spawn = async () => {
+    closedBeforeSpawn.push(sessions.every((s) => s.closed))
     const api = engines[sessions.length]
     if (!api) {
       throw new Error('spawned more engines than the test allows')
@@ -149,7 +160,7 @@ function spawner(engines, flags = {}) {
     await session.init({flags: {disableEngineSidecar: true, ...flags}, device: {deviceMemoryGiB: 8, isMobile: false}})
     return session
   }
-  return {spawn, sessions}
+  return {spawn, sessions, closedBeforeSpawn}
 }
 
 
@@ -169,28 +180,85 @@ describe('engine/engineModelLoad: a buffered open that runs out of memory (Share
     const log = []
     const first = conwayDouble(log, {buffered: {status: 'OPEN_FAIL', reason: WASM_OOM}})
     const second = conwayDouble(log)
-    const {spawn, sessions} = spawner([first, second])
+    const {spawn, sessions, closedBeforeSpawn} = spawner([first, second])
     const load = createEngineModelLoad({format: 'ifc', spawn})
     const result = await load.parse(snapshot(), {})
     expect(sessions).toHaveLength(2)
     expect(sessions[0].closed).toBe(true)
+    // Closed BEFORE the second engine was spawned, not after.
+    expect(closedBeforeSpawn).toEqual([true, true])
     expect(load.ifcAPI.engineSession).toBe(sessions[1])
     // The first engine buffered and failed; the second never tried buffered.
     expect(log).toEqual(['buffered open', 'windowed open'])
     expect(result.summary.sourceMode).toMatchObject({
-      mode: 'windowed', reason: SourceModeReason.BUFFERED_FAILED, failure: 'outOfMemory',
+      mode: 'windowed', reason: SourceModeReason.BUFFERED_FAILED, failure: 'engineException',
     })
-    expect(reportedLines()).toContain('Engine source: windowed (buffered open failed: out of memory)')
+    // The retry is announced before the retry's own lines, then the mode.
+    const lines = reportedLines()
+    expect(lines.indexOf('Engine retry: buffered open failed (engine exception); retrying windowed on a fresh engine'))
+      .toBe(0)
+    expect(lines).toContain('Engine source: windowed (buffered open failed: engine exception)')
     await sessions[1].close()
   })
 
-  it('a JS-heap allocation failure recorded by conway is retried the same way', async () => {
+  for (const [reason, code, text] of [
+    [WASM_ABORT, 'engineAbort', 'engine abort'],
+    [MALLOC_GUARD, 'outOfMemory', 'out of memory'],
+    ['WebAssembly.Memory(): could not allocate memory', 'outOfMemory', 'out of memory'],
+  ]) {
+    it(`a buffered open recorded as "${reason.slice(0, 30)}…" is retried, reported as ${code}`, async () => {
+      const log = []
+      const {spawn, sessions} = spawner([conwayDouble(log, {buffered: {status: 'OPEN_FAIL', reason}}), conwayDouble(log)])
+      const result = await createEngineModelLoad({format: 'ifc', spawn}).parse(snapshot(), {})
+      expect(sessions).toHaveLength(2)
+      expect(result.summary.sourceMode).toMatchObject({reason: SourceModeReason.BUFFERED_FAILED, failure: code})
+      expect(reportedLines()).toContain(`Engine source: windowed (buffered open failed: ${text})`)
+      await sessions[1].close()
+    })
+  }
+
+  it('an ordinary JS error recorded by the parse is not retried', async () => {
+    const log = []
+    const reason = 'Cannot read properties of undefined (reading \'length\')'
+    const {spawn, sessions} = spawner([conwayDouble(log, {buffered: {status: 'OPEN_FAIL', reason}})])
+    await expect(createEngineModelLoad({format: 'ifc', spawn}).parse(snapshot(), {})).rejects.toThrow()
+    expect(sessions).toHaveLength(1)
+  })
+
+  it('a retry whose own open fails the same way is never retried again (one retry, not a loop)', async () => {
+    // An engine that ignores the override and fails as a policy-buffered
+    // OOM again: without the once-guard, parse would spawn a third engine.
+    const policyOom = {code: -1, refusedSchema: false, openFailure: {status: 'OPEN_FAIL', reason: CPP_BAD_ALLOC},
+      sourceMode: {mode: 'buffered', reason: SourceModeReason.UNDER_CAP}}
+    const spawned = []
+    const spawn = async () => {
+      if (spawned.length >= 3) {
+        throw new Error('third engine spawned')
+      }
+      const session = {
+        closed: false, info: {}, on: () => null, pump: async () => null,
+        close() {
+          this.closed = true
+        },
+        async open() {
+          throw Object.assign(new Error('engine: open failed (-1)'), {engineFailure: policyOom})
+        },
+      }
+      spawned.push(session)
+      return session
+    }
+    await expect(createEngineModelLoad({format: 'ifc', spawn}).parse(snapshot(), {})).rejects.toThrow()
+    expect(spawned).toHaveLength(2)
+    expect(spawned.every((s) => s.closed)).toBe(true)
+  })
+
+  it('a JS-heap allocation failure in the worker recorded by conway is retried, as out of memory', async () => {
     const log = []
     const first = conwayDouble(log, {buffered: {status: 'OPEN_FAIL', reason: 'Array buffer allocation failed'}})
     const {spawn, sessions} = spawner([first, conwayDouble(log)])
     const result = await createEngineModelLoad({format: 'step', spawn}).parse(snapshot(), {})
     expect(sessions).toHaveLength(2)
-    expect(result.summary.sourceMode.reason).toBe(SourceModeReason.BUFFERED_FAILED)
+    expect(result.summary.sourceMode).toMatchObject({reason: SourceModeReason.BUFFERED_FAILED, failure: 'outOfMemory'})
     await sessions[1].close()
   })
 

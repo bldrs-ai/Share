@@ -366,15 +366,23 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
       } catch (e) {
         session.close()
         const failure = e.engineFailure
-        if (sourceOverride === null && shouldRetryWindowed(failure)) {
-          // The policy's buffered open ran out of memory (sourcePolicy.js,
-          // engine-worker.md §5.6). conway does not throw for that: it
-          // records the failure and the open returns -1, and an Emscripten
-          // OOM abort leaves that engine's wasm unusable, so the retry is
-          // windowed on a NEW engine, once. The failed worker is terminated
-          // above, which frees its heap. If this open fails too, its failure
-          // is the load's, reported once like any other.
-          sourceOverride = {windowed: true, failure: 'outOfMemory'}
+        const retryFailure = sourceOverride === null ? retryableBufferedFailure(failure) : null
+        if (retryFailure !== null) {
+          // The policy's buffered open failed in a way a heap exhaustion
+          // looks like (retryableBufferedFailure says which). conway does not
+          // throw for it: it records the failure and the open returns -1, and
+          // an Emscripten abort leaves that engine's wasm unusable, so the
+          // retry is windowed on a NEW engine, once (`sourceOverride` is set
+          // from here on, so the retry's own failure is final). The failed
+          // worker is terminated above, BEFORE the respawn, so the two heaps
+          // never coexist. If this open fails too, its failure is the load's,
+          // reported once like any other.
+          sourceOverride = {windowed: true, failure: retryFailure}
+          // Said in the report before the retry's lines, so the failed
+          // attempt's engine warnings and errors in the load's tally read as
+          // that attempt's (loadProgress.js#reportEngineLog counts both).
+          reportSourceInfo(`Engine retry: buffered open failed (${FAILURE_TEXT[retryFailure]}); ` +
+            'retrying windowed on a fresh engine')
           session = await spawn()
           finished = wire(session)
           continue
@@ -509,31 +517,84 @@ export function openFailureSource(buffer) {
 
 
 /**
- * Should a failed open be retried windowed, on a fresh engine? Only when
- * the source policy itself chose buffered over a store (sourcePolicy.js
- * #POLICY_BUFFERED_REASONS: not `disableStreamOpen`, not a bytes source,
- * which have nothing to window over) and the failure is out of memory.
+ * What a heap exhaustion looks like from this conway-geom build
+ * (`@bldrs-ai/conway/compiled/dependencies/conway-geom/Dist/ConwayGeomWasmWeb.js`,
+ * in conway 1.1645.781), as conway records it (`recordOpenFailure` stores
+ * `error.message`, or `String(error)` for a non-Error). Heap growth is on,
+ * `_emscripten_resize_heap` returns false when it can't grow, and there is
+ * no `abortOnCannotGrowMemory`, so the ASSERTIONS-only texts
+ * (`Aborted(OOM)`, "Cannot enlarge memory") are never produced. Instead:
+ * - a failed malloc in C++ throws `std::bad_alloc` as a `CppException`,
+ *   which is not an Error, so the recorded reason is `"[object Object]"`;
+ * - `abort()` throws `"Aborted(). Build with -sASSERTIONS for more info."`;
+ * - conway's own guard on `_malloc` (`core/wasm_heap.js`) throws
+ *   `"wasm _malloc returned an unusable address for N bytes - …"`.
+ * A conway-geom rebuild can change all three; re-read the glue then.
+ */
+export const CPP_EXCEPTION_REASON = '[object Object]'
+export const WASM_ABORT_PREFIX = 'Aborted('
+export const CONWAY_MALLOC_FAILURE_PREFIX = 'wasm _malloc returned an unusable address'
+
+
+/**
+ * Should a failed open be retried windowed, on a fresh engine, and with
+ * which failure code? Only when the source policy itself chose buffered over
+ * a store (sourcePolicy.js#POLICY_BUFFERED_REASONS: not `disableStreamOpen`,
+ * not a bytes source, which have nothing to window over), it was not a
+ * schema refusal, and conway's recorded reason looks like memory.
  *
  * The signal is conway's own record of the failure: a buffered open that
- * fails in its parse does not throw (conway's `fromStreamed` catches,
- * falls back to the classic open, whose `fromAsync` catches again and
- * calls `recordOpenFailure`, so the open returns -1), and the error it
- * caught is in `openFailure.reason` (openAttempt.js#conwayOpenFailure), read
- * by the one OOM classifier the app has (utils/oom.js). A schema refusal is
- * never retried, whatever its message.
+ * fails in its parse does not throw (`fromStreamed` catches, falls back to
+ * the classic open, whose `fromAsync` catches again and calls
+ * `recordOpenFailure`, so the open returns -1), and what it caught is in
+ * `openFailure.reason` (openAttempt.js#conwayOpenFailure). Codes:
+ * - `outOfMemory`: the app's OOM classifier matches (utils/oom.js: V8's
+ *   "Array buffer allocation failed", Firefox's and Safari's "out of
+ *   memory", "WebAssembly.Memory(): could not allocate memory", …) or
+ *   conway's `_malloc` guard fired;
+ * - `engineException`: a non-Error thrown out of wasm ({@link
+ *   CPP_EXCEPTION_REASON}), which in this build is how `std::bad_alloc`
+ *   arrives;
+ * - `engineAbort`: an Emscripten `abort()` ({@link WASM_ABORT_PREFIX}).
+ * The last two are not always memory: a C++ exception or abort for another
+ * reason costs one wasted windowed attempt, bounded to one, and then fails
+ * as before. The shared `utils/oom.js` patterns are deliberately not
+ * widened for these: other callers use them to tell the user their device
+ * ran out of memory.
  *
  * @param {object|undefined} failure the open's `engineFailure`
- * @return {boolean}
+ * @return {string|null} the failure code, or null for no retry
  */
-export function shouldRetryWindowed(failure) {
+export function retryableBufferedFailure(failure) {
   if (!failure || failure.refusedSchema) {
-    return false
+    return null
   }
   if (failure.sourceMode?.mode !== 'buffered' || !POLICY_BUFFERED_REASONS.includes(failure.sourceMode.reason)) {
-    return false
+    return null
   }
   const reason = failure.openFailure?.reason
-  return typeof reason === 'string' && isOutOfMemoryError({message: reason})
+  if (typeof reason !== 'string') {
+    return null
+  }
+  if (reason.startsWith(CONWAY_MALLOC_FAILURE_PREFIX) || isOutOfMemoryError({message: reason})) {
+    return 'outOfMemory'
+  }
+  if (reason === CPP_EXCEPTION_REASON) {
+    return 'engineException'
+  }
+  if (reason.startsWith(WASM_ABORT_PREFIX)) {
+    return 'engineAbort'
+  }
+  return null
+}
+
+
+/**
+ * @param {object|undefined} failure the open's `engineFailure`
+ * @return {boolean} whether {@link retryableBufferedFailure} would retry it
+ */
+export function shouldRetryWindowed(failure) {
+  return retryableBufferedFailure(failure) !== null
 }
 
 
@@ -642,7 +703,10 @@ export function indexLine(index) {
 
 
 /** How each `bufferedFailed` failure code reads on the report line. */
-const FAILURE_TEXT = {RangeError: 'RangeError', outOfMemory: 'out of memory'}
+const FAILURE_TEXT = {
+  RangeError: 'RangeError', outOfMemory: 'out of memory', engineException: 'engine exception',
+  engineAbort: 'engine abort',
+}
 
 
 /**

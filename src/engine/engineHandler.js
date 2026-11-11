@@ -499,7 +499,13 @@ export function createEngineHandler({
     // says when and why).
     const opened = windowable ?
       await openSourceStore(source, {
-        allowSyncHandle: !flags.disableEngineSyncHandle, holdResident: !flags.disableEngineResidentSource,
+        allowSyncHandle: !flags.disableEngineSyncHandle,
+        // Not on the page's windowed retry after a buffered open failed for
+        // memory (engineModelLoad.js#parse): on the Blob store that hold is
+        // the whole file again, then windowed over, the highest-memory arm
+        // measured, on a device that just ran out. Its reads are slower
+        // (each a Blob round trip), which is the price.
+        holdResident: !flags.disableEngineResidentSource && sourceOverride?.windowed !== true,
         now, ...sourceOptions,
       }) :
       null
@@ -537,13 +543,17 @@ export function createEngineHandler({
       isMobile: device.isMobile,
       flags,
     })
-    if (sourceOverride?.windowed === true && sourceMode.mode === 'buffered' && store !== null) {
+    // (On the Blob store the retry holds nothing, see openSourceStore above,
+    // so the policy itself already says windowed, `blobNotHeld`: the label is
+    // still the retry's.) A sidecar found meanwhile keeps its index reopen.
+    if (sourceOverride?.windowed === true && store !== null && sourceMode.reason !== SourceModeReason.INDEX_REOPEN) {
       // The page's retry of a load whose buffered open ran out of memory on
       // an earlier engine (engineModelLoad.js#parse): this open is windowed,
       // and says why. Per open, so nothing else on the page changes.
       sourceMode = {
         ...sourceMode, mode: 'windowed', reason: SourceModeReason.BUFFERED_FAILED,
-        failure: sourceOverride.failure ?? 'outOfMemory',
+        // Fixed codes only: it reaches the report line and GA.
+        failure: RETRY_FAILURE_CODES.has(sourceOverride.failure) ? sourceOverride.failure : 'outOfMemory',
       }
     }
     let whole = null
@@ -1065,6 +1075,10 @@ function bytesLoader(source, store, whole) {
     return ArrayBuffer.isView(bytes) ? bytes : new Uint8Array(bytes)
   }
 }
+
+
+/** The failure codes a page retry may carry (engineModelLoad.js#retryableBufferedFailure). */
+const RETRY_FAILURE_CODES = new Set(['outOfMemory', 'engineException', 'engineAbort'])
 
 
 /**

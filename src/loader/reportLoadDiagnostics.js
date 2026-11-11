@@ -131,7 +131,9 @@ export function reportEngineSourceBuffered({reason, sizeBytes}) {
  * @param {object} args
  * @param {string} args.format the engine's format label, 'ifc' | 'step'
  * @param {string} args.storeKind 'syncHandle' | 'blobHeld'
- * @param {string} args.failure 'RangeError' | 'outOfMemory'
+ * @param {string} args.failure 'RangeError' (the worker's whole-file allocation) | 'outOfMemory' |
+ *   'engineException' | 'engineAbort' (the page's retry on a fresh engine,
+ *   engine/engineModelLoad.js#retryableBufferedFailure)
  * @param {number} args.sizeBytes the source's size, bucketed here
  */
 export function reportEngineSourceFallback({format, storeKind, failure, sizeBytes}) {

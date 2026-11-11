@@ -397,6 +397,36 @@ describe('engine/engineHandler: the source policy', () => {
     await s.close()
   })
 
+  it('on the Blob store, the page\'s retry override holds no copy of the file', async () => {
+    // Firefox and Safari: the retry follows a buffered open that ran out of
+    // memory, so it must not read the whole file into the worker again.
+    const run = async (sourceOverride) => {
+      const log = []
+      const s = await session(policyApi(log), opfs(log), {flags: {disableEngineSyncHandle: true}})
+      const done = new Promise((resolve) => s.on(Ev.DONE, (msg) => resolve(msg.summary)))
+      await s.open({file: snapshot()}, {format: 'ifc', stream: {previews: false}, sourceOverride})
+      const summary = await done
+      await s.close()
+      return summary
+    }
+    const retry = await run({windowed: true, failure: 'engineException'})
+    expect(retry.sourceMode).toMatchObject({mode: 'windowed', reason: SourceModeReason.BUFFERED_FAILED,
+      failure: 'engineException'})
+    expect(retry.source).toMatchObject({kind: 'blob', residentBytes: 0, residentReads: 0})
+    // The control: without the override the same store holds the file.
+    expect((await run(null)).sourceMode).toMatchObject({mode: 'buffered', reason: SourceModeReason.HELD_BY_BLOB_STORE})
+  })
+
+  it('an override with an unknown failure code reports a fixed one', async () => {
+    const log = []
+    const s = await session(policyApi(log), opfs(log))
+    const done = new Promise((resolve) => s.on(Ev.DONE, (msg) => resolve(msg.summary)))
+    await s.open({file: snapshot()}, {format: 'ifc', stream: {previews: false},
+      sourceOverride: {windowed: true, failure: 'model.ifc ran out'}})
+    expect((await done).sourceMode.failure).toBe('outOfMemory')
+    await s.close()
+  })
+
   it('an open that throws (not a conway failure) is not retried here either', async () => {
     const log = []
     const api = policyApi(log)
