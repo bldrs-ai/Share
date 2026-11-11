@@ -9,8 +9,11 @@ README is the record schema and the confounder list.
 
 **Status (2026-11-11):** done for 13 models, 2.3 to 860.7 MiB, IFC and
 STEP: small at n = 5, medium at n = 3, large at n = 2 (471 records, none
-failed, every one passed its arm check). The summary is next; each size
+failed, every one passed its arm check), on conway `1.1643.778`. The summary is next; each size
 class has its own section after it, and the full tables are at the end.
+The re-measure on conway `1.1645.781` (the source-retention and window-LRU
+fixes) is in progress: [After conway 1.1645.781](#after-conway-11645781-2026-11-11),
+before the size-class sections.
 
 
 ## Setup
@@ -161,6 +164,56 @@ per-model sections and tables below give ranges and n.
 - **The ~20 s reading** is the after-spill reading (GC'd, 2 s after the
   spill line, 5–17 s after Total on these models, up to 37 s on DOWA); no
   separate fixed Total+20 s sample was taken.
+
+
+## After conway 1.1645.781 (2026-11-11)
+
+Share's conway pin moved from `1.1643.778-g5233308a` to
+`1.1645.781-g15220b10`, which brings two fixes:
+[conway#780](https://github.com/bldrs-ai/conway/pull/780) (the windowed
+source provider's LRU recency became an O(1) stamp write; it was a `Map`
+delete+set on each of ~9.6 M `acquire` calls on PSB) and
+[conway#781](https://github.com/bldrs-ai/conway/pull/781) (a buffered open's
+source is released on `SpillModelSource`, IFC and AP214, and
+`invalidate(true)` rebuilds complex records' sub-entities). This section
+re-measures seven of the 13 models on the arms those fixes touch:
+`windowedHandle`, `buffered`, `heldBuffer` everywhere, plus `windowedHeld`
+on PSB. The first matrix above is "before"; nothing above this section was
+changed.
+
+**Setup differences from the first matrix.** Product code is Share
+`f2d55cd` (the first matrix's `7924244` plus the pin; the commits between
+touch only `tools/bench/` and docs). Same machine, Chromium, build config,
+harness and contention guard. Records are in
+`tools/measure/sourceModes/records-conway-1645.jsonl`, kept apart from the
+first matrix's `records.jsonl` (both git-ignored). **Confounder: the two
+runs were hours apart** (before: 05:52–08:15 UTC; after: from 08:47 UTC,
+same day), on a container shared with other sessions' work. Same-arm
+differences of a few percent between the two runs are inside what that
+alone can move; read only differences larger than both runs' ranges.
+
+**Status:** in progress, model by model.
+
+### MB-Khaya (IFC, 31.4 MiB), n = 5
+
+Nothing moved outside the noise. Cold engine time `windowedHandle` 5.81 s
+(before 5.94), `buffered` 3.55 (3.39), `heldBuffer` 3.70 (3.52): the
+buffered arms read +0.16–0.18 s, with overlapping ranges, and the windowed
+arm −0.13 s; Geometry 4.50 against 4.70 windowed. The buffered-vs-windowed
+gap is −2.26 s (−39 %), against −2.55 s (−43 %) before. After the spill
+every arm reads 55 MiB (59 before, every arm alike): this model showed no
+retention before and shows none now. First mesh 1.30 / 1.00 / 1.20 s
+(before 1.31 / 0.99 / 1.14). Both reopen paths are within noise of before.
+
+| Arm | Phase | n | Engine | Parse | Geometry | 1st mesh | Index | Ready | Prev@idx | LT n | LT s | W peak | W idx | W spill | W heap spill | wasm | R peak |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| windowedHandle | cold | 5 | 5.81 (5.62–5.94) | 0.71 (0.68–0.76) | 4.50 (4.40–4.68) | 1.30 (1.19–1.33) | 1.48 (1.35–1.51) | 6.36 (6.17–6.44) | 0 | 17 (15–17) | 3.09 (3.01–3.22) | 82 (82–102) | 52 | 55 | 17 | 100 | 1003 (994–1028) |
+| windowedHandle | artifact hit | 5 | 0.21 (0.18–0.30) | — | — | 0.41 (0.38–0.49) | — | 0.38 (0.35–0.46) | — | 7 (5–9) | 0.96 (0.84–1.11) | — | — | — | — | — | 754 (747–780) |
+| windowedHandle | sidecar reopen | 5 | 5.23 (5.04–5.29) | 0.17 (0.15–0.20) | 4.58 (4.41–4.64) | 0.69 (0.62–0.72) | 0.85 (0.78–0.86) | 5.75 (5.51–5.80) | 0 | 13 (13–14) | 2.46 (2.36–2.50) | 84 (70–84) | 52 (52–84) | 55 | 17 | 100 | 1002 (985–1040) |
+| buffered | cold | 5 | 3.55 (3.38–3.80) | 0.50 (0.46–0.57) | 2.58 (2.43–2.80) | 1.00 (0.80–1.10) | 1.19 (1.01–1.31) | 4.12 (3.87–4.33) | 0 (0–1) | 14 (14–15) | 2.62 (2.41–2.82) | 70 (69–73) | 57 (56–66) | 55 | 17 (17–17) | 100 | 991 (817–996) |
+| heldBuffer | cold | 5 | 3.70 (3.53–3.73) | 0.52 (0.47–0.55) | 2.52 (2.44–2.64) | 1.20 (1.03–1.28) | 1.29 (1.23–1.41) | 4.21 (4.01–4.23) | 0 (0–1) | 15 (14–15) | 2.61 (2.52–2.71) | 83 (82–86) | 57 (56–67) | 55 | 17 | 100 | 1000 (961–1003) |
+| heldBuffer | artifact hit | 5 | 0.24 (0.20–0.36) | — | — | 0.43 (0.40–0.60) | — | 0.40 (0.38–0.57) | — | 7 (7–8) | 0.99 (0.98–1.13) | — | — | — | — | — | 782 (744–784) |
+| heldBuffer | sidecar reopen | 5 | 5.30 (5.12–5.63) | 0.17 (0.16–0.17) | 4.60 (4.47–4.96) | 0.85 (0.75–0.88) | 0.84 (0.81–1.02) | 5.85 (5.65–6.16) | 0 | 15 (12–16) | 2.53 (2.41–2.73) | 100 (100–104) | 83 (83–104) | 55 | 17 | 100 | 1031 (972–1070) |
 
 
 ## Small models (n = 5)
