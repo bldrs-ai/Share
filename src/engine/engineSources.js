@@ -139,6 +139,19 @@ export function makeBlobStore(blob, now = () => performance.now(), ReaderSync = 
         counters.residentSkipped = `${e?.name ?? 'Error'}: ${e?.message ?? e}`
       }
     },
+    /**
+     * Hand the whole-file copy to the caller, and stop serving reads from it
+     * (later reads go to the Blob again). For a buffered open over bytes this
+     * store already holds (`engineHeldBufferOpen`, Share#2139): the engine
+     * then owns the bytes, so the store must not keep a second reference.
+     *
+     * @return {Uint8Array|null} the copy, or null when none was held
+     */
+    takeResident() {
+      const held = resident
+      resident = null
+      return held
+    },
     /** @return {boolean} whether a whole-file copy was held and is now let go */
     releaseResident() {
       const held = resident !== null
