@@ -2,6 +2,13 @@
 
 **Status:** Draft v0.1 — implementation plan; no feature shipped by this doc.
 **Date:** 2026-11-11
+
+**UX requirements:** [Sharing](../reqs/sharing.md), [Versions](../reqs/versions.md),
+[Notes](../reqs/notes.md), and their [shared index](../reqs/README.md).
+These are the current UX planning drafts. Reconcile this earlier technical plan
+with their unlisted-link, external-version and Notes contracts before implementation;
+its public-hosting assumptions do not override the UX requirements. Existing-epic
+mapping and technical reconciliation remain subsequent planning work.
 **Epic / source proposal:** [#2144](https://github.com/bldrs-ai/Share/issues/2144).
 **Roadmap:** [`share-200`](../roadmap.md#43-share). The former `share-200`
 (grant/revoke per-principal sharing) is now `share-201`.
