@@ -1,10 +1,11 @@
-# Notes 100 reconciliation pilot
+# Notes 100
 
 **Status:** Notes issue normalization applied; UX decisions remain draft · 2026-11-12.
-**Agreed convention:** epic code plus story title; the GitHub issue number identifies the story.
-**Scope:** establish and apply the Notes rubric, including milestone-to-sub-issue reconciliation, before repeating it for Sharing and Versions.
+**Scope:** Establish and apply the [standard UX rubric], including milestone-to-sub-issue reconciliation.
 
 ## Coding and tier rubric
+
+**Convention:** Epic code plus story title; the GitHub issue number identifies the story.
 
 Use the roadmap’s `{share,notes,versions}-{1,2,3,4}xx` scheme for **epics**, not a separate numbered code for every story. For example:
 
