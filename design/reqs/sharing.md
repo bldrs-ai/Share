@@ -4,9 +4,9 @@
 
 Sharing lets an author publish an exact model version, disclose its audience and content, and send an unguessable link that opens the intended version and view. It also lets viewers link an externally hosted revision without copying the model. This document owns publication, link access, recipient opening and sharing recovery; Versions owns history and revision identity, and Notes owns discussion authoring and organization.
 
-The [UX index and shared requirements](README.md) define the Epic → Story → Task rubric, shared acceptance constraints and cross-feature decisions. Item codes use S for Sharing, V for Versions and N for Notes, retaining their numeric suffixes and task order. They are not GitHub issue IDs or new feature-level assignments. Each story includes its tasks and acceptance criteria. Cross-document dependencies refer to the owner listed in the index.
+The [UX index and shared requirements](README.md) define the Epic → Story → Task rubric, shared acceptance constraints and cross-feature decisions. The agreed canonical scheme uses roadmap epic codes and existing GitHub issue numbers for stories; see the index. This document’s S/V codes remain temporary locators until its triage. Notes has moved to notes-100, with its former N17–N20 aliases recorded in the pilot crosswalk. Each story includes its tasks and acceptance criteria. Cross-document dependencies refer to the owner listed in the index.
 
-**Related requirements:** [Versions](versions.md) (V21, V01–V03, V09, V11; later V13–V16) · [Notes](notes.md) (N17–N20).
+**Related requirements:** [Versions](versions.md) (V21, V01–V03, V09, V11; later V13–V16) · [Notes](notes.md) (notes-100).
 
 ## Epic and scope
 
