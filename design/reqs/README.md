@@ -8,9 +8,9 @@
 |---|---|---|
 | [Sharing](sharing.md) | Publication, audience, unguessable links, recipient opening and sharing recovery | S04–S08, S10, S12 |
 | [Versions](versions.md) | External revisions, history, local retention, updates and backup; later semantic version workflows | V21, V01–V03, V09, V11; later V13–V16 |
-| [Notes](notes.md) | Anchored discussions, private drafts, publication/replies and colored topic tags | `notes-100` (former N17–N20) |
+| [Notes — live requirements](https://github.com/bldrs-ai/Share/issues/670) | Anchored discussions, private drafts, publication/replies and colored topic tags | `notes-100` (former N17–N20) |
 
-Each feature document is the source of truth for its stories, decisions and gap analysis. This index owns only the common requirements and cross-feature decisions. Versions and Notes include starting maps to existing features and historical IDs; the Notes pilot now records the applied issue hierarchy, while wider reconciliation remains pending.
+Sharing and Versions retain their detailed feature requirements documents. Notes requirements, tasks and current decisions live in [epic #670](https://github.com/bldrs-ai/Share/issues/670) and its story issues; the [scope snapshot](notes-100.md) and [triage record](notes-100-triage.md) provide historical context. This index owns the common requirements and cross-feature decisions. Versions and Notes include starting maps to existing features and historical IDs; the Notes pilot now records the applied issue hierarchy, while wider reconciliation remains pending.
 
 This document describes the next version of Share’s existing Versions, sharing and Notes experience. Users can open model versions supplied by external sources such as GitHub; model authors can retain a local history and publish exact versions through Share. Collaborators can revisit the same version and view through an opaque, unguessable Share link, and discuss the model through the existing anchored Notes experience, extended with New, Draft and Published states and colored topic tags. The sharing experience is “Anyone with the link”, without a public listing or search discovery; an externally public source retains its own visibility. Later semantic editing lets collaborators contribute reviewable model changes without losing one another’s work.
 

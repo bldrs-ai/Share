@@ -178,6 +178,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Epic/Story/Track catalogue, milestone tier rubric (§2.1), MVP bar + phase plan (§6, ex-"Pro-MVP"), growth-funnel Phase G, AI-workspace pivot (§7), post-MVP loveables | [design/roadmap.md](design/roadmap.md) |
 | Sharing, Versions and Notes UX requirements, feature-prefixed item codes, gap analyses and existing-epic reconciliation | [design/reqs/README.md](design/reqs/README.md) |
 | Reconciling any epic's UX requirements with feature-tier codes, existing issues and milestones; formal UX story hierarchy and verification | [design/reqs/ux-rubric.md](design/reqs/ux-rubric.md) |
+| Live Notes requirements, acceptance tasks and current cross-feature decisions | [Notes epic #670](https://github.com/bldrs-ai/Share/issues/670) |
 | Notes 100 epic motivation and formal UX stories at a point in time | [design/reqs/notes-100.md](design/reqs/notes-100.md) |
 | Notes 100 triage: scope decisions, issue crosswalk, milestone audit and acceptance evidence | [design/reqs/notes-100-triage.md](design/reqs/notes-100-triage.md) |
 | Conversational-CAD epic plan (workspace shell / ProjectsDrawer + TopBar, fluid Nav+search, convo panel, multi-user channels), wireframe→issue mapping, epic/sub-issue process | [design/new/conversational-cad.md](design/new/conversational-cad.md) |

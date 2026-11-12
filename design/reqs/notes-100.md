@@ -26,6 +26,6 @@ Each linked issue carries the `notes-100:` prefix and owns its detailed tasks an
 | [Edit a comment · #1186](https://github.com/bldrs-ai/Share/issues/1186) | As an authorized contributor, I want to correct a comment so my contribution remains accurate. |
 | [Delete a comment · #1187](https://github.com/bldrs-ai/Share/issues/1187) | As an authorized contributor, I want to remove a comment I am permitted to manage. |
 
-This snapshot captures the eleven reconciled UX stories, not a completion claim. The broader [Notes requirements](notes.md) describe proposed evolution, including private drafts, exact-version context and topic filtering; the [triage record](notes-100-triage.md) holds the supporting scope decisions and reconciliation evidence.
+This snapshot captures the eleven reconciled UX stories, not a completion claim. The [live Notes requirements](https://github.com/bldrs-ai/Share/issues/670) track subsequent evolution, including private drafts, exact-version context and topic filtering; the [triage record](notes-100-triage.md) holds the supporting scope decisions and reconciliation evidence.
 
 Current progress, tasks, bugs and acceptance decisions live in the epic and story issues. Revise this page only when the epic's motivation or story scope materially changes, date the new snapshot, and use Git history to compare earlier versions.

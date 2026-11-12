@@ -109,3 +109,59 @@ The initial 42-link pass was checked against the preflight snapshot for preserve
 - [ ] Reconcile roadmap status from verified UX evidence, then repeat this rubric for Sharing and Versions.
 
 The roadmap's current `notes-100` done marker describes the existing baseline; it does not establish completion of the expanded target UX or all related bugs. Other roadmap epic assignments remain unchanged. Native sub-issue rollups track issue state, not acceptance verification.
+
+
+## Requirements migration to issues · 2026-11-12
+
+The working `notes.md` draft has been retired after assigning its requirements to live issues. [Source snapshot](https://github.com/bldrs-ai/Share/blob/8ab4ae9358ad3dcab25f250c40da7f700bd03508/design/reqs/notes.md) preserves the full original text. The [Notes 100 one-page snapshot](notes-100.md) remains the dated eleven-story account approved before this migration; it is not a live backlog. This section records the transfer, not changing delivery status.
+
+### Ownership crosswalk
+
+Task ordinals below refer only to the checklist order in the linked source snapshot; they are migration locators, not new UX codes. All 26 story tasks and three cross-feature audit tasks have issue owners. Acceptance and dependency prose moved with the owning tasks; shared contracts and decision ownership are on #670.
+
+| Source requirement | Live owner |
+|---|---|
+| Epic motivation, end-to-end journey, lifecycle states, shared version/audience/permission rules | [#670](https://github.com/bldrs-ai/Share/issues/670) |
+| Place a note · tasks 1–6, acceptance and dependencies | [#2149](https://github.com/bldrs-ai/Share/issues/2149) |
+| Private drafts · tasks 1–6, acceptance and persistence decisions | [#2148](https://github.com/bldrs-ai/Share/issues/2148) |
+| Publish/reply · tasks 1–4: publication review, consent, permission and retry | [#2149](https://github.com/bldrs-ai/Share/issues/2149) |
+| Publish/reply · task 5: opaque scoped note link | [#2155](https://github.com/bldrs-ai/Share/issues/2155) |
+| Publish/reply · task 6: attributed replies and recoverable sends | [#2154](https://github.com/bldrs-ai/Share/issues/2154) |
+| Publish/reply · task 7: anonymous reading, live refresh and pinned model | [#2156](https://github.com/bldrs-ai/Share/issues/2156) |
+| Browse/tags · tasks 1–2 and 5: list/marker association, identity, state and empty/unavailable cases | [#2150](https://github.com/bldrs-ai/Share/issues/2150) |
+| Browse/tags · tasks 3–5: tag selection, consistent filters and untagged/empty cases | [#894](https://github.com/bldrs-ai/Share/issues/894) |
+| Browse/tags · tasks 6–7: old-version navigation and missing anchors | [#2151](https://github.com/bldrs-ai/Share/issues/2151) |
+| Source navigation and its acceptance/access audit | [#2152](https://github.com/bldrs-ai/Share/issues/2152), following #1056 |
+| Note edits, comment edits/deletion and their permission/recovery audit | [#1057](https://github.com/bldrs-ai/Share/issues/1057), [#1186](https://github.com/bldrs-ai/Share/issues/1186), [#1187](https://github.com/bldrs-ai/Share/issues/1187) |
+| Note removal semantics, retained source/links and recovery | [#2153](https://github.com/bldrs-ai/Share/issues/2153), following #1058 |
+| Discussion-history and cross-version decisions | [#2151](https://github.com/bldrs-ai/Share/issues/2151) |
+| Taxonomy, initial tags, label mapping and administration scope | [#894](https://github.com/bldrs-ai/Share/issues/894) |
+| External-input destination/fallback and contribution-permission decisions | [#2149](https://github.com/bldrs-ai/Share/issues/2149), coordinated by #670 |
+| Cross-feature dependencies, BCF/Drive/anchoring ownership, six gap-analysis areas and final three audit tasks | [#670](https://github.com/bldrs-ai/Share/issues/670), with the story owners above |
+
+### Existing stories and follow-ups
+
+Eight completed baseline stories retain their original bodies/checklists and states, with appended links to their expanded follow-ups: #1059 → #2149, #1054 → #2150, #1055 → #2151, #1056 → #2152, #1058 → #2153, #978 → #2154, #1071 → #2155 and #1072 → #2156. Open stories #1057, #1186 and #1187 gained explicit acceptance, failure/recovery and permission obligations without changing historical checkboxes.
+
+The duplicate search covered open and closed Notes titles plus draft/topic/label/tag queries, with complete single-page search results. It found no existing focused private-draft story. #357 includes local/online issues as part of BCF interchange; new #2148 owns basic private Share drafting and links that related scope. #599 covers placemark creation and optional tag color; #311 covers ordering, neither owns durable drafts or full topic filtering.
+
+Existing open #894 (historical `Story: Epic: Collab (200) - Issues`) was reused as `notes-100: Find model notes using colored topic tags`. Its original description and Collab milestone 64 remain. Basic topic filtering belongs to the agreed MVP workflow; the historical title does not redefine current notes-200 BCF. Milestone 64 was inspected: #895 (Code Review) and #896 (Pluggable Note backends) remain outside this Notes hierarchy and keep their ownership. Publication/destination work must coordinate with provider capabilities rather than silently absorbing them.
+
+The nine new stories and reused #894 are direct formal UX sub-issues of #670. Supporting planning/refactor/test issues remain outside the epic's direct children. No existing issue state, milestone, assignee, label or historical task checkbox was changed by this requirements migration; #894's title was normalized. Current task state and product decisions belong in the issues, not this audit record.
+
+### Archived starting gap analysis
+
+The following source/test observations are retained as migration evidence. They are not a fresh runtime audit; the live issues above own follow-up verification.
+
+**Gap analysis status:** Initial observations are based on source and test definitions reviewed on GitHub `main` on 2026-11-11. Live UX walkthroughs, an exact build/commit and full issue reconciliation remain pending. An unverified capability is not necessarily missing. Use Retain, Extend/change, Verify and Decide dispositions, as defined in the index.
+
+| Area / requirements | Existing evidence | Provisional gap or disposition | Next audit step |
+|---|---|---|---|
+| Browse a note, replies and model context — notes-100 placement, notes-100 discussion and browsing | `Notes` lists/selects notes, loads GitHub comments and parses placemarks; Notes test definitions cover the list, selected thread and return navigation. `NoteFooter` exposes camera and GitHub navigation. | **Retain + verify.** Anchored discussion and replies already exist. The target must account for those flows and thread identities. | Walk through list → marker → note → reply → saved view on desktop/mobile, including anonymous reading and permitted contribution. |
+| New → Draft → Published — notes-100 authoring and discussion, V11 | `NoteCardCreate` sends issue/comment creation to GitHub. The inspected path does not establish durable private drafts, reload recovery or account-scoped draft storage. | **Verify, then extend.** Private device-local drafts and honest save/publish states need explicit coverage; model publication must not send drafts. | Inspect current storage; test reload/offline, account switching, cache clearing, failed publication and retry without duplicate notes/replies. |
+| Exact model version and legacy anchors — V02, S08, V09, notes-100 | Current Notes uses model routes, note/comment identifiers and parsed placemark URLs. This review has not established immutable revision coverage for every existing note. | **Verify + decide.** Preserve established associations where valid. A legacy note without a verifiable revision must show uncertainty rather than acquire an invented version. | Audit old note links, moving-branch links, external files and source/GLB anchors; specify missing-anchor recovery and any migration or intentional breaking change. |
+| Existing edit/delete actions — notes-100 discussion and shared requirements | `NoteMenu` exposes Edit/Delete; `NoteFooter` has edit save/cancel controls. | **Retain or explicitly change.** These actions are part of the baseline, not wholly new decisions. Permissions and effects on published threads need review. | Verify author/non-author controls, server enforcement, cancellation, deleted content and old links; document any revised behavior. |
+| Colored topic tags and filtering — notes-100 browsing and tags | Tag taxonomy, label mapping and coordinated list/marker filtering were not established by the inspected components. | **Verify + decide.** Audit current GitHub labels and any existing filters before defining extensions. | Inventory current labels; decide shared taxonomy/permissions and multi-tag matching, then check untagged/empty states and accessible colors. |
+| Audience, notes destination and source access — S05, S07–S08, notes-100 discussion | Creation/replies use GitHub issues/comments, and existing controls open those upstream resources. Public issues are publicly discoverable at source. | **Extend/change + decide.** Opaque Share links do not make public issues unlisted. Separate model-read, model-write and notes permissions; choose an audience-compatible destination. | Test public, restricted and issues-disabled sources; verify disclosures, destination selection, signed-out reading and failure recovery without model republication. |
+
+Notes starting points: [Notes](https://github.com/bldrs-ai/Share/blob/main/src/Components/Notes/Notes.jsx), [NoteCardCreate](https://github.com/bldrs-ai/Share/blob/main/src/Components/Notes/NoteCardCreate.jsx), [NoteFooter](https://github.com/bldrs-ai/Share/blob/main/src/Components/Notes/NoteFooter.jsx), [NoteMenu](https://github.com/bldrs-ai/Share/blob/main/src/Components/Notes/NoteMenu.jsx), and [Notes test definitions](https://github.com/bldrs-ai/Share/blob/main/src/Components/Notes/Notes.spec.ts). These links track `main`; pin evidence to the audited commit when completing the analysis.

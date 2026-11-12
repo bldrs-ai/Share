@@ -78,3 +78,5 @@ In `<epic-code>-triage.md`, preserve the reconciliation record:
 - Verification of the resulting hierarchy and preservation of milestones, issue history and acceptance checkboxes. Record runtime acceptance separately from source inspection and metadata checks.
 
 Use commit/build-pinned evidence for implementation claims. Resolve product decisions before dispatching dependent implementation work; record outstanding decisions without presenting the target UX as already delivered.
+
+When migrating a working requirements draft into issues, assign every task, acceptance condition, dependency and unresolved decision to an epic or story before retiring the draft. Reuse matching open issues; preserve completed baseline checklists and link follow-up stories for expanded scope. Keep a source permalink and ownership crosswalk in the triage record, update live links, and preserve the dated scope snapshot. Do not duplicate a changing backlog in repository prose.
