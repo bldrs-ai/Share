@@ -10,6 +10,8 @@ The [UX index and shared requirements](README.md) define the Epic → Story → 
 
 ## Epic and scope
 
+**Canonical epic:** [notes-100: Anchored notes · #670](https://github.com/bldrs-ai/Share/issues/670). Native sub-issues track the work hierarchy; historical milestones remain intact for reference.
+
 **As a logged-in reviewer, I want to place, privately prepare, publish and organize notes on a specific model version, so that collaborators can discuss the same context without exposing unfinished work.**
 
 **Notes collaboration journey and acceptance:** Open a Share-published or externally hosted version → place a note on the model → save it as a private draft (local storage only) → add colored topic tags → publish to a permitted notes destination → another person follows the note link to the same source version and location → an authorized collaborator replies. Reloading preserves a saved draft; publishing the model does not publish that draft. When a newer model version appears, the original note still opens its original context, and filtering by a topic finds the corresponding notes. Repeat against an existing public GitHub file without creating a new model repository or requiring model-write access.
@@ -142,7 +144,7 @@ Read access, model-write access and notes contribution permissions are distinct.
 
 ## Existing feature and story reconciliation
 
-The [Notes 100 pilot](notes-100-triage.md) is the issue-by-issue crosswalk and tier rubric. It retains the nine existing product stories, separates the planning task, and identifies adjacent comment edit/delete stories omitted by the supplied query. Edit, removal and source navigation are required baseline coverage even though they were not separate groups in the first UX draft. “Delete note” currently closes the GitHub issue; final removal wording and semantics remain a product decision.
+The [Notes 100 pilot](notes-100-triage.md) is the issue-by-issue crosswalk and tier rubric. It retains the nine original product stories, includes the two adjacent comment edit/delete stories omitted by the supplied query, and separates planning/support work. The milestone audit maps related bugs and legacy tasks into native sub-issues under their owning stories. Edit, removal and source navigation are required baseline coverage even though they were not separate groups in the first UX draft. “Delete note” currently closes the GitHub issue; final removal wording and semantics remain a product decision.
 
 Notes already has 100–200-level stories and established GitHub-backed discussion behavior. The [roadmap feature inventory and ID history](../roadmap.md) records both current IDs and historical aliases. Reconcile those stories with this target before creating or renumbering issues; this inventory does not claim their implementation status.
 
@@ -152,7 +154,7 @@ Notes already has 100–200-level stories and established GitHub-backed discussi
 | BCF round-trip; historical `notes-110` | `notes-200` | Related interchange capability; not the same as Draft/Published states or topic tags. | Preserve the existing scope and link dependencies. BCF remains separately scoped; this split does not add it to Notes authoring delivery. |
 | Drive-backed notes; historical `notes-120` / `notes-210` | `notes-300`, Track T6 | Related provider/destination work for notes-100 discussion and portable discussion context. | Check existing NotesProvider/sidecar plans against audience and source-version requirements before specifying new infrastructure. |
 
-For each existing story, record its canonical issue/feature ID, historical alias, current UX and acceptance, matching feature-prefixed story/task requirements, retain/extend/replace disposition, and remaining work. Preserve existing epic ownership where appropriate; link Sharing and Versions dependencies. Use the existing notes-100 epic code for the basic workflow. Story issue creation and live metadata changes remain deferred until the pilot mapping and missing-work scope are agreed.
+For each existing story, record its canonical issue/feature ID, historical alias, current UX and acceptance, matching feature-prefixed story/task requirements, retain/extend/replace disposition, and remaining work. Preserve existing epic ownership where appropriate; link Sharing and Versions dependencies. Use the existing notes-100 epic code for the basic workflow. The agreed Notes title and hierarchy normalization is applied under #670; the pilot records the milestone crosswalk and deferred ownership decisions. New stories and scope changes still require the missing-work and duplicate analysis.
 
 ## Existing UX gap analysis
 
