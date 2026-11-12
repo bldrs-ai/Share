@@ -24,33 +24,17 @@ The 900 MB IFC is a large-model validation case, not a promise that every device
 
 ## Rubric and future GitHub structure
 
-- **Epic:** the overall user capability and its end-to-end acceptance journey.
+Use the [standard UX rubric](ux-rubric.md) for Epic → Story → Task structure, feature-tier codes, triage dispositions and issue normalization. Stories use their epic prefix plus a user-visible title; the GitHub issue number identifies the story, and tasks remain checkboxes in its body.
 
-- **Story:** one independently understandable user goal, written “As a …, I want …, so that …”. After reconciliation, each story maps to an existing issue or a native sub-issue of its appropriate epic.
-
-- **Task:** a concrete, verifiable UX obligation inside that story. Tasks remain checkboxes in the story issue description. They are not separate task issues by default.
-
-- **Acceptance:** a user action and observable result that proves the story works. Technical implementation work is mapped to these requirements separately.
-
-Canonical feature codes follow the roadmap’s **{share,notes,versions}-{1,2,3,4}xx** epic scheme. Stories share their epic prefix in the title—for example, **notes-100: Edit a note**—and the existing GitHub issue number identifies the story (#1057). Tasks remain checkboxes in its body, referenced as #1057/T1. Do not consume a new epic number for each story or create replacement issues just to renumber them. Notes is the first migration pilot; former N17–N20 references are aliases recorded in its crosswalk. S/V references remain temporary locators until the corresponding Sharing/Versions triage.
-
-Reconcile Sharing with #2144 and the share-200 planning PR, and reconcile Versions and Notes with their existing 100–200-level stories and later roadmap aliases. Retain appropriate epic ownership and link dependencies; do not place every feature under share-200. Reuse or link existing issues before creating new ones. Each story issue keeps its user statement, task checklist, acceptance, dependencies and unresolved decisions. Create new issues only after scope agreement and a duplicate search; preserve existing issue numbers.
+Reconcile Sharing with #2144 and the share-200 planning PR, and reconcile Versions and Notes with their existing 100–200-level stories and later roadmap aliases. Retain appropriate epic ownership and link dependencies; do not place every feature under share-200. Notes has adopted the epic scheme; S/V references remain temporary locators until Sharing and Versions are reconciled.
 
 ## Feature tier and issue reconciliation pilot
 
-The [Notes 100 pilot](notes-100-triage.md) applies the agreed convention to the existing story issues. Tiers encode the earliest business milestone requiring a capability, not implementation difficulty or completion state: 1xx MVP, 2xx MLP, 3xx Pro, 4xx Enterprise. Most basic workflow requirements remain 1xx. Separate later capabilities need an explicit scope and milestone rationale; existing IDs and historical aliases are preserved until deliberately reconciled.
-
-The Notes pilot applies the agreed naming and native sub-issue hierarchy under [#670](https://github.com/bldrs-ai/Share/issues/670). Product decisions and acceptance gaps remain explicit follow-ups. Repeat this rubric for Sharing and Versions, keeping issue state, UX coverage and verification evidence separate.
+[Notes 100](notes-100.md) records the first application of the shared rubric, including its scope decisions, issue crosswalk, milestone audit and acceptance gaps. Its formal UX stories are tracked under [#670](https://github.com/bldrs-ai/Share/issues/670). Use the same procedure for other epics and keep each epic's results in its own document.
 
 ### Issue normalization, including milestones
 
-1. Inventory the feature's issues across open and closed states, labels and historical title variants. Find the existing epic/tracker before creating a parent or replacement story.
-2. **Expand through milestones.** Enumerate all members of each related milestone, including closed issues and linked pull requests, and follow explicit parent/task references. Include relevant issues from broader release milestones. Record the milestone URL, source issue, proposed parent, evidence and disposition; a story-only search is insufficient.
-3. Classify by user outcome and content. **Only formal UX stories are direct sub-issues of an epic.** Attach existing implementation/task/bug issues beneath their owning story where the relationship is established. Keep planning, refactoring, testing, documentation and other cross-story support work as linked references outside the epic's direct children; record any unresolved story ownership in the crosswalk. Preserve legacy task issues; new UX tasks remain checkboxes in story descriptions. Pull requests remain evidence/dependency links.
-4. **Use native sub-issues uniformly as the work hierarchy.** Milestone membership is discovery evidence, not automatic ownership. Preserve milestone names, descriptions, dates, open/closed states and assignments as historical references. Keep other-epic work with its owner; record ambiguous or shared ownership as an explicit deferral with a next decision. Cross-link dependencies rather than duplicating issues or forcing a second parent.
-5. Apply the agreed epic prefix and appropriate labels without rewriting historical completion or task checkboxes. Check existing parents first; retain correct links and resolve conflicts before reparenting. Verify the resulting hierarchy, preserved milestones and issue states, and record applied changes and remaining exceptions in the feature crosswalk.
-
-Milestone completion percentages remain historical. Native sub-issue rollups describe issue state; neither proves the current UX requirements have passed acceptance.
+Follow the [shared normalization procedure](ux-rubric.md#issue-normalization-including-milestones). Only formal UX stories are direct epic sub-issues; preserve milestones as historical references and keep issue state, UX coverage and verification evidence separate.
 
 ## Shared boundaries
 

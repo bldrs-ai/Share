@@ -4,7 +4,7 @@
 
 Versions lets people open, identify, retain and revisit exact model revisions from GitHub, browser-local histories and other explicitly supported sources. It extends the existing Versions experience. This document owns source identity, history navigation, local retention, backups and later semantic version workflows; Sharing owns publication and links, and Notes owns anchored discussion.
 
-The [UX index and shared requirements](README.md) define the Epic → Story → Task rubric, shared acceptance constraints and cross-feature decisions. The agreed canonical scheme uses roadmap epic codes and existing GitHub issue numbers for stories; see the index. This document’s S/V codes remain temporary locators until its triage. Notes has moved to notes-100, with its former N17–N20 aliases recorded in the pilot crosswalk. Each story includes its tasks and acceptance criteria. Cross-document dependencies refer to the owner listed in the index.
+The [standard UX rubric](ux-rubric.md) defines Epic → Story → Task structure and reconciliation; the [UX index](README.md) defines shared acceptance constraints and cross-feature decisions. The agreed canonical scheme uses roadmap epic codes and existing GitHub issue numbers for stories; see the shared rubric. This document’s S/V codes remain temporary locators until its triage. Notes has moved to notes-100, with its former N17–N20 aliases recorded in the pilot crosswalk. Each story includes its tasks and acceptance criteria. Cross-document dependencies refer to the owner listed in the index.
 
 **Related requirements:** [Sharing](sharing.md) (S04–S08, S10, S12) · [Notes](notes.md) (notes-100).
 

@@ -4,7 +4,7 @@
 
 Notes lets collaborators discuss a model in context through the existing GitHub-backed notes, replies and placemarks. The target makes exact-version context, private local drafts, publication state and colored topic tags explicit. This document owns the discussion lifecycle, note permissions, anchors and organization; Versions supplies model identity/history, and Sharing supplies the link and audience contract.
 
-The [UX index and shared requirements](README.md) define the Epic → Story → Task rubric, shared acceptance constraints and cross-feature decisions. Canonical Notes stories use the epic prefix `notes-100:` plus their user-visible title; the existing GitHub issue number identifies each story. Tasks remain checkboxes in that story’s body. The [Notes 100 pilot](notes-100-triage.md) maps these requirement groups to existing stories and identifies missing coverage. Former N17–N20 codes are migration aliases only; Sharing/Versions references remain temporary locators pending their triage.
+The [standard UX rubric](ux-rubric.md) defines Epic → Story → Task structure and reconciliation; the [UX index](README.md) defines shared acceptance constraints and cross-feature decisions. Canonical Notes stories use the epic prefix `notes-100:` plus their user-visible title; the existing GitHub issue number identifies each story. Tasks remain checkboxes in that story’s body. The [Notes 100 pilot](notes-100.md) maps these requirement groups to existing stories and identifies missing coverage. Former N17–N20 codes are migration aliases only; Sharing/Versions references remain temporary locators pending their triage.
 
 **Related requirements:** [Sharing](sharing.md) (S04–S08, S10, S12) · [Versions](versions.md) (V21, V01–V03, V09, V11; later V13–V16).
 
@@ -144,7 +144,7 @@ Read access, model-write access and notes contribution permissions are distinct.
 
 ## Existing feature and story reconciliation
 
-The [Notes 100 pilot](notes-100-triage.md) is the issue-by-issue crosswalk and tier rubric. It retains the nine original product stories, includes the two adjacent comment edit/delete stories omitted by the supplied query, and separates planning/support work. The milestone audit maps related bugs and legacy tasks into native sub-issues under their owning stories. Edit, removal and source navigation are required baseline coverage even though they were not separate groups in the first UX draft. “Delete note” currently closes the GitHub issue; final removal wording and semantics remain a product decision.
+The [Notes 100 pilot](notes-100.md) is the issue-by-issue crosswalk applying the [standard UX rubric](ux-rubric.md). It retains the nine original product stories, includes the two adjacent comment edit/delete stories omitted by the supplied query, and separates planning/support work. The milestone audit maps related bugs and legacy tasks into native sub-issues under their owning stories. Edit, removal and source navigation are required baseline coverage even though they were not separate groups in the first UX draft. “Delete note” currently closes the GitHub issue; final removal wording and semantics remain a product decision.
 
 Notes already has 100–200-level stories and established GitHub-backed discussion behavior. The [roadmap feature inventory and ID history](../roadmap.md) records both current IDs and historical aliases. Reconcile those stories with this target before creating or renumbering issues; this inventory does not claim their implementation status.
 

@@ -1,50 +1,15 @@
 # Notes 100
 
 **Status:** Notes issue normalization applied; UX decisions remain draft · 2026-11-12.
-**Scope:** Establish and apply the [standard UX rubric], including milestone-to-sub-issue reconciliation.
+**Scope:** Establish and apply the [standard UX rubric](ux-rubric.md), including milestone-to-sub-issue reconciliation.
 
-## Coding and tier rubric
+## Notes scope and tier decisions
 
-**Convention:** Epic code plus story title; the GitHub issue number identifies the story.
-
-Use the roadmap’s `{share,notes,versions}-{1,2,3,4}xx` scheme for **epics**, not a separate numbered code for every story. For example:
-
-- Epic: [notes-100: Anchored notes · #670](https://github.com/bldrs-ai/Share/issues/670).
-- Story: `notes-100: Edit a note`, identified by [#1057](https://github.com/bldrs-ai/Share/issues/1057).
-- Task: a checkbox in that story’s description, referenced as `#1057/T1`.
-- A requirement with no matching issue is marked **story issue pending**. Do not invent an issue number or open a duplicate to obtain one.
-
-Normalize “Notes 100”, “Notes 100 -” and “Notes 100:” to `notes-100:` when applying the agreed cleanup. Keep the existing issue number, discussion, provenance and supported acceptance. Native sub-issues express the epic/story relationship; a title prefix alone does not establish it. The four former N17–N20 UX groups are useful requirement groupings, not four replacement issues for all existing Notes work.
-
-The [roadmap tier rubric](../roadmap.md#21-tier-rubric-epic-id-numbering) encodes the earliest **business milestone requiring a capability**, not implementation difficulty, paid/free entitlement, completion state, or the product’s present date.
-
-| Band | Use |
-|---|---|
-| 1xx — MVP | The complete basic user journey, including permissions, honest states, recoverability and usable acceptance coverage. Existing core Notes remains here. |
-| 2xx — MLP | A separately useful extension beyond that basic journey. Record why it can wait and the milestone it supports. An advanced feature may belong here, but complexity alone is insufficient. |
-| 3xx — Pro | Power capabilities with their own product case. Do not move existing roadmap assignments merely to tidy numbering. |
-| 4xx — Enterprise | Organization-scale boundaries, administration and related enterprise outcomes. |
+The four former N17–N20 UX groups are useful requirement groupings, not four replacement issues for all existing Notes work.
 
 The MVP default applies to the agreed basic workflow, not every desired future feature. Keep private local drafts, explicit publication, anchored reading/replies and basic selection/filtering of existing topic tags within the proposed `notes-100` target. Shared taxonomy administration, cross-version carry-forward and frozen discussion snapshots are candidates for separate later scope, not automatic additions to MVP. Their exact epic codes remain unassigned.
 
 Preserve `notes-200` for BCF round-trip and `notes-300` for Drive-backed Notes unless a later roadmap decision explicitly moves them. Preserve their historical aliases; do not recycle those IDs for drafts or tags. Backend work needed to satisfy an MVP audience is a dependency to resolve, not a reason to promise unlisted discussion through public GitHub issues.
-
-## How to triage
-
-Record three independent facts for each issue: **issue state**, **UX coverage**, and **verification evidence**. A closed issue does not prove every current requirement is covered. An unchecked historical checkbox does not prove a shipped feature is absent.
-
-| Disposition | Use |
-|---|---|
-| Retain | Existing story and behavior still express the intended outcome. Refresh links and acceptance where needed. |
-| Extend | Preserve the existing story; identify new requirements separately from its completed baseline. |
-| Clarify | The user outcome or current behavior is ambiguous; settle it before asserting completion or rewriting scope. |
-| Evidence follow-up | Source/test review finds an acceptance gap. Link a targeted follow-up; do not automatically reopen every closed issue. |
-| Reclassify | The issue is planning, a bug or another work type rather than a product story. |
-| Duplicate/superseded | Use only after comparing intent and acceptance and naming the surviving issue. No pilot issue is classified this way yet. |
-
-Before changing state, establish the actual missing behavior or acceptance and its owner. Keep open stories open until verified. For a completed story acquiring a new requirement, link a follow-up rather than erase completion history. Reserve reopening for unfinished original acceptance or a confirmed regression where it is the appropriate tracking choice.
-
-A story body contains the user goal, scope, observable task checkboxes, acceptance and failure/recovery cases, dependencies, and evidence links. Use role-appropriate wording: anonymous readers need not become logged-in users; publication and mutation require the actual destination capability. Basic errors, keyboard/touch access and desktop/mobile coverage belong to the affected story.
 
 ## Pilot issue inventory
 
@@ -88,7 +53,7 @@ Source snapshot: [`13de4ee`](https://github.com/bldrs-ai/Share/commit/13de4ee96d
 
 The wider search found the original Notes tracker [#670](https://github.com/bldrs-ai/Share/issues/670), previously closed with an empty body and the `Tracking` label. It is now `notes-100: Anchored notes`, labeled `epic` while retaining `Tracking`, and reopened as an aggregate because existing children remain open. No duplicate epic was created.
 
-The [shared normalization procedure](README.md#issue-normalization-including-milestones) makes this audit part of every feature reconciliation. All twelve Notes milestones were inspected across both issue states, plus the broader release milestone 59 containing related Notes bugs. Each returned fewer than 100 members; no result page was omitted. Pull requests are evidence, not sub-issues. Explicit links also brought in #911, which has no milestone. #881 was included from the original pilot; its general cleanup milestone 60 was retained without expanding unrelated cleanup work.
+The [shared normalization procedure](ux-rubric.md#issue-normalization-including-milestones) makes this audit part of every feature reconciliation. All twelve Notes milestones were inspected across both issue states, plus the broader release milestone 59 containing related Notes bugs. Each returned fewer than 100 members; no result page was omitted. Pull requests are evidence, not sub-issues. Explicit links also brought in #911, which has no milestone. #881 was included from the original pilot; its general cleanup milestone 60 was retained without expanding unrelated cleanup work.
 
 The applied hierarchy contains **35 native parent/child links across 36 existing issues**: 11 formal UX stories directly under #670, 19 children of those stories, and 5 historical tasks beneath the legacy edit story #891. All selected children had no parent at preflight. Existing story/bug/task states, bodies and checkboxes were preserved; only the aggregate #670 was reopened. The eleven current story titles now share `notes-100:`; #881's planning title uses the same prefix. #1186/#1187 gained `story` while retaining `enhancement`; all other existing labels were retained.
 
