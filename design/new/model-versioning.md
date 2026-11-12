@@ -4,7 +4,7 @@
 **Date:** 2026-11-11
 
 **UX requirements:** [Sharing](../reqs/sharing.md), [Versions](../reqs/versions.md),
-[Notes](../reqs/notes.md), and their [shared index](../reqs/README.md).
+[Notes requirements](https://github.com/bldrs-ai/Share/issues/670), and their [shared index](../reqs/README.md).
 These are the current UX planning drafts. Reconcile this earlier technical plan
 with their unlisted-link, external-version and Notes contracts before implementation;
 its public-hosting assumptions do not override the UX requirements. Existing-epic
