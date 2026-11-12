@@ -30,7 +30,9 @@ Reconcile Sharing with #2144 and the share-200 planning PR, and reconcile Versio
 
 ## Feature tier and issue reconciliation pilot
 
-[Notes 100](notes-100.md) records the first application of the shared rubric, including its scope decisions, issue crosswalk, milestone audit and acceptance gaps. Its formal UX stories are tracked under [#670](https://github.com/bldrs-ai/Share/issues/670). Use the same procedure for other epics and keep each epic's results in its own document.
+The [Notes 100 snapshot](notes-100.md) is a dated one-page account of the epic's motivation and formal UX stories. The separate [Notes 100 triage record](notes-100-triage.md) holds scope decisions, the issue crosswalk, milestone audit and acceptance evidence. Current delivery state lives in [#670](https://github.com/bldrs-ai/Share/issues/670) and its story issues.
+
+Use `<epic-code>.md` for each epic's infrequently revised scope snapshot and `<epic-code>-triage.md` for its reconciliation record. Date material scope changes so Git history shows how the feature evolved; keep task progress and other frequently changing state in issues.
 
 ### Issue normalization, including milestones
 

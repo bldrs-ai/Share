@@ -1,6 +1,6 @@
 # UX reconciliation how-to
 
-Use this shared rubric to reconcile an epic's UX requirements with the roadmap and existing GitHub issues. Apply it to each epic, recording its scope, inventory, evidence, decisions and results in a separate `<epic-code>.md` document. [Notes 100](notes-100.md) is the first worked example.
+Use this shared rubric to reconcile an epic's UX requirements with the roadmap and existing GitHub issues. Apply it to each epic using two documents: a concise `<epic-code>.md` scope snapshot and a detailed `<epic-code>-triage.md` reconciliation record. See the [Notes 100 snapshot](notes-100.md) and [Notes 100 triage](notes-100-triage.md) for the first worked example.
 
 The [UX index](README.md) owns shared product requirements; the [roadmap](../roadmap.md) owns feature assignments and business milestones. This document owns the reconciliation procedure.
 
@@ -67,7 +67,9 @@ Milestone completion percentages remain historical. Native sub-issue rollups des
 
 ## Record the result
 
-For each epic, keep a concise record of:
+Keep `<epic-code>.md` to roughly one page: the dated epic motivation, intended user journey and formal UX stories with issue links. It is a historical scope snapshot, not a live status report. Update it only when motivation or story scope materially changes; date the new snapshot and use Git history to compare earlier versions. Current progress, task checklists, bugs and acceptance decisions belong in the epic/story issues.
+
+In `<epic-code>-triage.md`, preserve the reconciliation record:
 
 - The canonical epic issue, scope and tier rationale, including historical codes and aliases.
 - The issue and milestone inventory: original query, inspection date, issue states and any search limits.
