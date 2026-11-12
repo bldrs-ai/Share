@@ -1,10 +1,10 @@
 # Notes UX Requirements Draft
 
-**Draft v0.6 · 2026-11-11 · Existing Notes feature evolution · Target UX**
+**Draft v0.7 · 2026-11-12 · notes-100 reconciliation pilot · Target UX**
 
 Notes lets collaborators discuss a model in context through the existing GitHub-backed notes, replies and placemarks. The target makes exact-version context, private local drafts, publication state and colored topic tags explicit. This document owns the discussion lifecycle, note permissions, anchors and organization; Versions supplies model identity/history, and Sharing supplies the link and audience contract.
 
-The [UX index and shared requirements](README.md) define the Epic → Story → Task rubric, shared acceptance constraints and cross-feature decisions. Item codes use S for Sharing, V for Versions and N for Notes, retaining their numeric suffixes and task order. They are not GitHub issue IDs or new feature-level assignments. Each story includes its tasks and acceptance criteria. Cross-document dependencies refer to the owner listed in the index.
+The [UX index and shared requirements](README.md) define the Epic → Story → Task rubric, shared acceptance constraints and cross-feature decisions. Canonical Notes stories use the epic prefix `notes-100:` plus their user-visible title; the existing GitHub issue number identifies each story. Tasks remain checkboxes in that story’s body. The [Notes 100 pilot](notes-100-triage.md) maps these requirement groups to existing stories and identifies missing coverage. Former N17–N20 codes are migration aliases only; Sharing/Versions references remain temporary locators pending their triage.
 
 **Related requirements:** [Sharing](sharing.md) (S04–S08, S10, S12) · [Versions](versions.md) (V21, V01–V03, V09, V11; later V13–V16).
 
@@ -38,9 +38,11 @@ The same viewing and notes requirements apply to externally supplied versions. N
 
 Read access, model-write access and notes contribution permissions are distinct. Public GitHub issues remain Public at source; an opaque Share link does not make their contents unlisted. The full audience and token contract is owned by Sharing. Private Drafts remain local storage only, and model publication never sends them.
 
-## Notes stories
+## notes-100 requirements
 
-### N17 Place a note on a model version
+### notes-100: Place a note on a model version
+
+**Existing story:** [#1059](https://github.com/bldrs-ai/Share/issues/1059). Publication obligations also appear in the discussion group below.
 
 **As a logged-in user, I want to place a note on a model location or supported element, so that collaborators can see exactly what I am commenting on.**
 
@@ -62,7 +64,9 @@ Read access, model-write access and notes contribution permissions are distinct.
 
 **Dependencies:** An opened version from V01/S07 or V21, plus existing Notes and placemark capabilities. Cross-version element identity, Share model publication and model-write permission are not prerequisites for drafting a note.
 
-### N18 Save and resume private draft notes
+### notes-100: Save and resume private draft notes
+
+**Story issue:** pending duplicate search. The pilot cohort contains no matching durable-private-draft story.
 
 **As a logged-in user, I want to save and revise draft notes before publishing, so that I can prepare feedback without exposing unfinished comments.**
 
@@ -82,9 +86,11 @@ Read access, model-write access and notes contribution permissions are distinct.
 
 **Acceptance:** Save a Draft, reload offline with the required local data available, and resume it. Clear the application cache, switch model versions and return: the saved draft survives. Publish the model and confirm from a separate anonymous browser that the Draft is not visible.
 
-**Dependencies:** N17 and V11. Device-local persistence is the starting scope; cross-device draft sync and anonymous drafting remain open decisions.
+**Dependencies:** notes-100 placement and V11. Device-local persistence is the starting scope; cross-device draft sync and anonymous drafting remain open decisions.
 
-### N19 Publish notes and reply in context
+### notes-100: Publish notes and reply in context
+
+**Existing stories:** create/publish [#1059](https://github.com/bldrs-ai/Share/issues/1059), reply [#978](https://github.com/bldrs-ai/Share/issues/978), share [#1071](https://github.com/bldrs-ai/Share/issues/1071), and open shared note [#1072](https://github.com/bldrs-ai/Share/issues/1072). This is a requirement group spanning those stories, not a replacement umbrella issue.
 
 **As a logged-in collaborator, I want to publish a prepared note and reply to published notes when permitted, so that we can discuss a model in its original context.**
 
@@ -106,9 +112,11 @@ Read access, model-write access and notes contribution permissions are distinct.
 
 **Acceptance:** Publish a Draft and open its link in a clean signed-out browser: the correct model version, note and location appear. A permitted collaborator replies and the thread retains both contributions. An unauthorized or interrupted send leaves recoverable text and no false success or duplicate note.
 
-**Dependencies:** N17–N18 and the relevant identity, viewing and notes-destination capabilities. The model version may already be accessible through an external source such as GitHub; Share publication is not required. Publishing a note must not silently upload a local-only model or copy an external model. Check notes permissions separately from model-write permission. If the source repository cannot host comments, retain the draft and explain the supported destination/configuration options; do not silently create a repository or publish elsewhere. The notes destination must support the declared audience. A public GitHub issue requires explicit Public at source disclosure; it cannot serve as a concealed backend for an unlisted thread.
+**Dependencies:** notes-100 note placement and private drafts and the relevant identity, viewing and notes-destination capabilities. The model version may already be accessible through an external source such as GitHub; Share publication is not required. Publishing a note must not silently upload a local-only model or copy an external model. Check notes permissions separately from model-write permission. If the source repository cannot host comments, retain the draft and explain the supported destination/configuration options; do not silently create a repository or publish elsewhere. The notes destination must support the declared audience. A public GitHub issue requires explicit Public at source disclosure; it cannot serve as a concealed backend for an unlisted thread.
 
-### N20 Find model notes using colored topic tags
+### notes-100: Find model notes using colored topic tags
+
+**Existing stories:** browse [#1054](https://github.com/bldrs-ai/Share/issues/1054) and select [#1055](https://github.com/bldrs-ai/Share/issues/1055). A basic tag-selection/filtering story is pending duplicate search.
 
 **As a reviewer, I want to browse model notes and filter them by colored topic tags, so that I can focus on a subject and navigate to the relevant locations.**
 
@@ -130,19 +138,21 @@ Read access, model-write access and notes contribution permissions are distinct.
 
 **Acceptance:** Publish notes with two different topic tags plus an untagged note. Filtering yields the matching notes and markers; clearing restores the full selected version’s list. Open a note from an older version and verify that it takes me to that version, while a missing anchor yields a warning rather than a marker on the wrong element.
 
-**Dependencies:** N17–N19 and V02/V09. Color is supplementary to tag text. Shared tag creation, renaming/recoloring and the default taxonomy remain decisions rather than implicit permissions.
+**Dependencies:** notes-100 authoring and discussion and V02/V09. Color is supplementary to tag text. Shared tag creation, renaming/recoloring and the default taxonomy remain decisions rather than implicit permissions.
 
 ## Existing feature and story reconciliation
+
+The [Notes 100 pilot](notes-100-triage.md) is the issue-by-issue crosswalk and tier rubric. It retains the nine existing product stories, separates the planning task, and identifies adjacent comment edit/delete stories omitted by the supplied query. Edit, removal and source navigation are required baseline coverage even though they were not separate groups in the first UX draft. “Delete note” currently closes the GitHub issue; final removal wording and semantics remain a product decision.
 
 Notes already has 100–200-level stories and established GitHub-backed discussion behavior. The [roadmap feature inventory and ID history](../roadmap.md) records both current IDs and historical aliases. Reconcile those stories with this target before creating or renumbering issues; this inventory does not claim their implementation status.
 
 | Existing feature or historical ID | Current roadmap reference | Relationship to this draft | Remaining reconciliation |
 |---|---|---|---|
-| Anchored GitHub notes | `notes-100`; anchoring work [#892](https://github.com/bldrs-ai/Share/issues/892) under `view-230` | N17–N20 build on existing notes, replies and placemarks. | Map existing acceptance and permissions, including edit/delete and links, to retained behavior and lifecycle/version/tag changes. |
+| Anchored GitHub notes | `notes-100`; anchoring work [#892](https://github.com/bldrs-ai/Share/issues/892) under `view-230` | notes-100 build on existing notes, replies and placemarks. | Map existing acceptance and permissions, including edit/delete and links, to retained behavior and lifecycle/version/tag changes. |
 | BCF round-trip; historical `notes-110` | `notes-200` | Related interchange capability; not the same as Draft/Published states or topic tags. | Preserve the existing scope and link dependencies. BCF remains separately scoped; this split does not add it to Notes authoring delivery. |
-| Drive-backed notes; historical `notes-120` / `notes-210` | `notes-300`, Track T6 | Related provider/destination work for N19 and portable discussion context. | Check existing NotesProvider/sidecar plans against audience and source-version requirements before specifying new infrastructure. |
+| Drive-backed notes; historical `notes-120` / `notes-210` | `notes-300`, Track T6 | Related provider/destination work for notes-100 discussion and portable discussion context. | Check existing NotesProvider/sidecar plans against audience and source-version requirements before specifying new infrastructure. |
 
-For each existing story, record its canonical issue/feature ID, historical alias, current UX and acceptance, matching feature-prefixed story/task requirements, retain/extend/replace disposition, and remaining work. Preserve existing epic ownership where appropriate; link Sharing and Versions dependencies. New feature IDs and issue creation remain deferred until that mapping is agreed.
+For each existing story, record its canonical issue/feature ID, historical alias, current UX and acceptance, matching feature-prefixed story/task requirements, retain/extend/replace disposition, and remaining work. Preserve existing epic ownership where appropriate; link Sharing and Versions dependencies. Use the existing notes-100 epic code for the basic workflow. Story issue creation and live metadata changes remain deferred until the pilot mapping and missing-work scope are agreed.
 
 ## Existing UX gap analysis
 
@@ -150,12 +160,12 @@ For each existing story, record its canonical issue/feature ID, historical alias
 
 | Area / requirements | Existing evidence | Provisional gap or disposition | Next audit step |
 |---|---|---|---|
-| Browse a note, replies and model context — N17, N19–N20 | `Notes` lists/selects notes, loads GitHub comments and parses placemarks; Notes test definitions cover the list, selected thread and return navigation. `NoteFooter` exposes camera and GitHub navigation. | **Retain + verify.** Anchored discussion and replies already exist. The target must account for those flows and thread identities. | Walk through list → marker → note → reply → saved view on desktop/mobile, including anonymous reading and permitted contribution. |
-| New → Draft → Published — N17–N19, V11 | `NoteCardCreate` sends issue/comment creation to GitHub. The inspected path does not establish durable private drafts, reload recovery or account-scoped draft storage. | **Verify, then extend.** Private device-local drafts and honest save/publish states need explicit coverage; model publication must not send drafts. | Inspect current storage; test reload/offline, account switching, cache clearing, failed publication and retry without duplicate notes/replies. |
-| Exact model version and legacy anchors — V02, S08, V09, N17–N20 | Current Notes uses model routes, note/comment identifiers and parsed placemark URLs. This review has not established immutable revision coverage for every existing note. | **Verify + decide.** Preserve established associations where valid. A legacy note without a verifiable revision must show uncertainty rather than acquire an invented version. | Audit old note links, moving-branch links, external files and source/GLB anchors; specify missing-anchor recovery and any migration or intentional breaking change. |
-| Existing edit/delete actions — N19 and shared requirements | `NoteMenu` exposes Edit/Delete; `NoteFooter` has edit save/cancel controls. | **Retain or explicitly change.** These actions are part of the baseline, not wholly new decisions. Permissions and effects on published threads need review. | Verify author/non-author controls, server enforcement, cancellation, deleted content and old links; document any revised behavior. |
-| Colored topic tags and filtering — N20 | Tag taxonomy, label mapping and coordinated list/marker filtering were not established by the inspected components. | **Verify + decide.** Audit current GitHub labels and any existing filters before defining extensions. | Inventory current labels; decide shared taxonomy/permissions and multi-tag matching, then check untagged/empty states and accessible colors. |
-| Audience, notes destination and source access — S05, S07–S08, N19 | Creation/replies use GitHub issues/comments, and existing controls open those upstream resources. Public issues are publicly discoverable at source. | **Extend/change + decide.** Opaque Share links do not make public issues unlisted. Separate model-read, model-write and notes permissions; choose an audience-compatible destination. | Test public, restricted and issues-disabled sources; verify disclosures, destination selection, signed-out reading and failure recovery without model republication. |
+| Browse a note, replies and model context — notes-100 placement, notes-100 discussion and browsing | `Notes` lists/selects notes, loads GitHub comments and parses placemarks; Notes test definitions cover the list, selected thread and return navigation. `NoteFooter` exposes camera and GitHub navigation. | **Retain + verify.** Anchored discussion and replies already exist. The target must account for those flows and thread identities. | Walk through list → marker → note → reply → saved view on desktop/mobile, including anonymous reading and permitted contribution. |
+| New → Draft → Published — notes-100 authoring and discussion, V11 | `NoteCardCreate` sends issue/comment creation to GitHub. The inspected path does not establish durable private drafts, reload recovery or account-scoped draft storage. | **Verify, then extend.** Private device-local drafts and honest save/publish states need explicit coverage; model publication must not send drafts. | Inspect current storage; test reload/offline, account switching, cache clearing, failed publication and retry without duplicate notes/replies. |
+| Exact model version and legacy anchors — V02, S08, V09, notes-100 | Current Notes uses model routes, note/comment identifiers and parsed placemark URLs. This review has not established immutable revision coverage for every existing note. | **Verify + decide.** Preserve established associations where valid. A legacy note without a verifiable revision must show uncertainty rather than acquire an invented version. | Audit old note links, moving-branch links, external files and source/GLB anchors; specify missing-anchor recovery and any migration or intentional breaking change. |
+| Existing edit/delete actions — notes-100 discussion and shared requirements | `NoteMenu` exposes Edit/Delete; `NoteFooter` has edit save/cancel controls. | **Retain or explicitly change.** These actions are part of the baseline, not wholly new decisions. Permissions and effects on published threads need review. | Verify author/non-author controls, server enforcement, cancellation, deleted content and old links; document any revised behavior. |
+| Colored topic tags and filtering — notes-100 browsing and tags | Tag taxonomy, label mapping and coordinated list/marker filtering were not established by the inspected components. | **Verify + decide.** Audit current GitHub labels and any existing filters before defining extensions. | Inventory current labels; decide shared taxonomy/permissions and multi-tag matching, then check untagged/empty states and accessible colors. |
+| Audience, notes destination and source access — S05, S07–S08, notes-100 discussion | Creation/replies use GitHub issues/comments, and existing controls open those upstream resources. Public issues are publicly discoverable at source. | **Extend/change + decide.** Opaque Share links do not make public issues unlisted. Separate model-read, model-write and notes permissions; choose an audience-compatible destination. | Test public, restricted and issues-disabled sources; verify disclosures, destination selection, signed-out reading and failure recovery without model republication. |
 
 Notes starting points: [Notes](https://github.com/bldrs-ai/Share/blob/main/src/Components/Notes/Notes.jsx), [NoteCardCreate](https://github.com/bldrs-ai/Share/blob/main/src/Components/Notes/NoteCardCreate.jsx), [NoteFooter](https://github.com/bldrs-ai/Share/blob/main/src/Components/Notes/NoteFooter.jsx), [NoteMenu](https://github.com/bldrs-ai/Share/blob/main/src/Components/Notes/NoteMenu.jsx), and [Notes test definitions](https://github.com/bldrs-ai/Share/blob/main/src/Components/Notes/Notes.spec.ts). These links track `main`; pin evidence to the audited commit when completing the analysis.
 
@@ -170,7 +180,7 @@ Notes starting points: [Notes](https://github.com/bldrs-ai/Share/blob/main/src/C
 | Notes across model versions | Initial behavior: retain the original version and flag missing anchors. Decide whether explicit carry-forward or re-anchoring belongs in the next Notes delivery or a later enhancement. |
 | Notes destinations for external inputs | Decide the default notes destination and fallback when the source repository has issues disabled or does not permit this user to comment. Do not require model republication as the workaround. |
 
-- [ ] Reconcile the existing Notes and placemark stories with N17–N20, including existing edit/delete actions, legacy links and 100–200-level aliases.
+- [ ] Reconcile the existing Notes and placemark stories with notes-100, including existing edit/delete actions, legacy links and 100–200-level aliases.
 
 - [ ] Walk through draft saving, reload/offline, account switching, publication/reply retries, topic filters and old-version anchors on desktop/mobile.
 

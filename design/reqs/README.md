@@ -1,14 +1,14 @@
 # Share UX Requirements Index
 
-**Draft v0.6 · 2026-11-11 · Index and shared requirements**
+**Draft v0.7 · 2026-11-12 · Index and shared requirements**
 
 ## Feature documents
 
-| Document | Owns | Draft stories |
+| Document | Owns | Epic assignments and temporary references |
 |---|---|---|
 | [Sharing](sharing.md) | Publication, audience, unguessable links, recipient opening and sharing recovery | S04–S08, S10, S12 |
 | [Versions](versions.md) | External revisions, history, local retention, updates and backup; later semantic version workflows | V21, V01–V03, V09, V11; later V13–V16 |
-| [Notes](notes.md) | Anchored discussions, private drafts, publication/replies and colored topic tags | N17–N20 |
+| [Notes](notes.md) | Anchored discussions, private drafts, publication/replies and colored topic tags | `notes-100` (former N17–N20) |
 
 Each feature document is the source of truth for its stories, decisions and gap analysis. This index owns only the common requirements and cross-feature decisions. Versions and Notes include starting maps to existing features and historical IDs; detailed issue reconciliation remains the next pass.
 
@@ -32,9 +32,15 @@ The 900 MB IFC is a large-model validation case, not a promise that every device
 
 - **Acceptance:** a user action and observable result that proves the story works. Technical implementation work is mapped to these requirements separately.
 
-Item codes use **S** for Sharing, **V** for Versions and **N** for Notes. Numeric suffixes and task order are retained from the combined draft; these are requirements references, not GitHub issue numbers or new roadmap epic assignments. Each item has one owning document in the table above. Task references append /Tn, such as S05/T3, V02/T1 or N18/T2. Cross-feature references use the owning feature’s prefix.
+Canonical feature codes follow the roadmap’s **{share,notes,versions}-{1,2,3,4}xx** epic scheme. Stories share their epic prefix in the title—for example, **notes-100: Edit a note**—and the existing GitHub issue number identifies the story (#1057). Tasks remain checkboxes in its body, referenced as #1057/T1. Do not consume a new epic number for each story or create replacement issues just to renumber them. Notes is the first migration pilot; former N17–N20 references are aliases recorded in its crosswalk. S/V references remain temporary locators until the corresponding Sharing/Versions triage.
 
 Reconcile Sharing with #2144 and the share-200 planning PR, and reconcile Versions and Notes with their existing 100–200-level stories and later roadmap aliases. Retain appropriate epic ownership and link dependencies; do not place every feature under share-200. Reuse or link existing issues before creating new ones. Each story issue keeps its user statement, task checklist, acceptance, dependencies and unresolved decisions. Issue creation and renumbering remain deferred until agreement.
+
+## Feature tier and issue reconciliation pilot
+
+The [Notes 100 pilot](notes-100-triage.md) applies the agreed convention to the existing story issues. Tiers encode the earliest business milestone requiring a capability, not implementation difficulty or completion state: 1xx MVP, 2xx MLP, 3xx Pro, 4xx Enterprise. Most basic workflow requirements remain 1xx. Separate later capabilities need an explicit scope and milestone rationale; existing IDs and historical aliases are preserved until deliberately reconciled.
+
+Review the Notes issue dispositions and acceptance gaps before changing live issue titles, labels, parent links or states, then repeat the rubric for Sharing and Versions. Keep issue state, UX coverage and verification evidence separate.
 
 ## Shared boundaries
 
