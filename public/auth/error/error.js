@@ -14,7 +14,7 @@
  *    would let a crafted link put arbitrary words ("call this number…") on a
  *    bldrs.ai page. It is useful to support, though, so it goes, cleaned and
  *    capped, into the body of the support email draft, where the user sees it
- *    before anything is sent.
+ *    before anything is sent, and into the Sentry report (report() below).
  *  - `lang` is ignored: the page is English-only.
  *
  * Shipped as-is from public/ (no build step), so plain browser JS. The
@@ -22,6 +22,7 @@
  */
 (function() {
   const SUPPORT_EMAIL = 'support@bldrs.ai'
+  const REPORT_URL = '/.netlify/functions/report-auth-error'
 
   // Auth0's error codes (OAuth 2.0 / OIDC plus its own) grouped by what the
   // user can do about them. https://auth0.com/docs/customize/login-pages/custom-error-pages
@@ -177,6 +178,7 @@
    * @param {Document} doc the error page's document
    * @param {string} search location.search
    * @param {object} [nav] navigator, for the clipboard
+   * @return {object} what describe() made of the query
    */
   function render(doc, search, nav) {
     const info = describe(search)
@@ -204,12 +206,47 @@
         })
       }
     }
+    return info
+  }
+
+
+  /**
+   * Report the failure to Sentry through the report-auth-error Netlify
+   * Function, which re-checks every field against the app's allowlists
+   * (netlify/functions/report-auth-error.js says why a relay and not the
+   * SDK). Only allowlisted values and the cleaned description are sent.
+   * Nothing goes out without an error code, so a bare visit to the page
+   * reports nothing.
+   *
+   * sendBeacon so the report survives the user leaving at once via Back to
+   * Share; a failure (blocked, offline) is silent, as the page still works.
+   *
+   * @param {object} info from describe()
+   * @param {object} [nav] navigator, for sendBeacon
+   * @return {boolean} whether a report was queued
+   */
+  function report(info, nav) {
+    if (!info.error || !nav || typeof nav.sendBeacon !== 'function') {
+      return false
+    }
+    const body = JSON.stringify({
+      error: info.error,
+      tracking: info.tracking || undefined,
+      connection: info.connection || undefined,
+      client_id: info.clientId || undefined,
+      error_description: info.description || undefined,
+    })
+    try {
+      return nav.sendBeacon(REPORT_URL, body)
+    } catch {
+      return false
+    }
   }
 
 
   if (typeof module === 'object' && module.exports) {
-    module.exports = {describe: describe, render: render, supportHref: supportHref}
+    module.exports = {describe, render, report, supportHref}
   } else {
-    render(document, window.location.search, window.navigator)
+    report(render(document, window.location.search, window.navigator), window.navigator)
   }
 })()

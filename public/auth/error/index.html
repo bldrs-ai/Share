@@ -11,7 +11,8 @@
   &connection=…&lang=…. Every one of those is attacker-controllable — anyone
   can link here with any query — so error.js renders only allowlisted
   characters, as text, and error_description never reaches the page at all
-  (it goes only into the support email draft). See error.js.
+  (it goes only into the support email draft and, cleaned, the Sentry
+  report error.js beacons to the report-auth-error function). See error.js.
 
   Static on purpose, like auth/gh/callback.html: it must load even when the
   viewer bundle is broken, and needs none of it. The look follows the Bldrs

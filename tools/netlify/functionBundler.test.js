@@ -176,6 +176,20 @@ describe('netlify functions as deployed', () => {
     }
   })
 
+  it('ships the build\'s release file beside report-auth-error, and no package.json', () => {
+    expect(functionsConfig['report-auth-error'].included_files).toEqual(['netlify/functions/_build/release.json'])
+    const bundle = bundles.get('report-auth-error')
+    expect(bundle, 'no bundle for report-auth-error').toBeDefined()
+    // The repo's package.json at the bundle root would make Node load the
+    // CommonJS bundle as ESM ("type": "module") and crash it on cold start.
+    expect(fs.existsSync(path.join(bundle.path, 'package.json'))).toBe(false)
+    // Written by tools/updateVersion.mjs on a build, so, as with the pro
+    // modules above, only checked where one has run.
+    if (fs.existsSync(path.join(FUNCTIONS_DIR, '_build', 'release.json'))) {
+      expect(fs.existsSync(path.join(bundle.path, 'netlify', 'functions', '_build', 'release.json'))).toBe(true)
+    }
+  })
+
   it.each(FUNCTION_NAMES)('%s is bundled with esbuild unless it is a v2 function', (name) => {
     const bundle = bundles.get(name)
     expect(bundle, `no bundle for ${name}`).toBeDefined()
