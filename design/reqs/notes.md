@@ -10,7 +10,7 @@ The [UX index and shared requirements](README.md) define the Epic → Story → 
 
 ## Epic and scope
 
-**Canonical epic:** [notes-100: Anchored notes · #670](https://github.com/bldrs-ai/Share/issues/670). Native sub-issues track the work hierarchy; historical milestones remain intact for reference.
+**Canonical epic:** [notes-100: Anchored notes · #670](https://github.com/bldrs-ai/Share/issues/670). Only formal UX stories are direct sub-issues of the epic. Related implementation/bug work belongs beneath its owning story; planning and cross-story support remain linked references. Historical milestones remain intact for reference.
 
 **As a logged-in reviewer, I want to place, privately prepare, publish and organize notes on a specific model version, so that collaborators can discuss the same context without exposing unfinished work.**
 
