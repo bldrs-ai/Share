@@ -3,12 +3,12 @@
 **Status:** Draft v0.1 — implementation plan; no feature shipped by this doc.
 **Date:** 2026-11-11
 
-**UX requirements:** [Sharing](../reqs/sharing.md), [Versions](../reqs/versions.md),
+**UX requirements:** [Sharing](../reqs/sharing.md), [Versions epic #57](https://github.com/bldrs-ai/Share/issues/57),
 [Notes requirements](https://github.com/bldrs-ai/Share/issues/670), and their [shared index](../reqs/README.md).
 These are the current UX planning drafts. Reconcile this earlier technical plan
 with their unlisted-link, external-version and Notes contracts before implementation;
 its public-hosting assumptions do not override the UX requirements. Existing-epic
-mapping and technical reconciliation remain subsequent planning work.
+mapping is recorded in the [Versions triage](../reqs/versions-100-triage.md); technical reconciliation and Sharing's own issue migration remain subsequent planning work. Basic history, local retention, replacement, update and backup stories belong to `versions-100` #57. Later semantic requirements retain `share-200` #2144 and [its four reconciled stories](../reqs/share-200.md); structural diff and portable Drive sidecars retain their existing epics.
 **Epic / source proposal:** [#2144](https://github.com/bldrs-ai/Share/issues/2144).
 **Roadmap:** [`share-200`](../roadmap.md#43-share). The former `share-200`
 (grant/revoke per-principal sharing) is now `share-201`.
@@ -315,9 +315,8 @@ PR specifies the actual condition mapping and tests it.
 
 ## 9. Dispatch plan
 
-These are planning packages, not claims that implementation issues or agents
-already exist. Before coding, attach native story/task sub-issues to #2144 with
-the shared title prefix `share-200: Model versioning and sharing`. Each dispatch
+These are planning packages, not claims that implementation agents or acceptance
+evidence already exist. Before coding, use the [reconciled UX owners](../reqs/versions-100-triage.md#requirements-migration-and-source-ownership): basic Versions stories belong to #57 and later semantic/publication stories to #2144. Only formal UX stories are direct native epic children; keep new tasks as story-body checkboxes and attach existing implementation issues beneath their clearly owning story. Keep cross-story support linked outside the epic's direct children. Use the owning epic prefix plus a user-visible story title. Each dispatch
 includes the current branch/SHA, live issue/comments, exact files, numerical
 test baseline, acceptance fixtures and stop conditions per
 [agent-workflow.md](agent-workflow.md). Re-read the dependencies; L0 alone does
