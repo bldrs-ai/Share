@@ -1,7 +1,7 @@
 # Bldrs Share Roadmap
 
-**Status:** Draft v0.12 — model versioning and sharing design added as share-200
-**Date:** 2026-11-11
+**Status:** Draft v0.13 — Versions UX ownership reconciled with existing history
+**Date:** 2026-11-12
 **Owner:** Pablo
 **Source baseline:** `Share Requirements` Google Doc (Aug 2021, last updated Nov 2022); PDF extract is in this repo's history.
 
@@ -97,7 +97,7 @@ One row per Epic and Track; bodies are in §4 and §5. **Phase column:** A–E =
 | Notes | `notes-100` | Anchored notes (GitHub-backed) | ✔ | — | — | |
 | Notes | `notes-200` | BCF round-trip | ⬜ | Post | — | |
 | Notes | `notes-300` | Drive-backed notes (NotesProvider) | 🔮 | Post | T4, T6 | |
-| Versions | `versions-100` | Show specific version + branch/commit nav | 🟡 | — | — | |
+| Versions | `versions-100` | Exact revisions, history and local retention | 🟡 | — | — | <a href="https://github.com/bldrs-ai/Share/issues/57" target="_blank" rel="noopener noreferrer">#57</a> |
 | Versions | `versions-300` | Diff between versions | ⬜ | Post | — | |
 | Versions | `versions-310` | Portable versions for Drive | 🔮 | Post | T6 | |
 | Search | `search-100` | Search current model | 🟡 | — | — | |
@@ -197,7 +197,7 @@ User leaves comments anchored to model elements, replies in a thread, and can re
 - `notes-100` Anchored notes (GitHub-backed) ✔ (anchoring flow <a href="https://github.com/bldrs-ai/Share/issues/892" target="_blank" rel="noopener noreferrer">#892</a> is tracked under `view-230`).
 - **`notes-200` BCF round-trip** ⬜. Issues interoperate with Solibri/Navisworks/Tekla. **Post-MVP.**
 - **`notes-300` Drive-backed notes (NotesProvider)** 🔮 (NEW). T4 Stretch. **Post-MVP.**
-- **`versions-100` Show specific version + branch/commit nav** 🟡. Enough for the free tier; open: <a href="https://github.com/bldrs-ai/Share/issues/850" target="_blank" rel="noopener noreferrer">#850</a>, <a href="https://github.com/bldrs-ai/Share/issues/890" target="_blank" rel="noopener noreferrer">#890</a>. Polish post-MVP. `share-200` reuses the history/navigation seams for pointer-backed versions.
+- **`versions-100` Exact revisions, history and local retention** 🟡. Reused tracker [#57](https://github.com/bldrs-ai/Share/issues/57) owns the complete basic MVP journey: external revision opening [#850](https://github.com/bldrs-ai/Share/issues/850), explicit local save/history, replacement, deliberate updates and usable backup. Existing GitHub-save and navigation stories remain baselines, not newly invented features. [#890](https://github.com/bldrs-ai/Share/issues/890) is deletion with unresolved retention semantics, not branch navigation; its historical Versions 200 milestone is preserved. Source read, local save, publication and model-write capabilities stay distinct. See the [dated scope snapshot](reqs/versions-100.md) and [issue/milestone and requirements crosswalk](reqs/versions-100-triage.md). `share-200` coordinates publication and later semantic work while reusing these seams; technical V0 local-history dependencies do not move every basic Versions story into that epic.
 - **`versions-300` Diff between versions** ⬜. Needs a structural IFC diff. **Post-MVP.**
 - **`versions-310` Portable versions for Drive** 🔮 (NEW). T4 Stretch Q3. **Post-MVP.**
 
@@ -533,6 +533,7 @@ Standing convention (the original migration is done):
 
 # Changelog
 
+- **v0.13 (2026-11-12):** reconciled basic Versions UX under existing tracker #57, including local retention and recovery in the MVP journey; corrected #890's deletion scope and preserved its historical milestone. Later semantic requirements retain existing `share-200` #2144; `versions-300` structural diff and `versions-310` portable Drive assignments and aliases remain unchanged. [Reconciliation evidence](reqs/versions-100-triage.md).
 - **v0.12 (2026-11-11):** assigned #2144 model versioning and sharing to `share-200`, moved per-principal grants to `share-201` across current references, and added the implementation design/dispatch plan. Whole-file public sharing is independent of later T12 semantic editing; existing Phase C private-sharing scope and the MVP bar are unchanged.
 
 - **v0.3 (2026-07-02):** folded in implementation drift (adapter retired, GPU-instancing arc, STEP metadata, marketing SSG), the growth-strategy reconciliation (paid search was the only channel delivering real model opens, organic discovery near zero, shared links the best earned traffic; so funnel instrumentation, SEO surfaces and share-loop polish became Phase G, §4.10, T9), and the AI-workspace pivot (§4.11, T10–T11, §7).
