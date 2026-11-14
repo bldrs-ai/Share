@@ -38,12 +38,25 @@ The [roadmap tier rubric](../roadmap.md#21-tier-rubric-epic-id-numbering) encode
 
 The MVP default applies to the agreed basic workflow, not every desired future feature. Record the epic's scope and later candidates in its own reconciliation document. Preserve existing roadmap assignments and historical aliases unless an explicit roadmap decision changes them; do not recycle codes merely to tidy numbering. Backend dependencies do not justify weakening the required UX or audience contract.
 
-**Adding open scope to a 1xx epic is a roadmap decision, not a triage outcome.** The band table says where a requirement *belongs*; [roadmap §6.0](../roadmap.md#60-the-mvp-bar) says what the MVP *is*, and it lists the open 100-band work exhaustively. So a reconciliation that attaches new open stories to a 1xx epic does one of two things in the same PR, and says which in its description:
+### Milestones are hypotheses
 
-- **Grow the MVP deliberately:** add the work to §6.0's list, update the epic's status and Phase column (a ✔ epic with new open stories is no longer ✔), and add a roadmap changelog line. This needs the roadmap owner's agreement.
-- **Park it:** put the new stories under the epic's 2xx code, with the "why it can wait" note the 2xx row asks for, and leave the 1xx epic's scope and status as they were.
+> **In flight (2026-11-14).** This section is the direction we're moving in, not a settled process. The band table above stays in use until the measurement in [#2166](https://github.com/bldrs-ai/Share/issues/2166) exists; until then, treat a band as the starting hypothesis described here.
 
-Neither the "MVP default" above nor a story's 1xx prefix settles this on its own. Both Notes (#2147) and Versions (#2165) applied the band table correctly and still grew the MVP without a roadmap decision; this rule closes that gap.
+The 100–400 bands come from architecture's Level of Development scale, which fits a process where each stage follows a known, rote sequence. Product work doesn't: whether a feature is needed for MVP or MLP is an empirical question about what moves the outcomes [roadmap §2.1](../roadmap.md#21-tier-rubric-epic-id-numbering) already defines (a steady trickle of paying customers, then accelerating growth). So the band an epic carries is a **hypothesis**, and the reconciliation's job is to state it so it can be tested, not to settle it by argument.
+
+For each epic, and for any new open story added to a 1xx epic, the triage record states:
+
+- **Milestone hypothesis:** the milestone it's expected to serve, and why.
+- **Metric:** the outcome it should move. Prefer a leading indicator that accrues in weeks (7-day return, shared-link opens, a second model open) over paid conversion, which on current traffic would take far longer to read.
+- **Test:** a randomized holdout where withholding the feature is acceptable; otherwise a regression on observed use with controls (tier, source, route kind, prior engagement), labelled correlational.
+- **Current estimate:** the measured lift with its interval, or "not instrumented yet". Most epics are the latter today; Notes and Versions start in #2166.
+
+A new open story under a 1xx epic needs a recorded hypothesis and metric. Calling it MVP scope in [roadmap §6.0](../roadmap.md#60-the-mvp-bar) waits for the estimate; until then the roadmap owner decides, and the PR says which way and why. Both Notes (#2147) and Versions (#2165) grew a 1xx epic by reasoning about bands alone; this asks for the hypothesis that reasoning was standing in for.
+
+Two consequences to work toward, not yet adopted:
+
+- **Stable IDs without the tier digit.** While the milestone is encoded in the epic's number, every change of hypothesis renames the epic, which is how the roadmap came to keep an alias table and reuse eight numbers. Recording the hypothesis in its own field (an issue field or the triage record) would let it move with the evidence while IDs stay put.
+- **Moving an epic between milestones on evidence,** with the estimate and its interval in the changelog line, rather than on a judgment about its band.
 
 ## How to triage
 
@@ -101,7 +114,7 @@ The triage record is evidence for a reader checking a decision later, not a seco
 ### Before marking the PR ready
 
 - The snapshot lists exactly the epic's formal direct stories (compare with the epic's native sub-issues).
-- Any new open story under a 1xx epic has its §6.0 decision recorded (see the tier rules above).
+- Any new open story under a 1xx epic has a recorded milestone hypothesis and metric, and the PR says whether §6.0 changed (see §"Milestones are hypotheses").
 - No issue was parented under this epic while the roadmap assigns its outcome elsewhere.
 - Neither record contains `- [ ]`, and every code or retired-doc link is pinned to a commit.
 - The UX index, sibling requirement docs, the roadmap and the router have been searched for wording that describes the state before this change (for example "pending", "remains", "draft", or the retired doc's name), and it's updated.
