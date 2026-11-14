@@ -38,6 +38,13 @@ The [roadmap tier rubric](../roadmap.md#21-tier-rubric-epic-id-numbering) encode
 
 The MVP default applies to the agreed basic workflow, not every desired future feature. Record the epic's scope and later candidates in its own reconciliation document. Preserve existing roadmap assignments and historical aliases unless an explicit roadmap decision changes them; do not recycle codes merely to tidy numbering. Backend dependencies do not justify weakening the required UX or audience contract.
 
+**Adding open scope to a 1xx epic is a roadmap decision, not a triage outcome.** The band table says where a requirement *belongs*; [roadmap §6.0](../roadmap.md#60-the-mvp-bar) says what the MVP *is*, and it lists the open 100-band work exhaustively. So a reconciliation that attaches new open stories to a 1xx epic does one of two things in the same PR, and says which in its description:
+
+- **Grow the MVP deliberately:** add the work to §6.0's list, update the epic's status and Phase column (a ✔ epic with new open stories is no longer ✔), and add a roadmap changelog line. This needs the roadmap owner's agreement.
+- **Park it:** put the new stories under the epic's 2xx code, with the "why it can wait" note the 2xx row asks for, and leave the 1xx epic's scope and status as they were.
+
+Neither the "MVP default" above nor a story's 1xx prefix settles this on its own. Both Notes (#2147) and Versions (#2165) applied the band table correctly and still grew the MVP without a roadmap decision; this rule closes that gap.
+
 ## How to triage
 
 Record three independent facts for each issue: **issue state**, **UX coverage**, and **verification evidence**. A closed issue does not prove every current requirement is covered. An unchecked historical checkbox does not prove a shipped feature is absent.
@@ -59,7 +66,7 @@ A story body contains the user goal, scope, observable task checkboxes, acceptan
 
 1. Inventory the feature's issues across open and closed states, labels and historical title variants. Find the existing epic/tracker before creating a parent or replacement story.
 2. **Expand through milestones.** Enumerate all members of each related milestone, including closed issues and linked pull requests, and follow explicit parent/task references. Include relevant issues from broader release milestones. Record the milestone URL, source issue, proposed parent, evidence and disposition; a story-only search is insufficient.
-3. Classify by user outcome and content. **Only formal UX stories are direct sub-issues of an epic.** Attach existing implementation/task/bug issues beneath their owning story where the relationship is established. Keep planning, refactoring, testing, documentation and other cross-story support work as linked references outside the epic's direct children; record any unresolved story ownership in the crosswalk. Preserve legacy task issues; new UX tasks remain checkboxes in story descriptions. Pull requests remain evidence/dependency links.
+3. Classify by user outcome and content. **Only formal UX stories are direct sub-issues of an epic.** Attach existing implementation/task/bug issues beneath their owning story where the relationship is established. Keep planning, refactoring, testing, documentation and other cross-story support work as linked references outside the epic's direct children; record any unresolved story ownership in the crosswalk. Preserve legacy task issues; new UX tasks remain checkboxes in story descriptions. Pull requests remain evidence/dependency links. **Before parenting an issue under the epic, check that the roadmap doesn't already assign its outcome to another epic** (search the roadmap for the outcome, not just the issue number). If it does, keep the issue with that epic and cross-link the dependency, or record an explicit roadmap reassignment with a changelog line. A matching milestone or a historical title does not override a roadmap assignment: #894's "Collab" title and Notes scope did not move maps-style filtering out of `view-230`.
 4. **Use native sub-issues uniformly as the work hierarchy.** Milestone membership is discovery evidence, not automatic ownership. Preserve milestone names, descriptions, dates, open/closed states and assignments as historical references. Keep other-epic work with its owner; record ambiguous or shared ownership as an explicit deferral with a next decision. Cross-link dependencies rather than duplicating issues or forcing a second parent.
 5. Apply the agreed epic prefix and appropriate labels without rewriting historical completion or task checkboxes. Check existing parents first; retain correct links and resolve conflicts before reparenting. Verify the resulting hierarchy, preserved milestones and issue states, and record applied changes and remaining exceptions in the feature crosswalk.
 
@@ -67,7 +74,7 @@ Milestone completion percentages remain historical. Native sub-issue rollups des
 
 ## Record the result
 
-Keep `<epic-code>.md` to roughly one page: the dated epic motivation, intended user journey and formal UX stories with issue links. It is a historical scope snapshot, not a live status report. Update it only when motivation or story scope materially changes; date the new snapshot and use Git history to compare earlier versions. Current progress, task checklists, bugs and acceptance decisions belong in the epic/story issues.
+Keep `<epic-code>.md` to roughly one page: the dated epic motivation, intended user journey and formal UX stories with issue links. It is a historical scope snapshot, not a live status report. Update it only when motivation or story scope materially changes; date the new snapshot and use Git history to compare earlier versions. Current progress, task checklists, bugs and acceptance decisions belong in the epic/story issues. **A PR that changes the epic's formal stories (adds, reuses, detaches or retires one) updates the snapshot in the same PR,** so the snapshot lists every formal story the epic has when it merges, and is re-dated.
 
 In `<epic-code>-triage.md`, preserve the reconciliation record:
 
@@ -80,3 +87,22 @@ In `<epic-code>-triage.md`, preserve the reconciliation record:
 Use commit/build-pinned evidence for implementation claims. Resolve product decisions before dispatching dependent implementation work; record outstanding decisions without presenting the target UX as already delivered.
 
 When migrating a working requirements draft into issues, assign every task, acceptance condition, dependency and unresolved decision to an epic or story before retiring the draft. Reuse matching open issues; preserve completed baseline checklists and link follow-up stories for expanded scope. Keep a source permalink and ownership crosswalk in the triage record, update live links, and preserve the dated scope snapshot. Do not duplicate a changing backlog in repository prose.
+
+### Keep the records lean
+
+The triage record is evidence for a reader checking a decision later, not a second copy of the issues.
+
+- **Map, don't copy.** A crosswalk row is `source line or task → owning issue`, with the source permalinked. Don't restate task, acceptance or dependency text: it already lives in the issue, and a copy drifts the first time someone edits the story.
+- **Collapse what's out of scope.** When a milestone or search returns members outside the epic, one sentence ("#57 selected; the other 23 members are out of scope and unchanged") replaces a row per member. Keep per-member rows for members that were actually placed, deferred or reclassified.
+- **No PR process notes.** Link-check counts, word counts, how the commit was made and draft/review status belong in the PR description; `git log` keeps them. They read as false once the PR merges.
+- **Pin every link to code or a retired doc to a commit,** including starting points in an archived gap analysis. A `blob/main` link points at different code as soon as the files move.
+- **No live checklists** in the snapshot or the triage record. Record what was done as prose; open decisions go in the epic or the owning story, and the record points there.
+
+### Before marking the PR ready
+
+- The snapshot lists exactly the epic's formal direct stories (compare with the epic's native sub-issues).
+- Any new open story under a 1xx epic has its §6.0 decision recorded (see the tier rules above).
+- No issue was parented under this epic while the roadmap assigns its outcome elsewhere.
+- Neither record contains `- [ ]`, and every code or retired-doc link is pinned to a commit.
+- The UX index, sibling requirement docs, the roadmap and the router have been searched for wording that describes the state before this change (for example "pending", "remains", "draft", or the retired doc's name), and it's updated.
+- Docs-only reconciliation skips review under [agent-workflow.md](../new/agent-workflow.md) §"Review" unless it changes review, dispatch or release policy; mark it ready rather than leaving it in draft, since merge checks only run once it's ready.

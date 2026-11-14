@@ -100,13 +100,9 @@ The initial 42-link pass was checked against the preflight snapshot for preserve
 
 ## Remaining decisions and acceptance work
 
-- [x] Adopt the existing #670 tracker as the canonical epic, normalize current story titles, include #1186/#1187 as stories, and preserve #881 as linked planning work outside the epic's direct sub-issues.
-- [x] Expand through related milestones, apply the unambiguous native hierarchy, and retain milestone metadata and assignments for reference.
-- [ ] Resolve the deferred ownership/scope rows above and link their eventual owners without using milestone membership as the work hierarchy.
-- [ ] Confirm close/archive versus delete semantics for notes, including labels, source access, old links and recovery.
-- [ ] Confirm the basic Notes MVP boundary, including private drafts and basic topic filtering; separate later administration/carry-forward scope.
-- [ ] Agree precise follow-up acceptance for create, reply, removal and share/open; preserve historical completion while recording the current gaps.
-- [ ] Reconcile roadmap status from verified UX evidence, then repeat this rubric for Sharing and Versions.
+Done in this pilot: #670 adopted as the canonical epic, current story titles normalized, #1186/#1187 included as stories, and #881 kept as linked planning work outside the epic's direct sub-issues. Related milestones were expanded, the unambiguous native hierarchy applied, and milestone metadata and assignments retained.
+
+Still open, and owned outside this record: the deferred ownership rows above; close/archive versus delete semantics (#2153); follow-up acceptance for create, reply, removal and share/open (#2149, #2154, #2153, #2155, #2156); and the Notes MVP boundary, which is a roadmap §6.0 decision under the [tier rules](ux-rubric.md#coding-and-tier-rubric). #670's owner table is the live list. Sharing's reconciliation is still to come; Versions followed in #2165.
 
 The roadmap's current `notes-100` done marker describes the existing baseline; it does not establish completion of the expanded target UX or all related bugs. Other roadmap epic assignments remain unchanged. Native sub-issue rollups track issue state, not acceptance verification.
 
@@ -129,13 +125,13 @@ Task ordinals below refer only to the checklist order in the linked source snaps
 | Publish/reply · task 6: attributed replies and recoverable sends | [#2154](https://github.com/bldrs-ai/Share/issues/2154) |
 | Publish/reply · task 7: anonymous reading, live refresh and pinned model | [#2156](https://github.com/bldrs-ai/Share/issues/2156) |
 | Browse/tags · tasks 1–2 and 5: list/marker association, identity, state and empty/unavailable cases | [#2150](https://github.com/bldrs-ai/Share/issues/2150) |
-| Browse/tags · tasks 3–5: tag selection, consistent filters and untagged/empty cases | [#894](https://github.com/bldrs-ai/Share/issues/894) |
+| Browse/tags · tasks 3–5: tag selection, consistent filters and untagged/empty cases | [#894](https://github.com/bldrs-ai/Share/issues/894) (`view-230`; linked dependency since 2026-11-14) |
 | Browse/tags · tasks 6–7: old-version navigation and missing anchors | [#2151](https://github.com/bldrs-ai/Share/issues/2151) |
 | Source navigation and its acceptance/access audit | [#2152](https://github.com/bldrs-ai/Share/issues/2152), following #1056 |
 | Note edits, comment edits/deletion and their permission/recovery audit | [#1057](https://github.com/bldrs-ai/Share/issues/1057), [#1186](https://github.com/bldrs-ai/Share/issues/1186), [#1187](https://github.com/bldrs-ai/Share/issues/1187) |
 | Note removal semantics, retained source/links and recovery | [#2153](https://github.com/bldrs-ai/Share/issues/2153), following #1058 |
 | Discussion-history and cross-version decisions | [#2151](https://github.com/bldrs-ai/Share/issues/2151) |
-| Taxonomy, initial tags, label mapping and administration scope | [#894](https://github.com/bldrs-ai/Share/issues/894) |
+| Taxonomy, initial tags, label mapping and administration scope | [#894](https://github.com/bldrs-ai/Share/issues/894) (`view-230`; linked dependency since 2026-11-14) |
 | External-input destination/fallback and contribution-permission decisions | [#2149](https://github.com/bldrs-ai/Share/issues/2149), coordinated by #670 |
 | Cross-feature dependencies, BCF/Drive/anchoring ownership, six gap-analysis areas and final three audit tasks | [#670](https://github.com/bldrs-ai/Share/issues/670), with the story owners above |
 
@@ -145,9 +141,15 @@ Eight completed baseline stories retain their original bodies/checklists and sta
 
 The duplicate search covered open and closed Notes titles plus draft/topic/label/tag queries, with complete single-page search results. It found no existing focused private-draft story. #357 includes local/online issues as part of BCF interchange; new #2148 owns basic private Share drafting and links that related scope. #599 covers placemark creation and optional tag color; #311 covers ordering, neither owns durable drafts or full topic filtering.
 
-Existing open #894 (historical `Story: Epic: Collab (200) - Issues`) was reused as `notes-100: Find model notes using colored topic tags`. Its original description and Collab milestone 64 remain. Basic topic filtering belongs to the agreed MVP workflow; the historical title does not redefine current notes-200 BCF. Milestone 64 was inspected: #895 (Code Review) and #896 (Pluggable Note backends) remain outside this Notes hierarchy and keep their ownership. Publication/destination work must coordinate with provider capabilities rather than silently absorbing them.
+Existing open #894 (historical `Story: Epic: Collab (200) - Issues`) was reused as `notes-100: Find model notes using colored topic tags`. Its original description and Collab milestone 64 remain. The historical title does not redefine current notes-200 BCF. *(Corrected 2026-11-14, see below: #894 now belongs to `view-230`.)* Milestone 64 was inspected: #895 (Code Review) and #896 (Pluggable Note backends) remain outside this Notes hierarchy and keep their ownership. Publication/destination work must coordinate with provider capabilities rather than silently absorbing them.
 
-The nine new stories and reused #894 are direct formal UX sub-issues of #670. Supporting planning/refactor/test issues remain outside the epic's direct children. No existing issue state, milestone, assignee, label or historical task checkbox was changed by this requirements migration; #894's title was normalized. Current task state and product decisions belong in the issues, not this audit record.
+The nine new stories and reused #894 were made direct formal UX sub-issues of #670 (#894 was later detached; see the correction below). Supporting planning/refactor/test issues remain outside the epic's direct children. No existing issue state, milestone, assignee, label or historical task checkbox was changed by this requirements migration; #894's title was normalized. Current task state and product decisions belong in the issues, not this audit record.
+
+### Correction · 2026-11-14: #894 belongs to `view-230`
+
+The migration above made #894 a direct `notes-100` story on the reasoning that basic topic filtering is part of the MVP workflow. The roadmap already assigns the maps-style notes filtering UI to `view-230` and calls it post-MVP (its rows in roadmap §3 and §4.2, and §8's post-MVP backlog), and no roadmap decision changed that. Codex raised this on #2147 after merge.
+
+Applied: #894 was removed from #670's sub-issues and retitled `view-230: Find model notes using colored topic tags`. Its body, labels, Collab milestone 64, state and assignees are unchanged. #670's owner table now names #894 as a `view-230` dependency outside the epic. `view-230` has no epic issue yet, so #894 has no native parent. #670 now has 20 formal direct stories, and the [snapshot](notes-100.md) is re-dated to list them. If basic tag filtering should be MVP after all, that is a roadmap reassignment with a changelog line, not a triage change ([tier rules](ux-rubric.md#coding-and-tier-rubric)).
 
 ### Archived starting gap analysis
 
@@ -164,4 +166,4 @@ The following source/test observations are retained as migration evidence. They 
 | Colored topic tags and filtering — notes-100 browsing and tags | Tag taxonomy, label mapping and coordinated list/marker filtering were not established by the inspected components. | **Verify + decide.** Audit current GitHub labels and any existing filters before defining extensions. | Inventory current labels; decide shared taxonomy/permissions and multi-tag matching, then check untagged/empty states and accessible colors. |
 | Audience, notes destination and source access — S05, S07–S08, notes-100 discussion | Creation/replies use GitHub issues/comments, and existing controls open those upstream resources. Public issues are publicly discoverable at source. | **Extend/change + decide.** Opaque Share links do not make public issues unlisted. Separate model-read, model-write and notes permissions; choose an audience-compatible destination. | Test public, restricted and issues-disabled sources; verify disclosures, destination selection, signed-out reading and failure recovery without model republication. |
 
-Notes starting points: [Notes](https://github.com/bldrs-ai/Share/blob/main/src/Components/Notes/Notes.jsx), [NoteCardCreate](https://github.com/bldrs-ai/Share/blob/main/src/Components/Notes/NoteCardCreate.jsx), [NoteFooter](https://github.com/bldrs-ai/Share/blob/main/src/Components/Notes/NoteFooter.jsx), [NoteMenu](https://github.com/bldrs-ai/Share/blob/main/src/Components/Notes/NoteMenu.jsx), and [Notes test definitions](https://github.com/bldrs-ai/Share/blob/main/src/Components/Notes/Notes.spec.ts). These links track `main`; pin evidence to the audited commit when completing the analysis.
+Notes starting points: [Notes](https://github.com/bldrs-ai/Share/blob/13de4ee96d142daba3335b69453d431a0e1e0c55/src/Components/Notes/Notes.jsx), [NoteCardCreate](https://github.com/bldrs-ai/Share/blob/13de4ee96d142daba3335b69453d431a0e1e0c55/src/Components/Notes/NoteCardCreate.jsx), [NoteFooter](https://github.com/bldrs-ai/Share/blob/13de4ee96d142daba3335b69453d431a0e1e0c55/src/Components/Notes/NoteFooter.jsx), [NoteMenu](https://github.com/bldrs-ai/Share/blob/13de4ee96d142daba3335b69453d431a0e1e0c55/src/Components/Notes/NoteMenu.jsx), and [Notes test definitions](https://github.com/bldrs-ai/Share/blob/13de4ee96d142daba3335b69453d431a0e1e0c55/src/Components/Notes/Notes.spec.ts). These links are pinned to the audited commit `13de4ee` (they tracked `main` until 2026-11-14).

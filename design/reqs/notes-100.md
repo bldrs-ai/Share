@@ -1,6 +1,6 @@
 # Notes 100
 
-**Epic:** [notes-100: Anchored notes · #670](https://github.com/bldrs-ai/Share/issues/670) · **Scope snapshot: 2026-11-12**
+**Epic:** [notes-100: Anchored notes · #670](https://github.com/bldrs-ai/Share/issues/670) · **Scope snapshot: 2026-11-14** (revises 2026-11-12)
 
 ## Motivation
 
@@ -10,22 +10,32 @@ The basic journey is **open a model → find or create a note → discuss it →
 
 ## UX stories
 
-Each linked issue carries the `notes-100:` prefix and owns its detailed tasks and acceptance criteria.
+Each linked issue carries the `notes-100:` prefix and owns its detailed tasks and acceptance criteria. #670 has these 20 formal stories as its direct sub-issues.
+
+Eight closed baseline stories keep their history; each has an open follow-up story holding the expanded requirements:
+
+| Baseline (closed) | Follow-up (open) | User goal |
+|---|---|---|
+| [Browse notes · #1054](https://github.com/bldrs-ai/Share/issues/1054) | [Browse accessible notes with clear model and publication context · #2150](https://github.com/bldrs-ai/Share/issues/2150) | Find the notes available for the model, with clear empty, filtered and unavailable states. |
+| [Open a note and its discussion · #1055](https://github.com/bldrs-ai/Share/issues/1055) | [Revisit a note in its original version and anchor · #2151](https://github.com/bldrs-ai/Share/issues/2151) | Open a note, its replies and its saved model context, on the version it was written against. |
+| [Open the source GitHub issue · #1056](https://github.com/bldrs-ai/Share/issues/1056) | [Open the source issue with accurate access context · #2152](https://github.com/bldrs-ai/Share/issues/2152) | Continue in the source system, knowing who can see it there. |
+| [Create a note · #1059](https://github.com/bldrs-ai/Share/issues/1059) | [Prepare and publish a note on its original model version · #2149](https://github.com/bldrs-ai/Share/issues/2149) | Publish a note in model context to a destination the author is permitted to use. |
+| [Reply to a note · #978](https://github.com/bldrs-ai/Share/issues/978) | [Send replies with honest permissions and recoverable retries · #2154](https://github.com/bldrs-ai/Share/issues/2154) | Reply within the discussion, and recover from a failed send. |
+| [Delete a note · #1058](https://github.com/bldrs-ai/Share/issues/1058) | [Withdraw a note with clear retention and recovery behavior · #2153](https://github.com/bldrs-ai/Share/issues/2153) | Withdraw a note and know what stays accessible. |
+| [Share a note link · #1071](https://github.com/bldrs-ai/Share/issues/1071) | [Share an opaque note link within its intended audience · #2155](https://github.com/bldrs-ai/Share/issues/2155) | Send a link that reaches only the intended audience. |
+| [Open a shared note · #1072](https://github.com/bldrs-ai/Share/issues/1072) | [Open shared notes with pinned context and honest access states · #2156](https://github.com/bldrs-ai/Share/issues/2156) | Follow a note link to the same version, anchor and discussion. |
+
+Stories without a baseline/follow-up pair (all open):
 
 | Story | User goal |
 |---|---|
-| [Browse notes · #1054](https://github.com/bldrs-ai/Share/issues/1054) | As a reader, I want to find the notes available for the model so I can discover relevant discussion. |
-| [Open a note and its discussion · #1055](https://github.com/bldrs-ai/Share/issues/1055) | As a reader, I want to open a note, its replies and saved model context so I can understand the discussion. |
-| [Open the source GitHub issue · #1056](https://github.com/bldrs-ai/Share/issues/1056) | As a reader, I want to open the underlying issue so I can continue in the source system. |
-| [Create a note · #1059](https://github.com/bldrs-ai/Share/issues/1059) | As an authorized contributor, I want to publish a note in model context so others can understand and respond to my observation. |
-| [Reply to a note · #978](https://github.com/bldrs-ai/Share/issues/978) | As an authorized contributor, I want to reply within a note's discussion so the conversation stays together. |
-| [Edit a note · #1057](https://github.com/bldrs-ai/Share/issues/1057) | As an authorized contributor, I want to correct a note so its content stays useful. |
-| [Delete a note · #1058](https://github.com/bldrs-ai/Share/issues/1058) | As an authorized contributor, I want to withdraw a note with a clear explanation of what remains accessible. |
-| [Share a note link · #1071](https://github.com/bldrs-ai/Share/issues/1071) | As a reader, I want to send a note link so another person can visit the same discussion and model context. |
-| [Open a shared note · #1072](https://github.com/bldrs-ai/Share/issues/1072) | As a recipient, I want to follow a note link so I can understand the referenced model and conversation. |
-| [Edit a comment · #1186](https://github.com/bldrs-ai/Share/issues/1186) | As an authorized contributor, I want to correct a comment so my contribution remains accurate. |
-| [Delete a comment · #1187](https://github.com/bldrs-ai/Share/issues/1187) | As an authorized contributor, I want to remove a comment I am permitted to manage. |
+| [Save and resume private draft notes · #2148](https://github.com/bldrs-ai/Share/issues/2148) | Keep unfinished notes private on this device and pick them up later. |
+| [Edit a note · #1057](https://github.com/bldrs-ai/Share/issues/1057) | Correct a published note, with save, cancel, permission and failure handling. |
+| [Edit a comment · #1186](https://github.com/bldrs-ai/Share/issues/1186) | Correct a comment, with the same guarantees. |
+| [Delete a comment · #1187](https://github.com/bldrs-ai/Share/issues/1187) | Remove a comment one is permitted to manage. |
 
-This snapshot captures the eleven reconciled UX stories, not a completion claim. The [live Notes requirements](https://github.com/bldrs-ai/Share/issues/670) track subsequent evolution, including private drafts, exact-version context and topic filtering; the [triage record](notes-100-triage.md) holds the supporting scope decisions and reconciliation evidence.
+Colored topic tags and filtering, [#894](https://github.com/bldrs-ai/Share/issues/894), belongs to `view-230` (maps-style filtering, post-MVP in the roadmap). It is a linked dependency of this epic, not one of its stories; it was briefly a direct child after the 2026-11-12 migration.
 
-Current progress, tasks, bugs and acceptance decisions live in the epic and story issues. Revise this page only when the epic's motivation or story scope materially changes, date the new snapshot, and use Git history to compare earlier versions.
+**MVP status is not settled by this snapshot.** The roadmap still marks `notes-100` ✔ and §6.0 doesn't list it, while 12 of the stories above are open. Whether that open work is MVP or moves to a 2xx code is a roadmap decision under the [tier rules](ux-rubric.md#coding-and-tier-rubric).
+
+This snapshot makes no completion claim. The [triage record](notes-100-triage.md) holds the supporting scope decisions and reconciliation evidence. Current progress, tasks, bugs and acceptance decisions live in [#670](https://github.com/bldrs-ai/Share/issues/670) and its story issues. Revise this page when the epic's motivation or story scope materially changes, date the new snapshot, and use Git history to compare earlier versions.
