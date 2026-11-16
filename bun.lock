@@ -53,6 +53,7 @@
         "matrix-widget-api": "1.13.1",
         "meshoptimizer": "^1.1.1",
         "msw": "2.10.4",
+        "n8ao": "2.1.0",
         "normalize.css": "8.0.1",
         "pako": "2.1.0",
         "postprocessing": "6.39.6",
@@ -2686,6 +2687,8 @@
     "multiparty": ["multiparty@4.2.3", "", { "dependencies": { "http-errors": "~1.8.1", "safe-buffer": "5.2.1", "uid-safe": "2.1.5" } }, "sha512-Ak6EUJZuhGS8hJ3c2fY6UW5MbkGUPMBEGd13djUzoY/BHqV/gTuFWtC6IuVA7A2+v3yjBS6c4or50xhzTQZImQ=="],
 
     "mute-stream": ["mute-stream@0.0.8", "", {}, "sha512-nnbWWOkoWyUsTjKrhgD0dcz22mdkSnpYqbEjIm2nhwhuxlSkpywJmBo8h0ZqJdkp73mb90SssHkN4rsRaBAfAA=="],
+
+    "n8ao": ["n8ao@2.1.0", "", { "peerDependencies": { "postprocessing": ">=6.30.0", "three": ">=0.137" } }, "sha512-b/L5N7QiwNqI4nE3larcZ5PVkUiy5zHjYC5u7nMC9z3w3t2eGkiSDAUcQlcDar2ZQ9W4ZiiHpcZ3QX1tf1Vsbw=="],
 
     "nan": ["nan@2.26.2", "", {}, "sha512-0tTvBTYkt3tdGw22nrAy50x7gpbGCCFH3AFcyS5WiUu7Eu4vWlri1woE6qHBSfy11vksDqkiwjOnlR7WV8G1Hw=="],
 

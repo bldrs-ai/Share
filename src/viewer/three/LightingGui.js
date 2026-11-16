@@ -126,6 +126,7 @@ export default class LightingGui {
       envType: viewer._envType ?? 'gradient',
       aoEnabled: postProcessor?.getAOEnabled?.() ?? true,
       aoStrength: postProcessor?.getAOStrength?.() ?? 1,
+      aoMethod: postProcessor?.getAOMethod?.() ?? 'ssao',
       shadowEnabled: viewer._shadowEnabled ?? true,
       shadowOpacity: viewer._groundPlane?.material?.opacity ?? FALLBACK_SHADOW_OPACITY,
     }
@@ -162,6 +163,10 @@ export default class LightingGui {
     const ao = gui.addFolder('Ambient occlusion')
     ao.add(params, 'aoEnabled').name('enabled')
       .onChange((v) => postProcessor?.setAOEnabled(v))
+    // N8AO is imported and built on first pick, so the panel-wide
+    // onChange's paint lands before its pass exists: paint again once live.
+    ao.add(params, 'aoMethod', {'SSAO (postprocessing)': 'ssao', 'N8AO': 'n8ao'}).name('method')
+      .onChange((v) => postProcessor?.setAOMethod(v).then(() => requestPaint()))
     ao.add(params, 'aoStrength', 0, MATERIAL_MAX, AO_STRENGTH_STEP).name('strength')
       .onChange((v) => postProcessor?.setAOStrength(v))
 
@@ -275,6 +280,7 @@ export default class LightingGui {
       envBlur: p.envBlur,
       aoEnabled: p.aoEnabled,
       aoStrength: p.aoStrength,
+      aoMethod: p.aoMethod,
       shadowEnabled: p.shadowEnabled,
       shadowOpacity: p.shadowOpacity,
       keyLight: p.keyLight,

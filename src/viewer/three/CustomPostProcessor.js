@@ -24,6 +24,19 @@ const AO_RADIUS = 0.1
 const AO_INTENSITY = 2
 const AO_LUMINANCE_INFLUENCE = 0.6
 
+// N8AO defaults, the alternative AO method the `?feature=look` GUI can switch
+// to (`setAOMethod('n8ao')`). Radius is in SCREEN pixels
+// (`screenSpaceRadius`), not world units: one rig has to work from a unit GLB
+// to a kilometre-scale site IFC, and N8AO's world-unit radius would need
+// retuning per model. 32 px is mid-range of N8AO's own 16-64 recommendation;
+// `distanceFalloff` is a ratio of that radius in screen-space mode. `intensity`
+// is the exponent N8AO applies (`pow(ao, intensity)`); AO strength in the GUI
+// scales it.
+const N8AO_RADIUS_PX = 32
+const N8AO_DISTANCE_FALLOFF = 0.2
+const N8AO_INTENSITY = 3
+const N8AO_QUALITY = 'Medium'
+
 
 // Maps a look's `toneMapping` key (src/viewer/looks.js) to a postprocessing
 // ToneMappingMode. Lives here so looks.js stays free of the postprocessing
@@ -43,6 +56,14 @@ export default class CustomPostProcessor {
   _normalPass = null
   _ssaoEffect = null
   _ssaoPass = null
+  // `?feature=look` AO state. Method is 'ssao' (pmndrs SSAOEffect + NormalPass,
+  // built eagerly under the flag) or 'n8ao' (N8AOPostPass, imported and built
+  // on first selection, so the n8ao chunk only loads when someone picks it).
+  _aoMethod = 'ssao'
+  _aoEnabled = false
+  _aoStrength = 1
+  _n8aoPass = null
+  _n8aoLoading = null
   static _instance = null
 
   /**
@@ -175,40 +196,104 @@ export default class CustomPostProcessor {
   }
 
   /**
-   * Toggle the AO pass (and its NormalPass) on/off. Used by the
-   * `?feature=look` GUI. No-op without an AO pass (renderer-less contexts).
+   * Toggle ambient occlusion on/off for the current method. Used by the
+   * `?feature=look` GUI. No-op without AO passes (renderer-less contexts).
    *
    * @param {boolean} enabled
    */
   setAOEnabled(enabled) {
-    if (this._ssaoPass) {
-      this._ssaoPass.enabled = enabled
-    }
-    if (this._normalPass) {
-      this._normalPass.enabled = enabled
-    }
+    this._aoEnabled = enabled
+    this._applyAOState()
   }
 
   /**
-   * Set overall AO strength via the effect's blend opacity ([0,1]). Decouples
-   * the user-facing "how much AO" knob from SSAO's internal `intensity`.
+   * Set overall AO strength ([0,1], the GUI allows a little over). For SSAO
+   * it's the effect's blend opacity, decoupled from SSAO's internal
+   * `intensity`; for N8AO it scales the `intensity` exponent.
    *
    * @param {number} strength
    */
   setAOStrength(strength) {
+    this._aoStrength = strength
     if (this._ssaoEffect) {
       this._ssaoEffect.blendMode.opacity.value = strength
     }
+    if (this._n8aoPass) {
+      this._n8aoPass.configuration.intensity = N8AO_INTENSITY * strength
+    }
   }
 
-  /** @return {boolean} whether the AO pass is currently enabled. */
+  /** @return {boolean} whether AO is currently enabled. */
   getAOEnabled() {
-    return this._ssaoPass ? this._ssaoPass.enabled : false
+    return this._ssaoPass || this._n8aoPass ? this._aoEnabled : false
   }
 
-  /** @return {number} current AO strength (blend opacity), or 0 if no effect. */
+  /** @return {number} current AO strength, or 0 without an AO pass. */
   getAOStrength() {
-    return this._ssaoEffect ? this._ssaoEffect.blendMode.opacity.value : 0
+    return this._ssaoPass || this._n8aoPass ? this._aoStrength : 0
+  }
+
+  /** @return {string} the current AO method, 'ssao' or 'n8ao'. */
+  getAOMethod() {
+    return this._aoMethod
+  }
+
+  /**
+   * Switch the AO implementation (`?feature=look` GUI). 'n8ao' dynamic-imports
+   * the n8ao package and builds its pass on first use, inserted where SSAO
+   * sits (after the RenderPass/hover overlay, before tone mapping) so it
+   * darkens linear colour the same way. N8AO reads the composer's stable
+   * depth texture, needs no NormalPass (it reconstructs normals from depth),
+   * and detects the log-depth buffer from `renderer.capabilities` itself.
+   *
+   * @param {string} method 'ssao' | 'n8ao'
+   * @return {Promise<void>} resolves once the method is live
+   */
+  async setAOMethod(method) {
+    if (!this._ssaoPass) {
+      return
+    }
+    if (method === 'n8ao' && !this._n8aoPass) {
+      this._n8aoLoading ??= import('n8ao').then(({N8AOPostPass}) => {
+        if (!this._composer) {
+          return // disposed while the chunk loaded
+        }
+        const {width, height} = this._composer.inputBuffer
+        const pass = new N8AOPostPass(this._scene, this._camera, width, height)
+        pass.setQualityMode(N8AO_QUALITY)
+        Object.assign(pass.configuration, {
+          screenSpaceRadius: true,
+          aoRadius: N8AO_RADIUS_PX,
+          distanceFalloff: N8AO_DISTANCE_FALLOFF,
+          intensity: N8AO_INTENSITY * this._aoStrength,
+        })
+        pass.enabled = false
+        this._composer.addPass(pass, this._composer.passes.indexOf(this._ssaoPass) + 1)
+        this._n8aoPass = pass
+      })
+      await this._n8aoLoading
+    }
+    this._aoMethod = method === 'n8ao' && this._n8aoPass ? 'n8ao' : 'ssao'
+    this._applyAOState()
+  }
+
+  /**
+   * Enable exactly the passes the current method + toggle call for. The
+   * NormalPass is SSAO's input only, so it's off whenever SSAO is.
+   *
+   * @private
+   */
+  _applyAOState() {
+    const ssaoOn = this._aoEnabled && this._aoMethod === 'ssao'
+    if (this._ssaoPass) {
+      this._ssaoPass.enabled = ssaoOn
+    }
+    if (this._normalPass) {
+      this._normalPass.enabled = ssaoOn
+    }
+    if (this._n8aoPass) {
+      this._n8aoPass.enabled = this._aoEnabled && this._aoMethod === 'n8ao'
+    }
   }
 
   /**
@@ -241,6 +326,7 @@ export default class CustomPostProcessor {
     this._normalPass = null
     this._ssaoEffect = null
     this._ssaoPass = null
+    this._n8aoPass = null
     this._toneMappingEffect = null
   }
 }

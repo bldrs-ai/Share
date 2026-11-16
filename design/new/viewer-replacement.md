@@ -1832,6 +1832,33 @@ OBJ uses `OBJLoader`'s own materials, so it's unchanged either way (matches its
 legacy baseline); converting it to Standard for full flag-on uniformity is a
 separate step.
 
+**r187 (2026-11):**
+
+- **The look's IBL is now overexposed.** r187 rewrote `PMREMGenerator`: the
+  CubeUV atlas became a real cube target with prefiltered mips. Under
+  SwiftShader the r184 env map added nothing to the frame. A float readback
+  of Momentum was identical with the env on, off, or at intensity 0. Under
+  r187 it lights the walls to about 2.6 (linear), so with `envIntensity: 2.56`
+  they tone-map to the white background.
+- **Retune before the flag flips.** It is not measured yet whether r184 on a
+  real GPU matched r187. Check a deploy preview, and retune
+  `LOOKS.neutral.envIntensity` before `?feature=look` goes default-on.
+- **AO method selector.** The look GUI's AO folder has one: the pmndrs
+  `SSAOEffect` (default) or N8AO (`n8ao`, `N8AOPostPass`, a screen-space
+  radius of 32 px). N8AO needs no NormalPass. It reads the composer's stable
+  depth and detects log depth itself.
+- **SSAO barely registers.** On Momentum at default settings it darkens at
+  most 10/255 against N8AO's 64, over about 2.5k px against 24.5k. SSAO's
+  radius and cutoffs are fractions of normalized depth, which collapse
+  under a site-sized far plane.
+- **What N8AO costs.** It is about 107 KB gzipped, and esbuild inlines the
+  dynamic import into `index.js` because this build doesn't split. Gate it at
+  build time before it ships.
+- **Fast-SDF-AO, not adopted.** wrong-nebula/Fast-SDF-AO is AO from one baked
+  SDF volume over a fixed box, not screen-space. It has no package and no
+  stated license. It was considered and doesn't fit Share's models: arbitrary
+  scale, many BatchedMesh instances, nothing to bake offline.
+
 The compat path in §6b was a **deliberate hold**, not the destination.
 The fork's IFC pipeline and our material setup were tuned in 2022 against
 three's pre-r152 conventions. The forward plan below (steps 1–5) all landed
