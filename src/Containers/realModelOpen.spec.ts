@@ -239,21 +239,28 @@ describeMobileAndDesktop('real_model_open GA event', () => {
 
   // The stub duplicates analytics#isAllowed rather than importing it, so the
   // duplicate needs its own coverage — a consent gate that fails open is
-  // worse than one that never existed.
-  test('omits the user property when analytics consent is withheld', async ({page}) => {
+  // worse than one that never existed. A visitor who chose Browse only gets
+  // no config at all (so no page_view if gtag/js ever loaded), only the
+  // Consent Mode default, and no event of ours either.
+  test('queues no config, and no model-open event, when analytics consent is withheld', async ({page}) => {
     await page.context().addCookies([
       {name: '_ga', value: `GA1.1.${FAKE_CLIENT_ID}`, domain: 'localhost', path: '/'},
-      {name: 'isAnalyticsAllowed', value: 'false', domain: 'localhost', path: '/'},
+      {name: 'consentLevel', value: '1.restricted', domain: 'localhost', path: '/'},
     ])
     await setupVirtualPathIntercept(page, REAL_MODEL, 'box.ifc')
     await page.goto(REAL_MODEL, {waitUntil: 'domcontentloaded'})
-    const config = await page.evaluate(() => {
+    await waitForModelReady(page)
+    const queued = await page.evaluate(() => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const dataLayer: any[] = (window as any).dataLayer || []
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const entry = dataLayer.find((e: any) => e?.[0] === 'config')
-      return entry ? {params: entry[2]} : null
+      return dataLayer.map((e: any) => [e?.[0], e?.[1], JSON.parse(JSON.stringify(e?.[2] ?? null))])
     })
-    expect(config?.params?.user_properties).toBeUndefined()
+    expect(queued.filter(([cmd]) => cmd === 'config')).toHaveLength(0)
+    expect(queued).toContainEqual(['consent', 'default', {
+      analytics_storage: 'denied', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied',
+    }])
+    expect(queued.filter(([cmd, arg]) => cmd === 'consent' && arg === 'update')).toHaveLength(0)
+    expect(await realModelOpenEvents(page)).toHaveLength(0)
   })
 })

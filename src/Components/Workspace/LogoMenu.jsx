@@ -1,5 +1,6 @@
 import React, {ReactElement, useState} from 'react'
 import {Divider, Menu, MenuItem, Typography} from '@mui/material'
+import {dismissConsent} from '../../privacy/consentChoice'
 import {isFirst, setVisited} from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
 import AboutDialog from '../About/AboutDialog'
@@ -39,10 +40,12 @@ export default function LogoMenu() {
   const setIsNotesVisible = useStore((state) => state.setIsNotesVisible)
   const [anchorEl, setAnchorEl] = useState(null)
 
-  // Mirrors AboutControl#handleDialogClose: first-timers are marked
+  // Mirrors AboutControl#handleDialogClose: an undecided visitor's
+  // dismissal is stored as Browse only, first-timers are marked
   // visited so the dialog doesn't force itself open again, and Notes
   // opens to improve the first-run experience (#1320).
   const onAboutClose = () => {
+    dismissConsent()
     if (isFirst()) {
       setVisited()
       setIsNotesVisible(true)

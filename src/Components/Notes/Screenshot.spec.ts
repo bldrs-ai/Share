@@ -12,7 +12,10 @@ const {beforeEach, describe} = test
 describe.skip('Note screenshot', () => {
   describe('enable/disable feature using url parameter', () => {
     beforeEach(async ({page}) => {
-      await page.context().addCookies([{name: 'isFirstTime', value: '1', url: page.url()}])
+      await page.context().addCookies([
+        {name: 'isFirstTime', value: '1', url: page.url()},
+        {name: 'consentLevel', value: '1.functional', url: page.url()},
+      ])
       await page.goto('/')
     })
 

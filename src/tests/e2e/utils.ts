@@ -169,7 +169,12 @@ export async function homepageSetup(page: Page, allowHosts: string[] = []) {
 
 
 /**
- * Set cookie indicating user has visited before
+ * Set the cookies of a returning visitor: seen the first-visit About
+ * dialog, and chosen the Functional privacy level in it. Without the
+ * consent cookie About re-opens for every visitor who hasn't chosen
+ * (About/hashState.js), and the GA events many specs read from dataLayer
+ * aren't queued at all (privacy/consent.js). Specs about the choice itself
+ * start from clearState instead (About/consent.spec.ts).
  *
  * @param context - Playwright browser context
  */
@@ -178,6 +183,12 @@ export async function setIsReturningUser(context: BrowserContext) {
     {
       name: 'isFirstTime',
       value: '1',
+      domain: 'localhost',
+      path: '/',
+    },
+    {
+      name: 'consentLevel',
+      value: '1.functional',
       domain: 'localhost',
       path: '/',
     },

@@ -60,12 +60,12 @@ describe('goToSubscription', () => {
     expect(window.location.href).toBe('/subscribe/?theme=light&userEmail=a%40b.c')
 
     setGaClientId('111.222')
-    Cookies.set('isAnalyticsAllowed', 'false')
+    Cookies.set('consentLevel', '1.restricted')
     try {
       await goToSubscription(args)
       expect(window.location.href).toBe('/subscribe/?theme=light&userEmail=a%40b.c')
     } finally {
-      Cookies.remove('isAnalyticsAllowed')
+      Cookies.set('consentLevel', '1.functional')
     }
   })
 

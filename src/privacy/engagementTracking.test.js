@@ -42,7 +42,7 @@ describe('trackEngagementOnOpen', () => {
   beforeEach(() => {
     localStorage.clear()
     resetEngagementPageState()
-    Cookies.remove('isAnalyticsAllowed')
+    Cookies.set('consentLevel', '1.functional')
     Analytics.setIsAllowed(true)
     Analytics._resetGaClientIdForTests()
     window.gtag = jest.fn()
@@ -51,7 +51,7 @@ describe('trackEngagementOnOpen', () => {
   afterEach(() => {
     delete window.gtag
     uninstallFakeLocks()
-    Cookies.remove('isAnalyticsAllowed')
+    Cookies.set('consentLevel', '1.functional')
     jest.restoreAllMocks()
   })
 
