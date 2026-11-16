@@ -297,7 +297,19 @@ export class ShareViewer {
     //     the env map — the pre-§6e pipeline.
     // Env build no-ops in tests where getRenderer() returns undefined.
     if (isLookOn()) {
-      this._buildEnvironment(this._envBlur, this._envType)
+      // On the next task, not here. PMREM prefiltering is ~1 s of GPU work
+      // under a software rasteriser (CI's SwiftShader; milliseconds on a
+      // GPU), and a viewer can be disposed right after it's built (CadView
+      // re-inits on mount): built inline, the first viewer's env was then
+      // flushed by `forceContextLoss` on dispose, ~1.2 s spent on a viewer
+      // nobody sees (#2167 load profile). The scene is still empty here, so
+      // the env arriving a task later changes nothing on screen; the scene
+      // probe sees `scene.environment` change and paints.
+      setTimeout(() => {
+        if (!this._isDisposed) {
+          this._buildEnvironment(this._envBlur, this._envType)
+        }
+      }, 0)
       if (renderer) {
         scene.environmentIntensity = ENV_MAP_INTENSITY
       }

@@ -1876,6 +1876,28 @@ separate step.
     rule) with a paint.
   - `debugPanels.spec.ts` checks it at the paint, on desktop and mobile:
     the first moved frame without AO, and the still frame after with it.
+- **Load cost under a software rasteriser** (CI's SwiftShader, measured
+  in the #2167 sandbox). With the look on, index.ifc reached ready in 6.7 s
+  against 2.9 s with the look off, and four parallel E2E workers missed the
+  15 s ready timeout on most model specs. Measured parts:
+  - PMREM prefiltering of the gradient: ~950 ms of GPU work per viewer.
+  - N8AO: ~220 ms a paint (313 ms with AO against 93 ms without).
+  - A profile showed ~1.2 s in `forceContextLoss`: CadView builds a viewer
+    and disposes it right after (its model-path effect re-runs on a
+    `customViewSettings` change, a pre-existing double init), and losing the
+    context flushed that first viewer's queued PMREM.
+
+  Two fixes, both right on a GPU too:
+  - **The env map builds on the next task** and is skipped for a viewer
+    already disposed. The scene is empty then, so nothing on screen changes.
+  - **AO is dropped for the length of a load** (`motionAO.js`, RenderDemand
+    `isLoading`). AO over half-streamed geometry is wasted, and the finished
+    model gets one paint with it.
+
+  Together they took ready to ~5.0 s. The rest is the second viewer's PMREM
+  and the PBR/N8AO shader compiles, which cost milliseconds on a GPU.
+  Follow-up, not this PR: the double viewer init, which costs a WebGL
+  context with or without the look.
 - **The debug panels.** Perf (FPS / ms / MB graphs, plus geometries,
   textures, draw calls and triangles) and Render (the look panel,
   `LightingGui`, retitled) sit side by side in the debug dock

@@ -42,13 +42,14 @@ function setup({enabled = true, follow = false} = {}) {
   const controls = fakeControls()
   const pp = fakePostProcessor(enabled)
   const paint = jest.fn()
+  const renderDemand = {isFollowMoving: follow, isLoading: false}
   const motion = new MotionAO(pp, {
     controls,
     onFrame: (fn) => {
       frames.push(fn)
       return () => frames.splice(frames.indexOf(fn), 1)
     },
-    renderDemand: {isFollowMoving: follow},
+    renderDemand,
     now: () => t,
     paint,
   })
@@ -56,7 +57,7 @@ function setup({enabled = true, follow = false} = {}) {
     t += dtMs
     frames.forEach((fn) => fn())
   }
-  return {motion, controls, pp, paint, frame, frames}
+  return {motion, controls, pp, paint, frame, frames, renderDemand}
 }
 
 
@@ -112,5 +113,35 @@ describe('viewer/motionAO', () => {
     expect(pp.suspended).toBe(false)
     expect(controls.count()).toBe(0)
     expect(frames).toHaveLength(0)
+  })
+
+  it('drops AO for a whole load, from its first frame, and paints it back when the load ends', () => {
+    const {pp, paint, frame, renderDemand} = setup()
+    renderDemand.isLoading = true
+    frame()
+    expect(pp.suspended).toBe(true)
+    for (let i = 0; i < 10; i++) {
+      frame(REST_MS)
+    }
+    expect(pp.suspended).toBe(true)
+    expect(paint).not.toHaveBeenCalled()
+    renderDemand.isLoading = false
+    frame()
+    expect(pp.suspended).toBe(false)
+    expect(paint).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps AO off when the camera rests mid-load, and on only once both are done', () => {
+    const {controls, pp, frame, renderDemand} = setup()
+    renderDemand.isLoading = true
+    controls.update()
+    frame()
+    for (let i = 0; i < REST_FRAMES; i++) {
+      frame(REST_MS)
+    }
+    expect(pp.suspended).toBe(true)
+    renderDemand.isLoading = false
+    frame()
+    expect(pp.suspended).toBe(false)
   })
 })

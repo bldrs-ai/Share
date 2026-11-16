@@ -3,8 +3,18 @@ import {requestPaint} from './three/renderDemand'
 
 
 /**
- * MotionAO — drop ambient occlusion while the camera moves, and put it back
- * the moment it comes to rest.
+ * MotionAO — drop ambient occlusion while the camera moves or a model is
+ * loading, and put it back the moment the camera rests and the load ends.
+ *
+ * **During a load.** While RenderDemand has a load scope open
+ * (`isLoading`), the picture changes on every budgeted paint as geometry
+ * streams in, so AO over a half-loaded model is wasted work, and on a
+ * software rasteriser (CI's SwiftShader) it cost ~220 ms a paint: with AO
+ * on through the load, index.ifc took 6.7 s to ready against 2.9 s with the
+ * look off, and four E2E workers at once missed the 15 s ready timeout
+ * (#2167). Checked in the per-frame hook, before the paint, so a load's
+ * paints are AO-free from its first; the load's closing paint is followed
+ * by one with AO.
  *
  * **Why first, before geometry.** AO is a full-screen post pass (N8AO: an AO
  * pass, a denoise and a composite) whose cost scales with pixels, not with the
@@ -54,6 +64,7 @@ export class MotionAO {
     this.now = now
     this.paint = paint
     this.moving = false
+    this.loading = false
     this.lastMoveMs_ = -Infinity
     this.changedSinceFrame_ = false
     this.quietFrames_ = 0
@@ -77,13 +88,23 @@ export class MotionAO {
     this.quietFrames_ = 0
     if (!this.moving && this.postProcessor?.getAOEnabled?.()) {
       this.moving = true
-      this.postProcessor.setAOSuspended(true)
+      this.apply_()
     }
   }
 
 
   /** One animation frame, before its paint (ThreeContext#onFrame). */
   frame() {
+    const loading = this.renderDemand?.isLoading === true
+    if (loading !== this.loading) {
+      this.loading = loading
+      this.apply_()
+      if (!loading && !this.moving) {
+        // The load's last paint was without AO: paint the finished model
+        // with it.
+        this.paint()
+      }
+    }
     if (!this.moving) {
       return
     }
@@ -100,8 +121,11 @@ export class MotionAO {
 
   /** Detach from the camera and the loop; AO back on if it was dropped. */
   dispose() {
+    this.loading = false
     if (this.moving) {
       this.resume_()
+    } else {
+      this.apply_()
     }
     try {
       this.controls?.removeEventListener?.('update', this.onUpdate_)
@@ -116,8 +140,14 @@ export class MotionAO {
   /** @private */
   resume_() {
     this.moving = false
-    this.postProcessor?.setAOSuspended(false)
+    this.apply_()
     // AO is a composer pass: nothing three or the probe sees changes.
     this.paint()
+  }
+
+
+  /** AO off while moving or loading, else back to what the look chose. @private */
+  apply_() {
+    this.postProcessor?.setAOSuspended(this.moving || this.loading)
   }
 }
