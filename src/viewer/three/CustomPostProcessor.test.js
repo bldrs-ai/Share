@@ -27,11 +27,15 @@ describe('CustomPostProcessor', () => {
     // order resolves them stably. See the constructor comment.
     const postProcessor = new CustomPostProcessor(fakeRenderer(), new Scene(), new Camera())
     const composer = postProcessor.getComposer
-    expect(composer.depthTexture).not.toBeNull()
-    expect(composer.depthTexture.isDepthTexture).toBe(true)
-    expect(composer.depthTexture.type).toBe(UnsignedShortType)
-    // The stable-depth copy passes sample from must match, or a
-    // depth-consuming pass would silently read a different precision.
-    expect(composer.depthRenderTarget.depthTexture.type).toBe(UnsignedShortType)
+    // postprocessing >= 6.39.6: each ping-pong buffer owns a depth
+    // texture; the scene can land in either, so both are pinned.
+    for (const buffer of [composer.inputBuffer, composer.outputBuffer]) {
+      expect(buffer.depthTexture?.isDepthTexture).toBe(true)
+      expect(buffer.depthTexture.type).toBe(UnsignedShortType)
+    }
+    // The stable-depth copy passes sample from must match: it is filled by
+    // a depth blit, which needs identical formats on both ends, and a
+    // depth-consuming pass would otherwise read a different precision.
+    expect(composer.stableDepthTexture.type).toBe(UnsignedShortType)
   })
 })

@@ -67,18 +67,23 @@ export default class CustomPostProcessor {
     // the depth resolution prod shipped for years (~1.4mm at 15m under
     // log depth); per-surface resolution of coincident interfaces
     // belongs in the engine (conway interface culling, tracked
-    // separately). postprocessing re-assigns `composer.depthTexture`
-    // onto the current input buffer every frame (its ping-pong swaps
-    // buffer identities), and three rebinds changed depth textures and
-    // sizes them to the target, so this single assignment covers both
-    // buffers and all resizes. Going through createDepthTexture (rather
-    // than assigning composer.depthTexture directly) also builds the
-    // stable-depth target addPass dereferences; its default depth type
-    // is FloatType (32-bit), so both textures get re-pinned to 16-bit.
+    // separately). postprocessing >= 6.39.6 gives each ping-pong buffer
+    // its OWN depth texture (6.39.1 had one shared `composer.depthTexture`
+    // it re-attached to whichever buffer was the input each frame) plus a
+    // stable-depth target that depth-consuming passes sample, filled by a
+    // `blitFramebuffer` from the input buffer after a `needsDepthBlit`
+    // pass (the RenderPass). A depth blit requires identical depth formats
+    // on both ends, so all three textures are pinned together; three
+    // rebinds changed depth textures and sizes them to their target, so
+    // this one-time assignment survives resizes. createDepthTexture
+    // defaults the type to FloatType (32-bit) and is what addPass would
+    // call lazily for the first depth-needing pass; calling it up front
+    // lets us re-type before anything is uploaded.
     if (renderer) {
-      const stableDepthTexture = this._composer.createDepthTexture()
-      stableDepthTexture.type = UnsignedShortType
-      this._composer.depthTexture.type = UnsignedShortType
+      this._composer.createDepthTexture()
+      this._composer.inputBuffer.depthTexture.type = UnsignedShortType
+      this._composer.outputBuffer.depthTexture.type = UnsignedShortType
+      this._composer.stableDepthTexture.type = UnsignedShortType
     }
     this._composer.addPass(new RenderPass(scene, camera))
     // Ambient occlusion (§6e). SSAO needs a scene-normal buffer (NormalPass)

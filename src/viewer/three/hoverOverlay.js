@@ -164,8 +164,9 @@ class Fingerprint {
 
 /**
  * Whether the overlay can draw this batch's instances (module doc, "What the
- * overlay can't draw"). The private fields are the ones three r184's
- * `BatchedMesh#onBeforeRender` reads and writes (BatchedMesh.js:1518-1671),
+ * overlay can't draw"). The private fields are the ones three r187's
+ * `BatchedMesh#_updateDrawParameters` (called from `onBeforeRender`) reads
+ * and writes (BatchedMesh.js:1581-1795; WebGL takes its `multiDraw` branch),
  * which `installDrawList` writes in its place; a three that reshapes them
  * fails this check and the hover recolours instead.
  *
@@ -214,7 +215,8 @@ function isInScene(object, scene) {
 
 /**
  * Narrow a batch's next draw to `ids`: what three's own `onBeforeRender`
- * writes for the visible, unculled instances (BatchedMesh.js:1518-1671),
+ * writes for the visible, unculled instances (`_updateDrawParameters`,
+ * BatchedMesh.js:1581-1795),
  * written for these alone, wireframe's doubled ranges included. Undone by the
  * function it returns, which also marks the batch's list for a rebuild on its
  * next ordinary draw, as its culling and sort may skip one otherwise.
