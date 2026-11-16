@@ -209,6 +209,12 @@ export const flags = [
   // on-demand painting (DESIGN.md §"Render loop & perf monitor", "Rolling
   // back").
   {name: 'disableRenderOnDemand', isActive: false},
+  // OFF-switch for the §6e render look (viewer/lookMode.js), on by default
+  // since #2167. `?feature=disableLook` puts one session back on the pre-§6e
+  // pipeline (Lambert materials, linear output, no IBL, no AO); setting this
+  // `isActive: true` is the PROD ROLLBACK, which no URL can override. Not
+  // `look: false`: `?feature=look` now only opens the tuning panels.
+  {name: 'disableLook', isActive: false},
   // OFF-switch for the instance tree hover and click picks go through on a
   // batched model (viewer/ifc/batchedInstanceBvh.js): with it on, no tree is
   // built and every pick walks every instance, as before the tree. Same

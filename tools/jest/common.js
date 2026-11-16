@@ -23,6 +23,7 @@ export const excludedNodeModules = [
   'mdast-util-to-hast',
   'mdast-util-to-string',
   'micromark',
+  'n8ao',
   'property-graph',
   'property-information',
   'space-separated-tokens',

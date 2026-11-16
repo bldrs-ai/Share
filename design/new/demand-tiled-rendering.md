@@ -286,6 +286,14 @@ smoothness rules carried over from B2 handle the noise:
 The fraction persists across gestures, so the next drag starts from the last
 good target and its first frames are already cheap.
 
+*AO goes first (#2167).* With the §6e look on (the default), N8AO ambient
+occlusion is dropped on the same camera-controls `update` that starts motion
+here, before the frame's paint (`viewer/motionAO.js`), and comes back at
+rest by the same rule. So every frame Auto times is an AO-free frame:
+geometry is cut only for what the frame costs once AO is gone, which is the
+order the owner asked for (a full-screen post pass is the cheapest thing to
+lose while moving). viewer-replacement.md §6e has the rest.
+
 *Tuning, from the owner's preview run (M2 Air, 60 Hz, DPR 2).* The first
 cut budgeted 0.8 of the interval (13.3 ms) with a 5% floor. On PSB, Auto went
 to the floor and the menu read "Auto (5%)", which the owner called "a bit

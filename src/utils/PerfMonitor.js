@@ -3,22 +3,24 @@
  * memory (MB, where `performance.memory` exists).  A minimal port of
  * mrdoob's stats.js (MIT) — the panel the three.js examples use.
  *
- * Gated on the `?feature=perf` URL flag.  When the flag is absent:
- *   - the Panel / Monitor classes are never instantiated,
- *   - `window.perf` is not defined,
- *   - `withPerf(fn)` returns `fn` unchanged, so the render loop pays
- *     no per-frame branch or closure cost.
+ * Shown at startup with `?feature=perf` or `?feature=look`, and toggled at
+ * runtime, in prod too, by the backtick key together with the look panel
+ * (src/viewer/debugPanels.js).  The Monitor (canvases, DOM, `window.perf`)
+ * is built the first time the panel is shown, so a session that never shows
+ * it allocates nothing.  `withPerf(fn)` always wraps the render closure, so
+ * a runtime toggle has something to sample; while hidden the wrapper is one
+ * boolean check per frame and samples nothing.
  *
- * When the flag is on the panel is docked in the bottom bar (left of
- * the Help/Bot control) by `src/Components/PerfToolbarSlot.jsx`, which
- * calls `mountPerfPanel(slotEl)` on React mount.  Sampling starts at
- * module load regardless of whether the panel is attached to the DOM
- * — the canvases just aren't visible until mounted.
+ * The panel is docked in the bottom bar (left of the Help/Bot control) by
+ * `src/Components/PerfToolbarSlot.jsx`, which renders while the panel is
+ * visible (`subscribePerf` / `isPerfVisible`) and calls
+ * `mountPerfPanel(slotEl)` on mount.
  *
- * Devtools controls (only defined when the flag is on):
+ * Devtools controls (defined once the panel has been shown):
  *   perf.on()       show panel
- *   perf.off()      hide panel (sampling continues)
+ *   perf.off()      hide panel
  *   perf.toggle()
+ *   perf.fps()      the FPS the panel shows
  *
  * Click the panel to cycle FPS -> MS -> MB.
  *
@@ -26,74 +28,109 @@
  * by `src/viewer/three/IfcHighlighter.js` via `ThreeContext.setRenderUpdate`;
  * see DESIGN.md "Render loop & perf monitor" for the architectural seam.
  *
- * Test note: this module has module-load side effects gated on the URL
- * flag — `window.location.search` is read once at import.  jsdom-based
- * tests run with an empty search string by default, so the side-effect
- * block is skipped and the module is a no-op.  Tests that need to
- * exercise the on-path should set `window.location.search` *before*
- * importing the module (and use `jest.isolateModules`/`jest.resetModules`
- * to re-run the module-level code).
+ * Test note: the startup state reads `window.location.search` once, at
+ * import.  Tests that need the shown-at-startup path set it *before*
+ * importing (with `jest.isolateModules`/`jest.resetModules`), or call
+ * `setPerfVisible(true)`.
  */
 
-const PERF_FEATURE_FLAG = 'perf'
+const STARTUP_FLAGS = ['perf', 'look']
 
 
 /**
- * Read the `?feature=perf` URL flag once, at module load.  Toggling at
- * runtime requires a page reload — matches how `useExistInFeature`
- * treats URL flags.
+ * Read whether `?feature=perf` or `?feature=look` asks for the panel at
+ * startup, once, at module load.
  *
  * @return {boolean}
  */
-function readPerfFlag() {
+function readStartupFlag() {
   if (typeof window === 'undefined' || !window.location) {
     return false
   }
   const featureParam = new URLSearchParams(window.location.search).get('feature') || ''
-  return featureParam.split(',').map((s) => s.trim().toLowerCase()).includes(PERF_FEATURE_FLAG)
+  const asked = featureParam.split(',').map((s) => s.trim().toLowerCase())
+  return STARTUP_FLAGS.some((flag) => asked.includes(flag))
 }
 
 
 /**
- * Frozen at module load — true iff `?feature=perf` was in the URL.
- * Exported so the React side (`PerfToolbarSlot`) reads from the exact
- * same source of truth as `window.perf` / `withPerf`, instead of
- * re-resolving the flag through `useExistInFeature` (which is async
- * via `useEffect` and can lag a render).
+ * Frozen at module load — true iff the URL asked for the panel at startup.
+ * The panel's live state is `isPerfVisible()`.
  */
-export const isPerfEnabled = readPerfFlag()
+export const isPerfEnabled = readStartupFlag()
+
+
+// Whether the panel is shown (and sampling). Starts from the URL; the
+// backtick key flips it (debugPanels.js).
+let visible = false
+const listeners = new Set()
+
+
+/** @return {boolean} whether the panel is shown */
+export function isPerfVisible() {
+  return visible
+}
 
 
 /**
- * Wrap a per-frame update function with sampling.  Returns `fn`
- * unchanged when the perf flag is off — that's the "zero runtime cost"
- * path: callers can apply this unconditionally without branching at
- * call sites.
+ * Show or hide the panel. The first show builds it.
+ *
+ * @param {boolean} next
+ */
+export function setPerfVisible(next) {
+  next = next === true
+  if (next === visible) {
+    return
+  }
+  if (next && !monitor) {
+    createMonitor()
+  }
+  visible = next
+  if (monitor) {
+    monitor.reset()
+  }
+  listeners.forEach((fn) => fn())
+}
+
+
+/**
+ * Subscribe to show/hide (for `useSyncExternalStore` in PerfToolbarSlot).
+ *
+ * @param {Function} fn
+ * @return {Function} unsubscribe
+ */
+export function subscribePerf(fn) {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+
+
+/**
+ * Wrap a per-frame update function with sampling, which runs only while
+ * the panel is shown.
  *
  * @param {Function} fn per-frame closure (typically the one passed to
  *   `ThreeContext.setRenderUpdate`).
  * @return {Function}
  */
 export function withPerf(fn) {
-  if (!isPerfEnabled) {
-    return fn
-  }
   return function perfWrappedUpdate() {
+    if (!visible) {
+      return fn()
+    }
     monitor.begin()
     // The render closure returns false for a frame it didn't paint (on
     // demand, renderDemand.js): the panel counts paints, so an idle viewer
     // reads 0 FPS rather than the display's refresh rate.
     const painted = fn()
     monitor.end(painted !== false)
+    return painted
   }
 }
 
 
 // ---------------------------------------------------------------------------
-// Everything below is only reached when `isPerfEnabled` is true.  The
-// classes are still defined unconditionally (so the module remains
-// tree-shake-friendly across both paths), but no instance is constructed
-// and no DOM is touched unless the flag was set.
+// Everything below runs only once the panel has been shown.
 // ---------------------------------------------------------------------------
 
 
@@ -105,7 +142,7 @@ const GRAPH_WIDTH = 74
 const GRAPH_HEIGHT = 30
 const TEXT_X = 3
 const TEXT_Y = 2
-const PIXEL_RATIO = isPerfEnabled ? Math.round(window.devicePixelRatio || 1) : 1
+const PIXEL_RATIO = typeof window === 'undefined' ? 1 : Math.round(window.devicePixelRatio || 1)
 const PW = PANEL_WIDTH * PIXEL_RATIO
 const PH = PANEL_HEIGHT * PIXEL_RATIO
 const GX = GRAPH_X * PIXEL_RATIO
@@ -254,6 +291,15 @@ class Monitor {
     this.lastFps = null
   }
 
+  /**
+   * Restart the FPS window, so a panel shown after a hidden stretch doesn't
+   * average the frames it never saw.
+   */
+  reset() {
+    this.prevTime = performance.now()
+    this.frames = 0
+  }
+
   /** Advance to the next sub-panel and update which canvas is visible. */
   showNext() {
     this.activeIndex = (this.activeIndex + 1) % this.panels.length
@@ -301,33 +347,26 @@ class Monitor {
 }
 
 
-// Singleton — only constructed when the feature flag is on, so
-// `withPerf`'s wrapped path can dereference it directly without a null
-// check.  Sampling is decoupled from DOM attachment: canvas draws
-// happen on `monitor.end()` whether or not the panel is mounted, which
-// keeps `withPerf`'s wrapper branch-free.
+// Singleton, built on the first `setPerfVisible(true)`.
 let monitor = null
 
 
-if (isPerfEnabled) {
+/** Build the Monitor and the devtools surface. */
+function createMonitor() {
   monitor = new Monitor()
-
-  // Devtools control surface.  Only installed when the flag is on, so
-  // typing `perf` in the console of a normal session is `undefined`.
   window.perf = {
-    /** Show the panel.  Sampling continues regardless of visibility. */
+    /** Show the panel. */
     on() {
-      monitor.dom.style.display = ''
+      setPerfVisible(true)
     },
-    /** Hide the panel.  Sampling continues regardless of visibility. */
+    /** Hide the panel. */
     off() {
-      monitor.dom.style.display = 'none'
+      setPerfVisible(false)
     },
     /** @return {boolean} new visible-state */
     toggle() {
-      const hidden = monitor.dom.style.display === 'none'
-      monitor.dom.style.display = hidden ? '' : 'none'
-      return hidden
+      setPerfVisible(!visible)
+      return visible
     },
     /** @return {number|null} the FPS the panel shows: paints per second */
     fps() {
@@ -337,10 +376,15 @@ if (isPerfEnabled) {
 }
 
 
+if (isPerfEnabled) {
+  setPerfVisible(true)
+}
+
+
 /**
  * Dock the panel inside `parent`.  Called by `PerfToolbarSlot` once
- * the BottomBar has rendered its slot.  No-op when the feature flag
- * is off.
+ * the BottomBar has rendered its slot.  No-op before the panel has been
+ * shown.
  *
  * Safe to call multiple times — `appendChild` of an already-parented
  * node detaches it from its previous parent first.
@@ -358,8 +402,8 @@ export function mountPerfPanel(parent) {
 /**
  * Detach the panel from its current host.  Called by `PerfToolbarSlot`
  * on unmount so React doesn't blow up trying to reconcile a slot whose
- * DOM child it doesn't own.  No-op when the feature flag is off or the
- * panel is already detached.
+ * DOM child it doesn't own.  No-op before the panel has been shown or
+ * when it is already detached.
  */
 export function unmountPerfPanel() {
   if (!monitor) {

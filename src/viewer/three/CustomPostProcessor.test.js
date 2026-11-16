@@ -39,3 +39,53 @@ describe('CustomPostProcessor', () => {
     expect(composer.stableDepthTexture.type).toBe(UnsignedShortType)
   })
 })
+
+
+describe('CustomPostProcessor ambient occlusion (look on, the default)', () => {
+  const build = () => new CustomPostProcessor(fakeRenderer(), new Scene(), new Camera())
+
+  it('builds N8AO before tone mapping and runs it, as the Neutral look asks', () => {
+    const pp = build()
+    const names = pp.getComposer.passes.map((p) => p.constructor.name)
+    expect(pp.getAOMethod()).toBe('n8ao')
+    expect(pp.getAOEnabled()).toBe(true)
+    expect(pp.isAORunning()).toBe(true)
+    // After the RenderPass, before the tone-mapping EffectPass: occlusion
+    // darkens linear colour, then everything is tone-mapped together.
+    const n8ao = pp.getComposer.passes.indexOf(pp._n8aoPass)
+    expect(n8ao).toBeGreaterThan(names.indexOf('RenderPass'))
+    expect(n8ao).toBeLessThan(pp.getComposer.passes.indexOf(pp._toneMappingPass))
+  })
+
+  it('suspends AO for motion without forgetting that it is enabled', () => {
+    const pp = build()
+    pp.setAOSuspended(true)
+    expect(pp.isAORunning()).toBe(false)
+    expect(pp.getAOEnabled()).toBe(true)
+    pp.setAOSuspended(false)
+    expect(pp.isAORunning()).toBe(true)
+  })
+
+  it('stays off after a resume when the look turned AO off', () => {
+    const pp = build()
+    pp.setAOEnabled(false)
+    pp.setAOSuspended(true)
+    pp.setAOSuspended(false)
+    expect(pp.isAORunning()).toBe(false)
+  })
+
+  it('builds SSAO only when picked, inserted before N8AO, and runs one method at a time', () => {
+    const pp = build()
+    expect(pp._ssaoPass).toBeNull()
+    pp.setAOMethod('ssao')
+    const passes = pp.getComposer.passes
+    expect(passes.indexOf(pp._ssaoPass)).toBeLessThan(passes.indexOf(pp._n8aoPass))
+    expect(pp._ssaoPass.enabled).toBe(true)
+    expect(pp._normalPass.enabled).toBe(true)
+    expect(pp._n8aoPass.enabled).toBe(false)
+    pp.setAOMethod('n8ao')
+    expect(pp._ssaoPass.enabled).toBe(false)
+    expect(pp._normalPass.enabled).toBe(false)
+    expect(pp._n8aoPass.enabled).toBe(true)
+  })
+})

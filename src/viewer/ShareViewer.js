@@ -38,7 +38,9 @@ import {occurrencePathKey} from '../utils/occurrencePaths'
 import {modelHasCapability} from './ShareModel'
 import {paintPreviewSelection} from './previewSelection'
 import {paintStreamingSelection, streamingTablesModel} from './streamingBatchPick'
-import {isFeatureEnabled} from '../FeatureFlags'
+import {isLookOn} from './lookMode'
+import {MotionAO} from './motionAO'
+import {isLookPanelWanted} from './debugPanels'
 import {requestPaint} from './three/renderDemand'
 import {viewRules} from './legacyViewRules'
 import {
@@ -215,9 +217,15 @@ export class ShareViewer {
   // Whether the hover showing was painted by a full paint `_askForHoverPaint`
   // asked for, so taking it off needs one too (with the hover overlay only).
   _isHoverPaintedInFull = false
-  // The `?feature=look` lighting/material tuning GUI (LightingGui). Null
-  // unless the flag is set; lazily code-split in (see `_initLookGui`).
+  // The look-tuning panel (LightingGui), built the first time it's shown:
+  // `?feature=look` at startup or the backtick key (debugPanels.js).
   _lookGui = null
+  // Whether the look panel should be up; read by the async build so a hide
+  // that lands before the chunk loads wins.
+  _lookPanelVisible = false
+  // Set by dispose(), so async work that resolves later (the look panel's
+  // chunk) doesn't build on a viewer whose context is gone.
+  _isDisposed = false
   // Current IBL environment selection + PMREM blur, tracked so the
   // `?feature=look` GUI can rebuild the env on a type swap or blur change
   // without losing the other setting.
@@ -280,18 +288,18 @@ export class ShareViewer {
     const scene = this.context.getScene()
     const camera = this.context.getCamera()
     // The whole §6e look — PBR materials + gradient studio IBL + tone-mapping
-    // + retuned lights + the Neutral/Flat profile toggle — sits behind a
-    // single `?feature=look` flag (default OFF), so `main`'s rendering is
-    // unchanged until the flag is flipped (an atomic switch-over).
-    //   · flag ON: leave `outputColorSpace` at the r184 default (SRGBColorSpace)
+    // + retuned lights + AO + the Neutral/Flat profile toggle — is one
+    // decision, `isLookOn()` (lookMode.js): on by default, off with
+    // `?feature=disableLook` or the `disableLook` rollback.
+    //   · look ON: leave `outputColorSpace` at the r184 default (SRGBColorSpace)
     //     so the filmic tone-map (CustomPostProcessor, in the composer) writes
     //     gamma-encoded output, and build the gradient env map for image-based
     //     lighting (scaled by `environmentIntensity`; scene.js dials the direct
     //     lights down to compensate).
-    //   · flag OFF: restore the legacy `LinearSRGBColorSpace` output and skip
-    //     the env map — the pre-§6e pipeline, matching `main` pixel-for-pixel.
+    //   · look OFF: restore the legacy `LinearSRGBColorSpace` output and skip
+    //     the env map — the pre-§6e pipeline.
     // Env build no-ops in tests where getRenderer() returns undefined.
-    if (isFeatureEnabled('look')) {
+    if (isLookOn()) {
       this._buildEnvironment(this._envBlur, this._envType)
       if (renderer) {
         scene.environmentIntensity = ENV_MAP_INTENSITY
@@ -301,6 +309,13 @@ export class ShareViewer {
     }
     this._createGroundPlane()
     this.postProcessor = new CustomPostProcessor(renderer, scene, camera)
+    // Drop AO while the camera moves, before motion residency cuts any
+    // geometry (motionAO.js). Built with the post processor, which owns AO.
+    this._motionAO = new MotionAO(this.postProcessor, {
+      controls: this.context.getCameraControls?.() ?? null,
+      onFrame: (fn) => this.context.onFrame?.(fn) ?? null,
+      renderDemand: this.context.getRenderDemand?.() ?? null,
+    })
     this.highlighter = new IfcHighlighter(this.context, this.postProcessor)
     if (this.highlighter.hoverOverlay) {
       // The overlay turned itself off after a failure (hoverOverlay.js
@@ -323,10 +338,10 @@ export class ShareViewer {
     // call `viewer.clipper.X` and never branch on model type.
     this.clipper = new Clipper(this)
     this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
-    // §6e: opt-in live tuning panel for the filmic look. Off by default;
-    // `?feature=look` pulls in the (otherwise-unbundled) lil-gui panel.
-    if (isFeatureEnabled('look')) {
-      this._initLookGui()
+    // The look-tuning panel, up at startup with `?feature=look` or when the
+    // backtick key left it up on the viewer this one replaces.
+    if (isLookPanelWanted()) {
+      this.setLookPanelVisible(true)
     }
   }
 
@@ -415,7 +430,7 @@ export class ShareViewer {
    */
   _createGroundPlane() {
     const renderer = this.context.getRenderer()
-    if (!renderer || !isFeatureEnabled('look')) {
+    if (!renderer || !isLookOn()) {
       return
     }
     renderer.shadowMap.enabled = true
@@ -554,10 +569,9 @@ export class ShareViewer {
    * @param {string} name a LOOKS key ('neutral' | 'flat')
    */
   applyLook(name) {
-    // The whole §6e look is behind `?feature=look` (default off). No-op when
-    // the flag is off so a stale `renderMode` cookie from a prior flag-on
-    // session can't apply look lights/env over the legacy render.
-    if (!isFeatureEnabled('look')) {
+    // No-op with the look off (`isLookOn()`, lookMode.js) so a `renderMode`
+    // cookie can't apply look lights/env over the legacy render.
+    if (!isLookOn()) {
       return
     }
     const look = LOOKS[name] ? name : DEFAULT_LOOK
@@ -567,6 +581,7 @@ export class ShareViewer {
     this._currentLook = look
     const config = LOOKS[look]
     this.postProcessor?.setToneMappingForLook(config.toneMapping)
+    this.postProcessor?.setAOEnabled(config.ao)
     if (this._envType !== config.envType) {
       this.setEnvironmentType(config.envType)
     }
@@ -623,16 +638,38 @@ export class ShareViewer {
 
 
   /**
-   * Lazily build the `?feature=look` lighting/material tuning panel
-   * (LightingGui, a lil-gui overlay). Dynamic-imported so neither lil-gui
-   * nor the panel lands in the default bundle — only the flag pulls the
-   * chunk. Fire-and-forget: the panel appears a tick after viewer init.
+   * Show or hide the look-tuning panel (debugPanels.js: the backtick key,
+   * `?feature=look`). With the look off (`?feature=disableLook`) there's
+   * nothing for it to tune, so it stays down.
+   *
+   * @param {boolean} visible
+   */
+  setLookPanelVisible(visible) {
+    this._lookPanelVisible = visible === true && isLookOn()
+    if (this._lookGui) {
+      this._lookGui.setVisible(this._lookPanelVisible)
+    } else if (this._lookPanelVisible) {
+      this._initLookGui()
+    }
+  }
+
+
+  /**
+   * Build the look-tuning panel (LightingGui, a lil-gui overlay) on first
+   * show. A dynamic import, though this build inlines it (no code
+   * splitting). Fire-and-forget: the panel appears a tick later.
    *
    * @private
    */
   _initLookGui() {
     import('./three/LightingGui').then(({default: LightingGui}) => {
+      if (this._lookGui || this._isDisposed) {
+        // Built already, or this viewer was disposed meanwhile (a theme
+        // change or StrictMode remount): its context can't give a scene.
+        return
+      }
       this._lookGui = new LightingGui(this)
+      this._lookGui.setVisible(this._lookPanelVisible)
     }).catch((e) => {
       console.warn('LightingGui failed to load:', e)
     })
@@ -656,12 +693,14 @@ export class ShareViewer {
    * @return {Promise<void>}
    */
   async dispose() {
+    this._isDisposed = true
     // Local plugins. Each is null-safe individually so partial-init
     // teardown (e.g. constructor throw mid-build) still works.
     try {
       this._lookGui?.dispose?.()
+      this._motionAO?.dispose()
     } catch (e) {
-      console.warn('lookGui.dispose failed:', e)
+      console.warn('lookGui/motionAO dispose failed:', e)
     }
     try {
       if (this._groundPlane) {

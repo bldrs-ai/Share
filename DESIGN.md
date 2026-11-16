@@ -309,19 +309,22 @@ Perf instrumentation attaches at that seam, not inside the closure:
 context.setRenderUpdate(withPerf(newUpdateFunction(context, getComposer)))
 ```
 
-`withPerf` (in `src/utils/PerfMonitor.js`) is gated on the
-`?feature=perf` URL flag, evaluated once at module load:
+`withPerf` (in `src/utils/PerfMonitor.js`) always wraps the closure;
+whether it samples is the panel's live state (`isPerfVisible`):
 
-- **Flag off (default):** `withPerf(fn)` returns `fn` unchanged. The
-  render closure has no perf code; `window.perf` is not defined; no DOM
-  or sampling state is created. Zero per-frame cost.
-- **Flag on:** `withPerf` returns a wrapper that brackets `fn()` with
-  `monitor.begin()` / `monitor.end(painted)`. The render closure returns
-  whether it painted, and only painted frames count toward FPS and MS, so
-  a viewer painting on demand reads 0 FPS when idle. The Monitor singleton is built
-  at module load but **not** attached to the DOM yet; sampling runs on
-  the offscreen canvases regardless. `window.perf` is installed for
-  show/hide/toggle from devtools.
+- **Hidden (default):** the wrapper calls `fn` after one boolean check and
+  samples nothing. The Monitor (canvases, DOM, `window.perf`) isn't built
+  until the panel is first shown.
+- **Shown:** the wrapper brackets `fn()` with `monitor.begin()` /
+  `monitor.end(painted)`. The render closure returns whether it painted,
+  and only painted frames count toward FPS and MS, so a viewer painting on
+  demand reads 0 FPS when idle.
+- **What shows it:** `?feature=perf` (the overlay alone) or
+  `?feature=look` (with the look panel) at startup, and in any session,
+  prod included, the backtick key, which shows or hides the overlay and
+  the look-tuning panel together (`src/viewer/debugPanels.js`, ignored
+  while typing in a field). `window.perf.on()` / `off()` / `toggle()` /
+  `fps()` exist once it has been shown.
 
 The panel is docked in the bottom bar, immediately left of the
 Help/Bot control — wrapped with that control in a small sub-stack
@@ -332,20 +335,16 @@ app (the real chrome is the `ControlsGroup` / `OperationsGroup` /
 `BottomBar` trio laid out by `RootLandscape`).
 
 `src/Components/PerfToolbarSlot.jsx` is the only React bridge: it
-reads the module-level `isPerfEnabled` exported from `PerfMonitor.js`
-(same source of truth as `window.perf` — synchronous, never lags a
-render the way `useExistInFeature` would), renders a `<Box ref>`, and
-bridges mount/unmount via `mountPerfPanel(slotEl)` /
+follows the panel's live state with `useSyncExternalStore(subscribePerf,
+isPerfVisible)` (the same source of truth as `window.perf` and the
+backtick key), renders a `<Box ref>` while shown, and bridges mount/unmount via `mountPerfPanel(slotEl)` /
 `unmountPerfPanel()` from `PerfMonitor.js`. No mobile gate — the
 panel needs to be visible on mobile (where users can't reach a
 devtools console) and the bottom bar has enough lateral room across
 form factors.
 
-The panel is **on by default** when `?feature=perf` is set — the
-canvas wrapper is created without `display:none` and `mountPerfPanel`
-just `appendChild`s it. `window.perf.off()` / `on()` /  `toggle()`
-remain available for developers who want to hide/show it without
-reloading, and `window.perf.fps()` reads the FPS it shows.
+While shown, `mountPerfPanel` just `appendChild`s the canvas wrapper
+into the slot; hiding unmounts the slot.
 
 Three panels rotate on click — FPS, frame time (ms), JS heap MB (the
 last only where Chromium's `performance.memory` is available). The

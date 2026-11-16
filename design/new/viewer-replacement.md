@@ -1832,28 +1832,60 @@ OBJ uses `OBJLoader`'s own materials, so it's unchanged either way (matches its
 legacy baseline); converting it to Standard for full flag-on uniformity is a
 separate step.
 
-**r187 (2026-11):**
+**r187 and default-on (2026-11, #2167):**
 
-- **The look's IBL is now overexposed.** r187 rewrote `PMREMGenerator`: the
-  CubeUV atlas became a real cube target with prefiltered mips. Under
-  SwiftShader the r184 env map added nothing to the frame. A float readback
-  of Momentum was identical with the env on, off, or at intensity 0. Under
-  r187 it lights the walls to about 2.6 (linear), so with `envIntensity: 2.56`
-  they tone-map to the white background.
-- **Retune before the flag flips.** It is not measured yet whether r184 on a
-  real GPU matched r187. Check a deploy preview, and retune
-  `LOOKS.neutral.envIntensity` before `?feature=look` goes default-on.
-- **AO method selector.** The look GUI's AO folder has one: the pmndrs
-  `SSAOEffect` (default) or N8AO (`n8ao`, `N8AOPostPass`, a screen-space
-  radius of 32 px). N8AO needs no NormalPass. It reads the composer's stable
-  depth and detects log depth itself.
+- **The look is on by default.** `viewer/lookMode.js#isLookOn` is the one
+  predicate every pipeline decision reads (materials and colours in the
+  loaders, lights, output colour space, IBL, tone mapping, AO, the ground
+  plane, the profile menu's Neutral/Flat toggle).
+  - Off for a session with `?feature=disableLook`.
+  - Off prod-wide with `disableLook: isActive: true` in FeatureFlags.js,
+    which a URL can't override.
+  - `?feature=look` no longer switches anything on; it opens the debug
+    panels at startup (below).
+- **Neutral is the owner's pick.** The owner chose it on the #2167 deploy
+  preview, on a real GPU: the look panel's "Neutral CAD" preset (neutral
+  tone, key 1.2, fill 0.6, ambient 0.2, roughness 0.7, metalness 0) with the
+  gradient studio at 0.6, and N8AO on.
+- **Why the old values overexposed.** r187 rewrote `PMREMGenerator`: the
+  CubeUV atlas became a real cube target with prefiltered mips.
+  - Under SwiftShader the r184 env map added nothing to the frame. A float
+    readback of Momentum was identical with the env on, off, or at
+    intensity 0.
+  - Under r187 it lights the walls to about 2.6 (linear), so the r184
+    tuning (`envIntensity: 2.56`, fill 2.3) tone-mapped them to the white
+    background.
+- **AO is N8AO** (`n8ao`, `N8AOPostPass`, a screen-space radius of 32 px).
+  - It's part of a look: `ao` is on for Neutral, off for Flat.
+  - It needs no NormalPass. It reads the composer's stable depth and
+    detects log depth itself.
+  - If it can't be built on a device, the frame renders without AO, and GA
+    gets `ao_unavailable {method, error}`.
+  - The pmndrs `SSAOEffect` stays as a look-panel option, built only when
+    picked.
 - **SSAO barely registers.** On Momentum at default settings it darkens at
   most 10/255 against N8AO's 64, over about 2.5k px against 24.5k. SSAO's
   radius and cutoffs are fractions of normalized depth, which collapse
   under a site-sized far plane.
-- **What N8AO costs.** It is about 107 KB gzipped, and esbuild inlines the
-  dynamic import into `index.js` because this build doesn't split. Gate it at
-  build time before it ships.
+- **AO drops while the camera moves** (`viewer/motionAO.js`). It drops on
+  the same camera-controls `update` that starts motion residency (B3,
+  demand-tiled-rendering.md), before the frame's paint.
+  - So every frame Auto times is AO-free, and geometry is cut only for what
+    the frame costs once AO is gone.
+  - AO comes back at rest (200 ms and three quiet frames, MotionResidency's
+    rule) with a paint.
+  - `debugPanels.spec.ts` checks it at the paint, on desktop and mobile:
+    the first moved frame without AO, and the still frame after with it.
+- **The debug panels.** The look panel and the FPS / ms / MB overlay
+  (DESIGN.md §"Render loop & perf monitor") ship in prod behind the
+  backtick key (`viewer/debugPanels.js`), which shows or hides both.
+  - Ignored while typing in a field.
+  - The panel's state survives the viewer re-creation a theme change does.
+- **What it costs.** N8AO adds about 107 KB gzipped to `index.js`; it's in
+  the default pipeline now, so there is nothing to split out. GPU cost is
+  not measured here: CI and the sandbox render in SwiftShader. N8AO runs only
+  on still frames (on-demand painting, and the motion drop), and the
+  overlay's FPS/ms read is the way to check it on a device.
 - **Fast-SDF-AO, not adopted.** wrong-nebula/Fast-SDF-AO is AO from one baked
   SDF volume over a fixed box, not screen-space. It has no package and no
   stated license. It was considered and doesn't fit Share's models: arbitrary

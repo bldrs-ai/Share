@@ -95,10 +95,10 @@ const PRESETS = {
  * the values in real time, then hits "Log settings" to dump a JSON snapshot
  * to paste back so the chosen numbers can be baked in as the new defaults.
  *
- * Opt-in only: ShareViewer code-splits this module in behind `?feature=look`
- * (see `_initLookGui`), so lil-gui never ships in the default bundle. The
- * continuous render loop (context.js `setAnimationLoop`) repaints every
- * frame, so control changes show immediately — no manual render trigger.
+ * Built on first show (ShareViewer#setLookPanelVisible): `?feature=look` at
+ * startup, or the backtick key in any session (debugPanels.js), which also
+ * hides and shows it. Every change asks for a paint (`gui.onChange` below),
+ * since the viewer paints on demand.
  */
 export default class LightingGui {
   /**
@@ -126,7 +126,7 @@ export default class LightingGui {
       envType: viewer._envType ?? 'gradient',
       aoEnabled: postProcessor?.getAOEnabled?.() ?? true,
       aoStrength: postProcessor?.getAOStrength?.() ?? 1,
-      aoMethod: postProcessor?.getAOMethod?.() ?? 'ssao',
+      aoMethod: postProcessor?.getAOMethod?.() ?? 'n8ao',
       shadowEnabled: viewer._shadowEnabled ?? true,
       shadowOpacity: viewer._groundPlane?.material?.opacity ?? FALLBACK_SHADOW_OPACITY,
     }
@@ -134,6 +134,7 @@ export default class LightingGui {
 
     const gui = new GUI({title: 'Look — §6e filmic'})
     this._gui = gui
+    gui.domElement.dataset.testid = 'look-panel'
     // Every control changes lights, uniforms or the composer, none of which
     // the render-on-demand hooks see: one ask for any change in the panel.
     gui.onChange(() => requestPaint())
@@ -163,10 +164,8 @@ export default class LightingGui {
     const ao = gui.addFolder('Ambient occlusion')
     ao.add(params, 'aoEnabled').name('enabled')
       .onChange((v) => postProcessor?.setAOEnabled(v))
-    // N8AO is imported and built on first pick, so the panel-wide
-    // onChange's paint lands before its pass exists: paint again once live.
-    ao.add(params, 'aoMethod', {'SSAO (postprocessing)': 'ssao', 'N8AO': 'n8ao'}).name('method')
-      .onChange((v) => postProcessor?.setAOMethod(v).then(() => requestPaint()))
+    ao.add(params, 'aoMethod', {'N8AO': 'n8ao', 'SSAO (postprocessing)': 'ssao'}).name('method')
+      .onChange((v) => postProcessor?.setAOMethod(v))
     ao.add(params, 'aoStrength', 0, MATERIAL_MAX, AO_STRENGTH_STEP).name('strength')
       .onChange((v) => postProcessor?.setAOStrength(v))
 
@@ -302,6 +301,16 @@ export default class LightingGui {
 
 
   /** Remove the panel from the DOM. */
+  /**
+   * Show or hide the panel (the backtick key, debugPanels.js).
+   *
+   * @param {boolean} visible
+   */
+  setVisible(visible) {
+    this._gui?.show(visible === true)
+  }
+
+  /** Remove the panel from the page. */
   dispose() {
     this._gui?.destroy?.()
     this._gui = null

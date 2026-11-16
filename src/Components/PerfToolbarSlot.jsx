@@ -1,11 +1,12 @@
-import React, {ReactElement, useEffect, useRef} from 'react'
+import React, {ReactElement, useEffect, useRef, useSyncExternalStore} from 'react'
 import Box from '@mui/material/Box'
-import {isPerfEnabled, mountPerfPanel, unmountPerfPanel} from '../utils/PerfMonitor'
+import {isPerfVisible, mountPerfPanel, subscribePerf, unmountPerfPanel} from '../utils/PerfMonitor'
 
 
 /**
  * Bottom-bar slot that docks the PerfMonitor panel left of the
- * Help/Bot control when the `?feature=perf` flag is on.  Mounted by
+ * Help/Bot control while it is shown (`?feature=perf` or `?feature=look`
+ * at startup, or the backtick key; src/viewer/debugPanels.js).  Mounted by
  * `src/Containers/BottomBar.jsx`.
  *
  * Visible across desktop and mobile — the bottom bar has more lateral
@@ -13,8 +14,8 @@ import {isPerfEnabled, mountPerfPanel, unmountPerfPanel} from '../utils/PerfMoni
  * on mobile (where users can't reach a devtools console to call
  * `window.perf.on()`).
  *
- * Returns `null` only when the flag is off, in which case the bottom
- * bar's layout is byte-for-byte identical to before.
+ * Returns `null` while the panel is hidden, in which case the bottom
+ * bar's layout is byte-for-byte identical to having no panel.
  *
  * The panel itself (canvases + sampling) is owned by
  * `src/utils/PerfMonitor.js`; this component just provides a React-owned
@@ -25,9 +26,10 @@ import {isPerfEnabled, mountPerfPanel, unmountPerfPanel} from '../utils/PerfMoni
  */
 export default function PerfToolbarSlot() {
   const hostRef = useRef(null)
+  const isVisible = useSyncExternalStore(subscribePerf, isPerfVisible)
 
   useEffect(() => {
-    if (!isPerfEnabled || !hostRef.current) {
+    if (!isVisible || !hostRef.current) {
       return undefined
     }
     mountPerfPanel(hostRef.current)
@@ -36,9 +38,9 @@ export default function PerfToolbarSlot() {
       // React doesn't reconcile a child it doesn't own.
       unmountPerfPanel()
     }
-  }, [])
+  }, [isVisible])
 
-  if (!isPerfEnabled) {
+  if (!isVisible) {
     return null
   }
 

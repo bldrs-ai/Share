@@ -119,6 +119,7 @@ import {
 import {elementSelection} from './selection'
 import {partsToPath} from './urls'
 import {initViewer} from './viewer'
+import {installDebugPanelsShortcut} from '../viewer/debugPanels'
 
 
 let count = 0
@@ -2613,6 +2614,12 @@ export default function CadView({
   useEffect(() => {
     setAppPrefix(appPrefix)
   }, [appPrefix, setAppPrefix])
+
+
+  // The debug panels (look tuning + FPS/ms/MB) behind the backtick key, in
+  // prod too (viewer/debugPanels.js). Reads the viewer at keypress, so one
+  // listener serves every viewer a theme change re-creates.
+  useEffect(() => installDebugPanelsShortcut(() => useStore.getState().viewer), [])
 
 
   /* eslint-disable react-hooks/exhaustive-deps */

@@ -1,10 +1,11 @@
 /**
  * Tests for `PerfMonitor`.
  *
- * The module reads `?feature=perf` once at import and runs a
- * side-effect block (constructing the Monitor singleton, installing
- * `window.perf`) only when the flag is on.  To exercise both paths
- * we override `window.location` *before* `jest.resetModules() +
+ * The module reads `?feature=perf` / `?feature=look` once at import and
+ * shows the panel at startup (building the Monitor singleton, installing
+ * `window.perf`) when either is there; otherwise nothing is built until
+ * `setPerfVisible(true)` (the backtick key, debugPanels.js).  To exercise
+ * both paths we override `window.location` *before* `jest.resetModules() +
  * require()`.
  */
 
@@ -37,9 +38,30 @@ describe('PerfMonitor — flag off (default jsdom)', () => {
     expect(mod.isPerfEnabled).toBe(false)
   })
 
-  test('withPerf returns the input function unchanged (zero-cost contract)', () => {
-    const fn = () => 0
-    expect(mod.withPerf(fn)).toBe(fn)
+  test('withPerf wraps, calls through and samples nothing while hidden', () => {
+    const fn = jest.fn(() => true)
+    const wrapped = mod.withPerf(fn)
+    expect(wrapped()).toBe(true)
+    expect(fn).toHaveBeenCalledTimes(1)
+    expect(mod.isPerfVisible()).toBe(false)
+    expect(window.perf).toBeUndefined()
+  })
+
+  test('setPerfVisible(true) builds the panel at runtime and notifies subscribers', () => {
+    const listener = jest.fn()
+    const unsubscribe = mod.subscribePerf(listener)
+    mod.setPerfVisible(true)
+    expect(mod.isPerfVisible()).toBe(true)
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(typeof window.perf.fps).toBe('function')
+    const parent = document.createElement('div')
+    mod.mountPerfPanel(parent)
+    expect(parent.querySelector('#perf-monitor')).not.toBeNull()
+    mod.setPerfVisible(false)
+    expect(mod.isPerfVisible()).toBe(false)
+    expect(listener).toHaveBeenCalledTimes(2)
+    unsubscribe()
+    delete window.perf
   })
 
   test('mountPerfPanel is a no-op', () => {
@@ -134,17 +156,12 @@ describe('PerfMonitor — flag on (?feature=perf)', () => {
     expect(parent.querySelector('#perf-monitor')).toBeNull()
   })
 
-  test('window.perf.toggle flips visibility and returns the new hidden-state', () => {
-    const parent = document.createElement('div')
-    mod.mountPerfPanel(parent)
-    const dom = parent.querySelector('#perf-monitor')
-    expect(dom.style.display).toBe('')
-    const wasHidden1 = window.perf.toggle()
-    expect(wasHidden1).toBe(false)
-    expect(dom.style.display).toBe('none')
-    const wasHidden2 = window.perf.toggle()
-    expect(wasHidden2).toBe(true)
-    expect(dom.style.display).toBe('')
+  test('window.perf.toggle flips visibility and returns the new visible-state', () => {
+    expect(mod.isPerfVisible()).toBe(true)
+    expect(window.perf.toggle()).toBe(false)
+    expect(mod.isPerfVisible()).toBe(false)
+    expect(window.perf.toggle()).toBe(true)
+    expect(mod.isPerfVisible()).toBe(true)
   })
 })
 
@@ -171,6 +188,10 @@ describe('PerfMonitor — flag parsing', () => {
 
   test('is case-insensitive', () => {
     expect(isEnabledFor('?feature=PERF')).toBe(true)
+  })
+
+  test('`look` shows it at startup too (the look panel brings the overlay)', () => {
+    expect(isEnabledFor('?feature=look')).toBe(true)
   })
 
   test('does not match for a different feature', () => {
