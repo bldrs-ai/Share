@@ -40,7 +40,7 @@ import {paintPreviewSelection} from './previewSelection'
 import {paintStreamingSelection, streamingTablesModel} from './streamingBatchPick'
 import {isLookOn} from './lookMode'
 import {MotionAO} from './motionAO'
-import {isLookPanelWanted} from './debugPanels'
+import LightingGui from './three/LightingGui'
 import {requestPaint} from './three/renderDemand'
 import {viewRules} from './legacyViewRules'
 import {
@@ -217,14 +217,11 @@ export class ShareViewer {
   // Whether the hover showing was painted by a full paint `_askForHoverPaint`
   // asked for, so taking it off needs one too (with the hover overlay only).
   _isHoverPaintedInFull = false
-  // The look-tuning panel (LightingGui), built the first time it's shown:
-  // `?feature=look` at startup or the backtick key (debugPanels.js).
+  // The Render panel (LightingGui), built the first time the debug dock
+  // mounts it (`mountLookPanel`; debugPanels.js has when it's shown).
   _lookGui = null
-  // Whether the look panel should be up; read by the async build so a hide
-  // that lands before the chunk loads wins.
-  _lookPanelVisible = false
-  // Set by dispose(), so async work that resolves later (the look panel's
-  // chunk) doesn't build on a viewer whose context is gone.
+  // Set by dispose(), so a dock mount that lands later doesn't build on a
+  // viewer whose context is gone.
   _isDisposed = false
   // Current IBL environment selection + PMREM blur, tracked so the
   // `?feature=look` GUI can rebuild the env on a type swap or blur change
@@ -338,11 +335,6 @@ export class ShareViewer {
     // call `viewer.clipper.X` and never branch on model type.
     this.clipper = new Clipper(this)
     this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
-    // The look-tuning panel, up at startup with `?feature=look` or when the
-    // backtick key left it up on the viewer this one replaces.
-    if (isLookPanelWanted()) {
-      this.setLookPanelVisible(true)
-    }
   }
 
 
@@ -638,41 +630,36 @@ export class ShareViewer {
 
 
   /**
-   * Show or hide the look-tuning panel (debugPanels.js: the backtick key,
-   * `?feature=look`). With the look off (`?feature=disableLook`) there's
-   * nothing for it to tune, so it stays down.
+   * Put the Render panel (LightingGui) into `host`, building it on first use.
+   * Called by the debug dock (Components/DebugDock/DebugDock.jsx) whenever
+   * the panel is shown, so a theme change's new viewer lands in the same
+   * place. With the look off (`?feature=disableLook`) there's nothing for it
+   * to tune, so nothing is mounted.
    *
-   * @param {boolean} visible
+   * @param {HTMLElement} host
+   * @param {Function} [onOpenChange] told `(isOpen)` now and whenever the
+   *   panel is opened or minimised, so the dock can place it
+   * @return {boolean} whether a panel is mounted
    */
-  setLookPanelVisible(visible) {
-    this._lookPanelVisible = visible === true && isLookOn()
-    if (this._lookGui) {
-      this._lookGui.setVisible(this._lookPanelVisible)
-    } else if (this._lookPanelVisible) {
-      this._initLookGui()
+  mountLookPanel(host, onOpenChange = null) {
+    if (!host || this._isDisposed || !isLookOn()) {
+      return false
     }
+    if (!this._lookGui) {
+      this._lookGui = new LightingGui(this, host)
+    } else {
+      this._lookGui.mountInto(host)
+    }
+    this._lookGui.setOpenListener(onOpenChange)
+    onOpenChange?.(this._lookGui.isOpen())
+    return true
   }
 
 
-  /**
-   * Build the look-tuning panel (LightingGui, a lil-gui overlay) on first
-   * show. A dynamic import, though this build inlines it (no code
-   * splitting). Fire-and-forget: the panel appears a tick later.
-   *
-   * @private
-   */
-  _initLookGui() {
-    import('./three/LightingGui').then(({default: LightingGui}) => {
-      if (this._lookGui || this._isDisposed) {
-        // Built already, or this viewer was disposed meanwhile (a theme
-        // change or StrictMode remount): its context can't give a scene.
-        return
-      }
-      this._lookGui = new LightingGui(this)
-      this._lookGui.setVisible(this._lookPanelVisible)
-    }).catch((e) => {
-      console.warn('LightingGui failed to load:', e)
-    })
+  /** Take the Render panel off the page (the dock hid it); kept for reuse. */
+  unmountLookPanel() {
+    this._lookGui?.setOpenListener(null)
+    this._lookGui?.unmount()
   }
 
 

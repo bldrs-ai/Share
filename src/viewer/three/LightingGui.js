@@ -43,13 +43,9 @@ const AO_STRENGTH_STEP = 0.05
 const FALLBACK_SHADOW_OPACITY = 0.35
 
 
-// Panel inset so the GUI rides inside the app chrome instead of lil-gui's
-// default flush top:0/right:0 — which overlaps the top-right control buttons
-// (OperationsGroup: profile/apps/share + the notes column down the right
-// edge). Top clears the control row; right clears the right-edge column.
-// Tune if the toolbar geometry changes.
-const PANEL_INSET_TOP = '64px'
-const PANEL_INSET_RIGHT = '64px'
+// The panel's height cap in the debug dock: it opens upward from the window
+// bottom, so leave the top control row clear and scroll past that.
+const PANEL_MAX_HEIGHT = 'calc(100dvh - 96px)'
 
 
 // IBL environment sources offered in the dropdown (label → ShareViewer type).
@@ -105,8 +101,10 @@ export default class LightingGui {
    * @param {object} viewer the ShareViewer instance — for its `context`
    *   (scene + loaded models), `postProcessor` (tone mapping), and
    *   `setEnvironmentBlur`.
+   * @param {HTMLElement} container the debug dock's host for this panel
+   *   (lil-gui then skips its own fixed top-right placement)
    */
-  constructor(viewer) {
+  constructor(viewer, container) {
     this._viewer = viewer
     this._scene = viewer.context.getScene()
     this._postProcessor = viewer.postProcessor
@@ -132,18 +130,31 @@ export default class LightingGui {
     }
     const params = this._params
 
-    const gui = new GUI({title: 'Look — §6e filmic'})
+    // The title bar is lil-gui's own open/close toggle, which is the panel's
+    // minimise: closed, only the bar shows, docked at the window bottom.
+    const gui = new GUI({title: 'Render', container})
     this._gui = gui
-    gui.domElement.dataset.testid = 'look-panel'
+    gui.domElement.dataset.testid = 'render-panel'
     // Every control changes lights, uniforms or the composer, none of which
     // the render-on-demand hooks see: one ask for any change in the panel.
     gui.onChange(() => requestPaint())
-    // Inset the auto-placed panel inside the app chrome (below the top
-    // control row, clear of the right-edge buttons); scroll if it runs tall.
-    gui.domElement.style.top = PANEL_INSET_TOP
-    gui.domElement.style.right = PANEL_INSET_RIGHT
-    gui.domElement.style.maxHeight = `calc(100dvh - ${PANEL_INSET_TOP} - 24px)`
+    gui.domElement.style.maxHeight = PANEL_MAX_HEIGHT
     gui.domElement.style.overflowY = 'auto'
+    // The dock places the panel by whether it's open (expanded above the
+    // Elements control) or closed (its title bar at the window bottom).
+    // three's bundled lil-gui has no onOpenClose: the title click toggles a
+    // `closed` class on the root, so that is what's watched.
+    this._openListener = null
+    this._wasOpen = !gui._closed
+    this._classObserver = typeof MutationObserver === 'undefined' ? null :
+      new MutationObserver(() => {
+        const isOpen = !gui._closed
+        if (isOpen !== this._wasOpen) {
+          this._wasOpen = isOpen
+          this._openListener?.(isOpen)
+        }
+      })
+    this._classObserver?.observe(gui.domElement, {attributes: true, attributeFilter: ['class']})
 
     const tone = gui.addFolder('Tone mapping')
     tone.add(params, 'toneMapping', TONE_MODES).name('operator')
@@ -300,18 +311,40 @@ export default class LightingGui {
   }
 
 
-  /** Remove the panel from the DOM. */
   /**
-   * Show or hide the panel (the backtick key, debugPanels.js).
+   * Move the panel into `host` (a re-rendered dock).
    *
-   * @param {boolean} visible
+   * @param {HTMLElement} host
    */
-  setVisible(visible) {
-    this._gui?.show(visible === true)
+  mountInto(host) {
+    if (this._gui && host) {
+      host.appendChild(this._gui.domElement)
+    }
+  }
+
+  /** @return {boolean} whether the panel is open (not minimised) */
+  isOpen() {
+    return Boolean(this._gui) && !this._gui._closed
+  }
+
+  /**
+   * Tell `fn(isOpen)` when the panel is opened or minimised (its title bar).
+   *
+   * @param {Function|null} fn
+   */
+  setOpenListener(fn) {
+    this._openListener = fn
+  }
+
+  /** Take the panel off the page, keeping its state for the next mount. */
+  unmount() {
+    this._gui?.domElement.remove()
   }
 
   /** Remove the panel from the page. */
   dispose() {
+    this._classObserver?.disconnect()
+    this._classObserver = null
     this._gui?.destroy?.()
     this._gui = null
   }

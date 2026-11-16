@@ -3,44 +3,70 @@ import {isPerfVisible, setPerfVisible} from '../utils/PerfMonitor'
 
 
 /**
- * The debug panels: the look-tuning panel (LightingGui, a lil-gui overlay
- * built by ShareViewer) and the FPS / ms / MB overlay (utils/PerfMonitor.js,
- * docked in the bottom bar). Kept in prod, behind the backtick key, which
- * shows or hides both together. `?feature=look` opens both at startup;
- * `?feature=perf` the overlay alone, as before.
+ * The debug panels: Perf (FPS / ms / MB graphs and the renderer's counts,
+ * utils/PerfMonitor.js) and Render (the look-tuning panel, LightingGui),
+ * side by side in the debug dock (Components/DebugDock/DebugDock.jsx).
+ * Kept in prod: the backtick key shows or hides both together, and the
+ * Display menu's "Render..." opens Render alone. `?feature=look` opens both
+ * at startup; `?feature=perf` Perf alone, as before.
  *
- * Whether the look panel is wanted lives here, not on the viewer, because a
- * theme change re-creates the viewer (CadView's theme listener) and the new
- * one should come up as the old one was. The overlay's state lives in
- * PerfMonitor, which outlives viewers already.
+ * Perf's shown state lives in PerfMonitor; Render's lives here, outside the
+ * viewer, because a theme change re-creates the viewer (CadView's theme
+ * listener) and the new one should come up as the old one was. The dock
+ * mounts the Render panel into itself for whichever viewer is current.
  */
 
 export const DEBUG_PANELS_KEY = '`'
 
-let lookPanelWanted = null
+let renderShown = null
+const listeners = new Set()
 
 
-/** @return {boolean} whether the look panel should be shown */
-export function isLookPanelWanted() {
-  if (lookPanelWanted === null) {
-    lookPanelWanted = isFeatureEnabled('look')
+/** @return {boolean} whether the Render panel is shown */
+export function isRenderPanelShown() {
+  if (renderShown === null) {
+    renderShown = isFeatureEnabled('look')
   }
-  return lookPanelWanted
+  return renderShown
+}
+
+
+/**
+ * Show or hide the Render panel.
+ *
+ * @param {boolean} shown
+ */
+export function setRenderPanelShown(shown) {
+  shown = shown === true
+  if (shown === isRenderPanelShown()) {
+    return
+  }
+  renderShown = shown
+  listeners.forEach((fn) => fn())
+}
+
+
+/**
+ * Subscribe to the Render panel's show/hide (for `useSyncExternalStore`).
+ *
+ * @param {Function} fn
+ * @return {Function} unsubscribe
+ */
+export function subscribeRenderPanel(fn) {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
 }
 
 
 /**
  * Show or hide both panels: hide them if either is up, else show both.
  *
- * @param {object|null} viewer the current ShareViewer, or null before one
- *   exists (the overlay still toggles; the look panel follows the next one)
  * @return {boolean} whether the panels are now shown
  */
-export function toggleDebugPanels(viewer) {
-  const show = !(isPerfVisible() || isLookPanelWanted())
-  lookPanelWanted = show
+export function toggleDebugPanels() {
+  const show = !(isPerfVisible() || isRenderPanelShown())
   setPerfVisible(show)
-  viewer?.setLookPanelVisible?.(show)
+  setRenderPanelShown(show)
   return show
 }
 
@@ -60,14 +86,13 @@ function isTypingTarget(target) {
 
 /**
  * Listen for the backtick key on `win` and toggle the panels. Ignored while
- * typing in a field (a note, search, the assistant's chat), with a modifier
- * held, and on key repeat.
+ * typing in a field (a note, search, the assistant's chat, a Render panel
+ * number), with a modifier held, and on key repeat.
  *
- * @param {Function} getViewer returns the current ShareViewer or null
  * @param {object} [win] the window to listen on
  * @return {Function} removes the listener
  */
-export function installDebugPanelsShortcut(getViewer, win = window) {
+export function installDebugPanelsShortcut(win = window) {
   const onKeyDown = (event) => {
     if (event.key !== DEBUG_PANELS_KEY || event.repeat ||
         event.ctrlKey || event.metaKey || event.altKey ||
@@ -75,14 +100,14 @@ export function installDebugPanelsShortcut(getViewer, win = window) {
       return
     }
     event.preventDefault()
-    toggleDebugPanels(getViewer())
+    toggleDebugPanels()
   }
   win.addEventListener('keydown', onKeyDown)
   return () => win.removeEventListener('keydown', onKeyDown)
 }
 
 
-/** Test-only: forget the look-panel state so the URL is read again. */
+/** Test-only: forget the Render panel state so the URL is read again. */
 export function resetDebugPanelsForTest() {
-  lookPanelWanted = null
+  renderShown = null
 }

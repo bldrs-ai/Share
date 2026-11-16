@@ -1,3 +1,4 @@
+/* eslint-disable no-magic-numbers */
 /**
  * Tests for `PerfMonitor`.
  *
@@ -200,5 +201,80 @@ describe('PerfMonitor — flag parsing', () => {
 
   test('does not match when the `feature` param is absent', () => {
     expect(isEnabledFor('?foo=bar')).toBe(false)
+  })
+})
+
+
+describe('PerfMonitor — renderer counts and summary', () => {
+  let mod
+  let clock
+  let nowSpy
+
+  beforeEach(() => {
+    setLocationSearch('')
+    delete window.perf
+    clock = 1000
+    nowSpy = jest.spyOn(performance, 'now').mockImplementation(() => clock)
+    jest.resetModules()
+    mod = require('./PerfMonitor')
+  })
+
+  afterEach(() => {
+    nowSpy.mockRestore()
+    delete window.perf
+  })
+
+  /** @return {object} a stand-in for three's WebGLRenderer#info */
+  function fakeInfo() {
+    return {
+      autoReset: true,
+      memory: {geometries: 7, textures: 3},
+      render: {calls: 0, triangles: 0},
+      reset() {
+        this.render.calls = 0
+        this.render.triangles = 0
+      },
+    }
+  }
+
+  test('sums draw calls and triangles over the whole painted frame, not its last pass', () => {
+    const info = fakeInfo()
+    const passes = [{calls: 40, triangles: 9000}, {calls: 1, triangles: 2}, {calls: 1, triangles: 2}]
+    const wrapped = mod.withPerf(() => {
+      // A composer frame: several renderer.render calls, which with
+      // auto-reset off add up.
+      passes.forEach((p) => {
+        info.render.calls += p.calls
+        info.render.triangles += p.triangles
+      })
+      return true
+    }, () => ({info}))
+    mod.setPerfVisible(true)
+    clock += 16
+    wrapped()
+    expect(info.autoReset).toBe(false)
+    clock += 1000
+    wrapped()
+    const stats = mod.getPerfStats()
+    expect(stats.calls).toBe(42)
+    expect(stats.triangles).toBe(9004)
+    expect(stats.geometries).toBe(7)
+    expect(stats.textures).toBe(3)
+  })
+
+  test('puts the renderer\'s auto-reset back once hidden', () => {
+    const info = fakeInfo()
+    const wrapped = mod.withPerf(() => true, () => ({info}))
+    mod.setPerfVisible(true)
+    wrapped()
+    expect(info.autoReset).toBe(false)
+    mod.setPerfVisible(false)
+    wrapped()
+    expect(info.autoReset).toBe(true)
+  })
+
+  test('formats the minimised summary as fps/ms/MB, with – for what isn\'t measured', () => {
+    expect(mod.formatPerfSummary({fps: 59.6, ms: 16.4, mb: 120.2})).toBe('60/16/120')
+    expect(mod.formatPerfSummary({fps: null, ms: null, mb: null})).toBe('–/–/–')
   })
 })

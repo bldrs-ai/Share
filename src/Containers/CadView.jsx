@@ -2616,10 +2616,9 @@ export default function CadView({
   }, [appPrefix, setAppPrefix])
 
 
-  // The debug panels (look tuning + FPS/ms/MB) behind the backtick key, in
-  // prod too (viewer/debugPanels.js). Reads the viewer at keypress, so one
-  // listener serves every viewer a theme change re-creates.
-  useEffect(() => installDebugPanelsShortcut(() => useStore.getState().viewer), [])
+  // The debug panels (Perf + Render) behind the backtick key, in prod too
+  // (viewer/debugPanels.js; the dock is Components/DebugDock).
+  useEffect(() => installDebugPanelsShortcut(), [])
 
 
   /* eslint-disable react-hooks/exhaustive-deps */

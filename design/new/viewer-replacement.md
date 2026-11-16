@@ -1876,11 +1876,19 @@ separate step.
     rule) with a paint.
   - `debugPanels.spec.ts` checks it at the paint, on desktop and mobile:
     the first moved frame without AO, and the still frame after with it.
-- **The debug panels.** The look panel and the FPS / ms / MB overlay
-  (DESIGN.md §"Render loop & perf monitor") ship in prod behind the
-  backtick key (`viewer/debugPanels.js`), which shows or hides both.
-  - Ignored while typing in a field.
-  - The panel's state survives the viewer re-creation a theme change does.
+- **The debug panels.** Perf (FPS / ms / MB graphs, plus geometries,
+  textures, draw calls and triangles) and Render (the look panel,
+  `LightingGui`, retitled) sit side by side in the debug dock
+  (`Components/DebugDock/DebugDock.jsx`). They ship in prod.
+  - The backtick key shows or hides both (`viewer/debugPanels.js`), and is
+    ignored while typing in a field.
+  - The Display menu's last item, "Render...", opens Render alone.
+  - Each panel minimises to its title bar on the window bottom. Expanded, it
+    sits on top of the bottom bar's Elements control.
+  - Both use the theme. lil-gui is themed through its CSS variables,
+    scoped to the dock.
+  - The Render panel's state survives the viewer re-creation a theme change
+    does: the dock re-mounts it into the new viewer.
 - **What it costs.** N8AO adds about 107 KB gzipped to `index.js`; it's in
   the default pipeline now, so there is nothing to split out. GPU cost is
   not measured here: CI and the sandbox render in SwiftShader. N8AO runs only

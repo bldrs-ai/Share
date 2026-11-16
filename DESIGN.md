@@ -321,35 +321,48 @@ whether it samples is the panel's live state (`isPerfVisible`):
   demand reads 0 FPS when idle.
 - **What shows it:** `?feature=perf` (the overlay alone) or
   `?feature=look` (with the look panel) at startup, and in any session,
-  prod included, the backtick key, which shows or hides the overlay and
-  the look-tuning panel together (`src/viewer/debugPanels.js`, ignored
-  while typing in a field). `window.perf.on()` / `off()` / `toggle()` /
+  prod included, the backtick key, which shows or hides Perf and the Render
+  panel together (`src/viewer/debugPanels.js`, ignored while typing in a
+  field). `window.perf.on()` / `off()` / `toggle()` /
   `fps()` exist once it has been shown.
 
-The panel is docked in the bottom bar, immediately left of the
-Help/Bot control — wrapped with that control in a small sub-stack
-inside `src/Containers/BottomBar.jsx` so the outer
-`justifyContent='space-between'` doesn't float perf into the middle
-of the bar. `src/Components/AppBar.jsx` is *not* used by the running
-app (the real chrome is the `ControlsGroup` / `OperationsGroup` /
-`BottomBar` trio laid out by `RootLandscape`).
+The panel lives in the **debug dock** (`src/Components/DebugDock/DebugDock.jsx`,
+rendered by `RootLandscape`).
+- **Order:** Perf, then the Render panel (the look-tuning lil-gui,
+  `LightingGui`), left to right, fixed and centred over the bottom bar's
+  Elements control.
+- **Minimise:** each panel minimises to its title bar.
+  - Minimised, the bar sits on the window's bottom edge.
+  - Expanded, the panel lifts to sit on top of the Elements control,
+    measured from its box at runtime, so the control stays usable under it.
+  - Perf's minimised title shows `fps/ms/MB`.
+- **Theme:** both take the app theme. That's the drawers' translucent ground
+  and blur, the theme's text and type, and the accent colour for the graphs
+  and values; lil-gui is themed through its CSS variables, scoped to the
+  dock.
+- **Opening:** `src/viewer/debugPanels.js` holds Render's shown state and the
+  backtick key; the Display menu's "Render..." opens Render alone.
+- **No mobile gate:** the dock works on phones too, where there's no devtools
+  console.
 
-`src/Components/PerfToolbarSlot.jsx` is the only React bridge: it
-follows the panel's live state with `useSyncExternalStore(subscribePerf,
-isPerfVisible)` (the same source of truth as `window.perf` and the
-backtick key), renders a `<Box ref>` while shown, and bridges mount/unmount via `mountPerfPanel(slotEl)` /
-`unmountPerfPanel()` from `PerfMonitor.js`. No mobile gate — the
-panel needs to be visible on mobile (where users can't reach a
-devtools console) and the bottom bar has enough lateral room across
-form factors.
+The dock follows Perf's live state with
+`useSyncExternalStore(subscribePerf, isPerfVisible)`, the same source of
+truth as `window.perf` and the backtick key. It docks the graphs with
+`mountPerfPanel(el)` / `unmountPerfPanel()`, and shows the numbers from
+`getPerfStats()` (`subscribePerfStats`, about once a second).
 
-While shown, `mountPerfPanel` just `appendChild`s the canvas wrapper
-into the slot; hiding unmounts the slot.
-
-Three panels rotate on click — FPS, frame time (ms), JS heap MB (the
-last only where Chromium's `performance.memory` is available). The
-module is a minimal port of mrdoob's stats.js — the panel the three.js
-examples use.
+Expanded, Perf shows three graphs side by side and four counts:
+- **Graphs:** FPS, frame time (ms), and JS heap MB (the last only where
+  Chromium's `performance.memory` is available). The graph module is a
+  minimal port of mrdoob's stats.js, the panel the three.js examples use.
+- **Counts:** the renderer's geometries and textures resident on the GPU,
+  plus the last painted frame's draw calls and triangles.
+  - three resets `renderer.info.render` on every `renderer.render()`, and a
+    composer frame is several of them.
+  - So while Perf is shown, `withPerf` turns `info.autoReset` off, reads the
+    totals after each painted frame and resets them itself.
+  - It puts auto-reset back when hidden.
+  - The counts therefore include the post passes' full-screen draws.
 
 Offscreen renders (screenshots taken via
 `ShareViewer.takeScreenshot()` -> `IfcRenderer.newScreenshot`) are

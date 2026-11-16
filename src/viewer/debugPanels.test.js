@@ -1,8 +1,10 @@
 import {isPerfVisible, setPerfVisible} from '../utils/PerfMonitor'
 import {
   installDebugPanelsShortcut,
-  isLookPanelWanted,
+  isRenderPanelShown,
   resetDebugPanelsForTest,
+  setRenderPanelShown,
+  subscribeRenderPanel,
   toggleDebugPanels,
 } from './debugPanels'
 
@@ -17,38 +19,45 @@ function press(init = {}, target = window) {
 
 
 describe('viewer/debugPanels', () => {
-  let viewer
   let remove
 
   beforeEach(() => {
     resetDebugPanelsForTest()
     setPerfVisible(false)
-    viewer = {setLookPanelVisible: jest.fn()}
-    remove = installDebugPanelsShortcut(() => viewer)
+    remove = installDebugPanelsShortcut()
   })
 
   afterEach(() => {
     remove()
     setPerfVisible(false)
+    setRenderPanelShown(false)
     delete window.perf
   })
 
   it('backtick shows both panels, and again hides both', () => {
     press()
     expect(isPerfVisible()).toBe(true)
-    expect(viewer.setLookPanelVisible).toHaveBeenLastCalledWith(true)
-    expect(isLookPanelWanted()).toBe(true)
+    expect(isRenderPanelShown()).toBe(true)
     press()
     expect(isPerfVisible()).toBe(false)
-    expect(viewer.setLookPanelVisible).toHaveBeenLastCalledWith(false)
-    expect(isLookPanelWanted()).toBe(false)
+    expect(isRenderPanelShown()).toBe(false)
   })
 
-  it('hides both when only one was up (?feature=perf started the overlay alone)', () => {
-    setPerfVisible(true)
-    expect(toggleDebugPanels(viewer)).toBe(false)
+  it('hides both when only one was up (Display > Render... opened Render alone)', () => {
+    setRenderPanelShown(true)
+    expect(toggleDebugPanels()).toBe(false)
     expect(isPerfVisible()).toBe(false)
-    expect(viewer.setLookPanelVisible).toHaveBeenLastCalledWith(false)
+    expect(isRenderPanelShown()).toBe(false)
+  })
+
+  it('tells subscribers when the Render panel is shown or hidden, once per change', () => {
+    const listener = jest.fn()
+    const unsubscribe = subscribeRenderPanel(listener)
+    setRenderPanelShown(true)
+    setRenderPanelShown(true)
+    setRenderPanelShown(false)
+    expect(listener).toHaveBeenCalledTimes(2)
+    unsubscribe()
   })
 
   it('ignores typing in a field, modifiers and key repeat', () => {
@@ -59,14 +68,8 @@ describe('viewer/debugPanels', () => {
     press({metaKey: true})
     press({repeat: true})
     expect(isPerfVisible()).toBe(false)
-    expect(viewer.setLookPanelVisible).not.toHaveBeenCalled()
+    expect(isRenderPanelShown()).toBe(false)
     input.remove()
-  })
-
-  it('still toggles the overlay before any viewer exists', () => {
-    viewer = null
-    press()
-    expect(isPerfVisible()).toBe(true)
   })
 
   it('stops listening once removed', () => {

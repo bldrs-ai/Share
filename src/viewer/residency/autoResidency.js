@@ -47,8 +47,16 @@
  * 13.3 ms leaves too few triangles. A full frame (16.7 ms; the step aims at
  * ~14.2 ms) is about 2.3 M triangles — PSB at 25% (2.36 M, measured
  * 14.4 ms), which is the trade-off the owner found good.
+ *
+ * Doubled to 2 (33 ms at 60 Hz, i.e. Auto holds ~30 fps while moving) on the
+ * owner's #2167 preview check: with the §6e look on by default (PBR
+ * materials, so every moving frame costs more than the Lambert frames the
+ * value above was tuned on), the hosted index.ifc mostly vanished while
+ * orbiting. AO is already off while moving (viewer/motionAO.js), so what Auto
+ * times is the PBR frame without it. A first step to re-check on the
+ * preview, not a measured optimum.
  */
-export const BUDGET_SHARE = 1
+export const BUDGET_SHARE = 2
 /**
  * Never keep less than this while moving: the model must not vanish, and
  * below about a tenth the orbit stops being legible as the model at all

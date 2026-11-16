@@ -2,7 +2,7 @@
 // Page-context reads of the app's dev handles (`window.store`), untyped in
 // the test's TypeScript, as hoverPick.spec.ts does.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import {Page, expect, test} from '@playwright/test'
+import {Locator, Page, expect, test} from '@playwright/test'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
 import {waitForModelReady} from '../tests/e2e/models'
 import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
@@ -10,8 +10,8 @@ import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
 
 const {beforeEach} = test
 
-const LOOK_PANEL = '[data-testid="look-panel"]'
-const PERF_SLOT = '[data-testid="perf-toolbar-slot"]'
+const RENDER_PANEL = '[data-testid="render-panel"]'
+const PERF_PANEL = '[data-testid="perf-panel"]'
 
 
 /**
@@ -27,27 +27,59 @@ describeMobileAndDesktop('viewer/debugPanels', () => {
   })
 
 
-  test('backtick shows the look panel and the FPS overlay, and hides them again', async ({page}) => {
+  test('backtick docks Perf then Render above the Elements control, and hides them again', async ({page}) => {
     await page.goto('/share/v/p/index.ifc')
     await waitForModelReady(page)
-    await expect(page.locator(LOOK_PANEL)).toHaveCount(0)
-    await expect(page.locator(PERF_SLOT)).toHaveCount(0)
+    await expect(page.locator(RENDER_PANEL)).toHaveCount(0)
+    await expect(page.locator(PERF_PANEL)).toHaveCount(0)
 
     await page.keyboard.press('`')
-    await expect(page.locator(LOOK_PANEL)).toBeVisible()
-    await expect(page.locator(PERF_SLOT).locator('#perf-monitor canvas').first()).toBeVisible()
+    await expect(page.locator(RENDER_PANEL)).toBeVisible()
+    await expect(page.locator(PERF_PANEL).locator('#perf-monitor canvas').first()).toBeVisible()
+    await expect(page.getByTestId('perf-panel-counts')).toContainText('Draw calls')
+    // Left to right: Perf, then Render.
+    const perfBox = await boxOf(page.locator(PERF_PANEL))
+    const renderBox = await boxOf(page.locator(RENDER_PANEL))
+    expect(perfBox.x + perfBox.width).toBeLessThanOrEqual(renderBox.x + 1)
+    // Expanded, both sit on top of the Elements control, clear of it.
+    const controlTop = (await boxOf(page.getByTestId('element-group'))).y
+    expect(perfBox.y + perfBox.height).toBeLessThanOrEqual(controlTop)
+    expect(renderBox.y + renderBox.height).toBeLessThanOrEqual(controlTop)
 
     await page.keyboard.press('`')
-    await expect(page.locator(LOOK_PANEL)).toBeHidden()
-    await expect(page.locator(PERF_SLOT)).toHaveCount(0)
+    await expect(page.locator(RENDER_PANEL)).toHaveCount(0)
+    await expect(page.locator(PERF_PANEL)).toHaveCount(0)
+  })
+
+
+  test('Perf minimises to fps/ms/MB on the window bottom', async ({page}) => {
+    await page.goto('/share/v/p/index.ifc')
+    await waitForModelReady(page)
+    await page.keyboard.press('`')
+    await page.getByTestId('perf-panel-title').click()
+    await expect(page.getByTestId('perf-panel-counts')).toHaveCount(0)
+    await expect(page.getByTestId('perf-panel-summary')).toHaveText(/^\S+\/\S+\/\S+$/)
+    const box = await boxOf(page.locator(PERF_PANEL))
+    const viewportHeight = page.viewportSize()?.height ?? 0
+    expect(Math.abs(box.y + box.height - viewportHeight), 'the minimised bar sits on the window bottom').toBeLessThanOrEqual(1)
+  })
+
+
+  test('Display > Render... opens the Render panel', async ({page}) => {
+    await page.goto('/share/v/p/index.ifc')
+    await waitForModelReady(page)
+    await page.getByTestId('control-button-residency').click()
+    await page.getByTestId('display-render').click()
+    await expect(page.locator(RENDER_PANEL)).toBeVisible()
+    await expect(page.locator(RENDER_PANEL)).toContainText('Render')
   })
 
 
   test('?feature=look opens both panels at startup', async ({page}) => {
     await page.goto('/share/v/p/index.ifc?feature=look')
     await waitForModelReady(page)
-    await expect(page.locator(LOOK_PANEL)).toBeVisible()
-    await expect(page.locator(PERF_SLOT).locator('#perf-monitor')).toBeVisible()
+    await expect(page.locator(RENDER_PANEL)).toBeVisible()
+    await expect(page.locator(PERF_PANEL).locator('#perf-monitor')).toBeVisible()
   })
 
 
@@ -110,4 +142,17 @@ async function recordPaints(page: Page) {
       },
     })
   })
+}
+
+
+/**
+ * @param locator
+ * @return its bounding box; throws when it isn't laid out
+ */
+async function boxOf(locator: Locator): Promise<{x: number, y: number, width: number, height: number}> {
+  const box = await locator.boundingBox()
+  if (box === null) {
+    throw new Error('boxOf: element is not laid out')
+  }
+  return box
 }
