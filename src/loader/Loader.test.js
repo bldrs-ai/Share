@@ -2,10 +2,11 @@ import {DecompressionStream as NodeDecompressionStream} from 'node:stream/web'
 import {gzipSync} from 'node:zlib'
 import {Box3, Object3D, Mesh, BufferGeometry, Material, BufferAttribute, Raycaster, Vector3} from 'three'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
-import {zipSync} from 'three/examples/jsm/libs/fflate.module.js'
+import {unzipSync, zipSync} from 'three/examples/jsm/libs/fflate.module.js'
 import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
 import * as contentHash from '../utils/contentHash'
+import {dicomSeriesToNrrd, groupSeries, parseDicomSlice} from './dicom'
 import {load, readModel} from './Loader'
 
 
@@ -252,6 +253,30 @@ describe('Loader', () => {
       const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
       expect(model).toBeDefined()
       expect(model).toMatchSnapshot()
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  it('loads an NRRD volume, as the one a zip of DICOM slices is stacked into', async () => {
+    // Built as the archive seam builds it, from pydicom's phantom series.
+    const zip = unzipSync(new Uint8Array(readTestDataFile('dicom/phantom-ct.zip', true)))
+    const slices = Object.entries(zip).filter(([p]) => !p.endsWith('.txt')).map(([, b]) => parseDicomSlice(b))
+    const nrrd = dicomSeriesToNrrd(groupSeries(slices)[0])
+    const restoreArrayBuffer = setupMockBlobWithContent(Buffer.from(nrrd))
+    try {
+      const model = await load(testPathToUrl('dicom/phantom-ct.nrrd'), mockViewer, jest.fn(), true, jest.fn(), '')
+      const volume = model.children.find((child) => child.userData.isVolume)
+      expect(volume.name).toBe('CT 40 × 48 × 32')
+      // The NavTree label and a pick id, which convertToShareModel gives it.
+      expect(volume.Name).toEqual({value: 'CT 40 × 48 × 32'})
+      expect(Number.isSafeInteger(volume.expressID)).toBe(true)
+      expect(volume.material.uniforms.map.value.image.depth).toBe(32) // eslint-disable-line no-magic-numbers
+      // A raycast from the camera's side hits the box, so it can be picked.
+      model.updateMatrixWorld(true)
+      const center = new Box3().setFromObject(model).getCenter(new Vector3())
+      const ray = new Raycaster(center.clone().add(new Vector3(0, 0, 1)), new Vector3(0, 0, -1))
+      expect(ray.intersectObject(model, true).map((hit) => hit.object)).toContain(volume)
     } finally {
       restoreArrayBuffer()
     }

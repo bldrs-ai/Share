@@ -240,6 +240,105 @@ GLB cache. `routes.test.ts` and
 of one model, a drop and a pick of several, and a drop of none.
 
 
+## A DICOM series becomes one NRRD
+
+CT and MR scans leave the scanner as a folder of DICOM files, one per
+slice, and reach users zipped. Share opens such a zip as a volume, in
+three steps, each a module:
+
+1. **Detect the slices** — `loader/modelArchive.js#dicomVolume`, at the
+   archive seam. It runs only for an archive with **no model in it** (an
+   `.ifc` beside the slices wins). Candidates are entries named `.dcm`,
+   `.dicom`, `.dic`, `.ima`, with no extension (`IM0001`, the most common
+   scanner export), or with an all-digit extension (files named by their
+   SOP Instance UID, `1.2.840.113619.2.55.3`). Each is inflated against the
+   upload's one 512 MiB budget and kept only if it has the Part 10 preamble
+   and `DICM`. A DICOM file with no pixel data (a DICOMDIR, a report) is
+   skipped. A slice that can't be read is skipped too, as long as some
+   other slice can be.
+2. **Stack them into one NRRD** — `loader/dicom.js`. A small reader for
+   the uncompressed transfer syntaxes (implicit and explicit VR little
+   endian, which scanners and PACS exports write by default) reads each
+   slice's geometry, pixel format and rescale, and skips everything else,
+   nested sequences included. Slices are grouped by Series Instance UID,
+   image size and orientation, and the **largest series** opens, because a
+   study export carries a few-slice scout beside the scan. They're ordered
+   by `ImagePositionPatient` along the slice normal (row × column), not by
+   `InstanceNumber`. The slice gap is the median of the position
+   differences, never `SliceThickness`, which is the thickness of the cut
+   and differs from the gap in overlapping reconstructions. The output is
+   an NRRD in real units (`short` for Hounsfield; `float` when the rescale
+   isn't integral or a `short` would wrap), in `left-posterior-superior`
+   with the scanner's `space directions` and `space origin`, and a
+   `modality:=CT` key/value pair. The seam hands it on as a `File` named
+   for the archive (`CT1.zip` → `CT1.nrrd`), typed `nrrd`, so OPFS holds
+   `<uuid>.nrrd`, and recents and reloads see an NRRD.
+3. **Render it** — `nrrd` is an ordinary format: a `supportedTypes` entry
+   (sniffed by its `NRRD000` version line), a `findLoader` arm with three's
+   `NRRDLoader`, and an `UNSTRUCTURED_MESH` capability set, so a `.nrrd`
+   file opens on its own the same way. The
+   fixup, `loader/nrrd.js`, windows the voxels to 8 bits (a normalized
+   8-bit 3D texture filters linearly on every WebGL2 device, while 16-bit
+   needs `EXT_texture_norm16`). A CT gets a fixed Hounsfield window with
+   opacity ramping from 150 to 900 HU (bone, with tissue faint). Any other
+   volume ramps from its histogram's Otsu threshold to its 99th
+   percentile. The voxels go into a `Data3DTexture`, resampled past 512 on
+   any edge, which a box ray-marches in its fragment shader. It composites
+   front to back, lit by the gradient, and stops when nearly opaque. The
+   box draws its back faces, so it still renders with the camera inside.
+   It is placed where the scanner put the volume: millimetres to metres,
+   and LPS to the scene's Y-up, superior up and anterior toward the
+   default camera. That is a rotation, so the patient is never mirrored.
+
+**Two traps, both commented where they bite.**
+
+- The box's placement is **baked into its vertices** and the inverse
+  handed to the shader (`sceneToBox`), not set on the Mesh's transform.
+  `Loader#readModel` hoists the first child's geometry onto a geometry-less
+  root, and a unit cube there would add a 1 m box at the origin to every
+  bounds Share takes of the model, so fit-to-frame would be wrong.
+- `NRRDLoader` (three r184) cuts the header **one character short** of the
+  blank line that ends it (`_parseChars(_bytes, 0, i - 2)`). The NRRD
+  `dicom.js` writes therefore ends with a comment line for it to eat;
+  before that, `modality:=CT` came back as `=C`.
+
+**Refused, with the reason in the archive dialog** (as a
+`ZipArchiveError`, so an `unrecognizedFormat` alert with
+`archive.problem`, the same path as any unreadable archive):
+
+- compressed transfer syntaxes (JPEG, JPEG-LS, JPEG 2000, RLE, deflate),
+  which have no small browser decoder;
+- color (`SamplesPerPixel` ≠ 1), multi-frame files, and bit depths other
+  than 8 and 16;
+- slices that differ in size, and damaged or truncated files.
+
+**Out of scope, and what happens.** A DICOM zip on GitHub or Drive is not
+routed, like any `.zip` (§"An archive is not a format either"). A lone
+`.dcm` is not a format (`dcm` isn't in `supportedTypes`), so it's refused
+as an unknown type; zip it. ACR-NEMA files without the Part 10 preamble
+aren't recognized, nor is big-endian explicit VR. A series past the
+512 MiB inflate budget (about 1000 slices of 512 × 512 × 16-bit) is
+refused as too large. Several series in one zip don't put up the
+chooser: the largest opens. The volume has no transfer-function UI yet;
+the window and ramp are the material's `ramp` uniform. The shader
+doesn't read clipping planes, so a cut plane doesn't cut the volume, and
+the display controls' wireframe mode just draws the box's edges.
+
+**Tests.** `dicom.test.js` reads pydicom-written series in both transfer
+syntaxes (`testdata/models/dicom/`, generated by
+`tools/models/makeDicomPhantom.py`). It covers each refusal, ordering by
+position over instance number, the gap from positions, and voxel values
+checked through three's own `NRRDLoader`. `nrrd.test.js` covers
+placement in the scene, axis orientation (the phantom's off-centre sphere
+lands on the viewer's right), windowing and resampling.
+`modelArchive.test.js` covers detection at the seam (UID-named and `.DCM`
+entries, a model beside the slices winning, a compressed series ending in
+the dialog). `Loader.test.js` covers a `.nrrd` through `load()`, including
+that the volume can be picked. E2E: `loader/dicom.spec.ts`, desktop and
+mobile, drops and picks the phantom zip and checks the volume changes a
+real WebGL2 frame.
+
+
 ## 2. Wire the loader — `src/loader/Loader.js#findLoader`
 
 Add a `case` returning the tuple

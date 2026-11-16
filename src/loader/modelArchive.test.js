@@ -1,7 +1,10 @@
 /* eslint-disable no-magic-numbers */
 // Which entry of an archive is the model, and what each seam is told — over
 // archives written by fflate's `zipSync`, not by the code under test.
-import {zipSync} from 'three/examples/jsm/libs/fflate.module.js'
+import fs from 'fs'
+import path from 'path'
+import {NRRDLoader} from 'three/examples/jsm/loaders/NRRDLoader.js'
+import {unzipSync, zipSync} from 'three/examples/jsm/libs/fflate.module.js'
 import {
   ARCHIVE_ENTRY_CHOICE,
   noModelInArchiveAlert,
@@ -263,6 +266,64 @@ describe('modelArchive', () => {
       new DataView(stl.buffer).setUint32(80, 1, true)
       const stlFile = upload(stl, 'part.stl')
       expect(summary(await resolveArchiveUpload(stlFile), stlFile)).toEqual({kind: 'model', name: 'part.stl', isInput: true})
+    })
+  })
+
+  describe('a DICOM series', () => {
+    // pydicom's phantom (tools/models/makeDicomPhantom.py): 32 extension-less
+    // slices in shuffled order, a one-slice scout series and a README.
+    const phantom = () => new Uint8Array(fs.readFileSync(
+      path.join(__dirname, '../../testdata/models/dicom/phantom-ct.zip')))
+
+    it('is stacked into one .nrrd named for the archive, from the largest series', async () => {
+      const resolved = await resolveArchiveUpload(upload(phantom(), 'CT1.zip'))
+      expect(summary(resolved)).toEqual({kind: 'model', ext: 'nrrd', name: 'CT1.nrrd', isInput: false})
+      expect(resolved.file.lastModified).toBe(PICKED_AT)
+      // The File and `bytes` are the same NRRD, which three's loader reads
+      // as the 40 × 48 × 32 scan, not the 16 × 16 scout.
+      expect((await textOf(resolved.file)).startsWith('NRRD0004\n')).toBe(true)
+      const volume = new NRRDLoader().parse(resolved.bytes.buffer)
+      expect(volume.dimensions).toEqual([40, 48, 32])
+    })
+
+    it('loses to a model in the same archive', async () => {
+      const zip = zipSync({...unzipSync(phantom()), 'Tower.ifc': IFC})
+      expect(summary(await resolveArchiveUpload(upload(zip, 'CT1.zip'))))
+        .toEqual({kind: 'model', ext: 'ifc', name: 'Tower.ifc', isInput: false})
+    })
+
+    it('reads slices named by UID, and .dcm, and leaves extension-less files that aren\'t DICOM', async () => {
+      const slices = Object.entries(unzipSync(phantom())).filter(([p]) => p.includes('/DICOM/'))
+      const renamed = Object.fromEntries(slices.map(([, bytes], k) =>
+        [k % 2 ? `1.2.840.113619.2.55.${k}` : `slice${k}.DCM`, bytes]))
+      const resolved = await resolveArchiveUpload(upload(zipSync({...renamed, LICENSE: PDF}), 'study.zip'))
+      expect(summary(resolved)).toEqual({kind: 'model', ext: 'nrrd', name: 'study.nrrd', isInput: false})
+      expect(new NRRDLoader().parse(resolved.bytes.buffer).dimensions).toEqual([40, 48, 32])
+    })
+
+    it('ends a compressed series in the dialog, with the reason', async () => {
+      // The phantom's first slice, re-labelled RLE Lossless (a UID of the
+      // same length, so the element's length still holds). Its pixel data
+      // is still raw, but the reader refuses on the transfer syntax first.
+      const [slice] = Object.values(unzipSync(phantom())).filter((b) => b.length > 1000)
+      const relabelled = slice.slice()
+      const text = new TextDecoder('latin1').decode(relabelled)
+      const at = text.indexOf('1.2.840.10008.1.2.1')
+      relabelled.set(new TextEncoder().encode('1.2.840.10008.1.2.5'), at)
+      const alert = jest.fn()
+      const outcome = await openUploadThroughArchive(upload(zipSync({IM0001: relabelled}), 'CT1.zip'),
+        {entry: 'drop', alert, open: jest.fn()})
+      expect(outcome).toBe('refused')
+      expect(alert.mock.calls[0][0].archive.problem).toMatch(/compressed \(transfer syntax 1\.2\.840\.10008\.1\.2\.5\)/)
+    })
+
+    it('reaches the seam\'s open typed nrrd', async () => {
+      const open = jest.fn()
+      const outcome = await openUploadThroughArchive(upload(phantom(), 'CT1.zip'),
+        {entry: 'picker', alert: jest.fn(), open})
+      expect(outcome).toBe('opening')
+      expect(open.mock.calls[0][0].name).toBe('CT1.nrrd')
+      expect(open.mock.calls[0][1]).toBe('nrrd')
     })
   })
 
