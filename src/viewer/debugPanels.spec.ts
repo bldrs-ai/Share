@@ -118,7 +118,7 @@ describeMobileAndDesktop('viewer/debugPanels', () => {
     await page.mouse.up()
 
     // Rest is 200 ms and three quiet frames after the last camera change
-    // (MotionResidency's rule), then a 250 ms fade-in; SwiftShader frames are
+    // (MotionResidency's rule), then a 500 ms fade-in; SwiftShader frames are
     // slow.
     await expect.poll(() => page.evaluate(() => (window as any).store.getState().viewer.postProcessor.getAOLevel()),
       {timeout: 15_000}).toBe(1)

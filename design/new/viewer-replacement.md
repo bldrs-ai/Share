@@ -1869,8 +1869,8 @@ separate step.
   under a site-sized far plane.
 - **AO fades while the camera moves** (`viewer/motionAO.js`). It fades out
   over 100 ms from the same camera-controls `update` that starts motion
-  residency (B3, demand-tiled-rendering.md), and back in over 250 ms at
-  rest (200 ms and three quiet frames, MotionResidency's rule). A load drops
+  residency (B3, demand-tiled-rendering.md), and back in over 500 ms at
+  rest (250 ms at first; the owner found it still abrupt) (200 ms and three quiet frames, MotionResidency's rule). A load drops
   it at once, and the finished model fades it in.
   - **Why fades:** the owner found the cut on and off jarring, on index.ifc
     especially. The level scales AO's strength

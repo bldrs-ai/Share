@@ -5,7 +5,8 @@ import {requestPaint} from './three/renderDemand'
 /** How long AO takes to fade out when the camera starts moving. */
 export const FADE_OUT_MS = 100
 /** How long AO takes to fade back in at rest, or once a load ends. */
-export const FADE_IN_MS = 250
+// 500, not the first cut's 250: the owner found 250 still read as a pop.
+export const FADE_IN_MS = 500
 
 
 /**

@@ -55,8 +55,13 @@
  * orbiting. AO is already off while moving (viewer/motionAO.js), so what Auto
  * times is the PBR frame without it. A first step to re-check on the
  * preview, not a measured optimum.
+ *
+ * Doubled again to 4 (67 ms at 60 Hz, ~15 fps while moving) on the owner's
+ * next check of that preview: index.ifc was still evicting while orbiting at
+ * 2. Auto now cuts geometry only once a moving frame costs four display
+ * intervals.
  */
-export const BUDGET_SHARE = 2
+export const BUDGET_SHARE = 4
 /**
  * Never keep less than this while moving: the model must not vanish, and
  * below about a tenth the orbit stops being legible as the model at all
