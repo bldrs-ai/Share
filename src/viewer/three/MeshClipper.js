@@ -87,10 +87,8 @@ export default class MeshClipper {
     // previous implementation allocated 5x Vector3 + 1x Plane per
     // tick, which at 60Hz dragging meant ~360 allocations/sec.
     this._scratchCameraDir = new Vector3()
-    this._scratchDragPlane = new Plane()
     this._scratchIntersection = new Vector3()
     this._scratchMovement = new Vector3()
-    this._scratchNormalScaled = new Vector3()
     this._scratchNewPoint = new Vector3()
 
     // The arrows fade out when left alone and come back on activity near
@@ -101,6 +99,9 @@ export default class MeshClipper {
     // The pointer dragging an arrow, so a second touch (a pinch) can't move
     // or release it; null for a mouse event without one (tests).
     this._dragPointerId = null
+    // The drag in progress: its fixed drag plane, the start point and offset,
+    // and where along the normal the press landed (onMouseDown).
+    this._drag = null
 
     // Bind event handlers
     this.onMouseDown = this.onMouseDown.bind(this)
@@ -354,6 +355,7 @@ export default class MeshClipper {
       window.removeEventListener('pointerup', this.onMouseUp)
       window.removeEventListener('pointercancel', this.onMouseUp)
       this._dragPointerId = null
+      this._drag = null
       this.draggingArrow = null
       this.hoveredArrow = null
       this.interactionEnabled = false
@@ -587,6 +589,17 @@ export default class MeshClipper {
     // Only this pointer moves the arrow.
     this._dragPointerId = event.pointerId ?? null
     this._fade.hold('drag')
+    // Where along the normal the press landed, so the moves can be measured
+    // from it (onMouseMove).
+    this.viewer.context.getCamera().getWorldDirection(this._scratchCameraDir)
+    this._drag = {
+      plane: new Plane().setFromNormalAndCoplanarPoint(this._scratchCameraDir, planeData.point),
+      startPoint: planeData.point.clone(),
+      startOffset: planeData.offset ?? 0,
+      unitNormal: planeData.normal.clone().normalize(),
+      grabAlong: null,
+    }
+    this._drag.grabAlong = this._pointerAlongNormal()
     // Picks see this (pickControls.js): while the arrow is dragged, no
     // hover or click lands on the model, wherever the pointer gets to.
     // Re-run the hover pick now so a highlight from before the press
@@ -633,6 +646,28 @@ export default class MeshClipper {
 
 
   /**
+   * Where the pointer's ray meets the drag's plane, as a distance along the
+   * dragged plane's normal from where the plane was at the press. The drag
+   * plane faces the camera through that start point and stays put for the
+   * whole drag (the camera can't move during one). The raycaster is already
+   * set from the event.
+   *
+   * @return {number|null} null when the ray is parallel to the drag plane
+   * @private
+   */
+  _pointerAlongNormal() {
+    const drag = this._drag
+    // Ray.intersectPlane returns `target` on hit, `null` on miss (ray
+    // parallel to plane); don't trust the always-present scratch object.
+    const hit = this.raycaster.ray.intersectPlane(drag.plane, this._scratchIntersection)
+    if (!hit) {
+      return null
+    }
+    return this._scratchMovement.copy(hit).sub(drag.startPoint).dot(drag.unitNormal)
+  }
+
+
+  /**
    * Pointer move handler - update plane position if dragging
    *
    * @param {PointerEvent} event
@@ -662,23 +697,23 @@ export default class MeshClipper {
     }
 
     // Drag path. Pre-allocated scratch (see constructor comment).
-    this.viewer.context.getCamera().getWorldDirection(this._scratchCameraDir)
-    this._scratchDragPlane.setFromNormalAndCoplanarPoint(this._scratchCameraDir, this.draggingArrow.point)
-
-    // Ray.intersectPlane returns `target` on hit, `null` on miss
-    // (ray parallel to plane). The result is the canonical hit-test;
-    // do NOT trust `_scratchIntersection` truthiness — it's an
-    // always-present scratch object.
-    const hit = this.raycaster.ray.intersectPlane(this._scratchDragPlane, this._scratchIntersection)
-    if (!hit) {
+    const along = this._pointerAlongNormal()
+    if (along === null) {
       return
     }
-
-    this._scratchMovement.copy(this._scratchIntersection).sub(this.draggingArrow.point)
-    const projectedMovement = this._scratchMovement.dot(this.draggingArrow.normal) * this.draggingArrow.normal.length()
-
-    this._scratchNormalScaled.copy(this.draggingArrow.normal).multiplyScalar(projectedMovement)
-    this._scratchNewPoint.copy(this.draggingArrow.point).add(this._scratchNormalScaled)
+    const drag = this._drag
+    if (drag.grabAlong === null) {
+      // The press's ray missed the drag plane (parallel to it): this first
+      // move is where the grab counts from.
+      drag.grabAlong = along
+      return
+    }
+    // How far the pointer has moved along the normal since the press, not
+    // where it is: the plane moves by exactly that, so a grab at the tip
+    // doesn't first pull the plane out to the tip (owner on #2171: "it
+    // shouldn't matter where I grab the arrow").
+    const delta = along - drag.grabAlong
+    this._scratchNewPoint.copy(drag.startPoint).addScaledVector(drag.unitNormal, delta)
 
     this.draggingArrow.point.copy(this._scratchNewPoint)
     this.draggingArrow.plane.setFromNormalAndCoplanarPoint(
@@ -686,7 +721,7 @@ export default class MeshClipper {
       this._scratchNewPoint,
     )
     this.draggingArrow.arrow.position.copy(this._scratchNewPoint)
-    this.draggingArrow.offset += projectedMovement
+    this.draggingArrow.offset = drag.startOffset + delta
 
     // No tree walk + no renderer rebind here — the plane object is
     // already bound to renderer.clippingPlanes and to each material's
@@ -763,6 +798,7 @@ export default class MeshClipper {
     this.draggingArrow.arrow.userData.isDragging = false
     this.setArrowColor(this.draggingArrow.arrow, this.draggingArrow.arrow.userData.defaultColor)
     this.draggingArrow = null
+    this._drag = null
     this._fade.release('drag')
   }
 

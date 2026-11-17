@@ -355,6 +355,23 @@ describeMobileAndDesktop('Cutplanes: the arrow', (ff) => {
       .toBeCloseTo(after.constant, 2)
   })
 
+  // Owner on #2171: grabbed at a tip, the plane jumped out to the tip as
+  // the drag began. It moves by the pointer's travel along the normal, so a
+  // move straight across the arrow from its tip moves it not at all.
+  test('doesn\'t jump to where on the arrow it was grabbed', async ({page}) => {
+    await openModel(page, IFC_MODEL)
+    await addSectionCut(page)
+    await viewObliquely(page)
+    const {tip, across, tipDistance} = await arrowTipAndAcross(page)
+    const before = await planeState(page)
+    const during = await dragArrow(page, tip, across, ff.isMobile)
+    expect(during.color, 'the arrow is grabbed at its tip').toBe(ARROW_HIGHLIGHT)
+    const moved = Math.abs((await planeState(page)).constant - before.constant)
+    // Without the fix it moves by the tip's distance from the plane.
+    expect(moved, `the plane moved ${moved} of the tip's ${tipDistance}`).toBeLessThan(tipDistance * TIP_JUMP_TOLERANCE)
+  })
+
+
   test('is drawn over a hovered element in front of it', async ({page}) => {
     await openModel(page, IFC_MODEL)
     const centre = await canvasCentre(page)
@@ -418,6 +435,12 @@ const ARROW_HIGHLIGHT = 0xffff00
 const FADED_CHANNEL_DELTA = 60
 // Longer than arrowFade.js's IDLE_MS + FADE_OUT_MS (3.4 s).
 const FADE_TIMEOUT_MS = 8000
+// Where on the arrow to grab it near a tip, as a fraction of its half length:
+// on the head's base, its widest part (CutPlaneArrowHelper's head spans 0.75
+// to 1 of the half length).
+const TIP_ALONG_HALF_LENGTH = 0.78
+// How much of the tip's distance the plane may move on a move across it.
+const TIP_JUMP_TOLERANCE = 0.1
 // How far beside the arrow a hover can be and keep it shown (< NEAR_PX).
 const BESIDE_ARROW_PX = 20
 // A view at a slant to the Section cut, so its arrow (along x) is seen side-on
@@ -526,6 +549,45 @@ async function arrowDragPoints(page: Page): Promise<{start: {x: number, y: numbe
     /* eslint-enable @typescript-eslint/no-explicit-any */
   }, {dragPx: DRAG_PX, probe: NORMAL_PROBE})
   return points
+}
+
+
+/**
+ * A point on the arrow's head toward its tip, and a point {@link DRAG_PX}
+ * from it straight across the arrow on screen (perpendicular to the plane's
+ * normal as projected).
+ *
+ * @param page
+ * @return the two page points, and the world distance from the plane to the grabbed point
+ */
+async function arrowTipAndAcross(page: Page): Promise<{
+  tip: {x: number, y: number}, across: {x: number, y: number}, tipDistance: number,
+}> {
+  return await page.evaluate(({dragPx, alongTip}) => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const viewer = (window as any).store.getState().viewer
+    const planeData = viewer.clipper.planes[0]
+    const arrow = planeData.arrow
+    const camera = viewer.context.getCamera()
+    const rect = viewer.context.getDomElement().getBoundingClientRect()
+    const toPage = (v: any) => {
+      const ndc = v.clone().project(camera)
+      return {x: rect.left + (((ndc.x + 1) / 2) * rect.width), y: rect.top + (((1 - ndc.y) / 2) * rect.height)}
+    }
+    // The arrow points along its local +y (CutPlaneArrowHelper), scaled.
+    const tipDistance = arrow.halfLength * alongTip * arrow.scale.x
+    const direction = planeData.plane.normal.clone().normalize()
+    const tipWorld = arrow.position.clone().addScaledVector(direction, tipDistance)
+    const awayWorld = arrow.position.clone().addScaledVector(direction, -tipDistance)
+    // Whichever end is nearer the camera, so the press lands on its head.
+    const useTip = tipWorld.distanceTo(camera.position) <= awayWorld.distanceTo(camera.position)
+    const tip = toPage(useTip ? tipWorld : awayWorld)
+    const centre = toPage(arrow.position)
+    const length = Math.hypot(tip.x - centre.x, tip.y - centre.y)
+    const across = {x: tip.x - ((tip.y - centre.y) / length * dragPx), y: tip.y + ((tip.x - centre.x) / length * dragPx)}
+    return {tip, across, tipDistance}
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  }, {dragPx: DRAG_PX, alongTip: TIP_ALONG_HALF_LENGTH})
 }
 
 

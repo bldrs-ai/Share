@@ -325,6 +325,37 @@ describe('viewer/three/MeshClipper', () => {
       expect(planeData.arrow.material.color.getHex()).toBe(0x0000ff)
     })
 
+    // Owner on #2171: grabbed at a tip, the plane jumped out to the tip on
+    // the first move. The plane moves by how far the pointer moves along
+    // the normal, wherever on the arrow the grab landed.
+    it('moves the plane by the pointer\'s travel, not to where the grab landed', () => {
+      /**
+       * @param {number} grabX where along the arrow (horizontal on screen) to press
+       * @return {Array<number>} the plane's constant after a move straight down, then 30 px along it
+       */
+      const dragFrom = (grabX) => {
+        const {clipper, planeData, canvas} = makeClipper()
+        const before = planeData.plane.constant
+        pointer(canvas, 'pointerdown', grabX, 300, 'touch')
+        expect(clipper.draggingArrow).toBe(planeData)
+        pointer(canvas, 'pointermove', grabX, 320, 'touch')
+        const across = planeData.plane.constant - before
+        pointer(canvas, 'pointermove', grabX + 30, 320, 'touch')
+        const along = planeData.plane.constant - before
+        window.dispatchEvent(new MouseEvent('pointerup'))
+        return [across, along]
+      }
+      const [tipAcross, tipAlong] = dragFrom(425)
+      const [centreAcross, centreAlong] = dragFrom(400)
+      // A move across the normal moves nothing, from the tip as from the centre.
+      expect(tipAcross).toBeCloseTo(0, 6)
+      expect(centreAcross).toBeCloseTo(0, 6)
+      // The same travel along it moves the plane the same, wherever the grab.
+      expect(Math.abs(tipAlong)).toBeGreaterThan(0.1)
+      expect(tipAlong).toBeCloseTo(centreAlong, 6)
+    })
+
+
     it('is not grabbed by a touch far from it, nor by a mouse beside the shaft', () => {
       const {clipper, canvas} = makeClipper()
       pointer(canvas, 'pointerdown', 450, 400, 'touch')
