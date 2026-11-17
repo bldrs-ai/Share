@@ -40,9 +40,16 @@ function fakePostProcessor(enabled = true) {
  * @param {object} [opts]
  * @return {object} a MotionAO wired to fakes, plus the fakes
  */
-function setup({enabled = true, follow = false} = {}) {
+function setup({enabled = true, follow = false, shadowShowing = false} = {}) {
   let t = 0
   const shadowMap = {autoUpdate: true, needsUpdate: false}
+  const shadow = {
+    level: 1,
+    setShadowLevel(v) {
+      this.level = v
+    },
+    isShadowShowing: () => shadowShowing,
+  }
   const frames = []
   const controls = fakeControls()
   const pp = fakePostProcessor(enabled)
@@ -58,12 +65,13 @@ function setup({enabled = true, follow = false} = {}) {
     now: () => t,
     paint,
     shadowMap,
+    shadow,
   })
   const frame = (dtMs = 16) => {
     t += dtMs
     frames.forEach((fn) => fn())
   }
-  return {motion, controls, pp, paint, frame, frames, renderDemand, shadowMap}
+  return {motion, controls, pp, paint, frame, frames, renderDemand, shadowMap, shadow}
 }
 
 
@@ -214,5 +222,27 @@ describe('viewer/motionAO', () => {
     expect(s.shadowMap.autoUpdate).toBe(false)
     rest(s)
     expect(s.shadowMap.autoUpdate).toBe(true)
+  })
+
+  it('fades the contact shadow on the same tween as AO', () => {
+    const s = setup({shadowShowing: true})
+    s.controls.update()
+    s.frame(FADE_OUT_MS / 2)
+    expect(s.shadow.level).toBe(s.pp.level)
+    expect(s.shadow.level).toBeGreaterThan(0)
+    expect(s.shadow.level).toBeLessThan(1)
+    drag(s, 3, FADE_OUT_MS)
+    expect(s.shadow.level).toBe(0)
+    rest(s)
+    s.frame(FADE_IN_MS)
+    expect(s.shadow.level).toBe(1)
+  })
+
+  it('paints the shadow\'s fade even with AO off', () => {
+    const s = setup({enabled: false, shadowShowing: true})
+    s.motion.shadowMap = null
+    s.controls.update()
+    s.frame(FADE_OUT_MS / 2)
+    expect(s.paint).toHaveBeenCalled()
   })
 })

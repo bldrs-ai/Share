@@ -242,6 +242,10 @@ export class ShareViewer {
   // survives model reloads. Starts as the default look's.
   _groundPlane = null
   _shadowEnabled = LOOKS[DEFAULT_LOOK].shadow === true
+  // The shadow's set darkness (the Render panel's opacity), and the share of
+  // it shown now: MotionAO fades the shadow on AO's tween (`setShadowLevel`).
+  _shadowOpacity = DEFAULT_SHADOW_OPACITY
+  _shadowLevel = 1
   // Current render "look" (LOOKS key). Applied by `applyLook` and persisted by
   // the profile-menu toggle; the default is also baked into the construction
   // constants so the first paint is correct before any apply call.
@@ -331,6 +335,7 @@ export class ShareViewer {
     // before motion residency cuts any geometry (motionAO.js). Built with the
     // post processor, which owns AO.
     this._motionAO = new MotionAO(this.postProcessor, {
+      shadow: this,
       controls: this.context.getCameraControls?.() ?? null,
       onFrame: (fn) => this.context.onFrame?.(fn) ?? null,
       renderDemand: this.context.getRenderDemand?.() ?? null,
@@ -513,7 +518,7 @@ export class ShareViewer {
     const groundSize = maxXZ * GROUND_SIZE_FACTOR
     this._groundPlane.scale.set(groundSize, groundSize, 1)
     this._groundPlane.position.set(center.x, box.min.y, center.z)
-    this._groundPlane.visible = this._shadowEnabled
+    this._applyShadowLevel()
     const scene = this.context.getScene()
     const key = scene.getObjectByName('keyLight')
     if (key) {
@@ -563,9 +568,7 @@ export class ShareViewer {
    */
   setShadowEnabled(enabled) {
     this._shadowEnabled = enabled
-    if (this._groundPlane) {
-      this._groundPlane.visible = enabled
-    }
+    this._applyShadowLevel()
     const key = this.context.getScene()?.getObjectByName?.('keyLight')
     // Only with a ground to cast onto: none is built where the shadow can't
     // be drawn (`_createGroundPlane`).
@@ -583,10 +586,52 @@ export class ShareViewer {
    * @param {number} opacity
    */
   setShadowOpacity(opacity) {
-    if (this._groundPlane?.material) {
-      this._groundPlane.material.opacity = opacity
-    }
+    this._shadowOpacity = opacity
+    this._applyShadowLevel()
     requestPaint()
+  }
+
+
+  /** @return {number} the contact shadow's set darkness (not the faded one) */
+  getShadowOpacity() {
+    return this._shadowOpacity
+  }
+
+
+  /**
+   * Show this share (0..1) of the contact shadow's darkness. MotionAO fades it
+   * with AO (motionAO.js): out while the camera moves or a model loads, back
+   * in at rest. At 0 the ground isn't drawn at all. The caller paints.
+   *
+   * @param {number} level
+   */
+  setShadowLevel(level) {
+    this._shadowLevel = Math.min(1, Math.max(0, Number(level) || 0))
+    this._applyShadowLevel()
+  }
+
+
+  /** @return {boolean} whether the contact shadow is on and can be drawn */
+  isShadowShowing() {
+    return this._groundPlane !== null && this._shadowEnabled === true
+  }
+
+
+  /**
+   * The ground's visibility and opacity from the toggle, the set darkness and
+   * the fade level.
+   *
+   * @private
+   */
+  _applyShadowLevel() {
+    const ground = this._groundPlane
+    if (!ground) {
+      return
+    }
+    ground.visible = this._shadowEnabled && this._shadowLevel > 0
+    if (ground.material) {
+      ground.material.opacity = this._shadowOpacity * this._shadowLevel
+    }
   }
 
 
