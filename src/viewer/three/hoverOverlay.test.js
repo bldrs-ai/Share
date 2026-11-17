@@ -1,7 +1,7 @@
 import {NormalPass, RenderPass} from 'postprocessing'
 import {
   AmbientLight, BatchedMesh, BoxGeometry, DirectionalLight, Group, Matrix4, Mesh, MeshBasicMaterial,
-  MeshLambertMaterial, PerspectiveCamera, Plane, Scene, Vector3, Vector4,
+  MeshLambertMaterial, MeshPhysicalMaterial, PerspectiveCamera, Plane, Scene, Vector3, Vector4,
 } from 'three'
 import HoverOverlay, {
   OVERLAY_LAYER, drawInstances, installDrawList, isEligible, swapInColor,
@@ -523,12 +523,20 @@ describe('viewer/three/hoverOverlay: HoverOverlay', () => {
 
   it('declines a hover it can\'t draw, so the caller recolours', () => {
     const {overlay} = makeOverlay()
-    const glass = makeBatch(2, new MeshLambertMaterial({transparent: true, opacity: 0.4}))
-    expect(isEligible(glass)).toBe(false)
+    const transmissive = makeBatch(2, new MeshPhysicalMaterial({transmission: 0.9}))
+    expect(isEligible(transmissive)).toBe(false)
     expect(isEligible(makeBatch())).toBe(true)
     expect(isEligible(new Mesh())).toBe(false)
-    expect(overlay.setHover(() => [{mesh: glass, batchIds: [0]}], {r: 1, g: 0, b: 0})).toBe(false)
+    expect(overlay.setHover(() => [{mesh: transmissive, batchIds: [0]}], {r: 1, g: 0, b: 0})).toBe(false)
     expect(overlay.hasHover()).toBe(false)
+  })
+
+  it('draws a glass hover: only the hovered pane, tinted (no full repaint)', () => {
+    const {overlay} = makeOverlay()
+    const glass = makeBatch(2, new MeshLambertMaterial({transparent: true, opacity: 0.4}))
+    expect(isEligible(glass)).toBe(true)
+    expect(overlay.setHover(() => [{mesh: glass, batchIds: [0]}], {r: 1, g: 0, b: 0})).toBe(true)
+    expect(overlay.hasHover()).toBe(true)
   })
 
   it('asks for an overlay paint when the hover changes or clears, and only then', () => {

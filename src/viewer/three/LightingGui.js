@@ -121,7 +121,7 @@ export default class LightingGui {
       aoStrength: postProcessor?.getAOStrength?.() ?? 1,
       aoMethod: postProcessor?.getAOMethod?.() ?? 'n8ao',
       shadowEnabled: viewer._shadowEnabled ?? true,
-      shadowOpacity: viewer._groundPlane?.material?.opacity ?? FALLBACK_SHADOW_OPACITY,
+      shadowOpacity: viewer.getShadowOpacity?.() ?? FALLBACK_SHADOW_OPACITY,
     }
     const params = this._params
 
