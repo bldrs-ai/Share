@@ -2,7 +2,7 @@
 import {Group, Mesh, BoxGeometry, MeshBasicMaterial, PerspectiveCamera, Plane, Sphere, Vector3} from 'three'
 import MeshClipper from './MeshClipper'
 import RenderDemand from './renderDemand'
-import {TOUCH_FADE_FLOOR} from './arrowFade'
+import {FADE_OUT_MS, IDLE_MS} from './arrowFade'
 
 
 /**
@@ -231,36 +231,79 @@ describe('viewer/three/MeshClipper', () => {
       canvas.dispatchEvent(event)
     }
 
-    it('starts opaque, fades with distance from the pointer, and asks for a paint only on a change', () => {
-      const {planeData, canvas} = makeClipper()
-      const material = planeData.arrow.material
-      expect(material.transparent).toBe(true)
-      expect(material.opacity).toBe(1)
-      settle()
-      pointer(canvas, 'pointermove', 790, 10)
-      expect(material.opacity).toBe(0)
-      expect(nextFramePaints()).toBe(true)
-      settle()
-      // Farther still: no change, no paint.
-      pointer(canvas, 'pointermove', 795, 5)
-      expect(nextFramePaints()).toBe(false)
-      pointer(canvas, 'pointermove', 400, 300)
-      expect(material.opacity).toBe(1)
-      expect(nextFramePaints()).toBe(true)
+    // Owner on #2171: fade out after 3 s without activity near the arrow,
+    // back to full on activity near it.
+    it('fades out when left alone, asking for paints, and comes back on activity near it', () => {
+      jest.useFakeTimers()
+      try {
+        const {planeData, canvas} = makeClipper()
+        const material = planeData.arrow.material
+        expect(material.transparent).toBe(true)
+        expect(material.opacity).toBe(1)
+        settle()
+        // Activity far from the arrow doesn't keep it shown.
+        pointer(canvas, 'pointermove', 790, 10)
+        jest.advanceTimersByTime(IDLE_MS + FADE_OUT_MS + 200)
+        expect(material.opacity).toBe(0)
+        expect(nextFramePaints()).toBe(true)
+        settle()
+        // A move near it (off the shaft) brings it back at once.
+        pointer(canvas, 'pointermove', 400, 330)
+        expect(material.opacity).toBe(1)
+        expect(nextFramePaints()).toBe(true)
+        settle()
+        // And a press near it does too, after another fade.
+        jest.advanceTimersByTime(IDLE_MS + FADE_OUT_MS + 200)
+        expect(material.opacity).toBe(0)
+        pointer(canvas, 'pointerdown', 400, 330)
+        expect(material.opacity).toBe(1)
+      } finally {
+        jest.useRealTimers()
+      }
     })
 
-    it('keeps a touch above its floor', () => {
-      const {planeData, canvas} = makeClipper()
+    it('fades a touch device only to its floor', () => {
+      jest.useFakeTimers()
+      try {
+        const {planeData, canvas} = makeClipper()
+        pointer(canvas, 'pointerdown', 790, 10, 'touch')
+        jest.advanceTimersByTime(IDLE_MS + FADE_OUT_MS + 200)
+        expect(planeData.arrow.material.opacity).toBeCloseTo(0.3, 6)
+      } finally {
+        jest.useRealTimers()
+      }
+    })
+
+    it('keeps a dragged arrow opaque however long the drag', () => {
+      jest.useFakeTimers()
+      try {
+        const {clipper, planeData} = makeClipper()
+        clipper.onMouseDown({clientX: 400, clientY: 300})
+        expect(clipper.draggingArrow).toBe(planeData)
+        jest.advanceTimersByTime(IDLE_MS * 3)
+        expect(planeData.arrow.material.opacity).toBe(1)
+        clipper.onMouseUp()
+        jest.advanceTimersByTime(IDLE_MS + FADE_OUT_MS + 200)
+        expect(planeData.arrow.material.opacity).toBe(0)
+      } finally {
+        jest.useRealTimers()
+      }
+    })
+
+    // The press that grabs is the arrow's alone: camera-controls (listening
+    // after this capture listener) must not start an orbit, which on a real
+    // phone ended in a cancelled pointer and an arrow that wouldn't move.
+    it('stops a grabbing press from reaching the camera, and lets any other through', () => {
+      const {canvas} = makeClipper()
+      const camera = jest.fn()
+      canvas.addEventListener('pointerdown', camera)
       pointer(canvas, 'pointerdown', 790, 10, 'touch')
-      expect(planeData.arrow.material.opacity).toBe(TOUCH_FADE_FLOOR)
-    })
-
-    it('keeps a dragged arrow opaque wherever the pointer runs to', () => {
-      const {clipper, planeData, canvas} = makeClipper()
-      clipper.onMouseDown({clientX: 400, clientY: 300})
-      expect(clipper.draggingArrow).toBe(planeData)
-      pointer(canvas, 'pointermove', 790, 10)
-      expect(planeData.arrow.material.opacity).toBe(1)
+      expect(camera).toHaveBeenCalledTimes(1)
+      pointer(canvas, 'pointerdown', 440, 310, 'touch')
+      expect(camera).toHaveBeenCalledTimes(1)
+      // While it drags, a second finger reaches neither.
+      pointer(canvas, 'pointerdown', 100, 100, 'touch')
+      expect(camera).toHaveBeenCalledTimes(1)
     })
 
     // Owner on #2171: on a phone the arrow could not be grabbed at all. A
@@ -309,14 +352,18 @@ describe('viewer/three/MeshClipper', () => {
 
 
     it('puts every arrow back to opaque when interaction is turned off', () => {
-      const {clipper, planeData, canvas} = makeClipper()
-      pointer(canvas, 'pointermove', 790, 10)
-      expect(planeData.arrow.material.opacity).toBe(0)
-      clipper.setInteractionEnabled(false)
-      expect(planeData.arrow.material.opacity).toBe(1)
-      // And stops following the pointer.
-      pointer(canvas, 'pointermove', 790, 10)
-      expect(planeData.arrow.material.opacity).toBe(1)
+      jest.useFakeTimers()
+      try {
+        const {clipper, planeData} = makeClipper()
+        jest.advanceTimersByTime(IDLE_MS + FADE_OUT_MS + 200)
+        expect(planeData.arrow.material.opacity).toBe(0)
+        clipper.setInteractionEnabled(false)
+        expect(planeData.arrow.material.opacity).toBe(1)
+        jest.advanceTimersByTime(IDLE_MS * 3)
+        expect(planeData.arrow.material.opacity).toBe(1)
+      } finally {
+        jest.useRealTimers()
+      }
     })
   })
 

@@ -2,43 +2,36 @@ import {Vector3} from 'three'
 
 
 /**
- * Where the pointer is against a cut plane's arrow on screen: how opaque the
- * arrow is drawn, and whether a touch grabs it. Measured from the arrow's
- * axis, tip to tip, as projected (`screenAxis`), so a long arrow is as near
- * from its ends as from its middle, and one seen at a slant is no nearer to
- * points beside it than one seen straight.
+ * A cut plane's arrow on screen: when it fades, and where a touch grabs it.
  *
- * **The fade** (owner on #2171: an arrow far from the pointer only gets in
- * the way of the model). Fully opaque within `FADE_NEAR_PX` of the axis,
- * fading out linearly to nothing `FADE_REACH` of the canvas beyond that: a
- * quarter of its width sideways and a quarter of its height up or down,
- * which is halfway to the edge from an arrow at the centre. A touch has no
- * hover, so on a phone the last touch stands in for the pointer, and the
- * arrow never fades below `TOUCH_FADE_FLOOR`: with nothing sweeping the
- * screen, an arrow faded to nothing could not be found again to grab.
+ * **The fade** (owner on #2171): an arrow left alone only gets in the way of
+ * the model, so it fades out after `IDLE_MS` without activity near it (over
+ * `FADE_OUT_MS`), and comes back to full at once on any press or pointer move
+ * within `NEAR_PX` of its axis. It stays opaque while hovered or dragged.
+ * `ArrowFade` is that state machine; MeshClipper feeds it the activity and
+ * applies its opacity. A phone has no hover, so on a touch device it fades
+ * only to `TOUCH_FADE_FLOOR`: an arrow faded to nothing there could not be
+ * found again to tap near.
  *
- * **The grab.** A finger is wider than the arrow's shaft, so a touch within
- * `TOUCH_GRAB_PX` of the axis grabs it (`isNearAxis`), where a mouse needs
- * the ray to hit the arrow.
- *
- * MeshClipper applies both (`_applyFade`, `onMouseDown`); this module is the
- * arithmetic, kept free of the clipper for its tests.
+ * **Near, and the grab** are measured from the arrow's axis, tip to tip, as
+ * projected (`screenAxis`), so a long arrow is as near from its ends as from
+ * its middle, and one seen at a slant is no nearer to points beside it than
+ * one seen straight. A finger is wider than the shaft, so a touch within
+ * `TOUCH_GRAB_PX` of the axis grabs it (`distanceWithin`), where a mouse
+ * needs the ray to hit the arrow.
  */
 
 
-/** Within this many CSS pixels of the arrow's axis it is fully opaque. */
-export const FADE_NEAR_PX = 24
-/** The fraction of the canvas's width (and height) over which it fades out. */
-export const FADE_REACH = 0.25
+/** Activity within this many CSS pixels of an arrow's axis keeps it shown. */
+export const NEAR_PX = 48
+/** How long without activity near an arrow before it fades. */
+export const IDLE_MS = 3000
+/** How long the fade-out takes. */
+export const FADE_OUT_MS = 400
 /** The least a touch device fades it to (module doc). */
 export const TOUCH_FADE_FLOOR = 0.3
 /** A touch this many CSS pixels from the axis grabs the arrow. */
-export const TOUCH_GRAB_PX = 24
-/**
- * Opacity is quantized to this many steps, so a pointer sweeping the canvas
- * asks for a paint only when the arrow's look actually changes by a step.
- */
-export const FADE_STEPS = 32
+export const TOUCH_GRAB_PX = 40
 
 
 const scratchEnd = new Vector3()
@@ -86,32 +79,6 @@ export function offsetFromAxis(pointer, axis) {
 
 
 /**
- * @param {{x: number, y: number}} pointer page coordinates
- * @param {{ax: number, ay: number, bx: number, by: number}|null} axis from `screenAxis`
- * @param {{width: number, height: number}} canvasRect
- * @param {number} [floor] the least it fades to (TOUCH_FADE_FLOOR for a touch)
- * @return {number} the opacity, in steps of 1 / FADE_STEPS
- */
-export function fadeOpacity(pointer, axis, canvasRect, floor = 0) {
-  if (axis === null || !(canvasRect.width > 0) || !(canvasRect.height > 0)) {
-    return 1
-  }
-  const {dx, dy} = offsetFromAxis(pointer, axis)
-  const distance = Math.hypot(dx, dy)
-  if (distance <= FADE_NEAR_PX) {
-    return 1
-  }
-  // Beyond the near band, in units of the fade's reach on each axis: 1 is a
-  // quarter of the canvas away, sideways or up and down.
-  const beyond = (distance - FADE_NEAR_PX) / distance
-  const reach = Math.hypot((dx * beyond) / (canvasRect.width * FADE_REACH),
-    (dy * beyond) / (canvasRect.height * FADE_REACH))
-  const opacity = Math.round(Math.max(0, 1 - reach) * FADE_STEPS) / FADE_STEPS
-  return Math.max(floor, opacity)
-}
-
-
-/**
  * @param {{x: number, y: number}} pointer
  * @param {{ax: number, ay: number, bx: number, by: number}|null} axis
  * @param {number} px
@@ -125,3 +92,123 @@ export function distanceWithin(pointer, axis, px) {
   const distance = Math.hypot(dx, dy)
   return distance <= px ? distance : Infinity
 }
+
+
+/**
+ * The fade's state (module doc): opaque, then after `IDLE_MS` without a
+ * `wake`, faded to the floor over `FADE_OUT_MS`. `hold(reason)` keeps it
+ * opaque until the same reason is released (a hover, a drag), and the idle
+ * clock starts again when the last hold goes. `onChange(opacity)` is called
+ * on every change, a frame at a time while fading.
+ */
+export class ArrowFade {
+  /**
+   * @param {Function} onChange called with the new opacity
+   * @param {object} [clock] timers and frames, for tests
+   * @param {Function} [clock.now]
+   * @param {Function} [clock.setTimer]
+   * @param {Function} [clock.clearTimer]
+   * @param {Function} [clock.nextFrame]
+   * @param {Function} [clock.cancelFrame]
+   */
+  constructor(onChange, {
+    now = () => performance.now(),
+    setTimer = (fn, ms) => setTimeout(fn, ms),
+    clearTimer = (id) => clearTimeout(id),
+    nextFrame = (fn) => (globalThis.requestAnimationFrame ?? ((f) => setTimeout(f, FRAME_MS)))(fn),
+    cancelFrame = (id) => (globalThis.cancelAnimationFrame ?? clearTimeout)(id),
+  } = {}) {
+    this.onChange = onChange
+    this.clock = {now, setTimer, clearTimer, nextFrame, cancelFrame}
+    this.opacity = 1
+    // The opacity a fade ends at: 0, or TOUCH_FADE_FLOOR after a touch.
+    this.floor = 0
+    this.holds = new Set()
+    this.timer = null
+    this.frame = null
+    this.isStopped = true
+  }
+
+
+  /**
+   * Activity near an arrow: full opacity, and the idle clock starts again.
+   *
+   * @param {number} [floor] what a fade from here ends at; the last one's if absent
+   */
+  wake(floor = this.floor) {
+    this.floor = floor
+    this.isStopped = false
+    this.cancel_()
+    this.set_(1)
+    if (this.holds.size === 0) {
+      this.timer = this.clock.setTimer(() => this.fadeOut_(), IDLE_MS)
+    }
+  }
+
+
+  /** @param {string} reason held opaque until `release(reason)` */
+  hold(reason) {
+    this.holds.add(reason)
+    this.cancel_()
+    this.set_(1)
+  }
+
+
+  /** @param {string} reason */
+  release(reason) {
+    if (this.holds.delete(reason) && this.holds.size === 0 && !this.isStopped) {
+      this.wake()
+    }
+  }
+
+
+  /** No more fading (interaction off): opaque, no clocks. */
+  stop() {
+    this.isStopped = true
+    this.holds.clear()
+    this.cancel_()
+    this.set_(1)
+  }
+
+
+  /** @private */
+  fadeOut_() {
+    this.timer = null
+    const start = this.clock.now()
+    const step = () => {
+      const t = Math.min(1, (this.clock.now() - start) / FADE_OUT_MS)
+      this.set_(1 - (t * (1 - this.floor)))
+      this.frame = t < 1 ? this.clock.nextFrame(step) : null
+    }
+    step()
+  }
+
+
+  /** @private */
+  cancel_() {
+    if (this.timer !== null) {
+      this.clock.clearTimer(this.timer)
+      this.timer = null
+    }
+    if (this.frame !== null) {
+      this.clock.cancelFrame(this.frame)
+      this.frame = null
+    }
+  }
+
+
+  /**
+   * @param {number} opacity
+   * @private
+   */
+  set_(opacity) {
+    if (opacity !== this.opacity) {
+      this.opacity = opacity
+      this.onChange(opacity)
+    }
+  }
+}
+
+
+/** The frame fallback without requestAnimationFrame. */
+const FRAME_MS = 16

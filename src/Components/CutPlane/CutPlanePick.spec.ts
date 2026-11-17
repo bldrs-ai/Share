@@ -362,33 +362,50 @@ describeMobileAndDesktop('Cutplanes: the arrow', (ff) => {
     // From the kept side the box is in front of the arrow; hovered, the
     // overlay draws it, and the arrow must still show over it.
     await viewFromKeptSide(page)
-    await expectHoverPicks(page, centre, [IFC_INTERIOR])
+    // Hover the box just beside the arrow, toward the canvas centre (where
+    // the box is): near enough that the arrow stays shown (arrowFade.js
+    // NEAR_PX), off it so the hover picks the box.
     const arrow = await arrowPoint(page)
+    const toCentre = Math.hypot(centre.x - arrow.x, centre.y - arrow.y)
+    const step = Math.min(BESIDE_ARROW_PX, toCentre) / Math.max(toCentre, 1)
+    const beside = {x: arrow.x + ((centre.x - arrow.x) * step), y: arrow.y + ((centre.y - arrow.y) * step)}
+    await expectHoverPicks(page, beside, [IFC_INTERIOR])
+    expect(await arrowOpacity(page), 'the arrow is shown').toBe(1)
     for (const kind of ['overlay', 'full'] as const) {
       const pixel = await paintedPixel(page, arrow, kind)
       expect(isArrowBlue(pixel), `the arrow shows over the hover on a ${kind} paint: ${pixel}`).toBe(true)
     }
   })
 
-  test('fades out with distance from the pointer, and back in near it', async ({page}) => {
+  // Owner on #2171: fade out after a few seconds without activity near the
+  // arrow, back to full on a press or move near it (arrowFade.js).
+  test('fades out when left alone, and comes back on activity near it', async ({page}) => {
     await openModel(page, IFC_MODEL)
     await addSectionCut(page)
     await viewObliquely(page)
     const arrow = await arrowPoint(page)
-    // Near: on the arrow, which turns yellow under a mouse; beside it on a
-    // phone's touch layout the mouse still hovers it.
     await page.mouse.move(arrow.x + 8, arrow.y + 8)
     await expect.poll(() => arrowOpacity(page)).toBe(1)
-    const near = await paintedPixel(page, arrow, 'full')
-    // Far: a corner of the canvas, more than a quarter of it away.
+    const shown = await paintedPixel(page, arrow, 'full')
+    // Away from it, and left alone: it fades out.
     const far = await farCanvasPoint(page, arrow)
     await page.mouse.move(far.x, far.y, {steps: 5})
-    await expect.poll(() => arrowOpacity(page)).toBe(0)
+    expect(await arrowOpacity(page), 'not straight away').toBe(1)
+    await expect.poll(() => arrowOpacity(page), {timeout: FADE_TIMEOUT_MS}).toBe(0)
     const faded = await paintedPixel(page, arrow, 'full')
-    expect(channelDistance(near, faded), `the arrow is gone from its pixel: ${near} -> ${faded}`)
+    expect(channelDistance(shown, faded), `the arrow is gone from its pixel: ${shown} -> ${faded}`)
       .toBeGreaterThan(FADED_CHANNEL_DELTA)
-    // And back.
-    await page.mouse.move(arrow.x + 8, arrow.y + 8, {steps: 5})
+    // Activity near it brings it straight back: a move with a mouse, a tap
+    // with a finger (CDP touch, so the page gets touch pointer events).
+    const near = {x: arrow.x + BESIDE_ARROW_PX, y: arrow.y + BESIDE_ARROW_PX}
+    if (ff.isMobile) {
+      const cdp = await page.context().newCDPSession(page)
+      await cdp.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [near]})
+      await cdp.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []})
+      await cdp.detach()
+    } else {
+      await page.mouse.move(near.x, near.y, {steps: 3})
+    }
     await expect.poll(() => arrowOpacity(page)).toBe(1)
   })
 })
@@ -399,6 +416,10 @@ const ARROW_DEFAULT = 0x0000ff
 const ARROW_HIGHLIGHT = 0xffff00
 // The least change in a pixel's channels that counts as the arrow leaving it.
 const FADED_CHANNEL_DELTA = 60
+// Longer than arrowFade.js's IDLE_MS + FADE_OUT_MS (3.4 s).
+const FADE_TIMEOUT_MS = 8000
+// How far beside the arrow a hover can be and keep it shown (< NEAR_PX).
+const BESIDE_ARROW_PX = 20
 // A view at a slant to the Section cut, so its arrow (along x) is seen side-on
 // and a drag along it moves the plane.
 /* eslint-disable no-magic-numbers */

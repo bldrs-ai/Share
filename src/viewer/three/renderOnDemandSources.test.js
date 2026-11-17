@@ -66,6 +66,7 @@ const AUDITED = {
   'viewer/three/sceneGraphVisibility.js': ASKS_FOR_PAINT,
   'viewer/three/MeshClipper.js': ASKS_FOR_PAINT,
   'viewer/three/CutPlaneArrowHelper.ts': ASKS_FOR_PAINT,
+  'viewer/three/arrowFade.js': 'ArrowFade\'s own `opacity` state, not a material\'s: MeshClipper applies it and asks',
   'viewer/three/LightingGui.js': ASKS_FOR_PAINT,
   'viewer/display/shadingMode.js': ASKS_FOR_PAINT,
   'viewer/residency/ResidencyController.js': ASKS_FOR_PAINT,

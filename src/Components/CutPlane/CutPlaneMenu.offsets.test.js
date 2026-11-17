@@ -1,4 +1,4 @@
-import {Box3, BatchedMesh, BoxGeometry, Matrix4, Mesh, MeshBasicMaterial, Plane, Vector3} from 'three'
+import {Box3, BatchedMesh, BoxGeometry, BufferGeometry, Group, Matrix4, Mesh, MeshBasicMaterial, Plane, Vector3} from 'three'
 import useStore from '../../store/useStore'
 import {getModelCenter, getPlaneSceneInfo, getPlanes, getPlanesOffset, writeDraggedPlanes} from './CutPlaneMenu'
 
@@ -38,7 +38,7 @@ describe('CutPlaneMenu: a dragged plane\'s offset in the permalink', () => {
   beforeEach(() => {
     delete global.window.location
     global.window.location = {hash: ''}
-    useStore.setState({cutPlanes: []})
+    useStore.setState({cutPlanes: [], model: null})
   })
 
   it('round-trips each axis\'s offset, from a plane moved by a drag', () => {
@@ -57,7 +57,7 @@ describe('CutPlaneMenu: a dragged plane\'s offset in the permalink', () => {
 
   it('writes the offsets into the #cp: hash and the store, which a new tab reads back', () => {
     const model = makeModel()
-    useStore.setState({cutPlanes: [{direction: 'x', offset: 0}, {direction: 'y', offset: 0}]})
+    useStore.setState({cutPlanes: [{direction: 'x', offset: 0}, {direction: 'y', offset: 0}], model})
     const viewer = {clipper: {planes: [menuPlane(model, 'x', 0.75), menuPlane(model, 'y', -0.5)]}}
     writeDraggedPlanes(viewer, model)
     expect(window.location.hash).toContain('cp:')
@@ -79,12 +79,28 @@ describe('CutPlaneMenu: a dragged plane\'s offset in the permalink', () => {
 
   it('centres a plain mesh on its geometry\'s box, and an empty box falls back to the object\'s', () => {
     expect(getModelCenter(makeModel()).toArray()).toEqual([1, 2, 3])
+    // A root whose hoisted geometry box is empty (Loader.js#readModel) is
+    // centred on what it holds.
+    const root = new Group()
+    root.add(makeModel())
+    root.geometry = new BufferGeometry()
+    root.geometry.boundingBox = new Box3()
+    expect(getModelCenter(root).toArray()).toEqual([1, 2, 3])
     expect(getModelCenter(null).toArray()).toEqual([0, 0, 0])
   })
 
 
+  it('writes nothing for a model that is no longer the loaded one', () => {
+    const model = makeModel()
+    useStore.setState({cutPlanes: [{direction: 'x', offset: 0}], model: makeModel()})
+    writeDraggedPlanes({clipper: {planes: [menuPlane(model, 'x', 0.75)]}}, model)
+    expect(window.location.hash).toBe('')
+    expect(useStore.getState().cutPlanes).toEqual([{direction: 'x', offset: 0}])
+  })
+
   it('leaves out a Q-shortcut plane, which has no axis to write', () => {
     const model = makeModel()
+    useStore.setState({model})
     const slanted = {plane: new Plane(new Vector3(1, 1, 0).normalize(), 0), direction: undefined}
     expect(getPlanesOffset({clipper: {planes: [slanted, menuPlane(model, 'z', 0.25)]}}, model)).toEqual({z: 0.25})
     writeDraggedPlanes({clipper: {planes: [slanted]}}, model)

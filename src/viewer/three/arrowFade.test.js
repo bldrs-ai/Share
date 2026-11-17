@@ -1,7 +1,7 @@
 import {PerspectiveCamera, Vector3} from 'three'
 import CutPlaneArrowHelper from './CutPlaneArrowHelper'
 import {
-  FADE_NEAR_PX, FADE_REACH, FADE_STEPS, TOUCH_FADE_FLOOR, distanceWithin, fadeOpacity, offsetFromAxis, screenAxis,
+  ArrowFade, FADE_OUT_MS, IDLE_MS, TOUCH_FADE_FLOOR, distanceWithin, offsetFromAxis, screenAxis,
 } from './arrowFade'
 
 
@@ -27,36 +27,125 @@ describe('viewer/three/arrowFade', () => {
   })
 
 
-  describe('fadeOpacity', () => {
-    it('is opaque on the arrow and within the near band of it', () => {
-      expect(fadeOpacity({x: 400, y: 300}, AXIS, CANVAS)).toBe(1)
-      expect(fadeOpacity({x: 400 + FADE_NEAR_PX, y: 260}, AXIS, CANVAS)).toBe(1)
-      // From beyond a tip, as near as from beside the middle.
-      expect(fadeOpacity({x: 400, y: 250 - FADE_NEAR_PX}, AXIS, CANVAS)).toBe(1)
+  // Owner on #2171: fade out after inactivity, back to full on activity near.
+  describe('ArrowFade', () => {
+    /** @return {object} a fade on a hand-driven clock, and its opacity changes */
+    function makeFade() {
+      const clock = {ms: 0, timers: [], frames: []}
+      const seen = []
+      const fade = new ArrowFade((opacity) => seen.push(opacity), {
+        now: () => clock.ms,
+        setTimer: (fn, ms) => {
+          const timer = {fn, at: clock.ms + ms}
+          clock.timers.push(timer)
+          return timer
+        },
+        clearTimer: (timer) => {
+          clock.timers = clock.timers.filter((t) => t !== timer)
+        },
+        nextFrame: (fn) => {
+          clock.frames.push(fn)
+          return fn
+        },
+        cancelFrame: (fn) => {
+          clock.frames = clock.frames.filter((f) => f !== fn)
+        },
+      })
+      /** @param {number} ms advance the clock, firing timers and 16 ms frames */
+      const advance = (ms) => {
+        const end = clock.ms + ms
+        while (clock.ms < end) {
+          clock.ms = Math.min(end, clock.ms + 16)
+          for (const timer of clock.timers.filter((t) => t.at <= clock.ms)) {
+            clock.timers = clock.timers.filter((t) => t !== timer)
+            timer.fn()
+          }
+          const frames = clock.frames
+          clock.frames = []
+          frames.forEach((fn) => fn())
+        }
+      }
+      return {fade, seen, advance}
+    }
+
+    it('stays opaque until idle, then fades out over FADE_OUT_MS to nothing', () => {
+      const {fade, seen, advance} = makeFade()
+      fade.wake()
+      advance(IDLE_MS - 20)
+      expect(fade.opacity).toBe(1)
+      advance(40)
+      expect(fade.opacity).toBeLessThan(1)
+      expect(fade.opacity).toBeGreaterThan(0)
+      advance(FADE_OUT_MS)
+      expect(fade.opacity).toBe(0)
+      // A fade, not a jump: several steps on the way down.
+      expect(seen.length).toBeGreaterThan(5)
     })
 
-    it('reaches nothing a quarter of the canvas beyond the near band, on either axis', () => {
-      expect(fadeOpacity({x: 400 + FADE_NEAR_PX + (CANVAS.width * FADE_REACH), y: 300}, AXIS, CANVAS)).toBe(0)
-      expect(fadeOpacity({x: 400, y: 350 + FADE_NEAR_PX + (CANVAS.height * FADE_REACH)}, AXIS, CANVAS)).toBe(0)
-      expect(fadeOpacity({x: 0, y: 0}, AXIS, CANVAS)).toBe(0)
+    it('comes back to full at once on a wake, and the idle clock starts again', () => {
+      const {fade, advance} = makeFade()
+      fade.wake()
+      advance(IDLE_MS + FADE_OUT_MS + 100)
+      expect(fade.opacity).toBe(0)
+      fade.wake()
+      expect(fade.opacity).toBe(1)
+      advance(IDLE_MS - 100)
+      expect(fade.opacity).toBe(1)
+      // Activity before the clock runs out puts it off again.
+      fade.wake()
+      advance(IDLE_MS - 100)
+      expect(fade.opacity).toBe(1)
     })
 
-    it('fades linearly between, in steps', () => {
-      expect(fadeOpacity({x: 400 + FADE_NEAR_PX + (CANVAS.width * FADE_REACH / 2), y: 300}, AXIS, CANVAS)).toBe(0.5)
-      const near = fadeOpacity({x: 400 + FADE_NEAR_PX + 7, y: 300}, AXIS, CANVAS)
-      expect(near).toBeLessThan(1)
-      expect(near).toBeGreaterThan(0.9)
-      expect(Number.isInteger(near * FADE_STEPS)).toBe(true)
+    it('fades only to the floor it was last given (a touch device)', () => {
+      const {fade, advance} = makeFade()
+      fade.wake(TOUCH_FADE_FLOOR)
+      advance(IDLE_MS + FADE_OUT_MS + 100)
+      expect(fade.opacity).toBeCloseTo(TOUCH_FADE_FLOOR, 6)
     })
 
-    it('never fades a touch below its floor', () => {
-      expect(fadeOpacity({x: 0, y: 0}, AXIS, CANVAS, TOUCH_FADE_FLOOR)).toBe(TOUCH_FADE_FLOOR)
-      expect(fadeOpacity({x: 400, y: 300}, AXIS, CANVAS, TOUCH_FADE_FLOOR)).toBe(1)
+    it('stays opaque while held, for every reason, and idles from the last release', () => {
+      const {fade, advance} = makeFade()
+      fade.wake()
+      fade.hold('hover')
+      fade.hold('drag')
+      advance(IDLE_MS * 3)
+      expect(fade.opacity).toBe(1)
+      fade.release('drag')
+      advance(IDLE_MS * 3)
+      expect(fade.opacity).toBe(1)
+      fade.release('hover')
+      advance(IDLE_MS - 100)
+      expect(fade.opacity).toBe(1)
+      advance(FADE_OUT_MS + 200)
+      expect(fade.opacity).toBe(0)
     })
 
-    it('leaves the arrow opaque with no axis or no canvas', () => {
-      expect(fadeOpacity({x: 0, y: 0}, null, CANVAS)).toBe(1)
-      expect(fadeOpacity({x: 0, y: 0}, AXIS, {width: 0, height: 0})).toBe(1)
+    it('a hold mid-fade brings it back to full', () => {
+      const {fade, advance} = makeFade()
+      fade.wake()
+      advance(IDLE_MS + (FADE_OUT_MS / 2))
+      expect(fade.opacity).toBeLessThan(1)
+      fade.hold('drag')
+      expect(fade.opacity).toBe(1)
+      advance(FADE_OUT_MS * 3)
+      expect(fade.opacity).toBe(1)
+    })
+
+    it('stops opaque with no clocks left running', () => {
+      const {fade, advance} = makeFade()
+      fade.wake()
+      advance(IDLE_MS + 50)
+      fade.stop()
+      expect(fade.opacity).toBe(1)
+      advance(IDLE_MS * 3)
+      expect(fade.opacity).toBe(1)
+      // A release after a stop doesn't restart it.
+      fade.hold('drag')
+      fade.stop()
+      fade.release('drag')
+      advance(IDLE_MS * 3)
+      expect(fade.opacity).toBe(1)
     })
   })
 

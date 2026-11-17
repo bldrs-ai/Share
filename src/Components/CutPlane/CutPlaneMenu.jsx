@@ -365,6 +365,11 @@ export function getPlanesOffset(viewer, ifcModel) {
  * @param {object} model
  */
 export function writeDraggedPlanes(viewer, model) {
+  // The menu's effect flushes a pending write when the model changes (review
+  // of #2171): by then the planes and link belong to the next model.
+  if (useStore.getState().model !== model) {
+    return
+  }
   const offsets = getPlanesOffset(viewer, model)
   if (!offsets || Object.keys(offsets).length === 0) {
     return
