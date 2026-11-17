@@ -190,7 +190,12 @@ cheapest-to-forget last:
    the page (not a bare press), a pointer move over the canvas (only while
    paints are cheap; layer 1), and any store change
    (CadView subscribes): for the change a React effect applies a frame
-   after the event. During a load these are background asks.
+   after the event. During a load these are background asks. While paints
+   cost more than `EXPENSIVE_PAINT_MS`, the window paints once as it closes
+   instead of every frame (`RenderDemand#frameKind`): on PSB, toggling the
+   cut-plane menu repainted the unchanged scene 4-5 times a second and the
+   menu's animation ran at that rate. The probe (layer 4) still paints a
+   change it sees at once.
 6. `keepPainting()` for what changes on its own clock: a scene with Spark
    splats paints every frame, since the sort lands asynchronously.
 

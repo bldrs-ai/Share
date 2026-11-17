@@ -1,5 +1,6 @@
 import RenderDemand, {
-  BACKGROUND_COST_FACTOR, BACKGROUND_MIN_GAP_MS, HEARTBEAT_MS, SETTLE_MS, USER_CAMERA_EVENT, noteUserCamera,
+  BACKGROUND_COST_FACTOR, BACKGROUND_MIN_GAP_MS, EXPENSIVE_PAINT_MS, HEARTBEAT_MS, SETTLE_MS, USER_CAMERA_EVENT,
+  noteUserCamera,
   requestBackgroundPaint, requestPaint, runPaint,
 } from './renderDemand'
 
@@ -401,6 +402,37 @@ describe('viewer/three/renderDemand session', () => {
     const window = Math.floor(SETTLE_MS / FRAME_MS)
     expect(paintsIn(window)).toBe(window)
     expect(paintsIn(10)).toBe(0)
+  })
+
+  it('paints an expensive viewer\'s settle window once, as it closes, not every frame', () => {
+    demand.startSession({probe})
+    // One expensive paint: the next frame comes 200 ms after it starts.
+    expect(demand.shouldRender()).toBe(true)
+    demand.rendered(1)
+    clock += 200
+    expect(demand.shouldRender()).toBe(false)
+    expect(demand.paintCostMs()).toBeGreaterThan(EXPENSIVE_PAINT_MS)
+
+    // A click on a menu: nothing in the scene changed, so the window paints
+    // nothing while it is open...
+    demand.invalidateSoon()
+    const window = Math.floor(SETTLE_MS / FRAME_MS)
+    expect(paintsIn(window - 1)).toBe(0)
+    // ...and once when it closes, for whatever an effect changed in it.
+    expect(paintsIn(5)).toBe(1)
+    expect(paintsIn(30)).toBe(0)
+  })
+
+  it('still paints a change the probe sees inside an expensive settle window, at once', () => {
+    demand.startSession({probe})
+    expect(demand.shouldRender()).toBe(true)
+    demand.rendered(1)
+    clock += 200
+    demand.shouldRender()
+    demand.invalidateSoon()
+    expect(paintsIn(2)).toBe(0)
+    probeChanged = true
+    expect(frame()).toBe(true)
   })
 
   it('makes a settle ask background work during a load, so the load\'s store churn stays budgeted', () => {

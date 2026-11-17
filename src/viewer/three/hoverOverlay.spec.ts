@@ -26,6 +26,8 @@ const MODEL_TIMEOUT_MS = 120_000
 // Longer than the slowest hover interval (hoverPick.js MAX_INTERVAL_MS), so
 // any trailing pick has fired.
 const HOVER_SETTLE_MS = 600
+// Base frames retaken while a settle window is open (findHoverPoint).
+const MAX_BASE_RETAKES = 3
 // Dense enough to land on the small STEP logo at the phone viewport; points
 // that miss the model are skipped cheaply (`findHoverPoint`).
 const GRID_COLUMNS = 8
@@ -308,6 +310,24 @@ async function hoverAndCatch(page: Page, point: {x: number, y: number}, name: st
 
 
 /**
+ * @param page
+ * @return whether the viewer painted nothing for HOVER_SETTLE_MS, and has no
+ *   settle window open or owing its closing paint at the end of it
+ */
+async function staysIdle(page: Page): Promise<boolean> {
+  const paints = () => page.evaluate(() =>
+    (window as any).store.getState().viewer.context.getRenderDemand().stats.paints)
+  const before = await paints()
+  await page.waitForTimeout(HOVER_SETTLE_MS)
+  const isSettling = await page.evaluate(() => {
+    const demand = (window as any).store.getState().viewer.context.getRenderDemand()
+    return demand.isSettlePending === true || demand.now() < demand.settleUntilMs
+  })
+  return !isSettling && await paints() === before
+}
+
+
+/**
  * Find a canvas point whose hover the overlay draws, starting from a clean
  * base frame each time.
  *
@@ -330,6 +350,15 @@ async function findHoverPoint(page: Page,
     await page.evaluate(() => (window as any).__ovl.clearHover())
     await page.waitForTimeout(HOVER_SETTLE_MS)
     await nextFrame(page, 'base', 'full')
+    // A store change just after the base paint (the load snackbar hiding
+    // itself) opens a settle window. With paints as expensive as they are
+    // here, its one paint comes as the window closes (renderDemand.js
+    // #frameKind), which can be the frame the hover's catch below takes.
+    // So the base counts only once the viewer has stayed idle after it: no
+    // other paint, and no settle window open or owed.
+    for (let i = 0; i < MAX_BASE_RETAKES && !await staysIdle(page); i++) {
+      await nextFrame(page, 'base', 'full')
+    }
     const kind = await hoverAndCatch(page, point, 'hover')
     if (kind !== null && await accept(point)) {
       return {point, kind}

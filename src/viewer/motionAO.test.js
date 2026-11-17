@@ -42,6 +42,7 @@ function fakePostProcessor(enabled = true) {
  */
 function setup({enabled = true, follow = false} = {}) {
   let t = 0
+  const shadowMap = {autoUpdate: true, needsUpdate: false}
   const frames = []
   const controls = fakeControls()
   const pp = fakePostProcessor(enabled)
@@ -56,12 +57,13 @@ function setup({enabled = true, follow = false} = {}) {
     renderDemand,
     now: () => t,
     paint,
+    shadowMap,
   })
   const frame = (dtMs = 16) => {
     t += dtMs
     frames.forEach((fn) => fn())
   }
-  return {motion, controls, pp, paint, frame, frames, renderDemand}
+  return {motion, controls, pp, paint, frame, frames, renderDemand, shadowMap}
 }
 
 
@@ -178,5 +180,28 @@ describe('viewer/motionAO', () => {
     expect(s.pp.level).toBe(1)
     expect(s.controls.count()).toBe(0)
     expect(s.frames).toHaveLength(0)
+  })
+
+  it('freezes the shadow map while moving and re-renders it once at rest', () => {
+    const s = setup()
+    drag(s, 5)
+    expect(s.shadowMap.autoUpdate).toBe(false)
+    rest(s)
+    expect(s.shadowMap.autoUpdate).toBe(true)
+    expect(s.shadowMap.needsUpdate).toBe(true)
+  })
+
+  it('freezes the shadow map for a load, until both it and the camera are done', () => {
+    const s = setup()
+    s.renderDemand.isLoading = true
+    s.frame()
+    expect(s.shadowMap.autoUpdate).toBe(false)
+    drag(s, 1)
+    s.renderDemand.isLoading = false
+    s.frame()
+    // Still moving: still frozen.
+    expect(s.shadowMap.autoUpdate).toBe(false)
+    rest(s)
+    expect(s.shadowMap.autoUpdate).toBe(true)
   })
 })

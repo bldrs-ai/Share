@@ -34360,7 +34360,7 @@ exports[`Loader loads an STL model 1`] = `
       "flatShading": false,
       "fog": true,
       "forceSinglePass": false,
-      "metalness": 0,
+      "metalness": 0.5,
       "name": "",
       "opacity": 1,
       "polygonOffset": false,
