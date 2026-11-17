@@ -1,5 +1,5 @@
 import React, {ReactElement, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore} from 'react'
-import {Box, Stack, Typography} from '@mui/material'
+import {Box, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import useStore from '../../store/useStore'
 import {
@@ -17,12 +17,15 @@ import {isRenderPanelShown, subscribeRenderPanel} from '../../viewer/debugPanels
 
 // Gap kept between an expanded panel and the Elements control under it.
 const ABOVE_CONTROLS_GAP_PX = 8
+// Room kept clear above an expanded panel for the top control row.
+const TOP_CONTROLS_PX = 72
 // Fallback clearance when the Elements control isn't on the page (a load
 // error screen, a test harness): about the bottom bar's height.
 const FALLBACK_CLEARANCE_PX = 64
 // The Elements control (BottomBar's centre group); expanded panels sit on it.
 const ELEMENTS_CONTROL_SELECTOR = '[data-testid="element-group"]'
 const COUNT_FORMAT = new Intl.NumberFormat()
+const PANEL_FONT_PX = 11
 
 
 /**
@@ -87,12 +90,16 @@ export default function DebugDock() {
   })
 
   return (
-    <Stack
-      direction='row'
-      alignItems='flex-end'
-      spacing={1}
+    // A plain flex Box, not a Stack: Stack's `spacing` resets its children's
+    // margins (`margin: 0` at higher specificity), which flattened the
+    // expanded panels' lift above the Elements control onto the window
+    // bottom (debugPanels.spec caught it). `gap` spaces them instead.
+    <Box
       data-testid='debug-dock'
       sx={{
+        display: 'flex',
+        alignItems: 'flex-end',
+        gap: 1,
         position: 'fixed',
         left: '50%',
         bottom: 0,
@@ -114,6 +121,10 @@ export default function DebugDock() {
             ...panelSx(isRenderMounted && isRenderOpen),
             // lil-gui themes through CSS variables it sets on `.lil-gui`; a
             // descendant selector outranks that, so these win.
+            // Taller than the room above the Elements control, it scrolls.
+            '& .lil-gui.root': {
+              maxHeight: `calc(100dvh - ${clearance + TOP_CONTROLS_PX}px)`,
+            },
             '& .lil-gui': {
               '--background-color': 'transparent',
               '--text-color': text,
@@ -128,7 +139,7 @@ export default function DebugDock() {
             },
           }}
         />}
-    </Stack>
+    </Box>
   )
 }
 
@@ -158,7 +169,8 @@ function PerfPanel({panelSx, accent}) {
 
   const count = (v) => (v === null || v === undefined ? '–' : COUNT_FORMAT.format(v))
   return (
-    <Box data-testid='perf-panel' sx={panelSx(isOpen)}>
+    // 11px: lil-gui's size, so Perf reads as the Render panel's sibling.
+    <Box data-testid='perf-panel' sx={{...panelSx(isOpen), fontSize: PANEL_FONT_PX, lineHeight: 1.6}}>
       <Box
         role='button'
         tabIndex={0}
@@ -173,11 +185,11 @@ function PerfPanel({panelSx, accent}) {
         data-testid='perf-panel-title'
         sx={{px: 1, py: 0.5, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap'}}
       >
-        <Typography variant='caption' sx={{fontWeight: 600}}>
+        <Typography variant='inherit' component='span' sx={{fontWeight: 600}}>
           {isOpen ? '▾ Perf' : '▸ Perf '}
         </Typography>
         {!isOpen &&
-          <Typography variant='caption' sx={{color: accent}} data-testid='perf-panel-summary'>
+          <Typography variant='inherit' component='span' sx={{color: accent}} data-testid='perf-panel-summary'>
             {formatPerfSummary(stats)}
           </Typography>}
       </Box>
@@ -193,7 +205,7 @@ function PerfPanel({panelSx, accent}) {
               'columnGap': 2,
               'm': 0,
               'mt': 0.5,
-              '& dt, & dd': {m: 0, typography: 'caption'},
+              '& dt, & dd': {m: 0, fontSize: 'inherit'},
               '& dd': {textAlign: 'right', color: accent, fontVariantNumeric: 'tabular-nums'},
             }}
           >

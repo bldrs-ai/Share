@@ -43,11 +43,6 @@ const AO_STRENGTH_STEP = 0.05
 const FALLBACK_SHADOW_OPACITY = 0.35
 
 
-// The panel's height cap in the debug dock: it opens upward from the window
-// bottom, so leave the top control row clear and scroll past that.
-const PANEL_MAX_HEIGHT = 'calc(100dvh - 96px)'
-
-
 // IBL environment sources offered in the dropdown (label → ShareViewer type).
 const ENV_TYPES = {
   'Gradient studio': 'gradient',
@@ -138,7 +133,8 @@ export default class LightingGui {
     // Every control changes lights, uniforms or the composer, none of which
     // the render-on-demand hooks see: one ask for any change in the panel.
     gui.onChange(() => requestPaint())
-    gui.domElement.style.maxHeight = PANEL_MAX_HEIGHT
+    // Height cap: set by the debug dock, which knows how far above the
+    // window bottom the panel sits (DebugDock's `& .lil-gui.root`).
     gui.domElement.style.overflowY = 'auto'
     // The dock places the panel by whether it's open (expanded above the
     // Elements control) or closed (its title bar at the window bottom).
