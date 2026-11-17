@@ -131,6 +131,12 @@ const SHADOW_NORMAL_BIAS_FACTOR = 0.01
 const DEFAULT_SHADOW_OPACITY = 0.35
 
 
+/** A `raycast` that hits nothing, for decoration meshes. */
+function noRaycast() {
+  // Intentionally empty: adds no intersections.
+}
+
+
 /**
  * @param {number} n
  * @return {number} smallest power of 2 ≥ n.
@@ -447,6 +453,12 @@ export class ShareViewer {
     ground.receiveShadow = true
     ground.visible = false
     ground.name = 'contactShadowGround'
+    // Never a pick target. It's decoration, and three's Raycaster ignores
+    // `visible`: CadView's double-click casts against every scene child, so
+    // with the look on this hidden plane was the nearest hit under STEP
+    // parts, had no expressID, and the pick threw instead of selecting
+    // (#2167, exportGlb.spec's STEP picks).
+    ground.raycast = noRaycast
     this.context.getScene().add(ground)
     this._groundPlane = ground
   }
