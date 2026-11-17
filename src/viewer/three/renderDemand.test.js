@@ -457,6 +457,50 @@ describe('viewer/three/renderDemand session', () => {
     expect(paintsIn(1)).toBe(1)
   })
 
+  it('owes the settle paint again when paints turn expensive inside the window', () => {
+    demand.startSession({probe})
+    paintsIn(2)
+    demand.invalidateSoon()
+    // A cheap frame paints, but that paint is a heavy one (the next frame
+    // comes 50 ms later)...
+    clock += FRAME_MS
+    expect(demand.shouldRender()).toBe(true)
+    demand.rendered(1)
+    clock += 50
+    // ...so the rest of the window is expensive, and still owes a paint.
+    expect(demand.shouldRender()).toBe(false)
+    expect(paintsIn(5)).toBe(0)
+    clock += EXPENSIVE_SETTLE_MS
+    expect(paintsIn(1)).toBe(1)
+  })
+
+  it('pays a cheap window with a paint some other ask made inside it', () => {
+    demand.startSession({probe})
+    paintsIn(2)
+    demand.invalidateSoon()
+    // Every frame of the window paints for another reason (a camera
+    // damping `update`'s ask, say), which frameKind returns before the
+    // settle branch.
+    const window = Math.floor(SETTLE_MS / FRAME_MS)
+    for (let i = 0; i <= window; i++) {
+      demand.invalidate()
+      expect(frame()).toBe(true)
+    }
+    expect(paintsIn(10)).toBe(0)
+  })
+
+  it('owes no settle paint after a load that began inside the window', () => {
+    demand.startSession({probe})
+    paintsIn(2)
+    demand.invalidateSoon()
+    const end = demand.begin(makeControls())
+    paintsIn(1)
+    end()
+    expect(paintsIn(1)).toBe(1)
+    clock += EXPENSIVE_SETTLE_MS
+    expect(paintsIn(10)).toBe(0)
+  })
+
   it('still paints a change the probe sees inside an expensive settle window, at once', () => {
     demand.startSession({probe})
     expect(demand.shouldRender()).toBe(true)

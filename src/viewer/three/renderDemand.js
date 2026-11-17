@@ -381,6 +381,10 @@ export default class RenderDemand {
     this.isDirty = true
     if (isFirst) {
       this.isUserDriving = false
+      // A settle window open as the load begins is covered by the load's own
+      // paints, its last included (`end_`); don't owe one after it too.
+      this.isSettlePending = false
+      this.settleUntilMs = -Infinity
       globalThis.addEventListener?.('resize', this.onResize)
     }
     if (controls !== null && controls !== this.controls) {
@@ -669,10 +673,18 @@ export default class RenderDemand {
       // first frame that sees the window open: a long task or a paused loop
       // can let the whole window pass with no frame at all, and the paint
       // must still come (codex on #2169).
+      // A frame inside the window that finds paints expensive owes the paint
+      // again, even if a cheap frame earlier in the window paid it: the cost
+      // can rise mid-window (a heavy paint, a scene that just got bigger), and
+      // the change the backstop is for may land after that cheap paint (agent
+      // review on #2169).
       const isCheap = !(this.paintCostMs() > EXPENSIVE_PAINT_MS)
-      if (isCheap && now < this.settleUntilMs) {
-        this.isSettlePending = false
-        return PaintKind.FULL
+      if (now < this.settleUntilMs) {
+        if (isCheap) {
+          this.isSettlePending = false
+          return PaintKind.FULL
+        }
+        this.isSettlePending = true
       }
       if (this.isSettlePending && (isCheap || now - this.lastSettleAskMs >= EXPENSIVE_SETTLE_MS)) {
         this.isSettlePending = false
@@ -709,12 +721,19 @@ export default class RenderDemand {
    */
   rendered(costMs, kind = PaintKind.FULL) {
     const drawMs = Number.isFinite(costMs) && costMs > 0 ? costMs : 0
+    const wasCheap = !(this.paintCostMs() > EXPENSIVE_PAINT_MS)
     this.isOverlayDirty = false
     if (kind === PaintKind.OVERLAY) {
       this.stats.overlayPaints++
     } else {
       this.isDirty = false
       this.isBackgroundDirty = false
+      // A cheap full paint inside a settle window pays the window's paint,
+      // whatever asked for it (a damping `update`, a hold): otherwise the
+      // first quiet frame after the window would paint once more.
+      if (wasCheap && this.now() < this.settleUntilMs) {
+        this.isSettlePending = false
+      }
     }
     this.lastPaintStartMs = this.now() - drawMs
     this.lastPaintCostMs = drawMs
