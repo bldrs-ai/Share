@@ -373,7 +373,6 @@ async function findHoverPoint(page: Page,
     }
     await page.evaluate(() => (window as any).__ovl.clearHover())
     await page.waitForTimeout(HOVER_SETTLE_MS)
-    await waitForStillAO(page)
     await nextFrame(page, 'base', 'full')
     // A store change just after the base paint (the load snackbar hiding
     // itself) opens a settle window. With paints as expensive as they are
