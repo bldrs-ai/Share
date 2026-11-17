@@ -153,6 +153,55 @@ function hideCutPlaneArrows(page: Page): Promise<number> {
 }
 
 
+/**
+ * Move the one cut plane past the volume's box, so that every corner of the
+ * box is on its kept side (`keepAll`: `distanceToPoint > 0`) or none is
+ * (`keepNone`). Moved in place, as a drag moves it.
+ *
+ * @param page Playwright page
+ * @param where `keepAll` or `keepNone`
+ */
+async function placeCutPlane(page: Page, where: 'keepAll' | 'keepNone') {
+  const placed = await page.evaluate((side) => {
+    type Vec = {x: number, y: number, z: number}
+    type Plane = {normal: Vec, constant: number}
+    type Mesh = {
+      userData: {isVolume?: boolean}, matrixWorld: {elements: number[]},
+      geometry: {attributes: {position: {count: number, getX: (i: number) => number,
+        getY: (i: number) => number, getZ: (i: number) => number}}},
+      traverse: (fn: (n: Mesh) => void) => void,
+    }
+    type State = {model?: Mesh, viewer?: {clipper?: {_meshClipper?: {planes: Array<{plane: Plane}>}}}}
+    const state = (window as unknown as {useStore: {getState: () => State}}).useStore.getState()
+    const plane = state.viewer?.clipper?._meshClipper?.planes[0]?.plane
+    let volume: Mesh | null = null
+    state.model?.traverse((n) => {
+      if (n.userData?.isVolume) {
+        volume = n
+      }
+    })
+    if (!plane || volume === null) {
+      return false
+    }
+    const {matrixWorld: {elements: m}, geometry: {attributes: {position}}} = volume as Mesh
+    const distances: number[] = []
+    for (let i = 0; i < position.count; i++) {
+      const [x, y, z] = [position.getX(i), position.getY(i), position.getZ(i)]
+      const world = [
+        (m[0] * x) + (m[4] * y) + (m[8] * z) + m[12],
+        (m[1] * x) + (m[5] * y) + (m[9] * z) + m[13],
+        (m[2] * x) + (m[6] * y) + (m[10] * z) + m[14],
+      ]
+      distances.push((plane.normal.x * world[0]) + (plane.normal.y * world[1]) + (plane.normal.z * world[2]))
+    }
+    const margin = 0.01
+    plane.constant = side === 'keepAll' ? margin - Math.min(...distances) : -margin - Math.max(...distances)
+    return true
+  }, where)
+  expect(placed, 'placeCutPlane: no cut plane or no volume').toBe(true)
+}
+
+
 describeMobileAndDesktop('Open a zip of DICOM slices as a volume', () => {
   test.beforeEach(async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS)
@@ -180,11 +229,13 @@ describeMobileAndDesktop('Open a zip of DICOM slices as a volume', () => {
       throw new Error('No viewer canvas to click')
     }
     await page.mouse.click(box.x + (box.width / 2), box.y + (box.height / 2))
+    // Nothing selected is what the click did; Properties off is what
+    // CadView did for a volume (the Properties button already needs a
+    // selection, so asserting it absent too would add nothing).
     expect(await selectionState(page)).toEqual({selected: null, isPropertiesEnabled: false})
-    await expect(page.getByTestId('control-button-properties')).toHaveCount(0)
   })
 
-  test('a plan cut opens the volume', async ({page}) => {
+  test('a plan cut keeps the side three keeps, and opens the volume', async ({page}) => {
     await dropFile(page, PHANTOM_ZIP, 'CT1.zip')
     await expectVolumeOpened(page)
     const whole = await captureRenderedFrame(page)
@@ -192,12 +243,21 @@ describeMobileAndDesktop('Open a zip of DICOM slices as a volume', () => {
     await page.getByTestId('menu-item-plan').click()
     await expect(page.getByTestId('menu-cut-plane')).toBeHidden()
     expect(await hideCutPlaneArrows(page)).toBe(1)
+    // With the arrow hidden, all a frame can show is the volume and what the
+    // cut did to it.
     const cut = await captureRenderedFrame(page)
-    // With the arrow hidden, all that can differ is the volume itself.
-    expect(frameDifference(whole, cut)).toBeGreaterThan(SAME_FRAME_TOLERANCE)
-    // And it is cut, not gone: hiding it still changes the frame.
     expect(await setVolumeVisible(page, false)).toBe(VOLUME_NAME)
     const hidden = await captureRenderedFrame(page)
+    await setVolumeVisible(page, true)
+    // Cut, not gone, and not untouched.
+    expect(frameDifference(cut, whole)).toBeGreaterThan(SAME_FRAME_TOLERANCE)
     expect(frameDifference(cut, hidden)).toBeGreaterThan(SAME_FRAME_TOLERANCE)
+    // Which side: three keeps where `distanceToPoint >= 0`. Moved past the
+    // box with all of it on that side, the cut must remove nothing; with
+    // none of it, everything. A shader trimming the wrong side swaps these.
+    await placeCutPlane(page, 'keepAll')
+    expect(frameDifference(await captureRenderedFrame(page), whole)).toBeLessThanOrEqual(SAME_FRAME_TOLERANCE)
+    await placeCutPlane(page, 'keepNone')
+    expect(frameDifference(await captureRenderedFrame(page), hidden)).toBeLessThanOrEqual(SAME_FRAME_TOLERANCE)
   })
 })

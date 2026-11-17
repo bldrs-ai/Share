@@ -39,37 +39,71 @@ function parseNrrd(nrrd) {
 }
 
 
+const EXPLICIT_LE = '1.2.840.10008.1.2.1'
+const IMPLICIT_LE = '1.2.840.10008.1.2'
+const UNDEFINED = 0xffffffff
+
+
 /**
- * One explicit-VR-little-endian element.
+ * A DICOM element encoder, in explicit or implicit VR little endian.
  *
- * @param {number} group
- * @param {number} element
- * @param {string} vr
- * @param {Uint8Array|string|number} value a string is padded to even length
- * @return {Uint8Array}
+ * - `el(group, element, vr, value)`: one element. A string value is padded
+ *   to even length; a number is a US.
+ * - `sq(group, element, items, {vr})`: an undefined-length sequence (or,
+ *   with `vr: 'UN'`, the UN form PS3.5 §6.2.2 describes) of `items`, each
+ *   an array of elements, written as undefined-length items.
+ *
+ * @param {boolean} explicit
+ * @return {{el: Function, sq: Function}}
  */
-function el(group, element, vr, value) {
-  let bytes
-  if (typeof value === 'number') {
-    bytes = new Uint8Array(new Uint16Array([value]).buffer)
-  } else if (typeof value === 'string') {
-    bytes = new TextEncoder().encode(value.length % 2 ? `${value} ` : value)
-  } else {
-    bytes = value
+function encoder(explicit) {
+  const head = (group, element, vr, length) => {
+    const isLong = !explicit || ['OB', 'OW', 'SQ', 'UN', 'UT'].includes(vr)
+    const view = new DataView(new ArrayBuffer(explicit && isLong ? 12 : 8))
+    view.setUint16(0, group, true)
+    view.setUint16(2, element, true)
+    if (!explicit) {
+      view.setUint32(4, length, true)
+    } else if (isLong) {
+      view.setUint8(4, vr.charCodeAt(0))
+      view.setUint8(5, vr.charCodeAt(1))
+      view.setUint32(8, length, true)
+    } else {
+      view.setUint8(4, vr.charCodeAt(0))
+      view.setUint8(5, vr.charCodeAt(1))
+      view.setUint16(6, length, true)
+    }
+    return new Uint8Array(view.buffer)
   }
-  const isLong = ['OB', 'OW', 'SQ', 'UN', 'UT'].includes(vr)
-  const head = new DataView(new ArrayBuffer(isLong ? 12 : 8))
-  head.setUint16(0, group, true)
-  head.setUint16(2, element, true)
-  head.setUint8(4, vr.charCodeAt(0))
-  head.setUint8(5, vr.charCodeAt(1))
-  if (isLong) {
-    head.setUint32(8, bytes.length, true)
-  } else {
-    head.setUint16(6, bytes.length, true)
+  // Items and delimiters carry no VR in either syntax.
+  const structural = (element, length) => {
+    const view = new DataView(new ArrayBuffer(8))
+    view.setUint16(0, 0xfffe, true)
+    view.setUint16(2, element, true)
+    view.setUint32(4, length, true)
+    return new Uint8Array(view.buffer)
   }
-  return concat([new Uint8Array(head.buffer), bytes])
+  const el = (group, element, vr, value) => {
+    let bytes
+    if (typeof value === 'number') {
+      bytes = new Uint8Array(new Uint16Array([value]).buffer)
+    } else if (typeof value === 'string') {
+      bytes = new TextEncoder().encode(value.length % 2 ? `${value} ` : value)
+    } else {
+      bytes = value
+    }
+    return concat([head(group, element, vr, bytes.length), bytes])
+  }
+  const sq = (group, element, items, {vr = 'SQ'} = {}) => concat([
+    head(group, element, vr, UNDEFINED),
+    ...items.flatMap((elements) => [structural(0xe000, UNDEFINED), ...elements, structural(0xe00d, 0)]),
+    structural(0xe0dd, 0),
+  ])
+  return {el, sq}
 }
+
+
+const {el} = encoder(true)
 
 
 /**
@@ -88,32 +122,45 @@ function concat(parts) {
 
 
 /**
- * A one-slice DICOM file, explicit VR LE unless `transferSyntax` says
- * otherwise, with `overrides` replacing the default image elements.
+ * A one-slice DICOM file: a 2 × 2 signed 16-bit image, with `overrides`
+ * replacing or adding elements. The meta group is explicit VR, as Part 10
+ * requires; the dataset is in `transferSyntax`.
  *
  * @param {object} [opts]
  * @param {string} [opts.transferSyntax]
- * @param {object} [opts.overrides] keyed `gggg,eeee` → element bytes, or null to drop
+ * @param {object} [opts.overrides] keyed `gggg,eeee` → element bytes, a
+ *   function of the dataset's encoder returning them, or null to drop
  * @return {Uint8Array}
  */
-function makeDicom({transferSyntax = '1.2.840.10008.1.2.1', overrides = {}} = {}) {
-  const image = {
-    '0028,0002': el(0x0028, 0x0002, 'US', 1),
-    '0028,0010': el(0x0028, 0x0010, 'US', 2),
-    '0028,0011': el(0x0028, 0x0011, 'US', 2),
-    '0028,0100': el(0x0028, 0x0100, 'US', 16),
-    '0028,0103': el(0x0028, 0x0103, 'US', 1),
-    '7fe0,0010': el(0x7fe0, 0x0010, 'OW', new Uint8Array(new Int16Array([1, 2, 3, 4]).buffer)),
-    ...overrides,
+function makeDicom({transferSyntax = EXPLICIT_LE, overrides = {}} = {}) {
+  const enc = encoder(transferSyntax !== IMPLICIT_LE)
+  const dataset = {
+    '0008,0060': enc.el(0x0008, 0x0060, 'CS', 'CT'),
+    '0020,000e': enc.el(0x0020, 0x000e, 'UI', '1.2.3'),
+    '0028,0002': enc.el(0x0028, 0x0002, 'US', 1),
+    '0028,0010': enc.el(0x0028, 0x0010, 'US', 2),
+    '0028,0011': enc.el(0x0028, 0x0011, 'US', 2),
+    '0028,0100': enc.el(0x0028, 0x0100, 'US', 16),
+    '0028,0103': enc.el(0x0028, 0x0103, 'US', 1),
+    '7fe0,0010': enc.el(0x7fe0, 0x0010, 'OW', new Uint8Array(new Int16Array([1, 2, 3, 4]).buffer)),
+  }
+  for (const [key, value] of Object.entries(overrides)) {
+    dataset[key] = typeof value === 'function' ? value(enc) : value
   }
   return concat([
     new Uint8Array(128),
     new TextEncoder().encode('DICM'),
     el(0x0002, 0x0010, 'UI', transferSyntax),
-    el(0x0008, 0x0060, 'CS', 'CT'),
-    el(0x0020, 0x000e, 'UI', '1.2.3'),
-    ...Object.keys(image).sort().map((k) => image[k]).filter(Boolean),
+    ...Object.keys(dataset).sort().map((k) => dataset[k]).filter(Boolean),
   ])
+}
+
+
+/**
+ * @return {Array<object>} the phantom scan's slices, parsed, archive order
+ */
+function phantomScan() {
+  return groupSeries(sliceFilesOf('phantom-ct.zip').map(parseDicomSlice))[0]
 }
 
 
@@ -128,7 +175,7 @@ describe('loader/dicom', () => {
 
   describe('parseDicomSlice', () => {
     it.each(['phantom-ct.zip', 'phantom-ct-implicit-vr.zip'])(
-      'reads geometry, rescale and pixels from pydicom\'s %s, past a nested sequence', (zip) => {
+      'reads geometry, rescale and pixels from pydicom\'s %s', (zip) => {
         const slices = sliceFilesOf(zip).map(parseDicomSlice)
         const scan = slices.filter((s) => s.rows === ROWS)
         expect(scan).toHaveLength(SLICES)
@@ -149,6 +196,42 @@ describe('loader/dicom', () => {
         expect(new Set(scan.map((x) => x.position[2])).size).toBe(SLICES)
       })
 
+    describe.each([['explicit', EXPLICIT_LE], ['implicit', IMPLICIT_LE]])('in %s VR', (_label, syntax) => {
+      // pydicom writes its sequences with defined lengths, which are stepped
+      // over whole; these are undefined-length, the form scanners write, so
+      // the walk has to find each delimiter.
+      it('walks undefined-length sequences nested in undefined-length items', () => {
+        const nested = (enc) => enc.sq(0x0008, 0x1032, [[
+          enc.el(0x0008, 0x0100, 'SH', 'X'),
+          enc.sq(0x0040, 0xa043, [[enc.el(0x0008, 0x0104, 'LO', 'nested')], []]),
+        ]])
+        const slice = parseDicomSlice(makeDicom({transferSyntax: syntax, overrides: {'0008,1032': nested}}))
+        expect(slice.rows).toBe(2)
+        expect(Array.from(new Int16Array(slice.pixelData.slice().buffer))).toEqual([1, 2, 3, 4])
+      })
+
+      it('steps over an icon\'s Pixel Data, and reads the image\'s', () => {
+        // An Icon Image Sequence holds a thumbnail with its own Rows, Columns
+        // and Pixel Data. Only the dataset's own Pixel Data is the image.
+        const icon = (enc) => enc.sq(0x0088, 0x0200, [[
+          enc.el(0x0028, 0x0010, 'US', 1),
+          enc.el(0x0028, 0x0011, 'US', 1),
+          enc.el(0x7fe0, 0x0010, 'OB', new Uint8Array([9, 9])),
+        ]])
+        const slice = parseDicomSlice(makeDicom({transferSyntax: syntax, overrides: {'0088,0200': icon}}))
+        expect([slice.rows, slice.columns]).toEqual([2, 2])
+        expect(Array.from(new Int16Array(slice.pixelData.slice().buffer))).toEqual([1, 2, 3, 4])
+      })
+    })
+
+    it('reads an undefined-length UN element\'s contents as implicit VR, in an explicit file', () => {
+      // A private sequence a PACS re-encoded as UN (PS3.5 §6.2.2). Read as
+      // explicit, the implicit item's first element would be misparsed.
+      const implicit = encoder(false)
+      const un = (enc) => enc.sq(0x0009, 0x1010, [[implicit.el(0x0009, 0x1011, null, 'abcd')]], {vr: 'UN'})
+      expect(parseDicomSlice(makeDicom({overrides: {'0009,1010': un}})).rows).toBe(2)
+    })
+
     it('returns null for a DICOM file with no image in it', () => {
       expect(parseDicomSlice(makeDicom({overrides: {'7fe0,0010': null}}))).toBeNull()
     })
@@ -164,6 +247,15 @@ describe('loader/dicom', () => {
       expect(() => parseDicomSlice(bytes)).toThrow(/compressed \(transfer syntax 1\.2\.840\.10008\.1\.2\.4\.50\)/)
     })
 
+    it('names a deflated or big-endian series as such, rather than as damage', () => {
+      // Neither can be walked as little endian, so the syntax is judged where
+      // the meta group ends, before the walk would fail on it.
+      expect(() => parseDicomSlice(makeDicom({transferSyntax: '1.2.840.10008.1.2.1.99'})))
+        .toThrow(/compressed \(transfer syntax 1\.2\.840\.10008\.1\.2\.1\.99\)/)
+      expect(() => parseDicomSlice(makeDicom({transferSyntax: '1.2.840.10008.1.2.2'})))
+        .toThrow(/big-endian \(transfer syntax 1\.2\.840\.10008\.1\.2\.2\)/)
+    })
+
     it('refuses color, multi-frame and 32-bit images', () => {
       expect(() => parseDicomSlice(makeDicom({overrides: {'0028,0002': el(0x0028, 0x0002, 'US', 3)}})))
         .toThrow(/color/)
@@ -175,9 +267,11 @@ describe('loader/dicom', () => {
 
     it('refuses a file cut short, as damage rather than a RangeError', () => {
       const whole = makeDicom()
-      // Into an element's header, and into one's value.
+      // From the end: Pixel Data (20 bytes), then three 10-byte US elements.
+      // -45 keeps half of Columns' header (a partial element); -41 keeps its
+      // header and half its value (an element past the end).
       expect(() => parseDicomSlice(whole.subarray(0, whole.length - 45))).toThrow(/damaged/)
-      expect(() => parseDicomSlice(whole.subarray(0, whole.length - 49))).toThrow(/damaged/)
+      expect(() => parseDicomSlice(whole.subarray(0, whole.length - 41))).toThrow(/damaged/)
       // Into the pixels: the image is there, short.
       expect(() => parseDicomSlice(whole.subarray(0, whole.length - 2))).toThrow(/cut short/)
     })
@@ -187,6 +281,14 @@ describe('loader/dicom', () => {
     it('puts the scan first and the scout after it', () => {
       const series = groupSeries(sliceFilesOf('phantom-ct.zip').map(parseDicomSlice))
       expect(series.map((s) => s.length)).toEqual([SLICES, 1])
+    })
+
+    it('splits echoes that share a series and every position into stacks of their own', () => {
+      // Mixed, ordering by position would keep one image per position by
+      // zip order: a different echo here and there.
+      const scan = phantomScan()
+      const echo = (n) => scan.map((s) => ({...s, stack: `${n}|`}))
+      expect(groupSeries([...echo(1), ...echo(2)]).map((s) => s.length)).toEqual([SLICES, SLICES])
     })
   })
 
@@ -200,7 +302,7 @@ describe('loader/dicom', () => {
       expect(volume.spacing).toEqual([0.7, 0.8, 2.5])
       expect(volume.header.space).toBe('left-posterior-superior')
       expect(volume.header.space_origin.map(Number)).toEqual([-100, -80, 50])
-      // Not `=C`: NRRDLoader cuts the header's last character.
+      // A key/value pair (`modality:=CT`), filed by NRRDLoader with its `=`.
       expect(volume.header.modality).toBe('=CT')
       expect([volume.windowLow, volume.windowHigh]).toEqual([-1000, 2500])
       const at = (x, y, z) => volume.data[x + (y * COLUMNS) + (z * COLUMNS * ROWS)]
@@ -232,11 +334,55 @@ describe('loader/dicom', () => {
       expect(volume.data[0]).toBe(((-1000 + 1024) * 0.5) - 1024)
     })
 
-    it('writes float rather than wrap an unsigned scan past what a short holds', () => {
-      const [scan] = groupSeries(sliceFilesOf('phantom-ct.zip').map(parseDicomSlice))
-      const volume = parseNrrd(dicomSeriesToNrrd(scan.map((s) => ({...s, slope: 10, intercept: 0}))))
-      expect(volume.data).toBeInstanceOf(Float32Array)
-      expect(volume.windowHigh).toBe((2500 + 1024) * 10)
+    it('writes ushort for an unsigned range past what a short holds, float past that', () => {
+      const scan = phantomScan()
+      // Stored values run 24 (air) to 3524 (the sphere).
+      const tenfold = parseNrrd(dicomSeriesToNrrd(scan.map((s) => ({...s, slope: 10, intercept: 0}))))
+      expect(tenfold.data).toBeInstanceOf(Uint16Array)
+      expect(tenfold.windowHigh).toBe(35240)
+      const past = parseNrrd(dicomSeriesToNrrd(scan.map((s) => ({...s, slope: 20, intercept: 0}))))
+      expect(past.data).toBeInstanceOf(Float32Array)
+      expect(past.windowHigh).toBe(70480)
+      // Negative and past 32767: neither short nor ushort holds it.
+      const both = parseNrrd(dicomSeriesToNrrd(scan.map((s) => ({...s, slope: 10, intercept: -1024}))))
+      expect(both.data).toBeInstanceOf(Float32Array)
+    })
+
+    it('keeps a gantry tilt: the slice axis is the position step, not the normal', () => {
+      // Each slice 0.5 mm further posterior as well as 2.5 mm up.
+      const tilted = phantomScan().map((s) => {
+        const [x, y, z] = s.position
+        return {...s, position: [x, y + (0.2 * (z - 50)), z]}
+      })
+      const volume = parseNrrd(dicomSeriesToNrrd(tilted))
+      expect(volume.header.vectors[2][0]).toBeCloseTo(0, 6)
+      expect(volume.header.vectors[2][1]).toBeCloseTo(0.5, 6)
+      expect(volume.header.vectors[2][2]).toBeCloseTo(2.5, 6)
+    })
+
+    it('stacks a sagittal series along its own normal', () => {
+      // Rows run anterior to posterior (+y), columns superior to inferior
+      // (-z), so the normal row × column is -x (toward the patient's right),
+      // and positions step that way.
+      const sagittal = phantomScan().map((s) => ({
+        ...s,
+        orientation: [0, 1, 0, 0, 0, -1],
+        position: [-(s.position[2] - 50), -80, 50],
+      }))
+      const volume = parseNrrd(dicomSeriesToNrrd(sagittal))
+      const v = volume.header.vectors.map((d) => d.map((c) => Number(c.toFixed(6)) + 0))
+      expect(v).toEqual([[0, 0.7, 0], [0, 0, -0.8], [-2.5, 0, 0]])
+    })
+
+    it('refuses a series with a slice missing, rather than stack it evenly', () => {
+      const scan = phantomScan()
+      expect(() => dicomSeriesToNrrd(scan.filter((s) => s.position[2] !== 50 + (2.5 * 10))))
+        .toThrow(/unevenly spaced \(a slice may be missing\)/)
+    })
+
+    it('refuses slices with nothing to order them by', () => {
+      const unordered = phantomScan().map((s) => ({...s, position: null, instanceNumber: null}))
+      expect(() => dicomSeriesToNrrd(unordered)).toThrow(/no position or number/)
     })
 
     it('refuses slices of different sizes', () => {

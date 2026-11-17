@@ -88,6 +88,49 @@ function textOf(file) {
 
 
 /**
+ * A `File` the module made, as an ArrayBuffer.
+ *
+ * @param {Blob} file
+ * @return {Promise<ArrayBuffer>}
+ */
+function bufferOf(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsArrayBuffer(file)
+  })
+}
+
+
+/**
+ * A zip with one entry's compression method rewritten, in its local header
+ * and its directory record: how an archive with an entry Share can't extract
+ * (Deflate64, LZMA) is made from one fflate wrote.
+ *
+ * @param {Uint8Array} zip
+ * @param {string} name the entry's path
+ * @param {number} method
+ * @return {Uint8Array}
+ */
+function withMethod(zip, name, method) {
+  const out = zip.slice()
+  const view = new DataView(out.buffer)
+  const target = new TextEncoder().encode(name)
+  const nameAt = (at) => target.every((b, i) => out[at + i] === b)
+  for (let at = 0; at + 46 <= out.length; at++) {
+    const sig = view.getUint32(at, true)
+    if (sig === 0x04034b50 && view.getUint16(at + 26, true) === target.length && nameAt(at + 30)) {
+      view.setUint16(at + 8, method, true)
+    } else if (sig === 0x02014b50 && view.getUint16(at + 28, true) === target.length && nameAt(at + 46)) {
+      view.setUint16(at + 10, method, true)
+    }
+  }
+  return out
+}
+
+
+/**
  * A resolution as plain data, for assertions. Jest's failure diff deep-copies
  * what it prints, and a jsdom File inside a resolution aborts the worker
  * ("Assertion failed: isolate_data") instead of printing — so a failing
@@ -279,10 +322,12 @@ describe('modelArchive', () => {
       const resolved = await resolveArchiveUpload(upload(phantom(), 'CT1.zip'))
       expect(summary(resolved)).toEqual({kind: 'model', ext: 'nrrd', name: 'CT1.nrrd', isInput: false})
       expect(resolved.file.lastModified).toBe(PICKED_AT)
-      // The File and `bytes` are the same NRRD, which three's loader reads
+      // The File is the NRRD (no `bytes` beside it, which would hold the
+      // volume twice), which three's loader reads
       // as the 40 × 48 × 32 scan, not the 16 × 16 scout.
       expect((await textOf(resolved.file)).startsWith('NRRD0004\n')).toBe(true)
-      const volume = new NRRDLoader().parse(resolved.bytes.buffer)
+      expect(resolved.bytes).toBeUndefined()
+      const volume = new NRRDLoader().parse(await bufferOf(resolved.file))
       expect(volume.dimensions).toEqual([40, 48, 32])
     })
 
@@ -298,7 +343,7 @@ describe('modelArchive', () => {
         [k % 2 ? `1.2.840.113619.2.55.${k}` : `slice${k}.DCM`, bytes]))
       const resolved = await resolveArchiveUpload(upload(zipSync({...renamed, LICENSE: PDF}), 'study.zip'))
       expect(summary(resolved)).toEqual({kind: 'model', ext: 'nrrd', name: 'study.nrrd', isInput: false})
-      expect(new NRRDLoader().parse(resolved.bytes.buffer).dimensions).toEqual([40, 48, 32])
+      expect(new NRRDLoader().parse(await bufferOf(resolved.file)).dimensions).toEqual([40, 48, 32])
     })
 
     it('ends a compressed series in the dialog, with the reason', async () => {
@@ -315,6 +360,35 @@ describe('modelArchive', () => {
         {entry: 'drop', alert, open: jest.fn()})
       expect(outcome).toBe('refused')
       expect(alert.mock.calls[0][0].archive.problem).toMatch(/compressed \(transfer syntax 1\.2\.840\.10008\.1\.2\.5\)/)
+    })
+
+    it('doesn\'t change what an archive with no DICOM is told, even if an entry can\'t be extracted', async () => {
+      // `LICENSE` is a candidate (no extension), and Deflate64 (9) is a
+      // method Share can't read. Looking at it mustn't turn "holds no model"
+      // into "compressed with Deflate64".
+      const zip = withMethod(zipSync({'LICENSE': PDF, 'plan.pdf': PDF}), 'LICENSE', 9)
+      expect(summary(await resolveArchiveUpload(upload(zip, 'docs.zip')))).toEqual({kind: 'none', exts: ['', 'pdf']})
+    })
+
+    it('refuses a DICOM archive with an entry it can\'t extract, rather than open a series that may miss it', async () => {
+      const entries = unzipSync(phantom())
+      const [aSlice] = Object.keys(entries).filter((p) => p.includes('/DICOM/'))
+      const zip = withMethod(zipSync(entries), aSlice, 9)
+      await expect(resolveArchiveUpload(upload(zip, 'CT1.zip'))).rejects.toThrow(/Deflate64/)
+    })
+
+    it('charges the budget for DICOM slices only', async () => {
+      const entries = unzipSync(phantom())
+      const sliceBytes = Object.values(entries).filter((b) => b.length > 1000)
+        .reduce((n, b) => n + b.length, 0)
+      // A non-DICOM candidate: if looking at it were charged, the slices
+      // after it would not fit in a budget of exactly their size.
+      // First in the archive, so it is looked at before any slice.
+      const zip = zipSync({LICENSE: new Uint8Array(64 * 1024), ...entries})
+      mockTotalInflatedBytes = sliceBytes
+      expect(summary(await resolveArchiveUpload(upload(zip, 'CT1.zip'))).ext).toBe('nrrd')
+      mockTotalInflatedBytes = sliceBytes - 1
+      await expect(resolveArchiveUpload(upload(zip, 'CT1.zip'))).rejects.toThrow(/unpacks to more than/)
     })
 
     it('reaches the seam\'s open typed nrrd', async () => {

@@ -33,6 +33,7 @@ import {
   MAX_TOTAL_INFLATED_BYTES,
   ZipArchiveError,
   asArchiveError,
+  expandsPastMessage,
   extractZipEntry,
   looksLikeZipBytes,
   readZipDirectory,
@@ -205,12 +206,27 @@ const DICOM_EXTS = new Set(['dcm', 'dicom', 'dic', 'ima', ''])
  * The volume in an archive of DICOM slices, stacked into one `.nrrd`
  * (`loader/dicom.js`), for an archive with no other model in it.
  *
- * Each candidate entry is inflated against the upload's one budget and kept
- * only if it is a DICOM image; a series is the slices that share a Series
- * Instance UID, image size and orientation, and the largest one opens — a
+ * Each candidate entry is inflated and kept only if it is a DICOM image; a
+ * series is the slices that share a Series Instance UID, image size,
+ * orientation, echo and temporal position, and the largest one opens — a
  * study export puts the scan beside a scout of a few slices. What reaches
  * the seam is a `File` named for the archive (`CT1.zip` → `CT1.nrrd`),
  * typed `nrrd`: the archive is the only name the series has.
+ *
+ * The candidates are guesses (any entry with no extension), so looking at
+ * one must not change what an archive with no DICOM in it is told:
+ *
+ * - An entry is inflated against a scratch budget (the whole per-upload
+ *   ceiling), and charged to the upload's own only once it has proved to be
+ *   a DICOM image. A `LICENSE` or `Makefile` costs nothing, and can't fail
+ *   for room the slices before it used.
+ * - An entry that can't be extracted (encrypted, an unsupported method,
+ *   past the ceiling) is skipped while it might be anything. It is raised
+ *   only once the archive has proved to hold DICOM, where it may be a
+ *   slice, and a series missing slices must not open as if whole; or when
+ *   it is named as DICOM (`.dcm`).
+ * - Otherwise an archive with no DICOM image falls through to the "holds no
+ *   model" alert exactly as before.
  *
  * @param {Blob} file the archive
  * @param {Array<object>} files its entries (`zipArchive.js#ZipEntry`)
@@ -224,11 +240,31 @@ async function dicomVolume(file, files, budget) {
     (DICOM_EXTS.has(entry.ext) || /^\d+$/.test(entry.ext)))
   const slices = []
   let refusal = null
+  let unextracted = null
+  let unextractedNamedDicom = null
   for (const entry of candidates) {
-    const bytes = await extractZipEntry(file, entry, budget)
+    let bytes
+    try {
+      // A scratch budget of the whole per-upload ceiling, not what is left
+      // of the real one: a guess mustn't fail for room the slices used up.
+      bytes = await extractZipEntry(file, entry, {remaining: MAX_TOTAL_INFLATED_BYTES})
+    } catch (e) {
+      if (!(e instanceof ZipArchiveError)) {
+        throw e
+      }
+      unextracted = unextracted ?? e
+      if (entry.ext !== '' && !/^\d+$/.test(entry.ext)) {
+        unextractedNamedDicom = unextractedNamedDicom ?? e
+      }
+      continue
+    }
     if (!looksLikeDicom(bytes)) {
       continue
     }
+    if (bytes.length > budget.remaining) {
+      throw new ZipArchiveError(expandsPastMessage())
+    }
+    budget.remaining -= bytes.length
     try {
       const slice = parseDicomSlice(bytes)
       if (slice !== null) {
@@ -247,22 +283,31 @@ async function dicomVolume(file, files, budget) {
     if (refusal !== null) {
       throw new ZipArchiveError(refusal.message)
     }
+    if (unextractedNamedDicom !== null) {
+      throw unextractedNamedDicom
+    }
     return null
   }
+  if (unextracted !== null) {
+    throw unextracted
+  }
   const [series] = groupSeries(slices)
-  let bytes
+  slices.length = 0
+  let nrrd
   try {
-    bytes = withArchiveErrors(() => dicomSeriesToNrrd(series))
+    nrrd = withArchiveErrors(() => dicomSeriesToNrrd(series))
   } catch (e) {
     throw e instanceof DicomError ? new ZipArchiveError(e.message) : e
   }
   const name = `${withoutExtension(String(file.name || 'volume.zip'))}.nrrd`
-  debug().log(`modelArchive#dicomVolume: stacked ${series.length} of ${slices.length} DICOM slices`)
+  debug().log(`modelArchive#dicomVolume: stacked ${series.length} DICOM slices`)
+  // No `bytes` beside the File, unlike an entry's resolution: the File is a
+  // copy, and holding the NRRD array too would keep a second whole volume
+  // alive while the seam writes the File to OPFS.
   return {
     kind: 'model',
-    file: withArchiveErrors(() => new File([bytes], name, {lastModified: file.lastModified})),
+    file: withArchiveErrors(() => new File([nrrd], name, {lastModified: file.lastModified})),
     ext: 'nrrd',
-    bytes,
   }
 }
 

@@ -52,10 +52,12 @@ const TAG = Object.freeze({
   SOP_CLASS: 0x00080016,
   MODALITY: 0x00080060,
   SLICE_THICKNESS: 0x00180050,
+  ECHO_NUMBERS: 0x00180086,
   SERIES_UID: 0x0020000e,
   INSTANCE_NUMBER: 0x00200013,
   IMAGE_POSITION: 0x00200032,
   IMAGE_ORIENTATION: 0x00200037,
+  TEMPORAL_POSITION: 0x00200100,
   SAMPLES_PER_PIXEL: 0x00280002,
   NUMBER_OF_FRAMES: 0x00280008,
   ROWS: 0x00280010,
@@ -107,6 +109,8 @@ export function looksLikeDicom(bytes) {
  * @property {Array<number>} orientation ImageOrientationPatient: row then
  *   column direction cosines
  * @property {number|null} instanceNumber InstanceNumber, the fallback order
+ * @property {string} stack EchoNumbers and TemporalPositionIdentifier, which
+ *   tell apart images of one series taken at the same positions
  * @property {number} bitsAllocated 8 or 16
  * @property {boolean} isSigned PixelRepresentation 1
  * @property {number} slope RescaleSlope
@@ -127,15 +131,12 @@ export function parseDicomSlice(bytes) {
   if (!looksLikeDicom(bytes)) {
     throw new DicomError('This is not a DICOM file.')
   }
+  // The transfer syntax is checked inside, where the meta group ends: a
+  // syntax this reader can't walk (deflated, big endian) would otherwise fail
+  // the walk first, and be reported as damage.
   const elements = readElements(bytes)
-  const transferSyntax = elements.get(TAG.TRANSFER_SYNTAX) ?? IMPLICIT_VR_LE
   if (!elements.has(TAG.PIXEL_DATA)) {
     return null
-  }
-  if (transferSyntax !== IMPLICIT_VR_LE && transferSyntax !== EXPLICIT_VR_LE) {
-    throw new DicomError(
-      `This DICOM series is compressed (transfer syntax ${ transferSyntax }), which Share can't decode. ` +
-      `Export it uncompressed from your viewer or PACS, then open that.`)
   }
   const samples = numberOf(elements.get(TAG.SAMPLES_PER_PIXEL)) ?? 1
   if (samples !== 1) {
@@ -172,6 +173,7 @@ export function parseDicomSlice(bytes) {
     position: position?.length === 3 ? position : null,
     orientation: orientation?.length === 6 ? orientation : [1, 0, 0, 0, 1, 0],
     instanceNumber: numberOf(elements.get(TAG.INSTANCE_NUMBER)),
+    stack: `${elements.get(TAG.ECHO_NUMBERS) ?? ''}|${elements.get(TAG.TEMPORAL_POSITION) ?? ''}`,
     bitsAllocated,
     isSigned: numberOf(elements.get(TAG.PIXEL_REPRESENTATION)) === 1,
     slope: numberOf(elements.get(TAG.RESCALE_SLOPE)) || 1,
@@ -203,16 +205,21 @@ export function groupSeries(slices) {
 
 
 /**
- * A slice's series, split further by image size and orientation: a series
- * UID is supposed to mean one stack, but some exports reuse it across
- * reformats, and those can't share a volume.
+ * A slice's series, split further by image size and orientation, and by
+ * echo and temporal position: a series UID is supposed to mean one stack,
+ * but some exports reuse it across reformats, and some series hold several
+ * stacks at the same positions.
  *
  * @param {DicomSlice} slice
  * @return {string}
  */
 function seriesKey(slice) {
   const orientation = slice.orientation.map((c) => c.toFixed(3)).join(',')
-  return `${slice.seriesUid}|${slice.rows}x${slice.columns}|${orientation}`
+  // Echoes of a multi-echo MR, or phases of a cardiac or perfusion series,
+  // share a series UID and every position. Mixed, the position order would
+  // pick one image per position by zip order, a different echo here and
+  // there; split, each is its own stack.
+  return `${slice.seriesUid}|${slice.rows}x${slice.columns}|${orientation}|${slice.stack ?? ''}`
 }
 
 
@@ -249,7 +256,7 @@ export function dicomSeriesToNrrd(slices) {
   const colDir = orientation.slice(3, 6)
   const normal = normalize(cross(rowDir, colDir))
   const ordered = orderSlices(slices, normal)
-  const sliceGap = sliceSpacing(ordered, normal)
+  const sliceAxis = sliceStep(ordered, normal)
 
   // PixelSpacing is [row spacing, column spacing]: the gap between rows
   // runs along the column direction, and between columns along the row
@@ -259,27 +266,17 @@ export function dicomSeriesToNrrd(slices) {
   const directions = [
     scale(rowDir, colSpacing),
     scale(colDir, rowSpacing),
-    scale(normal, sliceGap),
+    sliceAxis,
   ]
   const origin = ordered[0].position ?? [0, 0, 0]
 
   const voxelsPerSlice = rows * columns
   const raws = ordered.map(rawPixels)
-  // `short` when every slice's rescale is integral and its rescaled range
-  // fits — CT's Hounsfield units always do — else `float`, rather than wrap
-  // an unsigned 16-bit scan's brightest voxels negative.
-  const isShort = ordered.every((s, k) => {
-    if (!Number.isInteger(s.slope) || !Number.isInteger(s.intercept)) {
-      return false
-    }
-    const [lo, hi] = minMax(raws[k])
-    const ends = [(lo * s.slope) + s.intercept, (hi * s.slope) + s.intercept]
-    return ends.every((v) => v >= -32768 && v <= 32767)
-  })
+  const type = voxelType(ordered, raws)
   const header = `${[
     'NRRD0004',
     '# Converted by Bldrs Share from a DICOM series',
-    `type: ${isShort ? 'short' : 'float'}`,
+    `type: ${type}`,
     'dimension: 3',
     'space: left-posterior-superior',
     `sizes: ${columns} ${rows} ${ordered.length}`,
@@ -291,10 +288,9 @@ export function dicomSeriesToNrrd(slices) {
     // NRRD key/value pairs (`key:=value`), which NRRDLoader keeps on
     // `volume.header` for `nrrd.js` to pick a default window by.
     `modality:=${sanitizeKeyValue(first.modality)}`,
-    // Last, and a comment, because NRRDLoader cuts the header one character
-    // short of the blank line that ends it (`_parseChars(_bytes, 0, i - 2)`
-    // in three r184): a field here would lose its last character. Read
-    // through NRRDLoader, `modality:=CT` above came back as `=C`.
+    // Last, and a comment: it carries the alignment padding below, which
+    // would otherwise trail a field's value. (Before three r187 it also had
+    // to absorb NRRDLoader cutting the header one character short.)
     '# end of header',
   ].join('\n') }\n\n`
   // The voxels are written straight into the file, after the header, rather
@@ -302,24 +298,57 @@ export function dicomSeriesToNrrd(slices) {
   // is another ~200 MiB held at once. A typed-array view needs its offset
   // aligned to its element size, so the header is padded with spaces at the
   // end of its last (comment) line.
-  const voxelBytes = isShort ? 2 : 4
+  const voxelBytes = type === 'float' ? 4 : 2
   const unpadded = new TextEncoder().encode(header)
   const padding = (voxelBytes - ((unpadded.length) % voxelBytes)) % voxelBytes
   const headerBytes = new TextEncoder().encode(header.replace(/\n\n$/, `${' '.repeat(padding)}\n\n`))
   const count = voxelsPerSlice * ordered.length
   const file = new Uint8Array(headerBytes.length + (count * voxelBytes))
   file.set(headerBytes, 0)
-  const out = isShort ?
-    new Int16Array(file.buffer, headerBytes.length, count) :
-    new Float32Array(file.buffer, headerBytes.length, count)
+  const VoxelArray = {short: Int16Array, ushort: Uint16Array, float: Float32Array}[type]
+  const out = new VoxelArray(file.buffer, headerBytes.length, count)
   ordered.forEach((slice, k) => {
     const raw = raws[k]
     const base = k * voxelsPerSlice
     for (let v = 0; v < voxelsPerSlice; v++) {
       out[base + v] = (raw[v] * slice.slope) + slice.intercept
     }
+    // Let a slice's copy (made when its pixels sat at an odd offset) go as
+    // soon as it is written, rather than at the end.
+    raws[k] = null
   })
   return file
+}
+
+
+/**
+ * The voxel type the series' rescaled values need: `short` when every
+ * slice's rescale is integral and its range fits (CT's Hounsfield units
+ * always do), `ushort` for an integral unsigned range past 32767 (half the
+ * memory `float` would take), else `float`, rather than wrap the brightest
+ * voxels negative.
+ *
+ * @param {Array<DicomSlice>} ordered
+ * @param {Array<object>} raws each slice's stored values
+ * @return {string} an NRRD type
+ */
+function voxelType(ordered, raws) {
+  let lo = Infinity
+  let hi = -Infinity
+  for (let k = 0; k < ordered.length; k++) {
+    const {slope, intercept} = ordered[k]
+    if (!Number.isInteger(slope) || !Number.isInteger(intercept)) {
+      return 'float'
+    }
+    const [rawLo, rawHi] = minMax(raws[k])
+    const ends = [(rawLo * slope) + intercept, (rawHi * slope) + intercept]
+    lo = Math.min(lo, ...ends)
+    hi = Math.max(hi, ...ends)
+  }
+  if (lo >= -32768 && hi <= 32767) {
+    return 'short'
+  }
+  return lo >= 0 && hi <= 65535 ? 'ushort' : 'float'
 }
 
 
@@ -327,42 +356,77 @@ export function dicomSeriesToNrrd(slices) {
  * @param {Array<DicomSlice>} slices
  * @param {Array<number>} normal
  * @return {Array<DicomSlice>} sorted along the normal, duplicates dropped
+ * @throws {DicomError} when the slices carry nothing to order them by
  */
 function orderSlices(slices, normal) {
   const hasPositions = slices.every((s) => s.position !== null)
+  if (!hasPositions && slices.length > 1 && slices.some((s) => s.instanceNumber === null)) {
+    // Without positions, InstanceNumber is the only order there is; without
+    // it too, every slice would sort alike and the duplicate pass below
+    // would collapse the series to one.
+    throw new DicomError('The slices in this DICOM series have no position or number to put them in order.')
+  }
   const key = hasPositions ?
     (s) => dot(s.position, normal) :
-    (s) => s.instanceNumber ?? 0
+    (s) => s.instanceNumber
   const sorted = [...slices].sort((a, b) => key(a) - key(b))
-  // The same slice twice (an export that wrote it under two names, or two
-  // echoes at one position) would double a plane of the volume and push
-  // everything after it out of place.
+  // The same slice twice (an export that wrote it under two names) would
+  // double a plane of the volume and push everything after it out of place.
+  // Several images per position that are different stacks (echoes, phases)
+  // were split apart by `seriesKey` before this.
   return sorted.filter((s, i) => i === 0 || Math.abs(key(s) - key(sorted[i - 1])) > 1e-4)
 }
 
 
+// How far one gap may differ from the series' median before the series is
+// refused as uneven. Positions are written to a few decimals, so a real
+// series varies by far less than this; a missing slice is a whole gap off.
+const GAP_TOLERANCE = 0.1
+
+
 /**
- * The gap between neighbouring slices along the normal, mm: the median of
- * their position differences, so one missing slice doesn't stretch the
- * whole volume. SliceThickness, then 1, for a series without positions.
+ * The step from one slice to the next, mm, as a vector: NRRD's third
+ * `space direction`.
+ *
+ * From the positions, it is the first-to-last step divided evenly, NOT the
+ * normal scaled by the gap: on a CT taken with the gantry tilted, each slice
+ * is offset along the table as well as along the normal, and only the
+ * position step carries that (the volume is then a sheared box, which NRRD
+ * and `nrrd.js#placement` both take). The gap is never SliceThickness, the
+ * thickness of the cut, which differs from the gap for overlapping or gapped
+ * reconstructions.
+ *
+ * A volume is a regular grid, so the gaps along the normal must agree: a
+ * missing slice or a variable-spacing series would otherwise be stacked
+ * evenly, and every slice after the hole drawn a gap out of place. Such a
+ * series is refused rather than drawn wrong.
+ *
+ * Without positions, the normal scaled by SliceThickness (or 1).
  *
  * @param {Array<DicomSlice>} ordered
  * @param {Array<number>} normal
- * @return {number}
+ * @return {Array<number>}
+ * @throws {DicomError} for uneven spacing
  */
-function sliceSpacing(ordered, normal) {
-  if (ordered.length > 1 && ordered.every((s) => s.position !== null)) {
+function sliceStep(ordered, normal) {
+  const n = ordered.length
+  if (n > 1 && ordered.every((s) => s.position !== null)) {
     const gaps = []
-    for (let k = 1; k < ordered.length; k++) {
+    for (let k = 1; k < n; k++) {
       gaps.push(dot(ordered[k].position, normal) - dot(ordered[k - 1].position, normal))
     }
-    gaps.sort((a, b) => a - b)
-    const median = gaps[Math.floor(gaps.length / 2)]
-    if (median > 0) {
-      return median
+    const sorted = [...gaps].sort((a, b) => a - b)
+    const median = sorted[Math.floor(sorted.length / 2)]
+    if (gaps.some((g) => Math.abs(g - median) > median * GAP_TOLERANCE)) {
+      throw new DicomError(
+        'The slices in this DICOM series are unevenly spaced (a slice may be missing), ' +
+        'so they don\'t stack into one regular volume.')
     }
+    const first = ordered[0].position
+    const last = ordered[n - 1].position
+    return [0, 1, 2].map((a) => (last[a] - first[a]) / (n - 1))
   }
-  return ordered[0].sliceThickness ?? 1
+  return scale(normal, ordered[0].sliceThickness ?? 1)
 }
 
 
@@ -405,6 +469,21 @@ function rawPixels(slice) {
 }
 
 
+// Explicit VR big endian, retired but still written by some old devices.
+const EXPLICIT_VR_BE = '1.2.840.10008.1.2.2'
+
+
+/**
+ * @param {string} syntax a transfer syntax UID this reader can't walk
+ * @return {string} why, for the dialog
+ */
+function unsupportedSyntaxMessage(syntax) {
+  const kind = syntax === EXPLICIT_VR_BE ? 'big-endian' : 'compressed'
+  return `This DICOM series is ${kind} (transfer syntax ${syntax}), which Share can't decode. ` +
+    'Export it uncompressed from your viewer or PACS, then open that.'
+}
+
+
 /**
  * Walk a Part 10 file's elements, keeping the values of {@link KEPT_TAGS}.
  *
@@ -426,13 +505,17 @@ function readElements(bytes) {
       const group = view.getUint16(reader.offset, true)
       if (group !== 0x0002 && reader.isMetaDone !== true) {
         reader.isMetaDone = true
-        reader.explicit = (elements.get(TAG.TRANSFER_SYNTAX) ?? IMPLICIT_VR_LE) !== IMPLICIT_VR_LE
+        const syntax = elements.get(TAG.TRANSFER_SYNTAX) ?? IMPLICIT_VR_LE
+        if (syntax !== IMPLICIT_VR_LE && syntax !== EXPLICIT_VR_LE) {
+          throw new DicomError(unsupportedSyntaxMessage(syntax))
+        }
+        reader.explicit = syntax === EXPLICIT_VR_LE
       }
-      const element = readElement(reader)
+      const element = readElement(reader, true)
       if (element.tag === TAG.PIXEL_DATA) {
         if (element.length === UNDEFINED_LENGTH) {
-          // Encapsulated (compressed) pixel data. The transfer syntax check
-          // reports it; mark it present so that check runs.
+          // Encapsulated pixel data in an uncompressed syntax isn't valid
+          // DICOM; it reads as pixels missing ("cut short").
           elements.set(TAG.PIXEL_DATA, new Uint8Array(0))
         } else {
           elements.set(TAG.PIXEL_DATA, bytes.subarray(element.valueOffset, element.valueOffset + element.length))
@@ -473,9 +556,13 @@ function readElements(bytes) {
  * length is walked to its delimiter).
  *
  * @param {object} reader
+ * @param {boolean} [isTopLevel] the dataset's own element, not one inside a
+ *   sequence. Only the dataset's Pixel Data is the image: its value is left
+ *   for the caller to take. A Pixel Data inside a sequence (an icon, in an
+ *   Icon Image Sequence) is stepped over like any other value.
  * @return {DicomElement}
  */
-function readElement(reader) {
+function readElement(reader, isTopLevel = false) {
   const {view} = reader
   const start = reader.offset
   const group = view.getUint16(start, true)
@@ -500,13 +587,21 @@ function readElement(reader) {
     valueOffset = start + 8
   }
   reader.offset = valueOffset
-  if (tag === TAG.PIXEL_DATA) {
+  if (tag === TAG.PIXEL_DATA && isTopLevel) {
     return {tag, vr, length, valueOffset}
   }
   if (length === UNDEFINED_LENGTH) {
     // A sequence (or, in implicit VR, an element of unknown VR that must be
-    // one) of undefined length: skip nested items to the delimiter.
+    // one) of undefined length: skip nested items to the delimiter. An
+    // undefined-length UN is a sequence whose contents are implicit VR
+    // little endian whatever the file's syntax (PS3.5 §6.2.2): a private
+    // sequence a PACS re-encoded without knowing its VR.
+    const wasExplicit = reader.explicit
+    if (vr === 'UN') {
+      reader.explicit = false
+    }
     skipUndefinedLength(reader)
+    reader.explicit = wasExplicit
   } else {
     if (valueOffset + length > reader.bytes.length) {
       throw new RangeError('element past end')

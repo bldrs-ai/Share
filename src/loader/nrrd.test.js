@@ -75,6 +75,28 @@ describe('loader/nrrd', () => {
     expect(sphere.z - middle.z).toBeCloseTo(0, 6)
   })
 
+  it('places a tilted (sheared) series voxel for voxel where the scanner put it', () => {
+    // Each slice 0.5 mm further posterior per 2.5 mm up: a gantry tilt. The
+    // box is then sheared, and its last slice's first voxel must still land
+    // on that slice's own ImagePositionPatient.
+    const zip = fs.readFileSync(path.join(__dirname, '../../testdata/models/dicom/phantom-ct.zip'))
+    const scan = groupSeries(Object.entries(unzipSync(new Uint8Array(zip)))
+      .filter(([p]) => !p.endsWith('.txt'))
+      .map(([, bytes]) => parseDicomSlice(bytes)))[0]
+    const tilted = scan.map((sl) => {
+      const [x, y, z] = sl.position
+      return {...sl, position: [x, y + (0.2 * (z - 50)), z]}
+    })
+    const root = nrrdToThree(new NRRDLoader().parse(dicomSeriesToNrrd(tilted).buffer))
+    const boxToScene = root.children[0].material.uniforms.sceneToBox.value.clone().invert()
+    // Voxel (0, 0, 31)'s centre, in box coords.
+    const voxel = new Vector3((0.5 / 40) - 0.5, (0.5 / 48) - 0.5, (31.5 / 32) - 0.5).applyMatrix4(boxToScene)
+    // LPS (-100, -80 + 0.2 × 77.5, 127.5) mm → scene (L, S, -P) m.
+    expect(voxel.x).toBeCloseTo(-0.1, 6)
+    expect(voxel.y).toBeCloseTo(0.1275, 6)
+    expect(voxel.z).toBeCloseTo(0.0645, 6)
+  })
+
   it('resamples a volume past the texture limit, keeping its extent', () => {
     const volume = {
       data: new Int16Array(4 * 4 * 1030),
