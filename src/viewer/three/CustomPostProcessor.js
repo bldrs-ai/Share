@@ -13,6 +13,7 @@ import {WebGLRenderer, Scene, Camera, UnsignedShortType} from 'three'
 import {gtagEvent} from '../../privacy/analytics'
 import {isLookOn} from '../lookMode'
 import {LOOKS, DEFAULT_LOOK} from '../looks'
+import {InPlacePass} from './inPlacePass'
 import {patchOutlineForBatchedMeshes} from './outlineBatching'
 
 
@@ -70,6 +71,13 @@ export default class CustomPostProcessor {
   _aoSuspended = false
   _aoStrength = 1
   _n8aoPass = null
+  // The AO passes as the composer runs them: each wrapped in an InPlacePass
+  // (inPlacePass.js) so its result lands back in the input buffer over the
+  // scene's depth, which is what lets the hover overlay cache the AO'd frame.
+  // Enabling and disabling AO toggles these; `_n8aoPass` / `_ssaoPass` stay
+  // the inner passes, for their configuration.
+  _n8aoStage = null
+  _ssaoStage = null
   _toneMappingPass = null
   static _instance = null
 
@@ -124,7 +132,9 @@ export default class CustomPostProcessor {
     if (renderer && isLookOn()) {
       this._n8aoPass = this._buildN8ao()
       if (this._n8aoPass) {
-        this._composer.addPass(this._n8aoPass)
+        this._n8aoStage = new InPlacePass(this._n8aoPass)
+        this._n8aoStage.enabled = false
+        this._composer.addPass(this._n8aoStage)
       }
       this._aoEnabled = LOOKS[DEFAULT_LOOK].ao === true
       this._applyAOState()
@@ -238,7 +248,7 @@ export default class CustomPostProcessor {
 
   /** @return {boolean} whether an AO pass will run on the next paint. */
   isAORunning() {
-    return Boolean(this._n8aoPass?.enabled || this._ssaoPass?.enabled)
+    return Boolean(this._n8aoStage?.enabled || this._ssaoStage?.enabled)
   }
 
   /** @return {number} current AO strength, or 0 without an AO pass. */
@@ -302,7 +312,7 @@ export default class CustomPostProcessor {
   /** @private */
   _buildSsao() {
     const passes = this._composer.passes
-    const anchor = this._n8aoPass ?? this._toneMappingPass
+    const anchor = this._n8aoStage ?? this._toneMappingPass
     const at = anchor ? passes.indexOf(anchor) : passes.length
     this._normalPass = new NormalPass(this._scene, this._camera)
     this._ssaoEffect = new SSAOEffect(this._camera, this._normalPass.texture, {
@@ -314,10 +324,11 @@ export default class CustomPostProcessor {
     })
     this._ssaoEffect.blendMode.opacity.value = this._aoStrength
     this._ssaoPass = new EffectPass(this._camera, this._ssaoEffect)
+    this._ssaoStage = new InPlacePass(this._ssaoPass)
     this._normalPass.enabled = false
-    this._ssaoPass.enabled = false
+    this._ssaoStage.enabled = false
     this._composer.addPass(this._normalPass, at)
-    this._composer.addPass(this._ssaoPass, at + 1)
+    this._composer.addPass(this._ssaoStage, at + 1)
   }
 
   /** @return {boolean} @private */
@@ -334,14 +345,14 @@ export default class CustomPostProcessor {
   _applyAOState() {
     const on = this._aoEnabled && !this._aoSuspended
     const ssaoOn = on && this._aoMethod === 'ssao'
-    if (this._ssaoPass) {
-      this._ssaoPass.enabled = ssaoOn
+    if (this._ssaoStage) {
+      this._ssaoStage.enabled = ssaoOn
     }
     if (this._normalPass) {
       this._normalPass.enabled = ssaoOn
     }
-    if (this._n8aoPass) {
-      this._n8aoPass.enabled = on && this._aoMethod === 'n8ao'
+    if (this._n8aoStage) {
+      this._n8aoStage.enabled = on && this._aoMethod === 'n8ao'
     }
   }
 
@@ -376,6 +387,8 @@ export default class CustomPostProcessor {
     this._ssaoEffect = null
     this._ssaoPass = null
     this._n8aoPass = null
+    this._n8aoStage = null
+    this._ssaoStage = null
     this._toneMappingEffect = null
     this._toneMappingPass = null
   }

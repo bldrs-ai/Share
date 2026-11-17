@@ -225,7 +225,12 @@ describeMobileAndDesktop('viewer/three/renderOnDemand: ?feature=disableRenderOnD
     await page.waitForTimeout(IDLE_QUIET_MS)
     const after = await readStats(page)
     const frames = after.frames - before.frames
-    expect(frames, 'the render loop kept running').toBeGreaterThan(10)
+    // A speed bound, not the claim: the claim is the equality below. Here
+    // every frame is a full paint, and with the §6e look on (#2167: PBR +
+    // N8AO) SwiftShader managed 3 to 8 of those in IDLE_QUIET_MS at the
+    // desktop size under two workers, against more than 10 before. More than
+    // one still says the loop ran rather than stopped.
+    expect(frames, 'the render loop kept running').toBeGreaterThan(MIN_EVERY_FRAME_FRAMES)
     // Every frame the loop ran painted: nothing asked, and nothing needed to.
     expect(after.paints - before.paints, 'an idle viewer painted every frame').toBe(frames)
   })
@@ -234,6 +239,8 @@ describeMobileAndDesktop('viewer/three/renderOnDemand: ?feature=disableRenderOnD
 
 /** How long the viewer must paint nothing to count as idle. */
 const IDLE_QUIET_MS = 1500
+/** Frames the every-frame loop must run in IDLE_QUIET_MS (see its test). */
+const MIN_EVERY_FRAME_FRAMES = 1
 /** How long a test waits for the viewer to go idle. */
 const IDLE_TIMEOUT_MS = 15_000
 /** Cells across a recorded frame, as `captureRenderedFrame`'s. */

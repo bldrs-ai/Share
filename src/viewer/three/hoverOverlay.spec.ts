@@ -272,6 +272,21 @@ async function openModel(page: Page, url: string = MODEL_URL) {
 
 
 /**
+ * Turn the look's ambient occlusion on or off, with a full paint after.
+ *
+ * @param page
+ * @param enabled
+ */
+async function setAO(page: Page, enabled: boolean) {
+  await page.evaluate((on) => {
+    const viewer = (window as any).store.getState().viewer
+    viewer.postProcessor.setAOEnabled(on)
+  }, enabled)
+  await nextFrame(page, 'aoChanged', 'full')
+}
+
+
+/**
  * Hover `point` as the user does, catching the frame the hover paints.
  *
  * @param page
@@ -369,6 +384,11 @@ describeMobileAndDesktop('viewer/three/hoverOverlay', (ff) => {
   test('an element partly behind another is highlighted only where it is seen', async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS * 2)
     await openModel(page)
+    // Occlusion only, so AO off: the truth below is the recolour, which AO
+    // shades over the hovered element, while the overlay draws it on top of
+    // the AO'd cache without AO (inPlacePass.js, #2167). That AO-on overlay
+    // frames match a full repaint is the first test's claim.
+    await setAO(page, false)
     // A hovered element whose silhouette (drawn alone) has enough pixels the
     // shipped hover (the recolour, drawn in full) does not light: hidden
     // behind something else.
@@ -454,6 +474,11 @@ describeMobileAndDesktop('viewer/three/hoverOverlay', (ff) => {
   test('a double-click selects what the hover highlighted', async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS)
     await openModel(page)
+    // AO off: under SwiftShader a full paint with N8AO (~300 ms) keeps the
+    // hover picker's slow-paint gate shut (hoverPick.js, EXPENSIVE_PAINT_MS),
+    // so the re-hover below finds nothing to pick. On a GPU it's ms. AO with
+    // hover is the first test's claim.
+    await setAO(page, false)
     const {point} = await findHoverPoint(page)
     const {parents} = await hovered(page)
     expect(parents.length).toBeGreaterThan(0)

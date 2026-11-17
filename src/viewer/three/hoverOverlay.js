@@ -545,7 +545,16 @@ export default class HoverOverlay {
       // Nothing to cache the output of: hover recolours, as without the flag.
       this.enabled = false
     } else {
-      composer.addPass(this.pass, renderIndex + 1)
+      // After the RenderPass and after any pass baked into the cache (the AO
+      // stages, `bakesIntoHoverCache`, inPlacePass.js): the cache then holds
+      // the AO'd frame and an overlay paint needn't run AO again.
+      let after = renderIndex
+      composer.passes.forEach((pass, i) => {
+        if (pass.bakesIntoHoverCache === true && i > after) {
+          after = i
+        }
+      })
+      composer.addPass(this.pass, after + 1)
     }
     this.canvas = canvas
     this.onContextLost = () => this.invalidate()
@@ -623,7 +632,10 @@ export default class HoverOverlay {
     this.mode = isOverlayOnly ? PaintKind.OVERLAY : PaintKind.FULL
     if (isOverlayOnly) {
       for (const pass of this.composer.passes) {
-        if (pass.enabled && (pass === this.renderPass || pass instanceof NormalPass)) {
+        // The scene passes, and the AO stages baked into the cache: the
+        // cached frame already holds their output.
+        if (pass.enabled && (pass === this.renderPass || pass instanceof NormalPass ||
+            pass.bakesIntoHoverCache === true)) {
           pass.enabled = false
           skipped.push(pass)
         }

@@ -222,7 +222,9 @@ colour and depth as the RenderPass left them at every full paint, and a
 hover change asks for a third kind of paint, `requestOverlayPaint()`
 (`RenderDemand#frameKind` returns `PaintKind.OVERLAY`): the frame copies
 that cache back into the composer's input buffer instead of running the
-scene passes (RenderPass, and the AO NormalPass when on), draws only the
+scene passes (RenderPass, the SSAO NormalPass when on, and the AO stages,
+which run in place before the overlay so the cache holds the AO'd frame:
+`viewer/three/inPlacePass.js`, #2167), draws only the
 hovered instances on it with their own batch, material and program
 (narrowed draw list, colour swapped for the draw and back), depth-tested
 LEQUAL against the cached depth, then runs the post passes as any frame

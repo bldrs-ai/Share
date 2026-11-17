@@ -1898,6 +1898,23 @@ separate step.
   and the PBR/N8AO shader compiles, which cost milliseconds on a GPU.
   Follow-up, not this PR: the double viewer init, which costs a WebGL
   context with or without the look.
+- **AO is baked into the hover cache** (`viewer/three/inPlacePass.js`).
+  - **Why:** N8AO first ran on every hover paint, 118 ms against 21 ms
+    under SwiftShader. That undid the hover overlay's point (a cheap
+    repaint) and kept the hover picker's 33 ms slow-paint gate shut.
+  - **How:** each AO pass (N8AO, SSAO's EffectPass) is wrapped to run in
+    place. It renders into the spare buffer, its colour is copied back over
+    the input buffer, and it doesn't swap. The input buffer keeps the
+    scene's depth: since postprocessing 6.39.6 each ping-pong buffer has its
+    own, so a swap would have split them.
+  - **Order:** the overlay pass sits after the AO stages
+    (`bakesIntoHoverCache`), captures the AO'd frame, and an overlay paint
+    skips them.
+  - **Trade-off:** the hovered element is drawn on top without AO, on full
+    and overlay paints alike, so those still match. The recolour fallback
+    (the overlay off) shades it.
+  - **Tests:** hoverOverlay.spec's occlusion and double-click tests run with
+    AO off for that reason and for SwiftShader's slow full paints.
 - **The debug panels.** Perf (FPS / ms / MB graphs, plus geometries,
   textures, draw calls and triangles) and Render (the look panel,
   `LightingGui`, retitled) sit side by side in the debug dock

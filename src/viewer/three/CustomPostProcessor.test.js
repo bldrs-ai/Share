@@ -52,7 +52,7 @@ describe('CustomPostProcessor ambient occlusion (look on, the default)', () => {
     expect(pp.isAORunning()).toBe(true)
     // After the RenderPass, before the tone-mapping EffectPass: occlusion
     // darkens linear colour, then everything is tone-mapped together.
-    const n8ao = pp.getComposer.passes.indexOf(pp._n8aoPass)
+    const n8ao = pp.getComposer.passes.indexOf(pp._n8aoStage)
     expect(n8ao).toBeGreaterThan(names.indexOf('RenderPass'))
     expect(n8ao).toBeLessThan(pp.getComposer.passes.indexOf(pp._toneMappingPass))
   })
@@ -79,13 +79,25 @@ describe('CustomPostProcessor ambient occlusion (look on, the default)', () => {
     expect(pp._ssaoPass).toBeNull()
     pp.setAOMethod('ssao')
     const passes = pp.getComposer.passes
-    expect(passes.indexOf(pp._ssaoPass)).toBeLessThan(passes.indexOf(pp._n8aoPass))
-    expect(pp._ssaoPass.enabled).toBe(true)
+    expect(passes.indexOf(pp._ssaoStage)).toBeLessThan(passes.indexOf(pp._n8aoStage))
+    expect(pp._ssaoStage.enabled).toBe(true)
     expect(pp._normalPass.enabled).toBe(true)
-    expect(pp._n8aoPass.enabled).toBe(false)
+    expect(pp._n8aoStage.enabled).toBe(false)
     pp.setAOMethod('n8ao')
-    expect(pp._ssaoPass.enabled).toBe(false)
+    expect(pp._ssaoStage.enabled).toBe(false)
     expect(pp._normalPass.enabled).toBe(false)
-    expect(pp._n8aoPass.enabled).toBe(true)
+    expect(pp._n8aoStage.enabled).toBe(true)
+  })
+})
+
+
+describe('CustomPostProcessor AO baked into the hover cache', () => {
+  it('runs each AO pass in place: no swap, marked for the hover cache', () => {
+    const pp = new CustomPostProcessor(fakeRenderer(), new Scene(), new Camera())
+    pp.setAOMethod('ssao')
+    for (const stage of [pp._n8aoStage, pp._ssaoStage]) {
+      expect(stage.needsSwap).toBe(false)
+      expect(stage.bakesIntoHoverCache).toBe(true)
+    }
   })
 })
