@@ -37,7 +37,11 @@ describeMobileAndDesktop('viewer/three/background', () => {
     await page.getByTestId('control-button-residency').click()
     await page.getByTestId('display-render').click()
     await page.locator('[data-testid="render-panel"] input[type="color"]').first().fill('#336699')
-    expect((await captureRenderedFrame(page)).rgb.slice(0, 3)).toEqual([0x33, 0x66, 0x99])
+    // Within one level: the un-tone-mapped colour goes through the
+    // composer's half-float buffers before the last pass encodes sRGB
+    // (#336699 reads 50,102,153). White, the theme's, is exact above.
+    const set = (await captureRenderedFrame(page)).rgb.slice(0, 3)
+    ;[0x33, 0x66, 0x99].forEach((want, c) => expect(Math.abs(set[c] - want)).toBeLessThanOrEqual(1))
   })
 
 

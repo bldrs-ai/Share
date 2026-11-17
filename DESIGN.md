@@ -191,8 +191,9 @@ cheapest-to-forget last:
    paints are cheap; layer 1), and any store change
    (CadView subscribes): for the change a React effect applies a frame
    after the event. During a load these are background asks. While paints
-   cost more than `EXPENSIVE_PAINT_MS`, the window paints once as it closes
-   instead of every frame (`RenderDemand#frameKind`): on PSB, toggling the
+   cost more than `EXPENSIVE_PAINT_MS`, the window paints once, after
+   `EXPENSIVE_SETTLE_MS` (500 ms) with no input, instead of every frame
+   (`RenderDemand#frameKind`), so not on a menu's opening frames: on PSB, toggling the
    cut-plane menu repainted the unchanged scene 4-5 times a second and the
    menu's animation ran at that rate. The probe (layer 4) still paints a
    change it sees at once.

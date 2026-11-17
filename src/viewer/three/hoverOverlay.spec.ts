@@ -414,6 +414,34 @@ describeMobileAndDesktop('viewer/three/hoverOverlay', (ff) => {
     expect(off / await pixelCount(page)).toBeLessThanOrEqual(SAME_FRAME_PIXELS)
   })
 
+  test('a glass hover paints as an overlay that matches a full repaint', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS * 2)
+    await openModel(page)
+    // Every batch drawn as IFC glazing is (transparent, depthWrite off;
+    // flatMeshToBatchedModel.js), so whatever the hover lands on is glass.
+    await page.evaluate(() => {
+      (window as any).store.getState().model.traverse((o: any) => {
+        if (o.isBatchedMesh) {
+          o.material.transparent = true
+          o.material.opacity = 0.5
+          o.material.depthWrite = false
+          o.material.needsUpdate = true
+        }
+      })
+    })
+    const {kind} = await findHoverPoint(page)
+    // Not the recolour's full repaint of the model (Seestrasse's façade, the
+    // owner's preview): the overlay drew the pane on the cached frame.
+    expect(kind).toBe('overlay')
+    expect(await mask(page, 'shown', 'base', 'hover')).toBeGreaterThan(MIN_HIGHLIGHT_PIXELS)
+    // A full repaint draws the overlay after the scene too, so it shows the
+    // same tinted pane.
+    expect(await nextFrame(page, 'full', 'full')).toBe('full')
+    const off = await mask(page, 'off', 'hover', 'full')
+    expect(off / await pixelCount(page)).toBeLessThanOrEqual(SAME_FRAME_PIXELS)
+  })
+
+
   test('an element partly behind another is highlighted only where it is seen', async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS * 2)
     await openModel(page)

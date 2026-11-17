@@ -1,5 +1,5 @@
 import RenderDemand, {
-  BACKGROUND_COST_FACTOR, BACKGROUND_MIN_GAP_MS, EXPENSIVE_PAINT_MS, HEARTBEAT_MS, SETTLE_MS, USER_CAMERA_EVENT,
+  BACKGROUND_COST_FACTOR, BACKGROUND_MIN_GAP_MS, EXPENSIVE_PAINT_MS, EXPENSIVE_SETTLE_MS, HEARTBEAT_MS, SETTLE_MS, USER_CAMERA_EVENT,
   noteUserCamera,
   requestBackgroundPaint, requestPaint, runPaint,
 } from './renderDemand'
@@ -413,14 +413,27 @@ describe('viewer/three/renderDemand session', () => {
     expect(demand.shouldRender()).toBe(false)
     expect(demand.paintCostMs()).toBeGreaterThan(EXPENSIVE_PAINT_MS)
 
-    // A click on a menu: nothing in the scene changed, so the window paints
-    // nothing while it is open...
+    // A click on a menu: nothing in the scene changed, so nothing paints
+    // while the window is open, nor while the menu's transition runs...
     demand.invalidateSoon()
-    const window = Math.floor(SETTLE_MS / FRAME_MS)
-    expect(paintsIn(window - 1)).toBe(0)
-    // ...and once when it closes, for whatever an effect changed in it.
+    const quiet = Math.floor(EXPENSIVE_SETTLE_MS / FRAME_MS)
+    expect(paintsIn(quiet - 1)).toBe(0)
+    // ...and once after, for whatever an effect changed in it.
     expect(paintsIn(5)).toBe(1)
     expect(paintsIn(30)).toBe(0)
+    // Input that keeps coming keeps it waiting (after another expensive
+    // paint: the cheap test paint above reset the measured cost).
+    demand.invalidate()
+    expect(demand.shouldRender()).toBe(true)
+    demand.rendered(1)
+    clock += 200
+    expect(demand.shouldRender()).toBe(false)
+    demand.invalidateSoon()
+    for (let i = 0; i < 3; i++) {
+      expect(paintsIn(quiet - 2)).toBe(0)
+      demand.invalidateSoon()
+    }
+    expect(paintsIn(quiet + 2)).toBe(1)
   })
 
   it('still paints a change the probe sees inside an expensive settle window, at once', () => {

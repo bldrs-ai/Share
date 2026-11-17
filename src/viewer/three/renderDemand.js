@@ -70,8 +70,8 @@
  *  5. a settle window (`invalidateSoon`, `SETTLE_MS`) after any user input
  *     on the page and any store change, for the change a React effect
  *     makes a frame or two after the event that caused it. It paints every
- *     frame while paints are cheap, and once, as it closes, when they are
- *     expensive (`EXPENSIVE_PAINT_MS`);
+ *     frame while paints are cheap, and once, after `EXPENSIVE_SETTLE_MS`
+ *     of quiet, when they are expensive (`EXPENSIVE_PAINT_MS`);
  *  6. `keepPainting()` for what changes the picture on its own clock
  *     (Spark's splat sort).
  *
@@ -130,6 +130,15 @@ export const USER_CAMERA_EVENT = 'bldrsusercamera'
  */
 export const SETTLE_MS = 200
 /**
+ * While paints are expensive (EXPENSIVE_PAINT_MS), a settle window's one
+ * paint waits until no input or store change has come for this long: past a
+ * MUI menu's or dialog's open transition (~225-300 ms), so the backstop
+ * repaint doesn't stall the UI animation that the same click started. The
+ * owner's PSB preview: with the paint at the window's 200 ms close, the
+ * cut-plane menu still paused on its first frames.
+ */
+export const EXPENSIVE_SETTLE_MS = 500
+/**
  * A paint that takes longer than this, measured to the next frame as the
  * load budget measures it, is an expensive one: two 60 Hz frames, so the
  * display is already showing every other frame at best. Above it, what only
@@ -137,7 +146,8 @@ export const SETTLE_MS = 200
  * pointermove no longer opens a settle window (renderDemandHooks.js
  * #attachSessionNets), the hover pick skips fast moves
  * (viewer/hoverPick.js#createFrameHoverPicker), and a settle window paints
- * once as it closes instead of on every frame (`frameKind`). Below it,
+ * once, after input goes quiet, instead of on every frame (`frameKind`).
+ * Below it,
  * nothing changes.
  * The owner's PSB preview: hover lag that grew with model size, the
  * repaints, not the picks, being what the sweep queued up on the GPU.
@@ -315,6 +325,9 @@ export default class RenderDemand {
     // An expensive viewer's settle window owes one paint at its end
     // (`frameKind`), instead of a paint on every frame of it.
     this.isSettlePending = false
+    // When the last settle ask came (`invalidateSoon`), for the expensive
+    // window's quiet period.
+    this.lastSettleAskMs = -Infinity
     // Open `keepPainting` holds (layer 6).
     this.holds = 0
     // `observePaints` observers: told around every paint, during a load or
@@ -572,7 +585,8 @@ export default class RenderDemand {
    * Something happened that will probably change the picture soon, if it
    * hasn't already: user input, a store change (module doc, layer 5).
    * Between loads, paint every frame for `SETTLE_MS`, or, when paints are
-   * expensive, once when the window closes (`frameKind`); during a load, a
+   * expensive, once after `EXPENSIVE_SETTLE_MS` of quiet (`frameKind`);
+   * during a load, a
    * background paint, so the load's own store churn doesn't paint at 60 Hz.
    */
   invalidateSoon() {
@@ -580,7 +594,8 @@ export default class RenderDemand {
       this.isBackgroundDirty = true
       return
     }
-    this.settleUntilMs = Math.max(this.settleUntilMs, this.now() + SETTLE_MS)
+    this.lastSettleAskMs = this.now()
+    this.settleUntilMs = Math.max(this.settleUntilMs, this.lastSettleAskMs + SETTLE_MS)
   }
 
 
@@ -636,7 +651,8 @@ export default class RenderDemand {
         return PaintKind.FULL
       }
       // A settle window paints every frame while paints are cheap. When they
-      // are expensive (EXPENSIVE_PAINT_MS), it paints once, as it closes:
+      // are expensive (EXPENSIVE_PAINT_MS), it paints once, after input has
+      // been quiet for EXPENSIVE_SETTLE_MS, so not on a menu's opening frames:
       // the window is a backstop for a change some React effect makes a
       // frame or two after the input, and on a big model every frame of it
       // was a full repaint of a picture that hadn't changed. The owner's PSB
@@ -650,7 +666,7 @@ export default class RenderDemand {
           return PaintKind.FULL
         }
         this.isSettlePending = true
-      } else if (this.isSettlePending) {
+      } else if (this.isSettlePending && now - this.lastSettleAskMs >= EXPENSIVE_SETTLE_MS) {
         this.isSettlePending = false
         return PaintKind.FULL
       }

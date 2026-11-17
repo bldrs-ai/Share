@@ -461,7 +461,12 @@ export class ShareViewer {
     renderer.shadowMap.type = PCFShadowMap
     const ground = new Mesh(
       new PlaneGeometry(1, 1),
-      new ShadowMaterial({opacity: DEFAULT_SHADOW_OPACITY}),
+      // No depth write: the look's tone map skips pixels at the clear depth
+      // (backgroundEffect.js), so where there's no shadow the plane shows
+      // exactly the background, and the shadow darkens it smoothly. Writing
+      // depth, the whole plane was tone-mapped: a grey sheet on the white
+      // background (the owner's preview).
+      new ShadowMaterial({opacity: DEFAULT_SHADOW_OPACITY, depthWrite: false}),
     )
     ground.rotation.x = -Math.PI / 2
     ground.receiveShadow = true
@@ -1803,7 +1808,7 @@ export class ShareViewer {
         // `?feature=disableHoverOverlay` or the prod rollback): draw the hover on
         // the cached frame rather than recolour the batch, which would repaint
         // the whole model. The overlay asks for its own (overlay-only) paint.
-        // Where it can't draw this hover (a transparent batch, …) it says so
+        // Where it can't draw this hover (a transmissive batch, …) it says so
         // and the recolour below runs instead, as without the flag.
         const overlay = this.highlighter?.hoverOverlay ?? null
         const isOverlaid = overlay !== null &&
