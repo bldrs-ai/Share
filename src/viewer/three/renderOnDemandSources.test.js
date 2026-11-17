@@ -66,6 +66,7 @@ const AUDITED = {
   'viewer/three/sceneGraphVisibility.js': ASKS_FOR_PAINT,
   'viewer/three/MeshClipper.js': ASKS_FOR_PAINT,
   'viewer/three/CutPlaneArrowHelper.ts': ASKS_FOR_PAINT,
+  'viewer/three/arrowFade.js': 'ArrowFade\'s own `opacity` state, not a material\'s: MeshClipper applies it and asks',
   'viewer/three/LightingGui.js': ASKS_FOR_PAINT,
   'viewer/display/shadingMode.js': ASKS_FOR_PAINT,
   'viewer/residency/ResidencyController.js': ASKS_FOR_PAINT,
@@ -75,7 +76,8 @@ const AUDITED = {
   'Components/ViewCube/ViewCube.jsx': 'its own renderer and scene, painted by its own dirty-flag loop',
   'Components/HideToggleButton.jsx': 'a CSS icon style, not the scene',
   'viewer/three/CustomPostProcessor.js': 'N8AO intensity, set only from LightingGui, whose onChange asks',
-  'viewer/three/hoverOverlay.js': 'layers and background changed for its own draw, inside a paint, and put back before it returns',
+  'viewer/three/hoverOverlay.js':
+    'layers, background and the controls\' `visible` changed for its own draw, inside a paint, and put back before it returns',
   'viewer/three/context/context.js': 'the clipping-plane array at construction; the probe reads it each frame',
   'viewer/three/context/renderer/postproduction.js': 'never activated (offscreen-rendering.md inventory #10)',
   'viewer/ifc/parsePreviewMesh.js': 'materials set up before the mesh is added, which the hooked add covers',
@@ -120,7 +122,8 @@ function sourceFiles(dir, out = []) {
  * `keepPainting`) is a full paint. Paths relative to src/.
  */
 const OVERLAY_ONLY_ASKS = {
-  'viewer/three/hoverOverlay.js': 'HoverOverlay#setHover / #clear: the hovered instances, drawn by the overlay alone',
+  'viewer/three/hoverOverlay.js': 'HoverOverlay#setHover / #clear: the hovered instances, and requestControlsPaint: ' +
+    'a control\'s look (MeshClipper\'s arrow colour and fade); both drawn by the overlay alone, never cached',
 }
 // The definition and its one route into RenderDemand, which aren't callers.
 const OVERLAY_ASK_DEFINITION = 'viewer/three/renderDemand.js'

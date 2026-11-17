@@ -23,7 +23,8 @@ import {EXPENSIVE_PAINT_MS, requestBackgroundPaint} from './renderDemand'
  *    is cheap to read: the camera pose and projection (any camera move,
  *    with or without camera-controls), the drawing-buffer size and pixel
  *    ratio (a resize the window didn't announce), the cut planes (a plane
- *    drag mutates `constant` in place), the scene's background, environment
+ *    drag mutates `constant` in place; MeshClipper's are on the renderer
+ *    wrapper, which the probe reads), the scene's background, environment
  *    and direct children, tone mapping.
  *  - **input and environment events** (`attachSessionNets`): user input
  *    anywhere on the page opens a settle window (`invalidateSoon`), and a
@@ -170,6 +171,17 @@ export function createSceneProbe(context) {
         renderer.localClippingEnabled)
       pushPlanes(out, renderer.clippingPlanes)
     }
+    // The cut planes MeshClipper drags live on the fork's IfcRenderer wrapper
+    // (`context.renderer`, MeshClipper#_syncClippingBindings) and on each
+    // material, not on the WebGLRenderer, whose array stays empty; nor in
+    // `context.clippingPlanes`, which nothing fills since MeshClipper replaced
+    // IfcClipper. A drag mutates them in place with camera-controls off, and
+    // with the hover overlay on no pointer move opens a settle window, so this
+    // read is what paints a drag (owner on #2171). Read only when it is a
+    // separate object, so a context whose wrapper is the renderer isn't
+    // counted twice; the count stays fixed per context either way.
+    const wrapper = context.renderer
+    pushPlanes(out, wrapper && wrapper !== renderer ? wrapper.clippingPlanes : null)
     pushPlanes(out, context.clippingPlanes)
     if (scene) {
       const background = scene.background
@@ -226,8 +238,10 @@ const WINDOW_INPUT_EVENTS = ['pointerup', 'wheel', 'keydown', 'keyup', 'touchend
  * redrawing the whole model and the overlay would save nothing. What a
  * canvas pointer move changes asks for itself instead: the hover, through
  * ShareViewer#highlightIfcItem (an overlay paint on a batched model, a full
- * `requestPaint` on every other path), and a cut plane's arrow, through
- * MeshClipper#setArrowColor. Those are every canvas pointer/mouse move
+ * `requestPaint` on every other path), a cut plane's arrow, through
+ * MeshClipper#setArrowColor, and the plane it drags, through
+ * MeshClipper#onMouseMove (missed until #2171: the drag showed nothing until
+ * the release's settle window). Those are every canvas pointer/mouse move
  * handler in src/ that changes the picture (the others track a position or a
  * flag: context/mouse.js, Camera/CameraControl.jsx).
  *
@@ -256,7 +270,7 @@ export function attachSessionNets(demand, canvas, {pointerMoveSettles = true} = 
   // and never with the hover overlay on (`pointerMoveSettles: false`, the
   // module doc above has why). What it changes asks for itself — the hover
   // through the overlay's own ask or the BatchedMesh `setColorAt` hook, a cut
-  // plane's arrow through MeshClipper#setArrowColor, both in
+  // plane's arrow and its drag through MeshClipper, both in
   // renderOnDemandSources.test.js — so the window is a backstop; on a model
   // whose paint is expensive (EXPENSIVE_PAINT_MS) it repainted the same
   // picture every frame of a sweep and left the GPU busy when the pointer
