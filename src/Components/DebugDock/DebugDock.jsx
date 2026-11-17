@@ -98,7 +98,15 @@ export default function DebugDock() {
       data-testid='debug-dock'
       sx={{
         display: 'flex',
-        alignItems: 'flex-end',
+        // Too narrow for both side by side (a phone: Perf ~260px + Render
+        // ~245px), wrap rather than run Render off the right edge.
+        // `wrap-reverse` stacks the rows upward from the window bottom, so
+        // Perf keeps its place on the bottom row and Render sits above it.
+        // It also flips the cross axis: `flex-start` is now the bottom, which
+        // is where each panel's (minimised) title bar must sit.
+        flexWrap: 'wrap-reverse',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
         gap: 1,
         position: 'fixed',
         left: '50%',
@@ -109,6 +117,8 @@ export default function DebugDock() {
         // The dock's own box spans the gap between panels: let clicks there
         // reach the scene.
         pointerEvents: 'none',
+        // The dock never exceeds the window: that's what makes it wrap.
+        width: 'max-content',
         maxWidth: '100vw',
       }}
     >

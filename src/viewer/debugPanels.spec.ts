@@ -37,10 +37,23 @@ describeMobileAndDesktop('viewer/debugPanels', () => {
     await expect(page.locator(RENDER_PANEL)).toBeVisible()
     await expect(page.locator(PERF_PANEL).locator('#perf-monitor canvas').first()).toBeVisible()
     await expect(page.getByTestId('perf-panel-counts')).toContainText('Draw calls')
-    // Left to right: Perf, then Render.
     const perfBox = await boxOf(page.locator(PERF_PANEL))
     const renderBox = await boxOf(page.locator(RENDER_PANEL))
-    expect(perfBox.x + perfBox.width).toBeLessThanOrEqual(renderBox.x + 1)
+    // Both whole on screen: on a phone the two can't sit side by side, and
+    // a single row ran Render off the right edge (codex on #2167).
+    const viewportWidth = page.viewportSize()?.width ?? 0
+    for (const box of [perfBox, renderBox]) {
+      expect(box.x).toBeGreaterThanOrEqual(0)
+      expect(box.x + box.width).toBeLessThanOrEqual(viewportWidth + 1)
+    }
+    // Perf, then Render: left to right where they fit side by side (one row:
+    // the same bottom edge), else Render on the row above Perf's.
+    const sameRow = Math.abs((renderBox.y + renderBox.height) - (perfBox.y + perfBox.height)) <= 1
+    if (sameRow) {
+      expect(perfBox.x + perfBox.width).toBeLessThanOrEqual(renderBox.x + 1)
+    } else {
+      expect(renderBox.y + renderBox.height).toBeLessThanOrEqual(perfBox.y + 1)
+    }
     // Expanded, both sit on top of the Elements control, clear of it.
     const controlTop = (await boxOf(page.getByTestId('element-group'))).y
     expect(perfBox.y + perfBox.height).toBeLessThanOrEqual(controlTop)
