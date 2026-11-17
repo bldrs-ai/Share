@@ -2,6 +2,7 @@
 import {Object3D, Raycaster} from 'three'
 import {assertDefined} from '../../utils/assert'
 import ThreeContext from './ThreeContext'
+import {unclippedHits} from './clippedHits'
 import {finiteHits} from './finiteHits'
 
 
@@ -27,36 +28,26 @@ export default class Picker {
    * subgraphs.
    *
    * @param {Array<Object3D>} items
-   * @return {Array<Object3D>|null}
+   * @return {Array<object>} three.js intersections, nearest first, without
+   *   those on clipped-away geometry
    */
   castRay(items) {
     const camera = this.context.getCamera()
     this.raycaster.setFromCamera(this.context.getNormalizedMousePosition(), camera)
     // finiteHits: three r187's watertight triangle test reports a NaN-vertex
-    // triangle as a hit at distance NaN; see finiteHits.js.
-    return finiteHits(this.raycaster.intersectObjects(items))
+    // triangle as a hit at distance NaN; see finiteHits.js. unclippedHits:
+    // a hit the cut planes removed from view is no pick (#2131); see
+    // clippedHits.js. IfcRaycaster#castRay (hover) does the same.
+    return unclippedHits(
+      finiteHits(this.raycaster.intersectObjects(items)),
+      this.context.getClippingPlanes())
   }
 
 
   /**
-   * @return {Array<Object3D>}
+   * @return {object|null} the nearest unclipped hit on the pickable models
    */
   castRayIfc() {
-    const items = this.castRay(this.context.getPickableModels())
-    const filtered = this.filterClippingPlanes(items)
-    return filtered.length > 0 ? filtered[0] : null
-  }
-
-
-  /**
-   * @param {Array<Object3D>} objs
-   * @return {Array<Object3D>}
-   */
-  #filterClippingPlanes(objs) {
-    const planes = this.context.getClippingPlanes()
-    if (objs.length <= 0 || !planes || (planes === null || planes === void 0 ? void 0 : planes.length) <= 0) {
-      return objs
-    }
-    return objs.filter((elem) => planes.every((elem2) => elem2.distanceToPoint(elem.point) > 0))
+    return this.castRay(this.context.getPickableModels())[0] ?? null
   }
 }
