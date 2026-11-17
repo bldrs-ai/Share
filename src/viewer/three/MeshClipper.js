@@ -522,6 +522,14 @@ export default class MeshClipper {
     // already bound to renderer.clippingPlanes and to each material's
     // clippingPlanes uniform. Mutation in place is picked up by the
     // next frame's render.
+    //
+    // That render has to be asked for. The scene probe sees the plane's
+    // `constant` move (renderDemandHooks.js#createSceneProbe), but a drag is
+    // the one pointer move here with camera-controls off and, with the hover
+    // overlay on, no settle window behind it (attachSessionNets), so ask
+    // directly rather than lean on the probe alone: a drag that showed
+    // nothing until the release is what #2171's owner hit.
+    requestPaint()
   }
 
 

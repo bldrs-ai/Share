@@ -1,6 +1,7 @@
 /* eslint-disable no-magic-numbers */
-import {Group, Mesh, BoxGeometry, MeshBasicMaterial, Plane, Sphere, Vector3} from 'three'
+import {Group, Mesh, BoxGeometry, MeshBasicMaterial, PerspectiveCamera, Plane, Sphere, Vector3} from 'three'
 import MeshClipper from './MeshClipper'
+import RenderDemand from './renderDemand'
 
 
 /**
@@ -110,6 +111,64 @@ describe('viewer/three/MeshClipper', () => {
       const tinyRatio = tiny.computeArrowScale() / tiny.modelBoundingSphere.radius
       const hugeRatio = huge.computeArrowScale() / huge.modelBoundingSphere.radius
       expect(tinyRatio).toBeCloseTo(hugeRatio, 10)
+    })
+  })
+
+
+  describe('a drag', () => {
+    const FRAME_MS = 16
+    let clock
+    let demand
+
+    beforeEach(() => {
+      clock = 10_000
+      demand = new RenderDemand({now: () => clock})
+      demand.startSession()
+    })
+
+    afterEach(() => {
+      demand.dispose()
+    })
+
+    /** Run frames until one doesn't paint, so the next read is clean. */
+    function settle() {
+      for (let i = 0; i < 100 && demand.shouldRender(); i++) {
+        demand.rendered(1)
+        clock += FRAME_MS
+      }
+    }
+
+    // A drag moves the plane in place with camera-controls off, and with the
+    // hover overlay on no canvas pointer move opens a settle window
+    // (renderDemandHooks.js#attachSessionNets), so the move must ask itself:
+    // without it the drag showed nothing until the release (#2171).
+    it('asks for a paint on every move of the arrow', () => {
+      const viewer = makeViewerStub()
+      // Looking down -z at the origin, where a plane through it puts its arrow.
+      const camera = new PerspectiveCamera(50, 800 / 600, 0.1, 100)
+      camera.position.set(0, 0, 10)
+      camera.lookAt(0, 0, 0)
+      camera.updateMatrixWorld(true)
+      viewer.context.getCamera = () => camera
+      const clipper = new MeshClipper(viewer, makeBoxModel())
+      const {plane, arrow} = clipper.createPlane(new Vector3(1, 0, 0), new Vector3(0, 0, 0), 'x', 0)
+      arrow.updateMatrixWorld(true)
+      clipper.onMouseDown({clientX: 400, clientY: 300})
+      expect(clipper.draggingArrow).not.toBeNull()
+      settle()
+      clock += FRAME_MS
+      expect(demand.shouldRender()).toBe(false)
+
+      const constantBefore = plane.constant
+      clipper.onMouseMove({clientX: 450, clientY: 300})
+      expect(plane.constant).not.toBe(constantBefore)
+      clock += FRAME_MS
+      expect(demand.shouldRender()).toBe(true)
+      settle()
+
+      clipper.onMouseMove({clientX: 500, clientY: 300})
+      clock += FRAME_MS
+      expect(demand.shouldRender()).toBe(true)
     })
   })
 
