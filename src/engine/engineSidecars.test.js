@@ -650,16 +650,22 @@ function sidecarApi(log, {refuseIndex = false} = {}) {
   const SIDECAR = Uint8Array.of(0x43, 0x49, 0x44, 0x58, 3)
   return {
     SIDECAR,
+    // The settings each open was given, kept apart from `log` so the log
+    // assertions stay exact.
+    streamSettings: [],
+    indexSettings: [],
     wasmModule: undefined,
     async Init() {
       this.wasmModule = {HEAPU8: {byteLength: 1}}
     },
     async OpenModelStream(store, settings) {
+      this.streamSettings.push({...settings})
       log.push(`stream recordHash=${settings.RECORD_SOURCE_HASH === true} readSync=${typeof store.readSync}`)
       await store.read(0, 4)
       return 0
     },
     async OpenModelFromIndex(store, sidecar, settings) {
+      this.indexSettings.push({...settings})
       log.push(`index verify=${settings.VERIFY_INDEX_SOURCE_HASH}`)
       return refuseIndex || sidecar.length !== SIDECAR.length ? -1 : 0
     },
@@ -736,6 +742,36 @@ describe('engine/engineHandler: index sidecar reopen (engine-worker.md §7 step 
     // No parse, and no second export. `verify=true` is the full source
     // hash the owner chose on Share#2085; 'sampled' here is a regression.
     expect(log).toEqual(['index verify=true', 'CloseModel'])
+  })
+
+  // Share#2092: the parse records the source hash natively (conway#783), so
+  // Firefox does not spend ~10 s of a big model's parse in a JS FNV loop.
+  it('the parse records the source hash natively, with RECORD_SOURCE_HASH', async () => {
+    const api = sidecarApi([])
+    const root = memoryDir({owner: memoryDir({[NAME]: memoryFile(NAME, BYTES)})})
+    await loadOnce(api, root)
+    expect(api.streamSettings).toHaveLength(1)
+    expect(api.streamSettings[0]).toMatchObject({RECORD_SOURCE_HASH: true, SOURCE_HASH_ALGORITHM: 'sha256Blocks'})
+  })
+
+  it('disableNativeSourceHash: still records the hash, and asks for no algorithm (conway\'s FNV default)', async () => {
+    const api = sidecarApi([])
+    const root = memoryDir({owner: memoryDir({[NAME]: memoryFile(NAME, BYTES)})})
+    await loadOnce(api, root, {disableNativeSourceHash: true})
+    expect(api.streamSettings[0].RECORD_SOURCE_HASH).toBe(true)
+    expect(api.streamSettings[0]).not.toHaveProperty('SOURCE_HASH_ALGORITHM')
+  })
+
+  it('a sidecar reopen still runs the full source check, whichever way the flag is set', async () => {
+    const root = memoryDir({owner: memoryDir({[NAME]: memoryFile(NAME, BYTES)})})
+    await loadOnce(sidecarApi([]), root)
+    for (const flags of [{}, {disableNativeSourceHash: true}]) {
+      const api = sidecarApi([])
+      const summary = await loadOnce(api, root, flags)
+      expect(summary.index.source).toBe('sidecar')
+      expect(api.indexSettings[0].VERIFY_INDEX_SOURCE_HASH).toBe(true)
+      expect(api.streamSettings).toHaveLength(0)
+    }
   })
 
   it('a refused sidecar falls back to the parse and is replaced', async () => {

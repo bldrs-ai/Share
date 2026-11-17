@@ -526,6 +526,18 @@ export function createEngineHandler({
       // a sidecar for exactly the bytes it indexed (~12 % of the index build,
       // conway#760); a sidecar open adopts the sidecar's own.
       settings.RECORD_SOURCE_HASH = true
+      // Hash natively (SHA-256 over 4 MiB blocks, conway#783) rather than
+      // conway's default per-byte FNV loop in JavaScript: on Firefox that loop
+      // was about 10 s of an 860 MB model's 40 s parse (Parsing 40.7 s with
+      // it, 30.8 s without; Share#2092). The sidecar records which algorithm
+      // ran (`hashAlgorithm` 2), so FNV sidecars already in users' OPFS still
+      // verify, each under its own. A sidecar read where WebCrypto is missing
+      // comes back INDEX_STALE under VERIFY_INDEX_SOURCE_HASH and reparses.
+      // `disableNativeSourceHash` is the kill switch (FeatureFlags.js): conway
+      // then records FNV as before.
+      if (!flags.disableNativeSourceHash) {
+        settings.SOURCE_HASH_ALGORITHM = 'sha256Blocks'
+      }
     }
     // The source policy (sourcePolicy.js, Share#2139): buffered or windowed
     // for this open. Buffered reads the whole file once into one buffer the

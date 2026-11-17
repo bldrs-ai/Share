@@ -146,6 +146,34 @@ describeMobileAndDesktop('Engine worker: index sidecar reopen', () => {
     })
   }
 
+  // Share#2092: the parse records its source hash natively by default
+  // (SOURCE_HASH_ALGORITHM 'sha256Blocks', conway#783), and `disableNativeSourceHash`
+  // keeps conway's FNV. A sidecar names the algorithm it was written under, so
+  // the reopen's full source check passes whichever way the flag is set on
+  // either side: an FNV sidecar already in a user's OPFS must keep opening
+  // after the default changes, and a native one must open under the kill switch.
+  for (const {from, to, label} of [
+    {from: 'disableNativeSourceHash', to: '', label: 'an FNV sidecar reopens under the native default'},
+    {from: '', to: 'disableNativeSourceHash', label: 'a native sidecar reopens under the kill switch'},
+  ]) {
+    test(`${label}, from the index without a parse`, async ({page}) => {
+      test.setTimeout(3 * LOAD_TIMEOUT_MS)
+      const glbLogs = captureGlbLogs(page)
+      const path = MODELS[0].path
+      const flags = (extra: string) => [WINDOWED, extra].filter(Boolean).join(',')
+      await page.goto(`${path}?feature=${flags(from)}`)
+      expect(await engineIndexLine(page)).toMatch(/^Engine index: parsed; sidecar saved \(\d+\.\d MB\)$/)
+      expect(await dropGlbArtifact(page, glbLogs), 'the worker load cached one artifact').toBe(1)
+
+      resetGlbLogs(glbLogs)
+      // A different URL, so a navigation rather than a reload: the flag is
+      // the only thing that changes, the OPFS copy and its sidecar stay.
+      await page.goto(`${path}?feature=${flags(to)}`)
+      expect(await engineIndexLine(page)).toMatch(/^Engine index: from sidecar \(\d+\.\d MB\), no parse$/)
+      expect(glbLogs.some((line) => line.includes('cache MISS')), 'the reopen went to the engine').toBe(true)
+    })
+  }
+
   // Firefox and Safari have no read-only sync access handles, so their engine
   // reads the source through the Blob store; `disableEngineSyncHandle` puts
   // Chromium on the same path. That store holds the whole file for the load

@@ -263,6 +263,17 @@ export const flags = [
   // the PROD ROLLBACK: spawnEngine.js#engineFlagSnapshot reads the static
   // value first, as engineRoute.js does `disableEngineWorker`.
   {name: 'disableBufferedSource', isActive: false},
+  // Kill switch for the native source hash (engine/engineHandler.js#openModel,
+  // Share#2092; engine-worker.md §7.1): record the index sidecar's source digest
+  // with the platform's SHA-256 over 4 MiB blocks (conway's
+  // `SOURCE_HASH_ALGORITHM: 'sha256Blocks'`) instead of conway's per-byte FNV
+  // loop in JavaScript. `?feature=disableNativeSourceHash` reverts one session
+  // (and A/Bs the same build). Setting it `isActive: true` here is the PROD
+  // ROLLBACK: spawnEngine.js#engineFlagSnapshot reads the static value first,
+  // like `disableBufferedSource`. With it on, conway records FNV as before;
+  // sidecars already written natively stay valid and verify natively on
+  // reopen regardless, since a sidecar names its own algorithm.
+  {name: 'disableNativeSourceHash', isActive: false},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-
