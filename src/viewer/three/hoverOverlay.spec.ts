@@ -26,6 +26,9 @@ const MODEL_TIMEOUT_MS = 120_000
 // Longer than the slowest hover interval (hoverPick.js MAX_INTERVAL_MS), so
 // any trailing pick has fired.
 const HOVER_SETTLE_MS = 600
+// Long enough for rest (MotionResidency's rule) and a FADE_IN_MS fade at
+// SwiftShader's frame rate.
+const AO_SETTLE_TIMEOUT_MS = 20_000
 // Base frames retaken while a settle window is open (findHoverPoint).
 const MAX_BASE_RETAKES = 3
 // Dense enough to land on the small STEP logo at the phone viewport; points
@@ -310,6 +313,27 @@ async function hoverAndCatch(page: Page, point: {x: number, y: number}, name: st
 
 
 /**
+ * Wait until AO is back at full and nothing is fading it (motionAO.js): no
+ * camera motion, no load, no fade in progress. A camera move, a resize's
+ * camera update or a load drops AO and fades it back in over FADE_IN_MS, a
+ * few paints apart under SwiftShader. A frame cached partway through that
+ * fade and compared against a full repaint at a later level differs where
+ * AO shades it: hoverOverlay.spec was intermittently red on CI from #2167
+ * on, in a different test each time.
+ *
+ * @param page
+ */
+async function waitForStillAO(page: Page) {
+  await expect.poll(() => page.evaluate(() => {
+    const viewer = (window as any).store.getState().viewer
+    const motion = viewer._motionAO
+    return viewer.postProcessor.getAOLevel() === 1 &&
+      (!motion || (motion.fade_ === null && !motion.moving && !motion.loading))
+  }), {message: 'AO back at full, no fade running', timeout: AO_SETTLE_TIMEOUT_MS}).toBe(true)
+}
+
+
+/**
  * @param page
  * @return whether the viewer painted nothing for HOVER_SETTLE_MS, and has no
  *   settle window open or owing its closing paint at the end of it
@@ -349,6 +373,7 @@ async function findHoverPoint(page: Page,
     }
     await page.evaluate(() => (window as any).__ovl.clearHover())
     await page.waitForTimeout(HOVER_SETTLE_MS)
+    await waitForStillAO(page)
     await nextFrame(page, 'base', 'full')
     // A store change just after the base paint (the load snackbar hiding
     // itself) opens a settle window. With paints as expensive as they are
@@ -523,6 +548,8 @@ describeMobileAndDesktop('viewer/three/hoverOverlay', (ff) => {
     await page.mouse.move(point.x, point.y)
     await page.mouse.wheel(0, WHEEL_ZOOM_DELTA)
     await page.waitForTimeout(HOVER_SETTLE_MS * 2)
+    // The zoom faded AO out; both frames below must be taken at full AO.
+    await waitForStillAO(page)
     // An overlay frame now composes from a cache of the NEW pose: the same
     // pixels as a full repaint, and not the old frame's.
     await nextFrame(page, 'after', 'overlay')
@@ -584,6 +611,7 @@ describeMobileAndDesktop('viewer/three/hoverOverlay', (ff) => {
     await page.setViewportSize(RESIZED_VIEWPORT)
     await expect.poll(() => pixelCount(page)).not.toBe(before)
     await page.waitForTimeout(HOVER_SETTLE_MS)
+    await waitForStillAO(page)
     await expectOverlayHoverMatchesFull(page)
   })
 
