@@ -335,6 +335,12 @@ export default class RenderDemand {
   }
 
 
+  /** @return {boolean} whether a load (an on-demand scope) is open */
+  get isLoading() {
+    return this.scopes.size > 0
+  }
+
+
   /**
    * Open an on-demand scope, for a load or a part of one. The first frame
    * paints, so the scene is current when the scope opens.

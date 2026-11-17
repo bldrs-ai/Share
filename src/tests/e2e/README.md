@@ -91,3 +91,10 @@ import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 
 from `src/Containers/` or `src/viewer/` it's one fewer `..`
 (`../tests/e2e/...`).
+
+## The render look is opt-in here
+
+The Playwright build turns the §6e render look (PBR, IBL, N8AO) off unless
+a spec opts in, because CI's software renderer can't afford it on every
+load. A spec about the look calls `withLook(page)` (`look.ts`) before its
+first `goto`. See design/new/viewer-replacement.md §6e.

@@ -119,6 +119,7 @@ import {
 import {elementSelection} from './selection'
 import {partsToPath} from './urls'
 import {initViewer} from './viewer'
+import {installDebugPanelsShortcut} from '../viewer/debugPanels'
 
 
 let count = 0
@@ -2613,6 +2614,11 @@ export default function CadView({
   useEffect(() => {
     setAppPrefix(appPrefix)
   }, [appPrefix, setAppPrefix])
+
+
+  // The debug panels (Perf + Render) behind the backtick key, in prod too
+  // (viewer/debugPanels.js; the dock is Components/DebugDock).
+  useEffect(() => installDebugPanelsShortcut(), [])
 
 
   /* eslint-disable react-hooks/exhaustive-deps */

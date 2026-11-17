@@ -1,6 +1,7 @@
 import React, {ReactElement, useEffect, useRef, useState} from 'react'
 import {
   Box,
+  Button,
   Divider,
   FormControlLabel,
   Popover,
@@ -29,6 +30,8 @@ import {
 } from '../../viewer/display/DisplayController'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {isMotionResidencyOn} from '../../viewer/display/motionResidencyMode'
+import {isLookOn} from '../../viewer/lookMode'
+import {setRenderPanelShown} from '../../viewer/debugPanels'
 import {readModelDisplayHash, writeModelDisplayHash} from './displayHash'
 
 
@@ -159,6 +162,9 @@ export default function ResidencyControl() {
       renderDemand: context.getRenderDemand?.() ?? null,
       gl: context.getRenderer?.()?.getContext?.() ?? null,
       onGestureEnd: (fraction) => setAutoPercent(Math.round(fraction * RESIDENCY_FULL)),
+      // Not while AO is still fading out (motionAO.js): Auto measures
+      // AO-free frames only.
+      shouldTime: () => !viewer?.postProcessor?.isAORunning?.(),
     })
     setMotionDriver(driver)
     return () => driver.dispose()
@@ -469,6 +475,24 @@ export default function ResidencyControl() {
                   data-testid='motion-residency-metric-distance'
                 />
               </RadioGroup>
+            </>}
+
+          {/* Last: the Render panel (look tuning) in the debug dock. */}
+          {isLookOn() &&
+            <>
+              <Divider/>
+              <Button
+                variant='text'
+                size='small'
+                onClick={() => {
+                  setAnchorEl(null)
+                  setRenderPanelShown(true)
+                }}
+                sx={{justifyContent: 'flex-start', textTransform: 'none'}}
+                data-testid='display-render'
+              >
+                Render...
+              </Button>
             </>}
         </Stack>
       </Popover>

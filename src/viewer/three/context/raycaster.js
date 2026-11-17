@@ -3,6 +3,7 @@
 
 import {Raycaster} from 'three'
 import {IfcComponent} from './base-types'
+import {finiteHits} from '../finiteHits'
 
 
 export class IfcRaycaster extends IfcComponent {
@@ -18,7 +19,9 @@ export class IfcRaycaster extends IfcComponent {
   castRay(items) {
     const camera = this.context.getCamera()
     this.raycaster.setFromCamera(this.context.mouse.position, camera)
-    return this.raycaster.intersectObjects(items)
+    // See ../finiteHits.js: three r187 reports NaN-vertex triangles as hits
+    // at distance NaN.
+    return finiteHits(this.raycaster.intersectObjects(items))
   }
   castRayIfc() {
     const items = this.castRay(this.context.items.pickableIfcModels)

@@ -49,7 +49,7 @@ export default class IfcHighlighter {
     // `withPerf` returns the function unchanged — the render closure has
     // no perf code, no branch, no closure overhead.  See DESIGN.md
     // "Render loop & perf monitor".
-    context.setRenderUpdate(withPerf(newUpdateFunction(context, composer, this.hoverOverlay)))
+    context.setRenderUpdate(withPerf(newUpdateFunction(context, composer, this.hoverOverlay), () => context.getRenderer()))
   }
 
 

@@ -76,9 +76,10 @@ function fenceGl() {
  * @param {number} count instances
  * @param {object} [opts]
  * @param {number} [opts.restTarget] at-rest target
+ * @param {Function} [opts.shouldTime] MotionResidency's `shouldTime` dep
  * @return {object}
  */
-function rig(count, {restTarget = 1} = {}) {
+function rig(count, {restTarget = 1, shouldTime = undefined} = {}) {
   const {group, mesh} = makeModel(count)
   const controller = new ResidencyController(group, {getCamera: () => ({position: new Vector3(0, 0, 200)})})
   if (restTarget < 1) {
@@ -112,6 +113,7 @@ function rig(count, {restTarget = 1} = {}) {
       return () => undefined
     },
     timerOptions: {nextTask: (fn) => tasks.push(fn)},
+    shouldTime,
   })
   /**
    * One 60 Hz animation frame: optionally a camera change, then the frame
@@ -311,6 +313,22 @@ describe('MotionResidency', () => {
       observers.forEach((o) => o.afterPaint?.(1, 'overlay'))
       // A fence would have been placed for a full paint: the timer is idle.
       expect(driver.timer.fence_).toBeNull()
+      observers.forEach((o) => o.beforePaint?.('full'))
+      observers.forEach((o) => o.afterPaint?.(1, 'full'))
+      expect(driver.timer.fence_).not.toBeNull()
+    })
+
+    it('never times a paint while AO still runs (motionAO.js fading it out)', () => {
+      let aoRunning = true
+      const {driver, controls, observers, frames, clock} = rig(20, {shouldTime: () => !aoRunning})
+      controls.dispatchEvent({type: 'update'})
+      expect(driver.moving).toBe(true)
+      clock.t += 16
+      frames.forEach((fn) => fn())
+      observers.forEach((o) => o.beforePaint?.('full'))
+      observers.forEach((o) => o.afterPaint?.(1, 'full'))
+      expect(driver.timer.fence_).toBeNull()
+      aoRunning = false
       observers.forEach((o) => o.beforePaint?.('full'))
       observers.forEach((o) => o.afterPaint?.(1, 'full'))
       expect(driver.timer.fence_).not.toBeNull()

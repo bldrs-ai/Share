@@ -4,6 +4,7 @@ import {useTheme} from '@mui/material/styles'
 import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
 import AppsRail from '../Components/Apps/AppsRail'
+import DebugDock from '../Components/DebugDock/DebugDock'
 import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
 import BottomBar from './BottomBar'
 import ControlsGroup from './ControlsGroup'
@@ -87,6 +88,9 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
         data-testid='RootLandscape-CenterPaneBottomBox'
       >
         <BottomBar deselectItems={deselectItems}/>
+        {/* Perf + Render panels (backtick, Display > Render...): fixed,
+            centred over the Elements control. */}
+        <DebugDock/>
         <AlertDialogAndSnackbar/>
         <LoadingBackdrop/>
       </Box>

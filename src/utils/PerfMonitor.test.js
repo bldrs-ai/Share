@@ -1,10 +1,12 @@
+/* eslint-disable no-magic-numbers */
 /**
  * Tests for `PerfMonitor`.
  *
- * The module reads `?feature=perf` once at import and runs a
- * side-effect block (constructing the Monitor singleton, installing
- * `window.perf`) only when the flag is on.  To exercise both paths
- * we override `window.location` *before* `jest.resetModules() +
+ * The module reads `?feature=perf` / `?feature=look` once at import and
+ * shows the panel at startup (building the Monitor singleton, installing
+ * `window.perf`) when either is there; otherwise nothing is built until
+ * `setPerfVisible(true)` (the backtick key, debugPanels.js).  To exercise
+ * both paths we override `window.location` *before* `jest.resetModules() +
  * require()`.
  */
 
@@ -37,9 +39,30 @@ describe('PerfMonitor — flag off (default jsdom)', () => {
     expect(mod.isPerfEnabled).toBe(false)
   })
 
-  test('withPerf returns the input function unchanged (zero-cost contract)', () => {
-    const fn = () => 0
-    expect(mod.withPerf(fn)).toBe(fn)
+  test('withPerf wraps, calls through and samples nothing while hidden', () => {
+    const fn = jest.fn(() => true)
+    const wrapped = mod.withPerf(fn)
+    expect(wrapped()).toBe(true)
+    expect(fn).toHaveBeenCalledTimes(1)
+    expect(mod.isPerfVisible()).toBe(false)
+    expect(window.perf).toBeUndefined()
+  })
+
+  test('setPerfVisible(true) builds the panel at runtime and notifies subscribers', () => {
+    const listener = jest.fn()
+    const unsubscribe = mod.subscribePerf(listener)
+    mod.setPerfVisible(true)
+    expect(mod.isPerfVisible()).toBe(true)
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(typeof window.perf.fps).toBe('function')
+    const parent = document.createElement('div')
+    mod.mountPerfPanel(parent)
+    expect(parent.querySelector('#perf-monitor')).not.toBeNull()
+    mod.setPerfVisible(false)
+    expect(mod.isPerfVisible()).toBe(false)
+    expect(listener).toHaveBeenCalledTimes(2)
+    unsubscribe()
+    delete window.perf
   })
 
   test('mountPerfPanel is a no-op', () => {
@@ -134,17 +157,12 @@ describe('PerfMonitor — flag on (?feature=perf)', () => {
     expect(parent.querySelector('#perf-monitor')).toBeNull()
   })
 
-  test('window.perf.toggle flips visibility and returns the new hidden-state', () => {
-    const parent = document.createElement('div')
-    mod.mountPerfPanel(parent)
-    const dom = parent.querySelector('#perf-monitor')
-    expect(dom.style.display).toBe('')
-    const wasHidden1 = window.perf.toggle()
-    expect(wasHidden1).toBe(false)
-    expect(dom.style.display).toBe('none')
-    const wasHidden2 = window.perf.toggle()
-    expect(wasHidden2).toBe(true)
-    expect(dom.style.display).toBe('')
+  test('window.perf.toggle flips visibility and returns the new visible-state', () => {
+    expect(mod.isPerfVisible()).toBe(true)
+    expect(window.perf.toggle()).toBe(false)
+    expect(mod.isPerfVisible()).toBe(false)
+    expect(window.perf.toggle()).toBe(true)
+    expect(mod.isPerfVisible()).toBe(true)
   })
 })
 
@@ -173,11 +191,90 @@ describe('PerfMonitor — flag parsing', () => {
     expect(isEnabledFor('?feature=PERF')).toBe(true)
   })
 
+  test('`look` shows it at startup too (the look panel brings the overlay)', () => {
+    expect(isEnabledFor('?feature=look')).toBe(true)
+  })
+
   test('does not match for a different feature', () => {
     expect(isEnabledFor('?feature=bot')).toBe(false)
   })
 
   test('does not match when the `feature` param is absent', () => {
     expect(isEnabledFor('?foo=bar')).toBe(false)
+  })
+})
+
+
+describe('PerfMonitor — renderer counts and summary', () => {
+  let mod
+  let clock
+  let nowSpy
+
+  beforeEach(() => {
+    setLocationSearch('')
+    delete window.perf
+    clock = 1000
+    nowSpy = jest.spyOn(performance, 'now').mockImplementation(() => clock)
+    jest.resetModules()
+    mod = require('./PerfMonitor')
+  })
+
+  afterEach(() => {
+    nowSpy.mockRestore()
+    delete window.perf
+  })
+
+  /** @return {object} a stand-in for three's WebGLRenderer#info */
+  function fakeInfo() {
+    return {
+      autoReset: true,
+      memory: {geometries: 7, textures: 3},
+      render: {calls: 0, triangles: 0},
+      reset() {
+        this.render.calls = 0
+        this.render.triangles = 0
+      },
+    }
+  }
+
+  test('sums draw calls and triangles over the whole painted frame, not its last pass', () => {
+    const info = fakeInfo()
+    const passes = [{calls: 40, triangles: 9000}, {calls: 1, triangles: 2}, {calls: 1, triangles: 2}]
+    const wrapped = mod.withPerf(() => {
+      // A composer frame: several renderer.render calls, which with
+      // auto-reset off add up.
+      passes.forEach((p) => {
+        info.render.calls += p.calls
+        info.render.triangles += p.triangles
+      })
+      return true
+    }, () => ({info}))
+    mod.setPerfVisible(true)
+    clock += 16
+    wrapped()
+    expect(info.autoReset).toBe(false)
+    clock += 1000
+    wrapped()
+    const stats = mod.getPerfStats()
+    expect(stats.calls).toBe(42)
+    expect(stats.triangles).toBe(9004)
+    expect(stats.geometries).toBe(7)
+    expect(stats.textures).toBe(3)
+  })
+
+  test('puts the renderer\'s auto-reset back once hidden', () => {
+    const info = fakeInfo()
+    const wrapped = mod.withPerf(() => true, () => ({info}))
+    mod.setPerfVisible(true)
+    wrapped()
+    expect(info.autoReset).toBe(false)
+    mod.setPerfVisible(false)
+    wrapped()
+    expect(info.autoReset).toBe(true)
+  })
+
+  test('formats the minimised summary as fps/ms/MB, with – for what isn\'t measured', () => {
+    expect(mod.formatPerfSummary({fps: 59.6, ms: 16.4, mb: 120.2})).toBe('60/16/120')
+    expect(mod.formatPerfSummary({fps: null, ms: null, mb: null})).toBe('–/–/–')
   })
 })

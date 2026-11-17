@@ -373,6 +373,25 @@ describe('viewer/three/hoverOverlay: HoverOverlay', () => {
     expect(composer.passes.indexOf(overlay.pass)).toBe(1)
   })
 
+  it('sits after the AO stage, and an overlay paint skips it: AO is baked into the cache', () => {
+    // CustomPostProcessor builds the AO stage (an InPlacePass, marked
+    // `bakesIntoHoverCache`) before IfcHighlighter builds the overlay.
+    const composer = makeComposer()
+    const aoStage = {name: 'InPlace(N8AO)', enabled: true, bakesIntoHoverCache: true}
+    composer.passes.splice(1, 0, aoStage)
+    const overlay = new HoverOverlay(composer, {
+      copy: () => {}, draw: () => {}, checkCache: () => {},
+      makeTarget: (input) => ({width: input.width, height: input.height, dispose: jest.fn()}),
+    })
+    expect(composer.passes.indexOf(overlay.pass)).toBe(composer.passes.indexOf(aoStage) + 1)
+    overlay.paint(false)
+    expect(composer.ran).toContain('InPlace(N8AO)')
+    composer.ran.length = 0
+    overlay.paint(true)
+    expect(composer.ran).not.toContain('InPlace(N8AO)')
+    expect(aoStage.enabled).toBe(true)
+  })
+
   it('captures the scene on a full paint and composes from it on an overlay paint', () => {
     const {overlay, composer, copies} = makeOverlay()
     expect(overlay.canCompose()).toBe(false)

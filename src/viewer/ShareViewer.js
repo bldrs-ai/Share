@@ -38,7 +38,9 @@ import {occurrencePathKey} from '../utils/occurrencePaths'
 import {modelHasCapability} from './ShareModel'
 import {paintPreviewSelection} from './previewSelection'
 import {paintStreamingSelection, streamingTablesModel} from './streamingBatchPick'
-import {isFeatureEnabled} from '../FeatureFlags'
+import {isLookOn} from './lookMode'
+import {MotionAO} from './motionAO'
+import LightingGui from './three/LightingGui'
 import {requestPaint} from './three/renderDemand'
 import {viewRules} from './legacyViewRules'
 import {
@@ -129,6 +131,12 @@ const SHADOW_NORMAL_BIAS_FACTOR = 0.01
 const DEFAULT_SHADOW_OPACITY = 0.35
 
 
+/** A `raycast` that hits nothing, for decoration meshes. */
+function noRaycast() {
+  // Intentionally empty: adds no intersections.
+}
+
+
 /**
  * @param {number} n
  * @return {number} smallest power of 2 ≥ n.
@@ -215,9 +223,12 @@ export class ShareViewer {
   // Whether the hover showing was painted by a full paint `_askForHoverPaint`
   // asked for, so taking it off needs one too (with the hover overlay only).
   _isHoverPaintedInFull = false
-  // The `?feature=look` lighting/material tuning GUI (LightingGui). Null
-  // unless the flag is set; lazily code-split in (see `_initLookGui`).
+  // The Render panel (LightingGui), built the first time the debug dock
+  // mounts it (`mountLookPanel`; debugPanels.js has when it's shown).
   _lookGui = null
+  // Set by dispose(), so a dock mount that lands later doesn't build on a
+  // viewer whose context is gone.
+  _isDisposed = false
   // Current IBL environment selection + PMREM blur, tracked so the
   // `?feature=look` GUI can rebuild the env on a type swap or blur change
   // without losing the other setting.
@@ -280,19 +291,31 @@ export class ShareViewer {
     const scene = this.context.getScene()
     const camera = this.context.getCamera()
     // The whole §6e look — PBR materials + gradient studio IBL + tone-mapping
-    // + retuned lights + the Neutral/Flat profile toggle — sits behind a
-    // single `?feature=look` flag (default OFF), so `main`'s rendering is
-    // unchanged until the flag is flipped (an atomic switch-over).
-    //   · flag ON: leave `outputColorSpace` at the r184 default (SRGBColorSpace)
+    // + retuned lights + AO + the Neutral/Flat profile toggle — is one
+    // decision, `isLookOn()` (lookMode.js): on by default, off with
+    // `?feature=disableLook` or the `disableLook` rollback.
+    //   · look ON: leave `outputColorSpace` at the r184 default (SRGBColorSpace)
     //     so the filmic tone-map (CustomPostProcessor, in the composer) writes
     //     gamma-encoded output, and build the gradient env map for image-based
     //     lighting (scaled by `environmentIntensity`; scene.js dials the direct
     //     lights down to compensate).
-    //   · flag OFF: restore the legacy `LinearSRGBColorSpace` output and skip
-    //     the env map — the pre-§6e pipeline, matching `main` pixel-for-pixel.
+    //   · look OFF: restore the legacy `LinearSRGBColorSpace` output and skip
+    //     the env map — the pre-§6e pipeline.
     // Env build no-ops in tests where getRenderer() returns undefined.
-    if (isFeatureEnabled('look')) {
-      this._buildEnvironment(this._envBlur, this._envType)
+    if (isLookOn()) {
+      // On the next task, not here. PMREM prefiltering is ~1 s of GPU work
+      // under a software rasteriser (CI's SwiftShader; milliseconds on a
+      // GPU), and a viewer can be disposed right after it's built (CadView
+      // re-inits on mount): built inline, the first viewer's env was then
+      // flushed by `forceContextLoss` on dispose, ~1.2 s spent on a viewer
+      // nobody sees (#2167 load profile). The scene is still empty here, so
+      // the env arriving a task later changes nothing on screen; the scene
+      // probe sees `scene.environment` change and paints.
+      setTimeout(() => {
+        if (!this._isDisposed) {
+          this._buildEnvironment(this._envBlur, this._envType)
+        }
+      }, 0)
       if (renderer) {
         scene.environmentIntensity = ENV_MAP_INTENSITY
       }
@@ -301,6 +324,13 @@ export class ShareViewer {
     }
     this._createGroundPlane()
     this.postProcessor = new CustomPostProcessor(renderer, scene, camera)
+    // Drop AO while the camera moves, before motion residency cuts any
+    // geometry (motionAO.js). Built with the post processor, which owns AO.
+    this._motionAO = new MotionAO(this.postProcessor, {
+      controls: this.context.getCameraControls?.() ?? null,
+      onFrame: (fn) => this.context.onFrame?.(fn) ?? null,
+      renderDemand: this.context.getRenderDemand?.() ?? null,
+    })
     this.highlighter = new IfcHighlighter(this.context, this.postProcessor)
     if (this.highlighter.hoverOverlay) {
       // The overlay turned itself off after a failure (hoverOverlay.js
@@ -323,11 +353,6 @@ export class ShareViewer {
     // call `viewer.clipper.X` and never branch on model type.
     this.clipper = new Clipper(this)
     this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
-    // §6e: opt-in live tuning panel for the filmic look. Off by default;
-    // `?feature=look` pulls in the (otherwise-unbundled) lil-gui panel.
-    if (isFeatureEnabled('look')) {
-      this._initLookGui()
-    }
   }
 
 
@@ -415,7 +440,7 @@ export class ShareViewer {
    */
   _createGroundPlane() {
     const renderer = this.context.getRenderer()
-    if (!renderer || !isFeatureEnabled('look')) {
+    if (!renderer || !isLookOn()) {
       return
     }
     renderer.shadowMap.enabled = true
@@ -428,6 +453,12 @@ export class ShareViewer {
     ground.receiveShadow = true
     ground.visible = false
     ground.name = 'contactShadowGround'
+    // Never a pick target. It's decoration, and three's Raycaster ignores
+    // `visible`: CadView's double-click casts against every scene child, so
+    // with the look on this hidden plane was the nearest hit under STEP
+    // parts, had no expressID, and the pick threw instead of selecting
+    // (#2167, exportGlb.spec's STEP picks).
+    ground.raycast = noRaycast
     this.context.getScene().add(ground)
     this._groundPlane = ground
   }
@@ -554,10 +585,9 @@ export class ShareViewer {
    * @param {string} name a LOOKS key ('neutral' | 'flat')
    */
   applyLook(name) {
-    // The whole §6e look is behind `?feature=look` (default off). No-op when
-    // the flag is off so a stale `renderMode` cookie from a prior flag-on
-    // session can't apply look lights/env over the legacy render.
-    if (!isFeatureEnabled('look')) {
+    // No-op with the look off (`isLookOn()`, lookMode.js) so a `renderMode`
+    // cookie can't apply look lights/env over the legacy render.
+    if (!isLookOn()) {
       return
     }
     const look = LOOKS[name] ? name : DEFAULT_LOOK
@@ -567,6 +597,7 @@ export class ShareViewer {
     this._currentLook = look
     const config = LOOKS[look]
     this.postProcessor?.setToneMappingForLook(config.toneMapping)
+    this.postProcessor?.setAOEnabled(config.ao)
     if (this._envType !== config.envType) {
       this.setEnvironmentType(config.envType)
     }
@@ -623,19 +654,36 @@ export class ShareViewer {
 
 
   /**
-   * Lazily build the `?feature=look` lighting/material tuning panel
-   * (LightingGui, a lil-gui overlay). Dynamic-imported so neither lil-gui
-   * nor the panel lands in the default bundle — only the flag pulls the
-   * chunk. Fire-and-forget: the panel appears a tick after viewer init.
+   * Put the Render panel (LightingGui) into `host`, building it on first use.
+   * Called by the debug dock (Components/DebugDock/DebugDock.jsx) whenever
+   * the panel is shown, so a theme change's new viewer lands in the same
+   * place. With the look off (`?feature=disableLook`) there's nothing for it
+   * to tune, so nothing is mounted.
    *
-   * @private
+   * @param {HTMLElement} host
+   * @param {Function} [onOpenChange] told `(isOpen)` now and whenever the
+   *   panel is opened or minimised, so the dock can place it
+   * @return {boolean} whether a panel is mounted
    */
-  _initLookGui() {
-    import('./three/LightingGui').then(({default: LightingGui}) => {
-      this._lookGui = new LightingGui(this)
-    }).catch((e) => {
-      console.warn('LightingGui failed to load:', e)
-    })
+  mountLookPanel(host, onOpenChange = null) {
+    if (!host || this._isDisposed || !isLookOn()) {
+      return false
+    }
+    if (!this._lookGui) {
+      this._lookGui = new LightingGui(this, host)
+    } else {
+      this._lookGui.mountInto(host)
+    }
+    this._lookGui.setOpenListener(onOpenChange)
+    onOpenChange?.(this._lookGui.isOpen())
+    return true
+  }
+
+
+  /** Take the Render panel off the page (the dock hid it); kept for reuse. */
+  unmountLookPanel() {
+    this._lookGui?.setOpenListener(null)
+    this._lookGui?.unmount()
   }
 
 
@@ -656,12 +704,14 @@ export class ShareViewer {
    * @return {Promise<void>}
    */
   async dispose() {
+    this._isDisposed = true
     // Local plugins. Each is null-safe individually so partial-init
     // teardown (e.g. constructor throw mid-build) still works.
     try {
       this._lookGui?.dispose?.()
+      this._motionAO?.dispose()
     } catch (e) {
-      console.warn('lookGui.dispose failed:', e)
+      console.warn('lookGui/motionAO dispose failed:', e)
     }
     try {
       if (this._groundPlane) {

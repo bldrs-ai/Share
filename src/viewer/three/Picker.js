@@ -2,6 +2,7 @@
 import {Object3D, Raycaster} from 'three'
 import {assertDefined} from '../../utils/assert'
 import ThreeContext from './ThreeContext'
+import {finiteHits} from './finiteHits'
 
 
 /** Uses the THREE raycaster to pick items in the scene. */
@@ -31,7 +32,9 @@ export default class Picker {
   castRay(items) {
     const camera = this.context.getCamera()
     this.raycaster.setFromCamera(this.context.getNormalizedMousePosition(), camera)
-    return this.raycaster.intersectObjects(items)
+    // finiteHits: three r187's watertight triangle test reports a NaN-vertex
+    // triangle as a hit at distance NaN; see finiteHits.js.
+    return finiteHits(this.raycaster.intersectObjects(items))
   }
 
 
