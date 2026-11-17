@@ -596,6 +596,9 @@ export default class RenderDemand {
     }
     this.lastSettleAskMs = this.now()
     this.settleUntilMs = Math.max(this.settleUntilMs, this.lastSettleAskMs + SETTLE_MS)
+    // The window owes at least one paint, whether or not a frame runs while
+    // it's open (`frameKind`).
+    this.isSettlePending = true
   }
 
 
@@ -661,12 +664,17 @@ export default class RenderDemand {
       // ran at that rate behind them. What does change the picture still
       // asks for itself (layers 1-3) or is caught by the probe below on the
       // next frame; only the backstop waits for the window to close.
-      if (now < this.settleUntilMs) {
-        if (!(this.paintCostMs() > EXPENSIVE_PAINT_MS)) {
-          return PaintKind.FULL
-        }
-        this.isSettlePending = true
-      } else if (this.isSettlePending && now - this.lastSettleAskMs >= EXPENSIVE_SETTLE_MS) {
+      //
+      // The owed paint is recorded by `invalidateSoon` itself, not by the
+      // first frame that sees the window open: a long task or a paused loop
+      // can let the whole window pass with no frame at all, and the paint
+      // must still come (codex on #2169).
+      const isCheap = !(this.paintCostMs() > EXPENSIVE_PAINT_MS)
+      if (isCheap && now < this.settleUntilMs) {
+        this.isSettlePending = false
+        return PaintKind.FULL
+      }
+      if (this.isSettlePending && (isCheap || now - this.lastSettleAskMs >= EXPENSIVE_SETTLE_MS)) {
         this.isSettlePending = false
         return PaintKind.FULL
       }

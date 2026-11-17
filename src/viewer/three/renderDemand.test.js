@@ -436,6 +436,27 @@ describe('viewer/three/renderDemand session', () => {
     expect(paintsIn(quiet + 2)).toBe(1)
   })
 
+  it('still paints a settle window no frame saw open, cheap or expensive', () => {
+    demand.startSession({probe})
+    paintsIn(2)
+    // Cheap: a long task swallows the whole window.
+    demand.invalidateSoon()
+    clock += SETTLE_MS * 2
+    expect(paintsIn(1)).toBe(1)
+    expect(paintsIn(10)).toBe(0)
+    // Expensive: still owed once input has been quiet long enough.
+    demand.invalidate()
+    expect(demand.shouldRender()).toBe(true)
+    demand.rendered(1)
+    clock += 200
+    expect(demand.shouldRender()).toBe(false)
+    demand.invalidateSoon()
+    clock += SETTLE_MS * 2
+    expect(paintsIn(1)).toBe(0)
+    clock += EXPENSIVE_SETTLE_MS
+    expect(paintsIn(1)).toBe(1)
+  })
+
   it('still paints a change the probe sees inside an expensive settle window, at once', () => {
     demand.startSession({probe})
     expect(demand.shouldRender()).toBe(true)
