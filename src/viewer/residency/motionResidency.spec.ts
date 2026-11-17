@@ -145,7 +145,12 @@ describeMobileAndDesktop('viewer/residency/motionResidency with render on demand
 
 
   test('a manual percent still draws less while dragging and everything again at rest', async ({page}) => {
-    test.setTimeout(TEST_TIMEOUT_MS)
+    // Twice the budget: render on demand is off here, so every frame is a full
+    // paint, and with the §6e look on (#2167: PBR, N8AO on still frames)
+    // SwiftShader runs those at a few a second. The menu and slider steps
+    // before the drag then outlast TEST_TIMEOUT_MS under two workers. The
+    // assertions are unchanged.
+    test.setTimeout(TEST_TIMEOUT_MS * 2)
     const before = await stillFrame(page)
     await openDisplayMenu(page)
     await page.getByTestId('motion-residency-auto').locator('input').uncheck()
