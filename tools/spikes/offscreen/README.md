@@ -141,7 +141,48 @@ Do this for PSB, a mid-size model and a small one:
    - **first show**: the upload plus the first frame;
    - **re-show**: an idle view coming back.
 
-### D. Post the results
+### D. Shared GPU budget: K of N views moving (Share#2135)
+
+What several views painting in one frame cost, and what each view's own GPU
+timer can see of it. `budget.js`; main thread, one rAF loop, as Share renders
+today.
+
+1. Leave the scene preset's **heavy** box off. In **Shared GPU budget**, set
+   N = 4 views and 20000 instances per view (about 480k triangles a view).
+   Leave the view size at 640×400 device px and 5 s a run.
+2. Leave **gated** on. A frame is then drawn only once every fence of the
+   last drawn frame has signalled, so the GPU never queues more than a frame.
+   That is the clean case; the ungated run in step 4 is Share's loop as it is.
+3. Click **Run budget sweep**. It runs K = 1, 2, 4 for each arrangement:
+   one context per view, then one shared context drawing tiles. Nothing needs
+   dragging. That is about a minute.
+4. Untick **gated** and run it again.
+5. Optionally repeat with N = 8 and 100000 instances, if the M2 keeps up
+   with frames that long.
+6. Click **Copy JSON** and post it on #2135.
+
+Columns:
+- **drawn-frame interval**: should grow with K if the views' GPU costs add
+  up, as one GPU would make them.
+- **fence tail** (min / median / max over the moving views): what each
+  view's Auto would read on the fence path, from its own draw's end
+  (`gpuFrameTimer.js`). If the k-th view drawn reads about k times one view,
+  the fence carries the views queued before it.
+- **last fence from frame start**: the closest a fence gets to the whole
+  frame's GPU time.
+- **timer query sum**: per-view `TIME_ELAPSED` queries, where the browser has
+  the extension (desktop Chrome on most GPUs). Compare it with the interval:
+  near it means per-view queries separate the views and add up to the frame.
+  `perView` in the JSON has each view's numbers.
+
+A headless SwiftShader run is CPU raster: use it for ratios, never times.
+Without `--enable-unsafe-swiftshader`, that Chromium hides the timer-query
+extension, which is how CI's E2E ends up on the fence path. `?budget=1` runs
+the sweep on load and leaves the JSON in `window.budgetResult`. The form's
+fields can be overridden from the URL: `bViews`, `bInstances`, `bW`, `bH`,
+`bSeconds`, and `bGated=0`.
+
+### E. Post the results
 
 Click **Copy JSON** and paste the result into the PR. Add the Summary output
 from A.4 for each capture. Both include the GPU name and the browser.
@@ -163,6 +204,7 @@ from A.4 for each capture. Both include the GPU name and the browser.
     (re-show cost) or eviction of contexts alongside eviction of models.
   - If re-show is fast in both modes, isolation (one worker per active view)
     is affordable.
+- **Shared budget (D):** see the column notes in D.
 
 ## Notes
 

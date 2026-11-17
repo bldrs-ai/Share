@@ -13,6 +13,7 @@ import {
 import {createLoop} from './loop.js'
 import {calibrate, runBlocks, syntheticBlocks} from './pump.js'
 import {makeScene} from './scene.js'
+import {runBudgetSweep} from './budget.js'
 import {runViews} from './views.js'
 
 
@@ -27,7 +28,7 @@ const SETTLE_MS = 1000
 const TAIL_MS = 500
 
 const $ = (id) => document.getElementById(id)
-const state = {trace: null, itersPerMs: null, results: [], views: []}
+const state = {trace: null, itersPerMs: null, results: [], views: [], budget: []}
 
 
 /**
@@ -301,6 +302,45 @@ async function runViewsSelected() {
 }
 
 
+/**
+ * The shared-budget sweep (budget.js, Share#2135). `?budget=1` runs it on
+ * load and leaves the JSON in `window.budgetResult`, for a headless run.
+ *
+ * @param {object} [over] overrides of the form's values
+ * @return {Promise<object>} the results JSON
+ */
+async function runBudgetSelected(over = {}) {
+  const opts = readOptions()
+  const modes = [['perContext', $('bPerContext').checked], ['shared', $('bShared').checked]]
+    .filter(([, on]) => on).map(([m]) => m)
+  $('runBudget').disabled = true
+  try {
+    const rows = await runBudgetSweep({
+      views: Number($('bViews').value) || 4,
+      durationMs: (Number($('bSeconds').value) || 5) * 1000,
+      scene: {instances: Number($('bInstances').value) || 20000, heavy: opts.heavy},
+      width: Number($('bW').value) || 640,
+      height: Number($('bH').value) || 400,
+      gated: $('bGated').checked,
+      host: $('stage'),
+      onProgress: (msg) => {
+        $('status').textContent = `budget: ${msg}`
+      },
+      ...over,
+    }, over.modes ?? modes)
+    state.budget.push(...rows)
+    renderTable()
+    $('status').textContent = 'Done. Copy the JSON into the issue.'
+  } catch (e) {
+    $('status').textContent = `Failed: ${e.message}`
+    throw e
+  } finally {
+    $('runBudget').disabled = false
+  }
+  return resultsJson()
+}
+
+
 /** Draw the results tables. */
 function renderTable() {
   const base = state.results.find((r) => r.id === 'R0')
@@ -320,7 +360,14 @@ function renderTable() {
     `${fmt(v.firstShowP50)} / ${fmt(v.firstShowMax)}`, `${fmt(v.reShowP50)} / ${fmt(v.reShowP95)}`,
     v.lostContexts.length ? `${v.lostContexts.length} (first after ${v.lostContexts[0].afterViews} views)` : '0',
     v.errors.map((e) => e.message).join('; ') || '—'])
-  const tables = [[head, rows], [vHead, vRows]].filter(([, r]) => r.length).map(([h, r]) => makeTable(h, r))
+  const bHead = ['mode', 'K of N moving', 'tris/view', 'drawn-frame interval p50/p95', 'frame CPU p50',
+    'fence tail p50 (min / median / max over views)', 'last fence from frame start p50', 'timer query sum p50']
+  const bMode = (b) => `${b.mode === 'perContext' ? 'context per view' : 'one shared context'}${b.gated ? '' : ', ungated'}`
+  const bRows = state.budget.map((b) => [bMode(b),
+    `${b.moving} of ${b.views}`, String(b.trisPerView), `${fmt(b.intervalP50)} / ${fmt(b.intervalP95)}`,
+    fmt(b.frameCpuP50), `${fmt(b.tailP50Min)} / ${fmt(b.tailP50Median)} / ${fmt(b.tailP50Max)}`,
+    fmt(b.lastFromFrameP50), b.timerQuery ? fmt(b.timerSumP50) : 'no extension'])
+  const tables = [[head, rows], [vHead, vRows], [bHead, bRows]].filter(([, r]) => r.length).map(([h, r]) => makeTable(h, r))
   $('results').replaceChildren(...tables)
   $('json').value = JSON.stringify(resultsJson(), null, 1)
 }
@@ -353,13 +400,15 @@ function resultsJson() {
     version: 1,
     env: {userAgent: navigator.userAgent,
       brands: (navigator.userAgentData?.brands ?? []).map((b) => `${b.brand} ${b.version}`).join(', '),
-      gpu: state.results.find((r) => r.gpu)?.gpu || state.views.find((v) => v.gpu)?.gpu || '', dpr: window.devicePixelRatio,
+      gpu: state.results.find((r) => r.gpu)?.gpu || state.views.find((v) => v.gpu)?.gpu ||
+        state.budget.find((b) => b.gpu)?.gpu || '', dpr: window.devicePixelRatio,
       hardwareConcurrency: navigator.hardwareConcurrency, itersPerMs: Math.round(state.itersPerMs)},
     trace: state.trace ?
       {env: state.trace.env, window: traceWindow(), summary: summarizeWindow(state.trace, traceWindow())} :
       null,
     results: state.results,
     views: state.views,
+    budget: state.budget,
   }
 }
 
@@ -416,6 +465,7 @@ function showTraceInfo() {
 function init() {
   $('run').addEventListener('click', runSelected)
   $('runViews').addEventListener('click', runViewsSelected)
+  $('runBudget').addEventListener('click', () => runBudgetSelected().catch((e) => console.warn('[budget]', e)))
   $('traceFile').addEventListener('change', (e) => e.target.files[0] && loadTrace(e.target.files[0]))
   for (const id of ['window', 'winFrom', 'winTo']) {
     $(id).addEventListener('change', showTraceInfo)
@@ -424,6 +474,7 @@ function init() {
   $('clear').addEventListener('click', () => {
     state.results = []
     state.views = []
+    state.budget = []
     renderTable()
   })
   $('dpr').placeholder = String(window.devicePixelRatio)
@@ -433,6 +484,23 @@ function init() {
     state.itersPerMs = calibrate()
     const noOffscreen = typeof OffscreenCanvas === 'undefined' ? 'No OffscreenCanvas here: the worker runs will fail.' : ''
     $('status').textContent = `Ready (${Math.round(state.itersPerMs)} iterations/ms). ${noOffscreen}`
+    const query = new URLSearchParams(location.search)
+    if (query.get('budget') === '1') {
+      // Form overrides for a headless run: ?budget=1&bViews=4&bInstances=…
+      if (query.get('bGated') === '0') {
+        $('bGated').checked = false
+      }
+      for (const id of ['bViews', 'bInstances', 'bW', 'bH', 'bSeconds']) {
+        if (query.has(id)) {
+          $(id).value = query.get(id)
+        }
+      }
+      runBudgetSelected().then((json) => {
+        window.budgetResult = json
+      }, (e) => {
+        window.budgetResult = {error: String(e?.message ?? e)}
+      })
+    }
   }, 200)
 }
 

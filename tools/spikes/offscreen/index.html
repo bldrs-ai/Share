@@ -72,6 +72,19 @@ Drag across the picture during each run. Protocol: <code>tools/spikes/offscreen/
   <em>lost contexts</em> column: that is the browser's cap on live WebGL contexts.</small></div>
 </fieldset>
 
+<fieldset><legend>Shared GPU budget: K of N views moving (Share#2135)</legend>
+  <label>Views N <input type="number" id="bViews" value="4"></label>
+  <label>Instances per view <input type="number" id="bInstances" value="20000"></label>
+  <label>View size <input type="number" id="bW" value="640"> × <input type="number" id="bH" value="400"> device px</label>
+  <label>Seconds per run <input type="number" id="bSeconds" value="5"></label>
+  <label><input type="checkbox" id="bPerContext" checked> one context per view</label>
+  <label><input type="checkbox" id="bShared" checked> one shared context, tiles</label>
+  <label><input type="checkbox" id="bGated" checked> gated (draw only once the last frame's fences signalled)</label>
+  <button id="runBudget">Run budget sweep</button>
+  <div><small>Main thread, one rAF loop, K = 1, 2, 4 … N moving views each run; uses the scene preset's
+  <em>heavy</em> flag. No dragging needed. Protocol: README.md §D.</small></div>
+</fieldset>
+
 <div id="status"></div>
 <div id="stage"></div>
 <div id="results"></div>
