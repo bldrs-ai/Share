@@ -48,7 +48,10 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const isolatedElements = useStore((state) => state.isolatedElements)
   const [isPlaneInUrl, setIsPlaneInUrl] = useState(false)
   const [isLinkCopied, setIsLinkCopied] = useState(false)
-  const [isCameraInUrl, setIsCameraInUrl] = useState(true)
+  // In the store, not the dialog's state: the live camera link reads it too
+  // (Camera/liveCameraLink.js), and stops following the camera while it's off.
+  const isCameraInUrl = useStore((state) => state.isCameraInUrl)
+  const setIsCameraInUrl = useStore((state) => state.setIsCameraInUrl)
   // Default ON, like the camera: the Display menu's choices are part of "what
   // the sender was looking at" (model-display-controls §6), and the `#d:`
   // token is empty for a model nobody has touched, so leaving it on costs

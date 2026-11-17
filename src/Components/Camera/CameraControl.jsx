@@ -7,21 +7,19 @@ import {
   addHashParams,
   getHashParams,
   removeHashListener,
+  replaceHashParams,
 } from '../../utils/location'
-import {HASH_DEBOUNCE_WAIT_MS, debounce} from '../../utils/debounce'
 import {roundCoord} from '../../utils/math'
 import {noteUserCamera} from '../../viewer/three/renderDemand'
-import {
-  HASH_PREFIX_CAMERA,
-  removeCameraUrlParams,
-} from './hashState'
+import {HASH_PREFIX_CAMERA} from './hashState'
+import {startLiveCameraLink} from './liveCameraLink'
 
 
 /**
- * The CameraControl is a button that adds the current camera position
- * to the URL hash.  On load, this component also reads the current
- * URL hash and sets the camera position, as well as adds a hash
- * listener to do the same whenever the hash changes.
+ * The CameraControl applies the URL hash's `#c:` camera when a link opens
+ * (and when the location changes to a different `#c:`, e.g. Back), and keeps
+ * the live camera link running: after the user's own first camera move the
+ * `#c:` token follows the camera for the session (liveCameraLink.js).
  *
  * @return {ReactElement}
  */
@@ -35,60 +33,77 @@ export default function CameraControl() {
 
   useEffect(() => {
     setCameraControls(cameraControls)
-    onHash(location, cameraControls)
-    const cleanup = onLoad(location, cameraControls, viewer)
-    return cleanup
-  }, [location, cameraControls, setCameraControls, viewer])
+    onLocation(location, cameraControls)
+  }, [location, cameraControls, setCameraControls])
+
+  // Keyed on the controls, not the location: the live link stays live across
+  // navigations (selecting an element changes the path), and starts over —
+  // waiting for a new first move — only with a new viewer's controls.
+  useEffect(() => {
+    addHashListener('camera', () => onHash(window.location, cameraControls))
+    const liveLink = startLiveCameraLink(cameraControls, {
+      write: replaceCameraUrlParams,
+      isEnabled: () => useStore.getState().isCameraInUrl,
+    })
+    return () => {
+      removeHashListener('camera')
+      liveLink.dispose()
+    }
+  }, [cameraControls, viewer])
 
   return <div style={{display: 'none'}}>Camera</div>
 }
 
 
 /**
- * Set camera position from window location hash and add listener for
- * hash change.
+ * The `#c:` token last written by us or applied from the URL, and the
+ * controls it was for. See onLocation.
+ *
+ * @type {{controls: object|null, token: string|undefined}}
+ */
+const synced = {controls: null, token: undefined}
+
+
+/**
+ * @param {object} cameraControls
+ * @param {Location|object} location
+ */
+function noteSyncedToken(cameraControls, location) {
+  if (location === window.location) {
+    synced.controls = cameraControls
+    synced.token = getHashParams(window.location, HASH_PREFIX_CAMERA)
+  }
+}
+
+
+// Exported for testing
+/**
+ * Apply the location's `#c:` camera unless it's the token we already hold.
+ *
+ * The effect calling this runs on EVERY location change, and with the live
+ * camera link the token is in the URL for the whole session: selecting an
+ * element navigates (utils/navigate.js#navWith carries the current hash), so
+ * an unconditional onHash would re-apply the camera on each selection —
+ * from rounded coords, animated (a small snap), or, if the live link's write
+ * was still pending, from the PREVIOUS settle's token, yanking the camera
+ * back mid-move. A token we wrote or applied for these controls is already
+ * the camera's; only a different one (a link opened, Back to an entry left
+ * at another pose) moves it.
  *
  * @param {object} location Either window.location or react-router location
  * @param {object} cameraControls obtained from the viewer
- * @param {object} viewer the viewer, for null testing
- * @return {Function} cleanup function that removes the listeners this
- *     call added.  Always returns a function so React useEffect can
- *     call it unconditionally.
+ * @return {boolean} whether a camera was applied
  */
-function onLoad(location, cameraControls, viewer) {
-  addHashListener('camera', () => onHash(location, cameraControls))
-  const canvas = document.querySelector('canvas')
-  if (viewer && canvas) {
-    let isMouseMoved = false
-    const onMouseMove = () => {
-      isMouseMoved = true
-    }
-    const onMouseUp = () => {
-      if (isMouseMoved) {
-        removeCameraUrlParams()
-      }
-      isMouseMoved = false
-    }
-    // When the wheel stops: the shared permalink debounce (utils/debounce.js),
-    // which a cut plane's drag uses too.
-    const onWheel = debounce(() => removeCameraUrlParams(), WHEEL_DEBOUNCE_WAIT_MS)
-    canvas.addEventListener('mousemove', onMouseMove)
-    canvas.addEventListener('wheel', onWheel)
-    canvas.addEventListener('mouseup', onMouseUp)
-    canvas.addEventListener('touchend', onMouseUp)
-
-    return () => {
-      removeHashListener('camera')
-      onWheel.cancel()
-      canvas.removeEventListener('mousemove', onMouseMove)
-      canvas.removeEventListener('wheel', onWheel)
-      canvas.removeEventListener('mouseup', onMouseUp)
-      canvas.removeEventListener('touchend', onMouseUp)
-    }
+export function onLocation(location, cameraControls) {
+  const token = getHashParams(location, HASH_PREFIX_CAMERA)
+  if (token !== undefined && synced.controls === cameraControls && token === synced.token) {
+    return false
   }
-  return () => {
-    removeHashListener('camera')
+  const applied = onHash(location, cameraControls)
+  if (applied) {
+    noteSyncedToken(cameraControls, window.location)
   }
+  return applied
 }
 
 
@@ -192,7 +207,9 @@ export function hasValidUrlParams() {
 
 
 /**
- * Adds camera coords to url.
+ * Adds camera coords to url, as a new history entry: for a user action that
+ * is a step of its own (the Share dialog's switch, a note's camera). The live
+ * camera link uses replaceCameraUrlParams.
  *
  * @param {object} cameraControls obtained from the viewer
  * @param {object} [location] where to write the `#c:` token; a location-shaped
@@ -204,6 +221,36 @@ export function addCameraUrlParams(cameraControls, location = window.location) {
   if (!cameraControls) {
     return
   }
+  addHashParams(location, HASH_PREFIX_CAMERA, cameraUrlParams(cameraControls))
+  noteSyncedToken(cameraControls, location)
+}
+
+
+/**
+ * Writes the camera into the page's `#c:` token in place: no history entry,
+ * no `hashchange` (utils/location.js#replaceHashParams). The live camera
+ * link's writer (liveCameraLink.js).
+ *
+ * @param {object} cameraControls obtained from the viewer
+ */
+export function replaceCameraUrlParams(cameraControls) {
+  if (!cameraControls) {
+    return
+  }
+  replaceHashParams(window.location, HASH_PREFIX_CAMERA, cameraUrlParams(cameraControls))
+  noteSyncedToken(cameraControls, window.location)
+}
+
+
+/**
+ * The `#c:` values for the camera's pose: position, then target, each
+ * rounded scale-aware (utils/math.js#roundCoord); a target at the origin is
+ * written as a single 0.
+ *
+ * @param {object} cameraControls
+ * @return {Array<number>}
+ */
+function cameraUrlParams(cameraControls) {
   const position = cameraControls.getPosition()
   let camArr = roundCoord(...position)
   const target = cameraControls.getTarget()
@@ -212,8 +259,5 @@ export function addCameraUrlParams(cameraControls, location = window.location) {
   } else {
     camArr = camArr.concat(roundCoord(...target))
   }
-  addHashParams(location, HASH_PREFIX_CAMERA, camArr)
+  return camArr
 }
-
-
-export const WHEEL_DEBOUNCE_WAIT_MS = HASH_DEBOUNCE_WAIT_MS

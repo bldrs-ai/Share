@@ -5,7 +5,7 @@ import {Menu, MenuItem, SvgIcon, Typography} from '@mui/material'
 import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
 import {HASH_DEBOUNCE_WAIT_MS, debounce} from '../../utils/debounce'
-import {addHashParams, getHashParams, getObjectParams, removeParams} from '../../utils/location'
+import {addHashParams, getHashParams, getObjectParams, removeParams, replaceHashParams} from '../../utils/location'
 import {roundCoordComponent} from '../../utils/math'
 import {isNumeric} from '../../utils/strings'
 import {TooltipIconButton} from '../Buttons'
@@ -103,9 +103,9 @@ export default function CutPlaneMenu() {
   // A dragged plane goes into the permalink (owner on #2171: a link kept
   // which planes were on but not where, so a new tab replayed every cut at
   // the model centre), and into the store, whose offsets togglePlane
-  // rebuilds the other planes from. Debounced like the camera's
-  // (utils/debounce.js): a drag is a stream of moves, and each hash write is
-  // a history entry.
+  // rebuilds the other planes from. Debounced like the live camera link's
+  // (utils/debounce.js): a drag is a stream of moves, written once it
+  // settles, in place (writeDraggedPlanes).
   useEffect(() => {
     const clipper = viewer?.clipper
     if (!model || !clipper) {
@@ -374,7 +374,12 @@ export function writeDraggedPlanes(viewer, model) {
   if (!offsets || Object.keys(offsets).length === 0) {
     return
   }
-  addHashParams(window.location, HASH_PREFIX_CUT_PLANE, offsets, true)
+  // In place, not as a new history entry: a drag settle is a value streaming
+  // into the link, like the live camera's (Camera/liveCameraLink.js), so Back
+  // shouldn't step through each one, and a `hashchange`/`popstate` would
+  // re-run every location effect for it (utils/location.js#replaceHashParams).
+  // Turning a plane on or off (togglePlane) stays a history entry.
+  replaceHashParams(window.location, HASH_PREFIX_CUT_PLANE, offsets, true)
   const {cutPlanes, setCutPlaneDirections} = useStore.getState()
   setCutPlaneDirections(cutPlanes.map((cutPlane) =>
     (cutPlane.direction in offsets ? {...cutPlane, offset: offsets[cutPlane.direction]} : cutPlane)))
