@@ -112,6 +112,15 @@ function pickerIn(scene, camera, pointer) {
 
 
 describe('viewer/three/pickControls', () => {
+  it('passes an empty hit list straight through, without casting at the arrows', () => {
+    const {scene, arrow} = sceneWithCutPlane()
+    arrow.userData.isDragging = true
+    const raycaster = {intersectObjects: jest.fn(() => [])}
+    const none = []
+    expect(hitsInFrontOfControls(none, raycaster, scene)).toBe(none)
+    expect(raycaster.intersectObjects).not.toHaveBeenCalled()
+  })
+
   it('leaves the hits alone in a scene with no cut-plane control', () => {
     const scene = new Scene()
     const back = slab(-3)
@@ -228,6 +237,16 @@ describe('viewer/three/pickControls', () => {
       expect(arrow.userData.isDragging).toBe(true)
       clipper.setInteractionEnabled(false)
       expect(arrow.userData.isDragging).toBe(false)
+    })
+
+    it('is cleared by a release off the canvas', () => {
+      const {clipper, arrow} = sceneWithCutPlane()
+      clipper.setInteractionEnabled(true)
+      clipper.onMouseDown(atCentre)
+      expect(arrow.userData.isDragging).toBe(true)
+      window.dispatchEvent(new MouseEvent('mouseup'))
+      expect(arrow.userData.isDragging).toBe(false)
+      expect(clipper.draggingArrow).toBeNull()
     })
 
     it('is not set by a press off the arrow', () => {

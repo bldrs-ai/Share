@@ -61,9 +61,10 @@ const KEPT_SIDE_VIEW = [-9.4, 1.3, 0.25, 0.6, 1.3, 0.25]
 // Frames for camera-controls to apply a pose and the loop to paint it.
 const CAMERA_SETTLE_MS = 500
 // How long a double-click on the gizmo is given to (wrongly) change the
-// selection: CadView's handler selects synchronously on the dblclick, and a
-// correct one already shows within a frame or two (PICK_TIMEOUT_MS is the
-// ceiling for those, not the norm).
+// selection, or a drag to (wrongly) hover: CadView's handler selects
+// synchronously on the dblclick and a hover pick lands within a frame or two,
+// so a wrong answer shows well inside this (PICK_TIMEOUT_MS is the ceiling
+// for the right ones, not the norm).
 const NO_CHANGE_SETTLE_MS = 1500
 
 
@@ -266,6 +267,17 @@ describeMobileAndDesktop('Cutplanes: picks skip what the cut removed', () => {
     const arrow = await arrowPoint(page)
     await expectHoverPicks(page, arrow, [])
     await expectDoubleClickKeeps(page, arrow, IFC_EXTERIOR)
+
+    // A drag of the arrow across the box: nothing hovered while the button is
+    // down, and hover is back the moment it is released (a drag flag left
+    // set, pickControls.js, would keep the box un-hoverable).
+    await page.mouse.move(arrow.x, arrow.y)
+    await page.mouse.down()
+    await page.mouse.move(centre.x, centre.y, {steps: 5})
+    await page.waitForTimeout(NO_CHANGE_SETTLE_MS)
+    expect(await hoveredParents(page)).toEqual([])
+    await page.mouse.up()
+    await expect.poll(() => hoveredParents(page), {timeout: PICK_TIMEOUT_MS}).toEqual([IFC_INTERIOR])
     await expectDoubleClickSelects(page, centre, IFC_INTERIOR)
   })
 

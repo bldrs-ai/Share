@@ -45,6 +45,11 @@
  *   the model)
  */
 export function hitsInFrontOfControls(hits, raycaster, scene) {
+  // Nothing to drop, whatever the controls say: skips the arrow raycast for
+  // the pointer over empty canvas.
+  if (hits.length === 0) {
+    return hits
+  }
   const controls = controlsIn(scene)
   if (controls === null) {
     return hits

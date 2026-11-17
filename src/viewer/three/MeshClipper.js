@@ -311,6 +311,7 @@ export default class MeshClipper {
       if (this.draggingArrow) {
         this.draggingArrow.arrow.userData.isDragging = false
       }
+      window.removeEventListener('mouseup', this.onMouseUp)
       this.draggingArrow = null
       this.hoveredArrow = null
       this.interactionEnabled = false
@@ -459,6 +460,11 @@ export default class MeshClipper {
         // picks pause while a button is down, Containers/viewer.js).
         planeData.arrow.userData.isDragging = true
         this.viewer.highlightIfcItem?.()
+        // The release can land anywhere, a panel or outside the window, not
+        // only on the canvas the other listeners are on. Missing it would
+        // leave the flag set, and every pick on the model blocked, until the
+        // next mouseup on the canvas (review of #2171).
+        window.addEventListener('mouseup', this.onMouseUp)
         this.setArrowColor(planeData.arrow, planeData.arrow.userData.highlightColor)
         const dragControls = this.viewer.context.getCameraControls()
         if (dragControls) {
@@ -558,6 +564,7 @@ export default class MeshClipper {
    * Mouse up handler - stop dragging
    */
   onMouseUp() {
+    window.removeEventListener('mouseup', this.onMouseUp)
     if (!this.draggingArrow) {
       return
     }
