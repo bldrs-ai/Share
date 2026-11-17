@@ -152,12 +152,19 @@ declared at the version the lockfile already resolved:
 
 The last two run in no test or build, so the gate passed without them;
 codex found them in review on #2142. That is what lint now catches, for
-every file in `eslint src netlify tools`: `import/no-unresolved` (package
-imports only), because under the isolated linker an undeclared package
-doesn't resolve, and `import/no-extraneous-dependencies`, which also keeps
-app and function code to `dependencies` (tests, specs, fixtures, mocks and
-`tools/` may use `devDependencies`). Both read the root `package.json`
-(`packageDir`), not the nested `{"type": "module"}` manifests. The
+every file in `eslint src netlify tools`: `import/no-unresolved`, because
+under the isolated linker an undeclared package doesn't resolve, and
+`import/no-extraneous-dependencies`, which also keeps app and function code
+to `dependencies` (tests, specs, fixtures, mocks and `tools/` may use
+`devDependencies`). The extraneous-dependencies rule reads the root
+`package.json` (`packageDir`), not the nested `{"type": "module"}`
+manifests. `no-unresolved` first landed for package imports only, because
+applied to relative paths it flagged five broken imports in four files
+nothing reached. Three were dead and were deleted
+(`OperationsGroupAndDrawer.jsx`, `AppBar.jsx`, `utils/cookies.js`). The
+fourth, `src/tests/fixtures/bldrs-inside-iframe.js`, is the source of the
+checked-in iframe fixture bundle, which couldn't be rebuilt until its import
+was fixed. The rule now covers relative paths as well. The
 `deps-graph` script's `npx dependency-cruiser` was never in either
 lockfile, so it is pinned in the script (`dependency-cruiser@18.7.2`)
 rather than added to every install.
