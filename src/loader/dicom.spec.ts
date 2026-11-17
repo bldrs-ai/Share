@@ -117,6 +117,42 @@ async function expectVolumeOpened(page: Page) {
 }
 
 
+/**
+ * Store state the volume tests read.
+ *
+ * @param page Playwright page
+ * @return what is selected, and whether the Properties panel is on
+ */
+function selectionState(page: Page): Promise<{selected: unknown, isPropertiesEnabled: boolean}> {
+  return page.evaluate(() => {
+    type State = {selectedElement: unknown, isPropertiesEnabled: boolean}
+    const state = (window as unknown as {useStore: {getState: () => State}}).useStore.getState()
+    return {selected: state.selectedElement, isPropertiesEnabled: state.isPropertiesEnabled}
+  })
+}
+
+
+/**
+ * Hide the cut planes' drag arrows, so a frame shows only what the cut did
+ * to the volume, not the arrow drawn beside it.
+ *
+ * @param page Playwright page
+ * @return how many planes there are
+ */
+function hideCutPlaneArrows(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    type Clipper = {_meshClipper?: {planes: Array<{arrow: {visible: boolean}}>}}
+    type State = {viewer?: {clipper?: Clipper}}
+    const state = (window as unknown as {useStore: {getState: () => State}}).useStore.getState()
+    const planes = state.viewer?.clipper?._meshClipper?.planes ?? []
+    planes.forEach((p) => {
+      p.arrow.visible = false
+    })
+    return planes.length
+  })
+}
+
+
 describeMobileAndDesktop('Open a zip of DICOM slices as a volume', () => {
   test.beforeEach(async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS)
@@ -132,5 +168,36 @@ describeMobileAndDesktop('Open a zip of DICOM slices as a volume', () => {
   test('a picked DICOM zip opens as a volume', async ({page}) => {
     await pickFile(page, PHANTOM_ZIP, 'CT1.zip')
     await expectVolumeOpened(page)
+  })
+
+  test('a click on the volume selects nothing, and Properties stays off', async ({page}) => {
+    await dropFile(page, PHANTOM_ZIP, 'CT1.zip')
+    await expectVolumeOpened(page)
+    // The model is framed in the middle of the canvas.
+    const canvas = page.getByTestId('cadview-dropzone')
+    const box = await canvas.boundingBox()
+    if (box === null) {
+      throw new Error('No viewer canvas to click')
+    }
+    await page.mouse.click(box.x + (box.width / 2), box.y + (box.height / 2))
+    expect(await selectionState(page)).toEqual({selected: null, isPropertiesEnabled: false})
+    await expect(page.getByTestId('control-button-properties')).toHaveCount(0)
+  })
+
+  test('a plan cut opens the volume', async ({page}) => {
+    await dropFile(page, PHANTOM_ZIP, 'CT1.zip')
+    await expectVolumeOpened(page)
+    const whole = await captureRenderedFrame(page)
+    await page.getByTestId('control-button-cut-plane').click()
+    await page.getByTestId('menu-item-plan').click()
+    await expect(page.getByTestId('menu-cut-plane')).toBeHidden()
+    expect(await hideCutPlaneArrows(page)).toBe(1)
+    const cut = await captureRenderedFrame(page)
+    // With the arrow hidden, all that can differ is the volume itself.
+    expect(frameDifference(whole, cut)).toBeGreaterThan(SAME_FRAME_TOLERANCE)
+    // And it is cut, not gone: hiding it still changes the frame.
+    expect(await setVolumeVisible(page, false)).toBe(VOLUME_NAME)
+    const hidden = await captureRenderedFrame(page)
+    expect(frameDifference(cut, hidden)).toBeGreaterThan(SAME_FRAME_TOLERANCE)
   })
 })

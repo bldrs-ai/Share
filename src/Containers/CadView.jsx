@@ -50,6 +50,7 @@ import {EngineOpenFailureError, engineFailureCaptureContext, engineSourceTags} f
 import {UnsupportedSchemaError, unsupportedSchemaAlert} from '../loader/unsupportedSchema'
 import {hasInMemoryUpload} from '../loader/inMemoryUploads'
 import {ARCHIVE_UNREADABLE} from '../loader/modelArchive'
+import {isVolumeModel} from '../loader/nrrd'
 import {ZipArchiveError} from '../loader/zipArchive'
 import {
   InMemoryUploadGoneError,
@@ -270,6 +271,7 @@ export default function CadView({
   const isModelReady = useStore((state) => state.isModelReady)
   const setIsModelReady = useStore((state) => state.setIsModelReady)
   const setModel = useStore((state) => state.setModel)
+  const setIsPropertiesEnabled = useStore((state) => state.setIsPropertiesEnabled)
   const setIndexedModel = useStore((state) => state.setIndexedModel)
 
   // NavTreeSlice
@@ -1089,6 +1091,10 @@ export default function CadView({
     // always be 0.
     loadedModel.modelID = 0
     setModel(loadedModel)
+    // A volume (a CT/MR scan, `loader/nrrd.js`) has no elements and no
+    // properties, so its Properties panel would only ever be empty. Set on
+    // every load, so the next model gets it back.
+    setIsPropertiesEnabled(!isVolumeModel(loadedModel))
     // For App API.  TODO(pablo): doublecheck this method still works with this
     // arg.. expected a url
     updateLoadedFileInfo(filepath)

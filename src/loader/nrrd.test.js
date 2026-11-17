@@ -4,11 +4,11 @@
 // `dicom.js` and parsed by three's own NRRDLoader, as `Loader` does.
 import fs from 'fs'
 import path from 'path'
-import {Box3, Data3DTexture, Vector3} from 'three'
+import {Box3, Data3DTexture, Group, Mesh, Plane, Vector3, Vector4} from 'three'
 import {NRRDLoader} from 'three/examples/jsm/loaders/NRRDLoader.js'
 import {unzipSync} from 'three/examples/jsm/libs/fflate.module.js'
 import {dicomSeriesToNrrd, groupSeries, parseDicomSlice} from './dicom'
-import nrrdToThree, {histogramRamp} from './nrrd'
+import nrrdToThree, {histogramRamp, isVolumeModel} from './nrrd'
 
 
 /** @return {object} the phantom as NRRDLoader's Volume */
@@ -100,5 +100,62 @@ describe('loader/nrrd', () => {
     expect(start * 255).toBeGreaterThanOrEqual(10)
     expect(start * 255).toBeLessThan(200)
     expect(end * 255).toBe(200)
+  })
+
+  describe('cut planes', () => {
+    /**
+     * Run the volume's pre-draw hook, as the renderer would.
+     *
+     * @param {object} mesh
+     * @return {Array<Vector4>} the box-space planes the shader gets
+     */
+    function drawn(mesh) {
+      mesh.onBeforeRender()
+      const {clipPlanes, clipCount} = mesh.material.uniforms
+      return clipPlanes.value.slice(0, clipCount.value)
+    }
+
+    /**
+     * @param {Vector4} plane box-space (n, c)
+     * @param {Array<number>} p a box-space point
+     * @return {boolean} whether the shader keeps it
+     */
+    const keeps = (plane, p) => (plane.x * p[0]) + (plane.y * p[1]) + (plane.z * p[2]) + plane.w >= 0
+
+    it('hands MeshClipper\'s world-space planes to the shader in box space, kept side and all', () => {
+      const root = nrrdToThree(phantomVolume())
+      // Wherever Share puts the model, the planes follow it.
+      root.position.set(1, 2, 3)
+      root.updateMatrixWorld(true)
+      const [mesh] = root.children
+      expect(drawn(mesh)).toEqual([])
+      const center = new Box3().setFromObject(root).getCenter(new Vector3())
+      // Keep the scene's -x half (three: kept where distanceToPoint >= 0),
+      // and the half below a plane raised a quarter of the box's height.
+      const height = new Box3().setFromObject(root).getSize(new Vector3()).y
+      mesh.material.clippingPlanes = [
+        new Plane().setFromNormalAndCoplanarPoint(new Vector3(-1, 0, 0), center),
+        new Plane().setFromNormalAndCoplanarPoint(new Vector3(0, -1, 0), center.clone().add(new Vector3(0, height / 4, 0))),
+      ]
+      const [xCut, yCut] = drawn(mesh)
+      // Scene x is the box's i axis; scene y (superior) its k axis.
+      expect(keeps(xCut, [-0.25, 0, 0])).toBe(true)
+      expect(keeps(xCut, [0.25, 0, 0])).toBe(false)
+      expect(keeps(yCut, [0, 0, 0.2])).toBe(true)
+      expect(keeps(yCut, [0, 0, 0.3])).toBe(false)
+      // Planes removed: the shader cuts nothing.
+      mesh.material.clippingPlanes = null
+      expect(drawn(mesh)).toEqual([])
+    })
+  })
+
+  it('can\'t be picked, and says it is a volume', () => {
+    const root = nrrdToThree(phantomVolume())
+    const hits = []
+    root.children[0].raycast(null, hits)
+    expect(hits).toEqual([])
+    expect(isVolumeModel(root)).toBe(true)
+    expect(isVolumeModel(new Group().add(new Mesh()))).toBe(false)
+    expect(isVolumeModel(null)).toBe(false)
   })
 })

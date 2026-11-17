@@ -272,11 +272,14 @@ describe('Loader', () => {
       expect(volume.Name).toEqual({value: 'CT 40 × 48 × 32'})
       expect(Number.isSafeInteger(volume.expressID)).toBe(true)
       expect(volume.material.uniforms.map.value.image.depth).toBe(32) // eslint-disable-line no-magic-numbers
-      // A raycast from the camera's side hits the box, so it can be picked.
+      // A ray straight through the volume picks nothing: it has nothing to
+      // select. Bounds still see it (the camera fits to it).
       model.updateMatrixWorld(true)
-      const center = new Box3().setFromObject(model).getCenter(new Vector3())
+      const bounds = new Box3().setFromObject(model)
+      expect(bounds.isEmpty()).toBe(false)
+      const center = bounds.getCenter(new Vector3())
       const ray = new Raycaster(center.clone().add(new Vector3(0, 0, 1)), new Vector3(0, 0, -1))
-      expect(ray.intersectObject(model, true).map((hit) => hit.object)).toContain(volume)
+      expect(ray.intersectObject(model, true)).toEqual([])
     } finally {
       restoreArrayBuffer()
     }

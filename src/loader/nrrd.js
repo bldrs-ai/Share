@@ -23,10 +23,12 @@ import {
   LinearFilter,
   Matrix4,
   Mesh,
+  Plane,
   RedFormat,
   ShaderMaterial,
   UnsignedByteType,
   Vector3,
+  Vector4,
 } from 'three'
 
 
@@ -92,6 +94,10 @@ export default function nrrdToThree(volume) {
       map: {value: texture},
       ramp: {value: ramp},
       steps: {value: Math.min(768, Math.ceil(Math.hypot(...size) * 1.5))},
+      // Cut planes, in box space, refreshed before each draw
+      // (`syncClipPlanes`).
+      clipPlanes: {value: Array.from({length: MAX_CLIP_PLANES}, () => new Vector4())},
+      clipCount: {value: 0},
     },
     vertexShader: VOLUME_VERTEX_SHADER,
     fragmentShader: VOLUME_FRAGMENT_SHADER,
@@ -116,12 +122,76 @@ export default function nrrdToThree(volume) {
   const label = `${modality || 'Volume'} ${nx} × ${ny} × ${nz}`
   mesh.name = label
   mesh.userData.isVolume = true
+  // Not pickable: a click on the volume has nothing to select (no
+  // elements, no properties), and selecting the box only outlined it.
+  // CadView turns the Properties panel off for a volume as well
+  // (`isVolumeModel`).
+  mesh.raycast = () => undefined
+  mesh.onBeforeRender = () => syncClipPlanes(mesh, boxToScene)
 
   const root = new Group()
   root.name = label
   root.add(mesh)
   return root
 }
+
+
+/**
+ * Whether a loaded model is a volume from this module, for the UI to turn
+ * off what a volume can't use (the Properties panel).
+ *
+ * @param {object} model the loaded model root
+ * @return {boolean}
+ */
+export function isVolumeModel(model) {
+  let found = false
+  model?.traverse?.((node) => {
+    if (node.userData?.isVolume) {
+      found = true
+    }
+  })
+  return found
+}
+
+
+/**
+ * Hand the cut planes to the shader, in box space.
+ *
+ * `MeshClipper` binds its planes (world space, one stable array) to every
+ * material's `clippingPlanes`. three's own clipping would discard the box's
+ * back faces, which isn't a cut through the volume, so this shader doesn't
+ * include three's clipping chunks: it trims each ray to the part every plane
+ * keeps instead, so a cut shows the scan's inside. Run before every draw, so
+ * a plane's drag (moved in place, with a paint requested) and the model's
+ * own transform are both current.
+ *
+ * Kept, as in three, where `plane.distanceToPoint(p) >= 0` for every plane
+ * (`clipIntersection` false, which `MeshClipper` sets).
+ *
+ * @param {Mesh} mesh the volume
+ * @param {Matrix4} boxToScene the placement baked into its vertices
+ */
+export function syncClipPlanes(mesh, boxToScene) {
+  const {uniforms} = mesh.material
+  const planes = mesh.material.clippingPlanes ?? []
+  const count = Math.min(planes.length, MAX_CLIP_PLANES)
+  if (count > 0) {
+    scratchWorldToBox.multiplyMatrices(mesh.matrixWorld, boxToScene).invert()
+    for (let i = 0; i < count; i++) {
+      scratchPlane.copy(planes[i]).applyMatrix4(scratchWorldToBox)
+      uniforms.clipPlanes.value[i].set(
+        scratchPlane.normal.x, scratchPlane.normal.y, scratchPlane.normal.z, scratchPlane.constant)
+    }
+  }
+  uniforms.clipCount.value = count
+}
+
+
+// The most cut planes the shader reads. `MeshClipper` makes one per axis
+// direction the user adds, so six covers a full box cut.
+const MAX_CLIP_PLANES = 6
+const scratchWorldToBox = new Matrix4()
+const scratchPlane = new Plane()
 
 
 /**
@@ -327,6 +397,8 @@ const VOLUME_FRAGMENT_SHADER = /* glsl */ `
 uniform sampler3D map;
 uniform vec2 ramp;
 uniform float steps;
+uniform vec4 clipPlanes[${MAX_CLIP_PLANES}];
+uniform int clipCount;
 
 varying vec3 vOrigin;
 varying vec3 vDirection;
@@ -351,6 +423,28 @@ void main() {
     discard;
   }
   bounds.x = max(bounds.x, 0.0);
+  // Trim the ray to the side of each cut plane that is kept
+  // (dot(n, p) + c >= 0), so a cut opens the volume at the plane.
+  for (int c = 0; c < ${MAX_CLIP_PLANES}; c++) {
+    if (c >= clipCount) {
+      break;
+    }
+    vec4 plane = clipPlanes[c];
+    float along = dot(plane.xyz, dir);
+    float side = dot(plane.xyz, vOrigin) + plane.w;
+    if (abs(along) < 1e-8) {
+      if (side < 0.0) {
+        discard;
+      }
+    } else if (along > 0.0) {
+      bounds.x = max(bounds.x, -side / along);
+    } else {
+      bounds.y = min(bounds.y, -side / along);
+    }
+  }
+  if (bounds.x > bounds.y) {
+    discard;
+  }
   float delta = 1.7321 / steps;
   // A per-pixel offset into the first step, so the steps don't line up
   // into visible rings.
