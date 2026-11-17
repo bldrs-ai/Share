@@ -1903,10 +1903,13 @@ separate step.
   15 s ready timeout on most model specs. Measured parts:
   - PMREM prefiltering of the gradient: ~950 ms of GPU work per viewer.
   - N8AO: ~220 ms a paint (313 ms with AO against 93 ms without).
-  - A profile showed ~1.2 s in `forceContextLoss`: CadView builds a viewer
-    and disposes it right after (its model-path effect re-runs on a
-    `customViewSettings` change, a pre-existing double init), and losing the
-    context flushed that first viewer's queued PMREM.
+  - A profile showed ~1.2 s in `forceContextLoss`: CadView built a viewer
+    and disposed it ~80 ms later, and losing the context flushed that first
+    viewer's queued PMREM. The double init was React StrictMode re-running
+    CadView's model-path effect, which happens only in development builds,
+    the Playwright build among them; prod never built the second viewer.
+    Fixed after #2167 (CadView's `viewerBuiltForRef`; one context per load,
+    asserted by `Containers/viewerInit.spec.ts`).
 
   Two fixes, both right on a GPU too:
   - **The env map builds on the next task** and is skipped for a viewer
@@ -1915,10 +1918,9 @@ separate step.
     `isLoading`). AO over half-streamed geometry is wasted, and the finished
     model gets one paint with it.
 
-  Together they took ready to ~5.0 s. The rest is the second viewer's PMREM
-  and the PBR/N8AO shader compiles, which cost milliseconds on a GPU.
-  Follow-up, not this PR: the double viewer init, which costs a WebGL
-  context with or without the look.
+  Together they took ready to ~5.0 s. The rest was the dev-only second
+  viewer's PMREM (since fixed, above) and the PBR/N8AO shader compiles,
+  which cost milliseconds on a GPU.
 - **AO is baked into the hover cache** (`viewer/three/inPlacePass.js`).
   - **Why:** N8AO first ran on every hover paint, 118 ms against 21 ms
     under SwiftShader. That undid the hover overlay's point (a cheap
