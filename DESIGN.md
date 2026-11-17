@@ -242,10 +242,19 @@ batch, no per-instance colours) the hover recolours as before. The A/B
 is in the PR that added it, and design/new/glb-export-premium.md §1.1d
 "What a hover pick costs after it" has the summary.
 
+*Controls drawn over everything* (the cut-plane arrows,
+`hoverOverlay.js#isDrawnOverHover`) are kept out of the scene passes and
+the cache: every frame the overlay draws them itself, after the hover
+(#2171: drawn in the RenderPass, a hovered element nearer than an arrow
+painted over it). So a change to how one looks, its hover colour or its
+fade with distance from the pointer (`viewer/three/arrowFade.js`), asks
+with `requestControlsPaint()` and is an overlay paint; a plane that moves
+changes the clipping and is a full one.
+
 *The invalidation rule:* a frame is an overlay frame only when the overlay's
 ask is the ONLY thing pending in a session between loads. Anything else
 makes it a full paint, which re-captures the cache: any `requestPaint()`
-(visibility, material colour, outlines, lights, looks, cut-plane arrows,
+(visibility, material colour, outlines, lights, looks, a cut plane's drag,
 residency), any hook (`add`/`attach`/`remove`, so model load and unload;
 `setColorAt`, so selection and colour modes; `setVisibleAt`, so hide,
 isolate and residency; `setMatrixAt` and the rest of `batchedEdit`;

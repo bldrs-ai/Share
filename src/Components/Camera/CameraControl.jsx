@@ -8,6 +8,7 @@ import {
   getHashParams,
   removeHashListener,
 } from '../../utils/location'
+import {HASH_DEBOUNCE_WAIT_MS, debounce} from '../../utils/debounce'
 import {roundCoord} from '../../utils/math'
 import {noteUserCamera} from '../../viewer/three/renderDemand'
 import {
@@ -68,14 +69,9 @@ function onLoad(location, cameraControls, viewer) {
       }
       isMouseMoved = false
     }
-    // https://stackoverflow.com/questions/3515446/jquery-mousewheel-detecting-when-the-wheel-stops/28371047#28371047
-    const onWheel = () => {
-      clearTimeout(document.wheeling)
-      document.wheeling = setTimeout(() => {
-        document.wheeling = undefined
-        removeCameraUrlParams()
-      }, WHEEL_DEBOUNCE_WAIT_MS)
-    }
+    // When the wheel stops: the shared permalink debounce (utils/debounce.js),
+    // which a cut plane's drag uses too.
+    const onWheel = debounce(() => removeCameraUrlParams(), WHEEL_DEBOUNCE_WAIT_MS)
     canvas.addEventListener('mousemove', onMouseMove)
     canvas.addEventListener('wheel', onWheel)
     canvas.addEventListener('mouseup', onMouseUp)
@@ -83,6 +79,7 @@ function onLoad(location, cameraControls, viewer) {
 
     return () => {
       removeHashListener('camera')
+      onWheel.cancel()
       canvas.removeEventListener('mousemove', onMouseMove)
       canvas.removeEventListener('wheel', onWheel)
       canvas.removeEventListener('mouseup', onMouseUp)
@@ -219,4 +216,4 @@ export function addCameraUrlParams(cameraControls, location = window.location) {
 }
 
 
-export const WHEEL_DEBOUNCE_WAIT_MS = 250
+export const WHEEL_DEBOUNCE_WAIT_MS = HASH_DEBOUNCE_WAIT_MS

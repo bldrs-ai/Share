@@ -11,7 +11,7 @@ import {
 import {isDevMode} from '../utils/common'
 import {floatStrTrim} from '../utils/strings'
 import {requestPaint} from '../viewer/three/renderDemand'
-import {finiteHits} from '../viewer/three/finiteHits'
+import {visibleHits} from '../viewer/three/visibleHits'
 
 
 /**
@@ -76,10 +76,11 @@ export default class PlaceMark extends EventDispatcher {
       if (_objects && this.activated) {
         updatePointer(event)
         _raycaster.setFromCamera(_pointer, _camera)
-        // The model, so through finiteHits like Picker#castRay: three r187
-        // reports a NaN-vertex triangle as a hit at distance NaN, which would
-        // otherwise drop the placemark at a non-finite point.
-        const _intersections = finiteHits(_raycaster.intersectObjects(_objects, true))
+        // The model, so through visibleHits like Picker#castRay: not at a
+        // NaN-distance hit three r187 reports for a NaN-vertex triangle, not
+        // on geometry a cut plane removed from view (#2131), and not on the
+        // model behind the cut-plane gizmo.
+        const _intersections = visibleHits(_raycaster.intersectObjects(_objects, true), _raycaster, context)
 
         if (_intersections.length > 0) {
           const intersect = _intersections[0]

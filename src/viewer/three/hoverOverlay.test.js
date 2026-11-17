@@ -4,7 +4,7 @@ import {
   MeshLambertMaterial, MeshPhysicalMaterial, PerspectiveCamera, Plane, Scene, Vector3, Vector4,
 } from 'three'
 import HoverOverlay, {
-  OVERLAY_LAYER, drawInstances, installDrawList, isEligible, swapInColor,
+  OVERLAY_LAYER, drawControls, drawInstances, installDrawList, isDrawnOverHover, isEligible, requestControlsPaint, swapInColor,
 } from './hoverOverlay'
 import {newUpdateFunction} from './IfcHighlighter'
 import RenderDemand, {
@@ -117,6 +117,21 @@ describe('viewer/three/hoverOverlay: which frames may be overlay frames (RenderD
     }
     throw new Error('never settled')
   }
+
+  // A control's look (MeshClipper's arrow colour and fade) changes nothing the
+  // cache holds while an overlay draws the controls, so it is an overlay frame.
+  it('makes a control\'s look change an overlay frame while an overlay draws the controls', () => {
+    const {overlay} = makeOverlay()
+    try {
+      settle()
+      requestControlsPaint()
+      clock += FRAME_MS
+      expect(demand.frameKind()).toBe(PaintKind.OVERLAY)
+    } finally {
+      overlay.dispose()
+    }
+  })
+
 
   /**
    * Ask for the hover overlay, let `change` happen, and read the next frame.
@@ -372,6 +387,104 @@ describe('viewer/three/hoverOverlay: HoverOverlay', () => {
     const {overlay, composer} = makeOverlay()
     expect(composer.passes.indexOf(overlay.pass)).toBe(1)
   })
+
+  // Owner on #2171: a hovered element nearer than a cut-plane arrow painted
+  // over it, since the arrow was drawn in the RenderPass, under the hover.
+  describe('controls drawn over everything (the cut-plane arrows)', () => {
+    /**
+     * @param {object} composer
+     * @param {boolean} [isVisible]
+     * @return {Group} a control at the scene's top level
+     */
+    function addArrow(composer, isVisible = true) {
+      const arrow = new Group()
+      arrow.userData.isClippingControl = true
+      arrow.visible = isVisible
+      composer.scene.add(arrow)
+      return arrow
+    }
+
+    /**
+     * @param {object} composer
+     * @param {object} arrow
+     * @return {Array<boolean>} the arrow's `visible` as each frame's scene passes ran
+     */
+    function watchSceneVisibility(composer, arrow) {
+      const seen = []
+      const render = composer.render.bind(composer)
+      composer.render = () => {
+        seen.push(arrow.visible)
+        render()
+      }
+      return seen
+    }
+
+    it('names the cut-plane arrows, and nothing else', () => {
+      expect(isDrawnOverHover({userData: {isClippingControl: true}})).toBe(true)
+      expect(isDrawnOverHover(new Mesh())).toBe(false)
+      expect(isDrawnOverHover(null)).toBe(false)
+    })
+
+    it('keeps them out of the scene passes and draws them after the hover, on full and overlay frames', () => {
+      const order = []
+      const ontop = []
+      const {overlay, composer, copies} = makeOverlay({
+        draw: () => order.push('hover'),
+        drawOnTop: (renderer, camera, target, controls) => {
+          order.push('controls')
+          ontop.push({camera, target, controls: [...controls]})
+        },
+      })
+      const arrow = addArrow(composer)
+      const seen = watchSceneVisibility(composer, arrow)
+      const batch = makeBatch()
+      composer.scene.add(batch)
+      overlay.setHover(() => [{mesh: batch, batchIds: [1]}])
+      overlay.paint(false)
+      overlay.paint(true)
+      // Hidden while the scene passes ran, so the cache never holds them.
+      expect(seen).toEqual([false, false])
+      expect(order).toEqual(['hover', 'controls', 'hover', 'controls'])
+      expect(ontop.every(({camera, target, controls}) => camera === composer.camera &&
+        target === composer.inputBuffer && controls.length === 1 && controls[0] === arrow)).toBe(true)
+      // The overlay frame drew them on the restored cache.
+      expect(copies[1]).toEqual([overlay.cache, composer.inputBuffer])
+      expect(arrow.visible).toBe(true)
+    })
+
+    it('draws them with no hover too, and leaves a hidden one hidden', () => {
+      const drawn = []
+      const {overlay, composer} = makeOverlay({drawOnTop: (r, c, t, controls) => drawn.push(controls.length)})
+      const shown = addArrow(composer)
+      const hidden = addArrow(composer, false)
+      overlay.paint(false)
+      expect(drawn).toEqual([1])
+      expect(shown.visible).toBe(true)
+      expect(hidden.visible).toBe(false)
+    })
+
+    it('puts them back even when the frame throws', () => {
+      const {overlay, composer} = makeOverlay()
+      const arrow = addArrow(composer)
+      composer.render = () => {
+        throw new Error('boom')
+      }
+      expect(() => overlay.paint(false)).toThrow('boom')
+      expect(arrow.visible).toBe(true)
+    })
+
+    it('leaves them in the scene passes while the overlay is off', () => {
+      const drawOnTop = jest.fn()
+      const {overlay, composer} = makeOverlay({drawOnTop})
+      const arrow = addArrow(composer)
+      const seen = watchSceneVisibility(composer, arrow)
+      overlay.enabled = false
+      overlay.paint(false)
+      expect(seen).toEqual([true])
+      expect(drawOnTop).not.toHaveBeenCalled()
+    })
+  })
+
 
   it('sits after the AO stage, and an overlay paint skips it: AO is baked into the cache', () => {
     // CustomPostProcessor builds the AO stage (an InPlacePass, marked
@@ -705,6 +818,39 @@ function makeRecordingRenderer() {
   }
   return renderer
 }
+
+
+describe('viewer/three/hoverOverlay: drawControls', () => {
+  it('draws each control alone, visible for its draw, over the target without clearing', () => {
+    const renderer = {
+      autoClear: true,
+      shadowMap: {autoUpdate: true, needsUpdate: true},
+      setRenderTarget: jest.fn(),
+      drawn: [],
+      render(root, camera) {
+        this.drawn.push({root, camera, visible: root.visible, autoClear: this.autoClear,
+          shadowAutoUpdate: this.shadowMap.autoUpdate})
+      },
+    }
+    const camera = new PerspectiveCamera()
+    const a = new Group()
+    const b = new Group()
+    a.visible = false
+    b.visible = false
+    drawControls(renderer, camera, 'target', [a, b])
+    expect(renderer.setRenderTarget).toHaveBeenCalledWith('target')
+    expect(renderer.drawn).toEqual([
+      {root: a, camera, visible: true, autoClear: false, shadowAutoUpdate: false},
+      {root: b, camera, visible: true, autoClear: false, shadowAutoUpdate: false},
+    ])
+    // Hidden again for the rest of the frame; HoverOverlay#paint shows them after it.
+    expect(a.visible).toBe(false)
+    expect(b.visible).toBe(false)
+    expect(renderer.autoClear).toBe(true)
+    expect(renderer.shadowMap.autoUpdate).toBe(true)
+    expect(renderer.shadowMap.needsUpdate).toBe(true)
+  })
+})
 
 
 describe('viewer/three/hoverOverlay: drawInstances', () => {
