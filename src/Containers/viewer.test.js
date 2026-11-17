@@ -130,6 +130,8 @@ describe('Containers/viewer', () => {
     })
 
     it('hover-picks in the render loop\'s frame, not in the mousemove, nor while a button is down', () => {
+      // Two per-frame hooks: MotionAO's (registered as the viewer is built)
+      // and then the hover picker's, which is the last one.
       let frameHook = null
       const stopFrame = jest.fn()
       const onFrame = jest.spyOn(ThreeContext.prototype, 'onFrame').mockImplementation((fn) => {
@@ -137,7 +139,7 @@ describe('Containers/viewer', () => {
         return stopFrame
       })
       const viewer = initViewer('/share/v/p')
-      expect(onFrame).toHaveBeenCalledTimes(1)
+      expect(onFrame).toHaveBeenCalledTimes(2)
       const pointer = {x: 0.1, y: 0.2}
       viewer.context.getNormalizedMousePosition = () => pointer
       viewer.highlightIfcItem = jest.fn()
@@ -162,9 +164,9 @@ describe('Containers/viewer', () => {
       expect(viewer.highlightIfcItem).toHaveBeenCalledTimes(1)
       frameHook()
       expect(viewer.highlightIfcItem).toHaveBeenCalledTimes(2)
-      // Disposing the viewer leaves the frame loop.
+      // Disposing the viewer leaves the frame loop, both hooks.
       disposeViewer()
-      expect(stopFrame).toHaveBeenCalledTimes(1)
+      expect(stopFrame).toHaveBeenCalledTimes(2)
     })
 
     it('with disableFrameHover, hover-picks in the mousemove on the timer scheduler, as #2127 shipped', () => {

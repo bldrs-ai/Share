@@ -272,10 +272,11 @@ module.exports = {
     // The rule above skips an import it can't resolve, and on the isolated
     // tree an undeclared package is exactly that, so this is the half that
     // catches it (sharp and express in tools, found in review on #2142).
-    // Relative paths are left out: this pair is about package declarations,
-    // and a broken relative import already fails the build or the tests
-    // wherever it is reachable.
-    'import/no-unresolved': ['error', {commonjs: true, ignore: ['^\\.']}],
+    // Relative paths are checked too: the build and the tests only catch a
+    // broken relative import where they reach it, and one nothing reaches is
+    // dead code. Five such imports in four unreachable files were found when
+    // this rule landed and were fixed or deleted in the follow-up.
+    'import/no-unresolved': ['error', {commonjs: true}],
     'indent': ['error', 2, {SwitchCase: 1}],
     'jsdoc/check-param-names': 'off',
     'jsdoc/check-types': 'error',

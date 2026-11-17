@@ -7,17 +7,10 @@ do and don't show; the policy itself is written elsewhere. The harness is
 [tools/bench/sourceModes/](../../tools/bench/sourceModes/README.md), and its
 README is the record schema and the confounder list.
 
-**Status (2026-11-11):** done. Three runs, all headless Chromium:
-the first matrix (13 models, 2.3 to 860.7 MiB, IFC and STEP, 471 records,
-conway `1.1643.778`); the re-measure on conway `1.1645.781`
-([After conway 1.1645.781](#after-conway-11645781-2026-11-11), 7 models,
-150 records), which found the buffered arms' after-spill retention
-unchanged and traced it to Share; and the measure of the source policy as
-built, with that retainer fixed
-([Source policy as built](#source-policy-as-built-2026-11-11), 7 models,
-147 records). The policy itself is engine-worker.md §5.6. The summary
-of the first matrix is next; each size class has its own section after
-the two later runs, and the full tables are at the end.
+**Status (2026-11-17):** the sandbox matrix is complete (13 models, three
+runs of it: conway 1.1643.778, 1.1645.781, and the policy as built). The
+owner's real-hardware runs are in the last section: they are what the cap
+was decided on, and they correct the sandbox's PSB result.
 
 ## Setup
 
@@ -1250,3 +1243,63 @@ within a second: `windowedHandle` 36.45 s (36.5 there), `windowedHeld`
 | PSB (ifc) | 860.7 | 36.45 s | 37.62 s (+3 %) | 30.24 s (-17 %) | 32.26 s (-11 %) | 33.26 s (-9 %) |
 | DOWA (ifc) | 398.4 | 27.08 s | 25.62 s (-5 %) | 21.21 s (-22 %) | 24.25 s (-10 %) | 24.77 s (-9 %) |
 | BLSN_007 (step) | 268.6 | 23.33 s | 23.89 s (+2 %) | 20.98 s (-10 %) | 22.21 s (-5 %) | 22.90 s (-2 %) |
+
+## Real hardware: the owner's runs (2026-11-11 to 2026-11-17)
+
+Brave on an M2, a real GPU, cold loads from a cleared profile, one run per
+arm unless noted. Models are named by authoring tool and size. These are the
+numbers the policy's cap rests on; the sandbox tables above (headless
+Chromium, software GL, 4 vCPU) are the wider but less representative set.
+
+### Buffered against windowed, same build
+
+Production `e7288bcb` (conway 1.1647.784) for the first three rows; the
+#2141 preview at `c2440e5` (conway 1.1645.781) for PSB.
+
+| Model | Buffered (default) | Windowed (`disableBufferedSource`) | Change | Geometry, buffered / windowed | Windowed source I/O |
+|---|---|---|---|---|---|
+| ArchiCAD 24, 63.0 MB | 6.7 s | 7.8 s | −15 % | 4.5 / 5.6 s | 32 reads, 158 MB (2.5×) |
+| Revit 24, 144.1 MB | 12.1 s | 15.6 s | −22 % | 8.2 / 11.7 s | 159 reads, 689 MB (4.8×) |
+| ArchiCAD 22, 309.4 MB | 17.1 s | 32.7 s | −48 % | 8.5 / 24.3 s | 1,026 reads, 4,236 MB (13.7×) |
+| PSB (Revit), 860.7 MB | 40.6 s | 39.8 s | +2 % | 20.7 / 20.8 s | 915 reads, 4,082 MB (4.7×) |
+
+- **Parsing is the same in both arms** on the three mid-sized models (within
+  0.2 s). The whole difference is Geometry.
+- **The gap follows the window's read amplification, not file size.** The
+  309 MB model re-read its file 13.7 times through the window and lost 16 s of
+  geometry; PSB, nearly three times larger, re-reads 4.7 times and is level.
+- **On the 144 MB model the adaptive window grew to the whole file**
+  (`window=144.1 MB`), so the windowed open held as much source as the
+  buffered one and was still 3.5 s slower.
+- **PSB does not reproduce the sandbox's result** (policy 11 % faster there):
+  on this machine the two arms are within a second, in Brave, Safari (53.2
+  against 52.9 s) and Firefox (69.4 against 69.9 s).
+- **Decision: the sync-handle cap stays at 1 GiB** (256 MiB on devices
+  reporting 4 GiB or less). Buffered is faster on every mid-sized model
+  measured and level on the largest.
+
+Single runs: the two smaller differences (1.1 s and 3.5 s) carry less weight
+than the 15.6 s one; the direction is the same in all three. Not measured:
+worker or tab memory in either arm, STEP, and anything between 310 and
+860 MB.
+
+### The source hash on Firefox
+
+PSB, Firefox, one run each.
+
+| | Parsing | Geometry | Total |
+|---|---|---|---|
+| FNV source hash, buffered by policy (`c2440e5`) | 42.1 s | 24.4 s | 69.4 s |
+| No hash, no sidecar (`disableEngineSidecar`, windowed, `c2440e5`) | 30.8 s | 26.3 s | 60.1 s |
+| Native SHA-256 block hash (#2172 preview, `0688f92`) | 30.9 s | 24.7 s | 58.6 s |
+
+The per-byte FNV loop cost about 10 s of Firefox's parse; the native digest
+(conway#783, turned on in Share#2172) removes it and keeps the sidecar. On
+Chromium the same loop profiled at about 1.2 s. Not measured: Safari and
+Chromium after #2172.
+
+### Open
+
+Why geometry extraction over a window re-reads one authoring tool's 309 MB
+file 14 times. That is the cost the buffered open avoids, and a file over the
+cap, or a device under the small-device ceiling, still pays it.

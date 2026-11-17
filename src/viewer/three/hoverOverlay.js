@@ -50,11 +50,31 @@ import {PaintKind, requestOverlayPaint, requestPaint} from './renderDemand'
  * is 16-bit), the recolour shows whichever the draw order put last and the
  * overlay shows the hovered one.
  *
+ * **Glass is drawn tinted.** A transparent batch (IFC glazing) draws its
+ * hovered pane in the hover colour at the pane's own alpha, blended over the
+ * cached frame, which already holds the pane in its own colour. So the pane
+ * reads as the highlight over a faint trace of the glass, and nothing else
+ * changes: no other glass is redrawn. A full paint shows the same frame, since
+ * it draws this overlay after the scene too. The owner's call: Seestrasse's
+ * glazed façade sent most hovers down the recolour path below, each a full
+ * repaint of the model.
+ *
+ * **Controls drawn over everything** (the cut-plane arrows, `isDrawnOverHover`:
+ * `depthTest` off, `renderOrder` 999) are left out of the scene passes and
+ * drawn by the overlay itself, after the hover, on full and overlay frames
+ * alike (`paint` lifts them, `drawControls`). Drawn in the RenderPass they
+ * were under the hover: an arrow writes its depth wherever it draws, so a
+ * hovered element nearer than the arrow passed the overlay's depth test there
+ * and painted over it (owner on #2171). Kept out of the cache, a change to how
+ * a control looks (its hover colour, MeshClipper's fade) needs only an
+ * overlay paint (`requestControlsPaint`): the cached frame never holds the
+ * old look under the new one.
+ *
  * **What the overlay can't draw** falls back to the recolour, decided per
- * hover by ShareViewer#highlightIfcItem through `isEligible`: a transparent
- * or transmissive material (a second blend over the cached pixels would
- * double it), a batch without per-instance colours, a multi-material batch,
- * or a three whose BatchedMesh internals don't look as this module expects.
+ * hover by ShareViewer#highlightIfcItem through `isEligible`: a transmissive
+ * material (it samples a transmission pass the overlay doesn't render), a
+ * batch without per-instance colours, a multi-material batch, or a three
+ * whose BatchedMesh internals don't look as this module expects.
  *
  * **Invalidation.** The overlay never decides by itself that the scene is
  * unchanged: RenderDemand does (`frameKind`), and any ask other than the
@@ -164,8 +184,9 @@ class Fingerprint {
 
 /**
  * Whether the overlay can draw this batch's instances (module doc, "What the
- * overlay can't draw"). The private fields are the ones three r184's
- * `BatchedMesh#onBeforeRender` reads and writes (BatchedMesh.js:1518-1671),
+ * overlay can't draw"). The private fields are the ones three r187's
+ * `BatchedMesh#_updateDrawParameters` (called from `onBeforeRender`) reads
+ * and writes (BatchedMesh.js:1581-1795; WebGL takes its `multiDraw` branch),
  * which `installDrawList` writes in its place; a three that reshapes them
  * fails this check and the hover recolours instead.
  *
@@ -179,7 +200,7 @@ export function isEligible(mesh) {
     mesh._indirectTexture?.image?.data &&
     Array.isArray(mesh._instanceInfo) && Array.isArray(mesh._geometryInfo) &&
     mesh._multiDrawStarts instanceof Int32Array && mesh._multiDrawCounts instanceof Int32Array &&
-    material && !Array.isArray(material) && material.transparent !== true && !(material.transmission > 0))
+    material && !Array.isArray(material) && !(material.transmission > 0))
 }
 
 
@@ -214,7 +235,8 @@ function isInScene(object, scene) {
 
 /**
  * Narrow a batch's next draw to `ids`: what three's own `onBeforeRender`
- * writes for the visible, unculled instances (BatchedMesh.js:1518-1671),
+ * writes for the visible, unculled instances (`_updateDrawParameters`,
+ * BatchedMesh.js:1581-1795),
  * written for these alone, wireframe's doubled ranges included. Undone by the
  * function it returns, which also marks the batch's list for a rebuild on its
  * next ordinary draw, as its culling and sort may skip one otherwise.
@@ -470,6 +492,79 @@ export function makeCacheTarget(input) {
 
 
 /**
+ * Whether a scene child is a control drawn over everything, which the
+ * overlay draws after the hover (module doc). Today the cut-plane arrows
+ * (MeshClipper#createPlane); pickControls.js reads the same flag for picks.
+ *
+ * @param {object} object a scene child
+ * @return {boolean}
+ */
+export function isDrawnOverHover(object) {
+  return object?.userData?.isClippingControl === true
+}
+
+
+/**
+ * Draw the lifted controls into the frame, over whatever is there: their
+ * materials have `depthTest` off, and each draws on its own as the root, so
+ * nothing else in the scene is walked. `visible` is turned on for the draw
+ * and off after it; `HoverOverlay#paint` puts it back after the frame.
+ *
+ * @param {object} renderer
+ * @param {object} camera
+ * @param {object} target the composer's input buffer
+ * @param {Array<object>} controls the lifted scene children
+ */
+export function drawControls(renderer, camera, target, controls) {
+  const autoClear = renderer.autoClear
+  const shadowAutoUpdate = renderer.shadowMap.autoUpdate
+  const shadowNeedsUpdate = renderer.shadowMap.needsUpdate
+  try {
+    renderer.autoClear = false
+    renderer.shadowMap.autoUpdate = false
+    renderer.shadowMap.needsUpdate = false
+    renderer.setRenderTarget(target)
+    for (const control of controls) {
+      control.visible = true
+      try {
+        renderer.render(control, camera)
+      } finally {
+        control.visible = false
+      }
+    }
+  } finally {
+    renderer.autoClear = autoClear
+    renderer.shadowMap.autoUpdate = shadowAutoUpdate
+    renderer.shadowMap.needsUpdate = shadowNeedsUpdate
+  }
+}
+
+
+// The overlays that draw the controls, so a control's own change can ask
+// for an overlay paint (`requestControlsPaint`). One viewer at a time today.
+const liveOverlays = new Set()
+
+
+/**
+ * A control's look changed (MeshClipper's arrow colour and fade), nothing
+ * else: with an overlay drawing the controls, the next frame need only
+ * redraw them on the cached frame, which never holds them (module doc).
+ * Without one, the controls are in the scene passes and it is a full paint.
+ * Not for a control that moved: a cut plane moves the clipping with it,
+ * which is a full paint (MeshClipper#onMouseMove asks for one).
+ */
+export function requestControlsPaint() {
+  for (const overlay of liveOverlays) {
+    if (overlay.enabled) {
+      requestOverlayPaint()
+      return
+    }
+  }
+  requestPaint()
+}
+
+
+/**
  * The composer pass the overlay runs as, right after the RenderPass. It
  * renders into the input buffer and doesn't swap, so the passes after it read
  * the scene with the hover in it.
@@ -515,11 +610,15 @@ export default class HoverOverlay {
    * @param {Function} [options.draw] `drawInstances`; tests pass a stand-in
    * @param {Function} [options.makeTarget] `makeCacheTarget`; tests pass a stand-in
    * @param {Function} [options.checkCache] `checkCacheComplete`; tests pass a stand-in
+   * @param {Function} [options.drawOnTop] `drawControls`; tests pass a stand-in
    */
   constructor(composer, {canvas = null, copy = blitColorAndDepth, draw = drawInstances,
-    makeTarget = makeCacheTarget, checkCache = checkCacheComplete} = {}) {
+    makeTarget = makeCacheTarget, checkCache = checkCacheComplete, drawOnTop = drawControls} = {}) {
     this.composer = composer
     this.copy = copy
+    this.drawOnTop = drawOnTop
+    // The controls `paint` took out of the scene passes for this frame.
+    this.lifted = []
     this.checkCache = checkCache
     this.isCacheChecked = false
     this.draw = draw
@@ -543,9 +642,19 @@ export default class HoverOverlay {
       // Nothing to cache the output of: hover recolours, as without the flag.
       this.enabled = false
     } else {
-      composer.addPass(this.pass, renderIndex + 1)
+      // After the RenderPass and after any pass baked into the cache (the AO
+      // stages, `bakesIntoHoverCache`, inPlacePass.js): the cache then holds
+      // the AO'd frame and an overlay paint needn't run AO again.
+      let after = renderIndex
+      composer.passes.forEach((pass, i) => {
+        if (pass.bakesIntoHoverCache === true && i > after) {
+          after = i
+        }
+      })
+      composer.addPass(this.pass, after + 1)
     }
     this.canvas = canvas
+    liveOverlays.add(this)
     this.onContextLost = () => this.invalidate()
     canvas?.addEventListener?.('webglcontextlost', this.onContextLost)
   }
@@ -621,20 +730,52 @@ export default class HoverOverlay {
     this.mode = isOverlayOnly ? PaintKind.OVERLAY : PaintKind.FULL
     if (isOverlayOnly) {
       for (const pass of this.composer.passes) {
-        if (pass.enabled && (pass === this.renderPass || pass instanceof NormalPass)) {
+        // The scene passes, and the AO stages baked into the cache: the
+        // cached frame already holds their output.
+        if (pass.enabled && (pass === this.renderPass || pass instanceof NormalPass ||
+            pass.bakesIntoHoverCache === true)) {
           pass.enabled = false
           skipped.push(pass)
         }
       }
     }
+    // Out of the scene passes, drawn by `compose_` after the hover (module
+    // doc). `visible` is no change the hooks see, and this runs inside a
+    // paint; it is put back below, before the frame returns.
+    this.lifted = this.liftControls_()
     try {
       this.composer.render()
     } finally {
       for (const pass of skipped) {
         pass.enabled = true
       }
+      for (const control of this.lifted) {
+        control.visible = true
+      }
+      this.lifted = []
       this.mode = PaintKind.FULL
     }
+  }
+
+
+  /**
+   * @return {Array<object>} the visible controls among the scene's children,
+   *   hidden for the scene passes; none while the overlay is off, so they
+   *   stay in the RenderPass
+   */
+  liftControls_() {
+    const scene = this.renderPass?.scene
+    if (!this.enabled || !scene) {
+      return []
+    }
+    const lifted = []
+    for (const child of scene.children) {
+      if (child.visible && isDrawnOverHover(child)) {
+        child.visible = false
+        lifted.push(child)
+      }
+    }
+    return lifted
   }
 
 
@@ -677,6 +818,10 @@ export default class HoverOverlay {
       }
       stage = 'draw'
       this.drawHover_(renderer, input)
+      if (this.lifted.length > 0) {
+        stage = 'controls'
+        this.drawOnTop(renderer, this.renderPass.camera, input, this.lifted)
+      }
     } catch (e) {
       this.fail_(stage, e)
     }
@@ -730,7 +875,7 @@ export default class HoverOverlay {
    * frame, and the count is what the A/B needs.
    *
    * @param {string} stage where it threw: 'capture', 'incomplete' (the cache's
-   *   framebuffer, `checkCacheComplete`), 'restore' or 'draw'
+   *   framebuffer, `checkCacheComplete`), 'restore', 'draw' or 'controls'
    * @param {Error} error
    */
   fail_(stage, error) {
@@ -762,5 +907,6 @@ export default class HoverOverlay {
     this.hover = null
     this.canvas?.removeEventListener?.('webglcontextlost', this.onContextLost)
     this.canvas = null
+    liveOverlays.delete(this)
   }
 }

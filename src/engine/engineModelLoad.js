@@ -688,7 +688,9 @@ export function indexLine(index) {
   if (!index) {
     return undefined
   }
-  const size = `${(index.bytes / MIB).toFixed(1)} MB`
+  // The sidecar's source digest, 'sha256' or 'fnv' (Share#2092), so a report
+  // says which hash a reopen verified; absent when the worker could not read it.
+  const size = `${(index.bytes / MIB).toFixed(1)} MB${index.hash ? `, ${index.hash}` : ''}`
   if (index.source === 'sidecar') {
     return `Engine index: from sidecar (${size}), no parse`
   }

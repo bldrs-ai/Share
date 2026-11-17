@@ -67,6 +67,10 @@ export function engineFlagSnapshot() {
     // policy, and must not depend on how the URL flags are read.
     disableBufferedSource: Boolean(flags?.find((f) => f.name === 'disableBufferedSource')?.isActive) ||
       isFeatureEnabled('disableBufferedSource'),
+    // Same static-first read: `isActive: true` is the prod rollback of the
+    // native source hash (engineHandler.js#openModel, Share#2092).
+    disableNativeSourceHash: Boolean(flags?.find((f) => f.name === 'disableNativeSourceHash')?.isActive) ||
+      isFeatureEnabled('disableNativeSourceHash'),
   }
 }
 

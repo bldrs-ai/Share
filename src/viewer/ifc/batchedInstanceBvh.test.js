@@ -28,6 +28,7 @@ import {
 } from './batchedInstanceBvh'
 import {withBvhPrototypes} from './batchedModel.fixture'
 import {raycastActiveInstances} from './batchedRaycast'
+import {finiteHits} from '../three/finiteHits'
 import {decorateBatchMeshes} from './buildBatchedConwayModel'
 import {
   disposeDeferredBatchedBoundsTree,
@@ -273,7 +274,10 @@ function raysAt(mesh) {
  * @return {Array<object>} `{batchId, faceIndex, distance, point}`
  */
 function hitsOf(mesh, raycaster) {
-  return raycaster.intersectObject(mesh, false).map((h) => ({
+  // Through finiteHits, as every pick in the app is (Picker#castRay): since
+  // three r187 a NaN-vertex triangle comes back as a hit at distance NaN, on
+  // both paths alike, and the pick layer drops it.
+  return finiteHits(raycaster.intersectObject(mesh, false)).map((h) => ({
     batchId: h.batchId, faceIndex: h.faceIndex, distance: h.distance, point: h.point,
   }))
 }

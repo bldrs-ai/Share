@@ -30,7 +30,7 @@ import {captureEngineExtensions, ifcManagerOver} from '../loader/glbEngineCaptur
 import {classifyOpenFailure, openDeferred} from '../loader/conwayOpen'
 import {ENGINE_PROTOCOL_VERSION, Ev, Op, serializeError} from './protocol'
 import {openSourceStore, opfsRoot} from './engineSources'
-import {readSidecar, sweepSidecars, writeSidecar} from './engineSidecars'
+import {readSidecar, sidecarHashName, sweepSidecars, writeSidecar} from './engineSidecars'
 import {makeBatchEncoder, previewMessage, snapshotStatistics} from './engineStream'
 import {enableStepPreviewFinishParse} from '../viewer/ifc/pumpTestSeams'
 import {isOutOfMemoryError} from '../utils/oom'
@@ -526,6 +526,18 @@ export function createEngineHandler({
       // a sidecar for exactly the bytes it indexed (~12 % of the index build,
       // conway#760); a sidecar open adopts the sidecar's own.
       settings.RECORD_SOURCE_HASH = true
+      // Hash natively (SHA-256 over 4 MiB blocks, conway#783) rather than
+      // conway's default per-byte FNV loop in JavaScript: on Firefox that loop
+      // was about 10 s of an 860 MB model's 40 s parse (Parsing 40.7 s with
+      // it, 30.8 s without; Share#2092). The sidecar records which algorithm
+      // ran (`hashAlgorithm` 2), so FNV sidecars already in users' OPFS still
+      // verify, each under its own. A sidecar read where WebCrypto is missing
+      // comes back INDEX_STALE under VERIFY_INDEX_SOURCE_HASH and reparses.
+      // `disableNativeSourceHash` is the kill switch (FeatureFlags.js): conway
+      // then records FNV as before.
+      if (!flags.disableNativeSourceHash) {
+        settings.SOURCE_HASH_ALGORITHM = 'sha256Blocks'
+      }
     }
     // The source policy (sourcePolicy.js, Share#2139): buffered or windowed
     // for this open. Buffered reads the whole file once into one buffer the
@@ -633,6 +645,10 @@ export function createEngineHandler({
         if (entryPath !== null) {
           sidecarState = {
             entryPath, file: blob, getOpfsRoot, source: index ?? 'parse', bytes: sidecar?.byteLength ?? 0, saved: false,
+          }
+          if (index === 'sidecar') {
+            // What the persisted sidecar was taken with, adopted by the open.
+            sidecarState.hash = sidecarHashName(sidecar)
           }
         }
       }
@@ -889,6 +905,7 @@ export function createEngineHandler({
         return
       }
       sidecarState.bytes = exported.byteLength
+      sidecarState.hash = sidecarHashName(exported)
       const written =
         await writeSidecar(sidecarState.entryPath, sidecarState.file, exported, sidecarState.getOpfsRoot)
       sidecarState.saved = written.saved
@@ -920,6 +937,9 @@ export function createEngineHandler({
       // before 26), or why nothing was saved (Share#2093).
       if (sidecarState.writer && sidecarState.writer !== 'writable') {
         summary.index.writer = sidecarState.writer
+      }
+      if (sidecarState.hash) {
+        summary.index.hash = sidecarState.hash
       }
       if (sidecarState.saveError) {
         summary.index.saveError = sidecarState.saveError

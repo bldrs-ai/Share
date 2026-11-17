@@ -190,7 +190,13 @@ cheapest-to-forget last:
    the page (not a bare press), a pointer move over the canvas (only while
    paints are cheap; layer 1), and any store change
    (CadView subscribes): for the change a React effect applies a frame
-   after the event. During a load these are background asks.
+   after the event. During a load these are background asks. While paints
+   cost more than `EXPENSIVE_PAINT_MS`, the window paints once, after
+   `EXPENSIVE_SETTLE_MS` (500 ms) with no input, instead of every frame
+   (`RenderDemand#frameKind`), so not on a menu's opening frames: on PSB, toggling the
+   cut-plane menu repainted the unchanged scene 4-5 times a second and the
+   menu's animation ran at that rate. The probe (layer 4) still paints a
+   change it sees at once.
 6. `keepPainting()` for what changes on its own clock: a scene with Spark
    splats paints every frame, since the sort lands asynchronously.
 
@@ -222,7 +228,9 @@ colour and depth as the RenderPass left them at every full paint, and a
 hover change asks for a third kind of paint, `requestOverlayPaint()`
 (`RenderDemand#frameKind` returns `PaintKind.OVERLAY`): the frame copies
 that cache back into the composer's input buffer instead of running the
-scene passes (RenderPass, and the AO NormalPass when on), draws only the
+scene passes (RenderPass, the SSAO NormalPass when on, and the AO stages,
+which run in place before the overlay so the cache holds the AO'd frame:
+`viewer/three/inPlacePass.js`, #2167), draws only the
 hovered instances on it with their own batch, material and program
 (narrowed draw list, colour swapped for the draw and back), depth-tested
 LEQUAL against the cached depth, then runs the post passes as any frame
@@ -234,10 +242,19 @@ batch, no per-instance colours) the hover recolours as before. The A/B
 is in the PR that added it, and design/new/glb-export-premium.md §1.1d
 "What a hover pick costs after it" has the summary.
 
+*Controls drawn over everything* (the cut-plane arrows,
+`hoverOverlay.js#isDrawnOverHover`) are kept out of the scene passes and
+the cache: every frame the overlay draws them itself, after the hover
+(#2171: drawn in the RenderPass, a hovered element nearer than an arrow
+painted over it). So a change to how one looks, its hover colour or its
+fade with distance from the pointer (`viewer/three/arrowFade.js`), asks
+with `requestControlsPaint()` and is an overlay paint; a plane that moves
+changes the clipping and is a full one.
+
 *The invalidation rule:* a frame is an overlay frame only when the overlay's
 ask is the ONLY thing pending in a session between loads. Anything else
 makes it a full paint, which re-captures the cache: any `requestPaint()`
-(visibility, material colour, outlines, lights, looks, cut-plane arrows,
+(visibility, material colour, outlines, lights, looks, a cut plane's drag,
 residency), any hook (`add`/`attach`/`remove`, so model load and unload;
 `setColorAt`, so selection and colour modes; `setVisibleAt`, so hide,
 isolate and residency; `setMatrixAt` and the rest of `batchedEdit`;
@@ -309,48 +326,60 @@ Perf instrumentation attaches at that seam, not inside the closure:
 context.setRenderUpdate(withPerf(newUpdateFunction(context, getComposer)))
 ```
 
-`withPerf` (in `src/utils/PerfMonitor.js`) is gated on the
-`?feature=perf` URL flag, evaluated once at module load:
+`withPerf` (in `src/utils/PerfMonitor.js`) always wraps the closure;
+whether it samples is the panel's live state (`isPerfVisible`):
 
-- **Flag off (default):** `withPerf(fn)` returns `fn` unchanged. The
-  render closure has no perf code; `window.perf` is not defined; no DOM
-  or sampling state is created. Zero per-frame cost.
-- **Flag on:** `withPerf` returns a wrapper that brackets `fn()` with
-  `monitor.begin()` / `monitor.end(painted)`. The render closure returns
-  whether it painted, and only painted frames count toward FPS and MS, so
-  a viewer painting on demand reads 0 FPS when idle. The Monitor singleton is built
-  at module load but **not** attached to the DOM yet; sampling runs on
-  the offscreen canvases regardless. `window.perf` is installed for
-  show/hide/toggle from devtools.
+- **Hidden (default):** the wrapper calls `fn` after one boolean check and
+  samples nothing. The Monitor (canvases, DOM, `window.perf`) isn't built
+  until the panel is first shown.
+- **Shown:** the wrapper brackets `fn()` with `monitor.begin()` /
+  `monitor.end(painted)`. The render closure returns whether it painted,
+  and only painted frames count toward FPS and MS, so a viewer painting on
+  demand reads 0 FPS when idle.
+- **What shows it:** `?feature=perf` (the overlay alone) or
+  `?feature=look` (with the look panel) at startup, and in any session,
+  prod included, the backtick key, which shows or hides Perf and the Render
+  panel together (`src/viewer/debugPanels.js`, ignored while typing in a
+  field). `window.perf.on()` / `off()` / `toggle()` /
+  `fps()` exist once it has been shown.
 
-The panel is docked in the bottom bar, immediately left of the
-Help/Bot control — wrapped with that control in a small sub-stack
-inside `src/Containers/BottomBar.jsx` so the outer
-`justifyContent='space-between'` doesn't float perf into the middle
-of the bar. `src/Components/AppBar.jsx` is *not* used by the running
-app (the real chrome is the `ControlsGroup` / `OperationsGroup` /
-`BottomBar` trio laid out by `RootLandscape`).
+The panel lives in the **debug dock** (`src/Components/DebugDock/DebugDock.jsx`,
+rendered by `RootLandscape`).
+- **Order:** Perf, then the Render panel (the look-tuning lil-gui,
+  `LightingGui`), left to right, fixed and centred over the bottom bar's
+  Elements control.
+- **Minimise:** each panel minimises to its title bar.
+  - Minimised, the bar sits on the window's bottom edge.
+  - Expanded, the panel lifts to sit on top of the Elements control,
+    measured from its box at runtime, so the control stays usable under it.
+  - Perf's minimised title shows `fps/ms/MB`.
+- **Theme:** both take the app theme. That's the drawers' translucent ground
+  and blur, the theme's text and type, and the accent colour for the graphs
+  and values; lil-gui is themed through its CSS variables, scoped to the
+  dock.
+- **Opening:** `src/viewer/debugPanels.js` holds Render's shown state and the
+  backtick key; the Display menu's "Render..." opens Render alone.
+- **No mobile gate:** the dock works on phones too, where there's no devtools
+  console.
 
-`src/Components/PerfToolbarSlot.jsx` is the only React bridge: it
-reads the module-level `isPerfEnabled` exported from `PerfMonitor.js`
-(same source of truth as `window.perf` — synchronous, never lags a
-render the way `useExistInFeature` would), renders a `<Box ref>`, and
-bridges mount/unmount via `mountPerfPanel(slotEl)` /
-`unmountPerfPanel()` from `PerfMonitor.js`. No mobile gate — the
-panel needs to be visible on mobile (where users can't reach a
-devtools console) and the bottom bar has enough lateral room across
-form factors.
+The dock follows Perf's live state with
+`useSyncExternalStore(subscribePerf, isPerfVisible)`, the same source of
+truth as `window.perf` and the backtick key. It docks the graphs with
+`mountPerfPanel(el)` / `unmountPerfPanel()`, and shows the numbers from
+`getPerfStats()` (`subscribePerfStats`, about once a second).
 
-The panel is **on by default** when `?feature=perf` is set — the
-canvas wrapper is created without `display:none` and `mountPerfPanel`
-just `appendChild`s it. `window.perf.off()` / `on()` /  `toggle()`
-remain available for developers who want to hide/show it without
-reloading, and `window.perf.fps()` reads the FPS it shows.
-
-Three panels rotate on click — FPS, frame time (ms), JS heap MB (the
-last only where Chromium's `performance.memory` is available). The
-module is a minimal port of mrdoob's stats.js — the panel the three.js
-examples use.
+Expanded, Perf shows three graphs side by side and four counts:
+- **Graphs:** FPS, frame time (ms), and JS heap MB (the last only where
+  Chromium's `performance.memory` is available). The graph module is a
+  minimal port of mrdoob's stats.js, the panel the three.js examples use.
+- **Counts:** the renderer's geometries and textures resident on the GPU,
+  plus the last painted frame's draw calls and triangles.
+  - three resets `renderer.info.render` on every `renderer.render()`, and a
+    composer frame is several of them.
+  - So while Perf is shown, `withPerf` turns `info.autoReset` off, reads the
+    totals after each painted frame and resets them itself.
+  - It puts auto-reset back when hidden.
+  - The counts therefore include the post passes' full-screen draws.
 
 Offscreen renders (screenshots taken via
 `ShareViewer.takeScreenshot()` -> `IfcRenderer.newScreenshot`) are
