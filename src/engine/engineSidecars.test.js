@@ -580,6 +580,16 @@ describe('engine/engineSidecars', () => {
     const empty = () => new ColumnarIndexSink().finalize()
     expect(sidecarHashName(serializeIndexSidecarFromColumns(empty(), 10, 5))).toBe('fnv')
     expect(sidecarHashName(serializeIndexSidecarFromColumns(empty(), 10, 5, {hashAlgorithm: 2}))).toBe('sha256')
+    // An id this build has no word for is left off the line, never called FNV.
+    // conway's serializer refuses to write one, so it is forged here: the two
+    // real sidecars differ only in the algorithm slot, which is overwritten.
+    const fnv = serializeIndexSidecarFromColumns(empty(), 10, 5)
+    const forged = serializeIndexSidecarFromColumns(empty(), 10, 5, {hashAlgorithm: 2})
+    const slot = forged.findIndex((byte, i) => byte !== fnv[i])
+    expect(slot).toBeGreaterThanOrEqual(0)
+    const UNKNOWN_ALGORITHM_ID = 3
+    forged[slot] = UNKNOWN_ALGORITHM_ID
+    expect(sidecarHashName(forged)).toBeUndefined()
     expect(sidecarHashName(Uint8Array.of(1, 2, 3))).toBeUndefined()
     expect(sidecarHashName(undefined)).toBeUndefined()
   })
