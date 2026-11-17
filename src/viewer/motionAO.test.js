@@ -1,4 +1,5 @@
-import {MotionAO} from './motionAO'
+/* eslint-disable no-magic-numbers */
+import {FADE_IN_MS, FADE_OUT_MS, MotionAO} from './motionAO'
 import {REST_FRAMES, REST_MS} from './residency/MotionResidency'
 
 
@@ -21,12 +22,15 @@ function fakeControls() {
 function fakePostProcessor(enabled = true) {
   return {
     enabled,
-    suspended: false,
+    level: 1,
     getAOEnabled() {
       return this.enabled
     },
-    setAOSuspended(v) {
-      this.suspended = v
+    getAOLevel() {
+      return this.level
+    },
+    setAOLevel(v) {
+      this.level = v
     },
   }
 }
@@ -61,87 +65,118 @@ function setup({enabled = true, follow = false} = {}) {
 }
 
 
+/**
+ * Drag: a camera change every frame for `n` frames.
+ *
+ * @param {object} s from setup
+ * @param {number} n
+ * @param {number} [dtMs]
+ */
+function drag(s, n, dtMs = 16) {
+  for (let i = 0; i < n; i++) {
+    s.controls.update()
+    s.frame(dtMs)
+  }
+}
+
+
+/**
+ * Come to rest: quiet frames past REST_MS and REST_FRAMES.
+ *
+ * @param {object} s from setup
+ */
+function rest(s) {
+  for (let i = 0; i < REST_FRAMES; i++) {
+    s.frame(1)
+  }
+  s.frame(REST_MS)
+}
+
+
 describe('viewer/motionAO', () => {
-  it('drops AO on the camera change itself, before that frame paints', () => {
-    // camera-controls fires `update` inside controls.update(), before the
-    // frame's paint, so AO must already be off when the update returns:
-    // that frame is the first one motion residency's Auto times.
-    const {controls, pp} = setup()
-    controls.update()
-    expect(pp.suspended).toBe(true)
+  it('fades AO out over FADE_OUT_MS from the drag\'s first frame, without a cut', () => {
+    const s = setup()
+    s.controls.update()
+    s.frame(0)
+    // The first moved frame still has (nearly) all of it: a fade, not a pop.
+    expect(s.pp.level).toBeCloseTo(1, 5)
+    s.controls.update()
+    s.frame(FADE_OUT_MS / 2)
+    expect(s.pp.level).toBeGreaterThan(0)
+    expect(s.pp.level).toBeLessThan(1)
+    drag(s, 1, FADE_OUT_MS)
+    expect(s.pp.level).toBe(0)
   })
 
-  it('keeps AO off through the gesture and back on only at rest, with a paint', () => {
-    const {controls, pp, paint, frame} = setup()
-    const gestureFrames = 20
-    for (let i = 0; i < gestureFrames; i++) {
-      controls.update()
-      frame()
-      expect(pp.suspended).toBe(true)
-    }
-    // Quiet frames, but not yet REST_MS: still moving (damping can pause).
-    for (let i = 0; i < REST_FRAMES; i++) {
-      frame(1)
-    }
-    expect(pp.suspended).toBe(true)
-    expect(paint).not.toHaveBeenCalled()
-    frame(REST_MS)
-    expect(pp.suspended).toBe(false)
-    expect(paint).toHaveBeenCalledTimes(1)
+  it('keeps AO out through the gesture, and fades it in over FADE_IN_MS at rest with a paint each step', () => {
+    const s = setup()
+    drag(s, 20)
+    expect(s.pp.level).toBe(0)
+    s.paint.mockClear()
+    rest(s)
+    // Rest found: the fade-in has begun, not jumped.
+    expect(s.pp.level).toBeLessThan(1)
+    s.frame(FADE_IN_MS / 2)
+    const mid = s.pp.level
+    expect(mid).toBeGreaterThan(0)
+    expect(mid).toBeLessThan(1)
+    s.frame(FADE_IN_MS)
+    expect(s.pp.level).toBe(1)
+    // Every step painted, so a fade on a still camera is drawn.
+    expect(s.paint.mock.calls.length).toBeGreaterThanOrEqual(3)
   })
 
   it('needs REST_FRAMES quiet frames as well as REST_MS (a slow frame is not rest)', () => {
-    const {controls, pp, frame} = setup()
-    controls.update()
-    frame(REST_MS * 2)
-    expect(pp.suspended).toBe(true)
+    const s = setup()
+    drag(s, 1, FADE_OUT_MS)
+    s.frame(REST_MS * 2)
+    expect(s.pp.level).toBe(0)
   })
 
-  it('does nothing when AO is off, or for the load\'s own camera follow', () => {
-    const off = setup({enabled: false})
-    off.controls.update()
-    expect(off.pp.suspended).toBe(false)
+  it('drops AO at once for a load, and fades it in when the load ends', () => {
+    const s = setup()
+    s.renderDemand.isLoading = true
+    s.frame()
+    expect(s.pp.level).toBe(0)
+    for (let i = 0; i < 10; i++) {
+      s.frame(REST_MS)
+    }
+    expect(s.pp.level).toBe(0)
+    s.renderDemand.isLoading = false
+    s.frame()
+    s.frame(FADE_IN_MS)
+    expect(s.pp.level).toBe(1)
+  })
+
+  it('keeps AO out when the camera rests mid-load, and fades in only once both are done', () => {
+    const s = setup()
+    s.renderDemand.isLoading = true
+    drag(s, 1)
+    rest(s)
+    s.frame(FADE_IN_MS)
+    expect(s.pp.level).toBe(0)
+    s.renderDemand.isLoading = false
+    s.frame()
+    s.frame(FADE_IN_MS)
+    expect(s.pp.level).toBe(1)
+  })
+
+  it('ignores the load\'s own camera follow, and paints nothing for a fade with AO off', () => {
     const follow = setup({follow: true})
     follow.controls.update()
-    expect(follow.pp.suspended).toBe(false)
+    follow.frame(FADE_OUT_MS)
+    expect(follow.pp.level).toBe(1)
+    const off = setup({enabled: false})
+    drag(off, 3, FADE_OUT_MS)
+    expect(off.paint).not.toHaveBeenCalled()
   })
 
-  it('puts AO back and detaches on dispose', () => {
-    const {motion, controls, pp, frames} = setup()
-    controls.update()
-    motion.dispose()
-    expect(pp.suspended).toBe(false)
-    expect(controls.count()).toBe(0)
-    expect(frames).toHaveLength(0)
-  })
-
-  it('drops AO for a whole load, from its first frame, and paints it back when the load ends', () => {
-    const {pp, paint, frame, renderDemand} = setup()
-    renderDemand.isLoading = true
-    frame()
-    expect(pp.suspended).toBe(true)
-    for (let i = 0; i < 10; i++) {
-      frame(REST_MS)
-    }
-    expect(pp.suspended).toBe(true)
-    expect(paint).not.toHaveBeenCalled()
-    renderDemand.isLoading = false
-    frame()
-    expect(pp.suspended).toBe(false)
-    expect(paint).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps AO off when the camera rests mid-load, and on only once both are done', () => {
-    const {controls, pp, frame, renderDemand} = setup()
-    renderDemand.isLoading = true
-    controls.update()
-    frame()
-    for (let i = 0; i < REST_FRAMES; i++) {
-      frame(REST_MS)
-    }
-    expect(pp.suspended).toBe(true)
-    renderDemand.isLoading = false
-    frame()
-    expect(pp.suspended).toBe(false)
+  it('puts AO back at full and detaches on dispose', () => {
+    const s = setup()
+    drag(s, 3, FADE_OUT_MS)
+    s.motion.dispose()
+    expect(s.pp.level).toBe(1)
+    expect(s.controls.count()).toBe(0)
+    expect(s.frames).toHaveLength(0)
   })
 })

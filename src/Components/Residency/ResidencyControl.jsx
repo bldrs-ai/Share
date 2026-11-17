@@ -162,6 +162,9 @@ export default function ResidencyControl() {
       renderDemand: context.getRenderDemand?.() ?? null,
       gl: context.getRenderer?.()?.getContext?.() ?? null,
       onGestureEnd: (fraction) => setAutoPercent(Math.round(fraction * RESIDENCY_FULL)),
+      // Not while AO is still fading out (motionAO.js): Auto measures
+      // AO-free frames only.
+      shouldTime: () => !viewer?.postProcessor?.isAORunning?.(),
     })
     setMotionDriver(driver)
     return () => driver.dispose()

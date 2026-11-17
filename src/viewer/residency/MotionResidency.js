@@ -86,6 +86,9 @@ export class MotionResidency {
    * @param {Function} [deps.idle] schedules idle work; returns a canceller
    * @param {Function} [deps.onGestureEnd] (autoFraction) after each restore
    * @param {object} [deps.timerOptions] passed to createGpuFrameTimer
+   * @param {Function} [deps.shouldTime] whether this paint may be timed;
+   *   false while ambient occlusion still runs (motionAO.js's fade-out), so
+   *   Auto only measures AO-free frames
    */
   constructor(controller, {
     controls = null,
@@ -96,6 +99,7 @@ export class MotionResidency {
     idle = scheduleIdle,
     onGestureEnd = null,
     timerOptions = {},
+    shouldTime = () => true,
   } = {}) {
     this.controller = controller
     this.controls = controls
@@ -103,6 +107,10 @@ export class MotionResidency {
     this.now = now
     this.idle = idle
     this.onGestureEnd = onGestureEnd
+    this.shouldTime = shouldTime
+    // Whether the paint in flight is being timed: beforePaint decides,
+    // afterPaint follows it, so a fence is never left half-placed.
+    this.timingPaint_ = false
     this.settings = {mode: MotionResidencyMode.AUTO, percent: FULL_PERCENT, metric: ResidencyMetric.OCCUPANCY}
     this.auto = new AutoResidency({now})
     this.rate = new FrameRateEstimate()
@@ -134,16 +142,21 @@ export class MotionResidency {
       // plus the hovered instances) says nothing about what the resident set
       // costs to draw, so it is never timed; it would read as a cheap frame
       // and walk Auto up.
+      // A paint while AO still runs (the first ~100 ms of a drag, motionAO.js
+      // fading it out) costs more than the AO-free frames the rest of the
+      // gesture draws, and would make Auto cut geometry for it: not timed.
       beforePaint: (kind) => {
-        if (this.isMeasuring_() && kind !== PaintKind.OVERLAY) {
+        this.timingPaint_ = this.isMeasuring_() && kind !== PaintKind.OVERLAY && this.shouldTime() !== false
+        if (this.timingPaint_) {
           this.timer.beforePaint(this.auto.epoch)
         }
       },
       afterPaint: (costMs, kind) => {
         this.paintedSinceFrame_ = true
-        if (this.isMeasuring_() && kind !== PaintKind.OVERLAY) {
+        if (this.timingPaint_) {
           this.timer.afterPaint(this.auto.epoch)
         }
+        this.timingPaint_ = false
       },
     }) ?? null
     // The first gesture needs an ordering too (a controller never applied

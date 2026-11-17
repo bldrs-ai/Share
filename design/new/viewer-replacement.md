@@ -1867,15 +1867,26 @@ separate step.
   most 10/255 against N8AO's 64, over about 2.5k px against 24.5k. SSAO's
   radius and cutoffs are fractions of normalized depth, which collapse
   under a site-sized far plane.
-- **AO drops while the camera moves** (`viewer/motionAO.js`). It drops on
-  the same camera-controls `update` that starts motion residency (B3,
-  demand-tiled-rendering.md), before the frame's paint.
-  - So every frame Auto times is AO-free, and geometry is cut only for what
-    the frame costs once AO is gone.
-  - AO comes back at rest (200 ms and three quiet frames, MotionResidency's
-    rule) with a paint.
-  - `debugPanels.spec.ts` checks it at the paint, on desktop and mobile:
-    the first moved frame without AO, and the still frame after with it.
+- **AO fades while the camera moves** (`viewer/motionAO.js`). It fades out
+  over 100 ms from the same camera-controls `update` that starts motion
+  residency (B3, demand-tiled-rendering.md), and back in over 250 ms at
+  rest (200 ms and three quiet frames, MotionResidency's rule). A load drops
+  it at once, and the finished model fades it in.
+  - **Why fades:** the owner found the cut on and off jarring, on index.ifc
+    especially. The level scales AO's strength
+    (CustomPostProcessor#setAOLevel; N8AO's exponent, so 0 is none), and at
+    0 the pass is skipped.
+  - **What Auto measures:** it doesn't time a paint while AO still runs
+    (MotionResidency's `shouldTime`, wired to `isAORunning`), so every frame
+    it measures is AO-free, and geometry is cut only for what's left.
+  - **Test:** `debugPanels.spec.ts` checks it at the paint, on desktop and
+    mobile. The drag's first moved frame keeps AO (it goes red with a cut
+    instead of a fade), a moved frame then draws without it, and at rest it
+    comes back through a part-way frame to full.
+  - **Pre-baking AO into the cached GLB, considered and deferred:**
+    per-vertex AO is too coarse on BIM meshes; texture AO needs UV
+    unwrapping; it goes stale under hide, isolate and cut planes; and first
+    loads wouldn't have it.
 - **Load cost under a software rasteriser** (CI's SwiftShader, measured
   in the #2167 sandbox). With the look on, index.ifc reached ready in 6.7 s
   against 2.9 s with the look off, and four parallel E2E workers missed the

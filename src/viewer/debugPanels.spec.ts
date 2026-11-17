@@ -96,11 +96,12 @@ describeMobileAndDesktop('viewer/debugPanels', () => {
   })
 
 
-  test('a camera drag paints without AO from its first moved frame, and AO is back at rest', async ({page}) => {
+  test('AO fades out as a drag starts, is gone while moving, and fades back in at rest', async ({page}) => {
     await page.goto('/share/v/p/index.ifc')
     await waitForModelReady(page)
-    expect(await page.evaluate(() => (window as any).store.getState().viewer.postProcessor.isAORunning()),
-      'N8AO runs on a still frame by default').toBe(true)
+    // The load's own fade-in (motionAO.js) done: full AO on the still frame.
+    await expect.poll(() => page.evaluate(() => (window as any).store.getState().viewer.postProcessor.getAOLevel()),
+      {timeout: 15_000}).toBe(1)
 
     await recordPaints(page)
     const box = await page.locator('#viewer-container canvas').first().boundingBox()
@@ -117,22 +118,30 @@ describeMobileAndDesktop('viewer/debugPanels', () => {
     await page.mouse.up()
 
     // Rest is 200 ms and three quiet frames after the last camera change
-    // (MotionResidency's rule, motionAO.js); SwiftShader frames are slow.
-    await expect.poll(() => page.evaluate(() => (window as any).store.getState().viewer.postProcessor.isAORunning()),
-      {timeout: 15_000}).toBe(true)
+    // (MotionResidency's rule), then a 250 ms fade-in; SwiftShader frames are
+    // slow.
+    await expect.poll(() => page.evaluate(() => (window as any).store.getState().viewer.postProcessor.getAOLevel()),
+      {timeout: 15_000}).toBe(1)
     await page.waitForTimeout(500)
-    const paints = await page.evaluate(() => (window as any).__aoPaints as Array<{moved: boolean, ao: boolean}>)
+    const paints = await page.evaluate(() => (window as any).__aoPaints as Array<{moved: boolean, level: number}>)
     const firstMoved = paints.findIndex((p) => p.moved)
     expect(firstMoved, 'the drag moved the camera and painted').toBeGreaterThanOrEqual(0)
-    expect(paints[firstMoved].ao, 'the first moved frame was painted with AO').toBe(false)
-    expect(paints.some((p) => p.moved && p.ao), 'a still frame after the drag was painted with AO').toBe(true)
-    expect(paints[paints.length - 1].ao, 'the last paint, at rest, has AO').toBe(true)
+    // A fade, not a cut: the drag's first moved frame still has AO.
+    expect(paints[firstMoved].level, 'the first moved frame kept its AO').toBeGreaterThan(0)
+    // Gone while moving: Auto times only those frames.
+    const lastDark = paints.map((p) => p.level).lastIndexOf(0)
+    expect(lastDark, 'a moved frame was painted with AO fully out').toBeGreaterThan(firstMoved)
+    // Back in at rest by a fade: a paint part-way, then full at the end.
+    const after = paints.slice(lastDark + 1)
+    expect(after.some((p) => p.level > 0 && p.level < 1), 'AO came back through a part-way frame').toBe(true)
+    expect(paints[paints.length - 1].level, 'the last paint, at rest, has full AO').toBe(1)
   })
 })
 
 
 /**
- * Record, at every paint from now on, whether AO ran and whether the camera
+ * Record, at every paint from now on, the AO level it drew with (0 when the
+ * pass didn't run) and whether the camera
  * pose differs from now, into `window.__aoPaints`. Read in the render
  * closure's paint observer (RenderDemand#observePaints), i.e. for the frame
  * actually drawn.
@@ -144,13 +153,13 @@ async function recordPaints(page: Page) {
     const viewer = (window as any).store.getState().viewer
     const camera = viewer.context.getCamera()
     const start = camera.position.clone()
-    const paints: Array<{moved: boolean, ao: boolean}> = []
+    const paints: Array<{moved: boolean, level: number}> = []
     ;(window as any).__aoPaints = paints
     viewer.context.getRenderDemand().observePaints({
       beforePaint: () => {
         paints.push({
           moved: camera.position.distanceTo(start) > 1e-6,
-          ao: viewer.postProcessor.isAORunning(),
+          level: viewer.postProcessor.isAORunning() ? viewer.postProcessor.getAOLevel() : 0,
         })
       },
     })

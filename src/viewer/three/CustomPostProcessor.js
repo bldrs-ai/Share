@@ -63,12 +63,12 @@ export default class CustomPostProcessor {
   // AO state (§6e, look on). `_aoMethod` is 'n8ao' (N8AOPostPass, the
   // default, built with the composer) or 'ssao' (pmndrs SSAOEffect +
   // NormalPass, built the first time the look panel picks it). `_aoEnabled`
-  // is the look's / the user's choice; `_aoSuspended` is motionAO.js dropping
-  // AO while the camera moves. A pass runs only when enabled and not
-  // suspended.
+  // is the look's / the user's choice; `_aoLevel` (0..1) is motionAO.js
+  // fading AO out while the camera moves or a model loads and back in at
+  // rest. It scales the strength, and at 0 the pass is skipped outright.
   _aoMethod = 'n8ao'
   _aoEnabled = false
-  _aoSuspended = false
+  _aoLevel = 1
   _aoStrength = 1
   _n8aoPass = null
   // The AO passes as the composer runs them: each wrapped in an InPlacePass
@@ -211,17 +211,33 @@ export default class CustomPostProcessor {
   }
 
   /**
-   * Drop AO while the camera moves (motionAO.js), independent of whether
-   * it's enabled: resuming restores whatever the look/panel chose. The pass
-   * is skipped outright while suspended, so a moving frame costs what it
-   * would with AO off, and that is the frame motion residency's Auto
-   * measures before it decides to cut geometry.
+   * How much of the AO to show, 0..1, independent of whether it's enabled
+   * (motionAO.js fades it with this). It scales the strength (N8AO's
+   * exponent, SSAO's blend opacity), so a fade is smooth. At 0 the pass is
+   * skipped outright, so a moving frame costs what it would with AO off, and
+   * that is the frame motion residency's Auto measures before it decides to
+   * cut geometry.
+   *
+   * @param {number} level 0..1
+   */
+  setAOLevel(level) {
+    this._aoLevel = Math.min(1, Math.max(0, Number(level) || 0))
+    this._applyStrength()
+    this._applyAOState()
+  }
+
+  /** @return {number} the AO level, 0..1 (see setAOLevel) */
+  getAOLevel() {
+    return this._aoLevel
+  }
+
+  /**
+   * Shorthand for level 0 (suspended) or 1.
    *
    * @param {boolean} suspended
    */
   setAOSuspended(suspended) {
-    this._aoSuspended = suspended === true
-    this._applyAOState()
+    this.setAOLevel(suspended === true ? 0 : 1)
   }
 
   /**
@@ -233,11 +249,23 @@ export default class CustomPostProcessor {
    */
   setAOStrength(strength) {
     this._aoStrength = strength
+    this._applyStrength()
+  }
+
+  /**
+   * Push strength × level into the passes. N8AO's `intensity` is the
+   * exponent in `pow(ao, intensity)`, so scaling it to 0 fades AO out to
+   * none (ao^0 = 1).
+   *
+   * @private
+   */
+  _applyStrength() {
+    const effective = this._aoStrength * this._aoLevel
     if (this._ssaoEffect) {
-      this._ssaoEffect.blendMode.opacity.value = strength
+      this._ssaoEffect.blendMode.opacity.value = effective
     }
     if (this._n8aoPass) {
-      this._n8aoPass.configuration.intensity = N8AO_INTENSITY * strength
+      this._n8aoPass.configuration.intensity = N8AO_INTENSITY * effective
     }
   }
 
@@ -298,7 +326,7 @@ export default class CustomPostProcessor {
         screenSpaceRadius: true,
         aoRadius: N8AO_RADIUS_PX,
         distanceFalloff: N8AO_DISTANCE_FALLOFF,
-        intensity: N8AO_INTENSITY * this._aoStrength,
+        intensity: N8AO_INTENSITY * this._aoStrength * this._aoLevel,
       })
       pass.enabled = false
       return pass
@@ -322,7 +350,7 @@ export default class CustomPostProcessor {
       intensity: AO_INTENSITY,
       luminanceInfluence: AO_LUMINANCE_INFLUENCE,
     })
-    this._ssaoEffect.blendMode.opacity.value = this._aoStrength
+    this._ssaoEffect.blendMode.opacity.value = this._aoStrength * this._aoLevel
     this._ssaoPass = new EffectPass(this._camera, this._ssaoEffect)
     this._ssaoStage = new InPlacePass(this._ssaoPass)
     this._normalPass.enabled = false
@@ -343,7 +371,7 @@ export default class CustomPostProcessor {
    * @private
    */
   _applyAOState() {
-    const on = this._aoEnabled && !this._aoSuspended
+    const on = this._aoEnabled && this._aoLevel > 0
     const ssaoOn = on && this._aoMethod === 'ssao'
     if (this._ssaoStage) {
       this._ssaoStage.enabled = ssaoOn

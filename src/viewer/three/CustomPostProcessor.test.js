@@ -101,3 +101,20 @@ describe('CustomPostProcessor AO baked into the hover cache', () => {
     }
   })
 })
+
+
+describe('CustomPostProcessor AO level (motionAO.js fades)', () => {
+  it('scales N8AO\'s exponent by the level, and skips the pass at 0', () => {
+    const pp = new CustomPostProcessor(fakeRenderer(), new Scene(), new Camera())
+    const full = pp._n8aoPass.configuration.intensity
+    const half = 0.5
+    pp.setAOLevel(half)
+    expect(pp._n8aoPass.configuration.intensity).toBeCloseTo(full * half, 5)
+    expect(pp.isAORunning()).toBe(true)
+    pp.setAOLevel(0)
+    expect(pp.isAORunning()).toBe(false)
+    pp.setAOLevel(1)
+    expect(pp._n8aoPass.configuration.intensity).toBeCloseTo(full, 5)
+    expect(pp.isAORunning()).toBe(true)
+  })
+})

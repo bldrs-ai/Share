@@ -288,12 +288,14 @@ The fraction persists across gestures, so the next drag starts from the last
 good target and its first frames are already cheap.
 
 *AO goes first (#2167).* With the §6e look on (the default), N8AO ambient
-occlusion is dropped on the same camera-controls `update` that starts motion
-here, before the frame's paint (`viewer/motionAO.js`), and comes back at
-rest by the same rule. So every frame Auto times is an AO-free frame:
-geometry is cut only for what the frame costs once AO is gone, which is the
-order the owner asked for (a full-screen post pass is the cheapest thing to
-lose while moving). viewer-replacement.md §6e has the rest.
+occlusion fades out over 100 ms from the same camera-controls `update` that
+starts motion here (`viewer/motionAO.js`), and fades back in at rest by the
+same rule. MotionResidency doesn't time a paint while AO still runs (its
+`shouldTime` dep, wired by ResidencyControl to `isAORunning`), so every frame
+Auto times is an AO-free frame. Geometry is cut only for what the frame costs
+once AO is gone, which is the order the owner asked for: a full-screen post
+pass is the cheapest thing to lose while moving. viewer-replacement.md §6e
+has the rest.
 
 *Budget doubled (#2167).* On the owner's preview check with the look on,
 the hosted index.ifc mostly vanished while orbiting: PBR frames cost more
