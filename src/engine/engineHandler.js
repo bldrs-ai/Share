@@ -30,7 +30,7 @@ import {captureEngineExtensions, ifcManagerOver} from '../loader/glbEngineCaptur
 import {classifyOpenFailure, openDeferred} from '../loader/conwayOpen'
 import {ENGINE_PROTOCOL_VERSION, Ev, Op, serializeError} from './protocol'
 import {openSourceStore, opfsRoot} from './engineSources'
-import {readSidecar, sweepSidecars, writeSidecar} from './engineSidecars'
+import {readSidecar, sidecarHashName, sweepSidecars, writeSidecar} from './engineSidecars'
 import {makeBatchEncoder, previewMessage, snapshotStatistics} from './engineStream'
 import {enableStepPreviewFinishParse} from '../viewer/ifc/pumpTestSeams'
 import {isOutOfMemoryError} from '../utils/oom'
@@ -646,6 +646,10 @@ export function createEngineHandler({
           sidecarState = {
             entryPath, file: blob, getOpfsRoot, source: index ?? 'parse', bytes: sidecar?.byteLength ?? 0, saved: false,
           }
+          if (index === 'sidecar') {
+            // What the persisted sidecar was taken with, adopted by the open.
+            sidecarState.hash = sidecarHashName(sidecar)
+          }
         }
       }
     } catch (e) {
@@ -901,6 +905,7 @@ export function createEngineHandler({
         return
       }
       sidecarState.bytes = exported.byteLength
+      sidecarState.hash = sidecarHashName(exported)
       const written =
         await writeSidecar(sidecarState.entryPath, sidecarState.file, exported, sidecarState.getOpfsRoot)
       sidecarState.saved = written.saved
@@ -932,6 +937,9 @@ export function createEngineHandler({
       // before 26), or why nothing was saved (Share#2093).
       if (sidecarState.writer && sidecarState.writer !== 'writable') {
         summary.index.writer = sidecarState.writer
+      }
+      if (sidecarState.hash) {
+        summary.index.hash = sidecarState.hash
       }
       if (sidecarState.saveError) {
         summary.index.saveError = sidecarState.saveError

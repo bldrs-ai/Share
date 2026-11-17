@@ -4,9 +4,11 @@ import {EngineSession} from './EngineSession'
 import {createEngineHandler} from './engineHandler'
 import {indexLine} from './engineModelLoad'
 import {
-  SIDECAR_DIR, STALE_TMP_MS, TMP_LOCK_PREFIX, discardSidecar, readSidecar, sidecarKey, sidecarWriter, sweepSidecars,
+  SIDECAR_DIR, STALE_TMP_MS, TMP_LOCK_PREFIX, discardSidecar, readSidecar, sidecarHashName, sidecarKey, sidecarWriter, sweepSidecars,
   writeSidecar, writeThroughSyncHandle,
 } from './engineSidecars'
+import {ColumnarIndexSink} from '@bldrs-ai/conway/src/step/parsing/columnar_index'
+import {serializeIndexSidecarFromColumns} from '@bldrs-ai/conway/src/step/parsing/index_sidecar'
 import {locateOpfsEntry, makeBlobStore, makeSyncHandleStore, openSourceStore} from './engineSources'
 import {ENGINE_PROTOCOL_VERSION, Ev} from './protocol'
 import {makeWorkerTransport} from './transports'
@@ -574,6 +576,15 @@ describe('engine/engineSidecars', () => {
     expect(entered).toBe(0)
   })
 
+  it('sidecarHashName reads the digest a real conway sidecar names, and nothing from garbage', () => {
+    const empty = () => new ColumnarIndexSink().finalize()
+    expect(sidecarHashName(serializeIndexSidecarFromColumns(empty(), 10, 5))).toBe('fnv')
+    expect(sidecarHashName(serializeIndexSidecarFromColumns(empty(), 10, 5, {hashAlgorithm: 2}))).toBe('sha256')
+    expect(sidecarHashName(Uint8Array.of(1, 2, 3))).toBeUndefined()
+    expect(sidecarHashName(undefined)).toBeUndefined()
+  })
+
+
   it('indexLine says where the index came from and whether a sidecar was saved', () => {
     const MIB = 1024 * 1024
     expect(indexLine({source: 'sidecar', bytes: 16.5 * MIB, saved: false}))
@@ -589,6 +600,11 @@ describe('engine/engineSidecars', () => {
       .toBe('Engine index: parsed; sidecar saved (143.8 MB, via sync access handle)')
     expect(indexLine({source: 'parse', bytes: 143.8 * MIB, saved: false, saveError: 'QuotaExceededError: full'}))
       .toBe('Engine index: parsed; no sidecar saved (QuotaExceededError: full)')
+    // Share#2092: which source digest the sidecar carries.
+    expect(indexLine({source: 'sidecar', bytes: 16.5 * MIB, saved: false, hash: 'sha256'}))
+      .toBe('Engine index: from sidecar (16.5 MB, sha256), no parse')
+    expect(indexLine({source: 'parse', bytes: 143.8 * MIB, saved: true, hash: 'fnv', writer: 'syncAccessHandle'}))
+      .toBe('Engine index: parsed; sidecar saved (143.8 MB, fnv, via sync access handle)')
     expect(indexLine(undefined)).toBeUndefined()
   })
 })

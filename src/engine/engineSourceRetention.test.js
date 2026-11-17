@@ -28,6 +28,11 @@ import {ENGINE_PROTOCOL_VERSION, Ev, Op} from './protocol'
 
 v8.setFlagsFromString('--expose-gc')
 const gc = vm.runInNewContext('gc')
+// V8 flags are process-wide and a Jest worker runs many test files, so leaving
+// `--expose-gc` on would hand every later file a non-configurable global `gc`
+// (conway had an unrelated test that deletes `globalThis.gc` fail this way,
+// depending on file order). The `gc` captured above keeps working.
+v8.setFlagsFromString('--no-expose-gc')
 
 
 /** @return {Promise<void>} a turn of the event loop */
@@ -193,6 +198,12 @@ async function untilDone(events) {
 
 
 describe('engine/engineHandler: a buffered open lets its source go at the spill (Share#2139)', () => {
+  it('the --expose-gc flag does not leak: a fresh context has no gc after the capture', () => {
+    expect(vm.runInNewContext('typeof gc')).toBe('undefined')
+    expect(typeof gc).toBe('function')
+  })
+
+
   it('a {bytes} source is collectable once the model has spilled', async () => {
     const api = retainingApi()
     const {request, events} = drive(api)
