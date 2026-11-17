@@ -29,7 +29,19 @@ import path from 'path'
  * directory they resolve to, not by path: several links to one copy are
  * fine, two real copies are the failure. `find` doesn't follow symlinks, so
  * it can't loop through the store.
+ *
+ * Only copies something can load count: the target of a link, or a real
+ * `three` directory outside the store (a hoisted layout has no links). A
+ * store directory no link points to is an orphan. `bun install` doesn't
+ * remove the store entry of a version bun.lock has dropped, so after the
+ * three 0.184 → 0.187 bump a reused checkout kept
+ * `.bun/three@0.184.0/node_modules/three` with nothing pointing at it,
+ * and this test failed locally while CI, installing fresh, passed.
  */
+// bunfig.toml's isolated store; see the layout note above.
+const STORE = 'node_modules/.bun/'
+
+
 describe('single three instance', () => {
   it('installs exactly one three copy (no duplicate anywhere in node_modules)', () => {
     const repoRoot = path.resolve(__dirname, '../../..')
@@ -42,6 +54,7 @@ describe('single three instance', () => {
       {cwd: repoRoot, encoding: 'utf8'})
     const entries = out.split('\n').map((line) => line.trim()).filter(Boolean)
     const copies = new Set(entries
+      .filter((entry) => isLink(path.join(repoRoot, entry)) || !entry.startsWith(STORE))
       .map((entry) => fs.realpathSync(path.join(repoRoot, entry)))
       .filter((dir) => readPackageName(dir) === 'three'))
 
@@ -62,4 +75,13 @@ function readPackageName(dir) {
   } catch (e) {
     return undefined
   }
+}
+
+
+/**
+ * @param {string} entry Absolute path of a `three` entry found in node_modules
+ * @return {boolean} Whether it is a symlink (a dependent's view of a store copy)
+ */
+function isLink(entry) {
+  return fs.lstatSync(entry).isSymbolicLink()
 }
