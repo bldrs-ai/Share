@@ -1,5 +1,6 @@
 import {Page, expect, test} from '@playwright/test'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
+import {withLook} from '../../tests/e2e/look'
 import {waitForModelReady} from '../../tests/e2e/models'
 import {clearOpfs, homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
 
@@ -362,6 +363,9 @@ async function expectOverlayHoverMatchesFull(page: Page) {
  */
 describeMobileAndDesktop('viewer/three/hoverOverlay', (ff) => {
   beforeEach(async ({page}) => {
+    // About the look (its AO and its hover cache): opt in, since the
+    // Playwright build has it off by default (src/tests/e2e/look.ts).
+    await withLook(page)
     await homepageSetup(page)
     await setIsReturningUser(page.context())
     await clearOpfs(page)

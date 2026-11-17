@@ -1841,6 +1841,16 @@ separate step.
   - Off for a session with `?feature=disableLook`.
   - Off prod-wide with `disableLook: isActive: true` in FeatureFlags.js,
     which a URL can't override.
+  - **Off in the Playwright build unless a spec opts in.** `LOOK_IS_OPT_IN`
+    (tools/esbuild/vars.playwright.js) keeps it off until the page sets
+    `window.__bldrsLookOptIn`. Specs call `withLook(page)`
+    (src/tests/e2e/look.ts) before the first `goto`. On #2167 every load in
+    the suite paid for PBR + N8AO under CI's SwiftShader, and shards went
+    from 9–12 min past their 15-min limit. The owner chose this over more
+    shards or time. The specs that opt in are debugPanels (panels, AO fades)
+    and hoverOverlay (AO baked into the hover cache); the rest of the suite
+    tests the pre-§6e pipeline, so a regression in the look's loaders shows
+    up only there or on the preview.
   - `?feature=look` no longer switches anything on; it opens the debug
     panels at startup (below).
 - **Neutral is the owner's pick.** The owner chose it on the #2167 deploy

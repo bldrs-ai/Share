@@ -1,5 +1,6 @@
 import React, {ReactElement, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore} from 'react'
-import {Box, Typography} from '@mui/material'
+import {Box, IconButton, Typography} from '@mui/material'
+import {Close as CloseIcon} from '@mui/icons-material'
 import {useTheme} from '@mui/material/styles'
 import useStore from '../../store/useStore'
 import {
@@ -8,11 +9,12 @@ import {
   isPerfVisible,
   mountPerfPanel,
   setPerfColors,
+  setPerfVisible,
   subscribePerf,
   subscribePerfStats,
   unmountPerfPanel,
 } from '../../utils/PerfMonitor'
-import {isRenderPanelShown, subscribeRenderPanel} from '../../viewer/debugPanels'
+import {isRenderPanelShown, setRenderPanelShown, subscribeRenderPanel} from '../../viewer/debugPanels'
 
 
 // Gap kept between an expanded panel and the Elements control under it.
@@ -26,6 +28,10 @@ const FALLBACK_CLEARANCE_PX = 64
 const ELEMENTS_CONTROL_SELECTOR = '[data-testid="element-group"]'
 const COUNT_FORMAT = new Intl.NumberFormat()
 const PANEL_FONT_PX = 11
+// Each panel's close button: about lil-gui's title-bar height, so it sits in
+// the Render panel's title bar as it does in Perf's.
+const CLOSE_BUTTON_PX = 20
+const CLOSE_ICON_PX = 14
 
 
 /**
@@ -125,10 +131,10 @@ export default function DebugDock() {
       {isPerfShown && <PerfPanel panelSx={panelSx} accent={accent}/>}
       {isRenderShown &&
         <Box
-          ref={renderHostRef}
           data-testid='render-panel-host'
           sx={{
             ...panelSx(isRenderMounted && isRenderOpen),
+            'position': 'relative',
             // lil-gui themes through CSS variables it sets on `.lil-gui`; a
             // descendant selector outranks that, so these win.
             // Taller than the room above the Elements control, it scrolls.
@@ -147,8 +153,15 @@ export default function DebugDock() {
               '--string-color': accent,
               '--font-family': theme.typography.fontFamily,
             },
+            // Room on lil-gui's title bar for the close button over its end.
+            '& .lil-gui.root > .lil-title': {paddingRight: `${CLOSE_BUTTON_PX + 4}px`},
           }}
-        />}
+        >
+          {/* lil-gui owns this node's children (mountLookPanel): a separate
+              host, so React never reconciles what it put there. */}
+          <Box ref={renderHostRef} data-testid='render-panel-mount'/>
+          <CloseButton label='Close Render' testId='render-panel-close' onClick={() => setRenderPanelShown(false)}/>
+        </Box>}
     </Box>
   )
 }
@@ -180,7 +193,7 @@ function PerfPanel({panelSx, accent}) {
   const count = (v) => (v === null || v === undefined ? '–' : COUNT_FORMAT.format(v))
   return (
     // 11px: lil-gui's size, so Perf reads as the Render panel's sibling.
-    <Box data-testid='perf-panel' sx={{...panelSx(isOpen), fontSize: PANEL_FONT_PX, lineHeight: 1.6}}>
+    <Box data-testid='perf-panel' sx={{...panelSx(isOpen), position: 'relative', fontSize: PANEL_FONT_PX, lineHeight: 1.6}}>
       <Box
         role='button'
         tabIndex={0}
@@ -193,7 +206,7 @@ function PerfPanel({panelSx, accent}) {
           }
         }}
         data-testid='perf-panel-title'
-        sx={{px: 1, py: 0.5, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap'}}
+        sx={{px: 1, py: 0.5, pr: `${CLOSE_BUTTON_PX + 4}px`, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap'}}
       >
         <Typography variant='inherit' component='span' sx={{fontWeight: 600}}>
           {isOpen ? '▾ Perf' : '▸ Perf '}
@@ -203,6 +216,7 @@ function PerfPanel({panelSx, accent}) {
             {formatPerfSummary(stats)}
           </Typography>}
       </Box>
+      <CloseButton label='Close Perf' testId='perf-panel-close' onClick={() => setPerfVisible(false)}/>
       {isOpen &&
         <Box sx={{px: 1, pb: 1}}>
           <Box ref={graphsRef} data-testid='perf-panel-graphs'/>
@@ -226,6 +240,40 @@ function PerfPanel({panelSx, accent}) {
           </Box>
         </Box>}
     </Box>
+  )
+}
+
+
+/**
+ * A panel's close button, at the top-right of its title bar. Closing hides
+ * just that panel; backtick or Display > Render... brings it back.
+ *
+ * @property {string} label accessible name
+ * @property {string} testId the button's data-testid
+ * @property {Function} onClick hides the panel
+ * @return {ReactElement}
+ */
+function CloseButton({label, testId, onClick}) {
+  return (
+    <IconButton
+      aria-label={label}
+      title={label}
+      data-testid={testId}
+      onClick={onClick}
+      size='small'
+      sx={{
+        position: 'absolute',
+        top: 2,
+        right: 2,
+        width: CLOSE_BUTTON_PX,
+        height: CLOSE_BUTTON_PX,
+        p: 0,
+        color: 'inherit',
+        zIndex: 1,
+      }}
+    >
+      <CloseIcon sx={{fontSize: CLOSE_ICON_PX}}/>
+    </IconButton>
   )
 }
 

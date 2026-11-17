@@ -4,6 +4,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {Locator, Page, expect, test} from '@playwright/test'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
+import {withLook} from '../tests/e2e/look'
 import {waitForModelReady} from '../tests/e2e/models'
 import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
 
@@ -18,10 +19,14 @@ const PERF_PANEL = '[data-testid="perf-panel"]'
  * The debug panels (src/viewer/debugPanels.js): the look-tuning panel and
  * the FPS / ms / MB overlay, kept in prod behind the backtick key, and the
  * motion AO drop (src/viewer/motionAO.js) the look ships with. On the plain
- * URL, so these test what prod ships: the look on, N8AO running at rest.
+ * URL with the look opted in (withLook), so these test what prod ships: the
+ * look on, N8AO running at rest.
  */
 describeMobileAndDesktop('viewer/debugPanels', () => {
   beforeEach(async ({page}) => {
+    // About the look (its AO and its hover cache): opt in, since the
+    // Playwright build has it off by default (src/tests/e2e/look.ts).
+    await withLook(page)
     await homepageSetup(page)
     await setIsReturningUser(page.context())
   })
@@ -75,6 +80,27 @@ describeMobileAndDesktop('viewer/debugPanels', () => {
     const box = await boxOf(page.locator(PERF_PANEL))
     const viewportHeight = page.viewportSize()?.height ?? 0
     expect(Math.abs(box.y + box.height - viewportHeight), 'the minimised bar sits on the window bottom').toBeLessThanOrEqual(1)
+  })
+
+
+  test('each panel closes alone with the x at its top-right', async ({page}) => {
+    await page.goto('/share/v/p/index.ifc')
+    await waitForModelReady(page)
+    await page.keyboard.press('`')
+    for (const panel of [PERF_PANEL, RENDER_PANEL]) {
+      const box = await boxOf(page.locator(panel))
+      const close = await boxOf(page.getByTestId(panel === PERF_PANEL ? 'perf-panel-close' : 'render-panel-close'))
+      // Top-right: in the panel's right end and on its title row.
+      expect(close.x + close.width).toBeGreaterThan(box.x + box.width - 40)
+      expect(close.x + close.width).toBeLessThanOrEqual(box.x + box.width + 1)
+      expect(close.y).toBeLessThan(box.y + 30)
+    }
+    await page.getByTestId('perf-panel-close').click()
+    await expect(page.locator(PERF_PANEL)).toHaveCount(0)
+    await expect(page.locator(RENDER_PANEL)).toBeVisible()
+    await page.getByTestId('render-panel-close').click()
+    await expect(page.locator(RENDER_PANEL)).toHaveCount(0)
+    await expect(page.getByTestId('debug-dock')).toHaveCount(0)
   })
 
 

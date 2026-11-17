@@ -13,6 +13,11 @@
 //     linear output, no IBL, no AO). A static `true` wins over every URL;
 //   - `?feature=disableLook`, the per-session way back, for an A/B or a
 //     render that looks wrong.
+//   - the Playwright build only (`LOOK_IS_OPT_IN`, tools/esbuild/
+//     vars.playwright.js): off unless the page set `window.__bldrsLookOptIn`
+//     before load (`withLook`, src/tests/e2e/look.ts). CI's software
+//     rasteriser pays for PBR + N8AO on every load, so the suite runs on the
+//     pre-§6e pipeline and the look's own specs opt in.
 // `?feature=look` no longer turns the look on (it is on); it opens the
 // look-tuning panel and the FPS/ms/MB overlay at startup (lookPanels.js), the
 // same panels the backtick key toggles.
@@ -25,6 +30,8 @@ export const LookOffReason = Object.freeze({
   ROLLBACK: 'rollback',
   // `?feature=disableLook`, this session's kill switch.
   KILL_SWITCH: 'disableLook',
+  // A Playwright build, and the spec didn't opt in.
+  E2E_OPT_IN: 'e2eOptIn',
 })
 
 
@@ -38,6 +45,11 @@ export function lookOffReason() {
   }
   if (isFeatureEnabled('disableLook')) {
     return LookOffReason.KILL_SWITCH
+  }
+  // A boolean from the esbuild define; Jest's process.env holds strings.
+  const isOptIn = process.env.LOOK_IS_OPT_IN === true || process.env.LOOK_IS_OPT_IN === 'true'
+  if (isOptIn && globalThis.__bldrsLookOptIn !== true) {
+    return LookOffReason.E2E_OPT_IN
   }
   return null
 }

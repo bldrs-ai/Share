@@ -53,12 +53,28 @@ describe('DebugDock', () => {
       setPerfVisible(true)
       setRenderPanelShown(true)
     })
-    const host = getByTestId('render-panel-host')
-    expect(viewer.mountLookPanel).toHaveBeenCalledWith(host, expect.any(Function))
+    expect(viewer.mountLookPanel).toHaveBeenCalledWith(getByTestId('render-panel-mount'), expect.any(Function))
     const dock = getByTestId('debug-dock')
     expect([...dock.children].map((el) => el.dataset.testid)).toEqual(['perf-panel', 'render-panel-host'])
 
     act(() => setRenderPanelShown(false))
+    expect(viewer.unmountLookPanel).toHaveBeenCalled()
+  })
+
+  it('closes each panel alone with the x at its top-right', () => {
+    const viewer = {mountLookPanel: jest.fn(() => true), unmountLookPanel: jest.fn()}
+    act(() => useStore.setState({viewer}))
+    const {getByTestId, queryByTestId} = render(<ShareMock><DebugDock/></ShareMock>)
+    act(() => {
+      setPerfVisible(true)
+      setRenderPanelShown(true)
+    })
+    fireEvent.click(getByTestId('perf-panel-close'))
+    expect(queryByTestId('perf-panel')).toBeNull()
+    expect(getByTestId('render-panel-host')).toBeInTheDocument()
+
+    fireEvent.click(getByTestId('render-panel-close'))
+    expect(queryByTestId('debug-dock')).toBeNull()
     expect(viewer.unmountLookPanel).toHaveBeenCalled()
   })
 })
