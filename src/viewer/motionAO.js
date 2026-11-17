@@ -188,6 +188,10 @@ export class MotionAO {
     shadowMap.autoUpdate = !frozen
     if (!frozen) {
       shadowMap.needsUpdate = true
+      // A full paint to draw it: with AO off no fade-in step asks, and a
+      // hide, isolation or residency change made while frozen painted with
+      // the old map (codex on #2169).
+      this.paint()
     }
   }
 

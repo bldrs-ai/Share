@@ -13,7 +13,7 @@ import {WebGLRenderer, Scene, Camera, UnsignedShortType} from 'three'
 import {gtagEvent} from '../../privacy/analytics'
 import {isLookOn} from '../lookMode'
 import {LOOKS, DEFAULT_LOOK} from '../looks'
-import {BackgroundEffect} from './backgroundEffect'
+import {BackgroundEffect, BackgroundMarkEffect} from './backgroundEffect'
 import {InPlacePass} from './inPlacePass'
 import {patchOutlineForBatchedMeshes} from './outlineBatching'
 
@@ -155,14 +155,16 @@ export default class CustomPostProcessor {
     // outline composites after it.
     //
     // The background is in the frame too, and tone mapping would grey it (a
-    // white day theme came out ~94%). BackgroundEffect puts the scene's
-    // background colour back wherever no geometry was drawn, so the theme's
-    // (or the Render panel's) colour is what shows. Its own pass, after the
-    // tone map: an EffectPass tone-maps its merged result as a whole, so in
-    // the same pass the restored colour was tone-mapped again.
+    // white day theme came out ~94%). BackgroundMarkEffect, ahead of the tone
+    // map, marks the pixels that are still the cleared background (glass
+    // blended over it isn't); BackgroundEffect, in its own pass after it,
+    // puts the scene's background colour back on them, so the theme's (or
+    // the Render panel's) colour is what shows. Its own pass because an
+    // EffectPass tone-maps its merged result as a whole, which tone-mapped the
+    // restored colour again (backgroundEffect.js).
     if (isLookOn()) {
       this._toneMappingEffect = new ToneMappingEffect({mode: ToneMappingMode.NEUTRAL})
-      this._toneMappingPass = new EffectPass(camera, this._toneMappingEffect)
+      this._toneMappingPass = new EffectPass(camera, new BackgroundMarkEffect(scene), this._toneMappingEffect)
       this._composer.addPass(this._toneMappingPass)
       this._backgroundEffect = new BackgroundEffect(scene)
       this._backgroundPass = new EffectPass(camera, this._backgroundEffect)

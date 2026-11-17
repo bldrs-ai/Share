@@ -168,7 +168,9 @@ describe('viewer/motionAO', () => {
     follow.controls.update()
     follow.frame(FADE_OUT_MS)
     expect(follow.pp.level).toBe(1)
+    // No shadow map here: a thaw asks for its own paint (the test below).
     const off = setup({enabled: false})
+    off.motion.shadowMap = null
     drag(off, 3, FADE_OUT_MS)
     expect(off.paint).not.toHaveBeenCalled()
   })
@@ -189,6 +191,15 @@ describe('viewer/motionAO', () => {
     rest(s)
     expect(s.shadowMap.autoUpdate).toBe(true)
     expect(s.shadowMap.needsUpdate).toBe(true)
+  })
+
+  it('asks for a paint when the shadow map thaws, even with AO off', () => {
+    const s = setup({enabled: false})
+    drag(s, 5)
+    s.paint.mockClear()
+    rest(s)
+    expect(s.shadowMap.autoUpdate).toBe(true)
+    expect(s.paint).toHaveBeenCalled()
   })
 
   it('freezes the shadow map for a load, until both it and the camera are done', () => {
