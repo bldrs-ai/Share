@@ -1865,6 +1865,13 @@ separate step.
   - Under r187 it lights the walls to about 2.6 (linear), so the r184
     tuning (`envIntensity: 2.56`, fill 2.3) tone-mapped them to the white
     background.
+- **The background is not tone-mapped** (`three/backgroundEffect.js`).
+  Neutral compresses everything above ~0.76, so the day theme's white came
+  out ~240 grey. A pass after the tone map writes `scene.background` back
+  over every pixel whose raw depth is still the cleared 1.0. The colour
+  comes from the theme (`sceneBackground`), and the Render panel's Scene >
+  background overrides it; both only set `scene.background`. It needs its
+  own pass because an EffectPass tone-maps its whole merged result.
 - **AO is N8AO** (`n8ao`, `N8AOPostPass`, a screen-space radius of 32 px).
   - It's part of a look: `ao` is on for Neutral, off for Flat.
   - It needs no NormalPass. It reads the composer's stable depth and

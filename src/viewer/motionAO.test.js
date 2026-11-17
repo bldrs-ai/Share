@@ -40,8 +40,16 @@ function fakePostProcessor(enabled = true) {
  * @param {object} [opts]
  * @return {object} a MotionAO wired to fakes, plus the fakes
  */
-function setup({enabled = true, follow = false} = {}) {
+function setup({enabled = true, follow = false, shadowShowing = false} = {}) {
   let t = 0
+  const shadowMap = {autoUpdate: true, needsUpdate: false}
+  const shadow = {
+    level: 1,
+    setShadowLevel(v) {
+      this.level = v
+    },
+    isShadowShowing: () => shadowShowing,
+  }
   const frames = []
   const controls = fakeControls()
   const pp = fakePostProcessor(enabled)
@@ -56,12 +64,14 @@ function setup({enabled = true, follow = false} = {}) {
     renderDemand,
     now: () => t,
     paint,
+    shadowMap,
+    shadow,
   })
   const frame = (dtMs = 16) => {
     t += dtMs
     frames.forEach((fn) => fn())
   }
-  return {motion, controls, pp, paint, frame, frames, renderDemand}
+  return {motion, controls, pp, paint, frame, frames, renderDemand, shadowMap, shadow}
 }
 
 
@@ -166,7 +176,9 @@ describe('viewer/motionAO', () => {
     follow.controls.update()
     follow.frame(FADE_OUT_MS)
     expect(follow.pp.level).toBe(1)
+    // No shadow map here: a thaw asks for its own paint (the test below).
     const off = setup({enabled: false})
+    off.motion.shadowMap = null
     drag(off, 3, FADE_OUT_MS)
     expect(off.paint).not.toHaveBeenCalled()
   })
@@ -178,5 +190,59 @@ describe('viewer/motionAO', () => {
     expect(s.pp.level).toBe(1)
     expect(s.controls.count()).toBe(0)
     expect(s.frames).toHaveLength(0)
+  })
+
+  it('freezes the shadow map while moving and re-renders it once at rest', () => {
+    const s = setup()
+    drag(s, 5)
+    expect(s.shadowMap.autoUpdate).toBe(false)
+    rest(s)
+    expect(s.shadowMap.autoUpdate).toBe(true)
+    expect(s.shadowMap.needsUpdate).toBe(true)
+  })
+
+  it('asks for a paint when the shadow map thaws, even with AO off', () => {
+    const s = setup({enabled: false})
+    drag(s, 5)
+    s.paint.mockClear()
+    rest(s)
+    expect(s.shadowMap.autoUpdate).toBe(true)
+    expect(s.paint).toHaveBeenCalled()
+  })
+
+  it('freezes the shadow map for a load, until both it and the camera are done', () => {
+    const s = setup()
+    s.renderDemand.isLoading = true
+    s.frame()
+    expect(s.shadowMap.autoUpdate).toBe(false)
+    drag(s, 1)
+    s.renderDemand.isLoading = false
+    s.frame()
+    // Still moving: still frozen.
+    expect(s.shadowMap.autoUpdate).toBe(false)
+    rest(s)
+    expect(s.shadowMap.autoUpdate).toBe(true)
+  })
+
+  it('fades the contact shadow on the same tween as AO', () => {
+    const s = setup({shadowShowing: true})
+    s.controls.update()
+    s.frame(FADE_OUT_MS / 2)
+    expect(s.shadow.level).toBe(s.pp.level)
+    expect(s.shadow.level).toBeGreaterThan(0)
+    expect(s.shadow.level).toBeLessThan(1)
+    drag(s, 3, FADE_OUT_MS)
+    expect(s.shadow.level).toBe(0)
+    rest(s)
+    s.frame(FADE_IN_MS)
+    expect(s.shadow.level).toBe(1)
+  })
+
+  it('paints the shadow\'s fade even with AO off', () => {
+    const s = setup({enabled: false, shadowShowing: true})
+    s.motion.shadowMap = null
+    s.controls.update()
+    s.frame(FADE_OUT_MS / 2)
+    expect(s.paint).toHaveBeenCalled()
   })
 })
