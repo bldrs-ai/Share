@@ -49,6 +49,18 @@ export const FADE_IN_MS = 500
  * toggle, the look off) the level still follows, but nothing is painted for
  * it.
  *
+ * **The contact shadow fades on the same tween** (`deps.shadow`, the
+ * owner's ask on #2169): its darkness is scaled by the same level, and at 0
+ * the ground isn't drawn.
+ *
+ * **The shadow map freezes on the same signals** (`shadowMap`, the
+ * renderer's). The look's key light is fixed in the world and the model
+ * doesn't move, so the contact shadow's map is the same on every frame of an
+ * orbit; three re-renders it on every paint anyway, a second pass over all of
+ * the model's geometry. While the camera moves or a model loads,
+ * `autoUpdate` is off and the last map is reused; at rest (and at the load's
+ * end) it is on again, with one `needsUpdate` for whatever changed meanwhile.
+ *
  * Independent of MotionResidency on purpose: that driver exists only for a
  * model with a residency controller and a motion setting that changes
  * something, while AO runs on every model.
@@ -62,6 +74,10 @@ export class MotionAO {
    * @param {object} [deps.renderDemand] the viewer's RenderDemand
    * @param {Function} [deps.now] clock in ms
    * @param {Function} [deps.paint] asks for a paint (default requestPaint)
+   * @param {object} [deps.shadowMap] the renderer's `shadowMap`, frozen while
+   *   moving or loading
+   * @param {object} [deps.shadow] the contact shadow (ShareViewer:
+   *   `setShadowLevel`, `isShadowShowing`), faded with AO
    */
   constructor(postProcessor, {
     controls = null,
@@ -69,12 +85,16 @@ export class MotionAO {
     renderDemand = null,
     now = () => performance.now(),
     paint = requestPaint,
+    shadowMap = null,
+    shadow = null,
   } = {}) {
     this.postProcessor = postProcessor
     this.controls = controls
     this.renderDemand = renderDemand
     this.now = now
     this.paint = paint
+    this.shadowMap = shadowMap
+    this.shadow = shadow
     this.moving = false
     this.loading = false
     // The fade in progress, `{from, to, start, ms}`, or null.
@@ -102,6 +122,7 @@ export class MotionAO {
     this.quietFrames_ = 0
     if (!this.moving) {
       this.moving = true
+      this.freezeShadow_()
       if (!this.loading) {
         this.startFade_(0, FADE_OUT_MS)
       }
@@ -116,10 +137,11 @@ export class MotionAO {
       this.loading = loading
       if (loading) {
         this.fade_ = null
-        this.postProcessor?.setAOLevel(0)
+        this.setLevel_(0)
       } else if (!this.moving) {
         this.startFade_(1, FADE_IN_MS)
       }
+      this.freezeShadow_()
     }
     if (this.moving) {
       if (this.changedSinceFrame_) {
@@ -129,6 +151,7 @@ export class MotionAO {
       }
       if (this.now() - this.lastMoveMs_ >= REST_MS && this.quietFrames_ >= REST_FRAMES) {
         this.moving = false
+        this.freezeShadow_()
         if (!this.loading) {
           this.startFade_(1, FADE_IN_MS)
         }
@@ -143,7 +166,8 @@ export class MotionAO {
     this.loading = false
     this.moving = false
     this.fade_ = null
-    this.postProcessor?.setAOLevel(1)
+    this.setLevel_(1)
+    this.freezeShadow_()
     try {
       this.controls?.removeEventListener?.('update', this.onUpdate_)
     } catch {
@@ -151,6 +175,32 @@ export class MotionAO {
     }
     this.stopFrame_?.()
     this.stopFrame_ = null
+  }
+
+
+  /**
+   * Freeze the shadow map while moving or loading; thaw it, with one
+   * re-render, otherwise.
+   *
+   * @private
+   */
+  freezeShadow_() {
+    const shadowMap = this.shadowMap
+    if (!shadowMap) {
+      return
+    }
+    const frozen = this.moving || this.loading
+    if (shadowMap.autoUpdate === !frozen) {
+      return
+    }
+    shadowMap.autoUpdate = !frozen
+    if (!frozen) {
+      shadowMap.needsUpdate = true
+      // A full paint to draw it: with AO off no fade-in step asks, and a
+      // hide, isolation or residency change made while frozen painted with
+      // the old map (codex on #2169).
+      this.paint()
+    }
   }
 
 
@@ -181,12 +231,24 @@ export class MotionAO {
     }
     const t = Math.min(1, (this.now() - fade.start) / fade.ms)
     const eased = t * t * (3 - (2 * t))
-    this.postProcessor?.setAOLevel(fade.from + ((fade.to - fade.from) * eased))
+    this.setLevel_(fade.from + ((fade.to - fade.from) * eased))
     if (t >= 1) {
       this.fade_ = null
     }
-    if (this.postProcessor?.getAOEnabled?.()) {
+    if (this.postProcessor?.getAOEnabled?.() || this.shadow?.isShadowShowing?.()) {
       this.paint()
     }
+  }
+
+
+  /**
+   * AO and the contact shadow, at the same level.
+   *
+   * @param {number} level 0..1
+   * @private
+   */
+  setLevel_(level) {
+    this.postProcessor?.setAOLevel(level)
+    this.shadow?.setShadowLevel?.(level)
   }
 }

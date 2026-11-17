@@ -50,6 +50,15 @@ import {PaintKind, requestOverlayPaint, requestPaint} from './renderDemand'
  * is 16-bit), the recolour shows whichever the draw order put last and the
  * overlay shows the hovered one.
  *
+ * **Glass is drawn tinted.** A transparent batch (IFC glazing) draws its
+ * hovered pane in the hover colour at the pane's own alpha, blended over the
+ * cached frame, which already holds the pane in its own colour. So the pane
+ * reads as the highlight over a faint trace of the glass, and nothing else
+ * changes: no other glass is redrawn. A full paint shows the same frame, since
+ * it draws this overlay after the scene too. The owner's call: Seestrasse's
+ * glazed façade sent most hovers down the recolour path below, each a full
+ * repaint of the model.
+ *
  * **Controls drawn over everything** (the cut-plane arrows, `isDrawnOverHover`:
  * `depthTest` off, `renderOrder` 999) are left out of the scene passes and
  * drawn by the overlay itself, after the hover, on full and overlay frames
@@ -62,10 +71,10 @@ import {PaintKind, requestOverlayPaint, requestPaint} from './renderDemand'
  * old look under the new one.
  *
  * **What the overlay can't draw** falls back to the recolour, decided per
- * hover by ShareViewer#highlightIfcItem through `isEligible`: a transparent
- * or transmissive material (a second blend over the cached pixels would
- * double it), a batch without per-instance colours, a multi-material batch,
- * or a three whose BatchedMesh internals don't look as this module expects.
+ * hover by ShareViewer#highlightIfcItem through `isEligible`: a transmissive
+ * material (it samples a transmission pass the overlay doesn't render), a
+ * batch without per-instance colours, a multi-material batch, or a three
+ * whose BatchedMesh internals don't look as this module expects.
  *
  * **Invalidation.** The overlay never decides by itself that the scene is
  * unchanged: RenderDemand does (`frameKind`), and any ask other than the
@@ -191,7 +200,7 @@ export function isEligible(mesh) {
     mesh._indirectTexture?.image?.data &&
     Array.isArray(mesh._instanceInfo) && Array.isArray(mesh._geometryInfo) &&
     mesh._multiDrawStarts instanceof Int32Array && mesh._multiDrawCounts instanceof Int32Array &&
-    material && !Array.isArray(material) && material.transparent !== true && !(material.transmission > 0))
+    material && !Array.isArray(material) && !(material.transmission > 0))
 }
 
 

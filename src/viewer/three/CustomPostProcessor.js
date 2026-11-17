@@ -5,7 +5,6 @@ import {
   OutlineEffect,
   RenderPass,
   SSAOEffect,
-  ToneMappingEffect,
   ToneMappingMode,
 } from 'postprocessing'
 import {N8AOPostPass} from 'n8ao'
@@ -13,6 +12,7 @@ import {WebGLRenderer, Scene, Camera, UnsignedShortType} from 'three'
 import {gtagEvent} from '../../privacy/analytics'
 import {isLookOn} from '../lookMode'
 import {LOOKS, DEFAULT_LOOK} from '../looks'
+import {SceneToneMappingEffect} from './backgroundEffect'
 import {InPlacePass} from './inPlacePass'
 import {patchOutlineForBatchedMeshes} from './outlineBatching'
 
@@ -149,8 +149,13 @@ export default class CustomPostProcessor {
     // Swap via the look panel / `setToneMappingMode` (ACES / AgX / ...).
     // Persistent pass so it applies with or without a selection outline; the
     // outline composites after it.
+    //
+    // The background is in the frame too, and tone mapping greyed it (a white
+    // day theme came out ~94%). SceneToneMappingEffect skips the pixels no
+    // geometry wrote depth to, so the background shows exactly the theme's
+    // (or the Render panel's) colour (backgroundEffect.js).
     if (isLookOn()) {
-      this._toneMappingEffect = new ToneMappingEffect({mode: ToneMappingMode.NEUTRAL})
+      this._toneMappingEffect = new SceneToneMappingEffect({mode: ToneMappingMode.NEUTRAL})
       this._toneMappingPass = new EffectPass(camera, this._toneMappingEffect)
       this._composer.addPass(this._toneMappingPass)
     }

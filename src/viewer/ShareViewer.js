@@ -12,7 +12,7 @@ import {
   EquirectangularReflectionMapping,
   LinearSRGBColorSpace,
   Mesh,
-  PCFSoftShadowMap,
+  PCFShadowMap,
   PlaneGeometry,
   PMREMGenerator,
   ShadowMaterial,
@@ -39,6 +39,8 @@ import {modelHasCapability} from './ShareModel'
 import {paintPreviewSelection} from './previewSelection'
 import {paintStreamingSelection, streamingTablesModel} from './streamingBatchPick'
 import {isLookOn} from './lookMode'
+import {isSoftwareRenderer} from './three/softwareRenderer'
+import {gtagEvent} from '../privacy/analytics'
 import {MotionAO} from './motionAO'
 import LightingGui from './three/LightingGui'
 import {requestPaint} from './three/renderDemand'
@@ -236,9 +238,14 @@ export class ShareViewer {
   _envBlur = ENV_MAP_BLUR
   // Contact-shadow ground plane (ShadowMaterial), fitted per model in
   // `groundModel`. Null until built (renderer present). `_shadowEnabled`
-  // gates visibility so the `?feature=look` toggle survives model reloads.
+  // gates visibility so the look's setting (and the Render panel's toggle)
+  // survives model reloads. Starts as the default look's.
   _groundPlane = null
-  _shadowEnabled = false
+  _shadowEnabled = LOOKS[DEFAULT_LOOK].shadow === true
+  // The shadow's set darkness (the Render panel's opacity), and the share of
+  // it shown now: MotionAO fades the shadow on AO's tween (`setShadowLevel`).
+  _shadowOpacity = DEFAULT_SHADOW_OPACITY
+  _shadowLevel = 1
   // Current render "look" (LOOKS key). Applied by `applyLook` and persisted by
   // the profile-menu toggle; the default is also baked into the construction
   // constants so the first paint is correct before any apply call.
@@ -324,12 +331,15 @@ export class ShareViewer {
     }
     this._createGroundPlane()
     this.postProcessor = new CustomPostProcessor(renderer, scene, camera)
-    // Drop AO while the camera moves, before motion residency cuts any
-    // geometry (motionAO.js). Built with the post processor, which owns AO.
+    // Drop AO, and freeze the contact shadow's map, while the camera moves,
+    // before motion residency cuts any geometry (motionAO.js). Built with the
+    // post processor, which owns AO.
     this._motionAO = new MotionAO(this.postProcessor, {
+      shadow: this,
       controls: this.context.getCameraControls?.() ?? null,
       onFrame: (fn) => this.context.onFrame?.(fn) ?? null,
       renderDemand: this.context.getRenderDemand?.() ?? null,
+      shadowMap: this.context.getRenderer?.()?.shadowMap ?? null,
     })
     this.highlighter = new IfcHighlighter(this.context, this.postProcessor)
     if (this.highlighter.hoverOverlay) {
@@ -431,10 +441,9 @@ export class ShareViewer {
    * visible where the model's shadow lands) and enable shadow maps on the
    * renderer. Added to the scene invisible; `groundModel` fits + reveals it
    * per loaded model. Not registered in the pickable lists, so the raycaster
-   * ignores it. Gated on `?feature=look`: contact shadow is a dev-only tool,
-   * off in both shipped looks, and `shadowMap.enabled = true` forces a
-   * scene-wide shader recompile — so only pay it when the look GUI (the only
-   * way to enable the shadow) is present. No-op without a renderer (Jest).
+   * ignores it. Built only with the look on (`isLookOn`), whose Neutral look
+   * shows it; the pre-§6e pipeline never pays for shadow maps. No-op without
+   * a renderer (Jest).
    *
    * @private
    */
@@ -443,11 +452,26 @@ export class ShareViewer {
     if (!renderer || !isLookOn()) {
       return
     }
+    // Not on a software rasteriser. Under SwiftShader (CI, and Chrome's
+    // fallback where it blocklists the GPU), once the model casts into the
+    // shadow map every draw fails with "Mismatch between texture format and
+    // sampler type" and the model doesn't show at all; a GPU draws it (the
+    // owner's prod check). The look stays on without the shadow.
+    if (isSoftwareRenderer(renderer.getContext?.())) {
+      gtagEvent('contact_shadow_unavailable', {reason: 'software_renderer'})
+      return
+    }
     renderer.shadowMap.enabled = true
-    renderer.shadowMap.type = PCFSoftShadowMap
+    // r187 removed PCFSoftShadowMap (it warned and fell back to this).
+    renderer.shadowMap.type = PCFShadowMap
     const ground = new Mesh(
       new PlaneGeometry(1, 1),
-      new ShadowMaterial({opacity: DEFAULT_SHADOW_OPACITY}),
+      // No depth write: the look's tone map skips pixels at the clear depth
+      // (backgroundEffect.js), so where there's no shadow the plane shows
+      // exactly the background, and the shadow darkens it smoothly. Writing
+      // depth, the whole plane was tone-mapped: a grey sheet on the white
+      // background (the owner's preview).
+      new ShadowMaterial({opacity: DEFAULT_SHADOW_OPACITY, depthWrite: false}),
     )
     ground.rotation.x = -Math.PI / 2
     ground.receiveShadow = true
@@ -494,7 +518,7 @@ export class ShareViewer {
     const groundSize = maxXZ * GROUND_SIZE_FACTOR
     this._groundPlane.scale.set(groundSize, groundSize, 1)
     this._groundPlane.position.set(center.x, box.min.y, center.z)
-    this._groundPlane.visible = this._shadowEnabled
+    this._applyShadowLevel()
     const scene = this.context.getScene()
     const key = scene.getObjectByName('keyLight')
     if (key) {
@@ -544,11 +568,11 @@ export class ShareViewer {
    */
   setShadowEnabled(enabled) {
     this._shadowEnabled = enabled
-    if (this._groundPlane) {
-      this._groundPlane.visible = enabled
-    }
+    this._applyShadowLevel()
     const key = this.context.getScene()?.getObjectByName?.('keyLight')
-    if (key) {
+    // Only with a ground to cast onto: none is built where the shadow can't
+    // be drawn (`_createGroundPlane`).
+    if (key && this._groundPlane) {
       key.castShadow = enabled
     }
     requestPaint()
@@ -562,10 +586,52 @@ export class ShareViewer {
    * @param {number} opacity
    */
   setShadowOpacity(opacity) {
-    if (this._groundPlane?.material) {
-      this._groundPlane.material.opacity = opacity
-    }
+    this._shadowOpacity = opacity
+    this._applyShadowLevel()
     requestPaint()
+  }
+
+
+  /** @return {number} the contact shadow's set darkness (not the faded one) */
+  getShadowOpacity() {
+    return this._shadowOpacity
+  }
+
+
+  /**
+   * Show this share (0..1) of the contact shadow's darkness. MotionAO fades it
+   * with AO (motionAO.js): out while the camera moves or a model loads, back
+   * in at rest. At 0 the ground isn't drawn at all. The caller paints.
+   *
+   * @param {number} level
+   */
+  setShadowLevel(level) {
+    this._shadowLevel = Math.min(1, Math.max(0, Number(level) || 0))
+    this._applyShadowLevel()
+  }
+
+
+  /** @return {boolean} whether the contact shadow is on and can be drawn */
+  isShadowShowing() {
+    return this._groundPlane !== null && this._shadowEnabled === true
+  }
+
+
+  /**
+   * The ground's visibility and opacity from the toggle, the set darkness and
+   * the fade level.
+   *
+   * @private
+   */
+  _applyShadowLevel() {
+    const ground = this._groundPlane
+    if (!ground) {
+      return
+    }
+    ground.visible = this._shadowEnabled && this._shadowLevel > 0
+    if (ground.material) {
+      ground.material.opacity = this._shadowOpacity * this._shadowLevel
+    }
   }
 
 
@@ -598,6 +664,9 @@ export class ShareViewer {
     const config = LOOKS[look]
     this.postProcessor?.setToneMappingForLook(config.toneMapping)
     this.postProcessor?.setAOEnabled(config.ao)
+    if (this._shadowEnabled !== (config.shadow === true)) {
+      this.setShadowEnabled(config.shadow === true)
+    }
     if (this._envType !== config.envType) {
       this.setEnvironmentType(config.envType)
     }
@@ -1784,7 +1853,7 @@ export class ShareViewer {
         // `?feature=disableHoverOverlay` or the prod rollback): draw the hover on
         // the cached frame rather than recolour the batch, which would repaint
         // the whole model. The overlay asks for its own (overlay-only) paint.
-        // Where it can't draw this hover (a transparent batch, …) it says so
+        // Where it can't draw this hover (a transmissive batch, …) it says so
         // and the recolour below runs instead, as without the flag.
         const overlay = this.highlighter?.hoverOverlay ?? null
         const isOverlaid = overlay !== null &&
