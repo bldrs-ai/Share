@@ -42,8 +42,11 @@ const IFC_INTERIOR = 2000
 // Camera on +x looking straight down -x, through both boxes but 0.3 above and
 // 0.25 beside the model centre: the Section cut's arrow sits ON the centre,
 // along that same axis, and a ray through it would pick the arrow (visible,
-// never clipped) first. The IFC is Z-up and the scene Y-up, so both fixtures
-// share these scene coordinates.
+// never clipped) first. The margin is ~0.39 off the arrow's axis, against an
+// arrow sized from the model (MeshClipper.js ARROW_SCALE_RATIO, the head and
+// shaft sizes in CutPlaneArrowHelper.ts): if those grow, the centre picks
+// below start landing on the arrow and select nothing. The IFC is Z-up and the
+// scene Y-up, so both fixtures share these scene coordinates.
 const CAMERA_HASH = '#c:10.6,1.3,0.25,0.6,1.3,0.25'
 const TEST_TIMEOUT_MS = 90_000
 const PICK_TIMEOUT_MS = 10_000

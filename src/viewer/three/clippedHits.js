@@ -5,10 +5,10 @@
  * three's Raycaster knows nothing of clipping: a ray through a house cut open
  * still meets the walls and windows the plane removed from view, nearest
  * first, so hover and click picked them instead of the interior behind them.
- * Every pick the viewer makes goes through `Picker#castRay` (click) or
- * `IfcRaycaster#castRay` (hover, and the Q shortcut's `castRayIfc`), and both
- * pass their hits through here, so batched and non-batched models, IFC, STEP,
- * GLB, OBJ and STL alike get the same answer.
+ * Every pick against the scene (`Picker#castRay`, the click;
+ * `IfcRaycaster#castRay`, the hover and the Q shortcut; `PlaceMark`'s drop)
+ * passes its hits through here by way of visibleHits.js, so batched and
+ * non-batched models, IFC, STEP, GLB, OBJ and STL alike get the same answer.
  *
  * **The clipping is read where the renderer reads it: the hit's material.**
  * `MeshClipper` binds its planes to every material under the model
@@ -111,7 +111,9 @@ function anyPlaneClips(planes, point) {
 
 /**
  * @param {object} hit
- * @return {object|null} the material the hit's triangle is drawn with
+ * @return {object|null} the material the hit's triangle is drawn with. Null
+ *   (no material, or a hole in a material array) reads as unclipped, which
+ *   is what the renderer does with it too: it draws nothing there to clip.
  */
 function materialOfHit(hit) {
   const material = hit.object?.material

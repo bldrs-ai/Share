@@ -2,9 +2,7 @@
 import {Object3D, Raycaster} from 'three'
 import {assertDefined} from '../../utils/assert'
 import ThreeContext from './ThreeContext'
-import {unclippedHits} from './clippedHits'
-import {finiteHits} from './finiteHits'
-import {hitsInFrontOfControls} from './pickControls'
+import {visibleHits} from './visibleHits'
 
 
 /** Uses the THREE raycaster to pick items in the scene. */
@@ -36,16 +34,8 @@ export default class Picker {
   castRay(items) {
     const camera = this.context.getCamera()
     this.raycaster.setFromCamera(this.context.getNormalizedMousePosition(), camera)
-    // finiteHits: three r187's watertight triangle test reports a NaN-vertex
-    // triangle as a hit at distance NaN; see finiteHits.js. unclippedHits:
-    // a hit the cut planes removed from view is no pick (#2131); see
-    // clippedHits.js. hitsInFrontOfControls: the cut-plane gizmo, drawn over
-    // everything, is the pick wherever the ray crosses it; see
-    // pickControls.js. IfcRaycaster#castRay (hover) does the same.
-    const hits = unclippedHits(
-      finiteHits(this.raycaster.intersectObjects(items)),
-      this.context.getClippingPlanes())
-    return hitsInFrontOfControls(hits, this.raycaster, this.context.getScene?.())
+    // Only what the user sees under the pointer: see visibleHits.js.
+    return visibleHits(this.raycaster.intersectObjects(items), this.raycaster, this.context)
   }
 
 

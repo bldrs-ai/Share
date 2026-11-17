@@ -71,6 +71,7 @@ function pickerOver(pickable, globalPlanes = []) {
     getCamera: () => camera,
     getNormalizedMousePosition: () => new Vector2(0, 0),
     getClippingPlanes: () => globalPlanes,
+    getScene: () => null,
     getPickableModels: () => pickable,
   })
 }
@@ -112,6 +113,7 @@ function hoverRaycasterOver(pickable) {
     addComponent: () => undefined,
     mouse: {position: new Vector2(0, 0)},
     getClippingPlanes: () => [],
+    getScene: () => null,
     items: {pickableIfcModels: pickable},
   })
 }

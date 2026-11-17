@@ -26,8 +26,9 @@
  * arrow's three small meshes, which their bounding spheres reject for nearly
  * every ray. With no plane there is no control and nothing else runs.
  *
- * Applied by both raycasters after the clipping filter (clippedHits.js):
- * `Picker#castRay` (the click) and `IfcRaycaster#castRay` (the hover).
+ * Applied after the clipping filter (clippedHits.js) to every pick against
+ * the scene, by way of visibleHits.js: `Picker#castRay` (the click),
+ * `IfcRaycaster#castRay` (the hover) and `PlaceMark`'s drop.
  * A cast at the arrows themselves (`MeshClipper#deletePlaneAtCursor`) still
  * gets its hits, since those are on a control.
  */

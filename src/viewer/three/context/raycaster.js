@@ -3,9 +3,7 @@
 
 import {Raycaster} from 'three'
 import {IfcComponent} from './base-types'
-import {unclippedHits} from '../clippedHits'
-import {finiteHits} from '../finiteHits'
-import {hitsInFrontOfControls} from '../pickControls'
+import {visibleHits} from '../visibleHits'
 
 
 export class IfcRaycaster extends IfcComponent {
@@ -21,15 +19,8 @@ export class IfcRaycaster extends IfcComponent {
   castRay(items) {
     const camera = this.context.getCamera()
     this.raycaster.setFromCamera(this.context.mouse.position, camera)
-    // See ../finiteHits.js: three r187 reports NaN-vertex triangles as hits
-    // at distance NaN. And ../clippedHits.js: a hit the cut planes removed
-    // from view is no pick (#2131). And ../pickControls.js: the cut-plane
-    // gizmo, drawn over everything, is the pick wherever the ray crosses it.
-    // Picker#castRay (click) does the same.
-    const hits = unclippedHits(
-      finiteHits(this.raycaster.intersectObjects(items)),
-      this.context.getClippingPlanes())
-    return hitsInFrontOfControls(hits, this.raycaster, this.context.getScene?.())
+    // Only what the user sees under the pointer: see ../visibleHits.js.
+    return visibleHits(this.raycaster.intersectObjects(items), this.raycaster, this.context)
   }
   castRayIfc() {
     const items = this.castRay(this.context.items.pickableIfcModels)
