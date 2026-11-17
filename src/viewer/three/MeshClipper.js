@@ -308,6 +308,9 @@ export default class MeshClipper {
       this.canvas.removeEventListener('mousemove', this.onMouseMove)
       this.canvas.removeEventListener('mouseup', this.onMouseUp)
       this.canvas.style.cursor = 'default'
+      if (this.draggingArrow) {
+        this.draggingArrow.arrow.userData.isDragging = false
+      }
       this.draggingArrow = null
       this.hoveredArrow = null
       this.interactionEnabled = false
@@ -449,6 +452,13 @@ export default class MeshClipper {
       if (intersects[0].object === planeData.arrow ||
           intersects[0].object.parent === planeData.arrow) {
         this.draggingArrow = planeData
+        // Picks see this (pickControls.js): while the arrow is dragged, no
+        // hover or click lands on the model, wherever the pointer gets to.
+        // Re-run the hover pick now so a highlight from before the press
+        // comes off rather than fighting the gizmo for the whole drag (hover
+        // picks pause while a button is down, Containers/viewer.js).
+        planeData.arrow.userData.isDragging = true
+        this.viewer.highlightIfcItem?.()
         this.setArrowColor(planeData.arrow, planeData.arrow.userData.highlightColor)
         const dragControls = this.viewer.context.getCameraControls()
         if (dragControls) {
@@ -552,6 +562,7 @@ export default class MeshClipper {
       return
     }
     debug().log('MeshClipper: Stopped dragging arrow')
+    this.draggingArrow.arrow.userData.isDragging = false
     this.setArrowColor(this.draggingArrow.arrow, this.draggingArrow.arrow.userData.defaultColor)
     this.draggingArrow = null
     const releaseControls = this.viewer.context.getCameraControls()

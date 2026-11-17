@@ -97,6 +97,7 @@ import {
 import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../viewer/three/Picker'
+import {isOnControl} from '../viewer/three/pickControls'
 import {loadPreviewGroups, pickPreviewExpressId, previewOccurrencePickOf} from '../viewer/previewSelection'
 import {streamingBatchRoots, streamingPickOf} from '../viewer/streamingBatchPick'
 import {USER_CAMERA_EVENT} from '../viewer/three/renderDemand'
@@ -1782,6 +1783,12 @@ export default function CadView({
         return
       }
       const picked = pickedAll[0]
+      // A double-click on the cut-plane gizmo is on the gizmo: it selects
+      // nothing, and it must not outline the arrow either. The Picker has
+      // already dropped every model hit behind it (pickControls.js).
+      if (isOnControl(picked)) {
+        return
+      }
       const mesh = picked.object
       // TODO(pablo): obsolete? needed this in h3 at some point.
       // Two pick targets must NOT reach the OutlineEffect:
