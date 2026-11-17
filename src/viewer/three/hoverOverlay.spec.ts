@@ -371,6 +371,12 @@ async function findHoverPoint(page: Page,
     if (!isOnBatch) {
       continue
     }
+    // Let the picker's own pick of that move land before clearing it: with
+    // paints this expensive, a fast move's pick waits for a later frame
+    // (hoverPick.js#createFrameHoverPicker). Cleared first, it lands after
+    // and hovers this very element, so the 1 px move below changes nothing
+    // and paints nothing (the STEP test on mobile, intermittently).
+    await page.waitForTimeout(HOVER_SETTLE_MS)
     await page.evaluate(() => (window as any).__ovl.clearHover())
     await page.waitForTimeout(HOVER_SETTLE_MS)
     await nextFrame(page, 'base', 'full')
