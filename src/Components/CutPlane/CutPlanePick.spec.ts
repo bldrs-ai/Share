@@ -310,3 +310,338 @@ describeMobileAndDesktop('Cutplanes: picks skip what the cut removed', () => {
     await expectDoubleClickSelects(page, centre, ids.Interior)
   })
 })
+
+
+/**
+ * The cut plane's arrow itself (owner on #2171's preview):
+ *
+ *  - **dragged by touch:** the clipper listened to mouse events only, and a
+ *    touch sends none (camera-controls' pointerdown suppresses them), so on a
+ *    phone the arrow never turned yellow and could not be moved;
+ *  - **drawn over the hover:** a hovered element nearer than the arrow
+ *    painted over it, since the arrow was drawn in the scene pass under the
+ *    hover overlay (hoverOverlay.js#isDrawnOverHover);
+ *  - **faded with distance** from the pointer, to nothing a quarter of the
+ *    canvas away (arrowFade.js);
+ *  - **kept in the permalink** where it was dragged to, not only which plane
+ *    is on, so the link replays the cut in a new tab (CutPlaneMenu.jsx
+ *    #writeDraggedPlanes, debounced as the camera is).
+ */
+describeMobileAndDesktop('Cutplanes: the arrow', (ff) => {
+  test('drags by mouse or touch, and the dragged cut replays from the permalink in a new tab', async ({page, context}) => {
+    await openModel(page, IFC_MODEL)
+    await addSectionCut(page)
+    await viewObliquely(page)
+    const {start, end} = await arrowDragPoints(page)
+    const before = await planeState(page)
+    const pose = await cameraPose(page)
+    const during = await dragArrow(page, start, end, ff.isMobile)
+    expect(during.color, 'the arrow is grabbed (highlighted) while dragged').toBe(ARROW_HIGHLIGHT)
+    const after = await planeState(page)
+    expect(after.constant, 'the drag moved the plane').not.toBeCloseTo(before.constant, 3)
+    expect(after.color, 'the arrow lets go on release').toBe(ARROW_DEFAULT)
+    expect(await cameraPose(page), 'the camera stayed put').toEqual(pose)
+
+    // The link follows once the drag settles (HASH_DEBOUNCE_WAIT_MS), with
+    // the plane's offset, not just its axis.
+    await expect.poll(() => cutPlaneOffset(page), {timeout: PICK_TIMEOUT_MS}).not.toBe(0)
+    const url = page.url()
+    const replay = await context.newPage()
+    await homepageSetup(replay)
+    await setupVirtualPathIntercept(replay, IFC_MODEL, '')
+    await replay.goto(url)
+    await waitForModelReady(replay)
+    await expect.poll(async () => (await planeState(replay)).constant, {timeout: PICK_TIMEOUT_MS})
+      .toBeCloseTo(after.constant, 2)
+  })
+
+  test('is drawn over a hovered element in front of it', async ({page}) => {
+    await openModel(page, IFC_MODEL)
+    const centre = await canvasCentre(page)
+    await addSectionCut(page)
+    // From the kept side the box is in front of the arrow; hovered, the
+    // overlay draws it, and the arrow must still show over it.
+    await viewFromKeptSide(page)
+    await expectHoverPicks(page, centre, [IFC_INTERIOR])
+    const arrow = await arrowPoint(page)
+    for (const kind of ['overlay', 'full'] as const) {
+      const pixel = await paintedPixel(page, arrow, kind)
+      expect(isArrowBlue(pixel), `the arrow shows over the hover on a ${kind} paint: ${pixel}`).toBe(true)
+    }
+  })
+
+  test('fades out with distance from the pointer, and back in near it', async ({page}) => {
+    await openModel(page, IFC_MODEL)
+    await addSectionCut(page)
+    await viewObliquely(page)
+    const arrow = await arrowPoint(page)
+    // Near: on the arrow, which turns yellow under a mouse; beside it on a
+    // phone's touch layout the mouse still hovers it.
+    await page.mouse.move(arrow.x + 8, arrow.y + 8)
+    await expect.poll(() => arrowOpacity(page)).toBe(1)
+    const near = await paintedPixel(page, arrow, 'full')
+    // Far: a corner of the canvas, more than a quarter of it away.
+    const far = await farCanvasPoint(page, arrow)
+    await page.mouse.move(far.x, far.y, {steps: 5})
+    await expect.poll(() => arrowOpacity(page)).toBe(0)
+    const faded = await paintedPixel(page, arrow, 'full')
+    expect(channelDistance(near, faded), `the arrow is gone from its pixel: ${near} -> ${faded}`)
+      .toBeGreaterThan(FADED_CHANNEL_DELTA)
+    // And back.
+    await page.mouse.move(arrow.x + 8, arrow.y + 8, {steps: 5})
+    await expect.poll(() => arrowOpacity(page)).toBe(1)
+  })
+})
+
+
+// MeshClipper's arrow colours.
+const ARROW_DEFAULT = 0x0000ff
+const ARROW_HIGHLIGHT = 0xffff00
+// The least change in a pixel's channels that counts as the arrow leaving it.
+const FADED_CHANNEL_DELTA = 60
+// A view at a slant to the Section cut, so its arrow (along x) is seen side-on
+// and a drag along it moves the plane.
+/* eslint-disable no-magic-numbers */
+const OBLIQUE_VIEW = [7.6, 5.3, 6.25, 0.6, 1.3, 0.25]
+/* eslint-enable no-magic-numbers */
+// How far along the plane's normal the arrow is dragged, in CSS pixels.
+const DRAG_PX = 60
+const DRAG_STEPS = 10
+// A step along the normal, in world units, to find its direction on screen.
+const NORMAL_PROBE = 0.1
+const PAINT_TIMEOUT_MS = 10_000
+// Points across (and down) the canvas searched for an uncovered far point.
+const FAR_POINT_GRID = 12
+
+
+/**
+ * @param page
+ */
+async function viewObliquely(page: Page) {
+  await page.evaluate(async (pose) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const controls = (window as any).store.getState().viewer.context.getCameraControls()
+    const [px, py, pz, tx, ty, tz] = pose
+    await controls.setLookAt(px, py, pz, tx, ty, tz, false)
+  }, OBLIQUE_VIEW)
+  await page.waitForTimeout(CAMERA_SETTLE_MS)
+}
+
+
+/**
+ * @param page
+ * @return the first cut plane's constant and its arrow's colour
+ */
+async function planeState(page: Page): Promise<{constant: number, color: number}> {
+  return await page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const planes = (window as any).store?.getState().viewer?.clipper?.planes ?? []
+    if (planes.length === 0) {
+      return {constant: NaN, color: -1}
+    }
+    return {constant: planes[0].plane.constant, color: planes[0].arrow.material.color.getHex()}
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
+
+
+/**
+ * @param page
+ * @return the first arrow's material opacity
+ */
+async function arrowOpacity(page: Page): Promise<number> {
+  return await page.evaluate(() =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).store.getState().viewer.clipper.planes[0].arrow.material.opacity)
+}
+
+
+/**
+ * @param page
+ * @return the `x` offset in the URL's `#cp:` set, 0 when it has none
+ */
+function cutPlaneOffset(page: Page): number {
+  const match = new URL(page.url()).hash.match(/cp:[^:]*?x=(-?[\d.e-]+)/)
+  return match ? parseFloat(match[1]) : 0
+}
+
+
+/**
+ * @param page
+ * @return the camera's position and quaternion
+ */
+async function cameraPose(page: Page): Promise<number[]> {
+  return await page.evaluate(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const camera = (window as any).store.getState().viewer.context.getCamera()
+    return [...camera.position.toArray(), ...camera.quaternion.toArray()]
+  })
+}
+
+
+/**
+ * Where to press on the Section cut's arrow and where to drag it to:
+ * {@link DRAG_PX} along the screen direction of its plane's normal (the
+ * clipper keeps only the part of a move along the normal).
+ *
+ * @param page
+ * @return the press and release points, in page coordinates
+ */
+async function arrowDragPoints(page: Page): Promise<{start: {x: number, y: number}, end: {x: number, y: number}}> {
+  const points = await page.evaluate(({dragPx, probe}) => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const viewer = (window as any).store.getState().viewer
+    const planeData = viewer.clipper.planes[0]
+    const camera = viewer.context.getCamera()
+    const rect = viewer.context.getDomElement().getBoundingClientRect()
+    const toPage = (v: any) => {
+      const ndc = v.clone().project(camera)
+      return {x: rect.left + (((ndc.x + 1) / 2) * rect.width), y: rect.top + (((1 - ndc.y) / 2) * rect.height)}
+    }
+    const start = toPage(planeData.arrow.position)
+    const along = toPage(planeData.arrow.position.clone().add(planeData.plane.normal.clone().multiplyScalar(probe)))
+    const length = Math.hypot(along.x - start.x, along.y - start.y)
+    return {start, end: {x: start.x + ((along.x - start.x) / length * dragPx), y: start.y + ((along.y - start.y) / length * dragPx)}}
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  }, {dragPx: DRAG_PX, probe: NORMAL_PROBE})
+  return points
+}
+
+
+/**
+ * Drag from `start` to `end`: the mouse on desktop, a finger on a phone (CDP
+ * touch events, so the browser makes real touch pointer events, as a phone's
+ * does).
+ *
+ * @param page
+ * @param start
+ * @param end
+ * @param isTouch
+ * @return the arrow's state mid-drag, before the release
+ */
+async function dragArrow(page: Page, start: {x: number, y: number}, end: {x: number, y: number},
+  isTouch: boolean): Promise<{constant: number, color: number}> {
+  const at = (i: number) => ({
+    x: start.x + ((end.x - start.x) * i / DRAG_STEPS),
+    y: start.y + ((end.y - start.y) * i / DRAG_STEPS),
+  })
+  if (!isTouch) {
+    await page.mouse.move(start.x, start.y)
+    await page.mouse.down()
+    await page.mouse.move(end.x, end.y, {steps: DRAG_STEPS})
+    const during = await planeState(page)
+    await page.mouse.up()
+    return during
+  }
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [start]})
+  for (let i = 1; i <= DRAG_STEPS; i++) {
+    await cdp.send('Input.dispatchTouchEvent', {type: 'touchMove', touchPoints: [at(i)]})
+  }
+  const during = await planeState(page)
+  await cdp.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []})
+  await cdp.detach()
+  return during
+}
+
+
+/**
+ * The colour the viewer paints at a point, read inside the next frame that
+ * paints after asking for one ('overlay': the hover overlay on the cached
+ * frame where it can compose one; 'full': the whole scene).
+ *
+ * @param page
+ * @param point page coordinates
+ * @param kind which paint to ask for
+ * @return [r, g, b]
+ */
+async function paintedPixel(page: Page, point: {x: number, y: number}, kind: 'overlay' | 'full'): Promise<number[]> {
+  return await page.evaluate(({x, y, ask, timeoutMs}) => new Promise<number[]>((resolve, reject) => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const context = (window as any).store.getState().viewer.context
+    const demand = context.getRenderDemand()
+    const gl = context.getRenderer().getContext()
+    const rect = context.getDomElement().getBoundingClientRect()
+    const px = Math.round((x - rect.left) * gl.drawingBufferWidth / rect.width)
+    const py = gl.drawingBufferHeight - 1 - Math.round((y - rect.top) * gl.drawingBufferHeight / rect.height)
+    const painting = context.getLegacyRendererWrapper().update
+    const timer = setTimeout(() => {
+      context.setRenderUpdate(painting)
+      reject(new Error('paintedPixel: no paint'))
+    }, timeoutMs)
+    context.setRenderUpdate((...args: unknown[]) => {
+      const painted = painting(...args)
+      if (painted) {
+        // The default framebuffer, read inside the frame that drew it.
+        const out = new Uint8Array(4)
+        const bound = gl.getParameter(gl.FRAMEBUFFER_BINDING)
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+        gl.readPixels(px, py, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, out)
+        gl.bindFramebuffer(gl.FRAMEBUFFER, bound)
+        clearTimeout(timer)
+        context.setRenderUpdate(painting)
+        resolve([out[0], out[1], out[2]])
+      }
+      return painted
+    })
+    if (ask === 'full') {
+      demand.invalidate()
+    } else {
+      demand.invalidateOverlay()
+    }
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  }), {x: point.x, y: point.y, ask: kind, timeoutMs: PAINT_TIMEOUT_MS})
+}
+
+
+/**
+ * @param rgb
+ * @return whether the pixel is the arrow's blue, not the hover's cyan or the model's greys
+ */
+function isArrowBlue([r, g, b]: number[]): boolean {
+  /* eslint-disable no-magic-numbers */
+  return b > 120 && g < 90 && r < 90
+  /* eslint-enable no-magic-numbers */
+}
+
+
+/**
+ * @param a
+ * @param b
+ * @return the largest channel difference
+ */
+function channelDistance(a: number[], b: number[]): number {
+  return Math.max(...a.map((v, i) => Math.abs(v - b[i])))
+}
+
+
+/**
+ * @param page
+ * @param from
+ * @return the point over the canvas, not under a panel or button, farthest
+ *   from `from` (a phone's layout covers every corner)
+ */
+async function farCanvasPoint(page: Page, from: {x: number, y: number}): Promise<{x: number, y: number}> {
+  const point = await page.evaluate(({fx, fy, steps}) => {
+    const canvas = document.querySelector('canvas') as HTMLCanvasElement
+    const rect = canvas.getBoundingClientRect()
+    let best = null
+    let bestDistance = -1
+    for (let i = 0; i <= steps; i++) {
+      for (let j = 0; j <= steps; j++) {
+        const x = rect.left + ((rect.width - 2) * i / steps) + 1
+        const y = rect.top + ((rect.height - 2) * j / steps) + 1
+        const distance = Math.hypot(x - fx, y - fy)
+        if (distance > bestDistance && document.elementFromPoint(x, y) === canvas) {
+          best = {x, y}
+          bestDistance = distance
+        }
+      }
+    }
+    return best
+  }, {fx: from.x, fy: from.y, steps: FAR_POINT_GRID})
+  if (point === null) {
+    throw new Error('farCanvasPoint: the canvas is covered everywhere')
+  }
+  return point
+}

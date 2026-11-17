@@ -2,6 +2,8 @@ import {Vector3, Plane, Raycaster, Vector2, Box3, Sphere, Matrix3} from 'three'
 import {getMeshMaterials} from '../ShareModel'
 import debug from '../../utils/debug'
 import CutPlaneArrowHelper from './CutPlaneArrowHelper'
+import {TOUCH_FADE_FLOOR, TOUCH_GRAB_PX, distanceWithin, fadeOpacity, screenAxis} from './arrowFade'
+import {requestControlsPaint} from './hoverOverlay'
 import {requestPaint} from './renderDemand'
 
 
@@ -56,9 +58,13 @@ export default class MeshClipper {
   /**
    * @param {object} viewer - The viewer instance
    * @param {object} model - The 3D model to apply clipping to
+   * @param {object} [options]
+   * @param {Function} [options.onPlaneMoved] called on every drag move of an
+   *   arrow, after the plane has moved (Clipper#onPlaneMoved)
    */
-  constructor(viewer, model) {
+  constructor(viewer, model, {onPlaneMoved = null} = {}) {
     this.viewer = viewer
+    this.onPlaneMoved = onPlaneMoved
     this.canvas = viewer.context.getDomElement()
     this.model = model
     this.planes = [] // Array of {plane, arrow, direction, offset, normal, point}
@@ -87,10 +93,20 @@ export default class MeshClipper {
     this._scratchNormalScaled = new Vector3()
     this._scratchNewPoint = new Vector3()
 
+    // Where the pointer last was, for the arrows' fade (arrowFade.js):
+    // `{x, y, floor}` in page coordinates, or null before it has moved over
+    // the canvas, when the arrows stay opaque.
+    this._fadePointer = null
+    // The pointer dragging an arrow, so a second touch (a pinch) can't move
+    // or release it; null for a mouse event without one (tests).
+    this._dragPointerId = null
+
     // Bind event handlers
     this.onMouseDown = this.onMouseDown.bind(this)
     this.onMouseMove = this.onMouseMove.bind(this)
     this.onMouseUp = this.onMouseUp.bind(this)
+    this.onPointerFade = this.onPointerFade.bind(this)
+    this._applyFade = this._applyFade.bind(this)
   }
 
 
@@ -119,10 +135,16 @@ export default class MeshClipper {
     arrow.userData.defaultColor = arrowColor
     arrow.userData.highlightColor = arrowColorHighlight
 
-    // Make arrow always visible over geometry
+    // Make arrow always visible over geometry. Transparent from the start,
+    // so its fade (arrowFade.js) changes only `opacity`, which needs no new
+    // program; no depth write, so a faded arrow leaves the depth buffer as
+    // the model left it. The hover overlay draws it after the hover
+    // (hoverOverlay.js#isDrawnOverHover).
     arrow.traverse((child) => {
       if (child.material) {
         child.material.depthTest = false
+        child.material.depthWrite = false
+        child.material.transparent = true
         child.renderOrder = ARROW_RENDER_ORDER
       }
     })
@@ -298,20 +320,37 @@ export default class MeshClipper {
    * @param {boolean} enabled
    */
   setInteractionEnabled(enabled) {
+    // Pointer events, not mouse events: a touch sends no mousemove, and
+    // camera-controls' pointerdown handler suppresses the compatibility
+    // mousedown, so on a phone the arrow was never grabbed (owner on #2171).
     if (enabled && !this.interactionEnabled) {
-      this.canvas.addEventListener('mousedown', this.onMouseDown)
-      this.canvas.addEventListener('mousemove', this.onMouseMove)
-      this.canvas.addEventListener('mouseup', this.onMouseUp)
+      this.canvas.addEventListener('pointerdown', this.onMouseDown)
+      this.canvas.addEventListener('pointermove', this.onMouseMove)
+      this.canvas.addEventListener('pointerup', this.onMouseUp)
+      // The fade: pointer events, so a touch counts too (arrowFade.js).
+      this.canvas.addEventListener('pointermove', this.onPointerFade)
+      this.canvas.addEventListener('pointerdown', this.onPointerFade)
+      // A camera move shifts the arrows under a still pointer (a wheel zoom,
+      // camera-controls' damping after a release).
+      this.viewer.context.getCameraControls?.()?.addEventListener?.('update', this._applyFade)
       this.interactionEnabled = true
     } else if (!enabled && this.interactionEnabled) {
-      this.canvas.removeEventListener('mousedown', this.onMouseDown)
-      this.canvas.removeEventListener('mousemove', this.onMouseMove)
-      this.canvas.removeEventListener('mouseup', this.onMouseUp)
+      this.canvas.removeEventListener('pointerdown', this.onMouseDown)
+      this.canvas.removeEventListener('pointermove', this.onMouseMove)
+      this.canvas.removeEventListener('pointerup', this.onMouseUp)
+      this.canvas.removeEventListener('pointermove', this.onPointerFade)
+      this.canvas.removeEventListener('pointerdown', this.onPointerFade)
+      this.viewer.context.getCameraControls?.()?.removeEventListener?.('update', this._applyFade)
+      // Nothing tracks the pointer now: leave every arrow opaque.
+      this._fadePointer = null
+      this._applyFade()
       this.canvas.style.cursor = 'default'
       if (this.draggingArrow) {
         this.draggingArrow.arrow.userData.isDragging = false
       }
-      window.removeEventListener('mouseup', this.onMouseUp)
+      window.removeEventListener('pointerup', this.onMouseUp)
+      window.removeEventListener('pointercancel', this.onMouseUp)
+      this._dragPointerId = null
       this.draggingArrow = null
       this.hoveredArrow = null
       this.interactionEnabled = false
@@ -405,8 +444,57 @@ export default class MeshClipper {
         child.material.color.setHex(color)
       }
     })
-    // A colour is no change the render-on-demand hooks see.
-    requestPaint()
+    // A colour is no change the render-on-demand hooks see. Only the arrow's
+    // look changed, so with the hover overlay drawing the arrows this is an
+    // overlay paint (hoverOverlay.js#requestControlsPaint).
+    requestControlsPaint()
+  }
+
+
+  /**
+   * Pointer moved or pressed over the canvas: fade the arrows by how far it
+   * is from each (arrowFade.js).
+   *
+   * @param {PointerEvent} event
+   */
+  onPointerFade(event) {
+    this._fadePointer = {
+      x: event.clientX,
+      y: event.clientY,
+      floor: event.pointerType === 'touch' ? TOUCH_FADE_FLOOR : 0,
+    }
+    this._applyFade()
+  }
+
+
+  /**
+   * Set each arrow's opacity from the last pointer position: opaque with no
+   * pointer yet, and while dragged (the pointer can run ahead of the arrow).
+   * Asks for a paint only when an opacity changed (it moves in steps,
+   * arrowFade.js#FADE_STEPS).
+   *
+   * @private
+   */
+  _applyFade() {
+    const pointer = this._fadePointer
+    const canvasRect = pointer === null ? null : this.canvas.getBoundingClientRect()
+    const camera = pointer === null ? null : this.viewer.context.getCamera()
+    let isChanged = false
+    for (const planeData of this.planes) {
+      const material = planeData.arrow.material
+      if (!material) {
+        continue
+      }
+      const opacity = pointer === null || planeData === this.draggingArrow ? 1 :
+        fadeOpacity(pointer, screenAxis(planeData.arrow, camera, canvasRect), canvasRect, pointer.floor)
+      if (material.opacity !== opacity) {
+        material.opacity = opacity
+        isChanged = true
+      }
+    }
+    if (isChanged) {
+      requestControlsPaint()
+    }
   }
 
 
@@ -437,57 +525,106 @@ export default class MeshClipper {
 
 
   /**
-   * Mouse down handler - check if clicking on an arrow
+   * Pointer down handler - check if pressing on an arrow
    *
-   * @param {MouseEvent} event
+   * @param {PointerEvent} event
    */
   onMouseDown(event) {
+    // The primary button, or any touch; a second finger while one drags
+    // is left to the camera's pinch.
+    if ((event.button !== undefined && event.button !== 0) || this.draggingArrow) {
+      return
+    }
     this.setMousePosition(event)
     this.raycaster.setFromCamera(this.mouse, this.viewer.context.getCamera())
 
-    const intersects = this.getIntersects()
-    if (intersects.length === 0) {
+    const planeData = this._arrowUnder(event)
+    if (planeData === null) {
       return
     }
-    for (const planeData of this.planes) {
-      if (intersects[0].object === planeData.arrow ||
-          intersects[0].object.parent === planeData.arrow) {
-        this.draggingArrow = planeData
-        // Picks see this (pickControls.js): while the arrow is dragged, no
-        // hover or click lands on the model, wherever the pointer gets to.
-        // Re-run the hover pick now so a highlight from before the press
-        // comes off rather than fighting the gizmo for the whole drag (hover
-        // picks pause while a button is down, Containers/viewer.js).
-        planeData.arrow.userData.isDragging = true
-        this.viewer.highlightIfcItem?.()
-        // The release can land anywhere, a panel or outside the window, not
-        // only on the canvas the other listeners are on. Missing it would
-        // leave the flag set, and every pick on the model blocked, until the
-        // next mouseup on the canvas (review of #2171).
-        window.addEventListener('mouseup', this.onMouseUp)
-        this.setArrowColor(planeData.arrow, planeData.arrow.userData.highlightColor)
-        const dragControls = this.viewer.context.getCameraControls()
-        if (dragControls) {
-          dragControls.enabled = false
-        }
-        debug().log('MeshClipper: Started dragging arrow for direction', planeData.direction)
-        break
-      }
+    this.draggingArrow = planeData
+    // Only this pointer moves the arrow: a second touch is a pinch.
+    this._dragPointerId = event.pointerId ?? null
+    // Picks see this (pickControls.js): while the arrow is dragged, no
+    // hover or click lands on the model, wherever the pointer gets to.
+    // Re-run the hover pick now so a highlight from before the press
+    // comes off rather than fighting the gizmo for the whole drag (hover
+    // picks pause while a button is down, Containers/viewer.js).
+    planeData.arrow.userData.isDragging = true
+    this.viewer.highlightIfcItem?.()
+    // The release can land anywhere, a panel or outside the window, not
+    // only on the canvas the other listeners are on. Missing it would
+    // leave the flag set, and every pick on the model blocked, until the
+    // next pointerup on the canvas (review of #2171).
+    window.addEventListener('pointerup', this.onMouseUp)
+    window.addEventListener('pointercancel', this.onMouseUp)
+    this.setArrowColor(planeData.arrow, planeData.arrow.userData.highlightColor)
+    // camera-controls saw this press first (its listener is older) and
+    // started an orbit; disabling it cancels that (camera-controls#cancel).
+    const dragControls = this.viewer.context.getCameraControls()
+    if (dragControls) {
+      dragControls.enabled = false
     }
+    this._applyFade()
+    debug().log('MeshClipper: Started dragging arrow for direction', planeData.direction)
   }
 
 
   /**
-   * Mouse move handler - update plane position if dragging
+   * The arrow a press lands on: the one the ray hits, or for a touch, which
+   * is wider than the shaft, the nearest one whose axis is within
+   * TOUCH_GRAB_PX on screen (arrowFade.js). The raycaster is already set
+   * from the event.
    *
-   * @param {MouseEvent} event
+   * @param {PointerEvent} event
+   * @return {object|null} the plane's entry in `this.planes`
+   * @private
+   */
+  _arrowUnder(event) {
+    const intersects = this.getIntersects()
+    if (intersects.length > 0) {
+      const hit = this.planes.find((planeData) => isSelfOrDescendant(intersects[0].object, planeData.arrow))
+      if (hit) {
+        return hit
+      }
+    }
+    if (event.pointerType !== 'touch') {
+      return null
+    }
+    const canvasRect = this.canvas.getBoundingClientRect()
+    const camera = this.viewer.context.getCamera()
+    const touch = {x: event.clientX, y: event.clientY}
+    let nearest = null
+    let nearestDistance = Infinity
+    for (const planeData of this.planes) {
+      const distance = distanceWithin(touch, screenAxis(planeData.arrow, camera, canvasRect), TOUCH_GRAB_PX)
+      if (distance < nearestDistance) {
+        nearest = planeData
+        nearestDistance = distance
+      }
+    }
+    return nearest
+  }
+
+
+  /**
+   * Pointer move handler - update plane position if dragging
+   *
+   * @param {PointerEvent} event
    */
   onMouseMove(event) {
+    if (this.draggingArrow && event.pointerId !== undefined && this._dragPointerId !== null &&
+        event.pointerId !== this._dragPointerId) {
+      return
+    }
     this.setMousePosition(event)
     this.raycaster.setFromCamera(this.mouse, this.viewer.context.getCamera())
 
     if (!this.draggingArrow) {
-      this._handleHover()
+      // A touch has no hover: its moves are orbits and pinches.
+      if (event.pointerType !== 'touch') {
+        this._handleHover()
+      }
       return
     }
 
@@ -530,6 +667,8 @@ export default class MeshClipper {
     // directly rather than lean on the probe alone: a drag that showed
     // nothing until the release is what #2171's owner hit.
     requestPaint()
+    // The permalink follows the plane (CutPlaneMenu debounces this).
+    this.onPlaneMoved?.()
   }
 
 
@@ -569,10 +708,18 @@ export default class MeshClipper {
 
 
   /**
-   * Mouse up handler - stop dragging
+   * Pointer up (or cancelled) handler - stop dragging
+   *
+   * @param {PointerEvent} [event] absent when called directly
    */
-  onMouseUp() {
-    window.removeEventListener('mouseup', this.onMouseUp)
+  onMouseUp(event) {
+    if (this.draggingArrow && event?.pointerId !== undefined && this._dragPointerId !== null &&
+        event.pointerId !== this._dragPointerId) {
+      return
+    }
+    window.removeEventListener('pointerup', this.onMouseUp)
+    window.removeEventListener('pointercancel', this.onMouseUp)
+    this._dragPointerId = null
     if (!this.draggingArrow) {
       return
     }

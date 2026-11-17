@@ -244,7 +244,7 @@ describe('viewer/three/pickControls', () => {
       clipper.setInteractionEnabled(true)
       clipper.onMouseDown(atCentre)
       expect(arrow.userData.isDragging).toBe(true)
-      window.dispatchEvent(new MouseEvent('mouseup'))
+      window.dispatchEvent(new MouseEvent('pointerup'))
       expect(arrow.userData.isDragging).toBe(false)
       expect(clipper.draggingArrow).toBeNull()
     })
