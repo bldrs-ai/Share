@@ -10,7 +10,7 @@ const {beforeEach} = test
 // Large enough for conway's parse-time preview channel to emit during the
 // parse (a first preview generation needs ~1k records, and index.ifc and the
 // 320 KB sculpture finish their parse before one), and already in the repo.
-// `yarn test-flows-build` copies src/tests/fixtures/Momentum.ifc to the
+// `bun run test-flows-build` copies src/tests/fixtures/Momentum.ifc to the
 // served `__test_fixtures__/`, so it opens as a hosted public file. Not a
 // page.route: the model fetch goes through MSW's service worker, which
 // context.route does not see.

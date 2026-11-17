@@ -148,7 +148,7 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
 
         if (org === 'bldrs-ai' && repo === 'test-models') {
           // E2e fixtures live under src/tests/fixtures/github/, copied
-          // into docs/__test_fixtures__/ by `yarn test-flows-build` and
+          // into docs/__test_fixtures__/ by `bun run test-flows-build` and
           // served by the playwright dev server. Returning a localhost
           // download_url here keeps the whole flow on one host with no
           // service-worker / page.route ordering games.

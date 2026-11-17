@@ -4,7 +4,7 @@ import {runGetPortPlease} from './utils'
 
 const ciPort = 9081
 const isCI = process.env.CI === 'true'
-// CI shards download a prebuilt `docs/` and only serve. Local `yarn test-flows`
+// CI shards download a prebuilt `docs/` and only serve. Local `bun run test-flows`
 // still builds. See test-flows.yml playwright-build.
 const serveOnly = process.env.PLAYWRIGHT_SERVE_ONLY === 'true'
 // In CI we use a fixed port.  Locally, there may be multiple instances of this
@@ -82,12 +82,12 @@ export default defineConfig({
   // Playwright's webServer cwd defaults to this config's directory
   // (`tools/`), not the repo root. Serve-only cds into `docs/` so
   // `npx http-server` uses the built artifact as the site root (PORT
-  // comes from env below). The full-build path still goes through yarn,
+  // comes from env below). The full-build path goes through `bun run`,
   // which walks up to the repo package.json.
   webServer: {
     command: serveOnly ?
       'npx http-server' :
-      `yarn test-flows-build-and-serve ${port}`,
+      `bun run test-flows-build-and-serve ${port}`,
     cwd: serveOnly ? '../docs' : undefined,
     url,
     env: {
@@ -98,7 +98,7 @@ export default defineConfig({
       SKIP_MARKETING: 'true',
     },
     // Serve-only is http-server on an existing tree. A full build still
-    // needs headroom for a cold yarn/esbuild on a local first run.
+    // needs headroom for a cold install/esbuild on a local first run.
     timeout: serveOnly ? serveOnlyTimeoutMs : fullBuildTimeoutMs,
     // Locally reuse a server already on this port. In CI, serve-only
     // shards have no server yet — Playwright starts http-server.

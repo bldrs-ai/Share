@@ -159,7 +159,7 @@ describe('netlify functions as deployed', () => {
   it('keeps shipping the built pro modules beside the pro-module function', () => {
     expect(functionsConfig['pro-module'].included_files).toContain('netlify/functions/_pro-modules/*.js')
     // The config only says what to include; check the files really landed.
-    // `_pro-modules/` is gitignored and populated by `yarn build-prod`, so a
+    // `_pro-modules/` is gitignored and populated by `bun run build-prod`, so a
     // fresh checkout has none and only the config assertion above runs —
     // there is nothing on disk to compare against, and failing would make
     // the hook depend on a prior build. Where a build has run, each built

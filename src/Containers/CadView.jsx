@@ -119,6 +119,7 @@ import {
 import {elementSelection} from './selection'
 import {partsToPath} from './urls'
 import {initViewer} from './viewer'
+import {installDebugPanelsShortcut} from '../viewer/debugPanels'
 
 
 let count = 0
@@ -181,6 +182,13 @@ export default function CadView({
   // (not module-level state) so two CadView mounts in the same process —
   // tests, multi-pane layouts — don't stomp each other.
   const previousThemeChangeCbRef = useRef(null)
+  // The `[modelPath, customViewSettings]` pair the viewer was last built for
+  // (see that effect). Its dependencies change only when a new viewer is
+  // wanted, so the only run that sees the same pair again is StrictMode's
+  // dev-only repeat of a mount effect. That repeat used to build a second
+  // ShareViewer and WebGL context on every dev and Playwright page load,
+  // disposing the first ~80 ms later. Prod builds never ran it.
+  const viewerBuiltForRef = useRef(null)
   const stopModelEngagementRef = useRef(null)
   // The path and tree the location watcher last selected from (see there).
   const lastPathSelectionRef = useRef(null)
@@ -2615,6 +2623,11 @@ export default function CadView({
   }, [appPrefix, setAppPrefix])
 
 
+  // The debug panels (Perf + Render) behind the backtick key, in prod too
+  // (viewer/debugPanels.js; the dock is Components/DebugDock).
+  useEffect(() => installDebugPanelsShortcut(), [])
+
+
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!isViewerLoaded) {
@@ -2638,6 +2651,12 @@ export default function CadView({
   // programmatic navigation (e.g. clicking element links).
   useEffect(() => {
     debug().log('CadView#useEffect1[modelPath], calling onModelPath, modelPath:', modelPath)
+    const builtFor = viewerBuiltForRef.current
+    if (builtFor !== null && builtFor.modelPath === modelPath &&
+        builtFor.customViewSettings === customViewSettings) {
+      return
+    }
+    viewerBuiltForRef.current = {modelPath, customViewSettings}
     // A different model starts a new open, so its failures count again even
     // when the model in between never touched the dedupe refs (A fails, B
     // loads, A fails). Reruns of the SAME model (customViewSettings) keep

@@ -21,8 +21,8 @@ default `false`). Without it, the tracer is folded out of the app bundle and
 
 ## Including the tools in a build
 
-- **Locally:** `MEASUREMENT_TOOLS=true yarn build-prod`, then `yarn serve-prod`.
-  Use `MEASUREMENT_TOOLS=true yarn serve` for the dev server.
+- **Locally:** `MEASUREMENT_TOOLS=true bun run build-prod`, then `bun run serve-prod`.
+  Use `MEASUREMENT_TOOLS=true bun run serve` for the dev server.
 - **On a deploy preview:** open a throwaway branch or draft PR that adds this to
   `netlify.toml`, and don't merge it:
 

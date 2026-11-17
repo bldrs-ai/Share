@@ -11,6 +11,7 @@ import {
 import {isDevMode} from '../utils/common'
 import {floatStrTrim} from '../utils/strings'
 import {requestPaint} from '../viewer/three/renderDemand'
+import {finiteHits} from '../viewer/three/finiteHits'
 
 
 /**
@@ -74,9 +75,11 @@ export default class PlaceMark extends EventDispatcher {
 
       if (_objects && this.activated) {
         updatePointer(event)
-        const _intersections = []
         _raycaster.setFromCamera(_pointer, _camera)
-        _raycaster.intersectObjects(_objects, true, _intersections)
+        // The model, so through finiteHits like Picker#castRay: three r187
+        // reports a NaN-vertex triangle as a hit at distance NaN, which would
+        // otherwise drop the placemark at a non-finite point.
+        const _intersections = finiteHits(_raycaster.intersectObjects(_objects, true))
 
         if (_intersections.length > 0) {
           const intersect = _intersections[0]

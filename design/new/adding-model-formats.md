@@ -306,8 +306,8 @@ will hand the loader UTF-8 mojibake.
 
 **E2E** (`src/Components/Open/Filetypes.spec.ts`): a fixture under
 `src/tests/fixtures/github/bldrs-ai/test-models/main/<fmt>/` plus a
-screen test. Fixtures must live there — `yarn test-flows` runs
-`yarn clean` before building, so anything hand-copied into
+screen test. Fixtures must live there — `bun run test-flows` runs
+`bun run clean` before building, so anything hand-copied into
 `docs/__test_fixtures__/` is deleted before the run. See
 [PLAYBOOK.md](../../PLAYBOOK.md) §"Screenshot goldens" for generating
 the golden.

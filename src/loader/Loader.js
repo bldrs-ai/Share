@@ -2574,7 +2574,9 @@ function getDracoLoader() {
   if (!sharedDracoLoader) {
     sharedDracoLoader = new DRACOLoader()
     sharedDracoLoader.setDecoderPath('/static/js/draco/')
-    sharedDracoLoader.setDecoderConfig({type: 'wasm'})
+    // No setDecoderConfig({type: 'wasm'}): three r187 deprecated it (removal
+    // in r194) and picks the wasm decoder by default wherever WebAssembly
+    // exists, which is what that call asked for.
   }
   return sharedDracoLoader
 }

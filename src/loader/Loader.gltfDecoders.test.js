@@ -28,8 +28,15 @@ describe('Loader#newGltfLoader', () => {
     expect(loader.dracoLoader).toBeInstanceOf(DRACOLoader)
     // The same path the viewer's DRACOLoader has always read from
     // (`public/static/js/draco/`), so the wasm is fetched from this origin.
-    expect(loader.dracoLoader.decoderPath).toBe('/static/js/draco/')
-    expect(loader.dracoLoader.decoderConfig).toEqual({type: 'wasm'})
+    // r187 replaced `decoderPath` with per-file `decoderPaths`, defaulting
+    // to a CDN; setDecoderPath must still point them all at this origin.
+    expect(loader.dracoLoader.decoderPaths).toEqual({
+      js: '/static/js/draco/draco_wasm_wrapper.js',
+      wasm: '/static/js/draco/draco_decoder.wasm',
+      dep_js: '/static/js/draco/draco_decoder.js',
+    })
+    // The wasm decoder, the r187 default (`type: 'js'` is the only opt-out).
+    expect(loader.dracoLoader.decoderConfig.type).not.toBe('js')
     expect(loader.meshoptDecoder).toBe(MeshoptDecoder)
   })
 

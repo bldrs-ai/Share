@@ -663,7 +663,7 @@ The tools behind §5a are checked in, but **left out of normal builds**. They
 are gated on the build-time switch `MEASUREMENT_TOOLS`
 (`tools/esbuild/vars.prod.js`, default `false`), so production ships neither
 the tracer nor the page. To use them again:
-1. Build with the switch on: `MEASUREMENT_TOOLS=true yarn build-prod`
+1. Build with the switch on: `MEASUREMENT_TOOLS=true bun run build-prod`
    locally, or on a deploy preview through a throwaway branch whose
    `netlify.toml` sets it for `context.deploy-preview`.
 2. Follow `tools/spikes/offscreen/README.md`, which has the exact snippet,

@@ -5,7 +5,6 @@ import BotControl from '../Components/Bot/BotControl'
 import ElementsControl from '../Components/ElementsControl'
 import HelpControl from '../Components/Help/HelpControl'
 import LoadReportControl from '../Components/LoadReport/LoadReportControl'
-import PerfToolbarSlot from '../Components/PerfToolbarSlot'
 import useExistInFeature from '../hooks/useExistInFeature'
 
 
@@ -33,18 +32,12 @@ export default function BottomBar({deselectItems}) {
       {isWorkspaceEnabled ? <Box/> : <AboutControl/>}
       <ElementsControl deselectItems={deselectItems}/>
       {/*
-        Sub-stack so the perf panel sits flush against the Help/Bot
-        control instead of being spread out by the outer
-        `justifyContent='space-between'`.  When the `?feature=perf`
-        flag is off, `PerfToolbarSlot` returns null and this resolves
-        to a single-child stack — no visual difference.
-
         Live load progress renders in the snackbar (AlertDialogAndSnackbar).
         LoadReportControl (the "i" next to "?") shows only once a load has
-        finished with a report — see conway #301 follow-up.
+        finished with a report — see conway #301 follow-up. The perf panel
+        that used to sit here is in the debug dock now (DebugDock.jsx).
       */}
       <Stack direction='row' alignItems='center' spacing={2}>
-        <PerfToolbarSlot/>
         <LoadReportControl/>
         {isBotEnabled ? <BotControl/> : <HelpControl/>}
       </Stack>

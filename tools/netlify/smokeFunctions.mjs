@@ -28,7 +28,7 @@
  *
  * Deliberately dependency-free (Node built-ins and global fetch only): the
  * functions-smoke workflow runs it from a sparse checkout with no
- * `yarn install`. Run by .github/workflows/functions-smoke.yml on every
+ * `bun install`. Run by .github/workflows/functions-smoke.yml on every
  * Netlify deploy-preview status and hourly against production.
  */
 

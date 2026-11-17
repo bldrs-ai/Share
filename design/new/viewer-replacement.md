@@ -1096,7 +1096,7 @@ viewer.viewsManager = IfcViewsManager
 
 ## 4. Migration plan (phased, each phase ships green)
 
-Each phase ends with `yarn lint && yarn test && yarn test-flows` green and a working demo on a representative IFC + GLB.
+Each phase ends with `bun run lint && bun run test && bun run test-flows` green and a working demo on a representative IFC + GLB.
 
 ### Phase 0 — preflight (no code change)
 - Pin a baseline. Snapshot a few "golden" Playwright runs against Schependomlaan & a GLB model. These are the regression gates.
@@ -1831,6 +1831,135 @@ construction-time constants (lights, IFC material params, env intensity) all
 OBJ uses `OBJLoader`'s own materials, so it's unchanged either way (matches its
 legacy baseline); converting it to Standard for full flag-on uniformity is a
 separate step.
+
+**r187 and default-on (2026-11, #2167):**
+
+- **The look is on by default.** `viewer/lookMode.js#isLookOn` is the one
+  predicate every pipeline decision reads (materials and colours in the
+  loaders, lights, output colour space, IBL, tone mapping, AO, the ground
+  plane, the profile menu's Neutral/Flat toggle).
+  - Off for a session with `?feature=disableLook`.
+  - Off prod-wide with `disableLook: isActive: true` in FeatureFlags.js,
+    which a URL can't override.
+  - **Off in the Playwright build unless a spec opts in.** `LOOK_IS_OPT_IN`
+    (tools/esbuild/vars.playwright.js) keeps it off until the page sets
+    `window.__bldrsLookOptIn`. Specs call `withLook(page)`
+    (src/tests/e2e/look.ts) before the first `goto`. On #2167 every load in
+    the suite paid for PBR + N8AO under CI's SwiftShader, and shards went
+    from 9–12 min past their 15-min limit. The owner chose this over more
+    shards or time. The specs that opt in are debugPanels (panels, AO fades)
+    and hoverOverlay (AO baked into the hover cache); the rest of the suite
+    tests the pre-§6e pipeline, so a regression in the look's loaders shows
+    up only there or on the preview.
+  - `?feature=look` no longer switches anything on; it opens the debug
+    panels at startup (below).
+- **Neutral is the owner's pick.** The owner chose it on the #2167 deploy
+  preview, on a real GPU: the look panel's "Neutral CAD" preset (neutral
+  tone, key 1.2, fill 0.6, ambient 0.2, roughness 0.7, metalness 0) with the
+  gradient studio at 0.6, and N8AO on.
+- **Why the old values overexposed.** r187 rewrote `PMREMGenerator`: the
+  CubeUV atlas became a real cube target with prefiltered mips.
+  - Under SwiftShader the r184 env map added nothing to the frame. A float
+    readback of Momentum was identical with the env on, off, or at
+    intensity 0.
+  - Under r187 it lights the walls to about 2.6 (linear), so the r184
+    tuning (`envIntensity: 2.56`, fill 2.3) tone-mapped them to the white
+    background.
+- **AO is N8AO** (`n8ao`, `N8AOPostPass`, a screen-space radius of 32 px).
+  - It's part of a look: `ao` is on for Neutral, off for Flat.
+  - It needs no NormalPass. It reads the composer's stable depth and
+    detects log depth itself.
+  - If it can't be built on a device, the frame renders without AO, and GA
+    gets `ao_unavailable {method, error}`.
+  - The pmndrs `SSAOEffect` stays as a look-panel option, built only when
+    picked.
+- **SSAO barely registers.** On Momentum at default settings it darkens at
+  most 10/255 against N8AO's 64, over about 2.5k px against 24.5k. SSAO's
+  radius and cutoffs are fractions of normalized depth, which collapse
+  under a site-sized far plane.
+- **AO fades while the camera moves** (`viewer/motionAO.js`). It fades out
+  over 100 ms from the same camera-controls `update` that starts motion
+  residency (B3, demand-tiled-rendering.md), and back in over 500 ms at
+  rest (250 ms at first; the owner found it still abrupt) (200 ms and three quiet frames, MotionResidency's rule). A load drops
+  it at once, and the finished model fades it in.
+  - **Why fades:** the owner found the cut on and off jarring, on index.ifc
+    especially. The level scales AO's strength
+    (CustomPostProcessor#setAOLevel; N8AO's exponent, so 0 is none), and at
+    0 the pass is skipped.
+  - **What Auto measures:** it doesn't time a paint while AO still runs
+    (MotionResidency's `shouldTime`, wired to `isAORunning`), so every frame
+    it measures is AO-free, and geometry is cut only for what's left.
+  - **Test:** `debugPanels.spec.ts` checks it at the paint, on desktop and
+    mobile. The drag's first moved frame keeps AO (it goes red with a cut
+    instead of a fade), a moved frame then draws without it, and at rest it
+    comes back through a part-way frame to full.
+  - **Pre-baking AO into the cached GLB, considered and deferred:**
+    per-vertex AO is too coarse on BIM meshes; texture AO needs UV
+    unwrapping; it goes stale under hide, isolate and cut planes; and first
+    loads wouldn't have it.
+- **Load cost under a software rasteriser** (CI's SwiftShader, measured
+  in the #2167 sandbox). With the look on, index.ifc reached ready in 6.7 s
+  against 2.9 s with the look off, and four parallel E2E workers missed the
+  15 s ready timeout on most model specs. Measured parts:
+  - PMREM prefiltering of the gradient: ~950 ms of GPU work per viewer.
+  - N8AO: ~220 ms a paint (313 ms with AO against 93 ms without).
+  - A profile showed ~1.2 s in `forceContextLoss`: CadView built a viewer
+    and disposed it ~80 ms later, and losing the context flushed that first
+    viewer's queued PMREM. The double init was React StrictMode re-running
+    CadView's model-path effect, which happens only in development builds,
+    the Playwright build among them; prod never built the second viewer.
+    Fixed after #2167 (CadView's `viewerBuiltForRef`; one context per load,
+    asserted by `Containers/viewerInit.spec.ts`).
+
+  Two fixes, both right on a GPU too:
+  - **The env map builds on the next task** and is skipped for a viewer
+    already disposed. The scene is empty then, so nothing on screen changes.
+  - **AO is dropped for the length of a load** (`motionAO.js`, RenderDemand
+    `isLoading`). AO over half-streamed geometry is wasted, and the finished
+    model gets one paint with it.
+
+  Together they took ready to ~5.0 s. The rest was the dev-only second
+  viewer's PMREM (since fixed, above) and the PBR/N8AO shader compiles,
+  which cost milliseconds on a GPU.
+- **AO is baked into the hover cache** (`viewer/three/inPlacePass.js`).
+  - **Why:** N8AO first ran on every hover paint, 118 ms against 21 ms
+    under SwiftShader. That undid the hover overlay's point (a cheap
+    repaint) and kept the hover picker's 33 ms slow-paint gate shut.
+  - **How:** each AO pass (N8AO, SSAO's EffectPass) is wrapped to run in
+    place. It renders into the spare buffer, its colour is copied back over
+    the input buffer, and it doesn't swap. The input buffer keeps the
+    scene's depth: since postprocessing 6.39.6 each ping-pong buffer has its
+    own, so a swap would have split them.
+  - **Order:** the overlay pass sits after the AO stages
+    (`bakesIntoHoverCache`), captures the AO'd frame, and an overlay paint
+    skips them.
+  - **Trade-off:** the hovered element is drawn on top without AO, on full
+    and overlay paints alike, so those still match. The recolour fallback
+    (the overlay off) shades it.
+  - **Tests:** hoverOverlay.spec's occlusion and double-click tests run with
+    AO off for that reason and for SwiftShader's slow full paints.
+- **The debug panels.** Perf (FPS / ms / MB graphs, plus geometries,
+  textures, draw calls and triangles) and Render (the look panel,
+  `LightingGui`, retitled) sit side by side in the debug dock
+  (`Components/DebugDock/DebugDock.jsx`). They ship in prod.
+  - The backtick key shows or hides both (`viewer/debugPanels.js`), and is
+    ignored while typing in a field.
+  - The Display menu's last item, "Render...", opens Render alone.
+  - Each panel minimises to its title bar on the window bottom. Expanded, it
+    sits on top of the bottom bar's Elements control.
+  - Both use the theme. lil-gui is themed through its CSS variables,
+    scoped to the dock.
+  - The Render panel's state survives the viewer re-creation a theme change
+    does: the dock re-mounts it into the new viewer.
+- **What it costs.** N8AO adds about 107 KB gzipped to `index.js`; it's in
+  the default pipeline now, so there is nothing to split out. GPU cost is
+  not measured here: CI and the sandbox render in SwiftShader. N8AO runs only
+  on still frames (on-demand painting, and the motion drop), and the
+  overlay's FPS/ms read is the way to check it on a device.
+- **Fast-SDF-AO, not adopted.** wrong-nebula/Fast-SDF-AO is AO from one baked
+  SDF volume over a fixed box, not screen-space. It has no package and no
+  stated license. It was considered and doesn't fit Share's models: arbitrary
+  scale, many BatchedMesh instances, nothing to bake offline.
 
 The compat path in §6b was a **deliberate hold**, not the destination.
 The fork's IFC pipeline and our material setup were tuned in 2022 against

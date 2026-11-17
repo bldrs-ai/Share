@@ -74,6 +74,7 @@ const AUDITED = {
   'Containers/CadView.jsx': 'calls ShareViewer#setSelection, which paints through IfcHighlighter',
   'Components/ViewCube/ViewCube.jsx': 'its own renderer and scene, painted by its own dirty-flag loop',
   'Components/HideToggleButton.jsx': 'a CSS icon style, not the scene',
+  'viewer/three/CustomPostProcessor.js': 'N8AO intensity, set only from LightingGui, whose onChange asks',
   'viewer/three/hoverOverlay.js': 'layers and background changed for its own draw, inside a paint, and put back before it returns',
   'viewer/three/context/context.js': 'the clipping-plane array at construction; the probe reads it each frame',
   'viewer/three/context/renderer/postproduction.js': 'never activated (offscreen-rendering.md inventory #10)',
