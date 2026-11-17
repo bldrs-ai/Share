@@ -13,6 +13,7 @@ import {WebGLRenderer, Scene, Camera, UnsignedShortType} from 'three'
 import {gtagEvent} from '../../privacy/analytics'
 import {isLookOn} from '../lookMode'
 import {LOOKS, DEFAULT_LOOK} from '../looks'
+import {BackgroundEffect} from './backgroundEffect'
 import {InPlacePass} from './inPlacePass'
 import {patchOutlineForBatchedMeshes} from './outlineBatching'
 
@@ -57,6 +58,9 @@ export default class CustomPostProcessor {
   _scene = null
   _camera = null
   _toneMappingEffect = null
+  // Restores the background after the tone map (backgroundEffect.js).
+  _backgroundEffect = null
+  _backgroundPass = null
   _normalPass = null
   _ssaoEffect = null
   _ssaoPass = null
@@ -149,10 +153,20 @@ export default class CustomPostProcessor {
     // Swap via the look panel / `setToneMappingMode` (ACES / AgX / ...).
     // Persistent pass so it applies with or without a selection outline; the
     // outline composites after it.
+    //
+    // The background is in the frame too, and tone mapping would grey it (a
+    // white day theme came out ~94%). BackgroundEffect puts the scene's
+    // background colour back wherever no geometry was drawn, so the theme's
+    // (or the Render panel's) colour is what shows. Its own pass, after the
+    // tone map: an EffectPass tone-maps its merged result as a whole, so in
+    // the same pass the restored colour was tone-mapped again.
     if (isLookOn()) {
       this._toneMappingEffect = new ToneMappingEffect({mode: ToneMappingMode.NEUTRAL})
       this._toneMappingPass = new EffectPass(camera, this._toneMappingEffect)
       this._composer.addPass(this._toneMappingPass)
+      this._backgroundEffect = new BackgroundEffect(scene)
+      this._backgroundPass = new EffectPass(camera, this._backgroundEffect)
+      this._composer.addPass(this._backgroundPass)
     }
   }
 
@@ -418,6 +432,8 @@ export default class CustomPostProcessor {
     this._n8aoStage = null
     this._ssaoStage = null
     this._toneMappingEffect = null
+    this._backgroundEffect = null
+    this._backgroundPass = null
     this._toneMappingPass = null
   }
 }
