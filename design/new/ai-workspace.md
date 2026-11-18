@@ -297,8 +297,13 @@ preview, and so is whether `context.waitUntil` keeps the function alive to
 the usage chunk after a client hangs up. What happens either way: a hold the
 function never settles expires into spend at its reservation
 (`_lib/aiLedger.js`), so a cut-off function can over-charge a user but
-never under-charge Bldrs. The generation-id reconciliation job is not
-built. The rest of this paragraph is the spike's framing, kept for the
+never under-charge Bldrs. A settle that fails is retried (three attempts,
+jittered, within 3 s, safe because settle is idempotent); one that still
+fails, or that finds its hold already expired, leaves a reconciliation
+record (`ai/reconcile/<day>/<request>`: generation id, actual cost, the
+buckets left at their reservation) and a `settle_failed` warning (Codex on
+#2220). The generation-id reconciliation job that reads those records and
+the `estimates` entries is not built. The rest of this paragraph is the spike's framing, kept for the
 limits it still has to measure.
 
 **Vehicle: open, spike #1928.** Share has no streaming function today. Every

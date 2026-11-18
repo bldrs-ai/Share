@@ -57,8 +57,10 @@
  * the upstream may well have billed it, and the direction here is "never more
  * spend than budgeted" (§7 "The reservation must be atomic"), unlike model
  * slots' "free extra, never a wrongful block". A settle that arrives after
- * that conversion books its actual cost as well, an over-count, in the same
- * direction.
+ * that conversion writes nothing (settle is idempotent: no hold, no write),
+ * so nothing is booked twice; the relay leaves a reconciliation record
+ * (`ai/reconcile/<day>/<request>`) so a job can correct the overcharge,
+ * as it does for a settle that keeps failing (settleWithRetry).
  */
 
 
@@ -290,22 +292,73 @@ export function reserve(store, bucket, {id, micro, free, nowMs}) {
  *   reconciliation through `/api/v1/generation` can correct it later.
  * @return {Promise<void>}
  */
-export async function settle(store, bucket, {id, micro, nowMs, release = false, estimate = null}) {
-  await compareAndSwap(store, bucket.key, (record) => {
+export function settle(store, bucket, {id, micro, nowMs, release = false, estimate = null}) {
+  return compareAndSwap(store, bucket.key, (record) => {
     const hold = record.holds[id]
+    if (!hold) {
+      // Nothing to settle: this hold was settled already (a retry whose
+      // earlier attempt landed but whose answer was lost) or it has expired
+      // into spend at its reservation (prune). Either way, writing would
+      // double-count, so this writes nothing and says so; the caller records
+      // an expired one for reconciliation (ai-chat.js settleOrRecord).
+      return {write: false, settled: false}
+    }
     delete record.holds[id]
     prune(record, nowMs, bucket.windowDays)
     if (release) {
-      return hold ? {} : {write: false}
+      return {settled: true}
     }
-    // No hold: it expired into spend at its reserved amount, or a crash lost
-    // it. Book the actual cost anyway (header: over-count, never under).
-    addToDay(record, utcDay(nowMs), micro, hold ? hold.free : 0)
+    addToDay(record, utcDay(nowMs), micro, hold.free)
     if (estimate) {
       record.estimates[id] = {micro, day: utcDay(nowMs), generation: estimate.generation ?? null}
     }
-    return {}
+    return {settled: true}
   })
+}
+
+
+export const SETTLE_ATTEMPTS = 3
+const SETTLE_BACKOFF_BASE_MS = 100
+const SETTLE_BACKOFF_JITTER_MS = 100
+
+
+/**
+ * {@link settle}, retried a few times when the store fails (each attempt is
+ * already a compare-and-swap loop; this covers a store outage or a burst of
+ * contention that outlasts one). Safe to retry because settle is
+ * idempotent: an attempt that landed removed the hold, so a later attempt
+ * finds none and writes nothing. Stops early past `deadline`.
+ *
+ * @param {object} store
+ * @param {Bucket} bucket
+ * @param {object} settlement as for settle
+ * @param {object} [options]
+ * @param {number} [options.attempts]
+ * @param {number} [options.deadline] epoch ms after which no new attempt starts
+ * @return {Promise<object>} `{ok: true, settled, attempts}`, or `{ok: false, attempts, reason}` with
+ *   reason 'contention' or 'store'
+ */
+export async function settleWithRetry(store, bucket, settlement, {attempts = SETTLE_ATTEMPTS, deadline = Infinity} = {}) {
+  let reason = 'store'
+  let tried = 0
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (attempt > 0) {
+      if (Date.now() >= deadline) {
+        break
+      }
+      await new Promise((resolve) => {
+        setTimeout(resolve, (SETTLE_BACKOFF_BASE_MS * attempt) + Math.floor(Math.random() * SETTLE_BACKOFF_JITTER_MS))
+      })
+    }
+    tried++
+    try {
+      const {settled} = await settle(store, bucket, settlement)
+      return {ok: true, settled, attempts: tried}
+    } catch (err) {
+      reason = err instanceof LedgerUnavailableError ? err.reason : 'store'
+    }
+  }
+  return {ok: false, attempts: tried, reason}
 }
 
 
@@ -358,15 +411,47 @@ export async function releaseAll(store, buckets, {id, nowMs}) {
 
 
 /**
- * Settle every bucket to the actual cost. Best-effort per bucket: one that
- * fails is left to expire into spend at its reservation.
+ * Settle every bucket to the actual cost, each retried (settleWithRetry). A
+ * bucket that still fails, or whose hold had already expired, keeps its
+ * reservation as spend: the caller records it for reconciliation
+ * (ai-chat.js settleOrRecord, recordForReconciliation below).
  *
  * @param {object} store
  * @param {Array<Bucket>} buckets
- * @param {{id: string, micro: number, nowMs: number}} settlement
- * @return {Promise<Array<Error>>} the failures, for the caller to log
+ * @param {object} settlement as for settle
+ * @param {object} [options] as for settleWithRetry
+ * @return {Promise<Array<object>>} per bucket, in order: `{bucket, ...settleWithRetry's result}`
  */
-export async function settleAll(store, buckets, settlement) {
-  const results = await Promise.allSettled(buckets.map((bucket) => settle(store, bucket, settlement)))
-  return results.filter((r) => r.status === 'rejected').map((r) => r.reason)
+export function settleAll(store, buckets, settlement, options = {}) {
+  return Promise.all(buckets.map(async (bucket) =>
+    ({bucket, ...await settleWithRetry(store, bucket, settlement, options)})))
+}
+
+
+/**
+ * Leave what a reconciliation job needs to correct a request whose spend
+ * stayed at its reservation in some bucket: a settle that kept failing, or a
+ * hold that expired first. Its own small key, created once (`onlyIfNew`), so
+ * it doesn't contend with the bucket keys (the hot breaker key above all) and
+ * a retried call can't duplicate it. Never throws.
+ *
+ * Key: `ai/reconcile/<UTC day>/<requestId>`. Value: `{v, at, tier,
+ * generation, actualMicro, reservedMicro, buckets: [{name, key, reason}]}`,
+ * where `key` is the bucket's ledger key, so the job knows whose spend to
+ * correct (the ledger is keyed by identity already; nothing here leaves the
+ * store).
+ *
+ * @param {object} store
+ * @param {object} entry
+ * @return {Promise<boolean>} whether it was written (or was already there)
+ */
+export async function recordForReconciliation(store, entry) {
+  const key = `ai/reconcile/${utcDay(entry.at)}/${entry.requestId}`
+  try {
+    // modified false: a record for this request is there already. Either way it exists.
+    await store.set(key, JSON.stringify({v: RECORD_VERSION, ...entry}), {onlyIfNew: true})
+    return true
+  } catch {
+    return false
+  }
 }

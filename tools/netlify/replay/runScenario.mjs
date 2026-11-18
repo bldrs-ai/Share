@@ -31,7 +31,7 @@
  * Node resolves each `require` relative to the file that makes it, so the
  * bundle still sees only what it shipped.
  */
-import {createRequire} from 'node:module'
+import {createRequire, syncBuiltinESMExports} from 'node:module'
 import {pathToFileURL} from 'node:url'
 import {setupServer} from 'msw/node'
 import {http, HttpResponse} from 'msw'
@@ -61,6 +61,9 @@ Object.assign(process.env, scenario.env || {})
 
 if (scenario.now !== undefined) {
   freezeClock(scenario.now)
+}
+if (scenario.uuid !== undefined) {
+  fixRandomUuid(scenario.uuid)
 }
 
 const exchanges = scenario.exchanges || []
@@ -386,4 +389,21 @@ function freezeClock(iso) {
     }
   }
   globalThis.Date = FrozenDate
+}
+
+
+/**
+ * Make `crypto.randomUUID()` answer `uuid`, for a function that names
+ * something it writes by one (ai-chat's ledger holds): a scenario's recorded
+ * read can then hold the very hold its request took. Patched on the CommonJS
+ * module and synced to the ESM named export, so `import {randomUUID} from
+ * 'node:crypto'` sees it in source and in a bundle alike.
+ *
+ * @param {string} uuid
+ */
+function fixRandomUuid(uuid) {
+  const require = createRequire(import.meta.url)
+  require('node:crypto').randomUUID = () => uuid
+  globalThis.crypto.randomUUID = () => uuid
+  syncBuiltinESMExports()
 }

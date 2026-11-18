@@ -4,6 +4,7 @@
     "$fixture": "env/ai-chat.json"
   },
   "now": "2026-11-18T12:00:00.000Z",
+  "uuid": "00000000-0000-4000-8000-00000000a1c0",
   "request": {
     "method": "POST",
     "path": "/.netlify/functions/ai-chat",

@@ -51,7 +51,9 @@
  * a tripped breaker; OpenRouter refusing Bldrs' key (401/403) or its credits
  * (402); our chosen model answering 404 (no deny-compatible endpoint) or 5xx;
  * OpenRouter unreachable, or the connection lost after sending; a settle
- * above its reservation; the ledger unavailable. An exhausted budget,
+ * above its reservation; a settle that still failed after its retries
+ * (`settle_failed`, with a reconciliation record left in the ledger); the
+ * ledger unavailable. An exhausted budget,
  * the concurrency cap and a busy free pool are expected and go to the user
  * only (the client sends `quota_limit_reached` to GA for the first).
  *
@@ -68,7 +70,14 @@ import {AI_TIERS, AI_WINDOW_DAYS, aiCreditLimits} from '../../src/quota/aiCredit
 import {isProSubscriptionStatus} from '../../src/quota/proStatus.js'
 import {shareAssistInstructions} from '../../src/viewer/tools/assistInstructions.js'
 import {getUserAppMetadata, verifyAuth0Bearer} from './_lib/auth0.js'
-import {LedgerUnavailableError, releaseAll, reserveAll, settleAll, utcDay} from './_lib/aiLedger.js'
+import {
+  LedgerUnavailableError,
+  recordForReconciliation,
+  releaseAll,
+  reserveAll,
+  settleAll,
+  utcDay,
+} from './_lib/aiLedger.js'
 import {DEFAULT_MODEL, freeRoute, resolveModel} from './_lib/aiModels.js'
 import {createUsageWatcher} from './_lib/aiSse.js'
 import {hashIp, looksLikeAnonToken, mintAnonToken, verifyAnonToken} from './_lib/aiToken.js'
@@ -290,7 +299,8 @@ export default async function handler(req, context = {}) {
       await reports.report('upstream_unreachable', {model: route.model})
       logOutcome({outcome: 'upstream_unreachable', tier, model: route.model, overflow})
     } else {
-      await settleAll(store, buckets, {id: holdId, micro: reserved, nowMs: Date.now(), estimate: {generation: null}})
+      await settleOrRecord({store, buckets, holdId, micro: reserved, reserved, tier, generation: null, estimate: true,
+        reports})
       await reports.report('upstream_interrupted', {model: route.model})
       logOutcome({outcome: 'upstream_interrupted', tier, model: route.model, overflow, micro: reserved, reserved})
     }
@@ -770,6 +780,53 @@ export function reservationMicro(upstreamBody, route, maxTokens) {
 }
 
 
+// The settle retries' budget, from the first settle attempt. The client's
+// stream closes only after the settle (relayStream), so a failing store can
+// hold its end back by about this much; a stream that worked is not affected.
+const SETTLE_BUDGET_MS = 3000
+
+
+/**
+ * Settle every bucket, retried (aiLedger.js settleWithRetry), and leave a
+ * reconciliation record for any bucket whose spend stays at the reservation:
+ * one whose settle kept failing, or whose hold had already expired into spend
+ * (Codex on #2220). Without it the user stays charged the reservation, often
+ * many times the real cost, and nothing points a reconciliation job at the
+ * request. Reports `settle_failed` once per bucket kind, tier and reason.
+ *
+ * @param {object} args
+ * @param {object} args.store
+ * @param {Array<object>} args.buckets
+ * @param {string} args.holdId
+ * @param {number} args.micro what to book: `usage.cost`, or the reservation
+ * @param {number} args.reserved
+ * @param {string} args.tier
+ * @param {?string} args.generation OpenRouter's, when known
+ * @param {boolean} args.estimate whether `micro` is a guess (no usage arrived)
+ * @param {object} args.reports
+ * @return {Promise<number>} how many buckets were left unsettled
+ */
+async function settleOrRecord({store, buckets, holdId, micro, reserved, tier, generation, estimate, reports}) {
+  const results = await settleAll(store, buckets,
+    {id: holdId, micro, nowMs: Date.now(), ...(estimate ? {estimate: {generation}} : {})},
+    {deadline: Date.now() + SETTLE_BUDGET_MS})
+  const unsettled = results.filter((r) => !r.ok || !r.settled)
+  if (unsettled.length === 0) {
+    return 0
+  }
+  const recorded = await recordForReconciliation(store, {
+    requestId: holdId, at: Date.now(), tier, generation, actualMicro: estimate ? null : micro,
+    reservedMicro: reserved,
+    buckets: unsettled.map((r) => ({name: r.bucket.name, key: r.bucket.key, reason: r.ok ? 'no_hold' : r.reason})),
+  })
+  await Promise.all(unsettled.map((r) => reports.report('settle_failed', {
+    bucket: r.bucket.name, tier, attempts: r.attempts, reason: r.ok ? 'no_hold' : r.reason,
+    recorded: recorded ? 'yes' : 'no',
+  })))
+  return unsettled.length
+}
+
+
 /**
  * Pass the upstream SSE through, and settle once it has ended. The client's
  * stream is closed only AFTER the settle, so the function is still running
@@ -831,8 +888,8 @@ function relayStream(upstreamBody, {
     // it an estimate, with the generation id when there is one, for a
     // reconciliation through /api/v1/generation to correct (§5 Amendment 3).
     const micro = seen.micro ?? reserved
-    const failures = await settleAll(store, buckets, {id: holdId, micro, nowMs: Date.now(),
-      ...(seen.micro === null ? {estimate: {generation}} : {})})
+    const unsettled = await settleOrRecord({store, buckets, holdId, micro, reserved, tier, generation,
+      estimate: seen.micro === null, reports})
     if (seen.micro !== null && seen.micro > reserved) {
       // Booked in full above: the money is spent. The bound didn't hold, so
       // the reservation formula or a ceiling price is wrong: ours to fix.
@@ -842,7 +899,7 @@ function relayStream(upstreamBody, {
       outcome: readError ? 'stream_cut' : (seen.micro === null ? 'no_usage' : 'ok'),
       tier, model: seen.model || route.model, overflow, micro, reserved,
       promptTokens: seen.promptTokens, completionTokens: seen.completionTokens,
-      generation, detached: !attached, settleFailures: failures.length,
+      generation, detached: !attached, settleFailures: unsettled,
     })
     if (readError) {
       forward(() => controller.error(readError))
@@ -1024,7 +1081,7 @@ function createReporter(context) {
    * @return {Promise<void>} resolves once the event is flushed (or skipped)
    */
   const report = async (condition, tags = {}) => {
-    const key = `${condition}|${tags.model ?? ''}|${tags.tier ?? tags.reason ?? ''}|${utcDay(Date.now())}`
+    const key = [condition, tags.model, tags.tier, tags.reason, tags.bucket, utcDay(Date.now())].join('|')
     if (reported.has(key)) {
       return
     }

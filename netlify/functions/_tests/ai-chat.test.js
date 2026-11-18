@@ -519,6 +519,58 @@ describe('ai-chat', () => {
     expect(Sentry.mockScope.setTag).toHaveBeenCalledWith('ai_model', 'qwen/qwen3.7-flash')
   })
 
+  describe('a settle that fails (Codex on #2220)', () => {
+    /**
+     * Make the store's writes to the breaker key fail once the upstream has
+     * answered, i.e. at settle time, not at reserve time.
+     *
+     * @param {Function} failing `(nthFailure) => boolean`: whether this write fails
+     */
+    const breakerWritesFail = (failing) => {
+      const set = fake.store.set.bind(fake.store)
+      let n = 0
+      fake.store.set = (key, ...rest) => {
+        if (key.startsWith('ai/breaker/') && fetchSpy.mock.calls.length > 0 && failing(++n)) {
+          return Promise.reject(new Error('blobs 503'))
+        }
+        return set(key, ...rest)
+      }
+    }
+
+    it('is retried, and a transient failure settles with nothing reported or left over', async () => {
+      breakerWritesFail((n) => n === 1)
+      const res = await call()
+      expect(await res.text()).toBe(SSE_TEXT.join(''))
+      expect(storedRecord(fake, `ai/breaker/anonymous/${TODAY}`).days[TODAY].spent).toBe(143)
+      expect(Sentry.captureMessage).not.toHaveBeenCalledWith('ai-chat: settle_failed', 'warning')
+      expect([...fake.data.keys()].some((p) => p.includes('/ai/reconcile/'))).toBe(false)
+    })
+
+    it('that persists leaves a reconciliation record and a report, and the answer the user got stands', async () => {
+      breakerWritesFail(() => true)
+      const res = await call()
+      expect(res.status).toBe(200)
+      expect(await res.text()).toBe(SSE_TEXT.join(''))
+      // The other buckets settled; the breaker kept its hold (to expire into spend).
+      expect(storedRecord(fake, anonKeyOf(fake)).days[TODAY].spent).toBe(143)
+      const breaker = storedRecord(fake, `ai/breaker/anonymous/${TODAY}`)
+      const [holdId] = Object.keys(breaker.holds)
+      expect(holdId).toBeDefined()
+      expect(storedRecord(fake, `ai/reconcile/${TODAY}/${holdId}`)).toMatchObject({
+        v: 1, requestId: holdId, tier: 'anonymous', generation: 'gen-1', actualMicro: 143,
+        reservedMicro: breaker.holds[holdId].micro,
+        buckets: [{name: 'breaker', key: `ai/breaker/anonymous/${TODAY}`, reason: 'store'}],
+      })
+      expect(Sentry.captureMessage).toHaveBeenCalledWith('ai-chat: settle_failed', 'warning')
+      const tags = Object.fromEntries(jest.mocked(Sentry.mockScope.setTag).mock.calls)
+      expect(tags).toMatchObject({ai_condition: 'settle_failed', ai_bucket: 'breaker', ai_tier: 'anonymous',
+        ai_attempts: '3', ai_reason: 'store', ai_recorded: 'yes'})
+      // Structured fields only: no hold id, key, token or IP among the tags.
+      expect(JSON.stringify(tags)).not.toMatch(new RegExp(`${holdId}|ai/|ba1\\.|${IP.replace(/\./g, '\\.')}`))
+      expect(JSON.parse(logSpy.mock.calls.at(-1)[0])).toMatchObject({outcome: 'ok', settleFailures: 1})
+    })
+  })
+
   it('a usage.cost within the reservation is not reported', async () => {
     await (await call()).text()
     expect(Sentry.captureMessage).not.toHaveBeenCalledWith('ai-chat: settle_exceeded_reservation', 'warning')

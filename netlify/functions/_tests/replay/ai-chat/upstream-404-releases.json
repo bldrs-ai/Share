@@ -4,6 +4,7 @@
     "$fixture": "env/ai-chat.json"
   },
   "now": "2026-11-18T12:00:00.000Z",
+  "uuid": "00000000-0000-4000-8000-00000000a1c0",
   "exchangeOrder": "any",
   "request": {
     "method": "POST",
@@ -130,7 +131,32 @@
         "json": {
           "v": 1,
           "days": {},
+          "holds": {
+            "00000000-0000-4000-8000-00000000a1c0": {
+              "micro": 4000,
+              "free": 0,
+              "at": 1795003200000
+            }
+          },
+          "estimates": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/anonymous/replayAnonymousId00001",
+        "headers": {
+          "if-match": "\"e1\""
+        },
+        "bodyJson": {
           "holds": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e2\""
         }
       }
     },
@@ -150,7 +176,32 @@
         "json": {
           "v": 1,
           "days": {},
+          "holds": {
+            "00000000-0000-4000-8000-00000000a1c0": {
+              "micro": 4000,
+              "free": 0,
+              "at": 1795003200000
+            }
+          },
+          "estimates": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/ip/b674d1622990c79e7ec46d087e79bdfb",
+        "headers": {
+          "if-match": "\"e1\""
+        },
+        "bodyJson": {
           "holds": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e2\""
         }
       }
     },
@@ -170,7 +221,32 @@
         "json": {
           "v": 1,
           "days": {},
+          "holds": {
+            "00000000-0000-4000-8000-00000000a1c0": {
+              "micro": 4000,
+              "free": 0,
+              "at": 1795003200000
+            }
+          },
+          "estimates": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/anonymous/2026-11-18",
+        "headers": {
+          "if-match": "\"e1\""
+        },
+        "bodyJson": {
           "holds": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e2\""
         }
       }
     }

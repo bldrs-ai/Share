@@ -1,9 +1,10 @@
 {
-  "description": "Past the anonymous daily breaker the turn isn't refused: the paid holds are released, a free-model hold is taken instead (its count is pinned by the unit suite: the hold id is random, so a replayed record can't carry it), and OpenRouter gets the curated :free chain (deny kept, max_price 0), with x-bldrs-ai-overflow for the tray's notice.",
+  "description": "Past the anonymous daily breaker the turn isn't refused: the paid holds are released, a free-model hold is taken instead and settled as one free-model request, and OpenRouter gets the curated :free chain (deny kept, max_price 0), with x-bldrs-ai-overflow for the tray's notice.",
   "env": {
     "$fixture": "env/ai-chat.json"
   },
   "now": "2026-11-18T12:00:00.000Z",
+  "uuid": "00000000-0000-4000-8000-00000000a1c0",
   "exchangeOrder": "any",
   "request": {
     "method": "POST",
@@ -113,7 +114,32 @@
         "json": {
           "v": 1,
           "days": {},
+          "holds": {
+            "00000000-0000-4000-8000-00000000a1c0": {
+              "micro": 4000,
+              "free": 0,
+              "at": 1795003200000
+            }
+          },
+          "estimates": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/anonymous/replayAnonymousId00001",
+        "headers": {
+          "if-match": "\"e1\""
+        },
+        "bodyJson": {
           "holds": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e2\""
         }
       }
     },
@@ -133,7 +159,32 @@
         "json": {
           "v": 1,
           "days": {},
+          "holds": {
+            "00000000-0000-4000-8000-00000000a1c0": {
+              "micro": 4000,
+              "free": 0,
+              "at": 1795003200000
+            }
+          },
+          "estimates": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/ip/b674d1622990c79e7ec46d087e79bdfb",
+        "headers": {
+          "if-match": "\"e1\""
+        },
+        "bodyJson": {
           "holds": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e2\""
         }
       }
     },
@@ -256,7 +307,14 @@
         "json": {
           "v": 1,
           "days": {},
-          "holds": {}
+          "holds": {
+            "00000000-0000-4000-8000-00000000a1c0": {
+              "micro": 4000,
+              "free": 1,
+              "at": 1795003200000
+            }
+          },
+          "estimates": {}
         }
       }
     },
@@ -270,9 +328,11 @@
         "bodyJson": {
           "days": {
             "2026-11-18": {
-              "spent": 143
+              "spent": 143,
+              "free": 1
             }
-          }
+          },
+          "holds": {}
         }
       },
       "response": {
@@ -298,7 +358,14 @@
         "json": {
           "v": 1,
           "days": {},
-          "holds": {}
+          "holds": {
+            "00000000-0000-4000-8000-00000000a1c0": {
+              "micro": 4000,
+              "free": 1,
+              "at": 1795003200000
+            }
+          },
+          "estimates": {}
         }
       }
     },
@@ -312,9 +379,11 @@
         "bodyJson": {
           "days": {
             "2026-11-18": {
-              "spent": 143
+              "spent": 143,
+              "free": 1
             }
-          }
+          },
+          "holds": {}
         }
       },
       "response": {

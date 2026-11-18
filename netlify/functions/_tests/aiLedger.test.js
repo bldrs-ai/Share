@@ -17,11 +17,14 @@ import {
   CAS_ATTEMPTS,
   HOLD_TTL_MS,
   LedgerUnavailableError,
+  SETTLE_ATTEMPTS,
+  recordForReconciliation,
   releaseAll,
   reserve,
   reserveAll,
   settle,
   settleAll,
+  settleWithRetry,
   utcDay,
 } from '../_lib/aiLedger.js'
 import {createFakeBlobs, storedRecord} from './fakeBlobs.js'
@@ -208,11 +211,104 @@ describe('aiLedger', () => {
     const fake = createFakeBlobs()
     const buckets = [bucket(), bucket({name: 'ip', key: 'ai/ip/h'})]
     await reserveAll(fake.store, buckets, {id: 'r1', micro: 50, free: false, nowMs: NOW})
-    expect(await settleAll(fake.store, buckets, {id: 'r1', micro: 7, nowMs: NOW})).toEqual([])
+    const results = await settleAll(fake.store, buckets, {id: 'r1', micro: 7, nowMs: NOW})
+    expect(results.map(({bucket: b, ...r}) => [b.name, r])).toEqual([
+      ['identity', {ok: true, settled: true, attempts: 1}], ['ip', {ok: true, settled: true, attempts: 1}]])
     for (const key of ['ai/anonymous/a1', 'ai/ip/h']) {
       expect(storedRecord(fake, key).days[TODAY].spent).toBe(7)
     }
     await releaseAll(fake.store, buckets, {id: 'nothing-held', nowMs: NOW})
+  })
+
+  // Codex on #2220 (settle failures). A settle that fails is retried; the
+  // retry must be safe, because a failed attempt may have landed.
+  describe('settle retries', () => {
+    /**
+     * @param {object} store a fake's
+     * @param {Function} shouldFail `(nthPut) => 'throw' | 'land-then-throw' | undefined`
+     * @return {object} the store, its set() failing as told
+     */
+    const failingSets = (store, shouldFail) => {
+      let puts = 0
+      const set = store.set.bind(store)
+      return Object.assign(Object.create(store), {
+        getWithMetadata: store.getWithMetadata.bind(store),
+        set: async (...args) => {
+          const how = shouldFail(++puts)
+          if (how === 'throw') {
+            throw new Error('blobs 503')
+          }
+          const result = await set(...args)
+          if (how === 'land-then-throw') {
+            throw new Error('socket hang up after the write')
+          }
+          return result
+        },
+      })
+    }
+
+    it('a transient failure is retried, then settles once', async () => {
+      const fake = createFakeBlobs()
+      const b = bucket({limit: 100})
+      await reserve(fake.store, b, {id: 'r1', micro: 90, free: false, nowMs: NOW})
+      const store = failingSets(fake.store, (n) => (n === 1 ? 'throw' : undefined))
+      expect(await settleWithRetry(store, b, {id: 'r1', micro: 12, nowMs: NOW}))
+        .toEqual({ok: true, settled: true, attempts: 2})
+      expect(storedRecord(fake, b.key).days[TODAY].spent).toBe(12)
+      expect(storedRecord(fake, b.key).holds).toEqual({})
+    })
+
+    it('never double-settles: an attempt that landed but answered an error is not booked twice', async () => {
+      const fake = createFakeBlobs()
+      const b = bucket({limit: 100})
+      await reserve(fake.store, b, {id: 'r1', micro: 90, free: false, nowMs: NOW})
+      const store = failingSets(fake.store, (n) => (n === 1 ? 'land-then-throw' : undefined))
+      // The retry finds the hold gone, so it writes nothing and says so.
+      expect(await settleWithRetry(store, b, {id: 'r1', micro: 12, nowMs: NOW}))
+        .toEqual({ok: true, settled: false, attempts: 2})
+      expect(storedRecord(fake, b.key).days[TODAY].spent).toBe(12)
+    })
+
+    it('never settles a hold that has expired into spend: that would book it twice', async () => {
+      const fake = createFakeBlobs()
+      const b = bucket({limit: 1000, windowDays: 30})
+      await reserve(fake.store, b, {id: 'late', micro: 90, free: false, nowMs: NOW})
+      // Another request's write, after the TTL, converts it into spend.
+      const later = NOW + HOLD_TTL_MS + 1
+      await reserve(fake.store, b, {id: 'other', micro: 1, free: false, nowMs: later})
+      expect(await settle(fake.store, b, {id: 'late', micro: 12, nowMs: later})).toEqual({write: false, settled: false})
+      expect(storedRecord(fake, b.key).days[TODAY].spent).toBe(90)
+    })
+
+    it('a persistent failure stops after its attempts and names the reason', async () => {
+      const fake = createFakeBlobs()
+      const b = bucket()
+      await reserve(fake.store, b, {id: 'r1', micro: 90, free: false, nowMs: NOW})
+      const store = failingSets(fake.store, () => 'throw')
+      expect(await settleWithRetry(store, b, {id: 'r1', micro: 12, nowMs: NOW}))
+        .toEqual({ok: false, attempts: SETTLE_ATTEMPTS, reason: 'store'})
+      expect(Object.keys(storedRecord(fake, b.key).holds)).toEqual(['r1'])
+    })
+
+    it('starts no retry past its deadline', async () => {
+      const fake = createFakeBlobs()
+      const store = failingSets(fake.store, () => 'throw')
+      await reserve(fake.store, bucket(), {id: 'r1', micro: 1, free: false, nowMs: NOW})
+      expect(await settleWithRetry(store, bucket(), {id: 'r1', micro: 1, nowMs: NOW}, {deadline: 0}))
+        .toMatchObject({ok: false, attempts: 1})
+    })
+
+    it('a reconciliation record is created once, under its own key, and a store failure is a false', async () => {
+      const fake = createFakeBlobs()
+      const entry = {requestId: 'r1', at: NOW, tier: 'anonymous', generation: 'gen-1', actualMicro: 12,
+        reservedMicro: 90, buckets: [{name: 'breaker', key: 'ai/breaker/anonymous/x', reason: 'contention'}]}
+      expect(await recordForReconciliation(fake.store, entry)).toBe(true)
+      expect(await recordForReconciliation(fake.store, {...entry, actualMicro: 99})).toBe(true)
+      expect(storedRecord(fake, `ai/reconcile/${TODAY}/r1`)).toEqual({v: 1, ...entry})
+      expect(fake.requests.filter((r) => r.method === 'PUT').map((r) => r.ifNoneMatch)).toEqual(['*', '*'])
+      const broken = {set: () => Promise.reject(new Error('down'))}
+      expect(await recordForReconciliation(broken, entry)).toBe(false)
+    })
   })
 
   it('gives up with contention after its retries, and fails closed', async () => {
