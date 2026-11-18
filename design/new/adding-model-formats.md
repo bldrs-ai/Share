@@ -272,8 +272,11 @@ three steps, each a module:
    compressed ones it can decode with nothing new in the bundle: Deflated
    Explicit VR (`.1.99`, fflate, already vendored with three; the dataset
    inflates, counted, to at most 64 MiB a slice, so a deflate bomb stops
-   there) and RLE Lossless (`.5`, PackBits per PS3.5 Annex G, a few lines
-   in `decodeRle`). It reads each
+   there; the input is fed 16 KiB at a time, since fflate inflates all it's
+   given before it calls back, and a deflated slice briefly holds its
+   inflated chunks and their join, about twice its size) and RLE Lossless (`.5`, PackBits per PS3.5 Annex G, a few lines
+   in `decodeRle`, which checks every segment could fill the image before
+   allocating it, and refuses a run that reads past its segment). It reads each
    slice's geometry, pixel format and rescale, and skips everything else.
    Skipping covers undefined-length sequences and items nested in each
    other; a Pixel Data inside a sequence (an icon thumbnail) is stepped

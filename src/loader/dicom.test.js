@@ -4,10 +4,29 @@
 // refusals, over minimal files built here.
 import fs from 'fs'
 import path from 'path'
-import {deflateRawSync} from 'zlib'
+import pako from 'pako'
 import {NRRDLoader} from 'three/examples/jsm/loaders/NRRDLoader.js'
 import {unzipSync} from 'three/examples/jsm/libs/fflate.module.js'
 import {DicomError, dicomSeriesToNrrd, groupSeries, looksLikeDicom, parseDicomSlice} from './dicom'
+
+
+// What fflate's Inflate has handed out, for the bomb test: whether the cap
+// stopped the inflate early, or only checked it after inflating everything.
+const mockInflated = {total: 0}
+jest.mock('three/examples/jsm/libs/fflate.module.js', () => {
+  const actual = jest.requireActual('three/examples/jsm/libs/fflate.module.js')
+  /** Counts each chunk it hands on. */
+  class CountingInflate extends actual.Inflate {
+    /** @param {Function} ondata */
+    constructor(ondata) {
+      super((chunk, final) => {
+        mockInflated.total += chunk.length
+        ondata(chunk, final)
+      })
+    }
+  }
+  return {...actual, Inflate: CountingInflate}
+})
 
 
 // The phantom, as makeDicomPhantom.py writes it: 32 slices of 48 rows × 40
@@ -119,6 +138,28 @@ function concat(parts) {
     at += p.length
   }
   return out
+}
+
+
+/**
+ * @param {Uint8Array} value
+ * @return {Uint8Array} an encapsulated item (FFFE,E000) holding it
+ */
+function item(value) {
+  const head = new DataView(new ArrayBuffer(8))
+  head.setUint16(0, 0xfffe, true)
+  head.setUint16(2, 0xe000, true)
+  head.setUint32(4, value.length, true)
+  return concat([new Uint8Array(head.buffer), value])
+}
+
+
+/** @return {Uint8Array} a sequence delimiter (FFFE,E0DD) */
+function delimiter() {
+  const head = new DataView(new ArrayBuffer(8))
+  head.setUint16(0, 0xfffe, true)
+  head.setUint16(2, 0xe0dd, true)
+  return new Uint8Array(head.buffer)
 }
 
 
@@ -283,9 +324,15 @@ describe('loader/dicom', () => {
         expect(view.getUint32(frameAt, true)).toBe(2)
         view.setUint32(frameAt, 3, true)
         expect(() => parseDicomSlice(bytes)).toThrow(/RLE-compressed DICOM slice in this series is damaged/)
-        // And one cut short: segments end before the image is full.
-        const cut = slice.slice(0, slice.length - 200)
-        expect(() => parseDicomSlice(cut)).toThrow(DicomError)
+        // And one cut short inside the frame, its items still well formed: the
+        // fragment item and the frame shrink by 200 bytes, the delimiter
+        // stays. The segments then end before the image is full.
+        const fragmentLengthAt = at + 12 + 8 + botLength + 4
+        const fragmentLength = new DataView(slice.buffer).getUint32(fragmentLengthAt, true)
+        const fragmentEnd = fragmentLengthAt + 4 + fragmentLength
+        const short = concat([slice.subarray(0, fragmentEnd - 200), slice.subarray(fragmentEnd)])
+        new DataView(short.buffer).setUint32(fragmentLengthAt, fragmentLength - 200, true)
+        expect(() => parseDicomSlice(short)).toThrow(/RLE-compressed DICOM slice in this series is damaged/)
       })
 
       it('refuses a deflated dataset that doesn\'t inflate', () => {
@@ -295,13 +342,80 @@ describe('loader/dicom', () => {
       })
 
       it('stops a deflate bomb at its cap, rather than inflate it all', () => {
-        // 65 MiB of zeros deflate to ~65 KB; the cap is 64 MiB a slice.
-        const bomb = new Uint8Array(deflateRawSync(Buffer.alloc((64 * 1024 * 1024) + 1)))
-        const head = makeDicom({transferSyntax: '1.2.840.10008.1.2.1.99'})
+        // 256 MiB of zeros deflate to ~256 KB; the cap is 64 MiB a slice.
+        // Built a megabyte at a time, so the test never holds the 256 MiB.
+        const deflater = new pako.Deflate({raw: true})
+        const zeros = new Uint8Array(1024 * 1024)
+        for (let i = 0; i < 256; i++) {
+          deflater.push(zeros, false)
+        }
+        deflater.push(new Uint8Array(0), true)
+        const bomb = deflater.result
         // Keep the preamble and meta group; replace the dataset with the bomb.
-        const metaEnd = head.findIndex((b, i) => i > 132 && b === 0x08 && head[i + 1] === 0x00)
-        const bytes = concat([head.subarray(0, metaEnd), bomb])
+        const syntax = '1.2.840.10008.1.2.1.99'
+        const metaEnd = 132 + el(0x0002, 0x0010, 'UI', syntax).length
+        const bytes = concat([makeDicom({transferSyntax: syntax}).subarray(0, metaEnd), bomb])
+        mockInflated.total = 0
         expect(() => parseDicomSlice(bytes)).toThrow(/inflates to more than any slice should/)
+        // Stopped near the cap: not the 256 MiB a one-shot push inflates
+        // before the first count.
+        expect(mockInflated.total).toBeGreaterThan(64 * 1024 * 1024)
+        expect(mockInflated.total).toBeLessThan(96 * 1024 * 1024)
+      })
+
+      it('refuses a replicate run whose value byte lies past its segment', () => {
+        // One 8-bit segment, 3 pixels: a 1-byte literal, then a replicate
+        // control byte (-1, "repeat the next byte twice") as the segment's
+        // last byte. Unguarded, it would take its value from past the
+        // segment (here past the frame, so 0) and decode 3 pixels "fine".
+        const frame = new Uint8Array(67)
+        new DataView(frame.buffer).setUint32(0, 1, true)
+        new DataView(frame.buffer).setUint32(4, 64, true)
+        frame.set([0x00, 0x11, 0xff], 64)
+        const rle = (enc) => concat([
+          enc.el(0x7fe0, 0x0010, 'OB', new Uint8Array(0)).subarray(0, 8),
+          new Uint8Array([0xff, 0xff, 0xff, 0xff]),
+          item(new Uint8Array(0)),
+          item(frame),
+          delimiter(),
+        ])
+        const bytes = makeDicom({transferSyntax: '1.2.840.10008.1.2.5', overrides: {
+          '0028,0010': el(0x0028, 0x0010, 'US', 1),
+          '0028,0011': el(0x0028, 0x0011, 'US', 3),
+          '0028,0100': el(0x0028, 0x0100, 'US', 8),
+          '7fe0,0010': rle,
+        }})
+        expect(() => parseDicomSlice(bytes)).toThrow(/RLE-compressed DICOM slice in this series is damaged/)
+      })
+
+      it('refuses a huge image over a tiny RLE frame without allocating it', () => {
+        // 65535 × 65535 16-bit is an 8.6 GB frame; the segments are bytes.
+        const [slice] = sliceFilesOf('phantom-ct-rle.zip').filter((b) => b.length > 1000)
+        const bytes = slice.slice()
+        const view = new DataView(bytes.buffer)
+        for (const tag of [[0x28, 0x00, 0x10, 0x00], [0x28, 0x00, 0x11, 0x00]]) {
+          const at = bytes.findIndex((_, i) => tag.every((b, k) => bytes[i + k] === b))
+          view.setUint16(at + 8, 65535, true)
+        }
+        // Node allocates a huge typed array lazily, so it would "succeed"
+        // here; a browser's ArrayBuffer limit throws instead. Stand that limit
+        // in for this test: a RangeError escaping as itself would end the
+        // whole series instead of setting one slice aside.
+        const RealUint8Array = global.Uint8Array
+        global.Uint8Array = class extends RealUint8Array {
+          /** @param {...any} args */
+          constructor(...args) {
+            if (typeof args[0] === 'number' && args[0] > 1e9) {
+              throw new RangeError('Array buffer allocation failed')
+            }
+            super(...args)
+          }
+        }
+        try {
+          expect(() => parseDicomSlice(bytes)).toThrow(/RLE-compressed DICOM slice in this series is damaged/)
+        } finally {
+          global.Uint8Array = RealUint8Array
+        }
       })
     })
 

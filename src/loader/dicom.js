@@ -57,6 +57,14 @@ const READABLE_SYNTAXES = new Set([IMPLICIT_VR_LE, EXPLICIT_VR_LE, DEFLATED_EXPL
 // than at its full size.
 const MAX_INFLATED_SLICE_BYTES = 64 * 1024 * 1024
 
+// Deflated input is fed to the inflater this much at a time. fflate's
+// `Inflate#push` inflates all it's given before it calls back, so pushing the
+// whole stream at once would inflate a bomb in full before the count above
+// ever saw it (review of #2181: 1 MB of deflate became one 1 GiB chunk). A
+// slice this size can't expand past deflate's ~1032:1 by more than ~16 MiB
+// beyond the cap.
+const INFLATE_INPUT_STEP = 16 * 1024
+
 // Explicit-VR elements whose length is a 4-byte field after 2 reserved
 // bytes (PS3.5 §7.1.2); every other VR has a 2-byte length.
 const LONG_LENGTH_VRS = new Set(['OB', 'OD', 'OF', 'OL', 'OV', 'OW', 'SQ', 'SV', 'UC', 'UN', 'UR', 'UT', 'UV'])
@@ -611,7 +619,13 @@ function inflateCapped(deflated) {
     chunks.push(chunk)
   })
   try {
-    inflater.push(deflated, true)
+    if (deflated.length === 0) {
+      inflater.push(deflated, true)
+    }
+    for (let at = 0; at < deflated.length; at += INFLATE_INPUT_STEP) {
+      const end = Math.min(deflated.length, at + INFLATE_INPUT_STEP)
+      inflater.push(deflated.subarray(at, end), end === deflated.length)
+    }
   } catch (e) {
     if (e instanceof DicomError) {
       throw e
@@ -698,13 +712,31 @@ function decodeRle(frame, pixels, bytesPerSample) {
   if (segments !== bytesPerSample) {
     throw damaged()
   }
-  const out = new Uint8Array(pixels * bytesPerSample)
+  // Each segment must at least be able to fill the image: a two-byte
+  // replicate run yields at most 128 bytes. Checked for every segment before
+  // the output is allocated, so a header claiming a huge image over a tiny
+  // frame is refused, not allocated (review of #2181).
+  const minSegment = 2 * Math.ceil(pixels / 128)
+  const bounds = []
   for (let s = 0; s < segments; s++) {
     const start = view.getUint32(4 + (4 * s), true)
     const end = s + 1 < segments ? view.getUint32(4 + (4 * (s + 1)), true) : frame.length
-    if (start < 64 || end > frame.length || start > end) {
+    if (start < 64 || end > frame.length || start > end || end - start < minSegment) {
       throw damaged()
     }
+    bounds.push([start, end])
+  }
+  let out
+  try {
+    out = new Uint8Array(pixels * bytesPerSample)
+  } catch {
+    // An allocation the device can't make: the slice is refused, and the
+    // series' other slices still read (modelArchive.js keeps a DicomError
+    // aside; anything else would end the whole series).
+    throw damaged()
+  }
+  for (let s = 0; s < segments; s++) {
+    const [start, end] = bounds[s]
     // Segment 0 is the most significant byte, which is the last of a
     // little-endian sample.
     const byteIndex = bytesPerSample - 1 - s
@@ -720,6 +752,11 @@ function decodeRle(frame, pixels, bytesPerSample) {
           i++
         }
       } else if (n !== -128) {
+        // The value byte must be this segment's: past its end it would be
+        // the next segment's first byte, decoded silently wrong.
+        if (i >= end) {
+          throw damaged()
+        }
         const value = frame[i++]
         for (let k = 0; k < 1 - n; k++, o++) {
           if (o < pixels) {
