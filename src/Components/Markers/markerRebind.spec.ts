@@ -49,15 +49,49 @@ describeMobileAndDesktop('Markers: a new viewer gets the note markers (#2017)', 
 
     await changeTheme(page)
 
-    const after = await readMarkers(page)
-    expect(after.positions).toEqual(before.positions)
-    expect(after.ids).toEqual(before.ids)
+    expect(before.problem).toBeUndefined()
+    await expect.poll(() => readMarkers(page), {timeout: 10_000}).toEqual(before)
     const old = await readOldViewer(page)
     expect(old.isViewerNew, 'the theme change built a new viewer').toBe(true)
     expect(old.isPlaceMarkNew, 'the store holds a new PlaceMark').toBe(true)
     // Null when it has already been collected; either way not drawing.
     expect(old.oldPlaceMarkMarkers ?? 0, 'the old PlaceMark let its markers go').toBe(0)
     expect(old.isOldPlaceMarkDisposed ?? true, 'the old PlaceMark was disposed').toBe(true)
+  })
+
+
+  // The issue's own acceptance: a marker put down after the change lands in
+  // the live scene. A drop raycasts the PlaceMark's camera against its
+  // model, so the old PlaceMark would have aimed through the disposed
+  // camera and put the marker in the disposed scene.
+  test('a marker put down after the change lands in the new viewer\'s scene', async ({page}) => {
+    await changeTheme(page)
+    const aim = await findModelOnCanvas(page)
+    // Read from the live scene; a value, so `expect.poll` can wait out a
+    // placement pass (the drop writes the location hash, and the notes code
+    // may then re-place every marker, which is no concern of this test).
+    const nearestToAim = async () => {
+      const {positions} = await readMarkers(page)
+      return Math.min(...positions.map((position) => Math.hypot(...position.map((v, i) => v - aim.hit[i]))))
+    }
+    expect(await nearestToAim(), 'no marker is there yet').toBeGreaterThan(0.01)
+    // What NoteFooter's "Add Placemark" button does (togglePlaceMarkActive);
+    // the button itself needs a signed-in note author. The drop is the
+    // user's own shift-click (PlaceMark#onSceneClick).
+    await page.evaluate(() => {
+      const state = (window as unknown as RebindWindow).store?.getState()
+      if (!state?.placeMark) {
+        throw new Error('no PlaceMark in the store')
+      }
+      state.placeMark.activate()
+      state.setIsPlaceMarkActivated(true)
+    })
+    await page.keyboard.down('Shift')
+    await clickAt(page, aim.x, aim.y)
+    await page.keyboard.up('Shift')
+
+    await expect.poll(nearestToAim, {message: 'a live marker where the live camera saw the model under the click'})
+      .toBeLessThan(0.01)
   })
 
 
@@ -114,13 +148,15 @@ async function waitForMarkersInLiveScene(page: Page) {
     const state = w.store?.getState()
     const scene = state?.viewer?.context.getScene()
     const marks = state?.placeMark?.getPlacemarks() ?? []
-    const isPlaced = state?.isModelReady === true && marks.length > 0 &&
+    // Not while a notes fetch is out: its markers replace these (the new
+    // model starts one, NotesControl), clearing the scene for a moment.
+    const isPlaced = state?.isModelReady === true && state.isLoadingNotes === false && marks.length > 0 &&
       marks.every((mark) => mark.parent === scene)
     if (!isPlaced) {
       w.markerSettle = undefined
       return false
     }
-    const key = `${marks.length}`
+    const key = marks.map((mark) => String(mark.userData.id)).join()
     if (w.markerSettle?.key !== key) {
       w.markerSettle = {key, since: performance.now()}
       return false
@@ -131,10 +167,11 @@ async function waitForMarkersInLiveScene(page: Page) {
 
 
 /**
- * @return The live markers' positions and ids, sorted, after checking each
- *     is in the live scene and the scene holds no others.
+ * @return The live markers' positions and ids, sorted, or what's wrong when
+ *     one isn't in the live scene or the scene holds others. A value, not a
+ *     throw, so `expect.poll` can wait out a placement pass.
  */
-async function readMarkers(page: Page): Promise<{positions: number[][], ids: string[]}> {
+async function readMarkers(page: Page): Promise<{positions: number[][], ids: string[], problem?: string}> {
   return await page.evaluate(() => {
     const {viewer, placeMark} = (window as unknown as RebindWindow).store?.getState() ?? {}
     if (!viewer || !placeMark) {
@@ -144,7 +181,7 @@ async function readMarkers(page: Page): Promise<{positions: number[][], ids: str
     const marks = placeMark.getPlacemarks()
     const inScene = scene.children.filter((child) => child.isSprite && child.renderOrder === 999)
     if (inScene.length !== marks.length || marks.some((mark) => mark.parent !== scene)) {
-      throw new Error(`markers: ${marks.length} placed, ${inScene.length} sprites in the live scene`)
+      return {positions: [], ids: [], problem: `${marks.length} placed, ${inScene.length} sprites in the live scene`}
     }
     const round = (n: number) => Math.round(n * 1000) / 1000
     return {
@@ -300,6 +337,57 @@ async function markersOnCanvas(page: Page): Promise<{id: string, x: number, y: n
 }
 
 
+/**
+ * Find a spot on the canvas, not under a panel, where the live viewer's own
+ * raycast (ThreeContext#castRay, through the pointer the viewer tracks) hits
+ * the model: a grid searched from the centre out, in the page, pointing the
+ * tracked pointer at each spot and putting it back after.
+ *
+ * @return The spot in page coordinates and the model point under it
+ */
+async function findModelOnCanvas(page: Page): Promise<{x: number, y: number, hit: number[]}> {
+  const found = await page.evaluate(() => {
+    const state = (window as unknown as RebindWindow).store?.getState()
+    const context = state?.viewer?.context
+    if (!context || !state?.model) {
+      throw new Error('no viewer or model in the store')
+    }
+    const canvas = context.getDomElement()
+    const rect = canvas.getBoundingClientRect()
+    const pointer = context.getNormalizedMousePosition()
+    const was = {x: pointer.x, y: pointer.y}
+    const spots = []
+    for (let y = rect.top + 4; y < rect.bottom; y += 8) {
+      for (let x = rect.left + 4; x < rect.right; x += 8) {
+        spots.push({x, y, d: Math.hypot(x - ((rect.left + rect.right) / 2), y - ((rect.top + rect.bottom) / 2))})
+      }
+    }
+    spots.sort((a, b) => a.d - b.d)
+    try {
+      for (const {x, y} of spots) {
+        if (document.elementFromPoint(x, y) !== canvas) {
+          continue
+        }
+        pointer.x = (((x - rect.left) / rect.width) * 2) - 1
+        pointer.y = 1 - (((y - rect.top) / rect.height) * 2)
+        const [first] = context.castRay([state.model])
+        if (first) {
+          return {x, y, hit: [first.point.x, first.point.y, first.point.z]}
+        }
+      }
+    } finally {
+      pointer.x = was.x
+      pointer.y = was.y
+    }
+    return null
+  })
+  if (!found) {
+    throw new Error('no spot on the canvas shows the model')
+  }
+  return found
+}
+
+
 /** A plain left click, the way a mouse selects a marker (ViewerContainer's onMouseDown). */
 async function clickAt(page: Page, x: number, y: number) {
   await page.mouse.move(x, y)
@@ -344,6 +432,7 @@ interface Marker {
 
 
 interface PlaceMarkLike {
+  activate: () => void
   getPlacemarks: () => Marker[]
   isDisposed: () => boolean
 }
@@ -357,6 +446,8 @@ interface ViewerLike {
     getRenderDemand: () => {stats: {paints: number}} | null
     getLegacyRendererWrapper: () => {update: (...args: unknown[]) => void}
     setRenderUpdate: (fn: (...args: unknown[]) => void) => void
+    castRay: (items: object[]) => {point: {x: number, y: number, z: number}}[]
+    getNormalizedMousePosition: () => {x: number, y: number}
   }
 }
 
@@ -367,7 +458,10 @@ type RebindWindow = Window & {
       viewer: ViewerLike | null
       placeMark: PlaceMarkLike | null
       isModelReady: boolean
+      isLoadingNotes: boolean
       selectedPlaceMarkId: string | number | null
+      setIsPlaceMarkActivated: (is: boolean) => void
+      model: object | null
     }
   }
   markerSettle?: {key: string, since: number}
