@@ -6,7 +6,7 @@
 
 A building is rarely one file. The architecture, structure and services usually come as separate models, and a large project can be split into several buildings. People reviewing a project need to see those models together, placed where they belong, to understand the whole, and to tell which model a given element comes from. Share has opened one model at a time since `open-100`. Since the 2026-11-18 workspace decisions ([workspace.md](workspace.md)), the place where several models meet is a session: a conversation thread that names the project models it works on.
 
-The journey is **open a session with models A and B → see them placed together → show, hide or fade each as a layer → select and inspect across models → resume the session as it was left**. A model opened on its own still shows alone, with no session. Starting and resuming sessions is `assist-310` ([#1659](https://github.com/bldrs-ai/Share/issues/1659)), and the project and session list is `assist-300` ([#1657](https://github.com/bldrs-ai/Share/issues/1657)). This epic covers only what the view shows once a session holds two or more models.
+The journey is **open a session with models A and B → see them placed together → show, hide or fade each as a layer → select and inspect across models → resume the session as it was left**. A model opened on its own still shows alone, with no session. Starting and resuming sessions is `assist-310` ([#1659](https://github.com/bldrs-ai/Share/issues/1659)), and the project and session list is `open-200` ([#1657](https://github.com/bldrs-ai/Share/issues/1657)). This epic covers only what the view shows once a session holds two or more models.
 
 ## UX stories
 

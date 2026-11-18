@@ -22,7 +22,7 @@ The epic is [#1659](https://github.com/bldrs-ai/Share/issues/1659), retitled `as
 
 Searched on 2026-11-18, open and closed, with `repo:bldrs-ai/Share is:issue` and each of: `assist`, `bot`, `"feature=bot"`, `BotChat`, `chatbot`, `convo`, `conversation`, `conversational`, `tray`, `agent in:title`, `"assist-310"`, `"assist-110"`, `AI in:title`, `LLM`, `openrouter`, `BYOK`, `Jev`, `MCP`, `assistant`, `"knowledge graph"`, `session in:title`, `thread in:title`, `chat in:title`, `resume`, `"sessions apart"`, `credits`, `"tool registry"`, `"element chips"`, `W7`. No result set was incomplete. Explicit links were followed from #1659, its 19 children, #1919 and #1660.
 
-Found, beyond #1659's 19 children: the legacy bot bugs [#1821](https://github.com/bldrs-ai/Share/issues/1821) and [#1822](https://github.com/bldrs-ai/Share/issues/1822); neighbouring epics `assist-300` (#1657, with #2193 created today), `assist-400` (#1660, children #1678–#1680), `create-310` (#1919, no children) and `open-210` (#2192). The rest of each result set is other features, unchanged.
+Found, beyond #1659's 19 children: the legacy bot bugs [#1821](https://github.com/bldrs-ai/Share/issues/1821) and [#1822](https://github.com/bldrs-ai/Share/issues/1822); neighbouring epics `open-200` (#1657, with #2193 created today), `assist-400` (#1660, children #1678–#1680), `create-310` (#1919, no children) and `open-210` (#2192). The rest of each result set is other features, unchanged.
 
 ## Milestone audit
 
@@ -37,7 +37,7 @@ Sources, pinned to `b16672d`: [workspace.md](https://github.com/bldrs-ai/Share/b
 | workspace.md "Start a session on some of a project's models" | #1672 | Extend: rescoped, original kept collapsed |
 | workspace.md "Resume a session" | #2194 (new) | Created after the duplicate search found none |
 | workspace.md "Keep sessions apart" | #2195 (new) | Created after the duplicate search found none |
-| §14 #1672 tray + threads; conversational-cad §4 "Convo tray + drawer threads" | #1672 (tray, threads); #2193 (listing in the drawer, `assist-300`) | Split by owner |
+| §14 #1672 tray + threads; conversational-cad §4 "Convo tray + drawer threads" | #1672 (tray, threads); #2193 (listing in the drawer, `open-200`) | Split by owner |
 | §14 #1675 agent loop; §4 "Conversation drives the UI" | #1675 | Formal story |
 | §14 #1673; §4 "Permalink anchors in messages" | #1673 | Formal story |
 | §14 #1676; §4 "Reduced tool set" | #1676 | Formal story, droppable |

@@ -29,7 +29,7 @@ The four-step sequence corresponds almost 1:1 to the roadmap's Assist group
 
 | # | This plan | Roadmap ID | Pivot stage | Tracking issue |
 |---|---|---|---|---|
-| 1 | Base UI reorg (projects drawer, top bar) | `assist-300` | AI.1 | [#1657](https://github.com/bldrs-ai/Share/issues/1657) |
+| 1 | Base UI reorg (projects drawer, top bar) | `open-200` (was `assist-300`) | AI.1 | [#1657](https://github.com/bldrs-ai/Share/issues/1657) |
 | 2 | Search + Nav upgrade | `search-320` (new in roadmap v0.7) | AI.1a | [#1658](https://github.com/bldrs-ai/Share/issues/1658) |
 | 3 | Conversational CAD w/ AI | `assist-310` + T10 + T11 | AI.2 | [#1659](https://github.com/bldrs-ai/Share/issues/1659) |
 | 4 | Multi-user + Social | `assist-400` + `assist-410` (backlog) | AI.4 | [#1660](https://github.com/bldrs-ai/Share/issues/1660) |
@@ -47,7 +47,7 @@ stays sequenced per the roadmap after the agent v0 and isn't re-planned by
 this doc. Same for the editing loop (AI.5).
 
 
-## 2. Epic 1 — Workspace shell (`assist-300`)
+## 2. Epic 1 — Workspace shell (`open-200`, was `assist-300`)
 
 Turns Share's chrome from single-document viewer into workspace: a projects
 drawer on the far left, a real top bar, and relocated header controls.
@@ -405,7 +405,7 @@ all its stories close.
 
 **Created 2026-07-27** as `epic`-labeled issues with `story`-labeled native
 sub-issues (the drafts below are the record of what was filed):
-- `assist-300` → [#1657](https://github.com/bldrs-ai/Share/issues/1657), stories #1661–#1667
+- `open-200` (was `assist-300`) → [#1657](https://github.com/bldrs-ai/Share/issues/1657), stories #1661–#1667
 - `search-320` → [#1658](https://github.com/bldrs-ai/Share/issues/1658), stories #1668–#1670 + existing #1254 attached
 - `assist-310` → [#1659](https://github.com/bldrs-ai/Share/issues/1659), stories #1671–#1677
 - `assist-400` → [#1660](https://github.com/bldrs-ai/Share/issues/1660), stories #1678–#1680

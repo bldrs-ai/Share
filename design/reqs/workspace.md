@@ -23,6 +23,7 @@ The person-facing requirements live in the three epics' stories (see [Stories](#
 - **2026-11-10:** sessions sit on the left, grouped by project, and a session's models open as tabs. This was recorded in `conversational-cad.md` §2.9, which is in draft PR #2138 and not yet on `main`.
 - **2026-11-18:** a session is the conversation thread, and it names the models it works on. A model belongs to the project, not to a session: the project lists its models, and any of them opens directly. This answers §2.9's first two open questions and keeps the model list that §2.9 had removed from the drawer.
 - **2026-11-18:** a model opened on its own has no session; a chat icon on it starts one about that model. Sessions, like models, can sit outside any project, under Ungrouped. With the workspace turned off, Share shows today's production layout, inset in the workspace; that layout isn't designed further yet.
+- **2026-11-18:** the workspace is an Open epic, `open-200` (was `assist-300`): a project lists its models and its sessions as assets, and it is the base for `open-205` and `open-210`. The conversation inside a session stays `assist-310`.
 
 ## Who owns what
 
@@ -30,7 +31,7 @@ Each story belongs to the epic the [roadmap](../roadmap.md) already assigns its 
 
 | Epic | Owns here |
 |---|---|
-| `assist-300` Workspace shell ([#1657](https://github.com/bldrs-ai/Share/issues/1657)) | The left nav: projects, their models and their sessions; opening a model directly; keeping all of it across reloads |
+| `open-200` Workspace ([#1657](https://github.com/bldrs-ai/Share/issues/1657)) | The left nav: projects, their models and their sessions; opening a model directly; keeping all of it across reloads |
 | `assist-310` Conversational agent panel ([#1659](https://github.com/bldrs-ai/Share/issues/1659)) | A session as a conversation thread: starting one, resuming one, keeping sessions apart, what the assistant can see and do inside it |
 | `open-210` View several models together ([#2192](https://github.com/bldrs-ai/Share/issues/2192)) | Viewing a session's models together, placed correctly, and showing, hiding or fading each as a layer |
 
@@ -43,15 +44,15 @@ Linked, not owned here:
 
 Each story's goal, tasks, acceptance and progress live in its issue, which is a native sub-issue of its epic. This page keeps only the goal, so links to these headings still land somewhere useful. The text this page held before reconciliation is preserved, pinned, in each epic's triage record.
 
-### assist-300: Browse a project's models and sessions
+### open-200: Browse a project's models and sessions
 
 See each project's Models and Sessions in the left nav, so the model or the piece of work you want is easy to find. **[#2193](https://github.com/bldrs-ai/Share/issues/2193)**, a follow-up to [#1661](https://github.com/bldrs-ai/Share/issues/1661).
 
-### assist-300: Open a model on its own
+### open-200: Open a model on its own
 
 Open one of the project's models directly, without starting a session; a chat icon starts one about that model. **[#1664](https://github.com/bldrs-ai/Share/issues/1664)**.
 
-### assist-300: Keep projects, models and sessions across reloads
+### open-200: Keep projects, models and sessions across reloads
 
 Find your projects, their models and their sessions when you come back. **[#1662](https://github.com/bldrs-ai/Share/issues/1662)**.
 
@@ -83,7 +84,7 @@ The [shared requirements](README.md#requirements-shared-by-every-story) apply. I
 
 | Epic | Scope snapshot | Triage record |
 |---|---|---|
-| `assist-300` | [assist-300.md](assist-300.md) | [assist-300-triage.md](assist-300-triage.md) |
+| `open-200` | [open-200.md](open-200.md) | [open-200-triage.md](open-200-triage.md) |
 | `assist-310` | [assist-310.md](assist-310.md) | [assist-310-triage.md](assist-310-triage.md) |
 | `open-210` | [open-210.md](open-210.md) | [open-210-triage.md](open-210-triage.md) |
 

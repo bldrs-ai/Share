@@ -41,7 +41,7 @@ const WEIGHT_MEDIUM = 500
 
 /**
  * The workspace TopBar (`?feature=workspace` — story #1663, epic
- * assist-300 #1657; plan `conversational-cad.md` §2.3 / §3.1 slice 1):
+ * open-200 #1657; plan `conversational-cad.md` §2.3 / §3.1 slice 1):
  * the 58px ToolbarPaper placeholder becomes a real bar carrying the
  * project / model / element breadcrumb and the relocated SearchBar.
  *

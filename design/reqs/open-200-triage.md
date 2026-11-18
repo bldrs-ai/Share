@@ -1,14 +1,14 @@
-# Assist 300 triage
+# Open 200 triage
 
-**Reconciliation date:** 2026-11-18. **Epic:** [#1657](https://github.com/bldrs-ai/Share/issues/1657), retitled `assist-300: Workspace shell — projects, models and sessions`; its labels (`enhancement`, `epic`), state, comment and original body (collapsed at the bottom) are kept.
+**Reconciliation date:** 2026-11-18. **Epic:** [#1657](https://github.com/bldrs-ai/Share/issues/1657), retitled `open-200: Workspace — projects, models and sessions` (it was `assist-300: Workspace shell — projects, models and sessions` earlier on 2026-11-18); its labels (`enhancement`, `epic`), state, comment and original body (collapsed at the bottom) are kept.
 
-For the motivation and the story list, see the [scope snapshot](assist-300.md). This page is the record of how the issues were placed; progress and open decisions live in the issues.
+For the motivation and the story list, see the [scope snapshot](open-200.md). This page is the record of how the issues were placed; progress and open decisions live in the issues.
 
 ## Ownership, tier and aliases
 
-The [roadmap](../roadmap.md) §4.11 assigns the workspace shell to `assist-300`: UI and routing with no AI dependency, stage AI.1 of the AI-workspace pivot (§7.4), post-MVP per the owner (2026-11-10). The 3xx band is kept; nothing here changes the roadmap. [workspace.md](https://github.com/bldrs-ai/Share/blob/5dc1788f9825f2938f387ff36b27315073792557/design/reqs/workspace.md) (merged 2026-11-18) puts the left nav (projects, their models and sessions), opening a model directly, and keeping it all across reloads in this epic, and no new epic is created.
+**Renumbered to `open-200` (owner, 2026-11-18).** The workspace is an Open feature: a project lists its models and its conversational sessions as assets, and it is the foundation the other `open-2xx` epics build on, beside `open-205` (opening without a reload) and `open-210` (viewing several models together, the older multi-model goal). The owner placed it in the 2xx (MLP) band; it was `assist-300` (Pro band) in [roadmap](../roadmap.md) §4.11, as UI and routing with no AI dependency, stage AI.1 of the AI-workspace pivot (§7.4). Recents reliability, which held `open-200`, moved to `open-130` as a variation on the 1xx open capabilities. The conversation inside a session stays with `assist-310` (#1659). [workspace.md](https://github.com/bldrs-ai/Share/blob/5dc1788f9825f2938f387ff36b27315073792557/design/reqs/workspace.md) (merged 2026-11-18) puts the left nav (projects, their models and sessions), opening a model directly, and keeping it all across reloads in this epic, and no new epic is created.
 
-Aliases (roadmap "ID lineage"): the workspace shell was `assist-100` in v0.3–v0.5 and is `assist-300` from v0.6. The number was reused: in v0.5, `assist-300` meant multi-user channels, which is now `assist-400` ([#1660](https://github.com/bldrs-ai/Share/issues/1660)). Older issue titles use `epic: assist-300:`, `story: workspace:` and `flow: workspace:`; the feature flag is `workspace`.
+Aliases (roadmap "ID lineage"): `assist-100` in v0.3–v0.5, `assist-300` in v0.6–v0.16, `open-200` from v0.17. Both numbers were reused. In v0.5, `assist-300` meant multi-user channels, now `assist-400` ([#1660](https://github.com/bldrs-ai/Share/issues/1660)). `open-200` meant the multi-model overlay in v0.5 (now `open-210`, #2192) and Recents reliability in v0.6–v0.16 (now `open-130`). Older issue titles use `assist-300:`, `epic: assist-300:`, `story: workspace:` and `flow: workspace:`, and two unrelated issues carry "Open 200:" (#1188, #1190); the feature flag is `workspace`.
 
 ## Inventory
 
@@ -71,6 +71,8 @@ Titles, all with the `assist-300:` prefix:
 | #1992 | story: workspace: side drawers open under the TopBar; Notes leads with New note | assist-300: Side drawers open beneath the top bar, and Notes starts with New note |
 | #1993 | story: workspace: Apps bar docks running and pinned apps on the right border | assist-300: Get back to running and pinned apps from the right edge |
 
+Later on 2026-11-18, with the renumber, each of these twelve titles changed its `assist-300:` prefix to `open-200:`; the rest of each title is as above.
+
 Labels: `story` added to #1992 and #1993 (they had none); `story` removed from #1667. Every direct story of #1657 now has `story`, and #1657 has `epic`.
 
 Hierarchy: #2193 created as a sub-issue of #1657. #1667 and #1989 detached from #1657; each got a comment saying so. No other parent changed, and #1659's and #1251's hierarchies were not touched.
@@ -100,7 +102,7 @@ Each is recorded in the issue named; this list only points there.
 
 ## Milestone hypothesis
 
-- **Milestone hypothesis:** AI stage AI.1 (post-MVP); grouping work into projects, and sessions within them, brings people back to the same models.
+- **Milestone hypothesis:** MLP (the 2xx band, per the owner's renumber; it was AI stage AI.1, post-MVP); grouping work into projects, and sessions within them, brings people back to the same models.
 - **Metric:** returning sessions per project within 7 days (workspace.md L130).
 - **Test (proposed):** a holdout is acceptable while the shell is behind `?feature=workspace`; otherwise a correlational regression on observed use, controlled for tier, source and prior engagement.
 - **Current estimate:** not instrumented yet. Measurement plans belong in bizdev, per the [rubric](ux-rubric.md#where-each-kind-of-work-lives).

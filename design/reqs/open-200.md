@@ -1,12 +1,12 @@
-# Assist 300
+# Open 200
 
-**Epic:** [assist-300: Workspace shell — projects, models and sessions · #1657](https://github.com/bldrs-ai/Share/issues/1657) · **Scope snapshot: 2026-11-18**
+**Epic:** [open-200: Workspace — projects, models and sessions · #1657](https://github.com/bldrs-ai/Share/issues/1657) · **Scope snapshot: 2026-11-18**
 
 ## Motivation
 
-People rarely work on one model at a time. They have a building and its structure, a product and its parts, a set of models under review, and they come back to the same set over days. The workspace shell turns Share from a one-model viewer into a workspace: a left nav groups models into projects and lists the sessions started on them, and a top bar says where you are. It is UI and routing only, with no AI dependency, behind `?feature=workspace`; with the flag off, Share shows today's layout.
+People rarely work on one model at a time. They have a building and its structure, a product and its parts, a set of models under review, and they come back to the same set over days. The workspace turns Share from a one-model viewer into a workspace: a left nav groups models into projects and lists the sessions started on them, and a top bar says where you are. It is UI and routing only, with no AI dependency, behind `?feature=workspace`; with the flag off, Share shows today's layout.
 
-Since 2026-11-18 the left nav holds sessions as well as models. A session is one conversation thread over one or more of a project's models, and a model belongs to its project rather than to a session, so any model also opens on its own ([workspace.md](workspace.md), [workspace-sessions.md §8](../new/workspace-sessions.md)).
+Since 2026-11-18 the left nav holds sessions as well as models. A session is one conversation thread over one or more of a project's models, and a model belongs to its project rather than to a session, so any model also opens on its own ([workspace.md](workspace.md), [workspace-sessions.md §8](../new/workspace-sessions.md)). A project's models and sessions are both its assets, which is why the workspace is an Open epic, `open-200`, and the base the other `open-2xx` epics build on (renumbered from `assist-300` on 2026-11-18; aliases in the [triage record](open-200-triage.md)).
 
 ## Journey
 
@@ -14,7 +14,7 @@ Since 2026-11-18 the left nav holds sessions as well as models. A session is one
 
 ## UX stories
 
-Each linked issue carries the `assist-300:` prefix and owns its tasks and acceptance. #1657 has these nine formal stories as its direct sub-issues.
+Each linked issue carries the `open-200:` prefix and owns its tasks and acceptance. #1657 has these nine formal stories as its direct sub-issues.
 
 | Story | User goal |
 |---|---|
@@ -30,4 +30,4 @@ Each linked issue carries the `assist-300:` prefix and owns its tasks and accept
 
 Starting, resuming and separating sessions belong to `assist-310` ([#1659](https://github.com/bldrs-ai/Share/issues/1659)); viewing a session's models together belongs to `open-210` ([#1251](https://github.com/bldrs-ai/Share/issues/1251)). Design-system icon tokens ([#1667](https://github.com/bldrs-ai/Share/issues/1667)) and the shell's design-system alignment ([#1989](https://github.com/bldrs-ai/Share/issues/1989)) are support work linked from the epic, not stories.
 
-This snapshot makes no completion claim. The [triage record](assist-300-triage.md) holds the aliases, inventory and ownership crosswalk. Current progress, tasks and open decisions live in [#1657](https://github.com/bldrs-ai/Share/issues/1657) and its stories. Revise and re-date this page when the epic's motivation or story scope changes; Git history keeps earlier versions.
+This snapshot makes no completion claim. The [triage record](open-200-triage.md) holds the aliases, inventory and ownership crosswalk. Current progress, tasks and open decisions live in [#1657](https://github.com/bldrs-ai/Share/issues/1657) and its stories. Revise and re-date this page when the epic's motivation or story scope changes; Git history keeps earlier versions.

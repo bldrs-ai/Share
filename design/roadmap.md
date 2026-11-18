@@ -1,6 +1,6 @@
 # Bldrs Share Roadmap
 
-**Status:** Draft v0.16 — sharing, identity and GLB tracks reconciled with their issues
+**Status:** Draft v0.17 — the workspace becomes `open-200`; Recents moves to `open-130`
 **Date:** 2026-11-18
 **Owner:** Pablo
 **Source baseline:** `Share Requirements` Google Doc (Aug 2021, last updated Nov 2022); PDF extract is in this repo's history.
@@ -15,7 +15,7 @@ This doc is the source of truth for Epic/Story/Track structure. The wiki page
 - **GLB export:** entitled to Pro; free users export public models freely and private/local models through the same slots (`design/new/glb-export-premium.md`).
 - **Growth (`grow-*`):** the epics, their status and their stories now live in the private bizdev repo (`docs/growth-roadmap.md`, <a href="https://github.com/bldrs-ai/bizdev/issues/369" target="_blank" rel="noopener noreferrer">bizdev#369</a>–<a href="https://github.com/bldrs-ai/bizdev/issues/372" target="_blank" rel="noopener noreferrer">bizdev#372</a>); §4.10 keeps a pointer per epic.
 - **Ads:** off and parked (per the owner, 2026-11-10); AdSense stays off for a while, possibly permanently (`subscribe-130`, T7).
-- **Workspace shell:** projects drawer, TopBar and Profile/Share relocation are shipped behind `?feature=workspace` (`assist-300`). Layout direction decided 2026-11-10: sessions on the left grouped by project, models as tabs (§4.11).
+- **Workspace shell:** projects drawer, TopBar and Profile/Share relocation are shipped behind `?feature=workspace` (`open-200`, renumbered from `assist-300` on 2026-11-18). Layout direction decided 2026-11-10: sessions on the left grouped by project, models as tabs (§4.11).
 - **AI assistant:** design doc landed (`design/new/ai-workspace.md`); the viewer tool registry v0 is on main behind `?feature=assist` as a dev hook, and a prototype bot sits behind `?feature=bot`. No panel, agent loop or relay yet. The arc stays post-MVP (§7).
 - **In flight:** identity/multi-account (T3), private sharing (T4), the remaining half of in-app model switching (`open-205`: session-owned workers, close and eviction, the switch itself), the model-edit substrate (`create-300`; L0 landed).
 - **Model versioning and sharing:** design planned as `share-200` ([#2144](https://github.com/bldrs-ai/Share/issues/2144), [design](new/model-versioning.md)); whole-file history and public pinned-version links first, semantic editing later. Implementation not started. Per-principal grants move to `share-201`; existing private-sharing scope stays in T4.
@@ -71,7 +71,8 @@ One row per Epic and Track; bodies are in §4 and §5. **Phase column:** A–E =
 | Open | `open-100` | Open from local file system | ✔ | — | — | |
 | Open | `open-110` | Open from GitHub URL / UI | ✔ | — | — | |
 | Open | `open-120` | Open from Google Drive | ✔ | — | — | |
-| Open | `open-200` | Recents reliability | 🟡 | E | T5 | |
+| Open | `open-130` | Recents reliability | 🟡 | E | T5 | |
+| Open | `open-200` | Workspace: projects, their models and sessions | 🟡 | AI | — | <a href="https://github.com/bldrs-ai/Share/issues/1657" target="_blank" rel="noopener noreferrer">#1657</a> |
 | Open | `open-205` | In-app model switching | 🟡 | AI | T1 | <a href="https://github.com/bldrs-ai/Share/issues/2011" target="_blank" rel="noopener noreferrer">#2011</a> |
 | Open | `open-210` | Open multiple IFCs in one session | ⬜ | Post | — | <a href="https://github.com/bldrs-ai/Share/issues/2192" target="_blank" rel="noopener noreferrer">#2192</a> |
 | Open | `open-300` | Multi-account Sources tab | 🟡 | B | T3 | |
@@ -124,7 +125,6 @@ One row per Epic and Track; bodies are in §4 and §5. **Phase column:** A–E =
 | Grow | `grow-120` | Funnel instrumentation + GA hygiene (NEW) | → bizdev | G | T9 | <a href="https://github.com/bldrs-ai/bizdev/issues/370" target="_blank" rel="noopener noreferrer">bizdev#370</a> |
 | Grow | `grow-200` | Rich share-link previews / OG cards (NEW) | → bizdev | G | T9 | <a href="https://github.com/bldrs-ai/bizdev/issues/371" target="_blank" rel="noopener noreferrer">bizdev#371</a> |
 | Grow | `grow-400` | Large-model + data-sovereignty positioning (NEW) | → bizdev | G | T9 | <a href="https://github.com/bldrs-ai/bizdev/issues/372" target="_blank" rel="noopener noreferrer">bizdev#372</a> |
-| Assist | `assist-300` | Workspace shell: left drawer projects + org nav (NEW) | 🟡 | AI | — | <a href="https://github.com/bldrs-ai/Share/issues/1657" target="_blank" rel="noopener noreferrer">#1657</a> |
 | Assist | `assist-310` | Conversational agent panel, single-user (NEW) | 🟡 | AI | T10, T11 | <a href="https://github.com/bldrs-ai/Share/issues/1659" target="_blank" rel="noopener noreferrer">#1659</a> |
 | Assist | `assist-320` | AI-apps toolbelt: save/version/run + MCP (NEW) | ⬜ | AI | T11 | |
 | Assist | `assist-400` | Multi-user channels + AI participation modes (NEW) | ⬜ | AI | T10 | <a href="https://github.com/bldrs-ai/Share/issues/1660" target="_blank" rel="noopener noreferrer">#1660</a> |
@@ -140,7 +140,7 @@ One row per Epic and Track; bodies are in §4 and §5. **Phase column:** A–E =
 | T2 | GLB Model Sharing | 🟡 | Post (Ph 4–6) | `share-140` cache, `share-200` derived GLB, `view-130` |
 | T3 | Identity Decoupling | 🟡 | Post (PR3) | `identity-110`, `identity-300`, `open-300`, `subscribe-120`, T4 PR3 |
 | T4 | Multi-User Sharing | 🟡 | C (chip), Post | `share-130`, `share-201`, `share-400` |
-| T5 | Drive Recents HEAD-check | ⬜ | E (polish) | `open-200` |
+| T5 | Drive Recents HEAD-check | ⬜ | E (polish) | `open-130` |
 | T6 | Notes & Versions sidecar formats | ⬜ | Post | `notes-200`, `notes-300`, `versions-310` |
 | T7 | Ads | 🔮 | D | `subscribe-130` |
 | T8 | Pro/Billing (NEW) | 🟡 | D | `subscribe-100`, `subscribe-110`, `subscribe-120`, §7 AI metering |
@@ -158,8 +158,9 @@ Compact by design: ✔ epics are one line; open epics say what the capability is
 User can open a model from local, cloud, or shared link, with format breadth and multi-model composition.
 
 - `open-100` Open from local file system ✔. `open-110` Open from GitHub URL / UI ✔. `open-120` Open from Google Drive ✔ (Drive Save is under `share-110`).
-- **`open-200` Recents reliability** 🟡 (NEW). A dead recent (Drive, GitHub or local) should show a typed "file no longer available" alert, not a parse failure. Not started (T5, `design/new/drive-recents-head-check.md`); <a href="https://github.com/bldrs-ai/Share/issues/1548" target="_blank" rel="noopener noreferrer">#1548</a> (local recent after cache clear) is closed (as of 2026-11-10). Polish for Phase E, not MVP-load-bearing.
-- **`open-205` In-app model switching** 🟡 (NEW). Open a model without a page reload; each model gets its own session and engine, and only close or memory eviction cancels a load. Epic <a href="https://github.com/bldrs-ai/Share/issues/2011" target="_blank" rel="noopener noreferrer">#2011</a>; Phase 0 (<a href="https://github.com/bldrs-ai/Share/issues/2012" target="_blank" rel="noopener noreferrer">#2012</a>) is closed (as of 2026-11-10). The engine-worker half has landed (per-model worker, on by default). Still to build: sessions owning their worker, close and eviction, and the switch itself (Phase 1, behind `?feature=spaModelNav`), Phase 2 multi-model groundwork (<a href="https://github.com/bldrs-ai/Share/issues/2024" target="_blank" rel="noopener noreferrer">#2024</a>), plus off-main-thread rendering under <a href="https://github.com/bldrs-ai/Share/issues/2055" target="_blank" rel="noopener noreferrer">#2055</a>. Prerequisite of `open-210` and `assist-300`; the tabbed workspace layout (below, `assist-300`) depends on it. Docs: `design/new/in-app-model-switch.md`, `engine-worker.md`, `offscreen-rendering.md`.
+- **`open-130` Recents reliability** 🟡 (NEW; `open-200` until 2026-11-18). A dead recent (Drive, GitHub or local) should show a typed "file no longer available" alert, not a parse failure. Not started (T5, `design/new/drive-recents-head-check.md`); <a href="https://github.com/bldrs-ai/Share/issues/1548" target="_blank" rel="noopener noreferrer">#1548</a> (local recent after cache clear) is closed (as of 2026-11-10). Polish for Phase E, not MVP-load-bearing.
+- **`open-200` Workspace: projects, their models and sessions** 🟡 (NEW; `assist-300` until 2026-11-18). A project lists its models and its conversational sessions as assets; the base the other `open-2xx` epics build on. UI/routing only, no AI dependency; `?feature=workspace`. Shipped behind the flag: ProjectsDrawer (<a href="https://github.com/bldrs-ai/Share/issues/1661" target="_blank" rel="noopener noreferrer">#1661</a>), TopBar (<a href="https://github.com/bldrs-ai/Share/issues/1663" target="_blank" rel="noopener noreferrer">#1663</a>), Profile/Share relocation (<a href="https://github.com/bldrs-ai/Share/issues/1665" target="_blank" rel="noopener noreferrer">#1665</a>); open: <a href="https://github.com/bldrs-ai/Share/issues/1662" target="_blank" rel="noopener noreferrer">#1662</a>, <a href="https://github.com/bldrs-ai/Share/issues/1664" target="_blank" rel="noopener noreferrer">#1664</a>, <a href="https://github.com/bldrs-ai/Share/issues/1666" target="_blank" rel="noopener noreferrer">#1666</a>, <a href="https://github.com/bldrs-ai/Share/issues/1667" target="_blank" rel="noopener noreferrer">#1667</a>. Layout direction decided 2026-11-10 (per the owner): sessions on the left grouped by project, with multiple models as tabs, each holding the three-part inner layout, replacing project → models in the drawer; owned by `design/new/conversational-cad.md` §2.9. Epic <a href="https://github.com/bldrs-ai/Share/issues/1657" target="_blank" rel="noopener noreferrer">#1657</a>. Stories reconciled 2026-11-18 (`design/reqs/open-200.md`); the conversation inside a session stays `assist-310`.
+- **`open-205` In-app model switching** 🟡 (NEW). Open a model without a page reload; each model gets its own session and engine, and only close or memory eviction cancels a load. Epic <a href="https://github.com/bldrs-ai/Share/issues/2011" target="_blank" rel="noopener noreferrer">#2011</a>; Phase 0 (<a href="https://github.com/bldrs-ai/Share/issues/2012" target="_blank" rel="noopener noreferrer">#2012</a>) is closed (as of 2026-11-10). The engine-worker half has landed (per-model worker, on by default). Still to build: sessions owning their worker, close and eviction, and the switch itself (Phase 1, behind `?feature=spaModelNav`), Phase 2 multi-model groundwork (<a href="https://github.com/bldrs-ai/Share/issues/2024" target="_blank" rel="noopener noreferrer">#2024</a>), plus off-main-thread rendering under <a href="https://github.com/bldrs-ai/Share/issues/2055" target="_blank" rel="noopener noreferrer">#2055</a>. Prerequisite of `open-210` and `open-200`; the tabbed workspace layout (above, `open-200`) depends on it. Docs: `design/new/in-app-model-switch.md`, `engine-worker.md`, `offscreen-rendering.md`.
 - **`open-210` Open multiple IFCs in one session** ⬜. Epic <a href="https://github.com/bldrs-ai/Share/issues/2192" target="_blank" rel="noopener noreferrer">#2192</a> (reconciled 2026-11-18; `design/reqs/open-210.md`). Import and overlay several models (<a href="https://github.com/bldrs-ai/Share/issues/1251" target="_blank" rel="noopener noreferrer">#1251</a>); now a UI and state problem, not an engine problem. **Post-MVP.**
 - **`open-300` Multi-account Sources tab** 🟡. Drive multi-account works. Parallel GitHub accounts wait on T3 PR3, which is post-MVP (<a href="https://github.com/bldrs-ai/Share/issues/2202" target="_blank" rel="noopener noreferrer">#2202</a>).
 
@@ -260,7 +261,7 @@ Moved to the private bizdev repo on 2026-11-18. Each epic's scope, status, stori
 
 User works with an AI agent on their models, collaborates with teammates in the same conversation, and accumulates AI-built tools. Epic-level decomposition of §7. Design doc landed (as of 2026-11-10): `design/new/ai-workspace.md`; epic plan: `design/new/conversational-cad.md`.
 
-- **`assist-300` Workspace shell** 🟡 (NEW). UI/routing only, no AI dependency; `?feature=workspace`. Shipped behind the flag: ProjectsDrawer (<a href="https://github.com/bldrs-ai/Share/issues/1661" target="_blank" rel="noopener noreferrer">#1661</a>), TopBar (<a href="https://github.com/bldrs-ai/Share/issues/1663" target="_blank" rel="noopener noreferrer">#1663</a>), Profile/Share relocation (<a href="https://github.com/bldrs-ai/Share/issues/1665" target="_blank" rel="noopener noreferrer">#1665</a>); open: <a href="https://github.com/bldrs-ai/Share/issues/1662" target="_blank" rel="noopener noreferrer">#1662</a>, <a href="https://github.com/bldrs-ai/Share/issues/1664" target="_blank" rel="noopener noreferrer">#1664</a>, <a href="https://github.com/bldrs-ai/Share/issues/1666" target="_blank" rel="noopener noreferrer">#1666</a>, <a href="https://github.com/bldrs-ai/Share/issues/1667" target="_blank" rel="noopener noreferrer">#1667</a>. Layout direction decided 2026-11-10 (per the owner): sessions on the left grouped by project, with multiple models as tabs, each holding the three-part inner layout, replacing project → models in the drawer; owned by `design/new/conversational-cad.md` §2.9. Epic <a href="https://github.com/bldrs-ai/Share/issues/1657" target="_blank" rel="noopener noreferrer">#1657</a>.
+- Workspace (projects, models and sessions) moved to `open-200` (§4.1) on 2026-11-18.
 - **`assist-310` Conversational agent panel (single-user)** 🟡 (NEW). Claude-Code-like panel over the open model, driving a viewer MCP tool surface (T11); the demo that sells the pivot (AI.2). Absorbs `search-310`. Design doc done (<a href="https://github.com/bldrs-ai/Share/issues/1671" target="_blank" rel="noopener noreferrer">#1671</a> closed); the Assist package boundary and viewer tool registry v0 are on main behind `?feature=assist`, and the Bot panel now runs the agent loop over it (<a href="https://github.com/bldrs-ai/Share/issues/2199" target="_blank" rel="noopener noreferrer">#2199</a>, which retired the `?feature=bot` eval path). The hosted relay and credit ledger are in review (<a href="https://github.com/bldrs-ai/Share/issues/2220" target="_blank" rel="noopener noreferrer">#2220</a>); no tray or sessions yet. Epic <a href="https://github.com/bldrs-ai/Share/issues/1659" target="_blank" rel="noopener noreferrer">#1659</a>; `?feature=assist`.
 - **`assist-320` AI-apps toolbelt (right drawer)** ⬜ (NEW). Agent-generated apps saved, versioned and run in a sandboxed iframe over an MCP bridge (T11). Needs <a href="https://github.com/bldrs-ai/Share/issues/1386" target="_blank" rel="noopener noreferrer">#1386</a> fixed first.
 - **`assist-400` Multi-user channels + AI participation modes** ⬜ (NEW). Direct address to the AI is a command; general channel talk is human-to-human and the AI may only comment. Needs a shared conversation store (T10) and T4 grants; last in the sequence. Epic <a href="https://github.com/bldrs-ai/Share/issues/1660" target="_blank" rel="noopener noreferrer">#1660</a>.
@@ -362,7 +363,9 @@ The open 100-band work, exhaustively — this list is the MVP:
 5. **The free tier monetises and acquires** (Phase D): T7 ads (`subscribe-130`) — parked (2026-11-10), not part of the bar.
 6. **It's measurable** (Phase G): `grow-120` events and GA hygiene, `community-110` feedback. The `grow-*` items are tracked in bizdev (§4.10).
 
-Demoted out of the MVP band (not load-bearing for the trickle): `open-200`, `share-201`, `grow-200`, and the Assist/AI arc. `grow-100` is parked until it's measured (<a href="https://github.com/bldrs-ai/bizdev/issues/368" target="_blank" rel="noopener noreferrer">bizdev#368</a>). Rationale: organic traffic is near zero and the one earned channel, shared links, is uninvested, so launching Pro into an unmeasured funnel wastes the launch.
+Demoted out of the MVP band (not load-bearing for the trickle): `share-201`, `grow-200`, and the Assist/AI arc. `grow-100` is parked until it's measured (<a href="https://github.com/bldrs-ai/bizdev/issues/368" target="_blank" rel="noopener noreferrer">bizdev#368</a>). Rationale: organic traffic is near zero and the one earned channel, shared links, is uninvested, so launching Pro into an unmeasured funnel wastes the launch.
+
+`open-130` Recents reliability sits in the 100 band as a variation on `open-100`–`open-120`, though it isn't on this list; the bar is an estimate (owner, 2026-11-18).
 
 ### Phase G (parallel, starts now): Growth funnel + SEO surfaces
 **Goal:** the funnel is measurable and share links unfurl. Format landing pages (`grow-100`) wait on that measurement.
@@ -426,7 +429,7 @@ Share becomes an **AI-native workspace for built-environment models** — the Cl
 
 ### 7.2 Architecture: three surfaces
 
-1. **Left drawer: workspace nav** (`assist-300`) — projects and company-level nav; UI/routing only.
+1. **Left drawer: workspace nav** (`open-200`) — projects and company-level nav; UI/routing only.
 2. **Conversational panel** (`assist-310`, `assist-400`) — direct replies to the AI are commands; general channel talk is human-to-human, the AI comment-only.
 3. **Right drawer: AI-apps toolbelt** (`assist-320`) — agent-generated apps saved, versioned and run in a sandbox over an MCP bridge.
 
@@ -450,7 +453,7 @@ Constraints:
 The pivot **follows the MVP**: Phases B–D give it identity, sharing and the metering rails; metered agent usage is the natural Pro anchor. Foundations that can't destabilise launch may start earlier behind flags.
 
 - **AI.0 — Design doc + seed repair.** Done: design doc landed (as of 2026-11-10). Seed repair remaining: fix <a href="https://github.com/bldrs-ai/Share/issues/1386" target="_blank" rel="noopener noreferrer">#1386</a> and re-enable the iframe suite.
-- **AI.1 — Workspace shell.** `assist-300` (<a href="https://github.com/bldrs-ai/Share/issues/1657" target="_blank" rel="noopener noreferrer">#1657</a>), `?feature=workspace`; no AI dependency, can overlap MVP phases. Shipped behind the flag (drawer, top bar, relocations); layout direction revised 2026-11-10: sessions on the left, models as tabs (§4.11).
+- **AI.1 — Workspace shell.** `open-200` (<a href="https://github.com/bldrs-ai/Share/issues/1657" target="_blank" rel="noopener noreferrer">#1657</a>), `?feature=workspace`; no AI dependency, can overlap MVP phases. Shipped behind the flag (drawer, top bar, relocations); layout direction revised 2026-11-10: sessions on the left, models as tabs (§4.11).
 - **AI.1a — Fluid Nav + scoped search.** `search-320` (<a href="https://github.com/bldrs-ai/Share/issues/1658" target="_blank" rel="noopener noreferrer">#1658</a>); standalone viewer value if AI.2 slips. Not started.
 - **AI.2 — Agent v0, single-user.** `assist-310` (<a href="https://github.com/bldrs-ai/Share/issues/1659" target="_blank" rel="noopener noreferrer">#1659</a>): MCP tool surface (T11) + agent loop (T10) + panel. The demo that sells the pivot, and it must run on a large model; refresh `grow-400` with it. Status: tool registry v0 and a prototype bot exist behind flags; the agent loop is the next build step, and the bot port must move onto the engine worker's async read surface.
 - **AI.3 — Toolbelt.** `assist-320`: generate, save, version, run over the same MCP surface.
@@ -523,6 +526,7 @@ Standing convention (the original migration is done):
 
 # Changelog
 
+- **v0.17 (2026-11-18):** renumbered the workspace epic (#1657) from `assist-300` to `open-200` (per the owner: projects list models and sessions as assets, the base of the `open-2xx` epics), and Recents reliability from `open-200` to `open-130`; ID lineage amended.
 - **v0.16 (2026-11-18):** reconciled the `share-*` epics and Tracks T2, T3, T4 and T6 with what shipped, and gave each a tracking issue (<a href="https://github.com/bldrs-ai/Share/issues/2201" target="_blank" rel="noopener noreferrer">#2201</a>–<a href="https://github.com/bldrs-ai/Share/issues/2208" target="_blank" rel="noopener noreferrer">#2208</a>). Owner's decisions: `share-110` is Drive Save only; `share-130` is private-by-default links and the chip, with links from `share-200`'s resolver; `share-201` is post-MVP; T3 PR3 and T2 Phases 4–6 are post-MVP; T6 owns `notes-300` and `versions-310`, with one version manifest. Phases B and C, §6.0 and the open questions updated to match.
 - **v0.15 (2026-11-18):** parked `grow-100` (format landing pages) until `grow-120` measures how many real model opens arrive by organic search (owner's decision, <a href="https://github.com/bldrs-ai/bizdev/issues/368" target="_blank" rel="noopener noreferrer">bizdev#368</a>). It leaves the §6.0 MVP list, and Phase G's goal and exit drop the landing pages.
 - **v0.14 (2026-11-18):** moved the `grow-*` epics (§4.10, Track T9, Phase G's work list) to the private bizdev repo, which now holds their status and stories; codes and aliases unchanged. Flagged the conflict between §6.0's `grow-100` and bizdev's parked SEO issue as bizdev#368.
@@ -541,7 +545,7 @@ Standing convention (the original migration is done):
 
 ## ID lineage
 
-Every epic that has ever been renumbered (all others have been stable since v0.2). Resolve any ID in an older branch, issue or PR through this table; several numbers were **reused across revisions** (`share-120`, `share-130`, `share-200`, `open-200`, `view-130`, `view-220`, `view-230`, `assist-300`), and `subscribe-100/110/120` were restored to their original meanings.
+Every epic that has ever been renumbered (all others have been stable since v0.2). Resolve any ID in an older branch, issue or PR through this table; several numbers were **reused across revisions** (`share-120`, `share-130`, `share-200`, `open-130`, `open-200`, `view-130`, `view-220`, `view-230`, `assist-300`), and `subscribe-100/110/120` were restored to their original meanings.
 
 | Epic (current name) | v0.2–v0.4 | v0.5 | v0.6–v0.11 |
 |---|---|---|---|
@@ -587,3 +591,12 @@ The user-requested reassignment below is deliberate; historical `share-200` refe
 |---|---|---|
 | Grant/revoke per-principal sharing | `share-200` | `share-201` |
 | Model versioning and sharing: git + progressive decomposition (#2144) | — (new) | `share-200` |
+
+### v0.17 amendments (2026-11-18)
+
+The workspace is an Open feature: a project lists its models and sessions as assets (owner). Its new 2xx code also moves it from the Pro band to MLP. Recents is a variation on the 1xx open capabilities and returns to its v0.5 code.
+
+| Epic (current name) | v0.6–v0.16 | v0.17 (current) |
+|---|---|---|
+| Workspace: projects, their models and sessions (#1657) | `assist-300` | `open-200` |
+| Recents reliability | `open-200` | `open-130` |
