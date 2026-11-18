@@ -53,7 +53,12 @@ which is the pin). §10 says what was measured and what was only read.
 - **The worker is the document session.** The protocol in §4 is the
   headless session the MVC-core review asks for (`reviews/2026-10-29-…` §7):
   Conway, no Three, no Zustand, answering by expressID and the `e`/`o` refs.
-  The same handler runs in Node for a CLI or MCP.
+  The same handler is meant to run in Node for a CLI or MCP; that is not yet
+  tried (MVC-core follow-up review, 2026-11-18, §4). More exactly, the worker
+  is the document's **read layer**: one engine per model, shared by every tab
+  and user session that uses it and never holding edits. Each user session
+  keeps its own op logs and resolves refs
+  ([workspace-sessions.md](workspace-sessions.md) §3, §6).
 
 
 ## 2. Audit — what assumes the engine is on the main thread
