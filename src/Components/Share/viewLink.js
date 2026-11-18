@@ -33,8 +33,8 @@ import {HASH_DEBOUNCE_WAIT_MS, debounce} from '../../utils/debounce'
  * (Camera/liveCameraLink.js), a cut plane's drag (CutPlaneMenu.jsx), a Display
  * menu choice or a hide / isolate (`noteUserDisplayChange`). User actions that
  * are a step of their own — turning a cut plane on or off, the Share dialog's
- * switches, a note's camera — still push a history entry, as before, and they
- * start the term too.
+ * switches, a note's camera — still push a history entry, as before; they
+ * don't start a term.
  */
 
 

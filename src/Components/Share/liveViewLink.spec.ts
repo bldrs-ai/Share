@@ -69,6 +69,17 @@ async function loadModel(page: Page, suffix = '') {
 
 /**
  * @param page Playwright page
+ * @param prefix a hash set's prefix, e.g. `cp`
+ * @return whether the page's hash has that set
+ */
+function hasSet(page: Page, prefix: string): Promise<boolean> {
+  return page.evaluate((p) =>
+    window.location.hash.substring(1).split(';').some((set) => set.startsWith(`${p}:`)), prefix)
+}
+
+
+/**
+ * @param page Playwright page
  * @return whether the Display menu shows Source colors
  */
 async function isSourceShown(page: Page): Promise<boolean> {
@@ -113,14 +124,18 @@ describeMobileAndDesktop('Live view link: display', () => {
   })
 
   test('a link\'s token stays as it is until the user changes the display', async ({page}) => {
-    await loadModel(page, '#d:color=src')
+    // Terms out of the writer's order (it writes color before res): any
+    // write before the user's change would reorder them, so leaving them be
+    // is visible (a token a write would reproduce byte for byte couldn't
+    // tell a premature write from none).
+    await loadModel(page, '#d:res=40,color=src')
     // Applied (the menu shows it), and not rewritten by the load.
     expect(await isSourceShown(page)).toBe(true)
     await page.waitForTimeout(PAST_DEBOUNCE_MS)
-    expect(await displayToken(page)).toBe('d:color=src')
-    // The user's change: followed.
+    expect(await displayToken(page)).toBe('d:res=40,color=src')
+    // The user's change: followed, in the writer's order.
     await pickColorMode(page, 'auto')
-    await expect.poll(() => displayToken(page)).toBe(null)
+    await expect.poll(() => displayToken(page)).toBe('d:res=40')
   })
 
   test('with the Share dialog\'s display switch off, a change writes nothing', async ({page}) => {
@@ -144,5 +159,24 @@ describeMobileAndDesktop('Live view link: display', () => {
     await expect.poll(() => displayToken(page)).toBe('d:color=src')
     await pickColorMode(page, 'auto')
     await expect.poll(() => displayToken(page)).toBe(null)
+  })
+
+  test('the Share dialog\'s Cut planes switch removes the planes and leaves the rest of the link', async ({page}) => {
+    await loadModel(page)
+    await pickColorMode(page, 'source')
+    await expect.poll(() => displayToken(page)).toBe('d:color=src')
+    await page.getByTestId('control-button-cut-plane').click()
+    await page.getByTestId('menu-item-plan').click()
+    await expect(page.getByTestId('menu-cut-plane')).toBeHidden()
+    await expect.poll(() => hasSet(page, 'cp')).toBe(true)
+
+    // The dialog adds the camera; the cut planes and display are on too.
+    await page.getByTestId('control-button-share').click()
+    await expect.poll(() => hasSet(page, 'c')).toBe(true)
+    await page.getByTestId('toggle-cutplane').click()
+    // The planes go; the camera and the display, written in place, stay.
+    await expect.poll(() => hasSet(page, 'cp')).toBe(false)
+    expect(await hasSet(page, 'c')).toBe(true)
+    expect(await displayToken(page)).toBe('d:color=src')
   })
 })

@@ -5,7 +5,7 @@ import useStore from '../../store/useStore'
 import {HASH_DEBOUNCE_WAIT_MS} from '../../utils/debounce'
 import {ResidencyMetric} from '../../viewer/residency/ResidencyController'
 import {noteUserDisplayChange} from '../Share/viewLink'
-import LiveDisplayLink from './LiveDisplayLink'
+import LiveDisplayLink, {livePaths} from './LiveDisplayLink'
 
 
 /** Let the debounced write land. */
@@ -35,10 +35,13 @@ describe('Residency/LiveDisplayLink', () => {
       // residency alone; no viewer, so no hide / isolate terms.
       useStore.getState().setModel({userData: {}})
       useStore.getState().setIsDisplayInUrl(true)
+      useStore.getState().setIsModelReady(true)
     })
+    livePaths.clear()
   })
   afterEach(async () => {
     await act(() => {
+      useStore.getState().setIsModelReady(false)
       useStore.getState().setModel(null)
       useStore.getState().resetDisplayOverrides()
       useStore.getState().setIsDisplayInUrl(true)
@@ -90,5 +93,43 @@ describe('Residency/LiveDisplayLink', () => {
     await setResidency(100)
     await settle()
     expect(window.location.hash).toBe('')
+  })
+
+  it('writes nothing before the model is ready, then the user\'s change once it is', async () => {
+    // A big model's tree is still being walked, and the link's hide terms not
+    // yet applied, when the user can already change the display.
+    await act(() => useStore.getState().setIsModelReady(false))
+    render(<LiveDisplayLink/>)
+    await setResidency(40)
+    noteUserDisplayChange()
+    await settle()
+    expect(window.location.hash).toBe('#d:res=60')
+    await act(() => useStore.getState().setIsModelReady(true))
+    await settle()
+    expect(window.location.hash).toBe('#d:res=40')
+  })
+
+  it('drops a pending write when the model changes, rather than write it into the next model\'s link', async () => {
+    render(<LiveDisplayLink/>)
+    await setResidency(40)
+    noteUserDisplayChange()
+    // Navigation to the next model comes first: its route, its link.
+    window.history.replaceState(null, '', '/share/v/p/other.ifc#d:res=60')
+    await act(() => useStore.getState().setModel({userData: {}}))
+    await settle()
+    expect(window.location.hash).toBe('#d:res=60')
+  })
+
+  it('stays live through a re-init of the same model', async () => {
+    render(<LiveDisplayLink/>)
+    await setResidency(40)
+    noteUserDisplayChange()
+    await settle()
+    expect(window.location.hash).toBe('#d:res=40')
+    // A theme toggle builds a new viewer: a new term, for the same route.
+    await act(() => useStore.getState().setViewer({}))
+    await setResidency(30)
+    await settle()
+    expect(window.location.hash).toBe('#d:res=30')
   })
 })
