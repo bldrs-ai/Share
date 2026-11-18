@@ -30,9 +30,13 @@ export const OpenKind = Object.freeze({
 })
 
 
-// The page's first open, by its number (routes/modelOpen.ts). Numbers are
-// handed out per route result as they are first asked for; the first load
-// this page runs is its first open's, so the first number seen here is it.
+// The page's first open, by its number (routes/modelOpen.ts). What `page`
+// means is "the first model this document loads": the first route result
+// asked about HERE, which only CadView's load runs do, starting with the
+// page's first load. Other consumers of `modelOpenId` may number route
+// results before that; that changes which number is first, not which open.
+// Module state for the life of the document, so a page load starts it over,
+// and a CadView remount (a route-family change, ShareRoutes.jsx) keeps it.
 let firstOpenId = null
 
 
