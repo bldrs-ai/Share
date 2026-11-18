@@ -1,6 +1,6 @@
 # Bldrs Share Roadmap
 
-**Status:** Draft v0.14 — growth (`grow-*`) epics moved to bizdev; Versions UX reconciled with existing history (v0.13)
+**Status:** Draft v0.15 — `grow-100` parked until measured; growth epics in bizdev (v0.14)
 **Date:** 2026-11-18
 **Owner:** Pablo
 **Source baseline:** `Share Requirements` Google Doc (Aug 2021, last updated Nov 2022); PDF extract is in this repo's history.
@@ -19,7 +19,7 @@ This doc is the source of truth for Epic/Story/Track structure. The wiki page
 - **AI assistant:** design doc landed (`design/new/ai-workspace.md`); the viewer tool registry v0 is on main behind `?feature=assist` as a dev hook, and a prototype bot sits behind `?feature=bot`. No panel, agent loop or relay yet. The arc stays post-MVP (§7).
 - **In flight:** identity/multi-account (T3), private sharing (T4), the remaining half of in-app model switching (`open-205`: session-owned workers, close and eviction, the switch itself), the model-edit substrate (`create-300`; L0 landed).
 - **Model versioning and sharing:** design planned as `share-200` ([#2144](https://github.com/bldrs-ai/Share/issues/2144), [design](new/model-versioning.md)); whole-file history and public pinned-version links first, semantic editing later. Implementation not started. Per-principal grants move to `share-201`; existing private-sharing scope stays in T4.
-- **MVP bar:** unchanged (§6.0). The paid offer is live; the working view is that the bar is met when users upgrade on their own as features improve. The six open items are in §6.0.
+- **MVP bar:** unchanged (§6.0). The paid offer is live; the working view is that the bar is met when users upgrade on their own as features improve. The six open items are in §6.0; `grow-100` left item 6 on 2026-11-18 (parked until measured).
 
 ## Relation to the bizdev planning set
 
@@ -251,7 +251,7 @@ User upgrades from free to Pro, the system tracks quota, and Pro-only features b
 
 Moved to the private bizdev repo on 2026-11-18. Each epic's scope, status, stories and open questions are in its bizdev issue, indexed in bizdev `docs/growth-roadmap.md`; the codes are unchanged, and code work for a growth story gets a Share story linking back. Implementation design stays here in Share (funnel events: `design/new/quotas.md` §"Funnel analytics").
 
-- **`grow-100` SEO format landing pages:** <a href="https://github.com/bldrs-ai/bizdev/issues/369" target="_blank" rel="noopener noreferrer">bizdev#369</a>. Whether it stays in the MVP list (§6.0) is <a href="https://github.com/bldrs-ai/bizdev/issues/368" target="_blank" rel="noopener noreferrer">bizdev#368</a>.
+- **`grow-100` SEO format landing pages:** <a href="https://github.com/bldrs-ai/bizdev/issues/369" target="_blank" rel="noopener noreferrer">bizdev#369</a>. **Parked, measure first** (decided in <a href="https://github.com/bldrs-ai/bizdev/issues/368" target="_blank" rel="noopener noreferrer">bizdev#368</a>): it comes back once `grow-120` shows how many real model opens arrive by organic search.
 - **`grow-120` Funnel instrumentation + analytics hygiene:** <a href="https://github.com/bldrs-ai/bizdev/issues/370" target="_blank" rel="noopener noreferrer">bizdev#370</a>.
 - **`grow-200` Rich share-link previews (OG cards):** <a href="https://github.com/bldrs-ai/bizdev/issues/371" target="_blank" rel="noopener noreferrer">bizdev#371</a>.
 - **`grow-400` Large-model + data-sovereignty positioning:** <a href="https://github.com/bldrs-ai/bizdev/issues/372" target="_blank" rel="noopener noreferrer">bizdev#372</a>.
@@ -364,15 +364,15 @@ The open 100-band work, exhaustively — this list is the MVP:
 3. **The paid offer exists** (Phase C): `share-130` (T4 PR2/PR3), `share-120` (<a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>), `share-110` (T2 Ph4+5).
 4. **It bills** (Phase D): `subscribe-100/110/120`. **Met (2026-11-10):** billing and the private-model slot quota are live under the decided paywall (§4.9).
 5. **The free tier monetises and acquires** (Phase D): T7 ads (`subscribe-130`) — parked (2026-11-10), not part of the bar.
-6. **It's measurable and findable** (Phase G): `grow-120` events and GA hygiene, `grow-100` `/viewer/ifc` + `/viewer/step`, `community-110` feedback. The `grow-*` items are tracked in bizdev (§4.10); <a href="https://github.com/bldrs-ai/bizdev/issues/368" target="_blank" rel="noopener noreferrer">bizdev#368</a> decides whether `grow-100` stays here, since bizdev has it parked.
+6. **It's measurable** (Phase G): `grow-120` events and GA hygiene, `community-110` feedback. The `grow-*` items are tracked in bizdev (§4.10).
 
-Demoted out of the MVP band (not load-bearing for the trickle): `open-200`, `share-201`, `grow-200`, and the Assist/AI arc. Rationale: organic traffic is near zero and the one earned channel, shared links, is uninvested, so launching Pro into an unmeasured funnel wastes the launch.
+Demoted out of the MVP band (not load-bearing for the trickle): `open-200`, `share-201`, `grow-200`, and the Assist/AI arc. `grow-100` is parked until it's measured (<a href="https://github.com/bldrs-ai/bizdev/issues/368" target="_blank" rel="noopener noreferrer">bizdev#368</a>). Rationale: organic traffic is near zero and the one earned channel, shared links, is uninvested, so launching Pro into an unmeasured funnel wastes the launch.
 
 ### Phase G (parallel, starts now): Growth funnel + SEO surfaces
-**Goal:** the funnel is measurable, share links unfurl, and search intent has a landing page.
+**Goal:** the funnel is measurable and share links unfurl. Format landing pages (`grow-100`) wait on that measurement.
 - The work is the `grow-*` epics, tracked in bizdev (§4.10).
 
-**Exit:** clean stage-by-stage funnel counts (large-model users visible as a segment); a shared link unfurls with a thumbnail; format and positioning pages indexed.
+**Exit:** clean stage-by-stage funnel counts (large-model users visible as a segment); a shared link unfurls with a thumbnail; the positioning page indexed.
 
 ### Phase A: Stabilise the rebuilt viewer
 **Goal:** launch can't ship if the viewer regresses on real models.
@@ -526,6 +526,7 @@ Standing convention (the original migration is done):
 
 # Changelog
 
+- **v0.15 (2026-11-18):** parked `grow-100` (format landing pages) until `grow-120` measures how many real model opens arrive by organic search (owner's decision, <a href="https://github.com/bldrs-ai/bizdev/issues/368" target="_blank" rel="noopener noreferrer">bizdev#368</a>). It leaves the §6.0 MVP list, and Phase G's goal and exit drop the landing pages.
 - **v0.14 (2026-11-18):** moved the `grow-*` epics (§4.10, Track T9, Phase G's work list) to the private bizdev repo, which now holds their status and stories; codes and aliases unchanged. Flagged the conflict between §6.0's `grow-100` and bizdev's parked SEO issue as bizdev#368.
 - **v0.13 (2026-11-12):** reconciled basic Versions UX under existing tracker #57; the new local save, history, update and backup stories (#2157–#2160) carry a milestone hypothesis rather than an MVP claim (`design/reqs/ux-rubric.md` §"Milestones are hypotheses"), and §6.0 is unchanged; corrected #890's deletion scope and preserved its historical milestone. Later semantic requirements retain existing `share-200` #2144; `versions-300` structural diff and `versions-310` portable Drive assignments and aliases remain unchanged. [Reconciliation evidence](reqs/versions-100-triage.md).
 - **v0.12 (2026-11-11):** assigned #2144 model versioning and sharing to `share-200`, moved per-principal grants to `share-201` across current references, and added the implementation design/dispatch plan. Whole-file public sharing is independent of later T12 semantic editing; existing Phase C private-sharing scope and the MVP bar are unchanged.
