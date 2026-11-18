@@ -27,7 +27,7 @@
 // We never write this into `extensionsRequired` — a generic GLTF reader
 // should still be able to load the geometry; only the NavTree degrades.
 //
-// TODO(T2 Phases 4–6, #2201; post-MVP): once GLBs are shared between users
+// TODO(share-t101 Phases 4–6, #2201; post-MVP): once GLBs are shared between users
 // (design/new/glb-model-sharing.md §"Pipelines/A. Originator"), this
 // reader will be ingesting GLBs produced by arbitrary user browsers —
 // not just our own writer. At that point §"Validation and trust" of the

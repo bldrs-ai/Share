@@ -156,7 +156,7 @@ Why a stack rather than per-object mutation: it's the only structure that makes
 ask 5 tractable. A permalink has to serialize a *decision*, not a scene diff —
 "wireframe on this sub-tree" is 20 characters, the resulting per-instance state
 is 28,674 booleans. It also makes reset trivial (pop to base) and gives the
-conversational-CAD agent (T11 tool surface) a sane thing to call.
+conversational-CAD agent (`apps-t300` tool surface) a sane thing to call.
 
 **Non-goal:** this is not a materials editor. `color: '#rrggbb'` is in the
 schema because scoped solid-color is the obvious next ask and reserving the
@@ -320,9 +320,9 @@ the link carries the overall look but not the per-part edits.
 
 The durable home for a large view state already exists in the plan:
 glb-model-sharing §"Round-trippable Notes & Versions" — named view states
-(camera + cut planes + visibility) in the artifact, T2 Phase 4. Display
+(camera + cut planes + visibility) in the artifact, `share-t101` Phase 4. Display
 overrides are the same kind of object and should ride the same v0.1 view-state
-schema. **This epic should define the display-override schema so T2 Phase 4 can
+schema. **This epic should define the display-override schema so `share-t101` Phase 4 can
 embed it verbatim**, and the URL token is then the compact projection of it.
 
 ### 6.3 Hide and isolate (#1250) — landed

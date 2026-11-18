@@ -41,9 +41,9 @@ entities must not become a second independently editable truth.
   whole-file versioning until its stable-identity contract is settled.
 - **Not included:** private blob storage, grants, live co-editing, rooms,
   presence, an IFC/STEP writer, or guaranteed free unlimited hosting.
-- `share-201` / T4 still owns grants and revocation; `share-130` owns private
+- `share-201` / `share-t100` still owns grants and revocation; `share-130` owns private
   links. A private git repo cannot make a public blob private.
-- `share-110` / T2 still owns the GLB originator-share path. This feature
+- `share-110` / `share-t101` still owns the GLB originator-share path. This feature
   publishes the **original model**, including properties and hidden content;
   it is a distinct choice, not a silent change to GLB sharing. Existing local
   viewing remains local. No automatic upload on open, save, or agent action.

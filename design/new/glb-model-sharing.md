@@ -1,6 +1,6 @@
 # GLB artifact contract and trust
 
-**Status:** cache artifact and four extensions built; notes, view states and model metadata designed, not built. Tracking: T2 [#2201](https://github.com/bldrs-ai/Share/issues/2201).
+**Status:** cache artifact and four extensions built; notes, view states and model metadata designed, not built. Tracking: `share-t101` [#2201](https://github.com/bldrs-ai/Share/issues/2201).
 **Date:** 2026-11-18
 **Owner:** Pablo
 
@@ -26,7 +26,7 @@ plan, test plan, telemetry, codec notes, how-tos) is at
   could later write the same artifact, but nothing does today.
 - **Realtime collaboration.** The artifact is immutable; live edits belong
   elsewhere (see §"Round-trippable Notes & Versions").
-- **Sharing the GLB with a recipient.** This is post-MVP (T2 Phases 4–6).
+- **Sharing the GLB with a recipient.** This is post-MVP (`share-t101` Phases 4–6).
   A recipient-side GLB becomes a derived artifact of a published version
   under `share-200` ([#2144](https://github.com/bldrs-ai/Share/issues/2144)).
   `share-110` ([#2205](https://github.com/bldrs-ai/Share/issues/2205)) is

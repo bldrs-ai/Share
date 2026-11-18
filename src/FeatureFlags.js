@@ -15,19 +15,19 @@ export const flags = [
   // user downloads it. Pairs with the replay page in tools/spikes/offscreen/.
   {name: 'mainThreadTrace', isActive: false},
   // Multi-user sharing UI: the visibility chip (share-130) and the people
-  // panel (share-201). The provider scaffolding (T4 PR1, #1505) ships
+  // panel (share-201). The provider scaffolding (`share-t100` PR1, #1505) ships
   // unconditionally; nothing reads this flag until the first of those
-  // surfaces lands (T4, #2203). See design/new/multi-user-sharing.md.
+  // surfaces lands (`share-t100`, #2203). See design/new/multi-user-sharing.md.
   {name: 'sharing', isActive: false},
   // GitHub-as-Sources connection. The GitHubProvider, Netlify Functions and
   // /auth/gh/callback.html ship unconditionally; this flag gates what
   // identity-decoupling PR2 (#1508) added: GitHubTab's "Connect GitHub"
   // button, browse-via-connection and the Save dialog's "Saving as" footer.
   // It stays off until PR3 moves Save and model loads onto the connection's
-  // token (T3, #2202; post-MVP).
+  // token (`identity-t100`, #2202; post-MVP).
   // See design/new/identity-decoupling-decisions.md.
   {name: 'githubAsSource', isActive: false},
-  // Workspace shell (conversational-CAD epic assist-300, #1657): the
+  // Workspace shell (conversational-CAD epic open-200, #1657): the
   // ProjectsDrawer (projects → models, localStorage-persisted) leftmost in
   // RootLandscape + the logo popup with marketing links. Flag-off layout
   // must stay byte-identical to today's — the merge into production chrome
