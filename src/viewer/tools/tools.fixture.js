@@ -238,8 +238,9 @@ function placement(position, rotateZ, scale) {
 function unitEntities(units) {
   const wrap = (value, type = 1) => ({type, value})
   const ref = (value) => ({type: 5, value})
-  // As Conway files an IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.) (ifcQuantities.js
-  // `siUnitFields`): one attribute early, `Name` absent. And, as for every
+  // The pre-conway#790 layout of an IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)
+  // (ifcQuantities.js `siUnitFields`): one attribute early, `Name` absent. GLB
+  // artifacts cached by older engines can still carry it. And, as for every
   // entity it returns, `type` is the numeric type code, never a name.
   const si = (id, unitType, name, prefix = null) => ({
     expressID: id, type: 448429030, Dimensions: wrap(unitType, 3), UnitType: prefix ? wrap(prefix, 3) : null,

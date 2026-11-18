@@ -34,11 +34,11 @@ describe('viewer/tools ifcQuantities#readProjectUnits', () => {
     {Dimensions: en('AREAUNIT'), UnitType: en('MILLI'), Prefix: en('SQUARE_METRE')},
     {Dimensions: en('VOLUMEUNIT'), UnitType: en('MILLI'), Prefix: en('CUBIC_METRE')},
   ]
-  // The same entities as a corrected Conway would return them.
+  // The same entities as Conway >= 1.1651.790 returns them (conway#790).
   const corrected = [
-    {UnitType: en('LENGTHUNIT'), Prefix: en('MILLI'), Name: en('METRE')},
-    {UnitType: en('AREAUNIT'), Prefix: en('MILLI'), Name: en('SQUARE_METRE')},
-    {UnitType: en('VOLUMEUNIT'), Prefix: en('MILLI'), Name: en('CUBIC_METRE')},
+    {Dimensions: {type: 0}, UnitType: en('LENGTHUNIT'), Prefix: en('MILLI'), Name: en('METRE')},
+    {Dimensions: {type: 0}, UnitType: en('AREAUNIT'), Prefix: en('MILLI'), Name: en('SQUARE_METRE')},
+    {Dimensions: {type: 0}, UnitType: en('VOLUMEUNIT'), Prefix: en('MILLI'), Name: en('CUBIC_METRE')},
   ]
 
   // The prefix scales the whole unit: milli square metre is (10^-3)^2 m².
