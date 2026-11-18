@@ -28,6 +28,7 @@ import {EngineOpenFailureError} from '../loader/engineOpenFailure'
 import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
 import {ZipArchiveError} from '../loader/zipArchive'
 import {registerInMemoryUpload, resetInMemoryUploadsForTest} from '../loader/inMemoryUploads'
+import {LoadAbortedError} from '../utils/loadAbort'
 import {
   InMemoryUploadGoneError,
   UploadNotInBrowserError,
@@ -1752,6 +1753,164 @@ describe('CadView', () => {
       await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
       await actAsyncFlush()
       expect(result.current.expandedElements).toEqual([])
+    })
+  })
+
+
+  // open-205 #2011 step A: under `?feature=spaModelNav` the load is owned by
+  // the CadView run that started it, and leaving the model aborts it, instead
+  // of queuing the next model behind it. Off the flag the queue stays.
+  describe('a switch while the model is still loading (open-205 #2011 step A)', () => {
+    let getHarness
+    let loadSpy
+    let cameraControlsSpy
+    let captureException
+
+    beforeEach(() => {
+      getHarness = require('../../__mocks__/shareViewerTestHarness').__getShareViewerMockSingleton
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+      captureException = jest.spyOn(require('@sentry/react'), 'captureException').mockImplementation(() => {})
+      // As in the describe above: a load that finishes on a disposed viewer
+      // hands back no camera controls.
+      cameraControlsSpy = jest.spyOn(ThreeContext.prototype, 'getCameraControls')
+        .mockImplementation(() => getHarness().IFC.context.ifcCamera.cameraControls)
+      // `viewer: null` as on a fresh page: an earlier test's viewer, left in
+      // the store, lets the auth-state effect start a load into it before
+      // this mount builds its own, which under the flag is (rightly) aborted
+      // and reloaded, and would muddy the load counts below.
+      useStore.setState({
+        alert: null, customViewSettings: null, isAuthResolved: false, isModelReady: false, viewer: null,
+        expandedElements: [], selectedElements: [], selectedAnchorIds: [], selectedOccurrencePath: null,
+      })
+    })
+
+    afterEach(() => {
+      cameraControlsSpy.mockRestore()
+      loadSpy?.mockRestore()
+      loadSpy = undefined
+      window.history.replaceState(null, '', '/?feature=disableEngineWorker')
+    })
+
+    /**
+     * A Loader.load that never finishes on its own, and rejects as the real
+     * one does once its signal aborts. `calls` records each call's path and
+     * signal.
+     *
+     * @return {object} `{impl, calls}`, each call as `{path, signal}`
+     */
+    function hangingLoad() {
+      const calls = []
+      const impl = (path, loadViewer, onProgress, isOpfs, setOpfsFile, token, options = {}) => {
+        calls.push({path: String(path), signal: options.signal})
+        return new Promise((resolve, reject) => {
+          options.signal?.addEventListener('abort', () => reject(new LoadAbortedError()))
+        })
+      }
+      return {impl, calls}
+    }
+
+    it('aborts the load in flight and starts the next model at once, reporting nothing', async () => {
+      window.history.replaceState(null, '', '/?feature=disableEngineWorker,spaModelNav')
+      const {result} = renderHook(() => useStore((state) => state))
+      const {impl, calls} = hangingLoad()
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(impl)
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBe(1))
+      const signalOfA = calls[0].signal
+      expect(signalOfA.aborted).toBe(false)
+
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+
+      expect(signalOfA.aborted, 'leaving A aborts its load').toBe(true)
+      // B did not wait for A's load, which never ends on its own.
+      await waitFor(() => expect(calls.length).toBe(2))
+      expect(calls[1].path).toContain('other.ifc')
+      expect(calls[1].signal).not.toBe(signalOfA)
+      expect(calls[1].signal.aborted).toBe(false)
+      expect(result.current.alert).toBeNull()
+      expect(captureException).not.toHaveBeenCalled()
+    })
+
+    it('clears the left model from the store when the switch starts', async () => {
+      window.history.replaceState(null, '', '/?feature=disableEngineWorker,spaModelNav')
+      const {result} = renderHook(() => useStore((state) => state))
+      const {impl, calls} = hangingLoad()
+      loadSpy = jest.spyOn(Loader, 'load')
+        .mockImplementationOnce(() => Promise.resolve(getHarness()._loadedModel))
+        .mockImplementation(impl)
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.isModelReady).toBe(true))
+      expect(result.current.model).toBe(getHarness()._loadedModel)
+      expect(result.current.rootElement).not.toBeNull()
+
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+
+      // B is loading, and nothing of A is left in the store meanwhile.
+      await waitFor(() => expect(calls.length).toBe(1))
+      expect(result.current.model).toBeNull()
+      expect(result.current.isModelReady).toBe(false)
+      expect(result.current.rootElement).toBeNull()
+      expect(result.current.loadedFileInfo).toBeNull()
+    })
+
+    it('reloads the same model into a viewer re-created mid-load (a theme change)', async () => {
+      window.history.replaceState(null, '', '/?feature=disableEngineWorker,spaModelNav')
+      const {result} = renderHook(() => useStore((state) => state))
+      const {impl, calls} = hangingLoad()
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(impl)
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBe(1))
+
+      // A view-settings change re-creates the viewer for the same model, as
+      // a theme change does (both through onModelPath's initViewerCb).
+      await act(() => result.current.setCustomViewSettings({}))
+      await actAsyncFlush()
+
+      expect(calls[0].signal.aborted).toBe(true)
+      await waitFor(() => expect(calls.length).toBe(2))
+      expect(calls[1].path).toContain('index.ifc')
+      expect(result.current.alert).toBeNull()
+    })
+
+    it('off the flag, passes no signal and queues the next model behind the load, as before', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      let releaseA
+      const calls = []
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation((path, ...rest) => {
+        calls.push({path: String(path), signal: rest[5]?.signal})
+        return calls.length === 1 ?
+          new Promise((resolve) => {
+            releaseA = () => resolve(getHarness()._loadedModel)
+          }) :
+          new Promise(() => {})
+      })
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBe(1))
+      expect(calls[0].signal).toBeUndefined()
+
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+      expect(calls.length, 'B waits for A').toBe(1)
+
+      await act(() => releaseA())
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBe(2))
+      expect(calls[1].path).toContain('other.ifc')
+      expect(calls[1].signal).toBeUndefined()
     })
   })
 
