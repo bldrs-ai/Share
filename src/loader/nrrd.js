@@ -93,6 +93,9 @@ export default function nrrdToThree(volume) {
     uniforms: {
       map: {value: texture},
       ramp: {value: ramp},
+      // The Display menu's opacity (viewer/display/volumeMode.js): a
+      // multiplier on the density below, 1 as loaded.
+      opacity: {value: 1},
       steps: {value: Math.min(768, Math.ceil(Math.hypot(...size) * 1.5))},
       // Cut planes, in box space, refreshed before each draw
       // (`syncClipPlanes`).
@@ -122,6 +125,14 @@ export default function nrrdToThree(volume) {
   const label = `${modality || 'Volume'} ${nx} × ${ny} × ${nz}`
   mesh.name = label
   mesh.userData.isVolume = true
+  // For the Display menu's Volume section (viewer/display/volumeMode.js),
+  // which works in the volume's own units: the window the voxels were packed
+  // into the 8-bit texture with, the ramp it opens at, and the unit's name.
+  mesh.userData.volume = {
+    range: [window[0], window[1]],
+    defaultWindow: ramp.map((t) => window[0] + (t * (window[1] - window[0]))),
+    unit: isCt ? 'HU' : '',
+  }
   // Not pickable: a click on the volume has nothing to select (no
   // elements, no properties), and selecting the box only outlined it.
   // CadView turns the Properties panel off for a volume as well
@@ -396,6 +407,7 @@ void main() {
 const VOLUME_FRAGMENT_SHADER = /* glsl */ `
 uniform sampler3D map;
 uniform vec2 ramp;
+uniform float opacity;
 uniform float steps;
 uniform vec4 clipPlanes[${MAX_CLIP_PLANES}];
 uniform int clipCount;
@@ -471,7 +483,7 @@ void main() {
       // Tissue warm, bone white.
       vec3 color = mix(vec3(0.85, 0.55, 0.45), vec3(1.0, 0.98, 0.94), a) * light;
       // Opacity per unit length, so the look doesn't depend on step count.
-      float alpha = 1.0 - pow(1.0 - (a * 0.6), delta * 200.0);
+      float alpha = 1.0 - pow(1.0 - min(1.0, a * 0.6 * opacity), delta * 200.0);
       acc.rgb += (1.0 - acc.a) * alpha * color;
       acc.a += (1.0 - acc.a) * alpha;
       if (acc.a > 0.98) {

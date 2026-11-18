@@ -205,6 +205,8 @@ describe('resolvedAppearance', () => {
       shading: ShadingMode.WIREFRAME,
       residency: {percent: 40, metric: ResidencyMetric.MEMORY},
       motionResidency: {mode: 'manual', percent: 25, metric: ResidencyMetric.DISTANCE},
+      // A model with no volume: the axis' defaults.
+      volume: {window: null, opacity: 100},
     })
   })
 

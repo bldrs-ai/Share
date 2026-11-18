@@ -33,7 +33,7 @@ const RANK = Object.freeze(Object.fromEntries(SCOPE_KINDS.map((k, i) => [k, i]))
 
 /** Appearance axes an override may carry. Each resolves independently. */
 export const APPEARANCE_AXES = Object.freeze(
-  ['color', 'shading', 'opacity', 'hidden', 'residency', 'motionResidency'])
+  ['color', 'shading', 'opacity', 'hidden', 'residency', 'motionResidency', 'volume'])
 
 
 /**

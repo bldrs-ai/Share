@@ -2,6 +2,7 @@ import {ColorMode, activeColorMode, hasAutoColor, setColorMode} from './colorMod
 import {motionResidencyOrDefault, setMotionResidencyMode} from './motionResidencyMode'
 import {residencyOrDefault, setResidencyMode} from './residencyMode'
 import {ShadingMode, activeShadingMode, modelSupportsShading, setShadingMode} from './shadingMode'
+import {setVolumeMode, volumeOf, volumeOrDefault} from './volumeMode'
 import {resolveAppearance} from './overrideStack'
 
 
@@ -56,6 +57,9 @@ export function applyDisplayOverrides(model, overrides) {
   }
   if (appearance.shading !== undefined) {
     setShadingMode(model, appearance.shading)
+  }
+  if (appearance.volume !== undefined) {
+    setVolumeMode(model, appearance.volume)
   }
 }
 
@@ -117,7 +121,21 @@ export function resolvedShadingMode(model, overrides) {
  * @return {boolean}
  */
 export function modelHasShadingChoice(model) {
-  return model ? modelSupportsShading(model) : false
+  // A volume is one ray-marched box: wireframe would only draw its edges.
+  return model ? modelSupportsShading(model) && volumeOf(model) === null : false
+}
+
+
+/**
+ * The model-scope volume axis (window and opacity, volumeMode.js), filled out
+ * with the defaults. Like residency, the stack is the only truth: the shader's
+ * uniforms are what it set.
+ *
+ * @param {Array<{scope: object, appearance: object}>} overrides
+ * @return {object} a volumeMode.js `VolumeAxis`
+ */
+export function resolvedVolume(overrides) {
+  return volumeOrDefault(resolveAppearance(overrides, {}).volume)
 }
 
 
@@ -195,7 +213,7 @@ export function applyMotionResidencyOverrides(driver, overrides) {
  * @param {object} model BatchedMesh or Group, may be null
  * @param {Array<{scope: object, appearance: object}>} overrides
  * @return {{color: string, shading: string, residency: object,
- *   motionResidency: object}}
+ *   motionResidency: object, volume: object}}
  */
 export function resolvedAppearance(model, overrides) {
   return {
@@ -207,5 +225,6 @@ export function resolvedAppearance(model, overrides) {
       ShadingMode.SHADED,
     residency: resolvedResidency(overrides),
     motionResidency: resolvedMotionResidency(overrides),
+    volume: resolvedVolume(overrides),
   }
 }

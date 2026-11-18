@@ -384,6 +384,18 @@ first time STEP occurrence paths needed encoding. Implemented in
   element-types tree (its members are written individually).
 
 
+### 6.3a A volume's window and opacity — the `volume` axis
+
+A volume (a CT or MR stacked from DICOM, `loader/nrrd.js`) has one axis of
+its own, `volume` (`viewer/display/volumeMode.js`): `{window: [low, high] |
+null, opacity: percent}`, the window in the volume's units (HU for a CT) and
+`null` meaning the volume's default ramp. It is in `APPEARANCE_AXES`, applied
+by `applyDisplayOverrides`, shown as the Display menu's Volume section, and
+written as `#d:vw=<low>_<high>,vo=<percent>` (`_` because the ends can be
+negative or fractional). Details:
+[adding-model-formats.md](adding-model-formats.md) §"A DICOM series becomes
+one NRRD".
+
 ### 6.4 The live view link — one rule for camera, cut planes and display
 
 Every piece of view state the link carries follows one rule, set for the
