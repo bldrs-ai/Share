@@ -1,24 +1,38 @@
 # Share 200
 
-**Epic:** [share-200: Model versioning and sharing · #2144](https://github.com/bldrs-ai/Share/issues/2144) · **Scope snapshot: 2026-11-12 · Versions reconciliation slice**
+**Epic:** [share-200: Model versioning and sharing · #2144](https://github.com/bldrs-ai/Share/issues/2144) · **Scope snapshot: 2026-11-18** (revises 2026-11-12)
 
 ## Motivation
 
-Authors need to share an exact model version and later contribute reviewable changes without losing earlier work or another contributor's changes. The existing proposal starts with whole-file history and explicit version publication, then adds semantic editing, contribution, conflict resolution and authoring-tool round trips. An opaque version link and a derived representation must retain the same source identity; publication uses its own destination permission and audience contract.
+Authors need to share an exact model version, so that whoever opens the link sees what was intended, and later to contribute reviewable changes without losing earlier work or anyone else's.
 
-The later journey is **edit a supported model → save the effective result → publish a contribution → review competing changes → resolve them explicitly → continue through another tool**. Camera changes and Notes discussions remain separate from document edits. Notes stays attached to its recorded model version, and the immutable external source retains its provenance.
+Two journeys, built in that order:
 
-## UX stories reconciled from Versions
+- **Whole-file sharing:** save a model and another version → choose where to publish → confirm who can open it → publish → copy a link → a recipient opens it without signing in → an update is published → the recipient chooses whether to open it.
+- **Later semantic editing:** edit a supported model → save the result → publish a contribution → review competing changes → resolve them → continue in another tool.
+
+Notes stay attached to the version they were written on; camera views and discussions are separate from document edits.
+
+## UX stories
+
+Whole-file sharing (migrated from the Sharing UX draft, 2026-11-18):
 
 | Story | User goal |
 |---|---|
-| [Save and reopen semantic edits · #2161](https://github.com/bldrs-ai/Share/issues/2161) | Reopen the edited state actually reviewed, including the effective undo/redo result. |
-| [Contribute to a shared history · #2162](https://github.com/bldrs-ai/Share/issues/2162) | Publish supported edits with actual destination write access while preserving local work on failure. |
-| [Resolve competing edits · #2163](https://github.com/bldrs-ai/Share/issues/2163) | Combine compatible work and explicitly resolve conflicts without losing either alternative. |
-| [Continue through another tool · #2164](https://github.com/bldrs-ai/Share/issues/2164) | Export a supported edited model and review an externally revised model as another version. |
+| [Choose the account and destination to publish to · #2211](https://github.com/bldrs-ai/Share/issues/2211) | Publish under the right account, to the right place. |
+| [Publish a version and get a working link · #2213](https://github.com/bldrs-ai/Share/issues/2213) | Get a link only once publishing has worked. |
+| [Open an exact shared version without signing in · #2214](https://github.com/bldrs-ai/Share/issues/2214) | Open exactly the version the sender meant, with no account. |
+| [Recover when someone else publishes first · #2216](https://github.com/bldrs-ai/Share/issues/2216) | Keep my work when the shared history changed meanwhile. |
 
-These four formal stories preserve the later semantic contract from the Versions draft. They depend on create-300's editing and identity substrate, measured semantic phase gates and an appropriate writer where required. STEP remains whole-file until explicitly supported. The existing `share-200` roadmap assignment is retained; complexity does not create a new tier or epic code.
+Later semantic editing (migrated from the Versions draft, 2026-11-12):
 
-This is a dated snapshot of the Versions reconciliation slice, not a complete reconciliation of Sharing. Whole-file publication and recipient requirements remain in the [Sharing draft](sharing.md) and the existing epic pending that feature's own reconciliation. Basic source opening and retained history belong to [versions-100](versions-100.md); structural diff and portable Drive sidecars retain `versions-300` and `versions-310`.
+| Story | User goal |
+|---|---|
+| [Save and reopen model edits · #2161](https://github.com/bldrs-ai/Share/issues/2161) | Reopen the edited state actually reviewed. |
+| [Contribute to a shared history · #2162](https://github.com/bldrs-ai/Share/issues/2162) | Publish supported edits, keeping local work if it fails. |
+| [Merge or resolve edits from two collaborators · #2163](https://github.com/bldrs-ai/Share/issues/2163) | Combine compatible work and resolve conflicts without losing either side. |
+| [Round-trip an edited model through another tool · #2164](https://github.com/bldrs-ai/Share/issues/2164) | Export an edited model, and review one revised elsewhere as a new version. |
 
-The [triage record](share-200-triage.md) records provenance and scope boundaries. Current tasks and decisions live in [#2144](https://github.com/bldrs-ai/Share/issues/2144) and its story issues. This snapshot is not a completion claim; revise and date it when motivation or story scope materially changes.
+Who can open a share, the link itself and what a recipient is told when it won't open belong to `share-130` ([snapshot](share-130.md), #2206). The rules for copied links are in [`model-versioning.md` §5a](../new/model-versioning.md#5a-share-link-contract-binding-ux-requirement). Basic history and local retention stay with `versions-100` (#57); structural diff and portable Drive versions keep `versions-300` and `versions-310`.
+
+This snapshot makes no completion claim; the semantic stories depend on `create-300`'s editing substrate. The [triage record](share-200-triage.md) has the provenance. Current tasks and decisions live in [#2144](https://github.com/bldrs-ai/Share/issues/2144) and its stories.
