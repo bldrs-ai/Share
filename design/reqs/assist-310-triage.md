@@ -66,13 +66,15 @@ Bodies: #1659 and #1672 rewritten, each original verbatim in a collapsed `Origin
 
 Result, checked after the writes: #1659 has exactly the 11 stories in the snapshot; #1675 has #1677 and #1821; #1930 has #1931; #1933 has #1932.
 
-## Deferred ownership
+## Ownership, decided
 
-| Issue | Question and next decision |
+The owner settled all three on 2026-11-18:
+
+| Issue | Decision and what was done |
 |---|---|
-| [#1822](https://github.com/bldrs-ai/Share/issues/1822) | BotChat ran model-written code with [`new Function`](https://github.com/bldrs-ai/Share/blob/b16672d75172203544b20ca9273fe538d76845d8/src/Components/Bot/BotChat.jsx#L189). PR #2199 removed that path (see [Since the reconciliation](#since-the-reconciliation)), so the ownership question is moot; the issue is still open and waits for the owner to close it. |
-| [#1936](https://github.com/bldrs-ai/Share/issues/1936) | The Create seam lands output through `create-320` (#1920). Linked here for now; may move to `create-320` when that epic is reconciled. |
-| [#1674](https://github.com/bldrs-ai/Share/issues/1674) | Track T11's contract, shared with `assist-320` and `apps-300`. No T11 epic issue exists to hold it. |
+| [#1822](https://github.com/bldrs-ai/Share/issues/1822) | Stays with `assist-310`. Nested under #1675, beside #1821. #2199 removed the [`new Function`](https://github.com/bldrs-ai/Share/blob/b16672d75172203544b20ca9273fe538d76845d8/src/Components/Bot/BotChat.jsx#L189) path; the issue stays open for the owner to close. |
+| [#1936](https://github.com/bldrs-ai/Share/issues/1936) | Moves to `create-320`. Now a sub-issue of #1920 and retitled `create-320: Create seam contract (remote tool provider)`; #1659 no longer links it as its support. |
+| [#1674](https://github.com/bldrs-ai/Share/issues/1674) | Sits under a Track T11 issue. [#2225](https://github.com/bldrs-ai/Share/issues/2225) was created in the shape of the other track issues (#2201–#2204: `Tracking` label, Status, Remaining work, Related), with #1674 and #1386 as its sub-issues. |
 
 Epic-level open decisions (budgets, generative UI timing, #1676, the ref separator) are listed in #1659.
 
