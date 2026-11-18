@@ -34,8 +34,15 @@ import {gaMeasurementConfig, sendMeasurementProtocolEvent} from './_lib/measurem
  * The GA client id every report is sent under. GA4 counts each client id as a
  * user, so a per-report id would add a user per blocked visit; one id keeps
  * the user counts what they were and leaves the event count as the measure.
+ *
+ * In GA's web client-id shape, two positive integers joined by a dot, which
+ * the Measurement Protocol expects: GA answers 2xx to a malformed id too and
+ * then may not process the event (codex on #2224). The two halves are the
+ * first eight bytes of SHA-256('bldrs-share:client-capabilities'), the same
+ * `<uint32>.<uint32>` construction as subscriptionAnalytics.js
+ * #fallbackClientId, written out so the replays can match it exactly.
  */
-export const CAPABILITY_CLIENT_ID = 'bldrs-client-capabilities'
+export const CAPABILITY_CLIENT_ID = '1766230857.3831044998'
 
 const HTTP_NO_CONTENT = 204
 const HTTP_BAD_REQUEST = 400

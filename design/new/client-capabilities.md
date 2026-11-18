@@ -58,7 +58,9 @@ through.
 functional data about what clients can run, used for configuration, and
 `consent` records which way the setting was.
 
-**One GA client id for every report** (`bldrs-client-capabilities`). GA4
+**One GA client id for every report** (`1766230857.3831044998`, in GA's
+`<uint32>.<uint32>` web shape, derived from SHA-256 of a fixed string; GA can
+answer 2xx to a malformed id yet not process the event). GA4
 counts each client id as a user; a per-report id would add a "user" for every
 blocked visit. The event count is the measure, and no report is tied to a
 browser. The request to GA comes from the function, so the user's IP doesn't

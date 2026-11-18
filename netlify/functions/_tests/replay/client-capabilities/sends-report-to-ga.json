@@ -13,7 +13,7 @@
         "method": "POST",
         "url": "https://www.google-analytics.com/mp/collect?measurement_id=G-REPLAY0001&api_secret=mp-secret-replay",
         "body": {
-          "client_id": "bldrs-client-capabilities",
+          "client_id": "1766230857.3831044998",
           "events": [{"name": "client_capability", "params": {"condition": "ga_blocked", "browser": "firefox", "blocker": "network", "form_factor": "desktop", "consent": "on"}}]
         }
       },

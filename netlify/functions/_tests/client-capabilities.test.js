@@ -5,6 +5,7 @@
  * pro-module.test.js gives: every top-level `.js` there is deployed.
  */
 
+import {createHash} from 'node:crypto'
 import handler, {CAPABILITY_CLIENT_ID, isAllowedOrigin} from '../client-capabilities.js'
 
 
@@ -97,6 +98,14 @@ describe('client-capabilities', () => {
     const logged = warnSpy.mock.calls.map((args) => args.join(' ')).join('\n')
     expect(logged).toContain('[GA4_API_SECRET]')
     expect(logged).not.toContain('mp-secret-unit')
+  })
+
+  // GA's Measurement Protocol expects the web client-id shape, and answers 2xx
+  // to a malformed one too; the constant must be the documented derivation.
+  it('sends under a fixed client id in GA\'s <uint32>.<uint32> shape', () => {
+    expect(CAPABILITY_CLIENT_ID).toMatch(/^[1-9]\d*\.[1-9]\d*$/)
+    const digest = createHash('sha256').update('bldrs-share:client-capabilities').digest()
+    expect(CAPABILITY_CLIENT_ID).toBe(`${digest.readUInt32BE(0)}.${digest.readUInt32BE(4)}`)
   })
 
   it('accepts Share\'s own origins only', () => {
