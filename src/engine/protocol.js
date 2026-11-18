@@ -84,6 +84,35 @@ export const Ev = Object.freeze({
 
 
 /**
+ * A thrown value's message, always a string, for an error that crosses to
+ * the page (a `failed` event, an `ok: false` reply). An engine throw is not
+ * always an `Error` with a string message, and `new Error(object)` on the
+ * page reads `Error: [object Object]`.
+ *
+ * @param {*} e anything thrown
+ * @return {string}
+ */
+export function errorMessageOf(e) {
+  if (typeof e === 'string') {
+    return e
+  }
+  if (typeof e?.message === 'string') {
+    return e.message
+  }
+  if (typeof e?.message?.message === 'string') {
+    // An error wrapped as another's message, which some engine throws carry.
+    return e.message.message
+  }
+  // Never the object itself: stringified it reads `[object Object]`
+  // (SHARE-1Y7), and serialised it could carry anything the engine had,
+  // file text included. Its type is enough to tell one kind from another.
+  const type = typeof e?.constructor?.name === 'string' && /^[A-Za-z_]\w{0,40}$/.test(e.constructor.name) ?
+    e.constructor.name : typeof e
+  return `engine failure (non-Error ${type})`
+}
+
+
+/**
  * Error shape that survives a structured clone. An `Error` does clone in
  * current browsers, but its subclass and own fields do not reliably, and the
  * in-process transport must behave exactly like the worker one.
@@ -103,7 +132,7 @@ export function serializeError(e) {
     }
     return shape
   }
-  return {name: 'Error', message: String(e)}
+  return {name: 'Error', message: errorMessageOf(e)}
 }
 
 

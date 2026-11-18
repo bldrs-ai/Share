@@ -75,6 +75,14 @@ const GH_OAUTH_NOT_CONFIGURED = {status: HTTP_INTERNAL_ERROR, body: 'GH_OAUTH_CL
 
 export const PROBES = [
   {
+    name: 'client-capabilities',
+    scenario: 'client-capabilities/invalid-report',
+    method: 'POST',
+    body: {},
+    accept: [{status: HTTP_BAD_REQUEST, body: 'invalid_capability_report'}],
+    strict: [{status: HTTP_BAD_REQUEST, body: 'invalid_capability_report'}],
+  },
+  {
     name: 'create-portal-session',
     scenario: 'create-portal-session/unauthenticated',
     method: 'POST',

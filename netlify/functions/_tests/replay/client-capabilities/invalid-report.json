@@ -1,0 +1,7 @@
+{
+  "description": "A body that isn't a capability report: 400, and nothing reaches GA (the deployed smoke probe sends exactly this).",
+  "env": {"GA4_MEASUREMENT_ID": "G-REPLAY0001", "GA4_API_SECRET": "mp-secret-replay"},
+  "request": {"method": "POST", "path": "/.netlify/functions/client-capabilities", "headers": {}, "body": {}},
+  "exchanges": [],
+  "expect": {"statusCode": 400, "json": {"error": "invalid_capability_report"}}
+}

@@ -506,6 +506,26 @@ describe('engine protocol version mismatch (review on #2057)', () => {
     await expect(session.init({timeoutMs: 20})).rejects
       .toThrow('engine did not answer init within 20 ms (no init reply after hello)')
   })
+
+  // The in-process engine's init (spawnEngine.js#IN_PROCESS_INIT_TIMEOUT):
+  // null is no clock at all, not a zero one (setTimeout reads Infinity as 0).
+  it('init with timeoutMs null waits for a slow engine instead of timing out', async () => {
+    const listeners = []
+    const transport = {
+      kind: 'test',
+      post: (msg) => setTimeout(() => {
+        for (const cb of listeners) {
+          const result = {conwayVersion: 'x', capabilities: {}, wasmBytes: 1, initMs: 1}
+          cb({v: ENGINE_PROTOCOL_VERSION, epoch: 1, re: msg.id, ok: true, result})
+        }
+      }, 60),
+      onMessage: (cb) => listeners.push(cb),
+      onCrash: () => null,
+      terminate: jest.fn(),
+    }
+    const session = new EngineSession(transport, {epoch: 1})
+    await expect(session.init({timeoutMs: null})).resolves.toMatchObject({conwayVersion: 'x'})
+  })
 })
 
 

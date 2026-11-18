@@ -202,9 +202,11 @@ export class EngineSession {
    *   snapshotted: a worker cannot read the page's `?feature=` (§4 `init`)
    * @param {object|null} [options.device] spawnEngine.js#engineDeviceSnapshot,
    *   for the source policy's cap
-   * @param {number} [options.timeoutMs] see ENGINE_INIT_TIMEOUT_MS, covering
+   * @param {?number} [options.timeoutMs] see ENGINE_INIT_TIMEOUT_MS, covering
    *   the worker's hello too; rejects with a ProtocolMismatchError if all the
-   *   engine sent was another version's
+   *   engine sent was another version's. `null` waits as long as init takes:
+   *   spawnEngine.js gives the in-process engine no clock, since it is the
+   *   last resort and has nothing to fall back to
    * @return {Promise<object>} `{conwayVersion, capabilities, wasmBytes, initMs}`
    */
   async init({verbose = false, flags = {}, device = null, timeoutMs = ENGINE_INIT_TIMEOUT_MS} = {}) {
@@ -215,6 +217,11 @@ export class EngineSession {
     let timer
     let helloSeen = !this.expectsHello
     const timeout = new Promise((resolve, reject) => {
+      if (timeoutMs === null) {
+        // No clock: the race below is then only against the engine itself.
+        // (setTimeout would read Infinity as 0, not as never.)
+        return
+      }
       timer = setTimeout(() => reject(this.foreignVersion === undefined ?
         // Which half never came says where to look: no hello is the worker
         // script (fetch, evaluation); no reply is the engine's Init().
