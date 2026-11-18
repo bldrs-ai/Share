@@ -13,7 +13,9 @@ import {
 
 /**
  * The assistant panel driving the viewer (#1675). The model is MSW's
- * scripted OpenRouter stream (src/__mocks__/api-handlers-openrouter.ts):
+ * scripted OpenRouter stream (src/__mocks__/api-handlers-openrouter.ts),
+ * straight from OpenRouter with the user's own key, or through MSW's stand-in
+ * for Bldrs' hosted relay without one (#1932):
  * for the select prompt it calls `model.query` for the proxies, then
  * `view.select` on the refs the REAL registry returned, then answers with
  * the count the select reported. So the selection these tests see in the
@@ -79,6 +81,38 @@ describeMobileAndDesktop('Assistant', (ff) => {
     await expect(panel.locator('[data-is-selected="true"]')).toHaveCount(1)
     await expect(panel.locator('[data-is-selected="true"]')).toHaveAttribute('data-node-label', PROXY_LABEL)
 
+    expect(realProviderRequests).toEqual([])
+  })
+
+  // #1932: a user with no key of their own still gets an answer, from Bldrs'
+  // hosted relay (MSW's stand-in for netlify/functions/ai-chat.js). The first
+  // request goes out signed out with no token, the relay mints one, and every
+  // later request of the turn carries it; nothing goes to openrouter.ai.
+  test('with no key of its own, answers through the hosted relay', async ({page}) => {
+    const realProviderRequests = watchRealProvider(page)
+    const relayAuth: Array<string | null> = []
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname === '/.netlify/functions/ai-chat') {
+        relayAuth.push(request.headers()['authorization'] ?? null)
+      }
+    })
+    await openAssistant(page)
+    await page.getByRole('textbox', {name: 'Message the assistant'}).fill(SCRIPT.selectPrompt)
+    await page.keyboard.press('Enter')
+
+    await expect(page.getByText(SCRIPT.preamble.trim())).toBeVisible()
+    await expect(page.getByText(SCRIPT.selectedAnswer(PROXY_COUNT))).toBeVisible()
+    await expect(page.getByTestId('BotChat-Error')).toHaveCount(0)
+    const actions = page.getByTestId('BotChat-Action')
+    await expect(actions.nth(1)).toContainText(`Selected ${PROXY_COUNT} elements`)
+    const panel = await openTree(page)
+    await expect(panel.locator('[data-is-selected="true"]')).toHaveCount(PROXY_COUNT)
+
+    const token = await page.evaluate(() => localStorage.getItem('bldrs.assist.anonToken'))
+    expect(token).toMatch(/^ba1\./)
+    expect(relayAuth.length).toBeGreaterThanOrEqual(2)
+    expect(relayAuth[0]).toBeNull()
+    expect(relayAuth.slice(1)).toEqual(relayAuth.slice(1).map(() => `Bearer ${token}`))
     expect(realProviderRequests).toEqual([])
   })
 
