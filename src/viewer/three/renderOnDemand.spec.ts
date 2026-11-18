@@ -133,6 +133,41 @@ describeMobileAndDesktop('viewer/three/renderOnDemand', () => {
   })
 
 
+  // Owner on #2171: dragging a cut plane's arrow showed nothing until the
+  // release. A drag moves the plane in place (MeshClipper#onMouseMove) with
+  // camera-controls off, so no camera move asks for the paint; and with the
+  // hover overlay on (the default) a pointer move over the canvas opens no
+  // settle window either (renderDemandHooks.js#attachSessionNets). The
+  // release's settle window then painted the end state, which is why only
+  // the frames while the button is down show the bug: the checks are made
+  // before the mouseup.
+  test('a cut plane dragged by its arrow repaints while the button is down', async ({page}) => {
+    await page.getByTestId('control-button-cut-plane').click()
+    await page.getByTestId('menu-item-section').click()
+    await expect(page.getByTestId('menu-cut-plane')).toBeHidden()
+    await expect.poll(() => new URL(page.url()).hash).toContain('cp:x')
+    await waitForIdle(page)
+    const {start, end} = await arrowDragPoints(page)
+    const planesBefore = await planeConstants(page)
+    const poseBefore = await cameraPose(page)
+    await startRecording(page)
+    await page.mouse.move(start.x, start.y)
+    await page.mouse.down()
+    await page.mouse.move(end.x, end.y, {steps: 10})
+    await page.waitForTimeout(DRAG_SETTLE_MS)
+    const during = await peekRecording(page)
+    const planesNow = await planeConstants(page)
+    // The preconditions that make the paint checks mean something: the press
+    // took the arrow, and the camera stayed put, so no camera move painted.
+    expect(planesNow, 'the drag moved the plane').not.toEqual(planesBefore)
+    expect(await cameraPose(page), 'the camera stayed put during the drag').toEqual(poseBefore)
+    expect(during.paints, 'the drag painted before the release').toBeGreaterThan(0)
+    expect(during.lastPlanes, 'the last paint during the drag showed the plane where it is').toEqual(planesNow)
+    await page.mouse.up()
+    await stopRecordingWhenIdle(page)
+  })
+
+
   test('a resize repaints at the new size', async ({page}) => {
     const viewport = page.viewportSize()
     if (viewport === null) {
@@ -230,6 +265,101 @@ describeMobileAndDesktop('viewer/three/renderOnDemand: ?feature=disableRenderOnD
     expect(after.paints - before.paints, 'an idle viewer painted every frame').toBe(frames)
   })
 })
+
+
+/** Frames for a drag's last move to be painted, if anything asks. */
+const DRAG_SETTLE_MS = 500
+/** How far along its plane's normal the arrow is dragged, in pixels. */
+const DRAG_PX = 60
+
+
+/**
+ * @param page
+ * @return each cut plane's `constant`, from the array MeshClipper binds
+ */
+async function planeConstants(page: Page): Promise<number[]> {
+  return await page.evaluate(() => {
+    const w = window as unknown as RodWindow
+    return (w.store?.getState().viewer?.context?.getLegacyRendererWrapper?.().clippingPlanes ?? [])
+      .map((plane) => plane.constant)
+  })
+}
+
+
+/**
+ * @param page
+ * @return the camera's position and quaternion
+ */
+async function cameraPose(page: Page): Promise<number[]> {
+  return await page.evaluate(() => {
+    const camera = (window as unknown as RodWindow).store?.getState().viewer?.context?.getCamera?.()
+    return camera ? [...camera.position.toArray(), ...camera.quaternion.toArray()] : []
+  })
+}
+
+
+/**
+ * Where to press on the Section cut's arrow and where to drag it to:
+ * {@link DRAG_PX} along the screen direction of its plane's normal, since
+ * MeshClipper keeps only the part of a move along the normal. Both points
+ * are checked to be over the canvas, which listens for the drag.
+ *
+ * @param page
+ * @return the press and release points, in page coordinates
+ */
+async function arrowDragPoints(page: Page): Promise<{start: {x: number, y: number}, end: {x: number, y: number}}> {
+  const points = await page.evaluate((dragPx) => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const context = (window as any).store.getState().viewer.context
+    const arrow = context.getScene().children.find((o: any) => o.userData?.isClippingControl)
+    const plane = context.getLegacyRendererWrapper().clippingPlanes[0]
+    if (!arrow || !plane) {
+      return null
+    }
+    const camera = context.getCamera()
+    const canvas = context.getDomElement() as HTMLCanvasElement
+    const rect = canvas.getBoundingClientRect()
+    const toPage = (v: any) => {
+      const ndc = v.clone().project(camera)
+      return {x: rect.left + (((ndc.x + 1) / 2) * rect.width), y: rect.top + (((1 - ndc.y) / 2) * rect.height)}
+    }
+    const start = toPage(arrow.position)
+    const along = toPage(arrow.position.clone().add(plane.normal.clone().multiplyScalar(0.1)))
+    const length = Math.hypot(along.x - start.x, along.y - start.y)
+    if (length < 1e-6) {
+      return null
+    }
+    const end = {
+      x: start.x + ((along.x - start.x) / length * dragPx),
+      y: start.y + ((along.y - start.y) / length * dragPx),
+    }
+    const onCanvas = (p: {x: number, y: number}) => document.elementFromPoint(p.x, p.y) === canvas
+    return {start, end, isCanvas: onCanvas(start) && onCanvas(end)}
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  }, DRAG_PX)
+  if (points === null) {
+    throw new Error('arrowDragPoints: no cut arrow, or its normal points straight at the camera')
+  }
+  expect(points.isCanvas, 'the arrow and the drag\'s end are on the canvas').toBe(true)
+  return {start: points.start, end: points.end}
+}
+
+
+/**
+ * What the recorder has seen so far, without stopping it.
+ *
+ * @param page
+ * @return how many paints, and the cut planes' constants at the last one
+ */
+async function peekRecording(page: Page): Promise<{paints: number, lastPlanes: number[]}> {
+  return await page.evaluate(() => {
+    const recording = (window as unknown as RodWindow).__rodRecording
+    if (!recording) {
+      throw new Error('peekRecording: not recording')
+    }
+    return {paints: recording.paints, lastPlanes: recording.lastPlanes}
+  })
+}
 
 
 /** How long the viewer must paint nothing to count as idle. */
@@ -375,8 +505,11 @@ function installRecorder(cols: number) {
   }
   const markerScales = (): number[] =>
     (w.store?.getState().placeMark?.getPlacemarks() ?? []).map((mark) => mark.scale.x)
+  const planes = (): number[] =>
+    (context.getLegacyRendererWrapper?.().clippingPlanes ?? []).map((plane) => plane.constant)
   const recording = {
     paints: 0, last: null as CanvasFrame | null, lastPose: [] as number[], lastMarkerScales: [] as number[],
+    lastPlanes: [] as number[],
     paintsAfterLoad: 0, wasLoading: false,
     painting, pose,
   }
@@ -393,6 +526,7 @@ function installRecorder(cols: number) {
       recording.last = read()
       recording.lastPose = pose()
       recording.lastMarkerScales = markerScales()
+      recording.lastPlanes = planes()
       if (recording.wasLoading && !isLoading) {
         recording.paintsAfterLoad++
       }
@@ -522,7 +656,10 @@ type RodWindow = Window & {
     } | null
     viewer?: {context?: {
       setRenderUpdate?: (fn: (...args: unknown[]) => void) => void
-      getLegacyRendererWrapper?: () => {update?: (...args: unknown[]) => void}
+      getLegacyRendererWrapper?: () => {
+        update?: (...args: unknown[]) => void
+        clippingPlanes?: Array<{constant: number}>
+      }
       getRenderer?: () => {getContext: () => WebGLRenderingContext}
       getRenderDemand?: () => {stats: {paints: number, frames: number}, scopes: Set<unknown>, isSession: boolean} | null
       getCamera?: () => {
@@ -535,6 +672,7 @@ type RodWindow = Window & {
     last: CanvasFrame | null
     lastPose: number[]
     lastMarkerScales: number[]
+    lastPlanes: number[]
     paintsAfterLoad: number
     wasLoading: boolean
     painting: (...args: unknown[]) => void

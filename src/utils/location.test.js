@@ -2,6 +2,7 @@ import {
   addHashParams,
   getHashParams,
   removeHashParams,
+  replaceHashParams,
   getEncodedParam,
   parseGitHubPath,
   setParamsToHash,
@@ -182,4 +183,66 @@ test('writing one set passes the others through as written', () => {
   // (This double doesn't add the '#' a browser does.)
   loc.hash = `#${loc.hash}`
   expect(getHashParams(loc, 'n')).toBe('n:')
+})
+
+
+describe('replaceHashParams', () => {
+  /** @type {any} */
+  let pushSpy
+  /** @type {any} */
+  let onHashChange
+  /** @type {any} */
+  let onPopState
+
+  beforeEach(() => {
+    window.history.replaceState({key: 'k1', idx: 3}, '', '/share/v/p/index.ifc?x=1#share:;c:1,2,3;cp:x=0.5,y;n')
+    pushSpy = jest.spyOn(window.history, 'pushState')
+    onHashChange = jest.fn()
+    onPopState = jest.fn()
+    window.addEventListener('hashchange', onHashChange)
+    window.addEventListener('popstate', onPopState)
+  })
+
+  afterEach(() => {
+    window.removeEventListener('hashchange', onHashChange)
+    window.removeEventListener('popstate', onPopState)
+    pushSpy.mockRestore()
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('rewrites only the named set, in place: no history entry, no hashchange or popstate', async () => {
+    const lengthBefore = window.history.length
+    replaceHashParams(window.location, 'c', [4, 5, 6, 7, 8, 9])
+    // Every other set (a bare `n`, a key-only `y`) passes through byte-identical.
+    expect(window.location.hash).toBe('#share:;c:4,5,6,7,8,9;cp:x=0.5,y;n')
+    expect(window.location.pathname).toBe('/share/v/p/index.ifc')
+    expect(window.location.search).toBe('?x=1')
+    expect(window.history.length).toBe(lengthBefore)
+    expect(pushSpy).not.toHaveBeenCalled()
+    // react-router keeps its entry key and index in history.state.
+    expect(window.history.state).toEqual({key: 'k1', idx: 3})
+    // jsdom queues hashchange as a task: let it run before asserting none came.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(onHashChange).not.toHaveBeenCalled()
+    expect(onPopState).not.toHaveBeenCalled()
+  })
+
+  it('appends the set when absent and merges named params like addHashParams', () => {
+    replaceHashParams(window.location, 'd', {color: 'src'}, true)
+    expect(window.location.hash).toBe('#share:;c:1,2,3;cp:x=0.5,y;n;d:color=src')
+    replaceHashParams(window.location, 'cp', {x: 0.75}, true)
+    expect(window.location.hash).toBe('#share:;c:1,2,3;cp:x=0.75,y;n;d:color=src')
+  })
+
+  it('sets the hash of a location-shaped double, as addHashParams does', () => {
+    const loc = newTestLocation()
+    loc.hash = '#a:1'
+    replaceHashParams(loc, 'c', [1, 2, 3])
+    expect(loc.hash).toBe('a:1;c:1,2,3')
+    const added = newTestLocation()
+    added.hash = '#a:1'
+    addHashParams(added, 'c', [1, 2, 3])
+    expect(added.hash).toBe(loc.hash)
+    expect(pushSpy).not.toHaveBeenCalled()
+  })
 })

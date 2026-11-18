@@ -31,6 +31,14 @@ export const flags = [
   // is invisible until flipped.
   // See design/new/conversational-cad.md §2.
   {name: 'workspace', isActive: false},
+  // Open a model in-app instead of with a page load (open-205 Phase 1a step 0,
+  // #2011, #2021): `navigateToModel` (utils/navigate.js) routes through
+  // react-router's `navigate()` rather than `window.location.assign`. Off:
+  // every open is the page load it always was. Its own flag, not
+  // `workspace`, so the switch burns in and rolls back without the shell
+  // (decision 2 on #2011). What the reload used to free, and what an in-app
+  // switch still leaks, is design/new/in-app-model-switch.md §2 and §6.
+  {name: 'spaModelNav', isActive: false},
   // The AI assistant (epic assist-310, #1659; design/new/ai-workspace.md §13,
   // D12). Today it gates only the dev hook `window.__bldrsAssistTools` that
   // drives the viewer tool registry (src/viewer/tools/assistHost.js, #1674);
@@ -209,6 +217,12 @@ export const flags = [
   // on-demand painting (DESIGN.md §"Render loop & perf monitor", "Rolling
   // back").
   {name: 'disableRenderOnDemand', isActive: false},
+  // OFF-switch for the §6e render look (viewer/lookMode.js), on by default
+  // since #2167. `?feature=disableLook` puts one session back on the pre-§6e
+  // pipeline (Lambert materials, linear output, no IBL, no AO); setting this
+  // `isActive: true` is the PROD ROLLBACK, which no URL can override. Not
+  // `look: false`: `?feature=look` now only opens the tuning panels.
+  {name: 'disableLook', isActive: false},
   // OFF-switch for the instance tree hover and click picks go through on a
   // batched model (viewer/ifc/batchedInstanceBvh.js): with it on, no tree is
   // built and every pick walks every instance, as before the tree. Same
@@ -257,6 +271,17 @@ export const flags = [
   // the PROD ROLLBACK: spawnEngine.js#engineFlagSnapshot reads the static
   // value first, as engineRoute.js does `disableEngineWorker`.
   {name: 'disableBufferedSource', isActive: false},
+  // Kill switch for the native source hash (engine/engineHandler.js#openModel,
+  // Share#2092; engine-worker.md §7.1): record the index sidecar's source digest
+  // with the platform's SHA-256 over 4 MiB blocks (conway's
+  // `SOURCE_HASH_ALGORITHM: 'sha256Blocks'`) instead of conway's per-byte FNV
+  // loop in JavaScript. `?feature=disableNativeSourceHash` reverts one session
+  // (and A/Bs the same build). Setting it `isActive: true` here is the PROD
+  // ROLLBACK: spawnEngine.js#engineFlagSnapshot reads the static value first,
+  // like `disableBufferedSource`. With it on, conway records FNV as before;
+  // sidecars already written natively stay valid and verify natively on
+  // reopen regardless, since a sidecar names its own algorithm.
+  {name: 'disableNativeSourceHash', isActive: false},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-

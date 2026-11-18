@@ -4,7 +4,7 @@ import {Button, Checkbox, FormControlLabel, Stack, Typography} from '@mui/materi
 import {navigateBaseOnModelPath} from '../../utils/location'
 import {navigateToModel} from '../../utils/navigate'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {pathSuffixSupported} from '../../Filetype'
+import {fileSuffixBoundaryRegex} from '../../Filetype'
 import {getFilesAndFolders} from '../../net/github/Files'
 import {getOrganizations} from '../../net/github/Organizations'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
@@ -37,7 +37,7 @@ function resolveValue(value, list) {
 
 /**
  * Keep only the file names Share can open, matched by supported extension
- * (case-insensitive, via {@link pathSuffixSupported}). GitHub's contents API
+ * (case-insensitive, at the end of the name). GitHub's contents API
  * has no server-side extension filter, so this is the enforcement point for
  * the *listed* files; a name typed into the File field bypasses it on purpose
  * (see validateFile / navigateToFile).
@@ -46,7 +46,9 @@ function resolveValue(value, list) {
  * @return {Array<string>}
  */
 function supportedFileNames(files) {
-  return files.map((file) => file.name).filter((name) => pathSuffixSupported(name))
+  // At the name's end: the unanchored match would list `foo.zipx` or
+  // `foo.gzip` as a zip, then fail to route it.
+  return files.map((file) => file.name).filter((name) => fileSuffixBoundaryRegex.test(name))
 }
 
 

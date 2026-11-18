@@ -4,6 +4,7 @@ import useStore from '../store/useStore'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneMenu from './CutPlane/CutPlaneMenu'
 import ResidencyControl from './Residency/ResidencyControl'
+import {noteUserDisplayChange} from './Share/viewLink'
 import {
   Close as CloseIcon,
   FilterCenterFocus as FilterCenterFocusIcon,
@@ -103,7 +104,10 @@ export default function ElementsControl({deselectItems}) {
         {(isSelected || isTempIsolationModeOn) &&
          <TooltipIconButton
            title='Isolate'
-           onClick={() => viewer.isolator.toggleIsolationMode()}
+           onClick={() => {
+             viewer.isolator.toggleIsolationMode()
+             noteUserDisplayChange()
+           }}
            icon={<FilterCenterFocusIcon className='icon-share'/>}
            placement='top'
            variant='solid'
@@ -121,7 +125,10 @@ export default function ElementsControl({deselectItems}) {
         {hasHidden && !isTempIsolationModeOn &&
           <TooltipIconButton
             title='Show all'
-            onClick={() => viewer.isolator.unHideAllElements()}
+            onClick={() => {
+              viewer.isolator.unHideAllElements()
+              noteUserDisplayChange()
+            }}
             icon={<VisibilityOutlinedIcon className='icon-share'/>}
             placement='top'
             variant='solid'
@@ -135,7 +142,10 @@ export default function ElementsControl({deselectItems}) {
         {isSelected && !isTempIsolationModeOn &&
          <TooltipIconButton
            title='Hide'
-           onClick={() => viewer.isolator.hideSelectedElements()}
+           onClick={() => {
+             viewer.isolator.hideSelectedElements()
+             noteUserDisplayChange()
+           }}
            icon={<HideSourceOutlinedIcon className='icon-share'/>}
            placement='top'
            variant='solid'
@@ -157,6 +167,7 @@ export default function ElementsControl({deselectItems}) {
            onClick={() => {
              if (isTempIsolationModeOn) {
                viewer.isolator.toggleIsolationMode()
+               noteUserDisplayChange()
              }
              deselectItems()
            }}

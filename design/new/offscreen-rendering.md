@@ -138,7 +138,7 @@ Classes:
 | 16 | Hover pick: `window` `mousemove` → `highlightIfcItem` at ≤30 Hz | `Containers/viewer.js:153-168`, `ShareViewer.js:1662-1750` | P | Runs worker-local from forwarded moves: no round trip, no main involvement. |
 | 17 | Double-click pick + id resolution | `CadView.jsx:489, 1270` (`window.ondblclick = canvasDoubleClickHandler`, `:1719`), `:1719-1860` | P | Split: the raycast and the table lookups (`instanceParents`, `instanceOccurrenceIds`, `instanceMap`) move to the worker as `pick()`. The selection funnel (`selectFromInstancePick`, `elementSelection`) stays on main. |
 | 18 | Keyboard shortcuts on the canvas (`Q W A H U I R`) | `src/utils/shortcutKeys.js:8-30` | P | Stays on main. Q/W (`viewer.clipper.createPlane()` / `deletePlane()`, which reach `MeshClipper#createPlaneAtCursor` / `deletePlaneAtCursor`) become RPCs that use the worker's last pointer. The canvas element stays in the DOM after transfer, so it still takes focus and `tagName === 'CANVAS'` still holds. |
-| 19 | Camera-permalink listeners on the canvas | `src/Components/Camera/CameraControl.jsx:79-82` | P | Stay on main (they only clear the `#c:` hash). |
+| 19 | Live camera link: `controlstart` / `control` / `update` listeners that keep `#c:` following the camera after the user's first move (they replaced canvas listeners that cleared it) | `src/Components/Camera/liveCameraLink.js` | P | Stays on main: it reads the camera mirror and writes the hash with `history.replaceState`; the `CameraProxy` (§6.6) re-emits the events it listens for. |
 
 ### 2.3 Camera
 

@@ -2,6 +2,8 @@ import {
   getHashParams,
   getObjectParams,
   removeHashParams,
+  removeParamsFromHash,
+  replaceHash,
   setParamsToHash,
 } from '../../utils/location'
 import {ColorMode} from '../../viewer/display/colorMode'
@@ -90,8 +92,11 @@ const MOTION_AUTO_TERM = 'auto'
  *
  * @param {object} location window.location
  * @param {object} terms key → value string, or null / '' to drop the key
+ * @param {object} [options]
+ * @param {boolean} [options.inPlace] write with `history.replaceState`, no
+ *   history entry: the live view link's writes (Share/viewLink.js)
  */
-export function mergeDisplayTerms(location, terms) {
+export function mergeDisplayTerms(location, terms, {inPlace = false} = {}) {
   const token = getHashParams(location, HASH_PREFIX_DISPLAY)
   const next = {}
   for (const [key, value] of Object.entries(token ? getObjectParams(token) : {})) {
@@ -116,14 +121,22 @@ export function mergeDisplayTerms(location, terms) {
     Object.entries(next).sort(([a], [b]) => rank(a) - rank(b)))
   if (Object.keys(ordered).length === 0) {
     if (token) {
-      removeHashParams(location, HASH_PREFIX_DISPLAY)
+      if (inPlace) {
+        replaceHash(location, removeParamsFromHash(location.hash, HASH_PREFIX_DISPLAY))
+      } else {
+        removeHashParams(location, HASH_PREFIX_DISPLAY)
+      }
     }
     return
   }
   // includeNames: emit `k=v`, matching the cp: token shape.
   const hash = setParamsToHash(location.hash, HASH_PREFIX_DISPLAY, ordered, true)
   if (hash !== location.hash) {
-    location.hash = hash
+    if (inPlace) {
+      replaceHash(location, hash)
+    } else {
+      location.hash = hash
+    }
   }
 }
 
@@ -172,8 +185,9 @@ export function modelDisplayParams(appearance = {}) {
  *
  * @param {object} location window.location
  * @param {object} [appearance] `{color?, shading?, residency?}`
+ * @param {object} [options] `{inPlace}`, as {@link mergeDisplayTerms}
  */
-export function writeModelDisplayHash(location, appearance = {}) {
+export function writeModelDisplayHash(location, appearance = {}, options = {}) {
   const params = modelDisplayParams(appearance)
   // Every model-display key is set or dropped, not merged: an axis returning
   // to its default stops being emitted, and a merge would keep it from the
@@ -181,7 +195,7 @@ export function writeModelDisplayHash(location, appearance = {}) {
   // `color=src` and the shared URL restored a different display than the
   // sender saw. Only the other writers' keys (hide / show / iso) are kept.
   mergeDisplayTerms(location, Object.fromEntries(
-    MODEL_DISPLAY_KEYS.map((key) => [key, params[key] ?? null])))
+    MODEL_DISPLAY_KEYS.map((key) => [key, params[key] ?? null])), options)
 }
 
 

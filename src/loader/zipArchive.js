@@ -135,15 +135,25 @@ const METHOD_NAMES = new Map([
 
 
 /**
- * Why an archive, or the entry asked for, cannot be opened. The message is
- * for the dialog: it never names a file, so it is safe as an alert's text
+ * Why an archive, or the entry asked for, cannot be opened. The message
+ * never names a file, so it is safe as an alert's text and in analytics
  * (string alerts are fingerprinted by their text, `utils/alertTracking.js`).
+ * Text that does name the archive's entries — useful to the user, private to
+ * them — rides `dialogText`, which only the dialog shows.
  */
 export class ZipArchiveError extends Error {
-  /** @param {string} msg */
-  constructor(msg) {
+  /**
+   * @param {string} msg
+   * @param {object} [options]
+   * @param {string} [options.dialogText] the dialog's fuller text, which may
+   *   name the archive's entries; never sent to a sink
+   */
+  constructor(msg, {dialogText} = {}) {
     super(msg)
     this.name = 'ZipArchiveError'
+    if (dialogText !== undefined) {
+      this.dialogText = dialogText
+    }
   }
 }
 
@@ -156,7 +166,7 @@ const DAMAGED_MESSAGE = 'This archive is damaged or incomplete, so Share can\'t 
 
 
 /** @return {string} The refusal for an entry past the ceiling */
-function expandsPastMessage() {
+export function expandsPastMessage() {
   return `The model in this archive unpacks to more than ${MAX_ENTRY_INFLATED_BYTES / BYTES_PER_MIB} MiB, ` +
     'which is larger than any model Share can open.'
 }

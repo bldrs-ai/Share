@@ -4,9 +4,11 @@ import {EngineSession} from './EngineSession'
 import {createEngineHandler} from './engineHandler'
 import {indexLine} from './engineModelLoad'
 import {
-  SIDECAR_DIR, STALE_TMP_MS, TMP_LOCK_PREFIX, discardSidecar, readSidecar, sidecarKey, sidecarWriter, sweepSidecars,
+  SIDECAR_DIR, STALE_TMP_MS, TMP_LOCK_PREFIX, discardSidecar, readSidecar, sidecarHashName, sidecarKey, sidecarWriter, sweepSidecars,
   writeSidecar, writeThroughSyncHandle,
 } from './engineSidecars'
+import {ColumnarIndexSink} from '@bldrs-ai/conway/src/step/parsing/columnar_index'
+import {serializeIndexSidecarFromColumns} from '@bldrs-ai/conway/src/step/parsing/index_sidecar'
 import {locateOpfsEntry, makeBlobStore, makeSyncHandleStore, openSourceStore} from './engineSources'
 import {ENGINE_PROTOCOL_VERSION, Ev} from './protocol'
 import {makeWorkerTransport} from './transports'
@@ -574,6 +576,25 @@ describe('engine/engineSidecars', () => {
     expect(entered).toBe(0)
   })
 
+  it('sidecarHashName reads the digest a real conway sidecar names, and nothing from garbage', () => {
+    const empty = () => new ColumnarIndexSink().finalize()
+    expect(sidecarHashName(serializeIndexSidecarFromColumns(empty(), 10, 5))).toBe('fnv')
+    expect(sidecarHashName(serializeIndexSidecarFromColumns(empty(), 10, 5, {hashAlgorithm: 2}))).toBe('sha256')
+    // An id this build has no word for is left off the line, never called FNV.
+    // conway's serializer refuses to write one, so it is forged here: the two
+    // real sidecars differ only in the algorithm slot, which is overwritten.
+    const fnv = serializeIndexSidecarFromColumns(empty(), 10, 5)
+    const forged = serializeIndexSidecarFromColumns(empty(), 10, 5, {hashAlgorithm: 2})
+    const slot = forged.findIndex((byte, i) => byte !== fnv[i])
+    expect(slot).toBeGreaterThanOrEqual(0)
+    const UNKNOWN_ALGORITHM_ID = 3
+    forged[slot] = UNKNOWN_ALGORITHM_ID
+    expect(sidecarHashName(forged)).toBeUndefined()
+    expect(sidecarHashName(Uint8Array.of(1, 2, 3))).toBeUndefined()
+    expect(sidecarHashName(undefined)).toBeUndefined()
+  })
+
+
   it('indexLine says where the index came from and whether a sidecar was saved', () => {
     const MIB = 1024 * 1024
     expect(indexLine({source: 'sidecar', bytes: 16.5 * MIB, saved: false}))
@@ -589,6 +610,11 @@ describe('engine/engineSidecars', () => {
       .toBe('Engine index: parsed; sidecar saved (143.8 MB, via sync access handle)')
     expect(indexLine({source: 'parse', bytes: 143.8 * MIB, saved: false, saveError: 'QuotaExceededError: full'}))
       .toBe('Engine index: parsed; no sidecar saved (QuotaExceededError: full)')
+    // Share#2092: which source digest the sidecar carries.
+    expect(indexLine({source: 'sidecar', bytes: 16.5 * MIB, saved: false, hash: 'sha256'}))
+      .toBe('Engine index: from sidecar (16.5 MB, sha256), no parse')
+    expect(indexLine({source: 'parse', bytes: 143.8 * MIB, saved: true, hash: 'fnv', writer: 'syncAccessHandle'}))
+      .toBe('Engine index: parsed; sidecar saved (143.8 MB, fnv, via sync access handle)')
     expect(indexLine(undefined)).toBeUndefined()
   })
 })
@@ -650,16 +676,22 @@ function sidecarApi(log, {refuseIndex = false} = {}) {
   const SIDECAR = Uint8Array.of(0x43, 0x49, 0x44, 0x58, 3)
   return {
     SIDECAR,
+    // The settings each open was given, kept apart from `log` so the log
+    // assertions stay exact.
+    streamSettings: [],
+    indexSettings: [],
     wasmModule: undefined,
     async Init() {
       this.wasmModule = {HEAPU8: {byteLength: 1}}
     },
     async OpenModelStream(store, settings) {
+      this.streamSettings.push({...settings})
       log.push(`stream recordHash=${settings.RECORD_SOURCE_HASH === true} readSync=${typeof store.readSync}`)
       await store.read(0, 4)
       return 0
     },
     async OpenModelFromIndex(store, sidecar, settings) {
+      this.indexSettings.push({...settings})
       log.push(`index verify=${settings.VERIFY_INDEX_SOURCE_HASH}`)
       return refuseIndex || sidecar.length !== SIDECAR.length ? -1 : 0
     },
@@ -736,6 +768,36 @@ describe('engine/engineHandler: index sidecar reopen (engine-worker.md §7 step 
     // No parse, and no second export. `verify=true` is the full source
     // hash the owner chose on Share#2085; 'sampled' here is a regression.
     expect(log).toEqual(['index verify=true', 'CloseModel'])
+  })
+
+  // Share#2092: the parse records the source hash natively (conway#783), so
+  // Firefox does not spend ~10 s of a big model's parse in a JS FNV loop.
+  it('the parse records the source hash natively, with RECORD_SOURCE_HASH', async () => {
+    const api = sidecarApi([])
+    const root = memoryDir({owner: memoryDir({[NAME]: memoryFile(NAME, BYTES)})})
+    await loadOnce(api, root)
+    expect(api.streamSettings).toHaveLength(1)
+    expect(api.streamSettings[0]).toMatchObject({RECORD_SOURCE_HASH: true, SOURCE_HASH_ALGORITHM: 'sha256Blocks'})
+  })
+
+  it('disableNativeSourceHash: still records the hash, and asks for no algorithm (conway\'s FNV default)', async () => {
+    const api = sidecarApi([])
+    const root = memoryDir({owner: memoryDir({[NAME]: memoryFile(NAME, BYTES)})})
+    await loadOnce(api, root, {disableNativeSourceHash: true})
+    expect(api.streamSettings[0].RECORD_SOURCE_HASH).toBe(true)
+    expect(api.streamSettings[0]).not.toHaveProperty('SOURCE_HASH_ALGORITHM')
+  })
+
+  it('a sidecar reopen still runs the full source check, whichever way the flag is set', async () => {
+    const root = memoryDir({owner: memoryDir({[NAME]: memoryFile(NAME, BYTES)})})
+    await loadOnce(sidecarApi([]), root)
+    for (const flags of [{}, {disableNativeSourceHash: true}]) {
+      const api = sidecarApi([])
+      const summary = await loadOnce(api, root, flags)
+      expect(summary.index.source).toBe('sidecar')
+      expect(api.indexSettings[0].VERIFY_INDEX_SOURCE_HASH).toBe(true)
+      expect(api.streamSettings).toHaveLength(0)
+    }
   })
 
   it('a refused sidecar falls back to the parse and is replaced', async () => {

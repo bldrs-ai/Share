@@ -519,6 +519,17 @@ describe('engine/spawnEngine: what the page snapshots for the policy', () => {
     expect(engineFlagSnapshot().disableBufferedSource).toBe(true)
   })
 
+  it('disableNativeSourceHash from the URL', () => {
+    expect(engineFlagSnapshot().disableNativeSourceHash).toBe(false)
+    isFeatureEnabled.mockImplementation((name) => name === 'disableNativeSourceHash')
+    expect(engineFlagSnapshot().disableNativeSourceHash).toBe(true)
+  })
+
+  it('disableNativeSourceHash from the static flag, read before the URL (the prod rollback)', () => {
+    staticFlags.push({name: 'disableNativeSourceHash', isActive: true})
+    expect(engineFlagSnapshot().disableNativeSourceHash).toBe(true)
+  })
+
   it('the old experimental flag is gone from the snapshot', () => {
     expect(Object.keys(engineFlagSnapshot())).not.toContain('engineHeldBufferOpen')
   })

@@ -48,6 +48,7 @@ import {Ev, Op} from './protocol'
 import {POLICY_BUFFERED_REASONS, SourceModeReason} from './sourcePolicy'
 import {isOutOfMemoryError} from '../utils/oom'
 import {spawnEngineSession} from './spawnEngine'
+import {LoadAbortedError} from '../utils/loadAbort'
 
 
 // Re-exported: callers that pick an engine load ask the same list the
@@ -250,11 +251,35 @@ export function makeEngineIfcApi(store) {
  *   what the file's SUFFIX names, so a label only (see the file header);
  *   null when the caller did not say
  * @param {function(): Promise<object>} [options.spawn] for tests
- * @return {{ifcAPI: object, parse: Function}}
+ * @return {{ifcAPI: object, parse: Function, abort: Function, aborted: boolean}}
  */
 export function createEngineModelLoad({format = null, spawn = spawnEngineSession} = {}) {
   const store = makeGeometryStore()
   const ifcAPI = makeEngineIfcApi(store)
+  // open-205 #2011 step A: the load can be given up before its parse ends —
+  // the user switched to another model in-app (CadView's load signal, through
+  // ShareIfcLoader#parse), or the viewer it streams into was disposed
+  // (ShareIfc#dispose). `abort()` terminates the worker at once: the open,
+  // the pump and every request still pending reject (EngineSession#fail), so
+  // the parse below unwinds at its next await. `aborted` rejects too, for the
+  // awaits that are not on the session (a spawn still starting, the test
+  // holds), so none of them can keep a given-up load suspended.
+  let isAbortedLoad = false
+  let rejectAborted
+  const aborted = new Promise((resolve, reject) => {
+    rejectAborted = reject
+  })
+  aborted.catch(() => null)
+  const untilAborted = (promise) => Promise.race([promise, aborted])
+  /** Give the load up; see above. Idempotent. */
+  const abort = () => {
+    if (isAbortedLoad) {
+      return
+    }
+    isAbortedLoad = true
+    rejectAborted(new LoadAbortedError())
+    ifcAPI.engineSession?.close()
+  }
 
   /**
    * The worker-engine twin of `parseIfcWithConway`, with the same callback
@@ -354,7 +379,20 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
       return finishedLoad
     }
 
-    let session = await spawn()
+    // A spawn is not cancellable: a session that comes up after the abort is
+    // closed here, before it is wired or opened.
+    const spawnLive = async () => {
+      const spawning = spawn()
+      try {
+        return await untilAborted(spawning)
+      } catch (e) {
+        if (isAbortedLoad) {
+          spawning.then((late) => late.close(), () => null)
+        }
+        throw e
+      }
+    }
+    let session = await spawnLive()
     reportEngineVersion(session.info?.conwayVersion)
     let finished = wire(session)
     let opened
@@ -365,6 +403,10 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
         break
       } catch (e) {
         session.close()
+        if (isAbortedLoad) {
+          // The open failed because the session was closed under it.
+          throw new LoadAbortedError()
+        }
         const failure = e.engineFailure
         const retryFailure = sourceOverride === null ? retryableBufferedFailure(failure) : null
         if (retryFailure !== null) {
@@ -383,7 +425,7 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
           // that attempt's (loadProgress.js#reportEngineLog counts both).
           reportSourceInfo(`Engine retry: buffered open failed (${FAILURE_TEXT[retryFailure]}); ` +
             'retrying windowed on a fresh engine')
-          session = await spawn()
+          session = await spawnLive()
           finished = wire(session)
           continue
         }
@@ -400,7 +442,7 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
     }
     const modelID = opened.modelID
     if (holdIndex !== null) {
-      await holdIndex()
+      await untilAborted(holdIndex())
     }
     if (onIndexed) {
       // Started, not awaited, as in parseIfcWithConway (#2037).
@@ -411,7 +453,7 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
       }
     }
     if (holdPump !== null) {
-      await holdPump()
+      await untilAborted(holdPump())
     }
     if (startPaused) {
       // Held mid-pump: one batch, then the engine pauses itself and the
@@ -422,7 +464,9 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
       ifcAPI.summary = await finished
     } catch (e) {
       session.close()
-      throw e
+      // A closed session ends the stream with `failed {kind: 'closed'}`,
+      // which says nothing of why: say it was given up.
+      throw isAbortedLoad ? new LoadAbortedError() : e
     }
     reportSourceInfo(sourceModeLine(ifcAPI.summary.sourceMode))
     reportSourceInfo(sourceIoLine(ifcAPI.summary.source))
@@ -455,7 +499,15 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
     return {modelID, recapture, summary: ifcAPI.summary}
   }
 
-  return {ifcAPI, parse}
+  return {
+    ifcAPI,
+    parse,
+    abort,
+    /** @return {boolean} whether {@link abort} has run */
+    get aborted() {
+      return isAbortedLoad
+    },
+  }
 }
 
 
@@ -688,7 +740,9 @@ export function indexLine(index) {
   if (!index) {
     return undefined
   }
-  const size = `${(index.bytes / MIB).toFixed(1)} MB`
+  // The sidecar's source digest, 'sha256' or 'fnv' (Share#2092), so a report
+  // says which hash a reopen verified; absent when the worker could not read it.
+  const size = `${(index.bytes / MIB).toFixed(1)} MB${index.hash ? `, ${index.hash}` : ''}`
   if (index.source === 'sidecar') {
     return `Engine index: from sidecar (${size}), no parse`
   }

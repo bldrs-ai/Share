@@ -1,7 +1,10 @@
 # In-app model switching — open a model without a page reload (open-205)
 
 **Status:** Phase 0 landed (#2026). Phase 1 re-planned 2026-11-02 (§4);
-P1.0 measured (§4.1); Phase 2 planned.
+P1.0 measured (§4.1); Phase 1a step 0, the flagged switch and the first
+memory E2E, built (§4.6, §6); step A, load ownership and abort under the
+same flag, built (§4.5a). Phase 2 planned. Per-step status lives on
+#2011 and its sub-issues, not here.
 **Epic:** `open-205` (#2011). Stories: Phase 0 #2012 (tasks #2013–#2018,
 closed; #2017 moved to Phase 1), Phase 1 #2028 (measure), #2029
 (interactive at index), #2019 (sessions), #2030 (no blocking calls), #2031
@@ -45,38 +48,53 @@ to matter.
 
 ### 2.1 The in-app path already exists
 
-A route change sets `modelPath` (`src/Share.jsx:100-108`), and CadView's
-`[modelPath]` effect runs `onModelPath` (`src/Containers/CadView.jsx:1931`),
-which builds a new viewer; `initViewer` disposes the previous one first
-(`src/Containers/viewer.js:125`). Two paths take it already:
+A route change sets `modelPath` (`src/Share.jsx`'s route effect, keyed by
+`modelIdentity` since #2013), and CadView's `[modelPath]` effect runs
+`onModelPath`, which builds a new viewer; `initViewer` disposes the previous
+one first (`src/Containers/viewer.js`). CadView itself has no key and
+survives every model change. Paths that take it without a page load:
 
 - the no-OPFS in-memory open (`navigateToInMemoryModel`, #1906), whose File
   can't survive a page load;
 - every theme toggle — `theme.addThemeChangeListener(initViewerCb)`
-  (`CadView.jsx:333`) re-creates the viewer and the `[viewer]` effect
-  reloads the model into it.
+  re-creates the viewer and the `[viewer]` effect reloads the model into it;
+- `navToDefault` (the alert's Reset), and the search bar's open of a
+  non-GitHub URL (`/share/v/u/…`);
+- Back/Forward between those;
+- since step 0, every `navigateToModel` under `?feature=spaModelNav` (§4.6).
 
 So the dispose path runs in production today; what's missing is everything
 the page load was quietly covering.
 
-### 2.2 One engine per viewer
+### 2.2 One engine per model, in a worker
 
-- `new ShareViewer` builds `new ShareIfc` (`src/viewer/ShareViewer.js:259`),
-  whose constructor creates `new IfcAPI()` (`src/viewer/ifc/ShareIfc.js:141`);
-  the loader shares that instance (`ShareViewer.js:268`).
-- The first parse calls `ifcAPI.Init()` (`src/viewer/ifc/conwayDirectIfcLoader.js:122-124`),
-  which instantiates a fresh Conway geometry module — a new
-  `WebAssembly.Memory` — per `IfcAPI`
-  (`node_modules/@bldrs-ai/conway/compiled/dependencies/conway-geom/interface/conway_geometry.js:299`).
-  GLB cache hits never call it.
-- Production is **single-threaded**. Pthreads need `SharedArrayBuffer`
-  (`pThreadsAllowed`, same file), which needs cross-origin isolation, and
-  `netlify.toml:115` sets COEP to `unsafe-none` (the Drive picker's CORP
-  rules out `require-corp`; `tools/esbuild/proxy.js:113-117` matches for
-  dev). No pthread pool exists to leak. If COEP ever changes, each `Init`
-  would start a worker pool that nothing terminates — revisit then.
+- **Default (the worker path).** Since #2083 (2026-11-07) each IFC or STEP
+  load spawns its own engine session (`engine/spawnEngine.js`) in its own
+  Web Worker; the model's `ifcManager.ifcAPI` is a facade over that session
+  (`engineSession`). `terminate()` frees the whole WASM instance at once
+  (engine-worker.md §3: PSB 2.25 GB → 0.9 MB).
+- **Main-thread engine** (`?feature=disableEngineWorker`, a `?view=` rule
+  set, the legacy `?feature=bot`; `engine/engineRoute.js`). `new
+  ShareViewer` builds `new ShareIfc`, whose constructor creates `new
+  IfcAPI()`, and the first parse `Init()`s a fresh Conway geometry module —
+  a new `WebAssembly.Memory` — per `IfcAPI`. GLB cache hits never call it.
+- Production is **single-threaded** inside each engine. Pthreads need
+  `SharedArrayBuffer` (`pThreadsAllowed`), which needs cross-origin
+  isolation, and `netlify.toml` sets COEP to `unsafe-none` (the Drive
+  picker's CORP rules out `require-corp`). No pthread pool exists to leak.
+  If COEP ever changes, each `Init` would start a worker pool that nothing
+  terminates — revisit then.
 
 ### 2.3 `CloseModel` frees almost nothing
+
+**On the worker path this no longer matters:** `ShareIfc.dispose` closes
+the engine session of every *registered* model, which terminates its
+worker (checked by `modelSwitchMemory.spec.ts`, §6). A model registers only
+when its parse returns (`ShareIfcLoader.js`, `ifc.addIfcModel`), so before
+step A a worker superseded mid-parse was not closed by the dispose (#2031).
+Under `?feature=spaModelNav` it now is: the load is aborted, and the
+dispose also aborts every engine load still parsing into the viewer
+(§4.5a). The rest of this section is the main-thread path.
 
 `ShareViewer.dispose` (`:630`, async, **not awaited** by `disposeViewer`,
 `viewer.js:103`) calls `ShareIfc.dispose` (`ShareIfc.js:225-241`), which
@@ -98,25 +116,38 @@ The per-model frees that do exist run from the idle GLB writer, not from
 dispose: `SpillModelSource` and `ReleaseModelGeometry` (`src/loader/Loader.js:1011-1029`,
 cache-miss only, the latter gated on `demandGeometry`).
 
-### 2.4 What keeps the old engine reachable
+### 2.4 What keeps the old model reachable
 
-The heap comes back only when every JS reference to the old `IfcAPI` is gone:
+On the worker path the engine's memory goes with `terminate()`, whatever
+still references the model. What stays is the JS side: the model's scene
+graph and geometry, its tree and its IfcAPI facade. On the main-thread path
+the model also pins the whole `IfcAPI`, so its WASM heap comes back only
+when every JS reference to the model is gone.
 
-- **The model.** `decorateConwayDirectIfcModel` sets
-  `ifcModel.ifcManager = makeConwayDirectIfcManager(ifcAPI, modelID)`
-  (`conwayDirectIfcLoader.js:878`). The store's `model`
-  (`src/store/IFCSlice.js:97`) — plus `rootElement`, `elementTypesMap` — is
-  replaced only when the *next* load succeeds (`CadView.jsx:838`). Peak
-  memory during a switch is therefore old engine + new engine; a failed next
-  load keeps the old one indefinitely.
-- **A load still running.** `Loader.load` has no cancellation; see §4.
-- **The idle GLB writer**, whose closure holds `model` and `viewer`
-  (`Loader.js:989-1033`).
-- **`elementsById`** (`CadView.jsx:268`), never cleared (§3.4).
-- **PlaceMark**, bound to the first viewer's scene (§3.5).
+Measured 2026-11-18 (step 0's leak hunt, #2023): after an in-app switch
+from a finished A to B, a `WeakRef` to A's model stays set after a forced
+GC, on both engines and both form factors. Heap-snapshot retainer paths
+(CDP `HeapProfiler.takeHeapSnapshot`, an unminified Playwright build),
+removed one at a time:
 
-Both theme toggles and the no-OPFS path already pay this today.
-
+- **PlaceMark** (#2017): the store's `placeMark`, created once for the first
+  viewer, keeps `[model]` in its `_objects` closure. MarkerControl mounts
+  whenever a model is ready, Notes open or not.
+- **The disposed viewer's isolator** kept `ifcModel`. Fixed in step 0
+  (`IfcIsolator#dispose`).
+- **Closures from the renders before the switch,** held by components that
+  stay mounted (#2019): MUI's `ButtonBase` keeps its first render's handlers
+  for life (`useEventCallback`), so a toolbar button's first `onClick` kept
+  its control's render scope; `TooltipIconButton` now hands it a stable
+  handler (fixed in step 0). Others remain: a stable-deps effect's closure
+  (NotesControl's `hashchange` listener), MUI Modal's effect deps, and
+  React's alternate fibers, each holding a render scope with A's `model`.
+  CadView's theme-change listener does the same for A's viewer. Remounting
+  the per-model view on a switch is not enough alone: during B's load the
+  store's `model` is still A (it is replaced only by the next successful
+  `setModel`), so the first render of a remounted control captures A again.
+- **The idle GLB writer** holds `model` and `viewer` until it has run
+  (`Loader.js`); the spec waits for it, so it was not a retainer there.
 
 ## 3. Phase 0 — bugs the reload hides (#2012)
 
@@ -490,11 +521,12 @@ construction.
 
 ### 4.4 No blocking calls (#2030)
 
-Conway runs on the main thread — the only workers are OPFS
-(`src/OPFS/OPFSService.js:54`) and the GLB writer
-(`src/loader/GlbWriterService.js:43`). Two loads at once therefore share
-one thread, and a background parse stutters the foreground model unless it
-yields often.
+*Written before the engine worker.* Since #2083 each model's engine runs
+in its own worker, so a background parse no longer shares the page's
+thread (item 4, done by #2053); item 1's preparation moved into the GLB
+writer worker in #2035. What is left on the page is Share's own work: batch
+assembly, the scene, and the GLB writer's main-side half. The list below is
+P1.0's, kept for its measurements.
 
 The suspect was a long synchronous initial parse, and P1.0 cleared it: Conway already yields (§4.1). The long blocks are mostly Share's own. In priority order:
 
@@ -525,7 +557,7 @@ exceeded (phones first).
 - These figures exclude GPU memory, and they were measured in software WebGL.
 - On phones, a single 231 MB model already exceeds typical tab limits. The practical mobile policy is one large model resident.
 
-**WASM `Memory` never shrinks**, so memory goes back to the browser only when the whole instance is collected: eviction must drop the session's `IfcAPI`. `ReleaseModelGeometry` returns nothing to the browser. It may let the same instance reuse those pages, but that doesn't help here, because a new model gets a new instance (§4.3). The steps:
+**On the worker path, eviction and close are `terminate()`** (engine-worker.md §5.2–§5.5), which frees the instance whatever still references the model. On the main-thread path: **WASM `Memory` never shrinks**, so memory goes back to the browser only when the whole instance is collected: eviction must drop the session's `IfcAPI`. `ReleaseModelGeometry` returns nothing to the browser. It may let the same instance reuse those pages, but that doesn't help here, because a new model gets a new instance (§4.3). The steps:
 
 1. abort the download and the parse — an `AbortSignal` through
    `Loader.load` to `ProgressiveLoadSession.abort()`
@@ -539,6 +571,62 @@ exceeded (phones first).
 An evicted model reopens like any other (its GLB cache hit makes that
 cheap where one exists).
 
+### 4.5a Phase 1a step A, as built: the switch aborts the load it leaves
+
+Phase 1a is "switch = close", one model at a time (#2011), so until
+sessions (§4.3) the close path above is what a switch takes, and it is
+built for that case only: no `EngineHost`, budget, LRU or rehydrate. All
+of it is under `?feature=spaModelNav`; off the flag nothing is aborted and
+a switch mid-load still waits behind the load.
+
+- **Who owns a load.** Each CadView `onViewer` run gets an
+  `AbortController` (`loadAbortRef`). Leaving the model aborts it, in
+  `onModelPath`'s `initViewerCb`, before `initViewer` disposes the viewer
+  the load streams into: on a model change, and on a viewer re-created for
+  the same model (a theme or view-settings change), which `onViewer` then
+  reloads into the new viewer. The aborted run unwinds at its next await
+  and the next model's load starts then. Loads stay one at a time, which
+  the per-load module state (the load reporter, the artifact generation,
+  the streaming selection) still assumes; what changed is that "the end of
+  the load in flight" is now its next await, not its end.
+- **What the signal reaches** (`utils/loadAbort.js`). `Loader.js#load`
+  races its download, OPFS staging and parse against it, quiets its
+  `onProgress` and `setOpfsFile` for the work it cannot stop, never falls
+  back to a direct fetch for an abort, and skips the idle GLB writer of a
+  model left before it ran. `ShareIfcLoader#parse` (IFC and STEP alike)
+  terminates the engine worker (`engineModelLoad.js#abort`: the open, the
+  pump and every pending request reject; a spawn still starting is closed
+  when it lands), or, on the main-thread engine, stops the pump at its next
+  batch; the open there is one wasm call and runs to its end. Either way
+  nothing is registered with the viewer and the parse rejects with a
+  `LoadAbortedError`, not null. The mesh loaders (GLB, OBJ, STL, …) have no
+  engine and cannot be stopped: their parse runs on and its model is
+  dropped, never registered.
+- **The close path for a model that never registered** (#2031's).
+  `ShareIfc` tracks each engine load parsing into it (`trackEngineLoad`),
+  and its `dispose` aborts them, beside closing the registered models.
+- **Nothing of the left model is written after the abort.** Every CadView
+  guard reads an aborted run as superseded (`isLoadSuperseded`), so after
+  A → B → A a run given up for its viewer is not "current" again. The run's
+  catch takes an abort as an abort: no alert, no `load_failed`, no Sentry;
+  one GA `model_load_aborted` (`phase`, `format`, real opens only). The load
+  report is cleared, not frozen with a "Load failed" line
+  (`endLoadProgress(…, {isAborted})`).
+- **The store's per-model state goes when the user leaves**
+  (`CadView#forgetLoadedModelState`, the load-ownership part of #2019):
+  `model`, `isModelReady`, the tree, search, `loadedFileInfo`, the export
+  artifact, `opfsFile` and the load report, so the page reads as a fresh
+  page load does before the model arrives. Before, `model` stayed A until
+  B's `setModel` (§2.4).
+- **Off the flag** a theme change mid-load still lets the load run into
+  the disposed viewer, which then fails at `addIfcModel` with "Cannot read
+  properties of null (reading 'items')" (an alert, and a Sentry capture),
+  and the model is not reloaded. Seen in a probe on index.ifc held at its
+  index; unchanged here, and fixed under the flag.
+
+Verified by `modelSwitchMemory.spec.ts` (§6) and unit tests beside each
+piece.
+
 ### 4.6 `navigateToModel` in-app, behind a flag (#2021)
 
 `navigate()` instead of `location.assign`, keeping `withCurrentSearch`;
@@ -546,7 +634,17 @@ cheap where one exists).
 
 **Decided 2026-11-01: its own flag, `?feature=spaModelNav`, not
 `?feature=workspace`.** That way the switch can burn in and roll back
-without touching the workspace shell. Also:
+without touching the workspace shell.
+
+**Built (Phase 1a step 0).** Under the flag `navigateToModel` calls the
+caller's react-router `navigate()` (every caller passes one; without one it
+still loads the page), after the same `withCurrentSearch` and upload-guard
+disarm as the page-load path. Flag off, it is the page load it was.
+`navigateToInMemoryModel` stays always in-app and now disarms the guard
+too; before, an in-memory upload left it armed for the next model.
+`spaModelNav.spec.ts` covers one surface (the search bar's link open), with
+Back. Still open for #2021: each surface's E2E, and the rest below.
+Also:
 disarm the `beforeunload` guard on switch (armed for uploads at
 `Loader.js:278`, `src/utils/event.js`; today only navigation helpers
 disarm it), check Back/Forward through `Share.jsx`'s route effect (needs
@@ -558,7 +656,7 @@ disarm it), check Back/Forward through `Share.jsx`'s route effect (needs
 
 - **Main-thread contention between concurrent loads (§4.4).**
   - Conway yields in 50–130 ms slices, so every slice is a long task, and a background parse will drop some foreground frames.
-  - Share's 6 s writer task and 2.3 s assembly task are the big blocks, and they're fixable.
+  - Share's 2.3 s assembly task is the big block left on the page; the 6 s writer task moved to the GLB writer worker (#2035).
   - Two concurrent loads have not been measured.
 - **Memory is the sum of the open models,** one WASM instance each, at about 6× file size for large models (§4.1). The budget and eviction (§4.5) are what keep phones alive.
 - **Each new `IfcAPI` pays a cold instantiate of 190–550 ms.** Whether a second instance in a live page compiles warm is unmeasured. It affects reopen cost after eviction.
@@ -621,6 +719,23 @@ A heap-size number can't fail reliably, so the test asserts **collection**:
   asserts A's engine is collected once its parse has stopped.
 - Shown red with one close/eviction step reverted (e.g. the store or the
   idle GLB writer still holding the closed session's model).
+
+**As built in step A** (same spec, §4.5a): a switch while A is held at its
+index (the conway loaders' `__bldrsTestHoldGeometryPump` seam, so A is
+mid-load on any runner) terminates A's worker, loads B in the same
+document, raises no alert and logs no failure, and leaves nothing of A in
+B's store, NavTree root, title or load report, also once A's hold is let
+go. IFC and STEP in the worker, IFC on the main-thread engine. With B held
+instead, after A finished, the store's `model` is not A's while B loads.
+A theme change while A is held reloads A into the new viewer and
+terminates the first worker.
+
+**As built in step 0** (`src/Containers/modelSwitchMemory.spec.ts`, one
+model at a time, switch = close): load A, let it and its GLB writer finish,
+open B in-app, and assert A's engine worker was terminated (Playwright's
+`Worker` 'close') while B's runs, in the same document. The `WeakRef`
+checks on A's model and, on the kill-switch path, A's `IfcAPI` do not hold
+yet (§2.4), so they are not in the spec: #2017 and #2019 take them.
 
 Chromium-only (CDP); the mobile project is a Chromium viewport, so both form
 factors are covered. Today's coverage: `noOpfsUpload.spec.ts` loads twice

@@ -1,6 +1,7 @@
 import React, {ReactElement} from 'react'
 import useStore from '../store/useStore'
 import {occurrenceKey} from '../utils/occurrencePaths'
+import {noteUserDisplayChange} from './Share/viewLink'
 import IfcIsolator from '../viewer/three/IfcIsolator'
 import {Visibility as VisibilityIcon, VisibilityOff as VisibilityOffIcon} from '@mui/icons-material'
 import GlassesIcon from '../assets/icons/Glasses.svg'
@@ -35,6 +36,13 @@ export default function HideToggleButton({elementId, occurrencePath = null, geom
   const viewer = useStore((state) => state.viewer)
 
   const toggleHide = () => {
+    hideOrUnhide()
+    // The user's own hide or unhide: the link follows what's hidden from now
+    // on (Share/viewLink.js). Noted after the change, which it writes at once.
+    noteUserDisplayChange()
+  }
+
+  const hideOrUnhide = () => {
     // STEP: hide this occurrence's own geometry instances. Hiding by expressID
     // would hit the shared product_definition_shape and vanish every reuse of
     // the part (the reported "eye does nothing / H hides both"); resolving the

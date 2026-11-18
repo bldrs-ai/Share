@@ -3,12 +3,19 @@
 **Status:** Draft v0.1 — implementation plan; no feature shipped by this doc.
 **Date:** 2026-11-11
 
-**UX requirements:** [Sharing](../reqs/sharing.md), [Versions epic #57](https://github.com/bldrs-ai/Share/issues/57),
-[Notes requirements](https://github.com/bldrs-ai/Share/issues/670), and their [shared index](../reqs/README.md).
-These are the current UX planning drafts. Reconcile this earlier technical plan
-with their unlisted-link, external-version and Notes contracts before implementation;
-its public-hosting assumptions do not override the UX requirements. Existing-epic
-mapping is recorded in the [Versions triage](../reqs/versions-100-triage.md); technical reconciliation and Sharing's own issue migration remain subsequent planning work. Basic history, local retention, replacement, update and backup stories belong to `versions-100` #57. Later semantic requirements retain `share-200` #2144 and [its four reconciled stories](../reqs/share-200.md); structural diff and portable Drive sidecars retain their existing epics.
+**UX requirements:** [Sharing](../reqs/sharing.md) is a planning draft; Versions
+([#57](https://github.com/bldrs-ai/Share/issues/57)) and Notes
+([#670](https://github.com/bldrs-ai/Share/issues/670)) keep their requirements in
+their epic issues; the [shared index](../reqs/README.md) holds the common rules.
+Reconcile this earlier technical plan with their unlisted-link, external-version
+and Notes contracts before implementation; its public-hosting assumptions do not
+override the UX requirements. Basic history, local retention, replacement, update
+and backup stories belong to `versions-100` #57 (mapping in the
+[Versions triage](../reqs/versions-100-triage.md)). Later semantic requirements
+stay with `share-200` #2144 and [its four stories](../reqs/share-200.md);
+structural diff and portable Drive sidecars keep their own epics. Technical
+reconciliation and Sharing's own issue migration are still to come.
+
 **Epic / source proposal:** [#2144](https://github.com/bldrs-ai/Share/issues/2144).
 **Roadmap:** [`share-200`](../roadmap.md#43-share). The former `share-200`
 (grant/revoke per-principal sharing) is now `share-201`.

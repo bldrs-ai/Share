@@ -20,6 +20,8 @@ const TEST_TIMEOUT_MS = 60_000
 const SETTLE_TIMEOUT_MS = 10_000
 // Per-axis tolerance on the unit view direction.
 const DIR_TOLERANCE = 0.01
+// The live link rounds each coordinate to 3 decimals (or 6 significant figures).
+const LINK_TOLERANCE = 0.01
 const ISO = 1 / Math.sqrt(3)
 // The cube canvas is CUBE_SIZE_PX (96) square. From the isometric Home view
 // the TOP face's centre projects ~26px below the canvas top edge, and the
@@ -170,7 +172,7 @@ describeMobileAndDesktop('ViewCube', (ff) => {
       .toBeLessThan(DIR_TOLERANCE)
   })
 
-  test('cube navigation clears a #c: camera permalink', async ({page}) => {
+  test('cube navigation moves a #c: camera permalink to the new pose', async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS)
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
 
@@ -187,10 +189,25 @@ describeMobileAndDesktop('ViewCube', (ff) => {
     })
     await expect.poll(() => page.evaluate(() => window.location.hash)).toContain('c:')
 
-    // Moving the camera from the cube must drop the now-stale pose, or a
-    // reload or copied URL would restore the old view.
+    // Moving the camera from the cube is the user's own move: the live camera
+    // link (Camera/liveCameraLink.js) puts the new pose in place of the stale
+    // one, or a reload or copied URL would restore the old view. It used to
+    // drop the token instead.
     await widget.getByRole('button', {name: 'Home (isometric)'}).click()
-    await expect.poll(() => page.evaluate(() => window.location.hash)).not.toContain('c:')
+    await expect.poll(() => page.evaluate(() => {
+      const token = window.location.hash.substring(1).split(';').find((set) => set.startsWith('c:'))
+      if (!token || token === 'c:8,10,20,1,1,1') {
+        return Number.POSITIVE_INFINITY
+      }
+      const [px, py, pz, tx, ty, tz] = token.substring(2).split(',').map(Number)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cc = (window as any).store.getState().viewer.context.getCameraControls()
+      const p = cc.getPosition()
+      const t = cc.getTarget()
+      return Math.max(Math.abs(p.x - px), Math.abs(p.y - py), Math.abs(p.z - pz),
+        Math.abs(t.x - (tx ?? 0)), Math.abs(t.y - (ty ?? 0)), Math.abs(t.z - (tz ?? 0)))
+    }), {timeout: SETTLE_TIMEOUT_MS, message: 'the link\'s #c: never followed the cube\'s pose'})
+      .toBeLessThan(LINK_TOLERANCE)
   })
 
   // Mobile drawers are bottom sheets, so the cube only moves aside on desktop.

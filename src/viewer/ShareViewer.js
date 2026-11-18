@@ -12,7 +12,7 @@ import {
   EquirectangularReflectionMapping,
   LinearSRGBColorSpace,
   Mesh,
-  PCFSoftShadowMap,
+  PCFShadowMap,
   PlaneGeometry,
   PMREMGenerator,
   ShadowMaterial,
@@ -38,7 +38,11 @@ import {occurrencePathKey} from '../utils/occurrencePaths'
 import {modelHasCapability} from './ShareModel'
 import {paintPreviewSelection} from './previewSelection'
 import {paintStreamingSelection, streamingTablesModel} from './streamingBatchPick'
-import {isFeatureEnabled} from '../FeatureFlags'
+import {isLookOn} from './lookMode'
+import {isSoftwareRenderer} from './three/softwareRenderer'
+import {gtagEvent} from '../privacy/analytics'
+import {MotionAO} from './motionAO'
+import LightingGui from './three/LightingGui'
 import {requestPaint} from './three/renderDemand'
 import {viewRules} from './legacyViewRules'
 import {
@@ -129,6 +133,12 @@ const SHADOW_NORMAL_BIAS_FACTOR = 0.01
 const DEFAULT_SHADOW_OPACITY = 0.35
 
 
+/** A `raycast` that hits nothing, for decoration meshes. */
+function noRaycast() {
+  // Intentionally empty: adds no intersections.
+}
+
+
 /**
  * @param {number} n
  * @return {number} smallest power of 2 ≥ n.
@@ -215,9 +225,12 @@ export class ShareViewer {
   // Whether the hover showing was painted by a full paint `_askForHoverPaint`
   // asked for, so taking it off needs one too (with the hover overlay only).
   _isHoverPaintedInFull = false
-  // The `?feature=look` lighting/material tuning GUI (LightingGui). Null
-  // unless the flag is set; lazily code-split in (see `_initLookGui`).
+  // The Render panel (LightingGui), built the first time the debug dock
+  // mounts it (`mountLookPanel`; debugPanels.js has when it's shown).
   _lookGui = null
+  // Set by dispose(), so a dock mount that lands later doesn't build on a
+  // viewer whose context is gone.
+  _isDisposed = false
   // Current IBL environment selection + PMREM blur, tracked so the
   // `?feature=look` GUI can rebuild the env on a type swap or blur change
   // without losing the other setting.
@@ -225,9 +238,14 @@ export class ShareViewer {
   _envBlur = ENV_MAP_BLUR
   // Contact-shadow ground plane (ShadowMaterial), fitted per model in
   // `groundModel`. Null until built (renderer present). `_shadowEnabled`
-  // gates visibility so the `?feature=look` toggle survives model reloads.
+  // gates visibility so the look's setting (and the Render panel's toggle)
+  // survives model reloads. Starts as the default look's.
   _groundPlane = null
-  _shadowEnabled = false
+  _shadowEnabled = LOOKS[DEFAULT_LOOK].shadow === true
+  // The shadow's set darkness (the Render panel's opacity), and the share of
+  // it shown now: MotionAO fades the shadow on AO's tween (`setShadowLevel`).
+  _shadowOpacity = DEFAULT_SHADOW_OPACITY
+  _shadowLevel = 1
   // Current render "look" (LOOKS key). Applied by `applyLook` and persisted by
   // the profile-menu toggle; the default is also baked into the construction
   // constants so the first paint is correct before any apply call.
@@ -280,19 +298,31 @@ export class ShareViewer {
     const scene = this.context.getScene()
     const camera = this.context.getCamera()
     // The whole §6e look — PBR materials + gradient studio IBL + tone-mapping
-    // + retuned lights + the Neutral/Flat profile toggle — sits behind a
-    // single `?feature=look` flag (default OFF), so `main`'s rendering is
-    // unchanged until the flag is flipped (an atomic switch-over).
-    //   · flag ON: leave `outputColorSpace` at the r184 default (SRGBColorSpace)
+    // + retuned lights + AO + the Neutral/Flat profile toggle — is one
+    // decision, `isLookOn()` (lookMode.js): on by default, off with
+    // `?feature=disableLook` or the `disableLook` rollback.
+    //   · look ON: leave `outputColorSpace` at the r184 default (SRGBColorSpace)
     //     so the filmic tone-map (CustomPostProcessor, in the composer) writes
     //     gamma-encoded output, and build the gradient env map for image-based
     //     lighting (scaled by `environmentIntensity`; scene.js dials the direct
     //     lights down to compensate).
-    //   · flag OFF: restore the legacy `LinearSRGBColorSpace` output and skip
-    //     the env map — the pre-§6e pipeline, matching `main` pixel-for-pixel.
+    //   · look OFF: restore the legacy `LinearSRGBColorSpace` output and skip
+    //     the env map — the pre-§6e pipeline.
     // Env build no-ops in tests where getRenderer() returns undefined.
-    if (isFeatureEnabled('look')) {
-      this._buildEnvironment(this._envBlur, this._envType)
+    if (isLookOn()) {
+      // On the next task, not here. PMREM prefiltering is ~1 s of GPU work
+      // under a software rasteriser (CI's SwiftShader; milliseconds on a
+      // GPU), and a viewer can be disposed right after it's built (CadView
+      // re-inits on mount): built inline, the first viewer's env was then
+      // flushed by `forceContextLoss` on dispose, ~1.2 s spent on a viewer
+      // nobody sees (#2167 load profile). The scene is still empty here, so
+      // the env arriving a task later changes nothing on screen; the scene
+      // probe sees `scene.environment` change and paints.
+      setTimeout(() => {
+        if (!this._isDisposed) {
+          this._buildEnvironment(this._envBlur, this._envType)
+        }
+      }, 0)
       if (renderer) {
         scene.environmentIntensity = ENV_MAP_INTENSITY
       }
@@ -301,6 +331,16 @@ export class ShareViewer {
     }
     this._createGroundPlane()
     this.postProcessor = new CustomPostProcessor(renderer, scene, camera)
+    // Drop AO, and freeze the contact shadow's map, while the camera moves,
+    // before motion residency cuts any geometry (motionAO.js). Built with the
+    // post processor, which owns AO.
+    this._motionAO = new MotionAO(this.postProcessor, {
+      shadow: this,
+      controls: this.context.getCameraControls?.() ?? null,
+      onFrame: (fn) => this.context.onFrame?.(fn) ?? null,
+      renderDemand: this.context.getRenderDemand?.() ?? null,
+      shadowMap: this.context.getRenderer?.()?.shadowMap ?? null,
+    })
     this.highlighter = new IfcHighlighter(this.context, this.postProcessor)
     if (this.highlighter.hoverOverlay) {
       // The overlay turned itself off after a failure (hoverOverlay.js
@@ -323,11 +363,6 @@ export class ShareViewer {
     // call `viewer.clipper.X` and never branch on model type.
     this.clipper = new Clipper(this)
     this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
-    // §6e: opt-in live tuning panel for the filmic look. Off by default;
-    // `?feature=look` pulls in the (otherwise-unbundled) lil-gui panel.
-    if (isFeatureEnabled('look')) {
-      this._initLookGui()
-    }
   }
 
 
@@ -406,28 +441,48 @@ export class ShareViewer {
    * visible where the model's shadow lands) and enable shadow maps on the
    * renderer. Added to the scene invisible; `groundModel` fits + reveals it
    * per loaded model. Not registered in the pickable lists, so the raycaster
-   * ignores it. Gated on `?feature=look`: contact shadow is a dev-only tool,
-   * off in both shipped looks, and `shadowMap.enabled = true` forces a
-   * scene-wide shader recompile — so only pay it when the look GUI (the only
-   * way to enable the shadow) is present. No-op without a renderer (Jest).
+   * ignores it. Built only with the look on (`isLookOn`), whose Neutral look
+   * shows it; the pre-§6e pipeline never pays for shadow maps. No-op without
+   * a renderer (Jest).
    *
    * @private
    */
   _createGroundPlane() {
     const renderer = this.context.getRenderer()
-    if (!renderer || !isFeatureEnabled('look')) {
+    if (!renderer || !isLookOn()) {
+      return
+    }
+    // Not on a software rasteriser. Under SwiftShader (CI, and Chrome's
+    // fallback where it blocklists the GPU), once the model casts into the
+    // shadow map every draw fails with "Mismatch between texture format and
+    // sampler type" and the model doesn't show at all; a GPU draws it (the
+    // owner's prod check). The look stays on without the shadow.
+    if (isSoftwareRenderer(renderer.getContext?.())) {
+      gtagEvent('contact_shadow_unavailable', {reason: 'software_renderer'})
       return
     }
     renderer.shadowMap.enabled = true
-    renderer.shadowMap.type = PCFSoftShadowMap
+    // r187 removed PCFSoftShadowMap (it warned and fell back to this).
+    renderer.shadowMap.type = PCFShadowMap
     const ground = new Mesh(
       new PlaneGeometry(1, 1),
-      new ShadowMaterial({opacity: DEFAULT_SHADOW_OPACITY}),
+      // No depth write: the look's tone map skips pixels at the clear depth
+      // (backgroundEffect.js), so where there's no shadow the plane shows
+      // exactly the background, and the shadow darkens it smoothly. Writing
+      // depth, the whole plane was tone-mapped: a grey sheet on the white
+      // background (the owner's preview).
+      new ShadowMaterial({opacity: DEFAULT_SHADOW_OPACITY, depthWrite: false}),
     )
     ground.rotation.x = -Math.PI / 2
     ground.receiveShadow = true
     ground.visible = false
     ground.name = 'contactShadowGround'
+    // Never a pick target. It's decoration, and three's Raycaster ignores
+    // `visible`: CadView's double-click casts against every scene child, so
+    // with the look on this hidden plane was the nearest hit under STEP
+    // parts, had no expressID, and the pick threw instead of selecting
+    // (#2167, exportGlb.spec's STEP picks).
+    ground.raycast = noRaycast
     this.context.getScene().add(ground)
     this._groundPlane = ground
   }
@@ -463,7 +518,7 @@ export class ShareViewer {
     const groundSize = maxXZ * GROUND_SIZE_FACTOR
     this._groundPlane.scale.set(groundSize, groundSize, 1)
     this._groundPlane.position.set(center.x, box.min.y, center.z)
-    this._groundPlane.visible = this._shadowEnabled
+    this._applyShadowLevel()
     const scene = this.context.getScene()
     const key = scene.getObjectByName('keyLight')
     if (key) {
@@ -513,11 +568,11 @@ export class ShareViewer {
    */
   setShadowEnabled(enabled) {
     this._shadowEnabled = enabled
-    if (this._groundPlane) {
-      this._groundPlane.visible = enabled
-    }
+    this._applyShadowLevel()
     const key = this.context.getScene()?.getObjectByName?.('keyLight')
-    if (key) {
+    // Only with a ground to cast onto: none is built where the shadow can't
+    // be drawn (`_createGroundPlane`).
+    if (key && this._groundPlane) {
       key.castShadow = enabled
     }
     requestPaint()
@@ -531,10 +586,52 @@ export class ShareViewer {
    * @param {number} opacity
    */
   setShadowOpacity(opacity) {
-    if (this._groundPlane?.material) {
-      this._groundPlane.material.opacity = opacity
-    }
+    this._shadowOpacity = opacity
+    this._applyShadowLevel()
     requestPaint()
+  }
+
+
+  /** @return {number} the contact shadow's set darkness (not the faded one) */
+  getShadowOpacity() {
+    return this._shadowOpacity
+  }
+
+
+  /**
+   * Show this share (0..1) of the contact shadow's darkness. MotionAO fades it
+   * with AO (motionAO.js): out while the camera moves or a model loads, back
+   * in at rest. At 0 the ground isn't drawn at all. The caller paints.
+   *
+   * @param {number} level
+   */
+  setShadowLevel(level) {
+    this._shadowLevel = Math.min(1, Math.max(0, Number(level) || 0))
+    this._applyShadowLevel()
+  }
+
+
+  /** @return {boolean} whether the contact shadow is on and can be drawn */
+  isShadowShowing() {
+    return this._groundPlane !== null && this._shadowEnabled === true
+  }
+
+
+  /**
+   * The ground's visibility and opacity from the toggle, the set darkness and
+   * the fade level.
+   *
+   * @private
+   */
+  _applyShadowLevel() {
+    const ground = this._groundPlane
+    if (!ground) {
+      return
+    }
+    ground.visible = this._shadowEnabled && this._shadowLevel > 0
+    if (ground.material) {
+      ground.material.opacity = this._shadowOpacity * this._shadowLevel
+    }
   }
 
 
@@ -554,10 +651,9 @@ export class ShareViewer {
    * @param {string} name a LOOKS key ('neutral' | 'flat')
    */
   applyLook(name) {
-    // The whole §6e look is behind `?feature=look` (default off). No-op when
-    // the flag is off so a stale `renderMode` cookie from a prior flag-on
-    // session can't apply look lights/env over the legacy render.
-    if (!isFeatureEnabled('look')) {
+    // No-op with the look off (`isLookOn()`, lookMode.js) so a `renderMode`
+    // cookie can't apply look lights/env over the legacy render.
+    if (!isLookOn()) {
       return
     }
     const look = LOOKS[name] ? name : DEFAULT_LOOK
@@ -567,6 +663,10 @@ export class ShareViewer {
     this._currentLook = look
     const config = LOOKS[look]
     this.postProcessor?.setToneMappingForLook(config.toneMapping)
+    this.postProcessor?.setAOEnabled(config.ao)
+    if (this._shadowEnabled !== (config.shadow === true)) {
+      this.setShadowEnabled(config.shadow === true)
+    }
     if (this._envType !== config.envType) {
       this.setEnvironmentType(config.envType)
     }
@@ -623,19 +723,36 @@ export class ShareViewer {
 
 
   /**
-   * Lazily build the `?feature=look` lighting/material tuning panel
-   * (LightingGui, a lil-gui overlay). Dynamic-imported so neither lil-gui
-   * nor the panel lands in the default bundle — only the flag pulls the
-   * chunk. Fire-and-forget: the panel appears a tick after viewer init.
+   * Put the Render panel (LightingGui) into `host`, building it on first use.
+   * Called by the debug dock (Components/DebugDock/DebugDock.jsx) whenever
+   * the panel is shown, so a theme change's new viewer lands in the same
+   * place. With the look off (`?feature=disableLook`) there's nothing for it
+   * to tune, so nothing is mounted.
    *
-   * @private
+   * @param {HTMLElement} host
+   * @param {Function} [onOpenChange] told `(isOpen)` now and whenever the
+   *   panel is opened or minimised, so the dock can place it
+   * @return {boolean} whether a panel is mounted
    */
-  _initLookGui() {
-    import('./three/LightingGui').then(({default: LightingGui}) => {
-      this._lookGui = new LightingGui(this)
-    }).catch((e) => {
-      console.warn('LightingGui failed to load:', e)
-    })
+  mountLookPanel(host, onOpenChange = null) {
+    if (!host || this._isDisposed || !isLookOn()) {
+      return false
+    }
+    if (!this._lookGui) {
+      this._lookGui = new LightingGui(this, host)
+    } else {
+      this._lookGui.mountInto(host)
+    }
+    this._lookGui.setOpenListener(onOpenChange)
+    onOpenChange?.(this._lookGui.isOpen())
+    return true
+  }
+
+
+  /** Take the Render panel off the page (the dock hid it); kept for reuse. */
+  unmountLookPanel() {
+    this._lookGui?.setOpenListener(null)
+    this._lookGui?.unmount()
   }
 
 
@@ -656,12 +773,14 @@ export class ShareViewer {
    * @return {Promise<void>}
    */
   async dispose() {
+    this._isDisposed = true
     // Local plugins. Each is null-safe individually so partial-init
     // teardown (e.g. constructor throw mid-build) still works.
     try {
       this._lookGui?.dispose?.()
+      this._motionAO?.dispose()
     } catch (e) {
-      console.warn('lookGui.dispose failed:', e)
+      console.warn('lookGui/motionAO dispose failed:', e)
     }
     try {
       if (this._groundPlane) {
@@ -1734,7 +1853,7 @@ export class ShareViewer {
         // `?feature=disableHoverOverlay` or the prod rollback): draw the hover on
         // the cached frame rather than recolour the batch, which would repaint
         // the whole model. The overlay asks for its own (overlay-only) paint.
-        // Where it can't draw this hover (a transparent batch, …) it says so
+        // Where it can't draw this hover (a transmissive batch, …) it says so
         // and the recolour below runs instead, as without the flag.
         const overlay = this.highlighter?.hoverOverlay ?? null
         const isOverlaid = overlay !== null &&

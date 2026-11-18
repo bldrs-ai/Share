@@ -58,3 +58,28 @@ has the detail:
   nowhere to land anyway.
 
 Covered end-to-end by `src/Containers/indexStepLogo.spec.ts`.
+
+
+## `testdata/models/dicom/` — a synthetic CT series, for tests
+
+`phantom-ct.zip` (explicit VR), `phantom-ct-implicit-vr.zip`,
+`phantom-ct-rle.zip` (RLE Lossless, pydicom's own encoder) and
+`phantom-ct-deflated.zip` (Deflated Explicit VR) are one 32-slice CT phantom
+written by **pydicom**, so the DICOM reader in
+`src/loader/dicom.js` is tested against an independent writer rather than
+its own output. The zips arrive as scanner exports do: extension-less
+slice files in shuffled order, a one-slice scout series beside the scan,
+and a README. Each slice also carries a nested sequence for the reader to
+skip. The phantom (air, a soft-tissue ellipsoid, a bone shell and a dense
+sphere off-centre in +column) and its expected values are described in
+`src/loader/dicom.test.js`.
+
+```
+python3 -m venv /tmp/venv && /tmp/venv/bin/pip install pydicom numpy
+/tmp/venv/bin/python tools/models/makeDicomPhantom.py
+```
+
+UIDs come from fixed entropy and zip timestamps are fixed, so a re-run
+writes byte-identical zips; a diff after one means the generator changed.
+Used by `dicom.test.js`, `nrrd.test.js`, `modelArchive.test.js`,
+`Loader.test.js` and the E2E `src/loader/dicom.spec.ts`.
