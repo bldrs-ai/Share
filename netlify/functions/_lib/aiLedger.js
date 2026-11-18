@@ -40,7 +40,13 @@
  * `ai/user/<sub>`, `ai/breaker/<tier>/<day>`):
  *
  *   {v: 1, days: {'2026-11-18': {spent: <micro-USD>, free: <requests>}},
- *    holds: {<requestId>: {micro, free: 0|1, at: <ms>}}}
+ *    holds: {<requestId>: {micro, free: 0|1, at: <ms>}},
+ *    estimates: {<requestId>: {micro, day, generation}}}
+ *
+ * `estimates` lists the spend booked at a reservation because no
+ * `usage.cost` arrived (a cut stream, a connection lost after sending), so a
+ * reconciliation job can find and correct it; it is part of `days`, not
+ * added to it.
  *
  * A bucket's usage is the window's `spent` plus every live hold, so a hold
  * counts against the budget from the moment it is taken. Days outside the
@@ -100,7 +106,7 @@ export function utcDay(ms) {
 
 /** @return {object} an empty record */
 function emptyRecord() {
-  return {v: RECORD_VERSION, days: {}, holds: {}}
+  return {v: RECORD_VERSION, days: {}, holds: {}, estimates: {}}
 }
 
 
@@ -116,6 +122,7 @@ function normalize(data) {
     v: RECORD_VERSION,
     days: data.days && typeof data.days === 'object' ? {...data.days} : {},
     holds: data.holds && typeof data.holds === 'object' ? {...data.holds} : {},
+    estimates: data.estimates && typeof data.estimates === 'object' ? {...data.estimates} : {},
   }
 }
 
@@ -139,6 +146,11 @@ function prune(record, nowMs, windowDays) {
   for (const day of Object.keys(record.days)) {
     if (day < oldest) {
       delete record.days[day]
+    }
+  }
+  for (const [id, estimate] of Object.entries(record.estimates)) {
+    if (estimate.day < oldest) {
+      delete record.estimates[id]
     }
   }
 }
@@ -271,10 +283,14 @@ export function reserve(store, bucket, {id, micro, free, nowMs}) {
  *
  * @param {object} store
  * @param {Bucket} bucket
- * @param {object} settlement `{id, micro, nowMs, release}`; `release` defaults to false
+ * @param {object} settlement `{id, micro, nowMs, release, estimate}`; `release`
+ *   defaults to false. `estimate: {generation}` marks `micro` as a guess (the
+ *   reservation, booked when no `usage.cost` arrived): it is kept beside the
+ *   day's spend with the OpenRouter generation id when known, so a
+ *   reconciliation through `/api/v1/generation` can correct it later.
  * @return {Promise<void>}
  */
-export async function settle(store, bucket, {id, micro, nowMs, release = false}) {
+export async function settle(store, bucket, {id, micro, nowMs, release = false, estimate = null}) {
   await compareAndSwap(store, bucket.key, (record) => {
     const hold = record.holds[id]
     delete record.holds[id]
@@ -285,6 +301,9 @@ export async function settle(store, bucket, {id, micro, nowMs, release = false})
     // No hold: it expired into spend at its reserved amount, or a crash lost
     // it. Book the actual cost anyway (header: over-count, never under).
     addToDay(record, utcDay(nowMs), micro, hold ? hold.free : 0)
+    if (estimate) {
+      record.estimates[id] = {micro, day: utcDay(nowMs), generation: estimate.generation ?? null}
+    }
     return {}
   })
 }

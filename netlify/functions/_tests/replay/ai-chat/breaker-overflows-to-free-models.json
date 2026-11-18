@@ -1,5 +1,5 @@
 {
-  "description": "Past the anonymous daily breaker the turn isn't refused: the paid holds are released, a free-model hold is taken instead (its count is pinned by the unit suite: the hold id is random, so a replayed record can't carry it), and OpenRouter gets the curated :free chain (deny kept), with x-bldrs-ai-overflow for the tray's notice.",
+  "description": "Past the anonymous daily breaker the turn isn't refused: the paid holds are released, a free-model hold is taken instead (its count is pinned by the unit suite: the hold id is random, so a replayed record can't carry it), and OpenRouter gets the curated :free chain (deny kept, max_price 0), with x-bldrs-ai-overflow for the tray's notice.",
   "env": {
     "$fixture": "env/ai-chat.json"
   },
@@ -215,16 +215,18 @@
         "method": "POST",
         "url": "https://openrouter.ai/api/v1/chat/completions",
         "body": {
-          "model": "apodex/apodex-1.1-mini:free",
+          "model": "dots-studio/dots-3-note-preview:free",
           "models": [
-            "apodex/apodex-1.1-mini:free",
             "dots-studio/dots-3-note-preview:free",
-            "inclusionai/ling-3.0-flash-sante:free",
             "openrouter/free"
           ],
           "provider": {
             "data_collection": "deny",
-            "require_parameters": true
+            "require_parameters": true,
+            "max_price": {
+              "prompt": 0,
+              "completion": 0
+            }
           }
         }
       },

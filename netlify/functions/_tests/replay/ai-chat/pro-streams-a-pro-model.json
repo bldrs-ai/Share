@@ -85,7 +85,11 @@
           "max_tokens": 8192,
           "provider": {
             "data_collection": "deny",
-            "require_parameters": true
+            "require_parameters": true,
+            "max_price": {
+              "prompt": 1,
+              "completion": 5
+            }
           }
         }
       },

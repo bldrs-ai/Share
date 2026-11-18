@@ -9,14 +9,18 @@
  * pool is a change to this file; the health-check canary (§6) that would
  * drop one automatically is a follow-up (#1932).
  *
- * Prices are USD per million tokens, input / output, and are used ONLY to
- * reserve a request's worst case before the call (`_lib/aiLedger.js`,
- * §7 "Reserve, then settle"). The charge itself is OpenRouter's
- * `usage.cost`. So a price here should be at or ABOVE what OpenRouter can
- * bill under `data_collection: "deny"`, which may route to a pricier
- * endpoint than the catalog's cheapest (§6 "A gap the live check found"):
- * over-reserving costs a user a refused request at the very end of a budget,
- * under-reserving costs Bldrs money past the budget.
+ * Prices are USD per million tokens, input / output: OpenRouter's LISTED
+ * prices, read from `GET /api/v1/models/{id}/endpoints` on 2026-11-18, and for
+ * each model the dearest of all its endpoints, long-context tiers included
+ * (qwen3.7-flash bills 0.20 / 0.80 past 256k prompt tokens). They do two jobs:
+ *  - the relay sends the route's ceiling as `provider.max_price`, so
+ *    OpenRouter won't route to an endpoint dearer than it (one that raises
+ *    its price is skipped, not paid);
+ *  - the reservation is priced at that same ceiling (ai-chat.js
+ *    `reservationMicro`), so it bounds what the request can cost.
+ * The charge itself is still OpenRouter's `usage.cost`; a settle above the
+ * reservation is booked in full and reported (`settle_exceeded_reservation`).
+ * A model with no listed price is not routed to at all.
  */
 
 
@@ -30,19 +34,19 @@ export const DEFAULT_MODEL = 'qwen/qwen3.7-flash'
  * single-provider in the eval, §6 "Single-provider risk").
  */
 export const PAID_MODELS = Object.freeze({
-  // $0.03 / $0.13 per M (live check 2026-10-06). One endpoint (Alibaba).
-  [DEFAULT_MODEL]: {input: 0.03, output: 0.13, tiers: ['anonymous', 'free', 'pro'],
+  // One endpoint (Alibaba): 0.03 / 0.13, 0.10 / 0.40 from 32k prompt tokens,
+  // 0.20 / 0.80 from 256k. The ceiling is the last tier.
+  [DEFAULT_MODEL]: {input: 0.20, output: 0.80, tiers: ['anonymous', 'free', 'pro'],
     fallbacks: ['deepseek/deepseek-v4-flash', 'openai/gpt-oss-120b']},
-  // Not recorded in the live check. The eval measured $0.00058 a turn at
-  // ~6.7k in / 0.5k out, which fits about $0.06 / $0.36; reserved at 5x that
-  // until a deny-routed price is read off a real call (#1932).
-  'deepseek/deepseek-v4-flash': {input: 0.30, output: 1.80, tiers: ['anonymous', 'free', 'pro']},
-  // 23 endpoints from $0.03 / $0.17 to $0.35 / $0.75; deny may route to the
-  // dearest (§6), so that is what is reserved.
-  'openai/gpt-oss-120b': {input: 0.35, output: 0.75, tiers: ['anonymous', 'free', 'pro']},
-  // Pro: eval #1929's two Pro-row models at catalog price. The live, priced
-  // picker from /api/v1/models replaces this list in #1934.
-  'google/gemini-3.8-flash': {input: 0.75, output: 3.75, tiers: ['pro']},
+  // 15 endpoints, 0.04 / 0.10 to 0.21 / 0.56 (Azure).
+  'deepseek/deepseek-v4-flash': {input: 0.21, output: 0.56, tiers: ['anonymous', 'free', 'pro']},
+  // 24 endpoints, 0.03 / 0.15 to 0.35 (Cerebras) / 0.95 (SambaNova).
+  'openai/gpt-oss-120b': {input: 0.35, output: 0.95, tiers: ['anonymous', 'free', 'pro']},
+  // Pro: eval #1929's two Pro-row models. The live, priced picker from
+  // /api/v1/models replaces this list in #1934.
+  // 6 endpoints, 0.375 / 1.875 to 1.35 / 6.75 (reasoning billed at output).
+  'google/gemini-3.8-flash': {input: 1.35, output: 6.75, tiers: ['pro']},
+  // 4 endpoints, all 1 / 5.
   'anthropic/claude-haiku-4.5': {input: 1, output: 5, tiers: ['pro']},
 })
 
@@ -51,13 +55,14 @@ export const PAID_MODELS = Object.freeze({
  * them deny-compatible per eval #1929. The optional NVIDIA entry is NOT
  * listed: it needs `data_collection: "allow"`, which is the owner's open
  * question (§15 Q9), and listing it would also need §10's disclosure.
- * The first entry is what an overflow (or an opt-in with no model named)
- * routes to, the rest are its fallbacks.
+ * `apodex/apodex-1.1-mini:free` and `inclusionai/ling-3.0-flash-sante:free`
+ * were on the eval's list but are gone from the live catalog (2026-11-18), so
+ * they are not routed to. The first entry is what an overflow (or an opt-in
+ * with no model named) routes to; the rest are its fallbacks. The free path
+ * is sent with `max_price` 0, so it can't be billed.
  */
 export const FREE_MODELS = Object.freeze([
-  'apodex/apodex-1.1-mini:free',
   'dots-studio/dots-3-note-preview:free',
-  'inclusionai/ling-3.0-flash-sante:free',
   'openrouter/free',
 ])
 
@@ -83,9 +88,10 @@ export function isFreeModel(model) {
  *
  * @param {string} model the client's `model` field
  * @param {string} tier one of AI_TIERS
- * @return {{ok: true, free: boolean, model: string, fallbacks: Array<string>,
- *   price: {input: number, output: number}} | {ok: false}} `price` is the
- *   chain's dearest, which is what a reservation must cover
+ * @return {object} `{ok: true, free, model, fallbacks, price: {input, output}}`, where
+ *   `price` is the chain's dearest listed price (USD per million tokens),
+ *   which the relay both enforces as `max_price` and reserves at; or
+ *   `{ok: false}`
  */
 export function resolveModel(model, tier) {
   if (typeof model !== 'string') {
@@ -118,7 +124,7 @@ export function resolveModel(model, tier) {
  * The free path for a free model, or for the overflow (`FREE_MODELS[0]`).
  *
  * @param {string} [model]
- * @return {{ok: true, free: true, model: string, fallbacks: Array<string>, price: {input: 0, output: 0}}}
+ * @return {object} `{ok: true, free: true, model, fallbacks, price: {input: 0, output: 0}}`
  */
 export function freeRoute(model = FREE_MODELS[0]) {
   const primary = model === FREE_MODELS_ALIAS ? FREE_MODELS[0] : model

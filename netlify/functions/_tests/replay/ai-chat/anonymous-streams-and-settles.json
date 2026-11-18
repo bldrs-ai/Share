@@ -117,15 +117,15 @@
           "stream": true,
           "provider": {
             "data_collection": "deny",
-            "require_parameters": true
+            "require_parameters": true,
+            "max_price": {
+              "prompt": 0.35,
+              "completion": 0.95
+            }
           },
           "messages": [
             {
               "role": "system"
-            },
-            {
-              "role": "system",
-              "content": "Use the tools."
             },
             {
               "role": "user",

@@ -22,12 +22,15 @@
  *     app_metadata through the Management API (`src/quota/proStatus.js`, the
  *     one Pro definition); anything else is `anonymous`, under a relay-minted
  *     HMAC token (`_lib/aiToken.js`) plus a day-salted IP-hash bucket.
- *  4. Model: the tier's allowlist (`_lib/aiModels.js`), or 400. Only the
- *     fields in FORWARDED_FIELDS survive, so a caller can't set routing,
- *     plugins or fallbacks; the relay then sets `max_tokens` to the tier cap
- *     at most, `provider: {data_collection: 'deny', require_parameters:
- *     true}`, its own fallback chain, and a server-owned system preamble.
- *  5. Reserve (D4, `_lib/aiLedger.js`): the request's worst case against the
+ *  4. Model: the tier's allowlist (`_lib/aiModels.js`), or 400. Roles are
+ *     checked (one leading app `system` message, then user / assistant /
+ *     tool; text only), and only the fields in FORWARDED_FIELDS survive, so a
+ *     caller can't set routing, plugins or fallbacks; the relay then sets
+ *     `max_tokens` to the tier cap at most, `provider: {data_collection:
+ *     'deny', require_parameters: true, max_price}`, its own fallback chain,
+ *     and one system message: its preamble, then the app's instructions.
+ *  5. Reserve (D4, `_lib/aiLedger.js`): an upper bound on the request's cost
+ *     (reservationMicro says why it is one) against the
  *     identity's budget, the IP bucket (anonymous), and the tier's global
  *     daily breaker (anonymous, free). A tripped breaker overflows the
  *     request to the free models rather than refusing it (§6 path 3), with
@@ -44,8 +47,9 @@
  *
  * Reported Conditions (Sentry warnings; each once per instance per UTC day):
  * a tripped breaker; OpenRouter refusing Bldrs' key (401/403) or its credits
- * (402); our chosen model answering 404 (no deny-compatible endpoint) or 5xx,
- * or OpenRouter unreachable; the ledger unavailable. An exhausted budget,
+ * (402); our chosen model answering 404 (no deny-compatible endpoint) or 5xx;
+ * OpenRouter unreachable, or the connection lost after sending; a settle
+ * above its reservation; the ledger unavailable. An exhausted budget,
  * the concurrency cap and a busy free pool are expected and go to the user
  * only (the client sends `quota_limit_reached` to GA for the first).
  *
@@ -85,10 +89,25 @@ export const MAX_OUTPUT_TOKENS = Object.freeze({
   [AI_TIERS.PRO]: 8192,
 })
 
-// Input tokens estimated from the forwarded body's bytes, for the
-// reservation only. JSON-heavy prompts run 3-4 bytes a token, so 3 over-
-// estimates slightly, which is the safe side (the settle uses the real count).
-const BYTES_PER_TOKEN_ESTIMATE = 3
+// The reservation is an upper bound on what the request can cost, by
+// construction (reservationMicro):
+//  - input tokens ≤ the UTF-8 bytes of the body sent, because every token a
+//    byte-level tokenizer emits covers at least one byte, and the JSON's own
+//    keys, quotes and brackets are bytes the rendered prompt doesn't even have;
+//  - plus what a chat template renders that the JSON doesn't carry: a fixed
+//    base (tool-calling preambles) and an allowance per message and per tool;
+//  - output: the `max_tokens` the relay sends;
+//  - at the route's ceiling price (_lib/aiModels.js: the dearest listed
+//    endpoint of the whole fallback chain, which the relay also sends as
+//    `provider.max_price`), times a margin for rounding.
+// What could still exceed it: reasoning tokens an upstream bills outside
+// `max_tokens`, or a price OpenRouter doesn't enforce through `max_price`.
+// A settle above the reservation is booked in full and reported
+// (`settle_exceeded_reservation`), never clamped.
+export const RESERVE_BASE_TOKENS = 1024
+export const RESERVE_TOKENS_PER_MESSAGE = 16
+export const RESERVE_TOKENS_PER_TOOL = 64
+export const RESERVE_PRICE_MARGIN = 1.1
 
 // The whole stream, headers to last byte. Past it the read is cut and the
 // hold settles at its reservation.
@@ -112,6 +131,11 @@ export const SERVER_PREAMBLE =
   'You are the assistant inside Bldrs Share, a viewer for building and CAD models. Help the user ' +
   'understand and navigate the model open in their viewer, using the tools you are given. If a request ' +
   'has nothing to do with their model or with Share, say briefly that you can only help with the model.'
+
+/** Introduces the caller's own system text, inside the relay's system message. */
+export const APP_INSTRUCTIONS_HEADING =
+  'The app adds the instructions below. Follow them where they agree with the above; where they conflict, ' +
+  'the above wins.'
 
 const HTTP = Object.freeze({
   OK: 200, BAD_REQUEST: 400, PAYMENT_REQUIRED: 402, FORBIDDEN: 403, NOT_FOUND: 404,
@@ -232,9 +256,21 @@ export default async function handler(req, context = {}) {
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     })
   } catch (err) {
-    await releaseAll(store, buckets, {id: holdId, nowMs})
-    await reports.report('upstream_unreachable', {model: route.model})
-    logOutcome({outcome: 'upstream_unreachable', tier, model: route.model, overflow})
+    // No response at all. Whether OpenRouter bills depends on whether the
+    // request ever reached it (Codex P1 on #2220): only a failure that
+    // happens before anything is sent (refused, DNS, TLS) gives the holds
+    // back; a reset or timeout after sending may still be generating and
+    // billing, so it settles at the reservation, marked as an estimate for a
+    // reconciliation to correct.
+    if (fetchFailedBeforeSending(err)) {
+      await releaseAll(store, buckets, {id: holdId, nowMs})
+      await reports.report('upstream_unreachable', {model: route.model})
+      logOutcome({outcome: 'upstream_unreachable', tier, model: route.model, overflow})
+    } else {
+      await settleAll(store, buckets, {id: holdId, micro: reserved, nowMs: Date.now(), estimate: {generation: null}})
+      await reports.report('upstream_interrupted', {model: route.model})
+      logOutcome({outcome: 'upstream_interrupted', tier, model: route.model, overflow, micro: reserved, reserved})
+    }
     return errorResponse('ai_upstream_error', meta)
   }
 
@@ -249,7 +285,10 @@ export default async function handler(req, context = {}) {
   }
 
   const stream = relayStream(upstream.body, {
-    store, buckets, holdId, reserved, route, tier, overflow, context,
+    store, buckets, holdId, reserved, route, tier, overflow, context, reports,
+    // OpenRouter names the generation in a header too; the stream's chunks
+    // carry it as well, but a stream cut before its first chunk has only this.
+    headerGeneration: upstream.headers.get('x-generation-id'),
   })
   return new Response(stream, {status: HTTP.OK, headers: metaHeaders(meta, {
     'Content-Type': 'text/event-stream; charset=utf-8',
@@ -292,7 +331,88 @@ async function readRequestBody(req) {
   if (body.model !== undefined && typeof body.model !== 'string') {
     return null
   }
-  return body
+  const conversation = checkedMessages(body.messages)
+  if (!conversation) {
+    return null
+  }
+  return {...body, ...conversation}
+}
+
+
+/**
+ * Check the conversation's roles and content (Codex P1 on #2220).
+ *
+ * Allowed: `user`, `assistant` and `tool`, plus ONE `system` message, and
+ * only as the first: that is Share's own assistant instructions, which the AI
+ * SDK sends as a system message (`instructions`, src/assist/loop.ts). Any
+ * other `system`, any `developer`, and any unknown role is refused, so a
+ * caller can't stack instructions after the relay's preamble. The caller's
+ * system text is kept, but sent INSIDE the relay's system message, after the
+ * preamble and framed as the app's lower-priority instructions
+ * (upstreamRequest), so it never stands as a system message of its own.
+ *
+ * Content is text only: a string, or an array of `{type: 'text'}` parts
+ * (what the provider sends, sometimes with `cache_control`). Images, audio
+ * and files are refused: screenshots on the hosted tier are an open question
+ * (ai-workspace.md §15 Q7), and they would be priced outside the byte bound
+ * the reservation rests on.
+ *
+ * This is hygiene, not a security boundary. A `user` message can still try
+ * to talk the model out of its instructions, and nothing here can stop that.
+ * What bounds the endpoint is the model allowlist, the token caps and the
+ * budgets.
+ *
+ * @param {Array<*>} messages the caller's
+ * @return {{messages: Array<object>, appInstructions: ?string}|null} the
+ *   conversation without its leading system message, and that message's text;
+ *   null to refuse
+ */
+function checkedMessages(messages) {
+  let appInstructions = null
+  let rest = messages
+  const first = messages[0]
+  if (first && typeof first === 'object' && first.role === 'system') {
+    appInstructions = textOf(first.content)
+    if (appInstructions === null) {
+      return null
+    }
+    rest = messages.slice(1)
+  }
+  for (const message of rest) {
+    if (!message || typeof message !== 'object' || !CONVERSATION_ROLES.has(message.role)) {
+      return null
+    }
+    if (message.role === 'assistant') {
+      if (message.content !== null && message.content !== undefined && textOf(message.content) === null) {
+        return null
+      }
+      if (message.tool_calls !== undefined && !Array.isArray(message.tool_calls)) {
+        return null
+      }
+    } else if (textOf(message.content) === null) {
+      return null
+    }
+    if (message.role === 'tool' && typeof message.tool_call_id !== 'string') {
+      return null
+    }
+  }
+  return {messages: rest, appInstructions}
+}
+const CONVERSATION_ROLES = new Set(['user', 'assistant', 'tool'])
+
+
+/**
+ * @param {*} content a message's
+ * @return {?string} its text, or null when it isn't text-only
+ */
+function textOf(content) {
+  if (typeof content === 'string') {
+    return content
+  }
+  if (Array.isArray(content) && content.every((part) => part && part.type === 'text' && typeof part.text === 'string')) {
+    return content.map((part) => part.text).join('\n')
+  }
+  return null
 }
 
 
@@ -304,6 +424,39 @@ const TIER_CACHE_MINUTES = 5
 const TIER_CACHE_MS = TIER_CACHE_MINUTES * MILLIS_PER_MINUTE
 const TIER_CACHE_MAX = 500
 const tierCache = new Map()
+
+
+/**
+ * `verifyAuth0Bearer`, without its Sentry user. The helper tags the global
+ * scope with the caller's `sub` (_lib/auth0.js, for the other functions'
+ * correlation), and a warm instance keeps that scope: a later caller whose
+ * /userinfo check fails would be captured under the previous caller's id
+ * (Codex P2 on #2220). So the user is cleared before (the capture inside a
+ * failing check carries no one) and after (nothing later does). Lambda runs
+ * one invocation per instance at a time, so no other request interleaves.
+ * The other functions keep the helper as it is.
+ *
+ * @param {string} bearer
+ * @return {Promise<object>} verifyAuth0Bearer's result
+ */
+async function verifyAuth0BearerWithoutUser(bearer) {
+  clearSentryUser()
+  try {
+    return await verifyAuth0Bearer({headers: {authorization: `Bearer ${bearer}`}})
+  } finally {
+    clearSentryUser()
+  }
+}
+
+
+/** Best-effort: Sentry may not be initialised. */
+function clearSentryUser() {
+  try {
+    Sentry.setUser(null)
+  } catch {
+    // ignore
+  }
+}
 
 
 /**
@@ -358,7 +511,7 @@ async function identifySignedIn(bearer, nowMs) {
   if (cached && nowMs < cached.until) {
     return cached.identity
   }
-  const auth = await verifyAuth0Bearer({headers: {authorization: `Bearer ${bearer}`}})
+  const auth = await verifyAuth0BearerWithoutUser(bearer)
   if (!auth.ok) {
     return {response: new Response(auth.response.body, {status: auth.response.statusCode,
       headers: {'Content-Type': 'application/json'}})}
@@ -443,9 +596,14 @@ function upstreamRequest(body, route, maxTokens) {
       forwarded[field] = body[field]
     }
   }
+  // One system message, the relay's: the preamble first, then the app's own
+  // instructions under a heading that says they rank below it (checkedMessages).
+  const system = body.appInstructions ?
+    `${SERVER_PREAMBLE}\n\n${APP_INSTRUCTIONS_HEADING}\n\n${body.appInstructions}` :
+    SERVER_PREAMBLE
   return {
     ...forwarded,
-    messages: [{role: 'system', content: SERVER_PREAMBLE}, ...body.messages],
+    messages: [{role: 'system', content: system}, ...body.messages],
     model: route.model,
     ...(route.fallbacks.length > 0 ? {models: [route.model, ...route.fallbacks]} : {}),
     max_tokens: maxTokens,
@@ -455,26 +613,34 @@ function upstreamRequest(body, route, maxTokens) {
     // on the conversation (§5). `require_parameters` makes `tools` a hard
     // routing requirement rather than a preference. Every listed model,
     // free ones included, keeps deny (`_lib/aiModels.js`).
-    provider: {data_collection: 'deny', require_parameters: true},
+    // `max_price` (USD per million tokens) is the route's ceiling, the price
+    // the reservation is made at (reservationMicro), so OpenRouter skips an
+    // endpoint dearer than the bound rather than billing past it. The free
+    // path's is zero.
+    provider: {data_collection: 'deny', require_parameters: true,
+      max_price: {prompt: route.price.input, completion: route.price.output}},
   }
 }
 
 
 /**
- * The worst case this request can cost, in micro-USD. A price per million
- * tokens in USD is exactly micro-USD per token.
+ * The most this request can cost, in micro-USD (the bound's argument is at
+ * RESERVE_BASE_TOKENS). A price per million tokens in USD is exactly
+ * micro-USD per token.
  *
- * @param {object} upstreamBody
+ * @param {object} upstreamBody exactly what is sent
  * @param {object} route
  * @param {number} maxTokens
  * @return {number}
  */
-function reservationMicro(upstreamBody, route, maxTokens) {
+export function reservationMicro(upstreamBody, route, maxTokens) {
   if (route.free) {
     return 0
   }
-  const inputTokens = Math.ceil(Buffer.byteLength(JSON.stringify(upstreamBody)) / BYTES_PER_TOKEN_ESTIMATE)
-  return Math.ceil((inputTokens * route.price.input) + (maxTokens * route.price.output))
+  const inputTokens = Buffer.byteLength(JSON.stringify(upstreamBody)) + RESERVE_BASE_TOKENS +
+    (upstreamBody.messages.length * RESERVE_TOKENS_PER_MESSAGE) +
+    ((upstreamBody.tools?.length ?? 0) * RESERVE_TOKENS_PER_TOOL)
+  return Math.ceil(((inputTokens * route.price.input) + (maxTokens * route.price.output)) * RESERVE_PRICE_MARGIN)
 }
 
 
@@ -491,7 +657,9 @@ function reservationMicro(upstreamBody, route, maxTokens) {
  * @param {object} deps
  * @return {ReadableStream}
  */
-function relayStream(upstreamBody, {store, buckets, holdId, reserved, route, tier, overflow, context}) {
+function relayStream(upstreamBody, {
+  store, buckets, holdId, reserved, route, tier, overflow, context, reports, headerGeneration,
+}) {
   const watcher = createUsageWatcher()
   let attached = true
   let controller
@@ -531,15 +699,24 @@ function relayStream(upstreamBody, {store, buckets, holdId, reserved, route, tie
       readError = err
     }
     const seen = watcher.result()
+    const generation = seen.generationId || headerGeneration || null
     // No usage chunk (a cut stream, an upstream error mid-way): the upstream
-    // may still bill, so settle at the reservation, never at zero.
+    // may still bill, so settle at the reservation, never at zero, and mark
+    // it an estimate, with the generation id when there is one, for a
+    // reconciliation through /api/v1/generation to correct (§5 Amendment 3).
     const micro = seen.micro ?? reserved
-    const failures = await settleAll(store, buckets, {id: holdId, micro, nowMs: Date.now()})
+    const failures = await settleAll(store, buckets, {id: holdId, micro, nowMs: Date.now(),
+      ...(seen.micro === null ? {estimate: {generation}} : {})})
+    if (seen.micro !== null && seen.micro > reserved) {
+      // Booked in full above: the money is spent. The bound didn't hold, so
+      // the reservation formula or a ceiling price is wrong: ours to fix.
+      await reports.report('settle_exceeded_reservation', {model: seen.model || route.model, tier})
+    }
     logOutcome({
       outcome: readError ? 'stream_cut' : (seen.micro === null ? 'no_usage' : 'ok'),
       tier, model: seen.model || route.model, overflow, micro, reserved,
       promptTokens: seen.promptTokens, completionTokens: seen.completionTokens,
-      generation: seen.generationId, detached: !attached, settleFailures: failures.length,
+      generation, detached: !attached, settleFailures: failures.length,
     })
     if (readError) {
       forward(() => controller.error(readError))
@@ -551,6 +728,34 @@ function relayStream(upstreamBody, {store, buckets, holdId, reserved, route, tie
     context.waitUntil(pump)
   }
   return stream
+}
+
+
+// Failures of `fetch` that happen before a request goes out, as undici and
+// Node report them on the error's `cause` chain. Only these give the holds
+// back: anything else (ECONNRESET, UND_ERR_SOCKET, a headers or body
+// timeout, an abort) may be after OpenRouter accepted the call.
+const UNSENT_FAILURE_CODES = new Set([
+  'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ENETUNREACH', 'EHOSTUNREACH', 'UND_ERR_CONNECT_TIMEOUT',
+  'CERT_HAS_EXPIRED', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'SELF_SIGNED_CERT_IN_CHAIN',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'ERR_TLS_CERT_ALTNAME_INVALID',
+])
+const MAX_CAUSE_DEPTH = 5
+
+
+/**
+ * @param {*} err what `fetch` rejected with
+ * @return {boolean} whether the request certainly never reached the upstream
+ */
+export function fetchFailedBeforeSending(err) {
+  let current = err
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH && current && typeof current === 'object'; depth++) {
+    if (typeof current.code === 'string' && UNSENT_FAILURE_CODES.has(current.code)) {
+      return true
+    }
+    current = current.cause
+  }
+  return false
 }
 
 
@@ -675,6 +880,13 @@ const reported = new Set()
 const unconfiguredBreakers = new Set()
 
 
+/** For tests: forget what this instance has reported, as a cold start would. */
+export function resetReportedConditions() {
+  reported.clear()
+  unconfiguredBreakers.clear()
+}
+
+
 /**
  * @param {object} context Netlify's
  * @return {{report: Function, breakerTripped: Function}}
@@ -686,7 +898,7 @@ function createReporter(context) {
    * @return {Promise<void>} resolves once the event is flushed (or skipped)
    */
   const report = async (condition, tags = {}) => {
-    const key = `${condition}|${tags.model ?? tags.tier ?? tags.reason ?? ''}|${utcDay(Date.now())}`
+    const key = `${condition}|${tags.model ?? ''}|${tags.tier ?? tags.reason ?? ''}|${utcDay(Date.now())}`
     if (reported.has(key)) {
       return
     }

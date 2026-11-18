@@ -109,8 +109,28 @@ describe('aiLedger', () => {
     const b = bucket({limit: 100})
     await reserve(fake.store, b, {id: 'r1', micro: 90, free: false, nowMs: NOW})
     await settle(fake.store, b, {id: 'r1', micro: 12, nowMs: NOW})
-    expect(storedRecord(fake, b.key)).toEqual({v: 1, days: {[TODAY]: {spent: 12, free: 0}}, holds: {}})
+    expect(storedRecord(fake, b.key)).toEqual({v: 1, days: {[TODAY]: {spent: 12, free: 0}}, holds: {}, estimates: {}})
     expect((await reserve(fake.store, b, {id: 'r2', micro: 88, free: false, nowMs: NOW})).ok).toBe(true)
+  })
+
+  it('an estimated settle books the amount and keeps it, with its generation, for reconciliation', async () => {
+    const fake = createFakeBlobs()
+    const b = bucket({limit: 100, windowDays: 30})
+    await reserve(fake.store, b, {id: 'r1', micro: 90, free: false, nowMs: NOW})
+    await settle(fake.store, b, {id: 'r1', micro: 90, nowMs: NOW, estimate: {generation: 'gen-9'}})
+    expect(storedRecord(fake, b.key)).toEqual({v: 1, days: {[TODAY]: {spent: 90, free: 0}}, holds: {},
+      estimates: {r1: {micro: 90, day: TODAY, generation: 'gen-9'}}})
+    // Estimates leave with their day.
+    await reserve(fake.store, b, {id: 'r2', micro: 1, free: false, nowMs: NOW + (30 * DAY_MS)})
+    expect(storedRecord(fake, b.key).estimates).toEqual({})
+  })
+
+  it('a settle above the hold books the whole actual cost: never clamped to the reservation', async () => {
+    const fake = createFakeBlobs()
+    const b = bucket({limit: 100})
+    await reserve(fake.store, b, {id: 'r1', micro: 10, free: false, nowMs: NOW})
+    await settle(fake.store, b, {id: 'r1', micro: 250, nowMs: NOW})
+    expect(storedRecord(fake, b.key).days[TODAY].spent).toBe(250)
   })
 
   it('a release gives the whole hold back and books nothing', async () => {
@@ -118,7 +138,7 @@ describe('aiLedger', () => {
     const b = bucket()
     await reserve(fake.store, b, {id: 'r1', micro: 90, free: true, nowMs: NOW})
     await settle(fake.store, b, {id: 'r1', micro: 0, nowMs: NOW, release: true})
-    expect(storedRecord(fake, b.key)).toEqual({v: 1, days: {}, holds: {}})
+    expect(storedRecord(fake, b.key)).toEqual({v: 1, days: {}, holds: {}, estimates: {}})
   })
 
   it('caps in-flight holds per identity', async () => {

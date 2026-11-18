@@ -701,6 +701,20 @@ Per-message metering would multiply that write rate by roughly 100.
   file's mtime, so it is not atomic and is not used. The shared breaker
   key is the hot one: every anonymous and free paid request CASes it
   twice, so under real load it may need sharding.
+  **The reservation is an upper bound by construction** (Codex on #2220,
+  `ai-chat.js#reservationMicro`): input tokens counted as the UTF-8 bytes
+  sent (every token covers at least one byte) plus per-message, per-tool
+  and base allowances; output as the `max_tokens` sent; priced at the
+  dearest listed endpoint of the whole fallback chain (live catalog,
+  2026-11-18, long-context tiers included), which the relay also sends as
+  `provider.max_price`; times 1.1. A settle above it is booked in full and
+  reported (`settle_exceeded_reservation`). The cost of a genuine bound: at
+  the anonymous placeholder ($0.02) a request is admitted only while its
+  body is under about 43 KB on an empty budget, so the anonymous budget
+  (or a smaller anonymous body cap) is the owner's to revisit. A fetch that
+  fails after the request may have reached OpenRouter settles at the
+  reservation too, kept in the record's `estimates` with the generation id
+  when known, for the reconciliation job (§5 Amendment 3) to correct.
   The direction is "never more spend than budgeted", unlike quotas.md's
   "free extra, never wrongful block": for model loads an under-count costs
   nothing, but for AI credits it costs real money.
