@@ -4,7 +4,9 @@ import {Sphere, Vector3} from 'three'
 import {act, fireEvent, render, renderHook} from '@testing-library/react'
 import ShareMock from '../../ShareMock'
 import useStore from '../../store/useStore'
+import LiveDisplayLink from './LiveDisplayLink'
 import ResidencyControl from './ResidencyControl'
+import {HASH_DEBOUNCE_WAIT_MS} from '../../utils/debounce'
 import {DEFAULT_COLOR} from '../../viewer/ifc/flatMeshToBatchedModel'
 import {activeColorMode} from '../../viewer/display/colorMode'
 import {activeShadingMode} from '../../viewer/display/shadingMode'
@@ -96,8 +98,20 @@ async function renderWithModel(model) {
   const {result} = renderHook(() => useStore((state) => state))
   await act(() => {
     result.current.setModel(model)
+    // CadView raises it once the model's link terms are applied; the live
+    // view link writes nothing before.
+    result.current.setIsModelReady(true)
   })
-  return render(<ResidencyControl/>, {wrapper: ShareMock})
+  // With the live view link's display term, as CadView mounts it: the menu
+  // only notes the user's change, and the term writes `#d:` once it settles
+  // (Share/viewLink.js).
+  return render(<><ResidencyControl/><LiveDisplayLink/></>, {wrapper: ShareMock})
+}
+
+
+/** Let the live view link's debounced `#d:` write land. */
+async function settleLink() {
+  await act(() => new Promise((resolve) => setTimeout(resolve, HASH_DEBOUNCE_WAIT_MS + 20)))
 }
 
 
@@ -229,6 +243,7 @@ describe('ResidencyControl residency section', () => {
     fireEvent.click(getByTestId('control-button-residency'))
 
     fireEvent.click(getByTestId('residency-metric-memory').querySelector('input'))
+    await settleLink()
     // Full residency but a non-default metric: still a menu choice the user
     // made, so the link carries it (percent first, metric appended).
     expect(window.location.hash).toContain('res=100.memory')
@@ -269,6 +284,7 @@ describe('ResidencyControl residency section', () => {
     // actually fires the radio; Source after it is the term we assert on.
     fireEvent.click(getByTestId('color-mode-auto').querySelector('input'))
     fireEvent.click(getByTestId('color-mode-source').querySelector('input'))
+    await settleLink()
 
     expect(window.location.hash).toContain('res=40.memory')
     expect(window.location.hash).toContain('color=src')
@@ -418,6 +434,7 @@ describe('ResidencyControl while-moving section (motion residency)', () => {
     fireEvent.click(getByTestId('control-button-residency'))
     fireEvent.click(getByTestId('motion-residency-auto').querySelector('input'))
     fireEvent.click(getByTestId('motion-residency-metric-memory').querySelector('input'))
+    await settleLink()
     expect(window.location.hash).toContain('mres=100.memory')
     const {result} = renderHook(() => useStore((state) => state.displayOverrides))
     expect(result.current.model.appearance.motionResidency)

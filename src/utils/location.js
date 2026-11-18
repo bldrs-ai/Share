@@ -128,7 +128,21 @@ export function addHashParams(location, name, params, includeNames = false) {
  *   parameter names in the encoding, default is false.
  */
 export function replaceHashParams(location, name, params, includeNames = false) {
-  const body = mergedHashBody(location, name, params, includeNames)
+  replaceHash(location, mergedHashBody(location, name, params, includeNames))
+}
+
+
+/**
+ * Set the whole hash in place: `history.replaceState`, so no history entry
+ * and no `hashchange`/`popstate` ({@link replaceHashParams} explains why that
+ * matters). For a writer that composes the hash itself, like the `#d:`
+ * token's (Residency/displayHash.js#mergeDisplayTerms).
+ *
+ * @param {Location} location The window.location object, or a `{hash}` double
+ * @param {string} hash with or without its leading `#`; '' for none
+ */
+export function replaceHash(location, hash) {
+  const body = hash.startsWith('#') ? hash.substring(1) : hash
   const isPageLocation = typeof Location !== 'undefined' && location instanceof Location
   if (isPageLocation && typeof window.history?.replaceState === 'function') {
     const url = `${location.pathname}${location.search}${body ? `#${body}` : ''}`

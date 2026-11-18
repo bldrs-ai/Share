@@ -1,3 +1,6 @@
+import {noteUserDisplayChange} from '../Components/Share/viewLink'
+
+
 /**
  * Set Keyboard button Shortcuts
  *
@@ -28,10 +31,13 @@ export function setKeydownListeners(viewer, selectItemsInScene) {
       selectItemsInScene([])
     } else if (event.code === 'KeyH') {
       viewer.isolator.hideSelectedElements()
+      noteUserDisplayChange()
     } else if (event.code === 'KeyU') {
       viewer.isolator.unHideAllElements()
+      noteUserDisplayChange()
     } else if (event.code === 'KeyI') {
       viewer.isolator.toggleIsolationMode()
+      noteUserDisplayChange()
     } else if (event.code === 'KeyR') {
       viewer.isolator.toggleRevealHiddenElements()
     }
