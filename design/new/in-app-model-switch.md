@@ -623,10 +623,11 @@ What the walk found, and fixed:
   the token back as an entry of its own. A rewrite after a location-only
   change is now in place (`replaceHashParams` / `removeHashParamsInPlace`);
   a state change is still its own entry.
-- *A streamed write landing in another entry.* The live camera link and a
-  dragged cut plane write after a 250 ms debounce, into whatever URL is the
-  page's then. A write scheduled before a Back or an in-app open now lands
-  only in the entry it was made in (`utils/debounce.js#debounceInHistoryEntry`,
+- *A streamed write landing in another entry.* The live view link's terms
+  (the camera, a dragged cut plane, the display: `Share/viewLink.js`) write
+  after a 250 ms debounce, into whatever URL is the page's then. A write
+  scheduled before a Back or an in-app open now lands only in the entry it
+  was made in (`createLiveTerm` over `utils/debounce.js#debounceInHistoryEntry`,
   keyed by react-router's `history.state.key`), and the camera link writes
   only while the store's route result is the one its viewer was built for
   (CameraControl), since the old viewer's camera goes on moving until it is

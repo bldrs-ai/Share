@@ -114,9 +114,10 @@ export function visibilityTermsFit(terms) {
  *
  * @param {object} location window.location
  * @param {object} viewer ShareViewer
+ * @param {object} [options] `{inPlace}`, as displayHash.js#mergeDisplayTerms
  * @return {boolean} false when the state was too large for the link
  */
-export function writeVisibilityHash(location, viewer) {
+export function writeVisibilityHash(location, viewer, options = {}) {
   // No model in the isolator yet: nothing to describe, and writing the empty
   // state would strip an incoming link's terms before they were applied.
   if (!viewer?.isolator?.ifcModel) {
@@ -127,7 +128,7 @@ export function writeVisibilityHash(location, viewer) {
   if (!fits) {
     console.warn('visibilityHash: hidden / isolated state is too large for the link; leaving it out')
   }
-  mergeDisplayTerms(location, fits ? terms : Object.fromEntries(VISIBILITY_KEYS.map((key) => [key, null])))
+  mergeDisplayTerms(location, fits ? terms : Object.fromEntries(VISIBILITY_KEYS.map((key) => [key, null])), options)
   return fits
 }
 

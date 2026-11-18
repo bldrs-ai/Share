@@ -1,4 +1,5 @@
-import {HASH_DEBOUNCE_WAIT_MS, debounceInHistoryEntry} from '../../utils/debounce'
+import {HASH_DEBOUNCE_WAIT_MS} from '../../utils/debounce'
+import {createLiveTerm} from '../Share/viewLink'
 
 
 /**
@@ -26,14 +27,17 @@ import {HASH_DEBOUNCE_WAIT_MS, debounceInHistoryEntry} from '../../utils/debounc
  * camera, the Assist `view.*` tools — don't start it, and once it's live
  * they're followed like any other.
  *
+ * The rule is the live view link's (Share/viewLink.js), shared with the cut
+ * planes and the display: this module only says what the camera's user
+ * change is, and the term does the rest.
+ *
  * Once live, every camera `update` schedules a write, programmatic ones too
  * (a ViewCube snap, a note's camera, a fit): the link follows the camera,
  * whoever moved it. The write is debounced (utils/debounce.js) so it lands
  * once camera-controls' damping has settled, and goes through
  * `history.replaceState` (utils/location.js#replaceHashParams): no history
  * entry per settle, and no `hashchange`/`popstate` for the location effect to
- * re-apply the rounded pose from. A write still pending when the page moves
- * to another history entry is dropped rather than written into that entry.
+ * re-apply the rounded pose from.
  */
 
 
@@ -84,30 +88,17 @@ export function startLiveCameraLink(controls, {
   isEnabled = () => true,
   waitMs = HASH_DEBOUNCE_WAIT_MS,
 }) {
-  let isLive = false
+  const term = createLiveTerm({write: () => write(controls), isEnabled, waitMs})
   // Input is under way on the canvas: a press (`controlstart`, until its
   // `controlend`) or a wheel zoom (`control` alone; it has no end).
   let isUserInput = false
   // The pose the press started from, to tell a press that moved the camera
   // from one that didn't.
   let pressPose = null
-  // Lands only in the history entry the camera last moved in: a Back,
-  // Forward or in-app open before it lands makes another entry the page's,
-  // and this pose isn't that entry's (utils/debounce.js#debounceInHistoryEntry).
-  const writeSettled = debounceInHistoryEntry(() => {
-    if (isEnabled()) {
-      write(controls)
-    }
-  }, waitMs)
-  const schedule = () => {
-    if (isLive && isEnabled()) {
-      writeSettled()
-    }
-  }
+  const schedule = term.changed
   const goLive = () => {
-    if (!isLive) {
-      isLive = true
-      schedule()
+    if (!term.isLive()) {
+      term.start()
     }
   }
   // camera-controls sends `controlstart` on pointerDOWN, before any drag, so
@@ -149,9 +140,9 @@ export function startLiveCameraLink(controls, {
   ]
   events.forEach(([type, fn]) => controls?.addEventListener?.(type, fn))
   return {
-    isLive: () => isLive,
+    isLive: term.isLive,
     dispose: () => {
-      writeSettled.cancel()
+      term.dispose()
       events.forEach(([type, fn]) => controls?.removeEventListener?.(type, fn))
     },
   }

@@ -67,6 +67,21 @@ describe('CutPlaneMenu: a dragged plane\'s offset in the permalink', () => {
     expect(useStore.getState().cutPlanes).toEqual([{direction: 'x', offset: 0.75}, {direction: 'y', offset: -0.5}])
   })
 
+  it('keeps the store\'s offsets but leaves the link alone while the Share switch is off', () => {
+    // The live view link's switch (store isPlaneInUrl) gates the URL only:
+    // togglePlane rebuilds the other planes from the store's offsets, so
+    // those must follow the drag either way.
+    const model = makeModel()
+    useStore.setState({cutPlanes: [{direction: 'x', offset: 0}], model, isPlaneInUrl: false})
+    try {
+      writeDraggedPlanes({clipper: {planes: [menuPlane(model, 'x', 0.75)]}}, model)
+      expect(window.location.hash).toBe('')
+      expect(useStore.getState().cutPlanes).toEqual([{direction: 'x', offset: 0.75}])
+    } finally {
+      useStore.setState({isPlaneInUrl: true})
+    }
+  })
+
   it('writes a drag in place, not as a history entry per settle', () => {
     // The page's location is a double in this file, so the writer is watched
     // instead: replaceHashParams is what keeps Back from stepping through

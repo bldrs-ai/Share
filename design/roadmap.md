@@ -1,7 +1,7 @@
 # Bldrs Share Roadmap
 
-**Status:** Draft v0.12 — model versioning and sharing design added as share-200
-**Date:** 2026-11-11
+**Status:** Draft v0.14 — growth (`grow-*`) epics moved to bizdev (v0.13 is pending in #2165)
+**Date:** 2026-11-18
 **Owner:** Pablo
 **Source baseline:** `Share Requirements` Google Doc (Aug 2021, last updated Nov 2022); PDF extract is in this repo's history.
 
@@ -13,13 +13,12 @@ This doc is the source of truth for Epic/Story/Track structure. The wiki page
 - **Viewer and engine:** rebuilt on Conway-direct with the GLB cache (T1/T2), default-on. The per-model engine worker, render on demand and motion residency are on by default (kill switches `disableEngineWorker`, `disableRenderOnDemand`, `disableMotionResidency`), and hover is drawn on a held frame. Per the owner (2026-11-10), this was tested extensively and gives a mostly smooth frame rate on a ~900 MB IFC, with interactivity during load.
 - **Billing and quotas:** live. Stripe (hosted pricing table, portal, webhook, daily reconcile) and the decided paywall: free viewing with no login for local and public models; a free account gets 2 private models per rolling 7 days (open, share and export); Pro has unlimited private models and exports. Rules: `design/new/quotas.md`.
 - **GLB export:** entitled to Pro; free users export public models freely and private/local models through the same slots (`design/new/glb-export-premium.md`).
-- **Funnel analytics:** landed through subscription events (load outcomes, engaged-use/return, normalized model actions, server-side subscription events). Still open: recipient share-loop attribution, size/complexity segmentation, GA4/Ads configuration (`grow-120`).
+- **Growth (`grow-*`):** the epics, their status and their stories now live in the private bizdev repo (`docs/growth-roadmap.md`, <a href="https://github.com/bldrs-ai/bizdev/issues/369" target="_blank" rel="noopener noreferrer">bizdev#369</a>–<a href="https://github.com/bldrs-ai/bizdev/issues/372" target="_blank" rel="noopener noreferrer">bizdev#372</a>); §4.10 keeps a pointer per epic.
 - **Ads:** off and parked (per the owner, 2026-11-10); AdSense stays off for a while, possibly permanently (`subscribe-130`, T7).
 - **Workspace shell:** projects drawer, TopBar and Profile/Share relocation are shipped behind `?feature=workspace` (`assist-300`). Layout direction decided 2026-11-10: sessions on the left grouped by project, models as tabs (§4.11).
 - **AI assistant:** design doc landed (`design/new/ai-workspace.md`); the viewer tool registry v0 is on main behind `?feature=assist` as a dev hook, and a prototype bot sits behind `?feature=bot`. No panel, agent loop or relay yet. The arc stays post-MVP (§7).
 - **In flight:** identity/multi-account (T3), private sharing (T4), the remaining half of in-app model switching (`open-205`: session-owned workers, close and eviction, the switch itself), the model-edit substrate (`create-300`; L0 landed).
 - **Model versioning and sharing:** design planned as `share-200` ([#2144](https://github.com/bldrs-ai/Share/issues/2144), [design](new/model-versioning.md)); whole-file history and public pinned-version links first, semantic editing later. Implementation not started. Per-principal grants move to `share-201`; existing private-sharing scope stays in T4.
-- **Not started:** `/viewer/*` landing pages, OG link previews, the large-model positioning page (Phase G).
 - **MVP bar:** unchanged (§6.0). The paid offer is live; the working view is that the bar is met when users upgrade on their own as features improve. The six open items are in §6.0.
 
 ## Relation to the bizdev planning set
@@ -121,10 +120,10 @@ One row per Epic and Track; bodies are in §4 and §5. **Phase column:** A–E =
 | Subscribe | `subscribe-120` | Quota tracking (NEW) | ✔ | D | T8, T3 | |
 | Subscribe | `subscribe-130` | Ads on free tier | 🔮 | D | T7 | <a href="https://github.com/bldrs-ai/Share/issues/1524" target="_blank" rel="noopener noreferrer">#1524</a> |
 | Subscribe | `subscribe-400` | Enterprise tier definition (NEW) | ⬜ | Post | T8 | |
-| Grow | `grow-100` | SEO format landing pages `/viewer/*` (NEW) | ⬜ | G | T9 | |
-| Grow | `grow-120` | Funnel instrumentation + GA hygiene (NEW) | 🟡 | G | T9 | |
-| Grow | `grow-200` | Rich share-link previews / OG cards (NEW) | ⬜ | G | T9 | |
-| Grow | `grow-400` | Large-model + data-sovereignty positioning (NEW) | ⬜ | G | T9 | |
+| Grow | `grow-100` | SEO format landing pages `/viewer/*` (NEW) | → bizdev | G | T9 | <a href="https://github.com/bldrs-ai/bizdev/issues/369" target="_blank" rel="noopener noreferrer">bizdev#369</a> |
+| Grow | `grow-120` | Funnel instrumentation + GA hygiene (NEW) | → bizdev | G | T9 | <a href="https://github.com/bldrs-ai/bizdev/issues/370" target="_blank" rel="noopener noreferrer">bizdev#370</a> |
+| Grow | `grow-200` | Rich share-link previews / OG cards (NEW) | → bizdev | G | T9 | <a href="https://github.com/bldrs-ai/bizdev/issues/371" target="_blank" rel="noopener noreferrer">bizdev#371</a> |
+| Grow | `grow-400` | Large-model + data-sovereignty positioning (NEW) | → bizdev | G | T9 | <a href="https://github.com/bldrs-ai/bizdev/issues/372" target="_blank" rel="noopener noreferrer">bizdev#372</a> |
 | Assist | `assist-300` | Workspace shell: left drawer projects + org nav (NEW) | 🟡 | AI | — | <a href="https://github.com/bldrs-ai/Share/issues/1657" target="_blank" rel="noopener noreferrer">#1657</a> |
 | Assist | `assist-310` | Conversational agent panel, single-user (NEW) | 🟡 | AI | T10, T11 | <a href="https://github.com/bldrs-ai/Share/issues/1659" target="_blank" rel="noopener noreferrer">#1659</a> |
 | Assist | `assist-320` | AI-apps toolbelt: save/version/run + MCP (NEW) | ⬜ | AI | T11 | |
@@ -145,7 +144,7 @@ One row per Epic and Track; bodies are in §4 and §5. **Phase column:** A–E =
 | T6 | Notes & Versions sidecar formats | ⬜ | Post | `notes-200`, `notes-300`, `versions-310` |
 | T7 | Ads | 🔮 | D | `subscribe-130` |
 | T8 | Pro/Billing (NEW) | 🟡 | D | `subscribe-100`, `subscribe-110`, `subscribe-120`, §7 AI metering |
-| T9 | Growth funnel & SEO surfaces (NEW) | 🟡 | G | `grow-100`, `grow-200`, `grow-120` |
+| T9 | Growth funnel & SEO surfaces (NEW) | → bizdev | G | `grow-100`, `grow-200`, `grow-120` |
 | T10 | Agent runtime & conversation store (NEW) | 🟡 | AI (§7) | `assist-310`, `assist-400`, `search-310` |
 | T11 | App sandbox + MCP bridge (NEW) | 🟡 | AI (§7) | `assist-320`, `apps-300`, `apps-310` |
 | T12 | Model edit substrate (NEW) | 🟡 | AI (§7) | `create-300`, `create-310`, `create-320`, `share-200` V1+, §7.4 AI.5 |
@@ -250,12 +249,12 @@ User upgrades from free to Pro, the system tracks quota, and Pro-only features b
 
 ### 4.10 Grow (NEW group)
 
-Users find Bldrs without paying for every visit, and shared links convert recipients into new users (see the Changelog, v0.3, for the growth conclusions). Quantitative targets live in the **private** bizdev docs. This group is free-tier demand-gen and measurement and stays cheap; the audience that pays gets its own surface (`grow-400`).
+Moved to the private bizdev repo on 2026-11-18. Each epic's scope, status, stories and open questions are in its bizdev issue, indexed in bizdev `docs/growth-roadmap.md`; the codes are unchanged, and code work for a growth story gets a Share story linking back. Implementation design stays here in Share (funnel events: `design/new/quotas.md` §"Funnel analytics").
 
-- **`grow-100` SEO format landing pages** ⬜ (NEW). Static `/viewer/<format>` pages (IFC and STEP first) on the marketing SSG build, targeting "open X file online" and serving as paid-search destinations; demo deep links exist for IFC and STEP. **Phase G.**
-- **`grow-120` Funnel instrumentation + analytics hygiene** 🟡 (NEW). Landed: GA hygiene, load outcomes, engaged-use/return conversions, normalized model actions by tier, and server-side subscription events. Remaining: recipient share-loop attribution (`share_link_created`, `share_link_opened`, `model_interacted`); size/complexity segmentation on model-open; GA4/Ads-side configuration and verification. Event grid: `design/new/quotas.md` §"Funnel analytics". **Phase G, first slice.**
-- **`grow-200` Rich share-link previews (OG cards)** ⬜ (NEW). Shared `/share/*` links unfurl with a thumbnail and title; recipients get an "Open your own model" affordance. Mechanism is an open question (§10). Supersedes <a href="https://github.com/bldrs-ai/Share/issues/1315" target="_blank" rel="noopener noreferrer">#1315</a>. **Phase G**; OG image may slip to Phase C.
-- **`grow-400` Large-model + data-sovereignty positioning** ⬜ (NEW). A marketing page for the audience that pays, leading with "AI iterates on models nobody else can even open" and the no-upload story, with a large-model demo link. **Phase G**; refreshed at AI.2.
+- **`grow-100` SEO format landing pages:** <a href="https://github.com/bldrs-ai/bizdev/issues/369" target="_blank" rel="noopener noreferrer">bizdev#369</a>. Whether it stays in the MVP list (§6.0) is <a href="https://github.com/bldrs-ai/bizdev/issues/368" target="_blank" rel="noopener noreferrer">bizdev#368</a>.
+- **`grow-120` Funnel instrumentation + analytics hygiene:** <a href="https://github.com/bldrs-ai/bizdev/issues/370" target="_blank" rel="noopener noreferrer">bizdev#370</a>.
+- **`grow-200` Rich share-link previews (OG cards):** <a href="https://github.com/bldrs-ai/bizdev/issues/371" target="_blank" rel="noopener noreferrer">bizdev#371</a>.
+- **`grow-400` Large-model + data-sovereignty positioning:** <a href="https://github.com/bldrs-ai/bizdev/issues/372" target="_blank" rel="noopener noreferrer">bizdev#372</a>.
 
 ### 4.11 Assist (NEW group — the AI workspace)
 
@@ -328,10 +327,7 @@ Each track has a long-form design doc.
 - **Doc:** `design/new/quotas.md`, `design/new/glb-export-premium.md`, `design/new/netlify-functions-testing.md`; no separate billing doc is planned.
 
 ### Track T9: Growth funnel & SEO surfaces (NEW)
-- **What:** Funnel events, analytics hygiene, OG metadata, `/viewer/<format>` pages and the `grow-400` page, on the marketing SSG build.
-- **Status:** In flight: most events landed (§4.10); share-loop attribution, size segmentation, landing pages and OG cards remain.
-- **MVP impact:** Phase G, parallel; the only work that grows the top of the funnel.
-- **Docs:** `design/new/ads.md` (on-site ads); strategy and numbers are in the private bizdev docs.
+- **Moved to bizdev** with the `grow-*` epics (§4.10). On-site ads stay here: `design/new/ads.md`.
 
 ### Track T10: Agent runtime & conversation store (NEW)
 - **What:** The agent loop (LLM calls, tool dispatch, streaming), conversation persistence, and the shared store for `assist-400`.
@@ -368,16 +364,13 @@ The open 100-band work, exhaustively — this list is the MVP:
 3. **The paid offer exists** (Phase C): `share-130` (T4 PR2/PR3), `share-120` (<a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>), `share-110` (T2 Ph4+5).
 4. **It bills** (Phase D): `subscribe-100/110/120`. **Met (2026-11-10):** billing and the private-model slot quota are live under the decided paywall (§4.9).
 5. **The free tier monetises and acquires** (Phase D): T7 ads (`subscribe-130`) — parked (2026-11-10), not part of the bar.
-6. **It's measurable and findable** (Phase G): `grow-120` events and GA hygiene, `grow-100` `/viewer/ifc` + `/viewer/step`, `community-110` feedback.
+6. **It's measurable and findable** (Phase G): `grow-120` events and GA hygiene, `grow-100` `/viewer/ifc` + `/viewer/step`, `community-110` feedback. The `grow-*` items are tracked in bizdev (§4.10); <a href="https://github.com/bldrs-ai/bizdev/issues/368" target="_blank" rel="noopener noreferrer">bizdev#368</a> decides whether `grow-100` stays here, since bizdev has it parked.
 
 Demoted out of the MVP band (not load-bearing for the trickle): `open-200`, `share-201`, `grow-200`, and the Assist/AI arc. Rationale: organic traffic is near zero and the one earned channel, shared links, is uninvested, so launching Pro into an unmeasured funnel wastes the launch.
 
 ### Phase G (parallel, starts now): Growth funnel + SEO surfaces
 **Goal:** the funnel is measurable, share links unfurl, and search intent has a landing page.
-- Remaining `grow-120`: recipient share-loop attribution, size/complexity segmentation, GA4/Ads configuration and verification.
-- `grow-100`: `/viewer/ifc` and `/viewer/step` first, then other formats.
-- `grow-200`: OG metadata and recipient affordance; image generation may pair with Phase C.
-- `grow-400`: the positioning page.
+- The work is the `grow-*` epics, tracked in bizdev (§4.10).
 
 **Exit:** clean stage-by-stage funnel counts (large-model users visible as a segment); a shared link unfurls with a thumbnail; format and positioning pages indexed.
 
@@ -517,7 +510,7 @@ Standing convention (the original migration is done):
 - **Unit of "private"** under sessions and projects (`conversational-cad.md` §5.1).
 - **Sandbox security model** for toolbelt apps: origin isolation, tool permissioning, provenance (T11).
 - **AI naming.** "Assist" is the working verb; the user-facing name is unpicked.
-- **OG image mechanism.** Edge injection on `/share/*` vs pre-render at share time; decides whether `grow-200` finishes in Phase G or Phase C.
+- **OG image mechanism** (decides whether `grow-200` finishes in Phase G or Phase C): tracked in <a href="https://github.com/bldrs-ai/bizdev/issues/371" target="_blank" rel="noopener noreferrer">bizdev#371</a>.
 
 **Decided:** the ❤️ name markers are kept as the record of former teammates' requests (2026-11-10). Unplaced epics: <a href="https://github.com/bldrs-ai/Share/issues/1601" target="_blank" rel="noopener noreferrer">#1601</a> is a T1 sub-track and <a href="https://github.com/bldrs-ai/Share/issues/2048" target="_blank" rel="noopener noreferrer">#2048</a> attaches to `identity-300`. Paywall wording reconciled with the shipped rule (§4.9, Phase D); the size/complexity axis was not adopted. Agent runtime placement (2026-10): the loop runs client-side, a thin `ai-chat` relay holds the hosted key and meters credits, BYOK goes direct (`ai-workspace.md` D1, D2, D6). Edit-log location: an op log over the immutable source, Share-side (`model-edit.md`).
 
@@ -533,6 +526,7 @@ Standing convention (the original migration is done):
 
 # Changelog
 
+- **v0.14 (2026-11-18):** moved the `grow-*` epics (§4.10, Track T9, Phase G's work list) to the private bizdev repo, which now holds their status and stories; codes and aliases unchanged. Flagged the conflict between §6.0's `grow-100` and bizdev's parked SEO issue as bizdev#368.
 - **v0.12 (2026-11-11):** assigned #2144 model versioning and sharing to `share-200`, moved per-principal grants to `share-201` across current references, and added the implementation design/dispatch plan. Whole-file public sharing is independent of later T12 semantic editing; existing Phase C private-sharing scope and the MVP bar are unchanged.
 
 - **v0.3 (2026-07-02):** folded in implementation drift (adapter retired, GPU-instancing arc, STEP metadata, marketing SSG), the growth-strategy reconciliation (paid search was the only channel delivering real model opens, organic discovery near zero, shared links the best earned traffic; so funnel instrumentation, SEO surfaces and share-loop polish became Phase G, §4.10, T9), and the AI-workspace pivot (§4.11, T10–T11, §7).
