@@ -41,7 +41,7 @@ export type AssistErrorCode =
   | 'network'
   /** The user stopped the reply. */
   | 'aborted'
-  /** A turn is already streaming in this session. */
+  /** A turn is already streaming, or an undo is running, in this session. */
   | 'busy'
   /** Any other provider or SDK failure; `status` carries the HTTP status when there was one. */
   | 'provider'
@@ -154,7 +154,7 @@ export function assistErrorMessage(code: AssistErrorCode, provider: string, stat
       `configuration, or your ${provider} provider settings leave it no endpoint.`
     case 'network': return `Couldn't reach ${provider}. Check your connection and try again.`
     case 'aborted': return 'Stopped.'
-    case 'busy': return 'The assistant is still answering. Wait for it, or stop it first.'
+    case 'busy': return 'The assistant is still answering or undoing. Wait for it, or stop it first.'
     default: return `${provider} returned an error${status ? ` (HTTP ${status})` : ''}. Try again in a moment.`
   }
 }

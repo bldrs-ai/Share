@@ -72,7 +72,8 @@ export default function BotChat() {
 
   // The chat lives outside the panel (assistState.js): the panel unmounts
   // when closed, and on a phone whenever another drawer tab is shown.
-  const {messages, streamingTurn, conversationId, undoTop} = useSyncExternalStore(assistChat.subscribe, assistChat.get)
+  const {messages, streamingTurn, conversationId, undoTop, undoPending} =
+    useSyncExternalStore(assistChat.subscribe, assistChat.get)
   const isStreaming = streamingTurn !== null
   const [input, setInput] = useState('')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
@@ -117,7 +118,7 @@ export default function BotChat() {
 
   const handleSend = useCallback(async () => {
     const content = input.trim()
-    if (!content || isStreaming) {
+    if (!content || isStreaming || undoPending) {
       return
     }
     setInput('')
@@ -189,7 +190,7 @@ export default function BotChat() {
         messages: chat.messages.map((message) => (message.live ? {...message, live: false} : message)),
       }))
     }
-  }, [conversationId, input, isStreaming])
+  }, [conversationId, input, isStreaming, undoPending])
 
   const handleStop = useCallback(() => {
     assistChat.update((chat) => ({...chat, stoppedTurn: chat.streamingTurn}))
@@ -204,12 +205,24 @@ export default function BotChat() {
   // Undo is a stack (assist/session.ts): only the newest undoable step
   // offers it, and undoing it may take newer steps with it via the API, so
   // every step the report names is marked.
+  //
+  // An undo can wait (bounded) for calls still running, so while it does,
+  // Undo, Send and New chat are disabled and the Undo button says so: a
+  // second undo or a new turn meanwhile is what the session's ordering
+  // guards against (assist/loop.ts `undo`, `send`), and the user should see
+  // it is still working.
   const handleUndo = useCallback(async (stepId) => {
     const session = assistInstance.current?.session
-    if (!session) {
+    if (!session || assistChat.get().undoPending) {
       return
     }
-    const report = await session.undo(stepId)
+    assistChat.update((chat) => ({...chat, undoPending: true}))
+    let report
+    try {
+      report = await session.undo(stepId)
+    } finally {
+      assistChat.update((chat) => ({...chat, undoPending: false}))
+    }
     const failed = report.failed.length > 0
     assistChat.update((chat) => ({
       ...chat,
@@ -225,6 +238,7 @@ export default function BotChat() {
         aria-label='New chat'
         title='New chat'
         onClick={handleNewChat}
+        disabled={undoPending}
         data-testid='BotChat-NewChatButton'
       >
         <NewChatIcon/>
@@ -284,11 +298,13 @@ export default function BotChat() {
           size='small'
           variant='text'
           onClick={() => handleUndo(message.stepId)}
+          disabled={undoPending}
+          aria-busy={undoPending}
           aria-label={`Undo: ${message.lines.join(', ')}`}
           data-testid='BotChat-UndoButton'
           sx={{minWidth: 0, py: 0, textTransform: 'none'}}
         >
-          Undo
+          {undoPending ? 'Undoing…' : 'Undo'}
         </Button>
       )}
       {message.undone && (
@@ -366,6 +382,7 @@ export default function BotChat() {
         ) : (
           <IconButton
             onClick={handleSend}
+            disabled={undoPending}
             color='primary'
             aria-label='Send'
             data-testid='BotChat-SendButton'

@@ -155,9 +155,16 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
   const undoable = (record: StepRecord) => !record.undone && record.calls.length > 0
   let turn = 0
   let current: AbortController | null = null
+  // Undos queue behind each other (`undo` below), and `send` is refused
+  // while any is pending.
+  let undoChain: Promise<void> = Promise.resolve()
+  let pendingUndos = 0
 
   const send = (text: string): AsyncIterable<AssistEvent> => {
-    if (current) {
+    // Refused, not queued, during an undo too: a turn that ran while an undo
+    // waited for running calls would have its changes overwritten when the
+    // undo's snapshots land. The panel disables Send meanwhile.
+    if (current || pendingUndos > 0) {
       return once({type: 'error', code: 'busy'}, {type: 'done', finishReason: 'error'})
     }
     const controller = new AbortController()
@@ -343,46 +350,64 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
       return Boolean(record && undoable(record))
     },
     lastUndoable: () => [...steps].reverse().find(undoable)?.id ?? null,
-    undo: async (stepId) => {
-      const report: UndoReport = {undone: 0, failed: [], steps: []}
-      const index = steps.findIndex((step) => step.id === stepId)
-      if (index < 0 || !undoable(steps[index])) {
-        return report
-      }
-      // The step asked for and every newer one: undoing an older step's
-      // snapshot alone would bring back state a newer step's undo had
-      // already taken away. Already-undone steps were reversed once already.
-      const affected = steps.slice(index).filter((record) => !record.undone)
-      // 1. Mark them undone first, so their running calls see shouldCommit()
-      //    false and apply nothing (types.ts ToolContext).
-      affected.forEach((record) => {
-        record.undone = true
+    isUndoing: () => pendingUndos > 0,
+    // Undos run one at a time, in the order asked: each waits, bounded, for
+    // running calls, and a second undo that read the stack meanwhile (a
+    // double click, an older step's Undo) would otherwise reverse an older
+    // step first and then have the newer snapshot land on top of it.
+    undo: (stepId) => {
+      pendingUndos++
+      const run = undoChain.then(() => undoNow(stepId))
+      undoChain = run.then(() => undefined, () => undefined)
+      return run.finally(() => {
+        pendingUndos--
       })
-      // 2. Wait, bounded, for those calls to settle: a call that ignored the
-      //    check rolls itself back as it lands, and it is the newest change,
-      //    so it must go before the older calls are reversed.
-      const running = affected.flatMap((record) => [...record.inflight])
-      if (running.length > 0) {
-        await Promise.race([Promise.all(running),
-          new Promise((resolve) => setTimeout(resolve, opts.undoSettleMs ?? UNDO_SETTLE_MS))])
-      }
-      // 3. Reverse strictly newest first.
-      for (const record of [...affected].reverse()) {
-        if (record.calls.length === 0) {
-          continue
-        }
-        report.steps.push(record.id)
-        for (const {name, undo} of [...record.calls].reverse()) {
-          try {
-            await undo()
-            report.undone++
-          } catch (e) {
-            report.failed.push({name, message: errorMessage(e)})
-          }
-        }
-      }
-      return report
     },
+  }
+
+  /**
+   * @param stepId
+   * @return what was undone
+   */
+  async function undoNow(stepId: string): Promise<UndoReport> {
+    const report: UndoReport = {undone: 0, failed: [], steps: []}
+    const index = steps.findIndex((step) => step.id === stepId)
+    if (index < 0 || !undoable(steps[index])) {
+      return report
+    }
+    // The step asked for and every newer one: undoing an older step's
+    // snapshot alone would bring back state a newer step's undo had
+    // already taken away. Already-undone steps were reversed once already.
+    const affected = steps.slice(index).filter((record) => !record.undone)
+    // 1. Mark them undone first, so their running calls see shouldCommit()
+    //    false and apply nothing (types.ts ToolContext).
+    affected.forEach((record) => {
+      record.undone = true
+    })
+    // 2. Wait, bounded, for those calls to settle: a call that ignored the
+    //    check rolls itself back as it lands, and it is the newest change,
+    //    so it must go before the older calls are reversed.
+    const running = affected.flatMap((record) => [...record.inflight])
+    if (running.length > 0) {
+      await Promise.race([Promise.all(running),
+        new Promise((resolve) => setTimeout(resolve, opts.undoSettleMs ?? UNDO_SETTLE_MS))])
+    }
+    // 3. Reverse strictly newest first.
+    for (const record of [...affected].reverse()) {
+      if (record.calls.length === 0) {
+        continue
+      }
+      report.steps.push(record.id)
+      for (const {name, undo} of [...record.calls].reverse()) {
+        try {
+          await undo()
+          report.undone++
+        } catch (e) {
+          report.failed.push({name, message: errorMessage(e)})
+        }
+      }
+    }
+    return report
   }
 }
 
@@ -592,9 +617,14 @@ async function runTool(name: string, input: unknown, callId: string,
     record.calls.push({name, undo: result.undo})
     return {result, kept: true, rolledBack: false}
   })
-  const settledLanding = landing.then(() => undefined, () => undefined)
-  record.inflight.add(settledLanding)
-  settledLanding.then(() => record.inflight.delete(settledLanding))
+  // Only a call that can change the view is waited for by undo: a
+  // read-only one ('run'), however slow (model.properties on a busy engine),
+  // has nothing to land.
+  if (policy !== 'run') {
+    const settledLanding = landing.then(() => undefined, () => undefined)
+    record.inflight.add(settledLanding)
+    settledLanding.then(() => record.inflight.delete(settledLanding))
+  }
   let settled
   try {
     settled = await untilAborted(landing, signal)

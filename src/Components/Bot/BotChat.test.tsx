@@ -39,7 +39,8 @@ jest.mock('../../viewer/tools/assistRuntime', () => ({
 // Share's registry needs a loaded model, which jsdom has none of. These
 // tests swap in a small registry with the same tool names, over a fake view,
 // and keep everything else of createShareAssist.
-const mockView: {selected: string[], undos: number} = {selected: ['e9'], undos: 0}
+const mockView: {selected: string[], undos: number, holdUndo: Promise<void> | null} =
+  {selected: ['e9'], undos: 0, holdUndo: null}
 jest.mock('../../viewer/tools/assistHost', () => {
   const actual = jest.requireActual('../../viewer/tools/assistHost')
   return {
@@ -97,11 +98,10 @@ function mockViewTools() {
         mockView.selected = refs
         return Promise.resolve({
           content: {selected: refs.length, refs}, echo: `Selected ${refs.length} elements`, refs,
-          undo: () => {
+          undo: () => (mockView.holdUndo ?? Promise.resolve()).then(() => {
             mockView.undos++
             mockView.selected = before
-            return Promise.resolve()
-          },
+          }),
         })
       },
     }],
@@ -124,6 +124,7 @@ describe('BotChat', () => {
   beforeEach(() => {
     mockView.selected = ['e9']
     mockView.undos = 0
+    mockView.holdUndo = null
     Object.assign(mockControl, {runtimeFails: false, runtimeDelayMs: 0, startThrows: false, labelThrows: false})
     jest.mocked(reportAssistCondition).mockClear()
     act(() => {
@@ -220,6 +221,34 @@ describe('BotChat', () => {
     expect(assistKeyStore.get(OPENROUTER_KEY_ID)).toBe('new-key')
     expect(JSON.stringify({...localStorage})).not.toContain('new-key')
     expect(screen.queryByTestId('BotSettings')).not.toBeInTheDocument()
+  })
+
+  it('while an undo runs, Undo, Send and New chat are disabled, and Undo says it is working', async () => {
+    render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+    send(SCRIPT.selectPrompt)
+    await screen.findByText(SCRIPT.selectedAnswer(2), {exact: false})
+    await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
+    let release = () => undefined
+    mockView.holdUndo = new Promise((resolve) => {
+      release = resolve
+    })
+    await act(() => Promise.resolve(fireEvent.click(screen.getByTestId('BotChat-UndoButton'))))
+    const undo = screen.getByTestId('BotChat-UndoButton')
+    expect(undo).toBeDisabled()
+    expect(undo).toHaveAttribute('aria-busy', 'true')
+    expect(undo).toHaveTextContent('Undoing…')
+    expect(screen.getByTestId('BotChat-SendButton')).toBeDisabled()
+    expect(screen.getByRole('button', {name: 'New chat'})).toBeDisabled()
+    // Enter in the box doesn't send either.
+    fireEvent.change(screen.getByPlaceholderText('Type a message…'), {target: {value: 'Hello bot'}})
+    fireEvent.keyDown(screen.getByPlaceholderText('Type a message…'), {key: 'Enter'})
+    expect(screen.queryByText('Hello bot')).toBeNull()
+
+    await act(() => Promise.resolve(release()).then(() => new Promise((resolve) => setTimeout(resolve, 10))))
+    expect(await screen.findByTestId('BotChat-Undone')).toHaveTextContent('Undone')
+    expect(screen.getByTestId('BotChat-SendButton')).toBeEnabled()
+    expect(screen.getByRole('button', {name: 'New chat'})).toBeEnabled()
+    expect(mockView.selected).toEqual(['e9'])
   })
 
   it('offers Undo on the newest step only, across turns, and walks back one step at a time', async () => {

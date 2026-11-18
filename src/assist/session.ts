@@ -69,13 +69,20 @@ export interface AssistSession {
   /**
    * Reverse the view changes of a step and of every newer step, newest step
    * and latest call first. A step undoes once. A call of an undone step that
-   * finishes afterwards is rolled back as it lands.
+   * finishes afterwards is rolled back as it lands. Runs after any undo
+   * already asked for.
    */
   undo(stepId: string): Promise<UndoReport>
   /** Whether a step still has something to undo. */
   canUndo(stepId: string): boolean
   /** The newest step that can still be undone, or null. */
   lastUndoable(): string | null
+  /**
+   * Whether an undo is still running (it can wait up to the loop's
+   * `undoSettleMs` for calls in flight). Undos queue, one at a time, in the
+   * order asked; `send` is refused with `busy` until they finish.
+   */
+  isUndoing(): boolean
 }
 
 

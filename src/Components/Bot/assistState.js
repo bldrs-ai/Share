@@ -85,10 +85,12 @@ export function resetAssistChat() {
  * - `stoppedTurn`: a send the user stopped before its session existed (the
  *   first send, while the runtime loads), so it doesn't start once it does.
  * - `undoTop`: the one step that offers Undo (session.lastUndoable()).
+ * - `undoPending`: an undo is running; Undo, Send and New chat wait for it.
  *
  * @return {object} an empty chat with its own conversation id
  */
 function initialChat() {
-  return {conversationId: uuid(), messages: [], streamingTurn: null, stoppedTurn: null, undoTop: null}
+  return {conversationId: uuid(), messages: [], streamingTurn: null, stoppedTurn: null, undoTop: null,
+    undoPending: false}
 }
 

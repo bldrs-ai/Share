@@ -519,10 +519,17 @@ describe('assist/loop', () => {
           }}
         },
       })
-      return {view, provider: {id: 'view', tools: () => [tool('view.fast', false), tool('view.slow', true)]}}
+      // Read-only and never settling, as model.properties on a hung engine; it
+      // counts as waiting, so untilWaiting returns with it running.
+      const slowRead = {
+        name: 'view.slowRead', description: 'slow read', annotations: {readOnly: true},
+        inputSchema: {type: 'object', properties: {}, additionalProperties: false},
+        run: () => new Promise((resolve) => view.releases.push(() => resolve({content: {}}))),
+      }
+      return {view, provider: {id: 'view', tools: () => [tool('view.fast', false), tool('view.slow', true), slowRead]}}
     }
     /**
-     * @param {Array<object>} plan the tool call of each model request, in order; then text
+     * @param {Array<object>} plan the tool call (or calls) of each model request, in order; then text
      * @return {Function} the scripted model
      */
     const scripted = (plan) => {
@@ -532,7 +539,7 @@ describe('assist/loop', () => {
           return scriptedReply(body)
         }
         const call = plan[n++]
-        return call ? {chunks: toolCalls([call]), delayMs: 0} : {chunks: textReply('done'), delayMs: 0}
+        return call ? {chunks: toolCalls([call].flat()), delayMs: 0} : {chunks: textReply('done'), delayMs: 0}
       }
     }
     /**
@@ -610,6 +617,58 @@ describe('assist/loop', () => {
       expect(slow.error.code).toBe('rolled_back')
       expect(slow.echo).toBeUndefined()
       expect(session.lastUndoable()).toBe(null)
+    })
+
+    // Probe 6/7 (round 3): Stop leaves step 1.1 with a select done (S2) and a
+    // slow call still running; step 1.0 selected S1 before it.
+    const stopped = async (extraTools = []) => {
+      const {view, session} = setupView(true, [
+        {id: 'f1', name: 'view_fast', args: {to: 'S1'}},
+        [{id: 'f2', name: 'view_fast', args: {to: 'S2'}}, ...extraTools],
+      ], {undoSettleMs: 1000})
+      const turn = collect(session.send('go'))
+      await untilWaiting(view)
+      session.abort()
+      await turn
+      return {view, session}
+    }
+
+    it('undos run in order: Undo, a double click, then Undo on the older step ends before both', async () => {
+      const {view, session} = await stopped([{id: 's', name: 'view_slow', args: {to: 'S3'}}])
+      expect(view.sel).toBe('S2')
+      const newer = session.lastUndoable()
+      const first = session.undo(newer)
+      expect(session.isUndoing()).toBe(true)
+      const doubleClick = session.undo(newer)
+      // Then the older step (1.0), as a click on its Undo would ask once the
+      // panel offered it.
+      const older = session.undo(newer.replace(/\.\d+$/, '.0'))
+      setTimeout(() => view.releases[0](), 30)
+      await Promise.all([first, doubleClick, older])
+      expect(view.sel).toBe('U0')
+      expect(session.isUndoing()).toBe(false)
+      expect(session.lastUndoable()).toBe(null)
+    })
+
+    it('a send during a pending undo is refused, so the undo can\'t overwrite its changes', async () => {
+      const {view, session} = await stopped([{id: 's', name: 'view_slow', args: {to: 'S3'}}])
+      const undo = session.undo(session.lastUndoable())
+      expect(await collect(session.send('two'))).toEqual([
+        {type: 'error', code: 'busy'}, {type: 'done', finishReason: 'error'},
+      ])
+      view.releases[0]()
+      await undo
+      expect(view.sel).toBe('S1')
+      // Once the undo is done, sends are taken again.
+      expect(textOf(await collect(session.send('hello')))).toBe(SCRIPT.fallback)
+    })
+
+    it('undo doesn\'t wait for a read-only call still running', async () => {
+      const {view, session} = await stopped([{id: 'r', name: 'view_slowRead', args: {}}])
+      const t0 = Date.now()
+      expect((await session.undo(session.lastUndoable())).undone).toBe(1)
+      expect(Date.now() - t0).toBeLessThan(500)
+      expect(view.sel).toBe('S1')
     })
 
     it('undo gives up waiting on a call that never lands, after its bound', async () => {
