@@ -42,6 +42,7 @@ import {
   reportLoadProgress,
   reportModelInfo,
   reportSourceInfo,
+  reportSourceSize,
 } from './loadProgress'
 
 
@@ -629,6 +630,27 @@ describe('loadProgress', () => {
         beginLoadProgress({fileInfo: 'a.ifc'})
         endLoadProgress()
         expect(getCompletedLoadStats().cacheHit).toBeUndefined()
+      })
+    })
+
+    describe('fileSize on a GLB cache hit', () => {
+      // A hit parses the cached artifact, so its own bytes must never stand
+      // in for the source's: a 24 MB IFC used to report its 4 MB GLB.
+      it('reports the source size the loader passes, replacing the model line\'s', () => {
+        const SOURCE_BYTES = 24_200_000
+        beginLoadProgress({fileInfo: 'a.ifc'})
+        reportModelInfo({fileName: 'a.ifc', schema: 'IFC', byteLength: 4_254_613})
+        reportSourceSize(SOURCE_BYTES)
+        endLoadProgress()
+        expect(getCompletedLoadStats().fileSize).toBe(SOURCE_BYTES)
+      })
+
+      it('reports no size, not the artifact\'s, when the source size is unknown', () => {
+        beginLoadProgress({fileInfo: 'a.ifc'})
+        reportModelInfo({fileName: 'a.ifc', schema: 'IFC', byteLength: 4_254_613})
+        reportSourceSize(undefined)
+        endLoadProgress()
+        expect(getCompletedLoadStats().fileSize).toBeUndefined()
       })
     })
 

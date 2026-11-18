@@ -85,6 +85,32 @@ import {injectGlbExtensions, parseGlb} from './injectGlbExtensions'
 export const BLDRS_TITLE_EXTRAS_KEY = 'bldrsTitle'
 
 
+// Key under `scenes[0].extras` carrying the SOURCE model's size in bytes
+// across the GLB cache round-trip, beside the title above. A cache hit
+// parses the artifact, not the source, so without this the only size the
+// load knows is the artifact's — and that is what `stats_fileSize` used to
+// report on every warm open: a 24 MB IFC read as its 4 MB GLB in the
+// bizdev per-user card. The reader (`Loader.js`, at `reportCacheHit`)
+// reports this value instead, or no size at all for an artifact written
+// before the key existed; never the artifact's own byte count.
+export const BLDRS_SOURCE_BYTES_EXTRAS_KEY = 'bldrsSourceBytes'
+
+
+/**
+ * A source size fit to stamp or to report: a positive safe integer, else
+ * null. Read back from the cache file, so validated like the title and the
+ * coordination frame — the artifact is an untrusted boundary
+ * (design/new/glb-model-sharing.md §"Validation and trust") and a bad value
+ * here would land in analytics as a real measurement.
+ *
+ * @param {*} value
+ * @return {number|null}
+ */
+export function validSourceBytes(value) {
+  return (Number.isSafeInteger(value) && value > 0) ? value : null
+}
+
+
 // What a write with no engine to capture from (a non-IFC source) embeds:
 // none of the engine-side extensions. The inject filter drops each null.
 const NO_ENGINE_CAPTURE = Object.freeze({spatialTree: null, elementProperties: null, geometryItemIdentities: null})
@@ -232,6 +258,10 @@ function modelHasBatchedMesh(model) {
  *   passes its session's `capture` op here (engine-worker.md §7 step 5),
  *   since no engine on the page holds its model. Takes precedence over
  *   `ifcManager`.
+ * @param {number} [args.sourceBytes] the source model's size in bytes, as
+ *   the load measured it before the parse. Stamped under
+ *   `BLDRS_SOURCE_BYTES_EXTRAS_KEY` so a later cache hit can report the
+ *   source's size rather than the artifact's; omitted when not a valid size.
  * @return {Promise<boolean>}
  */
 export async function exportAndCacheGlb({
@@ -242,6 +272,7 @@ export async function exportAndCacheGlb({
   modelID = null,
   artifactGeneration = currentGlbArtifactGeneration(),
   capture = null,
+  sourceBytes = null,
 }) {
   const startMs = Date.now()
   try {
@@ -602,6 +633,7 @@ export async function exportAndCacheGlb({
       [BLDRS_TITLE_EXTRAS_KEY]: titleForExtras,
       [APPLIED_COORDINATION_KEY]: appliedCoordinationForExtras,
       [COORDINATION_OFFSET_KEY]: coordinationOffsetForExtras,
+      [BLDRS_SOURCE_BYTES_EXTRAS_KEY]: validSourceBytes(sourceBytes),
     }
     const sceneExtrasPairs =
       Object.entries(sceneExtrasCandidates).filter(([, v]) => v !== null && v !== undefined)

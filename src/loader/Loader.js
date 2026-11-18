@@ -11,7 +11,7 @@ import {USDLoader} from 'three/examples/jsm/loaders/USDLoader.js'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader.js'
 import {MeshoptDecoder} from 'meshoptimizer/decoder'
 import * as Filetype from '../Filetype'
-import {reportCacheHit, reportModelInfo, reportSourceInfo} from './loadProgress'
+import {reportCacheHit, reportModelInfo, reportSourceInfo, reportSourceSize} from './loadProgress'
 import {
   deleteFileFromOPFS,
   doesFileExistInOPFS,
@@ -52,7 +52,9 @@ import {NESTED_LOAD_GENERATION, beginGlbArtifactLoad, publishGlbArtifact} from '
 import {glbCacheKey} from './glbCacheKey'
 import {activeArtifactSpec, glbCompressionModeFromExtensions, isGlbBatchedActive} from './glbCompress'
 import {isBldrsGlbContainer, readGlbContainerHeader, readGlbContainerJsonPrefixes, unpackGlbContainer} from './glbContainer'
-import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb} from './glbExport'
+import {
+  BLDRS_SOURCE_BYTES_EXTRAS_KEY, BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb, validSourceBytes,
+} from './glbExport'
 import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import glbToThree from './glb'
 import {decodeGzipEnvelope} from './gzipEnvelope'
@@ -967,7 +969,11 @@ export async function load(
   reportModelInfo({
     fileName: path.substring(path.lastIndexOf('/') + 1) || path,
     schema: formatTag,
-    byteLength: sourceBytes,
+    // On a GLB cache hit these bytes are the artifact's, under the source's
+    // name and format tag: "SEESTRASSE.ifc — IFC, 4.3 MB" for a 24 MB IFC.
+    // Left out, and the source's size reported after the parse instead
+    // (reportSourceSize, beside reportCacheHit below).
+    byteLength: cameFromGlbCache ? undefined : sourceBytes,
   })
 
   // readModel throws on any falsy model (surfacing viewer.IFC.ifcLastError
@@ -1164,6 +1170,12 @@ export async function load(
   // (`stats_cacheHit`). Read here, after the OPFS block, because the stale
   // Git LFS pointer path above can still reset it to false.
   reportCacheHit(cameFromGlbCache)
+  // A hit parsed the artifact, whose own size the model line above left out.
+  // Report the source's as the writer stamped it, or none for an artifact
+  // that predates the stamp (glbExport.js#BLDRS_SOURCE_BYTES_EXTRAS_KEY).
+  if (cameFromGlbCache) {
+    reportSourceSize(validSourceBytes(model.userData?.[BLDRS_SOURCE_BYTES_EXTRAS_KEY]) ?? undefined)
+  }
   // A batched model on a renderer without WEBGL_multi_draw draws per
   // instance: say so in the report (Share#2094).
   reportRendererLimits(model, () => viewer?.context?.getRenderer?.(), loader.type)
@@ -1296,6 +1308,9 @@ export async function load(
         // runs: by then the user may have navigated to another model, whose
         // own load owns the slot (glbArtifactPublish.js).
         artifactGeneration,
+        // Stamped into the artifact so its later cache hits report the
+        // source's size, not their own (BLDRS_SOURCE_BYTES_EXTRAS_KEY).
+        sourceBytes,
       }).finally(() => {
         useStore.getState().setIsCacheWriteInFlight(false)
         if (engineSession) {

@@ -1550,6 +1550,23 @@ export function reportCacheHit(isHit) {
 
 
 /**
+ * Set the size of the SOURCE model this load opened, replacing whatever
+ * the model line recorded. For a GLB cache hit, where the bytes parsed are
+ * the artifact's and the source's size is only known from the artifact's
+ * stamp (glbExport.js#BLDRS_SOURCE_BYTES_EXTRAS_KEY). `undefined` clears
+ * it: an unknown size is reported as absent (no `stats_fileSize`), never as
+ * the artifact's. Adds no report line. Safe no-op with no active load.
+ *
+ * @param {number|undefined} bytes
+ */
+export function reportSourceSize(bytes) {
+  if (activeReporter && !activeReporter.ended) {
+    activeReporter.fileSize = Number.isFinite(bytes) ? bytes : undefined
+  }
+}
+
+
+/**
  * Mark the moment geometry first reached the scene, in the load's own clock
  * (ms since beginLoadProgress, the same clock as `loadTime`). Latches: only
  * the first call counts. Called from ProgressiveLoadSession when the first
