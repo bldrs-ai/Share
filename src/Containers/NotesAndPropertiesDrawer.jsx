@@ -22,7 +22,7 @@ export default function NotesAndPropertiesDrawer({setDrawerWidth}) {
   const rightDrawerWidth = useStore((state) => state.rightDrawerWidth)
   const rightDrawerWidthInitial = useStore((state) => state.rightDrawerWidthInitial)
 
-  const isBotEnabled = useExistInFeature('bot')
+  const isBotEnabled = useExistInFeature('assist')
 
   const isDrawerVisible = isNotesVisible || isPropertiesVisible || (isBotEnabled && isBotVisible)
 

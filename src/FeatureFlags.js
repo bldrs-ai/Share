@@ -40,12 +40,14 @@ export const flags = [
   // switch still leaks, is design/new/in-app-model-switch.md §2 and §6.
   {name: 'spaModelNav', isActive: false},
   // The AI assistant (epic assist-310, #1659; design/new/ai-workspace.md §13,
-  // D12). Today it gates only the dev hook `window.__bldrsAssistTools` that
-  // drives the viewer tool registry (src/viewer/tools/assistHost.js, #1674);
-  // the tray and agent loop join it in #1672 / #1675, and #1672 also aliases
-  // the old `?feature=bot` to it. The registry and tool providers ship
+  // D12). It shows the assistant panel (Components/Bot/, whose agent loop is
+  // #1675) and installs the dev hook `window.__bldrsAssistTools` that drives
+  // the viewer tool registry (src/viewer/tools/assistHost.js, #1674). The old
+  // `?feature=bot` turns it on too (FEATURE_IMPLICATIONS below), until the
+  // tray's rename in #1672. A `#bot:` permalink opens the panel only where
+  // this flag is on (TabbedPanels.jsx, NotesAndPropertiesDrawer.jsx). The registry and tool providers ship
   // unconditionally — CadView registers the selection funnel they use either
-  // way — but nothing calls them without this flag.
+  // way — and the AI SDK loads only when the assistant first sends.
   {name: 'assist', isActive: false},
   // Usage quotas. The quota lib (src/quota), the record-load Netlify
   // function, the useQuota hook and QuotaLimitDialog all ship
@@ -180,9 +182,9 @@ export const flags = [
   // drives sessions directly when the URL names this flag.
   // Default-ON since §7 step 9. Where a load's engine runs is decided in ONE
   // place, `engine/engineRoute.js#mainThreadEngineReason`: the main-thread
-  // engine stays permanently (§8 item 6) for `disableEngineWorker` below,
-  // for the legacy `?view=` rules and for the legacy `?feature=bot` chat,
-  // both of which read the main-thread engine directly. Where module workers
+  // engine stays permanently (§8 item 6) for `disableEngineWorker` below
+  // and for the legacy `?view=` rules, which read the main-thread engine
+  // directly (the legacy `?feature=bot` eval did too, until #1675 deleted it). Where module workers
   // are missing, or a worker fails to start, the same handler runs in
   // process on this thread (spawnEngine.js).
   // Do NOT roll back by setting this to false: `?feature=engineWorker` in a
@@ -474,6 +476,10 @@ export const flags = [
  */
 const FEATURE_IMPLICATIONS = {
   glb: ['glbdraco', 'glbmeshopt', 'glbverbose', 'glbbatched', 'glbcollapse'],
+  // The old name of the assistant (ai-workspace.md §13, D12), kept so
+  // `?feature=bot` links open the same panel during the port. Remove the
+  // alias once the Bot components are renamed (#1672).
+  assist: ['bot'],
 }
 
 

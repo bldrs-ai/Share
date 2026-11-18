@@ -28,6 +28,12 @@ export type ToolErrorCode =
   | 'rejected'
   /** An undo whose state is gone: the host replaced what it changed (another model loaded). */
   | 'expired'
+  /**
+   * The call didn't take effect: the user stopped the turn or undid its
+   * step while it ran, so it changed nothing (`ToolContext.shouldCommit`),
+   * or its change was reversed as it landed.
+   */
+  | 'rolled_back'
 
 
 /** An error a tool call reports. Thrown by the registry and by tools. */

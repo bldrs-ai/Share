@@ -1,10 +1,18 @@
 import {http, HttpHandler} from 'msw'
 import {HTTP_BAD_REQUEST, HTTP_OK} from '../net/http'
 import {assertDefined} from '../utils/assert'
+import {SSE_HEADERS, scriptedReply, sseStream} from '../assist/openrouterSse.fixture'
 
 
 /**
  * Returns the HTTP handlers for the OpenRouter API.
+ *
+ * The chat endpoint answers with a scripted SSE stream (`openrouterSse.ts`
+ * `scriptedReply`): the same wire format the real API streams, decided from
+ * the request the client sent. So under Jest and the Playwright build the
+ * assistant's real loop runs against it — tool calls go through the real
+ * registry, and their results decide the next reply. Real openrouter.ai is
+ * refused here, and `tests/e2e/networkGuard.ts` blocks it in Playwright too.
  *
  * @param defines - The defines that contains the OPENROUTER_BASE_URL.
  * @return The HTTP handlers.
@@ -22,13 +30,11 @@ export default function apiHandlersOpenrouter(defines: Defines): HttpHandler[] {
     })
   }))
 
-  handlers.push(http.post(chatCompletionsEndpoint, () => {
-    return new Response(JSON.stringify(MOCK_OPENROUTER_RESPONSE), {
+  handlers.push(http.post(chatCompletionsEndpoint, async ({request}) => {
+    const {chunks, delayMs} = scriptedReply(await request.json() as Parameters<typeof scriptedReply>[0])
+    return new Response(sseStream(chunks, delayMs), {
       status: HTTP_OK,
-      headers: {
-        ...OPENROUTER_CORS_HEADERS,
-        'Content-Type': 'application/json',
-      },
+      headers: {...OPENROUTER_CORS_HEADERS, ...SSE_HEADERS},
     })
   }))
 
@@ -43,52 +49,6 @@ export default function apiHandlersOpenrouter(defines: Defines): HttpHandler[] {
   }))
 
   return handlers
-}
-
-
-const MOCK_OPENROUTER_RESPONSE = {
-  id: 'gen-1762456677-D3H9DUqGnL4sGelEXw4A',
-  provider: 'OpenAI',
-  model: 'openai/gpt-5-nano',
-  object: 'chat.completion',
-  created: 1762456678,
-  choices: [
-    {
-      logprobs: null,
-      finish_reason: 'stop',
-      native_finish_reason: 'completed',
-      index: 0,
-      message: {
-        role: 'assistant',
-        content: '```json\n{\n  "assistant_response": "Test received.",\n  "client_code": "return [];"\n}\n```',
-        refusal: null,
-        reasoning: '**Lots of reasoning here...**',
-        reasoning_details: [
-          {
-            type: 'reasoning.summary',
-            summary: '**Lots of reasoning here...**',
-            format: 'openai-responses-v1',
-            index: 0,
-          },
-          {
-            type: 'reasoning.encrypted',
-            data: 'bigEncryptedDataSDFS*DFDF*',
-            id: 'rs_06c198dbc4fd6e6a01690cf4676e1c8197999f710179c9f82b',
-            format: 'openai-responses-v1',
-            index: 0,
-          },
-        ],
-      },
-    },
-  ],
-  usage: {
-    prompt_tokens: 514,
-    completion_tokens: 1438,
-    total_tokens: 1952,
-    completion_tokens_details: {
-      reasoning_tokens: 1408,
-    },
-  },
 }
 
 
