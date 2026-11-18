@@ -152,6 +152,22 @@ describe('CameraControl', () => {
       expect(cameraToken()).toBe('c:7,8,9,4,5,6')
     })
 
+    // open-205 #2021: the URL becomes the next model's (and Share.jsx sets
+    // its route result) a few renders before this viewer is disposed, and
+    // the camera can go on moving meanwhile.
+    it('writes nothing once the store has moved on to another model\'s open', () => {
+      act(() => controls.dispatchEvent({type: 'controlstart'}))
+      controls.move(1, 2, 3, 4, 5, 6)
+      update()
+      settle()
+      expect(cameraToken()).toBe('c:1,2,3,4,5,6')
+      act(() => useStore.setState({modelPath: {filepath: '/another.ifc'}}))
+      controls.move(7, 8, 9, 4, 5, 6)
+      update()
+      settle()
+      expect(cameraToken()).toBe('c:1,2,3,4,5,6')
+    })
+
     it('unmounting drops a pending write and stops following', () => {
       act(() => controls.dispatchEvent({type: 'controlstart'}))
       update()

@@ -46,9 +46,18 @@ export default function CameraControl() {
   // waiting for a new first move — only with a new viewer's controls.
   useEffect(() => {
     addHashListener('camera', () => onHash(window.location, cameraControls))
+    // The open these controls' viewer was built for (Share.jsx sets a new
+    // route result per open; routes/modelOpen.ts). A Back, a Forward or an
+    // in-app open makes the URL another model's a few renders before this
+    // viewer is disposed, and its camera goes on moving meanwhile (damping,
+    // or the new entry's `#c:` being applied to it): each move would schedule
+    // a write of this model's pose into the next model's entry (open-205,
+    // #2021). A write scheduled before the URL changed is the debounce's to
+    // drop (liveCameraLink.js); one scheduled after, this.
+    const builtFor = useStore.getState().modelPath
     const liveLink = startLiveCameraLink(cameraControls, {
       write: replaceCameraUrlParams,
-      isEnabled: () => useStore.getState().isCameraInUrl,
+      isEnabled: () => useStore.getState().isCameraInUrl && useStore.getState().modelPath === builtFor,
     })
     return () => {
       removeHashListener('camera')

@@ -194,7 +194,7 @@ export function navigateToModel(target, navigate) {
   // Read at call time, like every `isFeatureEnabled` check: a kill switch
   // (`?feature=disableSpaModelNav`) rides in the query string
   // `withCurrentSearch` just carried forward, so the page it loads keeps it.
-  if (typeof navigate === 'function' && isSpaModelNavOn()) {
+  if (typeof navigate === 'function' && isSpaModelNavOn() && !isViewChange(path)) {
     navigate(path)
     return
   }
@@ -204,6 +204,29 @@ export function navigateToModel(target, navigate) {
     // Using assign to preserve back button history
     window.location.assign(path)
   }
+}
+
+
+/**
+ * Whether `path` asks for another `?view=` than the page has. ShareViewer
+ * reads `view` once, at module load (`viewParameter`), so an in-app open
+ * would keep the page's view whatever the link says (open-205, #2022): such
+ * an open loads the page instead, as it always did. A path with no query of
+ * its own has the page's by now (`withCurrentSearch`), so this is only a link
+ * that carries its own query.
+ *
+ * @param {string} path
+ * @return {boolean}
+ */
+function isViewChange(path) {
+  const viewOf = (search) => new URLSearchParams(search).get('view')?.toLowerCase() ?? null
+  const queryAt = path.indexOf('?')
+  if (queryAt === -1) {
+    return false
+  }
+  const hashAt = path.indexOf('#', queryAt)
+  const search = path.slice(queryAt, hashAt === -1 ? undefined : hashAt)
+  return viewOf(search) !== viewOf(window.location.search)
 }
 
 
