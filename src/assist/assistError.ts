@@ -45,25 +45,43 @@ export type AssistErrorCode =
   | 'busy'
   /** Any other provider or SDK failure; `status` carries the HTTP status when there was one. */
   | 'provider'
+  // The hosted relay's own refusals (hosted.ts maps its codes onto these).
+  // They carry the caller's tier, which decides what the user is told.
+  /** The tier's assistant credits are spent for the window: sign in, or upgrade. Expected. */
+  | 'credits_exhausted'
+  /** The day's free-model requests are spent (they cost no credits, so they're counted). Expected. */
+  | 'free_requests_exhausted'
+  /** The free models are busy: the breaker had overflowed to them and they refused too. Expected. */
+  | 'assistant_busy'
+  /** The relay or its upstream failed. The relay reports it; the page doesn't. */
+  | 'service_unavailable'
+  /** The Auth0 sign-in the request carried has lapsed. */
+  | 'session_expired'
 
 
 /** A typed failure thrown by Assist's own code (a transport with no key, a busy session). */
 export class AssistError extends Error {
   code: AssistErrorCode
   status?: number
+  /** The hosted relay's tier for the caller ('anonymous' | 'free' | 'pro'), when it said. */
+  tier?: string
 
 
   /**
    * @param code
    * @param message for a developer; hosts word the user-facing text with {@link assistErrorMessage}
    * @param status the HTTP status, when there was one
+   * @param tier the hosted relay's tier for the caller, when it said
    */
-  constructor(code: AssistErrorCode, message: string, status?: number) {
+  constructor(code: AssistErrorCode, message: string, status?: number, tier?: string) {
     super(message)
     this.name = 'AssistError'
     this.code = code
     if (status !== undefined) {
       this.status = status
+    }
+    if (tier !== undefined) {
+      this.tier = tier
     }
   }
 }
@@ -94,14 +112,14 @@ const HTTP_TOO_MANY_REQUESTS = 429
  *   any of several errors depending on where the request was when it fired
  * @return the code and, for an HTTP failure, its status
  */
-export function classifyError(error: unknown, aborted = false): {code: AssistErrorCode, status?: number} {
+export function classifyError(error: unknown, aborted = false): {code: AssistErrorCode, status?: number, tier?: string} {
   if (aborted || isAbortError(error)) {
     return {code: 'aborted'}
   }
   const inner = unwrapRetry(error)
   if (inner instanceof AssistError || (isObject(inner) && inner.name === 'AssistError')) {
-    const {code, status} = inner as AssistError
-    return status === undefined ? {code} : {code, status}
+    const {code, status, tier} = inner as AssistError
+    return {code, ...(status === undefined ? {} : {status}), ...(tier === undefined ? {} : {tier})}
   }
   if (isAbortError(inner)) {
     return {code: 'aborted'}
@@ -142,10 +160,34 @@ export function classifyError(error: unknown, aborted = false): {code: AssistErr
  * @param code
  * @param provider the transport's label, e.g. 'OpenRouter'
  * @param status the HTTP status, for 'provider'
+ * @param tier the hosted relay's tier, for the hosted codes: what a signed-out
+ *   user can do (sign in) differs from a free user (upgrade) and from Pro (wait)
  * @return one or two sentences
  */
-export function assistErrorMessage(code: AssistErrorCode, provider: string, status?: number): string {
+export function assistErrorMessage(code: AssistErrorCode, provider: string, status?: number, tier?: string): string {
   switch (code) {
+    case 'credits_exhausted':
+      if (tier === 'pro') {
+        return 'You\'ve used your Pro assistant credits for the last 30 days. They come back as the days roll ' +
+          'on; meanwhile you can add your own OpenRouter key in the assistant\'s settings.'
+      }
+      if (tier === 'free') {
+        return 'You\'ve used your free assistant credits for the last 30 days. Upgrade to Pro for substantially ' +
+          'more, or add your own OpenRouter key in the assistant\'s settings.'
+      }
+      return 'You\'ve used today\'s free assistant allowance. Sign in for more, or add your own OpenRouter key ' +
+        'in the assistant\'s settings.'
+    case 'free_requests_exhausted':
+      return tier === 'anonymous' ?
+        'You\'ve used today\'s free-model requests. Sign in to keep going, or try again tomorrow.' :
+        'You\'ve used today\'s free-model requests. Try again tomorrow.'
+    case 'assistant_busy':
+      return tier === 'anonymous' ?
+        'The free assistant is busy right now. Sign in to keep going, or try again later.' :
+        'The free models are busy right now. Try again in a few minutes.'
+    case 'service_unavailable': return `${provider} isn't available right now. Try again in a few minutes, or add ` +
+      'your own OpenRouter key in the assistant\'s settings.'
+    case 'session_expired': return 'Your sign-in has expired. Sign in again to keep using your assistant credits.'
     case 'no_key': return `Add your ${provider} key in the assistant's settings (the gear) to start.`
     case 'bad_key': return `${provider} didn't accept your key. Check it in the assistant's settings and try again.`
     case 'no_credits': return `Your ${provider} account is out of credits. Add credits with ${provider}, then try again.`

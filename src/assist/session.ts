@@ -42,7 +42,7 @@ export type AssistEvent =
    * carries on from it.
    */
   | {type: 'step-limit', steps: number}
-  | {type: 'error', code: AssistErrorCode, status?: number}
+  | {type: 'error', code: AssistErrorCode, status?: number, tier?: string}
   | {type: 'done', finishReason: string}
 
 
