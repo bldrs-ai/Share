@@ -332,6 +332,13 @@ describe('GitHubFileBrowser', () => {
           {name: 'stage.usda'},
           {name: 'crate.usdc'},
           {name: 'layer.usd'},
+          // Every zip is listed: Loader opens the model inside by its
+          // content, so the name doesn't have to say what that is.
+          {name: 'CT1.zip'},
+          {name: 'tower.ifc.zip'},
+          // A type inside a longer suffix is no type: not listed, since it
+          // wouldn't route.
+          {name: 'bundle.zipx'},
           {name: 'readme.md'},
           {name: 'notes.txt'},
         ],
@@ -348,6 +355,9 @@ describe('GitHubFileBrowser', () => {
       for (const usdName of ['engine.usdz', 'stage.usda', 'crate.usdc', 'layer.usd']) {
         expect(screen.getByRole('option', {name: usdName})).toBeInTheDocument()
       }
+      expect(screen.getByRole('option', {name: 'CT1.zip'})).toBeInTheDocument()
+      expect(screen.getByRole('option', {name: 'tower.ifc.zip'})).toBeInTheDocument()
+      expect(screen.queryByRole('option', {name: 'bundle.zipx'})).not.toBeInTheDocument()
       expect(screen.queryByRole('option', {name: 'readme.md'})).not.toBeInTheDocument()
       expect(screen.queryByRole('option', {name: 'notes.txt'})).not.toBeInTheDocument()
     })

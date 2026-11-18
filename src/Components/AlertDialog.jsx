@@ -10,6 +10,7 @@ import {UNSUPPORTED_SCHEMA_ALERT_EVENT} from '../loader/unsupportedSchema'
 import {getProvider} from '../connections/registry'
 import {CACHE_CLEAR_SKIPPED} from '../OPFS/messages'
 import useStore from '../store/useStore'
+import {gtagEventWithCid, LOCAL_LINK_EVENTS} from '../privacy/analytics'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
 import ArchiveEntryChoice from './ArchiveEntryChoice'
 import Dialog from './Dialog'
@@ -88,8 +89,11 @@ export default function AlertDialog({onClose}) {
       // a /v/local-only/ link, with OPFS available, to an upload this browser
       // doesn't hold (#1955). `noGeometry` is a model conway read fine that
       // has nothing to draw (loadProgress#classifyLoadOutcome, #1962).
-      // `archiveUnreadable` is a hosted `.ifczip` that isn't one readable
-      // IFC (loader/modelArchive.js); its message never names the file.
+      // `archiveUnreadable` is a downloaded archive (any URL whose bytes are
+      // a zip, `.ifczip` included) that isn't one readable model
+      // (loader/modelArchive.js#unwrapHostedArchive). Its message names no
+      // file; `dialogText`, which may name the entries inside, is shown but
+      // never counted.
       trackAlertEvent(alert.message)
     } else if (alert.type === 'unrecognizedFormat') {
       // Also an expected outcome, GA only: the constant, since the picker's
@@ -111,6 +115,23 @@ export default function AlertDialog({onClose}) {
     onClose()
   }
 
+  // local_link_missing_action, one per shown "File not in this browser"
+  // dialog: the "Open a file" button reports 'open_file' and every other
+  // close (X, backdrop, Escape) 'dismiss'. openAFile also runs onCloseInner,
+  // which is why the dismiss path is a separate wrapper below rather than
+  // living in onCloseInner. Skipped for a repeat alert, like the `alert` event
+  // above: the visitor already saw, and was counted for, this dialog.
+  const trackMissingLinkAction = (action) => {
+    if (alert?.type !== 'uploadNotInBrowser' || alert.repeat === true) {
+      return
+    }
+    gtagEventWithCid(LOCAL_LINK_EVENTS.ACTION, {action, origin: alert.origin ?? 'unknown'})
+  }
+  const onCloseDismiss = () => {
+    trackMissingLinkAction('dismiss')
+    onCloseInner()
+  }
+
   const isOom = alert && typeof alert === 'object' && alert.type === 'oom'
   const isNeedsReconnect = alert && typeof alert === 'object' && alert.type === 'needsReconnect'
   const isUnsupportedSchema = alert && typeof alert === 'object' && alert.type === 'unsupportedSchema'
@@ -127,12 +148,12 @@ export default function AlertDialog({onClose}) {
   // A zip Share looked inside and couldn't open (loader/modelArchive.js)
   // carries `archive`, what it holds or why it can't be read. The file's own
   // extension still wins: a .docx is a zip, and NOT_A_MODEL says it better.
-  // A hosted `.ifczip` that couldn't be opened gets the same "why" text.
+  // A downloaded archive that couldn't be opened gets the same "why" text.
   let guidance = null
   if (alert && typeof alert === 'object' && alert.type === 'unrecognizedFormat') {
     guidance = formatGuidance(alert.ext) ?? (alert.archive ? archiveGuidance(alert.archive) : null)
   } else if (alert && typeof alert === 'object' && alert.type === ARCHIVE_UNREADABLE) {
-    guidance = archiveGuidance({problem: alert.message})
+    guidance = archiveGuidance({problem: alert.dialogText ?? alert.message})
   }
   const setIsOpenModelVisible = useStore((state) => state.setIsOpenModelVisible)
 
@@ -170,6 +191,7 @@ export default function AlertDialog({onClose}) {
   // useHashState re-asserts as `#open` after the navigation, so it survives
   // the route change.
   const openAFile = () => {
+    trackMissingLinkAction('open_file')
     onCloseInner()
     setIsOpenModelVisible(true)
   }
@@ -259,7 +281,7 @@ export default function AlertDialog({onClose}) {
     <Dialog
       headerText={headerText}
       isDialogDisplayed={alert !== null}
-      setIsDialogDisplayed={isCacheClearSkipped ? acknowledgeCacheClear : (isNoGeometry || isEntryChoice ? dismiss : onCloseInner)}
+      setIsDialogDisplayed={isCacheClearSkipped ? acknowledgeCacheClear : (isNoGeometry || isEntryChoice ? dismiss : onCloseDismiss)}
       actionCb={actionCb}
       headerIcon={isNoGeometry || isEntryChoice || isCacheClearSkipped ?
         <InfoOutlinedIcon className='icon-share'/> :
