@@ -12,6 +12,11 @@ import type {ContextBlock, Ref, ToolAnnotations} from './types'
  * calls that call made; the loop runs up to `maxSteps` of them, stopping
  * early when the model answers without calling a tool. `stepId` names a step
  * across the session (`<turn>.<step>`), and is what `undo` takes.
+ *
+ * Undo is a stack across the session's turns: undoing a step first undoes
+ * every newer step, newest first, so the view never goes back to a state
+ * the user had already undone past. `lastUndoable()` is the one step a UI
+ * should offer Undo on.
  */
 export type AssistEvent =
   | {type: 'text-delta', stepId: string, text: string}
@@ -31,6 +36,12 @@ export type AssistEvent =
   | {type: 'tool-result', stepId: string, callId: string, name: string, ok: boolean,
       echo?: string, refs?: Ref[], undoable: boolean, error?: {code: string, message: string}}
   | {type: 'usage', inputTokens?: number, outputTokens?: number, totalTokens?: number}
+  /**
+   * The turn used all `maxSteps` model calls and the last one still called
+   * tools, so the model never answered. The turn is kept; asking again
+   * carries on from it.
+   */
+  | {type: 'step-limit', steps: number}
   | {type: 'error', code: AssistErrorCode, status?: number}
   | {type: 'done', finishReason: string}
 
@@ -41,6 +52,8 @@ export interface UndoReport {
   undone: number
   /** Calls whose undo threw (their state was replaced, e.g. another model loaded). */
   failed: Array<{name: string, message: string}>
+  /** Every step now undone: the one asked for and any newer ones undone before it. */
+  steps: string[]
 }
 
 
@@ -53,10 +66,16 @@ export interface AssistSession {
   send(text: string): AsyncIterable<AssistEvent>
   /** Stop the turn in flight, if any. Its events end with `error` 'aborted' and `done`. */
   abort(): void
-  /** Reverse the view changes a step made, latest call first. A step undoes once. */
+  /**
+   * Reverse the view changes of a step and of every newer step, newest step
+   * and latest call first. A step undoes once. A call of an undone step that
+   * finishes afterwards is rolled back as it lands.
+   */
   undo(stepId: string): Promise<UndoReport>
   /** Whether a step still has something to undo. */
   canUndo(stepId: string): boolean
+  /** The newest step that can still be undone, or null. */
+  lastUndoable(): string | null
 }
 
 
@@ -72,7 +91,8 @@ export interface ApprovalPolicy {
   /**
    * Whether a tool whose policy is 'confirm' may run. Optional: without it
    * every such call is denied, which is v0's behaviour (#1675: "until
-   * approval exists, they are declined, and the assistant says so").
+   * approval exists, they are declined, and the assistant says so"). Only a
+   * resolved `true` approves; any other value, a throw or a rejection denies.
    */
   confirm?: (request: ApprovalRequest) => Promise<boolean>
 }

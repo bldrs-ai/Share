@@ -9,7 +9,7 @@ import {
   toolCalls,
 } from './openrouterSse.fixture'
 import {createMemoryConversationStore} from './conversation'
-import {createAssist} from './loop'
+import {DEFAULT_MAX_STEPS, FULL_RESULT_TURNS, createAssist, wireHistory} from './loop'
 import {createRegistry} from './registry'
 import {openRouterTransport} from './transport'
 
@@ -222,13 +222,15 @@ describe('assist/loop', () => {
     const [queryResult, selectResult] = ofType(events, 'tool-result')
 
     expect(session.canUndo(queryResult.stepId)).toBe(false)
-    expect(await session.undo(queryResult.stepId)).toEqual({undone: 0, failed: []})
+    expect(await session.undo(queryResult.stepId)).toEqual({undone: 0, failed: [], steps: []})
     expect(session.canUndo(selectResult.stepId)).toBe(true)
-    expect(await session.undo(selectResult.stepId)).toEqual({undone: 1, failed: []})
+    expect(session.lastUndoable()).toBe(selectResult.stepId)
+    expect(await session.undo(selectResult.stepId)).toEqual({undone: 1, failed: [], steps: [selectResult.stepId]})
     expect(undos).toEqual([['e1', 'e2']])
     expect(view.selected).toEqual(['e9'])
     expect(session.canUndo(selectResult.stepId)).toBe(false)
-    expect(await session.undo(selectResult.stepId)).toEqual({undone: 0, failed: []})
+    expect(session.lastUndoable()).toBe(null)
+    expect(await session.undo(selectResult.stepId)).toEqual({undone: 0, failed: [], steps: []})
   })
 
   it('undoes a step\'s calls latest first, and reports one that fails', async () => {
@@ -252,7 +254,8 @@ describe('assist/loop', () => {
         delayMs: 0}))
     const events = await collect(session.send('move'))
     const [first] = ofType(events, 'tool-result')
-    expect(await session.undo(first.stepId)).toEqual({undone: 1, failed: [{name: 'cam.move', message: 'state replaced'}]})
+    expect(await session.undo(first.stepId)).toEqual({undone: 1, failed: [{name: 'cam.move', message: 'state replaced'}],
+      steps: [first.stepId]})
     expect(order).toEqual([2, 1])
   })
 
@@ -317,6 +320,9 @@ describe('assist/loop', () => {
     [403, 'bad_key'],
     [402, 'no_credits'],
     [429, 'rate_limited'],
+    [400, 'bad_request'],
+    [413, 'bad_request'],
+    [404, 'unavailable'],
     [500, 'provider'],
   ])('maps HTTP %d to %s', async (status, code) => {
     const {session} = setup({}, () => new Response(JSON.stringify({error: {message: 'nope', code: status}}),
@@ -400,5 +406,255 @@ describe('assist/loop', () => {
     await collect(session.send('two'))
     const assistant = requests[1].body.messages.find((m) => m.role === 'assistant')
     expect(assistant.reasoning_details).toEqual(details)
+  })
+
+  describe('approval', () => {
+    const posted = []
+    const notes = {
+      id: 'notes',
+      tools: () => [{
+        name: 'notes.add', description: 'Post a note.', annotations: {mutatesDocument: true},
+        inputSchema: {type: 'object', properties: {text: {type: 'string'}}, additionalProperties: false},
+        run: ({text}) => {
+          posted.push(text)
+          return {content: {posted: true}}
+        },
+      }],
+    }
+    const reply = (body) => (body.messages.some((m) => m.role === 'tool') ?
+      {chunks: textReply('Not posted.'), delayMs: 0} :
+      {chunks: toolCalls([{id: 'n1', name: 'notes_add', args: {text: 'hi'}}]), delayMs: 0})
+    beforeEach(() => {
+      posted.length = 0
+    })
+
+    it.each([
+      ['a truthy string', () => Promise.resolve('no')],
+      ['an object', () => Promise.resolve({approved: false})],
+      ['1', () => Promise.resolve(1)],
+      ['a throw', () => {
+        throw new Error('dialog broke')
+      }],
+      ['a rejection', () => Promise.reject(new Error('dismissed'))],
+    ])('denies when confirm answers %s rather than true', async (_, confirm) => {
+      const {session} = setup({extraProviders: [notes], policy: {confirm}}, reply)
+      const events = await collect(session.send('post'))
+      expect(posted).toEqual([])
+      expect(ofType(events, 'tool-result')[0].error.code).toBe('denied')
+    })
+
+    // The registry's policy at call time is what counts: a tool list whose
+    // descriptor says nothing (or says 'run') can't let a confirm tool through.
+    it.each([
+      ['no policy at all', (registry) => ({
+        ...registry,
+        list: () => registry.list().map(({policy, ...rest}) => rest),
+        policyOf: () => undefined,
+      })],
+      ['a turn-start list that says run, re-registered as confirm', (registry) => ({
+        ...registry,
+        list: () => registry.list().map((d) => ({...d, policy: 'run'})),
+      })],
+    ])('asks for a tool with %s', async (_, wrap) => {
+      const {fetchFn} = fakeFetch(reply)
+      const registry = createRegistry([notes])
+      const assist = createAssist({
+        transport: openRouterTransport({getKey: () => KEY, model: 'mock/model', baseURL: BASE_URL, fetch: fetchFn}),
+        registry: wrap(registry), store: createMemoryConversationStore(), instructions: 'x', maxRetries: 0,
+      })
+      const events = await collect(assist.open('c').send('post'))
+      expect(posted).toEqual([])
+      expect(ofType(events, 'approval-request')).toHaveLength(1)
+      expect(ofType(events, 'tool-result')[0].error.code).toBe('denied')
+    })
+  })
+
+  it('stops after DEFAULT_MAX_STEPS model calls when every one calls a tool, and says so', async () => {
+    expect(DEFAULT_MAX_STEPS).toBe(8)
+    let n = 0
+    const {session, requests} = setup({}, () => ({
+      chunks: toolCalls([{id: `q${n++}`, name: 'model_query', args: {ifcType: 'IfcWall'}}]), delayMs: 0,
+    }))
+    const events = await collect(session.send('loop forever'))
+    expect(requests).toHaveLength(DEFAULT_MAX_STEPS)
+    expect(ofType(events, 'step-limit')).toEqual([{type: 'step-limit', steps: DEFAULT_MAX_STEPS}])
+    expect(events.at(-1)).toEqual({type: 'done', finishReason: 'tool-calls'})
+  })
+
+  describe('a tool still running when the user stops', () => {
+    /**
+     * A tool whose call settles only when the test calls `state.release()`.
+     *
+     * @return {object} {provider, state}
+     */
+    function slowTool() {
+      const state = {applied: 0, release: null}
+      const provider = {
+        id: 'slow',
+        tools: () => [{
+          name: 'slow.select', description: 'Slow.', annotations: {viewState: true},
+          inputSchema: {type: 'object', properties: {}, additionalProperties: false},
+          run: () => new Promise((resolve) => {
+            state.release = () => {
+              state.applied++
+              resolve({content: {ok: true}, echo: 'Selected', undo: () => {
+                state.applied--
+              }})
+            }
+          }),
+        }],
+      }
+      return {provider, state}
+    }
+    const callSlow = (body) => {
+      if (body.messages.at(-1).content === 'hello') {
+        return scriptedReply(body)
+      }
+      return body.messages.some((m) => m.role === 'tool') ?
+        {chunks: textReply('done'), delayMs: 0} :
+        {chunks: toolCalls([{id: 's1', name: 'slow_select', args: {}}]), delayMs: 0}
+    }
+
+    it('ends the turn promptly even if the tool never settles', async () => {
+      const {provider} = slowTool()
+      const {session} = setup({extraProviders: [provider]}, callSlow)
+      const t0 = Date.now()
+      const events = await collect(session.send('go'), (event) => {
+        if (event.type === 'tool-call') {
+          setTimeout(() => session.abort(), 20)
+        }
+      })
+      expect(Date.now() - t0).toBeLessThan(2000)
+      expect(ofType(events, 'error')).toEqual([{type: 'error', code: 'aborted'}])
+      expect(events.at(-1)).toEqual({type: 'done', finishReason: 'aborted'})
+      // And the session takes the next turn.
+      expect(textOf(await collect(session.send('hello')))).toBe(SCRIPT.fallback)
+    })
+
+    it('rolls back a tool that finishes after the stop, so nothing is left without an Undo', async () => {
+      const {provider, state} = slowTool()
+      const {session} = setup({extraProviders: [provider]}, callSlow)
+      const events = await collect(session.send('go'), (event) => {
+        if (event.type === 'tool-call') {
+          setTimeout(() => session.abort(), 20)
+        }
+      })
+      const stepId = ofType(events, 'tool-call')[0].stepId
+      state.release()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(state.applied).toBe(0)
+      expect(session.canUndo(stepId)).toBe(false)
+      expect(session.lastUndoable()).toBe(null)
+    })
+
+    it('rolls back a call that lands after its step was undone', async () => {
+      // Step 0 selects at once; step 1 runs the slow tool. Undoing step 0 while
+      // step 1's call runs undoes step 1 too (the stack), so its late result
+      // is rolled back as it lands.
+      const {provider, state} = slowTool()
+      let call = 0
+      const {session, view} = setup({extraProviders: [provider]}, () => {
+        call++
+        if (call === 1) {
+          return {chunks: toolCalls([{id: 'a', name: 'view_select', args: {refs: ['e1']}}]), delayMs: 0}
+        }
+        if (call === 2) {
+          return {chunks: toolCalls([{id: 'b', name: 'slow_select', args: {}}]), delayMs: 0}
+        }
+        return {chunks: textReply('done'), delayMs: 0}
+      })
+      const turn = collect(session.send('go'))
+      await new Promise((resolve) => {
+        const wait = () => (state.release ? resolve() : setTimeout(wait, 5))
+        wait()
+      })
+      const first = session.lastUndoable()
+      expect(first).not.toBe(null)
+      expect(await session.undo(first)).toEqual(expect.objectContaining({undone: 1}))
+      expect(view.selected).toEqual(['e9'])
+      state.release()
+      const events = await turn
+      expect(state.applied).toBe(0)
+      expect(ofType(events, 'tool-result').find((e) => e.name === 'slow.select').undoable).toBe(false)
+      expect(session.lastUndoable()).toBe(null)
+    })
+  })
+
+  it('never calls the registry for a tool name the model made up, or spelled with dots', async () => {
+    const {fetchFn} = fakeFetch((body) => (body.messages.some((m) => m.role === 'tool') ?
+      {chunks: textReply('ok'), delayMs: 0} :
+      {chunks: toolCalls([
+        {id: 'd', name: 'view.select', args: {refs: ['e1']}},
+        {id: 'u', name: 'delete_everything', args: {}},
+      ]), delayMs: 0}))
+    const registry = fakeRegistry().registry
+    const call = jest.spyOn(registry, 'call')
+    const assist = createAssist({
+      transport: openRouterTransport({getKey: () => KEY, model: 'mock/model', baseURL: BASE_URL, fetch: fetchFn}),
+      registry, store: createMemoryConversationStore(), instructions: 'x', maxRetries: 0,
+    })
+    const events = await collect(assist.open('c').send('go'))
+    expect(call).not.toHaveBeenCalled()
+    expect(ofType(events, 'tool-result').map((e) => e.error?.code)).toEqual(['unknown_tool', 'unknown_tool'])
+  })
+
+  it('undo is a stack across turns: undoing an older step first undoes the newer ones', async () => {
+    let turn = 0
+    const {session, view} = setup({}, (body) => {
+      if (body.messages.at(-1).role === 'tool') {
+        return {chunks: textReply('ok'), delayMs: 0}
+      }
+      turn++
+      return {chunks: toolCalls([{id: `s${turn}`, name: 'view_select', args: {refs: [`e${turn}`]}}]), delayMs: 0}
+    })
+    const one = ofType(await collect(session.send('one')), 'tool-result')[0].stepId
+    const two = ofType(await collect(session.send('two')), 'tool-result')[0].stepId
+    expect(view.selected).toEqual(['e2'])
+    expect(session.lastUndoable()).toBe(two)
+
+    // Undo the newest: back to turn one's selection; then turn one's step is the top.
+    expect((await session.undo(two)).steps).toEqual([two])
+    expect(view.selected).toEqual(['e1'])
+    expect(session.lastUndoable()).toBe(one)
+    expect((await session.undo(one)).steps).toEqual([one])
+    expect(view.selected).toEqual(['e9'])
+    // Nothing left, and the undone selection never comes back.
+    expect(await session.undo(two)).toEqual({undone: 0, failed: [], steps: []})
+    expect(view.selected).toEqual(['e9'])
+
+    // Undoing an older step with a newer one still standing undoes both, newest first.
+    const three = ofType(await collect(session.send('three')), 'tool-result')[0].stepId
+    const four = ofType(await collect(session.send('four')), 'tool-result')[0].stepId
+    expect(view.selected).toEqual(['e4'])
+    expect((await session.undo(three)).steps).toEqual([four, three])
+    expect(view.selected).toEqual(['e9'])
+  })
+
+  it('sends older turns\' tool results as stubs, and keeps the store whole', async () => {
+    const {session, requests, store} = setup()
+    const turns = FULL_RESULT_TURNS + 2
+    for (let i = 0; i < turns; i++) {
+      await collect(session.send(SCRIPT.selectPrompt))
+    }
+    const stored = await store.load('c1')
+    expect(JSON.stringify(stored)).not.toContain('omitted to save space')
+    await collect(session.send('hello'))
+    const sent = requests.at(-1).body.messages.filter((m) => m.role === 'tool').map((m) => m.content)
+    const stubbed = sent.filter((c) => c.includes('omitted to save space'))
+    // Two tool results a turn; the oldest two turns are stubbed, the rest full.
+    expect(stubbed).toHaveLength(4)
+    expect(sent.slice(4).every((c) => c.includes('"selected"') || c.includes('"total"'))).toBe(true)
+    // Every call still has its result.
+    expect(requests.at(-1).body.messages.filter((m) => m.role === 'tool')).toHaveLength(turns * 2)
+  })
+
+  it('wireHistory cuts the history at a turn boundary past its turn cap', () => {
+    const history = []
+    for (let i = 0; i < 40; i++) {
+      history.push({role: 'user', content: `q${i}`}, {role: 'assistant', content: [{type: 'text', text: `a${i}`}]})
+    }
+    const sent = wireHistory(history)
+    expect(sent[0]).toEqual({role: 'user', content: 'q10'})
+    expect(sent).toHaveLength(60)
   })
 })

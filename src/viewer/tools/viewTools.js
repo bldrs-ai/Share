@@ -476,16 +476,28 @@ async function summarizePset(model, set) {
 
 
 /**
+ * Reads up to 20 elements' attributes and psets, one engine round trip per
+ * read, so it can take a while on a worker engine. It checks the call's
+ * signal between reads, so a Stop ends it at the next one instead of after
+ * all of them (the agent loop also stops waiting at once: assist/loop.ts).
+ *
  * @param {object} input
+ * @param {object} [ctx] the registry's ToolContext; `signal` aborts the reads
  * @return {Promise<object>} ToolResult
  */
-async function properties({refs}) {
+async function properties({refs}, ctx = {}) {
   const state = readState()
   const {model, rootElement} = state
   const targets = assertResolved(resolveRefs(refs, state))
   const nodes = nodesById(rootElement)
   const items = []
+  const checkAborted = () => {
+    if (ctx.signal?.aborted) {
+      throw new ToolError('aborted', 'model.properties was stopped before it finished.')
+    }
+  }
   for (const target of targets) {
+    checkAborted()
     const id = target.kind === 'id' ? target.id : Number(target.occurrence.nodeId)
     const node = nodes.get(id)
     const item = {ref: target.ref, type: nodeType(node), name: nodeName(node)}
@@ -504,6 +516,7 @@ async function properties({refs}) {
       const sets = (await model.getPropertySets(id)) ?? []
       item.propertySets = []
       for (const set of sets.slice(0, MAX_PSETS)) {
+        checkAborted()
         item.propertySets.push(await summarizePset(model, set))
       }
       if (sets.length > MAX_PSETS) {

@@ -99,12 +99,42 @@ describeMobileAndDesktop('Assistant', (ff) => {
     await page.waitForTimeout(SCRIPT.longDelayMs * 5)
     expect(await reply.textContent()).toBe(stopped)
   })
+
+  test('New chat clears the conversation, by keyboard, and the assistant answers afresh', async ({page}) => {
+    await openAssistant(page)
+    await enterKey(page)
+    const box = page.getByRole('textbox', {name: 'Message the assistant'})
+    await box.fill('hello there')
+    await page.keyboard.press('Enter')
+    await expect(page.getByText(SCRIPT.fallback)).toBeVisible()
+
+    const newChat = page.getByRole('button', {name: 'New chat'})
+    await newChat.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByText(SCRIPT.fallback)).toHaveCount(0)
+    await expect(page.getByText('hello there')).toHaveCount(0)
+
+    await box.fill('hello again')
+    await page.keyboard.press('Enter')
+    await expect(page.getByText('hello again')).toBeVisible()
+    await expect(page.getByText(SCRIPT.fallback)).toHaveCount(1)
+  })
 })
 
 
 describe('Assistant flag', () => {
   test.beforeEach(async ({page}) => {
     await homepageSetup(page)
+  })
+
+  // The old chat saved the key in plain text, forever. Every start deletes it,
+  // flag or no flag, panel or no panel (Components/Bot/legacyKey.js).
+  test('the old chat\'s plaintext key is deleted on startup, without the assistant', async ({page}) => {
+    await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
+    await page.evaluate(() => localStorage.setItem('openrouter_api_key', 'sk-or-old-plaintext'))
+    await page.reload({waitUntil: 'domcontentloaded'})
+    await waitForModel(page, {pauseRenderer: true})
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('openrouter_api_key'))).toBeNull()
   })
 
   test('is off by default; ?feature=assist and the old ?feature=bot both show it', async ({page}) => {

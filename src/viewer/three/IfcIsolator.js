@@ -654,9 +654,11 @@ export default class IfcIsolator {
    *
    * @param {object} [opts]
    * @param {Array<number>} [opts.isolatedIds] isolate this set instead of the
-   *   isolator's own `isolatedIds` / `tempIsolationModeOn` state — for the
-   *   direct `initTemporaryIsolationSubset` callers that never enter isolation
-   *   mode (BotChat).
+   *   isolator's own `isolatedIds` / `tempIsolationModeOn` state — for a
+   *   direct `initTemporaryIsolationSubset` caller that never enters isolation
+   *   mode. The old BotChat eval was one (#1821); since #1675 every in-app
+   *   caller goes through isolation mode, but the parameter keeps the method
+   *   honest for any direct caller.
    * @private
    */
   _applyBatchedVisibility(opts = {}) {
@@ -974,17 +976,17 @@ export default class IfcIsolator {
     }
     if (sceneGraph) {
       // Isolate in place, like the batched path; `includedIds` explicitly for
-      // the same BotChat reason given there. Outline the isolated meshes.
+      // the same reason given there. Outline the isolated meshes.
       this.setIsolationOutline_(applySceneGraphVisibility(
         this.ifcModel, {hiddenIds: this.hiddenIds, isolatedIds: includedIds}))
       return
     }
     if (batched) {
       // Isolate in place (Share#1806) — see the class doc. `includedIds` is
-      // passed explicitly rather than read off `isolatedIds`, because
-      // `BotChat` calls this method directly without entering isolation mode
-      // (no `tempIsolationModeOn` / `isolatedIds`) — reading the fields would
-      // make a bot-driven isolate a no-op.
+      // passed explicitly rather than read off `isolatedIds`, so a direct
+      // caller that never entered isolation mode (no `tempIsolationModeOn` /
+      // `isolatedIds`) still isolates. The old BotChat eval was one (#1821,
+      // deleted in #1675); reading the fields would make such a call a no-op.
       // Drop the selection paint before masking. Isolate normally targets the
       // *selection*, so the isolated instances are exactly the ones
       // `applyBatchedSelection` painted cyan — leaving that on would show the

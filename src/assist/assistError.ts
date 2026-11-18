@@ -24,6 +24,17 @@ export type AssistErrorCode =
   | 'no_credits'
   /** The provider is rate limiting: HTTP 429. */
   | 'rate_limited'
+  /**
+   * The provider refused the request itself: HTTP 400 or 413. In practice a
+   * conversation past the model's context window, which no retry fixes.
+   */
+  | 'bad_request'
+  /**
+   * HTTP 404: the model or endpoint isn't there. For OpenRouter this is also
+   * what a model with no `data_collection: 'deny'` endpoint answers. The
+   * model is Bldrs' choice (Share's ASSIST_MODEL), so the host reports it.
+   */
+  | 'unavailable'
   /** The request never got an HTTP answer: offline, DNS, CORS. */
   | 'network'
   /** The user stopped the reply. */
@@ -56,9 +67,12 @@ export class AssistError extends Error {
 }
 
 
+const HTTP_BAD_REQUEST = 400
 const HTTP_UNAUTHORIZED = 401
 const HTTP_PAYMENT_REQUIRED = 402
 const HTTP_FORBIDDEN = 403
+const HTTP_NOT_FOUND = 404
+const HTTP_PAYLOAD_TOO_LARGE = 413
 const HTTP_TOO_MANY_REQUESTS = 429
 
 
@@ -100,6 +114,12 @@ export function classifyError(error: unknown, aborted = false): {code: AssistErr
   if (status === HTTP_TOO_MANY_REQUESTS) {
     return {code: 'rate_limited', status}
   }
+  if (status === HTTP_BAD_REQUEST || status === HTTP_PAYLOAD_TOO_LARGE) {
+    return {code: 'bad_request', status}
+  }
+  if (status === HTTP_NOT_FOUND) {
+    return {code: 'unavailable', status}
+  }
   if (status !== undefined) {
     return {code: 'provider', status}
   }
@@ -126,6 +146,10 @@ export function assistErrorMessage(code: AssistErrorCode, provider: string, stat
     case 'bad_key': return `${provider} didn't accept your key. Check it in the assistant's settings and try again.`
     case 'no_credits': return `Your ${provider} account is out of credits. Add credits with ${provider}, then try again.`
     case 'rate_limited': return `${provider} is limiting requests right now. Wait a minute and try again.`
+    case 'bad_request': return `${provider} couldn't take this request; the conversation may be too long. ` +
+      'Start a new chat to carry on.'
+    case 'unavailable': return `The assistant's AI model isn't available from ${provider} right now. ` +
+      'Your key and settings are fine; this needs a fix on our side.'
     case 'network': return `Couldn't reach ${provider}. Check your connection and try again.`
     case 'aborted': return 'Stopped.'
     case 'busy': return 'The assistant is still answering. Wait for it, or stop it first.'

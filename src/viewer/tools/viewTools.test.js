@@ -235,6 +235,24 @@ describe('viewer/tools (model, view and share providers)', () => {
       expect(result.content.items[0].propertySets).toEqual([])
     })
 
+    it('stops between reads once the call is aborted (a Stop in the assistant)', async () => {
+      const controller = new AbortController()
+      const {model} = useStore.getState()
+      const original = model.getItemProperties.bind(model)
+      const read = jest.spyOn(model, 'getItemProperties').mockImplementation((id) => {
+        controller.abort()
+        return original(id)
+      })
+      try {
+        const error = await rejection(registry.call('model.properties', {refs: ['e102', 'e100']},
+          {signal: controller.signal}))
+        expect(error.code).toBe('aborted')
+        expect(read).toHaveBeenCalledTimes(1)
+      } finally {
+        read.mockRestore()
+      }
+    })
+
     it('accepts GlobalIds, prefixed or bare', async () => {
       const result = await registry.call('model.properties', {refs: [`g${globalIdOf(102)}`, globalIdOf(100)]})
       expect(result.content.items.map(({name}) => name)).toEqual(['Window 1', 'Wall A'])

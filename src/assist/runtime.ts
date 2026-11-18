@@ -11,6 +11,15 @@
  * AI SDK shows up among the main bundle's inputs (`assistEntry.js`
  * `assertAiSdkNotInMain`).
  */
+
+
+// The AI SDK and its OpenRouter provider print warnings to the console by
+// default (unsupported settings, dropped reasoning details), naming the
+// provider and model. A console line becomes a Sentry breadcrumb, so turn
+// them off for the whole runtime. Set before anything here makes a call.
+const sdkGlobals = globalThis as {AI_SDK_LOG_WARNINGS?: boolean}
+sdkGlobals.AI_SDK_LOG_WARNINGS = false
+
 export {DEFAULT_MAX_STEPS, createAssist} from './loop'
 export type {Assist, AssistOptions} from './loop'
 export {openRouterTransport} from './transport'

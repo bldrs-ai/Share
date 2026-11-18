@@ -1,7 +1,6 @@
 import React, {
   ReactElement,
   useCallback,
-  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -12,6 +11,7 @@ import {
   Box, Button, IconButton, InputBase, Stack, Typography, useTheme,
 } from '@mui/material'
 import {
+  AddCommentOutlined as NewChatIcon,
   Send as SendIcon,
   Settings as SettingsIcon,
   Stop as StopIcon,
@@ -28,14 +28,27 @@ import {
   assistConversationStore,
   assistInstance,
   assistKeyStore,
-  forgetLegacyKey,
+  newAssistChat,
 } from './assistState'
+import {reportAssistCondition} from './reportAssistCondition'
 import 'react-chat-elements/dist/main.css'
 import './chat-bubbles.css'
 
 
 /** Until the transport has loaded, errors still name the provider. */
 const PROVIDER_LABEL = 'OpenRouter'
+
+/** What the panel says for failures that aren't the provider's. */
+export const RUNTIME_LOAD_FAILED_MESSAGE = 'Couldn\'t load the assistant. Check your connection and try again.'
+export const START_FAILED_MESSAGE = 'The assistant couldn\'t start. Reload the page to try again.'
+
+/**
+ * @param {number} steps
+ * @return {string} what the panel says when a turn hit the step cap
+ */
+export function stepLimitMessage(steps) {
+  return `Stopped after ${steps} steps without an answer. Ask again to let it carry on, or ask something narrower.`
+}
 
 
 /**
@@ -58,7 +71,7 @@ export default function BotChat() {
 
   // The chat lives outside the panel (assistState.js): the panel unmounts
   // when closed, and on a phone whenever another drawer tab is shown.
-  const {messages, streamingTurn, conversationId} = useSyncExternalStore(assistChat.subscribe, assistChat.get)
+  const {messages, streamingTurn, conversationId, undoTop} = useSyncExternalStore(assistChat.subscribe, assistChat.get)
   const isStreaming = streamingTurn !== null
   const [input, setInput] = useState('')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
@@ -71,10 +84,6 @@ export default function BotChat() {
   const userText = theme.palette.primary.contrastText
   const botBg = theme.palette.mode === 'dark' ? theme.palette.grey[700] : theme.palette.grey[200]
   const botText = theme.palette.getContrastText(botBg)
-
-  useEffect(() => {
-    forgetLegacyKey()
-  }, [])
 
   useLayoutEffect(() => {
     const endNode = messagesEndRef.current
@@ -128,18 +137,40 @@ export default function BotChat() {
         try {
           runtime = await loadAssistRuntime()
         } catch (e) {
-          // The lazy bundle didn't arrive (offline at first send).
-          console.warn('assist: could not load the assistant runtime:', e)
-          setMessages((prev) => [...prev, errorMessage('network', PROVIDER_LABEL)])
+          // The lazy bundle didn't arrive. Offline is the user's to fix;
+          // online, it's a broken deploy (reportAssistCondition.js).
+          console.warn('assist: could not load the assistant runtime')
+          if (navigator.onLine !== false) {
+            reportAssistCondition('runtime_load_failed')
+          }
+          setMessages((prev) => [...prev, textMessage('error', RUNTIME_LOAD_FAILED_MESSAGE)])
           return
         }
         const built = createShareAssist(runtime, {keyStore: assistKeyStore, conversationStore: assistConversationStore})
         assistInstance.current = {...built, session: built.assist.open(conversationId)}
       }
+      // Stop pressed while the runtime loaded: there was no session to abort then.
+      if (assistChat.get().stoppedTurn === turn) {
+        setMessages((prev) => [...prev, errorMessage('aborted', PROVIDER_LABEL)])
+        return
+      }
       const {session, transport} = assistInstance.current
       for await (const event of session.send(content)) {
-        setMessages((prev) => applyEvent(prev, event, turn, transport.label))
+        if (event.type === 'error' && event.code === 'unavailable') {
+          reportAssistCondition('model_unavailable', {status: event.status, transport: transport.id})
+        }
+        update((chat) => ({
+          ...chat,
+          messages: applyEvent(chat.messages, event, turn, transport.label),
+          undoTop: session.lastUndoable(),
+        }))
       }
+    } catch (e) {
+      // Building the assistant threw: a bug, not the user's doing. Its
+      // message isn't logged: it could carry whatever the builder was given.
+      console.warn('assist: the assistant failed to start')
+      reportAssistCondition('start_failed')
+      setMessages((prev) => [...prev, textMessage('error', START_FAILED_MESSAGE)])
     } finally {
       update((chat) => ({
         ...chat,
@@ -150,30 +181,51 @@ export default function BotChat() {
   }, [conversationId, input, isStreaming])
 
   const handleStop = useCallback(() => {
+    assistChat.update((chat) => ({...chat, stoppedTurn: chat.streamingTurn}))
     assistInstance.current?.session?.abort()
   }, [])
 
+  const handleNewChat = useCallback(() => {
+    newAssistChat()
+    setInput('')
+  }, [])
+
+  // Undo is a stack (assist/session.ts): only the newest undoable step
+  // offers it, and undoing it may take newer steps with it via the API, so
+  // every step the report names is marked.
   const handleUndo = useCallback(async (stepId) => {
     const session = assistInstance.current?.session
     if (!session) {
       return
     }
     const report = await session.undo(stepId)
+    const failed = report.failed.length > 0
     assistChat.update((chat) => ({
       ...chat,
-      messages: chat.messages.map((message) => (message.kind === 'action' && message.stepId === stepId ?
-        {...message, undone: true, undoFailed: report.failed.length > 0} : message)),
+      undoTop: session.lastUndoable(),
+      messages: chat.messages.map((message) => (message.kind === 'action' && report.steps.includes(message.stepId) ?
+        {...message, undone: true, undoFailed: failed} : message)),
     }))
   }, [])
 
   const settingsActions = !isSettingsOpen ? (
-    <IconButton
-      aria-label='Open bot settings'
-      onClick={() => setIsSettingsOpen(true)}
-      data-testid='BotSettings-OpenButton'
-    >
-      <SettingsIcon/>
-    </IconButton>
+    <>
+      <IconButton
+        aria-label='New chat'
+        title='New chat'
+        onClick={handleNewChat}
+        data-testid='BotChat-NewChatButton'
+      >
+        <NewChatIcon/>
+      </IconButton>
+      <IconButton
+        aria-label='Open bot settings'
+        onClick={() => setIsSettingsOpen(true)}
+        data-testid='BotSettings-OpenButton'
+      >
+        <SettingsIcon/>
+      </IconButton>
+    </>
   ) : null
 
   const bubble = (message, index) => {
@@ -205,7 +257,7 @@ export default function BotChat() {
   }
 
   // A step's viewer actions: one compact line per tool call, from the tool's
-  // own echo, and one Undo for the step when any call in it can be undone.
+  // own echo, and Undo on the newest step that can still be undone.
   const actionLine = (message) => (
     <Box
       key={message.id}
@@ -216,7 +268,7 @@ export default function BotChat() {
       <Typography variant='caption' sx={{color: theme.palette.text.secondary, fontStyle: 'italic'}}>
         {message.lines.join(' · ')}
       </Typography>
-      {message.undoable && !message.undone && (
+      {message.stepId === undoTop && !message.undone && (
         <Button
           size='small'
           variant='text'
@@ -372,6 +424,8 @@ export function applyEvent(messages, event, turn, provider) {
     }
     case 'error':
       return [...messages, errorMessage(event.code, provider, event.status)]
+    case 'step-limit':
+      return [...messages, textMessage('error', stepLimitMessage(event.steps))]
     default:
       return messages
   }
@@ -401,4 +455,14 @@ function actionText(event) {
  */
 function errorMessage(code, provider, status) {
   return {id: uuid(), kind: 'error', code, text: assistErrorMessage(code, provider, status)}
+}
+
+
+/**
+ * @param {string} kind 'error' or 'assistant'
+ * @param {string} text
+ * @return {object} a bubble
+ */
+function textMessage(kind, text) {
+  return {id: uuid(), kind, text}
 }

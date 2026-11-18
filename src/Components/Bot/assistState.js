@@ -54,6 +54,23 @@ export const assistChat = (() => {
 export const assistInstance = {current: null}
 
 
+/**
+ * Start a new chat: stop the reply in flight, and open a fresh conversation
+ * on the same assistant. The old conversation stays in the store, unsent
+ * (sessions that list and reopen it are #1672 / #2194). Its view changes
+ * stay too; only their Undo goes, since undo belongs to a conversation.
+ */
+export function newAssistChat() {
+  const instance = assistInstance.current
+  instance?.session?.abort()
+  const chat = initialChat()
+  if (instance) {
+    instance.session = instance.assist.open(chat.conversationId)
+  }
+  assistChat.update(() => chat)
+}
+
+
 /** Forget the chat and the assistant. For tests; the page reload does it otherwise. */
 export function resetAssistChat() {
   assistInstance.current?.session?.abort()
@@ -63,26 +80,15 @@ export function resetAssistChat() {
 }
 
 
-/** @return {object} an empty chat with its own conversation id */
-function initialChat() {
-  return {conversationId: uuid(), messages: [], streamingTurn: null}
-}
-
-
 /**
- * The prototype kept the user's OpenRouter key here, in plain text and
- * forever (ai-workspace.md D13). The key now lives in tab memory only; this
- * name is read once to delete it, so a key saved by the old chat doesn't
- * outlive it on the device.
+ * - `streamingTurn`: the send in flight, or null.
+ * - `stoppedTurn`: a send the user stopped before its session existed (the
+ *   first send, while the runtime loads), so it doesn't start once it does.
+ * - `undoTop`: the one step that offers Undo (session.lastUndoable()).
+ *
+ * @return {object} an empty chat with its own conversation id
  */
-export const LEGACY_KEY_NAME = 'openrouter_api_key'
-
-
-/** Delete the plaintext key the old chat saved, if any. */
-export function forgetLegacyKey() {
-  try {
-    localStorage.removeItem(LEGACY_KEY_NAME)
-  } catch {
-    // Storage blocked (private mode, sandboxed frame): nothing was saved there.
-  }
+function initialChat() {
+  return {conversationId: uuid(), messages: [], streamingTurn: null, stoppedTurn: null, undoTop: null}
 }
+

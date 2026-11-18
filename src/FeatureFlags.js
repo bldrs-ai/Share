@@ -44,7 +44,8 @@ export const flags = [
   // #1675) and installs the dev hook `window.__bldrsAssistTools` that drives
   // the viewer tool registry (src/viewer/tools/assistHost.js, #1674). The old
   // `?feature=bot` turns it on too (FEATURE_IMPLICATIONS below), until the
-  // tray's rename in #1672. The registry and tool providers ship
+  // tray's rename in #1672. A `#bot:` permalink opens the panel only where
+  // this flag is on (TabbedPanels.jsx, NotesAndPropertiesDrawer.jsx). The registry and tool providers ship
   // unconditionally — CadView registers the selection funnel they use either
   // way — and the AI SDK loads only when the assistant first sends.
   {name: 'assist', isActive: false},

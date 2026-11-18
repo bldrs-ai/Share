@@ -42,7 +42,7 @@ import type {ContextBlock, Ref, ToolDescriptor} from './types'
 export interface AssistOptions {
   transport: Transport
   /** The host's tool registry; calls go through it so validation, the result guard and policy apply. */
-  registry: Pick<Registry, 'list' | 'call' | 'context'>
+  registry: Pick<Registry, 'list' | 'call' | 'context' | 'policyOf'>
   store: ConversationStore
   /** The system prompt. The context blocks are appended to it at every step. */
   instructions: string
@@ -78,14 +78,36 @@ export function createAssist(opts: AssistOptions): Assist {
 }
 
 
+/**
+ * Messages from turns older than this many are sent with their tool results
+ * cut to a stub (`wireHistory`). The store keeps them whole (D10); only what
+ * goes over the wire is bounded, because a result can be up to the
+ * registry's 32k-character cap and a turn can make eight of them.
+ */
+export const FULL_RESULT_TURNS = 3
+/** Turns of history sent at all; older ones stay in the store, unsent. */
+export const MAX_WIRE_TURNS = 30
+const STUB_RESULT = 'Result of an earlier turn, omitted to save space. Call the tool again if you need it.'
+
+
 /** What the loop keeps of a finished tool call, keyed by its call id until the stream reports it. */
 interface CallOutcome {
   name: string
+  stepId: string
   ok: boolean
   echo?: string
   refs?: Ref[]
-  undo?: () => Promise<void>
+  /** Whether the call's undo was kept: false when it was rolled back as it landed. */
+  undoable: boolean
   error?: {code: string, message: string}
+}
+
+
+/** A step's undo handles, in call order, and whether the step has been undone. */
+interface StepRecord {
+  id: string
+  calls: Array<{name: string, undo: () => Promise<void>}>
+  undone: boolean
 }
 
 
@@ -97,9 +119,19 @@ interface CallOutcome {
 function openSession(conversationId: string, opts: AssistOptions): AssistSession {
   const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS
   const contextOf: ContextProvider = opts.context ?? (() => opts.registry.context())
-  // Undo handles by step, in call order. Kept here, never in the store:
-  // they are closures over live view state, meaningless after a reload.
-  const undos: Map<string, Array<{name: string, undo: () => Promise<void>}>> = new Map()
+  // Undo handles by step, oldest step first, across every turn: undo is a
+  // stack (session.ts). Kept here, never in the store: they are closures
+  // over live view state, meaningless after a reload.
+  const steps: StepRecord[] = []
+  const stepRecord = (id: string): StepRecord => {
+    let record = steps.find((step) => step.id === id)
+    if (!record) {
+      record = {id, calls: [], undone: false}
+      steps.push(record)
+    }
+    return record
+  }
+  const undoable = (record: StepRecord) => !record.undone && record.calls.length > 0
   let turn = 0
   let current: AbortController | null = null
 
@@ -115,8 +147,12 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
       .catch((e) => {
         // runTurn reports its own failures as events; reaching here is a bug
         // in it, and the session must still end the turn rather than hang.
-        console.error('assist: turn failed outside the stream:', e)
-        events.push({type: 'error', ...classifyError(e, controller.signal.aborted)})
+        // Only the classification is logged: an SDK error carries the request
+        // body, which is the conversation, and a console line becomes a
+        // Sentry breadcrumb.
+        const classified = classifyError(e, controller.signal.aborted)
+        console.error('assist: turn failed outside the stream:', classified)
+        events.push({type: 'error', ...classified})
         events.push({type: 'done', finishReason: 'error'})
       })
       .finally(() => {
@@ -148,19 +184,24 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
       return
     }
     const outcomes = new Map<string, CallOutcome>()
-    let stepIndex = -1
-    // Steps are counted off the stream's 'start-step' parts, so a tool
-    // result's step is the one the stream reports it in. (An approval
-    // request is pushed from execute, which can run a beat before the
-    // reader has caught up; it can only ever name the same step or the one
-    // before it, and nothing undoes by an approval's step.)
-    const stepIdOf = () => `${turnNumber}.${Math.max(0, stepIndex)}`
+    // Two step counters, each exact for what it labels:
+    // - `streamStep` counts the stream's 'start-step' parts, for the parts the
+    //   reader reads (text, tool calls), which are in stream order;
+    // - `execStep` is set by prepareStep just before each model call, for
+    //   what tool execution does (approval requests, undo handles), which
+    //   can run ahead of the reader.
+    let streamStep = 0
+    let execStep = 0
+    let started = false
+    const streamStepId = () => `${turnNumber}.${streamStep}`
+    const execStepId = () => `${turnNumber}.${execStep}`
     const {tools, nameOf} = toolSet(opts.registry.list(), {
-      stepId: stepIdOf,
+      stepId: execStepId,
       push: (event) => events.push(event),
       registry: opts.registry,
       policy: opts.policy,
       outcomes,
+      stepRecord,
     })
     const instructionsNow = () => withContext(opts.instructions, contextOf())
 
@@ -173,17 +214,21 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
         events.push(event)
       }
     }
+    let stepsRun = 0
     const result = streamText({
       model,
       instructions: instructionsNow(),
-      messages: [...history, userMessage],
+      messages: [...wireHistory(history), userMessage],
       tools,
       stopWhen: stepCountIs(maxSteps),
       abortSignal: controller.signal,
       ...(opts.maxRetries === undefined ? {} : {maxRetries: opts.maxRetries}),
       // The view changes as tools run, so each step gets the context as it
       // is now ("Selection: 7" after a select), not as it was at send.
-      prepareStep: () => ({instructions: instructionsNow()}),
+      prepareStep: ({stepNumber}) => {
+        execStep = stepNumber
+        return {instructions: instructionsNow()}
+      },
       // Errors are read from the stream below; without this the SDK also
       // logs each one to the console.
       onError: () => undefined,
@@ -193,35 +238,28 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
       for await (const part of result.fullStream) {
         switch (part.type) {
           case 'start-step':
-            stepIndex++
+            if (started) {
+              streamStep++
+            }
+            started = true
+            stepsRun++
             break
           case 'text-delta':
             if (part.text) {
-              events.push({type: 'text-delta', stepId: stepIdOf(), text: part.text})
+              events.push({type: 'text-delta', stepId: streamStepId(), text: part.text})
             }
             break
           case 'tool-call':
-            events.push({type: 'tool-call', stepId: stepIdOf(), callId: part.toolCallId,
+            events.push({type: 'tool-call', stepId: streamStepId(), callId: part.toolCallId,
               name: nameOf(part.toolName), input: part.input})
             break
           case 'tool-result':
           case 'tool-error': {
-            const outcome = outcomes.get(part.toolCallId) ?? {
-              // Only reachable for a call execute never saw (the SDK refused
-              // it before running, e.g. unparseable arguments).
-              name: nameOf(part.toolName), ok: false,
-              error: {code: 'invalid_input', message: errorMessage((part as {error?: unknown}).error)},
-            }
+            const outcome = outcomes.get(part.toolCallId) ?? refusedCall(part, nameOf, streamStepId())
             outcomes.delete(part.toolCallId)
-            const stepId = stepIdOf()
-            if (outcome.undo) {
-              const list = undos.get(stepId) ?? []
-              list.push({name: outcome.name, undo: outcome.undo})
-              undos.set(stepId, list)
-            }
             events.push({
-              type: 'tool-result', stepId, callId: part.toolCallId, name: outcome.name, ok: outcome.ok,
-              undoable: Boolean(outcome.undo),
+              type: 'tool-result', stepId: outcome.stepId, callId: part.toolCallId, name: outcome.name,
+              ok: outcome.ok, undoable: outcome.undoable,
               ...(outcome.echo === undefined ? {} : {echo: outcome.echo}),
               ...(outcome.refs === undefined ? {} : {refs: outcome.refs}),
               ...(outcome.error === undefined ? {} : {error: outcome.error}),
@@ -263,25 +301,50 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
       }
     }
     await opts.store.append(conversationId, failed ? [userMessage] : [userMessage, ...response])
-    events.push({type: 'done', finishReason: failed ? (controller.signal.aborted ? 'aborted' : 'error') :
-      String(await result.finishReason)})
+    if (failed) {
+      events.push({type: 'done', finishReason: controller.signal.aborted ? 'aborted' : 'error'})
+      return
+    }
+    const finishReason = String(await result.finishReason)
+    // Only the step cap ends a turn whose last step still called tools.
+    if (finishReason === 'tool-calls' && stepsRun >= maxSteps) {
+      events.push({type: 'step-limit', steps: stepsRun})
+    }
+    events.push({type: 'done', finishReason})
   }
 
   return {
     conversationId,
     send,
     abort: () => current?.abort(),
-    canUndo: (stepId) => (undos.get(stepId)?.length ?? 0) > 0,
+    canUndo: (stepId) => {
+      const record = steps.find((step) => step.id === stepId)
+      return Boolean(record && undoable(record))
+    },
+    lastUndoable: () => [...steps].reverse().find(undoable)?.id ?? null,
     undo: async (stepId) => {
-      const list = undos.get(stepId) ?? []
-      undos.delete(stepId)
-      const report: UndoReport = {undone: 0, failed: []}
-      for (const {name, undo} of list.reverse()) {
-        try {
-          await undo()
-          report.undone++
-        } catch (e) {
-          report.failed.push({name, message: errorMessage(e)})
+      const report: UndoReport = {undone: 0, failed: [], steps: []}
+      const index = steps.findIndex((step) => step.id === stepId)
+      if (index < 0 || !undoable(steps[index])) {
+        return report
+      }
+      // Newest first, down to and including the one asked for: undoing an
+      // older step's snapshot alone would bring back state a newer step's
+      // undo had already taken away.
+      for (const record of steps.slice(index).reverse()) {
+        if (!undoable(record)) {
+          record.undone = true
+          continue
+        }
+        record.undone = true
+        report.steps.push(record.id)
+        for (const {name, undo} of [...record.calls].reverse()) {
+          try {
+            await undo()
+            report.undone++
+          } catch (e) {
+            report.failed.push({name, message: errorMessage(e)})
+          }
         }
       }
       return report
@@ -290,12 +353,67 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
 }
 
 
+/**
+ * The outcome of a call the SDK refused before running it: a tool name the
+ * set doesn't have (an invented one, or a registry name with its dots), or
+ * arguments that aren't JSON. The registry is never called for these.
+ *
+ * @param part the stream's tool-error part
+ * @param nameOf wire name → registry name
+ * @param stepId
+ * @return the outcome
+ */
+function refusedCall(part: {toolName: string, error?: unknown}, nameOf: (wire: string) => string,
+  stepId: string): CallOutcome {
+  // The stream reports this error as its string form ("AI_NoSuchToolError:
+  // Model tried to call unavailable tool …"), not the error object.
+  const unknown = (part.error as {name?: string} | undefined)?.name === 'AI_NoSuchToolError' ||
+    String(part.error).startsWith('AI_NoSuchToolError')
+  return {
+    name: nameOf(part.toolName), stepId, ok: false, undoable: false,
+    error: {code: unknown ? 'unknown_tool' : 'invalid_input', message: errorMessage(part.error)},
+  }
+}
+
+
+/**
+ * What of the stored history goes over the wire. The store keeps every
+ * message whole (D10); this bounds the request so a long conversation
+ * doesn't grow past the model's context window and fail every turn after:
+ * only the last {@link MAX_WIRE_TURNS} turns are sent, and in all but the
+ * last {@link FULL_RESULT_TURNS} each tool result is cut to a stub. The
+ * tool calls themselves stay, so every call still has its result, which
+ * providers require. A turn starts at a user message, so the cut never
+ * splits one.
+ *
+ * @param history the stored messages
+ * @return the messages to send
+ */
+export function wireHistory(history: ModelMessage[]): ModelMessage[] {
+  const turnStarts = history.flatMap((message, index) => (message.role === 'user' ? [index] : []))
+  const firstSent = turnStarts.length > MAX_WIRE_TURNS ? turnStarts[turnStarts.length - MAX_WIRE_TURNS] : 0
+  const firstFull = turnStarts.length > FULL_RESULT_TURNS ?
+    turnStarts[turnStarts.length - FULL_RESULT_TURNS] : 0
+  return history.slice(firstSent).map((message, offset) => {
+    if (firstSent + offset >= firstFull || message.role !== 'tool' || !Array.isArray(message.content)) {
+      return message
+    }
+    return {
+      ...message,
+      content: message.content.map((part) => (part.type === 'tool-result' ?
+        {...part, output: {type: 'text' as const, value: STUB_RESULT}} : part)),
+    } as ModelMessage
+  })
+}
+
+
 interface ToolHooks {
   stepId: () => string
   push: (event: AssistEvent) => void
-  registry: Pick<Registry, 'call'>
+  registry: Pick<Registry, 'call' | 'policyOf' | 'list'>
   policy?: ApprovalPolicy
   outcomes: Map<string, CallOutcome>
+  stepRecord: (id: string) => StepRecord
 }
 
 
@@ -319,53 +437,127 @@ function toolSet(descriptors: ToolDescriptor[], hooks: ToolHooks): {tools: ToolS
     tools[wire] = tool({
       description: descriptor.description,
       inputSchema: jsonSchema(descriptor.inputSchema as JSONSchema7),
-      execute: (input: unknown, {toolCallId, abortSignal}) => runTool(descriptor, input, toolCallId, abortSignal, hooks),
+      execute: (input: unknown, {toolCallId, abortSignal}) =>
+        runTool(descriptor.name, input, toolCallId, abortSignal, hooks),
     })
   }
   return {tools, nameOf: (wire) => names.get(wire) ?? wire}
 }
 
 
+/** The only policies that run without asking; anything else, or nothing, asks. */
+const RUNS_WITHOUT_ASKING = new Set(['run', 'runWithUndo'])
+
+
 /**
- * @param descriptor
+ * Run one call. The policy is read from the registry now, not from the
+ * turn's tool list, so a provider re-registering a tool mid-turn can't carry
+ * an old, laxer policy past the approval check.
+ *
+ * Stop wins over a slow tool: the call is raced against the turn's signal,
+ * and an abort answers the model at once (`aborted`) so the turn ends
+ * promptly even when the tool never settles. A call that completes after
+ * that, or after its step was undone, is ROLLED BACK as it lands, by its
+ * own undo: the user stopped or undid it, so its effect must not appear
+ * later with no Undo to take it back. (The other option, keeping it and
+ * reporting it late, would need an event after the turn's `done`.)
+ *
+ * @param name the registry name
  * @param input
  * @param callId
- * @param signal
+ * @param signal the turn's abort
  * @param hooks
  * @return what the model is sent: the result's `content`, or `{error}`
  */
-async function runTool(descriptor: ToolDescriptor, input: unknown, callId: string,
+async function runTool(name: string, input: unknown, callId: string,
   signal: AbortSignal | undefined, hooks: ToolHooks): Promise<unknown> {
+  // The step is fixed, and its record made, when the call starts: a call
+  // finishing late still belongs to the step that made it, and an undo of
+  // that step (or an older one) while it runs marks the record undone.
+  const stepId = hooks.stepId()
+  const record = hooks.stepRecord(stepId)
   const fail = (error: {code: string, message: string}) => {
-    hooks.outcomes.set(callId, {name: descriptor.name, ok: false, error})
+    hooks.outcomes.set(callId, {name, stepId, ok: false, undoable: false, error})
     return {error}
   }
-  if (descriptor.policy === 'confirm') {
-    hooks.push({type: 'approval-request', stepId: hooks.stepId(), callId, name: descriptor.name, input})
+  let policy: string | undefined
+  try {
+    policy = hooks.registry.policyOf(name)
+  } catch (e) {
+    return fail(toolErrorJson(e))
+  }
+  if (!RUNS_WITHOUT_ASKING.has(String(policy))) {
+    hooks.push({type: 'approval-request', stepId, callId, name, input})
+    const annotations = hooks.registry.list().find((descriptor) => descriptor.name === name)?.annotations ?? {}
     let approved = false
     try {
-      approved = Boolean(await hooks.policy?.confirm?.({name: descriptor.name, input,
-        annotations: descriptor.annotations}))
+      // Exactly `true`: 'no', {approved: false} and 1 are not approvals.
+      approved = (await hooks.policy?.confirm?.({name, input, annotations})) === true
     } catch {
       approved = false
     }
     if (!approved) {
       return fail({
         code: 'denied',
-        message: `'${descriptor.name}' needs the user's approval, which they did not give, so it was not run. ` +
+        message: `'${name}' needs the user's approval, which they did not give, so it was not run. ` +
           'Tell the user it was not done and why; do not retry it.',
       })
     }
   }
+  const call = hooks.registry.call(name, input, signal ? {signal} : {})
+  let settled: {result: Awaited<typeof call>} | null
   try {
-    const result = await hooks.registry.call(descriptor.name, input, signal ? {signal} : {})
-    hooks.outcomes.set(callId, {
-      name: descriptor.name, ok: true, echo: result.echo, refs: result.refs, undo: result.undo,
-    })
-    return result.content
+    settled = await untilAborted(call, signal)
   } catch (e) {
     return fail(toolErrorJson(e))
   }
+  if (!settled) {
+    // Stopped while the tool ran. Whatever it does when it finishes is undone then.
+    call.then((late) => late.undo?.(), () => undefined).catch(() => undefined)
+    return fail({code: 'aborted', message: `'${name}' was stopped before it finished.`})
+  }
+  const {result} = settled
+  let kept = false
+  if (result.undo) {
+    if (record.undone || signal?.aborted) {
+      // The user undid this step, or stopped the turn, while the call ran.
+      await result.undo().catch(() => undefined)
+    } else {
+      record.calls.push({name, undo: result.undo})
+      kept = true
+    }
+  }
+  hooks.outcomes.set(callId, {name, stepId, ok: true, echo: result.echo, refs: result.refs, undoable: kept})
+  return result.content
+}
+
+
+/**
+ * @param promise
+ * @param signal
+ * @return `{result}` when `promise` settles first, or null when `signal`
+ *   fires first (or had already); rejects when `promise` does first
+ */
+function untilAborted<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<{result: T} | null> {
+  if (!signal) {
+    return promise.then((result) => ({result}))
+  }
+  if (signal.aborted) {
+    return Promise.resolve(null)
+  }
+  return new Promise((resolve, reject) => {
+    const onAbort = () => resolve(null)
+    signal.addEventListener('abort', onAbort, {once: true})
+    promise.then(
+      (result) => {
+        signal.removeEventListener('abort', onAbort)
+        resolve({result})
+      },
+      (e) => {
+        signal.removeEventListener('abort', onAbort)
+        reject(e)
+      })
+  })
 }
 
 

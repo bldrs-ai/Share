@@ -1,19 +1,34 @@
 import React from 'react'
 import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react'
+import {http} from 'msw'
 import {OPENROUTER_KEY_ID, assistErrorMessage} from '../../assist'
-import {SCRIPT} from '../../assist/openrouterSse.fixture'
+import {DEFAULT_MAX_STEPS} from '../../assist/loop'
+import {SCRIPT, SSE_HEADERS, sseText, toolCalls} from '../../assist/openrouterSse.fixture'
+import {getServer} from '../../__mocks__/server'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import useStore from '../../store/useStore'
-import BotChat from './BotChat'
-import {LEGACY_KEY_NAME, assistKeyStore, resetAssistChat} from './assistState'
+import BotChat, {RUNTIME_LOAD_FAILED_MESSAGE, START_FAILED_MESSAGE, stepLimitMessage} from './BotChat'
+import {assistKeyStore, resetAssistChat} from './assistState'
 import {BOT_TITLE} from './component'
+import {reportAssistCondition} from './reportAssistCondition'
+
+
+jest.mock('./reportAssistCondition', () => ({reportAssistCondition: jest.fn()}))
+const mockControl = {runtimeFails: false, runtimeDelayMs: 0, startThrows: false}
 
 
 // The lazy runtime is a URL import in the app (assistRuntime.js); Jest loads
 // the module directly. Everything under it is real: the AI SDK, the
 // OpenRouter provider, and MSW's scripted SSE (api-handlers-openrouter.ts).
 jest.mock('../../viewer/tools/assistRuntime', () => ({
-  loadAssistRuntime: () => import('../../assist/runtime'),
+  loadAssistRuntime: () => {
+    if (mockControl.runtimeFails) {
+      return Promise.reject(new Error('404 assist/runtime.js'))
+    }
+    const runtime = import('../../assist/runtime')
+    return mockControl.runtimeDelayMs === 0 ? runtime :
+      new Promise((resolve) => setTimeout(() => resolve(runtime), mockControl.runtimeDelayMs))
+  },
 }))
 
 // Share's registry needs a loaded model, which jsdom has none of. These
@@ -28,6 +43,9 @@ jest.mock('../../viewer/tools/assistHost', () => {
       createAssist: (o: object) => object,
       openRouterTransport: (o: object) => {label: string},
     }, deps: {keyStore: {get: (id: string) => string | null}, conversationStore: object}) => {
+      if (mockControl.startThrows) {
+        throw new Error('builder broke')
+      }
       // A factory may not close over imports (jest hoists it above them).
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const {createRegistry: make} = require('../../assist')
@@ -97,6 +115,8 @@ describe('BotChat', () => {
   beforeEach(() => {
     mockView.selected = ['e9']
     mockView.undos = 0
+    Object.assign(mockControl, {runtimeFails: false, runtimeDelayMs: 0, startThrows: false})
+    jest.mocked(reportAssistCondition).mockClear()
     act(() => {
       setStoreState({isBotVisible: true})
       assistKeyStore.set(OPENROUTER_KEY_ID, 'test-key')
@@ -180,11 +200,8 @@ describe('BotChat', () => {
     expect(screen.queryByText('Test received.')).toBeNull()
   })
 
-  it('saves the key from settings to the session key store only, and deletes the old plaintext key', () => {
-    localStorage.setItem(LEGACY_KEY_NAME, 'old-plaintext-key')
+  it('saves the key from settings to the session key store only', () => {
     render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
-    expect(localStorage.getItem(LEGACY_KEY_NAME)).toBeNull()
-
     fireEvent.click(screen.getByTestId('BotSettings-OpenButton'))
     const input = screen.getByTestId('BotSettings-ApiKeyInput') as HTMLInputElement
     expect(input.value).toBe('test-key')
@@ -194,6 +211,120 @@ describe('BotChat', () => {
     expect(assistKeyStore.get(OPENROUTER_KEY_ID)).toBe('new-key')
     expect(JSON.stringify({...localStorage})).not.toContain('new-key')
     expect(screen.queryByTestId('BotSettings')).not.toBeInTheDocument()
+  })
+
+  it('offers Undo on the newest step only, across turns, and walks back one step at a time', async () => {
+    render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+    send(SCRIPT.selectPrompt)
+    await screen.findByText(SCRIPT.selectedAnswer(2), {exact: false})
+    await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
+    mockView.selected = ['e5']
+    send(SCRIPT.selectPrompt)
+    await waitFor(() => expect(screen.getAllByText(SCRIPT.selectedAnswer(2), {exact: false})).toHaveLength(2))
+    await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
+    expect(mockView.selected).toEqual(['e1', 'e2'])
+
+    const selects = () => screen.getAllByTestId('BotChat-Action').filter((a) => a.textContent?.startsWith('Selected'))
+    expect(selects().map((a) => Boolean(within(a).queryByTestId('BotChat-UndoButton')))).toEqual([false, true])
+    // Undo settles after the click's handler returns, so wait for it inside act.
+    await act(() => Promise.resolve(fireEvent.click(within(selects()[1]).getByTestId('BotChat-UndoButton'))))
+    // The second turn's select is undone, and the first's Undo is now the one offered.
+    await waitFor(() => expect(mockView.selected).toEqual(['e5']))
+    await waitFor(() => expect(within(selects()[0]).queryByTestId('BotChat-UndoButton')).not.toBeNull())
+    await act(() => Promise.resolve(fireEvent.click(within(selects()[0]).getByTestId('BotChat-UndoButton'))))
+    await waitFor(() => expect(mockView.selected).toEqual(['e9']))
+    await waitFor(() => expect(screen.queryByTestId('BotChat-UndoButton')).toBeNull())
+  })
+
+  it('New chat clears the conversation, and the next message starts a fresh one', async () => {
+    const bodies: Array<{messages: unknown[]}> = []
+    const onRequest = ({request}: {request: Request}) => {
+      void request.clone().json().then((body) => bodies.push(body))
+    }
+    getServer().events.on('request:start', onRequest)
+    try {
+      render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+      send('Hello bot')
+      expect(await screen.findByText('Test received.')).toBeInTheDocument()
+      await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
+      fireEvent.click(screen.getByRole('button', {name: 'New chat'}))
+      expect(screen.queryByText('Test received.')).toBeNull()
+      expect(screen.queryByText('Hello bot')).toBeNull()
+      send('Hello again')
+      expect(await screen.findByText('Test received.')).toBeInTheDocument()
+      await waitFor(() => expect(bodies).toHaveLength(2))
+      // The second request carries only its own user message, not the first chat's.
+      const users = (body: {messages: unknown[]}) => body.messages.filter((m) => (m as {role: string}).role === 'user')
+      expect(users(bodies[1])).toEqual([expect.objectContaining({content: 'Hello again'})])
+    } finally {
+      getServer().events.removeListener('request:start', onRequest)
+    }
+  })
+
+  it('says so when a turn hits the step cap', async () => {
+    let n = 0
+    getServer().use(http.post(`${process.env.OPENROUTER_BASE_URL}/api/v1/chat/completions*`, () =>
+      new Response(sseText(toolCalls([{id: `q${n++}`, name: 'model_query', args: {}}])),
+        {status: 200, headers: SSE_HEADERS})))
+    render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+    send('loop')
+    expect(await screen.findByText(stepLimitMessage(DEFAULT_MAX_STEPS))).toBeInTheDocument()
+  })
+
+  it('a 404 from the model is reported to Sentry by its fields only, and the user is told it isn\'t theirs to fix', async () => {
+    getServer().use(http.post(`${process.env.OPENROUTER_BASE_URL}/api/v1/chat/completions*`, () =>
+      new Response(JSON.stringify({error: {message: 'No endpoints found matching your data policy', code: 404}}),
+        {status: 404, headers: {'Content-Type': 'application/json'}})))
+    render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+    send('Hello bot')
+    expect(await screen.findByTestId('BotChat-Error')).toHaveTextContent(assistErrorMessage('unavailable', 'OpenRouter'))
+    expect(reportAssistCondition).toHaveBeenCalledWith('model_unavailable', {status: 404, transport: 'openrouter'})
+  })
+
+  it('a 401 is the user\'s to fix: shown, and not reported', async () => {
+    getServer().use(http.post(`${process.env.OPENROUTER_BASE_URL}/api/v1/chat/completions*`, () =>
+      new Response(JSON.stringify({error: {message: 'bad key', code: 401}}),
+        {status: 401, headers: {'Content-Type': 'application/json'}})))
+    render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+    send('Hello bot')
+    expect(await screen.findByTestId('BotChat-Error')).toHaveTextContent(assistErrorMessage('bad_key', 'OpenRouter'))
+    expect(reportAssistCondition).not.toHaveBeenCalled()
+  })
+
+  it('a runtime that won\'t load says so in its own words, and is reported', async () => {
+    mockControl.runtimeFails = true
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
+    render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+    send('Hello bot')
+    expect(await screen.findByTestId('BotChat-Error')).toHaveTextContent(RUNTIME_LOAD_FAILED_MESSAGE)
+    // The console line names the condition, not the error (which could name a URL).
+    expect(warn).toHaveBeenCalledWith('assist: could not load the assistant runtime')
+    warn.mockRestore()
+    expect(reportAssistCondition).toHaveBeenCalledWith('runtime_load_failed')
+    await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
+  })
+
+  it('an assistant that fails to build shows an error, not an unhandled rejection', async () => {
+    mockControl.startThrows = true
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
+    render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+    send('Hello bot')
+    expect(await screen.findByTestId('BotChat-Error')).toHaveTextContent(START_FAILED_MESSAGE)
+    expect(warn).toHaveBeenCalledWith('assist: the assistant failed to start')
+    warn.mockRestore()
+    expect(reportAssistCondition).toHaveBeenCalledWith('start_failed')
+    await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
+  })
+
+  it('Stop while the first send is still loading the runtime means the turn never starts', async () => {
+    mockControl.runtimeDelayMs = 50
+    render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+    send('Hello bot')
+    fireEvent.click(screen.getByRole('button', {name: 'Stop the reply'}))
+    expect(await screen.findByText(assistErrorMessage('aborted', 'OpenRouter'))).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
+    await new Promise((resolve) => setTimeout(resolve, mockControl.runtimeDelayMs * 2))
+    expect(screen.queryByText('Test received.')).toBeNull()
   })
 
   it('scrolls to the latest message when messages update', async () => {
