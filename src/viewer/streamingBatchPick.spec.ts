@@ -10,7 +10,7 @@ const {beforeEach} = test
 // A large IFC (its parse emits previews too, so the pick has to find a durable
 // instance the preview does not cover) and the hosted STEP assembly (occurrence
 // paths, a root-level part). Momentum is copied to `__test_fixtures__/` by
-// `yarn test-flows-build` (see previewInteraction.spec.ts).
+// `bun run test-flows-build` (see previewInteraction.spec.ts).
 const MODELS = [
   {format: 'IFC', path: '/share/v/p/__test_fixtures__/Momentum.ifc'},
   {format: 'STEP', path: '/share/v/p/index.step'},

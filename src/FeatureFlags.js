@@ -8,6 +8,12 @@ export const flags = [
   // smoke tests. Branch deploys and local builds remain excluded, and
   // navigator.webdriver still suppresses automated traffic.
   {name: 'gaEnableInPreview', isActive: false},
+  // Records main-thread long animation frames, long tasks, rAF cadence and
+  // input delay from page start, with load milestones, for the render-worker
+  // decision (open-205, design/new/offscreen-rendering.md §9.1). Adds a small
+  // Mark / Summary / Download overlay; the trace stays on the page until the
+  // user downloads it. Pairs with the replay page in tools/spikes/offscreen/.
+  {name: 'mainThreadTrace', isActive: false},
   // Multi-user sharing UI (Share dialog, visibility chip). Provider scaffolding
   // ships unconditionally; this flag gates the consumer surface in PR2+.
   // See design/new/multi-user-sharing.md.
@@ -25,6 +31,14 @@ export const flags = [
   // is invisible until flipped.
   // See design/new/conversational-cad.md §2.
   {name: 'workspace', isActive: false},
+  // Open a model in-app instead of with a page load (open-205 Phase 1a step 0,
+  // #2011, #2021): `navigateToModel` (utils/navigate.js) routes through
+  // react-router's `navigate()` rather than `window.location.assign`. Off:
+  // every open is the page load it always was. Its own flag, not
+  // `workspace`, so the switch burns in and rolls back without the shell
+  // (decision 2 on #2011). What the reload used to free, and what an in-app
+  // switch still leaks, is design/new/in-app-model-switch.md §2 and §6.
+  {name: 'spaModelNav', isActive: false},
   // The AI assistant (epic assist-310, #1659; design/new/ai-workspace.md §13,
   // D12). Today it gates only the dev hook `window.__bldrsAssistTools` that
   // drives the viewer tool registry (src/viewer/tools/assistHost.js, #1674);
@@ -203,6 +217,12 @@ export const flags = [
   // on-demand painting (DESIGN.md §"Render loop & perf monitor", "Rolling
   // back").
   {name: 'disableRenderOnDemand', isActive: false},
+  // OFF-switch for the §6e render look (viewer/lookMode.js), on by default
+  // since #2167. `?feature=disableLook` puts one session back on the pre-§6e
+  // pipeline (Lambert materials, linear output, no IBL, no AO); setting this
+  // `isActive: true` is the PROD ROLLBACK, which no URL can override. Not
+  // `look: false`: `?feature=look` now only opens the tuning panels.
+  {name: 'disableLook', isActive: false},
   // OFF-switch for the instance tree hover and click picks go through on a
   // batched model (viewer/ifc/batchedInstanceBvh.js): with it on, no tree is
   // built and every pick walks every instance, as before the tree. Same
@@ -243,6 +263,25 @@ export const flags = [
   // whole load instead of holding the file for it. Also the A/B for
   // measuring what the whole-file read buys.
   {name: 'disableEngineResidentSource', isActive: false},
+  // Kill switch for the engine's source policy (engine/sourcePolicy.js,
+  // Share#2139; engine-worker.md §"Source policy"): open every model the
+  // worker can window windowed, as before the policy, instead of buffered
+  // under the device's cap. `?feature=disableBufferedSource` reverts one
+  // session (and A/Bs the same build). Setting it `isActive: true` here is
+  // the PROD ROLLBACK: spawnEngine.js#engineFlagSnapshot reads the static
+  // value first, as engineRoute.js does `disableEngineWorker`.
+  {name: 'disableBufferedSource', isActive: false},
+  // Kill switch for the native source hash (engine/engineHandler.js#openModel,
+  // Share#2092; engine-worker.md §7.1): record the index sidecar's source digest
+  // with the platform's SHA-256 over 4 MiB blocks (conway's
+  // `SOURCE_HASH_ALGORITHM: 'sha256Blocks'`) instead of conway's per-byte FNV
+  // loop in JavaScript. `?feature=disableNativeSourceHash` reverts one session
+  // (and A/Bs the same build). Setting it `isActive: true` here is the PROD
+  // ROLLBACK: spawnEngine.js#engineFlagSnapshot reads the static value first,
+  // like `disableBufferedSource`. With it on, conway records FNV as before;
+  // sidecars already written natively stay valid and verify natively on
+  // reopen regardless, since a sidecar names its own algorithm.
+  {name: 'disableNativeSourceHash', isActive: false},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-
@@ -283,17 +322,22 @@ export const flags = [
   // both of which now run in the default configuration.
   // See design/new/model-display-controls.md §7.
   {name: 'displayControls', isActive: true},
-  // Adaptive residency during camera motion (B3 of
-  // design/new/demand-tiled-rendering.md; viewer/residency/MotionResidency.js):
-  // while the camera moves, the Display menu's residency controller holds a
-  // smaller set — Auto (the default) picks it from measured GPU frame time
-  // against the display's frame budget, or a manual percent — and the camera
-  // coming to rest restores the at-rest residency with a full-detail paint.
-  // Gates the menu's "While moving" section and the driver behind it; off,
-  // the viewer is exactly as before (no camera listener, no timer). Default
-  // OFF for the owner's A/B on a real GPU: SwiftShader, where CI runs,
-  // cannot say whether Auto's budget is the right one.
-  {name: 'motionResidency', isActive: false},
+  // OFF-switch for adaptive residency during camera motion (B3 of
+  // design/new/demand-tiled-rendering.md; viewer/residency/MotionResidency.js),
+  // on by default since the owner's A/B on a real GPU (it was the opt-in
+  // `motionResidency` flag until then): while the camera moves, the Display
+  // menu's residency controller holds a smaller set — Auto (the default)
+  // picks it from measured GPU frame time against the display's frame
+  // budget, or a manual percent — and the camera coming to rest restores the
+  // at-rest residency with a full-detail paint. Same inverted shape as the
+  // switches above: `?feature=disableMotionResidency` is the per-session way
+  // back (the menu's "While moving" section and the driver behind it are not
+  // built, so the viewer is exactly as before: no camera listener, no timer),
+  // and `isActive: true` here is the PROD ROLLBACK, which no URL can
+  // override. A leftover `?feature=motionResidency` in a link is an unknown
+  // name and changes nothing. viewer/display/motionResidencyMode.js
+  // #isMotionResidencyOn is the one predicate.
+  {name: 'disableMotionResidency', isActive: false},
   // Batched-native GLB cache artifact (view-140 S9 / viewer-replacement
   // §3b.v): the writer serializes the batched model via
   // EXT_mesh_gpu_instancing + BLDRS_instance_tables instead of the merged

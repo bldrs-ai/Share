@@ -26,7 +26,7 @@ export const PRO_ENTRY_DIR = path.resolve(repoRoot, 'src', 'export', 'pro')
 export const PRO_ENTRY_SUFFIX = '.entry.js'
 export const PRO_MODULE_OUT_DIR = path.resolve(repoRoot, 'netlify', 'functions', '_pro-modules')
 
-// Where the dev/playwright copy lands. `yarn serve` and the Playwright build
+// Where the dev/playwright copy lands. `bun run serve` and the Playwright build
 // are both served by a plain static server with no Netlify functions running,
 // so the MSW handler for `/.netlify/functions/pro-module` proxies to this
 // copy instead. NEVER emitted for `prod` — that would publish the module.

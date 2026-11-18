@@ -19,6 +19,12 @@ import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
  * the in-process fallback prints the same `Blob store (disabled)` line.
  */
 const MODEL = '/share/v/p/index.ifc'
+// The source policy (engine/sourcePolicy.js, Share#2139) opens a model under
+// the device's cap BUFFERED, read once through the handle, with nothing left
+// paging from it; these tests are of the windowed open over the handle, so
+// they take the policy's kill switch. engineSourcePolicy.spec.ts covers the
+// buffered default.
+const WINDOWED = 'disableBufferedSource'
 
 
 /**
@@ -50,7 +56,7 @@ describeMobileAndDesktop('Engine worker: OPFS sync access handle', () => {
   test('the worker reads the staged model through a read-only sync access handle', async ({page}) => {
     const engine = watchEngineWorker(page)
     // The worker is the default engine (engine-worker.md §7 step 9).
-    await page.goto(MODEL)
+    await page.goto(`${MODEL}?feature=${WINDOWED}`)
     const line = await engineSourceLine(page)
     expect(line).toMatch(/^Engine source I\/O: OPFS sync access handle, [1-9]\d* reads/)
     await engine.expectWorkerEngine()
@@ -78,7 +84,7 @@ describeMobileAndDesktop('Engine worker: OPFS sync access handle', () => {
     const STEP_TEST_TIMEOUT_MS = 90_000
     test.setTimeout(STEP_TEST_TIMEOUT_MS)
     const engine = watchEngineWorker(page)
-    await page.goto('/share/v/p/index.step')
+    await page.goto(`/share/v/p/index.step?feature=${WINDOWED}`)
     const line = await engineSourceLine(page, STEP_TEST_TIMEOUT_MS)
     expect(line).toMatch(/^Engine source I\/O: OPFS sync access handle, [1-9]\d* reads/)
     await engine.expectWorkerEngine()

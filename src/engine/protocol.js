@@ -93,7 +93,15 @@ export const Ev = Object.freeze({
  */
 export function serializeError(e) {
   if (e instanceof Error) {
-    return {name: e.name, message: e.message, stack: e.stack}
+    const shape = {name: e.name, message: e.message, stack: e.stack}
+    const mode = e.sourceMode
+    if (typeof mode?.mode === 'string') {
+      // The source mode of a failed open (engineHandler.js#openModel): two
+      // fixed-code strings, copied explicitly so nothing else on the error
+      // (a path, a file name) crosses to the page.
+      shape.sourceMode = {mode: mode.mode, reason: typeof mode.reason === 'string' ? mode.reason : undefined}
+    }
+    return shape
   }
   return {name: 'Error', message: String(e)}
 }
@@ -103,7 +111,7 @@ export function serializeError(e) {
  * Rebuild an Error from {@link serializeError}'s shape, keeping the engine's
  * message and stack so a failure reads the same on either side.
  *
- * @param {object} shape `{name?, message?, stack?}`
+ * @param {object} shape `{name?, message?, stack?, sourceMode?}`
  * @return {Error}
  */
 export function deserializeError(shape) {
@@ -113,6 +121,10 @@ export function deserializeError(shape) {
   }
   if (shape?.stack) {
     error.stack = shape.stack
+  }
+  if (typeof shape?.sourceMode?.mode === 'string') {
+    const {mode, reason} = shape.sourceMode
+    error.sourceMode = {mode, reason: typeof reason === 'string' ? reason : undefined}
   }
   return error
 }

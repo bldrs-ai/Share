@@ -1511,7 +1511,7 @@ both. The pro entry may import shared *source* (`glbContainer.js`,
 injected by the host at call time (§6.1), which is also what keeps the
 single-three-instance invariant.
 
-For dev (`yarn serve`) and Playwright, where no function runs, the build
+For dev (`bun run serve`) and Playwright, where no function runs, the build
 ALSO copies each module to `docs/__pro_dev__/<name>.js` when `SHARE_CONFIG`
 is `dev` or `playwright` (never `prod`). The MSW handler for
 `/.netlify/functions/pro-module` checks the store's `subscriptionStatus`
@@ -1520,7 +1520,7 @@ like `record-load`'s mock does, then proxies to that copy; Playwright specs
 
 Two conventions the deploy bundler imposes on anything added under
 `netlify/functions/`, both learned by breaking the deploy preview and
-neither visible to `yarn build` or to jest:
+neither visible to `bun run build` or to jest:
 
 - **No `node:`-prefixed builtin imports** (`node:fs/promises`, `node:path`,
   `node:crypto`, …). No pre-existing function used one; write `fs/promises`.

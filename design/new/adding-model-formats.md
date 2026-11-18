@@ -240,6 +240,186 @@ GLB cache. `routes.test.ts` and
 of one model, a drop and a pick of several, and a drop of none.
 
 
+## A DICOM series becomes one NRRD
+
+CT and MR scans leave the scanner as a folder of DICOM files, one per
+slice, and reach users zipped. Share opens such a zip as a volume, in
+three steps, each a module:
+
+1. **Detect the slices** — `loader/modelArchive.js#dicomVolume`, at the
+   archive seam. It runs only for an archive with **no model in it** (an
+   `.ifc` beside the slices wins). Candidates are entries named `.dcm`,
+   `.dicom`, `.dic`, `.ima`, with no extension (`IM0001`, the most common
+   scanner export), or with an all-digit extension (files named by their
+   SOP Instance UID, `1.2.840.113619.2.55.3`). Each is kept only if it has
+   the Part 10 preamble and `DICM`. A DICOM file with no pixel data (a
+   DICOMDIR, a report) is skipped. A slice that can't be read is skipped
+   too, as long as some other slice can be.
+
+   Candidates are guesses (any extensionless file), so looking at one
+   mustn't change what an archive **without** DICOM is told. Each is
+   inflated against a scratch budget of the whole 512 MiB ceiling, and
+   charged to the upload's real budget only once it has proved to be DICOM,
+   so a `LICENSE` costs nothing and can't fail for room the slices used.
+   An entry that can't be extracted (encrypted, Deflate64, past the
+   ceiling) is skipped while it might be anything. It is raised once the
+   archive has proved to hold DICOM, since it may be a slice and a series
+   must not open as if whole, and also when it is named `.dcm`. An archive
+   with no DICOM falls through to "holds no model" exactly as before.
+2. **Stack them into one NRRD** — `loader/dicom.js`. A small reader for
+   the uncompressed transfer syntaxes (implicit and explicit VR little
+   endian, which scanners and PACS exports write by default) reads each
+   slice's geometry, pixel format and rescale, and skips everything else.
+   Skipping covers undefined-length sequences and items nested in each
+   other; a Pixel Data inside a sequence (an icon thumbnail) is stepped
+   over, since only the dataset's own is the image; and an undefined-length
+   `UN` is read as implicit VR, whatever the file's syntax (PS3.5 §6.2.2).
+   The transfer syntax is judged where the meta group ends, so a deflated
+   or big-endian file is refused as that, not as damage.
+
+   Slices are grouped by Series Instance UID, image size, orientation, echo
+   number and temporal position, and the **largest series** opens, because
+   a study export carries a few-slice scout beside the scan. (Echoes and
+   phases share a series and every position; mixed, ordering would pick
+   one image per position by zip order.) They're ordered by
+   `ImagePositionPatient` along the slice normal (row × column), not by
+   `InstanceNumber`. Without positions, `InstanceNumber` orders them, and
+   without either the series is refused.
+
+   The slice axis is the **position step**, first slice to last divided
+   evenly, not the normal scaled by the gap. On a CT taken with the gantry
+   tilted, each slice is offset along the table too, and the volume is a
+   sheared box, which NRRD and `nrrd.js#placement` both take. It is never
+   `SliceThickness`, the thickness of the cut, which differs from the gap
+   in overlapping reconstructions. A volume is a regular grid, so the gaps
+   along the normal must agree to within 10%. A missing slice, or a series
+   with variable spacing, is **refused** rather than stacked evenly with
+   every slice after the hole a gap out of place.
+
+   The output is an NRRD in real units: `short` for Hounsfield; `ushort`
+   for an integral unsigned range past 32767, at half the memory of
+   `float`; `float` when the rescale isn't integral or neither fits. It is
+   in `left-posterior-superior`, with the scanner's `space directions` and
+   `space origin`, and a `modality:=CT` key/value pair. The voxels are
+   written straight into the file buffer, after a header padded to their
+   alignment. The seam hands it on as a `File` named
+   for the archive (`CT1.zip` → `CT1.nrrd`), typed `nrrd`, so OPFS holds
+   `<uuid>.nrrd`, and recents and reloads see an NRRD. Unlike an entry's
+   resolution, it carries no `bytes` beside the `File`, which would keep a
+   second whole volume alive while the seam writes the file.
+3. **Render it** — `nrrd` is an ordinary format: a `supportedTypes` entry
+   (sniffed by its `NRRD000` version line), a `findLoader` arm with three's
+   `NRRDLoader`, and an `UNSTRUCTURED_MESH` capability set, so a `.nrrd`
+   file opens on its own the same way. The
+   fixup, `loader/nrrd.js`, windows the voxels to 8 bits (a normalized
+   8-bit 3D texture filters linearly on every WebGL2 device, while 16-bit
+   needs `EXT_texture_norm16`). A CT gets a fixed Hounsfield window with
+   opacity ramping from 150 to 900 HU (bone, with tissue faint). Any other
+   volume ramps from its histogram's Otsu threshold to its 99th
+   percentile. The voxels go into a `Data3DTexture`, resampled past 512 on
+   any edge, which a box ray-marches in its fragment shader. It composites
+   front to back, lit by the gradient, and stops when nearly opaque. The
+   box draws its back faces, so it still renders with the camera inside.
+   It is placed where the scanner put the volume: millimetres to metres,
+   and LPS to the scene's Y-up, superior up and anterior toward the
+   default camera. That is a rotation, so the patient is never mirrored.
+
+**A trap, commented where it bites.** The box's placement is **baked into
+its vertices** and the inverse handed to the shader (`sceneToBox`), not
+set on the Mesh's transform. `Loader#readModel` hoists the first child's
+geometry onto a geometry-less root, and a unit cube there would add a 1 m
+box at the origin to every bounds Share takes of the model, so
+fit-to-frame would be wrong. (Before three r187, `NRRDLoader` also cut the
+header one character short of its blank line. The header `dicom.js`
+writes still ends in a comment line, which now carries the alignment
+padding.)
+
+**Memory.** The 512 MiB budget bounds what the archive inflates, not the
+peak. The slices are held until stacked; the NRRD is about their size
+again (twice for `float`), and its `File` copy is written to OPFS. The
+load then reads it back, NRRDLoader copies it twice more, and the 8-bit
+texture follows. A 500-slice 512 × 512 CT (≈ 270 MB of pixels) opens on a
+desktop; on a phone, a series that size is near the device's limit.
+
+**Refused, with the reason in the archive dialog** (as a
+`ZipArchiveError`, so an `unrecognizedFormat` alert with
+`archive.problem`, the same path as any unreadable archive):
+
+- compressed transfer syntaxes (JPEG, JPEG-LS, JPEG 2000, RLE, deflate),
+  which have no small browser decoder, and big-endian explicit VR;
+- color (`SamplesPerPixel` ≠ 1), multi-frame files, and bit depths other
+  than 8 and 16;
+- slices that differ in size, are unevenly spaced (a slice missing), or
+  have nothing to order them by; damaged or truncated files.
+
+**Out of scope, and what happens.** A DICOM zip on GitHub or Drive is not
+routed, like any `.zip` (§"An archive is not a format either"). A lone
+`.dcm` is not a format (`dcm` isn't in `supportedTypes`), so it's refused
+as an unknown type; zip it. ACR-NEMA files without the Part 10 preamble
+aren't recognized. `BitsStored`/`HighBit` masking and `MONOCHROME1`
+(inverted grayscale) aren't applied, and float Pixel Data (7FE0,0008)
+reads as no image. A `.nrrd` from elsewhere with a detached header
+(`data file:`) or more than three dimensions isn't read correctly by
+NRRDLoader. A series past the
+512 MiB inflate budget (about 1000 slices of 512 × 512 × 16-bit) is
+refused as too large. Several series in one zip don't put up the
+chooser: the largest opens. The volume has no transfer-function UI yet;
+the window and ramp are the material's `ramp` uniform. The display
+controls' wireframe mode just draws the box's edges.
+
+**No selection, no Properties.** A volume has no elements and no
+properties. The mesh's `raycast` is a no-op, so a click on it selects
+nothing and doesn't outline the box. CadView turns the Properties panel
+off when the loaded model is a volume (`nrrd.js#isVolumeModel`), and back
+on for the next model. One consequence: the Q shortcut (a cut plane at the
+cursor) raycasts the model, so it finds nothing on a volume. Use the
+cut-plane menu.
+
+**Cut planes cut the ray, not the box.** `MeshClipper` binds its
+world-space planes to every model material's `clippingPlanes`. three's own
+clipping would only discard the box's back faces, which isn't a cut
+through the volume. So the shader leaves three's clipping chunks out, and
+the mesh's `onBeforeRender` (`nrrd.js#syncClipPlanes`) moves up to six
+planes into box space, through the mesh's world matrix and the baked
+placement. The fragment shader then trims each ray's interval to the part
+every plane keeps (`distanceToPoint >= 0`, as three keeps). A cut opens
+the volume, and the cut face shows the tissue and bone inside it. A
+plane's drag mutates it in place and asks for a paint, and the hook runs
+before every draw, so dragging needs nothing more.
+
+**Tests.** `dicom.test.js` reads pydicom-written series in both transfer
+syntaxes (`testdata/models/dicom/`, generated by
+`tools/models/makeDicomPhantom.py`). pydicom writes its sequences with
+defined lengths, so the walk's undefined-length paths are covered by
+files built in the test: nested undefined-length sequences and an icon's
+Pixel Data, each in both VRs, and an undefined-length `UN`. It also covers
+each refusal (deflated and big-endian by name, a missing slice, nothing to
+order by), ordering by position over instance number, a gantry tilt, a
+sagittal series, echoes split into stacks, the `short`/`ushort`/`float`
+choice, and voxel values checked through three's own `NRRDLoader`.
+`nrrd.test.js` covers placement in the scene, axis orientation (the
+phantom's off-centre sphere lands on the viewer's right), a tilted
+series placed voxel for voxel, windowing and resampling, the cut planes'
+box-space transform under a moved model, and that the volume can't be
+picked. `modelArchive.test.js` covers detection at the seam (UID-named and
+`.DCM` entries, a model beside the slices winning, a compressed series
+ending in the dialog), that an unextractable non-DICOM entry leaves the
+"holds no model" alert alone, that one in a DICOM archive refuses it, and
+that only DICOM is charged to the budget. `Loader.test.js` covers a
+`.nrrd` through `load()`, including that a ray through the volume picks
+nothing while bounds still see it.
+
+E2E: `loader/dicom.spec.ts`, desktop and mobile, drops and picks the
+phantom zip and checks the volume changes a real WebGL2 frame. It checks
+that a click on the volume selects nothing and Properties stays off. It
+checks that a plan cut changes the frame (with the plane's arrow hidden)
+and leaves part of the volume drawn. Last, it checks which side the cut
+keeps: moved past the box with all of it on the kept side, the frame
+equals the uncut one; with none of it, the volume-hidden one. Each of the
+new walk, tilt and budget tests, and the E2E side check, was seen to fail
+with its fix reverted.
+
+
 ## 2. Wire the loader — `src/loader/Loader.js#findLoader`
 
 Add a `case` returning the tuple
@@ -306,8 +486,8 @@ will hand the loader UTF-8 mojibake.
 
 **E2E** (`src/Components/Open/Filetypes.spec.ts`): a fixture under
 `src/tests/fixtures/github/bldrs-ai/test-models/main/<fmt>/` plus a
-screen test. Fixtures must live there — `yarn test-flows` runs
-`yarn clean` before building, so anything hand-copied into
+screen test. Fixtures must live there — `bun run test-flows` runs
+`bun run clean` before building, so anything hand-copied into
 `docs/__test_fixtures__/` is deleted before the run. See
 [PLAYBOOK.md](../../PLAYBOOK.md) §"Screenshot goldens" for generating
 the golden.

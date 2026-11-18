@@ -206,10 +206,12 @@ detail it orbits at about 20 fps (47 ms a frame); at 25% occupancy residency
 the owner reports it "feels instant".
 
 *The controls.* The Display menu's residency section becomes the **at rest**
-setting, unchanged in default (100%) and behaviour. Behind
-`?feature=motionResidency` (default off, for the owner's A/B) a second
-section, **While moving**, has the same percent slider and priority metric
-plus **Auto**, the default. Manual 100% is "no change while moving" and is
+setting, unchanged in default (100%) and behaviour. A second section,
+**While moving**, has the same percent slider and priority metric plus
+**Auto**, the default. It shipped behind the opt-in `?feature=motionResidency`
+for the owner's A/B and is now on by default, with `disableMotionResidency`
+as the off switch (*Rollback* below); the owner's reason for the flip was
+large models on mobile. Manual 100% is "no change while moving" and is
 exactly today's viewer. Both persist the same way: the display-override
 stack (`motionResidency: {mode, percent, metric}`,
 model-display-controls.md §2) and the `#d:` token (`mres=25`,
@@ -263,9 +265,10 @@ GPU time is measured (gpuFrameTimer.js): an `EXT_disjoint_timer_query_webgl2`
 query around the paint where the browser exposes it, else the owner's fence
 technique, one fence in flight, polled from MessageChannel tasks, given up at
 500 ms. The paint is bracketed by `RenderDemand#observePaints`, called from
-the render closure around `composer.render()`. The budget is one display
-interval, read off the loop's idle animation frames, not assumed (16.7 ms at
-60 Hz, 8.3 ms at 120 Hz). Intervals after a paint are ignored,
+the render closure around `composer.render()`. The budget is four display
+intervals since #2167 (`BUDGET_SHARE`; one before, see *Budget doubled*
+below), the interval read off the loop's idle animation frames, not assumed
+(16.7 ms at 60 Hz, 8.3 ms at 120 Hz). Intervals after a paint are ignored,
 or a 47 ms orbit would read as a 21 Hz display. Each step scales the
 fraction by budget/measured. GPU cost is a + b·f, so that proportional step
 under-predicts a cut's saving and over-predicts a growth's cost: from either
@@ -283,6 +286,26 @@ smoothness rules carried over from B2 handle the noise:
 
 The fraction persists across gestures, so the next drag starts from the last
 good target and its first frames are already cheap.
+
+*AO goes first (#2167).* With the §6e look on (the default), N8AO ambient
+occlusion fades out over 100 ms from the same camera-controls `update` that
+starts motion here (`viewer/motionAO.js`), and fades back in at rest by the
+same rule. MotionResidency doesn't time a paint while AO still runs (its
+`shouldTime` dep, wired by ResidencyControl to `isAORunning`), so every frame
+Auto times is an AO-free frame. Geometry is cut only for what the frame costs
+once AO is gone, which is the order the owner asked for: a full-screen post
+pass is the cheapest thing to lose while moving. viewer-replacement.md §6e
+has the rest.
+
+*Budget doubled (#2167).* On the owner's preview check with the look on,
+the hosted index.ifc mostly vanished while orbiting: PBR frames cost more
+than the Lambert frames the one-interval budget was tuned on. `BUDGET_SHARE`
+went from 1 to 2 (33 ms at 60 Hz, ~30 fps while moving) as a first step to
+re-check, not a measured optimum. The step still aims at `AIM` of the
+budget, so the PSB trade-off above (25% at a 16.7 ms frame) moves to about
+twice the triangles. index.ifc still evicted at 2 on the next check, so it
+went to 4 (67 ms, ~15 fps while moving): about four times the original
+triangles before Auto cuts.
 
 *Tuning, from the owner's preview run (M2 Air, 60 Hz, DPR 2).* The first
 cut budgeted 0.8 of the interval (13.3 ms) with a 5% floor. On PSB, Auto went
@@ -302,8 +325,49 @@ ever proves too aggressive.
 budget has to be one GPU budget shared across them, not a full interval
 each.
 
-*Rollback.* `motionResidency` is default off. Off, no driver is built and
-nothing listens to the camera. Manual 100% is the per-user off switch.
+*On mobile: the fence path.* Phones and tablets rarely expose
+`EXT_disjoint_timer_query_webgl2` (iOS Safari never does; Chrome on Android
+depends on the GPU), so there Auto runs on the fence path:
+`createGpuFrameTimer` takes it whenever the extension is absent and the
+context has `fenceSync`, which every WebGL2 context does and three r184 only
+makes WebGL2 ones. SwiftShader takes the same path, so CI's Auto E2E
+(`motionResidency.spec.ts`, desktop and mobile viewports) is a fence-path run
+that sheds detail while dragging and reports a settled percent. The fence
+gives one sample per frame while the GPU keeps up, and one every other frame
+when it doesn't (one fence in flight); 3 samples and 150 ms per step is still
+a few steps a second, so Auto walks to the budget rather than staying where
+the gesture started. A frame the GPU never finishes within 500 ms is reported
+as 500 ms and cuts. Two biases to know about, neither of which pins it:
+
+- the fence sample is the GPU work *still queued* when the paint returns,
+  not the frame's whole cost. Where a frame is CPU-bound instead (the main
+  thread's draw-list rebuild on a big batch, on a slow phone CPU), the tail
+  is short, Auto reads the frame as cheap and keeps more than a CPU budget
+  would. Auto then errs toward detail, which is today's viewer; it never
+  cuts below what the GPU needs. Adding the draw call's own time
+  (`afterPaint`'s `costMs`) to fence samples is the obvious follow-up if a
+  device shows it, and would need re-tuning against the owner's numbers,
+  which came from the fence probe;
+- the fence is polled from MessageChannel tasks, so a busy main thread
+  delays the poll and inflates the sample, which errs toward cutting. The
+  ceiling relaxes after 2 s held under budget, so a burst doesn't hold the
+  fraction down for the rest of the session.
+
+If a context could measure neither way (no WebGL2), `createGpuFrameTimer`
+returns null, Auto takes no samples and holds its starting fraction of 100%,
+i.e. the viewer without B3. That is a capability limit with nothing to act
+on, so it is not reported anywhere.
+
+*Rollback.* On by default; `disableMotionResidency` is the off switch, the
+same inverted shape as `disableRenderOnDemand` and `disableHoverOverlay`
+(`viewer/display/motionResidencyMode.js#isMotionResidencyOn` is the one
+predicate). `?feature=disableMotionResidency` turns it off for a session;
+`isActive: true` in FeatureFlags.js is the prod rollback, which no URL can
+override, since `isFeatureEnabled` ORs the static value with the URL's and
+there is no longer an opt-in flag for a link to name (a leftover
+`?feature=motionResidency` is an unknown name and does nothing). Off, the
+Display menu has no While-moving section, no driver is built and nothing
+listens to the camera. Manual 100% is the per-user off switch.
 
 *Known limits.* Until the follow-up to B3, `ResidencyControl` handed the
 controller `viewer.context.ifcCamera.perspectiveCamera`, a field `ThreeContext`

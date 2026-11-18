@@ -33,14 +33,14 @@ Routes that **don't** live here:
 
 ```bash
 cd marketing
-yarn install        # or: npm install
-yarn dev            # http://localhost:3000
-yarn build          # emits ./out/ (static HTML)
-yarn typecheck      # tsc --noEmit
-yarn lint           # next lint
+bun install
+bun run dev            # http://localhost:3000
+bun run build          # emits ./out/ (static HTML)
+bun run typecheck      # tsc --noEmit
+bun run lint           # next lint
 ```
 
-`yarn build` produces `out/` with one `index.html` per route. No Node server is
+`bun run build` produces `out/` with one `index.html` per route. No Node server is
 needed to serve the result.
 
 ## Adding a blog post
@@ -60,7 +60,7 @@ needed to serve the result.
    ```
 3. Write the body in MDX. Headings, lists, code blocks, links all map to the
    site's MUI typography automatically (see `src/components/MdxContent.tsx`).
-4. `yarn build` picks it up — no code changes needed. The route, sitemap, and
+4. `bun run build` picks it up — no code changes needed. The route, sitemap, and
    RSS feed all update.
 
 The filename's `-` slug (minus `.mdx`) is the URL slug. Frontmatter `slug` is
@@ -100,17 +100,17 @@ What still needs you:
 ## Deploy
 
 The marketing build is chained into the root SPA build, not a sibling
-process. `yarn build` runs `build-share` → `build-marketing`
+process. `bun run build` runs `build-share` → `build-marketing`
 (`tools/marketing/build.js`). Playwright's webServer sets
 `SKIP_MARKETING=true` so that script exits before the Next.js
 install+export — no flow spec loads marketing routes. Production
 builds still overlay. The script:
 
-1. `yarn install --frozen-lockfile` inside `marketing/`.
-2. `yarn build` inside `marketing/` → `marketing/out/`.
+1. `bun install --frozen-lockfile` inside `marketing/`.
+2. `bun run build` inside `marketing/` → `marketing/out/`.
 3. `cpSync('marketing/out', 'docs', {recursive: true})` to overlay.
 
-The same script runs for `yarn serve` (the dev loop already builds the
+The same script runs for `bun run serve` (the dev loop already builds the
 SPA before serving — marketing piggybacks on that), and for Netlify
 deploys via `netlify.toml`. One pipeline, no dev↔prod drift.
 
@@ -135,20 +135,20 @@ Marketing-only iteration with HMR (no viewer):
 
 ```bash
 cd marketing
-yarn install
-yarn dev                         # http://localhost:3000
+bun install
+bun run dev                         # http://localhost:3000
 ```
 
 Full prod-shape preview (viewer + marketing, merged tree):
 
 ```bash
-yarn serve                       # builds both, serves on :8080
+bun run serve                       # builds both, serves on :8080
 ```
 
 Just the marketing static export, no viewer:
 
 ```bash
-cd marketing && yarn build
+cd marketing && bun run build
 npx serve out                    # http://localhost:3000
 ```
 

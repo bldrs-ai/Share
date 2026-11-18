@@ -134,7 +134,8 @@ appearance = {
 ```
 
 `residency` is the **at-rest** setting; `motionResidency` (B3 of
-demand-tiled-rendering.md, behind `?feature=motionResidency`) is what holds
+demand-tiled-rendering.md, on by default; `?feature=disableMotionResidency`
+turns it off) is what holds
 while the camera moves — a subset of the at-rest set, restored when the
 camera stops. Under `mode: 'auto'` the percent is inert and the frame
 budget picks the fraction. Defaults: `{percent: 100, metric: 'occupancy'}`

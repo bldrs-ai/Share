@@ -200,12 +200,14 @@ export class EngineSession {
    * @param {boolean} [options.verbose] engine debug logging (`glbVerbose`)
    * @param {object} [options.flags] the engine-relevant feature flags,
    *   snapshotted: a worker cannot read the page's `?feature=` (§4 `init`)
+   * @param {object|null} [options.device] spawnEngine.js#engineDeviceSnapshot,
+   *   for the source policy's cap
    * @param {number} [options.timeoutMs] see ENGINE_INIT_TIMEOUT_MS, covering
    *   the worker's hello too; rejects with a ProtocolMismatchError if all the
    *   engine sent was another version's
    * @return {Promise<object>} `{conwayVersion, capabilities, wasmBytes, initMs}`
    */
-  async init({verbose = false, flags = {}, timeoutMs = ENGINE_INIT_TIMEOUT_MS} = {}) {
+  async init({verbose = false, flags = {}, device = null, timeoutMs = ENGINE_INIT_TIMEOUT_MS} = {}) {
     // One clock from the start, covering the worker's hello as well as the
     // init reply: a worker script whose fetch stalls without an `error`
     // event never says hello, and a wait on hello alone would hang the load
@@ -230,7 +232,7 @@ export class EngineSession {
           throw new ProtocolMismatchError(ENGINE_PROTOCOL_VERSION, helloVersion)
         }
       }
-      result = await Promise.race([this.request(Op.INIT, {epoch: this.epoch, verbose, flags}), timeout])
+      result = await Promise.race([this.request(Op.INIT, {epoch: this.epoch, verbose, flags, device}), timeout])
     } finally {
       clearTimeout(timer)
     }
@@ -261,12 +263,15 @@ export class EngineSession {
    * @param {object} [options.stream] `{previews, batchSize, startPaused}` to
    *   stream the geometry after the index; `startPaused` waits for
    *   {@link pump}`('run')` before the first batch
+   * @param {object|null} [options.sourceOverride] `{windowed: true, failure}`
+   *   for this open only: the windowed retry after a buffered open ran out
+   *   of memory on an earlier engine (engineModelLoad.js#parse)
    * @return {Promise<object>} `{modelID, windowed, format, openMs, wasmBytes}`
    */
-  async open(source, {format = null, stream = null} = {}) {
+  async open(source, {format = null, stream = null, sourceOverride = null} = {}) {
     const {source: sent, transfer} = transferableSource(source)
     try {
-      const result = await this.request(Op.OPEN, {source: sent, format, stream}, transfer)
+      const result = await this.request(Op.OPEN, {source: sent, format, stream, sourceOverride}, transfer)
       if (result.failure) {
         // The engine's classification, for unsupportedSchema.js#openModelFailure
         // to turn into the user-facing error, as the main-thread path does.

@@ -1,0 +1,8 @@
+# Same install policy as the repo root's bunfig.toml (read that one for the
+# reasons): Bun installs, isolated linker, exact pins. This file is separate
+# because Bun reads bunfig.toml from the project being installed, and
+# tools/marketing/build.js installs this directory on its own.
+
+[install]
+linker = "isolated"
+exact = true

@@ -42,6 +42,26 @@ async function flushPick() {
 
 
 /**
+ * {@link flushPick}, then more turns until `isDone` holds, for the
+ * compressed path: how many turns the `DecompressionStream` round trip
+ * takes isn't fixed, and under the full parallel suite ten weren't always
+ * enough (the write hadn't happened yet when the test asserted it).
+ * Bounded, so a pick that really never settles still fails on the
+ * assertion after it, not on Jest's timeout.
+ *
+ * @param {Function} isDone
+ * @return {Promise<void>}
+ */
+async function flushPickUntil(isDone) {
+  await flushPick()
+  const MAX_TURNS = 500
+  for (let i = 0; i < MAX_TURNS && !isDone(); i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
+
+
+/**
  * A picked file with the surface this code reads: `slice().arrayBuffer()` for
  * the header sniff. jsdom's own `File` has neither under
  * `jest-fixed-jsdom`, while the global `Blob` (node's) has both, as a
@@ -138,7 +158,7 @@ describe('loadLocalFile', () => {
     const picked = pickedFile(gzipped, 'index.glb.gz')
     Object.defineProperty(inputElement, 'files', {value: [picked]})
     inputElement.dispatchEvent(new Event('change', {bubbles: true}))
-    await flushPick()
+    await flushPickUntil(() => opfsWriteModel.mock.calls.length > 0)
 
     // Storage id `<blob-uuid>.glb`, display name the user's own `.glb.gz`.
     expect(opfsWriteModel).toHaveBeenCalledWith('testId', 'index.glb.gz', 'testId.glb', 7)
@@ -227,7 +247,7 @@ describe('loadLocalFile', () => {
     const gzipped = new Uint8Array(gzipSync(Buffer.from(GLB_BYTES)))
     Object.defineProperty(inputElement, 'files', {value: [pickedFile(gzipped, 'index.glb.gz')]})
     inputElement.dispatchEvent(new Event('change', {bubbles: true}))
-    await flushPick()
+    await flushPickUntil(() => onLoad.mock.calls.length > 0)
 
     expect(onLoad).toHaveBeenCalledWith(
       expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.glb$/),

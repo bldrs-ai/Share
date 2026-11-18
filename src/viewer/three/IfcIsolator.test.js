@@ -1679,6 +1679,23 @@ describe('viewer/three/IfcIsolator', () => {
       expect(visibility(mesh)).toEqual([true, true, true, false])
     })
 
+    // open-205 (#2023): a disposed viewer can be held for a while by closures
+    // from before an in-app switch; its isolator must not keep the old model
+    // (and, on the main-thread engine, its IfcAPI) reachable through it.
+    it('dispose lets go of the model and the subsets cut from it', () => {
+      const {iso} = setupBatchedIsolator()
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+      iso.isolateSelectedElements()
+      expect(iso.ifcModel).not.toBeNull()
+
+      iso.dispose()
+
+      expect(iso.ifcModel).toBeNull()
+      expect(iso.unhiddenSubset).toBeNull()
+      expect(iso.isolationSubset).toBeNull()
+      expect(iso.revealedElementsSubset).toBeNull()
+    })
+
     it('preserves residency\'s eviction across an isolate / un-isolate round trip', () => {
       // Residency (ResidencyController) owns the same setVisibleAt bit. Its
       // intent must survive isolation rather than being blanket-restored —

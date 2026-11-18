@@ -1,4 +1,4 @@
-/* eslint-disable require-await */
+/* eslint-disable require-await, no-magic-numbers */
 // The GA diagnostics Loader#load sends after a SUCCESSFUL load
 // (reportLoadDiagnostics.js, Share#2106 follow-ups): `preview_unit_skipped`
 // once per load that skipped any preview unit, and `engine_source_buffered`
@@ -112,7 +112,8 @@ function workerModel(summary) {
 
 /** @return {Array} the diagnostics events GA got */
 function diagnosticEvents() {
-  return gtagEvent.mock.calls.filter(([name]) => name === 'preview_unit_skipped' || name === 'engine_source_buffered')
+  return gtagEvent.mock.calls.filter(([name]) =>
+    ['preview_unit_skipped', 'engine_source_buffered', 'engine_source_fallback'].includes(name))
 }
 
 
@@ -202,6 +203,39 @@ describe('Loader#load GA diagnostics', () => {
     const viewer = makeViewer(workerModel({source: {kind: 'syncHandle'}}))
     await load(SECRET_PATH, viewer, () => {}, false, () => {})
     expect(diagnosticEvents()).toEqual([])
+  })
+
+  // The source policy (engine/sourcePolicy.js, Share#2139): a buffered open
+  // it chose over a store is the default path, not a degraded one.
+  it('sends nothing for a buffered open the source policy chose', async () => {
+    for (const reason of ['underCap', 'heldByBlobStore']) {
+      gtagEvent.mockClear()
+      const viewer = makeViewer(workerModel({source: {kind: 'resident'},
+        sourceMode: {mode: 'buffered', reason, bytes: 5, format: 'ifc', storeKind: 'syncHandle'}}))
+      await load(EXTERNAL_PATH, viewer, () => {}, true, () => {})
+      expect(diagnosticEvents()).toEqual([])
+    }
+  })
+
+  it('sends one engine_source_fallback, and no engine_source_buffered, when the policy\'s buffered open fell back', async () => {
+    const viewer = makeViewer(workerModel({source: {kind: 'syncHandle'},
+      sourceMode: {mode: 'windowed', reason: 'bufferedFailed', failure: 'RangeError', bytes: 300 * 1024 * 1024,
+        format: 'ifc', storeKind: 'syncHandle', capBytes: 1024 * 1024 * 1024}}))
+    await load(SECRET_PATH, viewer, () => {}, false, () => {})
+    expect(diagnosticEvents()).toEqual([
+      ['engine_source_fallback', {format: 'ifc', store: 'syncHandle', failure: 'RangeError', size_class: '100MB-1GB'}],
+    ])
+    expect(JSON.stringify(diagnosticEvents())).not.toMatch(GA_PATTERN)
+  })
+
+  it('still reports a buffered open the store open refused, under the policy too', async () => {
+    const viewer = makeViewer(workerModel({source: {kind: 'resident'},
+      sourceMode: {mode: 'buffered', reason: 'windowedRefused', bytes: 5, format: 'step', storeKind: 'blob'}}),
+    undefined, {OpenModelStream: jest.fn()})
+    await load(EXTERNAL_PATH, viewer, () => {}, true, () => {})
+    expect(diagnosticEvents()).toEqual([
+      ['engine_source_buffered', {reason: 'store-open-refused', size_class: '<10MB'}],
+    ])
   })
 
   it('sends nothing for a main-thread load, which has no engine session', async () => {

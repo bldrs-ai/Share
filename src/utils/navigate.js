@@ -1,4 +1,5 @@
 import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
+import {isFeatureEnabled} from '../FeatureFlags'
 import {isLocalOnlyPath} from '../routes/localOnly'
 import {disablePageReloadApprovalCheck} from './event'
 
@@ -124,11 +125,12 @@ export function navWith(navigate, path, options = {
 /**
  * Merge the current query string into `path` when it carries none of its
  * own, inserting it before any hash. Opening a model is a full page load
- * (see `navigateToModel`), and most call sites build their destination
- * from path segments alone (`${appPrefix}/v/local-only/${filename}`), so without
- * this the reload drops `?feature=…` and the user falls out of whatever
- * flags they were running — same reason `homeModelPath` carries the query
- * forward across the cache-clear redirect.
+ * by default (see `navigateToModel`), and most call sites build their
+ * destination from path segments alone (`${appPrefix}/v/local-only/${filename}`),
+ * so without this the reload drops `?feature=…` and the user falls out of
+ * whatever flags they were running — same reason `homeModelPath` carries the
+ * query forward across the cache-clear redirect. An in-app open needs it as
+ * much: `isFeatureEnabled` reads the flags from the URL it lands on.
  *
  * @param {string} path Destination, may contain its own search and/or hash
  * @return {string}
@@ -147,13 +149,19 @@ function withCurrentSearch(path) {
 
 
 /**
- * Navigate to a model path with a full page reload to free memory.
- * During unit tests, falls back to SPA navigate to avoid jsdom reloads.
- * The current query string is carried forward when the target doesn't
- * specify its own (see `withCurrentSearch`).
+ * Navigate to a model path. A full page load by default, which frees the
+ * previous model's memory with the page; under `?feature=spaModelNav`
+ * (open-205, #2021) an in-app react-router transition instead, which keeps
+ * the page and leaves freeing the previous model to the viewer's teardown
+ * (design/new/in-app-model-switch.md §2, §6). During unit tests, falls back
+ * to SPA navigate to avoid jsdom reloads. The current query string is
+ * carried forward when the target doesn't specify its own (see
+ * `withCurrentSearch`), either way.
  *
  * @param {string|object} target Destination path or location-like object
- * @param {Function} [navigate] Optional react-router navigate for test fallback
+ * @param {Function} [navigate] react-router navigate: required for the
+ *   in-app path. Every caller passes one; a call without one still loads
+ *   the page, flag or not, rather than not navigating at all.
  */
 export function navigateToModel(target, navigate) {
   // Avoid blocking reload prompts
@@ -182,6 +190,14 @@ export function navigateToModel(target, navigate) {
     }
   }
 
+  // Read at call time, like every `isFeatureEnabled` check: the flag rides
+  // in the query string `withCurrentSearch` just carried forward, so the
+  // model it opens keeps it.
+  if (typeof navigate === 'function' && isFeatureEnabled('spaModelNav')) {
+    navigate(path)
+    return
+  }
+
   // Force a full reload in normal runtime
   if (path && typeof window !== 'undefined' && window.location) {
     // Using assign to preserve back button history
@@ -192,15 +208,22 @@ export function navigateToModel(target, navigate) {
 
 /**
  * Navigate to a local file held in memory (`loader/inMemoryUploads.js`), in
- * a browser without OPFS (#1906). Unlike `navigateToModel` this is an in-app
- * (react-router) transition, never a page load: the `File` lives only in this
- * page's memory, so a page load would end it before the Loader could read it.
- * The current query string is carried forward, as `navigateToModel` does.
+ * a browser without OPFS (#1906). Unlike a default `navigateToModel` this is
+ * always an in-app (react-router) transition, never a page load, flag or
+ * not: the `File` lives only in this page's memory, so a page load would end
+ * it before the Loader could read it. Otherwise it is `navigateToModel`'s
+ * in-app path: the current query string is carried forward, and the
+ * upload guard is disarmed, as every other open does before it leaves a
+ * model (#2021). The guard then belongs to the model being opened:
+ * Loader#load arms it again for this upload.
  *
  * @param {string} path `${appPrefix}/v/local-only/<uuid>.<ext>`
  * @param {Function} navigate react-router navigate
  */
 export function navigateToInMemoryModel(path, navigate) {
+  try {
+    disablePageReloadApprovalCheck()
+  } catch (e) {/* ignore */}
   navigate(withCurrentSearch(path))
 }
 

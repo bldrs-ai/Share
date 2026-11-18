@@ -1,5 +1,6 @@
 import {Page, expect, test} from '@playwright/test'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
+import {withLook} from '../../tests/e2e/look'
 import {waitForModelReady} from '../../tests/e2e/models'
 import {clearOpfs, homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
 
@@ -11,7 +12,7 @@ const {beforeEach} = test
 
 // A real IFC of a few hundred instances, loaded as a batched model, so the
 // hover goes through ShareViewer's batched branch and the overlay draws it.
-// Copied to `__test_fixtures__/` by `yarn test-flows-build`. The default URL:
+// Copied to `__test_fixtures__/` by `bun run test-flows-build`. The default URL:
 // the overlay is on by default (`disableHoverOverlay` turns it off).
 const MODEL_URL = '/share/v/p/__test_fixtures__/Momentum.ifc'
 // The hosted STEP logo: seven block occurrences of two part shapes, so a
@@ -25,6 +26,11 @@ const MODEL_TIMEOUT_MS = 120_000
 // Longer than the slowest hover interval (hoverPick.js MAX_INTERVAL_MS), so
 // any trailing pick has fired.
 const HOVER_SETTLE_MS = 600
+// Long enough for rest (MotionResidency's rule) and a FADE_IN_MS fade at
+// SwiftShader's frame rate.
+const AO_SETTLE_TIMEOUT_MS = 20_000
+// Base frames retaken while a settle window is open (findHoverPoint).
+const MAX_BASE_RETAKES = 3
 // Dense enough to land on the small STEP logo at the phone viewport; points
 // that miss the model are skipped cheaply (`findHoverPoint`).
 const GRID_COLUMNS = 8
@@ -272,6 +278,21 @@ async function openModel(page: Page, url: string = MODEL_URL) {
 
 
 /**
+ * Turn the look's ambient occlusion on or off, with a full paint after.
+ *
+ * @param page
+ * @param enabled
+ */
+async function setAO(page: Page, enabled: boolean) {
+  await page.evaluate((on) => {
+    const viewer = (window as any).store.getState().viewer
+    viewer.postProcessor.setAOEnabled(on)
+  }, enabled)
+  await nextFrame(page, 'aoChanged', 'full')
+}
+
+
+/**
  * Hover `point` as the user does, catching the frame the hover paints.
  *
  * @param page
@@ -288,6 +309,45 @@ async function hoverAndCatch(page: Page, point: {x: number, y: number}, name: st
     return null
   }
   return await caught
+}
+
+
+/**
+ * Wait until AO is back at full and nothing is fading it (motionAO.js): no
+ * camera motion, no load, no fade in progress. A camera move, a resize's
+ * camera update or a load drops AO and fades it back in over FADE_IN_MS, a
+ * few paints apart under SwiftShader. A frame cached partway through that
+ * fade and compared against a full repaint at a later level differs where
+ * AO shades it: hoverOverlay.spec was intermittently red on CI from #2167
+ * on, in a different test each time.
+ *
+ * @param page
+ */
+async function waitForStillAO(page: Page) {
+  await expect.poll(() => page.evaluate(() => {
+    const viewer = (window as any).store.getState().viewer
+    const motion = viewer._motionAO
+    return viewer.postProcessor.getAOLevel() === 1 &&
+      (!motion || (motion.fade_ === null && !motion.moving && !motion.loading))
+  }), {message: 'AO back at full, no fade running', timeout: AO_SETTLE_TIMEOUT_MS}).toBe(true)
+}
+
+
+/**
+ * @param page
+ * @return whether the viewer painted nothing for HOVER_SETTLE_MS, and has no
+ *   settle window open or owing its closing paint at the end of it
+ */
+async function staysIdle(page: Page): Promise<boolean> {
+  const paints = () => page.evaluate(() =>
+    (window as any).store.getState().viewer.context.getRenderDemand().stats.paints)
+  const before = await paints()
+  await page.waitForTimeout(HOVER_SETTLE_MS)
+  const isSettling = await page.evaluate(() => {
+    const demand = (window as any).store.getState().viewer.context.getRenderDemand()
+    return demand.isSettlePending === true || demand.now() < demand.settleUntilMs
+  })
+  return !isSettling && await paints() === before
 }
 
 
@@ -311,9 +371,24 @@ async function findHoverPoint(page: Page,
     if (!isOnBatch) {
       continue
     }
+    // Let the picker's own pick of that move land before clearing it: with
+    // paints this expensive, a fast move's pick waits for a later frame
+    // (hoverPick.js#createFrameHoverPicker). Cleared first, it lands after
+    // and hovers this very element, so the 1 px move below changes nothing
+    // and paints nothing (the STEP test on mobile, intermittently).
+    await page.waitForTimeout(HOVER_SETTLE_MS)
     await page.evaluate(() => (window as any).__ovl.clearHover())
     await page.waitForTimeout(HOVER_SETTLE_MS)
     await nextFrame(page, 'base', 'full')
+    // A store change just after the base paint (the load snackbar hiding
+    // itself) opens a settle window. With paints as expensive as they are
+    // here, its one paint comes as the window closes (renderDemand.js
+    // #frameKind), which can be the frame the hover's catch below takes.
+    // So the base counts only once the viewer has stayed idle after it: no
+    // other paint, and no settle window open or owed.
+    for (let i = 0; i < MAX_BASE_RETAKES && !await staysIdle(page); i++) {
+      await nextFrame(page, 'base', 'full')
+    }
     const kind = await hoverAndCatch(page, point, 'hover')
     if (kind !== null && await accept(point)) {
       return {point, kind}
@@ -347,6 +422,9 @@ async function expectOverlayHoverMatchesFull(page: Page) {
  */
 describeMobileAndDesktop('viewer/three/hoverOverlay', (ff) => {
   beforeEach(async ({page}) => {
+    // About the look (its AO and its hover cache): opt in, since the
+    // Playwright build has it off by default (src/tests/e2e/look.ts).
+    await withLook(page)
     await homepageSetup(page)
     await setIsReturningUser(page.context())
     await clearOpfs(page)
@@ -366,9 +444,42 @@ describeMobileAndDesktop('viewer/three/hoverOverlay', (ff) => {
     expect(off / await pixelCount(page)).toBeLessThanOrEqual(SAME_FRAME_PIXELS)
   })
 
+  test('a glass hover paints as an overlay that matches a full repaint', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS * 2)
+    await openModel(page)
+    // Every batch drawn as IFC glazing is (transparent, depthWrite off;
+    // flatMeshToBatchedModel.js), so whatever the hover lands on is glass.
+    await page.evaluate(() => {
+      (window as any).store.getState().model.traverse((o: any) => {
+        if (o.isBatchedMesh) {
+          o.material.transparent = true
+          o.material.opacity = 0.5
+          o.material.depthWrite = false
+          o.material.needsUpdate = true
+        }
+      })
+    })
+    const {kind} = await findHoverPoint(page)
+    // Not the recolour's full repaint of the model (Seestrasse's façade, the
+    // owner's preview): the overlay drew the pane on the cached frame.
+    expect(kind).toBe('overlay')
+    expect(await mask(page, 'shown', 'base', 'hover')).toBeGreaterThan(MIN_HIGHLIGHT_PIXELS)
+    // A full repaint draws the overlay after the scene too, so it shows the
+    // same tinted pane.
+    expect(await nextFrame(page, 'full', 'full')).toBe('full')
+    const off = await mask(page, 'off', 'hover', 'full')
+    expect(off / await pixelCount(page)).toBeLessThanOrEqual(SAME_FRAME_PIXELS)
+  })
+
+
   test('an element partly behind another is highlighted only where it is seen', async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS * 2)
     await openModel(page)
+    // Occlusion only, so AO off: the truth below is the recolour, which AO
+    // shades over the hovered element, while the overlay draws it on top of
+    // the AO'd cache without AO (inPlacePass.js, #2167). That AO-on overlay
+    // frames match a full repaint is the first test's claim.
+    await setAO(page, false)
     // A hovered element whose silhouette (drawn alone) has enough pixels the
     // shipped hover (the recolour, drawn in full) does not light: hidden
     // behind something else.
@@ -442,6 +553,8 @@ describeMobileAndDesktop('viewer/three/hoverOverlay', (ff) => {
     await page.mouse.move(point.x, point.y)
     await page.mouse.wheel(0, WHEEL_ZOOM_DELTA)
     await page.waitForTimeout(HOVER_SETTLE_MS * 2)
+    // The zoom faded AO out; both frames below must be taken at full AO.
+    await waitForStillAO(page)
     // An overlay frame now composes from a cache of the NEW pose: the same
     // pixels as a full repaint, and not the old frame's.
     await nextFrame(page, 'after', 'overlay')
@@ -454,6 +567,11 @@ describeMobileAndDesktop('viewer/three/hoverOverlay', (ff) => {
   test('a double-click selects what the hover highlighted', async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS)
     await openModel(page)
+    // AO off: under SwiftShader a full paint with N8AO (~300 ms) keeps the
+    // hover picker's slow-paint gate shut (hoverPick.js, EXPENSIVE_PAINT_MS),
+    // so the re-hover below finds nothing to pick. On a GPU it's ms. AO with
+    // hover is the first test's claim.
+    await setAO(page, false)
     const {point} = await findHoverPoint(page)
     const {parents} = await hovered(page)
     expect(parents.length).toBeGreaterThan(0)
@@ -498,6 +616,7 @@ describeMobileAndDesktop('viewer/three/hoverOverlay', (ff) => {
     await page.setViewportSize(RESIZED_VIEWPORT)
     await expect.poll(() => pixelCount(page)).not.toBe(before)
     await page.waitForTimeout(HOVER_SETTLE_MS)
+    await waitForStillAO(page)
     await expectOverlayHoverMatchesFull(page)
   })
 

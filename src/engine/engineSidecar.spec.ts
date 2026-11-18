@@ -31,6 +31,11 @@ const MODELS = [
   {name: 'IFC', path: '/share/v/p/index.ifc'},
 ]
 
+// The source policy (engine/sourcePolicy.js, Share#2139) parses these tiny
+// models BUFFERED by default; the first and Blob-store legs below are of the
+// WINDOWED parse and its export, so they take the policy's kill switch.
+// engineSourcePolicy.spec.ts covers the buffered parse's sidecar and reopen.
+const WINDOWED = 'disableBufferedSource'
 const LOAD_TIMEOUT_MS = 90_000
 const CACHE_TIMEOUT_MS = 60_000
 
@@ -127,19 +132,52 @@ describeMobileAndDesktop('Engine worker: index sidecar reopen', () => {
       const glbLogs = captureGlbLogs(page)
       const first = watchEngineWorker(page)
       // The worker is the default engine (engine-worker.md §7 step 9).
-      await page.goto(path)
-      expect(await engineIndexLine(page)).toMatch(/^Engine index: parsed; sidecar saved \(\d+\.\d MB\)$/)
+      await page.goto(`${path}?feature=${WINDOWED}`)
+      expect(await engineIndexLine(page)).toMatch(/^Engine index: parsed; sidecar saved \(\d+\.\d MB, (?:sha256|fnv)\)$/)
       await first.expectWorkerEngine()
       expect(await dropGlbArtifact(page, glbLogs), 'the worker load cached one artifact').toBe(1)
 
       resetGlbLogs(glbLogs)
       const reopen = watchEngineWorker(page)
       await page.reload()
-      expect(await engineIndexLine(page)).toMatch(/^Engine index: from sidecar \(\d+\.\d MB\), no parse$/)
+      expect(await engineIndexLine(page)).toMatch(/^Engine index: from sidecar \(\d+\.\d MB, (?:sha256|fnv)\), no parse$/)
       await reopen.expectWorkerEngine()
       expect(glbLogs.some((line) => line.includes('cache MISS')), 'the reopen went to the engine').toBe(true)
     })
   }
+
+  // Share#2092: the parse records its source hash natively by default
+  // (SOURCE_HASH_ALGORITHM 'sha256Blocks', conway#783), and `disableNativeSourceHash`
+  // keeps conway's FNV. A sidecar names the algorithm it was written under, so
+  // the reopen's full source check passes whichever way the flag is set on
+  // either side: an FNV sidecar already in a user's OPFS must keep opening
+  // after the default changes, and a native one must open under the kill switch.
+  for (const {from, to, label, digest} of [
+    {from: 'disableNativeSourceHash', to: '', label: 'an FNV sidecar reopens under the native default', digest: 'fnv'},
+    {from: '', to: 'disableNativeSourceHash', label: 'a native sidecar reopens under the kill switch', digest: 'sha256'},
+  ]) {
+    test(`${label}, from the index without a parse`, async ({page}) => {
+      test.setTimeout(3 * LOAD_TIMEOUT_MS)
+      const glbLogs = captureGlbLogs(page)
+      const path = MODELS[0].path
+      const flags = (extra: string) => [WINDOWED, extra].filter(Boolean).join(',')
+      await page.goto(`${path}?feature=${flags(from)}`)
+      // The line names the digest the parse recorded: the sidecar is what the
+      // reopen verifies against, so it is the flag at SAVE time that decides.
+      expect(await engineIndexLine(page)).toMatch(
+        new RegExp(`^Engine index: parsed; sidecar saved \\(\\d+\\.\\d MB, ${digest}\\)$`))
+      expect(await dropGlbArtifact(page, glbLogs), 'the worker load cached one artifact').toBe(1)
+
+      resetGlbLogs(glbLogs)
+      // A different URL, so a navigation rather than a reload: the flag is
+      // the only thing that changes, the OPFS copy and its sidecar stay.
+      await page.goto(`${path}?feature=${flags(to)}`)
+      expect(await engineIndexLine(page)).toMatch(
+        new RegExp(`^Engine index: from sidecar \\(\\d+\\.\\d MB, ${digest}\\), no parse$`))
+      expect(glbLogs.some((line) => line.includes('cache MISS')), 'the reopen went to the engine').toBe(true)
+    })
+  }
+
 
   // Firefox and Safari have no read-only sync access handles, so their engine
   // reads the source through the Blob store; `disableEngineSyncHandle` puts
@@ -152,8 +190,8 @@ describeMobileAndDesktop('Engine worker: index sidecar reopen', () => {
       async ({page}) => {
         test.setTimeout(3 * LOAD_TIMEOUT_MS)
         const glbLogs = captureGlbLogs(page)
-        await page.goto(`${path}?feature=disableEngineSyncHandle`)
-        expect(await engineIndexLine(page)).toMatch(/^Engine index: parsed; sidecar saved \(\d+\.\d MB\)$/)
+        await page.goto(`${path}?feature=disableEngineSyncHandle,${WINDOWED}`)
+        expect(await engineIndexLine(page)).toMatch(/^Engine index: parsed; sidecar saved \(\d+\.\d MB, (?:sha256|fnv)\)$/)
         expect(await sourceIoLine(page)).toMatch(
           /^Engine source I\/O: Blob store \(disabled; whole file held, \d+ reads from memory\), 1 reads, /)
         expect(await dropGlbArtifact(page, glbLogs), 'the worker load cached one artifact').toBe(1)
@@ -163,7 +201,7 @@ describeMobileAndDesktop('Engine worker: index sidecar reopen', () => {
 
         resetGlbLogs(glbLogs)
         await page.reload()
-        expect(await engineIndexLine(page)).toMatch(/^Engine index: from sidecar \(\d+\.\d MB\), no parse$/)
+        expect(await engineIndexLine(page)).toMatch(/^Engine index: from sidecar \(\d+\.\d MB, (?:sha256|fnv)\), no parse$/)
         expect(await sourceIoLine(page)).toMatch(/^Engine source I\/O: Blob store \(disabled; whole file held, /)
       })
   }

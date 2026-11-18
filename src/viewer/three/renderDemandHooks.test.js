@@ -190,6 +190,25 @@ describe('viewer/three/renderDemandHooks', () => {
       expect(probe.changed()).toBe(true)
     })
 
+    // The fork context's `renderer` is the IfcRenderer wrapper, not the
+    // WebGLRenderer `getRenderer()` returns, and MeshClipper binds its planes
+    // there (MeshClipper#_syncClippingBindings). Reading only the real
+    // renderer's empty array missed every drag (#2171).
+    it('sees a cut plane dragged on the renderer wrapper MeshClipper binds', () => {
+      const context = makeContext()
+      const plane = new Plane(new Vector3(1, 0, 0), 0)
+      context.renderer = {renderer: context.getRenderer(), clippingPlanes: [plane]}
+      const probe = createSceneProbe(context)
+      probe.snapshot()
+      expect(probe.changed()).toBe(false)
+      plane.constant = -2
+      expect(probe.changed()).toBe(true)
+      probe.snapshot()
+      context.renderer.clippingPlanes.length = 0
+      expect(probe.changed()).toBe(true)
+    })
+
+
     it('reads a context mid-dispose as unchanged rather than throwing', () => {
       const probe = createSceneProbe({getCamera: () => {
         throw new Error('disposed')

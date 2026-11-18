@@ -11,7 +11,7 @@ import {dismissLoadGrace} from './utils'
  *
  * - **`bldrs-ai/test-models/*`** — handled end-to-end by the dev server.
  *   Fixtures live under `src/tests/fixtures/github/bldrs-ai/test-models/`
- *   and are copied into `docs/__test_fixtures__/` by `yarn test-flows-build`.
+ *   and are copied into `docs/__test_fixtures__/` by `bun run test-flows-build`.
  *   The MSW Contents API handler returns a `download_url` that points at
  *   `/__test_fixtures__/...`, the SPA fetches it, the dev server serves the
  *   real fixture bytes. No `page.route` needed.

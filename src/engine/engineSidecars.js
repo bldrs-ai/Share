@@ -31,6 +31,42 @@
 // Worker-safe: no DOM, no store.
 
 
+import {readSidecarSourceIdentity} from '@bldrs-ai/conway/src/step/parsing/index_sidecar'
+
+
+/**
+ * Which source digest a sidecar's header names, for the load report's
+ * `Engine index:` line (Share#2092): 'sha256' (conway's native block digest,
+ * `hashAlgorithm` 2) or 'fnv' (the per-byte loop, id 1; an absent slot reads
+ * as FNV, the only id before the setting existed). Read from the header with
+ * conway's own reader, the public way to see what an export or a persisted
+ * sidecar recorded; undefined when the bytes do not decode, or name an id
+ * this build has no word for (a later conway's third algorithm must not be
+ * reported as FNV), so the line just leaves the digest out.
+ *
+ * @param {Uint8Array|undefined} bytes a sidecar blob
+ * @return {string|undefined}
+ */
+export function sidecarHashName(bytes) {
+  if (!bytes) {
+    return undefined
+  }
+  try {
+    const id = readSidecarSourceIdentity(bytes).hashAlgorithm
+    if (id === SIDECAR_HASH_SHA256_BLOCKS) {
+      return 'sha256'
+    }
+    return id === undefined || id === SIDECAR_HASH_FNV ? 'fnv' : undefined
+  } catch {
+    return undefined
+  }
+}
+
+
+/** conway's sidecar `hashAlgorithm` ids (index_sidecar.ts). */
+const SIDECAR_HASH_FNV = 1
+const SIDECAR_HASH_SHA256_BLOCKS = 2
+
 /** The OPFS directory sidecars are kept in. */
 export const SIDECAR_DIR = 'engine-index-sidecars'
 

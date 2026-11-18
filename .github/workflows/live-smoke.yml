@@ -80,13 +80,19 @@ jobs:
     steps:
       # First, and without a secret: the resolve step below runs a script
       # from the checkout (tools/live-smoke/previewStatus.mjs).
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: yarn
+      # Bun installs (bun.lock, bunfig.toml); Node above stays the runtime.
+      # Keep bun-version in step with package.json's packageManager and
+      # netlify.toml's BUN_VERSION. The one third-party action here, so it is
+      # pinned to a commit rather than a movable tag.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
       # Event values reach the shell only through env, never through ${{ }}
       # interpolation into a script.
       # No secret is in this step's environment, nor in any step up to and
@@ -151,7 +157,7 @@ jobs:
       - name: Install
         if: steps.target.outputs.run == 'true'
         run: |
-          yarn install --frozen-lockfile --prefer-offline
+          bun install --frozen-lockfile
           npx playwright install --with-deps chromium firefox webkit
 
       # GitHub masks a secret only where its whole value is printed; the
@@ -198,11 +204,11 @@ jobs:
               args+=("--project=$project")
             fi
           done
-          yarn test-flows-live "${args[@]}"
+          bun run test-flows-live "${args[@]}"
 
       - name: Upload the report
         if: always() && steps.target.outputs.run == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: live-smoke-report
           path: tools/playwright-report-live

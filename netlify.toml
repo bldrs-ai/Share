@@ -1,9 +1,9 @@
 # Skip the deploy preview when the only changes are documentation. The script
 # exits 0 to skip and 1 to build; logic and edge cases are documented inline.
 #
-# `yarn build` chains through build-share → build-marketing
+# `bun run build` chains through build-share → build-marketing
 # (tools/marketing/build.js), which builds the Next.js marketing site and
-# overlays marketing/out/ onto docs/. Same script runs for `yarn serve`
+# overlays marketing/out/ onto docs/. Same script runs for `bun run serve`
 # locally, so dev and prod produce identical merged trees:
 #   /                  → SPA (docs/index.html — react-router → IFC homepage)
 #   /share/*           → SPA (public/_redirects /share/* /index.html 200)
@@ -18,13 +18,13 @@
 # static export emits no out/index.html (root page.tsx removed), so the
 # overlay does not clobber the SPA's docs/index.html at /.
 [build]
-  command = "yarn build"
+  command = "bun run build"
   publish = "docs"
   ignore = "bash tools/netlify/ignore-build.sh"
 
 # Pin the build runtime. Without this, Netlify picks its build image's
 # default (18 on the current Noble image), which `package.json`'s
-# `engines.node: ">=20"` rejects — yarn then fails the install and the
+# `engines.node: ">=20"` rejects — the install then fails and the
 # whole deploy. That's exactly how the prod deploy of #1733 broke, while
 # deploy previews stayed green: previews and production were then two
 # separate Netlify projects, and only one of them carried a NODE_VERSION in
@@ -36,15 +36,25 @@
 # .github/workflows/{main,test-flows}.yml, so CI tests what Netlify ships.
 [build.environment]
   NODE_VERSION = "24"
+  # Netlify installs with Bun because it finds bun.lock (and package.json's
+  # `packageManager: bun@…`); no yarn.lock exists to compete. Pin the version:
+  # the build image's default Bun can be older than the one that wrote
+  # bun.lock, and an older Bun can't parse a newer lockfile. Keep in step
+  # with `packageManager` and the `bun-version` in .github/workflows/*.yml.
+  # --frozen-lockfile fails the deploy if bun.lock and package.json disagree,
+  # the same check CI runs. Node stays the runtime (`bun run` executes package
+  # scripts with node); Bun only installs.
+  BUN_VERSION = "1.4.4"
+  BUN_FLAGS = "--frozen-lockfile"
 
-# Local development. `npx netlify dev` launches `yarn serve-prod` (the
+# Local development. `npx netlify dev` launches `bun run serve-prod` (the
 # esbuild static-file server on :8080) and serves netlify/functions/* on
 # the same origin at :8888 so /.netlify/functions/* reaches them. Without
 # this block, functions only run on deploy previews — the esbuild server
 # 404s on the function path. Used by the GitHub OAuth broker (PR1 of
 # identity-decoupling) and any future function-backed feature.
 [dev]
-  command = "yarn serve-prod"
+  command = "bun run serve-prod"
   targetPort = 8080
   port = 8888
   publish = "docs"

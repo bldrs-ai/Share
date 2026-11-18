@@ -339,7 +339,7 @@ describe('ResidencyControl residency section', () => {
 })
 
 
-describe('ResidencyControl while-moving section (motionResidency)', () => {
+describe('ResidencyControl while-moving section (motion residency)', () => {
   /**
    * A viewer context double: the seams MotionResidency attaches to.
    *
@@ -362,11 +362,17 @@ describe('ResidencyControl while-moving section (motionResidency)', () => {
   }
 
   /**
-   * @param {boolean} flag motionResidency on or off
+   * Motion residency is on by default; its only flag is the off switch, so
+   * "off" is `disableMotionResidency` on. Both positions are pinned here, as
+   * the Shading gate's are above; the shipped default is the E2E's
+   * (viewer/residency/motionResidency.spec.ts, which navigates with no
+   * `?feature=`).
+   *
+   * @param {boolean} isOn motion residency on, or off by its kill switch
    * @return {Promise<object>} render result
    */
-  async function renderWithViewer(flag) {
-    mockIsFeatureEnabled.mockImplementation((name) => (name === 'motionResidency' ? flag : false))
+  async function renderWithViewer(isOn) {
+    mockIsFeatureEnabled.mockImplementation((name) => (name === 'disableMotionResidency' ? !isOn : false))
     const viewer = viewerDouble()
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
@@ -387,7 +393,7 @@ describe('ResidencyControl while-moving section (motionResidency)', () => {
     })
   })
 
-  it('is absent with the flag off, and the at-rest section keeps its title', async () => {
+  it('is absent with disableMotionResidency on, and the at-rest section keeps its title', async () => {
     const {getByTestId, queryByTestId, viewer} = await renderWithViewer(false)
     fireEvent.click(getByTestId('control-button-residency'))
     expect(queryByTestId('motion-residency-slider')).toBeNull()

@@ -102,9 +102,11 @@ export function reportPreviewUnitsSkipped({format, kind, skipped}) {
 
 
 /**
- * One event for a worker load whose source opened buffered, which is the
- * load whose report lacks its `Engine source I/O` line
- * (engineModelLoad.js#sourceIoLine).
+ * One event for a worker load whose source opened buffered because it could
+ * not window: the source never reached the engine as an OPFS File, or the
+ * store open was declined or refused. Not for a buffered open the source
+ * policy chose over a store (engine/sourcePolicy.js#POLICY_BUFFERED_REASONS):
+ * that is the default path, and Loader.js#reportLoadDiagnostics skips it.
  *
  * @param {object} args
  * @param {string} args.reason one of {@link ENGINE_BUFFERED_REASONS}
@@ -113,6 +115,32 @@ export function reportPreviewUnitsSkipped({format, kind, skipped}) {
 export function reportEngineSourceBuffered({reason, sizeBytes}) {
   const size = Number.isFinite(sizeBytes) ? sizeBytes : 0
   sendToGa('engine_source_buffered', {reason, size_class: sizeClass(size)})
+}
+
+
+/**
+ * One event for a worker load whose source policy chose buffered and fell
+ * back to the windowed open (engine/sourcePolicy.js, Share#2139): the
+ * whole-file read or the buffered open failed for memory, and the windowed
+ * open carried the load. Expected on a device short of memory and
+ * self-healing (the model loaded), so diagnostic GA, not Sentry: the count
+ * per size class and store says whether the policy's cap is too high. Sent
+ * only once the load succeeded; a load that then failed is CadView's
+ * `captureException`.
+ *
+ * @param {object} args
+ * @param {string} args.format the engine's format label, 'ifc' | 'step'
+ * @param {string} args.storeKind 'syncHandle' | 'blobHeld'
+ * @param {string} args.failure 'RangeError' (the worker's whole-file allocation) | 'outOfMemory' |
+ *   'engineException' | 'engineAbort' (the page's retry on a fresh engine,
+ *   engine/engineModelLoad.js#retryableBufferedFailure)
+ * @param {number} args.sizeBytes the source's size, bucketed here
+ */
+export function reportEngineSourceFallback({format, storeKind, failure, sizeBytes}) {
+  const size = Number.isFinite(sizeBytes) ? sizeBytes : 0
+  sendToGa('engine_source_fallback', {
+    format: format ?? 'unknown', store: storeKind ?? 'unknown', failure: failure ?? 'unknown', size_class: sizeClass(size),
+  })
 }
 
 

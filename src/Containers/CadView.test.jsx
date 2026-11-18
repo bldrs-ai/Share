@@ -36,6 +36,7 @@ import {
 import {makeTestTree} from '../utils/TreeUtils.test'
 import {actAsyncFlush, suppressActWarnings} from '../utils/tests'
 import CadView from './CadView'
+import * as viewerModule from './viewer'
 
 
 window.HTMLElement.prototype.scrollIntoView = jest.fn()
@@ -261,6 +262,32 @@ describe('CadView', () => {
     // act() warnings from testing-library.
     await actAsyncFlush()
     await waitFor(() => screen.getByTestId(aboutControlTestId))
+  })
+
+
+  // StrictMode (src/index.jsx) runs each mount effect twice in dev and
+  // Playwright builds. The [modelPath] effect built a ShareViewer on each run,
+  // so every page load made two viewers and two WebGL contexts.
+  it('builds one viewer per model under StrictMode', async () => {
+    const initViewer = jest.spyOn(viewerModule, 'initViewer')
+    try {
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(
+        <React.StrictMode>
+          <ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>
+        </React.StrictMode>)
+      await actAsyncFlush()
+      await waitFor(() => screen.getByTestId(aboutControlTestId))
+      expect(initViewer).toHaveBeenCalledTimes(1)
+
+      // A new model still builds a new one.
+      await act(() => result.current.setModelPath({filepath: `/other.ifc`}))
+      await actAsyncFlush()
+      expect(initViewer).toHaveBeenCalledTimes(2)
+    } finally {
+      initViewer.mockRestore()
+    }
   })
 
 

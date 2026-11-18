@@ -214,7 +214,8 @@ describe('AutoResidency', () => {
     const auto = new AutoResidency({now: () => clock.t})
     auto.setBudgetMs(budget)
     auto.startGesture(1)
-    run(auto, gpu({fixedMs: 2 * budget}), clock, 300)
+    // fullMs above fixedMs too, so cost still rises with the fraction.
+    run(auto, gpu({fixedMs: 2 * budget, fullMs: 3 * budget}), clock, 300)
     expect(auto.fraction).toBe(MIN_FRACTION)
   })
 })

@@ -241,6 +241,17 @@ describe('engine/engineSources', () => {
     expect(store.releaseResident()).toBe(false)
   })
 
+  it('takeWhole hands the whole-file copy over once, and later reads go to the Blob (Share#2139)', async () => {
+    const root = fakeDir({[NAME]: fakeEntry()})
+    const {store} = await openIn(root, {allowSyncHandle: false, holdResident: true})
+    const held = store.takeWhole()
+    expect(Array.from(held)).toEqual(Array.from(BYTES))
+    expect(store.takeWhole()).toBeNull()
+    expect(store.releaseResident()).toBe(false)
+    expect(Array.from(await store.read(4, 3))).toEqual([4, 5, 6])
+    expect(store.counters).toMatchObject({reads: 2, residentReads: 0})
+  })
+
   it('a synchronous read is served from the whole-file copy too', async () => {
     // STEP's windowed open faults windows in through readSync (conway#757).
     const reader = jest.fn(function ReaderSync() {
@@ -333,7 +344,10 @@ function readingApi(log) {
  * @param {object} api
  * @param {object} root fake OPFS root
  * @param {Array<string>} log records `terminate`
- * @param {object} [flags] init flags
+ * @param {object} [flags] init flags, over `disableBufferedSource`: these
+ *   tests are of the windowed open, which the source policy
+ *   (sourcePolicy.js) takes by default only over the cap; its buffered
+ *   default is tested in engineSourcePolicy.test.js
  * @return {Promise<EngineSession>}
  */
 async function workerSession(api, root, log, flags = {}) {
@@ -354,7 +368,7 @@ async function workerSession(api, root, log, flags = {}) {
   }
   const session = new EngineSession(makeWorkerTransport(fakeWorker), {epoch: 1})
   toPage({v: ENGINE_PROTOCOL_VERSION, epoch: 0, ev: Ev.HELLO, seq: 0})
-  await session.init({flags})
+  await session.init({flags: {disableBufferedSource: true, ...flags}})
   return session
 }
 

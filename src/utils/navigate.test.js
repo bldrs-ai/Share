@@ -1,6 +1,7 @@
 import {
   navigateToInMemoryModel, navigateToModel, isTempModelPath, homeModelPath, navToDefault, reloadAfterCacheClear,
 } from './navigate'
+import {enablePageReloadApprovalCheck, handleBeforeUnload} from './event'
 
 
 describe('navigateToModel', () => {
@@ -76,6 +77,58 @@ describe('navigateToModel', () => {
       expect(assignCalls).toEqual(['/share/v/new/haus.ifc?feature=bot'])
     })
   })
+
+  // open-205 #2021: the flag routes the open through react-router instead of
+  // a page load. Outside the test env, so the test-env fallback above can't
+  // be what navigates.
+  describe('under ?feature=spaModelNav', () => {
+    const prevEnv = process.env.NODE_ENV
+
+    beforeEach(() => {
+      process.env.NODE_ENV = 'development'
+      locationGetter.mockReturnValue({
+        search: '?feature=spaModelNav',
+        assign: (url) => assignCalls.push(url),
+      })
+    })
+
+    afterEach(() => {
+      process.env.NODE_ENV = prevEnv
+    })
+
+    it('navigates in-app, carrying the flag, and loads no page', () => {
+      const navigate = jest.fn()
+      navigateToModel('/share/v/p/index.ifc#c:1,2,3', navigate)
+      expect(navigate).toHaveBeenCalledWith('/share/v/p/index.ifc?feature=spaModelNav#c:1,2,3')
+      expect(assignCalls).toHaveLength(0)
+    })
+
+    it('still loads the page when no navigate is given', () => {
+      navigateToModel('/share/v/p/index.ifc')
+      expect(assignCalls).toEqual(['/share/v/p/index.ifc?feature=spaModelNav'])
+    })
+
+    it('disarms the upload guard before navigating', () => {
+      const remove = jest.spyOn(window, 'removeEventListener')
+      const navigate = jest.fn(() => {
+        expect(remove).toHaveBeenCalledWith('beforeunload', handleBeforeUnload)
+      })
+      navigateToModel('/share/v/p/index.ifc', navigate)
+      expect(navigate).toHaveBeenCalled()
+      remove.mockRestore()
+    })
+  })
+
+  it('without the flag, a navigate given outside tests does not stop the page load', () => {
+    const prevEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+    locationGetter.mockReturnValue({search: '?feature=workspace', assign: (url) => assignCalls.push(url)})
+    const navigate = jest.fn()
+    navigateToModel('/share/v/p/index.ifc', navigate)
+    expect(navigate).not.toHaveBeenCalled()
+    expect(assignCalls).toEqual(['/share/v/p/index.ifc?feature=workspace'])
+    process.env.NODE_ENV = prevEnv
+  })
 })
 
 
@@ -103,6 +156,16 @@ describe('navigateToInMemoryModel', () => {
     navigateToInMemoryModel('/share/v/new/4be9c3dc-e138-47e9-962b-d0cf55cbbc26.ifc', navigate)
     expect(navigate).toHaveBeenCalledWith('/share/v/new/4be9c3dc-e138-47e9-962b-d0cf55cbbc26.ifc?feature=look')
     expect(assign).not.toHaveBeenCalled()
+  })
+
+  // Loader#load arms the guard for every upload; leaving one in-app has to
+  // take it down, as navigateToModel does (#2021).
+  it('disarms the upload guard', () => {
+    enablePageReloadApprovalCheck()
+    const remove = jest.spyOn(window, 'removeEventListener')
+    navigateToInMemoryModel('/share/v/new/4be9c3dc-e138-47e9-962b-d0cf55cbbc26.ifc', jest.fn())
+    expect(remove).toHaveBeenCalledWith('beforeunload', handleBeforeUnload)
+    remove.mockRestore()
   })
 })
 

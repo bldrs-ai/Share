@@ -9,7 +9,7 @@
  * transforms both syntaxes, so the per-function Jest suites pass either way.
  * Only a real `import()` in a child Node process reproduces the failure.
  *
- * Runs under `yarn test-src` (jest roots include `netlify/`). A child process
+ * Runs under `bun run test-src` (jest roots include `netlify/`). A child process
  * rather than an in-process import so Jest's own transform can't paper over
  * a CommonJS file.
  *
