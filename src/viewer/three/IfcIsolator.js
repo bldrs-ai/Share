@@ -1683,6 +1683,17 @@ export default class IfcIsolator {
    */
   dispose() {
     eachBatch(this.ifcModel, (mesh) => this._releaseBatchedMask(mesh))
+    // Then let go of the model, and of the subsets cut from it. A disposed
+    // viewer can outlive its model: after an in-app switch (open-205,
+    // `?feature=spaModelNav`) CadView closures from the renders before the
+    // switch still hold the old ShareViewer for a while (its theme-change
+    // listener, stale React props), and through `isolator.ifcModel` that
+    // pinned the old model, and on the main-thread engine its whole IfcAPI.
+    // Found by heap snapshot in modelSwitchMemory.spec.ts's leak hunt (#2023).
+    this.ifcModel = null
+    this.unhiddenSubset = null
+    this.isolationSubset = null
+    this.revealedElementsSubset = null
   }
 
   /**

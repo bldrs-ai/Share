@@ -62,8 +62,10 @@ Covered end-to-end by `src/Containers/indexStepLogo.spec.ts`.
 
 ## `testdata/models/dicom/` — a synthetic CT series, for tests
 
-`phantom-ct.zip` (explicit VR) and `phantom-ct-implicit-vr.zip` are a
-32-slice CT phantom written by **pydicom**, so the DICOM reader in
+`phantom-ct.zip` (explicit VR), `phantom-ct-implicit-vr.zip`,
+`phantom-ct-rle.zip` (RLE Lossless, pydicom's own encoder) and
+`phantom-ct-deflated.zip` (Deflated Explicit VR) are one 32-slice CT phantom
+written by **pydicom**, so the DICOM reader in
 `src/loader/dicom.js` is tested against an independent writer rather than
 its own output. The zips arrive as scanner exports do: extension-less
 slice files in shuffled order, a one-slice scout series beside the scan,

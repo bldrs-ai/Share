@@ -68,20 +68,46 @@ describe('Share/viewLink', () => {
     })
   })
 
+  describe('commit', () => {
+    it('goes live and writes at once, dropping a pending settle', () => {
+      const write = jest.fn()
+      const term = createLiveTerm({write, waitMs: 100})
+      term.start()
+      term.commit()
+      expect(write).toHaveBeenCalledTimes(1)
+      expect(term.isLive()).toBe(true)
+      jest.advanceTimersByTime(100)
+      expect(write).toHaveBeenCalledTimes(1)
+    })
+
+    it('writes nothing while its switch is off, or once disposed', () => {
+      const write = jest.fn()
+      let isEnabled = false
+      const term = createLiveTerm({write, isEnabled: () => isEnabled, waitMs: 100})
+      term.commit()
+      expect(write).not.toHaveBeenCalled()
+      isEnabled = true
+      term.dispose()
+      term.commit()
+      expect(write).not.toHaveBeenCalled()
+    })
+  })
+
   describe('noteUserDisplayChange', () => {
-    it('starts the registered display term, and disposes the one it replaces', () => {
+    it('commits the registered display term at once, and disposes the one it replaces', () => {
       const first = jest.fn()
       const second = jest.fn()
       const firstTerm = createLiveTerm({write: first, waitMs: 100})
       setDisplayTerm(firstTerm)
       noteUserDisplayChange()
+      expect(first).toHaveBeenCalledTimes(1)
+      // A later change of the first model's, pending when it goes.
+      firstTerm.changed()
       setDisplayTerm(createLiveTerm({write: second, waitMs: 100}))
       jest.advanceTimersByTime(100)
-      // The first term was disposed with its write pending: the model it
-      // described is gone.
-      expect(first).not.toHaveBeenCalled()
+      // Disposed with its write pending: the model it described is gone.
+      expect(first).toHaveBeenCalledTimes(1)
       noteUserDisplayChange()
-      jest.advanceTimersByTime(100)
       expect(second).toHaveBeenCalledTimes(1)
     })
 

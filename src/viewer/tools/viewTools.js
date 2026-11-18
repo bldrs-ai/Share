@@ -1,6 +1,7 @@
 import {Sphere, Vector3} from 'three'
 import {decodeIFCString} from '@bldrs-ai/ifclib'
 import {ToolError} from '../../assist'
+import {noteUserDisplayChange} from '../../Components/Share/viewLink'
 import useStore from '../../store/useStore'
 import {selectReadModel} from '../../store/IFCSlice'
 import {getDescendantExpressIds} from '../../utils/TreeUtils'
@@ -843,6 +844,8 @@ function isolate({refs}) {
     throw new ToolError('rejected', 'Every one of these elements is hidden; nothing to isolate. ' +
       'Call view.showAll first.', {refs})
   }
+  // The user asked for it, so the link follows it (Share/viewLink.js).
+  noteUserDisplayChange()
   return {
     content: {isolated: targets.length, refs: targets.slice(0, MAX_RESULT_REFS).map(({ref}) => ref)},
     echo: `Isolated ${targets.length} element${targets.length === 1 ? '' : 's'}`,
@@ -874,6 +877,7 @@ function hide({refs}) {
   if (occurrences.length > 0) {
     isolator.hideOccurrences(occurrences)
   }
+  noteUserDisplayChange()
   return {
     content: {
       hidden: targets.length,
@@ -898,6 +902,7 @@ function showAll() {
   const wasIsolated = before.isolation !== null
   isolator.resetTempIsolation()
   isolator.unHideAllElements()
+  noteUserDisplayChange()
   return {
     content: {shown: hidden, endedIsolation: wasIsolated},
     echo: hidden === 0 && !wasIsolated ? 'Everything was already shown' :

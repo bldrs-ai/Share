@@ -13,8 +13,8 @@ import {HASH_DEBOUNCE_WAIT_MS, debounce} from '../../utils/debounce'
  * the feature at work.
  *
  * Why it waits for the user: until then, every change is one the page made —
- * the load's framing, a link's own terms being applied, a note's camera, an
- * Assist tool. Writing those would put terms into a plain model link nobody
+ * the load's framing, a link's own terms being applied, a note's camera.
+ * Writing those would put terms into a plain model link nobody
  * set up, or rewrite a link's terms before they were even applied (the
  * Display menu seeds itself from `#d:` when the model loads, and an early
  * write would strip the token first).
@@ -31,7 +31,10 @@ import {HASH_DEBOUNCE_WAIT_MS, debounce} from '../../utils/debounce'
  * What counts as the user's change is each term's to say, since the signals
  * differ: camera-controls input that actually moved the camera
  * (Camera/liveCameraLink.js), a cut plane's drag (CutPlaneMenu.jsx), a Display
- * menu choice or a hide / isolate (`noteUserDisplayChange`). User actions that
+ * menu choice or a hide / isolate, by hand or through an Assist tool the user
+ * asked (`noteUserDisplayChange`). Those are discrete, so they are written at
+ * once (`commit`), not once they settle: a reload or a copied address right
+ * after the click has them. Note the change AFTER making it. User actions that
  * are a step of their own — turning a cut plane on or off, the Share dialog's
  * switches, a note's camera — still push a history entry, as before; they
  * don't start a term.
@@ -47,11 +50,12 @@ import {HASH_DEBOUNCE_WAIT_MS, debounce} from '../../utils/debounce'
  * @param {function(): boolean} [options.isEnabled] whether the term belongs
  *   in the link right now: its Share-dialog switch
  * @param {number} [options.waitMs] debounce
- * @return {{start: function(): void, changed: function(): void,
+ * @return {{start: function(): void, commit: function(): void, changed: function(): void,
  *   isLive: function(): boolean, flush: function(): void, dispose: function(): void}}
- *   `start` is the user's own change: the term goes live and its value is
- *   written. `changed` is any change: written only once live. `dispose`
- *   drops a pending write.
+ *   `start` is the user's own change in progress: the term goes live and its
+ *   value is written once it settles. `commit` is a discrete one, written at
+ *   once. `changed` is any change: written only once live. `dispose` drops a
+ *   pending write.
  */
 export function createLiveTerm({write, isEnabled = () => true, waitMs = HASH_DEBOUNCE_WAIT_MS}) {
   let isLive = false
@@ -70,6 +74,17 @@ export function createLiveTerm({write, isEnabled = () => true, waitMs = HASH_DEB
     start: () => {
       isLive = true
       changed()
+    },
+    // A discrete change of the user's (a click, a key, a slider let go): live,
+    // and written now rather than once it settles, since there is nothing to
+    // settle. A reload or a copy of the address straight after it has it. A
+    // drag or the camera's damping keeps `start`, called on every move.
+    commit: () => {
+      isLive = true
+      writeSettled.cancel()
+      if (!isDisposed && isEnabled()) {
+        write()
+      }
     },
     changed,
     isLive: () => isLive,
@@ -106,10 +121,12 @@ export function setDisplayTerm(term) {
 
 /**
  * The user changed what the model looks like themselves: a Display menu
- * choice, a hide or unhide, isolation on or off. The display term goes live
- * and the link follows the display from now on. Not for a change the page
- * makes on the user's behalf (a link's `#d:` applied on load, an Assist tool).
+ * choice, a hide or unhide, isolation on or off — by hand, or by asking the
+ * assistant for it (an Assist `view.*` visibility tool, which runs only on
+ * the user's request). The display term goes live and the link follows the
+ * display from now on. Not for a change the page makes by itself (a link's
+ * `#d:` applied on load, a note's view).
  */
 export function noteUserDisplayChange() {
-  displayTerm?.start()
+  displayTerm?.commit()
 }

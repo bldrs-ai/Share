@@ -14,6 +14,14 @@ export function setKeydownListeners(viewer, selectItemsInScene) {
     if (!event.target || event.target.tagName !== 'CANVAS') {
       return
     }
+    // A viewer disposed by a model switch or a theme re-init stays bound
+    // here until the next model's `onModel` binds its own, so a key pressed
+    // on the new canvas while that model loads would reach the old viewer's
+    // clipper and isolator, which dispose has emptied (IfcIsolator#dispose
+    // drops its model, open-205 #2023).
+    if (viewer._isDisposed) {
+      return
+    }
     if (event.code === 'KeyQ') {
       viewer.clipper.createPlane()
     } else if (event.code === 'KeyW') {
