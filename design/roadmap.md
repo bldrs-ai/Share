@@ -506,7 +506,7 @@ Standing convention (the original migration is done):
 - **BCF priority.** Industry credibility vs cost; MVP scope or §8 item 7.
 - **Engine write path.** IFC/STEP export of edited models needs a Conway writer; scope in `create-engine.md` Part B.
 - **Conversation store** for `assist-400` (GitHub-issue-backed, Firestore, purpose-built) and whether channels and Notes are one primitive.
-- **Sessions.** What a session is, and what a conversation is keyed to (`design/new/conversational-cad.md` §2.9, `ai-workspace.md` §15).
+- **Sessions.** Decided 2026-11-18: a session is a conversation thread over one or more of a project's models, and conversations are keyed to the session. The rest is open in `design/new/workspace-sessions.md` §8 (UX: `design/reqs/workspace.md`).
 - **Unit of "private"** under sessions and projects (`conversational-cad.md` §5.1).
 - **Sandbox security model** for toolbelt apps: origin isolation, tool permissioning, provenance (T11).
 - **AI naming.** "Assist" is the working verb; the user-facing name is unpicked.
