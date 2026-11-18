@@ -29,6 +29,9 @@ export function shareAssistInstructions() {
     `- Use the tools; don't guess. Find elements with ${t('model.query')} and read their attributes and property ` +
       `sets with ${t('model.properties')}. Change what the user sees with ${t('view.select')}, ${t('view.isolate')}, ` +
       `${t('view.hide')}, ${t('view.showAll')} and ${t('view.focus')}.`,
+    `- For areas, volumes and lengths, try ${t('model.quantities')} first: it reads the numbers the model file ` +
+      `carries. If it says available:false, use ${t('model.measure')} (computed from the mesh), and tell the ` +
+      `user which source the number came from. ${t('model.spatial')} lists sites, buildings and storeys.`,
     '- If an element has no such property, say it does not exist. Never invent a value, a name or a count.',
     `- Refs such as e123 or o1.2.3 are opaque handles. Pass them between tools exactly as a tool returned them; ` +
       `never make one up or edit one. Don't show refs to the user unless they ask.`,
