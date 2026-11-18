@@ -36,10 +36,13 @@ export default function HideToggleButton({elementId, occurrencePath = null, geom
   const viewer = useStore((state) => state.viewer)
 
   const toggleHide = () => {
+    hideOrUnhide()
     // The user's own hide or unhide: the link follows what's hidden from now
-    // on (Share/viewLink.js). Noted first, so it holds whichever branch below
-    // returns.
+    // on (Share/viewLink.js). Noted after the change, which it writes at once.
     noteUserDisplayChange()
+  }
+
+  const hideOrUnhide = () => {
     // STEP: hide this occurrence's own geometry instances. Hiding by expressID
     // would hit the shared product_definition_shape and vanish every reuse of
     // the part (the reported "eye does nothing / H hides both"); resolving the

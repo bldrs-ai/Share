@@ -54,10 +54,15 @@ export default function LiveDisplayLink() {
       write: () => writeLiveDisplay(model, viewer),
       isEnabled: () => useStore.getState().isModelReady && useStore.getState().isDisplayInUrl,
     })
-    const start = term.start
+    // Either way the user makes it live, the route stays live for the session.
+    const {start, commit} = term
     term.start = () => {
       livePaths.add(path)
       start()
+    }
+    term.commit = () => {
+      livePaths.add(path)
+      commit()
     }
     setDisplayTerm(term)
     if (livePaths.has(path)) {
