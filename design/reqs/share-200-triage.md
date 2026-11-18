@@ -1,4 +1,4 @@
-# Share 200 triage — Versions migration slice
+# Share 200 triage — Versions and Sharing migrations
 
 **Reconciliation date:** 2026-11-12. **Owner:** existing [#2144](https://github.com/bldrs-ai/Share/issues/2144), now normalized to `share-200: Model versioning and sharing` with `epic` added. Its original body, checklist, open state, discussion, other labels, assignees and milestone are preserved.
 
@@ -24,3 +24,25 @@ The [immutable Versions draft at 4458ceb](https://github.com/bldrs-ai/Share/blob
 Whole-file Versions stories stay under [#57](https://github.com/bldrs-ai/Share/issues/57). Notes stays under [#670](https://github.com/bldrs-ai/Share/issues/670). Existing `versions-300` structural diff and `versions-310` portable Drive sidecar assignments and aliases remain unchanged. Semantic history preserves its upstream identity and must consume create-300's authoritative document operations instead of inventing a competing op log.
 
 The original proposal contains public-hosting, visible-URL and storage assumptions that differ from the target UX. The appended live issue contract makes the UX authoritative and owns technical reconciliation before implementation. This is documentation and issue organization; no runtime walkthrough, semantic acceptance, writer support or infrastructure readiness is claimed.
+
+## Sharing UX draft migration · 2026-11-18
+
+The Sharing UX draft (`design/reqs/sharing.md`, [retired at 587c7e1](https://github.com/bldrs-ai/Share/blob/587c7e1e7ae464213fa4108802a529044eddbb54/design/reqs/sharing.md)) moved into issues on 2026-11-18. Its stories split between two epics by what they're about: publishing and opening exact versions stay with `share-200` (#2144); who can open a share, the link itself and what a recipient is told belong to `share-130` (#2206, decided 2026-11-18). The duplicate search (publish, share link, unguessable or opaque link, private link, opening a shared model) found no existing story for any of them; `share-120` (#1421) owns the Share and sign-in dialog, and #2212 links it. Story bodies keep every source task, acceptance and dependency; a few long tasks were split into two checkboxes. The former S codes are aliases only, recorded here.
+
+| Source | Content | Now owned by |
+|---|---|---|
+| [L1–L9](https://github.com/bldrs-ai/Share/blob/587c7e1e7ae464213fa4108802a529044eddbb54/design/reqs/sharing.md#L1-L9) | Header and document purpose | Retired; ownership is now the issues below. |
+| [L11–L25](https://github.com/bldrs-ai/Share/blob/587c7e1e7ae464213fa4108802a529044eddbb54/design/reqs/sharing.md#L11-L25) | Epic goal, journey, end-to-end acceptance, scope boundaries | [#2144](https://github.com/bldrs-ai/Share/issues/2144) §"Whole-file sharing: the journey and the rules for every story". |
+| [L27–L47](https://github.com/bldrs-ai/Share/blob/587c7e1e7ae464213fa4108802a529044eddbb54/design/reqs/sharing.md#L27-L47) | Visibility table and "Anyone with the link" contract | Visibility table: [#2206](https://github.com/bldrs-ai/Share/issues/2206) §"Rules for every story". Token, discovery, full-path and scope rules: [`model-versioning.md` §5a](../new/model-versioning.md#5a-share-link-contract-binding-ux-requirement). |
+| [L51–L69](https://github.com/bldrs-ai/Share/blob/587c7e1e7ae464213fa4108802a529044eddbb54/design/reqs/sharing.md#L51-L69) | S04 choose the publishing identity and destination | [#2211](https://github.com/bldrs-ai/Share/issues/2211) |
+| [L71–L91](https://github.com/bldrs-ai/Share/blob/587c7e1e7ae464213fa4108802a529044eddbb54/design/reqs/sharing.md#L71-L91) | S05 understand and confirm who can access the share | [#2212](https://github.com/bldrs-ai/Share/issues/2212) |
+| [L93–L113](https://github.com/bldrs-ai/Share/blob/587c7e1e7ae464213fa4108802a529044eddbb54/design/reqs/sharing.md#L93-L113) | S06 publish a version and obtain a working link | [#2213](https://github.com/bldrs-ai/Share/issues/2213) |
+| [L115–L135](https://github.com/bldrs-ai/Share/blob/587c7e1e7ae464213fa4108802a529044eddbb54/design/reqs/sharing.md#L115-L135) | S07 open an exact shared version without signing in | [#2214](https://github.com/bldrs-ai/Share/issues/2214) |
+| [L137–L157](https://github.com/bldrs-ai/Share/blob/587c7e1e7ae464213fa4108802a529044eddbb54/design/reqs/sharing.md#L137-L157) | S08 share an unlisted link to a version and view | [#2215](https://github.com/bldrs-ai/Share/issues/2215) |
+| [L159–L177](https://github.com/bldrs-ai/Share/blob/587c7e1e7ae464213fa4108802a529044eddbb54/design/reqs/sharing.md#L159-L177) | S10 recover when another publisher gets there first | [#2216](https://github.com/bldrs-ai/Share/issues/2216) |
+| [L179–L199](https://github.com/bldrs-ai/Share/blob/587c7e1e7ae464213fa4108802a529044eddbb54/design/reqs/sharing.md#L179-L199) | S12 understand why a shared version cannot open | [#2217](https://github.com/bldrs-ai/Share/issues/2217) |
+| [L201–L209](https://github.com/bldrs-ai/Share/blob/587c7e1e7ae464213fa4108802a529044eddbb54/design/reqs/sharing.md#L201-L209) | Gap analysis | The audit of share dialogs, routes and GLB paths was done on 2026-11-18 and recorded in T2 [#2201](https://github.com/bldrs-ai/Share/issues/2201) and T4 [#2203](https://github.com/bldrs-ai/Share/issues/2203); acceptance walkthroughs stay with each story. |
+| [L211–L221](https://github.com/bldrs-ai/Share/blob/587c7e1e7ae464213fa4108802a529044eddbb54/design/reqs/sharing.md#L211-L221) | Decisions table | Each row moved to the story it decides: history in a link's audience → [#2212](https://github.com/bldrs-ai/Share/issues/2212); destination setup → [#2211](https://github.com/bldrs-ai/Share/issues/2211); opaque link resolution → [#2213](https://github.com/bldrs-ai/Share/issues/2213); view-link default, and link scope and lifecycle → [#2215](https://github.com/bldrs-ai/Share/issues/2215). |
+| [L223–L232](https://github.com/bldrs-ai/Share/blob/587c7e1e7ae464213fa4108802a529044eddbb54/design/reqs/sharing.md#L223-L232) | Reconciliation tasks | Done by this migration, except the desktop and mobile walkthrough, which is the epic's end-to-end acceptance. |
+
+`share-110` (Drive Save, #2205) had no story in the draft; its stories are still to be written.
