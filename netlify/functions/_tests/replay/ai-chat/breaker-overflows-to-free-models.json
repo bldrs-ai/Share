@@ -1,0 +1,334 @@
+{
+  "description": "Past the anonymous daily breaker the turn isn't refused: the paid holds are released, a free-model hold is taken instead (its count is pinned by the unit suite: the hold id is random, so a replayed record can't carry it), and OpenRouter gets the curated :free chain (deny kept), with x-bldrs-ai-overflow for the tray's notice.",
+  "env": {
+    "$fixture": "env/ai-chat.json"
+  },
+  "now": "2026-11-18T12:00:00.000Z",
+  "exchangeOrder": "any",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/ai-chat",
+    "headers": {
+      "authorization": "Bearer ba1.replayAnonymousId00001.1794999600.wBYdBmzPjjSIOmCGgCjkBbGlqWCrl22WTULDtGfPQzA",
+      "content-type": "application/json",
+      "x-nf-client-connection-ip": "203.0.113.9"
+    },
+    "body": {
+      "$fixture": "openrouter/chat-request.json"
+    }
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/anonymous/replayAnonymousId00001",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/anonymous/replayAnonymousId00001",
+        "headers": {
+          "if-none-match": "*"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/ip/b674d1622990c79e7ec46d087e79bdfb",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/ip/b674d1622990c79e7ec46d087e79bdfb",
+        "headers": {
+          "if-none-match": "*"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/anonymous/2026-11-18",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"b1\""
+        },
+        "json": {
+          "v": 1,
+          "days": {
+            "2026-11-18": {
+              "spent": 5000000,
+              "free": 0
+            }
+          },
+          "holds": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/anonymous/replayAnonymousId00001",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        },
+        "json": {
+          "v": 1,
+          "days": {},
+          "holds": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/ip/b674d1622990c79e7ec46d087e79bdfb",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        },
+        "json": {
+          "v": 1,
+          "days": {},
+          "holds": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/anonymous/replayAnonymousId00001",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e3\""
+        },
+        "json": {
+          "v": 1,
+          "days": {},
+          "holds": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/anonymous/replayAnonymousId00001",
+        "headers": {
+          "if-match": "\"e3\""
+        },
+        "bodyJson": {
+          "holds": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e2\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/ip/b674d1622990c79e7ec46d087e79bdfb",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e3\""
+        },
+        "json": {
+          "v": 1,
+          "days": {},
+          "holds": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/ip/b674d1622990c79e7ec46d087e79bdfb",
+        "headers": {
+          "if-match": "\"e3\""
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e2\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "body": {
+          "model": "apodex/apodex-1.1-mini:free",
+          "models": [
+            "apodex/apodex-1.1-mini:free",
+            "dots-studio/dots-3-note-preview:free",
+            "inclusionai/ling-3.0-flash-sante:free",
+            "openrouter/free"
+          ],
+          "provider": {
+            "data_collection": "deny",
+            "require_parameters": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream"
+        },
+        "text": {
+          "$fixture": "openrouter/stream-reply.json"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/anonymous/replayAnonymousId00001",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        },
+        "json": {
+          "v": 1,
+          "days": {},
+          "holds": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/anonymous/replayAnonymousId00001",
+        "headers": {
+          "if-match": "\"e1\""
+        },
+        "bodyJson": {
+          "days": {
+            "2026-11-18": {
+              "spent": 143
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e2\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/ip/b674d1622990c79e7ec46d087e79bdfb",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        },
+        "json": {
+          "v": 1,
+          "days": {},
+          "holds": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/ip/b674d1622990c79e7ec46d087e79bdfb",
+        "headers": {
+          "if-match": "\"e1\""
+        },
+        "bodyJson": {
+          "days": {
+            "2026-11-18": {
+              "spent": 143
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e2\""
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "bodyIncludes": "There are 7 proxies.",
+    "headers": {
+      "x-bldrs-ai-overflow": "free_models",
+      "x-bldrs-ai-tier": "anonymous"
+    }
+  }
+}

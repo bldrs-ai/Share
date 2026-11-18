@@ -32,7 +32,8 @@ One directory per function, named exactly like the function, with one
         "method": "GET",
         "url": "https://…",                                  // exact, query included
         "headers": {"authorization": "Bearer …"},            // optional, subset
-        "body": {"app_metadata": {"…": "…"}}                  // optional, subset
+        "body": {"app_metadata": {"…": "…"}},                 // optional, subset
+        "bodyJson": {"days": {"…": "…"}}                      // optional: a JSON body sent as text, subset
       },
       "response": {"status": 200, "json": {}}                // or "text", "headers", or {"networkError": true}
     }
@@ -49,7 +50,9 @@ One directory per function, named exactly like the function, with one
 **Matching.** Objects match as subsets: keys a scenario doesn't name are
 ignored. Arrays match by length and position. Anything else matches by `===`.
 Outbound request bodies are decoded by content type, so a form-encoded body
-(the Stripe SDK's) matches as an object too.
+(the Stripe SDK's) matches as an object too. `bodyJson` is for a body that is
+JSON but isn't sent as such: @netlify/blobs PUTs a value as `text/plain`, so
+`ai-chat`'s ledger writes are matched with it.
 
 The replay fails if:
 - the function makes a call the scenario doesn't list;

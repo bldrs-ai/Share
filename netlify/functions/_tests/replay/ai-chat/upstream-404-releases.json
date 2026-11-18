@@ -1,0 +1,187 @@
+{
+  "description": "OpenRouter finding no deny-compatible endpoint for our model (404) is a 502 ai_model_unavailable, and every hold is given back.",
+  "env": {
+    "$fixture": "env/ai-chat.json"
+  },
+  "now": "2026-11-18T12:00:00.000Z",
+  "exchangeOrder": "any",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/ai-chat",
+    "headers": {
+      "authorization": "Bearer ba1.replayAnonymousId00001.1794999600.wBYdBmzPjjSIOmCGgCjkBbGlqWCrl22WTULDtGfPQzA",
+      "content-type": "application/json",
+      "x-nf-client-connection-ip": "203.0.113.9"
+    },
+    "body": {
+      "$fixture": "openrouter/chat-request.json"
+    }
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/anonymous/replayAnonymousId00001",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/anonymous/replayAnonymousId00001",
+        "headers": {
+          "if-none-match": "*"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/ip/b674d1622990c79e7ec46d087e79bdfb",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/ip/b674d1622990c79e7ec46d087e79bdfb",
+        "headers": {
+          "if-none-match": "*"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/anonymous/2026-11-18",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/anonymous/2026-11-18",
+        "headers": {
+          "if-none-match": "*"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions"
+      },
+      "response": {
+        "status": 404,
+        "json": {
+          "error": {
+            "code": 404,
+            "message": "No endpoints found matching your data policy"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/anonymous/replayAnonymousId00001",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        },
+        "json": {
+          "v": 1,
+          "days": {},
+          "holds": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/ip/b674d1622990c79e7ec46d087e79bdfb",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        },
+        "json": {
+          "v": 1,
+          "days": {},
+          "holds": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/anonymous/2026-11-18",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        },
+        "json": {
+          "v": 1,
+          "days": {},
+          "holds": {}
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 502,
+    "json": {
+      "error": {
+        "code": "ai_model_unavailable"
+      },
+      "tier": "anonymous"
+    }
+  }
+}

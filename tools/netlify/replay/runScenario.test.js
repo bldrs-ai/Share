@@ -30,6 +30,7 @@ const EXCHANGE = {
 const ALSO = {request: {method: 'GET', url: 'https://upstream.test/also'}, response: {status: 200, json: {}}}
 const FROZEN_NOW = `2026-10-06T12:00:00.000Z ${Date.parse('2026-10-06T12:00:00.000Z')}`
 const TWO_CALLS = {method: 'GET', path: '/.netlify/functions/echo', headers: {}, query: {also: '1'}}
+const TEXT_BODY = {method: 'GET', path: '/.netlify/functions/echo', headers: {}, query: {text: '1'}}
 const BASE = {
   env: {WHO: 'replay'},
   request: {method: 'GET', path: '/.netlify/functions/echo', headers: {}},
@@ -73,6 +74,13 @@ const CASES = [
     env: {WHO: {$fixturePath: 'task-root'}},
     exchanges: [{...EXCHANGE, request: {...EXCHANGE.request, body: {n: 1, from: path.join(FIXTURE_ROOT, 'task-root')}}}],
   }, null],
+  // `bodyJson` matches a text/plain body as JSON; `body` sees it as a string.
+  ['bodyJson matches a JSON body sent as text', {request: TEXT_BODY,
+    exchanges: [{...EXCHANGE, request: {...EXCHANGE.request, body: undefined, bodyJson: {n: 1}}}]}, null],
+  ['bodyJson reports a wrong field', {request: TEXT_BODY,
+    exchanges: [{...EXCHANGE, request: {...EXCHANGE.request, body: undefined, bodyJson: {n: 2}}}]},
+  'bodyJson.n: expected 2, got 1'],
+  ['body does not parse a text body', {request: TEXT_BODY}, 'body: expected an object'],
   ['exchangeOrder any still checks bodies', {
     request: TWO_CALLS, exchangeOrder: 'any',
     exchanges: [ALSO, {...EXCHANGE, request: {...EXCHANGE.request, body: {n: 2}}}],

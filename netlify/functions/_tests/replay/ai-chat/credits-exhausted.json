@@ -1,0 +1,59 @@
+{
+  "description": "An anonymous id whose day is spent is refused 402 ai_credits_exhausted with its tier, after one ledger read and no upstream call.",
+  "env": {
+    "$fixture": "env/ai-chat.json"
+  },
+  "now": "2026-11-18T12:00:00.000Z",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/ai-chat",
+    "headers": {
+      "authorization": "Bearer ba1.replayAnonymousId00001.1794999600.wBYdBmzPjjSIOmCGgCjkBbGlqWCrl22WTULDtGfPQzA",
+      "content-type": "application/json",
+      "x-nf-client-connection-ip": "203.0.113.9"
+    },
+    "body": {
+      "$fixture": "openrouter/chat-request.json"
+    }
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/anonymous/replayAnonymousId00001",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        },
+        "json": {
+          "v": 1,
+          "days": {
+            "2026-11-18": {
+              "spent": 19990,
+              "free": 0
+            }
+          },
+          "holds": {}
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 402,
+    "json": {
+      "error": {
+        "code": "ai_credits_exhausted"
+      },
+      "tier": "anonymous"
+    },
+    "headers": {
+      "x-bldrs-ai-used": "19990",
+      "x-bldrs-ai-limit": "20000"
+    }
+  }
+}

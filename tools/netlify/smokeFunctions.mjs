@@ -75,6 +75,21 @@ const GH_OAUTH_NOT_CONFIGURED = {status: HTTP_INTERNAL_ERROR, body: 'GH_OAUTH_CL
 
 export const PROBES = [
   {
+    name: 'ai-chat',
+    scenario: 'ai-chat/empty-request',
+    method: 'POST',
+    body: {},
+    // Anonymous callers are served, so there is no "missing bearer" answer
+    // to probe: an empty body is refused before any upstream or ledger call,
+    // so the probe costs nothing. A context without the relay's secrets
+    // answers "not configured" first, which strict mode rejects.
+    accept: [
+      {status: HTTP_BAD_REQUEST, body: 'ai_bad_request'},
+      {status: HTTP_INTERNAL_ERROR, body: 'ai_not_configured'},
+    ],
+    strict: [{status: HTTP_BAD_REQUEST, body: 'ai_bad_request'}],
+  },
+  {
     name: 'create-portal-session',
     scenario: 'create-portal-session/unauthenticated',
     method: 'POST',

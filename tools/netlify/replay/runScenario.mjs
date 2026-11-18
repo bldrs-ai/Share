@@ -92,6 +92,19 @@ const server = setupServer(http.all('*', async ({request}) => {
   if (want.body !== undefined) {
     failures.push(...subsetMismatches(call.body, want.body, `${label} body`))
   }
+  // `bodyJson`: a body that IS JSON but isn't sent as such — @netlify/blobs
+  // PUTs a string value as text/plain — matched as JSON anyway.
+  if (want.bodyJson !== undefined) {
+    let parsed
+    try {
+      parsed = typeof call.body === 'string' ? JSON.parse(call.body) : call.body
+    } catch {
+      failures.push(`${label} bodyJson: not JSON`)
+    }
+    if (parsed !== undefined) {
+      failures.push(...subsetMismatches(parsed, want.bodyJson, `${label} bodyJson`))
+    }
+  }
   for (const [name, value] of Object.entries(want.headers || {})) {
     if (request.headers.get(name) !== value) {
       failures.push(`${label} header ${name}: expected ${JSON.stringify(value)}, got ${JSON.stringify(request.headers.get(name))}`)
