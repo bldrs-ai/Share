@@ -2,7 +2,7 @@
 
 **Reconciliation date:** 2026-11-12. **Owner:** existing [#2144](https://github.com/bldrs-ai/Share/issues/2144), now normalized to `share-200: Model versioning and sharing` with `epic` added. Its original body, checklist, open state, discussion, other labels, assignees and milestone are preserved.
 
-The [scope snapshot](share-200.md) records only the semantic UX slice reconciled from Versions. Sharing's complete publication, audience, opaque-link and recipient stories still require their own reconciliation; this pass does not claim that work is finished.
+This record covers two migrations into `share-200`: the semantic slice from the Versions draft (2026-11-12, below) and the whole-file sharing stories from the Sharing draft (2026-11-18, [last section](#sharing-ux-draft-migration--2026-11-18)). Both are complete as migrations; neither claims the work is built. The [scope snapshot](share-200.md) covers both.
 
 ## Ownership and tier
 
