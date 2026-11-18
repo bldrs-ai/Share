@@ -276,7 +276,7 @@ User changes the model, not just the view of it, by hand or through the agent. B
 
 ## 5. Cross-cutting Tracks
 
-Each track has a long-form design doc.
+Each track has a long-form design doc, and a `T<n>` tracking issue that holds its work items as sub-issues. How tracks are written down and tracked: [`design/dx/dx-rubric.md`](dx/dx-rubric.md).
 
 ### Track T1: Viewer Replacement
 - **What:** Replace `web-ifc-viewer`/`web-ifc-three` with Conway-direct IFC and STEP parsing, per-instance picking and GPU instancing.
