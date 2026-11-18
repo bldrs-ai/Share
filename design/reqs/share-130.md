@@ -18,7 +18,7 @@ Migrated from the Sharing UX draft, 2026-11-18:
 | [Share an unlisted link to a version and view · #2215](https://github.com/bldrs-ai/Share/issues/2215) | Send a link that opens the same version and view, and can't be guessed. |
 | [Understand why a shared version won't open · #2217](https://github.com/bldrs-ai/Share/issues/2217) | Know whether to retry, use a local copy or ask the sender. |
 
-Decided 2026-11-18: the unguessable link itself comes from `share-200`'s link resolver (#2144; the rules are in [`model-versioning.md` §5a](../new/model-versioning.md#5a-share-link-contract-binding-ux-requirement)), not from Drive's or GitHub's own link-sharing. Naming specific people is `share-201` (#2207). The visibility chip must show the same classification the quota meter uses, since a Drive file shared by link counts as public. The chip's technical work is Track T4 (#2203).
+Decided 2026-11-18: the unguessable link itself comes from `share-200`'s link resolver (#2144; the rules are in [`model-versioning.md` §5a](../new/model-versioning.md#5a-share-link-contract-binding-ux-requirement)), not from Drive's or GitHub's own link-sharing. Naming specific people is `share-201` (#2207). The visibility chip must show the same classification the quota meter uses, since a Drive file shared by link counts as public. The chip's technical work is Track `share-t100` (#2203).
 
 Open, and recorded in the roadmap: `share-130` is in the MVP (Phase C), but `share-200`'s resolver is placed post-MVP.
 

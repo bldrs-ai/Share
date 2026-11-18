@@ -1,0 +1,8 @@
+{
+  "NODE_ENV": "test",
+  "OPENROUTER_API_KEY": "sk-or-replay-server-key",
+  "AI_TOKEN_SECRET": "replay-ai-token-secret",
+  "AI_BREAKER_ANONYMOUS_DAILY_USD": "5",
+  "AI_BREAKER_FREE_DAILY_USD": "5",
+  "NETLIFY_BLOBS_CONTEXT": "eyJzaXRlSUQiOiJyZXBsYXktc2l0ZSIsInRva2VuIjoicmVwbGF5LWJsb2JzLXRva2VuIiwiZWRnZVVSTCI6Imh0dHBzOi8vYmxvYnMucmVwbGF5LnRlc3QiLCJ1bmNhY2hlZEVkZ2VVUkwiOiJodHRwczovL2Jsb2JzLXVuY2FjaGVkLnJlcGxheS50ZXN0In0="
+}

@@ -175,6 +175,9 @@ class LoadProgressReporter {
     this.stallRecoveryReported = false
     this.startTime = Date.now()
     this.fileSize = undefined
+    // A GLB cache hit's artifact size, beside the source's fileSize: the
+    // bytes that load actually parsed (recordModelInfo).
+    this.artifactSize = undefined
     // Page-wide console.warn / console.error calls in the load window, from
     // the console tee. NOT engine severity: see completedStats.
     this.warningCount = 0
@@ -571,6 +574,9 @@ class LoadProgressReporter {
     if (Number.isFinite(info?.byteLength)) {
       this.fileSize = info.byteLength
     }
+    if (Number.isFinite(info?.artifactByteLength)) {
+      this.artifactSize = info.artifactByteLength
+    }
     if (typeof info?.schema === 'string' && info.schema !== '') {
       this.schema = info.schema
     }
@@ -869,6 +875,7 @@ class LoadProgressReporter {
     const hasEngine = this.geometryStats !== undefined
     this.completedStats = {
       fileSize: this.fileSize,
+      artifactSize: this.artifactSize,
       memoryUsed: heapMb === undefined ? undefined : Math.round(heapMb * BYTES_PER_MB),
       loadTime: finishedAt - this.startTime,
       pageErrorCount: this.errorCount,
@@ -1626,6 +1633,27 @@ export function reportEngineLog(log) {
 
 
 /**
+ * The model line's tail on a GLB cache hit: the cached artifact's size,
+ * beside the source's that `formatModelLine` already printed, so
+ * "Momentum.ifc — IFC, 5.6 MB (cached GLB 1.3 MB)". When the artifact
+ * predates the source-size stamp the source's is unknown, and the line says
+ * so rather than leave the GLB's as the only size on it. Same MB rounding as
+ * conway's formatModelLine.
+ *
+ * @param {object} info model metadata, with `artifactByteLength` on a hit
+ * @param {number|undefined} sourceBytes the source size recorded for this load
+ * @return {string} '' when not a hit
+ */
+export function cachedArtifactSuffix(info, sourceBytes) {
+  if (!Number.isFinite(info?.artifactByteLength)) {
+    return ''
+  }
+  const glb = `cached GLB ${(info.artifactByteLength / BYTES_PER_MB).toFixed(1)} MB`
+  return Number.isFinite(sourceBytes) ? ` (${glb})` : ` (source size not recorded; ${glb})`
+}
+
+
+/**
  * Report early model-header info (log line 3) directly (the engine path
  * arrives via the onProgress envelope instead — see isModelInfoProgress).
  *
@@ -1634,7 +1662,9 @@ export function reportEngineLog(log) {
 export function reportModelInfo(info) {
   if (activeReporter && !activeReporter.ended) {
     activeReporter.recordModelInfo(info)
-    activeReporter.addReportLine(activeReporter.log.setModelInfo(info), true, activeReporter.sentryModelLine())
+    activeReporter.addReportLine(
+      activeReporter.log.setModelInfo(info) + cachedArtifactSuffix(info, activeReporter.fileSize),
+      true, activeReporter.sentryModelLine())
   }
 }
 

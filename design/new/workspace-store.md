@@ -1,7 +1,7 @@
 # Workspace store — the repo-as-workspace direction
 
 **Status:** v0.1 — direction agreed in principle; nothing below is
-committed scope. This doc exists so the thinking survives; the T10
+committed scope. This doc exists so the thinking survives; the `assist-t300`
 conversation-store decision and `ai-workspace.md` (roadmap §7.4 AI.0)
 will consume it.
 **Date:** 2026-07-28
@@ -166,7 +166,7 @@ Nothing in the shipped Tier-1 work (#1684) fights this direction.
 
 ## 5. Relationship to existing plans
 
-- **T10 conversation store** (roadmap §10): this doc is the sharpened
+- **`assist-t300` conversation store** (roadmap §10): this doc is the sharpened
   input; the record/stream split (§1.3) is the proposed answer shape.
 - **`ai-workspace.md`** (roadmap §7.4 AI.0, not yet drafted): owns the
   final storage decision alongside runtime/provider/sandbox; its storage

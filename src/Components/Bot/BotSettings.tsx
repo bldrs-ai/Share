@@ -5,9 +5,11 @@ import {
 
 
 /**
- * Settings panel for the bot: the user's OpenRouter key, which the panel
- * keeps in this tab's memory only (assist/keyStore.ts). Choosing a provider,
- * remembering a key on the device, Forget and Test connection are #1930.
+ * Settings panel for the bot: the user's own OpenRouter key, which is
+ * optional (without one the assistant uses Bldrs' hosted models within the
+ * plan's credits, #1932) and which the panel keeps in this tab's memory only
+ * (assist/keyStore.ts). Saving it empty forgets it, back to hosted. Choosing a
+ * provider, remembering a key on the device and Test connection are #1930.
  *
  * @param apiKey - The API key to display and save.
  * @param onApiKeyChange - Callback to save the API key.
@@ -66,7 +68,8 @@ export default function BotSettings({apiKey, onApiKeyChange, onClose}: BotSettin
           }}
         />
         <Typography variant='caption' id='bot-openrouter-api-key-note' sx={{color: 'text.secondary'}}>
-          Kept in this tab only, and forgotten when you reload. It is sent to OpenRouter and nowhere else.
+          Optional. Without a key, the assistant uses Bldrs&apos; hosted models within your plan&apos;s credits.
+          A key is kept in this tab only, forgotten when you reload, and sent to OpenRouter and nowhere else.
         </Typography>
       </Box>
       <Box sx={{display: 'flex', justifyContent: 'flex-end', gap: '0.5em'}}>
@@ -74,7 +77,6 @@ export default function BotSettings({apiKey, onApiKeyChange, onClose}: BotSettin
           variant='contained'
           onClick={handleSave}
           data-testid='BotSettings-OkButton'
-          disabled={!localApiKey.trim()}
         >
           OK
         </Button>

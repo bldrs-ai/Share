@@ -4,7 +4,7 @@
 **Date:** 2026-11-18
 **UX requirements:** [design/reqs/workspace.md](../reqs/workspace.md) (what the person sees; this doc is how it is built).
 **Follows:** [reviews/2026-11-18-mvc-core-review-followup.md](reviews/2026-11-18-mvc-core-review-followup.md) §4, which this settles.
-**Epics:** `assist-300` (#1657), `assist-310` (#1659), `open-210` (#1251); depends on `open-205` (#2011), `create-300` (#1914), `share-200` (#2144).
+**Epics:** `open-200` (#1657), `assist-310` (#1659), `open-210` (#2192, story #1251); depends on `open-205` (#2011), `create-300` (#1914), `share-200` (#2144).
 
 
 ## 1. Summary
@@ -79,7 +79,7 @@ A session is files, so it can be kept locally first and in a project repository 
 - **`version`** pins what the session was made against. Its format is `share-200`'s version identity ([model-versioning.md](model-versioning.md)), not a new one. A model that moved on since is shown as such (UX: "Resume a session"); the session is never silently re-pointed.
 - **`placement`** is `null` when the model's own coordinates are used; set it only when the person moves a model. IFC georeferencing is applied first, as today (`stampAppliedCoordination`).
 - **`view`** reuses the permalink terms (`#c:`, `#cp:`, `#d:`), so a session's view and a shared link describe a view the same way.
-- **Where it is kept.** Locally first, beside the Tier-1 project list (`workspace/persistence.ts`, #1662). The account-level sync (#1662's Auth0 tier) carries the project and session list only. A conversation is too large for it, so it stays on the device until the conversation store (T10) exists. This replaces D10's "per model" key with "per session".
+- **Where it is kept.** Locally first, beside the Tier-1 project list (`workspace/persistence.ts`, #1662). The account-level sync (#1662's Auth0 tier) carries the project and session list only. A conversation is too large for it, so it stays on the device until the conversation store (`assist-t300`) exists. This replaces D10's "per model" key with "per session".
 - **The manifest.** The MVC-core review's §7.3 `manifest.json` is this file: which models, which versions, which op logs. Its model and version fields are `share-200`'s; this doc only adds the session-level fields.
 
 
@@ -123,8 +123,8 @@ Because a path can contain almost any character, the key is placed first and res
 Each step is useful on its own and has one owner.
 
 1. **Op log, keyed by session and model** (`create-300`, #1916). The pure module the follow-up review asked for, with the model key in every op from the start. Unit tests only.
-2. **Session document and local persistence** (`assist-300`, extending #1662). `session.json` plus `conversation.jsonl` on the device; no UI yet.
-3. **Sessions in the left nav** (`assist-300`; UX "Browse a project's models and sessions"). Start, rename and reopen a session over one model.
+2. **Session document and local persistence** (`open-200`, extending #1662). `session.json` plus `conversation.jsonl` on the device; no UI yet.
+3. **Sessions in the left nav** (`open-200`; UX "Browse a project's models and sessions"). Start, rename and reopen a session over one model.
 4. **Engines held and shared** (`open-205`, #2031 steps 7–8). Host keyed by model identity; holds from tabs and sessions; the existing cap and eviction.
 5. **Model-qualified refs** (this doc §6, with model-display-controls.md §6.3). Refs, `refs.js` resolution and the `model.*` tools.
 6. **Several models in one view** (`open-205` Phase 2, #2024, then `open-210`, #1251). Per-model store, `modelID = 0` removed, layers.
@@ -140,7 +140,7 @@ Steps 1, 2 and 4 don't depend on each other. Steps 3, 5 and 6 depend on 2, 1 and
 3. **Sessions can sit outside a project,** in an Ungrouped group, as models do today (#1692).
 4. **The ref separator: positional, not yet picked.** Refs use `/` today (`n` paths), and names inside a path can hold other characters, such as `_`. So no character is safe to reserve everywhere. Instead, a model-qualified ref always *starts* with the model key, and the key's own characters are restricted (for example letters and digits only). The first separator after the key is then unambiguous whatever follows it, and a bare ref, with no key, stays valid in a one-model session (§6). The separator itself is picked with model-display-controls.md §6.3.
 5. **Live models per session: 3 on desktop for now.** That is engine-worker.md §5.2's cap, an early guess that hasn't been tuned. A session doesn't add a limit of its own: a fourth model's engine waits for, or evicts, a background one by the existing rules. Revisit when the cap is measured.
-6. **The flag-off layout is today's production layout, inset in the workspace.** It hasn't been designed beyond that; it is left open for `assist-300`.
+6. **The flag-off layout is today's production layout, inset in the workspace.** It hasn't been designed beyond that; it is left open for `open-200`.
 
 
 ## 9. What this changes elsewhere

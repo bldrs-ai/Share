@@ -48,11 +48,14 @@ import {BldrsFaceIdsReader} from './bldrsFaceIds'
 import {BldrsSpatialTreeReader} from './bldrsSpatialTree'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
 import {glbChunksHaveRenderableGeometry} from './glbArtifactHealth'
+import {parseGlbJsonChunk} from './glbArtifactSize'
 import {NESTED_LOAD_GENERATION, beginGlbArtifactLoad, publishGlbArtifact} from './glbArtifactPublish'
 import {glbCacheKey} from './glbCacheKey'
 import {activeArtifactSpec, glbCompressionModeFromExtensions, isGlbBatchedActive} from './glbCompress'
 import {isBldrsGlbContainer, readGlbContainerHeader, readGlbContainerJsonPrefixes, unpackGlbContainer} from './glbContainer'
-import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb} from './glbExport'
+import {
+  BLDRS_SOURCE_BYTES_EXTRAS_KEY, BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb, validSourceBytes,
+} from './glbExport'
 import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import glbToThree from './glb'
 import {decodeGzipEnvelope} from './gzipEnvelope'
@@ -460,6 +463,11 @@ export async function load(
   // Set when we swap the IFC source with a cached GLB. Drives post-parse
   // diagnostics so the user can see what the GLTF parser produced.
   let cameFromGlbCache = false
+  // On a hit, the SOURCE's size as the writer stamped it into the artifact
+  // (BLDRS_SOURCE_BYTES_EXTRAS_KEY), or null for an artifact that predates
+  // the stamp. The bytes this load parses are the artifact's, so this is the
+  // only source size a hit has.
+  let cachedSourceBytes = null
   // Not for a hosted `.ifczip`: every handle the cache path keeps is the
   // source file, which here is the zip — `spillModelSource` would back
   // conway's later reads of the IFC with it. It still opens, uncached. An
@@ -540,13 +548,15 @@ export async function load(
               `reader: cache lookup github key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
             `${cacheKeyArgs.sourcePath} sha=${cacheKeyArgs.sourceHash}`)
             glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
-            const glbFile = await tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel)
-            if (glbFile) {
+            const hit = await tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel)
+            if (hit) {
+              const glbFile = hit.file
               glbInfo(
                 `reader: github cache HIT (${glbFile.size}B); swapping to GLB loader for: ${filePath}`)
               ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
               file = glbFile
               cameFromGlbCache = true
+              cachedSourceBytes = hit.sourceBytes
             } else {
               glbInfo('reader: github cache MISS, will export after parse:', filePath)
             }
@@ -692,13 +702,15 @@ export async function load(
               `reader: cache lookup ${kindLabel} key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
             `${cacheKeyArgs.sourcePath} sha=${contentSha}`)
             glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
-            const glbFile = await tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel)
-            if (glbFile) {
+            const hit = await tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel)
+            if (hit) {
+              const glbFile = hit.file
               glbInfo(
                 `reader: ${kindLabel} cache HIT (${glbFile.size}B); swapping to GLB loader`)
               ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
               file = glbFile
               cameFromGlbCache = true
+              cachedSourceBytes = hit.sourceBytes
               // Its own stage, so reading the artifact out of OPFS isn't
               // counted as hashing the source (Share#2101).
               onProgress('Reading model data...')
@@ -967,7 +979,14 @@ export async function load(
   reportModelInfo({
     fileName: path.substring(path.lastIndexOf('/') + 1) || path,
     schema: formatTag,
-    byteLength: sourceBytes,
+    // On a GLB cache hit these bytes are the artifact's, and under the
+    // source's name and format tag they read as the file's size:
+    // "SEESTRASSE.ifc — IFC, 4.3 MB" for a 24 MB IFC, and the same 4.3 MB in
+    // stats_fileSize. So a hit reports the source's size as the writer
+    // stamped it (none for an artifact that predates the stamp), and the
+    // artifact's own size separately, as the cached GLB.
+    byteLength: cameFromGlbCache ? (cachedSourceBytes ?? undefined) : sourceBytes,
+    artifactByteLength: cameFromGlbCache ? sourceBytes : undefined,
   })
 
   // readModel throws on any falsy model (surfacing viewer.IFC.ifcLastError
@@ -1296,6 +1315,9 @@ export async function load(
         // runs: by then the user may have navigated to another model, whose
         // own load owns the slot (glbArtifactPublish.js).
         artifactGeneration,
+        // Stamped into the artifact so its later cache hits report the
+        // source's size, not their own (BLDRS_SOURCE_BYTES_EXTRAS_KEY).
+        sourceBytes,
       }).finally(() => {
         useStore.getState().setIsCacheWriteInFlight(false)
         if (engineSession) {
@@ -2802,7 +2824,8 @@ export class NotFoundError extends Error {
  * @param {string} kindLabel Source kind of the model this artifact came from
  *   ('github' | 'local' | 'upload' | 'external'), carried onto the published
  *   slot as the analytics dimension — see the publish below.
- * @return {Promise<File|null>}
+ * @return {Promise<{file: File, sourceBytes: (number|null)}|null>} the
+ *   artifact, and the source size its writer stamped (null when absent)
  */
 async function tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel) {
   try {
@@ -2883,9 +2906,29 @@ async function tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel) {
       // cache-hit load never runs a writer.
       kindLabel,
     }, artifactGeneration)
-    return file
+    return {file, sourceBytes: stampedSourceBytes(prefixes)}
   } catch (e) {
     glbInfo('reader: lookup failed, falling back to source path:', e)
+    return null
+  }
+}
+
+
+/**
+ * The source size the writer stamped into a cached artifact
+ * (glbExport.js#BLDRS_SOURCE_BYTES_EXTRAS_KEY), read from the JSON prefixes
+ * `tryLoadCachedGlb` already holds, so a hit knows it before the parse and
+ * the model line can carry it. Validated: the artifact is an untrusted
+ * boundary. Null for an artifact that predates the stamp, or any doubt.
+ *
+ * @param {Uint8Array[]} prefixes chunk JSON prefixes (readGlbContainerJsonPrefixes)
+ * @return {number|null}
+ */
+export function stampedSourceBytes(prefixes) {
+  try {
+    const json = parseGlbJsonChunk(prefixes[0])
+    return validSourceBytes(json?.scenes?.[0]?.extras?.[BLDRS_SOURCE_BYTES_EXTRAS_KEY])
+  } catch {
     return null
   }
 }

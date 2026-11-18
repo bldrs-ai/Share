@@ -30,7 +30,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
   const isMobile = useIsMobile()
   const theme = useTheme()
   const vh = useStore((state) => state.vh)
-  // Workspace shell (epic assist-300, #1657): ProjectsDrawer sits left of
+  // Workspace shell (epic open-200, #1657): ProjectsDrawer sits left of
   // the NavTree/Versions drawer. Desktop-only for now, like that drawer.
   const isWorkspaceEnabled = useExistInFeature('workspace')
 
