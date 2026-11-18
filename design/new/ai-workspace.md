@@ -8,7 +8,7 @@ added; amended 2026-11-01 to place the document session in D15, add the
 [MVC-core review](reviews/2026-10-29-mvc-core-review_grok-4.7.md)). Story
 [#1671](https://github.com/bldrs-ai/Share/issues/1671) under epic `assist-310`
 [#1659](https://github.com/bldrs-ai/Share/issues/1659). Roadmap §7.4 AI.0,
-Tracks T10 and T11.
+Tracks `assist-t300` and `apps-t300`.
 **Owner:** Pablo (with Claude).
 
 This is the architecture doc that roadmap §7 and
@@ -1562,11 +1562,11 @@ because it rides the quota and billing rails.
 
 ## 16. Deferred (named so they are not lost)
 
-- **Sandbox and MCP security for toolbelt apps** (`assist-320`, T11).
+- **Sandbox and MCP security for toolbelt apps** (`assist-320`, `apps-t300`).
   Iframe origin isolation, per-app tool grants and approval, and versioned-app
   provenance (roadmap §10). A section of this doc when `assist-320` starts.
   #1386 is its precondition.
-- **Notes vs channels; shared conversation store** (`assist-400`, T10).
+- **Notes vs channels; shared conversation store** (`assist-400`, `assist-t300`).
   ChannelProvider, and workspace-store.md's record/stream split.
 - **Write tools** (`create-310`). Permissioning and preview-before-apply
   (model-edit.md §9). They append to the document session's op log, never
