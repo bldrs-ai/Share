@@ -4,7 +4,7 @@ import {Vector3, Box3} from 'three'
 import {Menu, MenuItem, SvgIcon, Typography} from '@mui/material'
 import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
-import {HASH_DEBOUNCE_WAIT_MS, debounce} from '../../utils/debounce'
+import {HASH_DEBOUNCE_WAIT_MS, debounceInHistoryEntry} from '../../utils/debounce'
 import {addHashParams, getHashParams, getObjectParams, removeParams, replaceHashParams} from '../../utils/location'
 import {roundCoordComponent} from '../../utils/math'
 import {isNumeric} from '../../utils/strings'
@@ -111,7 +111,12 @@ export default function CutPlaneMenu() {
     if (!model || !clipper) {
       return undefined
     }
-    const writePlanes = debounce(() => writeDraggedPlanes(viewer, model), HASH_DEBOUNCE_WAIT_MS)
+    // In the entry the drag was made in only: the flush below runs when the
+    // viewer is replaced, which on an in-app open or a Back to another model
+    // is after the URL has become that model's, while the store's `model`
+    // (writeDraggedPlanes' own guard) is still this one
+    // (utils/debounce.js#debounceInHistoryEntry; open-205, #2021).
+    const writePlanes = debounceInHistoryEntry(() => writeDraggedPlanes(viewer, model), HASH_DEBOUNCE_WAIT_MS)
     clipper.onPlaneMoved = writePlanes
     return () => {
       // A drag's last move still lands in the link if the menu goes first.

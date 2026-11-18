@@ -1,4 +1,4 @@
-import {HASH_DEBOUNCE_WAIT_MS, debounce} from '../../utils/debounce'
+import {HASH_DEBOUNCE_WAIT_MS, debounceInHistoryEntry} from '../../utils/debounce'
 
 
 /**
@@ -32,7 +32,8 @@ import {HASH_DEBOUNCE_WAIT_MS, debounce} from '../../utils/debounce'
  * once camera-controls' damping has settled, and goes through
  * `history.replaceState` (utils/location.js#replaceHashParams): no history
  * entry per settle, and no `hashchange`/`popstate` for the location effect to
- * re-apply the rounded pose from.
+ * re-apply the rounded pose from. A write still pending when the page moves
+ * to another history entry is dropped rather than written into that entry.
  */
 
 
@@ -90,7 +91,10 @@ export function startLiveCameraLink(controls, {
   // The pose the press started from, to tell a press that moved the camera
   // from one that didn't.
   let pressPose = null
-  const writeSettled = debounce(() => {
+  // Lands only in the history entry the camera last moved in: a Back,
+  // Forward or in-app open before it lands makes another entry the page's,
+  // and this pose isn't that entry's (utils/debounce.js#debounceInHistoryEntry).
+  const writeSettled = debounceInHistoryEntry(() => {
     if (isEnabled()) {
       write(controls)
     }

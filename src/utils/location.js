@@ -540,6 +540,30 @@ export function removeHashParams(location, name, paramKeys = []) {
 
 
 /**
+ * Like removeHashParams for a whole set — every other set passed through as
+ * written (removeParamsFromHash) — but REPLACES the current history entry
+ * instead of making a new one, as replaceHashParams does for a write. For a
+ * rewrite that only brings the URL in line with the page after a navigation
+ * (hooks/useHashState.js), which must not be a step of its own.
+ *
+ * @param {Location} location The window.location object
+ * @param {string} name prefix of the set to remove
+ */
+export function removeHashParamsInPlace(location, name) {
+  const hash = removeParamsFromHash(location.hash, name)
+  if (hash === location.hash) {
+    return
+  }
+  const isPageLocation = typeof Location !== 'undefined' && location instanceof Location
+  if (isPageLocation && typeof window.history?.replaceState === 'function') {
+    window.history.replaceState(window.history.state, '', `${location.pathname}${location.search}${hash}`)
+    return
+  }
+  location.hash = hash
+}
+
+
+/**
  * Passthru to setHashParams, with window.location
  *
  * @param {string} name A unique name for the params
