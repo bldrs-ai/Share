@@ -53,6 +53,8 @@ export interface AssistOptions {
   maxSteps?: number
   /** The AI SDK's retries of a failed request (429, 5xx, network) before the error surfaces. */
   maxRetries?: number
+  /** How long `undo` waits for running calls; {@link UNDO_SETTLE_MS} by default. */
+  undoSettleMs?: number
 }
 
 
@@ -87,6 +89,14 @@ export function createAssist(opts: AssistOptions): Assist {
 export const FULL_RESULT_TURNS = 3
 /** Turns of history sent at all; older ones stay in the store, unsent. */
 export const MAX_WIRE_TURNS = 30
+/**
+ * Characters of history sent, as JSON: about 40k tokens at ~4 characters a
+ * token. Chosen to leave a 128k-token context room for what is NOT history:
+ * the current turn's own tool results (up to 8 steps of the registry's
+ * 32k-character cap, ~64k tokens at worst), the instructions and context
+ * blocks, and the tool schemas (a few thousand tokens).
+ */
+export const MAX_WIRE_CHARS = 160_000
 const STUB_RESULT = 'Result of an earlier turn, omitted to save space. Call the tool again if you need it.'
 
 
@@ -108,7 +118,18 @@ interface StepRecord {
   id: string
   calls: Array<{name: string, undo: () => Promise<void>}>
   undone: boolean
+  /** Calls of this step still running, each settling once its undo is kept or rolled back. */
+  inflight: Set<Promise<void>>
 }
+
+
+/**
+ * How long `undo` waits for the running calls of the steps it undoes. A
+ * view tool settles in milliseconds; this only bounds a tool that hangs,
+ * after which undo goes ahead and such a call is rolled back when (if) it
+ * lands, possibly out of order.
+ */
+export const UNDO_SETTLE_MS = 2000
 
 
 /**
@@ -126,7 +147,7 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
   const stepRecord = (id: string): StepRecord => {
     let record = steps.find((step) => step.id === id)
     if (!record) {
-      record = {id, calls: [], undone: false}
+      record = {id, calls: [], undone: false, inflight: new Set()}
       steps.push(record)
     }
     return record
@@ -328,15 +349,28 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
       if (index < 0 || !undoable(steps[index])) {
         return report
       }
-      // Newest first, down to and including the one asked for: undoing an
-      // older step's snapshot alone would bring back state a newer step's
-      // undo had already taken away.
-      for (const record of steps.slice(index).reverse()) {
-        if (!undoable(record)) {
-          record.undone = true
+      // The step asked for and every newer one: undoing an older step's
+      // snapshot alone would bring back state a newer step's undo had
+      // already taken away. Already-undone steps were reversed once already.
+      const affected = steps.slice(index).filter((record) => !record.undone)
+      // 1. Mark them undone first, so their running calls see shouldCommit()
+      //    false and apply nothing (types.ts ToolContext).
+      affected.forEach((record) => {
+        record.undone = true
+      })
+      // 2. Wait, bounded, for those calls to settle: a call that ignored the
+      //    check rolls itself back as it lands, and it is the newest change,
+      //    so it must go before the older calls are reversed.
+      const running = affected.flatMap((record) => [...record.inflight])
+      if (running.length > 0) {
+        await Promise.race([Promise.all(running),
+          new Promise((resolve) => setTimeout(resolve, opts.undoSettleMs ?? UNDO_SETTLE_MS))])
+      }
+      // 3. Reverse strictly newest first.
+      for (const record of [...affected].reverse()) {
+        if (record.calls.length === 0) {
           continue
         }
-        record.undone = true
         report.steps.push(record.id)
         for (const {name, undo} of [...record.calls].reverse()) {
           try {
@@ -379,31 +413,60 @@ function refusedCall(part: {toolName: string, error?: unknown}, nameOf: (wire: s
 /**
  * What of the stored history goes over the wire. The store keeps every
  * message whole (D10); this bounds the request so a long conversation
- * doesn't grow past the model's context window and fail every turn after:
- * only the last {@link MAX_WIRE_TURNS} turns are sent, and in all but the
- * last {@link FULL_RESULT_TURNS} each tool result is cut to a stub. The
- * tool calls themselves stay, so every call still has its result, which
- * providers require. A turn starts at a user message, so the cut never
- * splits one.
+ * doesn't grow past the model's context window and fail every turn after.
+ *
+ * 1. Only the last {@link MAX_WIRE_TURNS} turns are sent.
+ * 2. Tool results of all but the last {@link FULL_RESULT_TURNS} turns are
+ *    cut to a stub.
+ * 3. While it is still over {@link MAX_WIRE_CHARS}, the newest full turns'
+ *    results are stubbed too, oldest first, and then the oldest turns are
+ *    dropped, down to the last one.
+ *
+ * Whole turns only: a turn starts at a user message and holds its own tool
+ * calls and their results, so the result is never headed by anything but a
+ * user message and never holds a result without its call (providers reject
+ * both). Tool calls themselves are never cut, so every call keeps a result.
  *
  * @param history the stored messages
  * @return the messages to send
  */
 export function wireHistory(history: ModelMessage[]): ModelMessage[] {
-  const turnStarts = history.flatMap((message, index) => (message.role === 'user' ? [index] : []))
-  const firstSent = turnStarts.length > MAX_WIRE_TURNS ? turnStarts[turnStarts.length - MAX_WIRE_TURNS] : 0
-  const firstFull = turnStarts.length > FULL_RESULT_TURNS ?
-    turnStarts[turnStarts.length - FULL_RESULT_TURNS] : 0
-  return history.slice(firstSent).map((message, offset) => {
-    if (firstSent + offset >= firstFull || message.role !== 'tool' || !Array.isArray(message.content)) {
-      return message
+  const turns: ModelMessage[][] = []
+  for (const message of history) {
+    if (message.role === 'user') {
+      turns.push([message])
+    } else if (turns.length > 0) {
+      turns[turns.length - 1].push(message)
     }
-    return {
-      ...message,
-      content: message.content.map((part) => (part.type === 'tool-result' ?
-        {...part, output: {type: 'text' as const, value: STUB_RESULT}} : part)),
-    } as ModelMessage
-  })
+    // A message before the first user message has no turn, and is not sent.
+  }
+  let sent = turns.slice(-MAX_WIRE_TURNS)
+  const stubbed = (turn: ModelMessage[]) => turn.map(stubToolResults)
+  sent = sent.map((turn, index) => (index < sent.length - FULL_RESULT_TURNS ? stubbed(turn) : turn))
+  const size = () => sent.reduce((sum, turn) => sum + JSON.stringify(turn).length, 0)
+  for (let index = Math.max(0, sent.length - FULL_RESULT_TURNS); index < sent.length && size() > MAX_WIRE_CHARS; index++) {
+    sent[index] = stubbed(sent[index])
+  }
+  while (sent.length > 1 && size() > MAX_WIRE_CHARS) {
+    sent = sent.slice(1)
+  }
+  return sent.flat()
+}
+
+
+/**
+ * @param message
+ * @return the message with each tool result's output cut to a stub
+ */
+function stubToolResults(message: ModelMessage): ModelMessage {
+  if (message.role !== 'tool' || !Array.isArray(message.content)) {
+    return message
+  }
+  return {
+    ...message,
+    content: message.content.map((part) => (part.type === 'tool-result' ?
+      {...part, output: {type: 'text' as const, value: STUB_RESULT}} : part)),
+  } as ModelMessage
 }
 
 
@@ -456,11 +519,18 @@ const RUNS_WITHOUT_ASKING = new Set(['run', 'runWithUndo'])
  *
  * Stop wins over a slow tool: the call is raced against the turn's signal,
  * and an abort answers the model at once (`aborted`) so the turn ends
- * promptly even when the tool never settles. A call that completes after
- * that, or after its step was undone, is ROLLED BACK as it lands, by its
- * own undo: the user stopped or undid it, so its effect must not appear
- * later with no Undo to take it back. (The other option, keeping it and
- * reporting it late, would need an event after the turn's `done`.)
+ * promptly even when the tool never settles.
+ *
+ * A call must not change the view once the user has stopped the turn or
+ * undone its step (they would see a change they cancelled, or lose one they
+ * made since). The primary mechanism is the tool's own check: the call gets
+ * `ctx.shouldCommit()`, false from then on, and a state-changing tool
+ * checks it right before it mutates (types.ts `ToolContext`). The backstop,
+ * for a tool that doesn't check, is to run the call's own undo as it lands.
+ * Either way the call is reported `rolled_back`, with no echo, and the model
+ * is told it didn't take effect. The backstop restores the snapshot the
+ * call took when it started, which can be older than a change the user
+ * made meanwhile; only the check avoids that.
  *
  * @param name the registry name
  * @param input
@@ -504,28 +574,43 @@ async function runTool(name: string, input: unknown, callId: string,
       })
     }
   }
-  const call = hooks.registry.call(name, input, signal ? {signal} : {})
-  let settled: {result: Awaited<typeof call>} | null
+  const shouldCommit = () => !signal?.aborted && !record.undone
+  const call = hooks.registry.call(name, input, {...(signal ? {signal} : {}), shouldCommit})
+  // What happens when the call lands: its undo is kept, or (stopped or
+  // undone meanwhile) run at once. Tracked on the step so `undo` can wait
+  // for it, and it runs even after the race below has given up on the call.
+  const landing = call.then(async (result) => {
+    if (!result.undo) {
+      return {result, kept: false, rolledBack: false}
+    }
+    if (!shouldCommit()) {
+      // Through a promise: an undo that throws synchronously, or returns
+      // nothing, must not turn the rollback into a failure of its own.
+      await Promise.resolve().then(() => result.undo?.()).catch(() => undefined)
+      return {result, kept: false, rolledBack: true}
+    }
+    record.calls.push({name, undo: result.undo})
+    return {result, kept: true, rolledBack: false}
+  })
+  const settledLanding = landing.then(() => undefined, () => undefined)
+  record.inflight.add(settledLanding)
+  settledLanding.then(() => record.inflight.delete(settledLanding))
+  let settled
   try {
-    settled = await untilAborted(call, signal)
+    settled = await untilAborted(landing, signal)
   } catch (e) {
     return fail(toolErrorJson(e))
   }
   if (!settled) {
-    // Stopped while the tool ran. Whatever it does when it finishes is undone then.
-    call.then((late) => late.undo?.(), () => undefined).catch(() => undefined)
     return fail({code: 'aborted', message: `'${name}' was stopped before it finished.`})
   }
-  const {result} = settled
-  let kept = false
-  if (result.undo) {
-    if (record.undone || signal?.aborted) {
-      // The user undid this step, or stopped the turn, while the call ran.
-      await result.undo().catch(() => undefined)
-    } else {
-      record.calls.push({name, undo: result.undo})
-      kept = true
-    }
+  const {result, kept, rolledBack} = settled.result
+  if (rolledBack) {
+    return fail({
+      code: 'rolled_back',
+      message: `'${name}' finished after the user undid its step, so its change was reversed and did not take ` +
+        'effect. Do not report it as done.',
+    })
   }
   hooks.outcomes.set(callId, {name, stepId, ok: true, echo: result.echo, refs: result.refs, undoable: kept})
   return result.content

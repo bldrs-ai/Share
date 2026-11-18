@@ -209,6 +209,17 @@ describe('viewer/tools (model, view and share providers)', () => {
   })
 
 
+  it('a view tool changes nothing when its call may no longer commit (stopped or undone)', async () => {
+    const before = useStore.getState().selectedAnchorIds
+    expect((before ?? []).map(Number)).not.toContain(102)
+    const error = await rejection(registry.call('view.select', {refs: ['e102']}, {shouldCommit: () => false}))
+    expect(error.code).toBe('rolled_back')
+    expect(useStore.getState().selectedAnchorIds).toEqual(before)
+    // And commits when it may.
+    await registry.call('view.select', {refs: ['e102']}, {shouldCommit: () => true})
+    expect(useStore.getState().selectedAnchorIds.map(Number)).toEqual([102])
+  })
+
   describe('model.properties', () => {
     it('summarizes attributes and property sets', async () => {
       const result = await registry.call('model.properties', {refs: ['e102']})

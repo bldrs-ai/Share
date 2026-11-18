@@ -7,14 +7,19 @@ import {SCRIPT, SSE_HEADERS, sseText, toolCalls} from '../../assist/openrouterSs
 import {getServer} from '../../__mocks__/server'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import useStore from '../../store/useStore'
-import BotChat, {RUNTIME_LOAD_FAILED_MESSAGE, START_FAILED_MESSAGE, stepLimitMessage} from './BotChat'
+import BotChat, {
+  RUNTIME_LOAD_FAILED_MESSAGE,
+  START_FAILED_MESSAGE,
+  TURN_FAILED_MESSAGE,
+  stepLimitMessage,
+} from './BotChat'
 import {assistKeyStore, resetAssistChat} from './assistState'
 import {BOT_TITLE} from './component'
 import {reportAssistCondition} from './reportAssistCondition'
 
 
 jest.mock('./reportAssistCondition', () => ({reportAssistCondition: jest.fn()}))
-const mockControl = {runtimeFails: false, runtimeDelayMs: 0, startThrows: false}
+const mockControl = {runtimeFails: false, runtimeDelayMs: 0, startThrows: false, labelThrows: false}
 
 
 // The lazy runtime is a URL import in the app (assistRuntime.js); Jest loads
@@ -54,9 +59,13 @@ jest.mock('../../viewer/tools/assistHost', () => {
         getKey: () => deps.keyStore.get('openrouter'), model: 'mock/model',
         baseURL: `${process.env.OPENROUTER_BASE_URL}/api/v1`,
       })
+      // A transport whose label throws makes the panel's event handling throw.
+      const shown = mockControl.labelThrows ? Object.defineProperty({...transport}, 'label', {get: () => {
+        throw new Error('label broke')
+      }}) : transport
       const assist = runtime.createAssist({transport, registry, store: deps.conversationStore,
         instructions: 'Use the tools.', maxRetries: 0})
-      return {assist, transport, dispose: () => registry.dispose()}
+      return {assist, transport: shown, dispose: () => registry.dispose()}
     },
   }
 })
@@ -115,7 +124,7 @@ describe('BotChat', () => {
   beforeEach(() => {
     mockView.selected = ['e9']
     mockView.undos = 0
-    Object.assign(mockControl, {runtimeFails: false, runtimeDelayMs: 0, startThrows: false})
+    Object.assign(mockControl, {runtimeFails: false, runtimeDelayMs: 0, startThrows: false, labelThrows: false})
     jest.mocked(reportAssistCondition).mockClear()
     act(() => {
       setStoreState({isBotVisible: true})
@@ -313,6 +322,46 @@ describe('BotChat', () => {
     expect(warn).toHaveBeenCalledWith('assist: the assistant failed to start')
     warn.mockRestore()
     expect(reportAssistCondition).toHaveBeenCalledWith('start_failed')
+    await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
+  })
+
+  it('New chat while the first send loads the runtime: the old send never runs, and the new chat is new', async () => {
+    mockControl.runtimeDelayMs = 50
+    const bodies: Array<{messages: Array<{role: string, content: unknown}>}> = []
+    const onRequest = ({request}: {request: Request}) => {
+      void request.clone().json().then((body) => bodies.push(body))
+    }
+    getServer().events.on('request:start', onRequest)
+    try {
+      render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+      send(SCRIPT.selectPrompt)
+      fireEvent.click(screen.getByRole('button', {name: 'New chat'}))
+      await act(() => new Promise((resolve) => setTimeout(resolve, mockControl.runtimeDelayMs * 3)))
+      // The old send ran no tool and sent nothing.
+      expect(mockView.selected).toEqual(['e9'])
+      expect(bodies).toEqual([])
+      expect(screen.queryByText(SCRIPT.selectPrompt)).toBeNull()
+      // The new chat isn't busy, and its first request holds only its own message.
+      send('Hello again')
+      expect(await screen.findByText('Test received.')).toBeInTheDocument()
+      await waitFor(() => expect(bodies).toHaveLength(1))
+      expect(bodies[0].messages.filter((m) => m.role === 'user')).toEqual([{role: 'user', content: 'Hello again'}])
+      expect(mockView.selected).toEqual(['e9'])
+    } finally {
+      getServer().events.removeListener('request:start', onRequest)
+    }
+  })
+
+  it('a throw while showing a reply is its own condition, reported, with a bubble', async () => {
+    mockControl.labelThrows = true
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
+    render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+    send('Hello bot')
+    expect(await screen.findByTestId('BotChat-Error')).toHaveTextContent(TURN_FAILED_MESSAGE)
+    expect(reportAssistCondition).toHaveBeenCalledWith('turn_failed', {transport: 'openrouter'})
+    expect(reportAssistCondition).not.toHaveBeenCalledWith('start_failed')
+    expect(warn).toHaveBeenCalledWith('assist: a reply failed while it was shown')
+    warn.mockRestore()
     await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
   })
 

@@ -41,6 +41,7 @@ const PROVIDER_LABEL = 'OpenRouter'
 /** What the panel says for failures that aren't the provider's. */
 export const RUNTIME_LOAD_FAILED_MESSAGE = 'Couldn\'t load the assistant. Check your connection and try again.'
 export const START_FAILED_MESSAGE = 'The assistant couldn\'t start. Reload the page to try again.'
+export const TURN_FAILED_MESSAGE = 'Something went wrong showing this reply. Try again, or start a new chat.'
 
 /**
  * @param {number} steps
@@ -132,11 +133,11 @@ export default function BotChat() {
     }
     update((chat) => ({...chat, streamingTurn: turn}))
     try {
-      if (!assistInstance.current) {
-        let runtime
-        try {
-          runtime = await loadAssistRuntime()
-        } catch (e) {
+      let instance
+      try {
+        instance = await ensureAssistInstance()
+      } catch (e) {
+        if (e?.assistStage === 'load') {
           // The lazy bundle didn't arrive. Offline is the user's to fix;
           // online, it's a broken deploy (reportAssistCondition.js).
           console.warn('assist: could not load the assistant runtime')
@@ -144,33 +145,43 @@ export default function BotChat() {
             reportAssistCondition('runtime_load_failed')
           }
           setMessages((prev) => [...prev, textMessage('error', RUNTIME_LOAD_FAILED_MESSAGE)])
-          return
+        } else {
+          // Building the assistant threw: a bug, not the user's doing. Its
+          // message isn't logged: it could carry whatever the builder was given.
+          console.warn('assist: the assistant failed to start')
+          reportAssistCondition('start_failed')
+          setMessages((prev) => [...prev, textMessage('error', START_FAILED_MESSAGE)])
         }
-        const built = createShareAssist(runtime, {keyStore: assistKeyStore, conversationStore: assistConversationStore})
-        assistInstance.current = {...built, session: built.assist.open(conversationId)}
+        return
       }
-      // Stop pressed while the runtime loaded: there was no session to abort then.
-      if (assistChat.get().stoppedTurn === turn) {
+      // While the first send loaded the runtime there was no session to stop
+      // or replace: the user may have pressed Stop, or started a New chat, in
+      // the meantime. Either way this send never runs. (A New chat's own
+      // view is a different conversation, which `update` leaves alone.)
+      const chatNow = assistChat.get()
+      if (chatNow.conversationId !== conversationId || chatNow.stoppedTurn === turn) {
         setMessages((prev) => [...prev, errorMessage('aborted', PROVIDER_LABEL)])
         return
       }
-      const {session, transport} = assistInstance.current
-      for await (const event of session.send(content)) {
-        if (event.type === 'error' && event.code === 'unavailable') {
-          reportAssistCondition('model_unavailable', {status: event.status, transport: transport.id})
+      const {session, transport} = instance
+      try {
+        for await (const event of session.send(content)) {
+          if (event.type === 'error' && event.code === 'unavailable') {
+            reportAssistCondition('model_unavailable', {status: event.status, transport: transport.id})
+          }
+          update((chat) => ({
+            ...chat,
+            messages: applyEvent(chat.messages, event, turn, transport.label),
+            undoTop: session.lastUndoable(),
+          }))
         }
-        update((chat) => ({
-          ...chat,
-          messages: applyEvent(chat.messages, event, turn, transport.label),
-          undoTop: session.lastUndoable(),
-        }))
+      } catch (e) {
+        // Showing the reply threw: a bug in this panel's event handling,
+        // not the provider or the user. The session ends its turn itself.
+        console.warn('assist: a reply failed while it was shown')
+        reportAssistCondition('turn_failed', {transport: transport.id})
+        setMessages((prev) => [...prev, textMessage('error', TURN_FAILED_MESSAGE)])
       }
-    } catch (e) {
-      // Building the assistant threw: a bug, not the user's doing. Its
-      // message isn't logged: it could carry whatever the builder was given.
-      console.warn('assist: the assistant failed to start')
-      reportAssistCondition('start_failed')
-      setMessages((prev) => [...prev, textMessage('error', START_FAILED_MESSAGE)])
     } finally {
       update((chat) => ({
         ...chat,
@@ -388,6 +399,43 @@ export default function BotChat() {
 
 
 /**
+ * The assistant, built once per page on the first send: the lazy runtime
+ * loaded, Share's assistant made from it, and a session opened on the chat
+ * as it is when the build finishes (not when the send began, which a New
+ * chat may have replaced meanwhile). Concurrent first sends share one build.
+ *
+ * @return {Promise<object>} `assistInstance.current`
+ * @throws {Error} with `assistStage` 'load' (the runtime didn't arrive) or
+ *   'start' (building the assistant threw)
+ */
+function ensureAssistInstance() {
+  if (assistInstance.current) {
+    return Promise.resolve(assistInstance.current)
+  }
+  if (!building) {
+    building = loadAssistRuntime()
+      .catch((e) => {
+        throw Object.assign(new Error('assist runtime did not load', {cause: e}), {assistStage: 'load'})
+      })
+      .then((runtime) => {
+        try {
+          const built = createShareAssist(runtime, {keyStore: assistKeyStore, conversationStore: assistConversationStore})
+          assistInstance.current = {...built, session: built.assist.open(assistChat.get().conversationId)}
+          return assistInstance.current
+        } catch (e) {
+          throw Object.assign(new Error('assist failed to start', {cause: e}), {assistStage: 'start'})
+        }
+      })
+      .finally(() => {
+        building = null
+      })
+  }
+  return building
+}
+let building = null
+
+
+/**
  * Fold one loop event into the message list.
  *
  * - Text streams into the turn's live assistant bubble, and a new bubble
@@ -439,6 +487,9 @@ export function applyEvent(messages, event, turn, provider) {
 function actionText(event) {
   if (event.ok) {
     return event.echo ?? `Ran ${event.name}`
+  }
+  if (event.error?.code === 'rolled_back') {
+    return `${event.name} didn't take effect: it was stopped or undone`
   }
   if (event.error?.code === 'denied') {
     return `Didn't run ${event.name}: it needs your approval, which isn't available yet`

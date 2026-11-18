@@ -14,6 +14,7 @@ import {captureMessage} from '@sentry/react'
  * - `runtime_load_failed`: `docs/assist/runtime.js` didn't load while the
  *   browser says it is online: a broken deploy or a bad path.
  * - `start_failed`: building the assistant threw, which is a bug.
+ * - `turn_failed`: the panel threw while showing a turn's events, also a bug.
  *
  * What the user's own key or account causes (401/402/429), a stop and a
  * conversation grown too long (400) are shown to the user only.
@@ -28,10 +29,12 @@ const MESSAGES = {
   model_unavailable: 'Assist model unavailable',
   runtime_load_failed: 'Assist runtime failed to load',
   start_failed: 'Assist failed to start',
+  turn_failed: 'Assist failed while showing a reply',
 }
 
-// Once per page per condition: a user who retries a broken model five times
-// is one occurrence of the problem, not five.
+// Once per page per condition and transport: a user who retries a broken
+// model five times is one occurrence of the problem, not five, while the
+// same condition on another transport (#1930's providers) is another.
 const reported = new Set()
 
 
@@ -42,10 +45,11 @@ const reported = new Set()
  * @param {string} [fields.transport] transport id
  */
 export function reportAssistCondition(condition, {status, transport} = {}) {
-  if (!(condition in MESSAGES) || reported.has(condition)) {
+  const key = `${condition}|${transport ?? ''}`
+  if (!(condition in MESSAGES) || reported.has(key)) {
     return
   }
-  reported.add(condition)
+  reported.add(key)
   try {
     captureMessage(MESSAGES[condition], {
       level: 'warning',

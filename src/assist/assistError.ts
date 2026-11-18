@@ -31,8 +31,10 @@ export type AssistErrorCode =
   | 'bad_request'
   /**
    * HTTP 404: the model or endpoint isn't there. For OpenRouter this is also
-   * what a model with no `data_collection: 'deny'` endpoint answers. The
-   * model is Bldrs' choice (Share's ASSIST_MODEL), so the host reports it.
+   * what a model with no `data_collection: 'deny'` endpoint answers, and
+   * what the user's own account provider settings can cause by leaving it
+   * none. The model is Bldrs' choice (Share's ASSIST_MODEL), so the host
+   * reports it either way.
    */
   | 'unavailable'
   /** The request never got an HTTP answer: offline, DNS, CORS. */
@@ -148,8 +150,8 @@ export function assistErrorMessage(code: AssistErrorCode, provider: string, stat
     case 'rate_limited': return `${provider} is limiting requests right now. Wait a minute and try again.`
     case 'bad_request': return `${provider} couldn't take this request; the conversation may be too long. ` +
       'Start a new chat to carry on.'
-    case 'unavailable': return `The assistant's AI model isn't available from ${provider} right now. ` +
-      'Your key and settings are fine; this needs a fix on our side.'
+    case 'unavailable': return `This AI model isn't available from ${provider} right now. It may be our ` +
+      `configuration, or your ${provider} provider settings leave it no endpoint.`
     case 'network': return `Couldn't reach ${provider}. Check your connection and try again.`
     case 'aborted': return 'Stopped.'
     case 'busy': return 'The assistant is still answering. Wait for it, or stop it first.'

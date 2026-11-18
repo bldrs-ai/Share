@@ -23,6 +23,17 @@ describe('Bot/reportAssistCondition', () => {
     })
   })
 
+  it('dedupes per condition and transport', () => {
+    reportAssistCondition('model_unavailable', {status: 404, transport: 'openrouter'})
+    reportAssistCondition('model_unavailable', {status: 404, transport: 'anthropic'})
+    reportAssistCondition('turn_failed', {transport: 'openrouter'})
+    expect(captureMessage.mock.calls.map(([message, {tags}]) => [message, tags.assist_transport])).toEqual([
+      ['Assist model unavailable', 'openrouter'],
+      ['Assist model unavailable', 'anthropic'],
+      ['Assist failed while showing a reply', 'openrouter'],
+    ])
+  })
+
   it('ignores a condition it doesn\'t know, and never throws', () => {
     reportAssistCondition('something_else')
     expect(captureMessage).not.toHaveBeenCalled()

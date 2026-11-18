@@ -9,7 +9,14 @@ import {
   toolCalls,
 } from './openrouterSse.fixture'
 import {createMemoryConversationStore} from './conversation'
-import {DEFAULT_MAX_STEPS, FULL_RESULT_TURNS, createAssist, wireHistory} from './loop'
+import {
+  DEFAULT_MAX_STEPS,
+  FULL_RESULT_TURNS,
+  MAX_WIRE_CHARS,
+  UNDO_SETTLE_MS,
+  createAssist,
+  wireHistory,
+} from './loop'
 import {createRegistry} from './registry'
 import {openRouterTransport} from './transport'
 
@@ -481,49 +488,80 @@ describe('assist/loop', () => {
     expect(events.at(-1)).toEqual({type: 'done', finishReason: 'tool-calls'})
   })
 
-  describe('a tool still running when the user stops', () => {
+  describe('a tool still running when the user stops or undoes', () => {
     /**
-     * A tool whose call settles only when the test calls `state.release()`.
+     * A view over one value, `view.sel`, with two snapshot-undo tools, as
+     * Share's view tools are: `view.fast` sets it at once; `view.slow`
+     * takes its snapshot when it starts and sets the value only when the
+     * test releases it. `honours` says whether `view.slow` checks
+     * ctx.shouldCommit() before it mutates (types.ts ToolContext).
      *
-     * @return {object} {provider, state}
+     * @param {boolean} honours
+     * @return {object} {provider, view, release}
      */
-    function slowTool() {
-      const state = {applied: 0, release: null}
-      const provider = {
-        id: 'slow',
-        tools: () => [{
-          name: 'slow.select', description: 'Slow.', annotations: {viewState: true},
-          inputSchema: {type: 'object', properties: {}, additionalProperties: false},
-          run: () => new Promise((resolve) => {
-            state.release = () => {
-              state.applied++
-              resolve({content: {ok: true}, echo: 'Selected', undo: () => {
-                state.applied--
-              }})
-            }
-          }),
-        }],
-      }
-      return {provider, state}
+    function slowView(honours) {
+      const view = {sel: 'U0', releases: []}
+      const tool = (name, wait) => ({
+        name, description: name, annotations: {viewState: true},
+        inputSchema: {type: 'object', properties: {to: {type: 'string'}}, additionalProperties: false},
+        run: async ({to}, ctx) => {
+          const before = view.sel
+          if (wait) {
+            await new Promise((resolve) => view.releases.push(resolve))
+          }
+          if (honours && ctx.shouldCommit && !ctx.shouldCommit()) {
+            throw Object.assign(new Error(`${name} not applied`), {name: 'ToolError', code: 'rolled_back',
+              toJSON: () => ({code: 'rolled_back', message: `${name} not applied`})})
+          }
+          view.sel = to
+          return {content: {sel: to}, echo: `Set ${to}`, undo: () => {
+            view.sel = before
+          }}
+        },
+      })
+      return {view, provider: {id: 'view', tools: () => [tool('view.fast', false), tool('view.slow', true)]}}
     }
-    const callSlow = (body) => {
-      if (body.messages.at(-1).content === 'hello') {
-        return scriptedReply(body)
+    /**
+     * @param {Array<object>} plan the tool call of each model request, in order; then text
+     * @return {Function} the scripted model
+     */
+    const scripted = (plan) => {
+      let n = 0
+      return (body) => {
+        if (body.messages.at(-1).content === 'hello') {
+          return scriptedReply(body)
+        }
+        const call = plan[n++]
+        return call ? {chunks: toolCalls([call]), delayMs: 0} : {chunks: textReply('done'), delayMs: 0}
       }
-      return body.messages.some((m) => m.role === 'tool') ?
-        {chunks: textReply('done'), delayMs: 0} :
-        {chunks: toolCalls([{id: 's1', name: 'slow_select', args: {}}]), delayMs: 0}
+    }
+    /**
+     * @param {object} view from slowView
+     * @return {Promise<void>} once a slow call is waiting to be released
+     */
+    const untilWaiting = async (view) => {
+      while (view.releases.length === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 5))
+      }
+    }
+    const setupView = (honours, plan, extra = {}) => {
+      const {view, provider} = slowView(honours)
+      const {fetchFn} = fakeFetch(scripted(plan))
+      const assist = createAssist({
+        transport: openRouterTransport({getKey: () => KEY, model: 'mock/model', baseURL: BASE_URL, fetch: fetchFn}),
+        registry: createRegistry([provider]), store: createMemoryConversationStore(), instructions: 'x', maxRetries: 0,
+        ...extra,
+      })
+      return {view, session: assist.open('c')}
     }
 
     it('ends the turn promptly even if the tool never settles', async () => {
-      const {provider} = slowTool()
-      const {session} = setup({extraProviders: [provider]}, callSlow)
+      const {view, session} = setupView(true, [{id: 's', name: 'view_slow', args: {to: 'S'}}])
       const t0 = Date.now()
-      const events = await collect(session.send('go'), (event) => {
-        if (event.type === 'tool-call') {
-          setTimeout(() => session.abort(), 20)
-        }
-      })
+      const turn = collect(session.send('go'))
+      await untilWaiting(view)
+      session.abort()
+      const events = await turn
       expect(Date.now() - t0).toBeLessThan(2000)
       expect(ofType(events, 'error')).toEqual([{type: 'error', code: 'aborted'}])
       expect(events.at(-1)).toEqual({type: 'done', finishReason: 'aborted'})
@@ -531,52 +569,64 @@ describe('assist/loop', () => {
       expect(textOf(await collect(session.send('hello')))).toBe(SCRIPT.fallback)
     })
 
-    it('rolls back a tool that finishes after the stop, so nothing is left without an Undo', async () => {
-      const {provider, state} = slowTool()
-      const {session} = setup({extraProviders: [provider]}, callSlow)
-      const events = await collect(session.send('go'), (event) => {
-        if (event.type === 'tool-call') {
-          setTimeout(() => session.abort(), 20)
-        }
-      })
-      const stepId = ofType(events, 'tool-call')[0].stepId
-      state.release()
+    // (a) Stop, then the user changes the view, then the slow call lands.
+    it('a call landing after Stop applies nothing, so the user\'s own change since stands', async () => {
+      const {view, session} = setupView(true, [{id: 's', name: 'view_slow', args: {to: 'S'}}])
+      const turn = collect(session.send('go'))
+      await untilWaiting(view)
+      session.abort()
+      await turn
+      view.sel = 'USER'
+      view.releases[0]()
       await new Promise((resolve) => setTimeout(resolve, 20))
-      expect(state.applied).toBe(0)
-      expect(session.canUndo(stepId)).toBe(false)
+      expect(view.sel).toBe('USER')
       expect(session.lastUndoable()).toBe(null)
     })
 
-    it('rolls back a call that lands after its step was undone', async () => {
-      // Step 0 selects at once; step 1 runs the slow tool. Undoing step 0 while
-      // step 1's call runs undoes step 1 too (the stack), so its late result
-      // is rolled back as it lands.
-      const {provider, state} = slowTool()
-      let call = 0
-      const {session, view} = setup({extraProviders: [provider]}, () => {
-        call++
-        if (call === 1) {
-          return {chunks: toolCalls([{id: 'a', name: 'view_select', args: {refs: ['e1']}}]), delayMs: 0}
-        }
-        if (call === 2) {
-          return {chunks: toolCalls([{id: 'b', name: 'slow_select', args: {}}]), delayMs: 0}
-        }
-        return {chunks: textReply('done'), delayMs: 0}
-      })
+    // (b) Step 1.0 sets S1 at once; step 1.1's slow call (to S2) is still
+    // running when the user undoes step 1.0, which undoes 1.1 too.
+    it.each([
+      ['checks shouldCommit', true],
+      ['ignores it (the backstop rolls it back first, then the older step)', false],
+    ])('undoing a step while a newer call runs ends at the state before both, when the tool %s', async (_, honours) => {
+      const {view, session} = setupView(honours, [
+        {id: 'f', name: 'view_fast', args: {to: 'S1'}},
+        {id: 's', name: 'view_slow', args: {to: 'S2'}},
+      ])
       const turn = collect(session.send('go'))
-      await new Promise((resolve) => {
-        const wait = () => (state.release ? resolve() : setTimeout(wait, 5))
-        wait()
-      })
+      await untilWaiting(view)
+      expect(view.sel).toBe('S1')
       const first = session.lastUndoable()
-      expect(first).not.toBe(null)
-      expect(await session.undo(first)).toEqual(expect.objectContaining({undone: 1}))
-      expect(view.selected).toEqual(['e9'])
-      state.release()
+      // Release the slow call shortly after undo starts waiting for it.
+      setTimeout(() => view.releases[0](), 30)
+      const report = await session.undo(first)
+      expect(view.sel).toBe('U0')
+      expect(report.steps).toEqual([first])
       const events = await turn
-      expect(state.applied).toBe(0)
-      expect(ofType(events, 'tool-result').find((e) => e.name === 'slow.select').undoable).toBe(false)
+      expect(view.sel).toBe('U0')
+      // The rolled-back call is reported as not done: no echo, and the model was told.
+      const slow = ofType(events, 'tool-result').find((e) => e.name === 'view.slow')
+      expect(slow).toEqual(expect.objectContaining({ok: false, undoable: false}))
+      expect(slow.error.code).toBe('rolled_back')
+      expect(slow.echo).toBeUndefined()
       expect(session.lastUndoable()).toBe(null)
+    })
+
+    it('undo gives up waiting on a call that never lands, after its bound', async () => {
+      expect(UNDO_SETTLE_MS).toBe(2000)
+      const settleMs = 50
+      const {view, session} = setupView(true, [
+        {id: 'f', name: 'view_fast', args: {to: 'S1'}},
+        {id: 's', name: 'view_slow', args: {to: 'S2'}},
+      ], {undoSettleMs: settleMs})
+      const turn = collect(session.send('go'))
+      await untilWaiting(view)
+      const t0 = Date.now()
+      expect((await session.undo(session.lastUndoable())).undone).toBe(1)
+      expect(Date.now() - t0).toBeGreaterThanOrEqual(settleMs - 5)
+      expect(view.sel).toBe('U0')
+      session.abort()
+      await turn
     })
   })
 
@@ -646,6 +696,58 @@ describe('assist/loop', () => {
     expect(sent.slice(4).every((c) => c.includes('"selected"') || c.includes('"total"'))).toBe(true)
     // Every call still has its result.
     expect(requests.at(-1).body.messages.filter((m) => m.role === 'tool')).toHaveLength(turns * 2)
+  })
+
+  describe('wireHistory under its character budget', () => {
+    const big = 'x'.repeat(60_000)
+    /**
+     * @param {number} i
+     * @return {Array<object>} one stored turn: a question, a tool call, its 60k-char result, an answer
+     */
+    const turn = (i) => [
+      {role: 'user', content: `q${i}`},
+      {role: 'assistant', content: [{type: 'tool-call', toolCallId: `c${i}`, toolName: 'model_query', input: {}}]},
+      {role: 'tool', content: [{type: 'tool-result', toolCallId: `c${i}`, toolName: 'model_query',
+        output: {type: 'json', value: {blob: big}}}]},
+      {role: 'assistant', content: [{type: 'text', text: `a${i}`}]},
+    ]
+    const resultOf = (messages, i) => messages.find((m) => m.role === 'tool' && m.content[0].toolCallId === `c${i}`)
+    const isStub = (message) => message.content[0].output.type === 'text'
+
+    it('stubs the recent turns\' results oldest first before dropping a turn', () => {
+      // Turns 0-4 are stubbed by the recent-turns rule. The last three full
+      // results are ~180k, over budget, so the oldest of them (5) is stubbed too.
+      const history = Array.from({length: 8}, (_, i) => turn(i)).flat()
+      const sent = wireHistory(history)
+      expect(JSON.stringify(sent).length).toBeLessThanOrEqual(MAX_WIRE_CHARS)
+      // Nothing dropped: stubbing was enough.
+      expect(sent.filter((m) => m.role === 'user')).toHaveLength(8)
+      expect([4, 5, 6, 7].map((i) => isStub(resultOf(sent, i)))).toEqual([true, true, false, false])
+    })
+
+    it('then drops the oldest turns, never leaving a result without its call', () => {
+      // Each turn's own text is over budget/3, so stubs alone can't bring it under.
+      const long = (i) => [{role: 'user', content: `q${i} ${'y'.repeat(60_000)}`}, ...turn(i).slice(1)]
+      const history = Array.from({length: 5}, (_, i) => long(i)).flat()
+      const sent = wireHistory(history)
+      expect(JSON.stringify(sent).length).toBeLessThanOrEqual(MAX_WIRE_CHARS)
+      expect(sent[0].role).toBe('user')
+      expect(sent[0].content).toMatch(/^q[1-4] /)
+      const calls = new Set(sent.flatMap((m) => (m.role === 'assistant' ? m.content : []))
+        .filter((p) => p.type === 'tool-call').map((p) => p.toolCallId))
+      const results = sent.filter((m) => m.role === 'tool').map((m) => m.content[0].toolCallId)
+      expect(results.every((id) => calls.has(id))).toBe(true)
+    })
+
+    it('sends the last turn even when it alone is over budget', () => {
+      const sent = wireHistory([{role: 'user', content: 'z'.repeat(MAX_WIRE_CHARS * 2)}])
+      expect(sent).toHaveLength(1)
+    })
+
+    it('never starts with anything but a user message', () => {
+      const sent = wireHistory([{role: 'assistant', content: [{type: 'text', text: 'orphan'}]}, ...turn(0)])
+      expect(sent[0]).toEqual({role: 'user', content: 'q0'})
+    })
   })
 
   it('wireHistory cuts the history at a turn boundary past its turn cap', () => {
