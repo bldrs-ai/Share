@@ -55,7 +55,9 @@ import {Matrix4} from 'three'
 import {BLDRS_GLB_SCHEMA_VERSION, glbCacheKey} from './glbCacheKey'
 import useStore from '../store/useStore'
 import {beginGlbArtifactLoad, publishGlbArtifact} from './glbArtifactPublish'
-import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb, exportThreeModelAsGlb} from './glbExport'
+import {
+  BLDRS_SOURCE_BYTES_EXTRAS_KEY, BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb, exportThreeModelAsGlb, validSourceBytes,
+} from './glbExport'
 import {
   APPLIED_COORDINATION_KEY,
   COORDINATION_OFFSET_KEY,
@@ -680,6 +682,40 @@ describe('loader/glbExport', () => {
       expect(sceneExtrasArg).toEqual({[BLDRS_TITLE_EXTRAS_KEY]: 'Momentum'})
       // Same pass also stamps the standard glTF scenes[0].name (#1595).
       expect(sceneNameArg).toBe('Momentum')
+    })
+
+    it('stamps the source size beside the title, so a cache hit can report it', async () => {
+      const SOURCE_BYTES = 24_200_000
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      const ok = await exportAndCacheGlb({model: {name: 'Momentum'}, ...ctx, sourceBytes: SOURCE_BYTES})
+      expect(ok).toBe(true)
+
+      const [, , sceneExtrasArg] = mockInjectGlbExtensions.mock.calls[0]
+      expect(sceneExtrasArg).toEqual({
+        [BLDRS_TITLE_EXTRAS_KEY]: 'Momentum',
+        [BLDRS_SOURCE_BYTES_EXTRAS_KEY]: SOURCE_BYTES,
+      })
+    })
+
+    it('stamps no source size when the one given is not a size', async () => {
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      await exportAndCacheGlb({model: {name: 'Momentum'}, ...ctx, sourceBytes: 0})
+
+      const [, , sceneExtrasArg] = mockInjectGlbExtensions.mock.calls[0]
+      expect(sceneExtrasArg).toEqual({[BLDRS_TITLE_EXTRAS_KEY]: 'Momentum'})
+    })
+
+    const SIZE = 24_200_000
+    const FRACTION = 1.5
+    it.each([
+      [SIZE, SIZE],
+      [0, null], [-1, null], [FRACTION, null], [String(SIZE), null], [null, null], [undefined, null], [NaN, null],
+    ])('validSourceBytes(%p) is %p: the stamp is read back from an untrusted file', (value, expected) => {
+      expect(validSourceBytes(value)).toBe(expected)
     })
 
     it('passes sceneExtras: null when model.name is absent (drag-dropped GLB / OBJ etc.)', async () => {
