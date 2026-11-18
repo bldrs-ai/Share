@@ -22,6 +22,16 @@ const sentThisPage = new Set()
  */
 const BAIT_CLASSES = 'adsbox ad-banner textads banner-ads pub_300x250'
 
+/**
+ * How long the bait stays in the page before its style is read. uBlock Origin
+ * and Brave Shields add generic class-hiding rules only after their DOM
+ * surveyor sees a new class, asynchronously; a read right after insertion
+ * would find the bait visible and call them `network` (round-3 review on
+ * #2224). Blockers that inject their CSS up front (AdBlock Plus, AdGuard)
+ * read the same either way.
+ */
+export const BAIT_SETTLE_MS = 500
+
 
 /**
  * The browser family, by its own markers rather than a full UA parse. Brave
@@ -76,33 +86,50 @@ export function formFactor(nav = globalThis.navigator) {
 /**
  * What kind of blocking this looks like (CAPABILITY_FIELDS.blocker).
  * `offline` when the browser says so. Otherwise a bait element goes into the
- * page for one style read: hidden means an element-hiding ad blocker
- * (`cosmetic`); visible means the script was stopped at the request level, or
- * the network failed (`network`). Computed style rather than layout, so it
- * reads the same in a test DOM.
+ * page for {@link BAIT_SETTLE_MS}, then its style is read: hidden means an
+ * element-hiding ad blocker (`cosmetic`); visible means the script was stopped
+ * at the request level, or the network failed (`network`). Computed style
+ * rather than layout, so it reads the same in a test DOM. The bait is removed
+ * whatever happens. Never rejects.
  *
  * @param {object} [doc] document
  * @param {object} [nav] navigator
- * @return {string}
+ * @param {object} [opts]
+ * @param {number} [opts.delayMs] how long the bait waits; BAIT_SETTLE_MS
+ * @param {Function} [opts.schedule] setTimeout, for tests
+ * @return {Promise<string>}
  */
-export function blockerKind(doc = globalThis.document, nav = globalThis.navigator) {
+export function blockerKind(doc = globalThis.document, nav = globalThis.navigator,
+  {delayMs = BAIT_SETTLE_MS, schedule = globalThis.setTimeout} = {}) {
   if (nav && nav.onLine === false) {
-    return 'offline'
+    return Promise.resolve('offline')
   }
   if (!doc?.body || typeof doc.defaultView?.getComputedStyle !== 'function') {
-    return 'network'
+    return Promise.resolve('network')
   }
-  const bait = doc.createElement('div')
-  bait.className = BAIT_CLASSES
-  bait.setAttribute('aria-hidden', 'true')
-  bait.style.cssText = 'position:absolute;left:-10000px;top:-10000px;width:1px;height:1px;'
-  doc.body.appendChild(bait)
-  try {
-    const style = doc.defaultView.getComputedStyle(bait)
-    return style.display === 'none' || style.visibility === 'hidden' ? 'cosmetic' : 'network'
-  } finally {
-    bait.remove()
-  }
+  return new Promise((resolve) => {
+    let bait = null
+    try {
+      bait = doc.createElement('div')
+      bait.className = BAIT_CLASSES
+      bait.setAttribute('aria-hidden', 'true')
+      bait.style.cssText = 'position:absolute;left:-10000px;top:-10000px;width:1px;height:1px;'
+      doc.body.appendChild(bait)
+      schedule(() => {
+        try {
+          const style = doc.defaultView.getComputedStyle(bait)
+          resolve(style.display === 'none' || style.visibility === 'hidden' ? 'cosmetic' : 'network')
+        } catch (_) {
+          resolve('network')
+        } finally {
+          bait.remove()
+        }
+      }, delayMs)
+    } catch (_) {
+      bait?.remove()
+      resolve('network')
+    }
+  })
 }
 
 
@@ -110,14 +137,17 @@ export function blockerKind(doc = globalThis.document, nav = globalThis.navigato
  * The report for a condition, built from this client.
  *
  * @param {string} condition one of CAPABILITY_FIELDS.condition
- * @param {object} [env] document, navigator and consent, for tests
- * @return {object}
+ * @param {object} [env] document, navigator, consent and the bait's
+ *   `delayMs`/`schedule` (see blockerKind), for tests
+ * @return {Promise<object>}
  */
-export function capabilityReport(condition, {doc = globalThis.document, nav = globalThis.navigator, consent = isAllowed()} = {}) {
+export async function capabilityReport(condition, {
+  doc = globalThis.document, nav = globalThis.navigator, consent = isAllowed(), delayMs, schedule,
+} = {}) {
   return {
     condition,
     browser: browserFamily(nav),
-    blocker: blockerKind(doc, nav),
+    blocker: await blockerKind(doc, nav, {delayMs, schedule}),
     form_factor: formFactor(nav),
     consent: consent ? 'on' : 'off',
   }
@@ -138,11 +168,15 @@ export function capabilityReport(condition, {doc = globalThis.document, nav = gl
  * setting was. The function sends it under one fixed GA client id, so it is
  * never tied to this browser.
  *
+ * The once-per-session mark is set before anything waits, so a second call
+ * while the bait settles is still a no-op.
+ *
  * @param {string} condition one of CAPABILITY_FIELDS.condition
  * @param {object} [env] see capabilityReport; plus `storage` for tests
- * @return {boolean} whether a report was handed to the browser
+ * @return {Promise<boolean>} whether a report was handed to the browser.
+ *   Never rejects, so a caller may drop it.
  */
-export function reportClientCapability(condition, env = {}) {
+export async function reportClientCapability(condition, env = {}) {
   if (!CAPABILITY_FIELDS.condition.includes(condition) || sentThisPage.has(condition)) {
     return false
   }
@@ -163,7 +197,7 @@ export function reportClientCapability(condition, env = {}) {
     // As above.
   }
   try {
-    const body = JSON.stringify(capabilityReport(condition, env))
+    const body = JSON.stringify(await capabilityReport(condition, env))
     const nav = env.nav ?? globalThis.navigator
     if (typeof nav?.sendBeacon === 'function' && nav.sendBeacon(CAPABILITY_REPORT_PATH, body)) {
       return true

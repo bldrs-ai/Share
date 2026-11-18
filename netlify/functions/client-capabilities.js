@@ -20,7 +20,8 @@
  * GA comes from the function, so the user's IP doesn't reach it either.
  *
  * Answers: 405 for anything but POST; 400 `invalid_capability_report` for a
- * body that doesn't parse as a report (the deployed smoke probe sends `{}`);
+ * body that doesn't parse as a report (the deployed smoke probe sends `{}`)
+ * or declares a length over MAX_REPORT_BYTES;
  * 204 otherwise, whether the report was sent, dropped (an origin that isn't
  * Share's) or skipped (GA not configured, every context but production). GA
  * is best-effort: a failed send is a log line, never a different answer.
@@ -60,6 +61,12 @@ const DEPLOY_PREVIEW_ORIGIN = /^https:\/\/deploy-preview-\d+--bldrs-share(-prod)
 export default async (req) => {
   if (req.method !== 'POST') {
     return json(HTTP_METHOD_NOT_ALLOWED, {error: 'method_not_allowed'})
+  }
+  // A declared length over the cap is refused before the body is read, so an
+  // oversized post costs no buffering. A chunked body has no length and is
+  // checked after the read, below.
+  if (Number(req.headers.get('content-length')) > MAX_REPORT_BYTES) {
+    return json(HTTP_BAD_REQUEST, {error: 'invalid_capability_report'})
   }
   let text = ''
   try {

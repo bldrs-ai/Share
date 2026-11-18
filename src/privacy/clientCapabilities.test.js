@@ -1,5 +1,6 @@
 import {CAPABILITY_FIELDS, parseCapabilityReport} from './clientCapabilityReport'
 import {
+  BAIT_SETTLE_MS,
   CAPABILITY_REPORT_PATH,
   _resetClientCapabilitiesForTests,
   blockerKind,
@@ -60,28 +61,44 @@ describe('privacy/clientCapabilities', () => {
   })
 
   describe('blockerKind', () => {
-    it('says offline when the browser does', () => {
-      expect(blockerKind(document, {onLine: false})).toBe('offline')
+    const NOW = {delayMs: 0}
+
+    it('says offline when the browser does', async () => {
+      expect(await blockerKind(document, {onLine: false}, NOW)).toBe('offline')
     })
 
     // An element-hiding filter hides the bait; nothing else touches it.
-    it('says cosmetic when a filter hides the bait, network when nothing does', () => {
-      expect(blockerKind(document, {onLine: true})).toBe('network')
+    it('says cosmetic when a filter hides the bait, network when nothing does', async () => {
+      expect(await blockerKind(document, {onLine: true}, NOW)).toBe('network')
       const style = document.createElement('style')
       style.textContent = '.adsbox { display: none !important; }'
       document.head.appendChild(style)
-      expect(blockerKind(document, {onLine: true})).toBe('cosmetic')
+      expect(await blockerKind(document, {onLine: true}, NOW)).toBe('cosmetic')
     })
 
-    it('leaves no bait behind', () => {
-      blockerKind(document, {onLine: true})
+    // uBlock Origin and Brave Shields add class-hiding rules only after they
+    // see the new element, asynchronously: the read must wait for them.
+    it('waits for a hiding rule that lands after the bait goes in', async () => {
+      const schedule = (callback, delayMs) => {
+        expect(delayMs).toBe(BAIT_SETTLE_MS)
+        expect(document.querySelector('.adsbox')).not.toBeNull()
+        const style = document.createElement('style')
+        style.textContent = '.adsbox { display: none !important; }'
+        document.head.appendChild(style)
+        setTimeout(callback, 0)
+      }
+      expect(await blockerKind(document, {onLine: true}, {schedule})).toBe('cosmetic')
+    })
+
+    it('leaves no bait behind', async () => {
+      await blockerKind(document, {onLine: true}, NOW)
       expect(document.querySelector('.adsbox')).toBeNull()
     })
   })
 
   // The function refuses anything else, so what the page builds must parse.
-  it('builds a report the function accepts, from closed values only', () => {
-    const report = capabilityReport('ga_blocked', {doc: document, nav: {userAgent: UA.firefox, onLine: true}, consent: false})
+  it('builds a report the function accepts, from closed values only', async () => {
+    const report = await capabilityReport('ga_blocked', {doc: document, nav: {userAgent: UA.firefox, onLine: true}, consent: false, delayMs: 0})
     expect(report).toEqual({condition: 'ga_blocked', browser: 'firefox', blocker: 'network', form_factor: 'desktop', consent: 'off'})
     expect(parseCapabilityReport(JSON.stringify(report))).toEqual(report)
     for (const [field, value] of Object.entries(report)) {
@@ -101,36 +118,38 @@ describe('privacy/clientCapabilities', () => {
 
     // Owner's call: a capability report is sent whatever the analytics
     // setting, and says which way it was.
-    it('sends one report to Share\'s own function, even with analytics off', () => {
+    it('sends one report to Share\'s own function, even with analytics off', async () => {
       const {sent, nav} = beaconNav()
-      expect(reportClientCapability('ga_blocked', {nav, doc: document, consent: false, storage: null})).toBe(true)
+      expect(await reportClientCapability('ga_blocked', {nav, doc: document, consent: false, storage: null, delayMs: 0})).toBe(true)
       expect(sent).toEqual([[CAPABILITY_REPORT_PATH, expect.objectContaining({condition: 'ga_blocked', consent: 'off'})]])
     })
 
-    it('sends once per page session, across page loads in the same session', () => {
+    it('sends once per page session, across page loads in the same session', async () => {
       const {sent, nav} = beaconNav()
       const store = new Map()
       const storage = {getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v)}
-      reportClientCapability('ga_blocked', {nav, doc: document, consent: true, storage})
-      reportClientCapability('ga_blocked', {nav, doc: document, consent: true, storage})
+      const env = {nav, doc: document, consent: true, storage, delayMs: 0}
+      // The second call lands while the first one's bait is still settling.
+      await Promise.all([reportClientCapability('ga_blocked', env), reportClientCapability('ga_blocked', env)])
       expect(sent).toHaveLength(1)
       // A reload: the page's own flag is gone, the session's isn't.
       _resetClientCapabilitiesForTests()
-      expect(reportClientCapability('ga_blocked', {nav, doc: document, consent: true, storage})).toBe(false)
+      expect(await reportClientCapability('ga_blocked', env)).toBe(false)
       expect(sent).toHaveLength(1)
     })
 
-    it('refuses a condition the function doesn\'t know', () => {
+    it('refuses a condition the function doesn\'t know', async () => {
       const {sent, nav} = beaconNav()
-      expect(reportClientCapability('something_else', {nav, doc: document, consent: true, storage: null})).toBe(false)
+      expect(await reportClientCapability('something_else', {nav, doc: document, consent: true, storage: null})).toBe(false)
       expect(sent).toHaveLength(0)
     })
 
-    it('never throws, whatever the browser does', () => {
+    it('never rejects, whatever the browser does', async () => {
       const nav = {userAgent: UA.chrome, onLine: true, sendBeacon: () => {
         throw new Error('blocked')
       }}
-      expect(() => reportClientCapability('ga_blocked', {nav, doc: document, consent: true, storage: null})).not.toThrow()
+      await expect(reportClientCapability('ga_blocked', {nav, doc: document, consent: true, storage: null, delayMs: 0}))
+        .resolves.toBe(false)
     })
   })
 })

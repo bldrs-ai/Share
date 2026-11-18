@@ -38,4 +38,18 @@ describe('engine/protocol: errorMessageOf', () => {
     expect(serializeError(thrown).message).not.toContain('[object Object]')
     expect(JSON.stringify(serializeError(thrown))).not.toContain('private')
   })
+
+  // An Error whose message was set to an object, on either side of the wire.
+  it('keeps an Error with a non-string message or name readable, both ways', () => {
+    const error = new Error('x')
+    error.message = {path: '/private/model.ifc'}
+    error.name = {}
+    const shape = serializeError(error)
+    expect(shape).toEqual(expect.objectContaining({name: 'Error', message: 'engine failure (Error without a string message)'}))
+    expect(JSON.stringify(shape)).not.toContain('private')
+    const back = deserializeError({name: {}, message: {path: '/private/model.ifc'}, stack: 7})
+    expect(back.message).toBe('engine error')
+    expect(back.name).toBe('Error')
+    expect(String(back)).not.toContain('[object Object]')
+  })
 })

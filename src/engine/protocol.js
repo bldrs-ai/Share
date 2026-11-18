@@ -108,7 +108,7 @@ export function errorMessageOf(e) {
   // file text included. Its type is enough to tell one kind from another.
   const type = typeof e?.constructor?.name === 'string' && /^[A-Za-z_]\w{0,40}$/.test(e.constructor.name) ?
     e.constructor.name : typeof e
-  return `engine failure (non-Error ${type})`
+  return e instanceof Error ? `engine failure (${type} without a string message)` : `engine failure (non-Error ${type})`
 }
 
 
@@ -122,7 +122,10 @@ export function errorMessageOf(e) {
  */
 export function serializeError(e) {
   if (e instanceof Error) {
-    const shape = {name: e.name, message: e.message, stack: e.stack}
+    // An Error can still carry a non-string message or name (an engine
+    // throw that set `message` to an object): the same rule as below, so the
+    // page never shows `[object Object]` (SHARE-1Y7).
+    const shape = {name: typeof e.name === 'string' ? e.name : 'Error', message: errorMessageOf(e), stack: e.stack}
     const mode = e.sourceMode
     if (typeof mode?.mode === 'string') {
       // The source mode of a failed open (engineHandler.js#openModel): two
@@ -144,11 +147,12 @@ export function serializeError(e) {
  * @return {Error}
  */
 export function deserializeError(shape) {
-  const error = new Error(shape?.message ?? 'engine error')
-  if (shape?.name) {
+  // A shape from an older or foreign worker may not hold strings.
+  const error = new Error(typeof shape?.message === 'string' ? shape.message : 'engine error')
+  if (typeof shape?.name === 'string' && shape.name) {
     error.name = shape.name
   }
-  if (shape?.stack) {
+  if (typeof shape?.stack === 'string' && shape.stack) {
     error.stack = shape.stack
   }
   if (typeof shape?.sourceMode?.mode === 'string') {

@@ -70,6 +70,17 @@ describe('client-capabilities', () => {
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
+  // Refused on the header alone, before the body is buffered.
+  it('refuses a declared length over the cap without reading the body', async () => {
+    const req = request()
+    req.headers.set('content-length', '100000')
+    const textSpy = jest.spyOn(req, 'text')
+    const res = await handler(req)
+    expect(res.status).toBe(400)
+    expect(textSpy).not.toHaveBeenCalled()
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
   it('answers 405 to anything but POST', async () => {
     const res = await handler(request({method: 'GET'}))
     expect(res.status).toBe(405)

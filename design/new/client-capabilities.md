@@ -30,7 +30,8 @@ count.
    through. The path avoids the words filter lists match on (`beacon`,
    `collect`, `analytics`, `track`, `telemetry`).
 3. The function (`netlify/functions/client-capabilities.js`) checks the body
-   against the enums, drops a report from another origin, and sends a GA4
+   against the enums (a body over 512 bytes is refused, on its declared
+   length before it is read), drops a report from another origin, and sends a GA4
    `client_capability` event through the Measurement Protocol
    (`netlify/functions/_lib/measurementProtocol.js`, shared with
    stripe-webhook).
@@ -50,9 +51,16 @@ through.
 | --- | --- | --- |
 | `condition` | `ga_blocked` | gtag/js failed to load |
 | `browser` | `brave`, `duckduckgo`, `opera`, `edge`, `samsung`, `firefox`, `safari`, `chrome`, `other` | `navigator.brave` for Brave (it reports a plain Chrome UA), else UA markers, most specific first |
-| `blocker` | `cosmetic`, `network`, `offline` | `offline` when `navigator.onLine` is false; else a bait element with ad class names (`adsbox`, `ad-banner`, …) is checked for `display: none`: hidden is an element-hiding ad blocker (uBlock Origin, AdBlock, AdGuard, Brave Shields' cosmetic filtering), visible is request-level blocking only (a tracker blocker, a DNS filter, a browser's tracking protection) or a plain network failure |
+| `blocker` | `cosmetic`, `network`, `offline` | `offline` when `navigator.onLine` is false; else a bait element with ad class names (`adsbox`, `ad-banner`, …) is left in the page for 500 ms (`BAIT_SETTLE_MS`), then checked for `display: none`: hidden is an element-hiding ad blocker (uBlock Origin, AdBlock, AdGuard, Brave Shields' cosmetic filtering), visible is request-level blocking only (a tracker blocker, a DNS filter, a browser's tracking protection) or a plain network failure |
 | `form_factor` | `mobile`, `desktop` | `userAgentData.mobile`, else the UA |
 | `consent` | `on`, `off` | The user's own analytics setting (`privacy/analytics.js#isAllowed`) |
+
+**Why the bait waits.** uBlock Origin and Brave Shields add generic
+class-hiding rules only after they see a new element, asynchronously. A style
+read right after insertion would find the bait visible and file them under
+`network`. Blockers that inject their CSS up front read the same either way.
+The report goes out after the wait, so a tab closed within that half-second
+sends nothing, which is an accepted undercount.
 
 **Sent whatever the analytics setting** (owner's call, 2026-11-18): a report is
 functional data about what clients can run, used for configuration, and
@@ -69,7 +77,10 @@ reach it.
 ## Configuration and what's left
 
 - Needs `GA4_MEASUREMENT_ID` and `GA4_API_SECRET`, set for production only. In
-  every other context the function answers 204 and logs that it skipped. GA
+  every other context the function answers 204 and logs that it skipped. That
+  is an exception to the 500-on-missing-config rule
+  (netlify-functions-testing.md §"Adding a function"): the caller is a beacon
+  that can't act on an error, and every preview would otherwise answer 500. GA
   Admin needs event-scoped custom dimensions for `condition`, `browser`,
   `blocker`, `form_factor` and `consent` before they can be queried
   (design/new/quotas.md §"Funnel analytics").
