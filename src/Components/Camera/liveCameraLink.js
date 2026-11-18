@@ -22,7 +22,9 @@ import {HASH_DEBOUNCE_WAIT_MS, debounce} from '../../utils/debounce'
  * sends only that), which it sends for input on its canvas alone — once the
  * camera actually moves under them (a click to select isn't a camera move),
  * plus USER_CAMERA_MOVE_EVENT from our camera UIs that move the camera with
- * no control event (the ViewCube).
+ * no control event (the ViewCube). Other moves made for the user — a note's
+ * camera, the Assist `view.*` tools — don't start it, and once it's live
+ * they're followed like any other.
  *
  * Once live, every camera `update` schedules a write, programmatic ones too
  * (a ViewCube snap, a note's camera, a fit): the link follows the camera,

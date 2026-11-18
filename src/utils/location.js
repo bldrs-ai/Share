@@ -113,6 +113,11 @@ export function addHashParams(location, name, params, includeNames = false) {
  * so nothing re-reads the hash it wrote. It keeps `history.state`, which
  * react-router's history stores its entry key and index in.
  *
+ * By design react-router doesn't hear of the write either: `useLocation().hash`
+ * lags `window.location.hash` until the next navigation, which reads the real
+ * URL again. Read a streamed token (`c:`, a dragged `cp:`) from
+ * `window.location`, not from the router's location.
+ *
  * A location-shaped double (`{hash}`, e.g. a test's or the Assist tool's
  * composed link) isn't the page's URL, so it just gets its `hash` set.
  *

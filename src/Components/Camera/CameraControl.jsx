@@ -11,7 +11,12 @@ import {
 } from '../../utils/location'
 import {roundCoord} from '../../utils/math'
 import {noteUserCamera} from '../../viewer/three/renderDemand'
-import {HASH_PREFIX_CAMERA} from './hashState'
+import {
+  HASH_PREFIX_CAMERA,
+  forgetSyncedCameraToken,
+  isCameraTokenSynced,
+  noteCameraTokenSynced,
+} from './hashState'
 import {startLiveCameraLink} from './liveCameraLink'
 
 
@@ -56,22 +61,13 @@ export default function CameraControl() {
 
 
 /**
- * The `#c:` token last written by us or applied from the URL, and the
- * controls it was for. See onLocation.
- *
- * @type {{controls: object|null, token: string|undefined}}
- */
-const synced = {controls: null, token: undefined}
-
-
-/**
  * @param {object} cameraControls
- * @param {Location|object} location
+ * @param {Location|object} location where a token was just written or applied;
+ *   only the page's own URL is the camera's (a `{hash}` double is a composed link)
  */
 function noteSyncedToken(cameraControls, location) {
   if (location === window.location) {
-    synced.controls = cameraControls
-    synced.token = getHashParams(window.location, HASH_PREFIX_CAMERA)
+    noteCameraTokenSynced(cameraControls, getHashParams(window.location, HASH_PREFIX_CAMERA))
   }
 }
 
@@ -96,7 +92,14 @@ function noteSyncedToken(cameraControls, location) {
  */
 export function onLocation(location, cameraControls) {
   const token = getHashParams(location, HASH_PREFIX_CAMERA)
-  if (token !== undefined && synced.controls === cameraControls && token === synced.token) {
+  if (token === undefined) {
+    // The camera has left the URL (the Share switch off, a note with no
+    // camera): whatever it does next isn't written, so a later Back to the
+    // entry with the old token must move it again (Sonnet review on #2175).
+    forgetSyncedCameraToken()
+    return false
+  }
+  if (isCameraTokenSynced(cameraControls, token)) {
     return false
   }
   const applied = onHash(location, cameraControls)

@@ -11,7 +11,7 @@ import CameraControl, {
   onLocation,
   parseHashParams,
 } from './CameraControl'
-import {HASH_PREFIX_CAMERA} from './hashState'
+import {HASH_PREFIX_CAMERA, removeCameraUrlParams} from './hashState'
 import {noteUserCameraMove} from './liveCameraLink'
 
 
@@ -187,6 +187,30 @@ describe('CameraControl', () => {
       const setPosition = jest.spyOn(controls, 'setPosition')
       expect(onLocation(window.location, controls)).toBe(false)
       expect(setPosition).not.toHaveBeenCalled()
+    })
+
+    // Sonnet review on #2175: the token left the URL, the camera moved with
+    // nothing written, and Back returned to the entry with the old token.
+    it.each([
+      ['the Share switch or a note removed it', () => act(() => removeCameraUrlParams())],
+      ['a location without it was seen', () => {
+        expect(onLocation({hash: '#share:;n'}, controls)).toBe(false)
+      }],
+    ])('a token seen again after it left the URL (%s) is applied', (_how, leave) => {
+      act(() => controls.dispatchEvent({type: 'controlstart'}))
+      controls.move(1, 2, 3, 4, 5, 6)
+      update()
+      settle()
+      const t1 = window.location.hash
+      expect(cameraToken()).toBe('c:1,2,3,4,5,6')
+      leave()
+      act(() => useStore.getState().setIsCameraInUrl(false))
+      controls.move(9, 9, 9, 4, 5, 6)
+      update()
+      settle()
+      const setPosition = jest.spyOn(controls, 'setPosition')
+      expect(onLocation({hash: t1}, controls)).toBe(true)
+      expect(setPosition).toHaveBeenCalledWith(1, 2, 3, true)
     })
   })
 })
