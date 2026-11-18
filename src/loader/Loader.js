@@ -92,6 +92,7 @@ import useStore from '../store/useStore'
 import {sha1Hex, sha1HexFromBlob} from '../utils/contentHash'
 import {verifiedSourceSha} from '../utils/verifiedSourceSha'
 import {markIfOutOfMemory} from '../utils/oom'
+import {isAborted, raceLoadAbort, throwIfLoadAborted, unlessLoadAborted} from '../utils/loadAbort'
 
 
 // Defer to the browser's idle period when supported, otherwise to the
@@ -311,6 +312,16 @@ function probeLfsBytes(data) {
  * @param {Function} [options.onFirstMesh] open-205 #2043: called once when a
  *   Conway parse's first geometry is on screen (`ShareIfcLoader#parse`).
  *   Never called on the paths that put the model on screen only at its end.
+ * @param {AbortSignal} [options.signal] open-205 #2011 step A: the caller
+ *   gave the load up (CadView, on an in-app switch under
+ *   `?feature=spaModelNav`; utils/loadAbort.js). The load then rejects with a
+ *   LoadAbortedError at its next await: the download and OPFS waits are
+ *   raced against it (the OPFS worker's request runs on, its result
+ *   dropped), the parse is handed it (an engine worker is terminated), and
+ *   nothing after the parse runs, the GLB cache writer included. Its
+ *   `onProgress` and `setOpfsFile` go quiet at the abort, so work that could
+ *   not be stopped never writes into the next model's report or store.
+ *   Without one the load is exactly as before.
  * @return {object} The model or undefined
  */
 export async function load(
@@ -320,9 +331,14 @@ export async function load(
   isOpfsAvailable,
   setOpfsFile,
   accessToken = '',
-  {isNestedLoad = false, isUploadedRoute = false, onIndexed = undefined, onFirstMesh = undefined} = {},
+  {isNestedLoad = false, isUploadedRoute = false, onIndexed = undefined, onFirstMesh = undefined,
+    signal = undefined} = {},
 ) {
   assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
+  // Each is the identity without a signal (utils/loadAbort.js).
+  onProgress = unlessLoadAborted(onProgress, signal)
+  setOpfsFile = unlessLoadAborted(setOpfsFile, signal)
+  const untilAborted = (work) => raceLoadAbort(work, signal)
   // HACK: pathArg can be a URL or a string
   if (path instanceof URL) {
     path = path.toString()
@@ -392,7 +408,8 @@ export async function load(
       shaHash = ''
       isCacheHit = false
     } else {
-      [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable)
+      [derefPath, shaHash, isCacheHit, isBase64] =
+        await untilAborted(dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable))
     }
   } else if (isLocallyHostedFile) {
     debug().log('Loader#load: locally hosted file')
@@ -400,13 +417,14 @@ export async function load(
   } else {
     debug().log('Loader#load: download2', path, accessToken, isOpfsAvailable);
     // For logged in, you'll get a sha hash back.  otherwise null/undef
-    [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable)
+    [derefPath, shaHash, isCacheHit, isBase64] =
+      await untilAborted(dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable))
     debug().log('Loader#load: download2 DEREFERENCE', derefPath)
   }
 
   // Find loader can do a head download for content typecheck, but full download is delayed
   // GLB skip path below may swap these to the GLB loader tuple.
-  let [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
+  let [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await untilAborted(findLoader(path, viewer))
   debug().log(
     `Loader#load: loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText} path=${path}`)
 
@@ -478,19 +496,19 @@ export async function load(
       if (isUploadedFile) {
         kindLabel = 'upload'
         debug().log('Loader#load: getModelFromOPFS for upload:', path)
-        file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path)
+        file = await untilAborted(getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path))
       } else if (isLocallyHostedFile) {
         kindLabel = 'local'
         debug().log('Loader#load: local file:', path)
         evictOpfsSource = () => deleteFileFromOPFS(path, 'bldrs-ai', 'BldrsLocalStorage', 'V1', 'Projects')
-        file = await downloadToOPFS(
+        file = await untilAborted(downloadToOPFS(
           path,
           path,
           'bldrs-ai',
           'BldrsLocalStorage',
           'V1',
           'Projects',
-          onProgress)
+          onProgress))
       } else {
         let pathUrl
         try {
@@ -506,7 +524,7 @@ export async function load(
           // if we got a cache hit and the file doesn't exist in OPFS, query with no cache
           if (isCacheHit && !(await doesFileExistInOPFS(filePath, shaHash, owner, repo, branch))) {
             [derefPath, shaHash, isCacheHit, isBase64] =
-              await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable, false)
+              await untilAborted(dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable, false))
           }
           // Captured after the re-dereference above, which can replace
           // shaHash — the key must match the one the OPFS lookup uses.
@@ -535,10 +553,11 @@ export async function load(
 
           if (!file) {
             if (isBase64) {
-              file = await writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile)
+              file = await untilAborted(
+                writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile))
             } else {
               debug().log(`Loader#load: downloadModel with owner, repo, branch, filePath:`, owner, repo, branch, filePath)
-              file = await downloadModel(
+              file = await untilAborted(downloadModel(
                 derefPath,
                 shaHash,
                 filePath,
@@ -551,7 +570,7 @@ export async function load(
                 (lastModifiedGithub) => {
                   const sharePath = navigateBaseOnModelPath(owner, repo, branch, `/${filePath}`)
                   updateRecentFileLastModified(sharePath, lastModifiedGithub)
-                })
+                }))
             }
           }
         } else {
@@ -562,14 +581,14 @@ export async function load(
           evictOpfsSource = () =>
             deleteFileFromOPFS(opfsFilename, pathUrl.host, 'BldrsLocalStorage', 'V1', 'Projects')
           debug().log(`Loader#load: downloadToOPFS with opfsFilename:`, opfsFilename)
-          file = await downloadToOPFS(
+          file = await untilAborted(downloadToOPFS(
             path,
             opfsFilename,
             pathUrl.host,
             'BldrsLocalStorage',
             'V1',
             'Projects',
-            onProgress)
+            onProgress))
         }
       }
 
@@ -688,6 +707,8 @@ export async function load(
             }
           }
         } catch (cacheLookupError) {
+          // A cache miss is a fallback; a load given up is not.
+          throwIfLoadAborted(signal)
           glbInfo(
             `reader: ${kindLabel} cache lookup failed; treating as MISS and continuing:`,
             cacheLookupError)
@@ -759,6 +780,9 @@ export async function load(
         debug().log('Loader#load: modelData from OPFS (decoded):', modelData)
       }
     } catch (opfsError) {
+      // Given up while in the OPFS path: not an OPFS failure, and never a
+      // reason to fetch the model a second time (open-205 #2011 step A).
+      throwIfLoadAborted(signal)
       // Uploaded files (drag-drop, file picker) only exist in OPFS — there
       // is no remote URL to fall back to. Re-throw so the user sees the
       // error rather than a misleading "fall-through succeeded" outcome.
@@ -847,7 +871,7 @@ export async function load(
       // above was skipped (no GitHub Contents API dereference for `/index.ifc`),
       // so `derefPath` is unset — `path` is the URL we want.
       const fetchUrl = derefPath || path
-      modelData = await axiosDownload(fetchUrl, isFormatText, onProgress)
+      modelData = await untilAborted(axiosDownload(fetchUrl, isFormatText, onProgress, signal))
       debug().log('Loader#load: modelData from axios download:', modelData)
     }
   }
@@ -917,14 +941,40 @@ export async function load(
   // for IFC loads, or a generic error otherwise), so `model` is always
   // truthy past this point — no post-call null check is needed here.
   let model
+  // The engine of a model parsed after the load was given up; nothing else
+  // would close it if the viewer outlived the abort.
+  const closeEngineOf = (parsed) => {
+    parsed?.ifcManager?.ifcAPI?.engineSession?.close?.()
+  }
   try {
-    model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress,
-      {onIndexed, onFirstMesh})
+    // Before the parse: the stretch since the last raced await (hashing, the
+    // cache lookup, buffering, the gzip and archive envelopes) is not.
+    throwIfLoadAborted(signal)
+    // An IFC/STEP parse takes the signal itself (ShareIfcLoader#parse). The
+    // mesh loaders cannot be stopped: their parse runs on and its model is
+    // dropped, never registered with the viewer (below).
+    const reading = readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb,
+      onProgress, {onIndexed, onFirstMesh, signal})
+    try {
+      model = await untilAborted(reading)
+    } catch (e) {
+      if (isAborted(signal)) {
+        reading.then(closeEngineOf, () => null)
+      }
+      throw e
+    }
   } catch (e) {
     // The OPFS condition is dropped, unreported: this load failed, so
     // CadView's captureException already covers it, and a message as well
     // would make one failure two events (Share#2103 review).
     throw markIfOutOfMemory(e)
+  }
+  if (isAborted(signal)) {
+    // Parsed, but given up before it could be used. An IFC/STEP model is
+    // registered with the viewer, whose dispose closes its engine too; close
+    // it now so a viewer that outlives the abort doesn't keep it.
+    closeEngineOf(model)
+    throwIfLoadAborted(signal)
   }
   // "Recovered" means the fallback actually produced a model: the direct
   // fetch succeeded AND its bytes passed the LFS, gzip/archive and readModel
@@ -1189,6 +1239,13 @@ export async function load(
     glbVerbose('writer: scheduling export, kind =', glbExportContext.kindLabel)
     useStore.getState().setIsCacheWriteInFlight(true)
     const runWriter = () => {
+      if (isAborted(signal)) {
+        // The user left the model before the browser was idle enough for
+        // the writer: its viewer is gone and its engine closed, so there is
+        // nothing to capture from (open-205 #2011 step A).
+        useStore.getState().setIsCacheWriteInFlight(false)
+        return
+      }
       exportAndCacheGlb({
         model,
         kindLabel: glbExportContext.kindLabel,
@@ -1764,10 +1821,13 @@ function decodeBase64ModelData(base64, isFormatText) {
  * @param {string} path
  * @param {boolean} isFormatText
  * @param {Function} onProgress Handler from UI to display progress messages
+ * @param {AbortSignal} [signal] cancels the request (open-205 #2011 step A);
+ *   the caller races the download against it too, so what this throws then
+ *   is never read
  * @return {Array}
  * @throws Error for different events, with custom messages
  */
-async function axiosDownload(path, isFormatText, onProgress) {
+async function axiosDownload(path, isFormatText, onProgress, signal = undefined) {
   // TODO(pablo): path feels a little underconstrained here.  axios works a
   // little magic here, as either a url string or /foo.pdb work fine
   try {
@@ -1777,6 +1837,8 @@ async function axiosDownload(path, isFormatText, onProgress) {
         responseType:
         isFormatText ? 'text' : 'arraybuffer',
         onDownloadProgress: (event) => onDownloadProgressHandler(event, onProgress),
+        // Only when given: an absent key keeps the request as it was.
+        ...(signal ? {signal} : {}),
       },
     )).data
   } catch (error) {
