@@ -24,12 +24,13 @@ const GITHUB_API_HOSTS = String.raw`(?:api\.github\.com|git\.bldrs\.dev(?:\.[\w-
  * the file's latest sha. Same race as the Contents fallback: never fires
  * while MSW intercepts first.
  *
- * Only `[{sha}]`, with the sha MSW's handler serves for a success repo
- * (__mocks__/api-handlers-github.ts, `/repos/:owner/:repo/commits`):
- * `Commits.js#getLatestCommitHash` reads `data[0].sha` and nothing else, and
- * the rest of `MOCK_COMMITS` embeds URLs built from an env var at module load,
- * which in this (Playwright) process differs from the one MSW's bundle was
- * built with. Registered for `bldrs-ai/test-models` only: a success repo, so a
+ * MSW's own commits for a success repo (__mocks__/api-handlers-github.ts,
+ * `/repos/:owner/:repo/commits`), trimmed to the fields the app reads: `sha`
+ * (Commits.js#getLatestCommitHash) and `commit.{author, committer, message}`
+ * (useVersions, useGithubLastModified). The rest of `MOCK_COMMITS` embeds URLs
+ * built from an env var at module load, which in this (Playwright) process
+ * differs from the one MSW's bundle was built with, so it is left out rather
+ * than served wrong. Registered for `bldrs-ai/test-models` only: a success repo, so a
  * 200 is what MSW would have answered — never for an error-flow repo, whose
  * 404 a fallback must not turn into a pass.
  *
@@ -45,7 +46,10 @@ async function routeCommitsFallback(page: Page, owner: string, repo: string) {
       await route.fulfill({
         status: HTTP_OK,
         headers: {'content-type': 'application/json'},
-        body: JSON.stringify([{sha: MOCK_COMMITS.data[0].sha}]),
+        body: JSON.stringify(MOCK_COMMITS.data.map(({sha, commit}) => ({
+          sha,
+          commit: {author: commit.author, committer: commit.committer, message: commit.message},
+        }))),
       })
     },
   )
