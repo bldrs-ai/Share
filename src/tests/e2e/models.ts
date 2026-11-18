@@ -20,10 +20,18 @@ const GITHUB_API_HOSTS = String.raw`(?:api\.github\.com|git\.bldrs\.dev(?:\.[\w-
 
 
 /**
- * Fallback for the Commits API the loader asks before the Contents API (for
- * the file's latest sha), answering what MSW's handler would
- * (__mocks__/api-handlers-github.ts, `/repos/:owner/:repo/commits`). Same
- * race as the Contents fallback: never fires while MSW intercepts first.
+ * Fallback for the Commits API the loader asks before the Contents API, for
+ * the file's latest sha. Same race as the Contents fallback: never fires
+ * while MSW intercepts first.
+ *
+ * Only `[{sha}]`, with the sha MSW's handler serves for a success repo
+ * (__mocks__/api-handlers-github.ts, `/repos/:owner/:repo/commits`):
+ * `Commits.js#getLatestCommitHash` reads `data[0].sha` and nothing else, and
+ * the rest of `MOCK_COMMITS` embeds URLs built from an env var at module load,
+ * which in this (Playwright) process differs from the one MSW's bundle was
+ * built with. Registered for `bldrs-ai/test-models` only: a success repo, so a
+ * 200 is what MSW would have answered — never for an error-flow repo, whose
+ * 404 a fallback must not turn into a pass.
  *
  * @param page
  * @param owner
@@ -37,7 +45,7 @@ async function routeCommitsFallback(page: Page, owner: string, repo: string) {
       await route.fulfill({
         status: HTTP_OK,
         headers: {'content-type': 'application/json'},
-        body: JSON.stringify(MOCK_COMMITS.data),
+        body: JSON.stringify([{sha: MOCK_COMMITS.data[0].sha}]),
       })
     },
   )
@@ -158,11 +166,10 @@ export async function setupVirtualPathIntercept(
 
   const filePathInRegex = escapedFilePath.replace(/\//g, '(?:/|%2F)')
   const contentsApiPattern = new RegExp(
-    `^https://${GITHUB_API_HOSTS}` +
+    `^https://api\\.github\\.com(?:\\.[\\w-]+)?` +
     `/repos/${owner}/${repo}/contents/${filePathInRegex}` +
     `\\?.*ref=${escapeRegex(ref)}.*$`,
   )
-  await routeCommitsFallback(page, owner, repo)
   await page.context().route(contentsApiPattern, async (route) => {
     await route.fulfill({
       status: HTTP_OK,
