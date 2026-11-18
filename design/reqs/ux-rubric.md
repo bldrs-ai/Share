@@ -4,6 +4,15 @@ Use this shared rubric to reconcile an epic's UX requirements with the roadmap a
 
 The [UX index](README.md) owns shared product requirements; the [roadmap](../roadmap.md) owns feature assignments and business milestones. This document owns the reconciliation procedure.
 
+## Where each kind of work lives
+
+> **In flight (2026-11-18).** The owner's direction; the boundary will sharpen as it's used.
+
+- **bldrs-ai/bizdev** (private) holds product-level and meta discussion: growth (`grow-*` epics), measurement plans and their results, milestone hypotheses and their evidence (§"Milestones are hypotheses"), pricing and quotas as product decisions, and consent and privacy policy as product decisions. First example: the Notes and Versions measurement plan, moved from Share#2166 to [bizdev#366](https://github.com/bldrs-ai/bizdev/issues/366).
+- **bldrs-ai/Share** holds UX epics, stories and tasks, and the technical work behind any of them, including the code half of a bizdev plan. This follows bizdev's existing cross-link convention: a bizdev issue tracks the business outcome; the linked Share epic or story owns the technical work and follows Share's roadmap and agent-workflow rules. When a bizdev plan reaches implementation, open a Share story that links to it, rather than building against the bizdev issue directly.
+- **Links from Share to bizdev** are fine in docs and issues, but bizdev is private: write enough in Share that a reader without access still knows what was decided and where it's tracked, and never copy business numbers (targets, revenue, spend) into Share.
+- **Not moved yet:** the roadmap's `grow-*` rows and their §4.10 text still live in [design/roadmap.md](../roadmap.md). Moving them, or reducing them to pointers into bizdev, is a roadmap change of its own.
+
 ## Epic, Story and Task
 
 - **Epic:** the overall user capability and its end-to-end acceptance journey.
@@ -40,7 +49,7 @@ The MVP default applies to the agreed basic workflow, not every desired future f
 
 ### Milestones are hypotheses
 
-> **In flight (2026-11-14).** This section is the direction we're moving in, not a settled process. The band table above stays in use until the measurement in [#2166](https://github.com/bldrs-ai/Share/issues/2166) exists; until then, treat a band as the starting hypothesis described here.
+> **In flight (2026-11-14).** This section is the direction we're moving in, not a settled process. The band table above stays in use until the measurement in [bizdev#366](https://github.com/bldrs-ai/bizdev/issues/366) exists; until then, treat a band as the starting hypothesis described here.
 
 The 100–400 bands come from architecture's Level of Development scale, which fits a process where each stage follows a known, rote sequence. Product work doesn't: whether a feature is needed for MVP or MLP is an empirical question about what moves the outcomes [roadmap §2.1](../roadmap.md#21-tier-rubric-epic-id-numbering) already defines (a steady trickle of paying customers, then accelerating growth). So the band an epic carries is a **hypothesis**, and the reconciliation's job is to state it so it can be tested, not to settle it by argument.
 
@@ -49,7 +58,7 @@ For each epic, and for any new open story added to a 1xx epic, the triage record
 - **Milestone hypothesis:** the milestone it's expected to serve, and why.
 - **Metric:** the outcome it should move. Prefer a leading indicator that accrues in weeks (7-day return, shared-link opens, a second model open) over paid conversion, which on current traffic would take far longer to read.
 - **Test:** a randomized holdout where withholding the feature is acceptable; otherwise a regression on observed use with controls (tier, source, route kind, prior engagement), labelled correlational.
-- **Current estimate:** the measured lift with its interval, or "not instrumented yet". Most epics are the latter today; Notes and Versions start in #2166.
+- **Current estimate:** the measured lift with its interval, or "not instrumented yet". Most epics are the latter today; Notes and Versions start in bizdev#366.
 
 A new open story under a 1xx epic needs a recorded hypothesis and metric. Calling it MVP scope in [roadmap §6.0](../roadmap.md#60-the-mvp-bar) waits for the estimate; until then the roadmap owner decides, and the PR says which way and why. Both Notes (#2147) and Versions (#2165) grew a 1xx epic by reasoning about bands alone; this asks for the hypothesis that reasoning was standing in for.
 

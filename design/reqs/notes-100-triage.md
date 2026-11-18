@@ -102,7 +102,7 @@ The initial 42-link pass was checked against the preflight snapshot for preserve
 
 Done in this pilot: #670 adopted as the canonical epic, current story titles normalized, #1186/#1187 included as stories, and #881 kept as linked planning work outside the epic's direct sub-issues. Related milestones were expanded, the unambiguous native hierarchy applied, and milestone metadata and assignments retained.
 
-Still open, and owned outside this record: the deferred ownership rows above; close/archive versus delete semantics (#2153); follow-up acceptance for create, reply, removal and share/open (#2149, #2154, #2153, #2155, #2156); and the Notes MVP boundary, to be tested as a hypothesis ([rubric](ux-rubric.md#milestones-are-hypotheses), measured under #2166) and decided by the roadmap owner until then. #670's owner table is the live list. Sharing's reconciliation is still to come; Versions followed in #2165.
+Still open, and owned outside this record: the deferred ownership rows above; close/archive versus delete semantics (#2153); follow-up acceptance for create, reply, removal and share/open (#2149, #2154, #2153, #2155, #2156); and the Notes MVP boundary, to be tested as a hypothesis ([rubric](ux-rubric.md#milestones-are-hypotheses), measured under bizdev#366) and decided by the roadmap owner until then. #670's owner table is the live list. Sharing's reconciliation is still to come; Versions followed in #2165.
 
 The roadmap's current `notes-100` done marker describes the existing baseline; it does not establish completion of the expanded target UX or all related bugs. Other roadmap epic assignments remain unchanged. Native sub-issue rollups track issue state, not acceptance verification.
 
@@ -149,7 +149,7 @@ The nine new stories and reused #894 were made direct formal UX sub-issues of #6
 
 The migration above made #894 a direct `notes-100` story on the reasoning that basic topic filtering is part of the MVP workflow. The roadmap already assigns the maps-style notes filtering UI to `view-230` and calls it post-MVP (its rows in roadmap §3 and §4.2, and §8's post-MVP backlog), and no roadmap decision changed that. Codex raised this on #2147 after merge.
 
-Applied: #894 was removed from #670's sub-issues and retitled `view-230: Find model notes using colored topic tags`. Its body, labels, Collab milestone 64, state and assignees are unchanged. #670's owner table now names #894 as a `view-230` dependency outside the epic. `view-230` has no epic issue yet, so #894 has no native parent. #670 now has 20 formal direct stories, and the [snapshot](notes-100.md) is re-dated to list them. If basic tag filtering should be MVP after all, that is a roadmap reassignment with a changelog line, not a triage change; #2166 is where the evidence for it would come from ([rubric](ux-rubric.md#milestones-are-hypotheses)).
+Applied: #894 was removed from #670's sub-issues and retitled `view-230: Find model notes using colored topic tags`. Its body, labels, Collab milestone 64, state and assignees are unchanged. #670's owner table now names #894 as a `view-230` dependency outside the epic. `view-230` has no epic issue yet, so #894 has no native parent. #670 now has 20 formal direct stories, and the [snapshot](notes-100.md) is re-dated to list them. If basic tag filtering should be MVP after all, that is a roadmap reassignment with a changelog line, not a triage change; bizdev#366 is where the evidence for it would come from ([rubric](ux-rubric.md#milestones-are-hypotheses)).
 
 ### Archived starting gap analysis
 
