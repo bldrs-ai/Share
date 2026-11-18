@@ -11,7 +11,7 @@ import {MOCK_BRANCHES} from '../net/github/Branches.fixture'
 import {MOCK_COMMENTS, MOCK_COMMENTS_POST_DELETION} from '../net/github/Comments.fixture'
 import {MOCK_COMMITS} from '../net/github/Commits.fixture'
 import {MOCK_FILES} from '../net/github/Files.fixture'
-import {createMockIssues, sampleIssues} from '../net/github/Issues.fixture'
+import {createMockIssues, sampleIssues, testModelsIssues} from '../net/github/Issues.fixture'
 import {MOCK_ORGANIZATIONS} from '../net/github/Organizations.fixture'
 import {MOCK_REPOSITORY, MOCK_USER_REPOSITORIES} from '../net/github/Repositories.fixture'
 import {fixtureBlobSha} from './fixtureBlobSha'
@@ -38,7 +38,8 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
   return [
     http.get<{org: string, repo: string}>(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues`, ({params}) => {
       const {org, repo} = params
-      const createdIssues = createMockIssues(org, repo, sampleIssues)
+      const createdIssues = createMockIssues(org, repo,
+        org === 'bldrs-ai' && repo === 'test-models' ? testModelsIssues : sampleIssues)
       return new Response(
         JSON.stringify(createdIssues),
         {

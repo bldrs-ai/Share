@@ -125,30 +125,59 @@ graph and geometry, its tree and its IfcAPI facade. On the main-thread path
 the model also pins the whole `IfcAPI`, so its WASM heap comes back only
 when every JS reference to the model is gone.
 
-Measured 2026-11-18 (step 0's leak hunt, #2023): after an in-app switch
-from a finished A to B, a `WeakRef` to A's model stays set after a forced
-GC, on both engines and both form factors. Heap-snapshot retainer paths
-(CDP `HeapProfiler.takeHeapSnapshot`, an unminified Playwright build),
-removed one at a time:
+Measured 2026-11-18 (step 0's leak hunt, #2023, and the follow-up on
+#2019): after an in-app switch from a finished A to B, a `WeakRef` to A's
+model stayed set after a forced GC, on both engines and both form factors.
+Heap-snapshot retainer paths (CDP `HeapProfiler.takeHeapSnapshot`, an
+unminified Playwright build, shortest path from the GC roots with weak and
+ephemeron edges excluded) were cut one at a time. **All are cut now**, and
+`modelSwitchMemory.spec.ts` asserts A's model, and on the kill-switch path
+A's `IfcAPI`, are collected:
 
 - **PlaceMark** (#2017): the store's `placeMark`, created once for the first
-  viewer, keeps `[model]` in its `_objects` closure. MarkerControl mounts
-  whenever a model is ready, Notes open or not.
+  viewer, kept `[model]` in its `_objects` closure. Fixed by #2178 (PlaceMark
+  rebinds per viewer and drops its refs on dispose).
 - **The disposed viewer's isolator** kept `ifcModel`. Fixed in step 0
   (`IfcIsolator#dispose`).
-- **Closures from the renders before the switch,** held by components that
-  stay mounted (#2019): MUI's `ButtonBase` keeps its first render's handlers
+- **Toolbar buttons:** MUI's `ButtonBase` keeps its first render's handlers
   for life (`useEventCallback`), so a toolbar button's first `onClick` kept
-  its control's render scope; `TooltipIconButton` now hands it a stable
-  handler (fixed in step 0). Others remain: a stable-deps effect's closure
-  (NotesControl's `hashchange` listener), MUI Modal's effect deps, and
-  React's alternate fibers, each holding a render scope with A's `model`.
-  CadView's theme-change listener does the same for A's viewer. Remounting
-  the per-model view on a switch is not enough alone: during B's load the
-  store's `model` is still A (it is replaced only by the next successful
-  `setModel`), so the first render of a remounted control captures A again.
+  its control's render scope. Fixed in step 0 (`TooltipIconButton` hands it
+  a stable handler).
+- **ResidencyControl's Popover:** MUI's `useModal` memoizes `handleClose` and
+  `isTopModal` over its first render's props (`children`, `onClose`), and
+  so kept the render scope of the first model shown. Each new
+  `ResidencyController` and `MotionResidency` was also made in a render
+  whose scope held the one before, a chain back to the first model. The
+  menu now remounts per model object (keyed through a `WeakMap`), which cuts
+  both.
+- **The disposed viewer's camera controls:** a `fitToSphere` transition
+  still running at dispose never reaches `rest`, and camera-controls'
+  `dispose()` removes only its DOM listeners, so its `rest` listener kept
+  the suspended `OrbitControl#fitModelToFrame(model)`. `IfcCamera#dispose`
+  now drops every listener.
+- **The disposed viewer's IFC loader** (kill-switch path only): `ifcLoader`
+  shares ShareIfc's `IfcAPI`, and `ShareIfc#dispose` dropped only its own
+  manager. `ShareViewer#dispose` now drops `ifcLoader`.
 - **The idle GLB writer** holds `model` and `viewer` until it has run
   (`Loader.js`); the spec waits for it, so it was not a retainer there.
+
+**What is still reachable, and why it no longer matters.** The disposed
+viewer itself: React keeps render scopes that hold it (a DOM node's stale
+`__reactProps` → RootLandscape's `selectWithShiftClickEvents` → a CadView
+render scope; CadView's theme-listener closure, `previousThemeChangeCbRef`).
+These are replaced by the next switch, so at most one disposed viewer stays,
+and since the three fixes above it reaches neither the model nor the engine.
+Moving CadView's `initViewerCb` out of the render was tried and shown not to
+change the result, so it was left for step A, which owns that code.
+
+**The store's `model` during B's load** was A until B's `setModel`. Under
+the flag step A now clears it when the user leaves
+(`CadView#forgetLoadedModelState`, §4.5a). The WeakRef checks held before
+that landed too: renders in that window captured A, but nothing long-lived
+keeps those renders any more, so A was collected once B was in. NotesControl's stable-deps `hashchange` listener was
+such a holder whenever NotesControl mounted with a model in the store; it is
+made outside the render now (unit test only: on the measured path
+NotesControl mounts before the first model).
 
 ## 3. Phase 0 — bugs the reload hides (#2012)
 
@@ -812,12 +841,16 @@ instead, after A finished, the store's `model` is not A's while B loads.
 A theme change while A is held reloads A into the new viewer and
 terminates the first worker.
 
-**As built in step 0** (`src/Containers/modelSwitchMemory.spec.ts`, one
-model at a time, switch = close): load A, let it and its GLB writer finish,
-open B in-app, and assert A's engine worker was terminated (Playwright's
-`Worker` 'close') while B's runs, in the same document. The `WeakRef`
-checks on A's model and, on the kill-switch path, A's `IfcAPI` do not hold
-yet (§2.4), so they are not in the spec: #2017 and #2019 take them.
+**As built in step 0 and its follow-up** (`src/Containers/modelSwitchMemory.spec.ts`,
+one model at a time, switch = close): load A, let it and its GLB writer
+finish, open B in-app, and assert, in the same document, that A's engine
+worker was terminated (Playwright's `Worker` 'close') while B's runs; that a
+`WeakRef` to A's model is cleared after a forced GC; and on the kill-switch
+path (`?feature=disableEngineWorker`) that A's model and its main-thread
+`IfcAPI` both are. `src/Components/Markers/markerModelSwitch.spec.ts` checks
+that B's scene shows B's note markers only, and that A's marker and note
+selection don't follow (`NotesSlice#forgetModelMarkers`, called by Share.jsx
+when the model path's identity changes).
 
 Chromium-only (CDP); the mobile project is a Chromium viewport, so both form
 factors are covered. Today's coverage: `noOpfsUpload.spec.ts` loads twice

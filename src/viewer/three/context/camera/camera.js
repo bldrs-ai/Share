@@ -64,7 +64,18 @@ export class IfcCamera extends IfcComponent {
     this.perspectiveCamera = null
     this.orthographicCamera.removeFromParent()
     this.orthographicCamera = null
+    // camera-controls' own `dispose()` removes only its DOM listeners. Its
+    // event listeners stay, and among them the `rest` listener of any camera
+    // transition still running: its promise can never settle once this
+    // camera stops updating, and the async caller awaiting it
+    // (OrbitControl#fitModelToFrame) keeps its arguments, the model, for as
+    // long as the controls are reachable. Something can still reach them
+    // after dispose (MotionAO keeps `controls`, and stale React render scopes
+    // keep the disposed viewer), so after an in-app model switch that pinned
+    // the model left (open-205, #2019). Dropping every listener lets the
+    // never-settling chain be collected.
     this.cameraControls.dispose()
+    this.cameraControls.removeAllEventListeners()
     this.cameraControls = null
     this.navMode = null
     this.context = null
