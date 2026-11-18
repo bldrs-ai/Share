@@ -35,6 +35,7 @@ import {
   inMemoryUploadGoneAlert,
 } from '../OPFS/messages'
 import {makeTestTree} from '../utils/TreeUtils.test'
+import {resetModelOpenReportForTest} from '../utils/reportModelOpen'
 import {actAsyncFlush, suppressActWarnings} from '../utils/tests'
 import CadView from './CadView'
 import * as viewerModule from './viewer'
@@ -1390,6 +1391,8 @@ describe('CadView', () => {
 
     beforeEach(() => {
       window.gtag = jest.fn()
+      // Each test is a fresh page: its first load is the page's first open.
+      resetModelOpenReportForTest()
       // '../Filetype' is automocked for this whole file, which leaves
       // supportedTypes empty; load_failed's content_type is allowlisted
       // against it, so seed the one format these tests load.
@@ -1413,6 +1416,7 @@ describe('CadView', () => {
       loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
         throw new Error('OpenModel returned -1 for /private/secret-house.ifc')
       })
+      const setTag = jest.spyOn(require('@sentry/react'), 'setTag')
       const {result} = renderHook(() => useStore((state) => state))
       await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
       render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
@@ -1424,9 +1428,15 @@ describe('CadView', () => {
         size_bucket: 'unknown',
         reason_class: 'parse',
         last_phase: 'none',
+        open_kind: 'page',
       }]])
       expect(JSON.stringify(failures)).not.toContain('secret')
       expect(gaEvents().filter(([name]) => name === 'real_model_open')).toHaveLength(0)
+      // The failure's Sentry capture carries the open's kind and the page's
+      // nav mode as scope tags, set before the load ran.
+      expect(setTag).toHaveBeenCalledWith('model_open', 'page')
+      expect(setTag).toHaveBeenCalledWith('model_nav', 'in-app')
+      setTag.mockRestore()
     })
 
     // The success half (real_model_open's load_outcome and timings) cannot
@@ -1486,6 +1496,11 @@ describe('CadView', () => {
       await act(() => result.current.setModelPath({filepath: `/other.ifc`}))
       await actAsyncFlush()
       await waitFor(() => expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(2))
+      // The second failure is of a model switched to in this document, which
+      // is what tells a regression of the in-app switch from a bad model
+      // (utils/reportModelOpen.js, open-205 step F).
+      expect(gaEvents().filter(([name]) => name === 'load_failed').map(([, params]) => params.open_kind))
+        .toEqual(['page', 'in_app'])
     })
 
     // A fails, a model that reports nothing opens (the demo is excluded from
@@ -1555,6 +1570,7 @@ describe('CadView', () => {
         size_bucket: 'unknown',
         reason_class: 'other',
         last_phase: 'none',
+        open_kind: 'page',
       }]])
     })
   })
@@ -1824,6 +1840,8 @@ describe('CadView', () => {
     }
 
     it('aborts the load in flight and starts the next model at once, reporting nothing', async () => {
+      window.gtag = jest.fn()
+      resetModelOpenReportForTest()
       const {result} = renderHook(() => useStore((state) => state))
       const {impl, calls} = hangingLoad()
       loadSpy = jest.spyOn(Loader, 'load').mockImplementation(impl)
@@ -1846,6 +1864,11 @@ describe('CadView', () => {
       expect(calls[1].signal.aborted).toBe(false)
       expect(result.current.alert).toBeNull()
       expect(captureException).not.toHaveBeenCalled()
+      // Counted in GA only, with the kind of the open it gave up: the page's
+      // first (utils/reportModelOpen.js).
+      const aborted = window.gtag.mock.calls.filter(([, name]) => name === 'model_load_aborted')
+      expect(aborted.map(([, , params]) => params.open_kind)).toEqual(['page'])
+      delete window.gtag
     })
 
     it('clears the left model from the store when the switch starts', async () => {

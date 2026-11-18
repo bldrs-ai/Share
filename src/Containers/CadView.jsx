@@ -46,7 +46,7 @@ import {
   reportFramingExclusion,
   reportLoadProgress,
 } from '../loader/loadProgress'
-import {buildOutcomeParams, loadFailureParams} from '../loader/loadAnalytics'
+import {buildOutcomeParams, loadFailureParams, omitUndefined} from '../loader/loadAnalytics'
 import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
 import {EngineOpenFailureError, engineFailureCaptureContext, engineSourceTags} from '../loader/engineOpenFailure'
@@ -101,6 +101,7 @@ import {
 } from '../utils/occurrencePaths'
 import {isOutOfMemoryError} from '../utils/oom'
 import {isAborted, raceLoadAbort, throwIfLoadAborted} from '../utils/loadAbort'
+import {modelOpenKind, tagModelOpen} from '../utils/reportModelOpen'
 import {isSpaModelNavOn} from '../utils/spaModelNavMode'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../viewer/three/Picker'
@@ -449,8 +450,7 @@ export default function CadView({
     const {phase, format} = serialBefore === null ?
       {phase: 'auth', format: undefined} :
       getLoadFailureInfo(serialBefore)
-    gtagEvent('model_load_aborted', Object.fromEntries(Object.entries({phase, format})
-      .filter(([, value]) => value !== undefined)))
+    gtagEvent('model_load_aborted', omitUndefined({phase, format, open_kind: modelOpenKind(modelPath)}))
   }
 
 
@@ -626,6 +626,12 @@ export default function CadView({
     // viewer it loaded into (open-205 #2011 step A).
     const loadSignal = loadAbortRef.current?.signal
     const isLoadSuperseded = () => dedupeModelKeyRef.current !== loadModelKey || isAborted(loadSignal)
+    // Whether this open is the page's first or one switched to in-app, and
+    // the page's nav mode, as Sentry scope tags from here on, so this load's
+    // failure capture and any later exception on the model say which it was
+    // (utils/reportModelOpen.js, open-205 step F). The GA events below take
+    // the same `open_kind`.
+    tagModelOpen(modelPath)
     setIsModelReady(false)
     // open-205 #2043: the canvas is live from the load's first preview mesh,
     // during the parse, so scene picks are too: the handler takes picks on
@@ -826,7 +832,10 @@ export default function CadView({
       if (isRealModelOpen(modelPath) && reportedLoadFailureRef.current !== failureKey) {
         reportedLoadFailureRef.current = failureKey
         const {phase, fileSize, format} = getLoadFailureInfo(loadSerialBefore)
-        gtagFunnelEvent(FUNNEL_EVENTS.LOAD_FAILED, loadFailureParams({error: e, format, fileSize, phase}))
+        gtagFunnelEvent(FUNNEL_EVENTS.LOAD_FAILED, omitUndefined({
+          ...loadFailureParams({error: e, format, fileSize, phase}),
+          open_kind: modelOpenKind(modelPath),
+        }))
       }
       if (isOOM) {
         // Provide actionable OOM alert object; AlertDialog will render a Refresh button.
@@ -1417,6 +1426,13 @@ export default function CadView({
         // model_share / model_export elsewhere, so GA counts one model the
         // same way on every event. Equal to `filepath` above, by design.
         content_id: modelContentId(routeResult),
+      }
+      // The page's first open, or one switched to in-app
+      // (utils/reportModelOpen.js): splits opens, and with load_failed the
+      // failure rate, by whether a previous model was in this document.
+      const openKind = modelOpenKind(routeResult)
+      if (openKind) {
+        eventParams.open_kind = openKind
       }
       // How the load went: the reporter's cross-format snapshot merged with
       // Conway's engine stats for IFC/STEP, plus the displayed/no_geometry/
