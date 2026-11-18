@@ -259,11 +259,44 @@ describe('quota/useDirectLinkQuota', () => {
     expect(gtagEventWithCid).not.toHaveBeenCalled()
   })
 
-  it('meters a model once per page load: a re-init or A → B → A is not a second open', async () => {
+  // Per open, not per page (open-205, #2022; decision 1 on #2011). An open is
+  // one route result from Share.jsx (routes/modelOpen.ts): a re-init (theme
+  // toggle, auth or view-settings re-run, StrictMode) passes the SAME object
+  // again; an in-app return to a model passes a new one.
+  it('meters an open once: a re-init of the same route result is not a second count', async () => {
     const {record} = mockQuota({recordOutcome: {allowed: false, used: 2, limit: 2, tier: 'free', alreadyCounted: false}})
-    await meter(driveRoute(), driveRoute(), githubRoute(), driveRoute())
-    expect(record.mock.calls).toEqual([[DRIVE_KEY], ['/share/v/gh/acme/private-repo/main/models/tower.ifc']])
-    expect(gtagEventWithCid).toHaveBeenCalledTimes(2)
+    const open = driveRoute()
+    await meter(open, open, open)
+    expect(record.mock.calls).toEqual([[DRIVE_KEY]])
+    expect(gtagEventWithCid).toHaveBeenCalledTimes(1)
+  })
+
+  it('in-app A → B → A records A again: a return is a new open', async () => {
+    const {record} = mockQuota({recordOutcome: {allowed: false, used: 2, limit: 2, tier: 'free', alreadyCounted: true}})
+    const a = driveRoute()
+    await meter(a, githubRoute(), a, driveRoute())
+    expect(record.mock.calls).toEqual([[DRIVE_KEY], ['/share/v/gh/acme/private-repo/main/models/tower.ifc'], [DRIVE_KEY]])
+    // Still over the limit on the return, so the soft gate says so again.
+    expect(gtagEventWithCid).toHaveBeenCalledTimes(3)
+  })
+
+  it('A → an unmetered model → A records A again, though the key it last saw is the same', async () => {
+    const {record} = mockQuota()
+    const hosted = routeFor('/share/v/p', {'*': 'index.ifc'})
+    await meter(driveRoute(), hosted, driveRoute())
+    expect(record.mock.calls).toEqual([[DRIVE_KEY], [DRIVE_KEY]])
+  })
+
+  it('with every open a page load (spaModelNav off), per open is per page: one count per page', async () => {
+    // Each page load mounts its own CadView, so its own hook; within one
+    // page only re-inits of that page's one open follow.
+    const {record} = mockQuota()
+    for (let page = 0; page < 2; page++) {
+      const open = driveRoute()
+      const hook = await meter(open, open)
+      hook.unmount()
+    }
+    expect(record.mock.calls).toEqual([[DRIVE_KEY], [DRIVE_KEY]])
   })
 
   it('waits for Auth0 to settle before recording', async () => {

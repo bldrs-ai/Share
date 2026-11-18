@@ -1,3 +1,4 @@
+/* eslint-disable no-magic-numbers */
 import {Page, expect, test} from '@playwright/test'
 import {watchEngineWorker} from '../../tests/e2e/engineWorker'
 import {openLocalFile} from '../../tests/e2e/export'
@@ -29,6 +30,9 @@ const TWO_ROOT_FIXTURE = 'src/tests/fixtures/twoRootShells.step'
 const PLATES_ROW = 3007
 const PLATES_OWNER = 3008
 const TWO_ROOT_TIMEOUT_MS = 90_000
+// Two storeys with a wall each, authored in millimetres with Qto_WallBaseQuantities
+// sets (the file's header says how each number is derived).
+const QUANTITIES_FIXTURE = 'src/tests/fixtures/storeyQuantities.ifc'
 
 
 /**
@@ -44,7 +48,8 @@ function expectEngine(engine: ReturnType<typeof watchEngineWorker>, worker: bool
 /** What `__bldrsAssistTools.call` resolves to (assistHost.js). */
 interface CallResult {
   ok: boolean
-  content?: {total?: number, items?: Array<{ref: string, type: string, name: string}>}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  content?: {total?: any, items?: any[], [key: string]: any}
   echo?: string
   refs?: string[]
   error?: {code: string, message: string, details: Record<string, unknown>}
@@ -130,6 +135,90 @@ for (const {label, flags, worker} of [
       await expect.poll(() => visibleInstances(page)).toBe(plates)
       expect(await page.evaluate(() => (window as unknown as AssistWindow).__bldrsAssistTools.undo())).toBe(true)
       await expect.poll(() => visibleInstances(page)).toBe(total)
+    })
+
+    // The analysis tools (#1674 slice 2) against a model that carries quantity
+    // sets. Expected values are worked out from the fixture's own geometry
+    // (storeyQuantities.ifc header), not read back from the tools:
+    //   Wall A  4 x 0.2 x 3 m   area 2(0.8 + 12 + 0.6) = 26.8 m², volume 2.4 m³
+    //   Wall B  0.5 x 2 x 3 m   area 2(1 + 1.5 + 6)    = 17 m²,   volume 3 m³
+    // The file is in millimetres, so the scene being metres (and the tools
+    // saying m²) is the conversion under test, on the worker engine and off it.
+    test('quantities, measure and spatial answer for a model with quantity sets', async ({page}) => {
+      test.setTimeout(TWO_ROOT_TIMEOUT_MS)
+      const engine = watchEngineWorker(page)
+      await openLocalFile(page, QUANTITIES_FIXTURE, /\/share\/v\/local-only\/.+\.ifc/)
+      await waitForModelReady(page)
+      await expectEngine(engine, worker)
+      await enableAssistInPlace(page)
+
+      const walls = await callTool(page, 'model.query', {ifcType: 'IfcWall'})
+      expect(walls.ok, JSON.stringify(walls.error)).toBe(true)
+      const byName = (name: string) => walls.content?.items?.find((item) => item.name === name)?.ref as string
+      const [wallA, wallB] = [byName('Wall A'), byName('Wall B')]
+      expect(wallA).toMatch(/^e\d+$/)
+      expect(wallB).toMatch(/^e\d+$/)
+
+      // Spatial: the storeys, one wall each, and which one Wall B is on.
+      const spatial = await callTool(page, 'model.spatial', {})
+      expect(spatial.ok, JSON.stringify(spatial.error)).toBe(true)
+      const storeys: Array<{name: string, elements: number}> = []
+      const collect = (node: {type: string, name: string, elements: number, children?: unknown[]}) => {
+        if (node.type.toUpperCase() === 'IFCBUILDINGSTOREY') {
+          storeys.push({name: node.name, elements: node.elements})
+        }
+        const children = node.children ?? []
+        children.forEach((child) => collect(child as typeof node))
+      }
+      collect(spatial.content?.root)
+      expect(storeys).toEqual([{name: 'Level 1', elements: 1}, {name: 'Level 2', elements: 1}])
+      const where = await callTool(page, 'model.spatial', {ref: wallB})
+      expect(where.content?.storey?.name).toBe('Level 2')
+
+      // Quantities: the file's own numbers, summed. Length is stored in mm
+      // (4000 + 2000) and reported in m; area and volume are m² / m³ already.
+      const quantities = await callTool(page, 'model.quantities', {})
+      expect(quantities.ok, JSON.stringify(quantities.error)).toBe(true)
+      expect(quantities.content?.available).toBe(true)
+      const totalOf = (name: string) =>
+        (quantities.content?.totals as Array<{name: string, total: number, unit: string}>).find((t) => t.name === name)
+      expect(totalOf('NetSideArea')).toMatchObject({total: 18, unit: 'm²'})
+      expect(totalOf('NetVolume')).toMatchObject({total: 5.4, unit: 'm³'})
+      expect(totalOf('Length')).toMatchObject({total: 6, unit: 'm'})
+
+      // Measure: from the mesh, in metres. Agrees with the authored volume.
+      const area = await callTool(page, 'model.measure', {refs: [wallA, wallB], metric: 'surfaceArea'})
+      expect(area.ok, JSON.stringify(area.error)).toBe(true)
+      expect(area.content?.total).toBeCloseTo(43.8, 2)
+      expect(area.content?.items?.find((i) => i.ref === wallA)?.value).toBeCloseTo(26.8, 2)
+      expect(area.content?.items?.find((i) => i.ref === wallB)?.value).toBeCloseTo(17, 2)
+      const volume = await callTool(page, 'model.measure', {refs: [wallA, wallB], metric: 'volume'})
+      expect(volume.content?.total).toBeCloseTo(5.4, 2)
+      expect(volume.content?.openPieces).toBe(0)
+      // Wall B, turned and raised: 0.5 (X) x 3 (Y, up) x 2 (Z) in the scene's axes.
+      const extents = await callTool(page, 'model.measure', {refs: [wallB], metric: 'extents'})
+      const size = extents.content?.items?.[0]?.size as number[]
+      expect(size[0]).toBeCloseTo(0.5, 2)
+      expect(size[1]).toBeCloseTo(3, 2)
+      expect(size[2]).toBeCloseTo(2, 2)
+    })
+
+    // index.ifc (the Bldrs logo) carries no quantity sets: the tool says so
+    // plainly, and the mesh fallback gives a real, positive number for it.
+    test('a model without quantity sets says so, and model.measure answers from the mesh', async ({page}) => {
+      const query = await callTool(page, 'model.query', {ifcType: PROXY_TYPE})
+      const refs = query.content?.items?.map(({ref}) => ref) as string[]
+      expect(refs).toHaveLength(PROXY_COUNT)
+      const quantities = await callTool(page, 'model.quantities', {})
+      expect(quantities.ok, JSON.stringify(quantities.error)).toBe(true)
+      expect(quantities.content?.available).toBe(false)
+      expect(quantities.content?.hint).toContain('model.measure')
+      const area = await callTool(page, 'model.measure', {refs, metric: 'surfaceArea'})
+      expect(area.ok, JSON.stringify(area.error)).toBe(true)
+      expect(area.content?.total).toBeGreaterThan(0)
+      expect(area.content?.source).toContain('mesh')
+      const extents = await callTool(page, 'model.measure', {refs, metric: 'extents'})
+      expect((extents.content?.total.size as number[]).every((v) => v > 0)).toBe(true)
     })
 
     test('a ref the model lacks fails the call, naming it, and changes nothing', async ({page}) => {

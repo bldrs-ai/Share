@@ -389,9 +389,18 @@ workaround is used before deciding whether it should be gated:
   The hook does not short-circuit on the local mirror: OPFS is per browser,
   not per user, so a row from an offline fallback or another account would
   silence this user's server call (codex review on Share#1971). A signed-in
-  direct load is therefore one `record-load` call per model per page load.
-- **Once per model per page load**, and only after Auth0 settles: before it
-  does, `record()` would treat the user as signed out and meter nothing.
+  direct load is therefore one `record-load` call per open.
+- **Once per open**, and only after Auth0 settles: before it does,
+  `record()` would treat the user as signed out and meter nothing. An open
+  is one route result from `Share.jsx` (`routes/modelOpen.ts`): a theme
+  toggle, an auth or view-settings re-run and StrictMode's double effect
+  reload the same open and are not counted again; an in-app return to a
+  model (`?feature=spaModelNav`, A → B → A) is a new open and is recorded
+  again (decided on #2011, decision 1). That costs no slot, since the key is
+  `alreadyCounted`, but a user over the limit sends
+  `quota_soft_limit_exceeded` again on the return. With every open a page
+  load, as without the flag, per open is per page (open-205 #2022,
+  `in-app-model-switch.md` §5).
 - **Never blocks.** If `record()` comes back `allowed: false` (record-load's
   403, or the offline OPFS fallback at the limit), the model stays loaded,
   `QuotaLimitDialog` is not shown, and `quota_soft_limit_exceeded` is sent
@@ -401,7 +410,7 @@ workaround is used before deciding whether it should be gated:
 
 | Event | Params | Fires |
 |---|---|---|
-| `quota_soft_limit_exceeded` | `tier` (`free`; `anonymous` before the anonymous tier was removed), `used`, `limit`, `route_kind` (`gdrive` \| `github` \| `local`, the last only with `meterLocalFiles` on), `open_cid` | `useDirectLinkQuota`, when a direct-link load is over the limit; at most once per model per page load |
+| `quota_soft_limit_exceeded` | `tier` (`free`; `anonymous` before the anonymous tier was removed), `used`, `limit`, `route_kind` (`gdrive` \| `github` \| `local`, the last only with `meterLocalFiles` on), `open_cid` | `useDirectLinkQuota`, when a direct-link load is over the limit; at most once per open |
 
 `route_kind` is a closed set, registered GA-side. `local` was added for
 bldrs-ai/ops#39. It is `MODEL_ROUTE_KINDS.LOCAL`, the value `model_view` and
@@ -616,7 +625,7 @@ behind the same analytics consent check as every other `gtagEvent`.
 | Step | Event | Params | Fires |
 |---|---|---|---|
 | Visit | `session_start` / `page_view` | — | GA4 sends these itself |
-| Model open | `real_model_open` | `content_id`, `content_type`, `load_outcome`, `stats_*` (below), `local_hour`, `open_cid` | `CadView` after a real (non-demo) load; see `analytics#isRealModelOpen` |
+| Model open | `real_model_open` | `content_id`, `content_type`, `load_outcome`, `stats_*` (below), `local_hour`, `open_cid` | `CadView` after a real (non-demo) load, once per open: not again for a theme toggle or a view-settings change, which reload the same open (`routes/modelOpen.ts`; open-205 #2022). See `analytics#isRealModelOpen` |
 | (failed open) | `load_failed` | `content_type`, `size_bucket`, `reason_class`, `last_phase`, `open_cid` | `CadView#onViewerInternal`'s catch, once per failed attempt, real (non-demo) models only |
 | Hit a limit | `quota_limit_reached` | `tier` (`free`; `anonymous` before that tier was removed), `feature` (`QUOTA_FEATURES`: `private_load`) | `QuotaLimitDialog`, once each time the dialog opens, whatever made it show |
 | Signed in | `login` (GA4 recommended) | `method`: `google` \| `github` \| `email` \| `unknown`; plus `from: 'gate'` and `feature` (`export` \| `share`) when a visible gate started the sign-in (§"Gate events") | `src/Auth0/useLoginTracking.js`, once per completed sign-in (below) |
@@ -809,13 +818,13 @@ The parts that aren't obvious:
     review and CI traffic never reaches it. Team members' own opens on
     bldrs.ai are counted, as for `real_model_open`: they are filtered at
     query time on the bizdev dashboard (`GA_CONFIG.orgUsers`), not in the
-    client. A reload of the same model in one page load (a theme change
-    or Widget API view settings re-create the viewer, and each success sends
-    `real_model_open` again) is not a second open: the tracker skips a call
-    whose model key equals the previous counted open's. Opening the same
-    model again in a later page load counts. Known under-count: A, then the
-    demo (never tracked, so it does not clear the key), then A again in one
-    page load is skipped.
+    client. A reload of the same model's open (a theme change or Widget API
+    view settings re-create the viewer and re-run the load) is not a second
+    open: `CadView` sends none of the open events for it (below), and the
+    tracker skips a call whose open key (`routes/modelOpen.ts`) equals the
+    previous counted open's. Opening the same model again counts, on a later
+    page load or in-app (A → B → A, and A → demo → A, which the model-keyed
+    guard before open-205 #2022 skipped).
   - **Consent:** analytics is opt-out (`isAllowed()` defaults to true).
     Nothing is read, written or sent while the user has opted out, and opens
     made while opted out are never counted retroactively. The check repeats
@@ -1157,7 +1166,7 @@ the same handler.
 
 | New event | `gate` | Shadows | Fires | `source` |
 |---|---|---|---|---|
-| `model_view` | `none` | `real_model_open` | `CadView`, every real open; sent once auth settles | from the route |
+| `model_view` | `none` | `real_model_open` | `CadView`, every real open, once per open like `real_model_open`; sent once auth settles | from the route |
 | `model_share` | `none` | `share` | `ShareDialog`, when it opens | from the route (always `hosted`: local files get the gate instead) |
 | `model_share` | `upsell` | `share_gated` | `ShareControl`'s local-file gate, when its help opens | `local` |
 | `model_share` | `blocked` | `quota_limit_reached` | `QuotaLimitDialog`, once per showing | `hosted` |

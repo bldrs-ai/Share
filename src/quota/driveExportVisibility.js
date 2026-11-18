@@ -1,9 +1,14 @@
+import {modelOpenId} from '../routes/modelOpen'
 import {DRIVE_VISIBILITY, driveFileQuotaVisibility} from './driveVisibility'
 
 
 // fileId + how it was downloaded → the in-flight or settled answer. One
-// lookup per file per page: the Export tab and every export of the file ask.
+// lookup per file per OPEN (routes/modelOpen.ts): the Export tab and every
+// export of the file ask, and a theme rebuild is the same open. A new open
+// asks again, so an in-app return to a file whose sharing changed meanwhile
+// is classified as a page load would have it (open-205, #2022).
 const answers = new Map()
+let answersOpen = 0
 
 
 /**
@@ -29,6 +34,11 @@ export function isDriveModelPublic(modelPath, driveDownload) {
   if (!fileId || !driveDownload || driveDownload.fileId !== fileId) {
     return Promise.resolve(false)
   }
+  const open = modelOpenId(modelPath)
+  if (open !== answersOpen) {
+    answers.clear()
+    answersOpen = open
+  }
   const memoKey = `${fileId}\u0000${driveDownload.connection ? 'connection' : 'api-key'}`
   if (!answers.has(memoKey)) {
     answers.set(memoKey, driveFileQuotaVisibility(driveDownload.connection, fileId)
@@ -41,4 +51,5 @@ export function isDriveModelPublic(modelPath, driveDownload) {
 /** Tests only: forget the answers. */
 export function resetDriveExportVisibility() {
   answers.clear()
+  answersOpen = 0
 }
