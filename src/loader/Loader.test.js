@@ -8,6 +8,7 @@ import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
 import * as contentHash from '../utils/contentHash'
 import {dicomSeriesToNrrd, groupSeries, parseDicomSlice} from './dicom'
 import {load, readModel} from './Loader'
+import {ZipArchiveError} from './zipArchive'
 
 
 // Spark's real module boots a wasm sorter + workers that don't exist in
@@ -491,7 +492,7 @@ describe('Loader', () => {
     // Share#2006. Uploads arrive unwrapped; a `.ifczip` by URL (GitHub, a
     // locally hosted file, a pasted link) reaches `load` as the zip, takes
     // findLoader's IFC arm, and is unwrapped one line before `readModel`
-    // (`loader/modelArchive.js#unwrapIfcZip`). Conway must get the part-21
+    // (`loader/modelArchive.js#unwrapHostedArchive`). Conway must get the part-21
     // text, not the zip.
     mockViewer.IFC.type = 'ifc'
     const ifcText = readTestDataFile('ifc/index.ifc')
@@ -505,6 +506,64 @@ describe('Loader', () => {
       expect(opened).toBe(ifcText)
       // The model is an IFC from here on, whatever the URL said.
       expect(model.type).toBe('ifc')
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  // Share#2006 follow-up: a zip is a container wherever it comes from. The
+  // route's name doesn't pick the model — the one entry inside does, by its
+  // own name and header, so `.zip`, `.ifc.zip` and a zip under another
+  // model's name all open the model they hold.
+  it.each([['.zip', 'ifc/index.zip'], ['.ifc.zip', 'ifc/index.ifc.zip'], ['zip named as a .glb', 'ifc/index.glb']])(
+    'loads a hosted %s as the IFC inside it', async (_what, route) => {
+      mockViewer.IFC.type = 'ifc'
+      const ifcText = readTestDataFile('ifc/index.ifc')
+      const zip = zipSync({'index.ifc': new Uint8Array(Buffer.from(ifcText))})
+      const restoreArrayBuffer = setupMockBlobWithContent(Buffer.from(zip))
+      try {
+        const model = await load(testPathToUrl(route), mockViewer, jest.fn(), true, jest.fn(), '')
+        const {OpenModel} = mockViewer.IFC.loader.ifcManager.ifcAPI
+        expect(OpenModel).toHaveBeenCalledTimes(1)
+        expect(new TextDecoder().decode(OpenModel.mock.calls[0][0])).toBe(ifcText)
+        expect(model.type).toBe('ifc')
+      } finally {
+        restoreArrayBuffer()
+      }
+    })
+
+  it('refuses a hosted zip of several models, which a link can\'t choose between', async () => {
+    const ifc = new Uint8Array(Buffer.from(readTestDataFile('ifc/index.ifc')))
+    const restoreArrayBuffer = setupMockBlobWithContent(Buffer.from(zipSync({'a.ifc': ifc, 'b.ifc': ifc})))
+    try {
+      await expect(load(testPathToUrl('ifc/pair.zip'), mockViewer, jest.fn(), true, jest.fn(), ''))
+        .rejects.toThrow(ZipArchiveError)
+      expect(mockViewer.IFC.loader.ifcManager.ifcAPI.OpenModel).not.toHaveBeenCalled()
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  it('types a .zip that isn\'t one by its header', async () => {
+    mockViewer.IFC.type = 'ifc'
+    const ifcText = readTestDataFile('ifc/index.ifc')
+    const restoreArrayBuffer = setupMockBlobWithContent(Buffer.from(ifcText))
+    try {
+      const model = await load(testPathToUrl('ifc/index.zip'), mockViewer, jest.fn(), true, jest.fn(), '')
+      expect(model.type).toBe('ifc')
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  it('loads a hosted zip of DICOM slices as the volume they stack into', async () => {
+    const zip = readTestDataFile('dicom/phantom-ct.zip', true)
+    const restoreArrayBuffer = setupMockBlobWithContent(zip)
+    try {
+      const model = await load(testPathToUrl('dicom/scan.zip'), mockViewer, jest.fn(), true, jest.fn(), '')
+      expect(model.type).toBe('nrrd')
+      const volume = model.children.find((child) => child.userData.isVolume)
+      expect(volume.name).toBe('CT 40 × 48 × 32')
     } finally {
       restoreArrayBuffer()
     }

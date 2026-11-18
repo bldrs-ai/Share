@@ -73,12 +73,20 @@ either", below.
 
 ## An archive is not a format either: `.zip` and `.ifczip`
 
+*A zip is opened by what is inside it, from every source.* A drop, a pick, a
+GitHub file, a Drive link and a pasted URL all reach the same policy
+(`modelArchive.js`). The archive's own name never picks the model: a
+`.zip`, a `.ifc.zip`, a `.ifczip` and a zip renamed to `x.ifc` all open the
+one model inside, typed by that entry. The upload seams came first
+(Share#2006). Downloads followed (§"A downloaded archive", below).
+
 Half of the uploads the Open dialog rejected in the 2026-11-01 triage were
 archives (bldrs-ai/ops#26), mostly named as if a format Share opens was
 inside (`part.stp.zip`, `… ifc.zip`, download bundles). Share#2006 opens
-the model inside, on the gzip envelope's pattern: no `zip` entry in
-`supportedTypes`, no `findLoader` arm, nothing downstream that knows. The
-difference is that a zip is a **container**: it can hold no model, one, or
+the model inside, on the gzip envelope's pattern: nothing downstream of the
+unwrap knows there was a zip. (`zip` is now in `supportedTypes`, but only so
+that a hosted one routes. Its `findLoader` arm is a placeholder that a load
+never parses with.) The difference is that a zip is a **container**: it can hold no model, one, or
 several, so the upload seam can end in a refusal or a question as well as
 a file.
 
@@ -191,29 +199,58 @@ bytes are ever read. The directory comes from the tail of the Blob, so a
 checked: the size check catches a lying header, and corruption inside a
 deflate stream almost always fails the inflate.
 
-**`.ifczip`** is the one archive that *is* in `supportedTypes`. It is the
-standard IFC transport, a zip of one `.ifc`, so it routes, lists in the
-GitHub browser and parses out of a permalink. Before it was listed, the
-unanchored suffix regex split `model.ifczip/12` into `model.ifc` plus an
-element path `zip/12`. An uploaded one is unwrapped at the seams like any
-zip. A hosted one shares `findLoader`'s IFC arm and is unwrapped in
-`Loader#load` by `unwrapIfcZip`, one line after the gzip net, so conway
-gets the `.ifc` and `loader.type` becomes `ifc` from there on (capabilities
-and analytics see an IFC). The arms before that line correctly see a zip:
-`canOpenFromStore` refuses it, and the truncated-part-21 check skips it. A
-hosted `.ifczip` is excluded from the GLB cache (`wantGlb`), because that
-path's source handle would be the zip, and `spillModelSource` would back
-conway's later reads of the IFC with zip bytes. It opens uncached. An
-uploaded one caches as the `.ifc` it was stored as. A hosted one that isn't
-exactly one readable IFC throws a `ZipArchiveError`. CadView raises it as an
-`archiveUnreadable` alert ("Can't open this archive", with the reason), which
-is counted in analytics only and kept out of `captureException`, like an
-unsupported schema. `load_failed` still fires for it, as it does for that
-schema refusal: it is a failed open.
+**A downloaded archive.** Both `zip` and `ifczip` are in `supportedTypes`,
+so they route, list in the GitHub browser and parse out of a permalink.
+The browser lists every `.zip`: the name doesn't have to say what is
+inside. A route is split at the file's *outermost* suffix
+(`Filetype.js#splitAroundExtension`, at a segment boundary), so
+`box.ifc.zip/12` is `box.ifc.zip` plus element `12`. It is not `box.ifc`
+plus `.zip/12`, which used to make the route ask GitHub for a `box.ifc`
+that isn't there. A URL with no extension, such as a Drive link, is typed
+by its header (`Filetype.js#guessType`). A plain zip there reads as `zip`,
+while `analyzeHeader` itself still answers null for one, because
+`modelArchive.js` relies on that null to tell an archive from a zip-based
+model.
 
-**Out of scope, and what happens.** A `.zip` from GitHub or Drive is not
-routed (`zip` is not a type), so it never reaches these seams. That is the
-follow-up, and `connections/loadFromSource.js` is untouched. `.rar` and
+The unwrap is in `Loader#load`, one step after the gzip net:
+`unwrapHostedArchive`, the same `resolveArchiveUpload` the seams use. It
+runs for a `.zip` or `.ifczip` route. It also runs for any binary download
+whose bytes are a zip, *whatever its name*: a renamed `.ifczip` at
+`x.ifc`, or a zip at `x.glb`. USDZ and SOG are excluded, since they are
+zips themselves (`ZIP_MODEL_TYPES`), and so are text formats and GLB cache
+hits. One model inside retypes the load: `findLoader` again for the
+entry's type, or a retag of the IFC arm for a part-21 inner model. From
+there, the parse, capabilities and analytics all see that model. A zip of
+DICOM slices becomes its NRRD, so **a scan in a GitHub repo is a link
+someone can share**, with its view terms (`#c:`, `#cp:`, `#d:`) like any
+model. Bytes under a `.zip` name that aren't a zip are typed by their
+header, as an upload is.
+
+The arms before the unwrap saw the route's name. For an archive route that
+is correct: `canOpenFromStore` refuses it, the truncated-part-21 check
+skips it, and `wantGlb` excludes it. The GLB cache's handles are the
+source file, which here is the zip, and `spillModelSource` would back
+conway's later reads of the model with zip bytes. A zip under a model's
+*name* gets past `wantGlb`, so the unwrap drops the export context
+(`glbExportContext = null`). Every downloaded archive therefore opens
+uncached. An uploaded one caches as the entry it was stored as. Caching
+the inner model of a download is a follow-up.
+
+**When a downloaded archive can't open.** It throws a `ZipArchiveError` if
+it holds several models (a link can't ask which one), holds none, or can't
+be read. CadView raises that as an `archiveUnreadable` alert ("Can't open
+this archive", with the reason). The alert is counted in analytics only and
+kept out of `captureException`, like an unsupported schema. `load_failed`
+still fires for it, as it does for that schema refusal, since it is a failed
+open. The several-models refusal names the first five entries by their path
+in the archive, "and N more" after that. The entry names are the user's
+files, so they ride `ZipArchiveError#dialogText`, which only the dialog
+shows. The error's `message` is what `trackAlertEvent` counts, and it names
+none of them.
+
+**Out of scope, and what happens.** A downloaded archive of several
+models has no chooser (above). The chooser waits for demand: doing it in
+general means pausing a load mid-flight on a dialog. `.rar` and
 `.7z` have no small browser decoder. They get `ARCHIVE` guidance (*"Unpack
 it first"*). A `.zip.gz` is not unwrapped: the gzip seam inflates only a
 member whose inside sniffs as a model, and a zip doesn't. A multi-file
@@ -228,16 +265,24 @@ sub-field that claims more than its record), both ceilings, a lying-low bomb
 (counting what the inflate produced, not only the refusal), allocation
 failure and the error mapping. `modelArchive.test.js` covers entry
 selection, the pass-throughs, nesting under one total, the seam outcomes
-and `unwrapIfcZip`, plus 0-byte entries, multi-file glTF, extension tags and
+and `unwrapHostedArchive` (any name, DICOM, not-an-archive, the refusals and
+what their message withholds), plus 0-byte entries, multi-file glTF, extension tags and
 a defect ending in the dialog. `formatGuidance.test.js` covers the no-model
 text. `AlertDialog.test.jsx` covers the chooser (its cap, repeated paths, a
 choice that fails) and `archiveUnreadable`, which `CadView.test.jsx` raises. Each seam has its own suite
 (`dragAndDrop.archive.test.js` and `loader.test.js`). `Loader.test.js`
-covers a hosted `.ifczip` through `load()`, and that it never reaches the
-GLB cache. `routes.test.ts` and
-`Filetype.test.js` cover `ifczip` ahead of its `ifc` prefix. E2E:
+covers a hosted `.ifczip`, `.zip`, `.ifc.zip`, a zip under a `.glb` name,
+a DICOM zip, a non-zip `.zip` and the several-models refusal through
+`load()`, and that a `.ifczip` never reaches the GLB cache. `routes.test.ts`
+and `Filetype.test.js` cover `ifczip` ahead of its `ifc` prefix, the
+outermost-suffix split, and `guessType`'s `zip`. `GitHubFileBrowser.test.jsx`
+lists every `.zip`. E2E:
 `loader/modelArchive.spec.ts`, desktop and mobile, covers a drop and a pick
 of one model, a drop and a pick of several, and a drop of none.
+`loader/hostedArchive.spec.ts`, desktop and mobile, opens GitHub-hosted
+links: a `.ifc.zip`, a DICOM zip (also reopened with a camera on the hash),
+a zip renamed `.ifc` (which opens uncached, while the plain IFC caches), and
+a zip of several models refused with their names.
 
 
 ## A DICOM series becomes one NRRD
