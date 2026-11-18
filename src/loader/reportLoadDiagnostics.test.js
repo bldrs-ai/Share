@@ -156,6 +156,9 @@ describe('loader/reportLoadDiagnostics', () => {
     it.each([
       ['CONFIG_CONTROL_DESIGN', 'CONFIG_CONTROL_DESIGN'],
       ['IFC4X3_ADD2', 'IFC4X3_ADD2'],
+      // IFC4's addenda, as real exporters write them (codex on #2235).
+      ['IFC4_ADD2_TC1', 'IFC4_ADD2_TC1'],
+      ['IFC4_ADD1', 'IFC4_ADD1'],
       ['ifc2x3', 'IFC2X3'],
       ['AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }', 'AUTOMOTIVE_DESIGN'],
       ['AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF', 'AP242'],
