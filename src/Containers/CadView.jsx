@@ -128,7 +128,8 @@ import {elementSelection} from './selection'
 import {partsToPath} from './urls'
 import {initViewer} from './viewer'
 import {installDebugPanelsShortcut} from '../viewer/debugPanels'
-import {isWebGLUnavailableError, webglUnavailableAlert} from '../viewer/webglUnavailable'
+import {isWebGLUnavailableError} from '../viewer/webglUnavailable'
+import WebglUnavailable from '../Components/WebglUnavailable'
 import {reportClientCapability} from '../privacy/clientCapabilities'
 
 
@@ -192,9 +193,9 @@ export default function CadView({
   // (not module-level state) so two CadView mounts in the same process —
   // tests, multi-pane layouts — don't stomp each other.
   const previousThemeChangeCbRef = useRef(null)
-  // Set once the no-WebGL dialog has been shown, so a later re-init (a theme
-  // change, a navigation) that fails the same way doesn't raise it again.
-  const isWebglAlertShownRef = useRef(false)
+  // Set when three got no WebGL context: no viewer exists, so nothing the
+  // viewer gates renders, and Components/WebglUnavailable takes its place.
+  const [isWebglUnavailable, setIsWebglUnavailable] = useState(false)
   // The `[modelPath, customViewSettings]` pair the viewer was last built for
   // (see that effect). Its dependencies change only when a new viewer is
   // wanted, so the only run that sees the same pair again is StrictMode's
@@ -407,12 +408,13 @@ export default function CadView({
         // Share defect. Count it as a client capability (its one sink) and
         // tell the user what to try, rather than letting the throw take the
         // app down into the error boundary. With no viewer set, nothing tries
-        // to load (viewer/webglUnavailable.js).
+        // to load (viewer/webglUnavailable.js). The report dedupes itself, so
+        // a re-init that fails the same way (a theme change) sends nothing.
+        // initViewer disposed any previous viewer before it threw, so the
+        // store must not keep pointing at it.
         reportClientCapability('webgl_unavailable')
-        if (!isWebglAlertShownRef.current) {
-          isWebglAlertShownRef.current = true
-          setAlert(webglUnavailableAlert())
-        }
+        setViewer(null)
+        setIsWebglUnavailable(true)
         return
       }
       // Apply the persisted §6e render look (profile-menu toggle). Runs on
@@ -3230,6 +3232,7 @@ export default function CadView({
         * ElementsControl. The persisted visibility is left alone, so the
         * cube comes back when isolation ends.
         */}
+      {!viewer && isWebglUnavailable && <WebglUnavailable/>}
       {viewer && isViewCubeVisible && !isTempIsolationModeOn && <ViewCube/>}
       {viewer && (
         <RootLandscape

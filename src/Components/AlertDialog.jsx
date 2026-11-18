@@ -13,7 +13,6 @@ import useStore from '../store/useStore'
 import {gtagEventWithCid, LOCAL_LINK_EVENTS} from '../privacy/analytics'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
 import {DROP_REFUSED} from '../utils/dragAndDrop'
-import {WEBGL_UNAVAILABLE} from '../viewer/webglUnavailable'
 import ArchiveEntryChoice from './ArchiveEntryChoice'
 import Dialog from './Dialog'
 
@@ -66,11 +65,6 @@ export default function AlertDialog({onClose}) {
       // A question, or a cache clear another tab held back (ProfileControl):
       // not a failure, nothing to count. Its entry names are the
       // user's file names, which must not reach Sentry or GA anyway.
-      return
-    }
-    if (alert.type === WEBGL_UNAVAILABLE) {
-      // Counted where it is raised, as a client capability (CadView,
-      // viewer/webglUnavailable.js): that report is its one sink.
       return
     }
     if (alert.type === 'engineFailure') {
@@ -148,7 +142,6 @@ export default function AlertDialog({onClose}) {
   const isNoGeometry = alert && typeof alert === 'object' && alert.type === 'noGeometry'
   const isEntryChoice = alert && typeof alert === 'object' && alert.type === ARCHIVE_ENTRY_CHOICE
   const isCacheClearSkipped = alert && typeof alert === 'object' && alert.type === CACHE_CLEAR_SKIPPED
-  const isWebglUnavailable = alert && typeof alert === 'object' && alert.type === WEBGL_UNAVAILABLE
   // A rejected file whose extension we can say something useful about: a
   // Revit project, a SolidWorks part, a PDF (loader/formatGuidance.js). Only
   // the header and body change; it is still an unrecognizedFormat alert, so
@@ -234,9 +227,7 @@ export default function AlertDialog({onClose}) {
   } else if (isUploadNotInBrowser) {
     actionCb = openAFile
     actionTitle = 'Open a file'
-  } else if (isNoGeometry || isWebglUnavailable) {
-    // No WebGL: there is no viewer to reset to, and navToDefault would only
-    // try to build one again.
+  } else if (isNoGeometry) {
     actionCb = dismiss
     actionTitle = 'OK'
   } else if (isCacheClearSkipped) {
@@ -264,8 +255,6 @@ export default function AlertDialog({onClose}) {
     headerText = 'File not in this browser'
   } else if (isNoGeometry) {
     headerText = 'No 3D geometry'
-  } else if (isWebglUnavailable) {
-    headerText = '3D view not available'
   } else if (isEntryChoice) {
     headerText = 'Choose a model'
   } else if (isCacheClearSkipped) {
@@ -282,7 +271,7 @@ export default function AlertDialog({onClose}) {
   // so there is nothing for support to diagnose. A guided format is the same:
   // the guidance, and its help link, is the help.
   const showHelpFooter = !isOom && !isNeedsReconnect && !isUnsupportedSchema && !isInMemoryUploadGone &&
-    !isUploadNotInBrowser && !isNoGeometry && !guidance && !isEntryChoice && !isCacheClearSkipped && !isWebglUnavailable
+    !isUploadNotInBrowser && !isNoGeometry && !guidance && !isEntryChoice && !isCacheClearSkipped
   // Choosing finishes the drop or pick that raised the chooser, from inside
   // this click; closing leaves whatever model is open, as the user had it.
   const chooseEntry = (entry) => {
@@ -294,8 +283,7 @@ export default function AlertDialog({onClose}) {
     <Dialog
       headerText={headerText}
       isDialogDisplayed={alert !== null}
-      setIsDialogDisplayed={isCacheClearSkipped ? acknowledgeCacheClear :
-        (isNoGeometry || isEntryChoice || isWebglUnavailable ? dismiss : onCloseDismiss)}
+      setIsDialogDisplayed={isCacheClearSkipped ? acknowledgeCacheClear : (isNoGeometry || isEntryChoice ? dismiss : onCloseDismiss)}
       actionCb={actionCb}
       headerIcon={isNoGeometry || isEntryChoice || isCacheClearSkipped ?
         <InfoOutlinedIcon className='icon-share'/> :
@@ -368,7 +356,7 @@ function createAlertReport(a) {
     if (a && (a.type === 'oom' || a.type === 'needsReconnect' || a.type === 'unsupportedSchema' ||
         a.type === 'inMemoryUploadGone' || a.type === 'uploadNotInBrowser' || a.type === 'engineFailure' ||
         a.type === 'noGeometry' || a.type === 'unrecognizedFormat' || a.type === CACHE_CLEAR_SKIPPED ||
-        a.type === DROP_REFUSED || a.type === WEBGL_UNAVAILABLE)) {
+        a.type === DROP_REFUSED)) {
       return a.message
     } else if (a instanceof NotFoundError) {
       return displayPathAlert(a)

@@ -67,7 +67,7 @@ export function opfsSkipReason(signals: {engine: string, hasGetDirectory: boolea
 
 const MS_PER_SECOND = 1000
 
-/** AlertDialog's header when three got no WebGL context (viewer/webglUnavailable.js). */
+/** Components/WebglUnavailable's title when three got no WebGL context (viewer/webglUnavailable.js). */
 const WEBGL_UNAVAILABLE_HEADER = '3D view not available'
 
 /** Playwright engines whose Linux build on a GPU-less runner has been seen to have no WebGL. */
@@ -83,7 +83,7 @@ const WEBGL_LESS_ENGINES = ['firefox', 'webkit']
  * whatever the prefs (`webgl.force-enabled`) or Mesa installs tried. The app
  * then crashed to its error boundary ("Oh no!", the product's silent no-WebGL
  * crash, #659); since SHARE-1DZ's fix it shows a "3D view not available"
- * dialog and builds no viewer. Every spec loads a model, so every spec fails there
+ * notice and builds no viewer. Every spec loads a model, so every spec fails there
  * for a reason that is the runner, not the deploy. Same shape and same
  * narrowness as {@link opfsSkipReason}:
  *
@@ -327,8 +327,8 @@ export function describeModelNotReady(render: RenderState | null, diagnostics: s
         'The app crashed: its error boundary replaced the viewer with ApplicationError, so cadview-dropzone is gone.' :
         'cadview-dropzone is not in the DOM: the viewer never mounted, or was torn down.')
     } else if (render.bodyText.includes(WEBGL_UNAVAILABLE_HEADER)) {
-      // AlertDialog's header for viewer/webglUnavailable.js: no viewer was built.
-      lines.push('No WebGL: CadView showed its "3D view not available" dialog instead of building a viewer.')
+      // Components/WebglUnavailable, shown in place of the viewer.
+      lines.push('No WebGL: CadView showed its "3D view not available" notice instead of building a viewer.')
     } else {
       lines.push(`cadview-dropzone is there with data-model-ready=${render.modelReady}: the load itself did not finish.`)
     }

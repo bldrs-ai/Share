@@ -19,7 +19,6 @@ import {gtagEventWithCid} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
 import {DROP_REFUSED} from '../utils/dragAndDrop'
-import {webglUnavailableAlert} from '../viewer/webglUnavailable'
 import AlertDialog from './AlertDialog'
 
 
@@ -836,38 +835,3 @@ describe('AlertDialog — dropRefused alert type', () => {
   })
 })
 
-
-// SHARE-1DZ: no WebGL context. CadView counts it as a client capability; the
-// dialog only explains, and has no viewer to reset to.
-describe('AlertDialog — webglUnavailable alert type', () => {
-  const onClose = jest.fn()
-
-  beforeEach(() => {
-    jest.clearAllMocks()
-    act(() => {
-      useStore.getState().setAlert(null)
-    })
-  })
-
-  it('explains what to try, without the Discord footer, and reports nothing', () => {
-    act(() => {
-      useStore.getState().setAlert(webglUnavailableAlert())
-    })
-    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
-    expect(screen.getByText('3D view not available')).toBeInTheDocument()
-    expect(screen.getByText(/hardware acceleration/)).toBeInTheDocument()
-    expect(screen.queryByText(/Discord/i)).not.toBeInTheDocument()
-    expect(trackAlert).not.toHaveBeenCalled()
-    expect(trackAlertEvent).not.toHaveBeenCalled()
-  })
-
-  it('OK dismisses without navigating, which would only rebuild the viewer', () => {
-    act(() => {
-      useStore.getState().setAlert(webglUnavailableAlert())
-    })
-    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
-    fireEvent.click(screen.getByText('OK'))
-    expect(useStore.getState().alert).toBeNull()
-    expect(onClose).not.toHaveBeenCalled()
-  })
-})

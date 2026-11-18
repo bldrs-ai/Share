@@ -39,7 +39,7 @@ import {actAsyncFlush, suppressActWarnings} from '../utils/tests'
 import CadView from './CadView'
 import * as viewerModule from './viewer'
 import * as clientCapabilities from '../privacy/clientCapabilities'
-import {WEBGL_UNAVAILABLE} from '../viewer/webglUnavailable'
+import {WEBGL_UNAVAILABLE_TITLE} from '../viewer/webglUnavailable'
 
 
 window.HTMLElement.prototype.scrollIntoView = jest.fn()
@@ -296,8 +296,9 @@ describe('CadView', () => {
 
   // SHARE-1DZ: a browser with no WebGL context made three's WebGLRenderer
   // throw inside initViewer, which took the app down into the error boundary.
-  // Now it is a dialog and one client-capability report, and nothing loads.
-  it('shows the no-WebGL dialog instead of crashing when three gets no context', async () => {
+  // Now it is a notice in the viewer's place and one client-capability
+  // report, and nothing loads.
+  it('shows the no-WebGL notice instead of crashing when three gets no context', async () => {
     const initViewer = jest.spyOn(viewerModule, 'initViewer').mockImplementation(() => {
       throw new Error('THREE.WebGLRenderer: Error creating WebGL context.')
     })
@@ -306,20 +307,19 @@ describe('CadView', () => {
     const {result} = renderHook(() => useStore((state) => state))
     try {
       await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
-      // The store is shared across this file's tests, so "no new viewer" is
-      // "the same one as before", not null.
-      const viewerBefore = result.current.viewer
       render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
       await actAsyncFlush()
-      await waitFor(() => expect(result.current.alert?.type).toBe(WEBGL_UNAVAILABLE))
+      await waitFor(() => expect(screen.getByTestId('webgl-unavailable')).toBeInTheDocument())
+      expect(screen.getByText(WEBGL_UNAVAILABLE_TITLE)).toBeInTheDocument()
       expect(report).toHaveBeenCalledWith('webgl_unavailable')
-      expect(result.current.viewer).toBe(viewerBefore)
+      // Cleared, not left pointing at a viewer initViewer already disposed
+      // (this file's earlier tests leave one in the shared store).
+      expect(result.current.viewer).toBeNull()
       expect(loadSpy).not.toHaveBeenCalled()
     } finally {
       initViewer.mockRestore()
       report.mockRestore()
       loadSpy.mockRestore()
-      await act(() => result.current.setAlert(null))
     }
   })
 

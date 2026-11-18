@@ -13,11 +13,12 @@ headless crawler. Uncaught, that took the app down into its error boundary
 ("Oh no!", #659) and was a Sentry error, SHARE-1DZ (1,133 events, 285 users
 by 2026-11-18). Neither is right: the user gets nothing to act on, and nobody
 can fix a client's GPU in Share. Now `CadView`'s viewer init catches it
-(`viewer/webglUnavailable.js#isWebGLUnavailableError`), shows a "3D view not
-available" dialog that says what to try, builds no viewer, and sends one
-`webgl_unavailable` report. Its `blocker` is `none`: the bait check below is
-only for `ga_blocked`. The capability report is its only sink, so the dialog
-sends no `alert` event.
+(`viewer/webglUnavailable.js#isWebGLUnavailableError`), builds no viewer,
+shows a "3D view not available" notice in its place that says what to try
+(`Components/WebglUnavailable.jsx`: persistent, not a dialog, since there is
+nothing to dismiss it back to), and sends one `webgl_unavailable` report. Its
+`blocker` is `none`: the bait check below is only for `ga_blocked`. The
+capability report is its only sink.
 
 ## Why not Sentry, why not GA directly
 

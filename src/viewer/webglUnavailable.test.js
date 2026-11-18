@@ -1,4 +1,4 @@
-import {WEBGL_UNAVAILABLE, isWebGLUnavailableError, webglUnavailableAlert} from './webglUnavailable'
+import {isWebGLUnavailableError} from './webglUnavailable'
 
 
 describe('viewer/webglUnavailable', () => {
@@ -20,9 +20,5 @@ describe('viewer/webglUnavailable', () => {
     ['nothing', undefined],
   ])('does not recognise %s', (_, thrown) => {
     expect(isWebGLUnavailableError(thrown)).toBe(false)
-  })
-
-  it('builds the dialog alert', () => {
-    expect(webglUnavailableAlert()).toEqual({type: WEBGL_UNAVAILABLE, message: expect.stringMatching(/WebGL/)})
   })
 })
