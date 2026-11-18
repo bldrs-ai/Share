@@ -146,12 +146,12 @@
         "bodyJson": {
           "days": {
             "2026-11-18": {
-              "spent": 3414
+              "spent": 3523
             }
           },
           "estimates": {
             "00000000-0000-4000-8000-00000000a1c0": {
-              "micro": 3414,
+              "micro": 3523,
               "generation": null
             }
           }
@@ -201,12 +201,12 @@
         "bodyJson": {
           "days": {
             "2026-11-18": {
-              "spent": 3414
+              "spent": 3523
             }
           },
           "estimates": {
             "00000000-0000-4000-8000-00000000a1c0": {
-              "micro": 3414,
+              "micro": 3523,
               "generation": null
             }
           }
@@ -256,12 +256,12 @@
         "bodyJson": {
           "days": {
             "2026-11-18": {
-              "spent": 3414
+              "spent": 3523
             }
           },
           "estimates": {
             "00000000-0000-4000-8000-00000000a1c0": {
-              "micro": 3414,
+              "micro": 3523,
               "generation": null
             }
           }
