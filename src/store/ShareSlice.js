@@ -16,5 +16,13 @@ export default function createShareSlice(set, get) {
     // state, so it also outlives the dialog being closed and reopened.
     isCameraInUrl: true,
     setIsCameraInUrl: (isCameraInUrl) => set(() => ({isCameraInUrl})),
+    // The dialog's other two switches, for the same reason: the live view
+    // link (Share/viewLink.js) reads them, so the cut planes (`#cp:`) and the
+    // display (`#d:`) stop following while theirs is off. Default on, like
+    // the camera: a term is only written once the user has changed it.
+    isPlaneInUrl: true,
+    setIsPlaneInUrl: (isPlaneInUrl) => set(() => ({isPlaneInUrl})),
+    isDisplayInUrl: true,
+    setIsDisplayInUrl: (isDisplayInUrl) => set(() => ({isDisplayInUrl})),
   }
 }

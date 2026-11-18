@@ -1,4 +1,5 @@
-import {HASH_DEBOUNCE_WAIT_MS, debounce} from '../../utils/debounce'
+import {HASH_DEBOUNCE_WAIT_MS} from '../../utils/debounce'
+import {createLiveTerm} from '../Share/viewLink'
 
 
 /**
@@ -25,6 +26,10 @@ import {HASH_DEBOUNCE_WAIT_MS, debounce} from '../../utils/debounce'
  * no control event (the ViewCube). Other moves made for the user — a note's
  * camera, the Assist `view.*` tools — don't start it, and once it's live
  * they're followed like any other.
+ *
+ * The rule is the live view link's (Share/viewLink.js), shared with the cut
+ * planes and the display: this module only says what the camera's user
+ * change is, and the term does the rest.
  *
  * Once live, every camera `update` schedules a write, programmatic ones too
  * (a ViewCube snap, a note's camera, a fit): the link follows the camera,
@@ -83,27 +88,17 @@ export function startLiveCameraLink(controls, {
   isEnabled = () => true,
   waitMs = HASH_DEBOUNCE_WAIT_MS,
 }) {
-  let isLive = false
+  const term = createLiveTerm({write: () => write(controls), isEnabled, waitMs})
   // Input is under way on the canvas: a press (`controlstart`, until its
   // `controlend`) or a wheel zoom (`control` alone; it has no end).
   let isUserInput = false
   // The pose the press started from, to tell a press that moved the camera
   // from one that didn't.
   let pressPose = null
-  const writeSettled = debounce(() => {
-    if (isEnabled()) {
-      write(controls)
-    }
-  }, waitMs)
-  const schedule = () => {
-    if (isLive && isEnabled()) {
-      writeSettled()
-    }
-  }
+  const schedule = term.changed
   const goLive = () => {
-    if (!isLive) {
-      isLive = true
-      schedule()
+    if (!term.isLive()) {
+      term.start()
     }
   }
   // camera-controls sends `controlstart` on pointerDOWN, before any drag, so
@@ -145,9 +140,9 @@ export function startLiveCameraLink(controls, {
   ]
   events.forEach(([type, fn]) => controls?.addEventListener?.(type, fn))
   return {
-    isLive: () => isLive,
+    isLive: term.isLive,
     dispose: () => {
-      writeSettled.cancel()
+      term.dispose()
       events.forEach(([type, fn]) => controls?.removeEventListener?.(type, fn))
     },
   }
