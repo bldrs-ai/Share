@@ -65,6 +65,7 @@ import {getBrowser} from '../connections/registry'
 import {installEngineDevHook} from '../engine/engineDevHook'
 import useLegacyViewRulesNotice from '../engine/useLegacyViewRulesNotice'
 import modelIdentity from '../routes/modelIdentity'
+import {modelOpenId} from '../routes/modelOpen'
 import useExistInFeature from '../hooks/useExistInFeature'
 import useDirectLinkQuota from '../quota/useDirectLinkQuota'
 import useStore from '../store/useStore'
@@ -290,6 +291,13 @@ export default function CadView({
   // would send another load_failed for one user open (codex review of
   // Share#1961).
   const reportedLoadFailureRef = useRef(null)
+  // The open (routes/modelOpen.ts) the open events below were last sent for:
+  // real_model_open, model_view, the engagement count and the load
+  // diagnostics. A theme toggle or a view-settings change re-runs the load
+  // for the SAME open, and is not an open of the model (open-205, #2022;
+  // design/new/in-app-model-switch.md §5), so it sends none of them again;
+  // an in-app return to a model is a new open and sends them.
+  const reportedOpenRef = useRef(0)
 
   // IFCSlice
   const model = useStore((state) => state.model)
@@ -1395,6 +1403,11 @@ export default function CadView({
     if (routeResult.isUploadedFile === true) {
       recordLocalUpload(routeResult.filepath.split('/').pop())
     }
+    // Each open has its own number, so only a reload of this same open (a
+    // theme toggle, a view-settings change) finds it here already.
+    const openId = modelOpenId(routeResult)
+    const isNewOpen = reportedOpenRef.current !== openId
+    reportedOpenRef.current = openId
     if (isRealModelOpen(routeResult)) {
       const eventParams = {
         content_type: loadedModel.type || 'undefined',
@@ -1426,40 +1439,12 @@ export default function CadView({
       // growth-strategy §2). This is their local hour, prefixed so gtag
       // keeps it in the text slot; see analytics#getLocalHour.
       eventParams[LOCAL_HOUR_PARAM] = getLocalHour()
-      gtagEvent(FUNNEL_EVENTS.REAL_MODEL_OPEN, eventParams)
-      // The normalized twin, beside — never instead of — real_model_open,
-      // which Ads and the dashboard key on. Sent once auth settles, with the
-      // auth state of then (privacy/modelActionTracking.js says why: a
-      // non-GitHub load doesn't wait for auth, and the auth-change reload is
-      // deduped). The route is read now, so a later navigation can't
-      // relabel it. Always `gate: 'none'`: a view a soft gate let through
-      // over the limit is still an ungated view; the over-limit fact is
-      // model_share {gate: 'soft'}. Not awaited.
-      trackModelActionWhenAuthSettled(MODEL_ACTIONS.VIEW, {
-        gate: MODEL_GATES.NONE,
-        ...modelRouteSource(routeResult),
-        contentId: eventParams.content_id,
-        getIsAuthenticated: () => isAuthenticatedRef.current,
-      })
-      // Engaged-use conversions (Share#1960). Same real-open gate as the
-      // event above; keyed by model so a theme/view-settings reload of the
-      // same model is not a second open. Resolves to the events it sent
-      // and never rejects, so it is not awaited.
-      trackEngagementOnOpen(Date.now(), modelIdentity(modelPath, installPrefix))
-      // Give a chip with non-zero errors/warnings a Sentry event to link
-      // to (issue #1767). Gated on the very counts just assembled above,
-      // because those are what colour the chip: Conway's own
-      // stats_errorCount / stats_warningCount when it supplies them
-      // (conway#740; it does not yet), else the page-wide console tee the
-      // reporter publishes as stats_pageErrorCount / stats_pageWarnCount.
-      // Siting the call here is also what keeps it to real, successful
-      // opens. See loadProgress#captureLoadDiagnostics.
-      captureLoadDiagnostics({
-        errorCount: eventParams.stats_errorCount ?? eventParams.stats_pageErrorCount,
-        warningCount: eventParams.stats_warningCount ?? eventParams.stats_pageWarnCount,
-        contentId: eventParams.content_id,
-        contentType: eventParams.content_type,
-      })
+      if (isNewOpen) {
+        sendOpenEvents(routeResult, eventParams)
+      }
+      // The engagement window restarts on every load, a theme rebuild's
+      // too: the stop above ended the last one, and the user is still on
+      // the model.
       stopModelEngagementRef.current = startModelEngagement({
         content_type: eventParams.content_type,
         content_id: eventParams.content_id,
@@ -1467,6 +1452,53 @@ export default function CadView({
     }
 
     return loadedModel
+  }
+
+
+  /**
+   * The events that count an open of a real model, sent once per open
+   * (reportedOpenRef; routes/modelOpen.ts): not again for a theme toggle or a
+   * view-settings change, which reload the same open.
+   *
+   * @param {object} routeResult the route loaded, the store's modelPath
+   * @param {object} eventParams real_model_open's params, assembled by loadModel
+   */
+  function sendOpenEvents(routeResult, eventParams) {
+    gtagEvent(FUNNEL_EVENTS.REAL_MODEL_OPEN, eventParams)
+    // The normalized twin, beside — never instead of — real_model_open,
+    // which Ads and the dashboard key on. Sent once auth settles, with the
+    // auth state of then (privacy/modelActionTracking.js says why: a
+    // non-GitHub load doesn't wait for auth, and the auth-change reload is
+    // deduped). The route is read now, so a later navigation can't
+    // relabel it. Always `gate: 'none'`: a view a soft gate let through
+    // over the limit is still an ungated view; the over-limit fact is
+    // model_share {gate: 'soft'}. Not awaited.
+    trackModelActionWhenAuthSettled(MODEL_ACTIONS.VIEW, {
+      gate: MODEL_GATES.NONE,
+      ...modelRouteSource(routeResult),
+      contentId: eventParams.content_id,
+      getIsAuthenticated: () => isAuthenticatedRef.current,
+    })
+    // Engaged-use conversions (Share#1960). Same real-open gate as the
+    // event above; keyed by open, so a theme/view-settings reload of the
+    // same model is not a second open and an in-app return to it is.
+    // Resolves to the events it sent and never rejects, so it is not
+    // awaited.
+    trackEngagementOnOpen(Date.now(), modelOpenId(routeResult))
+    // Give a chip with non-zero errors/warnings a Sentry event to link
+    // to (issue #1767). Gated on the very counts just assembled above,
+    // because those are what colour the chip: Conway's own
+    // stats_errorCount / stats_warningCount when it supplies them
+    // (conway#740; it does not yet), else the page-wide console tee the
+    // reporter publishes as stats_pageErrorCount / stats_pageWarnCount.
+    // Siting the call here is also what keeps it to real, successful
+    // opens. See loadProgress#captureLoadDiagnostics.
+    captureLoadDiagnostics({
+      errorCount: eventParams.stats_errorCount ?? eventParams.stats_pageErrorCount,
+      warningCount: eventParams.stats_warningCount ?? eventParams.stats_pageWarnCount,
+      contentId: eventParams.content_id,
+      contentType: eventParams.content_type,
+    })
   }
 
 

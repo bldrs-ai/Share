@@ -108,6 +108,17 @@ describe('navigateToModel', () => {
       expect(assignCalls).toEqual(['/share/v/p/index.ifc?feature=spaModelNav'])
     })
 
+    // ShareViewer reads `?view=` once, at module load (open-205, #2022).
+    it('loads the page for a link that asks for another ?view=, and stays in-app for the same one', () => {
+      const navigate = jest.fn()
+      navigateToModel('/share/v/p/index.ifc?feature=spaModelNav&view=ifc#c:1', navigate)
+      expect(navigate).not.toHaveBeenCalled()
+      expect(assignCalls).toEqual(['/share/v/p/index.ifc?feature=spaModelNav&view=ifc#c:1'])
+      navigateToModel('/share/v/p/index.ifc?feature=spaModelNav', navigate)
+      expect(navigate).toHaveBeenCalledWith('/share/v/p/index.ifc?feature=spaModelNav')
+      expect(assignCalls).toHaveLength(1)
+    })
+
     it('disarms the upload guard before navigating', () => {
       const remove = jest.spyOn(window, 'removeEventListener')
       const navigate = jest.fn(() => {

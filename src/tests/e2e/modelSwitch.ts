@@ -15,7 +15,10 @@ import {waitForModelReady} from './models'
  */
 export const HOME_PATH = '/share/v/p/index.ifc'
 export const BOX_PATH = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc'
-const BOX_LINK = 'https://github.com/bldrs-ai/test-models/main/ifc/misc/box.ifc'
+export const BOX_LINK = 'https://github.com/bldrs-ai/test-models/main/ifc/misc/box.ifc'
+// A third hosted fixture, for A → B → C.
+export const WALL_PATH = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/cut-plane-pick.ifc'
+export const WALL_LINK = 'https://github.com/bldrs-ai/test-models/main/ifc/misc/cut-plane-pick.ifc'
 // Long enough for a fixture-sized model on a loaded CI shard, as
 // waitForModelReady's own default is for one load.
 const SWITCH_TIMEOUT_MS = 30_000
@@ -84,9 +87,54 @@ export async function waitForModelOtherThan(page: Page, name: string) {
  * @param page
  */
 export async function openBoxFromSearchBar(page: Page) {
+  await openFromSearchBar(page, BOX_LINK, BOX_PATH)
+}
+
+
+/**
+ * Open a hosted test-models fixture by typing its GitHub link into the
+ * search bar, and wait for the route to change to it.
+ *
+ * @param page
+ * @param link the fixture's github.com link
+ * @param sharePath the share path it opens at
+ * @return the URL (no origin) of the entry the open left, as a Back finds it:
+ *   the page's just before Enter, less the search panel's `s:` set. The open
+ *   closes the panel, so a Back to that entry finds it closed, and
+ *   useHashState drops the token in place.
+ */
+export async function openFromSearchBar(page: Page, link: string, sharePath: string): Promise<string> {
   await page.getByTestId('control-button-search').click()
   const searchInput = page.getByPlaceholder(SEARCH_BAR_PLACEHOLDER_TEXT)
-  await searchInput.fill(BOX_LINK)
+  await searchInput.fill(link)
+  const left = new URL(page.url())
   await searchInput.press('Enter')
-  await expect(page).toHaveURL(new RegExp(BOX_PATH))
+  await expect(page).toHaveURL(new RegExp(sharePath))
+  const sets = left.hash.substring(1).split(';').filter((set) => set !== '' && set !== 's:' && !set.startsWith('s:'))
+  return `${left.pathname}${left.search}${sets.length > 0 ? `#${sets.join(';')}` : ''}`
+}
+
+
+/**
+ * Mark this document, so `isSameDocument` can later tell an in-app switch
+ * from a page load: the marker lives on `window`, which a page load replaces.
+ *
+ * @param page
+ */
+export async function markDocument(page: Page) {
+  await page.evaluate(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__sameDocument = true
+  })
+}
+
+
+/**
+ * @param page
+ * @return whether the document `markDocument` marked is still the page's
+ */
+export function isSameDocument(page: Page): Promise<boolean> {
+  return page.evaluate(() =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__sameDocument === true)
 }

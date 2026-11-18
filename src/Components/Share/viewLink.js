@@ -1,4 +1,4 @@
-import {HASH_DEBOUNCE_WAIT_MS, debounce} from '../../utils/debounce'
+import {HASH_DEBOUNCE_WAIT_MS, debounceInHistoryEntry} from '../../utils/debounce'
 
 
 /**
@@ -26,7 +26,8 @@ import {HASH_DEBOUNCE_WAIT_MS, debounce} from '../../utils/debounce'
  * terms; and only while the Share dialog's switch for the term is on (store
  * `isCameraInUrl`, `isPlaneInUrl`, `isDisplayInUrl`), read when a write is
  * scheduled AND when it fires, so turning a switch off drops a write already
- * pending.
+ * pending. A write still pending when the page moves to another history entry
+ * is dropped rather than written into that entry.
  *
  * What counts as the user's change is each term's to say, since the signals
  * differ: camera-controls input that actually moved the camera
@@ -60,7 +61,13 @@ import {HASH_DEBOUNCE_WAIT_MS, debounce} from '../../utils/debounce'
 export function createLiveTerm({write, isEnabled = () => true, waitMs = HASH_DEBOUNCE_WAIT_MS}) {
   let isLive = false
   let isDisposed = false
-  const writeSettled = debounce(() => {
+  // Lands only in the history entry the change was made in: a Back, a
+  // Forward or an in-app open (open-205, #2021: with `?feature=spaModelNav`
+  // they stay in this document) can make another entry the page's within
+  // the debounce, and this value isn't that entry's. `flush` (a component
+  // going away as the viewer is replaced) is dropped the same way
+  // (utils/debounce.js#debounceInHistoryEntry).
+  const writeSettled = debounceInHistoryEntry(() => {
     if (!isDisposed && isEnabled()) {
       write()
     }

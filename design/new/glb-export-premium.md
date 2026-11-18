@@ -208,7 +208,8 @@ from `Loader.js`) for every IFC/STEP source and writes **one** OPFS file at
 the key `src/loader/glbCacheKey.js#glbCacheKey` derives from the source
 (`<ns1>/<ns2>/<ns3>/<file>.<schemaVer>.glb` + commit hash). Per-source-kind
 adapters in `src/loader/sourceCacheKey.js` produce the key input for GitHub,
-local, upload, Drive and external sources. The file is not a bare GLB: it is
+local, upload, Drive and external sources. (Drive has a key adapter, but
+Drive loads skip OPFS today, so they get no cache: #2100.) The file is not a bare GLB: it is
 the **Bldrs container** (`src/loader/glbContainer.js`) — a 16-byte header
 (`BLDR`, version, chunkCount, compression-mode byte, container-codec byte)
 followed by exactly one chunk (the writer always packs a single chunk,

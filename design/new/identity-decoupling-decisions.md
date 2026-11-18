@@ -1,227 +1,136 @@
-# Identity decoupling: design decisions
+# Identity decoupling: GitHub as a per-account connection
 
-**Status:** Decided
-**Date:** 2026-05-07
+**Status:** PR1 (#1507) and PR2 (#1508) merged; PR3 (switch over, flag `githubAsSource` on) is post-MVP. Tracking: [T3 #2202](https://github.com/bldrs-ai/Share/issues/2202).
+**Date:** 2026-11-18
 **Owner:** Pablo
-**Amends:** [`identity-decoupling.md`](./identity-decoupling.md) (Proposed, same date)
-**Related code:** `src/connections/`, `netlify/functions/`, `src/Components/Connections/SourcesTab.jsx`, `src/Components/Open/SaveModelControl.jsx`
+**Related code:** `src/connections/github/`, `netlify/functions/gh-oauth-*.js`, `netlify/functions/_lib/auth0.js`, `src/Components/Connections/GitHubTab.jsx`, `src/Components/Open/SaveModelControl.jsx`
+
+This doc absorbs the earlier proposal, `identity-decoupling.md` (at [8c28c7d](https://github.com/bldrs-ai/Share/blob/8c28c7db619f81dab318885715af5f26d85e0549/design/new/identity-decoupling.md)). Code invariants are in [`src/connections/README.md`](../../src/connections/README.md); UX stories belong to the `identity-*` epics.
 
 
-## What this doc is
+## Problem
 
-The parent doc, [`identity-decoupling.md`](./identity-decoupling.md), proposed promoting GitHub to a `ConnectionProvider` peer of Drive and left four open questions. This doc records the answers, the reasoning that shaped them, and one architectural correction surfaced by surveying [`bldrs-ai/share-oauth-proxy`](https://github.com/bldrs-ai/share-oauth-proxy) end-to-end before committing.
+Bldrs has two kinds of identity, and they don't match.
 
-The parent doc's *Proposal* and *Scope* sections are partially superseded — see "Architectural correction" below. The *Migration* section stands.
+1. **Primary login (Auth0),** via GitHub or Google. When it is GitHub, it also supplies the GitHub token through the federated identity.
+2. **Per-account connections.** Drive is one or more linked accounts, each with its own Google Identity Services (GIS) grant in `localStorage`.
 
+GitHub is both a login and the only way to reach private repos, with no connection like Drive's. So:
 
-## Architectural correction: SOAP not touched, work moves to Netlify Functions
+- A user who signed in with Google can't browse GitHub.
+- A user can't link two GitHub accounts (work and personal), though Drive allows it.
+- Switching the primary login changes access to both systems at once.
 
-The parent doc proposed adding a token-exchange endpoint to `share-oauth-proxy` (SOAP). Surveying that repo before committing surfaced two facts that shifted the plan:
-
-1. **SOAP is a reverse-proxy, not a token broker.** Today it accepts an Auth0 JWT in `Authorization`, looks up the federated GitHub identity via Auth0 Management API, caches the user object (1h TTL via ristretto), and reverse-proxies `api.github.com` calls with the GitHub token attached server-side. **The browser never holds the GitHub token in this model.** That's a different security architecture from what the parent doc implicitly proposed (`localStorage['bldrs:github-token:<id>']`).
-
-2. **rawgit.bldrs.dev was retired** in favor of browser-direct calls to `api.github.com`. The same playbook applies here: the only thing genuinely needing server-side mediation is the moments where `client_secret` must be present (code-for-token exchange and refresh). Everything else SOAP does today is artifact of the "tokens never leave server" model — JWT validation, Auth0 user lookup, ristretto cache, the retry-on-401 transport, redirect-URL rewriting. None of it is needed once the browser holds the token.
-
-**Implication:** identity-decoupling can ship without touching SOAP. Two ~50-line Netlify Functions plus the browser-side `GitHubProvider` cover the work. SOAP continues serving the legacy `/p/gh/*` path during migration; eventual retirement is independent and optional (Phase 3, separable).
-
-This also addresses an operational concern: SOAP is in Go, the original author is no longer maintaining it, and ops cost on changes is high. Co-locating the new endpoints with the frontend (same repo, same deploy, same-origin to the browser) eliminates that cost. The pattern matches the rawgit.bldrs.dev retirement: pull infrastructure closer to the frontend, eliminate orphaned standalone services.
+**Decision:** GitHub becomes a `ConnectionProvider`, a peer of the Drive provider. Auth0 shrinks to "who you are on Bldrs"; connections say "what sources you can reach".
 
 
-## Q1: Where does the OAuth code-for-token exchange live?
+## The broker lives in Netlify Functions, not the SOAP proxy
 
-**Decision: Netlify Functions in `bldrs-ai/Share`.** Two endpoints:
+The proposal put a token-exchange endpoint on [`share-oauth-proxy`](https://github.com/bldrs-ai/share-oauth-proxy) (SOAP). A look at that repo overturned it.
+
+- **SOAP is a reverse proxy, not a token broker.** It looks up the federated GitHub identity for an Auth0 JWT and forwards `api.github.com` calls with the token added server-side. The browser never holds the token.
+- **Only the exchange and the refresh need the server,** because both need `client_secret`. The rest of SOAP exists only because tokens stay on the server, the same reasoning that retired `rawgit.bldrs.dev`.
+- **SOAP is costly to change.** It is in Go and its author no longer maintains it.
+
+So SOAP is untouched. It keeps serving the legacy `/p/gh/*` path for Auth0-federated users. Retiring it is separate and optional.
+
+
+## Q1: Where the code-for-token exchange lives
+
+**Decision: two Netlify Functions in this repo.**
 
 ```
-POST /.netlify/functions/gh-oauth-exchange
-  body: { code, code_verifier, redirect_uri }
-  → calls https://github.com/login/oauth/access_token with client_secret
-  → returns { access_token, refresh_token, expires_in, scope, token_type }
-
-POST /.netlify/functions/gh-oauth-refresh
-  body: { refresh_token }
-  → calls same endpoint with grant_type=refresh_token
-  → returns the new pair (refresh-token rotation enabled)
+POST /.netlify/functions/gh-oauth-exchange   body: {code, redirect_uri}
+POST /.netlify/functions/gh-oauth-refresh    body: {refresh_token}
+  → both call https://github.com/login/oauth/access_token with client_secret
+  → return {access_token, refresh_token, expires_in, scope, token_type}
 ```
 
-Plus a static callback page at `/auth/gh/callback.html` that extracts `code`+`state` from the URL, postMessages the opener, and closes the popup.
+A static page, `/auth/gh/callback.html`, takes `code` and `state` from the URL, posts them to the opener and closes the popup. The browser stores the token at `localStorage['bldrs:github-token:<connectionId>']` and calls `api.github.com` directly.
 
-Browser stores the token at `localStorage['bldrs:github-token:<connectionId>']` (per parent doc) and calls `api.github.com` directly via Octokit/fetch.
+**Why a broker, not PKCE alone.** GitHub OAuth Apps support PKCE (since [July 2025](https://github.blog/changelog/2025-07-14-pkce-support-for-oauth-and-github-app-authentication/)) but still require `client_secret`. [GitHub's guidance](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/best-practices-for-creating-an-oauth-app) for single-page apps is to ship the secret and add PKCE. A server broker is the only way to keep the secret out of the bundle.
 
-### Why not PKCE-only (no broker)?
+**Why browser-held tokens, not a stateful SOAP.** Server-held tokens are slightly safer, but make SOAP stateful (credential store, backups, encryption at rest), and Drive's tokens must live in the browser anyway, so we'd keep two patterns. Browser tokens are what GIS, Auth0's SPA SDK and OAuth 2.1 do. CSP, short access tokens (Q2) and rotation cap the XSS risk.
 
-GitHub OAuth Apps support PKCE since [July 2025](https://github.blog/changelog/2025-07-14-pkce-support-for-oauth-and-github-app-authentication/) but explicitly do **not** waive the `client_secret` requirement for public clients. From [GitHub's best-practices doc](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/best-practices-for-creating-an-oauth-app):
+**Why Netlify Functions, not a new Worker.** `unlink-identity.js` already set the pattern: Auth0-aware, Sentry, secrets from env. The functions are same-origin with the app, so there is no CORS, and the popup callback is same-origin too.
 
-> If your app is a public client (a native app that runs on the user's device, CLI utility, or single-page web application), you cannot secure your client secret. You will have to ship the client secret in the application's code, and you should use PKCE to better secure the authentication flow.
+**Decided, not built:** PKCE on top of the secret (a `code_verifier` in the exchange body) as defence in depth.
 
-PKCE adds defense-in-depth on top of `client_secret`; it doesn't replace it. So a server-side broker is the only way to keep the secret out of the browser bundle. PKCE-only escape isn't currently available for OAuth Apps; SPA support for GitHub Apps is on the [public roadmap](https://github.com/orgs/community/discussions/15752) but unshipped.
 
-### Why not extend SOAP's reverse-proxy (Path 1)?
+## Q2: Token lifetime
 
-Considered. The reverse-proxy approach gives marginally stronger security posture — token never crosses the browser boundary — but:
+**Decision: expiring tokens.** The GitHub OAuth App is set to 8-hour access tokens and 6-month refresh tokens, rotated on each use.
 
-- SOAP becomes stateful (per-connection credential store, persistent storage, backups, encryption-at-rest decisions).
-- Doesn't generalize: Drive's tokens *must* live in the browser (forced by GIS), so we'd permanently maintain two patterns.
-- Operational: SOAP's original author is no longer maintaining it; ops cost on big changes is high.
+**Why.** A default OAuth App token never expires, so a stolen one works until revoked by hand. Eight hours plus rotation caps that window, and a stolen refresh token shows up on next use.
 
-The browser-token alternative (Path 2) is what GIS chose for Drive, what Auth0's SPA SDK does, and what OAuth 2.1 standardizes for SPAs. Token exfiltration via XSS is a real concern but the mitigations are real:
+**Refresh only on a 401, not ahead of time.** With rotation, two tabs refreshing with the same refresh token race: the first wins and the second sees a revoked grant. Refreshing only after a 401 makes that rare. If it shows up in practice, a cross-tab lock (`navigator.locks.request('gh-refresh:<connectionId>', …)`) fixes it.
 
-- Modern React + CSP make XSS hard.
-- Token TTL caps the worst-case post-XSS window (Q2: 8h access tokens).
-- Refresh-token rotation surfaces compromised refresh tokens on next use.
+**Failure path.** A refresh that fails (revoked, expired, scope changed) throws `NeedsReconnectError`, and the Reconnect overlay built for Drive asks for a new popup. No new error types.
 
-Net: Path 2 chosen. SOAP not touched.
 
-### Why Netlify Functions specifically (vs. a new Worker)?
+## Q3: Scopes
 
-Existing precedent in the repo: `netlify/functions/unlink-identity.js` is already an Auth0-aware function that validates tokens, calls a sensitive API (Auth0 Management), uses Sentry, and reads secrets from env. Same shape, same conventions, same deploy story. Adding two new functions slots into proven machinery rather than introducing a new deployment surface.
+**Decision: one consent step for `repo`, `read:user` and `read:org`.**
 
-Same-origin advantage: `bldrs.ai/.netlify/functions/*` is same-origin with `bldrs.ai`, so the browser → function calls dodge CORS entirely (no preflight, no `Access-Control-Allow-Origin` config). The OAuth callback URL is also same-origin, simplifying the popup → opener postMessage flow.
+- `repo`: read and write private and public repos. It is the only OAuth App scope that reaches private repos.
+- `read:user`: login, name and id, for the connection label and the "Saving as" footer.
+- `read:org`: list the user's orgs, for the Save dialog's org picker.
 
+**Why not split read from write.** OAuth Apps have no private read-only scope, so a read-first step gains nothing, and a user who connects GitHub expects to save.
 
-## Q2: Token TTL?
 
-**Decision: opt into expiring tokens** on the GitHub OAuth App.
+## Q4: Who authors a commit
 
-Configuration (manual one-time step at OAuth App creation):
-- Access tokens: **8 hours**
-- Refresh tokens: **6 months**, **rotated on each use** (one-time-use)
+**Decision: the GitHub account whose token makes the push.** `commitFile` (`src/net/github/Files.js`) is unchanged.
 
-### Why not the default (non-expiring tokens)?
+**Why this is not really a choice.** `createCommit` sets no `author` or `committer`, so GitHub fills both from the token holder (with the noreply address if the user has email privacy on). The Auth0 user never appears in git metadata.
 
-Default GitHub OAuth App access tokens never expire unless revoked. A non-expiring token in localStorage is a materially worse target than Drive's 1h tokens — the worst-case post-XSS window goes from "≤1h" to "until manual revocation." That gap makes Path 2 indefensible.
+The connection's token must therefore be the one Save uses. Today Save still commits with the Auth0-federated token through SOAP, so the "Saving as" footer can name a different account. Moving Save onto the connection token is part of PR3 (#2202).
 
-8h tokens with 6mo refresh + rotation collapse the worst-case window to ≤8h, comparable in shape to Drive (where silent re-acquire works whenever the user is active).
 
-### Refresh policy: refresh-on-401, not preemptive
+## Q5: The broker functions require an Auth0 bearer
 
-Multi-tab races are a known sharp edge with rotated refresh tokens: two tabs can simultaneously POST to `/oauth/gh/refresh` with the same refresh_token; first wins, second mistakenly thinks the user revoked.
+**Decision (built in #1508): both functions reject a request without a valid Auth0 access token.** `verifyAuth0Bearer` (`netlify/functions/_lib/auth0.js`) reads `Authorization: Bearer`, checks it against Auth0 `/userinfo`, and returns the user's `sub`. A missing or invalid token gets a 401 before any call to GitHub. The UI also disables Connect until the user is signed in (`ConnectProviderButton.jsx`).
 
-For v1, refresh only when the API returns 401 (lazy/reactive). Race window narrows to "two tabs hit a 401 on simultaneous calls" — rare in practice. Future mitigation if telemetry shows it firing: the [Web Locks API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API) (`navigator.locks.request('gh-refresh:<connectionId>', …)`) for cross-tab mutex.
+**Why.** A UI-only gate can be bypassed by anyone with the URL. With the server gate, anonymous callers can't probe for codes or hammer refresh, and the Auth0 `sub` is a real quota key however many GitHub connections a user has. It matches `unlink-identity` and `create-portal-session`.
 
-### User-gesture mapping (UX implications)
+**Why `/userinfo`, not JWKS.** It accepts any Auth0-issued token whatever its audience, so it survives a switch to a Bldrs-specific audience. It costs one round trip per call. With no `AUTH0_DOMAIN` (unconfigured local dev) the gate is skipped and a one-time Sentry warning fires.
 
-Three flows, two requiring a user gesture:
 
-| Flow | User gesture? | Pattern to reuse |
-|---|---|---|
-| Initial connect (popup to `/login/oauth/authorize`) | **Yes** — popup-blocker requires it | Mirror Drive's "Connect Google Drive" button → bind to click handler in SourcesTab |
-| Background access-token refresh (POST `/oauth/gh/refresh`) | **No** — plain fetch | New, no Drive equivalent — but it's just an XHR, no popup |
-| Refresh-token failure (revoked, 6mo elapsed, scope changed) | **Yes** — fallback is re-popup | Reuse `NeedsReconnectError` + Reconnect overlay built for Drive (#1498/#1499) |
-| API 401 from `api.github.com` mid-session | Maybe — try refresh first | Same shape as Drive's silent-refresh / Reconnect cascade |
+## Migration: seed the connection, don't migrate the token
 
-Typed-error and Reconnect overlay infrastructure already exists from the Drive work and the multi-user-sharing PR1 ([#1505](https://github.com/bldrs-ai/Share/pull/1505), merged). No new error vocabulary needed.
+**Rule:** a user with an Auth0 GitHub identity and no GitHub connection gets one created from that identity (label from the nickname). The token is not copied. The first Browse goes through the new OAuth App's popup.
 
+**Why.** The federated token comes from Auth0's grant and reaches GitHub through SOAP. A connection needs its own grant from our OAuth App, with the lifetimes and scopes above. Users can keep the Auth0 GitHub login as their primary; we just stop depending on its token for sources. Older GitHub recents get their `connectionId` filled in from the new connection so they still resolve.
 
-## Q3: Scope?
+Until PR3, GitHub models load through the Auth0-federated token, and that path keeps working.
 
-**Decision: single consent step, three scopes:** `repo` + `read:user` + `read:org`.
 
-### What each scope grants
+## What Auth0 is still responsible for
 
-- **`repo`** — read code, write code (push), read/write issues, read/write PRs, **and read/write comments on all of those.** Single broad scope is the only way to get private-repo write access on github.com.
-- **`read:user`** — basic profile (`name`, `login`, `id`). Needed for the Sources card label and Save dialog's "Saving as" footer.
-- **`read:org`** — enumerate orgs the user belongs to. Needed for the existing Save dialog's organization picker.
+- Subscription and billing identity: Stripe customer, quota key (`sub`), profile.
+- The Bldrs profile: display name, avatar, preferences. The avatar shows the Auth0 user, not a GitHub login.
+- The federated identities claim (`https://bldrs.ai/identities`), kept for compatibility but no longer the source of repo access once PR3 lands.
+- The gate on the broker functions (Q5).
 
-### Why not split read/write into separate consent steps?
 
-Considered. Rejected for two reasons:
+## Decided, not yet built (#2202)
 
-1. **GitHub's OAuth-App scope model has no "private repo, read-only" option.** It's `repo` (read+write to public+private) or `public_repo` (read+write to public only). No private-read-only scope exists, so splitting buys nothing on the read side.
-2. **User mental model.** A user who connects Bldrs to GitHub expects to be able to save. Splitting into "first ask for read, then ask for write later" doubles the consent friction without a clear privacy win. GitHub's permission listing on the consent screen already exposes the granular permissions to the user, so detailed perm visibility is preserved.
+- **Revoke on disconnect** via `DELETE /applications/{client_id}/token`, which needs `client_secret` and so a third function. Today `disconnect` only clears local state; the grant lapses per Q2.
+- **PKCE** (Q1), **Save and model loads on the connection token** (Q4), and **seeding plus the recents backfill** (Migration).
 
-Note: this differs from GitHub Apps, which offer fine-grained permissions (`issues: write` separately from `contents: write`, etc.). We're on OAuth Apps for now (matches existing infrastructure); GitHub Apps migration is a future option once SPA support lands.
 
+## Alternatives rejected
 
-## Q4: Commit-author attribution when Auth0-primary ≠ Sources-GitHub?
+- **Keep GitHub special.** Fixes none of the three problems.
+- **Make Drive a federated Auth0 identity.** GIS already gives Picker-scoped tokens with no server exchange; Auth0 would add latency or break the Picker.
+- **Link a second GitHub identity in Auth0.** Solves two accounts but not Google-login users, with worse UX than connections.
+- **Reuse Auth0's GitHub connection as the OAuth App broker.** No new server code, but it ties connections back to the Auth0 identity, which is what we're removing.
+- **Token broker or credential store in SOAP.** See the broker section and Q1.
 
-**Decision: commit author = the Sources GitHub identity whose token signs the push.** No code change to `commitFile`.
 
-### Why this isn't really a choice
+## Non-goals
 
-Today's `commitFile` (`src/net/github/Files.js:26`) calls `octokit.rest.git.createCommit` without setting `author` or `committer`. GitHub auto-fills both with the OAuth token holder's identity. After identity-decoupling, the only thing that changes is *where the token comes from* (Auth0 federation today → `bldrs:github-token:<connectionId>` from a Sources connection). GitHub still attributes the commit to whoever owns the token. The Auth0 user (which may be Google) is irrelevant for git metadata.
-
-### What changes (UX, not commit logic)
-
-1. **"Saving as @username — GitHub" footer** in the Save dialog, mirroring the multi-user-sharing doc's "Sharing as" pattern.
-2. **Connection picker** when multiple GitHub connections exist. Default: first connection with repo access (auto-detected). If multiple have access, prompt on first save per repo and remember the choice.
-3. **Save disabled** when no GitHub connection exists, with tooltip linking to Sources ("Connect GitHub in Sources to save").
-4. **No custom-author override in v1.** GitHub's default behavior (uses primary email, or noreply per the user's account privacy settings) is correct and privacy-respecting. Custom author + GPG signing are reasonable future asks; not blocking.
-
-### Privacy footnote
-
-If a user has email privacy enabled in their GitHub account settings, GitHub auto-substitutes the noreply email (`<id>+<login>@users.noreply.github.com`) on API commits. We don't need to handle this — it's transparent. Users who want this enable the setting in GitHub once.
-
-
-## Implementation roadmap
-
-The parent doc's three-PR plan stands, with a smaller PR1 thanks to B′′:
-
-### PR1 — Provider scaffolding + Netlify Functions
-
-**`bldrs-ai/Share` only. No cross-repo coordination.**
-
-Adds:
-- `src/connections/github/GitHubProvider.ts` implementing `ConnectionProvider`. `connect()` launches popup, handles postMessage callback from `/auth/gh/callback`, posts to exchange function, persists token. `getAccessToken()` checks expiry, hits refresh function on staleness, throws `NeedsReconnectError` on refresh failure. `checkStatus()` calls `GET /user` against the cached token to validate.
-- `netlify/functions/gh-oauth-exchange.js` — modeled on `unlink-identity.js`. ~50 lines including Sentry wiring.
-- `netlify/functions/gh-oauth-refresh.js` — same shape. ~50 lines.
-- Static page at `/auth/gh/callback.html` — extracts `code`+`state` from URL, postMessages opener, closes popup.
-- Provider registration in `src/connections/registry.ts`.
-- Feature flag `github-as-source` (off by default) in `src/FeatureFlags.js` to gate the SourcesTab integration that lands in PR2.
-
-Estimated effort: **3–5 days**.
-
-### PR2 — SourcesTab integration + recents migration
-
-- "Connect GitHub" button alongside "Connect Google Drive" in SourcesTab empty state and "Add another account" footer.
-- Connection cards for GitHub render the same as Drive cards (provider-keyed icon, label, Disconnect/Reconnect actions).
-- GitHub tab in OpenModelDialog: Browse routes through `provider.getAccessToken(connection)` instead of `useAuth0().getAccessTokenSilently`.
-- Recents resolve through the new connection.
-- Auto-create GitHub connection from existing Auth0 federated identity on first load (per parent doc's *Migration* section). Token absent until first Browse triggers a code exchange.
-- Reconnect overlay pattern (existing from Drive) extended to GitHub connections.
-- Save dialog gains "Saving as @username" footer + multi-account picker + "no GH connection" disabled state.
-- **Gate connection actions behind Auth0 primary auth.** A logged-out user can currently click Connect Google Drive / Connect GitHub and persist a token to localStorage — fine for the flag-gated dev surface but indefensible for prod. Before flipping `googleDrive`/`githubAsSource` defaults on, require any Auth0 primary login (Google, GitHub-as-federated, OR Auth0 Database email/password — Database is the "I don't want OAuth" escape hatch) before the connect buttons are enabled. The `isAuthenticated` check from `useAuth0` is the seam; render the buttons disabled with a "Sign in to connect" tooltip otherwise. The Auth0 user `sub` then becomes the legitimate quota key (no anonymous connect/refresh hammering of the Netlify Functions).
-
-Behind the same flag. Legacy `/p/gh/*` reverse-proxy still serves users on the federated path.
-
-Estimated effort: **~1 week**.
-
-### PR3 — Switch over and retire flag
-
-- Flag removed; GitHub-via-Sources becomes the only path for new sign-ins.
-- Bespoke GitHub-tab auth UI in OpenModelDialog removed.
-- Legacy Auth0-federated path stays available for users who haven't reconnected via the new flow yet (graceful degradation).
-- **Optional, separable Phase 3:** once `/p/gh/*` traffic drops to ~zero, retire SOAP's reverse-proxy code paths. Can ship as its own PR or bundle here.
-
-Estimated effort: **3–5 days** for the Bldrs-side switch; retiring SOAP reverse-proxy is independent.
-
-
-## Adjacent work that's now unblocked or independent
-
-- **Multi-user-sharing PR2 (Drive Share dialog UI)** — independent of identity-decoupling. Can ship in parallel any time.
-- **Multi-user-sharing PR3 (GitHub sharing adapter)** — directly unblocked by identity-decoupling PR1 (which provides the `GitHubProvider`). Will reuse the typed errors + sharing types from sharing PR1 ([#1505](https://github.com/bldrs-ai/Share/pull/1505), merged).
-- **Save-to-Drive v1 (no commit message)** — independent. ~1 PR (~50 LOC `GoogleDriveSave.ts` mirroring the Browser/Sharing pattern, hook into `SaveModelControl`). Closes the read-only Drive asymmetry.
-
-
-## Open implementation details (not blocking)
-
-- **Multi-tab refresh-token race.** v1: refresh-on-401 only. Web Locks API mitigation deferred until telemetry justifies.
-- **Email privacy for commit author.** v1: rely on GitHub's account-level setting. Future: explicit noreply email in `commit.author.email` if telemetry shows mismatched-email confusion.
-- **GitHub Enterprise.** Out of scope for v1. The Netlify Functions can be parameterized on a custom GitHub host later if needed.
-- **Quota tracking.** Auth0 user (`sub`) remains the natural quota key — even with multiple GH connections per user. No change to the quotas plan; coordinates with `quotas` work flagged in parent doc's *Open questions*. Note: this presumes the PR2 "gate connections behind Auth0 primary auth" step has landed, otherwise an anonymous user can mint connections without ever passing through Auth0.
-- **GitHub App migration.** Out of scope. Reasonable future move once SPA support for GitHub Apps lands and we want fine-grained per-repo permissions.
-- **Server-side Auth0 enforcement on the Netlify Functions.** *Open question, needs a decision before PR2 ships the UI guard.* Should `gh-oauth-exchange` and `gh-oauth-refresh` require an Auth0 access token in the `Authorization` header (mirroring `netlify/functions/unlink-identity.js`'s pattern: extract Bearer, verify against `${AUTH0_DOMAIN}/userinfo`, derive `sub` for rate-limiting/quota tagging)? A UI-only guard is bypassable — the functions are reachable from any logged-out browser, curl, or compromised dependency once the URL is known. Tradeoffs:
-  - **Pro (defense in depth):** anonymous abuse impossible; Auth0 `sub` becomes a real quota key; aligns the security shape with the existing `unlink-identity` / `create-portal-session` functions which already authenticate.
-  - **Con (latency):** adds a `/userinfo` round trip per call (~50-150ms). Mitigable by JWT signature verification against Auth0's JWKS instead of `/userinfo` — same outcome, no extra hop, but more code.
-  - **Con (migration friction):** users mid-flow when the function-side check lands will see exchange/refresh fail until they re-auth. Probably acceptable since refresh failure already routes through `NeedsReconnectError`.
-  - **Open question:** Auth0 access tokens issued for the Bldrs SPA — what's their audience/scopes? Need to confirm we can validate them server-side without changing the Auth0 application configuration.
-  - **Sequencing:** if we decide *yes*, this lands as a follow-up PR (or rolled into PR2's UI guard) so the function-side and UI-side guards ship together. If *no*, document the decision and rely on Auth0 user `sub` (read from the optional Bearer when present) as a soft quota key only.
-
-
-## Decisions matrix (one-line summary)
-
-| # | Question | Decision |
-|---|---|---|
-| Q1 | Code-for-token exchange location | Two Netlify Functions in `bldrs-ai/Share`; SOAP untouched |
-| Q2 | Token TTL | 8h access + 6mo refresh + rotation; refresh-on-401 in v1 |
-| Q3 | Scope split | Single consent: `repo` + `read:user` + `read:org` |
-| Q4 | Commit-author attribution | Sources GitHub identity (token holder); `commitFile` unchanged |
+- **GitHub Enterprise.** The functions can take a custom host later.
+- **GitHub Apps.** Fine-grained, per-repo permissions, but no SPA support yet.
+- **Custom commit author or GPG signing.** GitHub's default author is correct and respects the user's privacy setting.

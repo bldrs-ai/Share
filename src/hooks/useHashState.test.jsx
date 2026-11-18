@@ -1,6 +1,6 @@
 import React from 'react'
-import {renderHook} from '@testing-library/react'
-import {BrowserRouter} from 'react-router-dom'
+import {act, renderHook} from '@testing-library/react'
+import {BrowserRouter, useNavigate} from 'react-router-dom'
 import useHashState from './useHashState'
 
 
@@ -69,5 +69,44 @@ describe('useHashState', () => {
 
     // Hash should remain unchanged when state matches
     expect(window.location.hash).toBe('#test:value')
+  })
+
+  // open-205 #2021: a rewrite that only follows a navigation must not be a
+  // history entry of its own, or Forward loses every entry ahead.
+  describe('after a navigation that changed only the location', () => {
+    const renderWithNavigate = (isActive) => renderHook(
+      ({active}) => {
+        useHashState('test', active)
+        return useNavigate()
+      },
+      {initialProps: {active: isActive}, wrapper: Wrapper},
+    )
+
+    it('drops a token the state doesn\'t hold in place, with no new entry', () => {
+      const {result} = renderWithNavigate(false)
+      const lengthBefore = window.history.length
+      act(() => result.current('/other#test:'))
+      // The navigation is the entry; the hook's rewrite is not another.
+      expect(window.location.hash).toBe('')
+      expect(window.history.length).toBe(lengthBefore + 1)
+      expect(window.location.pathname).toBe('/other')
+    })
+
+    it('puts back a token the state holds in place, with no new entry', () => {
+      const {result} = renderWithNavigate(true)
+      expect(window.location.hash).toContain('test:')
+      const lengthBefore = window.history.length
+      act(() => result.current('/elsewhere'))
+      expect(window.location.hash).toContain('test:')
+      expect(window.history.length).toBe(lengthBefore + 1)
+    })
+
+    it('still makes a state change its own entry', () => {
+      const {rerender} = renderHook(({active}) => useHashState('test', active),
+        {initialProps: {active: false}, wrapper: Wrapper})
+      const lengthBefore = window.history.length
+      rerender({active: true})
+      expect(window.history.length).toBe(lengthBefore + 1)
+    })
   })
 })
