@@ -9,6 +9,7 @@
 | [Sharing](sharing.md) | Publication, audience, unguessable links, recipient opening and sharing recovery | S04–S08, S10, S12 |
 | [Versions](versions.md) | External revisions, history, local retention, updates and backup; later semantic version workflows | V21, V01–V03, V09, V11; later V13–V16 |
 | [Notes — live requirements](https://github.com/bldrs-ai/Share/issues/670) | Anchored discussions, private drafts, publication/replies and colored topic tags | `notes-100` (former N17–N20) |
+| [Workspace](workspace.md) | Projects, their models and sessions; a session as a conversation thread over several models; viewing them together | `assist-300`, `assist-310`, `open-210` (not yet reconciled) |
 
 Sharing and Versions retain their detailed feature requirements documents. Notes requirements, tasks and current decisions live in [epic #670](https://github.com/bldrs-ai/Share/issues/670) and its story issues; the [scope snapshot](notes-100.md) and [triage record](notes-100-triage.md) provide historical context. This index owns the common requirements and cross-feature decisions. Versions and Notes include starting maps to existing features and historical IDs; the Notes pilot now records the applied issue hierarchy, while wider reconciliation remains pending.
 
