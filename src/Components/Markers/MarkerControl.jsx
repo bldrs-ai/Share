@@ -76,8 +76,10 @@ function MarkerControl({context, oppositeObjects, postProcessor}) {
       // Set the location hash
       window.location.hash = hash_
     } else {
-      // see if we have a temporary marker in the local group map
-      const temporaryMarker = placeMarkGroupMap.get(selectedPlaceMarkId)
+      // see if we have a temporary marker in the local group map. Read, not
+      // a dependency: a new PlaceMark alone mustn't rewrite the location.
+      const current = useStore.getState().placeMark
+      const temporaryMarker = current ? markerGroupsOf(current).get(selectedPlaceMarkId) : undefined
 
       if (temporaryMarker) {
         window.location.hash = `#${selectedPlaceMarkId}`
@@ -101,25 +103,42 @@ function MarkerControl({context, oppositeObjects, postProcessor}) {
   }, [isNotesVisible, placeMark])
 
 
-  // Initialize PlaceMark instance
+  // One PlaceMark per viewer context, released with it. A PlaceMark binds
+  // its context's canvas, camera and scene for life (PlaceMark.js), and the
+  // viewer is re-created in-app: on a theme change (CadView.jsx#onModelPath
+  // registers initViewer as a theme listener) and on every model load. This
+  // effect used to create one PlaceMark and keep it forever, so after the
+  // first re-creation markers were drawn into, and raycast against, the
+  // disposed viewer, which the store's PlaceMark kept reachable (#2017).
+  //
+  // So: a new context gets a new PlaceMark, and the old one is released
+  // when its context changes or this component unmounts (it does while each
+  // model loads: OperationsGroup mounts it only while `isModelReady`). The
+  // store's `markers` are put down on the new one by the placement effect
+  // in PlacemarkHandlers, which runs again for a new `placeMark`.
   useEffect(() => {
     if (!context) {
       debug().error('MarkerControl: context is undefined')
-      return
+      return undefined
     }
+    // Its per-frame upkeep runs in the viewer's own loop (PlaceMark#update,
+    // ThreeContext#onFrame) until it is disposed.
+    return bindPlaceMark(createPlaceMark, {context, oppositeObjects, postProcessor})
+    // Keyed on the context alone: the model and post-processor are read at
+    // creation, and a model that changes under the same context is handed
+    // over by the effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context])
 
-    if (placeMark) {
-      return
+
+  // Shift-click and double-click drop a marker on these objects (the model).
+  const oppositeObject = oppositeObjects[0]
+  useEffect(() => {
+    if (placeMark && oppositeObject) {
+      placeMark.setObjects(oppositeObjects)
     }
-
-    // Initialize PlaceMark once. Its per-frame upkeep runs in the viewer's
-    // own loop (PlaceMark#update, ThreeContext#onFrame).
-    createPlaceMark({context, oppositeObjects, postProcessor})
-
-    return () => {
-      // Cleanup logic will be added here in the future if needed
-    }
-  })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placeMark, oppositeObject])
 
 
   // End of MarkerControl - no component returned
@@ -162,11 +181,12 @@ export function PlacemarkHandlers() {
   }))
 
   useEffect(() => {
-    if (!selectedPlaceMarkInNoteId) {
+    if (!selectedPlaceMarkInNoteId || !placeMark) {
       return
     }
-    if (placeMarkGroupMap.size > 0) {
-      const _marker = placeMarkGroupMap.get(Number(selectedPlaceMarkInNoteId))
+    const groups = markerGroupsOf(placeMark)
+    if (groups.size > 0) {
+      const _marker = groups.get(Number(selectedPlaceMarkInNoteId))
 
       if (_marker) {
         selectPlaceMarkMarker(_marker)
@@ -175,18 +195,34 @@ export function PlacemarkHandlers() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPlaceMarkInNoteId])
 
-  // Update the useEffect
+  // Put the store's markers down on the PlaceMark. Every component that calls
+  // this hook runs this effect (MarkerControl, ViewerContainer, NoteFooter,
+  // NoteCardCreate), so the PlaceMark's own `placedFor` gate lets the first
+  // one place and the rest skip, until the notes code toggles `synchSidebar`
+  // for a new set of markers. A new PlaceMark (a new viewer, #2017) has
+  // placed nothing, so it places the current markers again. The generation
+  // check lets only the newest pass put markers down: two overlapping passes
+  // (a rebind, then the notes refetch the new model starts) both used to
+  // add theirs, doubling every marker.
   useEffect(() => {
     (async () => {
-      if (!placeMark || prevSynchSidebar === synchSidebar) {
+      if (!placeMark) {
         return
       }
-      prevSynchSidebar = synchSidebar
+      const placement = markerPlacementOf(placeMark)
+      if (placement.placedFor === synchSidebar) {
+        return
+      }
+      const isFirstPlacement = placement.placedFor === undefined
+      placement.placedFor = synchSidebar
+      const generation = ++placement.generation
+      const isSuperseded = () => placement.generation !== generation || placeMark.isDisposed()
+      const groups = placement.groups
 
       // dispose existing placemarks if they exist
       placeMark.disposePlaceMarks()
 
-      placeMarkGroupMap.clear()
+      groups.clear()
 
       // HACK(pablo): clear this test tracker; this effect is being called twice,
       // but doesn't cause double-display of markers.  Should really not use this
@@ -202,13 +238,23 @@ export function PlacemarkHandlers() {
       }
       // Loop over markers to place each one in the scene
       for (const marker of markers) {
-        if (!placeMarkGroupMap.has(marker.id)) {
+        if (!groups.has(marker.id)) {
           const svgGroup = await placeMark.putDown({
             point: new Vector3(marker.coordinates[0], marker.coordinates[1], marker.coordinates[2]),
             normal: new Vector3(marker.coordinates[3], marker.coordinates[4], marker.coordinates[5]),
             fillColor: marker.inactiveColor,
             active: marker.isActive,
           })
+          if (isSuperseded()) {
+            // A newer pass cleared the scene before this marker landed, or
+            // the PlaceMark was released (putDown then gives null).
+            if (svgGroup) {
+              placeMark.disposePlaceMark(svgGroup)
+              svgGroup.material.map?.dispose()
+              svgGroup.material.dispose()
+            }
+            return
+          }
 
           svgGroup.visible = isNotesVisible
           svgGroup.userData.isActive = marker.isActive
@@ -221,12 +267,24 @@ export function PlacemarkHandlers() {
             window.markerScene.markerObjects.add(svgGroup)
           }
 
-          placeMarkGroupMap.set(svgGroup.userData.id, svgGroup)
+          groups.set(svgGroup.userData.id, svgGroup)
         }
       }
 
+      // A PlaceMark's first pass follows the store's selection when it names
+      // one of these markers. That is the marker the URL shows (the hash
+      // effect in MarkerControl), and for a PlaceMark rebuilt for a new
+      // viewer it is the one the user had selected on the old one: a click
+      // selection lives only in the old sprites and `selectedPlaceMarkId`,
+      // never in `markers[].isActive`.
+      const selectedId = useStore.getState().selectedPlaceMarkId
+      if (isFirstPlacement && selectedId !== null && groups.has(selectedId)) {
+        for (const [key, value] of groups.entries()) {
+          value.userData.isActive = key === selectedId
+        }
+      }
 
-      for (const [, value] of placeMarkGroupMap.entries()) {
+      for (const [, value] of groups.entries()) {
         if (value.userData.isActive) {
           // set color to active if active
           value.userData.color = value.userData.activeColor
@@ -240,9 +298,10 @@ export function PlacemarkHandlers() {
       }
       requestPaint()
     })()
-    // Add markers to the dependency array so useEffect re-runs on markers change
+    // Add markers to the dependency array so useEffect re-runs on markers
+    // change, and placeMark so a new viewer's PlaceMark gets them too.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [markers, commentMutatedSignal])
+  }, [markers, commentMutatedSignal, placeMark])
 
 
   // Save a placemark
@@ -266,8 +325,9 @@ export function PlacemarkHandlers() {
       svgGroup.userData.id = hash
       requestPaint()
 
-      placeMarkGroupMap.set(hash, svgGroup)
-      setPlaceMarkStatus(svgGroup, true)
+      const groups = markerGroupsOf(placeMark)
+      groups.set(hash, svgGroup)
+      setPlaceMarkStatus(groups, svgGroup, true)
     }
 
     setPlaceMarkMode(false)
@@ -301,7 +361,7 @@ export function PlacemarkHandlers() {
 
     let foundKey = null
 
-    for (const [key, value] of placeMarkGroupMap.entries()) {
+    for (const [key, value] of markerGroupsOf(placeMark).entries()) {
       if (key === res.marker.userData.id) {
         res.marker.userData.isActive = true
         res.marker.userData.color = res.marker.userData.activeColor
@@ -326,7 +386,7 @@ export function PlacemarkHandlers() {
 
     let foundKey = null
 
-    for (const [key, value] of placeMarkGroupMap.entries()) {
+    for (const [key, value] of markerGroupsOf(placeMark).entries()) {
       if (key === marker.userData.id) {
         marker.userData.isActive = true
         marker.userData.color = marker.userData.activeColor
@@ -425,6 +485,11 @@ export function PlacemarkHandlers() {
     debug().log('usePlaceMark#createPlaceMark')
     const newPlaceMark = new PlaceMark({context, postProcessor})
     newPlaceMark.setObjects(oppositeObjects)
+    // A viewer re-created while the user was placing a marker keeps them
+    // placing: the store's flag (NoteFooter's button) outlives the PlaceMark.
+    if (useStore.getState().isPlaceMarkActivated) {
+      newPlaceMark.activate()
+    }
     setPlaceMark(newPlaceMark)
     return newPlaceMark
   }
@@ -434,23 +499,23 @@ export function PlacemarkHandlers() {
 }
 
 
-const setPlaceMarkStatus = (svgGroup, isActive) => {
-  assertDefined(svgGroup, isActive)
-  resetPlaceMarksActive(false)
+const setPlaceMarkStatus = (groups, svgGroup, isActive) => {
+  assertDefined(groups, svgGroup, isActive)
+  resetPlaceMarksActive(groups, false)
   svgGroup.userData.isActive = isActive
-  resetPlaceMarkColors()
+  resetPlaceMarkColors(groups)
 }
 
 
-const resetPlaceMarksActive = (isActive) => {
-  placeMarkGroupMap.forEach((svgGroup) => {
+const resetPlaceMarksActive = (groups, isActive) => {
+  groups.forEach((svgGroup) => {
     svgGroup.userData.isActive = isActive
   })
 }
 
 
-const resetPlaceMarkColors = () => {
-  placeMarkGroupMap.forEach((svgGroup) => {
+const resetPlaceMarkColors = (groups) => {
+  groups.forEach((svgGroup) => {
     let color = '#00ff00'
     if (svgGroup.userData.isActive) {
       color = 'red'
@@ -460,8 +525,91 @@ const resetPlaceMarkColors = () => {
 }
 
 
-const placeMarkGroupMap = new Map()
-let prevSynchSidebar
+/**
+ * MarkerControl's bookkeeping for one PlaceMark: its markers by id
+ * (`groups`), the `synchSidebar` value it last placed for, and the newest
+ * placement pass. These were module-level and so outlived every viewer:
+ * the map held the first viewer's sprites, and the `synchSidebar` gate,
+ * set once, kept a new viewer from ever getting its markers (#2017). Keyed
+ * weakly, so a released PlaceMark takes its state with it.
+ *
+ * @type {WeakMap<PlaceMark, {groups: Map, placedFor: (boolean|undefined), generation: number}>}
+ */
+const markerPlacements = new WeakMap()
+
+
+/**
+ * @param {PlaceMark} placeMark
+ * @return {{groups: Map, placedFor: (boolean|undefined), generation: number}}
+ */
+function markerPlacementOf(placeMark) {
+  let placement = markerPlacements.get(placeMark)
+  if (!placement) {
+    placement = {groups: new Map(), placedFor: undefined, generation: 0}
+    markerPlacements.set(placeMark, placement)
+  }
+  return placement
+}
+
+
+/**
+ * @param {PlaceMark} placeMark
+ * @return {Map} the PlaceMark's markers, by note or comment id
+ */
+export function markerGroupsOf(placeMark) {
+  return markerPlacementOf(placeMark).groups
+}
+
+
+/**
+ * Create a PlaceMark and return the cleanup that releases it.
+ *
+ * Outside the component on purpose. React keeps an effect's cleanup until
+ * the effect runs again, and a closure made in the render keeps that
+ * render's whole V8 context: here, the `placeMark` the store held while
+ * rendering for the new context, which is the old PlaceMark. A cleanup made
+ * here closes over the new PlaceMark alone (the unit test's forced GC fails
+ * without this).
+ *
+ * @param {Function} createPlaceMark PlacemarkHandlers#createPlaceMark
+ * @param {object} args Its arguments
+ * @return {Function} the effect cleanup
+ */
+function bindPlaceMark(createPlaceMark, args) {
+  const boundPlaceMark = createPlaceMark(args)
+  return () => releasePlaceMark(boundPlaceMark)
+}
+
+
+/**
+ * Release a PlaceMark whose viewer is going away: take it out of the store
+ * if it is still the store's, forget the Playwright build's handles on its
+ * markers, and dispose it (frame upkeep, sprites, materials, textures and
+ * the viewer refs; PlaceMark#dispose).
+ *
+ * @param {PlaceMark} placeMark
+ */
+export function releasePlaceMark(placeMark) {
+  const {placeMark: current, setPlaceMark} = useStore.getState()
+  if (current === placeMark) {
+    setPlaceMark(null)
+  }
+  const markerObjects = window.markerScene?.markerObjects
+  if (markerObjects) {
+    for (const sprite of placeMark.getPlacemarks()) {
+      markerObjects.delete(sprite)
+    }
+  }
+  // Bump the generation so a placement pass still awaiting a texture drops
+  // its marker instead of adding it to the released PlaceMark's list.
+  const placement = markerPlacements.get(placeMark)
+  if (placement) {
+    placement.generation++
+    placement.groups.clear()
+  }
+  markerPlacements.delete(placeMark)
+  placeMark.dispose()
+}
 
 MarkerControl.propTypes = {
   context: PropTypes.object.isRequired,
