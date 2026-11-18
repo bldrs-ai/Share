@@ -34,7 +34,7 @@ A track is named after the feature group and milestone band it mainly serves: `<
 - **One primary feature group.** A track may serve several groups and bands. Its ID names the primary one, and its issue and snapshot list the others under Related, with the related tracks.
 - **A new track** gets a row in roadmap §3.2 and an entry in §5.
 - **Kept, never reused.** A finished track stays listed with ✔, and its ID isn't given to another track.
-- **Work items** keep their issue numbers. A work item's title carries the track ID while it is a direct child of the track issue; one nested under a story keeps the epic's prefix.
+- **Work items** keep their issue numbers. A work item's title carries the track ID while it is a direct child of the track issue; one nested under a story keeps the epic's prefix. Bugs keep their own titles wherever they sit; only the parent link places them (owner, 2026-11-18).
 - **The old `T1`…`T12` numbers** are aliases in the roadmap's ID lineage (renamed 2026-11-18). T9, growth, lives in bizdev and keeps its number.
 
 ## The track issue
