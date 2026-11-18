@@ -4,6 +4,9 @@
  * works.
  */
 export const excludedNodeModules = [
+  // The AI SDK and its OpenRouter provider (src/assist, #1675) ship ESM
+  // only, as do the two small packages they import that have no CJS build.
+  '@ai-sdk',
   '@bldrs-ai',
   // Scoped to the two subpackages the batched-native GLB writer imports
   // (they pull the ESM-only `property-graph`). Deliberately NOT the whole
@@ -11,6 +14,10 @@ export const excludedNodeModules = [
   // compression path resolves and its glbCompress test times out.
   '@gltf-transform/core',
   '@gltf-transform/extensions',
+  '@openrouter',
+  '@standard-schema',
+  '@workflow',
+  'ai',
   'bail',
   'character-entities',
   'comma-separated-tokens',

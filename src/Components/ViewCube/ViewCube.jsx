@@ -70,7 +70,7 @@ export default function ViewCube() {
   const isNotesVisible = useStore((state) => state.isNotesVisible)
   const isPropertiesVisible = useStore((state) => state.isPropertiesVisible)
   const isBotVisible = useStore((state) => state.isBotVisible)
-  const isBotEnabled = useExistInFeature('bot')
+  const isBotEnabled = useExistInFeature('assist')
   const isAppsVisible = useStore((state) => state.isAppsVisible)
   const rightDrawerWidth = useStore((state) => state.rightDrawerWidth)
   const appsDrawerWidth = useStore((state) => state.appsDrawerWidth)

@@ -15,7 +15,7 @@ import useExistInFeature from '../hooks/useExistInFeature'
  * @return {ReactElement}
  */
 export default function BottomBar({deselectItems}) {
-  const isBotEnabled = useExistInFeature('bot')
+  const isBotEnabled = useExistInFeature('assist')
   // With the workspace shell on, the ProjectsDrawer footer carries the
   // only logo (LogoMenu) — including the version tooltip and the About
   // dialog — so this over-canvas copy would be a second brand mark.

@@ -5,7 +5,9 @@ import {
 
 
 /**
- * Settings panel for the bot.
+ * Settings panel for the bot: the user's OpenRouter key, which the panel
+ * keeps in this tab's memory only (assist/keyStore.ts). Choosing a provider,
+ * remembering a key on the device, Forget and Test connection are #1930.
  *
  * @param apiKey - The API key to display and save.
  * @param onApiKeyChange - Callback to save the API key.
@@ -57,8 +59,15 @@ export default function BotSettings({apiKey, onApiKeyChange, onClose}: BotSettin
             px: 2,
             py: 1,
           }}
-          inputProps={{'data-testid': 'BotSettings-ApiKeyInput', 'id': 'bot-openrouter-api-key'}}
+          inputProps={{
+            'data-testid': 'BotSettings-ApiKeyInput',
+            'id': 'bot-openrouter-api-key',
+            'aria-describedby': 'bot-openrouter-api-key-note',
+          }}
         />
+        <Typography variant='caption' id='bot-openrouter-api-key-note' sx={{color: 'text.secondary'}}>
+          Kept in this tab only, and forgotten when you reload. It is sent to OpenRouter and nowhere else.
+        </Typography>
       </Box>
       <Box sx={{display: 'flex', justifyContent: 'flex-end', gap: '0.5em'}}>
         <Button

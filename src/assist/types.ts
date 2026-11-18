@@ -71,6 +71,19 @@ export type Ref = string
 /** Per-call context the host passes through to `run`. */
 export interface ToolContext {
   signal?: AbortSignal
+  /**
+   * Whether the call may still change the view. False once the user has
+   * stopped the turn or undone the step the call belongs to. A tool that
+   * changes state (a `viewState` or `mutatesDocument` tool) MUST check it
+   * immediately before it mutates, after its last await, and if it is false
+   * throw `ToolError('rolled_back')` having changed nothing. That is what
+   * keeps a late call from overwriting what the user did meanwhile: the
+   * loop's fallback for a tool that doesn't check is to run the call's own
+   * undo, which restores the snapshot the call took, and that snapshot may
+   * be older than the user's change (assist/loop.ts `runTool`). Absent (the
+   * dev hook, a test) means always true.
+   */
+  shouldCommit?: () => boolean
 }
 
 

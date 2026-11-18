@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import * as path from 'node:path'
 import esbuild from 'esbuild'
 import {fileURLToPath} from 'url'
+import {ASSIST_RUNTIME_ENTRY, assertAiSdkNotInMain} from './assistEntry.js'
 import config, {staticCopyPlugin} from './common.js'
 import {proModuleBuilds} from './proModules.js'
 
@@ -17,10 +18,18 @@ const subscribeFile = path.resolve(repoRoot, 'src', 'subscribe', 'index.jsx')
 // across them races and intermittently fails the whole build with
 // `EEXIST: mkdir docs`. The workers and pro modules emit single bundles and
 // never needed the asset tree. See `plugins.js#makeStaticCopyPlugin`.
+//
+// The Assist runtime (the AI SDK) is a third entry, emitted as
+// `docs/assist/runtime.js` and loaded only when the assistant first sends;
+// `assertAiSdkNotInMain` below fails the build if the SDK reaches the other
+// two. See `assistEntry.js`.
 const mainBuild = esbuild.build({
   ...config,
   plugins: [...config.plugins, staticCopyPlugin],
-  entryPoints: [indexFile, subscribeFile],
+  entryPoints: [indexFile, subscribeFile, ASSIST_RUNTIME_ENTRY],
+}).then((result) => {
+  assertAiSdkNotInMain(result.metafile)
+  return result
 })
 
 // Workers

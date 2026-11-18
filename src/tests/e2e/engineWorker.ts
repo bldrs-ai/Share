@@ -7,8 +7,8 @@ const MAIN_THREAD_PUMP_TIMEOUT_MS = 60_000
 /**
  * Watch a page for which engine ran its model (engine-worker.md §7 steps 3
  * and 9), so a spec's leg fails if the load quietly ran on the other engine.
- * The worker is the default since step 9; `?feature=disableEngineWorker`,
- * a known `?view=` and the legacy `?feature=bot` keep a load on the
+ * The worker is the default since step 9; `?feature=disableEngineWorker`
+ * and a known `?view=` keep a load on the
  * main-thread engine (engine/engineRoute.js). Call before `page.goto`; await
  * one of the two checks once the model is at its index or ready.
  *

@@ -333,8 +333,7 @@ const BYTES_PER_MIB = BYTES_PER_KIB * BYTES_PER_KIB
  * `.ifczip`) and STEP/AP214 — through one worker load
  * (engine/engineModelLoad.js), and only on the streamed path that feeds the
  * incremental builder. Default on; `engine/engineRoute.js` says when a load
- * stays on the main-thread engine instead (the kill switch, `?view=` rules,
- * the legacy `?feature=bot`).
+ * stays on the main-thread engine instead (the kill switch, `?view=` rules).
  *
  * @param {string|undefined} loaderType `loader.type` (Loader.js#findLoader)
  * @param {object|null} scene
