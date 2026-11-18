@@ -194,7 +194,12 @@ export function navigateToModel(target, navigate) {
   // Read at call time, like every `isFeatureEnabled` check: a kill switch
   // (`?feature=disableSpaModelNav`) rides in the query string
   // `withCurrentSearch` just carried forward, so the page it loads keeps it.
-  if (typeof navigate === 'function' && isSpaModelNavOn() && !isViewChange(path)) {
+  // A link that names the kill switch in its own query loads the page too:
+  // the destination's readers (CadView, ShareIfc) take the mode from ITS
+  // URL, so an in-app open there would run as the kill switch's page-load
+  // path (no abort, no store reset) without the page load (codex on #2222).
+  if (typeof navigate === 'function' && isSpaModelNavOn() && !isViewChange(path) &&
+      !namesKillSwitch(path)) {
     navigate(path)
     return
   }
@@ -220,13 +225,44 @@ export function navigateToModel(target, navigate) {
  */
 function isViewChange(path) {
   const viewOf = (search) => new URLSearchParams(search).get('view')?.toLowerCase() ?? null
-  const queryAt = path.indexOf('?')
-  if (queryAt === -1) {
+  const search = searchOf(path)
+  if (search === null) {
     return false
   }
-  const hashAt = path.indexOf('#', queryAt)
-  const search = path.slice(queryAt, hashAt === -1 ? undefined : hashAt)
   return viewOf(search) !== viewOf(window.location.search)
+}
+
+
+/**
+ * Whether `path`'s own query turns the in-app switch off
+ * (`?feature=disableSpaModelNav`, utils/spaModelNavMode.js). A path with no
+ * query of its own has the page's by now (`withCurrentSearch`), and a page
+ * with the kill switch already loads every open.
+ *
+ * @param {string} path
+ * @return {boolean}
+ */
+function namesKillSwitch(path) {
+  const search = searchOf(path)
+  if (search === null) {
+    return false
+  }
+  const features = (new URLSearchParams(search).get('feature') ?? '').split(',')
+  return features.some((name) => name.trim().toLowerCase() === 'disablespamodelnav')
+}
+
+
+/**
+ * @param {string} path a path, maybe with its own `?query` and `#hash`
+ * @return {string|null} its `?query`, or null when it has none
+ */
+function searchOf(path) {
+  const queryAt = path.indexOf('?')
+  if (queryAt === -1) {
+    return null
+  }
+  const hashAt = path.indexOf('#', queryAt)
+  return path.slice(queryAt, hashAt === -1 ? undefined : hashAt)
 }
 
 

@@ -785,8 +785,9 @@ from the URL at each call; the query rides from one open to the next
   The switch is read when an open is made, from the page's URL, so it takes
   effect from the page that carries it: paste it into the current URL and
   reload, then open models as usual (it rides into each page it loads).
-  Opening, in-app, a link whose own query adds it gives that one open the
-  old load path (no abort) and makes every open after it a page load.
+  A link whose own query names it loads the page from any page
+  (`navigate.js#namesKillSwitch`): the destination reads the mode from its
+  own URL, so an in-app open there would be neither mode (codex on #2222).
 - *To confirm which mode a page is in:* every Sentry event carries
   `model_nav` (`in-app` or `page-load:<reason>`) and `model_open` (`page`
   for the page's first open, `in_app` for one switched to in the same

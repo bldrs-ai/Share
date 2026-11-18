@@ -152,6 +152,21 @@ describe('navigateToModel', () => {
       process.env.NODE_ENV = prevEnv
     })
 
+    // codex on #2222: the destination's readers take the mode from its URL,
+    // so an in-app open of a link naming the kill switch would be neither
+    // mode. Such a link loads the page, from a page without the switch.
+    it('a link whose own query names the kill switch loads the page', () => {
+      locationGetter.mockReturnValue({search: '?feature=workspace', assign: (url) => assignCalls.push(url)})
+      const navigate = jest.fn()
+      navigateToModel('/share/v/p/index.ifc?feature=workspace,disableSpaModelNav#c:1', navigate)
+      expect(navigate).not.toHaveBeenCalled()
+      expect(assignCalls).toEqual(['/share/v/p/index.ifc?feature=workspace,disableSpaModelNav#c:1'])
+      // A link with a query of its own that doesn't name it stays in-app.
+      navigateToModel('/share/v/p/index.ifc?feature=workspace', navigate)
+      expect(navigate).toHaveBeenCalledWith('/share/v/p/index.ifc?feature=workspace')
+      expect(assignCalls).toHaveLength(1)
+    })
+
     it('?feature=disableSpaModelNav: a navigate given does not stop the page load, which keeps the switch', () => {
       locationGetter.mockReturnValue({search: '?feature=disableSpaModelNav', assign: (url) => assignCalls.push(url)})
       const navigate = jest.fn()
