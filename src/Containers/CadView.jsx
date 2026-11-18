@@ -107,7 +107,7 @@ import {installAssistDevHook} from '../viewer/tools/assistHost'
 import {registerSelectionFunnel} from '../viewer/tools/selectionFunnel'
 import ViewCube from '../Components/ViewCube/ViewCube'
 import {applyVisibilityHash} from '../Components/Residency/visibilityHash'
-import VisibilityHashWriter from '../Components/Residency/VisibilityHashWriter'
+import LiveDisplayLink from '../Components/Residency/LiveDisplayLink'
 import SelectionHashWriter from './SelectionHashWriter'
 import {readSelectionHash, resolveSelectionRefs, selectionFitsLink} from './selectionHash'
 import RootLandscape from './RootLandscape'
@@ -847,10 +847,10 @@ export default function CadView({
       viewer.isolator.hideElementsById(previouslyHiddenELements)
     }
     // A link's hide / isolate terms (`#d:hide=…,iso=…`) win over the above:
-    // on a cold load there is nothing above, and on a re-init the writer has
-    // kept the terms current. After onModel, which sets the NavTree root
-    // that STEP occurrence refs resolve against; before setIsModelReady,
-    // which lets VisibilityHashWriter start rewriting the terms.
+    // on a cold load there is nothing above, and on a re-init the live view
+    // link has kept the terms current once the user changed them
+    // (Residency/LiveDisplayLink.jsx). After onModel, which sets the NavTree
+    // root that STEP occurrence refs resolve against.
     // The selection goes first: isolating leaves the selection it finds
     // unpainted, as it does live.
     if (viewer.isolator?.ifcModel) {
@@ -2965,7 +2965,7 @@ export default function CadView({
   return (
     <Box sx={{...absTop, left: 0, width: '100vw', height: isMobile ? `${vh}px` : '100vh', m: 0, p: 0}}>
       {<ViewerContainer/>}
-      <VisibilityHashWriter/>
+      <LiveDisplayLink/>
       <SelectionHashWriter/>
       {/*
         * Unmounted during isolation, matching its toolbar toggle in

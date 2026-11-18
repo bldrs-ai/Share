@@ -17,7 +17,9 @@ import numpy as np
 import pydicom
 from pydicom.dataset import Dataset, FileDataset, FileMetaDataset
 from pydicom.sequence import Sequence
-from pydicom.uid import ExplicitVRLittleEndian, ImplicitVRLittleEndian, generate_uid, CTImageStorage
+from pydicom.uid import (
+    CTImageStorage, DeflatedExplicitVRLittleEndian, ExplicitVRLittleEndian, ImplicitVRLittleEndian,
+    RLELossless, generate_uid)
 
 def phantom(n=32, rows=48, cols=40):
     z, y, x = np.mgrid[0:n, 0:rows, 0:cols].astype(np.float32)
@@ -30,7 +32,8 @@ def phantom(n=32, rows=48, cols=40):
     vol[s] = 2500                                     # dense sphere, off-centre in +column
     return vol
 
-def write(out, explicit, shuffle=True, scout=True):
+def write(out, explicit, shuffle=True, scout=True, codec=None):
+    """codec: None (uncompressed), 'rle' (RLE Lossless) or 'deflate' (Deflated Explicit VR LE)."""
     vol = phantom()
     n, rows, cols = vol.shape
     uid = lambda *s: generate_uid(entropy_srcs=['bldrs-phantom', *map(str, s)])
@@ -66,7 +69,15 @@ def write(out, explicit, shuffle=True, scout=True):
         ds.RescaleSlope, ds.RescaleIntercept = slope, intercept
         ds.PixelData = (vol[k].astype(np.int32) - intercept).astype(np.uint16).tobytes()
         buf = io.BytesIO()
-        ds.save_as(buf, enforce_file_format=True, implicit_vr=not explicit, little_endian=True)
+        if codec == 'rle':
+            # pydicom's own RLE encoder: a writer independent of Share's decoder.
+            ds.compress(RLELossless, generate_instance_uid=False)
+            ds.save_as(buf, enforce_file_format=True)
+        elif codec == 'deflate':
+            ds.file_meta.TransferSyntaxUID = DeflatedExplicitVRLittleEndian
+            ds.save_as(buf, enforce_file_format=True)
+        else:
+            ds.save_as(buf, enforce_file_format=True, implicit_vr=not explicit, little_endian=True)
         # Numbered without an extension, as many scanners write them.
         entries.append((f'CT1/DICOM/IM{k:04d}', buf.getvalue()))
     if scout:
@@ -100,3 +111,5 @@ if __name__ == '__main__':
     outDir = os.path.join(here, '..', '..', 'testdata', 'models', 'dicom')
     write(os.path.join(outDir, 'phantom-ct.zip'), explicit=True)
     write(os.path.join(outDir, 'phantom-ct-implicit-vr.zip'), explicit=False)
+    write(os.path.join(outDir, 'phantom-ct-rle.zip'), explicit=True, codec='rle')
+    write(os.path.join(outDir, 'phantom-ct-deflated.zip'), explicit=True, codec='deflate')
