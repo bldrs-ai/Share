@@ -4,7 +4,7 @@
 **Date:** 2026-11-18
 **UX requirements:** [design/reqs/workspace.md](../reqs/workspace.md) (what the person sees; this doc is how it is built).
 **Follows:** [reviews/2026-11-18-mvc-core-review-followup.md](reviews/2026-11-18-mvc-core-review-followup.md) §4, which this settles.
-**Epics:** `assist-300` (#1657), `assist-310` (#1659), `open-210` (#1251); depends on `open-205` (#2011), `create-300` (#1914), `share-200` (#2144).
+**Epics:** `assist-300` (#1657), `assist-310` (#1659), `open-210` (#2192, story #1251); depends on `open-205` (#2011), `create-300` (#1914), `share-200` (#2144).
 
 
 ## 1. Summary

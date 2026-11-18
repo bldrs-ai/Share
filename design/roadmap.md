@@ -73,7 +73,7 @@ One row per Epic and Track; bodies are in §4 and §5. **Phase column:** A–E =
 | Open | `open-120` | Open from Google Drive | ✔ | — | — | |
 | Open | `open-200` | Recents reliability | 🟡 | E | T5 | |
 | Open | `open-205` | In-app model switching | 🟡 | AI | T1 | <a href="https://github.com/bldrs-ai/Share/issues/2011" target="_blank" rel="noopener noreferrer">#2011</a> |
-| Open | `open-210` | Open multiple IFCs in one session | ⬜ | Post | — | |
+| Open | `open-210` | Open multiple IFCs in one session | ⬜ | Post | — | <a href="https://github.com/bldrs-ai/Share/issues/2192" target="_blank" rel="noopener noreferrer">#2192</a> |
 | Open | `open-300` | Multi-account Sources tab | 🟡 | B | T3 | |
 | View | `view-100` | 3D + NavTree + Properties | ✔ | — | T1, T2 | |
 | View | `view-110` | Cut planes | ✔ | — | T1 | |
@@ -160,7 +160,7 @@ User can open a model from local, cloud, or shared link, with format breadth and
 - `open-100` Open from local file system ✔. `open-110` Open from GitHub URL / UI ✔. `open-120` Open from Google Drive ✔ (Drive Save is under `share-110`).
 - **`open-200` Recents reliability** 🟡 (NEW). A dead recent (Drive, GitHub or local) should show a typed "file no longer available" alert, not a parse failure. Not started (T5, `design/new/drive-recents-head-check.md`); <a href="https://github.com/bldrs-ai/Share/issues/1548" target="_blank" rel="noopener noreferrer">#1548</a> (local recent after cache clear) is closed (as of 2026-11-10). Polish for Phase E, not MVP-load-bearing.
 - **`open-205` In-app model switching** 🟡 (NEW). Open a model without a page reload; each model gets its own session and engine, and only close or memory eviction cancels a load. Epic <a href="https://github.com/bldrs-ai/Share/issues/2011" target="_blank" rel="noopener noreferrer">#2011</a>; Phase 0 (<a href="https://github.com/bldrs-ai/Share/issues/2012" target="_blank" rel="noopener noreferrer">#2012</a>) is closed (as of 2026-11-10). The engine-worker half has landed (per-model worker, on by default). Still to build: sessions owning their worker, close and eviction, and the switch itself (Phase 1, behind `?feature=spaModelNav`), Phase 2 multi-model groundwork (<a href="https://github.com/bldrs-ai/Share/issues/2024" target="_blank" rel="noopener noreferrer">#2024</a>), plus off-main-thread rendering under <a href="https://github.com/bldrs-ai/Share/issues/2055" target="_blank" rel="noopener noreferrer">#2055</a>. Prerequisite of `open-210` and `assist-300`; the tabbed workspace layout (below, `assist-300`) depends on it. Docs: `design/new/in-app-model-switch.md`, `engine-worker.md`, `offscreen-rendering.md`.
-- **`open-210` Open multiple IFCs in one session** ⬜. Import and overlay several models (<a href="https://github.com/bldrs-ai/Share/issues/1251" target="_blank" rel="noopener noreferrer">#1251</a>); now a UI and state problem, not an engine problem. **Post-MVP.**
+- **`open-210` Open multiple IFCs in one session** ⬜. Epic <a href="https://github.com/bldrs-ai/Share/issues/2192" target="_blank" rel="noopener noreferrer">#2192</a> (reconciled 2026-11-18; `design/reqs/open-210.md`). Import and overlay several models (<a href="https://github.com/bldrs-ai/Share/issues/1251" target="_blank" rel="noopener noreferrer">#1251</a>); now a UI and state problem, not an engine problem. **Post-MVP.**
 - **`open-300` Multi-account Sources tab** 🟡. Drive multi-account works; parallel GitHub accounts arrive with T3 PR2/PR3 (Phase B).
 
 ### 4.2 View
