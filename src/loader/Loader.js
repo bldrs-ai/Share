@@ -56,7 +56,8 @@ import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb} from './glbExport'
 import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import glbToThree from './glb'
 import {decodeGzipEnvelope} from './gzipEnvelope'
-import {unwrapIfcZip} from './modelArchive'
+import {ZIP_MODEL_TYPES, unwrapHostedArchive} from './modelArchive'
+import {ZipArchiveError, looksLikeZipBytes} from './zipArchive'
 import {BldrsInstanceTablesReader} from './bldrsInstanceTables'
 import {
   APPLIED_COORDINATION_KEY,
@@ -445,7 +446,7 @@ export async function load(
   // source file, which here is the zip — `spillModelSource` would back
   // conway's later reads of the IFC with it. It still opens, uncached. An
   // UPLOADED `.ifczip` is stored as the `.ifc` inside it and caches as one.
-  const wantGlb = isFeatureEnabled('glb') && isIfc && loader.type !== 'ifczip'
+  const wantGlb = isFeatureEnabled('glb') && isIfc && !ARCHIVE_LOADER_TYPES.has(loader.type)
   if (wantGlb) {
     glbVerbose('feature enabled')
   }
@@ -876,16 +877,46 @@ export async function load(
   // gzip is that format's own container. See `loader/gzipEnvelope.js`.
   modelData = await decodeGzipEnvelope(modelData, loader.type)
 
-  // A hosted `.ifczip` is still the zip here (uploads were unwrapped before
-  // OPFS); conway gets the `.ifc` inside it. The type is the inner model's
-  // from here on, so the model and everything that reads `loader.type` after
-  // this — capabilities, analytics — see an IFC. The arms before this that
-  // key on it (`canOpenFromStore`, the truncated-part-21 check, `wantGlb`)
-  // correctly saw a zip. See `loader/modelArchive.js`.
-  if (loader.type === 'ifczip') {
-    const unwrapped = await unwrapIfcZip(modelData)
-    modelData = unwrapped.modelData
-    loader.type = unwrapped.type
+  // A downloaded archive is still the zip here (uploads were unwrapped before
+  // OPFS): a `.zip` or `.ifczip` route, or any download whose bytes are a zip
+  // whatever its name — content decides, as at the upload seams. The model
+  // inside is what gets parsed, and its type is the load's from here on, so
+  // the parse and everything that reads `loader.type` after this —
+  // capabilities, analytics — see it, not a zip. The arms before this that
+  // key on the route's type (`canOpenFromStore`, the truncated-part-21 check,
+  // `wantGlb`) correctly saw a zip. See `loader/modelArchive.js`.
+  // The model's own type once an archive is opened, for the model line.
+  let archivedType
+  if (ARCHIVE_LOADER_TYPES.has(loader.type) ||
+      (!isFormatText && !cameFromGlbCache && !ZIP_MODEL_TYPES.has(loader.type) && await isZipDownload(modelData))) {
+    const inner = await unwrapHostedArchive(modelData, path.substring(path.lastIndexOf('/') + 1))
+    let innerType
+    if (inner !== null) {
+      modelData = inner.modelData
+      innerType = inner.type
+      // A zip under a model's name (a renamed `.ifczip` at `x.ifc`) got past
+      // `wantGlb`, which went by the name: the export's source handle is the
+      // zip, which `spillModelSource` must never back conway's reads with. It
+      // opens uncached, as a `.ifczip` route does.
+      glbExportContext = null
+    } else if (ARCHIVE_LOADER_TYPES.has(loader.type)) {
+      // Named an archive but not one: typed by its header, as an upload is.
+      // A `.ifczip` the sniff can't place (a BOM, a UTF-16 IFC) still goes to
+      // conway as the IFC it was named, as it did before any zip was a type:
+      // conway's own refusal says more than ours would.
+      innerType = Filetype.analyzeHeader(modelData.slice(0, Filetype.HEADER_LIMIT), {fileByteLength: modelData.byteLength}) ??
+        (loader.type === 'ifczip' ? 'ifc' : null)
+      if (innerType === null) {
+        throw new ZipArchiveError('This file is named as an archive, but it isn\'t a zip or any model Share opens.')
+      }
+    }
+    if (innerType !== undefined) {
+      archivedType = innerType
+      ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await retypeLoader(loader, innerType, viewer)
+      if (isFormatText && typeof modelData !== 'string') {
+        modelData = new TextDecoder('utf-8').decode(modelData)
+      }
+    }
   }
 
   // Provide basePath for multi-file models.  Keep the last '/' for
@@ -899,7 +930,9 @@ export async function load(
   // its header parses.
   let formatTag
   try {
-    formatTag = Filetype.getValidExtension(path)?.toUpperCase()
+    // The archive's inner model, not the route's `.zip` (or the name a zip
+    // was given): the model line describes what was parsed.
+    formatTag = (archivedType ?? Filetype.getValidExtension(path))?.toUpperCase()
   } catch {
     // Extension-less upload paths — the loader was already resolved by
     // content sniffing in findLoader; the model line just omits the tag.
@@ -2358,6 +2391,48 @@ export async function readModel(
 }
 
 
+// Route types that name an archive, resolved by content in `load`.
+const ARCHIVE_LOADER_TYPES = new Set(['zip', 'ifczip'])
+
+// The zip signatures' length (`zipArchive.js#looksLikeZipBytes`).
+const ZIP_SIGNATURE_BYTES = 4
+
+
+/**
+ * @param {string|ArrayBuffer|Uint8Array|Blob} modelData the download: bytes,
+ *   or the OPFS File itself for a streaming open
+ * @return {Promise<boolean>} whether it is a zip archive
+ */
+async function isZipDownload(modelData) {
+  if (modelData instanceof ArrayBuffer || ArrayBuffer.isView(modelData)) {
+    return looksLikeZipBytes(modelData)
+  }
+  if (modelData instanceof Blob) {
+    return looksLikeZipBytes(await modelData.slice(0, ZIP_SIGNATURE_BYTES).arrayBuffer())
+  }
+  return false
+}
+
+
+/**
+ * The loader tuple for an archive's inner model. A part-21 model behind the
+ * IFC arm (a `.ifczip`, or a STEP inside one) keeps its loader, retagged, as
+ * it always has; anything else gets its own arm.
+ *
+ * @param {object} loader the route's loader
+ * @param {string} type the inner model's format tag
+ * @param {object} viewer
+ * @return {Promise<Array>} `[loader, isLoaderAsync, isFormatText, isIfc, fixupCb]`
+ */
+function retypeLoader(loader, type, viewer) {
+  if (loader === viewer?.ifcLoader && PART21_LOADER_TYPES.has(type)) {
+    loader.type = type
+    return Promise.resolve([loader, true, false, true, undefined])
+  }
+  return findLoader(`model.${type}`, viewer)
+}
+
+
 /**
  * @param {string} pathname
  * @param {object} viewer
@@ -2413,8 +2488,8 @@ async function findLoader(pathname, viewer) {
     case 'stp':
     case 'ifc':
     case 'ifczip': {
-      // A `.ifczip` shares this arm and is unwrapped to its `.ifc` before
-      // `readModel` (`load`, beside the gzip net; `modelArchive.js`).
+      // A `.ifczip` shares this arm and is unwrapped to the model inside it
+      // before `readModel` (`load`, beside the gzip net; `modelArchive.js`).
       // ShareIfcLoader (`src/viewer/ifc/ShareIfcLoader.js`) is wired
       // up as `viewer.ifcLoader` at viewer construction (see
       // `src/viewer/ShareViewer.js`). It owns the Conway-direct parse
@@ -2437,6 +2512,18 @@ async function findLoader(pathname, viewer) {
       // voxels in a 3D texture on a ray-marched box (`loader/nrrd.js`).
       loader = new NRRDLoader()
       fixupCb = nrrdToThree
+      isFormatText = false
+      break
+    }
+    case 'zip': {
+      // A container, not a format: `load` resolves the model inside after the
+      // download (`modelArchive.js#unwrapHostedArchive`) and retypes the load
+      // to it. Nothing should ever reach this parse.
+      loader = {
+        parse: () => {
+          throw new Error('Loader#findLoader: an archive reached the parser unopened')
+        },
+      }
       isFormatText = false
       break
     }

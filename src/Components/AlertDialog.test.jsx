@@ -724,7 +724,7 @@ describe('AlertDialog — archives', () => {
     expect(keyWarnings).toEqual([])
   })
 
-  // A hosted .ifczip that isn't one readable IFC (CadView raises it).
+  // A hosted archive that isn't one readable model (CadView raises it).
   it('says why a hosted .ifczip can\'t be opened, counted in analytics only', () => {
     const message = 'This .ifczip holds no IFC model.'
     act(() => {
@@ -736,6 +736,18 @@ describe('AlertDialog — archives', () => {
     expect(screen.queryByText(/Discord/)).not.toBeInTheDocument()
     expect(trackAlertEvent).toHaveBeenCalledWith(message)
     expect(trackAlert).not.toHaveBeenCalled()
+  })
+
+  it('shows a hosted archive\'s entries in the dialog, never in analytics', () => {
+    const message = 'This archive holds 2 models. A link opens an archive of one model.'
+    const dialogText = 'This archive holds 2 models (Tower.ifc, Annex.ifc). A link opens an archive of one model.'
+    act(() => {
+      useStore.getState().setAlert({type: ARCHIVE_UNREADABLE, message, dialogText})
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText(dialogText)).toBeInTheDocument()
+    expect(trackAlertEvent).toHaveBeenCalledWith(message)
+    expect(JSON.stringify(trackAlertEvent.mock.calls)).not.toContain('Tower.ifc')
   })
 
   it('says why an archive can\'t be read', () => {

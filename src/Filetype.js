@@ -42,6 +42,11 @@ export const supportedTypes = [
   'usdc',
   'usdz',
   'xyz',
+  // Any zip, from any source: what it holds is decided by its content
+  // (`loader/modelArchive.js`), at the upload seams and in `Loader#load` for
+  // a download. Listed so a `.zip` routes, shows in the GitHub browser and
+  // parses out of a permalink (`foo.ifc.zip/12` splits after `.zip`).
+  'zip',
 ]
 
 export const supportedTypesUsageStr = `${supportedTypes.join(',')}`
@@ -60,7 +65,7 @@ export const typeRegexStr = `(?:${[...supportedTypes].sort((a, b) => b.length - 
 export const filetypeRegex = new RegExp(typeRegexStr, 'i')
 
 
-/** Prepend it with a '.' to make a file suffix*/
+/** A ".<type>" anywhere: the fallback of {@link splitAroundExtension}. */
 const fileSuffixRegex = new RegExp(`\\.${typeRegexStr}`, 'i')
 
 
@@ -141,7 +146,7 @@ export function getValidExtension(pathOrExt) {
 
 
 // File header magic is clear by this offset
-const HEADER_LIMIT = 1024
+export const HEADER_LIMIT = 1024
 
 // GLB binary format magic ("glTF" in ASCII)
 const GLB_MAGIC = Array.from('glTF', (c) => c.charCodeAt(0))
@@ -202,7 +207,8 @@ export function looksLikeGzipBytes(bytes) {
 
 /**
  * @param {string} path
- * @return {Promise<string|null>} The result of the `analyzeHeader` function on the downloaded file.
+ * @return {Promise<string|null>} The result of the `analyzeHeader` function on the downloaded file,
+ *   or `'zip'` for an archive it doesn't otherwise recognize.
  */
 export async function guessType(path) {
   debug().log('Filetype#guessType, path:', path)
@@ -215,7 +221,12 @@ export async function guessType(path) {
   const headerBuffer = response.data
   const fileByteLength = fileByteLengthOfRangeResponse(
     response.status, response.headers?.['content-range'], headerBuffer)
-  return analyzeHeader(headerBuffer, {fileByteLength})
+  // A plain zip is no model `analyzeHeader` knows (it answers null, which
+  // `modelArchive.js` relies on to tell an archive from a zip-based model),
+  // but a URL that serves one — a Drive link, any extension-less path — is
+  // routed as the container it is: `Loader#load` opens the model inside.
+  return analyzeHeader(headerBuffer, {fileByteLength}) ??
+    (matchesMagic(headerBuffer, ZIP_MAGIC) ? 'zip' : null)
 }
 
 
@@ -773,11 +784,17 @@ function maskPart21Comments(text) {
  */
 export function splitAroundExtension(filepath) {
   assertDefined(filepath)
-  const match = fileSuffixRegex.exec(filepath)
+  // At a segment boundary first, so the suffix is the file's outermost: the
+  // `.zip` of `box.ifc.zip`, not the `.ifc` inside its name, which would
+  // route `box.ifc.zip` to a `box.ifc` that isn't there. Then anywhere, as
+  // before: a transport suffix that isn't a type (`x.glb.gz`) still routes
+  // by the type inside it.
+  const suffixRegex = fileSuffixBoundaryRegex.test(filepath) ? fileSuffixBoundaryRegex : fileSuffixRegex
+  const match = suffixRegex.exec(filepath)
   if (!match) {
     throw new FilenameParseError(`Filepath(${filepath}) must contain ".${typeRegexStr}" (case-insensitive)`)
   }
-  const parts = filepath.split(fileSuffixRegex)
+  const parts = filepath.split(suffixRegex)
   return {parts, extension: match[0]}
 }
 

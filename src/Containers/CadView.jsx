@@ -696,12 +696,14 @@ export default function CadView({
         reportedRefusalRef.current = refusalKey
         setAlert({...unsupportedSchemaAlert(e, modelPath), repeat})
       } else if (e instanceof ZipArchiveError) {
-        // A hosted `.ifczip` that isn't one IFC in a readable zip
-        // (loader/modelArchive.js#unwrapIfcZip). The user's file, not a
-        // defect: say why under its own header, counted in analytics only
+        // A downloaded archive that isn't one model in a readable zip — a
+        // hosted zip of several models, or of none
+        // (loader/modelArchive.js#unwrapHostedArchive). The user's file, not
+        // a defect: say why under its own header, counted in analytics only
         // (AlertDialog), and kept out of the captureException below. The
-        // message never names the file.
-        setAlert({type: ARCHIVE_UNREADABLE, message: e.message})
+        // message names no file and is what analytics counts; `dialogText`
+        // may name the entries inside, for the dialog alone.
+        setAlert({type: ARCHIVE_UNREADABLE, message: e.message, dialogText: e.dialogText})
       } else if (e instanceof EngineOpenFailureError) {
         // conway said why the open failed (conway#742): a short form of the
         // reason in place of the raw "OpenModel returned -1". Still a real
