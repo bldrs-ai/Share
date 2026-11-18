@@ -1,6 +1,6 @@
 # Workspace sessions — projects, models, sessions and their engines
 
-**Status:** draft v0.1, design only. Nothing here is built.
+**Status:** draft v0.2, design only; the owner's decisions of 2026-11-18 are in §8. Nothing here is built.
 **Date:** 2026-11-18
 **UX requirements:** [design/reqs/workspace.md](../reqs/workspace.md) (what the person sees; this doc is how it is built).
 **Follows:** [reviews/2026-11-18-mvc-core-review-followup.md](reviews/2026-11-18-mvc-core-review-followup.md) §4, which this settles.
@@ -85,7 +85,7 @@ A session is files, so it can be kept locally first and in a project repository 
 
 ## 5. Workers: engines always, sessions when needed
 
-The owner's first sketch gave each session a worker. This draft proposes not doing that by default:
+The owner's first sketch gave each session a worker. Decided on 2026-11-18 (§8, 1): not by default, for these reasons.
 
 - **A session's own work is small.** Reading `session.json`, appending to the conversation, and folding a short op log take milliseconds. Parsing, geometry and property reads are already in the model engines.
 - **A worker costs.** A model engine measured about 45 MB and 0.4–0.6 s to start ([engine-worker.md](engine-worker.md) §1). A session worker without Conway would be smaller, but three of them buy nothing until a session computes something.
@@ -96,17 +96,17 @@ Give a session a worker when it runs a job that would block the page:
 - folding a long op log;
 - the future writer that turns a session's edits into a new model file (`create-engine.md` §B2). That writer runs next to Conway, so it is more likely a job on the model engine than in a session worker.
 
-**Decision for the owner (§8, 1):** sessions on the page by default with workers on demand, or a worker per session from the start.
+**Decided (§8, 1):** sessions on the page, workers on demand.
 
 
 ## 6. Refs, tools and edits across models
 
 **Refs name a model.** Today's refs (`e123`, `o1.2.3`, `n<seg>/…`, `g<GlobalId>`; [model-edit.md](model-edit.md) §5) assume one model. In a session they need the model key: `A` plus `e123`. Constraints on the separator:
-- it can't be `.`, `/` or `~`, which `o` and `n` refs already use;
+- it can't be one that refs already use or that a name in a path can contain: `.`, `/`, `~`, `_` and more;
 - it can't be any of `:`, `=`, `,` or `+`, which the `#d:` permalink grammar uses for its prefix, terms and lists ([model-display-controls.md](model-display-controls.md) §6.3);
 - a bare ref stays valid when the session has one model, so existing permalinks and single-model sessions don't change.
 
-The separator is decided together with model-display-controls.md §6.3 (§8, 4).
+Because a path can contain almost any character, the key is placed first and restricted, rather than reserving a character everywhere (§8, 4).
 
 **Resolution moves next to the engine.** Today `src/viewer/tools/refs.js` resolves refs on the page against the store's `rootElement`. For several models, and for a CLI later, resolution becomes a session function: split off the model key, then resolve within that model's tree from its engine. This is gap 1 of the follow-up review's §4.
 
@@ -133,14 +133,14 @@ Each step is useful on its own and has one owner.
 Steps 1, 2 and 4 don't depend on each other. Steps 3, 5 and 6 depend on 2, 1 and 4 respectively.
 
 
-## 8. Decisions for the owner
+## 8. Decisions (owner, 2026-11-18)
 
-1. **Session workers:** on demand (§5, proposed) or always?
-2. **A model opened directly:** a plain view with no session (proposed in the UX doc), or an implicit one-model session that keeps view state and could take a conversation later?
-3. **Sessions outside a project:** an "Ungrouped" group, as models have today (#1692), or a session always belongs to a project?
-4. **The ref separator** (§6). Settled with model-display-controls.md §6.3.
-5. **Tabs and the engine cap:** how many models a session may open live at once on desktop, given at most 3 live engines (engine-worker.md §5.2)? Proposed: no extra limit; a fourth model's engine waits for, or evicts, a background one by the existing rules.
-6. **The flag-off layout** (§2.9 open question 3, PR #2138): what the single-model layout keeps when `?feature=workspace` is off.
+1. **Session workers: on demand.** A session runs on the page; it gets a worker only for a job that would block it (§5).
+2. **A model opened directly has no session.** Its view carries a chat icon; choosing it starts a session about that model, with that model as the session's first (UX: "Open a model on its own").
+3. **Sessions can sit outside a project,** in an Ungrouped group, as models do today (#1692).
+4. **The ref separator: positional, not yet picked.** Refs use `/` today (`n` paths), and names inside a path can hold other characters, such as `_`. So no character is safe to reserve everywhere. Instead, a model-qualified ref always *starts* with the model key, and the key's own characters are restricted (for example letters and digits only). The first separator after the key is then unambiguous whatever follows it, and a bare ref, with no key, stays valid in a one-model session (§6). The separator itself is picked with model-display-controls.md §6.3.
+5. **Live models per session: 3 on desktop for now.** That is engine-worker.md §5.2's cap, an early guess that hasn't been tuned. A session doesn't add a limit of its own: a fourth model's engine waits for, or evicts, a background one by the existing rules. Revisit when the cap is measured.
+6. **The flag-off layout is today's production layout, inset in the workspace.** It hasn't been designed beyond that; it is left open for `assist-300`.
 
 
 ## 9. What this changes elsewhere

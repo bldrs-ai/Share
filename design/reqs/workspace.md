@@ -1,6 +1,6 @@
 # Workspace UX Requirements Draft — projects, models and sessions
 
-**Draft v0.1 · 2026-11-18 · New capability across `assist-300`, `assist-310` and `open-210`**
+**Draft v0.2 · 2026-11-18 · New capability across `assist-300`, `assist-310` and `open-210`**
 
 A person groups their models into projects, and works on them in sessions. A model can be opened on its own straight from its project. A session is one conversation thread, with the assistant and later with teammates, over one or more of the project's models: an analysis, a review, or a set of edits. Two sessions can use the same model without affecting each other, and a session that uses several models can show them together, as layers of one assembly.
 
@@ -22,6 +22,7 @@ This page owns what the person sees and can do. The [technical design](../new/wo
 
 - **2026-11-10:** sessions sit on the left, grouped by project, and a session's models open as tabs. This was recorded in `conversational-cad.md` §2.9, which is in draft PR #2138 and not yet on `main`.
 - **2026-11-18:** a session is the conversation thread, and it names the models it works on. A model belongs to the project, not to a session: the project lists its models, and any of them opens directly. This answers §2.9's first two open questions and keeps the model list that §2.9 had removed from the drawer.
+- **2026-11-18:** a model opened on its own has no session; a chat icon on it starts one about that model. Sessions, like models, can sit outside any project, under Ungrouped. With the workspace turned off, Share shows today's production layout, inset in the workspace; that layout isn't designed further yet.
 
 ## Who owns what
 
@@ -59,6 +60,7 @@ Existing: [#1661](https://github.com/bldrs-ai/Share/issues/1661) (closed) built 
 
 - Opening a model from the Models group shows that model alone, as opening a model does today. No conversation is created.
 - The view says which project the model belongs to, and that no session is open.
+- A chat icon on the view starts a session about this model (see "Start a session").
 
 Existing: the "open from the drawer" flow (#1691) under #1661. **Retain**, and clarify the "no session" state.
 
@@ -72,10 +74,11 @@ Existing: [#1662](https://github.com/bldrs-ai/Share/issues/1662) (open) keeps pr
 
 **As a project member, I want to start a session and choose which of the project's models it works on, so that the assistant and I look at the same thing.**
 
-- Start a session from a project, or from an open model, which then becomes the session's first model.
+- Start a session from a project, or from an open model's chat icon, which makes that model the session's first.
 - Pick one or more of the project's models. Add or remove models later; removing a model says what happens to that session's edits to it.
 - The session gets a title, editable, suggested from its first message.
 - Models of other projects can't be added without first adding them to this project.
+- A session started outside any project sits under Ungrouped, and can be moved into a project later.
 
 Existing: [#1672](https://github.com/bldrs-ai/Share/issues/1672) (open) plans "drawer threads". **Extend:** a thread is a session, and it lives under its project. Story issue pending, or #1672 rescoped, decided at reconciliation.
 
@@ -130,4 +133,4 @@ The three epics are in the AI and post-MVP bands of the roadmap. The rubric asks
 
 ## Next step
 
-Reconcile `assist-300`, `assist-310` and `open-210` with these stories under the [rubric](ux-rubric.md#how-to-triage): search for duplicates, then create the pending stories as sub-issues and write each epic's scope snapshot and triage record. That needs the owner's go-ahead on the decisions in the technical design's §8.
+Reconcile `assist-300`, `assist-310` and `open-210` with these stories under the [rubric](ux-rubric.md#how-to-triage): search for duplicates, then create the pending stories as sub-issues and write each epic's scope snapshot and triage record. The technical design's §8 records the owner's decisions of 2026-11-18; the ref separator is the one left to pick.
