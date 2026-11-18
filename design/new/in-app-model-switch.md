@@ -776,6 +776,16 @@ reload the same open, and selecting an element keeps it. On a page load
 the page and its first open coincide, so with the flag off, where every
 open from a surface is a page load, per open is per page.
 
+**With step A and the marker reset.** The open changes exactly where
+Share.jsx's route effect sets a new route result, which is also where it
+calls `NotesSlice#forgetModelMarkers` (#2189; not on the first route, which
+starts with that state fresh) and, through CadView's `[modelPath]` effect,
+where step A's `forgetLoadedModelState` runs under the flag (§4.5a). So the
+three agree on what a switch is. A load the user leaves is aborted before
+it reaches the open events or the meter (both sit after the model is on
+screen), so a left mid-load open sends nothing, as a page left mid-load
+sent nothing; the return to it is a new open and sends them once.
+
 **Decided: a theme rebuild is not an open.** It is the same model, reloaded
 into a new viewer for the user's look. Until now `real_model_open` and
 `model_view` fired again on every theme toggle; they no longer do. That is
