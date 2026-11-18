@@ -27,7 +27,7 @@ describe('engine/sourcePolicy#bufferedSourceCap', () => {
     expect(bufferedSourceCap({deviceMemoryGiB: 8, isMobile: false})).toBe(1024 * MIB)
   })
 
-  it('on a device of 4 GiB or less, never above conway\'s 256 MiB windowed residency ceiling', () => {
+  it('on a device of 4 GiB or less, never above 256 MiB (conway\'s old windowed residency ceiling)', () => {
     expect(SMALL_DEVICE_MEMORY_GIB).toBe(4)
     expect(SMALL_DEVICE_BUFFERED_SOURCE_MAX_BYTES).toBe(256 * MIB)
     const caps = [0.25, 0.5, 1, 2, 4, 8].map((gib) => bufferedSourceCap({deviceMemoryGiB: gib, isMobile: false}) / MIB)

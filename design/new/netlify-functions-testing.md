@@ -124,7 +124,9 @@ rather than a PR's code.
 
 Two tests enforce the last two steps; the first two are on you.
 1. Write it as ESM. Build clients inside the handler, not at module scope,
-   and answer 500 "not configured" when a secret is missing.
+   and answer 500 "not configured" when a secret is missing. The exception
+   is a best-effort sink such as `client-capabilities`, whose caller is a
+   beacon that can't act on an error: it answers 204 and logs the skip.
 2. Unit tests for its branches, with mocks.
 3. At least one replay scenario, including one for the unauthenticated
    request (`replaySource.test.js` fails otherwise).

@@ -90,6 +90,14 @@ export const PROBES = [
     strict: [{status: HTTP_BAD_REQUEST, body: 'ai_bad_request'}],
   },
   {
+    name: 'client-capabilities',
+    scenario: 'client-capabilities/invalid-report',
+    method: 'POST',
+    body: {},
+    accept: [{status: HTTP_BAD_REQUEST, body: 'invalid_capability_report'}],
+    strict: [{status: HTTP_BAD_REQUEST, body: 'invalid_capability_report'}],
+  },
+  {
     name: 'create-portal-session',
     scenario: 'create-portal-session/unauthenticated',
     method: 'POST',
