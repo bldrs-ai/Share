@@ -1,5 +1,7 @@
 import {useEffect, useRef} from 'react'
 import {useAuth0} from '../Auth0/Auth0Proxy'
+import {AUTH_STEPS} from '../Auth0/authFailureCodes'
+import {reportAuthFailure} from '../Auth0/reportAuthFailure'
 import {registerAuth0AccessTokenFetcher} from './auth0Bridge'
 
 
@@ -37,7 +39,12 @@ export default function Auth0BridgeRegistrar() {
       return
     }
     if (isAuthenticated) {
-      registerAuth0AccessTokenFetcher(() => getTokenRef.current())
+      // getAuth0AccessToken turns a failure into `null` for its callers, so
+      // this is the only place it can be seen. Deduped per page load.
+      registerAuth0AccessTokenFetcher(() => getTokenRef.current().catch((err) => {
+        reportAuthFailure(AUTH_STEPS.TOKEN_BRIDGE, err)
+        throw err
+      }))
     } else {
       registerAuth0AccessTokenFetcher(null)
     }

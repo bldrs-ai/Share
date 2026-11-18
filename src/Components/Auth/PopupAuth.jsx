@@ -1,6 +1,9 @@
 import React, {useEffect, useRef} from 'react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {AUTH_STEPS} from '../../Auth0/authFailureCodes'
+import {stashAuthPopupConnection} from '../../Auth0/authPopup'
 import {clearPendingGithubScope, getGrantedGithubScope, stashPendingGithubScope} from '../../Auth0/githubGrant'
+import {reportAuthFailure} from '../../Auth0/reportAuthFailure'
 
 
 /**
@@ -64,7 +67,11 @@ function PopupAuth() {
     // remembered connectionScope) skip it: if the Auth0 session is still
     // live the stored token is already right, and if it isn't, the upstream
     // re-auth runs anyway — with the remembered scope attached.
-    loginWithRedirect({
+    stashAuthPopupConnection(connection)
+    // Only throws before leaving for Auth0 (building the authorize URL,
+    // storing the PKCE transaction); the popup would otherwise sit on
+    // "Redirecting…" with nothing reported.
+    Promise.resolve(loginWithRedirect({
       authorizationParams: {
         redirect_uri: `${window.location.origin}/popup-callback`,
         scope: 'openid profile email offline_access',
@@ -73,7 +80,7 @@ function PopupAuth() {
         ...(requestedScope && {prompt: 'login'}),
         ...(linkToken && {linkToken}), // ← forward it
       },
-    })
+    })).catch((err) => reportAuthFailure(AUTH_STEPS.AUTHORIZE, err, {connection}))
   }, [loginWithRedirect, isLoading, user])
 
   return <div>Redirecting to Auth0…</div>

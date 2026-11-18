@@ -4,6 +4,7 @@ import {Button, Checkbox, FormControlLabel, Stack, Typography} from '@mui/materi
 import {navigateBaseOnModelPath} from '../../utils/location'
 import {navigateToModel} from '../../utils/navigate'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {openAuthPopup} from '../../Auth0/authPopup'
 import {pathSuffixSupported} from '../../Filetype'
 import {getFilesAndFolders} from '../../net/github/Files'
 import {getOrganizations} from '../../net/github/Organizations'
@@ -341,7 +342,7 @@ export default function GitHubFileBrowser({
     }
     awaitingGrantRef.current = true
     setGrantPending(true)
-    window.open('/popup-auth?scope=repo&connection=github', 'authPopup', 'width=600,height=600')
+    openAuthPopup('/popup-auth?scope=repo&connection=github', {connection: 'github', flow: 'scope'})
   }
 
   // Reset the pending flag when the popup closes (main window regains focus),
