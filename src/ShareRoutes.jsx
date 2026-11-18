@@ -19,19 +19,23 @@ import Share from './Share'
 /**
  * For URL design see: https://github.com/bldrs-ai/Share/wiki/URL-Structure
  *
- * A new model path will cause a new instance of CadView to be
- * instantiated.  CadView will invoke the model loader and creates a
- * THREE.Scene.  This scene is currently not re-used
+ * One CadView serves every model path: it has no key (Share.jsx), so a
+ * route change for another model keeps the same instance. Share's route
+ * effect sets the new `modelPath`, and CadView's `[modelPath]` effect builds
+ * a new viewer, disposing the previous one (Containers/viewer.js#initViewer)
+ * and its scene, then loads the new model into it.
  *
- * For example, a first page load of:
+ * For example, after a first page load of:
  *
  *   .../v/p/haus.ifc
  *
- * will load a new instance of CadView for that path.  Changing the path to:
+ * changing the path in-app to:
  *
  *   .../v/p/index.ifc
  *
- * will load a second new instance fot that path.
+ * keeps the CadView and swaps the viewer. Opening a model from the app's
+ * own surfaces is still a page load unless `?feature=spaModelNav` is on
+ * (utils/navigate.js#navigateToModel, open-205 #2021).
  *
  * Examples for this component:
  *   http://host/share/v/p/haus.ifc

@@ -31,6 +31,14 @@ export const flags = [
   // is invisible until flipped.
   // See design/new/conversational-cad.md §2.
   {name: 'workspace', isActive: false},
+  // Open a model in-app instead of with a page load (open-205 Phase 1a step 0,
+  // #2011, #2021): `navigateToModel` (utils/navigate.js) routes through
+  // react-router's `navigate()` rather than `window.location.assign`. Off:
+  // every open is the page load it always was. Its own flag, not
+  // `workspace`, so the switch burns in and rolls back without the shell
+  // (decision 2 on #2011). What the reload used to free, and what an in-app
+  // switch still leaks, is design/new/in-app-model-switch.md §2 and §6.
+  {name: 'spaModelNav', isActive: false},
   // The AI assistant (epic assist-310, #1659; design/new/ai-workspace.md §13,
   // D12). Today it gates only the dev hook `window.__bldrsAssistTools` that
   // drives the viewer tool registry (src/viewer/tools/assistHost.js, #1674);
