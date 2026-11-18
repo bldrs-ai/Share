@@ -44,6 +44,21 @@ describe('utils/shortcutKeys', () => {
   }
 
 
+  it('does nothing once its viewer is disposed', () => {
+    viewer._isDisposed = true
+    for (const code of ['KeyQ', 'KeyW', 'KeyA', 'KeyH', 'KeyU', 'KeyI', 'KeyR']) {
+      dispatchKey(code)
+    }
+    expect(viewer.clipper.createPlane).not.toHaveBeenCalled()
+    expect(viewer.clipper.deletePlane).not.toHaveBeenCalled()
+    expect(selectItemsInScene).not.toHaveBeenCalled()
+    expect(viewer.isolator.hideSelectedElements).not.toHaveBeenCalled()
+    expect(viewer.isolator.unHideAllElements).not.toHaveBeenCalled()
+    expect(viewer.isolator.toggleIsolationMode).not.toHaveBeenCalled()
+    expect(viewer.isolator.toggleRevealHiddenElements).not.toHaveBeenCalled()
+  })
+
+
   it('ignores key events whose target is not a CANVAS', () => {
     const input = document.createElement('input')
     document.body.appendChild(input)

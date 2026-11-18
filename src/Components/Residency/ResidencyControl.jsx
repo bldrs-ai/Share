@@ -1,6 +1,7 @@
 import React, {ReactElement, useEffect, useRef, useState} from 'react'
 import {
   Box,
+  Button,
   Divider,
   FormControlLabel,
   Popover,
@@ -29,7 +30,10 @@ import {
 } from '../../viewer/display/DisplayController'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {isMotionResidencyOn} from '../../viewer/display/motionResidencyMode'
-import {readModelDisplayHash, writeModelDisplayHash} from './displayHash'
+import {isLookOn} from '../../viewer/lookMode'
+import {setRenderPanelShown} from '../../viewer/debugPanels'
+import {noteUserDisplayChange} from '../Share/viewLink'
+import {readModelDisplayHash} from './displayHash'
 
 
 /**
@@ -159,6 +163,9 @@ export default function ResidencyControl() {
       renderDemand: context.getRenderDemand?.() ?? null,
       gl: context.getRenderer?.()?.getContext?.() ?? null,
       onGestureEnd: (fraction) => setAutoPercent(Math.round(fraction * RESIDENCY_FULL)),
+      // Not while AO is still fading out (motionAO.js): Auto measures
+      // AO-free frames only.
+      shouldTime: () => !viewer?.postProcessor?.isAORunning?.(),
     })
     setMotionDriver(driver)
     return () => driver.dispose()
@@ -236,43 +243,45 @@ export default function ResidencyControl() {
    * Move one or more axes: store (the stack owns the state), scene, then the
    * `#d:` token.
    *
-   * The store set is async to this closure, so both the scene apply and the
-   * hash write compose the NEXT appearance explicitly rather than reading
-   * `displayOverrides` back this tick.
+   * The store set is async to this closure, so the scene apply composes the
+   * NEXT appearance explicitly rather than reading `displayOverrides` back
+   * this tick. The `#d:` write needn't: the live view link writes from the
+   * store once the change has settled (Share/viewLink.js).
    *
    * @param {object} patch appearance axes to change
    */
   const setModelAppearance = (patch) => {
     setDisplayOverride({kind: 'model'}, patch)
     applyDisplayOverrides(model, [{scope: {kind: 'model'}, appearance: patch}])
-    writeModelDisplayHash(window.location, {...appearance, ...patch})
+    // The user's own change: the live view link's display term takes it from
+    // here, writing `#d:` from the store once it settles (Share/viewLink.js).
+    noteUserDisplayChange()
   }
 
   // `setDisplayOverride` merges axes but not WITHIN an axis, so a residency
   // patch has to carry both halves or the untouched one is dropped.
   const onSlider = (event, value) => {
     // Store only while dragging: the effect above pushes it at the
-    // controller, and the `#d:` write waits for onChangeCommitted so a drag
-    // doesn't stamp a hash — and a browser history entry — per tick.
+    // controller. Once the display term is live, the store change is what it
+    // follows, debounced and in place; the user's first drag makes it live
+    // on release (onChangeCommitted).
     setDisplayOverride({kind: 'model'}, {residency: {percent: value, metric}})
   }
-  const onSliderCommitted = (event, value) => {
-    writeModelDisplayHash(window.location, {...appearance, residency: {percent: value, metric}})
+  const onSliderCommitted = () => {
+    noteUserDisplayChange()
   }
   const onMetric = (event) => {
     setModelAppearance({residency: {percent, metric: event.target.value}})
   }
   // The motion section's handlers mirror the at-rest ones: store while the
-  // slider drags, `#d:` on commit, and every patch carries the whole axis.
+  // slider drags, the user's change noted on commit, and every patch carries
+  // the whole axis.
   const onMotionSlider = (event, value) => {
     setDisplayOverride({kind: 'model'},
       {motionResidency: {...motionResidency, mode: MotionResidencyMode.MANUAL, percent: value}})
   }
-  const onMotionSliderCommitted = (event, value) => {
-    writeModelDisplayHash(window.location, {
-      ...appearance,
-      motionResidency: {...motionResidency, mode: MotionResidencyMode.MANUAL, percent: value},
-    })
+  const onMotionSliderCommitted = () => {
+    noteUserDisplayChange()
   }
   const onMotionAuto = (event) => {
     const mode = event.target.checked ? MotionResidencyMode.AUTO : MotionResidencyMode.MANUAL
@@ -469,6 +478,24 @@ export default function ResidencyControl() {
                   data-testid='motion-residency-metric-distance'
                 />
               </RadioGroup>
+            </>}
+
+          {/* Last: the Render panel (look tuning) in the debug dock. */}
+          {isLookOn() &&
+            <>
+              <Divider/>
+              <Button
+                variant='text'
+                size='small'
+                onClick={() => {
+                  setAnchorEl(null)
+                  setRenderPanelShown(true)
+                }}
+                sx={{justifyContent: 'flex-start', textTransform: 'none'}}
+                data-testid='display-render'
+              >
+                Render...
+              </Button>
             </>}
         </Stack>
       </Popover>

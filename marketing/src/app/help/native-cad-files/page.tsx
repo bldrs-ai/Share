@@ -120,6 +120,8 @@ export default function NativeCadFilesPage() {
           FBX (.fbx), PLY (.ply), USD (.usd, .usda, .usdc, .usdz)</Item>
         <Item><strong>Point clouds and splats:</strong> XYZ (.xyz), Gaussian splats
           (.splat, .ksplat, .spz, .sog)</Item>
+        <Item><strong>Medical scans:</strong> CT and MR volumes (.nrrd), and a .zip
+          of a scan&apos;s DICOM slices (uncompressed, RLE or deflated)</Item>
         <Item><strong>Other:</strong> molecules (.pdb), Align dental scans (.adf)</Item>
       </Bullets>
       <Typography variant="body1">

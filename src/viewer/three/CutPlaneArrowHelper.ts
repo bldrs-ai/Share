@@ -15,6 +15,11 @@ import {requestPaint} from './renderDemand'
  */
 export default class CutPlaneArrowHelper extends Group {
   material: MeshBasicMaterial
+  /**
+   * Half the total length, tip to tip, along local +y: where the arrow's
+   * axis ends, which arrowFade.js measures the pointer against.
+   */
+  halfLength: number
 
   /**
    * @param direction - The direction of the arrow.
@@ -41,6 +46,7 @@ export default class CutPlaneArrowHelper extends Group {
   ) {
     super()
     this.name = 'CutPlaneArrowHelper'
+    this.halfLength = length / 2
 
     const normalizedDirection = direction.clone().normalize()
 

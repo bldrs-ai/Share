@@ -1,12 +1,13 @@
 # Per-model engine worker — one Conway engine per model, in its own Web Worker (open-205)
 
-**Status:** decided 2026-11-03 (§8); being built behind
-`?feature=engineWorker` in the §7 order. Steps 1–6 have landed: IFC
-and STEP both load in the worker, and a worker load writes the GLB
-artifact (step 5, #2081). Step 9 (default on) is next.
-**Epic:** `open-205` (#2011). Story: #2053. Absorbs #2031 (close and
-eviction): with an engine in a worker, terminating the worker *is* the
-eviction.
+**Status:** decided 2026-11-03 (§8). Steps 1–6 and 9 have landed: IFC
+and STEP both load in the worker, a worker load writes the GLB artifact
+(step 5, #2081), and the worker is on by default since #2083 merged
+(2026-11-07), with `?feature=disableEngineWorker` as the kill switch. Steps
+7–8 were not started; they moved to #2031.
+**Epic:** `open-205` (#2011). Story: #2053 (closed 2026-11-18). Steps 7–8
+(sessions own their worker; close and eviction) are #2031's: with an engine
+in a worker, terminating the worker *is* the eviction.
 **Related:** #2019 (per-model sessions), #2030 (no blocking calls), #2037
 (interactive at index, `indexedModel` / `selectReadModel`), #2043
 (interactive at first mesh), #2023 (memory E2E), #1756 (geometry worker
@@ -924,21 +925,29 @@ One session: `?feature=disableBufferedSource`.
 
 ## 7. Migration plan
 
-### Resume here (2026-11-06)
+### Resume here (2026-11-18)
 
-Picking `open-205` back up after a break? Read this, then §7.1 (numbers)
-and §7.2 (step-9 criteria). Docs #2064, #2068 and #2071 are merged.
+Picking `open-205` back up after a break? The release goal of this doc,
+step 9, shipped: #2083 merged on 2026-11-07, and #2053 closed on
+2026-11-18 with steps 1–6 and 9. What is left of this plan is steps 7–8,
+now tracked on #2031, and they come with in-app model switching (#2011):
 
-**Since (2026-11-11): the source policy (§5.6, Share#2139).** A worker open
-is no longer windowed by default: it is buffered under a device cap (or
-over the Blob store's held copy) and released to windows at the spill;
-windowed is the over-cap, sidecar-reopen and kill-switch path. The windowed
-specs take `?feature=disableBufferedSource`. Open question carried from
-there: whether the cap is right (the measurements doc's
-§"Source policy as built").
-
-**Release goal.** `?feature=engineWorker` on by default. That is step 9,
-the only thing left that users would see.
+- **#2011 Phase 1a** switches models in-app behind `?feature=spaModelNav`
+  (`utils/navigate.js#navigateToModel`). A switch is a close, one model at
+  a time: the old viewer's dispose closes its registered model's session,
+  and `modelSwitchMemory.spec.ts` checks that the old worker is
+  terminated. Its next step (A) is load ownership and abort, with the close
+  path of #2031. #2011's body has the step list and its status.
+- **Step 4's requirement on step 7 still stands:** an in-app switch must
+  await `close()` before it evicts or re-stages the previous model's OPFS
+  entry. The flagged switch does not re-stage anything yet.
+- **The source policy** (§5.6, Share#2139, 2026-11-11): a worker open is
+  buffered under a device cap (or over the Blob store's held copy) and
+  released to windows at the spill; windowed is the over-cap, sidecar-reopen
+  and kill-switch path. Whether the cap is right is the open question
+  (the measurements doc's §"Source policy as built").
+- **STEP convergence** (§11), #2077 and #2078 (priority residency), then
+  #2076, as before.
 
 **Merged.**
 - Steps 0–4: this doc (#2056), conway#540 (conway#759), protocol and
@@ -955,30 +964,14 @@ the only thing left that users would see.
 - Step 5, the GLB capture in the worker (#2081): a worker load writes the
   same artifact, byte for byte, as a main-thread one (PSB checked whole,
   §7.1). Protocol v2 (§4). This was the last code blocker for the flip.
-
 - The windowed STEP open and the index sidecar reopen, for both formats
   (conway#757 via conway#769, in conway `1.1639.773`; Share#2085; §7.1, §11). A STEP
   in OPFS now opens windowed in the worker. A worker load saves the
   model's index sidecar, and the next open of the same file comes up from
   it without a parse.
+- Step 9, the flip (#2083, 2026-11-07).
 
-**In flight.** Step 9, the flip itself (#2083, draft): `engineWorker`
-on by default, the `disableEngineWorker` kill switch and prod rollback, and
-the `?view=` and legacy `?feature=bot` routes to the main-thread engine
-(`engine/engineRoute.js`). #2061 is explained (§7.1).
-
-**Flip gates (step 9).** §7.2 is the list. What is left is the human's:
-a real-GPU check, plus Safari and Firefox by hand, on #2083's deploy
-preview. #2083 is not merged before that.
-
-**Next after the flip.**
-- STEP convergence in conway (§11): the STEP index sidecar and windowed
-  open (conway#757, landed in conway#769) and occurrence paths on preview
-  payloads (conway#772) are in conway 1.1639.773; STEP previews themselves
-  are parked until conway#773.
-- #2077 and #2078 (priority residency), then #2076.
-- Steps 7–8 (sessions own their worker, close and eviction) only when
-  in-app model switching (#2011) is picked up. They do not gate the flip.
+How each step landed is in §7.1 and in the steps below.
 
 1. **conway: recognise a worker** (conway#540): `WorkerGlobalScope` in
    `isWebPlatform`, `self.crossOriginIsolated` in `pThreadsAllowed`. Small;
@@ -1672,6 +1665,7 @@ index sidecar (conway#757; Share#2085). The sidecar reopen serves IFC too, so
 - **Full against sampled.** An earlier run with the sampled check, before the GLB cache, read: reopen Parsing 0.12 / 0.11 s on 58 MB and 0.40 / 0.39 s on 106 MB, against first-open parses of 0.95 / 0.94 s and 2.35 / 2.17 s. So the full check costs about 1.7–3× the sampled reopen, some of it the busier machine, and it is still not a re-parse. The extra cost is the hashing pass: the 58 MB reopen now reads the whole file, 111 MB in 30 reads, where the sampled one read 56 MB.
 - Geometry is the same in both legs, so the reopen saves the parse and little else: 1.0–2.1 s off Parsing here, and 2.1–3.7 s off the time to a tree.
 - A first open records the source digests for the export (conway's `RECORD_SOURCE_HASH`, about 12 % of the index build) and writes the sidecar after the pump.
+- **The digest is native SHA-256 (Share#2092, conway#783).** The first open also sets `SOURCE_HASH_ALGORITHM: 'sha256Blocks'` (`engineHandler.js#openModel`), so the source hash is the platform's SHA-256 over 4 MiB blocks instead of conway's per-byte FNV loop in JavaScript. On Firefox that loop was about 10 s of an 860 MB model's 40 s parse (Parsing 40.7 s with the hash, 30.8 s without); on Chromium the measured gain is small (Node: about 0.4 to 0.5 s of a 9 to 10 s parse). The sidecar records which algorithm ran (`hashAlgorithm` 2), and the reopen's full check runs whichever algorithm the sidecar names, so FNV sidecars already in users' OPFS keep verifying and no sidecar format bump was needed. A native sidecar read where WebCrypto is unavailable, or by an older conway, comes back `INDEX_STALE` under `VERIFY_INDEX_SOURCE_HASH: true` and Share reparses. Kill switch: `?feature=disableNativeSourceHash` for one session; `isActive: true` in `FeatureFlags.js` is the prod rollback (`spawnEngine.js#engineFlagSnapshot` reads the static value first). With it on conway records FNV as before; native sidecars already written stay valid. The `Engine index:` line names the digest (`sidecar saved (143.8 MB, sha256)`, `from sidecar (143.8 MB, fnv), no parse`), read from the sidecar header with conway's `readSidecarSourceIdentity` (`engineSidecars.js#sidecarHashName`); a reopen reports the digest the sidecar was saved with. `engineSidecar.spec.ts` checks the reopen across the flag in both directions.
 - The 106 MB model reads 4.8× its size through the windows: conway's adaptive window grows on AP214's access pattern. Over the sync handle this costs 0.3–0.5 s.
 - Windowing does not lower the worker's peak memory on these models. The window grows to most of the file, and geometry dominates (conway#769's description has the Node numbers).
 

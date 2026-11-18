@@ -69,7 +69,9 @@
  *     direct children, tone mapping;
  *  5. a settle window (`invalidateSoon`, `SETTLE_MS`) after any user input
  *     on the page and any store change, for the change a React effect
- *     makes a frame or two after the event that caused it;
+ *     makes a frame or two after the event that caused it. It paints every
+ *     frame while paints are cheap, and once, after `EXPENSIVE_SETTLE_MS`
+ *     of quiet, when they are expensive (`EXPENSIVE_PAINT_MS`);
  *  6. `keepPainting()` for what changes the picture on its own clock
  *     (Spark's splat sort).
  *
@@ -128,13 +130,25 @@ export const USER_CAMERA_EVENT = 'bldrsusercamera'
  */
 export const SETTLE_MS = 200
 /**
+ * While paints are expensive (EXPENSIVE_PAINT_MS), a settle window's one
+ * paint waits until no input or store change has come for this long: past a
+ * MUI menu's or dialog's open transition (~225-300 ms), so the backstop
+ * repaint doesn't stall the UI animation that the same click started. The
+ * owner's PSB preview: with the paint at the window's 200 ms close, the
+ * cut-plane menu still paused on its first frames.
+ */
+export const EXPENSIVE_SETTLE_MS = 500
+/**
  * A paint that takes longer than this, measured to the next frame as the
  * load budget measures it, is an expensive one: two 60 Hz frames, so the
  * display is already showing every other frame at best. Above it, what only
  * the pointer moving would repaint is left to ask for itself: the canvas
  * pointermove no longer opens a settle window (renderDemandHooks.js
- * #attachSessionNets), and the hover pick skips fast moves
- * (viewer/hoverPick.js#createFrameHoverPicker). Below it, nothing changes.
+ * #attachSessionNets), the hover pick skips fast moves
+ * (viewer/hoverPick.js#createFrameHoverPicker), and a settle window paints
+ * once, after input goes quiet, instead of on every frame (`frameKind`).
+ * Below it,
+ * nothing changes.
  * The owner's PSB preview: hover lag that grew with model size, the
  * repaints, not the picks, being what the sweep queued up on the GPU.
  */
@@ -308,6 +322,12 @@ export default class RenderDemand {
     this.probe = null
     // Paint every frame until this time (layer 5, `invalidateSoon`).
     this.settleUntilMs = -Infinity
+    // An expensive viewer's settle window owes one paint at its end
+    // (`frameKind`), instead of a paint on every frame of it.
+    this.isSettlePending = false
+    // When the last settle ask came (`invalidateSoon`), for the expensive
+    // window's quiet period.
+    this.lastSettleAskMs = -Infinity
     // Open `keepPainting` holds (layer 6).
     this.holds = 0
     // `observePaints` observers: told around every paint, during a load or
@@ -335,6 +355,12 @@ export default class RenderDemand {
   }
 
 
+  /** @return {boolean} whether a load (an on-demand scope) is open */
+  get isLoading() {
+    return this.scopes.size > 0
+  }
+
+
   /**
    * Open an on-demand scope, for a load or a part of one. The first frame
    * paints, so the scene is current when the scope opens.
@@ -355,6 +381,10 @@ export default class RenderDemand {
     this.isDirty = true
     if (isFirst) {
       this.isUserDriving = false
+      // A settle window open as the load begins is covered by the load's own
+      // paints, its last included (`end_`); don't owe one after it too.
+      this.isSettlePending = false
+      this.settleUntilMs = -Infinity
       globalThis.addEventListener?.('resize', this.onResize)
     }
     if (controls !== null && controls !== this.controls) {
@@ -558,7 +588,9 @@ export default class RenderDemand {
   /**
    * Something happened that will probably change the picture soon, if it
    * hasn't already: user input, a store change (module doc, layer 5).
-   * Between loads, paint every frame for `SETTLE_MS`; during a load, a
+   * Between loads, paint every frame for `SETTLE_MS`, or, when paints are
+   * expensive, once after `EXPENSIVE_SETTLE_MS` of quiet (`frameKind`);
+   * during a load, a
    * background paint, so the load's own store churn doesn't paint at 60 Hz.
    */
   invalidateSoon() {
@@ -566,7 +598,11 @@ export default class RenderDemand {
       this.isBackgroundDirty = true
       return
     }
-    this.settleUntilMs = Math.max(this.settleUntilMs, this.now() + SETTLE_MS)
+    this.lastSettleAskMs = this.now()
+    this.settleUntilMs = Math.max(this.settleUntilMs, this.lastSettleAskMs + SETTLE_MS)
+    // The window owes at least one paint, whether or not a frame runs while
+    // it's open (`frameKind`).
+    this.isSettlePending = true
   }
 
 
@@ -618,7 +654,40 @@ export default class RenderDemand {
       // A session between loads: no heartbeat and no budget. Whatever asked
       // paints now; with nothing asking, the probe has the last word. A hold
       // counts only here: during a load the load's budget still decides.
-      if (this.holds > 0 || this.isBackgroundDirty || now < this.settleUntilMs) {
+      if (this.holds > 0 || this.isBackgroundDirty) {
+        return PaintKind.FULL
+      }
+      // A settle window paints every frame while paints are cheap. When they
+      // are expensive (EXPENSIVE_PAINT_MS), it paints once, after input has
+      // been quiet for EXPENSIVE_SETTLE_MS, so not on a menu's opening frames:
+      // the window is a backstop for a change some React effect makes a
+      // frame or two after the input, and on a big model every frame of it
+      // was a full repaint of a picture that hadn't changed. The owner's PSB
+      // preview: opening the cut-plane menu took the canvas from no paints to
+      // 4-5 a second, each a GPU-bound redraw, and the menu's own animation
+      // ran at that rate behind them. What does change the picture still
+      // asks for itself (layers 1-3) or is caught by the probe below on the
+      // next frame; only the backstop waits for the window to close.
+      //
+      // The owed paint is recorded by `invalidateSoon` itself, not by the
+      // first frame that sees the window open: a long task or a paused loop
+      // can let the whole window pass with no frame at all, and the paint
+      // must still come (codex on #2169).
+      // A frame inside the window that finds paints expensive owes the paint
+      // again, even if a cheap frame earlier in the window paid it: the cost
+      // can rise mid-window (a heavy paint, a scene that just got bigger), and
+      // the change the backstop is for may land after that cheap paint (agent
+      // review on #2169).
+      const isCheap = !(this.paintCostMs() > EXPENSIVE_PAINT_MS)
+      if (now < this.settleUntilMs) {
+        if (isCheap) {
+          this.isSettlePending = false
+          return PaintKind.FULL
+        }
+        this.isSettlePending = true
+      }
+      if (this.isSettlePending && (isCheap || now - this.lastSettleAskMs >= EXPENSIVE_SETTLE_MS)) {
+        this.isSettlePending = false
         return PaintKind.FULL
       }
       // Read on an overlay ask too: a camera or canvas change nobody
@@ -652,12 +721,19 @@ export default class RenderDemand {
    */
   rendered(costMs, kind = PaintKind.FULL) {
     const drawMs = Number.isFinite(costMs) && costMs > 0 ? costMs : 0
+    const wasCheap = !(this.paintCostMs() > EXPENSIVE_PAINT_MS)
     this.isOverlayDirty = false
     if (kind === PaintKind.OVERLAY) {
       this.stats.overlayPaints++
     } else {
       this.isDirty = false
       this.isBackgroundDirty = false
+      // A cheap full paint inside a settle window pays the window's paint,
+      // whatever asked for it (a damping `update`, a hold): otherwise the
+      // first quiet frame after the window would paint once more.
+      if (wasCheap && this.now() < this.settleUntilMs) {
+        this.isSettlePending = false
+      }
     }
     this.lastPaintStartMs = this.now() - drawMs
     this.lastPaintCostMs = drawMs

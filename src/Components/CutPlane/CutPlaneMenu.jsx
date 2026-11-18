@@ -1,10 +1,11 @@
-import React, {ReactElement, useState, useEffect} from 'react'
+import React, {ReactElement, useEffect, useState} from 'react'
 import {useLocation} from 'react-router-dom'
 import {Vector3, Box3} from 'three'
 import {Menu, MenuItem, SvgIcon, Typography} from '@mui/material'
 import useStore from '../../store/useStore'
+import {createLiveTerm} from '../Share/viewLink'
 import debug from '../../utils/debug'
-import {addHashParams, getHashParams, getObjectParams, removeParams} from '../../utils/location'
+import {addHashParams, getHashParams, getObjectParams, removeParams, replaceHashParams} from '../../utils/location'
 import {roundCoordComponent} from '../../utils/math'
 import {isNumeric} from '../../utils/strings'
 import {TooltipIconButton} from '../Buttons'
@@ -22,12 +23,19 @@ import SectionIcon from '../../assets/icons/Section.svg'
  * @param {object} model - The model object
  * @return {Vector3} The center point of the model
  */
-function getModelCenter(model) {
+export function getModelCenter(model) {
   const modelCenter = new Vector3()
 
-  if (model?.geometry?.boundingBox) {
+  // A geometry box is the model's only for a plain mesh. A BatchedMesh (a
+  // batched IFC/STEP, and every GLB cache hit) carries a packed geometry
+  // whose box, where it has one, is empty or in unplaced local space: on a
+  // cache hit it read as the origin, so a Section cut and every `#cp:`
+  // offset landed relative to (0, 0, 0) rather than the model (#2171).
+  // Box3.setFromObject uses the batch's own instance bounds instead.
+  const geometryBox = model?.geometry?.boundingBox
+  if (geometryBox && geometryBox.isEmpty?.() !== true && !model.isBatchedMesh) {
     // IFC model with geometry.boundingBox
-    model.geometry.boundingBox.getCenter(modelCenter)
+    geometryBox.getCenter(modelCenter)
   } else if (model) {
     // GLB or other model - compute bounding box
     const box = new Box3()
@@ -92,6 +100,29 @@ export default function CutPlaneMenu() {
     return undefined
   }, [model, viewer])
 
+  // A dragged plane goes into the permalink (owner on #2171: a link kept
+  // which planes were on but not where, so a new tab replayed every cut at
+  // the model centre), and into the store, whose offsets togglePlane
+  // rebuilds the other planes from. It is the cut planes' term of the live
+  // view link (Share/viewLink.js): a drag is the user's own change, and a
+  // stream of moves, written once it settles, in place (writeDraggedPlanes).
+  useEffect(() => {
+    const clipper = viewer?.clipper
+    if (!model || !clipper) {
+      return undefined
+    }
+    const term = createLiveTerm({write: () => writeDraggedPlanes(viewer, model)})
+    clipper.onPlaneMoved = term.start
+    return () => {
+      // A drag's last move still lands in the link if the menu goes first.
+      term.flush()
+      term.dispose()
+      if (clipper.onPlaneMoved === term.start) {
+        clipper.onPlaneMoved = null
+      }
+    }
+  }, [model, viewer])
+
   useEffect(() => {
     const planeHash = getHashParams(location, HASH_PREFIX_CUT_PLANE)
     debug().log('CutPlaneMenu#useEffect: planeHash: ', planeHash)
@@ -143,7 +174,11 @@ export default function CutPlaneMenu() {
       }
     } else {
       debug().log('CutPlaneMenu#togglePlane: found: ', false)
-      addHashParams(window.location, HASH_PREFIX_CUT_PLANE, {[direction]: offset}, true)
+      // Its own history step, unlike a drag. Not while the Share dialog's
+      // "Cut planes" switch is off: that would put back what it removed.
+      if (useStore.getState().isPlaneInUrl) {
+        addHashParams(window.location, HASH_PREFIX_CUT_PLANE, {[direction]: offset}, true)
+      }
       addCutPlaneDirection({direction, offset})
       viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset, direction, offset)
       viewer.clipper.setInteractionEnabled(true)
@@ -275,6 +310,10 @@ export function removePlanes(viewer) {
 }
 
 
+/** The menu's planes (getPlaneSceneInfo), the only ones a `#cp:` link holds. */
+const AXIS_DIRECTIONS = ['x', 'y', 'z']
+
+
 /**
  * Get the location of cut plane from the center of the model
  *
@@ -294,6 +333,12 @@ export function getPlanesOffset(viewer, ifcModel) {
     debug().log('CutPlaneMenu#getPlanesOffset: modelCenter: ', modelCenter)
 
     planes.forEach((planeData) => {
+      // Only the menu's axis planes have a `#cp:` form; a Q-shortcut plane
+      // (MeshClipper#createPlaneAtCursor) has an arbitrary normal and no
+      // direction, and would write a key per non-zero normal component.
+      if (!AXIS_DIRECTIONS.includes(planeData.direction)) {
+        return
+      }
       const plane = planeData.plane
       const normal = plane.normal
       const constant = plane.constant
@@ -314,6 +359,39 @@ export function getPlanesOffset(viewer, ifcModel) {
     return planesOffset
   }
   return undefined
+}
+
+
+/**
+ * Write the menu planes' current offsets into the `#cp:` permalink and the
+ * store, after a drag (CutPlaneMenu's debounced `onPlaneMoved`).
+ *
+ * @param {object} viewer
+ * @param {object} model
+ */
+export function writeDraggedPlanes(viewer, model) {
+  // The menu's effect flushes a pending write when the model changes (review
+  // of #2171): by then the planes and link belong to the next model.
+  if (useStore.getState().model !== model) {
+    return
+  }
+  const offsets = getPlanesOffset(viewer, model)
+  if (!offsets || Object.keys(offsets).length === 0) {
+    return
+  }
+  const {cutPlanes, setCutPlaneDirections, isPlaneInUrl} = useStore.getState()
+  // In place, not as a new history entry: a drag settle is a value streaming
+  // into the link, like the live camera's (Share/viewLink.js), so Back
+  // shouldn't step through each one, and a `hashchange`/`popstate` would
+  // re-run every location effect for it (utils/location.js#replaceHashParams).
+  // Turning a plane on or off (togglePlane) stays a history entry. The link
+  // only while the Share dialog's switch is on; the store always, since
+  // togglePlane rebuilds the other planes from its offsets.
+  if (isPlaneInUrl) {
+    replaceHashParams(window.location, HASH_PREFIX_CUT_PLANE, offsets, true)
+  }
+  setCutPlaneDirections(cutPlanes.map((cutPlane) =>
+    (cutPlane.direction in offsets ? {...cutPlane, offset: offsets[cutPlane.direction]} : cutPlane)))
 }
 
 

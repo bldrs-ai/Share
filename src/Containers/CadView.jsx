@@ -50,6 +50,7 @@ import {EngineOpenFailureError, engineFailureCaptureContext, engineSourceTags} f
 import {UnsupportedSchemaError, unsupportedSchemaAlert} from '../loader/unsupportedSchema'
 import {hasInMemoryUpload} from '../loader/inMemoryUploads'
 import {ARCHIVE_UNREADABLE} from '../loader/modelArchive'
+import {isVolumeModel} from '../loader/nrrd'
 import {ZipArchiveError} from '../loader/zipArchive'
 import {
   InMemoryUploadGoneError,
@@ -97,6 +98,7 @@ import {
 import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../viewer/three/Picker'
+import {isOnControl} from '../viewer/three/pickControls'
 import {loadPreviewGroups, pickPreviewExpressId, previewOccurrencePickOf} from '../viewer/previewSelection'
 import {streamingBatchRoots, streamingPickOf} from '../viewer/streamingBatchPick'
 import {USER_CAMERA_EVENT} from '../viewer/three/renderDemand'
@@ -105,7 +107,7 @@ import {installAssistDevHook} from '../viewer/tools/assistHost'
 import {registerSelectionFunnel} from '../viewer/tools/selectionFunnel'
 import ViewCube from '../Components/ViewCube/ViewCube'
 import {applyVisibilityHash} from '../Components/Residency/visibilityHash'
-import VisibilityHashWriter from '../Components/Residency/VisibilityHashWriter'
+import LiveDisplayLink from '../Components/Residency/LiveDisplayLink'
 import SelectionHashWriter from './SelectionHashWriter'
 import {readSelectionHash, resolveSelectionRefs, selectionFitsLink} from './selectionHash'
 import RootLandscape from './RootLandscape'
@@ -119,6 +121,7 @@ import {
 import {elementSelection} from './selection'
 import {partsToPath} from './urls'
 import {initViewer} from './viewer'
+import {installDebugPanelsShortcut} from '../viewer/debugPanels'
 
 
 let count = 0
@@ -181,6 +184,13 @@ export default function CadView({
   // (not module-level state) so two CadView mounts in the same process —
   // tests, multi-pane layouts — don't stomp each other.
   const previousThemeChangeCbRef = useRef(null)
+  // The `[modelPath, customViewSettings]` pair the viewer was last built for
+  // (see that effect). Its dependencies change only when a new viewer is
+  // wanted, so the only run that sees the same pair again is StrictMode's
+  // dev-only repeat of a mount effect. That repeat used to build a second
+  // ShareViewer and WebGL context on every dev and Playwright page load,
+  // disposing the first ~80 ms later. Prod builds never ran it.
+  const viewerBuiltForRef = useRef(null)
   const stopModelEngagementRef = useRef(null)
   // The path and tree the location watcher last selected from (see there).
   const lastPathSelectionRef = useRef(null)
@@ -270,6 +280,7 @@ export default function CadView({
   const isModelReady = useStore((state) => state.isModelReady)
   const setIsModelReady = useStore((state) => state.setIsModelReady)
   const setModel = useStore((state) => state.setModel)
+  const setIsPropertiesEnabled = useStore((state) => state.setIsPropertiesEnabled)
   const setIndexedModel = useStore((state) => state.setIndexedModel)
 
   // NavTreeSlice
@@ -834,10 +845,10 @@ export default function CadView({
       viewer.isolator.hideElementsById(previouslyHiddenELements)
     }
     // A link's hide / isolate terms (`#d:hide=…,iso=…`) win over the above:
-    // on a cold load there is nothing above, and on a re-init the writer has
-    // kept the terms current. After onModel, which sets the NavTree root
-    // that STEP occurrence refs resolve against; before setIsModelReady,
-    // which lets VisibilityHashWriter start rewriting the terms.
+    // on a cold load there is nothing above, and on a re-init the live view
+    // link has kept the terms current once the user changed them
+    // (Residency/LiveDisplayLink.jsx). After onModel, which sets the NavTree
+    // root that STEP occurrence refs resolve against.
     // The selection goes first: isolating leaves the selection it finds
     // unpainted, as it does live.
     if (viewer.isolator?.ifcModel) {
@@ -1089,6 +1100,10 @@ export default function CadView({
     // always be 0.
     loadedModel.modelID = 0
     setModel(loadedModel)
+    // A volume (a CT/MR scan, `loader/nrrd.js`) has no elements and no
+    // properties, so its Properties panel would only ever be empty. Set on
+    // every load, so the next model gets it back.
+    setIsPropertiesEnabled(!isVolumeModel(loadedModel))
     // For App API.  TODO(pablo): doublecheck this method still works with this
     // arg.. expected a url
     updateLoadedFileInfo(filepath)
@@ -1774,6 +1789,12 @@ export default function CadView({
         return
       }
       const picked = pickedAll[0]
+      // A double-click on the cut-plane gizmo is on the gizmo: it selects
+      // nothing, and it must not outline the arrow either. The Picker has
+      // already dropped every model hit behind it (pickControls.js).
+      if (isOnControl(picked)) {
+        return
+      }
       const mesh = picked.object
       // TODO(pablo): obsolete? needed this in h3 at some point.
       // Two pick targets must NOT reach the OutlineEffect:
@@ -2615,6 +2636,11 @@ export default function CadView({
   }, [appPrefix, setAppPrefix])
 
 
+  // The debug panels (Perf + Render) behind the backtick key, in prod too
+  // (viewer/debugPanels.js; the dock is Components/DebugDock).
+  useEffect(() => installDebugPanelsShortcut(), [])
+
+
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!isViewerLoaded) {
@@ -2638,6 +2664,12 @@ export default function CadView({
   // programmatic navigation (e.g. clicking element links).
   useEffect(() => {
     debug().log('CadView#useEffect1[modelPath], calling onModelPath, modelPath:', modelPath)
+    const builtFor = viewerBuiltForRef.current
+    if (builtFor !== null && builtFor.modelPath === modelPath &&
+        builtFor.customViewSettings === customViewSettings) {
+      return
+    }
+    viewerBuiltForRef.current = {modelPath, customViewSettings}
     // A different model starts a new open, so its failures count again even
     // when the model in between never touched the dedupe refs (A fails, B
     // loads, A fails). Reruns of the SAME model (customViewSettings) keep
@@ -2931,7 +2963,7 @@ export default function CadView({
   return (
     <Box sx={{...absTop, left: 0, width: '100vw', height: isMobile ? `${vh}px` : '100vh', m: 0, p: 0}}>
       {<ViewerContainer/>}
-      <VisibilityHashWriter/>
+      <LiveDisplayLink/>
       <SelectionHashWriter/>
       {/*
         * Unmounted during isolation, matching its toolbar toggle in

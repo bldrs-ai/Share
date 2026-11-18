@@ -199,7 +199,12 @@ Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 trian
      windowed open: the store it pages through (sync access handle, or the
      Blob store and why) and its read counts (`sourceIoLine`).
    - `Engine index: …` — where the index came from (a sidecar, or the
-     parse) and whether the parse saved one (`indexLine`).
+     parse) and whether the parse saved one (`indexLine`). The size is
+     followed by the sidecar's source digest, `sha256` (conway's native
+     block digest, the default) or `fnv` (the per-byte loop: sidecars saved
+     before it, or under `?feature=disableNativeSourceHash`; Share#2092). A
+     reopen reports the digest the sidecar was saved with, not the current
+     flag's.
 
 **Precision** — seconds to millisecond precision (3 decimals), memory to
 byte precision (6 decimals of MB), per the report's diagnostic purpose.

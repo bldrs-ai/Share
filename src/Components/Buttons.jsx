@@ -1,4 +1,4 @@
-import React, {ReactElement, useState} from 'react'
+import React, {ReactElement, useRef, useState} from 'react'
 import {IconButton, SvgIcon, ToggleButton, Tooltip} from '@mui/material'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
@@ -8,6 +8,20 @@ import {Close as CloseIcon} from '@mui/icons-material'
 import ExpandIcon from '../assets/icons/Expand.svg'
 import BackIcon from '../assets/icons/Back.svg'
 import {slugify} from '../utils/strings'
+
+
+/**
+ * A function that calls whatever `ref.current` holds when it is called.
+ * Module-level on purpose: a closure made inside a component's render would
+ * share that render's V8 context, and so keep every variable any closure of
+ * that render captures (see TooltipIconButton).
+ *
+ * @param {{current: Function}} ref
+ * @return {Function}
+ */
+function callLatest(ref) {
+  return (...args) => ref.current(...args)
+}
 
 
 /**
@@ -41,6 +55,20 @@ export function TooltipIconButton({
   tabIndex,
 }) {
   assertDefined(title, onClick, icon, placement)
+  // The button gets one stable handler that calls the latest `onClick`,
+  // never `onClick` itself. MUI's ButtonBase keeps its FIRST render's event
+  // handlers for its whole life (`useEventCallback` returns a closure made on
+  // the first render, and that closure's context holds the first handler),
+  // and through them the first `onClick` — so a toolbar control's inline
+  // `onClick` from the render it mounted in kept that render's scope alive
+  // as long as the button stayed up: its model, its viewer. After an in-app
+  // model switch (open-205, `?feature=spaModelNav`) that pinned the model
+  // left, found by heap snapshot (ResidencyControl's button, #2023). Written
+  // during render, not in an effect: an effect closure would capture
+  // `onClick` in this render's context, which is the retention again.
+  const onClickRef = useRef(onClick)
+  onClickRef.current = onClick
+  const [onClickLatest] = useState(() => callLatest(onClickRef))
   const isMobile = useIsMobile()
   const isHelpTooltipsVisible = useStore((state) => state.isHelpTooltipsVisible) && !isMobile
   const [isTooltipVisible, setIsTooltipVisible] = useState(false)
@@ -73,7 +101,7 @@ export function TooltipIconButton({
     >
       <ToggleButton
         selected={selected}
-        onClick={onClick}
+        onClick={onClickLatest}
         value=''
         size={size}
         color={color}

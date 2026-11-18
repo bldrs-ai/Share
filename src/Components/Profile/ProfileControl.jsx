@@ -16,7 +16,7 @@ import {trackSubscriptionFromToken} from '../../privacy/subscriptionTracking'
 import useStore from '../../store/useStore'
 import {Themes} from '../../theme/Theme'
 import {assertDefinedBoolean} from '../../utils/assert'
-import {isFeatureEnabled} from '../../FeatureFlags'
+import {isLookOn} from '../../viewer/lookMode'
 import {LOOKS, DEFAULT_LOOK} from '../../viewer/looks'
 import {TooltipIconButton} from '../Buttons'
 import LoginDialog from './LoginDialog'
@@ -57,9 +57,10 @@ export default function ProfileControl() {
   const viewer = useStore((state) => state.viewer)
   const appPrefix = useStore((state) => state.appPrefix)
   const setAlert = useStore((state) => state.setAlert)
-  // The §6e Neutral/Flat render toggle only appears when the whole look system
-  // is enabled (`?feature=look`); off, there's no look to switch.
-  const isLookEnabled = isFeatureEnabled('look')
+  // The §6e Neutral/Flat render toggle only appears when the look system is
+  // on (`isLookOn()`, the default); with `?feature=disableLook` there's no
+  // look to switch.
+  const isLookEnabled = isLookOn()
 
   const {
     getAccessTokenSilently,

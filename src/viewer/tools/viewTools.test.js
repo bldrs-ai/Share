@@ -1,5 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {ToolError, findNonJson} from '../../assist'
+import {setDisplayTerm} from '../../Components/Share/viewLink'
 import useStore from '../../store/useStore'
 import {createShareAssistRegistry, installAssistDevHook} from './assistHost'
 import {registerSelectionFunnel} from './selectionFunnel'
@@ -324,6 +325,23 @@ describe('viewer/tools (model, view and share providers)', () => {
       await result.undo()
       expect(visibleProducts(fixture.batch)).toEqual(ALL_PRODUCTS)
       expect(useStore.getState().isTempIsolationModeOn).toBe(false)
+    })
+
+    // The user asked the assistant, so the link follows (Share/viewLink.js):
+    // each visibility tool starts the display term, as the toolbar does.
+    it('starts the live display link on isolate, hide and show all', async () => {
+      const term = {commit: jest.fn(), dispose: jest.fn()}
+      setDisplayTerm(term)
+      try {
+        await registry.call('view.isolate', {refs: ['e10']})
+        expect(term.commit).toHaveBeenCalledTimes(1)
+        await registry.call('view.showAll', {})
+        expect(term.commit).toHaveBeenCalledTimes(2)
+        await registry.call('view.hide', {refs: ['e102']})
+        expect(term.commit).toHaveBeenCalledTimes(3)
+      } finally {
+        setDisplayTerm(null)
+      }
     })
 
     it('re-isolating replaces the isolation, and undo returns to the first', async () => {

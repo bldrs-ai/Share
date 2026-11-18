@@ -1,6 +1,7 @@
 /* eslint-disable no-magic-numbers */
 import {Page, expect, test} from '@playwright/test'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
+import {withLook} from '../../tests/e2e/look'
 import {waitForModelReady} from '../../tests/e2e/models'
 import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
 
@@ -97,6 +98,22 @@ describeMobileAndDesktop('viewer/residency/motionResidency', () => {
     expect(off, 'the overlay frame matches a full repaint of the at-rest scene')
       .toBeLessThanOrEqual(SAME_FRAME_PIXELS)
   })
+})
+
+
+// With the look on (withLook), as prod ships: Auto's budget is four display
+// intervals (autoResidency.js#BUDGET_SHARE), and only the look's PBR frame
+// under SwiftShader is reliably over it on this small model. With the look
+// off (the Playwright default, src/tests/e2e/look.ts) the frame fits and
+// Auto rightly cuts nothing.
+describeMobileAndDesktop('viewer/residency/motionResidency Auto', () => {
+  beforeEach(async ({page}) => {
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    await withLook(page)
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+    await openModel(page, '')
+  })
 
 
   test('Auto (the default) sheds detail while dragging and restores it at rest', async ({page}) => {
@@ -110,8 +127,8 @@ describeMobileAndDesktop('viewer/residency/motionResidency', () => {
     await expect(page.getByTestId('motion-residency-label')).toHaveText(/^While moving: Auto( \(\d+%\))?$/)
     await closeDisplayMenu(page)
 
-    // SwiftShader rasterizes on the CPU, so even this small model's frame
-    // is far over a 60 Hz budget and Auto has every reason to cut. Two
+    // SwiftShader rasterizes on the CPU, so this small model's PBR frame is
+    // over Auto's budget and Auto has every reason to cut. Two
     // drags: the first finds the level, the second starts from it.
     await dragCamera(page)
     await settledFrame(page)
