@@ -31,14 +31,28 @@ export const flags = [
   // is invisible until flipped.
   // See design/new/conversational-cad.md §2.
   {name: 'workspace', isActive: false},
-  // Open a model in-app instead of with a page load (open-205 Phase 1a step 0,
-  // #2011, #2021): `navigateToModel` (utils/navigate.js) routes through
-  // react-router's `navigate()` rather than `window.location.assign`. Off:
-  // every open is the page load it always was. Its own flag, not
-  // `workspace`, so the switch burns in and rolls back without the shell
+  // Open a model in-app instead of with a page load (open-205 Phase 1a, #2011,
+  // #2021): `navigateToModel` (utils/navigate.js) routes through react-router's
+  // `navigate()` rather than `window.location.assign`, and the load the user
+  // leaves is aborted and its state dropped (CadView step A). Its own flag,
+  // not `workspace`, so the switch burns in and rolls back without the shell
   // (decision 2 on #2011). What the reload used to free, and what an in-app
   // switch still leaks, is design/new/in-app-model-switch.md §2 and §6.
-  {name: 'spaModelNav', isActive: false},
+  // Default-ON since step F (§4.8). Where an open is decided is ONE place,
+  // `utils/spaModelNavMode.js#modelPageLoadReason`.
+  // Do NOT roll back by setting this to false: `?feature=spaModelNav` in a
+  // URL would still turn it on for that link, and the query rides from one
+  // open to the next. Roll back with `disableSpaModelNav` below.
+  {name: 'spaModelNav', isActive: true},
+  // OFF-switch for the in-app switch above, the same inverted shape as
+  // `disableEngineWorker`: `?feature=` can only turn flags ON, so
+  // `?feature=disableSpaModelNav` is the per-session way back to a page load
+  // per open, for a bug that looks like the previous model's state left
+  // behind. Setting it `isActive: true` here is the PROD ROLLBACK:
+  // spaModelNavMode.js reads the static value before any URL flag, so no
+  // link can opt back into the in-app switch (in-app-model-switch.md §4.8,
+  // "Rolling back").
+  {name: 'disableSpaModelNav', isActive: false},
   // The AI assistant (epic assist-310, #1659; design/new/ai-workspace.md §13,
   // D12). It shows the assistant panel (Components/Bot/, whose agent loop is
   // #1675) and installs the dev hook `window.__bldrsAssistTools` that drives

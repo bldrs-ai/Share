@@ -242,6 +242,19 @@ describe('CadView', () => {
     viewer.context.getDomElement = jest.fn(() => {
       return document.createElement('div')
     })
+    // Each test mounts CadView as a fresh page does: with no viewer in the
+    // store. The previous test's viewer left there is one this mount never
+    // built, and the auth-state effect would start a load into it before
+    // this mount builds its own. Under the in-app switch (on by default
+    // since open-205 step F) that load is aborted and reloaded into the new
+    // viewer, as it must be; before it, the second start was skipped as a
+    // duplicate and the model went into the stale viewer. Either way the
+    // test would count a load the page never makes.
+    useStore.setState({viewer: null})
+    // And at the location a test hasn't set: `mockReturnValue` outlives
+    // `clearAllMocks`, so a test's `#c:`/`#cp:` link would otherwise be the
+    // next test's too, whose load then applies its cut plane.
+    reactRouting.useLocation.mockReturnValue(defaultLocationValue)
   })
 
 
@@ -1757,9 +1770,10 @@ describe('CadView', () => {
   })
 
 
-  // open-205 #2011 step A: under `?feature=spaModelNav` the load is owned by
-  // the CadView run that started it, and leaving the model aborts it, instead
-  // of queuing the next model behind it. Off the flag the queue stays.
+  // open-205 #2011 step A: under the in-app switch (on by default since step
+  // F) the load is owned by the CadView run that started it, and leaving the
+  // model aborts it, instead of queuing the next model behind it. With the
+  // kill switch (`?feature=disableSpaModelNav`) the queue stays.
   describe('a switch while the model is still loading (open-205 #2011 step A)', () => {
     let getHarness
     let loadSpy
@@ -1776,7 +1790,7 @@ describe('CadView', () => {
         .mockImplementation(() => getHarness().IFC.context.ifcCamera.cameraControls)
       // `viewer: null` as on a fresh page: an earlier test's viewer, left in
       // the store, lets the auth-state effect start a load into it before
-      // this mount builds its own, which under the flag is (rightly) aborted
+      // this mount builds its own, which under the switch is (rightly) aborted
       // and reloaded, and would muddy the load counts below.
       useStore.setState({
         alert: null, customViewSettings: null, isAuthResolved: false, isModelReady: false, viewer: null,
@@ -1810,7 +1824,6 @@ describe('CadView', () => {
     }
 
     it('aborts the load in flight and starts the next model at once, reporting nothing', async () => {
-      window.history.replaceState(null, '', '/?feature=disableEngineWorker,spaModelNav')
       const {result} = renderHook(() => useStore((state) => state))
       const {impl, calls} = hangingLoad()
       loadSpy = jest.spyOn(Loader, 'load').mockImplementation(impl)
@@ -1836,7 +1849,6 @@ describe('CadView', () => {
     })
 
     it('clears the left model from the store when the switch starts', async () => {
-      window.history.replaceState(null, '', '/?feature=disableEngineWorker,spaModelNav')
       const {result} = renderHook(() => useStore((state) => state))
       const {impl, calls} = hangingLoad()
       loadSpy = jest.spyOn(Loader, 'load')
@@ -1862,7 +1874,6 @@ describe('CadView', () => {
     })
 
     it('reloads the same model into a viewer re-created mid-load (a theme change)', async () => {
-      window.history.replaceState(null, '', '/?feature=disableEngineWorker,spaModelNav')
       const {result} = renderHook(() => useStore((state) => state))
       const {impl, calls} = hangingLoad()
       loadSpy = jest.spyOn(Loader, 'load').mockImplementation(impl)
@@ -1883,7 +1894,8 @@ describe('CadView', () => {
       expect(result.current.alert).toBeNull()
     })
 
-    it('off the flag, passes no signal and queues the next model behind the load, as before', async () => {
+    it('with ?feature=disableSpaModelNav, passes no signal and queues the next model behind the load, as before', async () => {
+      window.history.replaceState(null, '', '/?feature=disableEngineWorker,disableSpaModelNav')
       const {result} = renderHook(() => useStore((state) => state))
       let releaseA
       const calls = []

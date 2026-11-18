@@ -15,8 +15,9 @@ import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
 /**
  * What an in-app model switch frees (open-205 Phase 1a step 0, #2023).
  *
- * Under `?feature=spaModelNav` opening a model no longer loads the page, so
- * nothing frees the model left but the viewer's teardown
+ * By default (`spaModelNav`, on since #2011 step F) opening a model no
+ * longer loads the page, so nothing frees the model left but the viewer's
+ * teardown
  * (Containers/viewer.js#initViewer → ShareViewer#dispose → ShareIfc#dispose,
  * which closes the registered model's engine session). This loads A, lets it
  * finish (the idle GLB writer included), opens B in-app, and asserts that
@@ -38,7 +39,7 @@ import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
  * #2023's mid-load case). A's geometry pump is held at its index (the
  * conway loaders' `__bldrsTestHoldGeometryPump` seam), so A is reliably
  * mid-load whatever the runner's speed, with its tree, title and load report
- * up: the state a switch must not carry over. Under the flag the switch
+ * up: the state a switch must not carry over. Under the in-app switch it
  * aborts A (Containers/CadView.jsx#abortLoadInFlight): its engine worker is
  * terminated, B loads in the same document, and nothing of A is left in B's
  * store, NavTree root, page title or load report. Before step A the switch
@@ -145,8 +146,8 @@ async function stillReachableAfterGc(page: Page): Promise<string[]> {
  * @param page
  * @param features the `?feature=` list
  */
-async function switchInApp(page: Page, features: string) {
-  await page.goto(`${HOME_PATH}?feature=${features}`, {waitUntil: 'domcontentloaded'})
+async function switchInApp(page: Page, features = '') {
+  await page.goto(`${HOME_PATH}${features ? `?feature=${features}` : ''}`, {waitUntil: 'domcontentloaded'})
   await waitForModelSettled(page)
   await rememberShownModel(page, 'A')
   await rememberLeftModelWeakly(page)
@@ -174,7 +175,7 @@ describeMobileAndDesktop('open-205: an in-app model switch frees the engine it l
 
   test('A\'s engine worker is terminated, and B\'s runs', async ({page}) => {
     const workers = watchEngineWorkers(page)
-    await page.goto(`${HOME_PATH}?feature=spaModelNav`, {waitUntil: 'domcontentloaded'})
+    await page.goto(HOME_PATH, {waitUntil: 'domcontentloaded'})
     await waitForModelSettled(page)
     const sessionKind = await page.evaluate(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -205,7 +206,7 @@ describeMobileAndDesktop('open-205: an in-app model switch frees the engine it l
   })
 
   test('A\'s model is collected', async ({page}) => {
-    await switchInApp(page, 'spaModelNav')
+    await switchInApp(page)
     expect(await stillReachableAfterGc(page), 'A\'s model must be garbage-collected').toEqual([])
   })
 
@@ -213,7 +214,7 @@ describeMobileAndDesktop('open-205: an in-app model switch frees the engine it l
   // terminates it: A's IfcAPI and its WASM heap go only once nothing reaches
   // them.
   test('on the main-thread engine, A\'s model and its IfcAPI are collected', async ({page}) => {
-    await switchInApp(page, 'spaModelNav,disableEngineWorker')
+    await switchInApp(page, 'disableEngineWorker')
     expect(await page.evaluate(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       Object.keys((window as any).__leftWeakRefs)), 'A ran on a main-thread IfcAPI').toEqual(['model', 'ifcAPI'])
@@ -225,7 +226,7 @@ describeMobileAndDesktop('open-205: an in-app model switch frees the engine it l
     // store's `model` was still A (it changed only at B's `setModel`), and so
     // was everything rendered from it (in-app-model-switch.md §2.4).
     await holdLoadAtIndex(page, 2)
-    await page.goto(`${HOME_PATH}?feature=spaModelNav`, {waitUntil: 'domcontentloaded'})
+    await page.goto(HOME_PATH, {waitUntil: 'domcontentloaded'})
     await waitForModelSettled(page)
     const a = await shownState(page)
     expect(a.hasModel).toBe(true)
@@ -345,7 +346,7 @@ describeMobileAndDesktop('open-205: a switch while the model is still loading ab
     {label: 'STEP in the engine worker', path: '/share/v/p/index.step', fileName: 'index.step', isWorker: true},
     {label: 'IFC on the main-thread engine', path: HOME_PATH, fileName: 'index.ifc', isWorker: false,
       feature: 'disableEngineWorker'},
-  ].map((leg) => ({...leg, path: `${leg.path}?feature=spaModelNav${leg.feature ? `,${leg.feature}` : ''}`}))) {
+  ].map((leg) => ({...leg, path: `${leg.path}${leg.feature ? `?feature=${leg.feature}` : ''}`}))) {
     test(`${label}: A's load stops, B loads, and nothing of A is left`, async ({page}) => {
       const workers = watchEngineWorkers(page)
       // CadView's failure path logs the error it alerts and captures; an
@@ -473,7 +474,7 @@ describeMobileAndDesktop('open-205: a theme change while the model is still load
         failureLines.push(msg.text())
       }
     })
-    await page.goto(`${HOME_PATH}?feature=spaModelNav`, {waitUntil: 'domcontentloaded'})
+    await page.goto(HOME_PATH, {waitUntil: 'domcontentloaded'})
     await waitForHeldLoad(page)
     expect((await shownState(page)).isModelReady).toBe(false)
     expect(workers.length).toBe(1)

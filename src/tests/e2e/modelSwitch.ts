@@ -4,14 +4,15 @@ import {waitForModelReady} from './models'
 
 
 /**
- * Helpers for specs that switch models in one page (open-205, #2011):
- * `?feature=spaModelNav` and the memory checks on what a switch frees.
+ * Helpers for specs that switch models in one page (open-205, #2011): the
+ * in-app switch (on by default since step F, `?feature=disableSpaModelNav`
+ * its kill switch) and the memory checks on what a switch frees.
  *
  * The second model is a hosted test-models fixture, served end to end by
  * MSW and the test server (models.ts#setupVirtualPathIntercept), opened by
  * typing its GitHub link into the search bar: SearchBar.jsx#onSubmit opens a
- * link through `navigateToModel`, so it is in-app under the flag and a page
- * load without it.
+ * link through `navigateToModel`, so it is in-app by default and a page
+ * load with the kill switch.
  */
 export const HOME_PATH = '/share/v/p/index.ifc'
 export const BOX_PATH = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc'

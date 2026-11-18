@@ -1,7 +1,7 @@
 import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
-import {isFeatureEnabled} from '../FeatureFlags'
 import {isLocalOnlyPath} from '../routes/localOnly'
 import {disablePageReloadApprovalCheck} from './event'
+import {isSpaModelNavOn} from './spaModelNavMode'
 
 
 /**
@@ -149,11 +149,12 @@ function withCurrentSearch(path) {
 
 
 /**
- * Navigate to a model path. A full page load by default, which frees the
- * previous model's memory with the page; under `?feature=spaModelNav`
- * (open-205, #2021) an in-app react-router transition instead, which keeps
- * the page and leaves freeing the previous model to the viewer's teardown
- * (design/new/in-app-model-switch.md §2, §6). During unit tests, falls back
+ * Navigate to a model path. An in-app react-router transition by default
+ * (open-205 #2011, on since step F), which keeps the page and leaves freeing
+ * the previous model to the viewer's teardown and CadView's load ownership
+ * (design/new/in-app-model-switch.md §2, §4.5a, §6). With the kill switch
+ * or the rollback on (`utils/spaModelNavMode.js`), the full page load it
+ * always was, which frees the previous model's memory with the page. During unit tests, falls back
  * to SPA navigate to avoid jsdom reloads. The current query string is
  * carried forward when the target doesn't specify its own (see
  * `withCurrentSearch`), either way.
@@ -190,10 +191,10 @@ export function navigateToModel(target, navigate) {
     }
   }
 
-  // Read at call time, like every `isFeatureEnabled` check: the flag rides
-  // in the query string `withCurrentSearch` just carried forward, so the
-  // model it opens keeps it.
-  if (typeof navigate === 'function' && isFeatureEnabled('spaModelNav')) {
+  // Read at call time, like every `isFeatureEnabled` check: a kill switch
+  // (`?feature=disableSpaModelNav`) rides in the query string
+  // `withCurrentSearch` just carried forward, so the page it loads keeps it.
+  if (typeof navigate === 'function' && isSpaModelNavOn()) {
     navigate(path)
     return
   }

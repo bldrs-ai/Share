@@ -100,7 +100,7 @@ import {
 } from '../utils/occurrencePaths'
 import {isOutOfMemoryError} from '../utils/oom'
 import {isAborted, raceLoadAbort, throwIfLoadAborted} from '../utils/loadAbort'
-import {isFeatureEnabled} from '../FeatureFlags'
+import {isSpaModelNavOn} from '../utils/spaModelNavMode'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../viewer/three/Picker'
 import {isOnControl} from '../viewer/three/pickControls'
@@ -223,16 +223,18 @@ export default function CadView({
   const inFlightModelKeyRef = useRef(null)
   const isViewerReloadPendingRef = useRef(false)
   const latestOnViewerRef = useRef(null)
-  // open-205 #2011 step A (`?feature=spaModelNav`): who owns the load. Each
-  // onViewer run under the flag gets its own AbortController, and leaving
-  // the model aborts it (abortLoadInFlight): the download, OPFS staging and
-  // parse stop, the engine worker is terminated, and the run unwinds at its
-  // next await writing nothing, so the next model's load starts then instead
-  // of when this one would have ended. Kept after the run ends, so a switch
-  // before the idle GLB writer has run skips the writer too. Null off the
-  // flag, where nothing is aborted and a switch waits behind the load as
-  // before. The viewer the run loads into, because under the flag a viewer
-  // re-created for the SAME model (a theme change) supersedes the run too.
+  // open-205 #2011 step A (the in-app switch, on by default since step F;
+  // utils/spaModelNavMode.js): who owns the load. Each onViewer run under it
+  // gets its own AbortController, and leaving the model aborts it
+  // (abortLoadInFlight): the download, OPFS staging and parse stop, the
+  // engine worker is terminated, and the run unwinds at its next await
+  // writing nothing, so the next model's load starts then instead of when
+  // this one would have ended. Kept after the run ends, so a switch before
+  // the idle GLB writer has run skips the writer too. Null with the kill
+  // switch (`?feature=disableSpaModelNav`) or the rollback on, where nothing
+  // is aborted and a switch waits behind the load as before. The viewer the
+  // run loads into, because under the switch a viewer re-created for the
+  // SAME model (a theme change) supersedes the run too.
   const loadAbortRef = useRef(null)
   const inFlightViewerRef = useRef(null)
   // The alert as it stood when the in-flight load began. If that load is
@@ -404,13 +406,13 @@ export default function CadView({
 
 
   /**
-   * Give up the load this CadView started last, under `?feature=spaModelNav`
-   * (open-205 #2011 step A): the user is leaving it, for another model or for
+   * Give up the load this CadView started last, under the in-app switch
+   * (open-205 #2011 step A; utils/spaModelNavMode.js): the user is leaving it, for another model or for
    * a re-created viewer. Its run unwinds at its next await without writing
    * (onViewerInternal's `loadSignal`), and onViewer then starts the next one.
    * A load that has already ended is aborted too, which only stops its idle
-   * GLB writer if that has not run yet (Loader.js#load). Off the flag there
-   * is no controller, and nothing changes.
+   * GLB writer if that has not run yet (Loader.js#load). With the kill switch
+   * on there is no controller, and nothing changes.
    */
   function abortLoadInFlight() {
     loadAbortRef.current?.abort()
@@ -467,10 +469,10 @@ export default function CadView({
     // Playwright where viewer is still null at the [auth]-effect's render —
     // don't accidentally claim the slot and starve the eventual successful
     // load from the [viewer] effect.
-    const isSpaModelNav = isFeatureEnabled('spaModelNav')
+    const isSpaModelNav = isSpaModelNavOn()
     if (onViewerInFlightRef.current) {
       if (inFlightModelKeyRef.current !== modelIdentity(modelPath, installPrefix)) {
-        // Under spaModelNav the load in flight was aborted when the model
+        // Under the in-app switch the load in flight was aborted when the model
         // changed (initViewerCb), so "once it ends" is its next await.
         debug().warn('CadView#onViewer: model changed mid-load; loading it once the current load ends')
         isViewerReloadPendingRef.current = true
@@ -479,7 +481,7 @@ export default function CadView({
       if (isSpaModelNav && inFlightViewerRef.current !== useStore.getState().viewer) {
         // The same model, in a viewer re-created mid-load (a theme change):
         // the load in flight streams into the disposed one and was aborted
-        // with it, so load it again here. Off the flag this stays a
+        // with it, so load it again here. With the kill switch on this stays a
         // duplicate, as before. Compared with the store's viewer, not this
         // render's: the auth-state effect can run a render older than the
         // one that started the load, and that call is still a duplicate.
@@ -559,14 +561,14 @@ export default function CadView({
     if (useStore.getState().indexedModel !== null) {
       forgetIndexedTree()
     }
-    if (isFeatureEnabled('spaModelNav')) {
+    if (isSpaModelNavOn()) {
       forgetLoadedModelState()
     }
   }
 
 
   /**
-   * Under `?feature=spaModelNav`, drop the store's per-model state when the
+   * Under the in-app switch, drop the store's per-model state when the
    * user leaves a model, instead of leaving it to the next load's own writes
    * (open-205 #2011 step A, the load-ownership part of #2019). Without a page
    * load nothing else does: the store's `model` stayed the left model until
@@ -577,9 +579,9 @@ export default function CadView({
    * model arrives. The left load itself was aborted (abortLoadInFlight), so
    * it cannot write any of it back.
    *
-   * Not off the flag: there every open is a page load, and the in-app opens
-   * that remain (an in-memory upload, the alert's Reset, a search-bar URL)
-   * keep the behaviour they have today.
+   * Not with the kill switch or the rollback on: there every open is a page
+   * load, and the in-app opens that remain (an in-memory upload, the alert's
+   * Reset, a search-bar URL) keep the behaviour they had before step A.
    */
   function forgetLoadedModelState() {
     const state = useStore.getState()
@@ -609,8 +611,8 @@ export default function CadView({
     // write, not here: on mount the [modelPath] effect, which sets the shown
     // identity, runs after the auth effect that may start this load.
     const loadModelKey = modelIdentity(modelPath, installPrefix)
-    // This run's abort signal under `?feature=spaModelNav` (onViewer sets the
-    // controller just before calling here), undefined off the flag. An
+    // This run's abort signal under the in-app switch (onViewer sets the
+    // controller just before calling here), undefined with the kill switch on. An
     // aborted run is superseded whatever the identity says: after A → B → A
     // the identity reads current again, but the run was given up for the
     // viewer it loaded into (open-205 #2011 step A).
@@ -1153,8 +1155,8 @@ export default function CadView({
    *   geometry still streams (open-205 #2029); see onViewerInternal
    * @param {Function} [options.onFirstMesh] called when a progressive load's
    *   first geometry is on screen (open-205 #2043); see onViewerInternal
-   * @param {AbortSignal} [options.signal] the run's, under
-   *   `?feature=spaModelNav` (open-205 #2011 step A): handed to the Loader,
+   * @param {AbortSignal} [options.signal] the run's, under the in-app
+   *   switch (open-205 #2011 step A): handed to the Loader,
    *   and checked after each await here, so an aborted load writes nothing
    *   (setModel, the scene, the isolator, the open's analytics)
    * @return {object} loaded model
