@@ -1420,8 +1420,8 @@ Every item needs either a merged PR or a measurement in a PR body.
    A load whose URL names a known `?view=` rule set runs on the
    main-thread engine (`engine/engineRoute.js`), where IfcViewsManager
    reads it, and the report says so (`Engine: main thread (?view= rules
-   need the main-thread engine)`). Legacy `?feature=bot` routes the same
-   way. Deleting the stack (§8 item 7, WidgetApi's
+   need the main-thread engine)`). Legacy `?feature=bot` routed the same
+   way until #1675 deleted its eval; it now loads in the worker. Deleting the stack (§8 item 7, WidgetApi's
    `ChangeViewSettingsEventHandler` first) is now a cleanup, not a gate.
 3. **#2061 explained. Met:** a measurement artifact, 56.5 MB live after
    GC (§7.1).
@@ -1474,9 +1474,9 @@ decision, `engine/engineRoute.js#mainThreadEngineReason`.
   the URL, so that would leave every `?feature=engineWorker` link in the
   worker (Codex review on #2083).
 - *One session:* `?feature=disableEngineWorker`.
-- `?view=` rule sets and the legacy bot chat (`?feature=bot`, or a `#bot:`
-  permalink, which opens it without the flag) route to the main-thread
-  engine on their own, since both read it directly.
+- `?view=` rule sets route to the main-thread engine on their own, since
+  they read it directly. The legacy bot chat did too, until the Assist port
+  (#1675) replaced its eval with the tool registry, which reads either engine.
 
 ## 8. Decisions (2026-11-03)
 
@@ -1529,6 +1529,8 @@ These were the open questions of the scope. The user decided each one.
      main-thread engine. It is off by default and retires with the
      `?feature=assist` port (ai-workspace.md §13). Under
      `?feature=engineWorker` it fails with a clear message, not a crash.
+     *Retired by #1675:* the eval is deleted and `?feature=bot` is an alias
+     of `assist`, whose tools read either engine.
    - **No synchronous proxy** over the worker: without `SharedArrayBuffer`
      it cannot be built.
 8. **Topology: separate workers.** One engine worker per model, and later

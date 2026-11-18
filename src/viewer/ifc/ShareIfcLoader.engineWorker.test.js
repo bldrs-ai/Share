@@ -308,8 +308,6 @@ describe('viewer/ifc/ShareIfcLoader with ?feature=engineWorker', () => {
     it.each([
       ['?feature=disableEngineWorker', ['disableEngineWorker'], 'Engine: main thread (?feature=disableEngineWorker)'],
       ['?view=ch.sia380-1.heatmap', [], 'Engine: main thread (?view= rules need the main-thread engine)'],
-      ['?feature=bot', ['bot'],
-        'Engine: main thread (the legacy bot chat needs the main-thread engine)'],
     ])('%s parses on the main-thread engine, and says so', async (search, urlFlags, note) => {
       Object.defineProperty(window, 'location', {writable: true, value: {...originalLocation, search}})
       isFeatureEnabled.mockImplementation((name) =>

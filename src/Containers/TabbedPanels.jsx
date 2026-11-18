@@ -48,7 +48,7 @@ export default function TabbedPanels({
 
   const isBotVisible = useStore((state) => state.isBotVisible)
   const setIsBotVisible = useStore((state) => state.setIsBotVisible)
-  const isBotEnabled = useExistInFeature('bot')
+  const isBotEnabled = useExistInFeature('assist')
 
   // Next two are used by NavTree and Versions
   // IFCSlice. The indexed model while geometry still streams (open-205 #2029).
