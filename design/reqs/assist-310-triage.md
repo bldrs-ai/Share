@@ -86,7 +86,7 @@ Later on 2026-11-18, from the implementation session and checked on GitHub and `
 
 - **PR #2199 merged** ([`c34ff58`](https://github.com/bldrs-ai/Share/commit/c34ff588)): the agent loop over the tool registry, run by the Bot panel. The owner closed #1675 and #1821; #1677 stays open under #1675. The loop also removed BotChat's `new Function` eval ([`BotChat.jsx`](https://github.com/bldrs-ai/Share/blob/6c8bda5c/src/Components/Bot/BotChat.jsx#L55-L66)), which is #1822's subject.
 - **PR #2219 (draft):** `model.quantities`, `model.measure` and `model.spatial`, slice 2 of #1674. It partly addresses #1674, which stays open for the STEP ref-contract slice, and closes no story. The tools are read-only, reuse `refs.js` for refs, and add their rows to ai-workspace.md's v0 tool table.
-- **Hosted relay and credits** (#1932 under #1933): in progress; no PR yet.
+- **PR #2220 (draft): the hosted relay and credits.** It implements #1932, the `ai-chat` relay with anonymous identity, and the server half of #1933: a reserve-then-settle credit ledger on Netlify Blobs, daily breakers per tier, and tier budgets defined once in `src/quota/aiCredits.js`. #1933's UI (the credits meter and the upsell dialog) is still open, so #1933 is partly addressed. It closes no story.
 - **Conway bug found on the way:** Conway returns `IfcSIUnit`'s attributes shifted by one slot (for `IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)`, `UnitType` reads `MILLI` and `Prefix` reads `METRE`). #2219 works around it by classifying the enum values; the implementation session is filing it in conway.
 
 ## Milestone hypothesis
