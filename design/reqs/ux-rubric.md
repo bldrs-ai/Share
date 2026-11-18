@@ -11,7 +11,7 @@ The [UX index](README.md) owns shared product requirements; the [roadmap](../roa
 - **bldrs-ai/bizdev** (private) holds product-level and meta discussion: growth (`grow-*` epics), measurement plans and their results, milestone hypotheses and their evidence (§"Milestones are hypotheses"), pricing and quotas as product decisions, and consent and privacy policy as product decisions. First example: the Notes and Versions measurement plan, moved from Share to [bizdev#366](https://github.com/bldrs-ai/bizdev/issues/366).
 - **bldrs-ai/Share** holds UX epics, stories and tasks, and the technical work behind any of them, including the code half of a bizdev plan. This follows bizdev's existing cross-link convention: a bizdev issue tracks the business outcome; the linked Share epic or story owns the technical work and follows Share's roadmap and agent-workflow rules. When a bizdev plan reaches implementation, open a Share story that links to it, rather than building against the bizdev issue directly.
 - **Links from Share to bizdev** are fine in docs and issues, but bizdev is private: write enough in Share that a reader without access still knows what was decided and where it's tracked, and never copy business numbers (targets, revenue, spend) into Share.
-- **Not moved yet:** the roadmap's `grow-*` rows and their §4.10 text still live in [design/roadmap.md](../roadmap.md). Moving them, or reducing them to pointers into bizdev, is a roadmap change of its own.
+- **Growth moved 2026-11-18:** the `grow-*` epics, their status and their stories are bizdev issues, indexed in bizdev `docs/growth-roadmap.md`. The [roadmap](../roadmap.md) keeps one pointer row per epic (§4.10) so its MVP list and phases can still name them. Bizdev's `docs/planning.md` §6 states the same docs-versus-issues rule for that repo.
 
 ## Epic, Story and Task
 
@@ -120,11 +120,25 @@ The triage record is evidence for a reader checking a decision later, not a seco
 - **Pin every link to code or a retired doc to a commit,** including starting points in an archived gap analysis. A `blob/main` link points at different code as soon as the files move.
 - **No live checklists** in the snapshot or the triage record. Record what was done as prose; open decisions go in the epic or the owning story, and the record points there.
 
+### Write for a reader who wasn't there
+
+> **In flight (2026-11-18).** Budgets are starting points; tune them as epics get rewritten.
+
+This project produces a lot of text, much of it written by AI agents, so most readers are skimming and many weren't in the conversation that produced it. Optimise for that reader.
+
+- **Budgets.** An epic body is about 400 words: the user goal, the journey, open decisions with their owners, and links. A story body is about 300: goal, tasks, acceptance, dependencies. A scope snapshot is one page. When a body runs over, move the excess somewhere and link to it; don't trim the meaning.
+- **Don't paste archives into issues.** When a doc is retired into issues, each issue gets only what it owns, plus a permalink to the retired doc for the rest. GitHub keeps every earlier version of an issue body, so a rewrite loses nothing.
+- **Say shared rules once.** Acceptance rules that every story shares (desktop and mobile, accessibility, failure paths) live in the epic or the UX index, and each story links to them rather than repeating them. The same goes for alias tables: one copy, in the triage record.
+- **Plain words.** Prefer the everyday word to the process word: "task" over "obligation", "decision" over "disposition", "main" or "owning" over "canonical", "accurate" over "truthful" or "honest". Cut "materially", "explicitly" and "as appropriate" unless they change the meaning.
+- **Lead with what the user can do,** then the rules. A reader should know what the feature is for from the first two sentences.
+- **No process narrative.** What was audited, how many links were checked, which tool made the commit: that's PR and commit material. An issue or doc says what is true and what is decided.
+
 ### Before marking the PR ready
 
 - The snapshot lists exactly the epic's formal direct stories (compare with the epic's native sub-issues).
 - Any new open story under a 1xx epic has a recorded milestone hypothesis and metric, and the PR says whether §6.0 changed (see §"Milestones are hypotheses").
 - No issue was parented under this epic while the roadmap assigns its outcome elsewhere.
 - Neither record contains `- [ ]`, and every code or retired-doc link is pinned to a commit.
+- Every epic and story body touched is within its budget (§"Write for a reader who wasn't there"), with no pasted archive and no repeated shared rules.
 - The UX index, sibling requirement docs, the roadmap and the router have been searched for wording that describes the state before this change (for example "pending", "remains", "draft", or the retired doc's name), and it's updated.
 - Docs-only reconciliation skips review under [agent-workflow.md](../new/agent-workflow.md) §"Review" unless it changes review, dispatch or release policy; mark it ready rather than leaving it in draft, since merge checks only run once it's ready.
