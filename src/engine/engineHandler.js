@@ -28,7 +28,7 @@
 import {resolvePropertyTables, schemaTypeName} from '../Components/Properties/propertyTable'
 import {captureEngineExtensions, ifcManagerOver} from '../loader/glbEngineCapture'
 import {classifyOpenFailure, openDeferred} from '../loader/conwayOpen'
-import {ENGINE_PROTOCOL_VERSION, Ev, Op, serializeError} from './protocol'
+import {ENGINE_PROTOCOL_VERSION, Ev, Op, errorMessageOf, serializeError} from './protocol'
 import {openSourceStore, opfsRoot} from './engineSources'
 import {readSidecar, sidecarHashName, sweepSidecars, writeSidecar} from './engineSidecars'
 import {makeBatchEncoder, previewMessage, snapshotStatistics} from './engineStream'
@@ -847,7 +847,7 @@ export function createEngineHandler({
       emit(Ev.DONE, {summary: await summarize({batches, meshes, bytes, pumpMs: now() - tPump,
         geometries: encoder.sentCount(), windowed, format})})
     } catch (e) {
-      emit(Ev.FAILED, {kind: 'pump', message: e?.message ?? String(e), name: e?.name})
+      emit(Ev.FAILED, {kind: 'pump', message: errorMessageOf(e), name: typeof e?.name === 'string' ? e.name : undefined})
     }
   }
 

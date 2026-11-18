@@ -95,6 +95,18 @@ export function engineDeviceSnapshot() {
 
 
 /**
+ * The in-process engine's init has no clock. It is the last resort, with
+ * nothing to fall back to, so a timeout only turns a slow start into a
+ * failed load: SHARE-1Y8 was low-end Android phones where the worker failed
+ * and the in-process engine then took over 30 s to fetch and start its wasm
+ * on a slow connection, so the load failed after the model had downloaded.
+ * A start that truly hangs is still reported, by the load's stall watchdog
+ * (loadProgress.js).
+ */
+const IN_PROCESS_INIT_TIMEOUT = null
+
+
+/**
  * Spawn and initialise one engine.
  *
  * @param {object} [options]
@@ -115,7 +127,7 @@ export async function spawnEngineSession({
   const inProcessTransport = () =>
     makeInProcessTransport((post) => createEngineHandler({loadIfcAPI, post}))
   if (inProcess || workerFailedThisPage || !supportsModuleWorkers()) {
-    return await initSession(inProcessTransport())
+    return await initSession(inProcessTransport(), IN_PROCESS_INIT_TIMEOUT)
   }
   try {
     return await initSession(makeWorkerTransport(makeWorker()), initTimeoutMs)
@@ -134,7 +146,7 @@ export async function spawnEngineSession({
     // everything the worker buys.
     console.warn(`[engine] worker engine failed to start (${e?.name ?? 'Error'}: ${e?.message ?? e}); ` +
       'running this model\'s engine in process instead')
-    return await initSession(inProcessTransport())
+    return await initSession(inProcessTransport(), IN_PROCESS_INIT_TIMEOUT)
   }
 }
 
