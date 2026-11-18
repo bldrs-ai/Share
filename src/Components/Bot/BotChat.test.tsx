@@ -1,3 +1,4 @@
+import {transferableAbortController} from 'node:util'
 import React from 'react'
 import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react'
 import {http} from 'msw'
@@ -16,6 +17,19 @@ import BotChat, {
 import {assistKeyStore, resetAssistChat} from './assistState'
 import {BOT_TITLE} from './component'
 import {reportAssistCondition} from './reportAssistCondition'
+
+
+// The test DOM's AbortController must be Node's. The loop's AbortSignal
+// reaches fetch, and MSW's fetch interceptor builds a `Request` from it with
+// the global Request, which jest-fixed-jsdom takes from Node. Node 24's (undici
+// 7) brand-checks the signal against Node's own AbortSignal and refuses
+// jsdom's, so every request failed before MSW answered, on Node 24 (CI) only:
+// Node 22's undici 6 duck-types the signal. A browser has one realm, so the
+// app itself never meets this. `util.transferableAbortController()` is the
+// sandbox's way to reach Node's class.
+const NodeAbortController = transferableAbortController().constructor as typeof AbortController
+globalThis.AbortController = NodeAbortController
+globalThis.AbortSignal = new NodeAbortController().signal.constructor as typeof AbortSignal
 
 
 jest.mock('./reportAssistCondition', () => ({reportAssistCondition: jest.fn()}))

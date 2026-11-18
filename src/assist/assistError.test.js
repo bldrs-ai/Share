@@ -1,4 +1,5 @@
 /* eslint-disable no-magic-numbers */
+import {runInNewContext} from 'node:vm'
 import {AssistError, assistErrorMessage, classifyError} from './assistError'
 
 
@@ -14,6 +15,8 @@ describe('assist/assistError', () => {
     expect(classifyError(Object.assign(new Error('Cannot connect'), {name: 'AI_APICallError',
       cause: new TypeError('Failed to fetch')}))).toEqual({code: 'network'})
     expect(classifyError(new TypeError('Failed to fetch'))).toEqual({code: 'network'})
+    // A TypeError from another realm (a test DOM over Node's fetch) is still one.
+    expect(classifyError(runInNewContext('new TypeError("RequestInit: Expected signal")'))).toEqual({code: 'network'})
     expect(classifyError(new DOMException('stopped', 'AbortError'))).toEqual({code: 'aborted'})
     expect(classifyError(api(401), true)).toEqual({code: 'aborted'})
     expect(classifyError(new AssistError('no_key', 'none'))).toEqual({code: 'no_key'})

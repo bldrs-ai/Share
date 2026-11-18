@@ -125,9 +125,11 @@ export function classifyError(error: unknown, aborted = false): {code: AssistErr
   if (status !== undefined) {
     return {code: 'provider', status}
   }
-  // No HTTP answer: fetch itself rejected, bare or wrapped by the SDK.
-  if (inner instanceof TypeError || (isObject(inner) && inner.name === 'AI_APICallError') ||
-      (isObject(inner) && inner.cause instanceof TypeError)) {
+  // No HTTP answer: fetch itself rejected, bare or wrapped by the SDK. By
+  // name, not `instanceof TypeError`: the TypeError can come from another
+  // realm than this module's (a test DOM over Node's fetch, an iframe's).
+  if (isTypeError(inner) || (isObject(inner) && inner.name === 'AI_APICallError') ||
+      (isObject(inner) && isTypeError(inner.cause))) {
     return {code: 'network'}
   }
   return {code: 'provider'}
@@ -173,6 +175,15 @@ function unwrapRetry(error: unknown): unknown {
   return current
 }
 const MAX_UNWRAP = 4
+
+
+/**
+ * @param error
+ * @return whether it is a TypeError from any realm
+ */
+function isTypeError(error: unknown): boolean {
+  return error instanceof TypeError || (isObject(error) && error.name === 'TypeError')
+}
 
 
 /**
