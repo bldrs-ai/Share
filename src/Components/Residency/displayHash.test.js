@@ -1,3 +1,4 @@
+/* eslint-disable no-magic-numbers */
 import {
   HASH_PREFIX_DISPLAY,
   mergeDisplayTerms,
@@ -272,5 +273,48 @@ describe('sharing #d: with the hide / isolate terms', () => {
     writes.length = 0
     mergeDisplayTerms(spy, {hide: null})
     expect(writes).toEqual([])
+  })
+})
+
+
+describe('the volume terms', () => {
+  it('writes nothing for a volume as it loads', () => {
+    expect(modelDisplayParams(appearance({volume: {window: null, opacity: 100}}))).toEqual({})
+  })
+
+  it('writes the window in the volume\'s units, joined by _, and the opacity', () => {
+    // Negative and fractional ends: why the separator isn't `.`.
+    expect(modelDisplayParams(appearance({volume: {window: [-500, 300], opacity: 60}})))
+      .toEqual({vw: '-500_300', vo: '60'})
+    expect(modelDisplayParams(appearance({volume: {window: [0.125, 0.8], opacity: 100}})))
+      .toEqual({vw: '0.125_0.8'})
+    // Eight significant figures: a 1-unit window at large values keeps its
+    // two ends apart, and float noise past float32's precision is dropped.
+    expect(modelDisplayParams(appearance({volume: {window: [10100, 10101], opacity: 100}})))
+      .toEqual({vw: '10100_10101'})
+    expect(modelDisplayParams(appearance({volume: {window: [0.1 + 0.2, 0.8], opacity: 100}})))
+      .toEqual({vw: '0.3_0.8'})
+  })
+
+  it.each([
+    ['window', {window: [-500, 300], opacity: 100}, {volume: {window: [-500, 300], opacity: 100}}],
+    ['opacity', {window: null, opacity: 40}, {volume: {window: null, opacity: 40}}],
+    ['both', {window: [0.125, 0.8], opacity: 150}, {volume: {window: [0.125, 0.8], opacity: 150}}],
+  ])('round-trips the %s', (_label, volume, expected) => {
+    const location = loc()
+    writeModelDisplayHash(location, appearance({volume}))
+    expect(readModelDisplayHash(location)).toEqual(expected)
+  })
+
+  it('drops a malformed term and keeps the other', () => {
+    expect(readModelDisplayHash(loc('#d:vw=900_150,vo=60'))).toEqual({volume: {window: null, opacity: 60}})
+    expect(readModelDisplayHash(loc('#d:vw=1_2_3,vo=x'))).toEqual({})
+    expect(readModelDisplayHash(loc('#d:vw=-10_20,vo=x'))).toEqual({volume: {window: [-10, 20], opacity: 100}})
+  })
+
+  it('keeps the hide / isolate terms when it writes', () => {
+    const location = loc('#d:hide=e5')
+    writeModelDisplayHash(location, appearance({volume: {window: [1, 2], opacity: 100}}))
+    expect(location.hash).toBe('#d:vw=1_2,hide=e5')
   })
 })

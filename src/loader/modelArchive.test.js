@@ -1,13 +1,16 @@
 /* eslint-disable no-magic-numbers */
 // Which entry of an archive is the model, and what each seam is told — over
 // archives written by fflate's `zipSync`, not by the code under test.
-import {zipSync} from 'three/examples/jsm/libs/fflate.module.js'
+import fs from 'fs'
+import path from 'path'
+import {NRRDLoader} from 'three/examples/jsm/loaders/NRRDLoader.js'
+import {unzipSync, zipSync} from 'three/examples/jsm/libs/fflate.module.js'
 import {
   ARCHIVE_ENTRY_CHOICE,
   noModelInArchiveAlert,
   openUploadThroughArchive,
   resolveArchiveUpload,
-  unwrapIfcZip,
+  unwrapHostedArchive,
 } from './modelArchive'
 import {redactBreadcrumb} from '../privacy/sentryRedaction'
 import {WARN, disableDebug, setDebugLevel} from '../utils/debug'
@@ -85,6 +88,49 @@ function textOf(file) {
 
 
 /**
+ * A `File` the module made, as an ArrayBuffer.
+ *
+ * @param {Blob} file
+ * @return {Promise<ArrayBuffer>}
+ */
+function bufferOf(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsArrayBuffer(file)
+  })
+}
+
+
+/**
+ * A zip with one entry's compression method rewritten, in its local header
+ * and its directory record: how an archive with an entry Share can't extract
+ * (Deflate64, LZMA) is made from one fflate wrote.
+ *
+ * @param {Uint8Array} zip
+ * @param {string} name the entry's path
+ * @param {number} method
+ * @return {Uint8Array}
+ */
+function withMethod(zip, name, method) {
+  const out = zip.slice()
+  const view = new DataView(out.buffer)
+  const target = new TextEncoder().encode(name)
+  const nameAt = (at) => target.every((b, i) => out[at + i] === b)
+  for (let at = 0; at + 46 <= out.length; at++) {
+    const sig = view.getUint32(at, true)
+    if (sig === 0x04034b50 && view.getUint16(at + 26, true) === target.length && nameAt(at + 30)) {
+      view.setUint16(at + 8, method, true)
+    } else if (sig === 0x02014b50 && view.getUint16(at + 28, true) === target.length && nameAt(at + 46)) {
+      view.setUint16(at + 10, method, true)
+    }
+  }
+  return out
+}
+
+
+/**
  * A resolution as plain data, for assertions. Jest's failure diff deep-copies
  * what it prints, and a jsdom File inside a resolution aborts the worker
  * ("Assertion failed: isolate_data") instead of printing — so a failing
@@ -124,6 +170,14 @@ describe('modelArchive', () => {
       expect(summary(resolved)).toEqual({kind: 'model', ext: 'ifc', name: 'Tower.ifc', isInput: false})
       expect(resolved.file.lastModified).toBe(PICKED_AT)
       expect(await textOf(resolved.file)).toBe(new TextDecoder().decode(IFC))
+    })
+
+    // `zip` is a type so a hosted one routes; a zip INSIDE one is a bundle's
+    // attachments as often as not, and never a second model.
+    it('opens the model beside a nested plain zip, not a chooser of two', async () => {
+      const zip = zipSync({'Tower.ifc': IFC, 'attachments.zip': zipSync({'a.pdf': PDF})})
+      const resolved = await resolveArchiveUpload(upload(zip, 'deliverable.zip'))
+      expect(summary(resolved)).toEqual({kind: 'model', ext: 'ifc', name: 'Tower.ifc', isInput: false})
     })
 
     it('goes by the header, not the name: a zip named anything still opens', async () => {
@@ -266,6 +320,96 @@ describe('modelArchive', () => {
     })
   })
 
+  describe('a DICOM series', () => {
+    // pydicom's phantom (tools/models/makeDicomPhantom.py): 32 extension-less
+    // slices in shuffled order, a one-slice scout series and a README.
+    const phantom = () => new Uint8Array(fs.readFileSync(
+      path.join(__dirname, '../../testdata/models/dicom/phantom-ct.zip')))
+
+    it('is stacked into one .nrrd named for the archive, from the largest series', async () => {
+      const resolved = await resolveArchiveUpload(upload(phantom(), 'CT1.zip'))
+      expect(summary(resolved)).toEqual({kind: 'model', ext: 'nrrd', name: 'CT1.nrrd', isInput: false})
+      expect(resolved.file.lastModified).toBe(PICKED_AT)
+      // The File is the NRRD (no `bytes` beside it, which would hold the
+      // volume twice), which three's loader reads
+      // as the 40 × 48 × 32 scan, not the 16 × 16 scout.
+      expect((await textOf(resolved.file)).startsWith('NRRD0004\n')).toBe(true)
+      expect(resolved.bytes).toBeUndefined()
+      const volume = new NRRDLoader().parse(await bufferOf(resolved.file))
+      expect(volume.dimensions).toEqual([40, 48, 32])
+    })
+
+    it('loses to a model in the same archive', async () => {
+      const zip = zipSync({...unzipSync(phantom()), 'Tower.ifc': IFC})
+      expect(summary(await resolveArchiveUpload(upload(zip, 'CT1.zip'))))
+        .toEqual({kind: 'model', ext: 'ifc', name: 'Tower.ifc', isInput: false})
+    })
+
+    it('reads slices named by UID, and .dcm, and leaves extension-less files that aren\'t DICOM', async () => {
+      const slices = Object.entries(unzipSync(phantom())).filter(([p]) => p.includes('/DICOM/'))
+      const renamed = Object.fromEntries(slices.map(([, bytes], k) =>
+        [k % 2 ? `1.2.840.113619.2.55.${k}` : `slice${k}.DCM`, bytes]))
+      const resolved = await resolveArchiveUpload(upload(zipSync({...renamed, LICENSE: PDF}), 'study.zip'))
+      expect(summary(resolved)).toEqual({kind: 'model', ext: 'nrrd', name: 'study.nrrd', isInput: false})
+      expect(new NRRDLoader().parse(await bufferOf(resolved.file)).dimensions).toEqual([40, 48, 32])
+    })
+
+    it('ends an unreadable series in the dialog, with the reason', async () => {
+      // The phantom's first slice, re-labelled Explicit VR Big Endian (a UID
+      // of the same length, so the element's length still holds). Its pixel
+      // data is still little endian, but the reader refuses on the transfer
+      // syntax first. (RLE was the example before it became readable.)
+      const [slice] = Object.values(unzipSync(phantom())).filter((b) => b.length > 1000)
+      const relabelled = slice.slice()
+      const text = new TextDecoder('latin1').decode(relabelled)
+      const at = text.indexOf('1.2.840.10008.1.2.1')
+      relabelled.set(new TextEncoder().encode('1.2.840.10008.1.2.2'), at)
+      const alert = jest.fn()
+      const outcome = await openUploadThroughArchive(upload(zipSync({IM0001: relabelled}), 'CT1.zip'),
+        {entry: 'drop', alert, open: jest.fn()})
+      expect(outcome).toBe('refused')
+      expect(alert.mock.calls[0][0].archive.problem).toMatch(/big-endian \(transfer syntax 1\.2\.840\.10008\.1\.2\.2\)/)
+    })
+
+    it('doesn\'t change what an archive with no DICOM is told, even if an entry can\'t be extracted', async () => {
+      // `LICENSE` is a candidate (no extension), and Deflate64 (9) is a
+      // method Share can't read. Looking at it mustn't turn "holds no model"
+      // into "compressed with Deflate64".
+      const zip = withMethod(zipSync({'LICENSE': PDF, 'plan.pdf': PDF}), 'LICENSE', 9)
+      expect(summary(await resolveArchiveUpload(upload(zip, 'docs.zip')))).toEqual({kind: 'none', exts: ['', 'pdf']})
+    })
+
+    it('refuses a DICOM archive with an entry it can\'t extract, rather than open a series that may miss it', async () => {
+      const entries = unzipSync(phantom())
+      const [aSlice] = Object.keys(entries).filter((p) => p.includes('/DICOM/'))
+      const zip = withMethod(zipSync(entries), aSlice, 9)
+      await expect(resolveArchiveUpload(upload(zip, 'CT1.zip'))).rejects.toThrow(/Deflate64/)
+    })
+
+    it('charges the budget for DICOM slices only', async () => {
+      const entries = unzipSync(phantom())
+      const sliceBytes = Object.values(entries).filter((b) => b.length > 1000)
+        .reduce((n, b) => n + b.length, 0)
+      // A non-DICOM candidate: if looking at it were charged, the slices
+      // after it would not fit in a budget of exactly their size.
+      // First in the archive, so it is looked at before any slice.
+      const zip = zipSync({LICENSE: new Uint8Array(64 * 1024), ...entries})
+      mockTotalInflatedBytes = sliceBytes
+      expect(summary(await resolveArchiveUpload(upload(zip, 'CT1.zip'))).ext).toBe('nrrd')
+      mockTotalInflatedBytes = sliceBytes - 1
+      await expect(resolveArchiveUpload(upload(zip, 'CT1.zip'))).rejects.toThrow(/unpacks to more than/)
+    })
+
+    it('reaches the seam\'s open typed nrrd', async () => {
+      const open = jest.fn()
+      const outcome = await openUploadThroughArchive(upload(phantom(), 'CT1.zip'),
+        {entry: 'picker', alert: jest.fn(), open})
+      expect(outcome).toBe('opening')
+      expect(open.mock.calls[0][0].name).toBe('CT1.nrrd')
+      expect(open.mock.calls[0][1]).toBe('nrrd')
+    })
+  })
+
   describe('openUploadThroughArchive', () => {
     it('hands a non-archive straight to the seam, as before', async () => {
       const file = upload(GLB, 'part.glb')
@@ -371,23 +515,61 @@ describe('modelArchive', () => {
     })
   })
 
-  describe('unwrapIfcZip', () => {
-    it('gives the IFC parser the .ifc inside, as an ArrayBuffer', async () => {
-      const unwrapped = await unwrapIfcZip(zipSync({'Tower.ifc': IFC}).buffer)
+  describe('unwrapHostedArchive', () => {
+    it('gives the parser the one model inside, as an ArrayBuffer, typed by its content', async () => {
+      const unwrapped = await unwrapHostedArchive(zipSync({'Tower.ifc': IFC}).buffer, 'Tower.ifczip')
       expect(unwrapped.type).toBe('ifc')
       expect(unwrapped.modelData).toBeInstanceOf(ArrayBuffer)
       expect(new TextDecoder().decode(unwrapped.modelData)).toBe(new TextDecoder().decode(IFC))
     })
 
-    it('hands bytes that aren\'t a zip on unchanged, for conway to judge', async () => {
-      const unwrapped = await unwrapIfcZip(IFC.buffer)
-      expect(unwrapped).toEqual({modelData: IFC.buffer, type: 'ifc'})
+    it('opens whatever model a zip holds, whatever the zip is called', async () => {
+      // `.ifczip`, `.ifc.zip`, `.zip` and a renamed download are one archive:
+      // the entry decides, not the name around it.
+      for (const name of ['part.ifczip', 'part.glb.zip', 'part.zip', 'download']) {
+        const unwrapped = await unwrapHostedArchive(zipSync({'part.glb': GLB}).buffer, name)
+        expect(unwrapped.type).toBe('glb')
+        expect(new Uint8Array(unwrapped.modelData)).toEqual(GLB)
+      }
     })
 
-    it('refuses a .ifczip that doesn\'t hold exactly one IFC', async () => {
-      await expect(unwrapIfcZip(zipSync({'a.ifc': IFC, 'b.ifc': IFC}).buffer)).rejects.toThrow(ZipArchiveError)
-      await expect(unwrapIfcZip(zipSync({'a.glb': GLB}).buffer)).rejects.toThrow('holds a .glb model, not an IFC')
-      await expect(unwrapIfcZip(zipSync({'a.pdf': PDF}).buffer)).rejects.toThrow('holds no IFC model')
+    it('stacks a zip of DICOM slices into the NRRD it opens as', async () => {
+      const zip = fs.readFileSync(path.join(__dirname, '../../testdata/models/dicom/phantom-ct.zip'))
+      const unwrapped = await unwrapHostedArchive(new Uint8Array(zip).buffer, 'scan.zip')
+      expect(unwrapped.type).toBe('nrrd')
+      expect(new TextDecoder().decode(unwrapped.modelData.slice(0, 4))).toBe('NRRD')
+    })
+
+    it('returns null for bytes that aren\'t an archive, for the caller to type', async () => {
+      expect(await unwrapHostedArchive(IFC.buffer, 'Tower.ifczip')).toBeNull()
+    })
+
+    it('refuses an archive of several models, naming the first few', async () => {
+      const several = {}
+      for (let i = 0; i < 7; i++) {
+        several[`m${i}.glb`] = GLB
+      }
+      const refusal = await unwrapHostedArchive(zipSync(several).buffer, 'set.zip').catch((e) => e)
+      expect(refusal).toBeInstanceOf(ZipArchiveError)
+      // The names are the user's files: the dialog shows them, but the
+      // message — what analytics counts — names none.
+      expect(refusal.dialogText).toContain('holds 7 models (m0.glb, m1.glb, m2.glb, m3.glb, m4.glb and 2 more)')
+      expect(refusal.message).toContain('holds 7 models.')
+      expect(refusal.message).not.toContain('m0.glb')
+    })
+
+    it('refuses an archive of no model, naming what it holds to the dialog only', async () => {
+      // The extensions are tagged, but still the user's entry names' tails.
+      const refusal = await unwrapHostedArchive(zipSync({'J.Smith': PDF}).buffer, 'docs.zip').catch((e) => e)
+      expect(refusal).toBeInstanceOf(ZipArchiveError)
+      expect(refusal.message).toBe('This archive has no model Share can open.')
+      expect(refusal.dialogText).toContain('.smith')
+    })
+
+    it('types a nested .ifczip that isn\'t a zip by its header', async () => {
+      const unwrapped = await unwrapHostedArchive(zipSync({'Tower.ifczip': IFC}).buffer, 'bundle.zip')
+      expect(unwrapped.type).toBe('ifc')
+      expect(new TextDecoder().decode(unwrapped.modelData)).toBe(new TextDecoder().decode(IFC))
     })
   })
 })

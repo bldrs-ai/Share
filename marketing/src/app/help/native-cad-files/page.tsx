@@ -120,12 +120,16 @@ export default function NativeCadFilesPage() {
           FBX (.fbx), PLY (.ply), USD (.usd, .usda, .usdc, .usdz)</Item>
         <Item><strong>Point clouds and splats:</strong> XYZ (.xyz), Gaussian splats
           (.splat, .ksplat, .spz, .sog)</Item>
+        <Item><strong>Medical scans:</strong> CT and MR volumes (.nrrd), and a .zip
+          of a scan&apos;s DICOM slices (uncompressed, RLE or deflated)</Item>
         <Item><strong>Other:</strong> molecules (.pdb), Align dental scans (.adf)</Item>
       </Bullets>
       <Typography variant="body1">
         A gzipped copy of any of these, such as model.glb.gz, opens too, and so
-        does a .zip with one inside: Share opens the model, or asks which one when
-        there are several.{' '}
+        does a .zip with one inside, from your computer, GitHub, Google Drive or a
+        link: Share opens the model, whatever the zip is called. A zip of several
+        models opened from your computer asks which one; a link to one needs
+        the model unpacked first.{' '}
         <MuiLink href="/">Open Share</MuiLink>.
       </Typography>
     </PageShell>

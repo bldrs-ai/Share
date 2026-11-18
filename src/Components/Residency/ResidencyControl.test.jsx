@@ -4,7 +4,10 @@ import {Sphere, Vector3} from 'three'
 import {act, fireEvent, render, renderHook} from '@testing-library/react'
 import ShareMock from '../../ShareMock'
 import useStore from '../../store/useStore'
+import nrrdToThree from '../../loader/nrrd'
+import LiveDisplayLink from './LiveDisplayLink'
 import ResidencyControl from './ResidencyControl'
+import {HASH_DEBOUNCE_WAIT_MS} from '../../utils/debounce'
 import {DEFAULT_COLOR} from '../../viewer/ifc/flatMeshToBatchedModel'
 import {activeColorMode} from '../../viewer/display/colorMode'
 import {activeShadingMode} from '../../viewer/display/shadingMode'
@@ -96,8 +99,20 @@ async function renderWithModel(model) {
   const {result} = renderHook(() => useStore((state) => state))
   await act(() => {
     result.current.setModel(model)
+    // CadView raises it once the model's link terms are applied; the live
+    // view link writes nothing before.
+    result.current.setIsModelReady(true)
   })
-  return render(<ResidencyControl/>, {wrapper: ShareMock})
+  // With the live view link's display term, as CadView mounts it: the menu
+  // only notes the user's change, and the term writes `#d:` once it settles
+  // (Share/viewLink.js).
+  return render(<><ResidencyControl/><LiveDisplayLink/></>, {wrapper: ShareMock})
+}
+
+
+/** Let the live view link's debounced `#d:` write land. */
+async function settleLink() {
+  await act(() => new Promise((resolve) => setTimeout(resolve, HASH_DEBOUNCE_WAIT_MS + 20)))
 }
 
 
@@ -229,6 +244,7 @@ describe('ResidencyControl residency section', () => {
     fireEvent.click(getByTestId('control-button-residency'))
 
     fireEvent.click(getByTestId('residency-metric-memory').querySelector('input'))
+    await settleLink()
     // Full residency but a non-default metric: still a menu choice the user
     // made, so the link carries it (percent first, metric appended).
     expect(window.location.hash).toContain('res=100.memory')
@@ -269,6 +285,7 @@ describe('ResidencyControl residency section', () => {
     // actually fires the radio; Source after it is the term we assert on.
     fireEvent.click(getByTestId('color-mode-auto').querySelector('input'))
     fireEvent.click(getByTestId('color-mode-source').querySelector('input'))
+    await settleLink()
 
     expect(window.location.hash).toContain('res=40.memory')
     expect(window.location.hash).toContain('color=src')
@@ -418,6 +435,7 @@ describe('ResidencyControl while-moving section (motion residency)', () => {
     fireEvent.click(getByTestId('control-button-residency'))
     fireEvent.click(getByTestId('motion-residency-auto').querySelector('input'))
     fireEvent.click(getByTestId('motion-residency-metric-memory').querySelector('input'))
+    await settleLink()
     expect(window.location.hash).toContain('mres=100.memory')
     const {result} = renderHook(() => useStore((state) => state.displayOverrides))
     expect(result.current.model.appearance.motionResidency)
@@ -505,5 +523,97 @@ describe('ResidencyControl while-moving section (motion residency)', () => {
     expect(getByTestId('motion-residency-label').textContent).toBe('While moving: 30%')
     expect(getByTestId('motion-residency-slider').querySelector('input').value).toBe('30')
     expect(getByTestId('motion-residency-metric-distance').querySelector('input').checked).toBe(true)
+  })
+})
+
+
+describe('ResidencyControl volume section', () => {
+  /**
+   * A small CT volume, as nrrd.js builds one from NRRDLoader's Volume: packed
+   * over [-1024, 3071] HU, opening at 150–900 HU.
+   *
+   * @return {object} the model root
+   */
+  function ctVolumeModel() {
+    return nrrdToThree({
+      data: new Int16Array(8),
+      dimensions: [2, 2, 2],
+      windowLow: -1000,
+      windowHigh: 1000,
+      header: {vectors: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], space_origin: ['0', '0', '0'], modality: '=CT'},
+    })
+  }
+
+  afterEach(async () => {
+    await act(() => {
+      useStore.getState().setModel(null)
+      useStore.getState().resetDisplayOverrides()
+    })
+  })
+
+  it('offers the window and opacity, in HU, and none of the other sections', async () => {
+    const {getByTestId, queryByTestId} = await renderWithModel(ctVolumeModel())
+    fireEvent.click(getByTestId('control-button-residency'))
+    expect(getByTestId('volume-window-label').textContent).toBe('Window: 150 – 900 HU')
+    expect(getByTestId('volume-opacity-label').textContent).toBe('Opacity: 100%')
+    expect(queryByTestId('color-mode-group')).toBeNull()
+    expect(queryByTestId('shading-mode-group')).toBeNull()
+    expect(queryByTestId('residency-slider')).toBeNull()
+  })
+
+  it('moves the shader, the store and the #d: token with the sliders', async () => {
+    const model = ctVolumeModel()
+    const {getByTestId} = await renderWithModel(model)
+    const {uniforms} = model.children[0].material
+    fireEvent.click(getByTestId('control-button-residency'))
+    // A keyboard step commits, as a mouse release does.
+    const opacity = getByTestId('volume-opacity-slider').querySelector('input')
+    fireEvent.keyDown(opacity, {key: 'PageDown'})
+    const shown = Number(/Opacity: (\d+)%/.exec(getByTestId('volume-opacity-label').textContent)[1])
+    expect(shown).toBeLessThan(100)
+    expect(uniforms.opacity.value).toBeCloseTo(shown / 100)
+    const [, high] = getByTestId('volume-window-slider').querySelectorAll('input')
+    fireEvent.keyDown(high, {key: 'PageUp'})
+    const rampBefore = (900 + 1024) / 4095
+    expect(uniforms.ramp.value[1]).toBeGreaterThan(rampBefore)
+    await settleLink()
+    expect(window.location.hash).toMatch(new RegExp(`d:vw=150_\\d+,vo=${shown}`))
+
+    // Reset: back to the volume as it loaded, and out of the link.
+    fireEvent.click(getByTestId('volume-reset'))
+    await settleLink()
+    expect(uniforms.opacity.value).toBe(1)
+    expect(uniforms.ramp.value[1]).toBeCloseTo(rampBefore)
+    expect(window.location.hash).not.toContain('d:')
+  })
+
+  it('keeps the window\'s thumbs a step apart, rather than jump back to the default when they meet', async () => {
+    // Found by the E2E: the low thumb run up to the high one made equal ends,
+    // which aren't a window, and the menu snapped back to 150–900.
+    const {getByTestId} = await renderWithModel(ctVolumeModel())
+    fireEvent.click(getByTestId('control-button-residency'))
+    const [low] = getByTestId('volume-window-slider').querySelectorAll('input')
+    // PageUp, not End: End is the browser's own range-input key, which jsdom
+    // doesn't implement; MUI handles PageUp itself, 10 units a press. Enough
+    // presses to run the low thumb from 150 into the high one at 900.
+    for (let i = 0; i < 100; i++) {
+      fireEvent.keyDown(low, {key: 'PageUp'})
+    }
+    const [, lowShown, highShown] = /Window: (-?\d+) – (-?\d+) HU/.exec(getByTestId('volume-window-label').textContent)
+    expect(Number(highShown)).toBe(900)
+    // One slider step (20 HU over this 4095 HU range) below it.
+    expect(Number(highShown) - Number(lowShown)).toBe(20)
+  })
+
+  it('opens a link\'s window and opacity', async () => {
+    window.location.hash = '#d:vw=0_400,vo=50'
+    const model = ctVolumeModel()
+    const {getByTestId} = await renderWithModel(model)
+    fireEvent.click(getByTestId('control-button-residency'))
+    expect(getByTestId('volume-window-label').textContent).toBe('Window: 0 – 400 HU')
+    const {uniforms} = model.children[0].material
+    expect(uniforms.opacity.value).toBe(0.5)
+    expect(uniforms.ramp.value[0]).toBeCloseTo(1024 / 4095)
+    expect(uniforms.ramp.value[1]).toBeCloseTo(1424 / 4095)
   })
 })

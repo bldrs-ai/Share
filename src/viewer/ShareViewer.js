@@ -844,6 +844,16 @@ export class ShareViewer {
         console.warn('IFC.dispose failed:', e)
       }
     }
+    // ShareIfc#dispose drops its own manager, but the loader shares the
+    // same IfcAPI (constructor above). On the main-thread engine
+    // (`?feature=disableEngineWorker`) that IfcAPI is the whole WASM engine
+    // with the model's heap, and a disposed viewer can stay reachable for a
+    // while (stale React render scopes keep it). So after an in-app model
+    // switch the left model's engine stayed alive through
+    // `viewer.ifcLoader.ifcManager.ifcAPI` (open-205, #2019). A load reads
+    // `ifcLoader` when it starts (Loader.js#findLoader), and nothing loads
+    // into a disposed viewer.
+    this.ifcLoader = null
     if (this.context) {
       try {
         this.context.dispose?.()

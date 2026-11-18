@@ -3,9 +3,9 @@ import {useLocation} from 'react-router-dom'
 import {Vector3, Box3} from 'three'
 import {Menu, MenuItem, SvgIcon, Typography} from '@mui/material'
 import useStore from '../../store/useStore'
+import {createLiveTerm} from '../Share/viewLink'
 import debug from '../../utils/debug'
-import {HASH_DEBOUNCE_WAIT_MS, debounce} from '../../utils/debounce'
-import {addHashParams, getHashParams, getObjectParams, removeParams} from '../../utils/location'
+import {addHashParams, getHashParams, getObjectParams, removeParams, replaceHashParams} from '../../utils/location'
 import {roundCoordComponent} from '../../utils/math'
 import {isNumeric} from '../../utils/strings'
 import {TooltipIconButton} from '../Buttons'
@@ -103,20 +103,21 @@ export default function CutPlaneMenu() {
   // A dragged plane goes into the permalink (owner on #2171: a link kept
   // which planes were on but not where, so a new tab replayed every cut at
   // the model centre), and into the store, whose offsets togglePlane
-  // rebuilds the other planes from. Debounced like the camera's
-  // (utils/debounce.js): a drag is a stream of moves, and each hash write is
-  // a history entry.
+  // rebuilds the other planes from. It is the cut planes' term of the live
+  // view link (Share/viewLink.js): a drag is the user's own change, and a
+  // stream of moves, written once it settles, in place (writeDraggedPlanes).
   useEffect(() => {
     const clipper = viewer?.clipper
     if (!model || !clipper) {
       return undefined
     }
-    const writePlanes = debounce(() => writeDraggedPlanes(viewer, model), HASH_DEBOUNCE_WAIT_MS)
-    clipper.onPlaneMoved = writePlanes
+    const term = createLiveTerm({write: () => writeDraggedPlanes(viewer, model)})
+    clipper.onPlaneMoved = term.start
     return () => {
       // A drag's last move still lands in the link if the menu goes first.
-      writePlanes.flush()
-      if (clipper.onPlaneMoved === writePlanes) {
+      term.flush()
+      term.dispose()
+      if (clipper.onPlaneMoved === term.start) {
         clipper.onPlaneMoved = null
       }
     }
@@ -173,7 +174,11 @@ export default function CutPlaneMenu() {
       }
     } else {
       debug().log('CutPlaneMenu#togglePlane: found: ', false)
-      addHashParams(window.location, HASH_PREFIX_CUT_PLANE, {[direction]: offset}, true)
+      // Its own history step, unlike a drag. Not while the Share dialog's
+      // "Cut planes" switch is off: that would put back what it removed.
+      if (useStore.getState().isPlaneInUrl) {
+        addHashParams(window.location, HASH_PREFIX_CUT_PLANE, {[direction]: offset}, true)
+      }
       addCutPlaneDirection({direction, offset})
       viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset, direction, offset)
       viewer.clipper.setInteractionEnabled(true)
@@ -374,8 +379,17 @@ export function writeDraggedPlanes(viewer, model) {
   if (!offsets || Object.keys(offsets).length === 0) {
     return
   }
-  addHashParams(window.location, HASH_PREFIX_CUT_PLANE, offsets, true)
-  const {cutPlanes, setCutPlaneDirections} = useStore.getState()
+  const {cutPlanes, setCutPlaneDirections, isPlaneInUrl} = useStore.getState()
+  // In place, not as a new history entry: a drag settle is a value streaming
+  // into the link, like the live camera's (Share/viewLink.js), so Back
+  // shouldn't step through each one, and a `hashchange`/`popstate` would
+  // re-run every location effect for it (utils/location.js#replaceHashParams).
+  // Turning a plane on or off (togglePlane) stays a history entry. The link
+  // only while the Share dialog's switch is on; the store always, since
+  // togglePlane rebuilds the other planes from its offsets.
+  if (isPlaneInUrl) {
+    replaceHashParams(window.location, HASH_PREFIX_CUT_PLANE, offsets, true)
+  }
   setCutPlaneDirections(cutPlanes.map((cutPlane) =>
     (cutPlane.direction in offsets ? {...cutPlane, offset: offsets[cutPlane.direction]} : cutPlane)))
 }

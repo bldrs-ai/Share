@@ -14,24 +14,25 @@
 // several, so the seam can end in a refusal or a question as well as a file
 // ({@link openUploadThroughArchive}).
 //
-// `.ifczip` is the one archive that IS in `supportedTypes` — the standard IFC
-// transport, a zip of one `.ifc` — so it routes, lists in the GitHub
-// browser and parses out of a permalink like any model. An uploaded one is
-// unwrapped here like any zip; a hosted one reaches `Loader#load` still
-// zipped, and {@link unwrapIfcZip} is that path's net, one line before
+// `.zip` and `.ifczip` are in `supportedTypes`, so they route, list in the
+// GitHub browser and parse out of a permalink like any model; what they hold
+// is decided by content, never the name. An upload is unwrapped here; a
+// download reaches `Loader#load` still zipped (whatever its name), and
+// {@link unwrapHostedArchive} is that path's net, one line before
 // `readModel`, beside the gzip one.
 //
 // Design: design/new/adding-model-formats.md §"An archive is not a format either".
 import {analyzeHeader, supportedTypes} from '../Filetype'
 import debug, {WARN} from '../utils/debug'
+import {DicomError, dicomSeriesToNrrd, groupSeries, looksLikeDicom, parseDicomSlice} from './dicom'
 import {archiveGuidance} from './formatGuidance'
 import {consoleFileName} from '../privacy/sentryRedaction'
-import {PART21_LOADER_TYPES} from './part21Formats'
 import {extensionTag, unrecognizedFormatAlert} from './unrecognizedFormat'
 import {
   MAX_TOTAL_INFLATED_BYTES,
   ZipArchiveError,
   asArchiveError,
+  expandsPastMessage,
   extractZipEntry,
   looksLikeZipBytes,
   readZipDirectory,
@@ -43,8 +44,8 @@ export const ARCHIVE_ENTRY_CHOICE = 'archiveEntryChoice'
 
 
 /**
- * The alert type for a hosted `.ifczip` that can't be opened
- * ({@link unwrapIfcZip}, raised by CadView): `{type, message}`, where the
+ * The alert type for a downloaded archive that can't be opened
+ * ({@link unwrapHostedArchive}, raised by CadView): `{type, message}`, where the
  * message is a `ZipArchiveError`'s, which never names a file. An expected
  * outcome, counted in analytics only. Uploads don't use it: theirs are
  * `unrecognizedFormat` alerts, tagged by the upload's extension.
@@ -59,11 +60,13 @@ const HEADER_LIMIT = 1024
 // whose first entry gives one away is passed through by the sniff below; this
 // covers the rest by name — a SOG bundle that doesn't lead with `meta.json`
 // has only its `.sog` to say what it is (`Filetype.js#looksLikeSogArchive`).
-const ZIP_MODEL_TYPES = new Set(['usdz', 'sog'])
+export const ZIP_MODEL_TYPES = new Set(['usdz', 'sog'])
 
-// The archive type in `supportedTypes`. Inside another archive it is opened
-// one level down, and no further.
-const IFC_ZIP = 'ifczip'
+// The archive types in `supportedTypes`: a zip, and the IFC transport (a zip
+// of one `.ifc`). Listed so routes, the GitHub browser and permalinks take
+// them; what they hold is decided by content here, never by the name. Inside
+// another archive one is opened one level down, and no further.
+const ARCHIVE_TYPES = new Set(['zip', 'ifczip'])
 
 
 // A `.gltf` names its buffers and textures by URI. Out of an archive it is
@@ -149,9 +152,17 @@ async function resolveArchive(file, depth, budget) {
   const files = await readZipDirectory(file)
   // A 0-byte entry is no model, whatever its name: fflate inflates an empty
   // stream to nothing without complaint, and conway would be handed it.
-  const models = files.filter((entry) => entry.size > 0 &&
-    supportedTypes.includes(entry.ext) && !(depth > 0 && entry.ext === IFC_ZIP))
+  // A plain `.zip` inside is never a model: it is a bundle's attachments as
+  // often as not (`deliverable.zip` holding `Tower.ifc` and `docs.zip`), and
+  // `zip` is in `supportedTypes` only so a hosted one routes. A `.ifczip` is
+  // the IFC transport, so it is one, unwrapped once.
+  const models = files.filter((entry) => entry.size > 0 && entry.ext !== 'zip' &&
+    supportedTypes.includes(entry.ext) && !(depth > 0 && ARCHIVE_TYPES.has(entry.ext)))
   if (models.length === 0) {
+    const volume = await dicomVolume(file, files, budget)
+    if (volume !== null) {
+      return volume
+    }
     // Tagged as `uploadExtension` tags a file's own: the text after an
     // entry's last dot can be a name fragment, and this goes on the alert.
     // Empty files are left out: "it contains .ifc" about a 0-byte a.ifc
@@ -173,7 +184,7 @@ async function resolveArchive(file, depth, budget) {
     // as the reader's can: mapped the same way, to "too large to unpack in
     // this browser" rather than a defect.
     const asFile = () => withArchiveErrors(() => new File([bytes], entry.name, {lastModified: file.lastModified}))
-    if (entry.ext === IFC_ZIP) {
+    if (ARCHIVE_TYPES.has(entry.ext)) {
       const inner = await resolveArchive(
         withArchiveErrors(() => namedBlob(bytes, entry.name, file.lastModified)), depth + 1, budget)
       // Not a zip after all: the entry is handed on as the file it is, for
@@ -186,6 +197,123 @@ async function resolveArchive(file, depth, budget) {
     return open(models[0])
   }
   return {kind: 'choose', entries: models, revitTextSiblings: revitTextSiblings(models, files), open}
+}
+
+
+// Entry names a DICOM slice can have. Scanners and PACS exports write
+// `.dcm`, `.dicom`, `.ima` (Siemens), or no extension at all (`IM0001`,
+// `I1000000`), and some name each file by its SOP Instance UID, whose last
+// dotted component then reads as an all-digit extension.
+const DICOM_EXTS = new Set(['dcm', 'dicom', 'dic', 'ima', ''])
+
+
+/**
+ * The volume in an archive of DICOM slices, stacked into one `.nrrd`
+ * (`loader/dicom.js`), for an archive with no other model in it.
+ *
+ * Each candidate entry is inflated and kept only if it is a DICOM image; a
+ * series is the slices that share a Series Instance UID, image size,
+ * orientation, echo and temporal position, and the largest one opens — a
+ * study export puts the scan beside a scout of a few slices. What reaches
+ * the seam is a `File` named for the archive (`CT1.zip` → `CT1.nrrd`),
+ * typed `nrrd`: the archive is the only name the series has.
+ *
+ * The candidates are guesses (any entry with no extension), so looking at
+ * one must not change what an archive with no DICOM in it is told:
+ *
+ * - An entry is inflated against a scratch budget (the whole per-upload
+ *   ceiling), and charged to the upload's own only once it has proved to be
+ *   a DICOM image. A `LICENSE` or `Makefile` costs nothing, and can't fail
+ *   for room the slices before it used.
+ * - An entry that can't be extracted (encrypted, an unsupported method,
+ *   past the ceiling) is skipped while it might be anything. It is raised
+ *   only once the archive has proved to hold DICOM, where it may be a
+ *   slice, and a series missing slices must not open as if whole; or when
+ *   it is named as DICOM (`.dcm`).
+ * - Otherwise an archive with no DICOM image falls through to the "holds no
+ *   model" alert exactly as before.
+ *
+ * @param {Blob} file the archive
+ * @param {Array<object>} files its entries (`zipArchive.js#ZipEntry`)
+ * @param {{remaining: number}} budget
+ * @return {Promise<object|null>} an `ArchiveResolution` of kind `model`, or
+ *   null when the archive holds no DICOM image
+ * @throws {ZipArchiveError} for a series that can't be read or stacked
+ */
+async function dicomVolume(file, files, budget) {
+  const candidates = files.filter((entry) => entry.size > 0 &&
+    (DICOM_EXTS.has(entry.ext) || /^\d+$/.test(entry.ext)))
+  const slices = []
+  let refusal = null
+  let unextracted = null
+  let unextractedNamedDicom = null
+  for (const entry of candidates) {
+    let bytes
+    try {
+      // A scratch budget of the whole per-upload ceiling, not what is left
+      // of the real one: a guess mustn't fail for room the slices used up.
+      bytes = await extractZipEntry(file, entry, {remaining: MAX_TOTAL_INFLATED_BYTES})
+    } catch (e) {
+      if (!(e instanceof ZipArchiveError)) {
+        throw e
+      }
+      unextracted = unextracted ?? e
+      if (entry.ext !== '' && !/^\d+$/.test(entry.ext)) {
+        unextractedNamedDicom = unextractedNamedDicom ?? e
+      }
+      continue
+    }
+    if (!looksLikeDicom(bytes)) {
+      continue
+    }
+    if (bytes.length > budget.remaining) {
+      throw new ZipArchiveError(expandsPastMessage())
+    }
+    budget.remaining -= bytes.length
+    try {
+      const slice = parseDicomSlice(bytes)
+      if (slice !== null) {
+        slices.push(slice)
+      }
+    } catch (e) {
+      if (!(e instanceof DicomError)) {
+        throw e
+      }
+      // One unreadable slice shouldn't sink a series of readable ones, so
+      // the refusal is kept, and raised only if nothing could be read.
+      refusal = refusal ?? e
+    }
+  }
+  if (slices.length === 0) {
+    if (refusal !== null) {
+      throw new ZipArchiveError(refusal.message)
+    }
+    if (unextractedNamedDicom !== null) {
+      throw unextractedNamedDicom
+    }
+    return null
+  }
+  if (unextracted !== null) {
+    throw unextracted
+  }
+  const [series] = groupSeries(slices)
+  slices.length = 0
+  let nrrd
+  try {
+    nrrd = withArchiveErrors(() => dicomSeriesToNrrd(series))
+  } catch (e) {
+    throw e instanceof DicomError ? new ZipArchiveError(e.message) : e
+  }
+  const name = `${withoutExtension(String(file.name || 'volume.zip'))}.nrrd`
+  debug().log(`modelArchive#dicomVolume: stacked ${series.length} DICOM slices`)
+  // No `bytes` beside the File, unlike an entry's resolution: the File is a
+  // copy, and holding the NRRD array too would keep a second whole volume
+  // alive while the seam writes the File to OPFS.
+  return {
+    kind: 'model',
+    file: withArchiveErrors(() => new File([nrrd], name, {lastModified: file.lastModified})),
+    ext: 'nrrd',
+  }
 }
 
 
@@ -275,37 +403,107 @@ export function noModelInArchiveAlert(fileName, entry, exts) {
 
 
 /**
- * The model in a hosted `.ifczip`, for the IFC parser.
+ * The model inside a downloaded archive — from GitHub, Drive, a locally
+ * hosted file or a pasted URL — for `Loader#load` to parse.
  *
- * The load seam's net: uploads arrive unwrapped, but a `.ifczip` on GitHub, a
- * locally hosted one or a pasted URL reaches `Loader#load` as the zip it is.
- * It shares `findLoader`'s IFC arm, so its bytes are about to go to conway,
- * which reads part-21 text and would refuse a zip ("zip archive (such as
- * .ifczip), not STEP text").
+ * The load seam's half of opening zips the same way wherever they come from:
+ * uploads are unwrapped at the upload seams (`openUploadThroughArchive`);
+ * a download reaches `Loader#load` as the bytes it is, whatever its name
+ * (`.zip`, `.ifc.zip`, `.ifczip`, or a zip renamed `model.ifc`), and comes
+ * through here. It is the same resolution the upload seams use
+ * (`resolveArchiveUpload`): one model opens, typed by its extension (header
+ * sniffing types an entry with none); a DICOM series opens as its volume;
+ * zip-based model formats (USDZ, SOG) pass through as themselves.
  *
- * @param {ArrayBuffer|Uint8Array} modelData the `.ifczip`'s bytes
- * @return {Promise<object>} `{modelData, type}`: the part-21 model inside
- *   and its format tag. Bytes that aren't a zip at all come back unchanged
- *   as `ifc`, for conway to judge
- * @throws {ZipArchiveError} when there isn't exactly one part-21 model inside
+ * What a download can't do that an upload can: put up the entry chooser.
+ * The chooser resumes an upload with the entry picked, but a hosted link has
+ * no way to name an entry inside an archive, so a link to an archive of
+ * several models would have nothing to reopen. Several models are refused,
+ * naming them.
+ *
+ * @param {ArrayBuffer|Uint8Array} modelData the downloaded bytes
+ * @param {string} [name] the download's file name, for a DICOM volume's name
+ * @return {Promise<object|null>} `{modelData, type}`: the model inside, as
+ *   an ArrayBuffer, and its format tag; null when the bytes aren't an
+ *   archive to look inside (not a zip, or a zip-based model format)
+ * @throws {ZipArchiveError} when there isn't exactly one model inside, or the
+ *   archive can't be read
  */
-export async function unwrapIfcZip(modelData) {
-  const resolution = await resolveArchiveUpload(namedBlob(modelData, `model.${IFC_ZIP}`, Date.now()))
-  if (resolution.kind === 'model' && resolution.ext === undefined) {
-    return {modelData, type: 'ifc'}
-  }
-  if (resolution.kind === 'model' && PART21_LOADER_TYPES.has(resolution.ext)) {
-    // An ArrayBuffer, as every other path hands the IFC parser. The entry's
-    // buffer is exactly its bytes: `extractZipEntry` sizes it to the entry.
-    return {modelData: resolution.bytes.buffer, type: resolution.ext}
-  }
-  if (resolution.kind === 'choose') {
-    throw new ZipArchiveError('This .ifczip holds more than one model. Unpack it, then open the .ifc you want.')
+export async function unwrapHostedArchive(modelData, name = 'model.zip') {
+  const outer = namedBlob(modelData, name, Date.now())
+  const resolution = await resolveArchiveUpload(outer)
+  if (resolution.kind === 'model' && resolution.ext === undefined && resolution.file === outer) {
+    return null
   }
   if (resolution.kind === 'model') {
-    throw new ZipArchiveError(`This .ifczip holds a .${resolution.ext} model, not an IFC. Unpack it and open that file.`)
+    // An entry's bytes are exactly the entry (`extractZipEntry` sizes the
+    // buffer to it); a DICOM volume's resolution carries only its File.
+    const bytes = resolution.bytes ?? new Uint8Array(await readBlob(resolution.file))
+    const buffer = bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength ?
+      bytes.buffer : bytes.slice().buffer
+    // A nested `.ifczip` that wasn't a zip after all comes back untyped, as
+    // the seams' sniff expects: typed here by its header, as they would.
+    const type = resolution.ext ??
+      analyzeHeader(buffer.slice(0, HEADER_LIMIT), {fileByteLength: buffer.byteLength})
+    if (type === null) {
+      throw new ZipArchiveError(NO_MODEL_MESSAGE)
+    }
+    return {modelData: buffer, type}
   }
-  throw new ZipArchiveError('This .ifczip holds no IFC model.')
+  if (resolution.kind === 'choose') {
+    throw new ZipArchiveError(severalModelsMessage(resolution.entries.length),
+      {dialogText: severalModelsMessage(resolution.entries.length, resolution.entries)})
+  }
+  // The extension list is the archive's content, tagged but still taken from
+  // the user's entry names (`.acmecorp`), so only the dialog gets it.
+  throw new ZipArchiveError(NO_MODEL_MESSAGE, {dialogText: archiveGuidance({exts: resolution.exts}).lines[0]})
+}
+
+
+// What sinks get for a hosted archive with no model in it.
+const NO_MODEL_MESSAGE = 'This archive has no model Share can open.'
+
+
+// How many of an archive's models the several-models refusal names.
+const NAMED_MODELS = 5
+
+
+/**
+ * The refusal for a hosted archive of several models. Without `entries` it
+ * names none of them, which is the form sinks get (`ZipArchiveError`).
+ *
+ * @param {number} count how many models the archive holds
+ * @param {Array<object>} [entries] the models, to name the first few
+ * @return {string}
+ */
+function severalModelsMessage(count, entries) {
+  let listed = ''
+  if (entries !== undefined) {
+    const names = entries.slice(0, NAMED_MODELS).map((entry) => entry.path)
+    const more = count > NAMED_MODELS ? ` and ${count - NAMED_MODELS} more` : ''
+    listed = ` (${names.join(', ')}${more})`
+  }
+  return `This archive holds ${count} models${listed}. ` +
+    'A link opens an archive of one model. Unpack it and open the model you want, ' +
+    'or open the archive from your computer to choose one.'
+}
+
+
+/**
+ * @param {Blob} blob
+ * @return {Promise<ArrayBuffer>} its bytes (through FileReader where a Blob
+ *   can't read itself, as jsdom's File can't)
+ */
+function readBlob(blob) {
+  if (typeof blob.arrayBuffer === 'function') {
+    return blob.arrayBuffer()
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsArrayBuffer(blob)
+  })
 }
 
 

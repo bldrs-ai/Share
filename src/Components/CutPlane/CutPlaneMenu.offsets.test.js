@@ -1,5 +1,6 @@
 import {Box3, BatchedMesh, BoxGeometry, BufferGeometry, Group, Matrix4, Mesh, MeshBasicMaterial, Plane, Vector3} from 'three'
 import useStore from '../../store/useStore'
+import * as locationUtils from '../../utils/location'
 import {getModelCenter, getPlaneSceneInfo, getPlanes, getPlanesOffset, writeDraggedPlanes} from './CutPlaneMenu'
 
 
@@ -64,6 +65,39 @@ describe('CutPlaneMenu: a dragged plane\'s offset in the permalink', () => {
     const hash = window.location.hash.split('#').pop().split('::').find((set) => set.startsWith('cp:'))
     expect(getPlanes(hash)).toEqual([{direction: 'x', offset: 0.75}, {direction: 'y', offset: -0.5}])
     expect(useStore.getState().cutPlanes).toEqual([{direction: 'x', offset: 0.75}, {direction: 'y', offset: -0.5}])
+  })
+
+  it('keeps the store\'s offsets but leaves the link alone while the Share switch is off', () => {
+    // The live view link's switch (store isPlaneInUrl) gates the URL only:
+    // togglePlane rebuilds the other planes from the store's offsets, so
+    // those must follow the drag either way.
+    const model = makeModel()
+    useStore.setState({cutPlanes: [{direction: 'x', offset: 0}], model, isPlaneInUrl: false})
+    try {
+      writeDraggedPlanes({clipper: {planes: [menuPlane(model, 'x', 0.75)]}}, model)
+      expect(window.location.hash).toBe('')
+      expect(useStore.getState().cutPlanes).toEqual([{direction: 'x', offset: 0.75}])
+    } finally {
+      useStore.setState({isPlaneInUrl: true})
+    }
+  })
+
+  it('writes a drag in place, not as a history entry per settle', () => {
+    // The page's location is a double in this file, so the writer is watched
+    // instead: replaceHashParams is what keeps Back from stepping through
+    // every drag (utils/location.test.js holds its no-entry, no-event contract).
+    const replaceSpy = jest.spyOn(locationUtils, 'replaceHashParams')
+    const addSpy = jest.spyOn(locationUtils, 'addHashParams')
+    try {
+      const model = makeModel()
+      useStore.setState({cutPlanes: [{direction: 'x', offset: 0}], model})
+      writeDraggedPlanes({clipper: {planes: [menuPlane(model, 'x', 0.75)]}}, model)
+      expect(replaceSpy).toHaveBeenCalledWith(window.location, 'cp', {x: 0.75}, true)
+      expect(addSpy).not.toHaveBeenCalled()
+    } finally {
+      replaceSpy.mockRestore()
+      addSpy.mockRestore()
+    }
   })
 
   // The E2E's replay tab opened the model from the GLB cache: a BatchedMesh

@@ -2,6 +2,8 @@ import {
   getHashParams,
   getObjectParams,
   removeHashParams,
+  removeParamsFromHash,
+  replaceHash,
   setParamsToHash,
 } from '../../utils/location'
 import {ColorMode} from '../../viewer/display/colorMode'
@@ -17,6 +19,7 @@ import {
   isDefaultMotionResidency,
   motionResidencyOrDefault,
 } from '../../viewer/display/motionResidencyMode'
+import {VOLUME_DEFAULT, volumeOrDefault} from '../../viewer/display/volumeMode'
 import {MotionResidencyMode} from '../../viewer/residency/MotionResidency'
 import {ResidencyMetric} from '../../viewer/residency/ResidencyController'
 
@@ -37,6 +40,8 @@ import {ResidencyMetric} from '../../viewer/residency/ResidencyController'
  *   #d:color=src,wire=1,res=40   all three
  *   #d:mres=25             25% resident while the camera moves (B3)
  *   #d:mres=auto.memory    Auto while moving, memory-budget priority
+ *   #d:vw=150_900          a volume's window, in its own units (HU for CT)
+ *   #d:vo=60               a volume at 60% of its default density
  *
  * `res` follows §6.1's `res=<pct>[.<metric>]`: the metric is appended only
  * when it isn't the default, and spelled out (`memory`, not `m`) so parsing
@@ -62,6 +67,14 @@ import {ResidencyMetric} from '../../viewer/residency/ResidencyController'
  * Auto + occupancy is the default and writes nothing; under Auto the percent
  * is not written (it is inert there).
  *
+ * `vw` and `vo` are a volume's (volumeMode.js). The window's two ends are
+ * joined by `_`, not `.`: they can be negative and fractional (a CT's
+ * `-500_300`, a float volume's `0.12_0.8`). Each end is written to eight
+ * significant figures: about 256 slider steps span the volume's range, so
+ * four figures could round a narrow window's two ends to one number on a
+ * volume of large values (a 1-unit step at 10100), and eight cover float32
+ * data, while a CT's integer HU still write as themselves (review of #2179).
+ *
  * FORWARD COMPAT (not yet emitted): §6.1's grammar also has scoped terms
  * (`e<id>=…`, `o<pathKey>=…`, `m<idx>=…`). They slot into the same `d:` token
  * as extra comma-separated entries when S5 (the scoped overrides) lands.
@@ -74,10 +87,14 @@ export const HASH_PREFIX_DISPLAY = 'd'
 
 // The order terms are written in, so a token reads the same whichever writer
 // touched it last. Keys a newer writer added follow these, as found.
-const TERM_ORDER = ['color', 'wire', 'res', 'mres', 'hide', 'show', 'iso']
+const TERM_ORDER = ['color', 'wire', 'res', 'mres', 'vw', 'vo', 'hide', 'show', 'iso']
 
 // The keys `writeModelDisplayHash` owns.
-const MODEL_DISPLAY_KEYS = ['color', 'wire', 'res', 'mres']
+const MODEL_DISPLAY_KEYS = ['color', 'wire', 'res', 'mres', 'vw', 'vo']
+
+// Joins a volume window's two ends in `vw`.
+const WINDOW_SEP = '_'
+const WINDOW_DIGITS = 8
 
 // `mres`'s spelling of Auto.
 const MOTION_AUTO_TERM = 'auto'
@@ -90,8 +107,11 @@ const MOTION_AUTO_TERM = 'auto'
  *
  * @param {object} location window.location
  * @param {object} terms key → value string, or null / '' to drop the key
+ * @param {object} [options]
+ * @param {boolean} [options.inPlace] write with `history.replaceState`, no
+ *   history entry: the live view link's writes (Share/viewLink.js)
  */
-export function mergeDisplayTerms(location, terms) {
+export function mergeDisplayTerms(location, terms, {inPlace = false} = {}) {
   const token = getHashParams(location, HASH_PREFIX_DISPLAY)
   const next = {}
   for (const [key, value] of Object.entries(token ? getObjectParams(token) : {})) {
@@ -116,14 +136,22 @@ export function mergeDisplayTerms(location, terms) {
     Object.entries(next).sort(([a], [b]) => rank(a) - rank(b)))
   if (Object.keys(ordered).length === 0) {
     if (token) {
-      removeHashParams(location, HASH_PREFIX_DISPLAY)
+      if (inPlace) {
+        replaceHash(location, removeParamsFromHash(location.hash, HASH_PREFIX_DISPLAY))
+      } else {
+        removeHashParams(location, HASH_PREFIX_DISPLAY)
+      }
     }
     return
   }
   // includeNames: emit `k=v`, matching the cp: token shape.
   const hash = setParamsToHash(location.hash, HASH_PREFIX_DISPLAY, ordered, true)
   if (hash !== location.hash) {
-    location.hash = hash
+    if (inPlace) {
+      replaceHash(location, hash)
+    } else {
+      location.hash = hash
+    }
   }
 }
 
@@ -162,6 +190,13 @@ export function modelDisplayParams(appearance = {}) {
     const amount = mode === MotionResidencyMode.AUTO ? MOTION_AUTO_TERM : `${percent}`
     params.mres = metric === MOTION_RESIDENCY_DEFAULT.metric ? amount : `${amount}.${metric}`
   }
+  const volume = volumeOrDefault(appearance.volume)
+  if (volume.window !== null) {
+    params.vw = volume.window.map((end) => `${Number(end.toPrecision(WINDOW_DIGITS))}`).join(WINDOW_SEP)
+  }
+  if (volume.opacity !== VOLUME_DEFAULT.opacity) {
+    params.vo = `${Math.round(volume.opacity)}`
+  }
   return params
 }
 
@@ -172,8 +207,9 @@ export function modelDisplayParams(appearance = {}) {
  *
  * @param {object} location window.location
  * @param {object} [appearance] `{color?, shading?, residency?}`
+ * @param {object} [options] `{inPlace}`, as {@link mergeDisplayTerms}
  */
-export function writeModelDisplayHash(location, appearance = {}) {
+export function writeModelDisplayHash(location, appearance = {}, options = {}) {
   const params = modelDisplayParams(appearance)
   // Every model-display key is set or dropped, not merged: an axis returning
   // to its default stops being emitted, and a merge would keep it from the
@@ -181,7 +217,7 @@ export function writeModelDisplayHash(location, appearance = {}) {
   // `color=src` and the shared URL restored a different display than the
   // sender saw. Only the other writers' keys (hide / show / iso) are kept.
   mergeDisplayTerms(location, Object.fromEntries(
-    MODEL_DISPLAY_KEYS.map((key) => [key, params[key] ?? null])))
+    MODEL_DISPLAY_KEYS.map((key) => [key, params[key] ?? null])), options)
 }
 
 
@@ -279,5 +315,32 @@ export function readModelDisplayHash(location) {
   if (motionResidency) {
     appearance.motionResidency = motionResidency
   }
+  const volume = readVolume(obj)
+  if (volume) {
+    appearance.volume = volume
+  }
   return appearance
+}
+
+
+/**
+ * Parse the volume terms (`vw`, `vo`). A malformed one is dropped and the
+ * other kept, as `res`'s halves are.
+ *
+ * @param {object} obj the token's params
+ * @return {object|undefined} a volumeMode.js `VolumeAxis`
+ */
+function readVolume(obj) {
+  let window = null
+  if (typeof obj.vw === 'string') {
+    const ends = obj.vw.split(WINDOW_SEP).map(Number)
+    if (ends.length === 2 && ends.every(Number.isFinite) && ends[0] < ends[1]) {
+      window = ends
+    }
+  }
+  const opacity = typeof obj.vo === 'string' && /^\d+$/.test(obj.vo) ? Number(obj.vo) : undefined
+  if (window === null && opacity === undefined) {
+    return undefined
+  }
+  return volumeOrDefault({window, opacity})
 }
