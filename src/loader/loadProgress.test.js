@@ -42,7 +42,6 @@ import {
   reportLoadProgress,
   reportModelInfo,
   reportSourceInfo,
-  reportSourceSize,
 } from './loadProgress'
 
 
@@ -633,24 +632,43 @@ describe('loadProgress', () => {
       })
     })
 
-    describe('fileSize on a GLB cache hit', () => {
-      // A hit parses the cached artifact, so its own bytes must never stand
-      // in for the source's: a 24 MB IFC used to report its 4 MB GLB.
-      it('reports the source size the loader passes, replacing the model line\'s', () => {
-        const SOURCE_BYTES = 24_200_000
-        beginLoadProgress({fileInfo: 'a.ifc'})
-        reportModelInfo({fileName: 'a.ifc', schema: 'IFC', byteLength: 4_254_613})
-        reportSourceSize(SOURCE_BYTES)
+    describe('sizes on a GLB cache hit', () => {
+      // A hit parses the cached artifact, so its bytes must never stand in for
+      // the source's: a 24 MB IFC used to report its 4 MB GLB as stats_fileSize
+      // and on the model line. The loader passes the source size the writer
+      // stamped (byteLength) and the artifact's own (artifactByteLength).
+      const SOURCE_BYTES = 5_879_866
+      const GLB_BYTES = 1_394_746
+
+      it('reports the source as fileSize and the GLB as artifactSize', () => {
+        beginLoadProgress({fileInfo: 'Momentum.ifc'})
+        reportModelInfo({fileName: 'Momentum.ifc', schema: 'IFC', byteLength: SOURCE_BYTES, artifactByteLength: GLB_BYTES})
         endLoadProgress()
         expect(getCompletedLoadStats().fileSize).toBe(SOURCE_BYTES)
+        expect(getCompletedLoadStats().artifactSize).toBe(GLB_BYTES)
       })
 
-      it('reports no size, not the artifact\'s, when the source size is unknown', () => {
-        beginLoadProgress({fileInfo: 'a.ifc'})
-        reportModelInfo({fileName: 'a.ifc', schema: 'IFC', byteLength: 4_254_613})
-        reportSourceSize(undefined)
+      it('shows both sizes on the model line', () => {
+        beginLoadProgress({fileInfo: 'Momentum.ifc'})
+        reportModelInfo({fileName: 'Momentum.ifc', schema: 'IFC', byteLength: SOURCE_BYTES, artifactByteLength: GLB_BYTES})
+        expect(reportLines()).toContain('Model: Momentum.ifc — IFC, 5.6 MB (cached GLB 1.3 MB)')
+        endLoadProgress()
+      })
+
+      it('reports no source size, not the GLB\'s, for an artifact that predates the stamp', () => {
+        beginLoadProgress({fileInfo: 'Momentum.ifc'})
+        reportModelInfo({fileName: 'Momentum.ifc', schema: 'IFC', artifactByteLength: GLB_BYTES})
+        expect(reportLines()).toContain('Model: Momentum.ifc — IFC (source size not recorded; cached GLB 1.3 MB)')
         endLoadProgress()
         expect(getCompletedLoadStats().fileSize).toBeUndefined()
+        expect(getCompletedLoadStats().artifactSize).toBe(GLB_BYTES)
+      })
+
+      it('has no artifact size on a load that parsed the source', () => {
+        beginLoadProgress({fileInfo: 'a.ifc'})
+        reportModelInfo({fileName: 'a.ifc', schema: 'IFC', byteLength: SOURCE_BYTES})
+        endLoadProgress()
+        expect(getCompletedLoadStats().artifactSize).toBeUndefined()
       })
     })
 

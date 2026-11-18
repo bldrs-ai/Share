@@ -90,9 +90,10 @@ export const BLDRS_TITLE_EXTRAS_KEY = 'bldrsTitle'
 // parses the artifact, not the source, so without this the only size the
 // load knows is the artifact's — and that is what `stats_fileSize` used to
 // report on every warm open: a 24 MB IFC read as its 4 MB GLB in the
-// bizdev per-user card. The reader (`Loader.js`, at `reportCacheHit`)
-// reports this value instead, or no size at all for an artifact written
-// before the key existed; never the artifact's own byte count.
+// bizdev per-user card. The reader (`Loader.js#stampedSourceBytes`, from the
+// JSON the cache lookup already holds) reports this value instead, beside the
+// artifact's own size, or no source size at all for an artifact written
+// before the key existed; never the artifact's byte count as the file's.
 export const BLDRS_SOURCE_BYTES_EXTRAS_KEY = 'bldrsSourceBytes'
 
 
