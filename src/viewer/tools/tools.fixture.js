@@ -231,7 +231,7 @@ function placement(position, rotateZ, scale) {
  * (feet) with its IfcMeasureWithUnit. Ids from 2000.
  *
  * @param {string} units 'm', 'mm' (a milli prefix, area and volume implied
- *   from it) or 'ft' (conversion-based length, area and volume)
+ *   from it), 'mm-prefixed' (milli on all three) or 'ft' (conversion-based length, area and volume)
  * @return {{entities: object, factors: object}} entities by id, and the
  *   factor each kind's raw value is multiplied by to get SI
  */
@@ -257,6 +257,18 @@ function unitEntities(units) {
     return {
       entities: {2000: {expressID: 2000, type: 180925521, Units: [ref(2001)]},
         2001: si(2001, 'LENGTHUNIT', 'METRE', 'MILLI')},
+      factors: {length: 1e-3, area: 1e-6, volume: 1e-9},
+    }
+  }
+  if (units === 'mm-prefixed') {
+    // Prefixes on the area and volume units themselves: (10^-3)^2 and ^3.
+    return {
+      entities: {
+        2000: {expressID: 2000, type: 180925521, Units: [ref(2001), ref(2002), ref(2003)]},
+        2001: si(2001, 'LENGTHUNIT', 'METRE', 'MILLI'),
+        2002: si(2002, 'AREAUNIT', 'SQUARE_METRE', 'MILLI'),
+        2003: si(2003, 'VOLUMEUNIT', 'CUBIC_METRE', 'MILLI'),
+      },
       factors: {length: 1e-3, area: 1e-6, volume: 1e-9},
     }
   }

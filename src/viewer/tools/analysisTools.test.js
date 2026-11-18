@@ -156,6 +156,51 @@ describe('viewer/tools analysis: model.measure', () => {
       expect(content.hint).toMatch(/narrower/)
     })
 
+    // One piece past the whole call's bound used to be measured anyway (the
+    // bound only applied once something was measured) and reported complete.
+    it('refuses a single piece over the limit, lists its ref, and does not call the result complete', async () => {
+      MEASURE_LIMITS.maxTriangles = 11
+      const {content} = await registry.call('model.measure', {refs: ['e100', 'e102', 'e101'], metric: 'surfaceArea'})
+      // The cubes have 12 triangles each; the open box has 10.
+      expect(content.complete).toBe(false)
+      expect(content.tooLarge).toEqual(['e100', 'e101'])
+      expect(content.items.map(({ref}) => ref)).toEqual(['e102'])
+      expect(content.total).toBeCloseTo(5, 4)
+      expect(content.hint).toMatch(/single mesh piece over the 11-triangle limit/)
+    })
+
+    it('refuses a lone oversize piece instead of measuring it', async () => {
+      MEASURE_LIMITS.maxTriangles = 11
+      const {content} = await registry.call('model.measure', {refs: ['e100'], metric: 'volume'})
+      expect(content.complete).toBe(false)
+      expect(content.measured).toBe(0)
+      expect(content.tooLarge).toEqual(['e100'])
+    })
+
+    // A piece larger than the chunk yields inside itself, on a timer (a
+    // macrotask: the page paints and a Stop's event runs), not only between
+    // pieces. A 12-triangle cube in chunks of 3 pauses at triangles 3, 6, 9.
+    it.each(['surfaceArea', 'volume'])('yields mid-piece on a timer when measuring %s', async (metric) => {
+      MEASURE_LIMITS.yieldEvery = 3
+      const spy = jest.spyOn(global, 'setTimeout')
+      try {
+        await registry.call('model.measure', {refs: ['e100'], metric})
+        const pauses = spy.mock.calls.filter(([, delay]) => delay === 0).length
+        expect(pauses).toBeGreaterThanOrEqual(3)
+      } finally {
+        spy.mockRestore()
+      }
+    })
+
+    it.each(['surfaceArea', 'volume'])('stops in the middle of one piece when aborted (%s)', async (metric) => {
+      MEASURE_LIMITS.yieldEvery = 3
+      const controller = new AbortController()
+      setTimeout(() => controller.abort(), 0)
+      const error = await rejection(registry.call('model.measure',
+        {refs: ['e100'], metric}, {signal: controller.signal}))
+      expect(error.code).toBe('aborted')
+    })
+
     it('stops between pieces when the call is aborted', async () => {
       MEASURE_LIMITS.yieldEvery = 1
       const controller = new AbortController()
@@ -230,7 +275,9 @@ describe('viewer/tools analysis: model.quantities', () => {
   // The file's own units, never assumed: a milli-prefixed metre (area and
   // volume implied by it) and feet through IfcConversionBasedUnit give the
   // same SI numbers as a metre model.
-  it.each(['mm', 'ft'])('converts a %s model\'s quantities to SI', async (units) => {
+  // IFCSIUNIT(*,.AREAUNIT.,.MILLI.,.SQUARE_METRE.) is 10^-6 m², and the
+  // cubic one 10^-9 m³: the prefix is raised to the unit's power.
+  it.each(['mm', 'ft', 'mm-prefixed'])('converts a %s model\'s quantities to SI', async (units) => {
     await open({units})
     const {content} = await registry.call('model.quantities', {})
     expect(total(content, 'NetSideArea').total).toBeCloseTo(16, 4)

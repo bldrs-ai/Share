@@ -60,6 +60,7 @@ const MAX_QUANTITY_GROUPS = 40
 const MAX_MEASURE_REFS = 200
 const MAX_MEASURE_ITEMS = 100
 const MAX_RESULT_UNMEASURED = 20
+const TOO_LARGE = 'tooLarge'
 const MAX_SPATIAL_NODES = 120
 const MAX_HIERARCHY_DEPTH = 2
 const MAX_PATH_DEPTH = 20
@@ -228,20 +229,41 @@ export function createAnalysisTools({readState, loadedState, visibilityTargets, 
     let triangles = 0
     let sinceYield = 0
     let stopped = false
+    // A macrotask, not a microtask: only a timer lets the page paint and a
+    // Stop's event run. The signal is checked on both sides of it.
+    const pause = async () => {
+      checkAborted()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      checkAborted()
+    }
     const measurePiece = async (piece) => {
       if (measured.has(piece.key)) {
         return true
       }
       const count = pieceTriangleCount(piece)
-      if (triangles > 0 && triangles + count > MEASURE_LIMITS.maxTriangles) {
+      if (count > MEASURE_LIMITS.maxTriangles) {
+        // One piece past the whole call's bound is refused, not measured:
+        // measuring it would be the unbounded work the bound exists to
+        // prevent, and a half-measured piece must not reach a total.
+        return TOO_LARGE
+      }
+      if (triangles + count > MEASURE_LIMITS.maxTriangles) {
         return false
       }
+      if (sinceYield >= MEASURE_LIMITS.yieldEvery) {
+        sinceYield = 0
+        // Many small pieces: let a Stop and the page's own work through between
+        // them. Before the next piece, not after the last, so the chunked
+        // yields inside one piece are what a lone large piece relies on.
+        await pause()
+      }
       checkAborted()
+      const hooks = {chunk: MEASURE_LIMITS.yieldEvery, pause}
       const result = {triangles: count}
       if (metric === 'volume') {
         let solid = piece.shape === null ? null : solids.get(piece.shape)
         if (!solid) {
-          solid = localSolid(piece)
+          solid = await localSolid(piece, hooks)
           if (piece.shape !== null) {
             solids.set(piece.shape, solid)
           }
@@ -250,7 +272,7 @@ export function createAnalysisTools({readState, loadedState, visibilityTargets, 
         result.reason = solid.reason
         result.volume = solid.closed ? Math.abs(linearDeterminant(piece.matrix) * solid.volume) : null
       } else {
-        const world = measureWorld(piece, {wantBox: metric === 'extents'})
+        const world = await measureWorld(piece, {...hooks, wantBox: metric === 'extents'})
         result.area = world.area
         result.min = world.min
         result.max = world.max
@@ -258,17 +280,13 @@ export function createAnalysisTools({readState, loadedState, visibilityTargets, 
       measured.set(piece.key, result)
       triangles += count
       sinceYield += count
-      if (sinceYield >= MEASURE_LIMITS.yieldEvery) {
-        sinceYield = 0
-        // Let a Stop and the page's own work through between pieces.
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      }
       return true
     }
 
     const items = []
     const completedKeys = new Set()
     const unmeasured = []
+    const oversize = []
     let noGeometry = 0
     for (const {target, ids, instanceIds} of resolved) {
       const pieces = index.forTarget({ids, instanceIds})
@@ -281,12 +299,21 @@ export function createAnalysisTools({readState, loadedState, visibilityTargets, 
         continue
       }
       let complete = !stopped
+      let tooLarge = false
       for (let i = 0; complete && i < pieces.length; i++) {
-        complete = await measurePiece(pieces[i])
+        const outcome = await measurePiece(pieces[i])
+        tooLarge = outcome === TOO_LARGE
+        complete = outcome === true
       }
       if (!complete) {
-        stopped = true
-        unmeasured.push(target.ref)
+        // The budget running out ends the call; one oversize piece only
+        // costs its own ref.
+        stopped = stopped || !tooLarge
+        if (tooLarge) {
+          oversize.push(target.ref)
+        } else {
+          unmeasured.push(target.ref)
+        }
         continue
       }
       pieces.forEach((p) => completedKeys.add(p.key))
@@ -306,7 +333,7 @@ export function createAnalysisTools({readState, loadedState, visibilityTargets, 
       items: items.slice(0, MAX_MEASURE_ITEMS),
       returned: Math.min(items.length, MAX_MEASURE_ITEMS),
       truncated: items.length > MAX_MEASURE_ITEMS,
-      complete: unmeasured.length === 0,
+      complete: unmeasured.length === 0 && oversize.length === 0,
     }
     if (noGeometry > 0) {
       content.withoutGeometry = noGeometry
@@ -316,6 +343,13 @@ export function createAnalysisTools({readState, loadedState, visibilityTargets, 
       content.unmeasuredCount = unmeasured.length
       content.hint = `Stopped at the ${MEASURE_LIMITS.maxTriangles.toLocaleString('en-US')}-triangle limit: the total covers ` +
         `only the ${items.length - noGeometry} measured refs. Measure the rest with a narrower set of refs.`
+    }
+    if (oversize.length > 0) {
+      content.tooLarge = oversize.slice(0, MAX_RESULT_UNMEASURED)
+      content.tooLargeCount = oversize.length
+      content.hint = `${content.hint ? `${content.hint} ` : ''}${oversize.length} ref(s) hold a single mesh piece over the ` +
+        `${MEASURE_LIMITS.maxTriangles.toLocaleString('en-US')}-triangle limit; they were not measured and are not ` +
+        `in the total. Read model.quantities for them, or measure other refs.`
     }
     if (metric === 'volume' && content.openPieces > 0) {
       content.hint = 'Volume is only computed for closed meshes; elements marked closed:false have no volume. ' +

@@ -25,7 +25,7 @@ const SMALL = [0, 0, 5, 1, 0, 5, 0, 1, 5]
 
 
 describe('viewer/tools elementPieces (the render backends model.measure reads)', () => {
-  it('splits a merged mesh by the element each triangle belongs to, in world space', () => {
+  it('splits a merged mesh by the element each triangle belongs to, in world space', async () => {
     const mesh = new Mesh(trianglesGeometry([BIG, SMALL], [7, 7, 7, 8, 8, 8]))
     mesh.scale.set(2, 2, 2)
     const root = new Group()
@@ -34,12 +34,12 @@ describe('viewer/tools elementPieces (the render backends model.measure reads)',
     const [big] = index.forTarget({ids: [7]})
     const [small] = index.forTarget({ids: [8]})
     // Scaled by 2: areas ×4.
-    expect(measureWorld(big).area).toBeCloseTo(24, 5)
-    expect(measureWorld(small).area).toBeCloseTo(2, 5)
-    expect(measureWorld(small, {wantBox: true}).max).toEqual([2, 2, 10])
+    expect((await measureWorld(big)).area).toBeCloseTo(24, 5)
+    expect((await measureWorld(small)).area).toBeCloseTo(2, 5)
+    expect((await measureWorld(small, {wantBox: true})).max).toEqual([2, 2, 10])
   })
 
-  it('measures a scene-graph node by its whole subtree', () => {
+  it('measures a scene-graph node by its whole subtree', async () => {
     const root = new Group()
     const node = new Group()
     node.expressID = 5
@@ -51,7 +51,8 @@ describe('viewer/tools elementPieces (the render backends model.measure reads)',
     const index = indexElementPieces(root, {ids: new Set([5]), instanceIds: new Set()})
     const pieces = index.forTarget({ids: [5]})
     expect(pieces).toHaveLength(2)
-    expect(pieces.reduce((sum, piece) => sum + measureWorld(piece).area, 0)).toBeCloseTo(6.5, 5)
+    const areas = await Promise.all(pieces.map(async (piece) => (await measureWorld(piece)).area))
+    expect(areas.reduce((sum, area) => sum + area, 0)).toBeCloseTo(6.5, 5)
   })
 
   it('is empty when nothing wanted has geometry', () => {
@@ -63,7 +64,7 @@ describe('viewer/tools elementPieces (the render backends model.measure reads)',
 
 
 describe('viewer/tools meshMeasure', () => {
-  it('finds a tetrahedron closed with volume 1/6, and one flipped face open', () => {
+  it('finds a tetrahedron closed with volume 1/6, and one flipped face open', async () => {
     // Corners 0, e1, e2, e3; faces wound outward.
     const o = [0, 0, 0]
     const x = [1, 0, 0]
@@ -77,13 +78,13 @@ describe('viewer/tools meshMeasure', () => {
         matrix: new Mesh().matrixWorld, shape: null,
       }
     }
-    const closed = localSolid(piece(faces))
+    const closed = await localSolid(piece(faces))
     expect(closed.closed).toBe(true)
     expect(closed.volume).toBeCloseTo(1 / 6, 6)
     // Winding one face the other way breaks the edge pairing.
-    const flipped = localSolid(piece([faces[0], faces[1], faces[2], [x, z, y]]))
+    const flipped = await localSolid(piece([faces[0], faces[1], faces[2], [x, z, y]]))
     expect(flipped.closed).toBe(false)
-    expect(localSolid(piece(faces.slice(0, 3))).closed).toBe(false)
+    expect((await localSolid(piece(faces.slice(0, 3)))).closed).toBe(false)
   })
 
   it('scales volume by the determinant of the placement', () => {

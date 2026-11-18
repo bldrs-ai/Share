@@ -48,6 +48,9 @@ const PREFIX_EXPONENT = {
 const SI_NAME_BASE = {
   METRE: 1, SQUARE_METRE: 1, CUBIC_METRE: 1, GRAM: 1e-3, SECOND: 1,
 }
+// A prefix scales the unit it is attached to, so it is raised to that unit's
+// power: a MILLI square metre is (10^-3)^2 = 10^-6 m², not 10^-3.
+const SI_NAME_POWER = {SQUARE_METRE: 2, CUBIC_METRE: 3}
 const MAX_UNIT_READS = 40
 const BASE = 10
 
@@ -149,7 +152,8 @@ async function unitFactor(model, id, budget) {
     // convertible to SI with a factor.
     return null
   }
-  return SI_NAME_BASE[name] * (prefix ? BASE ** PREFIX_EXPONENT[prefix] : 1)
+  const prefixFactor = prefix ? BASE ** PREFIX_EXPONENT[prefix] : 1
+  return SI_NAME_BASE[name] * (prefixFactor ** (SI_NAME_POWER[name] ?? 1))
 }
 
 

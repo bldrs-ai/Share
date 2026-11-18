@@ -32,9 +32,16 @@
  * never guessed: a wrong number looks exactly like a right one to a model.
  */
 
-// Vertices closer than this (in the shape's local units) are one vertex.
-// Triangulations emit a corner once per face, so closure needs a weld.
-const WELD_QUANTUM = 1e-6
+// Vertices closer than this fraction of the piece's bounding-box diagonal are
+// one vertex. Triangulations emit a corner once per face, so closure needs a
+// weld; relative to the diagonal because a batched shape's positions are in
+// SOURCE units (the unit scale lives in the placement matrix,
+// flatMeshToBatchedModel.js), so any fixed distance would be a micrometre in
+// a metre model and a nanometre in a millimetre one.
+const WELD_RELATIVE = 1e-6
+// Triangles a loop runs before it offers the caller a chance to yield.
+export const DEFAULT_CHUNK = 200_000
+const NEIGHBOUR_CELLS = [-1, 0, 1]
 const TRIANGLE = 3
 const HALF = 0.5
 const SIXTH = 1 / 6
@@ -64,12 +71,16 @@ function vertexAt(piece, corner) {
 /**
  * Surface area and bounding box of one piece in world space.
  *
+ * Async only so a large piece can yield: every `chunk` triangles it awaits
+ * `pause()`, which is where the caller lets the page and a Stop through.
+ *
  * @param {object} piece
- * @param {{wantBox: boolean}} opts
- * @return {{area: number, min: Array<number>, max: Array<number>}} `min` and
- *   `max` are `[Infinity…]` / `[-Infinity…]` for a piece with no triangles
+ * @param {{wantBox: boolean, chunk: number, pause: ?Function}} opts
+ * @return {Promise<{area: number, min: Array<number>, max: Array<number>}>}
+ *   `min` and `max` are `[Infinity…]` / `[-Infinity…]` for a piece with no
+ *   triangles
  */
-export function measureWorld(piece, {wantBox = false} = {}) {
+export async function measureWorld(piece, {wantBox = false, chunk = DEFAULT_CHUNK, pause = null} = {}) {
   const {array, itemSize} = piece.position
   const e = piece.matrix.elements
   const min = [Infinity, Infinity, Infinity]
@@ -78,6 +89,9 @@ export function measureWorld(piece, {wantBox = false} = {}) {
   let area = 0
   const triangles = pieceTriangleCount(piece)
   for (let t = 0; t < triangles; t++) {
+    if (pause && t > 0 && t % chunk === 0) {
+      await pause()
+    }
     for (let c = 0; c < TRIANGLE; c++) {
       const base = vertexAt(piece, t * TRIANGLE + c) * itemSize
       const x = array[base]
@@ -124,31 +138,91 @@ export function linearDeterminant(matrix) {
 
 /**
  * Closure and signed volume of a piece's source triangles, in the piece's
- * own (local) coordinates.
+ * own (local) coordinates. Async for the same reason as {@link measureWorld}:
+ * each of its loops (bounding box, weld and volume, edge pairing) awaits
+ * `pause()` every `chunk` steps.
+ *
+ * Welding is O(n): a spatial hash with cells of the weld tolerance, each
+ * new vertex checked against its own and the 26 neighbouring cells, so two
+ * copies of a corner that straddle a cell boundary still merge (a plain
+ * rounding grid would split them).
  *
  * @param {object} piece
- * @return {{closed: boolean, volume: number, reason: ?string}} `volume`
- *   is the signed tetrahedron sum, meaningful only when `closed`
+ * @param {{chunk: number, pause: ?Function}} [opts]
+ * @return {Promise<{closed: boolean, volume: number, reason: ?string}>}
+ *   `volume` is the signed tetrahedron sum, meaningful only when `closed`
  */
-export function localSolid(piece) {
+export async function localSolid(piece, {chunk = DEFAULT_CHUNK, pause = null} = {}) {
   const {array, itemSize} = piece.position
   const triangles = pieceTriangleCount(piece)
-  const weld = new Map()
-  const welded = (vertex) => {
-    const base = vertex * itemSize
-    const key = `${Math.round(array[base] / WELD_QUANTUM)},${Math.round(array[base + 1] / WELD_QUANTUM)},` +
-      `${Math.round(array[base + 2] / WELD_QUANTUM)}`
-    let id = weld.get(key)
-    if (id === undefined) {
-      id = weld.size
-      weld.set(key, id)
+  const step = async (i) => {
+    if (pause && i > 0 && i % chunk === 0) {
+      await pause()
     }
+  }
+  const min = [Infinity, Infinity, Infinity]
+  const max = [-Infinity, -Infinity, -Infinity]
+  for (let corner = 0; corner < triangles * TRIANGLE; corner++) {
+    await step(corner)
+    const base = vertexAt(piece, corner) * itemSize
+    for (let k = 0; k < TRIANGLE; k++) {
+      min[k] = Math.min(min[k], array[base + k])
+      max[k] = Math.max(max[k], array[base + k])
+    }
+  }
+  const diagonal = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2])
+  if (!(diagonal > 0)) {
+    return {closed: false, volume: 0, reason: 'no extent'}
+  }
+  const tolerance = WELD_RELATIVE * diagonal
+  const buckets = new Map()
+  const reps = []
+  const byVertex = new Map()
+  const cellHash = (ix, iy, iz) => (ix * 73856093) ^ (iy * 19349663) ^ (iz * 83492791)
+  const welded = (vertex) => {
+    const known = byVertex.get(vertex)
+    if (known !== undefined) {
+      return known
+    }
+    const base = vertex * itemSize
+    const x = array[base]
+    const y = array[base + 1]
+    const z = array[base + 2]
+    const ix = Math.floor((x - min[0]) / tolerance)
+    const iy = Math.floor((y - min[1]) / tolerance)
+    const iz = Math.floor((z - min[2]) / tolerance)
+    for (const dx of NEIGHBOUR_CELLS) {
+      for (const dy of NEIGHBOUR_CELLS) {
+        for (const dz of NEIGHBOUR_CELLS) {
+          // A hash collision only adds candidates: each is distance-checked.
+          for (const id of buckets.get(cellHash(ix + dx, iy + dy, iz + dz)) ?? []) {
+            const rep = reps[id]
+            if (Math.abs(rep[0] - x) <= tolerance && Math.abs(rep[1] - y) <= tolerance &&
+                Math.abs(rep[2] - z) <= tolerance) {
+              byVertex.set(vertex, id)
+              return id
+            }
+          }
+        }
+      }
+    }
+    const id = reps.length
+    reps.push([x, y, z])
+    const key = cellHash(ix, iy, iz)
+    const bucket = buckets.get(key)
+    if (bucket) {
+      bucket.push(id)
+    } else {
+      buckets.set(key, [id])
+    }
+    byVertex.set(vertex, id)
     return id
   }
   const edges = new Map()
   let volume = 0
   let degenerate = 0
   for (let t = 0; t < triangles; t++) {
+    await step(t)
     const va = vertexAt(piece, t * TRIANGLE)
     const vb = vertexAt(piece, t * TRIANGLE + 1)
     const vc = vertexAt(piece, t * TRIANGLE + 2)
@@ -176,7 +250,9 @@ export function localSolid(piece) {
   if (triangles - degenerate < TRIANGLE + 1) {
     return {closed: false, volume: 0, reason: 'fewer than four triangles'}
   }
+  let checked = 0
   for (const [key, count] of edges) {
+    await step(checked++)
     const from = Math.floor(key / EDGE_STRIDE)
     const to = key - from * EDGE_STRIDE
     if (count !== 1 || edges.get(to * EDGE_STRIDE + from) !== 1) {
