@@ -118,6 +118,11 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
           modelPath.kind !== mp.kind ||
           modelPath.provider !== mp.provider ||
           Boolean(modelPath.isUploadedFile) !== Boolean(mp.isUploadedFile)) {
+        // Not on the first path: a page load starts with this state fresh,
+        // and the hash may already have seeded a note selection.
+        if (modelPath !== null) {
+          useStore.getState().forgetModelMarkers()
+        }
         setModelPath(mp)
         debug().log('Share#onChangeUrlParams: new model path: ', mp)
       }

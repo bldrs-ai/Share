@@ -250,6 +250,33 @@ describe('Share deciding whether a route names a new model', () => {
     expect(useStore.getState().modelPath.kind).toBe('url')
   })
 
+  // open-205 (the PlaceMark follow-up to #2017): a page load starts the
+  // marker state fresh, so an in-app switch must drop the left model's.
+  it('drops the left model\'s marker state when the route names another model', async () => {
+    useStore.setState({
+      modelPath: driveModelPath(driveFileIdA),
+      markers: [{id: 13}], selectedPlaceMarkId: 13, selectedNoteId: 13,
+    })
+    renderRoute('/share/v/p', 'index.ifc')
+    await actAsyncFlush()
+    expect(useStore.getState()).toMatchObject({markers: [], selectedPlaceMarkId: null, selectedNoteId: null})
+  })
+
+  // A viewer re-created for the same model (a theme change) keeps them, as
+  // #2017's rebind does; and so does the first route of a page load, whose
+  // hash may already have selected a note.
+  it.each([
+    ['the route names the same model', () => driveModelPath(driveFileIdA)],
+    ['the route is the first one', () => null],
+  ])('keeps the marker state when %s', async (_, seed) => {
+    // Not `selectedNoteId`: the rendered tree's NotesControl clears it on
+    // its own while Notes is closed.
+    useStore.setState({modelPath: seed(), markers: [{id: 13}], selectedPlaceMarkId: 13})
+    renderRoute('/share/v/g', driveFileIdA)
+    await actAsyncFlush()
+    expect(useStore.getState()).toMatchObject({markers: [{id: 13}], selectedPlaceMarkId: 13})
+  })
+
   it('keeps the modelPath when the route names the same Drive file', async () => {
     const seeded = driveModelPath(driveFileIdA)
     useStore.setState({modelPath: seeded})
