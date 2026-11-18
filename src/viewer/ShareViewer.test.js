@@ -37,6 +37,7 @@ import {instanceMapFromGeometry, instanceMapFromOrderedPlacedRanges} from './ifc
 import Selector from './three/Selector'
 import ThreeContext from './three/ThreeContext'
 import {occurrencePathKey} from '../utils/occurrencePaths'
+import {isCollected} from '../utils/gc.fixture'
 import {
   LOAD_PREVIEW_GROUP_KEY, PREVIEW_EXPRESS_ID_KEY, PREVIEW_GEOMETRY_ID_KEY, PREVIEW_OCCURRENCE_PATH_KEY,
 } from './previewSelection'
@@ -1002,3 +1003,39 @@ describe('viewer/ShareViewer per-instance queries while a load streams (no model
       .toEqual({instanceIds: [], parentExpressIds: [], instanceOwners: [], instanceGeometryIds: []})
   })
 })
+
+
+describe('viewer/ShareViewer dispose', () => {
+  // open-205 (#2019): a disposed viewer can stay reachable for a while after
+  // an in-app model switch (stale React render scopes keep it). On the
+  // main-thread engine (`?feature=disableEngineWorker`) its IFC loader shares
+  // the IfcAPI, the whole engine and the model's WASM heap, so that stayed
+  // alive through `viewer.ifcLoader.ifcManager.ifcAPI` after a switch.
+  it('lets the IFC loader\'s engine go, though the viewer stays reachable', async () => {
+    const viewer = new ShareViewer()
+    const engineRef = giveIfcLoader(viewer)
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      await viewer.dispose()
+    } finally {
+      console.warn.mockRestore()
+    }
+    expect(viewer.ifcLoader).toBeNull()
+    expect(await isCollected(engineRef)).toBe(true)
+  })
+})
+
+
+/**
+ * Give the viewer an IFC loader over an engine stand-in that only it holds,
+ * the shape ShareViewer's constructor installs (`ifcLoader.ifcManager.ifcAPI`).
+ * Its own function so this file's scope never holds the engine.
+ *
+ * @param {ShareViewer} viewer
+ * @return {WeakRef} to the engine
+ */
+function giveIfcLoader(viewer) {
+  const ifcAPI = {models: new Map()}
+  viewer.ifcLoader = {ifcManager: {ifcAPI}}
+  return new WeakRef(ifcAPI)
+}

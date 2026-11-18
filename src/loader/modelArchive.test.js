@@ -10,7 +10,7 @@ import {
   noModelInArchiveAlert,
   openUploadThroughArchive,
   resolveArchiveUpload,
-  unwrapIfcZip,
+  unwrapHostedArchive,
 } from './modelArchive'
 import {redactBreadcrumb} from '../privacy/sentryRedaction'
 import {WARN, disableDebug, setDebugLevel} from '../utils/debug'
@@ -170,6 +170,14 @@ describe('modelArchive', () => {
       expect(summary(resolved)).toEqual({kind: 'model', ext: 'ifc', name: 'Tower.ifc', isInput: false})
       expect(resolved.file.lastModified).toBe(PICKED_AT)
       expect(await textOf(resolved.file)).toBe(new TextDecoder().decode(IFC))
+    })
+
+    // `zip` is a type so a hosted one routes; a zip INSIDE one is a bundle's
+    // attachments as often as not, and never a second model.
+    it('opens the model beside a nested plain zip, not a chooser of two', async () => {
+      const zip = zipSync({'Tower.ifc': IFC, 'attachments.zip': zipSync({'a.pdf': PDF})})
+      const resolved = await resolveArchiveUpload(upload(zip, 'deliverable.zip'))
+      expect(summary(resolved)).toEqual({kind: 'model', ext: 'ifc', name: 'Tower.ifc', isInput: false})
     })
 
     it('goes by the header, not the name: a zip named anything still opens', async () => {
@@ -507,23 +515,61 @@ describe('modelArchive', () => {
     })
   })
 
-  describe('unwrapIfcZip', () => {
-    it('gives the IFC parser the .ifc inside, as an ArrayBuffer', async () => {
-      const unwrapped = await unwrapIfcZip(zipSync({'Tower.ifc': IFC}).buffer)
+  describe('unwrapHostedArchive', () => {
+    it('gives the parser the one model inside, as an ArrayBuffer, typed by its content', async () => {
+      const unwrapped = await unwrapHostedArchive(zipSync({'Tower.ifc': IFC}).buffer, 'Tower.ifczip')
       expect(unwrapped.type).toBe('ifc')
       expect(unwrapped.modelData).toBeInstanceOf(ArrayBuffer)
       expect(new TextDecoder().decode(unwrapped.modelData)).toBe(new TextDecoder().decode(IFC))
     })
 
-    it('hands bytes that aren\'t a zip on unchanged, for conway to judge', async () => {
-      const unwrapped = await unwrapIfcZip(IFC.buffer)
-      expect(unwrapped).toEqual({modelData: IFC.buffer, type: 'ifc'})
+    it('opens whatever model a zip holds, whatever the zip is called', async () => {
+      // `.ifczip`, `.ifc.zip`, `.zip` and a renamed download are one archive:
+      // the entry decides, not the name around it.
+      for (const name of ['part.ifczip', 'part.glb.zip', 'part.zip', 'download']) {
+        const unwrapped = await unwrapHostedArchive(zipSync({'part.glb': GLB}).buffer, name)
+        expect(unwrapped.type).toBe('glb')
+        expect(new Uint8Array(unwrapped.modelData)).toEqual(GLB)
+      }
     })
 
-    it('refuses a .ifczip that doesn\'t hold exactly one IFC', async () => {
-      await expect(unwrapIfcZip(zipSync({'a.ifc': IFC, 'b.ifc': IFC}).buffer)).rejects.toThrow(ZipArchiveError)
-      await expect(unwrapIfcZip(zipSync({'a.glb': GLB}).buffer)).rejects.toThrow('holds a .glb model, not an IFC')
-      await expect(unwrapIfcZip(zipSync({'a.pdf': PDF}).buffer)).rejects.toThrow('holds no IFC model')
+    it('stacks a zip of DICOM slices into the NRRD it opens as', async () => {
+      const zip = fs.readFileSync(path.join(__dirname, '../../testdata/models/dicom/phantom-ct.zip'))
+      const unwrapped = await unwrapHostedArchive(new Uint8Array(zip).buffer, 'scan.zip')
+      expect(unwrapped.type).toBe('nrrd')
+      expect(new TextDecoder().decode(unwrapped.modelData.slice(0, 4))).toBe('NRRD')
+    })
+
+    it('returns null for bytes that aren\'t an archive, for the caller to type', async () => {
+      expect(await unwrapHostedArchive(IFC.buffer, 'Tower.ifczip')).toBeNull()
+    })
+
+    it('refuses an archive of several models, naming the first few', async () => {
+      const several = {}
+      for (let i = 0; i < 7; i++) {
+        several[`m${i}.glb`] = GLB
+      }
+      const refusal = await unwrapHostedArchive(zipSync(several).buffer, 'set.zip').catch((e) => e)
+      expect(refusal).toBeInstanceOf(ZipArchiveError)
+      // The names are the user's files: the dialog shows them, but the
+      // message — what analytics counts — names none.
+      expect(refusal.dialogText).toContain('holds 7 models (m0.glb, m1.glb, m2.glb, m3.glb, m4.glb and 2 more)')
+      expect(refusal.message).toContain('holds 7 models.')
+      expect(refusal.message).not.toContain('m0.glb')
+    })
+
+    it('refuses an archive of no model, naming what it holds to the dialog only', async () => {
+      // The extensions are tagged, but still the user's entry names' tails.
+      const refusal = await unwrapHostedArchive(zipSync({'J.Smith': PDF}).buffer, 'docs.zip').catch((e) => e)
+      expect(refusal).toBeInstanceOf(ZipArchiveError)
+      expect(refusal.message).toBe('This archive has no model Share can open.')
+      expect(refusal.dialogText).toContain('.smith')
+    })
+
+    it('types a nested .ifczip that isn\'t a zip by its header', async () => {
+      const unwrapped = await unwrapHostedArchive(zipSync({'Tower.ifczip': IFC}).buffer, 'bundle.zip')
+      expect(unwrapped.type).toBe('ifc')
+      expect(new TextDecoder().decode(unwrapped.modelData)).toBe(new TextDecoder().decode(IFC))
     })
   })
 })

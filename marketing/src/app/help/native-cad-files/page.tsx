@@ -126,8 +126,10 @@ export default function NativeCadFilesPage() {
       </Bullets>
       <Typography variant="body1">
         A gzipped copy of any of these, such as model.glb.gz, opens too, and so
-        does a .zip with one inside: Share opens the model, or asks which one when
-        there are several.{' '}
+        does a .zip with one inside, from your computer, GitHub, Google Drive or a
+        link: Share opens the model, whatever the zip is called. A zip of several
+        models opened from your computer asks which one; a link to one needs
+        the model unpacked first.{' '}
         <MuiLink href="/">Open Share</MuiLink>.
       </Typography>
     </PageShell>

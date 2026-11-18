@@ -28,6 +28,7 @@ import {flatMeshToBufferGeometry} from './flatMeshToBufferGeometry'
 import {flatMeshToInstancedModel} from './flatMeshToInstancedModel'
 import {payloadToPreviewMesh} from './parsePreviewMesh'
 import {isOutOfMemoryError, markIfOutOfMemory} from '../../utils/oom'
+import {LoadAbortedError, isAborted, isLoadAbortedError, throwIfLoadAborted} from '../../utils/loadAbort'
 import {hasParams} from '../../utils/location'
 import {HASH_PREFIX_CAMERA} from '../../Components/Camera/hashState'
 import {isFeatureEnabled} from '../../FeatureFlags'
@@ -419,11 +420,18 @@ export default class ShareIfcLoader {
    *   once the deferred open returns and before geometry streams, so the
    *   caller can bring up the tree, properties and search while the pump
    *   runs. Started beside the pump, not awaited; see `parseIfcWithConway`.
+   * @param {AbortSignal} [options.signal] open-205 #2011 step A: the load's
+   *   owner gave it up (an in-app switch under `?feature=spaModelNav`,
+   *   utils/loadAbort.js). A worker load's engine is terminated at once; a
+   *   main-thread one stops at its pump's next batch (its open is one call
+   *   into the wasm on this thread and cannot be interrupted). Either way
+   *   nothing reaches the scene registry after it, and the parse rejects with
+   *   a LoadAbortedError instead of returning null.
    * @return {Promise<object|null>} the loaded IfcModel, or null on
    *   handled error (re-throws on OOM so the caller can show a
    *   tailored UX message).
    */
-  async parse(buffer, onProgress, onError, {onIndexed, onFirstMesh} = {}) {
+  async parse(buffer, onProgress, onError, {onIndexed, onFirstMesh, signal} = {}) {
     const ifc = this._ifc
     // Clear any error stashed by a prior load on this shared IFC namespace.
     // readModel (Loader.js) reads `viewer.IFC.ifcLastError` to surface the
@@ -435,6 +443,7 @@ export default class ShareIfcLoader {
     if (ifc.context.items.ifcModels.length !== 0) {
       throw new Error('Model cannot be loaded.  A model is already present')
     }
+    throwIfLoadAborted(signal)
     // The progressive-load session owns the format-neutral load
     // instrumentation — demand-preview lifecycle, strict-fit camera
     // follow, and progress/summary reporting. IFC and STEP both route
@@ -480,6 +489,17 @@ export default class ShareIfcLoader {
     // to feed.
     const engineLoad = isEngineWorkerLoad(this.type, scene) ?
       createEngineModelLoad({format: engineFormatOf(this.type)}) : null
+    // open-205 #2011 step A, the engine's close path for a load that never
+    // registers: a model joins `ifcModels` (which ShareIfc#dispose closes)
+    // only at the end of this parse, so an engine given up mid-parse was
+    // never closed (#2031). Tracked on the viewer until the parse settles,
+    // and terminated on the owner's abort.
+    const untrackEngineLoad = engineLoad !== null && typeof ifc.trackEngineLoad === 'function' ?
+      ifc.trackEngineLoad(engineLoad) : null
+    const abortEngineLoad = engineLoad !== null && signal ? () => engineLoad.abort() : null
+    if (abortEngineLoad !== null) {
+      signal.addEventListener('abort', abortEngineLoad, {once: true})
+    }
     if (engineLoad === null && isEngineWorkerCandidate(this.type, scene)) {
       // Say in the report and the console why this load runs on the slower
       // main-thread engine, so a `?view=` link or a kill-switched session
@@ -532,6 +552,10 @@ export default class ShareIfcLoader {
       const aabbRing = {meshes: [], byExpressID: new Map(), cap: AABB_IMPOSTER_CAP}
 
       const onPreviewMesh = !usePreview ? undefined : (payload) => {
+        // A main-thread parse keeps delivering until its pump sees the abort.
+        if (isAborted(signal)) {
+          return
+        }
         try {
           const mesh = payloadToPreviewMesh(
             payload, previewGeometryCache, previewMaterialCache, coordination)
@@ -565,6 +589,9 @@ export default class ShareIfcLoader {
       // back to the render-only preview mesh (and the end-of-load
       // builds below) on any builder failure.
       const onMeshBatch = !usePreview ? undefined : (batch, batchModelID, progress) => {
+        if (isAborted(signal)) {
+          return
+        }
         try {
           if (builder === null) {
             builder = new IncrementalBatchedBuilder(ifcAPI, batchModelID, {
@@ -617,7 +644,10 @@ export default class ShareIfcLoader {
       const {modelID, recapture} = engineLoad !== null ?
         await engineLoad.parse(buffer, {onProgress, onMeshBatch, onPreviewMesh, onIndexed: onModelIndexed}) :
         await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress, onMeshBatch, onPreviewMesh,
-          onModelIndexed)
+          onModelIndexed, {signal})
+      // A parse that resolved after its abort (the abort landed on its last
+      // await) is dropped here, before anything is assembled or registered.
+      throwIfLoadAborted(signal)
 
       session.beginAssembly()
 
@@ -696,6 +726,8 @@ export default class ShareIfcLoader {
       // inverse, and how it composes with `userData.coordinationOffset`.
       stampAppliedCoordination(ifcModel, ifcAPI, modelID)
 
+      // The fallback builds above await a recapture.
+      throwIfLoadAborted(signal)
       ifc.addIfcModel(ifcModel)
 
       // eslint-disable-next-line new-cap
@@ -899,6 +931,9 @@ export default class ShareIfcLoader {
 
       // Read by Loader.js#load after the whole load succeeded.
       ifcModel.previewUnitsSkipped = previewUnitsSkipped
+      // Registered above; an abort during the awaits since leaves it to the
+      // viewer's dispose, which closes registered models' engines.
+      throwIfLoadAborted(signal)
       return ifcModel
     } catch (err) {
       session.abort()
@@ -914,6 +949,13 @@ export default class ShareIfcLoader {
         }
       } catch {
         // best-effort
+      }
+      if (isAborted(signal) || engineLoad?.aborted === true) {
+        // Given up, not failed: whatever the abort made the parse throw (a
+        // closed session's rejection, most often) is its consequence, not a
+        // fault. No ifcLastError and no error line, which the caller would
+        // otherwise report as the load's failure.
+        throw isLoadAbortedError(err) ? err : new LoadAbortedError()
       }
       this.ifcLastError = err
       this._ifc.ifcLastError = err
@@ -931,6 +973,10 @@ export default class ShareIfcLoader {
       return null
     } finally {
       endLoadSelection(scene)
+      if (abortEngineLoad !== null) {
+        signal.removeEventListener('abort', abortEngineLoad)
+      }
+      untrackEngineLoad?.()
     }
   }
 }

@@ -28,6 +28,7 @@ import {EngineOpenFailureError} from '../loader/engineOpenFailure'
 import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
 import {ZipArchiveError} from '../loader/zipArchive'
 import {registerInMemoryUpload, resetInMemoryUploadsForTest} from '../loader/inMemoryUploads'
+import {LoadAbortedError} from '../utils/loadAbort'
 import {
   InMemoryUploadGoneError,
   UploadNotInBrowserError,
@@ -914,6 +915,179 @@ describe('CadView', () => {
     expect(result.current.alert).toEqual(expect.objectContaining({type: 'uploadNotInBrowser', repeat: true}))
   })
 
+  // local_link_missing: what GA could not say about the alert above. The
+  // ledger (OPFS/uploadLedger.js) decides origin; the event is first-sighting
+  // only, like the `alert` event it sits beside.
+  describe('local_link_missing analytics', () => {
+    const ID = '12345678-1234-4abc-9def-123456789abc.ifc'
+    const gaEvents = () => window.gtag.mock.calls.map(([, name, params]) => [name, params])
+    const missingEvents = () => gaEvents().filter(([name]) => name === 'local_link_missing')
+
+    beforeEach(() => {
+      window.gtag = jest.fn()
+      localStorage.removeItem('bldrs:local-upload-ledger')
+      jest.spyOn(Loader, 'load').mockImplementation(() => {
+        throw new UploadNotInBrowserError(ID)
+      })
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+      const Sentry = require('@sentry/react')
+      jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    })
+
+    afterEach(() => {
+      mockAuthState.isAuthenticated = false
+      delete window.gtag
+      localStorage.removeItem('bldrs:local-upload-ledger')
+    })
+
+    const LEDGER_KEY = 'bldrs:local-upload-ledger'
+    const readLedgerIds = () => JSON.parse(localStorage.getItem(LEDGER_KEY) || '[]')
+
+    /**
+     * @param {object} [opts]
+     * @param {boolean} [opts.settleAuth] flip the store's isAuthResolved
+     *   first (BaseRoutes' job in the app); false leaves Auth0 "loading"
+     * @return {Promise<{result: object, rerender: Function}>} the store hook result and a rerender, after the alert shows
+     */
+    async function openMissingUpload({settleAuth = true} = {}) {
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setIsOpfsAvailable(true))
+      await act(() => result.current.setIsAuthResolved(settleAuth))
+      await act(() => result.current.setModelPath({filepath: ID, isUploadedFile: true}))
+      const ui = <ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>
+      const {rerender} = render(ui)
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert?.type).toBe('uploadNotInBrowser'))
+      return {result, rerender: () => rerender(ui)}
+    }
+
+    it('reports origin unknown when the ledger never saw the id', async () => {
+      const {result} = await openMissingUpload()
+      expect(missingEvents()).toEqual([['local_link_missing',
+        {origin: 'unknown', legacy_route: false, signed_in: false}]])
+      expect(result.current.alert.origin).toBe('unknown')
+    })
+
+    it('reports origin this_browser when the ledger holds the id', async () => {
+      localStorage.setItem('bldrs:local-upload-ledger', JSON.stringify([ID]))
+      const {result} = await openMissingUpload()
+      expect(missingEvents()).toEqual([['local_link_missing',
+        {origin: 'this_browser', legacy_route: false, signed_in: false}]])
+      expect(result.current.alert.origin).toBe('this_browser')
+    })
+
+    it('reports signed_in true for a signed-in visitor', async () => {
+      mockAuthState.isAuthenticated = true
+      await openMissingUpload()
+      await waitFor(() => expect(missingEvents()).toEqual([['local_link_missing',
+        {origin: 'unknown', legacy_route: false, signed_in: true}]]))
+    })
+
+    // A local-only route never awaits auth, so the failure can land while
+    // Auth0 still reads isAuthenticated false. The send waits for BaseRoutes'
+    // settlement and reads the state then; the alert doesn't wait.
+    it('waits for auth to settle before reading signed_in', async () => {
+      mockAuthState.isAuthenticated = false
+      const {result, rerender} = await openMissingUpload({settleAuth: false})
+      // Dialog is up, event not yet sent.
+      expect(missingEvents()).toEqual([])
+      mockAuthState.isAuthenticated = true
+      act(() => rerender())
+      await act(() => result.current.setIsAuthResolved(true))
+      await actAsyncFlush()
+      await waitFor(() => expect(missingEvents()).toEqual([['local_link_missing',
+        {origin: 'unknown', legacy_route: false, signed_in: true}]]))
+    })
+
+    describe('legacy_route', () => {
+      afterEach(() => {
+        reactRouting.useLocation.mockReturnValue(defaultLocationValue)
+      })
+
+      it('is true when the route arrived through the legacy redirect', async () => {
+        reactRouting.useLocation.mockReturnValue({...defaultLocationValue, state: {legacyUploadRoute: true}})
+        await openMissingUpload()
+        await waitFor(() => expect(missingEvents()).toEqual([['local_link_missing',
+          {origin: 'unknown', legacy_route: true, signed_in: false}]]))
+      })
+
+      it('is false without the redirect marker', async () => {
+        await openMissingUpload()
+        await waitFor(() => expect(missingEvents()).toEqual([['local_link_missing',
+          {origin: 'unknown', legacy_route: false, signed_in: false}]]))
+      })
+    })
+
+    // The ledger's load-time writer (CadView), with no recents seeded so
+    // nothing else could have recorded the id.
+    describe('ledger writer', () => {
+      let cameraControlsSpy
+      let getHarness
+
+      beforeEach(() => {
+        getHarness = require('../../__mocks__/shareViewerTestHarness').__getShareViewerMockSingleton
+        // Same sidestep as the open-205 block: a load can finish on a
+        // viewer the mount already disposed.
+        cameraControlsSpy = jest.spyOn(ThreeContext.prototype, 'getCameraControls')
+          .mockImplementation(() => getHarness().IFC.context.ifcCamera.cameraControls)
+      })
+
+      afterEach(() => {
+        cameraControlsSpy.mockRestore()
+      })
+
+      /**
+       * Mount CadView on the upload route with the loader mocked by `impl`.
+       *
+       * @param {Function} impl Loader.load implementation
+       * @return {Promise<object>} the store hook result
+       */
+      async function mountUploadRoute(impl) {
+        jest.spyOn(Loader, 'load').mockImplementation(impl)
+        const {result} = renderHook(() => useStore((state) => state))
+        await act(() => result.current.setIsOpfsAvailable(true))
+        await act(() => result.current.setIsAuthResolved(true))
+        await act(() => result.current.setModelPath({filepath: ID, isUploadedFile: true}))
+        render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+        await actAsyncFlush()
+        return result
+      }
+
+      it('records the id after a successful load', async () => {
+        const result = await mountUploadRoute(() => Promise.resolve(getHarness()._loadedModel))
+        await waitFor(() => expect(result.current.model).toBe(getHarness()._loadedModel))
+        await waitFor(() => expect(readLedgerIds()).toContain(ID))
+      })
+
+      it('does not record the id when the upload is not in this browser', async () => {
+        const result = await mountUploadRoute(() => {
+          throw new UploadNotInBrowserError(ID)
+        })
+        await waitFor(() => expect(result.current.alert?.type).toBe('uploadNotInBrowser'))
+        expect(readLedgerIds()).not.toContain(ID)
+      })
+
+      it('does not record the id when the load fails otherwise', async () => {
+        const result = await mountUploadRoute(() => {
+          throw new Error('parse failed')
+        })
+        await waitFor(() => expect(result.current.alert).toBeTruthy())
+        expect(readLedgerIds()).not.toContain(ID)
+      })
+    })
+
+    it('sends nothing for the repeat an auth change causes', async () => {
+      const {result} = await openMissingUpload()
+      expect(missingEvents()).toHaveLength(1)
+      const first = result.current.alert
+      await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert).not.toBe(first))
+      expect(result.current.alert.repeat).toBe(true)
+      expect(missingEvents()).toHaveLength(1)
+    })
+  })
+
   // A hosted file whose NAME is a UUID looks like an upload to the loader's
   // path heuristic; only the route knows it isn't (codex review on #1956).
   // A private model needs a Bldrs sign-in AND the provider's authorization
@@ -1579,6 +1753,164 @@ describe('CadView', () => {
       await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
       await actAsyncFlush()
       expect(result.current.expandedElements).toEqual([])
+    })
+  })
+
+
+  // open-205 #2011 step A: under `?feature=spaModelNav` the load is owned by
+  // the CadView run that started it, and leaving the model aborts it, instead
+  // of queuing the next model behind it. Off the flag the queue stays.
+  describe('a switch while the model is still loading (open-205 #2011 step A)', () => {
+    let getHarness
+    let loadSpy
+    let cameraControlsSpy
+    let captureException
+
+    beforeEach(() => {
+      getHarness = require('../../__mocks__/shareViewerTestHarness').__getShareViewerMockSingleton
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+      captureException = jest.spyOn(require('@sentry/react'), 'captureException').mockImplementation(() => {})
+      // As in the describe above: a load that finishes on a disposed viewer
+      // hands back no camera controls.
+      cameraControlsSpy = jest.spyOn(ThreeContext.prototype, 'getCameraControls')
+        .mockImplementation(() => getHarness().IFC.context.ifcCamera.cameraControls)
+      // `viewer: null` as on a fresh page: an earlier test's viewer, left in
+      // the store, lets the auth-state effect start a load into it before
+      // this mount builds its own, which under the flag is (rightly) aborted
+      // and reloaded, and would muddy the load counts below.
+      useStore.setState({
+        alert: null, customViewSettings: null, isAuthResolved: false, isModelReady: false, viewer: null,
+        expandedElements: [], selectedElements: [], selectedAnchorIds: [], selectedOccurrencePath: null,
+      })
+    })
+
+    afterEach(() => {
+      cameraControlsSpy.mockRestore()
+      loadSpy?.mockRestore()
+      loadSpy = undefined
+      window.history.replaceState(null, '', '/?feature=disableEngineWorker')
+    })
+
+    /**
+     * A Loader.load that never finishes on its own, and rejects as the real
+     * one does once its signal aborts. `calls` records each call's path and
+     * signal.
+     *
+     * @return {object} `{impl, calls}`, each call as `{path, signal}`
+     */
+    function hangingLoad() {
+      const calls = []
+      const impl = (path, loadViewer, onProgress, isOpfs, setOpfsFile, token, options = {}) => {
+        calls.push({path: String(path), signal: options.signal})
+        return new Promise((resolve, reject) => {
+          options.signal?.addEventListener('abort', () => reject(new LoadAbortedError()))
+        })
+      }
+      return {impl, calls}
+    }
+
+    it('aborts the load in flight and starts the next model at once, reporting nothing', async () => {
+      window.history.replaceState(null, '', '/?feature=disableEngineWorker,spaModelNav')
+      const {result} = renderHook(() => useStore((state) => state))
+      const {impl, calls} = hangingLoad()
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(impl)
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBe(1))
+      const signalOfA = calls[0].signal
+      expect(signalOfA.aborted).toBe(false)
+
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+
+      expect(signalOfA.aborted, 'leaving A aborts its load').toBe(true)
+      // B did not wait for A's load, which never ends on its own.
+      await waitFor(() => expect(calls.length).toBe(2))
+      expect(calls[1].path).toContain('other.ifc')
+      expect(calls[1].signal).not.toBe(signalOfA)
+      expect(calls[1].signal.aborted).toBe(false)
+      expect(result.current.alert).toBeNull()
+      expect(captureException).not.toHaveBeenCalled()
+    })
+
+    it('clears the left model from the store when the switch starts', async () => {
+      window.history.replaceState(null, '', '/?feature=disableEngineWorker,spaModelNav')
+      const {result} = renderHook(() => useStore((state) => state))
+      const {impl, calls} = hangingLoad()
+      loadSpy = jest.spyOn(Loader, 'load')
+        .mockImplementationOnce(() => Promise.resolve(getHarness()._loadedModel))
+        .mockImplementation(impl)
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.isModelReady).toBe(true))
+      expect(result.current.model).toBe(getHarness()._loadedModel)
+      expect(result.current.rootElement).not.toBeNull()
+
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+
+      // B is loading, and nothing of A is left in the store meanwhile.
+      await waitFor(() => expect(calls.length).toBe(1))
+      expect(result.current.model).toBeNull()
+      expect(result.current.isModelReady).toBe(false)
+      expect(result.current.rootElement).toBeNull()
+      expect(result.current.loadedFileInfo).toBeNull()
+    })
+
+    it('reloads the same model into a viewer re-created mid-load (a theme change)', async () => {
+      window.history.replaceState(null, '', '/?feature=disableEngineWorker,spaModelNav')
+      const {result} = renderHook(() => useStore((state) => state))
+      const {impl, calls} = hangingLoad()
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(impl)
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBe(1))
+
+      // A view-settings change re-creates the viewer for the same model, as
+      // a theme change does (both through onModelPath's initViewerCb).
+      await act(() => result.current.setCustomViewSettings({}))
+      await actAsyncFlush()
+
+      expect(calls[0].signal.aborted).toBe(true)
+      await waitFor(() => expect(calls.length).toBe(2))
+      expect(calls[1].path).toContain('index.ifc')
+      expect(result.current.alert).toBeNull()
+    })
+
+    it('off the flag, passes no signal and queues the next model behind the load, as before', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      let releaseA
+      const calls = []
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation((path, ...rest) => {
+        calls.push({path: String(path), signal: rest[5]?.signal})
+        return calls.length === 1 ?
+          new Promise((resolve) => {
+            releaseA = () => resolve(getHarness()._loadedModel)
+          }) :
+          new Promise(() => {})
+      })
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBe(1))
+      expect(calls[0].signal).toBeUndefined()
+
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+      expect(calls.length, 'B waits for A').toBe(1)
+
+      await act(() => releaseA())
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBe(2))
+      expect(calls[1].path).toContain('other.ifc')
+      expect(calls[1].signal).toBeUndefined()
     })
   })
 

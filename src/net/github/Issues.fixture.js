@@ -72,6 +72,22 @@ export const sampleIssues = [
   },
 ]
 
+/**
+ * The notes of `bldrs-ai/test-models`, the repo the hosted box.ifc fixture
+ * is served from: one note with its own placemark, so a spec that switches
+ * from index.ifc to box.ifc in-app can tell the next model's markers from
+ * the left one's (open-205, markerModelSwitch.spec.ts). Every other repo
+ * gets `sampleIssues`.
+ */
+export const testModelsIssues = [
+  {
+    id: 9001,
+    title: 'box_placemark',
+    body: 'Box note: [placemark](https://bldrs.ai/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc#m:0.5,0.5,1,0,0,1)',
+  },
+]
+
+
 export const MOCK_ISSUES = {
   data: [
     {

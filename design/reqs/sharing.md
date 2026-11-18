@@ -4,9 +4,9 @@
 
 Sharing lets an author publish an exact model version, disclose its audience and content, and send an unguessable link that opens the intended version and view. It also lets viewers link an externally hosted revision without copying the model. This document owns publication, link access, recipient opening and sharing recovery; Versions owns history and revision identity, and Notes owns discussion authoring and organization.
 
-The [standard UX rubric](ux-rubric.md) defines Epic → Story → Task structure and reconciliation; the [UX index](README.md) defines shared acceptance constraints and cross-feature decisions. The agreed canonical scheme uses roadmap epic codes and existing GitHub issue numbers for stories; see the shared rubric. This document’s S/V codes remain temporary locators until its triage. Notes has moved to notes-100, with its former N17–N20 aliases recorded in the pilot crosswalk. Each story includes its tasks and acceptance criteria. Cross-document dependencies refer to the owner listed in the index.
+The [standard UX rubric](ux-rubric.md) defines Epic → Story → Task structure and reconciliation; the [UX index](README.md) defines shared acceptance constraints and cross-feature decisions. The agreed canonical scheme uses roadmap epic codes and existing GitHub issue numbers for stories; see the shared rubric. This document’s S codes remain temporary locators until Sharing’s triage. Versions and Notes use canonical issue owners, with former V and N aliases retained in their crosswalks. Each story includes its tasks and acceptance criteria. Cross-document dependencies refer to the owner listed in the index.
 
-**Related requirements:** [Versions](versions.md) (V21, V01–V03, V09, V11; later V13–V16) · [Notes requirements](https://github.com/bldrs-ai/Share/issues/670) (notes-100).
+**Related requirements:** [Versions requirements](https://github.com/bldrs-ai/Share/issues/57) (`versions-100`; [historical V-locator crosswalk](versions-100-triage.md#requirements-migration-and-source-ownership)) · [Later semantic workflows](https://github.com/bldrs-ai/Share/issues/2144) (`share-200`) · [Notes requirements](https://github.com/bldrs-ai/Share/issues/670) (`notes-100`).
 
 ## Epic and scope
 
@@ -66,7 +66,7 @@ Versions and Notes retain their existing feature/story ownership. The share-200 
 
 **Acceptance:** With two connected accounts, selecting one results in publication to its chosen destination. An unauthorized destination produces a recoverable refusal and no silent account substitution.
 
-**Dependencies:** A local version from V01/V03 or an external revision explicitly selected for republication under V21; the provider and account-setup flow must be selected before implementation. No destination’s visibility is broadened implicitly. This flow is not required merely to view or link an existing external version.
+**Dependencies:** A local version from [#2157](https://github.com/bldrs-ai/Share/issues/2157)/[#950](https://github.com/bldrs-ai/Share/issues/950), or an external revision explicitly selected for republication under [#850](https://github.com/bldrs-ai/Share/issues/850); the provider and account-setup flow must be selected before implementation. No destination’s visibility is broadened implicitly. This flow is not required merely to view or link an existing external version.
 
 ### S05 Understand and confirm who can access the share
 
@@ -132,7 +132,7 @@ Versions and Notes retain their existing feature/story ownership. The share-200 
 
 **Acceptance:** Open a link in a clean signed-out browser and verify its model content. Publish another version, then reopen the original link and verify that it still identifies and opens the original version while its hosting remains available. Replace the token with an unknown or malformed value and verify a generic unavailable-link response with no model or discussion details.
 
-**Dependencies:** S06 for a new Share publication or V21 for an already-hosted external revision. A verified GLB may provide the viewing representation for that exact source version. Show progress and any temporary limits on properties, selection or notes while required data loads; never substitute another revision or label an incomplete representation fully ready. The artifact and source-loading contract must be settled in the gap analysis.
+**Dependencies:** S06 for a new Share publication or [#850](https://github.com/bldrs-ai/Share/issues/850) for an already-hosted external revision. A verified GLB may provide the viewing representation for that exact source version. Show progress and any temporary limits on properties, selection or notes while required data loads; never substitute another revision or label an incomplete representation fully ready. The artifact and source-loading contract must be settled in the gap analysis.
 
 ### S08 Share an unlisted link to a specific version and view
 
@@ -174,7 +174,7 @@ Versions and Notes retain their existing feature/story ownership. The share-200 
 
 **Acceptance:** Two sessions start from the same published version and publish different replacements. The second publisher receives a recoverable conflict; the first publication and the second publisher’s local work both remain intact.
 
-**Dependencies:** V03 and S06. Automatic semantic merge belongs to V15.
+**Dependencies:** [Replacement version #950](https://github.com/bldrs-ai/Share/issues/950) and S06. Automatic semantic merge belongs to [#2163](https://github.com/bldrs-ai/Share/issues/2163).
 
 ### S12 Understand why a shared version cannot open
 
