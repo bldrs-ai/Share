@@ -316,6 +316,25 @@ describe('loadProgress', () => {
       expect(useStore.getState().currentLoadLine).toBe(null)
     })
 
+    // open-205 #2011 step A: a load given up for another model leaves no
+    // report and no "Load failed" grace line, and stops teeing the console.
+    it('endLoadProgress for an aborted load clears the report instead of freezing it', () => {
+      const consoleWarnBefore = console.warn
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      reportLoadProgress({phase: 'geometry', completed: 5, total: 10, elapsedMs: 100})
+      expect(reportLines().length).toBeGreaterThan(0)
+      endLoadProgress(new Error('engine session closed'), {isAborted: true})
+      expect(reportLines()).toEqual([])
+      expect(useStore.getState().currentLoadLine).toBe(null)
+      expect(useStore.getState().loadResult).toBe(null)
+      expect(console.warn).toBe(consoleWarnBefore)
+      // Ended: a late progress event from the given-up load writes nothing.
+      reportLoadProgress({phase: 'geometry', completed: 9, total: 10, elapsedMs: 200})
+      expect(reportLines()).toEqual([])
+      // Where it stopped is still readable, for the abort's GA event.
+      expect(getLoadFailureInfo(currentLoadSerial() - 1).phase).toBe('geometry')
+    })
+
     it('summarizes captured console warnings/errors after the Total line', () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
       beginLoadProgress({fileInfo: 'index.ifc'})

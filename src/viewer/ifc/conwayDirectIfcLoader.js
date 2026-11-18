@@ -58,6 +58,7 @@ import {makeBlobByteStore} from '../../loader/opfsSourceByteStore'
 import {openDeferred} from '../../loader/conwayOpen'
 import {beginOpenAttempt, conwayOpenFailure, conwayRefusedSchema, openModelFailure} from '../../loader/unsupportedSchema'
 import debug, {WARN} from '../../utils/debug'
+import {raceLoadAbort, throwIfLoadAborted} from '../../utils/loadAbort'
 import {attachInstanceMapSubsets} from '../three/elementSubsets'
 import {instanceMapFromGeometry} from './IfcInstanceMap'
 import {enableStepPreviewFinishParse, testPumpBatchSize, testStepPreviewFinishParse} from './pumpTestSeams'
@@ -118,12 +119,18 @@ import {enableStepPreviewFinishParse, testPumpBatchSize, testStepPreviewFinishPa
  *   path then reads the tree as it did before. Only on the deferred path:
  *   the classic opens below extract every mesh inside one synchronous
  *   `StreamAllMeshes`, so there is no window to fill.
+ * @param {object} [options]
+ * @param {AbortSignal} [options.signal] open-205 #2011 step A: the load was
+ *   given up (utils/loadAbort.js). Checked after the open and before every
+ *   pump batch, so a main-thread parse stops at its next batch with a
+ *   LoadAbortedError. The open itself is one wasm call on this thread and
+ *   runs to its end.
  * @return {Promise<{modelID: number, captured: Array,
  *   recapture: function(): Promise<Array>}>}
  */
 export async function parseIfcWithConway(
   buffer, ifcAPI, settings = undefined, onProgress = undefined, onMeshBatch = undefined, onPreviewMesh = undefined,
-  onIndexed = undefined) {
+  onIndexed = undefined, {signal} = {}) {
   if (!ifcAPI || typeof ifcAPI.OpenModel !== 'function') {
     throw new Error('parseIfcWithConway: ifcAPI.OpenModel is unavailable')
   }
@@ -226,7 +233,8 @@ export async function parseIfcWithConway(
       throw await openModelFailure(modelID, buffer, conwayRefusedSchema(ifcAPI, attempt),
         conwayOpenFailure(ifcAPI, attempt))
     }
-    await holdIndexForTest()
+    throwIfLoadAborted(signal)
+    await raceLoadAbort(holdIndexForTest(), signal)
     if (onIndexed) {
       // Started, not awaited (codex/PSB review on #2037). The caller's tree
       // walk is conway's `properties.getSpatialStructure(modelID, 'names')`.
@@ -252,7 +260,7 @@ export async function parseIfcWithConway(
         warnIndexFailure(e)
       }
     }
-    await holdGeometryPumpForTest()
+    await raceLoadAbort(holdGeometryPumpForTest(), signal)
     const captured = []
     // Does this engine expose conway#660's async whole-model ask? That is
     // the ONLY entry point that can answer a windowed deferred model, so it
@@ -349,6 +357,7 @@ export async function parseIfcWithConway(
       })
     }
     for (;;) {
+      throwIfLoadAborted(signal)
       const batch = []
       let extracted
       let remaining
@@ -394,7 +403,7 @@ export async function parseIfcWithConway(
           // first pump call has returned, which is also the first call
           // that can produce a batch, so in practice it is always set here.
           onMeshBatch(batch, modelID, {done: geometryDone, total: geometryTotal})
-          await holdMidPumpForTest()
+          await raceLoadAbort(holdMidPumpForTest(), signal)
         }
         // `batch` itself goes out of scope on the next iteration, so on the
         // streaming path the last reference to this batch's FlatMeshes is
