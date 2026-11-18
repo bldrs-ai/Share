@@ -44,7 +44,7 @@ jest.mock('@netlify/blobs', () => {
 })
 jest.mock('axios')
 jest.mock('@sentry/serverless', () => {
-  const scope = {setFingerprint: jest.fn(), setTag: jest.fn()}
+  const scope = {setFingerprint: jest.fn(), setTag: jest.fn(), setUser: jest.fn()}
   return {
     init: jest.fn(),
     withScope: jest.fn((cb) => cb(scope)),
@@ -352,6 +352,8 @@ describe('ai-chat', () => {
     expect(storedRecord(fake, anonKeyOf(fake)).days[TODAY]).toEqual({spent: 143, free: 1})
     expect(Sentry.captureMessage).toHaveBeenCalledWith('ai-chat: breaker_tripped', 'warning')
     expect(Sentry.mockScope.setFingerprint).toHaveBeenCalledWith(['ai-chat', 'breaker_tripped'])
+    // No user rides along: the scope's user (set by verifyAuth0Bearer) is cleared.
+    expect(Sentry.mockScope.setUser).toHaveBeenCalledWith(null)
     await (await call()).text()
     expect(jest.mocked(Sentry.captureMessage).mock.calls
       .filter(([message]) => message === 'ai-chat: breaker_tripped')).toHaveLength(1)

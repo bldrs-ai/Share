@@ -697,6 +697,10 @@ function createReporter(context) {
         sentryReady = true
       }
       Sentry.withScope((scope) => {
+        // verifyAuth0Bearer tags the instance's scope with the last caller's
+        // user id (_lib/auth0.js); these conditions are about the relay, not
+        // anyone, and a warm instance's next event would carry that id.
+        scope.setUser(null)
         scope.setFingerprint(['ai-chat', condition])
         scope.setTag('component', 'ai-chat')
         scope.setTag('ai_condition', condition)
