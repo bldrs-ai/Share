@@ -14,7 +14,8 @@ import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
  * What these hold, each by the user's own action (an orbit with the mouse on
  * desktop, a one-finger drag on mobile, CDP touch so the page gets real touch
  * pointer events):
- * - the load's auto-framing writes no `#c:`; a link's `#c:` stays as it came;
+ * - the load's auto-framing writes no `#c:`, nor does a pick (camera-controls
+ *   reports any press as user input); a link's `#c:` stays as it came;
  * - an orbit puts the live pose in the URL, and the URL opens there;
  * - written in place (history.replaceState): the orbit adds no history entry;
  * - the Share dialog's "Camera position" switch off: an orbit writes nothing;
@@ -47,6 +48,11 @@ describeMobileAndDesktop('Live camera link', (ff) => {
     await openModel(page, MODEL_PATH)
     await page.waitForTimeout(NO_WRITE_SETTLE_MS)
     expect(cameraToken(page.url()), 'the load\'s own framing wrote no #c:').toBeUndefined()
+    // camera-controls sends controlstart on any press, so a pick is user input
+    // too, but it moves no camera.
+    await pickAtCentre(page, ff.isMobile)
+    await page.waitForTimeout(NO_WRITE_SETTLE_MS)
+    expect(cameraToken(page.url()), 'a pick (a press that moves no camera) wrote no #c:').toBeUndefined()
 
     const historyBefore = await historyLength(page)
     await orbit(page, ff.isMobile)
@@ -209,6 +215,23 @@ async function canvasCentre(page: Page): Promise<Point> {
   })
   expect(point.isCanvas, 'the canvas centre is not covered').toBe(true)
   return {x: point.x, y: point.y}
+}
+
+
+/**
+ * Double-click (double-tap on mobile) the canvas centre, as a pick does.
+ *
+ * @param page
+ * @param isTouch
+ */
+async function pickAtCentre(page: Page, isTouch: boolean) {
+  const {x, y} = await canvasCentre(page)
+  if (isTouch) {
+    await page.touchscreen.tap(x, y)
+    await page.touchscreen.tap(x, y)
+  } else {
+    await page.mouse.dblclick(x, y)
+  }
 }
 
 

@@ -13,6 +13,12 @@ describe('Camera/liveCameraLink', () => {
   beforeEach(() => {
     jest.useFakeTimers()
     controls = new EventDispatcher()
+    // Where camera-controls says the camera is heading (getPosition and
+    // getTarget return the END of a move).
+    controls.position = {x: 0, y: 0, z: 0}
+    controls.target = {x: 0, y: 0, z: 0}
+    controls.getPosition = () => ({...controls.position})
+    controls.getTarget = () => ({...controls.target})
     write = jest.fn()
     isEnabled = true
     link = startLiveCameraLink(controls, {write, isEnabled: () => isEnabled})
@@ -37,12 +43,31 @@ describe('Camera/liveCameraLink', () => {
     expect(link.isLive()).toBe(false)
   })
 
+  const dispatch = (type) => controls.dispatchEvent({type})
+  const moveTo = (x) => {
+    controls.position = {x, y: 0, z: 0}
+  }
+
   it.each([
-    ['a canvas drag', 'controlstart'],
-    ['a wheel zoom (camera-controls sends no controlstart for it)', 'control'],
-    ['a ViewCube move', USER_CAMERA_MOVE_EVENT],
-  ])('starts on %s, then writes once per settle, debounced', (_name, type) => {
-    controls.dispatchEvent({type})
+    ['a canvas drag', () => {
+      dispatch('controlstart')
+      dispatch('control')
+      moveTo(1)
+      update()
+    }],
+    ['a wheel zoom (camera-controls sends no controlstart for it)', () => {
+      dispatch('control')
+      moveTo(1)
+      update()
+    }],
+    ['a flick released before any frame applied it', () => {
+      dispatch('controlstart')
+      moveTo(1)
+      dispatch('controlend')
+    }],
+    ['a ViewCube move', () => dispatch(USER_CAMERA_MOVE_EVENT)],
+  ])('starts on %s, then writes once per settle, debounced', (_name, userMove) => {
+    userMove()
     expect(link.isLive()).toBe(true)
     update()
     jest.advanceTimersByTime(HASH_DEBOUNCE_WAIT_MS - 1)
@@ -52,6 +77,21 @@ describe('Camera/liveCameraLink', () => {
     settle()
     expect(write).toHaveBeenCalledTimes(1)
     expect(write).toHaveBeenCalledWith(controls)
+  })
+
+  it('doesn\'t start on a click or double-click that moves nothing (picking an element)', () => {
+    // camera-controls sends controlstart on pointerdown, before any drag.
+    for (let i = 0; i < 2; i++) {
+      dispatch('controlstart')
+      dispatch('controlend')
+    }
+    expect(link.isLive()).toBe(false)
+    // And a later move the page makes (a fit) is still not the user's.
+    moveTo(5)
+    update()
+    settle()
+    expect(link.isLive()).toBe(false)
+    expect(write).not.toHaveBeenCalled()
   })
 
   it('once live, follows programmatic moves too (a snap, a note\'s camera, a fit)', () => {
@@ -64,8 +104,10 @@ describe('Camera/liveCameraLink', () => {
   })
 
   it('stays off while the Share dialog\'s camera switch is off, and resumes when it\'s on', () => {
-    controls.dispatchEvent({type: 'controlstart'})
+    dispatch('controlstart')
+    moveTo(1)
     update()
+    expect(link.isLive()).toBe(true)
     // Switched off with a write pending: that write must not put back the
     // token the dialog just removed.
     isEnabled = false
@@ -80,14 +122,15 @@ describe('Camera/liveCameraLink', () => {
   })
 
   it('dispose drops a pending write and stops listening', () => {
-    controls.dispatchEvent({type: 'controlstart'})
+    dispatch('controlstart')
     update()
+    expect(link.isLive()).toBe(true)
     link.dispose()
     settle()
     update()
     settle()
     expect(write).not.toHaveBeenCalled()
-    for (const type of ['controlstart', 'control', 'update', USER_CAMERA_MOVE_EVENT]) {
+    for (const type of ['controlstart', 'control', 'controlend', 'update', USER_CAMERA_MOVE_EVENT]) {
       expect(controls._listeners?.[type] ?? []).toHaveLength(0)
     }
   })

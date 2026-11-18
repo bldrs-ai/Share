@@ -18,9 +18,11 @@ import {HASH_DEBOUNCE_WAIT_MS, debounce} from '../../utils/debounce'
  * USER_CAMERA_EVENT isn't the gate: `setCameraFromParams` sends it for a
  * link's or a note's pose, which is the user's for the load's camera follow
  * but not a move of theirs here. The gate is camera-controls' own
- * `controlstart` (drag) and `control` (a wheel zoom sends only that), which
- * it sends for input on its canvas alone, plus USER_CAMERA_MOVE_EVENT from
- * our camera UIs that move the camera with no control event (the ViewCube).
+ * input events — `controlstart` (a press) and `control` (a drag; a wheel zoom
+ * sends only that), which it sends for input on its canvas alone — once the
+ * camera actually moves under them (a click to select isn't a camera move),
+ * plus USER_CAMERA_MOVE_EVENT from our camera UIs that move the camera with
+ * no control event (the ViewCube).
  *
  * Once live, every camera `update` schedules a write, programmatic ones too
  * (a ViewCube snap, a note's camera, a fit): the link follows the camera,
@@ -80,28 +82,63 @@ export function startLiveCameraLink(controls, {
   waitMs = HASH_DEBOUNCE_WAIT_MS,
 }) {
   let isLive = false
+  // Input is under way on the canvas: a press (`controlstart`, until its
+  // `controlend`) or a wheel zoom (`control` alone; it has no end).
+  let isUserInput = false
+  // The pose the press started from, to tell a press that moved the camera
+  // from one that didn't.
+  let pressPose = null
   const writeSettled = debounce(() => {
     if (isEnabled()) {
       write(controls)
     }
   }, waitMs)
-  const onUpdate = () => {
+  const schedule = () => {
     if (isLive && isEnabled()) {
       writeSettled()
     }
   }
-  const onUserMove = () => {
+  const goLive = () => {
     if (!isLive) {
       isLive = true
-      // A move whose `update`s all landed before this event (none today, but
-      // nothing promises the order) still gets written.
-      onUpdate()
+      schedule()
     }
   }
+  // camera-controls sends `controlstart` on pointerDOWN, before any drag, so
+  // a click or a double-click to select an element gets one too. That isn't
+  // a camera move, and taking it for one put the load's framing into the
+  // link of everyone who only picked an element. So user input starts the
+  // link only once the camera MOVES under it: an `update` while the input is
+  // under way (a drag, a wheel zoom's dolly)...
+  const onUpdate = () => {
+    if (isUserInput) {
+      goLive()
+    }
+    schedule()
+  }
+  const onControlStart = () => {
+    isUserInput = true
+    pressPose = poseKey(controls)
+  }
+  const onControl = () => {
+    isUserInput = true
+  }
+  // ...or a press that changed where the camera is heading by its release,
+  // with no `update` in between: a flick inside one frame, or a paused render
+  // loop (nothing calls the controls' update then). getPosition/getTarget
+  // return the END of a move, so the change shows before any frame applies it.
+  const onControlEnd = () => {
+    if (pressPose !== null && poseKey(controls) !== pressPose) {
+      goLive()
+    }
+    isUserInput = false
+    pressPose = null
+  }
   const events = [
-    ['controlstart', onUserMove],
-    ['control', onUserMove],
-    [USER_CAMERA_MOVE_EVENT, onUserMove],
+    ['controlstart', onControlStart],
+    ['control', onControl],
+    ['controlend', onControlEnd],
+    [USER_CAMERA_MOVE_EVENT, goLive],
     ['update', onUpdate],
   ]
   events.forEach(([type, fn]) => controls?.addEventListener?.(type, fn))
@@ -112,4 +149,19 @@ export function startLiveCameraLink(controls, {
       events.forEach(([type, fn]) => controls?.removeEventListener?.(type, fn))
     },
   }
+}
+
+
+/**
+ * @param {object} controls
+ * @return {string|null} where the camera is heading, comparable by value;
+ *   null for controls without a pose
+ */
+function poseKey(controls) {
+  const position = controls?.getPosition?.()
+  const target = controls?.getTarget?.()
+  if (!position || !target) {
+    return null
+  }
+  return [position.x, position.y, position.z, target.x, target.y, target.z].join(',')
 }
