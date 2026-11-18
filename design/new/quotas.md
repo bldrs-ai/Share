@@ -681,6 +681,16 @@ another machine or a full wipe; that is why the value is `unknown` and not
 `other_browser`. The ledger holds UUID-derived ids only, and only the
 closed-set verdict reaches GA.
 
+`signed_in` on `local_link_missing` is read after auth settles, not at the
+failure: a local-only route never awaits auth, so a signed-in visitor opening
+a dead link on a cold load would otherwise be counted signed out. The alert
+still shows at once; only the GA send waits. `legacy_route` undercounts: the
+`/v/new/` marker lives in router state on the history entry, so a hash push
+before the failure drops it (never a mislabel). The ledger seed can race too:
+`OpenModelDialog` also prunes local recents, and on a cold load with `#open`
+it can prune a recent before the seed runs; that is bounded, because the seed
+has run on every earlier startup and every successful load records its id.
+
 The parts that aren't obvious:
 
 - **`login` is a completed sign-in, not an authenticated boot.** Most

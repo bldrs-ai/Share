@@ -748,11 +748,29 @@ export default function CadView({
         // first-sighting rule as that one, and the same isRealModelOpen guard
         // as load_failed above so deploy previews stay quiet.
         if (!repeat && isRealModelOpen(modelPath)) {
-          gtagEventWithCid(LOCAL_LINK_EVENTS.MISSING, {
-            origin,
-            legacy_route: isLegacyUploadRouteRef.current,
-            signed_in: isAuthenticatedRef.current === true,
-          })
+          // Snapshot what the failure itself knows, now; `signed_in` is read
+          // after auth settles. A local-only route never awaits auth, so at
+          // this point useAuth0().isAuthenticated can still be its loading-
+          // state false for a signed-in visitor. Only the GA send waits: the
+          // alert above is already up, and a rejection here must not reach
+          // the load path. The once-per-route dedupe (`repeat`) was decided
+          // synchronously above, so a re-run during the wait can't resend.
+          // Router state lives on the history entry, so a
+          // `window.location.hash = ...` push before this failure drops
+          // legacyUploadRoute: legacy links are undercounted, never
+          // mislabelled.
+          const legacyRoute = isLegacyUploadRouteRef.current
+          waitForAuthSettled(AUTH_SETTLE_RETRY_MS)
+            .then(() => {
+              gtagEventWithCid(LOCAL_LINK_EVENTS.MISSING, {
+                origin,
+                legacy_route: legacyRoute,
+                signed_in: isAuthenticatedRef.current === true,
+              })
+            })
+            .catch(() => {
+              // Analytics only: a failed send must not surface to the user.
+            })
         }
       } else {
         setAlert(e)

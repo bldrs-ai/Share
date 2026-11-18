@@ -934,23 +934,34 @@ describe('CadView', () => {
     })
 
     afterEach(() => {
+      mockAuthState.isAuthenticated = false
       delete window.gtag
       localStorage.removeItem('bldrs:local-upload-ledger')
     })
 
-    /** @return {Promise<object>} the store hook result, after the alert shows */
-    async function openMissingUpload() {
+    const LEDGER_KEY = 'bldrs:local-upload-ledger'
+    const readLedgerIds = () => JSON.parse(localStorage.getItem(LEDGER_KEY) || '[]')
+
+    /**
+     * @param {object} [opts]
+     * @param {boolean} [opts.settleAuth] flip the store's isAuthResolved
+     *   first (BaseRoutes' job in the app); false leaves Auth0 "loading"
+     * @return {Promise<{result: object, rerender: Function}>} the store hook result and a rerender, after the alert shows
+     */
+    async function openMissingUpload({settleAuth = true} = {}) {
       const {result} = renderHook(() => useStore((state) => state))
       await act(() => result.current.setIsOpfsAvailable(true))
+      await act(() => result.current.setIsAuthResolved(settleAuth))
       await act(() => result.current.setModelPath({filepath: ID, isUploadedFile: true}))
-      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      const ui = <ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>
+      const {rerender} = render(ui)
       await actAsyncFlush()
       await waitFor(() => expect(result.current.alert?.type).toBe('uploadNotInBrowser'))
-      return result
+      return {result, rerender: () => rerender(ui)}
     }
 
     it('reports origin unknown when the ledger never saw the id', async () => {
-      const result = await openMissingUpload()
+      const {result} = await openMissingUpload()
       expect(missingEvents()).toEqual([['local_link_missing',
         {origin: 'unknown', legacy_route: false, signed_in: false}]])
       expect(result.current.alert.origin).toBe('unknown')
@@ -958,14 +969,114 @@ describe('CadView', () => {
 
     it('reports origin this_browser when the ledger holds the id', async () => {
       localStorage.setItem('bldrs:local-upload-ledger', JSON.stringify([ID]))
-      const result = await openMissingUpload()
+      const {result} = await openMissingUpload()
       expect(missingEvents()).toEqual([['local_link_missing',
         {origin: 'this_browser', legacy_route: false, signed_in: false}]])
       expect(result.current.alert.origin).toBe('this_browser')
     })
 
+    it('reports signed_in true for a signed-in visitor', async () => {
+      mockAuthState.isAuthenticated = true
+      await openMissingUpload()
+      await waitFor(() => expect(missingEvents()).toEqual([['local_link_missing',
+        {origin: 'unknown', legacy_route: false, signed_in: true}]]))
+    })
+
+    // A local-only route never awaits auth, so the failure can land while
+    // Auth0 still reads isAuthenticated false. The send waits for BaseRoutes'
+    // settlement and reads the state then; the alert doesn't wait.
+    it('waits for auth to settle before reading signed_in', async () => {
+      mockAuthState.isAuthenticated = false
+      const {result, rerender} = await openMissingUpload({settleAuth: false})
+      // Dialog is up, event not yet sent.
+      expect(missingEvents()).toEqual([])
+      mockAuthState.isAuthenticated = true
+      act(() => rerender())
+      await act(() => result.current.setIsAuthResolved(true))
+      await actAsyncFlush()
+      await waitFor(() => expect(missingEvents()).toEqual([['local_link_missing',
+        {origin: 'unknown', legacy_route: false, signed_in: true}]]))
+    })
+
+    describe('legacy_route', () => {
+      afterEach(() => {
+        reactRouting.useLocation.mockReturnValue(defaultLocationValue)
+      })
+
+      it('is true when the route arrived through the legacy redirect', async () => {
+        reactRouting.useLocation.mockReturnValue({...defaultLocationValue, state: {legacyUploadRoute: true}})
+        await openMissingUpload()
+        await waitFor(() => expect(missingEvents()).toEqual([['local_link_missing',
+          {origin: 'unknown', legacy_route: true, signed_in: false}]]))
+      })
+
+      it('is false without the redirect marker', async () => {
+        await openMissingUpload()
+        await waitFor(() => expect(missingEvents()).toEqual([['local_link_missing',
+          {origin: 'unknown', legacy_route: false, signed_in: false}]]))
+      })
+    })
+
+    // The ledger's load-time writer (CadView), with no recents seeded so
+    // nothing else could have recorded the id.
+    describe('ledger writer', () => {
+      let cameraControlsSpy
+      let getHarness
+
+      beforeEach(() => {
+        getHarness = require('../../__mocks__/shareViewerTestHarness').__getShareViewerMockSingleton
+        // Same sidestep as the open-205 block: a load can finish on a
+        // viewer the mount already disposed.
+        cameraControlsSpy = jest.spyOn(ThreeContext.prototype, 'getCameraControls')
+          .mockImplementation(() => getHarness().IFC.context.ifcCamera.cameraControls)
+      })
+
+      afterEach(() => {
+        cameraControlsSpy.mockRestore()
+      })
+
+      /**
+       * Mount CadView on the upload route with the loader mocked by `impl`.
+       *
+       * @param {Function} impl Loader.load implementation
+       * @return {Promise<object>} the store hook result
+       */
+      async function mountUploadRoute(impl) {
+        jest.spyOn(Loader, 'load').mockImplementation(impl)
+        const {result} = renderHook(() => useStore((state) => state))
+        await act(() => result.current.setIsOpfsAvailable(true))
+        await act(() => result.current.setIsAuthResolved(true))
+        await act(() => result.current.setModelPath({filepath: ID, isUploadedFile: true}))
+        render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+        await actAsyncFlush()
+        return result
+      }
+
+      it('records the id after a successful load', async () => {
+        const result = await mountUploadRoute(() => Promise.resolve(getHarness()._loadedModel))
+        await waitFor(() => expect(result.current.model).toBe(getHarness()._loadedModel))
+        await waitFor(() => expect(readLedgerIds()).toContain(ID))
+      })
+
+      it('does not record the id when the upload is not in this browser', async () => {
+        const result = await mountUploadRoute(() => {
+          throw new UploadNotInBrowserError(ID)
+        })
+        await waitFor(() => expect(result.current.alert?.type).toBe('uploadNotInBrowser'))
+        expect(readLedgerIds()).not.toContain(ID)
+      })
+
+      it('does not record the id when the load fails otherwise', async () => {
+        const result = await mountUploadRoute(() => {
+          throw new Error('parse failed')
+        })
+        await waitFor(() => expect(result.current.alert).toBeTruthy())
+        expect(readLedgerIds()).not.toContain(ID)
+      })
+    })
+
     it('sends nothing for the repeat an auth change causes', async () => {
-      const result = await openMissingUpload()
+      const {result} = await openMissingUpload()
       expect(missingEvents()).toHaveLength(1)
       const first = result.current.alert
       await act(() => result.current.setIsAuthResolved(!result.current.isAuthResolved))

@@ -24,6 +24,14 @@ import {loadRecentFilesBySource} from '../connections/persistence'
  * "not in the ledger" means "another machine OR fully wiped". That is why the
  * GA verdict for a miss is `unknown`, not `other_browser`.
  *
+ * Known limit: concurrent tabs do an unlocked read-modify-write, so an id
+ * can be lost to the other tab's write; it then reads as `unknown`.
+ *
+ * Known limit: `OpenModelDialog` also calls `pruneMissingLocalRecents()`
+ * (OpenModelDialog.jsx), and on a cold load with `#open` it can prune a
+ * recent before BaseRoutes' seed runs. Bounded: the seed has run on every
+ * earlier startup, and CadView records the id on every successful load.
+ *
  * Every access is wrapped: storage may be unavailable, full or corrupt, and
  * analytics bookkeeping must never throw into the load path.
  */
