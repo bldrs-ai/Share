@@ -98,6 +98,9 @@ async function renderWithModel(model) {
   const {result} = renderHook(() => useStore((state) => state))
   await act(() => {
     result.current.setModel(model)
+    // CadView raises it once the model's link terms are applied; the live
+    // view link writes nothing before.
+    result.current.setIsModelReady(true)
   })
   // With the live view link's display term, as CadView mounts it: the menu
   // only notes the user's change, and the term writes `#d:` once it settles

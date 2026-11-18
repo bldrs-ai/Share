@@ -413,6 +413,25 @@ model-ready, as history entries, regardless of the switch.
 The Share dialog still writes every switched-on term when it opens, so the
 link it shows is complete even for terms that never went live.
 
+Three details of the display term (`LiveDisplayLink.jsx`), from the review
+of #2177:
+
+- **Nothing before `isModelReady`.** CadView raises it only after applying
+  the link's hide / isolate terms. On a big model the user can change the
+  display while the tree is still being walked, and a write then would
+  describe an isolator with nothing hidden yet, dropping the link's terms on
+  arrival. A change made in that window is written once the model is ready.
+- **Live per model route, for the session** (`livePaths`). A re-init of the
+  same model (a theme toggle builds a new viewer) keeps following, so
+  CadView's re-init reapply finds the terms current.
+- **A model swap cancels a pending write** rather than flushing it. By then
+  the page's location is the next model's.
+
+The Share dialog's Cut planes switch removes `#cp:` from the page's location
+(`CutPlane/hashState.js#removePlanesFromHashState`), not react-router's
+`useLocation()` object. History freezes that object outside production, and
+it lags the page after in-place writes.
+
 
 ## 7. Epic + stories
 
