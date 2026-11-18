@@ -604,6 +604,16 @@ export default function CadView({
     state.setLoadReportLines([])
     state.setCurrentLoadLine(null)
     state.setLoadResult(null)
+    // The NavTree's expansion is a set of the left model's element ids (and
+    // type names). Left in place, the next model's tree came up with whichever
+    // of its own ids collide expanded, and a toggle on one collapsed it
+    // instead (found by step F's burn-in, exportGlb.spec.ts's reopen of a
+    // second export of the same model: its root came up expanded, so the
+    // user's first click closed it). A page load starts with none.
+    state.setExpandedElements([])
+    state.setExpandedTypes([])
+    state.setDefaultExpandedElements([])
+    state.setDefaultExpandedTypes([])
   }
 
 
@@ -2894,6 +2904,33 @@ export default function CadView({
   // The debug panels (Perf + Render) behind the backtick key, in prod too
   // (viewer/debugPanels.js; the dock is Components/DebugDock).
   useEffect(() => installDebugPanelsShortcut(), [])
+
+
+  // Give up this CadView's load when it unmounts. An in-app open across route
+  // families (`/v/p`, `/v/gh` and `/v/local-only` sit under one parent route;
+  // `/v/u` and `/v/g` do not, ShareRoutes.jsx) remounts Share and CadView,
+  // and the next CadView builds a new viewer and disposes the store's one.
+  // Left running, this instance's load streamed into that disposed viewer and
+  // failed at its scene: an alert, a Sentry capture, and `load_failed`, over
+  // the model the user had just opened (found by step F's burn-in,
+  // GoogleDriveConnect.spec.ts: a Drive pick from a hosted model). With the
+  // kill switch on there is no controller, so this does nothing. Checked a
+  // microtask later, defensively: StrictMode (index.jsx) runs this cleanup
+  // and the effect again at once in development, which is no unmount, and a
+  // load already started then (a remount into the store's viewer) would be
+  // given up and started again for nothing.
+  const isMountedRef = useRef(false)
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      queueMicrotask(() => {
+        if (!isMountedRef.current) {
+          abortLoadInFlight()
+        }
+      })
+    }
+  }, [])
 
 
   /* eslint-disable react-hooks/exhaustive-deps */

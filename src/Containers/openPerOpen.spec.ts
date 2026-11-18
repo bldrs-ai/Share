@@ -59,6 +59,8 @@ describeMobileAndDesktop('open-205: the open events are sent once per open', () 
       // object, so the reload the events would have counted did happen.
       await waitForModelOtherThan(page, 'before-theme')
       expect(await openCounts(page)).toEqual({realModelOpen: 1, modelView: 1, engagementOpens: 1})
+      // Opened by the page load: the page's first open.
+      expect((await gaEvents(page, 'real_model_open')).map((event) => event.params.open_kind)).toEqual(['page'])
     })
   }
 
@@ -82,6 +84,11 @@ describeMobileAndDesktop('open-205: the open events are sent once per open', () 
     await waitForModelOtherThan(page, 'demo')
     expect(await isSameDocument(page), 'Back and Forward stayed in the document').toBe(true)
     expect(await openCounts(page)).toEqual({realModelOpen: 2, modelView: 2, engagementOpens: 2})
+    // Both of box.ifc's opens followed the demo in this document, so both are
+    // in-app opens (utils/reportModelOpen.js): what splits a regression of
+    // the switch from a bad model in GA.
+    expect((await gaEvents(page, 'real_model_open')).map((event) => event.params.open_kind))
+      .toEqual(['in_app', 'in_app'])
   })
 })
 

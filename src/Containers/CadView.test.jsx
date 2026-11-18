@@ -1871,6 +1871,30 @@ describe('CadView', () => {
       delete window.gtag
     })
 
+    // An in-app open across route families (`/v/p` → `/v/g` or `/v/u`)
+    // remounts CadView; the instance left must not go on loading into the
+    // viewer the next one disposes.
+    it('aborts its load when it unmounts', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const {impl, calls} = hangingLoad()
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(impl)
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      // Under StrictMode, as index.jsx mounts the app: its double effect run
+      // is no unmount. (Not a pin of the microtask in the cleanup: no load has
+      // started yet when StrictMode re-runs the mount effects here.)
+      const {unmount} = render(
+        <React.StrictMode><ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock></React.StrictMode>)
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBeGreaterThan(0))
+      const signal = calls[calls.length - 1].signal
+      expect(signal.aborted).toBe(false)
+
+      unmount()
+      await actAsyncFlush()
+      expect(signal.aborted, 'an unmounted CadView gives its load up').toBe(true)
+    })
+
     it('clears the left model from the store when the switch starts', async () => {
       const {result} = renderHook(() => useStore((state) => state))
       const {impl, calls} = hangingLoad()
@@ -1884,6 +1908,11 @@ describe('CadView', () => {
       await waitFor(() => expect(result.current.isModelReady).toBe(true))
       expect(result.current.model).toBe(getHarness()._loadedModel)
       expect(result.current.rootElement).not.toBeNull()
+      // The user opened part of A's tree.
+      await act(() => {
+        result.current.setExpandedElements(['89', '90'])
+        result.current.setExpandedTypes(['IFCWALL'])
+      })
 
       await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
       await actAsyncFlush()
@@ -1894,6 +1923,9 @@ describe('CadView', () => {
       expect(result.current.isModelReady).toBe(false)
       expect(result.current.rootElement).toBeNull()
       expect(result.current.loadedFileInfo).toBeNull()
+      // A's expansion is A's ids: B's tree starts closed, as on a page load.
+      expect(result.current.expandedElements).toEqual([])
+      expect(result.current.expandedTypes).toEqual([])
     })
 
     it('reloads the same model into a viewer re-created mid-load (a theme change)', async () => {

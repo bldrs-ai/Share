@@ -341,13 +341,19 @@ describeMobileAndDesktop('open-205: a switch while the model is still loading ab
     await holdLoadAtIndex(page, 1)
   })
 
-  for (const {label, path, fileName, isWorker} of [
+  for (const {label, path, fileName, isWorker, isFromUrl} of [
     {label: 'IFC in the engine worker', path: HOME_PATH, fileName: 'index.ifc', isWorker: true},
+    // A from a generic URL (`/v/u/…`), a route outside the parent route of
+    // `/v/gh` (ShareRoutes.jsx): the open of B remounts Share and CadView, so
+    // the CadView that owns A's load is gone, not switched. Found by step F's
+    // burn-in: its load ran on into the viewer the next CadView disposed.
+    {label: 'IFC in the engine worker, from a generic URL (a CadView remount)', path: HOME_PATH,
+      fileName: 'index.ifc', isWorker: true, isFromUrl: true},
     {label: 'STEP in the engine worker', path: '/share/v/p/index.step', fileName: 'index.step', isWorker: true},
     {label: 'IFC on the main-thread engine', path: HOME_PATH, fileName: 'index.ifc', isWorker: false,
       feature: 'disableEngineWorker'},
   ].map((leg) => ({...leg, path: `${leg.path}${leg.feature ? `?feature=${leg.feature}` : ''}`}))) {
-    test(`${label}: A's load stops, B loads, and nothing of A is left`, async ({page}) => {
+    test(`${label}: A's load stops, B loads, and nothing of A is left`, async ({page, baseURL}) => {
       const workers = watchEngineWorkers(page)
       // CadView's failure path logs the error it alerts and captures; an
       // abort must never take it (no alert, no Sentry, no load_failed).
@@ -357,7 +363,9 @@ describeMobileAndDesktop('open-205: a switch while the model is still loading ab
           failureLines.push(msg.text())
         }
       })
-      await page.goto(path, {waitUntil: 'domcontentloaded'})
+      // The hosted index.ifc by its plain URL, as a link to any server gives it.
+      await page.goto(isFromUrl ? `/share/v/u/${new URL('/index.ifc', baseURL).href}` : path,
+        {waitUntil: 'domcontentloaded'})
 
       // A at its index, held: tree, title and report up, not ready.
       await waitForHeldLoad(page)

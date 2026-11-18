@@ -4,8 +4,10 @@
 P1.0 measured (§4.1); Phase 1a step 0, the flagged switch and the first
 memory E2E, built (§4.6, §6); step A, load ownership and abort under the
 same flag, built (§4.5a); steps C (Back/Forward, every open surface, §4.6)
-and D (per-open dedupe, §5) built. Phase 2 planned. Per-step status lives on
-#2011 and its sub-issues, not here.
+and D (per-open dedupe, §5) built; step F, the switch **on by default** with
+the kill switch `?feature=disableSpaModelNav` and the `disableSpaModelNav`
+prod rollback (§4.8). Phase 2 planned. Per-step status lives on #2011 and
+its sub-issues, not here.
 **Epic:** `open-205` (#2011). Stories: Phase 0 #2012 (tasks #2013–#2018,
 closed; #2017 moved to Phase 1), Phase 1 #2028 (measure), #2029
 (interactive at index), #2019 (sessions), #2030 (no blocking calls), #2031
@@ -62,7 +64,8 @@ survives every model change. Paths that take it without a page load:
 - `navToDefault` (the alert's Reset), and the search bar's open of a
   non-GitHub URL (`/share/v/u/…`);
 - Back/Forward between those;
-- since step 0, every `navigateToModel` under `?feature=spaModelNav` (§4.6).
+- since step 0, every `navigateToModel` under `?feature=spaModelNav` (§4.6),
+  and since step F every one by default (§4.8).
 
 So the dispose path runs in production today; what's missing is everything
 the page load was quietly covering.
@@ -93,7 +96,7 @@ the engine session of every *registered* model, which terminates its
 worker (checked by `modelSwitchMemory.spec.ts`, §6). A model registers only
 when its parse returns (`ShareIfcLoader.js`, `ifc.addIfcModel`), so before
 step A a worker superseded mid-parse was not closed by the dispose (#2031).
-Under `?feature=spaModelNav` it now is: the load is aborted, and the
+Under the in-app switch (on by default since step F) it now is: the load is aborted, and the
 dispose also aborts every engine load still parsing into the viewer
 (§4.5a). The rest of this section is the main-thread path.
 
@@ -606,8 +609,9 @@ cheap where one exists).
 Phase 1a is "switch = close", one model at a time (#2011), so until
 sessions (§4.3) the close path above is what a switch takes, and it is
 built for that case only: no `EngineHost`, budget, LRU or rehydrate. All
-of it is under `?feature=spaModelNav`; off the flag nothing is aborted and
-a switch mid-load still waits behind the load.
+of it is under the in-app switch (`spaModelNav`, on by default since step
+F, §4.8); with the kill switch or the rollback on, nothing is aborted and a
+switch mid-load still waits behind the load.
 
 - **Who owns a load.** Each CadView `onViewer` run gets an
   `AbortController` (`loadAbortRef`). Leaving the model aborts it, in
@@ -648,11 +652,12 @@ a switch mid-load still waits behind the load.
   artifact, `opfsFile` and the load report, so the page reads as a fresh
   page load does before the model arrives. Before, `model` stayed A until
   B's `setModel` (§2.4).
-- **Off the flag** a theme change mid-load still lets the load run into
-  the disposed viewer, which then fails at `addIfcModel` with "Cannot read
-  properties of null (reading 'items')" (an alert, and a Sentry capture),
-  and the model is not reloaded. Seen in a probe on index.ifc held at its
-  index; unchanged here, and fixed under the flag.
+- **With the kill switch on** (`?feature=disableSpaModelNav`, §4.8; before
+  step F, off the flag) a theme change mid-load still lets the load run
+  into the disposed viewer, which then fails at `addIfcModel` with "Cannot
+  read properties of null (reading 'items')" (an alert, and a Sentry
+  capture), and the model is not reloaded. Seen in a probe on index.ifc
+  held at its index; fixed under the switch, so for everyone since step F.
 
 Verified by `modelSwitchMemory.spec.ts` (§6) and unit tests beside each
 piece.
@@ -747,6 +752,61 @@ Left for Phase 1b: the ProjectsDrawer capture's reload-shaped reasoning
 - **Resolved by P1.0:** the initial parse is *not* one long synchronous call; it yields, except for `populateStyledItemsMap` (§4.4 item 3).
 
 
+### 4.8 Default-on and rollback (step F)
+
+**On by default.** `spaModelNav` is `isActive: true`. Whether an open is an
+in-app switch or a page load is one predicate,
+`utils/spaModelNavMode.js#modelPageLoadReason`, read by everything that
+behaves differently for a switch, so none of them can disagree:
+`navigateToModel` (switch or `location.assign`), CadView's load ownership
+(`loadAbortRef`, `forgetLoadedModelState`, the viewer-replaced reload;
+§4.5a) and `ShareIfc#dispose` (the in-flight engine aborts). It is read
+from the URL at each call; the query rides from one open to the next
+(`withCurrentSearch`), so a page and the opens it makes agree.
+`?feature=spaModelNav` is harmless: on is on.
+
+**Rolling back.** The same shape as the engine worker's (engine-worker.md
+§7.2) and render-on-demand's (DESIGN.md §"Render loop & perf monitor"):
+- *Prod-wide:* set `disableSpaModelNav` to `isActive: true` in
+  `FeatureFlags.js` and deploy. The predicate reads that static value before
+  any URL flag, so every open from a surface is a page load again, including
+  links that still carry `?feature=spaModelNav`; step A's abort and store
+  reset go with it. What stays in-app is what was in-app before step 0: the
+  no-OPFS in-memory open (a page load would end its `File`), a theme or
+  view-settings rebuild, the alert's Reset, and a `/v/u` search.
+- *Not* `spaModelNav: false`. `isFeatureEnabled` ORs a static flag with the
+  URL, so every `?feature=spaModelNav` link (burn-in links, specs, shared
+  previews) would stay in-app, and `withCurrentSearch` would carry it to
+  every open after.
+- *One session:* `?feature=disableSpaModelNav`, the first thing to try on a
+  report that looks like the previous model's state left behind (a wrong
+  tree, markers or selection, a stale panel, memory growing per switch): if
+  it is right with the switch off and wrong with it on, it is a switch bug.
+  The switch is read when an open is made, from the page's URL, so it takes
+  effect from the page that carries it: paste it into the current URL and
+  reload, then open models as usual (it rides into each page it loads).
+  Opening, in-app, a link whose own query adds it gives that one open the
+  old load path (no abort) and makes every open after it a page load.
+- *To confirm which mode a page is in:* every Sentry event carries
+  `model_nav` (`in-app` or `page-load:<reason>`) and `model_open` (`page`
+  for the page's first open, `in_app` for one switched to in the same
+  document), set at the start of each load (`utils/reportModelOpen.js`).
+  GA's `real_model_open`, `load_failed` and `model_load_aborted` carry the
+  same `open_kind`, so the failure rate of in-app opens can be read against
+  first opens (`load_failed` ÷ (`real_model_open` + `load_failed`) per
+  `open_kind`): a regression of the switch shows as `in_app` failing more
+  than `page`.
+
+**Burn-in.** Before the flip, the whole Playwright suite (both form
+factors) ran on a build with the switch on by default; results and what it
+found are in the step F PR. Tests that pinned "flag off = page load" now
+pin the kill switch (`spaModelNav.spec.ts`: a page load per open and per
+Back, the switch riding into the loaded page; `openPerOpen.spec.ts`: a
+theme toggle is one open with the switch off too; `navigate.test.js`,
+`CadView.test.jsx`, `ShareIfc.dispose.test.js`), and every spec that named
+`?feature=spaModelNav` (the memory, marker, history, surfaces and per-open
+specs) runs on a plain link, so on the default path.
+
 ## 5. "Once per page load" needs a per-open answer (#2022)
 
 ### 5.1 Decided 2026-11-01: a return to A is a new open
@@ -773,14 +833,15 @@ meter and for analytics alike.
 So in-app A → B → A is three opens, while a theme toggle, a Widget API
 view-settings change, an auth-state re-run and StrictMode's double effect
 reload the same open, and selecting an element keeps it. On a page load
-the page and its first open coincide, so with the flag off, where every
-open from a surface is a page load, per open is per page.
+the page and its first open coincide, so with the kill switch on
+(`?feature=disableSpaModelNav`, §4.8), where every open from a surface is a
+page load, per open is per page.
 
 **With step A and the marker reset.** The open changes exactly where
 Share.jsx's route effect sets a new route result, which is also where it
 calls `NotesSlice#forgetModelMarkers` (#2189; not on the first route, which
 starts with that state fresh) and, through CadView's `[modelPath]` effect,
-where step A's `forgetLoadedModelState` runs under the flag (§4.5a). So the
+where step A's `forgetLoadedModelState` runs under the switch (§4.5a). So the
 three agree on what a switch is. A load the user leaves is aborted before
 it reaches the open events or the meter (both sit after the model is on
 screen), so a left mid-load open sends nothing, as a page left mid-load
@@ -789,7 +850,7 @@ sent nothing; the return to it is a new open and sends them once.
 **Decided: a theme rebuild is not an open.** It is the same model, reloaded
 into a new viewer for the user's look. Until now `real_model_open` and
 `model_view` fired again on every theme toggle; they no longer do. That is
-the one change with the flag off, and it is in GA's numbers (see the
+the one change that also holds with the kill switch on, and it is in GA's numbers (see the
 inventory).
 
 ### 5.3 Inventory
@@ -817,8 +878,9 @@ Tests: `useDirectLinkQuota.test.js` (A → B → A records A twice; a re-init of
 one open once; A → unmetered → A; one count per page when every open is a
 page load), `engagementTracking.test.js`, `driveExportVisibility.test.js`,
 `modelOpen.test.ts`, `navigate.test.js` (`?view=`), and
-`src/Containers/openPerOpen.spec.ts` (a theme toggle sends no second open;
-under the flag a Back and Forward to a model sends it again).
+`src/Containers/openPerOpen.spec.ts` (a theme toggle sends no second open,
+by default and with the kill switch; in-app, a Back and Forward to a model
+sends it again).
 
 
 ## 6. Verification (#2023)
