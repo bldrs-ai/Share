@@ -141,7 +141,9 @@ describeMobileAndDesktop('open-205: Back and Forward between models opened in-ap
     // B's entry.
     await orbit(page, ff.isMobile)
     await expect.poll(() => cameraToken(pageUrl(page)), {timeout: WRITE_TIMEOUT_MS}).toBeDefined()
-    const urlB = pageUrl(page)
+    // On a slow frame the damping can pause past the debounce and write more
+    // than once; B's entry is what it holds once the orbit has settled.
+    const urlB = await settledUrl(page)
     // Then Back, with B's camera still damping. Its next write is B's, and
     // the URL is A's a few renders before B's viewer (and its link) goes.
     // That window is too short to hit on purpose here, so the drop itself
@@ -208,6 +210,22 @@ async function expectShown(page: Page, url: string, expected: ShownModel, previo
 async function expectUrlStays(page: Page, url: string) {
   await page.waitForTimeout(NO_WRITE_SETTLE_MS)
   expect(pageUrl(page), 'the entry\'s URL is what it was when the user left it').toBe(url)
+}
+
+
+/**
+ * @param page
+ * @return the page's URL once it has stopped changing for NO_WRITE_SETTLE_MS
+ */
+async function settledUrl(page: Page): Promise<string> {
+  let url = pageUrl(page)
+  await expect.poll(async () => {
+    const before = url
+    await page.waitForTimeout(NO_WRITE_SETTLE_MS)
+    url = pageUrl(page)
+    return url === before
+  }, {timeout: WRITE_TIMEOUT_MS * 2}).toBe(true)
+  return url
 }
 
 
