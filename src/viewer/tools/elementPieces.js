@@ -79,7 +79,7 @@ export function indexElementPieces(model, {ids, instanceIds}) {
     node.traverse((mesh) => {
       const geometry = mesh.geometry
       if (mesh.isMesh && geometry?.attributes?.position && !mesh.isBatchedMesh) {
-        add(byId, id, wholeMeshPiece(mesh))
+        wholeMeshPieces(mesh).forEach((piece) => add(byId, id, piece))
       }
     })
   }
@@ -189,18 +189,33 @@ function mergedPieces(mesh, owners, ids) {
 
 
 /**
- * @param {object} mesh a Mesh
- * @return {object} the whole mesh as one piece
+ * @param {object} mesh a Mesh, or an InstancedMesh (a glTF with
+ *   `EXT_mesh_gpu_instancing` that carries no Share instance tables loads as one)
+ * @return {Array<object>} the whole mesh as one piece; an InstancedMesh as one
+ *   piece per placement it draws (`count`), world = matrixWorld × instance
+ *   matrix. Copies share `shape`, so closure is checked once per geometry.
  */
-function wholeMeshPiece(mesh) {
+function wholeMeshPieces(mesh) {
   const geometry = mesh.geometry
-  return {
-    key: `s${mesh.id}`,
+  const base = {
     position: geometry.attributes.position,
     index: geometry.index ? geometry.index.array : null,
     indexStart: 0,
     indexCount: geometry.index ? geometry.index.count : geometry.attributes.position.count,
-    matrix: mesh.matrixWorld,
-    shape: null,
   }
+  if (!mesh.isInstancedMesh) {
+    return [{...base, key: `s${mesh.id}`, matrix: mesh.matrixWorld, shape: null}]
+  }
+  const pieces = []
+  const instanceMatrix = new Matrix4()
+  for (let i = 0; i < mesh.count; i++) {
+    mesh.getMatrixAt(i, instanceMatrix)
+    pieces.push({
+      ...base,
+      key: `s${mesh.id}:${i}`,
+      matrix: new Matrix4().multiplyMatrices(mesh.matrixWorld, instanceMatrix),
+      shape: `s${mesh.id}`,
+    })
+  }
+  return pieces
 }

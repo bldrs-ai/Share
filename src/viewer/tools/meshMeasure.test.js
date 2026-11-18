@@ -1,6 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {Matrix4} from 'three'
-import {localSolid} from './meshMeasure'
+import {localSolid, measureWorld} from './meshMeasure'
 
 
 const FACES = [
@@ -97,5 +97,49 @@ describe('viewer/tools meshMeasure#localSolid weld', () => {
     const xs = [...piece.position.array].filter((_, i) => i % 3 === 0 && i < 100)
     expect(xs.some((x) => x > 0 && x < 2e-6)).toBe(true)
     expect((await localSolid(piece)).closed).toBe(true)
+  })
+})
+
+
+// The yield check is a comparison in the loop, not an awaited call per step:
+// a 3M-triangle piece would otherwise cost ~20M promises. Observable as the
+// number of microtask turns the call takes: an `await` per corner/triangle/edge
+// is one turn each (tens of thousands here), a comparison is none.
+describe('viewer/tools meshMeasure hot path', () => {
+  it.each([['no pause', null], ['a pause that is never due', () => Promise.resolve()]])(
+    'does not await per step (%s)', async (_, pause) => {
+      const triangles = 4000
+      const array = new Float32Array(triangles * 9)
+      for (let i = 0; i < array.length; i++) {
+        array[i] = (i * 7919) % 1000
+      }
+      const piece = {
+        position: {array, itemSize: 3}, index: null, indexStart: 0, indexCount: triangles * 3,
+        matrix: new Matrix4(), shape: null,
+      }
+      let turns = 0
+      let done = false
+      const spin = () => {
+        if (!done) {
+          turns++
+          queueMicrotask(spin)
+        }
+      }
+      spin()
+      await Promise.all([localSolid(piece, {chunk: 1e9, pause}), measureWorld(piece, {chunk: 1e9, pause})])
+      done = true
+      expect(turns).toBeLessThan(20)
+    })
+
+  it('still awaits about once per chunk when a pause is given', async () => {
+    const triangles = 4000
+    const array = new Float32Array(triangles * 9).map((_, i) => (i * 7919) % 1000)
+    const piece = {
+      position: {array, itemSize: 3}, index: null, indexStart: 0, indexCount: triangles * 3,
+      matrix: new Matrix4(), shape: null,
+    }
+    const pause = jest.fn(() => Promise.resolve())
+    await measureWorld(piece, {chunk: 1000, pause})
+    expect(pause).toHaveBeenCalledTimes(3)
   })
 })

@@ -1,5 +1,5 @@
 /* eslint-disable no-magic-numbers */
-import {BufferAttribute, BufferGeometry, Group, Mesh} from 'three'
+import {BufferAttribute, BufferGeometry, Group, InstancedMesh, Matrix4, Mesh} from 'three'
 import {indexElementPieces} from './elementPieces'
 import {linearDeterminant, localSolid, measureWorld} from './meshMeasure'
 
@@ -18,6 +18,16 @@ function trianglesGeometry(triangles, owners = null) {
   return geometry
 }
 
+
+// A unit cube, outward wound, as 12 triangles of 9 numbers.
+const CUBE_TRIANGLES = [
+  [[0, 0, 1], [1, 0, 1], [1, 1, 1]], [[0, 0, 1], [1, 1, 1], [0, 1, 1]],
+  [[0, 0, 0], [0, 1, 0], [1, 1, 0]], [[0, 0, 0], [1, 1, 0], [1, 0, 0]],
+  [[1, 0, 0], [1, 1, 0], [1, 1, 1]], [[1, 0, 0], [1, 1, 1], [1, 0, 1]],
+  [[0, 0, 0], [0, 0, 1], [0, 1, 1]], [[0, 0, 0], [0, 1, 1], [0, 1, 0]],
+  [[0, 1, 0], [0, 1, 1], [1, 1, 1]], [[0, 1, 0], [1, 1, 1], [1, 1, 0]],
+  [[0, 0, 0], [1, 0, 0], [1, 0, 1]], [[0, 0, 0], [1, 0, 1], [0, 0, 1]],
+].map((tri) => tri.flat())
 
 // Two right triangles with legs 3 and 4 (area 6) and 1 and 1 (area 0.5).
 const BIG = [0, 0, 0, 3, 0, 0, 0, 4, 0]
@@ -53,6 +63,35 @@ describe('viewer/tools elementPieces (the render backends model.measure reads)',
     expect(pieces).toHaveLength(2)
     const areas = await Promise.all(pieces.map(async (piece) => (await measureWorld(piece)).area))
     expect(areas.reduce((sum, area) => sum + area, 0)).toBeCloseTo(6.5, 5)
+  })
+
+  // A glTF using EXT_mesh_gpu_instancing, with no Share instance tables, loads
+  // as an InstancedMesh: every placement is drawn, so every one is measured.
+  it('measures every placement of a scene-graph InstancedMesh, not just the first', async () => {
+    const geometry = trianglesGeometry(CUBE_TRIANGLES)
+    const mesh = new InstancedMesh(geometry, undefined, 3)
+    mesh.setMatrixAt(0, new Matrix4().makeTranslation(10, 0, 0))
+    mesh.setMatrixAt(1, new Matrix4().makeTranslation(20, 0, 0))
+    mesh.setMatrixAt(2, new Matrix4().makeScale(2, 2, 2).setPosition(40, 0, 0))
+    const node = new Group()
+    node.expressID = 5
+    node.add(mesh)
+    const root = new Group()
+    root.add(node)
+    const pieces = indexElementPieces(root, {ids: new Set([5]), instanceIds: new Set()}).forTarget({ids: [5]})
+    expect(pieces).toHaveLength(3)
+    // Unit cubes: area 6 each, the scaled one 24.
+    const worlds = await Promise.all(pieces.map((piece) => measureWorld(piece, {wantBox: true})))
+    expect(worlds.reduce((sum, w) => sum + w.area, 0)).toBeCloseTo(6 + 6 + 24, 4)
+    expect(Math.min(...worlds.map((w) => w.min[0]))).toBeCloseTo(10, 4)
+    expect(Math.max(...worlds.map((w) => w.max[0]))).toBeCloseTo(42, 4)
+    // One geometry: one closure check serves all three.
+    expect(new Set(pieces.map((piece) => piece.shape)).size).toBe(1)
+    expect((await localSolid(pieces[0])).volume).toBeCloseTo(1, 5)
+    // `count` limits what is drawn.
+    mesh.count = 2
+    const drawn = indexElementPieces(root, {ids: new Set([5]), instanceIds: new Set()}).forTarget({ids: [5]})
+    expect(drawn).toHaveLength(2)
   })
 
   it('is empty when nothing wanted has geometry', () => {

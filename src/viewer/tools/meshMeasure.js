@@ -155,15 +155,14 @@ export function linearDeterminant(matrix) {
 export async function localSolid(piece, {chunk = DEFAULT_CHUNK, pause = null} = {}) {
   const {array, itemSize} = piece.position
   const triangles = pieceTriangleCount(piece)
-  const step = async (i) => {
-    if (pause && i > 0 && i % chunk === 0) {
-      await pause()
-    }
-  }
   const min = [Infinity, Infinity, Infinity]
   const max = [-Infinity, -Infinity, -Infinity]
   for (let corner = 0; corner < triangles * TRIANGLE; corner++) {
-    await step(corner)
+    // The chunk boundary is tested inline: awaiting on every step would cost a
+    // promise and a microtask per corner, ~20M of them at the triangle cap.
+    if (pause && corner > 0 && corner % chunk === 0) {
+      await pause()
+    }
     const base = vertexAt(piece, corner) * itemSize
     for (let k = 0; k < TRIANGLE; k++) {
       min[k] = Math.min(min[k], array[base + k])
@@ -222,7 +221,9 @@ export async function localSolid(piece, {chunk = DEFAULT_CHUNK, pause = null} = 
   let volume = 0
   let degenerate = 0
   for (let t = 0; t < triangles; t++) {
-    await step(t)
+    if (pause && t > 0 && t % chunk === 0) {
+      await pause()
+    }
     const va = vertexAt(piece, t * TRIANGLE)
     const vb = vertexAt(piece, t * TRIANGLE + 1)
     const vc = vertexAt(piece, t * TRIANGLE + 2)
@@ -252,7 +253,10 @@ export async function localSolid(piece, {chunk = DEFAULT_CHUNK, pause = null} = 
   }
   let checked = 0
   for (const [key, count] of edges) {
-    await step(checked++)
+    if (pause && checked > 0 && checked % chunk === 0) {
+      await pause()
+    }
+    checked++
     const from = Math.floor(key / EDGE_STRIDE)
     const to = key - from * EDGE_STRIDE
     if (count !== 1 || edges.get(to * EDGE_STRIDE + from) !== 1) {
