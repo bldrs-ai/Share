@@ -156,7 +156,7 @@ const DAMAGED_MESSAGE = 'This archive is damaged or incomplete, so Share can\'t 
 
 
 /** @return {string} The refusal for an entry past the ceiling */
-function expandsPastMessage() {
+export function expandsPastMessage() {
   return `The model in this archive unpacks to more than ${MAX_ENTRY_INFLATED_BYTES / BYTES_PER_MIB} MiB, ` +
     'which is larger than any model Share can open.'
 }

@@ -24,6 +24,10 @@ export const supportedTypes = [
   // Listed with the rest so routes, drag-drop and permalinks all pick
   // them up.
   'ksplat',
+  // Volumes (CT, MR), via three's NRRDLoader (src/loader/nrrd.js). A zip of
+  // DICOM slices becomes one of these at the upload seams
+  // (`loader/modelArchive.js`, `loader/dicom.js`).
+  'nrrd',
   'obj',
   'pdb',
   'ply',
@@ -151,6 +155,11 @@ const USDC_MAGIC = Array.from('PXR-USDC', (c) => c.charCodeAt(0))
 // otherwise hit bytes inside it. Only the `bin` flavour is matched, since
 // it is the only one `loader/adf/adf-parser.js` reads.
 const ADF_MAGIC = Array.from('AlignDataFile ( bin )', (c) => c.charCodeAt(0))
+
+// NRRD opens with its version line, `NRRD0001` to `NRRD0005`. Matched as
+// magic bytes: the header is text but the voxels after it are binary, and
+// a small volume's voxels fall inside the sniffed window.
+const NRRD_MAGIC = Array.from('NRRD000', (c) => c.charCodeAt(0))
 
 // Zip local-file-header signature "PK\x03\x04". A zip signature alone
 // is NOT enough to classify as usdz — docx/xlsx/plain .zip uploads are
@@ -321,6 +330,9 @@ export function analyzeHeader(headerBuffer, {isEnvelopeAllowed = true, fileByteL
   }
   if (matchesMagic(headerBuffer, ADF_MAGIC)) {
     return 'adf'
+  }
+  if (matchesMagic(headerBuffer, NRRD_MAGIC)) {
+    return 'nrrd'
   }
   if (looksLikeGzipBytes(headerBuffer)) {
     // The gzip signature is shared by SPZ splats, Share's own `.glb.gz`

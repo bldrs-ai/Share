@@ -303,6 +303,15 @@ describe('Filetype', () => {
       expect(getValidExtension('scan.ADF')).toBe('adf')
     })
 
+    it('detects NRRD by its version line, ahead of the text checks its voxels could trip', () => {
+      // A small volume's binary voxels fall inside the sniff window, and can
+      // spell anything — here the `v x y z` an OBJ sniff takes.
+      const nrrd = new TextEncoder().encode('NRRD0004\ntype: short\nsizes: 2 2 1\n\nv 1 2 3\n').buffer
+      expect(analyzeHeader(nrrd)).toBe('nrrd')
+      expect(analyzeHeader(new TextEncoder().encode('NRRD0005\n').buffer)).toBe('nrrd')
+      expect(getValidExtension('CT1.NRRD')).toBe('nrrd')
+    })
+
     /**
      * Build the start of a zip: a local file header whose first entry
      * has the given name. Enough for the sniffing path, which only

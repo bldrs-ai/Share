@@ -24,7 +24,7 @@ import {PART21_LOADER_TYPES} from '../loader/part21Formats'
  * Source file format. Mirrors the extensions findLoader() understands.
  *
  * @typedef {'ifc'|'step'|'stp'|'glb'|'gltf'|'obj'|'stl'|'pdb'|'xyz'|'fbx'|'bld'|'adf'|
- *   'usd'|'usda'|'usdc'|'usdz'|'ply'|'spz'|'splat'|'ksplat'|'sog'} ShareModelFormat
+ *   'usd'|'usda'|'usdc'|'usdz'|'ply'|'spz'|'splat'|'ksplat'|'sog'|'nrrd'} ShareModelFormat
  */
 
 
@@ -78,6 +78,8 @@ const UNSTRUCTURED_MESH = new Set([
   'glb', 'gltf', 'obj', 'stl', 'pdb', 'xyz', 'fbx', 'bld', 'adf',
   'usd', 'usda', 'usdc', 'usdz',
   'ply', 'spz', 'splat', 'ksplat', 'sog',
+  // A volume (loader/nrrd.js): one ray-marched box, no element structure.
+  'nrrd',
 ])
 
 
