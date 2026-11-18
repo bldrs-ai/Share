@@ -1,6 +1,6 @@
 # Bldrs Share Roadmap
 
-**Status:** Draft v0.15 — `grow-100` parked until measured; growth epics in bizdev (v0.14)
+**Status:** Draft v0.16 — sharing, identity and GLB tracks reconciled with their issues
 **Date:** 2026-11-18
 **Owner:** Pablo
 **Source baseline:** `Share Requirements` Google Doc (Aug 2021, last updated Nov 2022); PDF extract is in this repo's history.
@@ -86,16 +86,16 @@ One row per Epic and Track; bodies are in §4 and §5. **Phase column:** A–E =
 | View | `view-230` | Placemarks + maps-style issues w/filtering (🥇) | 🟡 | C, Post | T1, T6 | |
 | View | `view-300` | ETL / Table view (❤️ Markus) | 🔮 | Post | T1 | |
 | Share | `share-100` | Share link to current view | ✔ | — | — | |
-| Share | `share-110` | Save model to user's hosting (originator share) | 🟡 | C | T2 | |
+| Share | `share-110` | Save a model to Google Drive | ⬜ | C | — | <a href="https://github.com/bldrs-ai/Share/issues/2205" target="_blank" rel="noopener noreferrer">#2205</a> |
 | Share | `share-120` | Extended Share/Login flow | 🟡 | C, D | — | <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a> |
-| Share | `share-130` | Private link sharing + visibility chip | 🟡 | C | T4 | |
+| Share | `share-130` | Private-by-default links + visibility chip | ⬜ | C | T4 | <a href="https://github.com/bldrs-ai/Share/issues/2206" target="_blank" rel="noopener noreferrer">#2206</a> |
 | Share | `share-140` | GLB export with Pro entitlement and free model slots | 🟡 | D | T2, T8 | <a href="https://github.com/bldrs-ai/Share/issues/1831" target="_blank" rel="noopener noreferrer">#1831</a> |
 | Share | `share-200` | Model versioning and sharing: git + progressive decomposition | 🟡 | Post, AI | T2, T12 (V1+) | <a href="https://github.com/bldrs-ai/Share/issues/2144" target="_blank" rel="noopener noreferrer">#2144</a> |
-| Share | `share-201` | Grant/revoke per-principal sharing | 🟡 | C | T4 | |
-| Share | `share-400` | Folder-scoped boundaries | ⬜ | Post | T4 | |
+| Share | `share-201` | Share with named people (grants) | ⬜ | Post | T4 | <a href="https://github.com/bldrs-ai/Share/issues/2207" target="_blank" rel="noopener noreferrer">#2207</a> |
+| Share | `share-400` | Folder-scoped boundaries | ⬜ | Post | T4 | <a href="https://github.com/bldrs-ai/Share/issues/2208" target="_blank" rel="noopener noreferrer">#2208</a> |
 | Notes | `notes-100` | Anchored notes (GitHub-backed) | ✔ | — | — | |
 | Notes | `notes-200` | BCF round-trip | ⬜ | Post | — | |
-| Notes | `notes-300` | Drive-backed notes (NotesProvider) | 🔮 | Post | T4, T6 | |
+| Notes | `notes-300` | Drive-backed notes (NotesProvider) | 🔮 | Post | T6 | |
 | Versions | `versions-100` | Exact revisions, history and local retention | 🟡 | — | — | <a href="https://github.com/bldrs-ai/Share/issues/57" target="_blank" rel="noopener noreferrer">#57</a> |
 | Versions | `versions-300` | Diff between versions | ⬜ | Post | — | |
 | Versions | `versions-310` | Portable versions for Drive | 🔮 | Post | T6 | |
@@ -106,7 +106,7 @@ One row per Epic and Track; bodies are in §4 and §5. **Phase column:** A–E =
 | Identity | `identity-100` | Auth0 primary login | ✔ | — | — | |
 | Identity | `identity-110` | GitHub as Sources peer | 🟡 | B | T3 | |
 | Identity | `identity-120` | Auth disambiguation | 🟡 | B | — | <a href="https://github.com/bldrs-ai/Share/issues/1422" target="_blank" rel="noopener noreferrer">#1422</a> |
-| Identity | `identity-300` | Profile drawer + multi-account picker | ⬜ | B | T3 | <a href="https://github.com/bldrs-ai/Share/issues/2048" target="_blank" rel="noopener noreferrer">#2048</a> (consent) |
+| Identity | `identity-300` | Profile drawer + multi-account picker | 🟡 | B | T3 | <a href="https://github.com/bldrs-ai/Share/issues/2048" target="_blank" rel="noopener noreferrer">#2048</a> (consent) |
 | Apps | `apps-100` | Browse + select app (AppsDrawer) | ✔ | — | — | |
 | Apps | `apps-110` | XYZ demo app (v0.1 API dogfood) | ✔ | — | — | |
 | Apps | `apps-300` | v1.0 Public API + IDE (🥇) | 🔮 | AI | T11 | |
@@ -137,9 +137,9 @@ One row per Epic and Track; bodies are in §4 and §5. **Phase column:** A–E =
 | ID | Name | Status | Phase | Unblocks |
 |---|---|---|---|---|
 | T1 | Viewer Replacement | 🟡 | A (launch gate) | `view-100`, `view-110`, `view-200`, `view-130`, `view-300`, `open-205`, T2 |
-| T2 | GLB Model Sharing | 🟡 | C (Ph 4 + 5) | `share-110`, `notes-300`, `view-130` |
-| T3 | Identity Decoupling | 🟡 | B (PR2 + PR3) | `identity-110`, `identity-120`, `identity-300`, `open-300`, `share-201`, `subscribe-120`, T4 PR3 |
-| T4 | Multi-User Sharing | 🟡 | C (PR2 + PR3) | `share-130`, `share-201`, `share-400`, `notes-300`, `versions-310` |
+| T2 | GLB Model Sharing | 🟡 | Post (Ph 4–6) | `share-140` cache, `share-200` derived GLB, `view-130` |
+| T3 | Identity Decoupling | 🟡 | Post (PR3) | `identity-110`, `identity-300`, `open-300`, `subscribe-120`, T4 PR3 |
+| T4 | Multi-User Sharing | 🟡 | C (chip), Post | `share-130`, `share-201`, `share-400` |
 | T5 | Drive Recents HEAD-check | ⬜ | E (polish) | `open-200` |
 | T6 | Notes & Versions sidecar formats | ⬜ | Post | `notes-200`, `notes-300`, `versions-310` |
 | T7 | Ads | 🔮 | D | `subscribe-130` |
@@ -161,7 +161,7 @@ User can open a model from local, cloud, or shared link, with format breadth and
 - **`open-200` Recents reliability** 🟡 (NEW). A dead recent (Drive, GitHub or local) should show a typed "file no longer available" alert, not a parse failure. Not started (T5, `design/new/drive-recents-head-check.md`); <a href="https://github.com/bldrs-ai/Share/issues/1548" target="_blank" rel="noopener noreferrer">#1548</a> (local recent after cache clear) is closed (as of 2026-11-10). Polish for Phase E, not MVP-load-bearing.
 - **`open-205` In-app model switching** 🟡 (NEW). Open a model without a page reload; each model gets its own session and engine, and only close or memory eviction cancels a load. Epic <a href="https://github.com/bldrs-ai/Share/issues/2011" target="_blank" rel="noopener noreferrer">#2011</a>; Phase 0 (<a href="https://github.com/bldrs-ai/Share/issues/2012" target="_blank" rel="noopener noreferrer">#2012</a>) is closed (as of 2026-11-10). The engine-worker half has landed (per-model worker, on by default). Still to build: sessions owning their worker, close and eviction, and the switch itself (Phase 1, behind `?feature=spaModelNav`), Phase 2 multi-model groundwork (<a href="https://github.com/bldrs-ai/Share/issues/2024" target="_blank" rel="noopener noreferrer">#2024</a>), plus off-main-thread rendering under <a href="https://github.com/bldrs-ai/Share/issues/2055" target="_blank" rel="noopener noreferrer">#2055</a>. Prerequisite of `open-210` and `assist-300`; the tabbed workspace layout (below, `assist-300`) depends on it. Docs: `design/new/in-app-model-switch.md`, `engine-worker.md`, `offscreen-rendering.md`.
 - **`open-210` Open multiple IFCs in one session** ⬜. Import and overlay several models (<a href="https://github.com/bldrs-ai/Share/issues/1251" target="_blank" rel="noopener noreferrer">#1251</a>); now a UI and state problem, not an engine problem. **Post-MVP.**
-- **`open-300` Multi-account Sources tab** 🟡. Drive multi-account works; parallel GitHub accounts arrive with T3 PR2/PR3 (Phase B).
+- **`open-300` Multi-account Sources tab** 🟡. Drive multi-account works. Parallel GitHub accounts wait on T3 PR3, which is post-MVP (<a href="https://github.com/bldrs-ai/Share/issues/2202" target="_blank" rel="noopener noreferrer">#2202</a>).
 
 ### 4.2 View
 
@@ -181,13 +181,13 @@ User can inspect the model in 3D with the navigation, properties, search-by-elem
 User shares a model, a view, a note, or a region with another user — privately or publicly — and the recipient sees what was intended.
 
 - `share-100` Share link to current view ✔.
-- **`share-110` Save model to user's hosting** 🟡. Originator-side persistence: Drive Save mirroring GitHub Save, then the originator share flow (T2 Phase 5). Phase C; part of the MVP paid offer.
+- **`share-110` Save a model to Google Drive** ⬜. Drive Save, mirroring GitHub Save. Decided 2026-11-18: Drive Save only. Sharing a cached GLB with a recipient (former T2 Phase 5) left this epic: a recipient-side GLB becomes a derived artifact of a published `share-200` version. <a href="https://github.com/bldrs-ai/Share/issues/2205" target="_blank" rel="noopener noreferrer">#2205</a>. Phase C; part of the MVP paid offer.
 - **`share-120` Extended Share/Login flow** 🟡 (NEW). The dialog that picks between anonymous-public, free-public, and Pro-private; where the upgrade prompt lives. Share gate for local uploads has landed. <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>. **Required for MVP.**
-- **`share-130` Private link sharing + visibility chip** 🟡 (NEW). T4 PR1 landed; the Share dialog (PR2/PR3) remains; `sharing` flag is off. **Required for MVP** (private sharing is a paid feature).
+- **`share-130` Private-by-default links + visibility chip** ⬜. A shared model is private unless the author says otherwise, and a chip shows who can open it. Decided 2026-11-18: the unguessable link itself comes from `share-200`'s link resolver, not provider link-sharing; naming people is `share-201`. The chip must match quota classification (a Drive file shared by link counts as public). <a href="https://github.com/bldrs-ai/Share/issues/2206" target="_blank" rel="noopener noreferrer">#2206</a>. **Required for MVP** (private sharing is a paid feature).
 - **`share-140` GLB export with Pro entitlement and free model slots** 🟡 (NEW). Shipped and default-on; Pro exports unlimited, free users use public models freely and private/local models through their model slots. Remaining: residual manual cross-browser smoke checks. Epic <a href="https://github.com/bldrs-ai/Share/issues/1831" target="_blank" rel="noopener noreferrer">#1831</a>; rules in `design/new/quotas.md` and `design/new/glb-export-premium.md`.
 - **`share-200` Model versioning and sharing: git + progressive decomposition** 🟡 (NEW; design only). [#2144](https://github.com/bldrs-ai/Share/issues/2144); [implementation design and dispatch plan](new/model-versioning.md). V0/S1: local whole-file IFC/STEP history, explicit public publication, immutable repo+commit links and opt-in updates; large bases live outside git. V1–V4: reuse the `create-300` op log, then prove progressive entity checkpoints, semantic merge/compaction and round trip. First gates: protected OPFS history, browser git/transport measurements, and a verified blob-hosting/retention choice. **Post-MVP**, with later semantic stages in the AI arc; V0/S1 do not wait for editing, private grants or rooms. This publishes original source bytes by explicit choice, distinct from T2 GLB sharing.
-- **`share-201` Grant/revoke per-principal sharing** 🟡 (NEW). People panel in the Share dialog (T4 PR2/PR3); MLP band, not load-bearing for the trickle. Renumbered from `share-200` in v0.12; scope unchanged.
-- **`share-400` Folder-scoped boundaries** ⬜ (NEW). T4 PR4. **Post-MVP.**
+- **`share-201` Share with named people** ⬜. Provider grants (Drive permissions, GitHub collaborators) through a people panel in the Share dialog (T4). MLP band, not load-bearing for the trickle. Renumbered from `share-200` in v0.12; scope unchanged. <a href="https://github.com/bldrs-ai/Share/issues/2207" target="_blank" rel="noopener noreferrer">#2207</a>.
+- **`share-400` Folder-scoped boundaries** ⬜. T4 PR4. <a href="https://github.com/bldrs-ai/Share/issues/2208" target="_blank" rel="noopener noreferrer">#2208</a>. **Post-MVP.**
 
 ### 4.4 Notes & Versions
 
@@ -195,10 +195,10 @@ User leaves comments anchored to model elements, replies in a thread, and can re
 
 - `notes-100` Anchored notes (GitHub-backed) ✔ (anchoring flow <a href="https://github.com/bldrs-ai/Share/issues/892" target="_blank" rel="noopener noreferrer">#892</a> is tracked under `view-230`).
 - **`notes-200` BCF round-trip** ⬜. Issues interoperate with Solibri/Navisworks/Tekla. **Post-MVP.**
-- **`notes-300` Drive-backed notes (NotesProvider)** 🔮 (NEW). T4 Stretch. **Post-MVP.**
+- **`notes-300` Drive-backed notes (NotesProvider)** 🔮 (NEW). Track T6 (#2204). **Post-MVP.**
 - **`versions-100` Exact revisions, history and local retention** 🟡. Reused tracker [#57](https://github.com/bldrs-ai/Share/issues/57) owns the basic Versions journey: external revision opening [#850](https://github.com/bldrs-ai/Share/issues/850), explicit local save/history, replacement, deliberate updates and usable backup. Opening exact revisions is the existing baseline; whether the new local save, history, update and backup stories (#2157–#2160) are MVP is a milestone hypothesis still to be measured (`design/reqs/ux-rubric.md` §"Milestones are hypotheses"), so §6.0 is unchanged. Existing GitHub-save and navigation stories remain baselines, not newly invented features. [#890](https://github.com/bldrs-ai/Share/issues/890) is deletion with unresolved retention semantics, not branch navigation; its historical Versions 200 milestone is preserved. Source read, local save, publication and model-write capabilities stay distinct. See the [dated scope snapshot](reqs/versions-100.md) and [issue/milestone and requirements crosswalk](reqs/versions-100-triage.md). `share-200` coordinates publication and later semantic work while reusing these seams; technical V0 local-history dependencies do not move every basic Versions story into that epic.
 - **`versions-300` Diff between versions** ⬜. Needs a structural IFC diff. **Post-MVP.**
-- **`versions-310` Portable versions for Drive** 🔮 (NEW). T4 Stretch Q3. **Post-MVP.**
+- **`versions-310` Portable versions for Drive** 🔮 (NEW). Track T6 (#2204), on `share-200`'s version layout. **Post-MVP.**
 
 ### 4.5 Search
 
@@ -214,9 +214,9 @@ User finds elements in the current model, across their repos, or across the buil
 User signs in, links data sources, and the system honors that even across primary-auth changes.
 
 - `identity-100` Auth0 primary login ✔.
-- **`identity-110` GitHub as a Sources peer** 🟡. T3 PR1 landed; SourcesTab integration and switchover (PR2/PR3) remain, behind `githubAsSource`. **Required for MVP.**
+- **`identity-110` GitHub as a Sources peer** 🟡. T3 PR1 (<a href="https://github.com/bldrs-ai/Share/issues/1507" target="_blank" rel="noopener noreferrer">#1507</a>) and PR2 (<a href="https://github.com/bldrs-ai/Share/issues/1508" target="_blank" rel="noopener noreferrer">#1508</a>) merged, behind `githubAsSource` (off). PR3, the switchover, is post-MVP (decided 2026-11-18); GitHub through the Auth0 sign-in keeps working meanwhile. <a href="https://github.com/bldrs-ai/Share/issues/2202" target="_blank" rel="noopener noreferrer">#2202</a>.
 - **`identity-120` Auth disambiguation across linked identities** 🟡. Chooser for prior identities so users with two GitHub accounts know what they are billed under. <a href="https://github.com/bldrs-ai/Share/issues/1422" target="_blank" rel="noopener noreferrer">#1422</a>. **Required for MVP.**
-- **`identity-300` Profile drawer + multi-account picker** ⬜. Includes the "Saving as X — GitHub" footer. Analytics consent (<a href="https://github.com/bldrs-ai/Share/issues/2048" target="_blank" rel="noopener noreferrer">#2048</a>) is a child story, grouped with Profile. **Required for MVP.**
+- **`identity-300` Profile drawer + multi-account picker** 🟡. The "Saving as X — GitHub" footer and account picker shipped behind `githubAsSource` in #1508. Includes the "Saving as X — GitHub" footer. Analytics consent (<a href="https://github.com/bldrs-ai/Share/issues/2048" target="_blank" rel="noopener noreferrer">#2048</a>) is a child story, grouped with Profile. **Required for MVP.**
 
 ### 4.7 Apps
 
@@ -285,22 +285,20 @@ Each track has a long-form design doc.
 - **Doc:** `design/new/viewer-replacement.md`.
 
 ### Track T2: GLB Model Sharing
-- **What:** Content-addressed GLB cache plus originator-side share.
-- **Status:** Phases 0–3 landed; 4 (notes + view-states in the artifact), 5 (originator share flow), 6 (shared cache tier) open.
-- **MVP impact:** Phases 4 and 5 required; Phase 6 post-MVP.
-- **Doc:** `design/new/glb-model-sharing.md`.
+- **What:** the GLB artifact an opened model becomes: the OPFS cache, the `share-140` export, and later a published version's derived GLB.
+- **Status:** Phases 0, 1 and 3 landed; Phase 2 partly (properties and spatial tree); Phases 4–6 not started and post-MVP (decided 2026-11-18). <a href="https://github.com/bldrs-ai/Share/issues/2201" target="_blank" rel="noopener noreferrer">#2201</a>.
+- **Docs:** `design/new/glb-model-sharing.md` (artifact contract and trust); the cache container and slots are in `glb-export-premium.md` §1.1.
 
 ### Track T3: Identity Decoupling
-- **What:** GitHub as a `ConnectionProvider` peer of Drive; multi-account GitHub.
-- **Status:** PR1 merged; PR2 (SourcesTab) and PR3 (switchover, flag retire) open.
-- **MVP impact:** PR2 + PR3 required.
-- **Docs:** `design/new/identity-decoupling.md`, `identity-decoupling-decisions.md`.
+- **What:** GitHub as a per-account connection, a peer of Drive, instead of riding on the Auth0 sign-in.
+- **Status:** PR1 (<a href="https://github.com/bldrs-ai/Share/issues/1507" target="_blank" rel="noopener noreferrer">#1507</a>) and PR2 (<a href="https://github.com/bldrs-ai/Share/issues/1508" target="_blank" rel="noopener noreferrer">#1508</a>) merged behind `githubAsSource` (off); PR3 (switchover) is post-MVP (decided 2026-11-18). <a href="https://github.com/bldrs-ai/Share/issues/2202" target="_blank" rel="noopener noreferrer">#2202</a>.
+- **Doc:** `design/new/identity-decoupling-decisions.md`.
 
 ### Track T4: Multi-User Sharing
-- **What:** Grants (`share-201`), visibility and folder-scoped routes, consistent across Drive and GitHub. Public model-version storage (`share-200`) is a separate capability.
-- **Status:** PR1 merged; PR2 (Drive Share dialog), PR3 (GitHub adapter), PR4 (folder routes) open; PR5 (token-health parity) and PR6 (flag retire) follow.
-- **MVP impact:** PR2 + PR3 required; PR4 post-MVP.
-- **Docs:** `design/new/multi-user-sharing.md`, `sharing-pr3-github.md`.
+- **What:** the provider layer for sharing on Drive and GitHub: the visibility chip (`share-130`), grants (`share-201`) and folder-scoped routes (`share-400`). Share's own unguessable links are `share-200`'s resolver, not this track.
+- **Status:** PR1 (<a href="https://github.com/bldrs-ai/Share/issues/1505" target="_blank" rel="noopener noreferrer">#1505</a>) merged; token-health parity shipped with T3; the chip, people panel, GitHub adapter and folder routes not started. <a href="https://github.com/bldrs-ai/Share/issues/2203" target="_blank" rel="noopener noreferrer">#2203</a>.
+- **MVP impact:** the chip, for `share-130`; the rest post-MVP.
+- **Doc:** `design/new/multi-user-sharing.md`.
 
 ### Track T5: Drive Recents HEAD-check
 - **What:** Pre-flight metadata check on recents click with typed "unreachable" alerts.
@@ -309,10 +307,8 @@ Each track has a long-form design doc.
 - **Doc:** `design/new/drive-recents-head-check.md`.
 
 ### Track T6: Notes & Versions sidecar formats
-- **What:** Provider-neutral JSON sidecars for notes and versions across Drive and git.
-- **Status:** Not started.
-- **MVP impact:** Post-MVP.
-- **Doc:** `design/new/multi-user-sharing.md` §Stretch.
+- **What:** provider-neutral formats for notes and versions across Drive and git; owns `notes-200`, `notes-300` and `versions-310` (decided 2026-11-18).
+- **Status:** Not started; post-MVP. One version manifest: `share-200`'s layout in `design/new/model-versioning.md`. <a href="https://github.com/bldrs-ai/Share/issues/2204" target="_blank" rel="noopener noreferrer">#2204</a>.
 
 ### Track T7: Ads
 - **What:** AdSense free-tier monetisation without Auto-ads on viewer routes.
@@ -360,8 +356,8 @@ MVP is a milestone, not a launch event: **a steady trickle of paying customers, 
 The open 100-band work, exhaustively — this list is the MVP:
 
 1. **The viewer holds** (Phase A): T1 public-launch gate, <a href="https://github.com/bldrs-ai/Share/issues/1249" target="_blank" rel="noopener noreferrer">#1249</a>, STEP verification <a href="https://github.com/bldrs-ai/Share/issues/1569" target="_blank" rel="noopener noreferrer">#1569</a>. (<a href="https://github.com/bldrs-ai/Share/issues/1561" target="_blank" rel="noopener noreferrer">#1561</a> and <a href="https://github.com/bldrs-ai/Share/issues/1545" target="_blank" rel="noopener noreferrer">#1545</a> closed; on-demand rendering shipped, as of 2026-11-10.)
-2. **Identity is billable** (Phase B): T3 PR2/PR3 (`identity-110`) and <a href="https://github.com/bldrs-ai/Share/issues/1422" target="_blank" rel="noopener noreferrer">#1422</a> (`identity-120`), so the quota key and the card belong to the same person.
-3. **The paid offer exists** (Phase C): `share-130` (T4 PR2/PR3), `share-120` (<a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>), `share-110` (T2 Ph4+5).
+2. **Identity is billable** (Phase B): <a href="https://github.com/bldrs-ai/Share/issues/1422" target="_blank" rel="noopener noreferrer">#1422</a> (`identity-120`), so the quota key and the card belong to the same person.
+3. **The paid offer exists** (Phase C): `share-130` (T4 chip), `share-120` (<a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>), `share-110` (Drive Save).
 4. **It bills** (Phase D): `subscribe-100/110/120`. **Met (2026-11-10):** billing and the private-model slot quota are live under the decided paywall (§4.9).
 5. **The free tier monetises and acquires** (Phase D): T7 ads (`subscribe-130`) — parked (2026-11-10), not part of the bar.
 6. **It's measurable** (Phase G): `grow-120` events and GA hygiene, `community-110` feedback. The `grow-*` items are tracked in bizdev (§4.10).
@@ -385,18 +381,19 @@ Demoted out of the MVP band (not load-bearing for the trickle): `open-200`, `sha
 
 ### Phase B: Identity + Sources, multi-account
 **Goal:** the Pro user has a coherent multi-account identity that quota tracking hangs off.
-- T3 PR2 (SourcesTab, recents migration; connect actions gated behind Auth0) and PR3 (switchover, retire `githubAsSource`).
+- T3 PR2 merged (<a href="https://github.com/bldrs-ai/Share/issues/1508" target="_blank" rel="noopener noreferrer">#1508</a>); PR3 (switchover) is post-MVP, so GitHub keeps riding on the Auth0 sign-in (<a href="https://github.com/bldrs-ai/Share/issues/2202" target="_blank" rel="noopener noreferrer">#2202</a>).
 - `identity-120` (<a href="https://github.com/bldrs-ai/Share/issues/1422" target="_blank" rel="noopener noreferrer">#1422</a>); `identity-300` picker and "Saving as X" footer.
 
-**Exit:** a user logged in via Google can browse and save to two GitHub accounts; recents are attributed per connection.
+**Exit:** a returning user can tell which identity they're signed in with, and is billed under it (`identity-120`). Browsing and saving to two GitHub accounts waits on T3 PR3.
 
 ### Phase C: Sharing v1
-**Goal:** in-app share with grants and visibility, parity Drive and GitHub.
-- T4 PR2, PR3, PR5 behind `sharing`; `share-130` and `share-201` surfaces in the Share dialog.
-- T2 Phase 4 (notes + view-states in the artifact) and Phase 5 (originator share flow), wired to `share-120`.
-- `grow-200` OG image written with the share artifact, if that is the chosen mechanism; retire the `sharing` flag.
+**Goal:** share a model privately by default, with its audience shown plainly; save to Drive.
+- `share-130`: private-by-default links and the visibility chip (T4 chip, <a href="https://github.com/bldrs-ai/Share/issues/2206" target="_blank" rel="noopener noreferrer">#2206</a>). The unguessable link comes from `share-200`'s resolver.
+- `share-110`: Drive Save (<a href="https://github.com/bldrs-ai/Share/issues/2205" target="_blank" rel="noopener noreferrer">#2205</a>).
+- `share-120`: the Share and sign-in flow with its upgrade prompt (<a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>).
+- `grow-200` OG image written with the share, if that is the chosen mechanism.
 
-**Exit:** a user shares a model, invites a teammate, the teammate opens it in under 2 seconds, and the link unfurls with a thumbnail.
+**Exit:** a user shares a private model by link, the recipient sees who can open it, and the link unfurls with a thumbnail.
 
 ### Phase D: Subscribe
 **Goal:** the Pro tier exists and bills under the decided paywall (free viewing with no login for local and public models; free account with 2 private models per rolling 7 days; Pro unlimited). **Met (as of 2026-11-10):** Stripe is live and slot quotas are default-on (private opens and private/local exports share the 2 slots; public exports need no slot; local viewing is unmetered). The v0.4 size/complexity axis was a proposal and was not adopted.
@@ -502,7 +499,6 @@ Standing convention (the original migration is done):
 
 - **Model-version hosting.** `share-200` S1 needs a proven public blob provider, retention/operating policy and browser upload/read path; GitHub is the initial metadata-remote recommendation. No free/permanent-hosting promise or private-storage rollout is implied ([design](new/model-versioning.md)).
 - **Free-tier numbers.** Public anonymous share TTL, public hosting size ceiling (<10MB per <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>), refresh-token-mint rate.
-- **Auth0 enforcement on Netlify Functions** (`identity-decoupling-decisions.md` §Open Implementation Details): flagged as a prerequisite for quota tracking, which has since shipped; confirm.
 - **BCF priority.** Industry credibility vs cost; MVP scope or §8 item 7.
 - **Engine write path.** IFC/STEP export of edited models needs a Conway writer; scope in `create-engine.md` Part B.
 - **Conversation store** for `assist-400` (GitHub-issue-backed, Firestore, purpose-built) and whether channels and Notes are one primitive.
@@ -510,6 +506,7 @@ Standing convention (the original migration is done):
 - **Unit of "private"** under sessions and projects (`conversational-cad.md` §5.1).
 - **Sandbox security model** for toolbelt apps: origin isolation, tool permissioning, provenance (T11).
 - **AI naming.** "Assist" is the working verb; the user-facing name is unpicked.
+- **`share-130`'s link resolver.** `share-130` is MVP (Phase C), but its unguessable links come from `share-200`'s resolver, which is placed post-MVP. Either the resolver's link slice moves into Phase C, or `share-130` ships without its own links.
 - **OG image mechanism** (decides whether `grow-200` finishes in Phase G or Phase C): tracked in <a href="https://github.com/bldrs-ai/bizdev/issues/371" target="_blank" rel="noopener noreferrer">bizdev#371</a>.
 
 **Decided:** the ❤️ name markers are kept as the record of former teammates' requests (2026-11-10). Unplaced epics: <a href="https://github.com/bldrs-ai/Share/issues/1601" target="_blank" rel="noopener noreferrer">#1601</a> is a T1 sub-track and <a href="https://github.com/bldrs-ai/Share/issues/2048" target="_blank" rel="noopener noreferrer">#2048</a> attaches to `identity-300`. Paywall wording reconciled with the shipped rule (§4.9, Phase D); the size/complexity axis was not adopted. Agent runtime placement (2026-10): the loop runs client-side, a thin `ai-chat` relay holds the hosted key and meters credits, BYOK goes direct (`ai-workspace.md` D1, D2, D6). Edit-log location: an op log over the immutable source, Share-side (`model-edit.md`).
@@ -526,6 +523,7 @@ Standing convention (the original migration is done):
 
 # Changelog
 
+- **v0.16 (2026-11-18):** reconciled the `share-*` epics and Tracks T2, T3, T4 and T6 with what shipped, and gave each a tracking issue (<a href="https://github.com/bldrs-ai/Share/issues/2201" target="_blank" rel="noopener noreferrer">#2201</a>–<a href="https://github.com/bldrs-ai/Share/issues/2208" target="_blank" rel="noopener noreferrer">#2208</a>). Owner's decisions: `share-110` is Drive Save only; `share-130` is private-by-default links and the chip, with links from `share-200`'s resolver; `share-201` is post-MVP; T3 PR3 and T2 Phases 4–6 are post-MVP; T6 owns `notes-300` and `versions-310`, with one version manifest. Phases B and C, §6.0 and the open questions updated to match.
 - **v0.15 (2026-11-18):** parked `grow-100` (format landing pages) until `grow-120` measures how many real model opens arrive by organic search (owner's decision, <a href="https://github.com/bldrs-ai/bizdev/issues/368" target="_blank" rel="noopener noreferrer">bizdev#368</a>). It leaves the §6.0 MVP list, and Phase G's goal and exit drop the landing pages.
 - **v0.14 (2026-11-18):** moved the `grow-*` epics (§4.10, Track T9, Phase G's work list) to the private bizdev repo, which now holds their status and stories; codes and aliases unchanged. Flagged the conflict between §6.0's `grow-100` and bizdev's parked SEO issue as bizdev#368.
 - **v0.13 (2026-11-12):** reconciled basic Versions UX under existing tracker #57; the new local save, history, update and backup stories (#2157–#2160) carry a milestone hypothesis rather than an MVP claim (`design/reqs/ux-rubric.md` §"Milestones are hypotheses"), and §6.0 is unchanged; corrected #890's deletion scope and preserved its historical milestone. Later semantic requirements retain existing `share-200` #2144; `versions-300` structural diff and `versions-310` portable Drive assignments and aliases remain unchanged. [Reconciliation evidence](reqs/versions-100-triage.md).
