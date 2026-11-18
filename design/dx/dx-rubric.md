@@ -8,7 +8,7 @@ The [roadmap](../roadmap.md) owns which tracks exist, what each unblocks and its
 
 ## Track, work item and task
 
-- **Track:** a technical capability several epics need, and the end state that proves it. Its issue is `T<n>: <name>`, labelled `Tracking`, and it is the track's root in GitHub.
+- **Track:** a technical capability several epics need, and the end state that proves it. Its ID is `<feature>-t<band><nn>`, such as `share-t100` (§"Naming"), and its issue is `<id>: <name>`, labelled `Tracking`, the track's root in GitHub.
 - **Work item:** one technical outcome that can be checked on its own, written as what becomes possible and for what: "the engine reopens a model from its index sidecar, so a reload skips the parse". It is a native sub-issue of its track issue.
 - **Task:** a concrete step inside a work item, kept as a checkbox in its body, not a separate issue.
 - **Evidence:** what proves a work item is done. A test that can fail ([STYLE.md](../../STYLE.md) §"Assertions must be able to fail"), a measurement with its date, commit and machine, a CI job, or a default flipped with its kill switch named. A UX story is proven by the user's own action on desktop and mobile; a work item is proven by one of these.
@@ -16,30 +16,36 @@ The [roadmap](../roadmap.md) owns which tracks exist, what each unblocks and its
 ## Where technical work lives
 
 - **Serves one story:** a sub-issue of that story, under its epic's prefix ([UX rubric](../reqs/ux-rubric.md) §"Issue normalization"). Most implementation work is here.
-- **Serves several epics, or is infrastructure no story owns:** a sub-issue of its track issue, titled `T<n>: …`. Epics keep only formal UX stories as direct children, so this is where cross-epic work goes instead of under one epic.
+- **Serves several epics, or is infrastructure no story owns:** a sub-issue of its track issue, titled `<track-id>: …`. Epics keep only formal UX stories as direct children, so this is where cross-epic work goes instead of under one epic.
 - **Neither:** a one-off bug or chore stays standalone, labelled, and linked from wherever it's found.
 
 Before parenting an issue under a track, check that the roadmap doesn't give the work to an epic, and that no other track's issue already holds it. An issue has one parent; link the other side.
 
 The bizdev boundary is the UX rubric's (§"Where each kind of work lives"): measurement plans and business numbers stay in bizdev, and the code half of a bizdev plan is a Share work item.
 
-## Numbering
+## Naming
 
-Tracks are numbered in order, `T1`, `T2`, …, with no tier digit. That's the stable ID the UX rubric is working toward (§"Milestones are hypotheses"): a track's phase and the milestone it serves are recorded in the roadmap and change with the evidence, without renaming the track.
+> **Provisional (owner, 2026-11-18).**
 
-- A new track takes the next number and a row in roadmap §3.2 and §5.
-- A track that's finished stays listed with ✔; it is never renumbered or reused.
-- A work item keeps its issue number. Its title carries the track prefix only while it is a direct child of the track issue; one nested under a story keeps the epic's prefix.
+A track is named after the feature group and milestone band it mainly serves: `<feature>-t<band><nn>`.
+
+- **One track per feature level, usually.** `share-t100` handles the technical work behind the `share-1xx` epics, and `share-t200` the work behind `share-2xx`. A level that needs more takes `t101`, `t102` and so on, but a level should seldom need more than one or two extra.
+- **The band follows the epics.** It is the band of the epics the track mainly serves, read from the UX rubric's tier table. A track whose epics move band is renamed, and the rename is recorded in the roadmap's ID lineage, as an epic's is.
+- **One primary feature group.** A track may serve several groups and bands. Its ID names the primary one, and its issue and snapshot list the others under Related, with the related tracks.
+- **A new track** gets a row in roadmap §3.2 and an entry in §5.
+- **Kept, never reused.** A finished track stays listed with ✔, and its ID isn't given to another track.
+- **Work items** keep their issue numbers. A work item's title carries the track ID while it is a direct child of the track issue; one nested under a story keeps the epic's prefix.
+- **The old `T1`…`T12` numbers** stay as aliases in the roadmap's ID lineage once each track is renamed.
 
 ## The track issue
 
 About 400 words, in this order:
 
-1. **What and why:** the capability, and the epics it unblocks.
+1. **What and why:** the capability, the primary feature group and band, and the epics it unblocks.
 2. **Status:** landed, in flight, not started, with the PRs that landed it.
 3. **Work items:** native sub-issues. Work that has no issue yet may be a checkbox line until someone picks it up; it becomes a sub-issue then.
 4. **Open decisions,** each with its owner.
-5. **Related:** neighbouring tracks and epics, the snapshot and the design docs.
+5. **Related:** other feature groups and bands it serves, related tracks, the snapshot and the design docs.
 
 The roadmap's track Status line ends with the issue's link. When rewriting an existing issue, keep its original text collapsed at the bottom, as the UX rubric does (§"Write for a reader who wasn't there").
 
@@ -49,9 +55,9 @@ The first track issues were written with checkbox lists (T2 #2201, T3 #2202, T4 
 
 | Kind | Where | What it holds | What it doesn't |
 |---|---|---|---|
-| Track snapshot | `design/dx/t<n>.md` | One page, dated: why the track exists, the end state, its work items with issue links, the design docs that govern it. | Status, checklists, progress. |
+| Track snapshot | `design/dx/<track-id>.md` | One page, dated: why the track exists, the end state, its work items with issue links, the design docs that govern it. | Status, checklists, progress. |
 | Design doc | `design/dx/<topic>.md` (today mostly `design/new/`) | How it works and why: decisions, contracts, measurements with their date and commit, rejected alternatives. Durable. | A backlog, or "next steps" lists that are really issues. |
-| Triage record | `design/dx/t<n>-triage.md`, only when reconciling a track moved real issues | The inventory, crosswalk and changes applied, as in the UX rubric (§"Record the result"). | A copy of the issues. |
+| Triage record | `design/dx/<track-id>-triage.md`, only when reconciling a track moved real issues | The inventory, crosswalk and changes applied, as in the UX rubric (§"Record the result"). | A copy of the issues. |
 
 A snapshot is updated in the same PR that changes the track's work items (adds, moves or retires one), and is re-dated. The design doc is updated by the PR that changes the behaviour it describes. Pin every link to code or a retired doc to a commit.
 
