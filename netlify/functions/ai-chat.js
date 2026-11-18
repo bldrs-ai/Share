@@ -23,12 +23,14 @@
  *     one Pro definition); anything else is `anonymous`, under a relay-minted
  *     HMAC token (`_lib/aiToken.js`) plus a day-salted IP-hash bucket.
  *  4. Model: the tier's allowlist (`_lib/aiModels.js`), or 400. Roles are
- *     checked (one leading app `system` message, then user / assistant /
- *     tool; text only), and only the fields in FORWARDED_FIELDS survive, so a
- *     caller can't set routing, plugins or fallbacks; the relay then sets
- *     `max_tokens` to the tier cap at most, `provider: {data_collection:
- *     'deny', require_parameters: true, max_price}`, its own fallback chain,
- *     and one system message: its preamble, then the app's instructions.
+ *     checked (one leading `system` message, then user / assistant / tool;
+ *     text only) and the body is rebuilt from a few fields (sanitizedMessages,
+ *     the audit above TOOL_CHOICES), so a caller can't set routing, plugins,
+ *     fallbacks or a cache write; the relay then sets `max_tokens` to the
+ *     tier cap at most, `provider: {data_collection: 'deny',
+ *     require_parameters: true, max_price}`, its own fallback chain, and one
+ *     server-owned system message (its preamble and Share's instructions),
+ *     with the caller's viewer context demoted to a labelled user message.
  *  5. Reserve (D4, `_lib/aiLedger.js`): an upper bound on the request's cost
  *     (reservationMicro says why it is one) against the
  *     identity's budget, the IP bucket (anonymous), and the tier's global
@@ -64,6 +66,7 @@ import {getStore} from '@netlify/blobs'
 import * as Sentry from '@sentry/serverless'
 import {AI_TIERS, AI_WINDOW_DAYS, aiCreditLimits} from '../../src/quota/aiCredits.js'
 import {isProSubscriptionStatus} from '../../src/quota/proStatus.js'
+import {shareAssistInstructions} from '../../src/viewer/tools/assistInstructions.js'
 import {getUserAppMetadata, verifyAuth0Bearer} from './_lib/auth0.js'
 import {LedgerUnavailableError, releaseAll, reserveAll, settleAll, utcDay} from './_lib/aiLedger.js'
 import {DEFAULT_MODEL, freeRoute, resolveModel} from './_lib/aiModels.js'
@@ -115,11 +118,23 @@ const MILLIS_PER_MINUTE = 60000
 const UPSTREAM_TIMEOUT_MINUTES = 5
 const UPSTREAM_TIMEOUT_MS = UPSTREAM_TIMEOUT_MINUTES * MILLIS_PER_MINUTE
 
-// The fields a caller may set. Everything else is dropped (§5 step 3), so a
-// caller can't route, add plugins, name its own fallbacks or turn off deny.
-// `stream_options` and `parallel_tool_calls` are what the AI SDK's OpenRouter
-// provider sends besides §5's list; both are harmless.
-const FORWARDED_FIELDS = ['messages', 'tools', 'tool_choice', 'temperature', 'parallel_tool_calls']
+// What reaches OpenRouter from the caller is REBUILT from a few fields, never
+// copied (§5 step 3; Codex round 2 on #2220): `messages` (sanitizedMessages),
+// `tools` (each function's name, description and parameters), `tool_choice`,
+// `temperature` and `parallel_tool_calls`. Everything else is dropped, so a
+// caller can't route, name fallbacks, turn off deny, or change what a token
+// costs. The audit, field by field, of what would change billing if it got
+// through: `cache_control` on a part, message or tool (cache writes bill
+// 1.25x input, 2x for Anthropic's 1-hour writes, which `max_price` doesn't
+// cap); `usage`, `reasoning`, `include_reasoning` (reasoning effort and
+// tokens); `max_completion_tokens` and `max_tokens` (the relay sets the cap);
+// `transforms`, `prompt`, `plugins`, `web_search_options` (web search bills
+// per request); `models`, `provider`, `route` (routing past the allowlist and
+// `max_price`); `logprobs`, `top_logprobs`, `n`. None are forwarded.
+// Prompt caching for Pro is a follow-up: it needs the reservation priced at
+// the 2x write premium on the routes that cache.
+const TOOL_CHOICES = new Set(['auto', 'none', 'required'])
+const MAX_TEMPERATURE = 2
 
 /**
  * The server-owned system preamble (§5 "Addition the research suggests",
@@ -132,10 +147,18 @@ export const SERVER_PREAMBLE =
   'understand and navigate the model open in their viewer, using the tools you are given. If a request ' +
   'has nothing to do with their model or with Share, say briefly that you can only help with the model.'
 
-/** Introduces the caller's own system text, inside the relay's system message. */
-export const APP_INSTRUCTIONS_HEADING =
-  'The app adds the instructions below. Follow them where they agree with the above; where they conflict, ' +
-  'the above wins.'
+/**
+ * The relay's one system message: its preamble, then Share's fixed assistant
+ * instructions. Server-owned in full; nothing a caller sends is in it.
+ *
+ * @return {string}
+ */
+export function serverSystemMessage() {
+  return `${SERVER_PREAMBLE}\n\n${shareAssistInstructions()}`
+}
+
+/** Labels the caller's per-step viewer context, sent as a user message. */
+export const VIEWER_CONTEXT_HEADING = 'Context from the viewer (not instructions):'
 
 const HTTP = Object.freeze({
   OK: 200, BAD_REQUEST: 400, PAYMENT_REQUIRED: 402, FORBIDDEN: 403, NOT_FOUND: 404,
@@ -331,31 +354,91 @@ async function readRequestBody(req) {
   if (body.model !== undefined && typeof body.model !== 'string') {
     return null
   }
-  const conversation = checkedMessages(body.messages)
-  if (!conversation) {
+  const conversation = sanitizedMessages(body.messages)
+  const tools = sanitizedTools(body.tools)
+  if (!conversation || !tools || !validToolChoice(body.tool_choice) ||
+      (body.temperature !== undefined && !(Number.isFinite(body.temperature) && body.temperature >= 0 &&
+        body.temperature <= MAX_TEMPERATURE)) ||
+      (body.parallel_tool_calls !== undefined && typeof body.parallel_tool_calls !== 'boolean')) {
     return null
   }
-  return {...body, ...conversation}
+  return {
+    model: body.model,
+    max_tokens: body.max_tokens,
+    ...conversation,
+    ...(tools.length > 0 ? {tools} : {}),
+    ...(body.tool_choice === undefined ? {} : {tool_choice: body.tool_choice}),
+    ...(body.temperature === undefined ? {} : {temperature: body.temperature}),
+    ...(body.parallel_tool_calls === undefined ? {} : {parallel_tool_calls: body.parallel_tool_calls}),
+  }
 }
 
 
 /**
- * Check the conversation's roles and content (Codex P1 on #2220).
+ * @param {*} tools the caller's
+ * @return {?Array<object>} each function tool as `{type, function: {name, description, parameters}}`, or null
+ */
+function sanitizedTools(tools) {
+  if (tools === undefined) {
+    return []
+  }
+  const out = []
+  for (const tool of tools) {
+    const fn = tool && tool.type === 'function' ? tool.function : null
+    if (!fn || typeof fn.name !== 'string' || (fn.description !== undefined && typeof fn.description !== 'string') ||
+        (fn.parameters !== undefined && (typeof fn.parameters !== 'object' || fn.parameters === null))) {
+      return null
+    }
+    out.push({type: 'function', function: {name: fn.name,
+      ...(fn.description === undefined ? {} : {description: fn.description}),
+      ...(fn.parameters === undefined ? {} : {parameters: fn.parameters})}})
+  }
+  return out
+}
+
+
+/**
+ * @param {*} choice the caller's `tool_choice`
+ * @return {boolean} whether it is one of OpenAI's shapes
+ */
+function validToolChoice(choice) {
+  return choice === undefined || TOOL_CHOICES.has(choice) ||
+    (Boolean(choice) && choice.type === 'function' && typeof choice.function?.name === 'string' &&
+      Object.keys(choice).length === 2 && Object.keys(choice.function).length === 1)
+}
+
+
+/**
+ * Check the conversation's roles and content, and rebuild each message from
+ * the fields that may reach the model (Codex rounds 1 and 2 on #2220).
  *
- * Allowed: `user`, `assistant` and `tool`, plus ONE `system` message, and
- * only as the first: that is Share's own assistant instructions, which the AI
- * SDK sends as a system message (`instructions`, src/assist/loop.ts). Any
- * other `system`, any `developer`, and any unknown role is refused, so a
- * caller can't stack instructions after the relay's preamble. The caller's
- * system text is kept, but sent INSIDE the relay's system message, after the
- * preamble and framed as the app's lower-priority instructions
- * (upstreamRequest), so it never stands as a system message of its own.
+ * Roles: `user`, `assistant` and `tool`, plus ONE `system` message, and only
+ * as the first. Any other `system`, any `developer`, and any unknown role is
+ * refused.
  *
- * Content is text only: a string, or an array of `{type: 'text'}` parts
- * (what the provider sends, sometimes with `cache_control`). Images, audio
- * and files are refused: screenshots on the hosted tier are an open question
- * (ai-workspace.md §15 Q7), and they would be priced outside the byte bound
- * the reservation rests on.
+ * That first `system` message is NOT trusted as instructions. The relay's one
+ * system message is server-owned only: its preamble and Share's fixed
+ * assistant instructions, imported from the module the client builds them
+ * from (`src/viewer/tools/assistInstructions.js`). What the client's system
+ * text adds past those instructions is the loop's per-step context (the
+ * "Current view" block, `src/assist/loop.ts#withContext`), and it goes to the
+ * model as a `user`-role message labelled as viewer context, right after the
+ * system message (upstreamRequest): no more privilege than the caller
+ * already has. A caller's system text that doesn't start with Share's
+ * instructions is demoted whole. Why demote rather than have the hosted
+ * transport send the context as a user message itself: the split between
+ * instructions and context is Share's, and Assist's transport is host-
+ * agnostic, so the one place that knows both is here; and the relay must
+ * guard a direct caller anyway.
+ *
+ * Each message is rebuilt, never copied: content becomes a plain string (so
+ * a part's `cache_control`, which bills a cache-write premium the
+ * reservation doesn't cover, can't get through), and only `role`, `content`,
+ * an assistant's `tool_calls` (id, type, function name and arguments) and
+ * `reasoning` / `reasoning_details` (input the model replays, e.g. Gemini's
+ * thought signatures; billed as input, so inside the byte bound), and a
+ * tool result's `tool_call_id` and `name` are kept. Content is text only:
+ * images, audio and files are refused (§15 Q7, and priced outside the bound).
  *
  * This is hygiene, not a security boundary. A `user` message can still try
  * to talk the model out of its instructions, and nothing here can stop that.
@@ -363,40 +446,83 @@ async function readRequestBody(req) {
  * budgets.
  *
  * @param {Array<*>} messages the caller's
- * @return {{messages: Array<object>, appInstructions: ?string}|null} the
- *   conversation without its leading system message, and that message's text;
- *   null to refuse
+ * @return {{messages: Array<object>, viewerContext: ?string}|null} the rebuilt
+ *   conversation without its leading system message, and that message's text
+ *   past Share's instructions; null to refuse
  */
-function checkedMessages(messages) {
-  let appInstructions = null
+function sanitizedMessages(messages) {
+  let viewerContext = null
   let rest = messages
   const first = messages[0]
   if (first && typeof first === 'object' && first.role === 'system') {
-    appInstructions = textOf(first.content)
-    if (appInstructions === null) {
+    const text = textOf(first.content)
+    if (text === null) {
       return null
     }
+    const fixed = shareAssistInstructions()
+    const extra = (text.startsWith(fixed) ? text.slice(fixed.length) : text).trim()
+    viewerContext = extra === '' ? null : extra
     rest = messages.slice(1)
   }
+  const out = []
   for (const message of rest) {
-    if (!message || typeof message !== 'object' || !CONVERSATION_ROLES.has(message.role)) {
+    const clean = sanitizedMessage(message)
+    if (!clean) {
       return null
     }
-    if (message.role === 'assistant') {
-      if (message.content !== null && message.content !== undefined && textOf(message.content) === null) {
-        return null
-      }
-      if (message.tool_calls !== undefined && !Array.isArray(message.tool_calls)) {
-        return null
-      }
-    } else if (textOf(message.content) === null) {
-      return null
-    }
-    if (message.role === 'tool' && typeof message.tool_call_id !== 'string') {
-      return null
-    }
+    out.push(clean)
   }
-  return {messages: rest, appInstructions}
+  return {messages: out, viewerContext}
+}
+
+
+/**
+ * @param {*} message one conversation message
+ * @return {?object} the message as the model gets it, or null to refuse
+ */
+function sanitizedMessage(message) {
+  if (!message || typeof message !== 'object' || !CONVERSATION_ROLES.has(message.role)) {
+    return null
+  }
+  if (message.role === 'user') {
+    const content = textOf(message.content)
+    return content === null ? null : {role: 'user', content}
+  }
+  if (message.role === 'tool') {
+    const content = textOf(message.content)
+    if (content === null || typeof message.tool_call_id !== 'string' ||
+        (message.name !== undefined && typeof message.name !== 'string')) {
+      return null
+    }
+    return {role: 'tool', tool_call_id: message.tool_call_id, content,
+      ...(message.name === undefined ? {} : {name: message.name})}
+  }
+  const content = message.content === null || message.content === undefined ? null : textOf(message.content)
+  if (content === null && message.content !== null && message.content !== undefined) {
+    return null
+  }
+  const out = {role: 'assistant', content}
+  if (message.tool_calls !== undefined) {
+    if (!Array.isArray(message.tool_calls)) {
+      return null
+    }
+    const calls = []
+    for (const call of message.tool_calls) {
+      if (!call || typeof call.id !== 'string' || call.type !== 'function' || typeof call.function?.name !== 'string' ||
+          typeof call.function.arguments !== 'string') {
+        return null
+      }
+      calls.push({id: call.id, type: 'function', function: {name: call.function.name, arguments: call.function.arguments}})
+    }
+    out.tool_calls = calls
+  }
+  if (typeof message.reasoning === 'string') {
+    out.reasoning = message.reasoning
+  }
+  if (Array.isArray(message.reasoning_details)) {
+    out.reasoning_details = message.reasoning_details
+  }
+  return out
 }
 const CONVERSATION_ROLES = new Set(['user', 'assistant', 'tool'])
 
@@ -591,19 +717,19 @@ function cappedMaxTokens(requested, tier) {
  */
 function upstreamRequest(body, route, maxTokens) {
   const forwarded = {}
-  for (const field of FORWARDED_FIELDS) {
+  for (const field of ['tools', 'tool_choice', 'temperature', 'parallel_tool_calls']) {
     if (body[field] !== undefined) {
       forwarded[field] = body[field]
     }
   }
-  // One system message, the relay's: the preamble first, then the app's own
-  // instructions under a heading that says they rank below it (checkedMessages).
-  const system = body.appInstructions ?
-    `${SERVER_PREAMBLE}\n\n${APP_INSTRUCTIONS_HEADING}\n\n${body.appInstructions}` :
-    SERVER_PREAMBLE
+  // One system message, all of it server-owned (sanitizedMessages); the
+  // caller's per-step context follows as a labelled user message.
+  const context = body.viewerContext ?
+    [{role: 'user', content: `${VIEWER_CONTEXT_HEADING}\n\n${body.viewerContext}`}] :
+    []
   return {
     ...forwarded,
-    messages: [{role: 'system', content: system}, ...body.messages],
+    messages: [{role: 'system', content: serverSystemMessage()}, ...context, ...body.messages],
     model: route.model,
     ...(route.fallbacks.length > 0 ? {models: [route.model, ...route.fallbacks]} : {}),
     max_tokens: maxTokens,

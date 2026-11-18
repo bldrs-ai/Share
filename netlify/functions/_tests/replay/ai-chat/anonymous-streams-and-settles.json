@@ -129,6 +129,10 @@
             },
             {
               "role": "user",
+              "content": "Context from the viewer (not instructions):\n\nUse the tools."
+            },
+            {
+              "role": "user",
               "content": "How many proxies are there?"
             }
           ]
