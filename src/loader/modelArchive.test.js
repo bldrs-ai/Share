@@ -346,20 +346,21 @@ describe('modelArchive', () => {
       expect(new NRRDLoader().parse(await bufferOf(resolved.file)).dimensions).toEqual([40, 48, 32])
     })
 
-    it('ends a compressed series in the dialog, with the reason', async () => {
-      // The phantom's first slice, re-labelled RLE Lossless (a UID of the
-      // same length, so the element's length still holds). Its pixel data
-      // is still raw, but the reader refuses on the transfer syntax first.
+    it('ends an unreadable series in the dialog, with the reason', async () => {
+      // The phantom's first slice, re-labelled Explicit VR Big Endian (a UID
+      // of the same length, so the element's length still holds). Its pixel
+      // data is still little endian, but the reader refuses on the transfer
+      // syntax first. (RLE was the example before it became readable.)
       const [slice] = Object.values(unzipSync(phantom())).filter((b) => b.length > 1000)
       const relabelled = slice.slice()
       const text = new TextDecoder('latin1').decode(relabelled)
       const at = text.indexOf('1.2.840.10008.1.2.1')
-      relabelled.set(new TextEncoder().encode('1.2.840.10008.1.2.5'), at)
+      relabelled.set(new TextEncoder().encode('1.2.840.10008.1.2.2'), at)
       const alert = jest.fn()
       const outcome = await openUploadThroughArchive(upload(zipSync({IM0001: relabelled}), 'CT1.zip'),
         {entry: 'drop', alert, open: jest.fn()})
       expect(outcome).toBe('refused')
-      expect(alert.mock.calls[0][0].archive.problem).toMatch(/compressed \(transfer syntax 1\.2\.840\.10008\.1\.2\.5\)/)
+      expect(alert.mock.calls[0][0].archive.problem).toMatch(/big-endian \(transfer syntax 1\.2\.840\.10008\.1\.2\.2\)/)
     })
 
     it('doesn\'t change what an archive with no DICOM is told, even if an entry can\'t be extracted', async () => {
