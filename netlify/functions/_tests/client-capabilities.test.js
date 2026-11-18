@@ -88,15 +88,21 @@ describe('client-capabilities', () => {
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('not sent to GA'))
   })
 
-  // GA is best-effort: a failed send never changes the answer.
-  it('answers 204 when GA fails', async () => {
-    fetchSpy.mockRejectedValueOnce(new Error('network down'))
+  // GA is best-effort: a failed send never changes the answer. A fetch error
+  // can quote the request URL, which carries the API secret: never logged.
+  it('answers 204 when GA fails, and logs the failure without the API secret', async () => {
+    fetchSpy.mockRejectedValueOnce(new Error(
+      'request to https://www.google-analytics.com/mp/collect?measurement_id=G-UNIT0001&api_secret=mp-secret-unit failed'))
     expect((await handler(request())).status).toBe(204)
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('network down'))
+    const logged = warnSpy.mock.calls.map((args) => args.join(' ')).join('\n')
+    expect(logged).toContain('[GA4_API_SECRET]')
+    expect(logged).not.toContain('mp-secret-unit')
   })
 
   it('accepts Share\'s own origins only', () => {
     expect(isAllowedOrigin('https://bldrs.ai')).toBe(true)
+    // index/ga.js loads GA on www too, so its blocked clients report from there.
+    expect(isAllowedOrigin('https://www.bldrs.ai')).toBe(true)
     expect(isAllowedOrigin('https://deploy-preview-2114--bldrs-share-prod.netlify.app')).toBe(true)
     expect(isAllowedOrigin('http://localhost:8080')).toBe(true)
     expect(isAllowedOrigin('https://bldrs.ai.evil.example')).toBe(false)

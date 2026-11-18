@@ -45,16 +45,37 @@ export async function sendMeasurementProtocolEvent({config, clientId, name, para
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {'content-type': 'application/json'},
-      body: JSON.stringify({client_id: clientId, events: [{name, params}]}),
-      signal: controller.signal,
-    })
+    let response
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({client_id: clientId, events: [{name, params}]}),
+        signal: controller.signal,
+      })
+    } catch (err) {
+      // A fetch error can quote the URL, which carries api_secret. Every
+      // caller logs this message, so it is redacted here, once.
+      throw new Error(redactSecret(String(err?.message ?? err), config.apiSecret))
+    }
     if (!response.ok) {
       throw new Error(`Measurement Protocol answered ${response.status}`)
     }
   } finally {
     clearTimeout(timer)
   }
+}
+
+
+/**
+ * @param {string} message
+ * @param {string} secret GA4_API_SECRET
+ * @return {string} the message with the secret, raw or URL-encoded, replaced
+ */
+export function redactSecret(message, secret) {
+  if (!secret) {
+    return message
+  }
+  return message.split(secret).join('[GA4_API_SECRET]')
+    .split(encodeURIComponent(secret)).join('[GA4_API_SECRET]')
 }

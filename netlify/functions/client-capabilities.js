@@ -41,7 +41,8 @@ const HTTP_NO_CONTENT = 204
 const HTTP_BAD_REQUEST = 400
 const HTTP_METHOD_NOT_ALLOWED = 405
 
-const ALLOWED_ORIGINS = new Set(['https://bldrs.ai', 'http://localhost:8080', 'http://localhost:8888'])
+// The hosts index/ga.js#PROD_HOSTNAMES loads GA on, plus local dev.
+const ALLOWED_ORIGINS = new Set(['https://bldrs.ai', 'https://www.bldrs.ai', 'http://localhost:8080', 'http://localhost:8888'])
 const DEPLOY_PREVIEW_ORIGIN = /^https:\/\/deploy-preview-\d+--bldrs-share(-prod)?\.netlify\.app$/
 
 
