@@ -77,6 +77,28 @@ import {readModelDisplayHash, writeModelDisplayHash} from './displayHash'
  */
 export default function ResidencyControl() {
   const model = useStore((state) => state.model)
+  // Remounted for each model object. Everything in the menu is per model
+  // (the controller, the motion driver, Auto's last percent), and MUI keeps
+  // closures from the FIRST render of a mounted Popover for its whole life:
+  // useModal memoizes `handleClose` and `isTopModal` over its first props,
+  // `children` and `onClose` among them, and those reach this component's
+  // render scope and its `model`. So without a remount the first model shown
+  // stayed reachable after an in-app switch (open-205, #2019; found by heap
+  // snapshot, and residencyControlRetention.test.jsx). A theme change reloads
+  // the model into a new object, so it remounts too, which is invisible: the
+  // controller and driver were rebuilt for the new object anyway, and the
+  // menu is closed while the profile menu is open.
+  return <ResidencyMenu key={modelKeyOf(model)}/>
+}
+
+
+/**
+ * The display menu for the store's model. See ResidencyControl.
+ *
+ * @return {ReactElement|null}
+ */
+function ResidencyMenu() {
+  const model = useStore((state) => state.model)
   const viewer = useStore((state) => state.viewer)
   const selectedElement = useStore((state) => state.selectedElement)
   const displayOverrides = useStore((state) => state.displayOverrides)
@@ -498,4 +520,28 @@ export default function ResidencyControl() {
       </Popover>
     </>
   )
+}
+
+
+// A React key per model object, for ResidencyControl's remount. A WeakMap,
+// so a key never keeps its model, and any model object gets one (an
+// Object3D's `uuid` would leave out the doubles and non-three models).
+const modelKeys = new WeakMap()
+let lastModelKey = 0
+
+
+/**
+ * @param {object|null} model
+ * @return {number} 0 for no model, else one number per model object
+ */
+function modelKeyOf(model) {
+  if (!model) {
+    return 0
+  }
+  let key = modelKeys.get(model)
+  if (key === undefined) {
+    key = ++lastModelKey
+    modelKeys.set(model, key)
+  }
+  return key
 }
