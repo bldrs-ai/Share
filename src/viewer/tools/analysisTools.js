@@ -61,6 +61,8 @@ const MAX_MEASURE_REFS = 200
 const MAX_MEASURE_ITEMS = 100
 const MAX_RESULT_UNMEASURED = 20
 const TOO_LARGE = 'tooLarge'
+/** What a placement of an already-checked shape costs the triangle budget (`volume`). */
+const PLACEMENT_COST = 1
 const MAX_SPATIAL_NODES = 120
 const MAX_HIERARCHY_DEPTH = 2
 const MAX_PATH_DEPTH = 20
@@ -216,10 +218,17 @@ export function createAnalysisTools({readState, loadedState, visibilityTargets, 
         instanceIds: occurrences.flatMap((occurrence) => occurrence.instanceIds ?? []),
       }
     })
-    const index = indexElementPieces(model, {
+    // Made before indexing, which yields too. A macrotask, not a microtask: only a timer lets the page paint and a
+    // Stop's event run. The signal is checked on both sides of it.
+    const pause = async () => {
+      checkAborted()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      checkAborted()
+    }
+    const index = await indexElementPieces(model, {
       ids: new Set(resolved.flatMap(({ids}) => ids)),
       instanceIds: new Set(resolved.flatMap(({instanceIds}) => instanceIds)),
-    })
+    }, {chunk: MEASURE_LIMITS.yieldEvery, pause})
     if (index.empty) {
       throw new ToolError('rejected', 'None of these elements has geometry to measure.', {refs})
     }
@@ -229,13 +238,6 @@ export function createAnalysisTools({readState, loadedState, visibilityTargets, 
     let triangles = 0
     let sinceYield = 0
     let stopped = false
-    // A macrotask, not a microtask: only a timer lets the page paint and a
-    // Stop's event run. The signal is checked on both sides of it.
-    const pause = async () => {
-      checkAborted()
-      await new Promise((resolve) => setTimeout(resolve, 0))
-      checkAborted()
-    }
     const measurePiece = async (piece) => {
       if (measured.has(piece.key)) {
         return true
@@ -247,7 +249,14 @@ export function createAnalysisTools({readState, loadedState, visibilityTargets, 
         // prevent, and a half-measured piece must not reach a total.
         return TOO_LARGE
       }
-      if (triangles + count > MEASURE_LIMITS.maxTriangles) {
+      // What the budget is charged is the work actually done. `volume` scans and
+      // closure-checks a SHARED shape once, so a placement of an already-checked
+      // shape costs only the determinant (PLACEMENT_COST). `surfaceArea` and
+      // `extents` transform every placement's triangles in measureWorld, so
+      // each placement is charged in full.
+      const cached = metric === 'volume' && piece.shape !== null && solids.has(piece.shape)
+      const cost = cached ? PLACEMENT_COST : count
+      if (triangles + cost > MEASURE_LIMITS.maxTriangles) {
         return false
       }
       if (sinceYield >= MEASURE_LIMITS.yieldEvery) {
@@ -278,8 +287,8 @@ export function createAnalysisTools({readState, loadedState, visibilityTargets, 
         result.max = world.max
       }
       measured.set(piece.key, result)
-      triangles += count
-      sinceYield += count
+      triangles += cost
+      sinceYield += cost
       return true
     }
 

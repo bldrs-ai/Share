@@ -201,6 +201,40 @@ describe('viewer/tools analysis: model.measure', () => {
       expect(error.code).toBe('aborted')
     })
 
+    // `volume` scans a shared shape once; a further placement of it costs a
+    // determinant. Four cube placements are 48 triangles against a limit of 30.
+    it('charges a shared closed shape once for volume, but every placement for surface area', async () => {
+      MEASURE_LIMITS.maxTriangles = 30
+      const refs = ['e100', 'e101', 'e200']
+      const volume = (await registry.call('model.measure', {refs, metric: 'volume'})).content
+      expect(volume.complete).toBe(true)
+      expect(volume.total).toBeCloseTo(16, 4)
+      const area = (await registry.call('model.measure', {refs, metric: 'surfaceArea'})).content
+      expect(area.complete).toBe(false)
+      expect(area.unmeasuredCount).toBeGreaterThan(0)
+    })
+
+    it('still refuses a single shape over the limit for volume', async () => {
+      MEASURE_LIMITS.maxTriangles = 11
+      const {content} = await registry.call('model.measure', {refs: ['e100', 'e101'], metric: 'volume'})
+      expect(content.tooLarge).toEqual(['e100', 'e101'])
+      expect(content.complete).toBe(false)
+    })
+
+    // Indexing runs before any piece is measured and yields on the same timer:
+    // 5 in-piece pauses (12 triangles, chunk 2) plus the ones indexing adds.
+    it('yields during indexing as well as inside the piece', async () => {
+      MEASURE_LIMITS.yieldEvery = 2
+      const spy = jest.spyOn(global, 'setTimeout')
+      try {
+        await registry.call('model.measure', {refs: ['e100'], metric: 'extents'})
+        const pauses = spy.mock.calls.filter(([, delay]) => delay === 0).length
+        expect(pauses).toBeGreaterThanOrEqual(7)
+      } finally {
+        spy.mockRestore()
+      }
+    })
+
     it('stops between pieces when the call is aborted', async () => {
       MEASURE_LIMITS.yieldEvery = 1
       const controller = new AbortController()

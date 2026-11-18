@@ -1,5 +1,6 @@
 import {Matrix4} from 'three'
 import {instanceGeometryRangeAt} from '../ifc/batchedInstanceGeometry'
+import {DEFAULT_CHUNK} from './meshMeasure'
 
 
 /**
@@ -31,17 +32,27 @@ import {instanceGeometryRangeAt} from '../ifc/batchedInstanceGeometry'
 
 
 /**
+ * Async so a large model can yield while it is indexed: a model of a million
+ * placements would otherwise block the page, and a Stop, for the whole walk.
+ * Every loop here counts its steps in the shared `work` and awaits `pause()`
+ * when `chunk` of them have passed — a comparison per step, an await per
+ * chunk, as in meshMeasure.js — and the caller's `pause` checks its signal.
+ *
  * @param {object} model the loaded model root (Object3D)
  * @param {object} want
  * @param {Set<number>} want.ids element express ids
  * @param {Set<number>} want.instanceIds STEP occurrence instance ids
- * @return {{forTarget: Function, empty: boolean}} `forTarget({ids,
+ * @param {object} [opts]
+ * @param {number} [opts.chunk] steps between yields
+ * @param {Function} [opts.pause] `async () => void`, the yield
+ * @return {Promise<{forTarget: Function, empty: boolean}>} `forTarget({ids,
  *   instanceIds})` → the target's pieces, deduplicated; `empty` when nothing
  *   wanted has geometry
  */
-export function indexElementPieces(model, {ids, instanceIds}) {
+export async function indexElementPieces(model, {ids, instanceIds}, {chunk = DEFAULT_CHUNK, pause = null} = {}) {
   const byId = new Map()
   const byInstance = new Map()
+  const work = {n: 0, chunk, pause}
   const add = (map, id, piece) => {
     const list = map.get(id)
     if (list) {
@@ -51,37 +62,45 @@ export function indexElementPieces(model, {ids, instanceIds}) {
     }
   }
   const sceneNodes = new Map()
+  const nodes = []
   if (typeof model?.traverse === 'function') {
     model.updateWorldMatrix(true, true)
-    model.traverse((node) => {
-      if (node.isBatchedMesh && node.instanceParents) {
-        indexBatched(node, {ids, instanceIds}, (id, piece) => {
-          add(byId, id, piece)
-        }, (id, piece) => {
-          add(byInstance, id, piece)
-        })
-        return
+    model.traverse((node) => nodes.push(node))
+  }
+  for (const node of nodes) {
+    if (pause && ++work.n % chunk === 0) {
+      await pause()
+    }
+    if (node.isBatchedMesh && node.instanceParents) {
+      await indexBatched(node, {ids, instanceIds}, work, (id, piece) => {
+        add(byId, id, piece)
+      }, (id, piece) => {
+        add(byInstance, id, piece)
+      })
+      continue
+    }
+    const owners = node.geometry?.attributes?.expressID
+    const position = node.geometry?.attributes?.position
+    if (owners && position && owners.count === position.count && ids.size > 0) {
+      for (const [id, piece] of await mergedPieces(node, owners, ids, work)) {
+        add(byId, id, piece)
       }
-      const owners = node.geometry?.attributes?.expressID
-      const position = node.geometry?.attributes?.position
-      if (owners && position && owners.count === position.count && ids.size > 0) {
-        for (const [id, piece] of mergedPieces(node, owners, ids)) {
-          add(byId, id, piece)
-        }
-        return
-      }
-      if (Number.isInteger(node.expressID) && ids.has(node.expressID) && node !== model) {
-        sceneNodes.set(node.expressID, node)
-      }
-    })
+      continue
+    }
+    if (Number.isInteger(node.expressID) && ids.has(node.expressID) && node !== model) {
+      sceneNodes.set(node.expressID, node)
+    }
   }
   for (const [id, node] of sceneNodes) {
-    node.traverse((mesh) => {
-      const geometry = mesh.geometry
-      if (mesh.isMesh && geometry?.attributes?.position && !mesh.isBatchedMesh) {
-        wholeMeshPieces(mesh).forEach((piece) => add(byId, id, piece))
+    const meshes = []
+    node.traverse((mesh) => meshes.push(mesh))
+    for (const mesh of meshes) {
+      if (mesh.isMesh && mesh.geometry?.attributes?.position && !mesh.isBatchedMesh) {
+        for (const piece of await wholeMeshPieces(mesh, work)) {
+          add(byId, id, piece)
+        }
       }
-    })
+    }
   }
   return {
     empty: byId.size === 0 && byInstance.size === 0,
@@ -102,10 +121,11 @@ export function indexElementPieces(model, {ids, instanceIds}) {
 /**
  * @param {object} mesh a THREE.BatchedMesh with `instanceParents`
  * @param {object} want `{ids, instanceIds}`
+ * @param {object} work the shared step counter `{n, chunk, pause}`
  * @param {Function} onId `(id, piece)` for a piece wanted by its parent id
  * @param {Function} onInstance `(id, piece)` for one wanted by occurrence id
  */
-function indexBatched(mesh, {ids, instanceIds}, onId, onInstance) {
+async function indexBatched(mesh, {ids, instanceIds}, work, onId, onInstance) {
   const parents = mesh.instanceParents
   const occurrences = mesh.instanceOccurrenceIds
   // `_instanceInfo` with its active flag, as elementBounds and robustBounds
@@ -115,6 +135,9 @@ function indexBatched(mesh, {ids, instanceIds}, onId, onInstance) {
   const range = {}
   const instanceMatrix = new Matrix4()
   for (let batchId = 0; batchId < info.length; batchId++) {
+    if (work.pause && ++work.n % work.chunk === 0) {
+      await work.pause()
+    }
     if (info[batchId].active === false) {
       continue
     }
@@ -152,14 +175,18 @@ function indexBatched(mesh, {ids, instanceIds}, onId, onInstance) {
  * @param {object} mesh a Mesh whose vertices carry an element id each
  * @param {object} owners its `expressID` attribute
  * @param {Set<number>} ids the wanted element ids
- * @return {Map<number, object>} a piece per wanted element that has triangles
+ * @param {object} work the shared step counter
+ * @return {Promise<Map<number, object>>} a piece per wanted element that has triangles
  */
-function mergedPieces(mesh, owners, ids) {
+async function mergedPieces(mesh, owners, ids, work) {
   const geometry = mesh.geometry
   const index = geometry.index ? geometry.index.array : null
   const corners = index ? index.length : geometry.attributes.position.count
   const perOwner = new Map()
   for (let t = 0; t + 2 < corners; t += 3) {
+    if (work.pause && ++work.n % work.chunk === 0) {
+      await work.pause()
+    }
     const first = index ? index[t] : t
     const owner = owners.getX(first)
     if (!ids.has(owner)) {
@@ -191,11 +218,12 @@ function mergedPieces(mesh, owners, ids) {
 /**
  * @param {object} mesh a Mesh, or an InstancedMesh (a glTF with
  *   `EXT_mesh_gpu_instancing` that carries no Share instance tables loads as one)
- * @return {Array<object>} the whole mesh as one piece; an InstancedMesh as one
+ * @param {object} work the shared step counter
+ * @return {Promise<Array<object>>} the whole mesh as one piece; an InstancedMesh as one
  *   piece per placement it draws (`count`), world = matrixWorld × instance
  *   matrix. Copies share `shape`, so closure is checked once per geometry.
  */
-function wholeMeshPieces(mesh) {
+async function wholeMeshPieces(mesh, work) {
   const geometry = mesh.geometry
   const base = {
     position: geometry.attributes.position,
@@ -209,6 +237,9 @@ function wholeMeshPieces(mesh) {
   const pieces = []
   const instanceMatrix = new Matrix4()
   for (let i = 0; i < mesh.count; i++) {
+    if (work.pause && ++work.n % work.chunk === 0) {
+      await work.pause()
+    }
     mesh.getMatrixAt(i, instanceMatrix)
     pieces.push({
       ...base,

@@ -40,7 +40,7 @@ describe('viewer/tools elementPieces (the render backends model.measure reads)',
     mesh.scale.set(2, 2, 2)
     const root = new Group()
     root.add(mesh)
-    const index = indexElementPieces(root, {ids: new Set([7, 8]), instanceIds: new Set()})
+    const index = await indexElementPieces(root, {ids: new Set([7, 8]), instanceIds: new Set()})
     const [big] = index.forTarget({ids: [7]})
     const [small] = index.forTarget({ids: [8]})
     // Scaled by 2: areas ×4.
@@ -58,7 +58,7 @@ describe('viewer/tools elementPieces (the render backends model.measure reads)',
     node.add(a)
     node.add(b)
     root.add(node)
-    const index = indexElementPieces(root, {ids: new Set([5]), instanceIds: new Set()})
+    const index = await indexElementPieces(root, {ids: new Set([5]), instanceIds: new Set()})
     const pieces = index.forTarget({ids: [5]})
     expect(pieces).toHaveLength(2)
     const areas = await Promise.all(pieces.map(async (piece) => (await measureWorld(piece)).area))
@@ -78,7 +78,7 @@ describe('viewer/tools elementPieces (the render backends model.measure reads)',
     node.add(mesh)
     const root = new Group()
     root.add(node)
-    const pieces = indexElementPieces(root, {ids: new Set([5]), instanceIds: new Set()}).forTarget({ids: [5]})
+    const pieces = (await indexElementPieces(root, {ids: new Set([5]), instanceIds: new Set()})).forTarget({ids: [5]})
     expect(pieces).toHaveLength(3)
     // Unit cubes: area 6 each, the scaled one 24.
     const worlds = await Promise.all(pieces.map((piece) => measureWorld(piece, {wantBox: true})))
@@ -90,12 +90,12 @@ describe('viewer/tools elementPieces (the render backends model.measure reads)',
     expect((await localSolid(pieces[0])).volume).toBeCloseTo(1, 5)
     // `count` limits what is drawn.
     mesh.count = 2
-    const drawn = indexElementPieces(root, {ids: new Set([5]), instanceIds: new Set()}).forTarget({ids: [5]})
+    const drawn = (await indexElementPieces(root, {ids: new Set([5]), instanceIds: new Set()})).forTarget({ids: [5]})
     expect(drawn).toHaveLength(2)
   })
 
-  it('is empty when nothing wanted has geometry', () => {
-    const index = indexElementPieces(new Group(), {ids: new Set([1]), instanceIds: new Set()})
+  it('is empty when nothing wanted has geometry', async () => {
+    const index = await indexElementPieces(new Group(), {ids: new Set([1]), instanceIds: new Set()})
     expect(index.empty).toBe(true)
     expect(index.forTarget({ids: [1]})).toEqual([])
   })
@@ -131,5 +131,60 @@ describe('viewer/tools meshMeasure', () => {
     mesh.scale.set(2, -3, 4)
     mesh.updateMatrixWorld()
     expect(linearDeterminant(mesh.matrixWorld)).toBeCloseTo(-24, 6)
+  })
+})
+
+
+// Indexing walks every placement and allocates a piece and a matrix each, so
+// a large instance set must yield inside it (it runs before any measuring).
+describe('viewer/tools elementPieces indexing yields', () => {
+  /**
+   * @param {number} count placements
+   * @return {{root: Group, mesh: InstancedMesh}} a node holding an InstancedMesh
+   */
+  function instancedNode(count) {
+    const mesh = new InstancedMesh(trianglesGeometry(CUBE_TRIANGLES), undefined, count)
+    for (let i = 0; i < count; i++) {
+      mesh.setMatrixAt(i, new Matrix4().makeTranslation(i, 0, 0))
+    }
+    const node = new Group()
+    node.expressID = 5
+    node.add(mesh)
+    const root = new Group()
+    root.add(node)
+    return {root, mesh}
+  }
+  const want = () => ({ids: new Set([5]), instanceIds: new Set()})
+
+  it('awaits pause during an InstancedMesh expansion larger than the chunk', async () => {
+    const {root} = instancedNode(100)
+    const pause = jest.fn(() => Promise.resolve())
+    const index = await indexElementPieces(root, want(), {chunk: 10, pause})
+    expect(pause.mock.calls.length).toBeGreaterThanOrEqual(9)
+    expect(index.forTarget({ids: [5]})).toHaveLength(100)
+  })
+
+  it('stops indexing when the pause rejects (an abort), after at most one chunk more', async () => {
+    const {root, mesh} = instancedNode(100)
+    const read = jest.spyOn(mesh, 'getMatrixAt')
+    const pause = jest.fn(() => Promise.reject(new Error('aborted')))
+    await expect(indexElementPieces(root, want(), {chunk: 10, pause})).rejects.toThrow('aborted')
+    expect(read.mock.calls.length).toBeLessThanOrEqual(10)
+  })
+
+  it('does not await per placement: microtask turns stay flat as the count grows', async () => {
+    const {root} = instancedNode(5000)
+    let turns = 0
+    let done = false
+    const spin = () => {
+      if (!done) {
+        turns++
+        queueMicrotask(spin)
+      }
+    }
+    spin()
+    await indexElementPieces(root, want(), {chunk: 1e9, pause: () => Promise.resolve()})
+    done = true
+    expect(turns).toBeLessThan(20)
   })
 })
