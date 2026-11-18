@@ -1,8 +1,23 @@
 # Client-capability reports
 
 Counting what kinds of client can't run something Share depends on, when the
-thing they can't run is the tool that would count them. First case: browsers
-where gtag/js never loads.
+thing they can't run is the tool that would count them. Two cases so far:
+browsers where gtag/js never loads (`ga_blocked`), and browsers where three
+gets no WebGL 2 context (`webgl_unavailable`).
+
+## No WebGL
+
+three's `WebGLRenderer` throws from its constructor when it can't get a WebGL
+2 context: no GPU, hardware acceleration off, a blocklisted driver, a VM, a
+headless crawler. Uncaught, that took the app down into its error boundary
+("Oh no!", #659) and was a Sentry error, SHARE-1DZ (1,133 events, 285 users
+by 2026-11-18). Neither is right: the user gets nothing to act on, and nobody
+can fix a client's GPU in Share. Now `CadView`'s viewer init catches it
+(`viewer/webglUnavailable.js#isWebGLUnavailableError`), shows a "3D view not
+available" dialog that says what to try, builds no viewer, and sends one
+`webgl_unavailable` report. Its `blocker` is `none`: the bait check below is
+only for `ga_blocked`. The capability report is its only sink, so the dialog
+sends no `alert` event.
 
 ## Why not Sentry, why not GA directly
 
@@ -49,9 +64,9 @@ through.
 
 | Field | Values | How the page decides |
 | --- | --- | --- |
-| `condition` | `ga_blocked` | gtag/js failed to load |
+| `condition` | `ga_blocked`, `webgl_unavailable` | gtag/js failed to load; three got no WebGL 2 context |
 | `browser` | `brave`, `duckduckgo`, `opera`, `edge`, `samsung`, `firefox`, `safari`, `chrome`, `other` | `navigator.brave` for Brave (it reports a plain Chrome UA), else UA markers, most specific first |
-| `blocker` | `cosmetic`, `network`, `offline` | `offline` when `navigator.onLine` is false; else a bait element with ad class names (`adsbox`, `ad-banner`, …) is left in the page for 500 ms (`BAIT_SETTLE_MS`), then checked for `display: none`: hidden is an element-hiding ad blocker (uBlock Origin, AdBlock, AdGuard, Brave Shields' cosmetic filtering), visible is request-level blocking only (a tracker blocker, a DNS filter, a browser's tracking protection) or a plain network failure |
+| `blocker` | `cosmetic`, `network`, `offline`, `none` | `none` for any condition but `ga_blocked`; `offline` when `navigator.onLine` is false; else a bait element with ad class names (`adsbox`, `ad-banner`, …) is left in the page for 500 ms (`BAIT_SETTLE_MS`), then checked for `display: none`: hidden is an element-hiding ad blocker (uBlock Origin, AdBlock, AdGuard, Brave Shields' cosmetic filtering), visible is request-level blocking only (a tracker blocker, a DNS filter, a browser's tracking protection) or a plain network failure |
 | `form_factor` | `mobile`, `desktop` | `userAgentData.mobile`, else the UA |
 | `consent` | `on`, `off` | The user's own analytics setting (`privacy/analytics.js#isAllowed`) |
 

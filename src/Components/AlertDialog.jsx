@@ -12,6 +12,8 @@ import {CACHE_CLEAR_SKIPPED} from '../OPFS/messages'
 import useStore from '../store/useStore'
 import {gtagEventWithCid, LOCAL_LINK_EVENTS} from '../privacy/analytics'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
+import {DROP_REFUSED} from '../utils/dragAndDrop'
+import {WEBGL_UNAVAILABLE} from '../viewer/webglUnavailable'
 import ArchiveEntryChoice from './ArchiveEntryChoice'
 import Dialog from './Dialog'
 
@@ -66,6 +68,11 @@ export default function AlertDialog({onClose}) {
       // user's file names, which must not reach Sentry or GA anyway.
       return
     }
+    if (alert.type === WEBGL_UNAVAILABLE) {
+      // Counted where it is raised, as a client capability (CadView,
+      // viewer/webglUnavailable.js): that report is its one sink.
+      return
+    }
     if (alert.type === 'engineFailure') {
       // A constant, not alert.message: the message carries conway's free-form
       // reason (file-derived text, unbounded cardinality), which must not
@@ -80,8 +87,8 @@ export default function AlertDialog({onClose}) {
       // #unsupportedSchemaAlert); the dialog text names the schema, which is
       // header text.
       trackAlertEvent(UNSUPPORTED_SCHEMA_ALERT_EVENT, alert.ga ?? {})
-    } else if (alert.type === 'inMemoryUploadGone' ||
-        alert.type === 'uploadNotInBrowser' || alert.type === 'noGeometry' || alert.type === ARCHIVE_UNREADABLE) {
+    } else if (alert.type === 'inMemoryUploadGone' || alert.type === 'uploadNotInBrowser' ||
+        alert.type === 'noGeometry' || alert.type === ARCHIVE_UNREADABLE || alert.type === DROP_REFUSED) {
       // Expected outcome, not a defect: analytics only, never Sentry
       // (alertTracking.js#trackAlertEvent). `inMemoryUploadGone` is a
       // /v/local-only/ URL whose file, opened without OPFS, was held only by a
@@ -93,7 +100,8 @@ export default function AlertDialog({onClose}) {
       // a zip, `.ifczip` included) that isn't one readable model
       // (loader/modelArchive.js#unwrapHostedArchive). Its message names no
       // file; `dialogText`, which may name the entries inside, is shown but
-      // never counted.
+      // never counted. `dropRefused` is a drop with no file in it, or several
+      // (utils/dragAndDrop.js#handleFileDrop); its two messages are constants.
       trackAlertEvent(alert.message)
     } else if (alert.type === 'unrecognizedFormat') {
       // Also an expected outcome, GA only: the constant, since the picker's
@@ -140,6 +148,7 @@ export default function AlertDialog({onClose}) {
   const isNoGeometry = alert && typeof alert === 'object' && alert.type === 'noGeometry'
   const isEntryChoice = alert && typeof alert === 'object' && alert.type === ARCHIVE_ENTRY_CHOICE
   const isCacheClearSkipped = alert && typeof alert === 'object' && alert.type === CACHE_CLEAR_SKIPPED
+  const isWebglUnavailable = alert && typeof alert === 'object' && alert.type === WEBGL_UNAVAILABLE
   // A rejected file whose extension we can say something useful about: a
   // Revit project, a SolidWorks part, a PDF (loader/formatGuidance.js). Only
   // the header and body change; it is still an unrecognizedFormat alert, so
@@ -225,7 +234,9 @@ export default function AlertDialog({onClose}) {
   } else if (isUploadNotInBrowser) {
     actionCb = openAFile
     actionTitle = 'Open a file'
-  } else if (isNoGeometry) {
+  } else if (isNoGeometry || isWebglUnavailable) {
+    // No WebGL: there is no viewer to reset to, and navToDefault would only
+    // try to build one again.
     actionCb = dismiss
     actionTitle = 'OK'
   } else if (isCacheClearSkipped) {
@@ -253,6 +264,8 @@ export default function AlertDialog({onClose}) {
     headerText = 'File not in this browser'
   } else if (isNoGeometry) {
     headerText = 'No 3D geometry'
+  } else if (isWebglUnavailable) {
+    headerText = '3D view not available'
   } else if (isEntryChoice) {
     headerText = 'Choose a model'
   } else if (isCacheClearSkipped) {
@@ -269,7 +282,7 @@ export default function AlertDialog({onClose}) {
   // so there is nothing for support to diagnose. A guided format is the same:
   // the guidance, and its help link, is the help.
   const showHelpFooter = !isOom && !isNeedsReconnect && !isUnsupportedSchema && !isInMemoryUploadGone &&
-    !isUploadNotInBrowser && !isNoGeometry && !guidance && !isEntryChoice && !isCacheClearSkipped
+    !isUploadNotInBrowser && !isNoGeometry && !guidance && !isEntryChoice && !isCacheClearSkipped && !isWebglUnavailable
   // Choosing finishes the drop or pick that raised the chooser, from inside
   // this click; closing leaves whatever model is open, as the user had it.
   const chooseEntry = (entry) => {
@@ -281,7 +294,8 @@ export default function AlertDialog({onClose}) {
     <Dialog
       headerText={headerText}
       isDialogDisplayed={alert !== null}
-      setIsDialogDisplayed={isCacheClearSkipped ? acknowledgeCacheClear : (isNoGeometry || isEntryChoice ? dismiss : onCloseDismiss)}
+      setIsDialogDisplayed={isCacheClearSkipped ? acknowledgeCacheClear :
+        (isNoGeometry || isEntryChoice || isWebglUnavailable ? dismiss : onCloseDismiss)}
       actionCb={actionCb}
       headerIcon={isNoGeometry || isEntryChoice || isCacheClearSkipped ?
         <InfoOutlinedIcon className='icon-share'/> :
@@ -353,7 +367,8 @@ function createAlertReport(a) {
   } else if (typeof a === 'object') {
     if (a && (a.type === 'oom' || a.type === 'needsReconnect' || a.type === 'unsupportedSchema' ||
         a.type === 'inMemoryUploadGone' || a.type === 'uploadNotInBrowser' || a.type === 'engineFailure' ||
-        a.type === 'noGeometry' || a.type === 'unrecognizedFormat' || a.type === CACHE_CLEAR_SKIPPED)) {
+        a.type === 'noGeometry' || a.type === 'unrecognizedFormat' || a.type === CACHE_CLEAR_SKIPPED ||
+        a.type === DROP_REFUSED || a.type === WEBGL_UNAVAILABLE)) {
       return a.message
     } else if (a instanceof NotFoundError) {
       return displayPathAlert(a)

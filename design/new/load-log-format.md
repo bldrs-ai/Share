@@ -56,9 +56,31 @@ hugged box renders them as a narrow clipped column. Expanding also grows
 MUI's message slot (`flexGrow`), which otherwise stays content-sized and turns
 the extra width into empty space on the right.
 
+### Where a load's conditions go
+
+A successful load's diagnostics are split by the Reported Conditions rule
+(`LoadProgressReporter#captureDiagnostics`, since 2026-11):
+
+| Condition | Sink |
+| --- | --- |
+| A diagnostic the engine couldn't act on (geometry it couldn't build) | Sentry `Load diagnostics: <most frequent engine diagnostic>`, warning; error when the load drew nothing although the file had geometry |
+| Authoring defects: `No units defined.`, `No IfcProjects found?`, anything conway marks `DATA_DEFECT` | GA `load_diagnostics {outcome, defect, format, authoring_tool, schema, size_class}`; `defect` is `no_units`, `no_projects` or `marked`, never the text |
+| A model that read fine but has nothing to draw | The same GA event, `outcome: no_geometry` |
+| A load with no progress event for 30 s | The UI's stall cue only |
+| … still silent at 3 min | Sentry `Model load hung`, warning, once per load |
+| … that then finished | GA `load_stall_recovered {phase, format, size_class}` |
+| … that then failed | CadView's failure event, tagged `load.stalled: true` |
+
+The Sentry event is titled by the most frequent diagnostic that is not a
+defect, so an engine gap behind a noisier defect still gets its own issue. An
+unusable load whose only diagnostics are defects still goes to Sentry, tagged
+`data_defect`. Before 2026-11 the defects and the nothing-to-draw loads were
+Sentry events too (SHARE-1MV alone, 123 users in two weeks), and every 30 s
+stall was a Sentry warning (SHARE-1HJ), though most such loads finished.
+
 A user pasting any of these into a bug report produces the same text. Sentry
 receives the same trail as breadcrumbs, plus the final report string in the
-`load` context (stall and failure events) and the `loadDiagnostics` context
+`load` context (hang and failure events) and the `loadDiagnostics` context
 (diagnostics events), **with one line changed: the model line.** conway's
 `Model: <header FILE_NAME> — <schema>, <size>, <originating system>
 (<preprocessor>)` is the exporter's free text, and in the wild that has

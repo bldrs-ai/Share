@@ -190,6 +190,84 @@ export function reportBvhDepthCapToGa({format, trees, maxLeafTriangles}) {
 
 
 /**
+ * One event for a successful load whose diagnostics were the file's own
+ * authoring gaps, or that read fine but had nothing to draw
+ * (loadProgress.js#captureDiagnostics). Both used to be Sentry events: the
+ * defects as warnings tagged `data_defect` (Share#1863, SHARE-1MV "No units
+ * defined." and SHARE-1MZ "No IfcProjects found?"), the nothing-to-draw loads
+ * at info. Neither is something to go fix in Share, so GA counts them, split
+ * by authoring tool and schema, which is what says whether an exporter is
+ * worth a guide or a workaround.
+ *
+ * Every param is closed-set or bucketed. `authoringTool` is already the
+ * allowlisted family name (loadProgress.js#knownAuthoringTool); `schema` is
+ * header text, so anything that isn't a plain schema identifier is `other`.
+ *
+ * @param {object} args
+ * @param {string} args.outcome loadProgress.js LOAD_OUTCOMES value
+ * @param {string} args.defect 'none' | 'no_units' | 'no_projects' | 'marked'
+ * @param {string} args.format the model's format, e.g. 'ifc', 'step'
+ * @param {string} [args.authoringTool] the exporter family, when known
+ * @param {string} [args.schema] the header's schema, when known
+ * @param {number} [args.sizeBytes] the source's size, bucketed here
+ * @return {boolean} whether gtagEvent handed the event to gtag
+ */
+export function reportLoadDiagnosticsToGa({outcome, defect, format, authoringTool, schema, sizeBytes}) {
+  return sendToGa('load_diagnostics', {
+    outcome,
+    defect,
+    format,
+    authoring_tool: authoringTool ?? 'unknown',
+    schema: schemaParam(schema),
+    size_class: sizeClass(Number.isFinite(sizeBytes) ? sizeBytes : 0),
+  })
+}
+
+
+/**
+ * One event for a load that went STALL_TIMEOUT_MS without a progress event
+ * and then finished (loadProgress.js#reportStallRecoveredOnce). Until 2026-11
+ * every such stall was a Sentry warning at 30 s (SHARE-1HJ), though most were
+ * one long wasm call that completed; now only HANG_TIMEOUT_MS of silence
+ * reaches Sentry, and the recovered ones are counted here by phase, format
+ * and size, which is what says where the long calls are.
+ *
+ * @param {object} args
+ * @param {string} args.phase the progress phase the load stalled in
+ * @param {string} args.format the model's format, e.g. 'ifc', 'step'
+ * @param {number} [args.sizeBytes] the source's size, bucketed here
+ * @return {boolean} whether gtagEvent handed the event to gtag
+ */
+export function reportLoadStallRecovered({phase, format, sizeBytes}) {
+  return sendToGa('load_stall_recovered', {
+    phase: PHASE_PATTERN.test(phase ?? '') ? phase : 'other',
+    format,
+    size_class: sizeClass(Number.isFinite(sizeBytes) ? sizeBytes : 0),
+  })
+}
+
+
+// Progress phases are code constants ('download', 'geometry', 'dataParse'…);
+// the pattern only keeps a future free-text phase out of GA.
+const PHASE_PATTERN = /^[A-Za-z]{1,24}$/
+// IFC2X3, IFC4X3_ADD2, AUTOMOTIVE_DESIGN, CONFIG_CONTROL_DESIGN…
+const SCHEMA_PATTERN = /^[A-Za-z0-9_]{1,40}$/
+
+
+/**
+ * @param {string} [schema] the header's schema
+ * @return {string} the schema when it is a plain identifier, else 'other'
+ *   ('unknown' when there was none)
+ */
+export function schemaParam(schema) {
+  if (typeof schema !== 'string' || schema === '') {
+    return 'unknown'
+  }
+  return SCHEMA_PATTERN.test(schema) ? schema.toUpperCase() : 'other'
+}
+
+
+/**
  * Best-effort; the load has its own outcome.
  *
  * @param {string} name

@@ -128,6 +128,8 @@ import {elementSelection} from './selection'
 import {partsToPath} from './urls'
 import {initViewer} from './viewer'
 import {installDebugPanelsShortcut} from '../viewer/debugPanels'
+import {isWebGLUnavailableError, webglUnavailableAlert} from '../viewer/webglUnavailable'
+import {reportClientCapability} from '../privacy/clientCapabilities'
 
 
 let count = 0
@@ -190,6 +192,9 @@ export default function CadView({
   // (not module-level state) so two CadView mounts in the same process —
   // tests, multi-pane layouts — don't stomp each other.
   const previousThemeChangeCbRef = useRef(null)
+  // Set once the no-WebGL dialog has been shown, so a later re-init (a theme
+  // change, a navigation) that fails the same way doesn't raise it again.
+  const isWebglAlertShownRef = useRef(false)
   // The `[modelPath, customViewSettings]` pair the viewer was last built for
   // (see that effect). Its dependencies change only when a new viewer is
   // wanted, so the only run that sees the same pair again is StrictMode's
@@ -391,7 +396,25 @@ export default function CadView({
         console.error(error.message)
         captureException(error)
       }
-      const initializedViewer = initViewer(pathPrefix, sceneBackground || '#abcdef')
+      let initializedViewer
+      try {
+        initializedViewer = initViewer(pathPrefix, sceneBackground || '#abcdef')
+      } catch (e) {
+        if (!isWebGLUnavailableError(e)) {
+          throw e
+        }
+        // No WebGL context (SHARE-1DZ): a property of this browser, not a
+        // Share defect. Count it as a client capability (its one sink) and
+        // tell the user what to try, rather than letting the throw take the
+        // app down into the error boundary. With no viewer set, nothing tries
+        // to load (viewer/webglUnavailable.js).
+        reportClientCapability('webgl_unavailable')
+        if (!isWebglAlertShownRef.current) {
+          isWebglAlertShownRef.current = true
+          setAlert(webglUnavailableAlert())
+        }
+        return
+      }
       // Apply the persisted §6e render look (profile-menu toggle). Runs on
       // every (re)init — including theme changes, which re-create the viewer —
       // so the chosen look survives re-creation.

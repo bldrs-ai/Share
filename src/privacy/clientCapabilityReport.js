@@ -26,6 +26,9 @@ export const MAX_REPORT_BYTES = 512
  *
  * - `condition`: what the browser couldn't do. `ga_blocked` is gtag/js
  *   failing to load, which is how a blocked client looks to the page.
+ *   `webgl_unavailable` is three's WebGLRenderer failing to get a WebGL 2
+ *   context (no GPU, hardware acceleration off, a blocklisted driver, a
+ *   headless crawler), which leaves Share with nothing to draw on.
  * - `browser`: the browser family, privacy-focused ones named (Brave,
  *   DuckDuckGo, and the ones with built-in blockers: Opera, Edge's strict
  *   tracking prevention, Firefox's ETP, Safari's content blockers).
@@ -34,16 +37,18 @@ export const MAX_REPORT_BYTES = 512
  *   Shields' cosmetic filtering): a bait element was hidden. `network` is
  *   request-level blocking only (a tracker blocker like Privacy Badger, a DNS
  *   filter, a browser's tracking protection) or a plain network failure.
- *   `offline` is the browser saying it has no connection.
+ *   `offline` is the browser saying it has no connection. `none` is a
+ *   condition that has nothing to do with blocking (`webgl_unavailable`),
+ *   for which the page doesn't run the bait check.
  * - `form_factor`: mobile or desktop.
  * - `consent`: whether the user's own analytics setting (privacy/analytics.js
  *   #isAllowed) was on. A report is functional data about what the client can
  *   run, so it is sent either way, and says which.
  */
 export const CAPABILITY_FIELDS = Object.freeze({
-  condition: Object.freeze(['ga_blocked']),
+  condition: Object.freeze(['ga_blocked', 'webgl_unavailable']),
   browser: Object.freeze(['brave', 'duckduckgo', 'opera', 'edge', 'samsung', 'firefox', 'safari', 'chrome', 'other']),
-  blocker: Object.freeze(['cosmetic', 'network', 'offline']),
+  blocker: Object.freeze(['cosmetic', 'network', 'offline', 'none']),
   form_factor: Object.freeze(['mobile', 'desktop']),
   consent: Object.freeze(['on', 'off']),
 })

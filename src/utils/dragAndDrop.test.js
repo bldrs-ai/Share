@@ -1,4 +1,4 @@
-import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from './dragAndDrop'
+import {DROP_REFUSED, handleFileDrop, handleDragOverOrEnter, handleDragLeave} from './dragAndDrop'
 import {guessTypeFromFile} from '../Filetype'
 import {checkOPFSAvailability, deleteUploadFromOPFS, saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
@@ -88,7 +88,7 @@ describe('dragAndDrop utility', () => {
         mockOnError,
       )
 
-      expect(mockSetAlert).toHaveBeenCalledWith('File upload initiated but found no data')
+      expect(mockSetAlert).toHaveBeenCalledWith({type: DROP_REFUSED, message: 'File upload initiated but found no data'})
       expect(mockOnError).toHaveBeenCalledWith('File upload initiated but found no data')
       expect(mockNavigate).not.toHaveBeenCalled()
     })
@@ -106,7 +106,7 @@ describe('dragAndDrop utility', () => {
         mockOnError,
       )
 
-      expect(mockSetAlert).toHaveBeenCalledWith('File upload initiated for more than 1 file')
+      expect(mockSetAlert).toHaveBeenCalledWith({type: DROP_REFUSED, message: 'File upload initiated for more than 1 file'})
       expect(mockOnError).toHaveBeenCalledWith('File upload initiated for more than 1 file')
       expect(mockNavigate).not.toHaveBeenCalled()
     })
@@ -515,7 +515,7 @@ describe('dragAndDrop utility', () => {
         mockSetAlert,
       )
 
-      expect(mockSetAlert).toHaveBeenCalledWith('File upload initiated but found no data')
+      expect(mockSetAlert).toHaveBeenCalledWith({type: DROP_REFUSED, message: 'File upload initiated but found no data'})
       // Should not throw errors when onError callback is not provided
     })
   })

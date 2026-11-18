@@ -179,7 +179,7 @@ export function planShards(tests, timings, {shards, isIndivisible = () => false}
   const unknown = []
   const unitsByKey = new Map()
   for (const {key, file} of tests) {
-    const seconds = Object.hasOwn(known, key) ? known[key] : null
+    const seconds = Object.prototype.hasOwnProperty.call(known, key) ? known[key] : null
     if (seconds === null) {
       unknown.push(key)
     }
@@ -232,7 +232,7 @@ export function countShardSeconds(tests, timings, shards) {
     const from = (size * s) + Math.min(extra, s)
     const to = from + size + (s < extra ? 1 : 0)
     return tests.slice(from, to)
-      .reduce((sum, {key}) => sum + (Object.hasOwn(known, key) ? known[key] : defaultSeconds), 0)
+      .reduce((sum, {key}) => sum + (Object.prototype.hasOwnProperty.call(known, key) ? known[key] : defaultSeconds), 0)
   })
 }
 

@@ -12,6 +12,10 @@ import {navigateToInMemoryModel, navigateToModel} from './navigate'
 import debug, {WARN} from './debug'
 
 
+/** Alert type for a drop with no file in it, or more than one. */
+export const DROP_REFUSED = 'dropRefused'
+
+
 /**
  * Handles drag and drop file upload with validation and processing
  *
@@ -51,9 +55,13 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
   // drop landed in Sentry twice in the same second (one event from this
   // stack, one from AlertDialog's) and the drop families' counts read double.
 
+  // These two refuse what the user dropped (text or a link rather than a
+  // file, or several files at once): an expected outcome, so AlertDialog
+  // counts the `dropRefused` type in GA only (SHARE-1PH, SHARE-1PS). The
+  // messages are constants and name no file.
   if (files.length === 0) {
     const message = 'File upload initiated but found no data'
-    setAlert(message)
+    setAlert({type: DROP_REFUSED, message})
     if (onError) {
       onError(message)
     }
@@ -61,7 +69,7 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
   }
   if (files.length > 1) {
     const message = 'File upload initiated for more than 1 file'
-    setAlert(message)
+    setAlert({type: DROP_REFUSED, message})
     if (onError) {
       onError(message)
     }
