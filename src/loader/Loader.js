@@ -3,6 +3,7 @@ import {Box3, BufferAttribute, Group, Mesh, Object3D, Vector3} from 'three'
 import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader.js'
 import {FBXLoader} from 'three/examples/jsm/loaders/FBXLoader.js'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
+import {NRRDLoader} from 'three/examples/jsm/loaders/NRRDLoader.js'
 import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader.js'
 import {PDBLoader} from 'three/examples/jsm/loaders/PDBLoader.js'
 import {STLLoader} from 'three/examples/jsm/loaders/STLLoader.js'
@@ -80,6 +81,7 @@ import {
   uploadCacheKey,
 } from './sourceCacheKey'
 import adfToThree, {newAdfLoader} from './adf'
+import nrrdToThree from './nrrd'
 import objToThree from './obj'
 import pdbToThree from './pdb'
 import splatsToThree, {newSplatLoader} from './splats'
@@ -2426,6 +2428,16 @@ async function findLoader(pathname, viewer) {
       // TODO(pablo): true should work but currently causes IFCLoader to fail
       isFormatText = false
       isIfc = true
+      break
+    }
+    case 'nrrd': {
+      // A volume (CT, MR) — opened directly, or as the NRRD a zip of DICOM
+      // slices was stacked into at the upload seam (`loader/dicom.js`).
+      // NRRDLoader returns a `Volume`, not an Object3D; the fixup puts its
+      // voxels in a 3D texture on a ray-marched box (`loader/nrrd.js`).
+      loader = new NRRDLoader()
+      fixupCb = nrrdToThree
+      isFormatText = false
       break
     }
     case 'obj': {

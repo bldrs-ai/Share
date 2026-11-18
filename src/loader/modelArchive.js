@@ -24,6 +24,7 @@
 // Design: design/new/adding-model-formats.md §"An archive is not a format either".
 import {analyzeHeader, supportedTypes} from '../Filetype'
 import debug, {WARN} from '../utils/debug'
+import {DicomError, dicomSeriesToNrrd, groupSeries, looksLikeDicom, parseDicomSlice} from './dicom'
 import {archiveGuidance} from './formatGuidance'
 import {consoleFileName} from '../privacy/sentryRedaction'
 import {PART21_LOADER_TYPES} from './part21Formats'
@@ -32,6 +33,7 @@ import {
   MAX_TOTAL_INFLATED_BYTES,
   ZipArchiveError,
   asArchiveError,
+  expandsPastMessage,
   extractZipEntry,
   looksLikeZipBytes,
   readZipDirectory,
@@ -152,6 +154,10 @@ async function resolveArchive(file, depth, budget) {
   const models = files.filter((entry) => entry.size > 0 &&
     supportedTypes.includes(entry.ext) && !(depth > 0 && entry.ext === IFC_ZIP))
   if (models.length === 0) {
+    const volume = await dicomVolume(file, files, budget)
+    if (volume !== null) {
+      return volume
+    }
     // Tagged as `uploadExtension` tags a file's own: the text after an
     // entry's last dot can be a name fragment, and this goes on the alert.
     // Empty files are left out: "it contains .ifc" about a 0-byte a.ifc
@@ -186,6 +192,123 @@ async function resolveArchive(file, depth, budget) {
     return open(models[0])
   }
   return {kind: 'choose', entries: models, revitTextSiblings: revitTextSiblings(models, files), open}
+}
+
+
+// Entry names a DICOM slice can have. Scanners and PACS exports write
+// `.dcm`, `.dicom`, `.ima` (Siemens), or no extension at all (`IM0001`,
+// `I1000000`), and some name each file by its SOP Instance UID, whose last
+// dotted component then reads as an all-digit extension.
+const DICOM_EXTS = new Set(['dcm', 'dicom', 'dic', 'ima', ''])
+
+
+/**
+ * The volume in an archive of DICOM slices, stacked into one `.nrrd`
+ * (`loader/dicom.js`), for an archive with no other model in it.
+ *
+ * Each candidate entry is inflated and kept only if it is a DICOM image; a
+ * series is the slices that share a Series Instance UID, image size,
+ * orientation, echo and temporal position, and the largest one opens — a
+ * study export puts the scan beside a scout of a few slices. What reaches
+ * the seam is a `File` named for the archive (`CT1.zip` → `CT1.nrrd`),
+ * typed `nrrd`: the archive is the only name the series has.
+ *
+ * The candidates are guesses (any entry with no extension), so looking at
+ * one must not change what an archive with no DICOM in it is told:
+ *
+ * - An entry is inflated against a scratch budget (the whole per-upload
+ *   ceiling), and charged to the upload's own only once it has proved to be
+ *   a DICOM image. A `LICENSE` or `Makefile` costs nothing, and can't fail
+ *   for room the slices before it used.
+ * - An entry that can't be extracted (encrypted, an unsupported method,
+ *   past the ceiling) is skipped while it might be anything. It is raised
+ *   only once the archive has proved to hold DICOM, where it may be a
+ *   slice, and a series missing slices must not open as if whole; or when
+ *   it is named as DICOM (`.dcm`).
+ * - Otherwise an archive with no DICOM image falls through to the "holds no
+ *   model" alert exactly as before.
+ *
+ * @param {Blob} file the archive
+ * @param {Array<object>} files its entries (`zipArchive.js#ZipEntry`)
+ * @param {{remaining: number}} budget
+ * @return {Promise<object|null>} an `ArchiveResolution` of kind `model`, or
+ *   null when the archive holds no DICOM image
+ * @throws {ZipArchiveError} for a series that can't be read or stacked
+ */
+async function dicomVolume(file, files, budget) {
+  const candidates = files.filter((entry) => entry.size > 0 &&
+    (DICOM_EXTS.has(entry.ext) || /^\d+$/.test(entry.ext)))
+  const slices = []
+  let refusal = null
+  let unextracted = null
+  let unextractedNamedDicom = null
+  for (const entry of candidates) {
+    let bytes
+    try {
+      // A scratch budget of the whole per-upload ceiling, not what is left
+      // of the real one: a guess mustn't fail for room the slices used up.
+      bytes = await extractZipEntry(file, entry, {remaining: MAX_TOTAL_INFLATED_BYTES})
+    } catch (e) {
+      if (!(e instanceof ZipArchiveError)) {
+        throw e
+      }
+      unextracted = unextracted ?? e
+      if (entry.ext !== '' && !/^\d+$/.test(entry.ext)) {
+        unextractedNamedDicom = unextractedNamedDicom ?? e
+      }
+      continue
+    }
+    if (!looksLikeDicom(bytes)) {
+      continue
+    }
+    if (bytes.length > budget.remaining) {
+      throw new ZipArchiveError(expandsPastMessage())
+    }
+    budget.remaining -= bytes.length
+    try {
+      const slice = parseDicomSlice(bytes)
+      if (slice !== null) {
+        slices.push(slice)
+      }
+    } catch (e) {
+      if (!(e instanceof DicomError)) {
+        throw e
+      }
+      // One unreadable slice shouldn't sink a series of readable ones, so
+      // the refusal is kept, and raised only if nothing could be read.
+      refusal = refusal ?? e
+    }
+  }
+  if (slices.length === 0) {
+    if (refusal !== null) {
+      throw new ZipArchiveError(refusal.message)
+    }
+    if (unextractedNamedDicom !== null) {
+      throw unextractedNamedDicom
+    }
+    return null
+  }
+  if (unextracted !== null) {
+    throw unextracted
+  }
+  const [series] = groupSeries(slices)
+  slices.length = 0
+  let nrrd
+  try {
+    nrrd = withArchiveErrors(() => dicomSeriesToNrrd(series))
+  } catch (e) {
+    throw e instanceof DicomError ? new ZipArchiveError(e.message) : e
+  }
+  const name = `${withoutExtension(String(file.name || 'volume.zip'))}.nrrd`
+  debug().log(`modelArchive#dicomVolume: stacked ${series.length} DICOM slices`)
+  // No `bytes` beside the File, unlike an entry's resolution: the File is a
+  // copy, and holding the NRRD array too would keep a second whole volume
+  // alive while the seam writes the File to OPFS.
+  return {
+    kind: 'model',
+    file: withArchiveErrors(() => new File([nrrd], name, {lastModified: file.lastModified})),
+    ext: 'nrrd',
+  }
 }
 
 
