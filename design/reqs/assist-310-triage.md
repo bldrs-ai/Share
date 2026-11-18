@@ -72,7 +72,7 @@ The owner settled all three on 2026-11-18:
 
 | Issue | Decision and what was done |
 |---|---|
-| [#1822](https://github.com/bldrs-ai/Share/issues/1822) | Stays with `assist-310`. Nested under #1675, beside #1821. #2199 removed the [`new Function`](https://github.com/bldrs-ai/Share/blob/b16672d75172203544b20ca9273fe538d76845d8/src/Components/Bot/BotChat.jsx#L189) path; the issue stays open for the owner to close. |
+| [#1822](https://github.com/bldrs-ai/Share/issues/1822) | Stays with `assist-310`, nested under #1675 beside #1821. Closed as completed by #2199, which removed the [`new Function`](https://github.com/bldrs-ai/Share/blob/b16672d75172203544b20ca9273fe538d76845d8/src/Components/Bot/BotChat.jsx#L189) path, replaced `client_code` with the tool registry and took the key out of `localStorage`. The [closing comment](https://github.com/bldrs-ai/Share/issues/1822#issuecomment-6992444818) maps each part. |
 | [#1936](https://github.com/bldrs-ai/Share/issues/1936) | Moves to `create-320`. Now a sub-issue of #1920 and retitled `create-320: Create seam contract (remote tool provider)`; #1659 no longer links it as its support. |
 | [#1674](https://github.com/bldrs-ai/Share/issues/1674) | Sits under a Track T11 issue. [#2225](https://github.com/bldrs-ai/Share/issues/2225) was created in the shape of the other track issues (#2201–#2204: `Tracking` label, Status, Remaining work, Related), with #1674 and #1386 as its sub-issues. |
 
