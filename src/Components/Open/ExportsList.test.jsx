@@ -5,6 +5,7 @@ import {RouteThemeCtx} from '../../Share.fixture'
 import {mockedUseAuth0, mockedUserLoggedIn} from '../../__mocks__/authentication'
 import {hydrateExports, loadExports} from '../../export/exportHistory'
 import useStore from '../../store/useStore'
+import {navigateToModel} from '../../utils/navigate'
 import ExportsList from './ExportsList'
 
 
@@ -13,6 +14,10 @@ const mockUseStore = useStore
 
 
 jest.mock('../../OPFS/utils', () => ({doesFileExistInOPFS: jest.fn()}))
+jest.mock('../../utils/navigate', () => ({
+  ...jest.requireActual('../../utils/navigate'),
+  navigateToModel: jest.fn(),
+}))
 jest.mock('../../export/exportHistory', () => ({
   hydrateExports: jest.fn(),
   loadExports: jest.fn(),
@@ -121,6 +126,19 @@ describe('ExportsList', () => {
     expect(row).toHaveTextContent('2048 B')
     expect(row).toHaveTextContent('/share/v/p/index.ifc')
     expect(await screen.findByTestId('exports-download-again')).toBeInTheDocument()
+  })
+
+  // The list isn't mounted in the app today (SaveModelControl's Export tab
+  // leaves it out), so no E2E reaches this: it is the open-205 surface check
+  // (#2021) that the row opens its model through navigateToModel with the
+  // router's navigate, so it is in-app under ?feature=spaModelNav.
+  it('opens a row\'s model through navigateToModel, with the router\'s navigate', async () => {
+    loadExports.mockResolvedValue({exports: [aRow()]})
+
+    await renderList()
+
+    fireEvent.click(await screen.findByText('/share/v/p/index.ifc'))
+    expect(navigateToModel).toHaveBeenCalledWith('/share/v/p/index.ifc', expect.any(Function))
   })
 
   // A free export's charge row (pro-module, §4.8) has no key until

@@ -3,7 +3,8 @@
 **Status:** Phase 0 landed (#2026). Phase 1 re-planned 2026-11-02 (§4);
 P1.0 measured (§4.1); Phase 1a step 0, the flagged switch and the first
 memory E2E, built (§4.6, §6); step A, load ownership and abort under the
-same flag, built (§4.5a). Phase 2 planned. Per-step status lives on
+same flag, built (§4.5a); steps C (Back/Forward, every open surface, §4.6)
+and D (per-open dedupe, §5) built. Phase 2 planned. Per-step status lives on
 #2011 and its sub-issues, not here.
 **Epic:** `open-205` (#2011). Stories: Phase 0 #2012 (tasks #2013–#2018,
 closed; #2017 moved to Phase 1), Phase 1 #2028 (measure), #2029
@@ -671,15 +672,68 @@ still loads the page), after the same `withCurrentSearch` and upload-guard
 disarm as the page-load path. Flag off, it is the page load it was.
 `navigateToInMemoryModel` stays always in-app and now disarms the guard
 too; before, an in-memory upload left it armed for the next model.
-`spaModelNav.spec.ts` covers one surface (the search bar's link open), with
-Back. Still open for #2021: each surface's E2E, and the rest below.
-Also:
-disarm the `beforeunload` guard on switch (armed for uploads at
-`Loader.js:278`, `src/utils/event.js`; today only navigation helpers
-disarm it), check Back/Forward through `Share.jsx`'s route effect (needs
-§3.1), and revisit the ProjectsDrawer capture's reload-shaped reasoning
+
+**Built (step C, #2021): every surface, and Back/Forward.**
+
+- *Each open surface,* desktop and mobile, in
+  `src/utils/spaModelNavSurfaces.spec.ts`: Samples (Caffeine, whose fixture is
+  a small PDB; the Momentum route serves stub bytes), the Open dialog's
+  GitHub browser and Local tab, drag-and-drop with OPFS and without (the
+  in-memory path), the Versions panel, Save to GitHub, and the ProjectsDrawer
+  (under `?feature=workspace`, the only place it renders). Each asserts the
+  same document, the new model shown at the surface's URL, and the flag kept.
+  The search bar's link open is `spaModelNav.spec.ts`'s. Not covered: My
+  Exports, which no surface mounts today (SaveModelControl leaves it out,
+  glb-export-premium.md §4.5; `ExportsList.test.jsx` pins its call), and the
+  Drive tab, which needs Google's Picker.
+- *Back and Forward,* `src/utils/spaModelHistory.spec.ts`: A (a link with an
+  element path, a `#c:` camera and a `#cp:` cut plane) → B → C in-app, then
+  Back, Back, Forward, Forward. Each lands on its own model (title, NavTree
+  root, a new model object), A with its selection, camera and cut plane, each
+  entry's URL as the user left it, no page load and no history entry added.
+  Back steps past a model's panel entries (opening the search bar pushes
+  `s:` entries, `useHashState`), so the walk presses Back until the path
+  changes.
+
+What the walk found, and fixed:
+
+- *A selection token written into the next model's URL.*
+  `SelectionHashWriter` re-runs on a path change, and an in-app open or a
+  Back changes the path a few renders before the left model's viewer,
+  selection and `isModelReady` are replaced: it wrote the left model's
+  `#sel:` into the next model's URL as a history entry, then removed it in
+  another once the selection was reset. It now writes only into a URL with
+  the model file (or, for a Drive route, the file id) it became ready at.
+- *Forward lost after a Back.* `useHashState` brought the hash in line with a
+  panel's state with a push on every location change. On a Back to an entry
+  whose panel token the state no longer held, that push dropped every
+  entry ahead, so Forward went nowhere; an in-app open with a panel open put
+  the token back as an entry of its own. A rewrite after a location-only
+  change is now in place (`replaceHashParams` / `removeHashParamsInPlace`);
+  a state change is still its own entry.
+- *A streamed write landing in another entry.* The live view link's terms
+  (the camera, a dragged cut plane, the display: `Share/viewLink.js`) write
+  after a 250 ms debounce, into whatever URL is the page's then. A write
+  scheduled before a Back or an in-app open now lands only in the entry it
+  was made in (`createLiveTerm` over `utils/debounce.js#debounceInHistoryEntry`,
+  keyed by react-router's `history.state.key`), and the camera link writes
+  only while the store's route result is the one its viewer was built for
+  (CameraControl), since the old viewer's camera goes on moving until it is
+  disposed. The window is a few renders, too short to hit in an E2E, so the
+  unit tests pin these.
+- *Versions panel links had no slash between the commit and the file*
+  (`…/<sha>ifc/misc/box.ifc`), with or without the flag: a GitHub route
+  result's `filepath` has no leading slash.
+
+Test infra the surfaces needed: the GitHub mock's blob sha is per fixture
+path (`__mocks__/fixtureBlobSha.ts`; one shared sha let the OPFS cache serve
+box.ifc's bytes for another file in `ifc/misc/`), and every cypresstester file
+downloads `index.ifc` from the test server (window.ifc's raw.githubusercontent
+download never reached its `page.route`, part of #1269).
+
+Left for Phase 1b: the ProjectsDrawer capture's reload-shaped reasoning
 (`src/store/WorkspaceSlice.js:165-170`, `src/workspace/persistence.ts:140-143`,
-`src/Containers/ProjectsDrawer.jsx:197-203`).
+`src/Containers/ProjectsDrawer.jsx:197-203`), harmless in-app.
 
 ### 4.7 Open risks
 
@@ -701,32 +755,70 @@ In-app A → B → A counts the return to A as a **new open**, for the quota
 meter and for analytics alike.
 
 - **The direct-link meter *is* the quota metric.** `useDirectLinkQuota`
-  (`src/quota/useDirectLinkQuota.js:80-135`) calls `record-load`. That is
-  the rolling 7-day count of private-model loads, and it shares its slots
-  with free GLB exports (`quotas.md` §"Direct links: soft gate", §"Exports
-  use the same slots").
+  calls `record-load`. That is the rolling 7-day count of private-model
+  loads, and it shares its slots with free GLB exports (`quotas.md`
+  §"Direct links: soft gate", §"Exports use the same slots").
 - **Counting again costs no slot.** `record-load`'s ledger dedupes by key,
   so a key the user already holds comes back `alreadyCounted`
-  (`netlify/functions/record-load.js:32`).
-- **What it does cost:**
-  - one extra `record-load` call per return;
-  - `quota_soft_limit_exceeded` fires again on each revisit while the user
-    is over the limit.
-- **Phase 1 change:** `meteredKeysRef` (`useDirectLinkQuota.js:129`)
-  currently dedupes per page. It becomes per open, keeping the dedupe
-  *within* one open (theme re-init, StrictMode's double effect).
-- **Engagement already behaves this way:** `lastCountedModelKey`
-  (`src/privacy/engagementTracking.js:60, 141`) counts A → B → A as two
-  opens, because B clears the key.
+  (`netlify/functions/record-load.js`).
+- **What it does cost:** one extra `record-load` call per return, and
+  `quota_soft_limit_exceeded` (with its `model_share {gate: 'soft'}`) again
+  on each revisit while the user is over the limit.
 
-### 5.2 Still to decide
+### 5.2 What an open is (built, step D)
 
-| Behaviour | Where | Decision needed |
-|---|---|---|
-| Fresh-claims refresh | `src/BaseRoutes.jsx:70-74` | Pro status across many in-app opens |
-| `?view=` | `src/viewer/ShareViewer.js:157` (module load) | Ignored on an in-app open |
-| `?feature=perf` | `src/utils/PerfMonitor.js:40-46` (module load) | Likely fine (dev flag) |
-| Workspace capture | `src/workspace/persistence.ts:140-143` | Keep or simplify |
+**An open is one route result from `Share.jsx`** (`routes/modelOpen.ts`,
+`modelOpenId`). The route effect is the only writer of the store's
+`modelPath`, and it sets a new one only when the route names another model.
+So in-app A → B → A is three opens, while a theme toggle, a Widget API
+view-settings change, an auth-state re-run and StrictMode's double effect
+reload the same open, and selecting an element keeps it. On a page load
+the page and its first open coincide, so with the flag off, where every
+open from a surface is a page load, per open is per page.
+
+**With step A and the marker reset.** The open changes exactly where
+Share.jsx's route effect sets a new route result, which is also where it
+calls `NotesSlice#forgetModelMarkers` (#2189; not on the first route, which
+starts with that state fresh) and, through CadView's `[modelPath]` effect,
+where step A's `forgetLoadedModelState` runs under the flag (§4.5a). So the
+three agree on what a switch is. A load the user leaves is aborted before
+it reaches the open events or the meter (both sit after the model is on
+screen), so a left mid-load open sends nothing, as a page left mid-load
+sent nothing; the return to it is a new open and sends them once.
+
+**Decided: a theme rebuild is not an open.** It is the same model, reloaded
+into a new viewer for the user's look. Until now `real_model_open` and
+`model_view` fired again on every theme toggle; they no longer do. That is
+the one change with the flag off, and it is in GA's numbers (see the
+inventory).
+
+### 5.3 Inventory
+
+| What | Where | Was | Now | Why |
+|---|---|---|---|---|
+| Direct-link meter (`record-load`) and its soft-gate events | `useDirectLinkQuota.js` `meteredOpensRef` | Per page: a set of keys | **Per open** | Decision 1. Keyed by open and key, so A → an unmetered model → A records A again too |
+| `real_model_open`, `model_view`, load diagnostics (Sentry, for the chip) | `CadView#sendOpenEvents`, `reportedOpenRef` | Every load, theme toggles included | **Per open** | A theme rebuild is not an open (§5.2); one failure, one event for the diagnostics |
+| Engagement count (`engaged_use`, `return_visit`) | `engagementTracking.js` `lastCountedOpenKey` | Per model, which skipped A → demo → A | **Per open** | Decision 1, and the under-count goes |
+| Drive export visibility | `driveExportVisibility.js` | One lookup per file per page | **Per open** | An in-app return asks again, as a page load did; the file's sharing may have changed |
+| `?view=` | `ShareViewer.js` `viewParameter`, read at module load | Read once | **Read once; a link asking for another view loads the page** (`navigate.js#isViewChange`) | An in-app open can't change what was read at module load |
+| `load_failed`, schema refusals, the no-geometry alert, upload-not-in-browser | `CadView` `reportedLoadFailureRef`, `reportedRefusalRef` | Cleared on each model identity change | Unchanged: already per open | A → B → A changes the identity twice, so the return counts again |
+| `model_engagement` window | `CadView` `startModelEngagement` | Restarted per load | Unchanged | The user is still on the model through a theme toggle |
+| `renderer_fallback`, load-report lines (first mesh, Health) | `reportRendererLimits.js`, `loadProgress.js` | Per load | Unchanged | They describe a load, and a theme rebuild is one |
+| Fresh-claims refresh | `BaseRoutes.jsx` `freshClaimsRequestedRef` | Per page | Unchanged: per session | Claims go stale with time, not with opens; record-load and pro-module decide server-side; a refresh per open would put an `/oauth/token` round trip back on every open |
+| `render_mode` GA event | `reportRenderMode.js` | Per page | Unchanged | The mode is constant for the page |
+| `?feature=perf` / `look` panel at startup | `PerfMonitor.js`, module load | Read once | Unchanged | Dev flags; `?feature=` itself rides every open |
+| Sentry noise filter, `reported_condition` shadow | `index/sentry.js` | Per page session | Unchanged | Coarse per-session counts by design |
+| `subscription_*_client`, `login` | `subscriptionTracking.js`, `useLoginTracking.js` | Per transition, per sign-in | Unchanged | Not about models |
+| First-visit About / onboarding | `privacy/firstTime` cookie | Per browser | Unchanged | Not about models |
+| Pro module memo | `proModuleLoader.js` | Per page, Pro only | Unchanged | Entitlement, not a model; a free delivery is never memoised |
+| Workspace capture | `workspace/persistence.ts` | Persisted to survive the reload | Unchanged | Harmless in-app; revisit with the ProjectsDrawer in Phase 1b |
+
+Tests: `useDirectLinkQuota.test.js` (A → B → A records A twice; a re-init of
+one open once; A → unmetered → A; one count per page when every open is a
+page load), `engagementTracking.test.js`, `driveExportVisibility.test.js`,
+`modelOpen.test.ts`, `navigate.test.js` (`?view=`), and
+`src/Containers/openPerOpen.spec.ts` (a theme toggle sends no second open;
+under the flag a Back and Forward to a model sends it again).
 
 
 ## 6. Verification (#2023)

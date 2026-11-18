@@ -1,6 +1,7 @@
 import {Page, expect} from '@playwright/test'
 import {readFile} from 'fs/promises'
 import {join} from 'path'
+import {fixtureBlobSha} from '../../__mocks__/fixtureBlobSha'
 import {dismissLoadGrace} from './utils'
 
 
@@ -74,11 +75,12 @@ export async function setupVirtualPathIntercept(
         body: JSON.stringify({
           name: filePathParts[filePathParts.length - 1],
           path: filePath,
-          sha: 'e2etestsha000000000000000000000000000000',
+          // The MSW handler's per-path sha (fixtureBlobSha.ts says why).
+          sha: fixtureBlobSha(filePath),
           size: 0,
           url: `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}?ref=${ref}`,
           html_url: `https://github.com/${owner}/${repo}/blob/${ref}/${filePath}`,
-          git_url: `https://api.github.com/repos/${owner}/${repo}/git/blobs/e2etestsha000000000000000000000000000000`,
+          git_url: `https://api.github.com/repos/${owner}/${repo}/git/blobs/${fixtureBlobSha(filePath)}`,
           download_url: fixtureUrl,
           type: 'file',
         }),
