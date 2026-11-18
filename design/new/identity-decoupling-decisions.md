@@ -1,6 +1,6 @@
 # Identity decoupling: GitHub as a per-account connection
 
-**Status:** PR1 (#1507) and PR2 (#1508) merged; PR3 (switch over, flag `githubAsSource` on) is post-MVP. Tracking: [T3 #2202](https://github.com/bldrs-ai/Share/issues/2202).
+**Status:** PR1 (#1507) and PR2 (#1508) merged; PR3 (switch over, flag `githubAsSource` on) is post-MVP. Tracking: [`identity-t100` #2202](https://github.com/bldrs-ai/Share/issues/2202).
 **Date:** 2026-11-18
 **Owner:** Pablo
 **Related code:** `src/connections/github/`, `netlify/functions/gh-oauth-*.js`, `netlify/functions/_lib/auth0.js`, `src/Components/Connections/GitHubTab.jsx`, `src/Components/Open/SaveModelControl.jsx`

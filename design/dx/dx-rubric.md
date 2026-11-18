@@ -35,7 +35,7 @@ A track is named after the feature group and milestone band it mainly serves: `<
 - **A new track** gets a row in roadmap §3.2 and an entry in §5.
 - **Kept, never reused.** A finished track stays listed with ✔, and its ID isn't given to another track.
 - **Work items** keep their issue numbers. A work item's title carries the track ID while it is a direct child of the track issue; one nested under a story keeps the epic's prefix.
-- **The old `T1`…`T12` numbers** stay as aliases in the roadmap's ID lineage once each track is renamed.
+- **The old `T1`…`T12` numbers** are aliases in the roadmap's ID lineage (renamed 2026-11-18). T9, growth, lives in bizdev and keeps its number.
 
 ## The track issue
 
@@ -49,7 +49,7 @@ About 400 words, in this order:
 
 The roadmap's track Status line ends with the issue's link. When rewriting an existing issue, keep its original text collapsed at the bottom, as the UX rubric does (§"Write for a reader who wasn't there").
 
-The first track issues were written with checkbox lists (T2 #2201, T3 #2202, T4 #2203, T6 #2204); T11 (#2225) is the first with its work items as sub-issues. Convert the others as their tracks are next worked on.
+The first track issues were written with checkbox lists (`share-t101` #2201, `identity-t100` #2202, `share-t100` #2203, `notes-t200` #2204); `apps-t300` (#2225) is the first with its work items as sub-issues. Convert the others as their tracks are next worked on.
 
 ## Docs in the repo
 

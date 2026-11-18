@@ -13,10 +13,10 @@ The epic is [#1659](https://github.com/bldrs-ai/Share/issues/1659), retitled `as
 |---|---|---|
 | `assist-110` | roadmap v0.3–v0.5 | This epic, before the AI band was renumbered |
 | `assist-310` | roadmap v0.6 onward | This epic |
-| `search-310` | roadmap §4.5 | Knowledge graph; absorbed, since natural-language questions are this epic's job and the graph becomes its retrieval layer (Track T10) |
+| `search-310` | roadmap §4.5 | Knowledge graph; absorbed, since natural-language questions are this epic's job and the graph becomes its retrieval layer (Track `assist-t300`) |
 | "Bot", `?feature=bot` | 2025 prototype (PRs #1391, #1447, #1452) | The chat prototype this epic replaces; `bot` stays an alias of `?feature=assist` (#1672) |
 
-**Tier.** The 3xx band (Pro): a power capability with its own product case, outside the MVP bar (roadmap §6.0; Track T10 "MVP impact: none"). The roadmap's validation target is large-model users running the assistant on models they can't open anywhere else, and paying (§7.5). Nothing here moves it.
+**Tier.** The 3xx band (Pro): a power capability with its own product case, outside the MVP bar (roadmap §6.0; Track `assist-t300` "MVP impact: none"). The roadmap's validation target is large-model users running the assistant on models they can't open anywhere else, and paying (§7.5). Nothing here moves it.
 
 ## Inventory
 
@@ -51,11 +51,11 @@ Sources, pinned to `b16672d`: [workspace.md](https://github.com/bldrs-ai/Share/b
 
 **Why #1672 became "Start a session".** A session is the conversation thread (decided 2026-11-18), so #1672's "drawer threads" and a session are one object; a separate tray story would split one conversation across two issues. #1672 had no comments or work yet, and [workspace-sessions.md §7](https://github.com/bldrs-ai/Share/blob/b16672d75172203544b20ca9273fe538d76845d8/design/new/workspace-sessions.md#7-build-order) step 7 already gave it "the conversation in the session". The tray tasks stay in it; the drawer listing went to #2193.
 
-**Why the rest are or aren't stories.** A story is a goal the person sees. #1675's agent loop, #1933's credits and #1937's instant commands were titled after their mechanism but each has a plain user goal, so they keep their numbers under user-facing titles. The tool surface (#1674) serves #1675, #1937, #1938 and #1936 and belongs to Track T11 with `assist-320` and `apps-300`; the spikes and CSP serve several stories; #1671 and #1936 are documents. These are linked references, not children.
+**Why the rest are or aren't stories.** A story is a goal the person sees. #1675's agent loop, #1933's credits and #1937's instant commands were titled after their mechanism but each has a plain user goal, so they keep their numbers under user-facing titles. The tool surface (#1674) serves #1675, #1937, #1938 and #1936 and belongs to Track `apps-t300` with `assist-320` and `apps-300`; the spikes and CSP serve several stories; #1671 and #1936 are documents. These are linked references, not children.
 
 ## Applied changes
 
-Titles (all retitled from `story: assist: …`): #1672, #1673, #1675, #1676, #1930, #1933, #1934, #1937, #1938 now carry the user-facing titles in the snapshot; support issues keep a descriptive title with the prefix: #1671 `assist-310: design doc ai-workspace.md (…)`, #1674 `assist-310: viewer tool surface v0 (read and view tools, Track T11)`, #1677 `assist-310: large-model demo fixture and E2E`, #1927–#1929 `assist-310: spike — …`, #1931 `assist-310: connect an OpenRouter account instead of pasting a key (OAuth PKCE)`, #1932 `assist-310: hosted relay ai-chat and anonymous identity`, #1935 and #1936 the old title under the new prefix. #1821 and #1822 keep their bug titles.
+Titles (all retitled from `story: assist: …`): #1672, #1673, #1675, #1676, #1930, #1933, #1934, #1937, #1938 now carry the user-facing titles in the snapshot; support issues keep a descriptive title with the prefix: #1671 `assist-310: design doc ai-workspace.md (…)`, #1674 `assist-310: viewer tool surface v0 (read and view tools, Track T11)` (retitled `apps-t300: viewer tool surface v0 (read and view tools)` with the track rename, later on 2026-11-18), #1677 `assist-310: large-model demo fixture and E2E`, #1927–#1929 `assist-310: spike — …`, #1931 `assist-310: connect an OpenRouter account instead of pasting a key (OAuth PKCE)`, #1932 `assist-310: hosted relay ai-chat and anonymous identity`, #1935 and #1936 the old title under the new prefix. #1821 and #1822 keep their bug titles.
 
 Hierarchy:
 - Detached from #1659 to linked references: #1671, #1674, #1927, #1928, #1929, #1935, #1936.
@@ -74,7 +74,7 @@ The owner settled all three on 2026-11-18:
 |---|---|
 | [#1822](https://github.com/bldrs-ai/Share/issues/1822) | Stays with `assist-310`, nested under #1675 beside #1821. Closed as completed by #2199, which removed the [`new Function`](https://github.com/bldrs-ai/Share/blob/b16672d75172203544b20ca9273fe538d76845d8/src/Components/Bot/BotChat.jsx#L189) path, replaced `client_code` with the tool registry and took the key out of `localStorage`. The [closing comment](https://github.com/bldrs-ai/Share/issues/1822#issuecomment-6992444818) maps each part. |
 | [#1936](https://github.com/bldrs-ai/Share/issues/1936) | Moves to `create-320`. Now a sub-issue of #1920 and retitled `create-320: Create seam contract (remote tool provider)`; #1659 no longer links it as its support. |
-| [#1674](https://github.com/bldrs-ai/Share/issues/1674) | Sits under a Track T11 issue. [#2225](https://github.com/bldrs-ai/Share/issues/2225) was created in the shape of the other track issues (#2201–#2204: `Tracking` label, Status, Remaining work, Related), with #1674 and #1386 as its sub-issues. |
+| [#1674](https://github.com/bldrs-ai/Share/issues/1674) | Sits under a Track `apps-t300` issue. [#2225](https://github.com/bldrs-ai/Share/issues/2225) was created in the shape of the other track issues (#2201–#2204: `Tracking` label, Status, Remaining work, Related), with #1674 and #1386 as its sub-issues. |
 
 Epic-level open decisions (budgets, generative UI timing, #1676, the ref separator) are listed in #1659.
 

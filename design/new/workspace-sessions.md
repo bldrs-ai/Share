@@ -79,7 +79,7 @@ A session is files, so it can be kept locally first and in a project repository 
 - **`version`** pins what the session was made against. Its format is `share-200`'s version identity ([model-versioning.md](model-versioning.md)), not a new one. A model that moved on since is shown as such (UX: "Resume a session"); the session is never silently re-pointed.
 - **`placement`** is `null` when the model's own coordinates are used; set it only when the person moves a model. IFC georeferencing is applied first, as today (`stampAppliedCoordination`).
 - **`view`** reuses the permalink terms (`#c:`, `#cp:`, `#d:`), so a session's view and a shared link describe a view the same way.
-- **Where it is kept.** Locally first, beside the Tier-1 project list (`workspace/persistence.ts`, #1662). The account-level sync (#1662's Auth0 tier) carries the project and session list only. A conversation is too large for it, so it stays on the device until the conversation store (T10) exists. This replaces D10's "per model" key with "per session".
+- **Where it is kept.** Locally first, beside the Tier-1 project list (`workspace/persistence.ts`, #1662). The account-level sync (#1662's Auth0 tier) carries the project and session list only. A conversation is too large for it, so it stays on the device until the conversation store (`assist-t300`) exists. This replaces D10's "per model" key with "per session".
 - **The manifest.** The MVC-core review's §7.3 `manifest.json` is this file: which models, which versions, which op logs. Its model and version fields are `share-200`'s; this doc only adds the session-level fields.
 
 
