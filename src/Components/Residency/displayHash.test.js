@@ -288,9 +288,12 @@ describe('the volume terms', () => {
       .toEqual({vw: '-500_300', vo: '60'})
     expect(modelDisplayParams(appearance({volume: {window: [0.125, 0.8], opacity: 100}})))
       .toEqual({vw: '0.125_0.8'})
-    // Four significant figures: finer than any slider step.
-    expect(modelDisplayParams(appearance({volume: {window: [150.04, 900.06], opacity: 100}})))
-      .toEqual({vw: '150_900.1'})
+    // Eight significant figures: a 1-unit window at large values keeps its
+    // two ends apart, and float noise past float32's precision is dropped.
+    expect(modelDisplayParams(appearance({volume: {window: [10100, 10101], opacity: 100}})))
+      .toEqual({vw: '10100_10101'})
+    expect(modelDisplayParams(appearance({volume: {window: [0.1 + 0.2, 0.8], opacity: 100}})))
+      .toEqual({vw: '0.3_0.8'})
   })
 
   it.each([

@@ -592,11 +592,10 @@ describe('ResidencyControl volume section', () => {
     // which aren't a window, and the menu snapped back to 150–900.
     const {getByTestId} = await renderWithModel(ctVolumeModel())
     fireEvent.click(getByTestId('control-button-residency'))
-    const [low, high] = getByTestId('volume-window-slider').querySelectorAll('input')
+    const [low] = getByTestId('volume-window-slider').querySelectorAll('input')
     // PageUp, not End: End is the browser's own range-input key, which jsdom
     // doesn't implement; MUI handles PageUp itself, 10 units a press. Enough
     // presses to run the low thumb from 150 into the high one at 900.
-    expect(high).toBeTruthy()
     for (let i = 0; i < 100; i++) {
       fireEvent.keyDown(low, {key: 'PageUp'})
     }

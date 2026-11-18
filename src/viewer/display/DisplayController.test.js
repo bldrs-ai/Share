@@ -14,6 +14,7 @@ import {RESIDENCY_DEFAULT} from './residencyMode'
 import {ShadingMode} from './shadingMode'
 import {DEFAULT_COLOR} from '../ifc/flatMeshToBatchedModel'
 import {ResidencyMetric} from '../residency/ResidencyController'
+import nrrdToThree from '../../loader/nrrd'
 
 
 const grey = () => ({x: DEFAULT_COLOR.x, y: DEFAULT_COLOR.y, z: DEFAULT_COLOR.z, w: 1})
@@ -228,5 +229,22 @@ describe('resolvedAppearance', () => {
 
   it('trusts the stack alone when no model is loaded', () => {
     expect(resolvedAppearance(null, modelColor(ColorMode.SOURCE)).color).toBe(ColorMode.SOURCE)
+  })
+})
+
+
+describe('applyDisplayOverrides on a volume', () => {
+  it('leaves a volume shaded whatever a link says: the menu offers it no shading', () => {
+    // A `#d:wire=1` link, written for a volume before the Shading section was
+    // withdrawn for one, or by hand (review of #2179).
+    const root = nrrdToThree({
+      data: new Int16Array(8),
+      dimensions: [2, 2, 2],
+      windowLow: 0,
+      windowHigh: 1,
+      header: {vectors: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], space_origin: ['0', '0', '0']},
+    })
+    applyDisplayOverrides(root, [{scope: {kind: 'model'}, appearance: {shading: ShadingMode.WIREFRAME}}])
+    expect(root.children[0].material.wireframe).toBe(false)
   })
 })

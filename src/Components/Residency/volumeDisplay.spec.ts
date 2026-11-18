@@ -111,4 +111,22 @@ describeMobileAndDesktop('Display menu: volume window and opacity', () => {
     await expect.poll(() => displayToken(page)).toMatch(/^d:vw=30\d\d_3056$/)
     expect(frameDifference(before, await captureRenderedFrame(page))).toBeGreaterThan(SAME_FRAME_TOLERANCE)
   })
+
+  test('a link\'s window and opacity open with the volume', async ({page}) => {
+    await openPhantom(page)
+    // The dropped volume stays in this browser's storage, so its route
+    // reloads; with a `#d:` token, it opens as the token says.
+    // Through a blank page: the same route with only a new hash would be a
+    // same-document navigation, not a load.
+    const route = new URL(page.url())
+    await page.goto('about:blank')
+    await page.goto(`${route.origin}${route.pathname}#d:vw=0_400,vo=50`, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page)
+    await page.getByTestId('control-button-residency').click()
+    await expect(page.getByTestId('volume-window-label')).toHaveText('Window: 0 – 400 HU')
+    await expect(page.getByTestId('volume-opacity-label')).toHaveText('Opacity: 50%')
+    // Opening it isn't a change of the user's: the token stays as given.
+    await page.keyboard.press('Escape')
+    expect(await displayToken(page)).toBe('d:vw=0_400,vo=50')
+  })
 })

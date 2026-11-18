@@ -55,7 +55,11 @@ export function applyDisplayOverrides(model, overrides) {
   if (appearance.color !== undefined) {
     setColorMode(model, appearance.color)
   }
-  if (appearance.shading !== undefined) {
+  // Not on a volume: the Display menu offers no shading for one
+  // (modelHasShadingChoice), so a link's `wire=1` — written for a volume
+  // before that, or by hand — would put the ray-march box in wireframe with
+  // no control left to undo it (review of #2179).
+  if (appearance.shading !== undefined && volumeOf(model) === null) {
     setShadingMode(model, appearance.shading)
   }
   if (appearance.volume !== undefined) {

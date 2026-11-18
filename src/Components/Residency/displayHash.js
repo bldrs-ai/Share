@@ -69,8 +69,11 @@ import {ResidencyMetric} from '../../viewer/residency/ResidencyController'
  *
  * `vw` and `vo` are a volume's (volumeMode.js). The window's two ends are
  * joined by `_`, not `.`: they can be negative and fractional (a CT's
- * `-500_300`, a float volume's `0.12_0.8`). Each end is written to four
- * significant figures, which is finer than the slider steps.
+ * `-500_300`, a float volume's `0.12_0.8`). Each end is written to eight
+ * significant figures: about 256 slider steps span the volume's range, so
+ * four figures could round a narrow window's two ends to one number on a
+ * volume of large values (a 1-unit step at 10100), and eight cover float32
+ * data, while a CT's integer HU still write as themselves (review of #2179).
  *
  * FORWARD COMPAT (not yet emitted): §6.1's grammar also has scoped terms
  * (`e<id>=…`, `o<pathKey>=…`, `m<idx>=…`). They slot into the same `d:` token
@@ -91,7 +94,7 @@ const MODEL_DISPLAY_KEYS = ['color', 'wire', 'res', 'mres', 'vw', 'vo']
 
 // Joins a volume window's two ends in `vw`.
 const WINDOW_SEP = '_'
-const WINDOW_DIGITS = 4
+const WINDOW_DIGITS = 8
 
 // `mres`'s spelling of Auto.
 const MOTION_AUTO_TERM = 'auto'
