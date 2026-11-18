@@ -122,7 +122,11 @@ function MarkerControl({context, oppositeObjects, postProcessor}) {
       return undefined
     }
     // Its per-frame upkeep runs in the viewer's own loop (PlaceMark#update,
-    // ThreeContext#onFrame) until it is disposed.
+    // ThreeContext#onFrame) until it is disposed. On a theme change the
+    // first PlaceMark for the new context is short-lived: it renders while
+    // the store still has the old model and `isModelReady`, and is released
+    // when the reload unmounts this component a moment later. Wasted work
+    // (a pass of marker textures), not a leak.
     return bindPlaceMark(createPlaceMark, {context, oppositeObjects, postProcessor})
     // Keyed on the context alone: the model and post-processor are read at
     // creation, and a model that changes under the same context is handed
@@ -308,6 +312,14 @@ export function PlacemarkHandlers() {
   const savePlaceMark = async ({point, normal, promiseGroup}) => {
     if (point && normal && promiseGroup) {
       const svgGroup = await promiseGroup
+      // The viewer went away while the marker's texture loaded (a theme
+      // change or model load released this PlaceMark, #2017): there is no
+      // marker to save, so end the placing and leave the note alone.
+      if (!svgGroup || placeMark.isDisposed()) {
+        setPlaceMarkMode(false)
+        setIsPlaceMarkActivated(false)
+        return
+      }
       const positionData = roundCoord(...point)
       const normalData = roundCoord(...normal)
       const markArr = positionData.concat(normalData)
@@ -447,6 +459,11 @@ export function PlacemarkHandlers() {
     }
   }
   /**
+   * NoteFooter's and NoteCardCreate's "Add Placemark". A no-op while a model
+   * loads: MarkerControl is unmounted then, so the store has no PlaceMark
+   * (#2017). A PlaceMark built while `isPlaceMarkActivated` is set starts
+   * activated (createPlaceMark), so placing carries over a rebind.
+   *
    * @param {string} id - The marker ID
    */
   function togglePlaceMarkActive(id) {

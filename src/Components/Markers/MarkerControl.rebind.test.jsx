@@ -279,7 +279,49 @@ describe('MarkerControl: a new viewer gets a new PlaceMark (#2017)', () => {
     expect(markersIn(second.scene)).toHaveLength(MOCK_MARKERS.length)
     unmount()
   })
+
+
+  // The theme change's own path: the new context reaches a MarkerControl
+  // that then unmounts for the reload (OperationsGroup) and mounts afresh.
+  it('lets the old PlaceMark go across an unmount and a fresh mount too', async () => {
+    const second = makeViewer()
+    const refs = await placeThenUnmountKeepingOnlyWeakRefs()
+    const {unmount} = render(markerControlOn(second.context))
+    writeNoteMarkers()
+    await waitFor(() => expect(markersIn(second.scene)).toHaveLength(MOCK_MARKERS.length))
+    expect(await collected(refs.placeMark), 'the old PlaceMark is still reachable').toBe(true)
+    expect(await collected(refs.scene), 'the old scene is still reachable').toBe(true)
+    unmount()
+  })
 })
+
+
+/**
+ * Mount on a viewer, place the markers, unmount, and hand back only WeakRefs
+ * (see rebindKeepingOnlyWeakRefs for why a helper, and why state).
+ *
+ * @return {Promise<object>} WeakRefs to the PlaceMark and its scene
+ */
+async function placeThenUnmountKeepingOnlyWeakRefs() {
+  const first = makeViewer()
+  const holder = {context: first.context, setContext: null, renderAgain: null}
+  const {unmount} = render(<SwappableMarkerControl holder={holder}/>)
+  holder.context = null
+  writeNoteMarkers()
+  await waitFor(() => expect(markersIn(first.scene)).toHaveLength(MOCK_MARKERS.length))
+  const refs = {
+    placeMark: new WeakRef(useStore.getState().placeMark),
+    scene: new WeakRef(first.scene),
+  }
+  unmount()
+  // Testing Library keeps every root it rendered, element included, until
+  // its cleanup, and the state setters hold their hook's last state: here
+  // the first context.
+  holder.setContext = null
+  holder.renderAgain = null
+  expect(useStore.getState().placeMark).toBeNull()
+  return refs
+}
 
 
 /**

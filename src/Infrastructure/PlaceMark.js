@@ -182,6 +182,8 @@ export default class PlaceMark extends EventDispatcher {
       }
     }
 
+    // A no-op once disposed: `dispose` has already taken every marker out
+    // of the scene, and none can land after it (createCirclePlacemark).
     this.disposePlaceMark = (_placeMark) => {
       const index = _placeMarks.indexOf(_placeMark)
 

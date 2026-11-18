@@ -54,7 +54,8 @@ describeMobileAndDesktop('Markers: a new viewer gets the note markers (#2017)', 
     const old = await readOldViewer(page)
     expect(old.isViewerNew, 'the theme change built a new viewer').toBe(true)
     expect(old.isPlaceMarkNew, 'the store holds a new PlaceMark').toBe(true)
-    // Null when it has already been collected; either way not drawing.
+    // Null when it has already been collected, so these two pass then; the
+    // assertions that go red without the fix are the ones above.
     expect(old.oldPlaceMarkMarkers ?? 0, 'the old PlaceMark let its markers go').toBe(0)
     expect(old.isOldPlaceMarkDisposed ?? true, 'the old PlaceMark was disposed').toBe(true)
   })
