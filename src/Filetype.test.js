@@ -449,6 +449,8 @@ describe('Filetype', () => {
       expect(splitAroundExtension('zip/box.ifc.zip')).toStrictEqual({parts: ['zip/box.ifc', ''], extension: '.zip'})
       expect(splitAroundExtension('zip/box.ifc.zip/12/34')).toStrictEqual(
         {parts: ['zip/box.ifc', '/12/34'], extension: '.zip'})
+      // A transport suffix that isn't a type still routes by the one inside.
+      expect(splitAroundExtension('glb/x.glb.gz').extension).toBe('.glb')
     })
 
     it('validates the USD family, matching the longest extension', () => {

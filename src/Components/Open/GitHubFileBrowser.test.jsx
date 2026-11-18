@@ -336,6 +336,9 @@ describe('GitHubFileBrowser', () => {
           // content, so the name doesn't have to say what that is.
           {name: 'CT1.zip'},
           {name: 'tower.ifc.zip'},
+          // A type inside a longer suffix is no type: not listed, since it
+          // wouldn't route.
+          {name: 'bundle.zipx'},
           {name: 'readme.md'},
           {name: 'notes.txt'},
         ],
@@ -354,6 +357,7 @@ describe('GitHubFileBrowser', () => {
       }
       expect(screen.getByRole('option', {name: 'CT1.zip'})).toBeInTheDocument()
       expect(screen.getByRole('option', {name: 'tower.ifc.zip'})).toBeInTheDocument()
+      expect(screen.queryByRole('option', {name: 'bundle.zipx'})).not.toBeInTheDocument()
       expect(screen.queryByRole('option', {name: 'readme.md'})).not.toBeInTheDocument()
       expect(screen.queryByRole('option', {name: 'notes.txt'})).not.toBeInTheDocument()
     })

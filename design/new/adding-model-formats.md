@@ -204,7 +204,10 @@ so they route, list in the GitHub browser and parse out of a permalink.
 The browser lists every `.zip`: the name doesn't have to say what is
 inside. A route is split at the file's *outermost* suffix
 (`Filetype.js#splitAroundExtension`, at a segment boundary), so
-`box.ifc.zip/12` is `box.ifc.zip` plus element `12`. It is not `box.ifc`
+`box.ifc.zip/12` is `box.ifc.zip` plus element `12`. A path with no type at
+a boundary falls back to the first type anywhere, so `x.glb.gz` still routes
+as before. The GitHub browser lists a name only by its final suffix, so
+`foo.zipx` isn't listed as a zip it couldn't route. It is not `box.ifc`
 plus `.zip/12`, which used to make the route ask GitHub for a `box.ifc`
 that isn't there. A URL with no extension, such as a Drive link, is typed
 by its header (`Filetype.js#guessType`). A plain zip there reads as `zip`,
@@ -214,17 +217,22 @@ model.
 
 The unwrap is in `Loader#load`, one step after the gzip net:
 `unwrapHostedArchive`, the same `resolveArchiveUpload` the seams use. It
-runs for a `.zip` or `.ifczip` route. It also runs for any binary download
-whose bytes are a zip, *whatever its name*: a renamed `.ifczip` at
+runs for a `.zip` or `.ifczip` route. It also runs for any download under a
+*binary* format's name whose bytes are a zip: a renamed `.ifczip` at
 `x.ifc`, or a zip at `x.glb`. USDZ and SOG are excluded, since they are
-zips themselves (`ZIP_MODEL_TYPES`), and so are text formats and GLB cache
-hits. One model inside retypes the load: `findLoader` again for the
+zips themselves (`ZIP_MODEL_TYPES`), and so are GLB cache hits. A zip under
+a text format's name (`x.obj`, `x.gltf`) is not sniffed: that load is read
+as text before this point, as a `.gz` under one is. One model inside retypes the load: `findLoader` again for the
 entry's type, or a retag of the IFC arm for a part-21 inner model. From
 there, the parse, capabilities and analytics all see that model. A zip of
 DICOM slices becomes its NRRD, so **a scan in a GitHub repo is a link
 someone can share**, with its view terms (`#c:`, `#cp:`, `#d:`) like any
 model. Bytes under a `.zip` name that aren't a zip are typed by their
-header, as an upload is.
+header, as an upload is, and a `.ifczip` the sniff can't place still goes to
+conway as the IFC it was named. A plain `.zip` *inside* an archive is never a
+model (it's a bundle's attachments as often as not). A `.ifczip` inside one
+is, and is unwrapped once. The load report's model line names the model
+inside, not the zip.
 
 The arms before the unwrap saw the route's name. For an archive route that
 is correct: `canOpenFromStore` refuses it, the truncated-part-21 check
@@ -234,7 +242,10 @@ conway's later reads of the model with zip bytes. A zip under a model's
 *name* gets past `wantGlb`, so the unwrap drops the export context
 (`glbExportContext = null`). Every downloaded archive therefore opens
 uncached. An uploaded one caches as the entry it was stored as. Caching
-the inner model of a download is a follow-up.
+the inner model of a download is a follow-up. The OPFS source health check
+skips a zip too. A stored (uncompressed) entry would otherwise put a part-21
+head above the zip's directory, which reads as a truncated file: evicted
+and re-fetched on every load.
 
 **When a downloaded archive can't open.** It throws a `ZipArchiveError` if
 it holds several models (a link can't ask which one), holds none, or can't
@@ -243,10 +254,12 @@ this archive", with the reason). The alert is counted in analytics only and
 kept out of `captureException`, like an unsupported schema. `load_failed`
 still fires for it, as it does for that schema refusal, since it is a failed
 open. The several-models refusal names the first five entries by their path
-in the archive, "and N more" after that. The entry names are the user's
-files, so they ride `ZipArchiveError#dialogText`, which only the dialog
-shows. The error's `message` is what `trackAlertEvent` counts, and it names
-none of them.
+in the archive, "and N more" after that. The no-model refusal's list of what
+the archive holds ("it contains .dwg and .pdf") goes to the dialog alone in
+the same way. Its extensions are tags, but they are still the tails of the
+user's entry names. Both ride `ZipArchiveError#dialogText`, which only the
+dialog shows. The error's `message` is what `trackAlertEvent` counts, and it
+names nothing of the archive's.
 
 **Out of scope, and what happens.** A downloaded archive of several
 models has no chooser (above). The chooser waits for demand: doing it in

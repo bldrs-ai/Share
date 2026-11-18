@@ -885,6 +885,8 @@ export async function load(
   // capabilities, analytics — see it, not a zip. The arms before this that
   // key on the route's type (`canOpenFromStore`, the truncated-part-21 check,
   // `wantGlb`) correctly saw a zip. See `loader/modelArchive.js`.
+  // The model's own type once an archive is opened, for the model line.
+  let archivedType
   if (ARCHIVE_LOADER_TYPES.has(loader.type) ||
       (!isFormatText && !cameFromGlbCache && !ZIP_MODEL_TYPES.has(loader.type) && await isZipDownload(modelData))) {
     const inner = await unwrapHostedArchive(modelData, path.substring(path.lastIndexOf('/') + 1))
@@ -899,13 +901,18 @@ export async function load(
       glbExportContext = null
     } else if (ARCHIVE_LOADER_TYPES.has(loader.type)) {
       // Named an archive but not one: typed by its header, as an upload is.
-      innerType = Filetype.analyzeHeader(modelData.slice(0, Filetype.HEADER_LIMIT), {fileByteLength: modelData.byteLength})
+      // A `.ifczip` the sniff can't place (a BOM, a UTF-16 IFC) still goes to
+      // conway as the IFC it was named, as it did before any zip was a type:
+      // conway's own refusal says more than ours would.
+      innerType = Filetype.analyzeHeader(modelData.slice(0, Filetype.HEADER_LIMIT), {fileByteLength: modelData.byteLength}) ??
+        (loader.type === 'ifczip' ? 'ifc' : null)
       if (innerType === null) {
         throw new ZipArchiveError('This file is named as an archive, but it isn\'t a zip or any model Share opens.')
       }
     }
     if (innerType !== undefined) {
-      [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await retypeLoader(loader, innerType, viewer)
+      archivedType = innerType
+      ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await retypeLoader(loader, innerType, viewer)
       if (isFormatText && typeof modelData !== 'string') {
         modelData = new TextDecoder('utf-8').decode(modelData)
       }
@@ -923,7 +930,9 @@ export async function load(
   // its header parses.
   let formatTag
   try {
-    formatTag = Filetype.getValidExtension(path)?.toUpperCase()
+    // The archive's inner model, not the route's `.zip` (or the name a zip
+    // was given): the model line describes what was parsed.
+    formatTag = (archivedType ?? Filetype.getValidExtension(path))?.toUpperCase()
   } catch {
     // Extension-less upload paths — the loader was already resolved by
     // content sniffing in findLoader; the model line just omits the tag.

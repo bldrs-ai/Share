@@ -172,6 +172,14 @@ describe('modelArchive', () => {
       expect(await textOf(resolved.file)).toBe(new TextDecoder().decode(IFC))
     })
 
+    // `zip` is a type so a hosted one routes; a zip INSIDE one is a bundle's
+    // attachments as often as not, and never a second model.
+    it('opens the model beside a nested plain zip, not a chooser of two', async () => {
+      const zip = zipSync({'Tower.ifc': IFC, 'attachments.zip': zipSync({'a.pdf': PDF})})
+      const resolved = await resolveArchiveUpload(upload(zip, 'deliverable.zip'))
+      expect(summary(resolved)).toEqual({kind: 'model', ext: 'ifc', name: 'Tower.ifc', isInput: false})
+    })
+
     it('goes by the header, not the name: a zip named anything still opens', async () => {
       const zip = zipSync({'part.stp': STEP})
       for (const name of ['download', 'part.stp', 'part.bin']) {
@@ -549,8 +557,18 @@ describe('modelArchive', () => {
       expect(refusal.message).not.toContain('m0.glb')
     })
 
-    it('refuses an archive of no model', async () => {
-      await expect(unwrapHostedArchive(zipSync({'a.pdf': PDF}).buffer, 'docs.zip')).rejects.toThrow(ZipArchiveError)
+    it('refuses an archive of no model, naming what it holds to the dialog only', async () => {
+      // The extensions are tagged, but still the user's entry names' tails.
+      const refusal = await unwrapHostedArchive(zipSync({'J.Smith': PDF}).buffer, 'docs.zip').catch((e) => e)
+      expect(refusal).toBeInstanceOf(ZipArchiveError)
+      expect(refusal.message).toBe('This archive has no model Share can open.')
+      expect(refusal.dialogText).toContain('.smith')
+    })
+
+    it('types a nested .ifczip that isn\'t a zip by its header', async () => {
+      const unwrapped = await unwrapHostedArchive(zipSync({'Tower.ifczip': IFC}).buffer, 'bundle.zip')
+      expect(unwrapped.type).toBe('ifc')
+      expect(new TextDecoder().decode(unwrapped.modelData)).toBe(new TextDecoder().decode(IFC))
     })
   })
 })

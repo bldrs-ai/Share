@@ -7,6 +7,7 @@ import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
 import * as contentHash from '../utils/contentHash'
 import {dicomSeriesToNrrd, groupSeries, parseDicomSlice} from './dicom'
+import * as loadProgress from './loadProgress'
 import {load, readModel} from './Loader'
 import {ZipArchiveError} from './zipArchive'
 
@@ -531,6 +532,19 @@ describe('Loader', () => {
         restoreArrayBuffer()
       }
     })
+
+  it('names the model inside on the load report\'s model line, not the zip', async () => {
+    const spy = jest.spyOn(loadProgress, 'reportModelInfo')
+    const zip = readTestDataFile('dicom/phantom-ct.zip', true)
+    const restoreArrayBuffer = setupMockBlobWithContent(zip)
+    try {
+      await load(testPathToUrl('dicom/scan.zip'), mockViewer, jest.fn(), true, jest.fn(), '')
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining({schema: 'NRRD'}))
+    } finally {
+      restoreArrayBuffer()
+      spy.mockRestore()
+    }
+  })
 
   it('refuses a hosted zip of several models, which a link can\'t choose between', async () => {
     const ifc = new Uint8Array(Buffer.from(readTestDataFile('ifc/index.ifc')))

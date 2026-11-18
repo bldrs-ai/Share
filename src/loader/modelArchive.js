@@ -152,7 +152,11 @@ async function resolveArchive(file, depth, budget) {
   const files = await readZipDirectory(file)
   // A 0-byte entry is no model, whatever its name: fflate inflates an empty
   // stream to nothing without complaint, and conway would be handed it.
-  const models = files.filter((entry) => entry.size > 0 &&
+  // A plain `.zip` inside is never a model: it is a bundle's attachments as
+  // often as not (`deliverable.zip` holding `Tower.ifc` and `docs.zip`), and
+  // `zip` is in `supportedTypes` only so a hosted one routes. A `.ifczip` is
+  // the IFC transport, so it is one, unwrapped once.
+  const models = files.filter((entry) => entry.size > 0 && entry.ext !== 'zip' &&
     supportedTypes.includes(entry.ext) && !(depth > 0 && ARCHIVE_TYPES.has(entry.ext)))
   if (models.length === 0) {
     const volume = await dicomVolume(file, files, budget)
@@ -426,8 +430,9 @@ export function noModelInArchiveAlert(fileName, entry, exts) {
  *   archive can't be read
  */
 export async function unwrapHostedArchive(modelData, name = 'model.zip') {
-  const resolution = await resolveArchiveUpload(namedBlob(modelData, name, Date.now()))
-  if (resolution.kind === 'model' && resolution.ext === undefined) {
+  const outer = namedBlob(modelData, name, Date.now())
+  const resolution = await resolveArchiveUpload(outer)
+  if (resolution.kind === 'model' && resolution.ext === undefined && resolution.file === outer) {
     return null
   }
   if (resolution.kind === 'model') {
@@ -436,14 +441,27 @@ export async function unwrapHostedArchive(modelData, name = 'model.zip') {
     const bytes = resolution.bytes ?? new Uint8Array(await readBlob(resolution.file))
     const buffer = bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength ?
       bytes.buffer : bytes.slice().buffer
-    return {modelData: buffer, type: resolution.ext}
+    // A nested `.ifczip` that wasn't a zip after all comes back untyped, as
+    // the seams' sniff expects: typed here by its header, as they would.
+    const type = resolution.ext ??
+      analyzeHeader(buffer.slice(0, HEADER_LIMIT), {fileByteLength: buffer.byteLength})
+    if (type === null) {
+      throw new ZipArchiveError(NO_MODEL_MESSAGE)
+    }
+    return {modelData: buffer, type}
   }
   if (resolution.kind === 'choose') {
     throw new ZipArchiveError(severalModelsMessage(resolution.entries.length),
       {dialogText: severalModelsMessage(resolution.entries.length, resolution.entries)})
   }
-  throw new ZipArchiveError(archiveGuidance({exts: resolution.exts}).lines[0])
+  // The extension list is the archive's content, tagged but still taken from
+  // the user's entry names (`.acmecorp`), so only the dialog gets it.
+  throw new ZipArchiveError(NO_MODEL_MESSAGE, {dialogText: archiveGuidance({exts: resolution.exts}).lines[0]})
 }
+
+
+// What sinks get for a hosted archive with no model in it.
+const NO_MODEL_MESSAGE = 'This archive has no model Share can open.'
 
 
 // How many of an archive's models the several-models refusal names.

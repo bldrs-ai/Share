@@ -65,6 +65,10 @@ export const typeRegexStr = `(?:${[...supportedTypes].sort((a, b) => b.length - 
 export const filetypeRegex = new RegExp(typeRegexStr, 'i')
 
 
+/** A ".<type>" anywhere: the fallback of {@link splitAroundExtension}. */
+const fileSuffixRegex = new RegExp(`\\.${typeRegexStr}`, 'i')
+
+
 /**
  * The model file's ".<type>" suffix at a path-segment boundary (followed by
  * '/' or end-of-string). Use this — not the bare `filetypeRegex` — to split a
@@ -780,14 +784,17 @@ function maskPart21Comments(text) {
  */
 export function splitAroundExtension(filepath) {
   assertDefined(filepath)
-  // At a segment boundary, so the suffix is the file's outermost: the
+  // At a segment boundary first, so the suffix is the file's outermost: the
   // `.zip` of `box.ifc.zip`, not the `.ifc` inside its name, which would
-  // route `box.ifc.zip` to a `box.ifc` that isn't there.
-  const match = fileSuffixBoundaryRegex.exec(filepath)
+  // route `box.ifc.zip` to a `box.ifc` that isn't there. Then anywhere, as
+  // before: a transport suffix that isn't a type (`x.glb.gz`) still routes
+  // by the type inside it.
+  const suffixRegex = fileSuffixBoundaryRegex.test(filepath) ? fileSuffixBoundaryRegex : fileSuffixRegex
+  const match = suffixRegex.exec(filepath)
   if (!match) {
     throw new FilenameParseError(`Filepath(${filepath}) must contain ".${typeRegexStr}" (case-insensitive)`)
   }
-  const parts = filepath.split(fileSuffixBoundaryRegex)
+  const parts = filepath.split(suffixRegex)
   return {parts, extension: match[0]}
 }
 
