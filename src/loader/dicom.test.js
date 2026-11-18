@@ -4,6 +4,7 @@
 // refusals, over minimal files built here.
 import fs from 'fs'
 import path from 'path'
+import {deflateRawSync} from 'zlib'
 import {NRRDLoader} from 'three/examples/jsm/loaders/NRRDLoader.js'
 import {unzipSync} from 'three/examples/jsm/libs/fflate.module.js'
 import {DicomError, dicomSeriesToNrrd, groupSeries, looksLikeDicom, parseDicomSlice} from './dicom'
@@ -247,13 +248,61 @@ describe('loader/dicom', () => {
       expect(() => parseDicomSlice(bytes)).toThrow(/compressed \(transfer syntax 1\.2\.840\.10008\.1\.2\.4\.50\)/)
     })
 
-    it('names a deflated or big-endian series as such, rather than as damage', () => {
-      // Neither can be walked as little endian, so the syntax is judged where
-      // the meta group ends, before the walk would fail on it.
-      expect(() => parseDicomSlice(makeDicom({transferSyntax: '1.2.840.10008.1.2.1.99'})))
-        .toThrow(/compressed \(transfer syntax 1\.2\.840\.10008\.1\.2\.1\.99\)/)
+    it('names a big-endian or still-compressed series as such, rather than as damage', () => {
+      // Neither can be walked, so the syntax is judged where the meta group
+      // ends, before the walk would fail on it.
       expect(() => parseDicomSlice(makeDicom({transferSyntax: '1.2.840.10008.1.2.2'})))
         .toThrow(/big-endian \(transfer syntax 1\.2\.840\.10008\.1\.2\.2\)/)
+      // JPEG Lossless: no decoder in the bundle.
+      expect(() => parseDicomSlice(makeDicom({transferSyntax: '1.2.840.10008.1.2.4.70'})))
+        .toThrow(/compressed \(transfer syntax 1\.2\.840\.10008\.1\.2\.4\.70\)/)
+    })
+
+    describe('compressed syntaxes it decodes', () => {
+      // pydicom wrote these (its own RLE encoder, zlib's deflate), from the
+      // same phantom as phantom-ct.zip: decoded, they must stack to the same
+      // volume, byte for byte.
+      const stack = (zip) => dicomSeriesToNrrd(groupSeries(sliceFilesOf(zip).map(parseDicomSlice))[0])
+      const plain = () => Buffer.from(stack('phantom-ct.zip'))
+
+      it.each(['phantom-ct-rle.zip', 'phantom-ct-deflated.zip'])('%s stacks to the uncompressed volume', (zip) => {
+        expect(Buffer.from(stack(zip)).equals(plain())).toBe(true)
+      })
+
+      it('refuses a damaged RLE frame', () => {
+        const [slice] = sliceFilesOf('phantom-ct-rle.zip').filter((b) => b.length > 1000)
+        // The frame's header starts after the Basic Offset Table item: find
+        // its segment count (2, for 16-bit) and claim 3.
+        const bytes = slice.slice()
+        const pixelTag = [0xe0, 0x7f, 0x10, 0x00]
+        const at = bytes.findIndex((_, i) => pixelTag.every((b, k) => bytes[i + k] === b))
+        // Pixel Data header (12), BOT item (8 + its length), fragment item (8).
+        const view = new DataView(bytes.buffer)
+        const botLength = view.getUint32(at + 12 + 4, true)
+        const frameAt = at + 12 + 8 + botLength + 8
+        expect(view.getUint32(frameAt, true)).toBe(2)
+        view.setUint32(frameAt, 3, true)
+        expect(() => parseDicomSlice(bytes)).toThrow(/RLE-compressed DICOM slice in this series is damaged/)
+        // And one cut short: segments end before the image is full.
+        const cut = slice.slice(0, slice.length - 200)
+        expect(() => parseDicomSlice(cut)).toThrow(DicomError)
+      })
+
+      it('refuses a deflated dataset that doesn\'t inflate', () => {
+        // The meta group says deflated; the dataset after it is plain bytes.
+        expect(() => parseDicomSlice(makeDicom({transferSyntax: '1.2.840.10008.1.2.1.99'})))
+          .toThrow(/doesn't inflate/)
+      })
+
+      it('stops a deflate bomb at its cap, rather than inflate it all', () => {
+        // 65 MiB of zeros deflate to ~65 KB; the cap is 64 MiB a slice.
+        const bomb = new Uint8Array(deflateRawSync(Buffer.alloc((64 * 1024 * 1024) + 1)))
+        const head = makeDicom({transferSyntax: '1.2.840.10008.1.2.1.99'})
+        // Keep the preamble and meta group; replace the dataset with the bomb.
+        const metaEnd = head.findIndex((b, i) => i > 132 && b === 0x08 && head[i + 1] === 0x00)
+        const bytes = concat([head.subarray(0, metaEnd), bomb])
+        expect(() => parseDicomSlice(bytes)).toThrow(/inflates to more than any slice should/)
+      })
     })
 
     it('refuses color, multi-frame and 32-bit images', () => {

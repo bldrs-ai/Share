@@ -12,12 +12,19 @@
 // format and the rescale to real units — and skips everything else, nested
 // sequences included. It reads the uncompressed transfer syntaxes (implicit
 // and explicit VR little endian), which is what scanners and PACS exports
-// write by default. A compressed series (JPEG, JPEG 2000, RLE, deflate) is
-// refused with a message, not decoded: there is no small browser decoder
-// for those, and a wrong volume is worse than a clear "can't".
+// write by default, and the two compressed ones it can decode with nothing
+// new in the bundle: Deflated Explicit VR (fflate, already vendored with
+// three and used by the zip reader) and RLE Lossless (PackBits, a few lines
+// here). The rest (JPEG baseline and lossless, JPEG-LS, JPEG 2000) are
+// refused with a message, not decoded: they need codecs Share doesn't ship,
+// to be added if a series in one is asked for, and a wrong volume is worse
+// than a clear "can't".
 //
 // Design: design/new/adding-model-formats.md §"A DICOM series becomes one
 // NRRD".
+
+
+import {Inflate} from 'three/examples/jsm/libs/fflate.module.js'
 
 
 // A binary codec: offsets, tag numbers and value ranges are the format's,
@@ -39,6 +46,16 @@ const DICM_MAGIC = [0x44, 0x49, 0x43, 0x4d]
 
 const IMPLICIT_VR_LE = '1.2.840.10008.1.2'
 const EXPLICIT_VR_LE = '1.2.840.10008.1.2.1'
+// The dataset after the meta group is one raw deflate stream of explicit VR.
+const DEFLATED_EXPLICIT_VR_LE = '1.2.840.10008.1.2.1.99'
+// Explicit VR, with the pixel data encapsulated and RLE-compressed (PS3.5 G).
+const RLE_LOSSLESS = '1.2.840.10008.1.2.5'
+const READABLE_SYNTAXES = new Set([IMPLICIT_VR_LE, EXPLICIT_VR_LE, DEFLATED_EXPLICIT_VR_LE, RLE_LOSSLESS])
+
+// The most a deflated slice may inflate to: a 4096 × 4096 16-bit slice is
+// 32 MiB. Counted as the inflate runs, so a deflate bomb stops here rather
+// than at its full size.
+const MAX_INFLATED_SLICE_BYTES = 64 * 1024 * 1024
 
 // Explicit-VR elements whose length is a 4-byte field after 2 reserved
 // bytes (PS3.5 §7.1.2); every other VR has a 2-byte length.
@@ -155,8 +172,10 @@ export function parseDicomSlice(bytes) {
   if (bitsAllocated !== 8 && bitsAllocated !== 16) {
     throw new DicomError(`This DICOM series stores ${bitsAllocated}-bit pixels. Share opens 8- and 16-bit scans.`)
   }
-  const pixelData = elements.get(TAG.PIXEL_DATA)
   const frameBytes = rows * columns * (bitsAllocated / 8)
+  const pixelData = elements.has(RLE_FRAME) ?
+    decodeRle(elements.get(RLE_FRAME), rows * columns, bitsAllocated / 8) :
+    elements.get(TAG.PIXEL_DATA)
   if (pixelData.length < frameBytes) {
     throw new DicomError('A DICOM slice in this series is cut short: its pixels are missing.')
   }
@@ -497,28 +516,32 @@ function unsupportedSyntaxMessage(syntax) {
  * @throws {DicomError}
  */
 function readElements(bytes) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const elements = new Map()
-  const reader = {view, bytes, offset: PREAMBLE_BYTES + DICM_MAGIC.length, explicit: true}
+  const reader = {
+    view: new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength),
+    bytes,
+    offset: PREAMBLE_BYTES + DICM_MAGIC.length,
+    explicit: true,
+    syntax: null,
+  }
   try {
-    while (reader.offset + 8 <= bytes.length) {
-      const group = view.getUint16(reader.offset, true)
-      if (group !== 0x0002 && reader.isMetaDone !== true) {
-        reader.isMetaDone = true
-        const syntax = elements.get(TAG.TRANSFER_SYNTAX) ?? IMPLICIT_VR_LE
-        if (syntax !== IMPLICIT_VR_LE && syntax !== EXPLICIT_VR_LE) {
-          throw new DicomError(unsupportedSyntaxMessage(syntax))
-        }
-        reader.explicit = syntax === EXPLICIT_VR_LE
+    while (reader.offset + 8 <= reader.bytes.length) {
+      const group = reader.view.getUint16(reader.offset, true)
+      if (group !== 0x0002 && reader.syntax === null) {
+        startDataset(reader, elements.get(TAG.TRANSFER_SYNTAX) ?? IMPLICIT_VR_LE)
+        continue
       }
       const element = readElement(reader, true)
       if (element.tag === TAG.PIXEL_DATA) {
-        if (element.length === UNDEFINED_LENGTH) {
+        if (element.length !== UNDEFINED_LENGTH) {
+          elements.set(TAG.PIXEL_DATA, reader.bytes.subarray(element.valueOffset, element.valueOffset + element.length))
+        } else if (reader.syntax === RLE_LOSSLESS) {
+          elements.set(TAG.PIXEL_DATA, new Uint8Array(0))
+          elements.set(RLE_FRAME, readFragments(reader, element.valueOffset))
+        } else {
           // Encapsulated pixel data in an uncompressed syntax isn't valid
           // DICOM; it reads as pixels missing ("cut short").
           elements.set(TAG.PIXEL_DATA, new Uint8Array(0))
-        } else {
-          elements.set(TAG.PIXEL_DATA, bytes.subarray(element.valueOffset, element.valueOffset + element.length))
         }
         break
       }
@@ -526,7 +549,7 @@ function readElements(bytes) {
         elements.set(element.tag, decodeValue(reader, element))
       }
     }
-    if (!elements.has(TAG.PIXEL_DATA) && reader.offset < bytes.length) {
+    if (!elements.has(TAG.PIXEL_DATA) && reader.offset < reader.bytes.length) {
       // Bytes left over that don't make an element: the file was cut off.
       throw new RangeError('trailing partial element')
     }
@@ -537,6 +560,179 @@ function readElements(bytes) {
     throw e
   }
   return elements
+}
+
+
+// The key the RLE frame's fragments are kept under beside the real tags: not
+// a tag, so no element can collide with it.
+const RLE_FRAME = 'rleFrame'
+
+
+/**
+ * Switch the reader from the meta group (always explicit VR little endian)
+ * to the dataset, in its transfer syntax. A deflated dataset is inflated
+ * here, and read on as explicit VR from its start.
+ *
+ * @param {object} reader
+ * @param {string} syntax the meta group's TransferSyntaxUID
+ * @throws {DicomError} for a syntax this reader can't walk
+ */
+function startDataset(reader, syntax) {
+  if (!READABLE_SYNTAXES.has(syntax)) {
+    throw new DicomError(unsupportedSyntaxMessage(syntax))
+  }
+  reader.syntax = syntax
+  reader.explicit = syntax !== IMPLICIT_VR_LE
+  if (syntax === DEFLATED_EXPLICIT_VR_LE) {
+    const inflated = inflateCapped(reader.bytes.subarray(reader.offset))
+    reader.bytes = inflated
+    reader.view = new DataView(inflated.buffer, inflated.byteOffset, inflated.byteLength)
+    reader.offset = 0
+  }
+}
+
+
+/**
+ * Inflate a raw deflate stream, counting as it goes.
+ *
+ * @param {Uint8Array} deflated
+ * @return {Uint8Array}
+ * @throws {DicomError} past {@link MAX_INFLATED_SLICE_BYTES}, or for a
+ *   stream that doesn't inflate
+ */
+function inflateCapped(deflated) {
+  const chunks = []
+  let total = 0
+  const inflater = new Inflate((chunk) => {
+    total += chunk.length
+    if (total > MAX_INFLATED_SLICE_BYTES) {
+      throw new DicomError('A deflated DICOM file in this series inflates to more than any slice should.')
+    }
+    chunks.push(chunk)
+  })
+  try {
+    inflater.push(deflated, true)
+  } catch (e) {
+    if (e instanceof DicomError) {
+      throw e
+    }
+    throw new DicomError('A deflated DICOM file in this series is damaged: it doesn\'t inflate.')
+  }
+  const out = new Uint8Array(total)
+  let at = 0
+  for (const chunk of chunks) {
+    out.set(chunk, at)
+    at += chunk.length
+  }
+  return out
+}
+
+
+/**
+ * The fragments of an encapsulated Pixel Data, joined: the frame's RLE
+ * stream. The first item is the Basic Offset Table, which a single-frame
+ * image doesn't need; the rest are the frame's fragments, up to the sequence
+ * delimiter.
+ *
+ * @param {object} reader
+ * @param {number} offset where the Pixel Data's items start
+ * @return {Uint8Array}
+ */
+function readFragments(reader, offset) {
+  const {view, bytes} = reader
+  const fragments = []
+  let at = offset
+  let isFirst = true
+  for (;;) {
+    if (at + 8 > bytes.length) {
+      throw new RangeError('fragments past end')
+    }
+    const tag = ((view.getUint16(at, true) << 16) | view.getUint16(at + 2, true)) >>> 0
+    const length = view.getUint32(at + 4, true)
+    at += 8
+    if (tag === SEQUENCE_DELIMITER) {
+      break
+    }
+    if (tag !== ITEM || at + length > bytes.length) {
+      throw new RangeError('malformed fragment')
+    }
+    if (!isFirst) {
+      fragments.push(bytes.subarray(at, at + length))
+    }
+    isFirst = false
+    at += length
+  }
+  const total = fragments.reduce((sum, f) => sum + f.length, 0)
+  const frame = new Uint8Array(total)
+  let written = 0
+  for (const fragment of fragments) {
+    frame.set(fragment, written)
+    written += fragment.length
+  }
+  return frame
+}
+
+
+/**
+ * Decode one RLE Lossless frame (PS3.5 Annex G) to little-endian samples.
+ *
+ * The frame opens with a 64-byte header: the segment count, then up to 15
+ * segment offsets. A grayscale image has one segment per byte of a sample,
+ * the most significant byte's first; each segment is PackBits — a byte `n`
+ * of 0..127 copies the next n + 1 bytes, -1..-127 repeats the next byte
+ * 1 - n times, and -128 is a no-op.
+ *
+ * @param {Uint8Array} frame
+ * @param {number} pixels rows × columns
+ * @param {number} bytesPerSample 1 or 2
+ * @return {Uint8Array} `pixels × bytesPerSample` bytes, little endian
+ * @throws {DicomError} for a frame that doesn't decode to the image's size
+ */
+function decodeRle(frame, pixels, bytesPerSample) {
+  const damaged = () => new DicomError('An RLE-compressed DICOM slice in this series is damaged.')
+  if (frame.length < 64) {
+    throw damaged()
+  }
+  const view = new DataView(frame.buffer, frame.byteOffset, frame.byteLength)
+  const segments = view.getUint32(0, true)
+  if (segments !== bytesPerSample) {
+    throw damaged()
+  }
+  const out = new Uint8Array(pixels * bytesPerSample)
+  for (let s = 0; s < segments; s++) {
+    const start = view.getUint32(4 + (4 * s), true)
+    const end = s + 1 < segments ? view.getUint32(4 + (4 * (s + 1)), true) : frame.length
+    if (start < 64 || end > frame.length || start > end) {
+      throw damaged()
+    }
+    // Segment 0 is the most significant byte, which is the last of a
+    // little-endian sample.
+    const byteIndex = bytesPerSample - 1 - s
+    let o = 0
+    let i = start
+    while (o < pixels && i < end) {
+      const n = (frame[i++] << 24) >> 24
+      if (n >= 0) {
+        for (let k = 0; k <= n && i < end; k++, o++) {
+          if (o < pixels) {
+            out[(o * bytesPerSample) + byteIndex] = frame[i]
+          }
+          i++
+        }
+      } else if (n !== -128) {
+        const value = frame[i++]
+        for (let k = 0; k < 1 - n; k++, o++) {
+          if (o < pixels) {
+            out[(o * bytesPerSample) + byteIndex] = value
+          }
+        }
+      }
+    }
+    if (o < pixels) {
+      throw damaged()
+    }
+  }
+  return out
 }
 
 

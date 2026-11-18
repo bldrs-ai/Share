@@ -26,6 +26,9 @@ const CHOOSER_WAIT_MS = 15_000
 
 // Relative to the repo root, the cwd Playwright runs specs from.
 const PHANTOM_ZIP = new Uint8Array(fs.readFileSync(path.resolve('testdata/models/dicom/phantom-ct.zip')))
+// The same phantom, RLE-compressed and deflated by pydicom.
+const PHANTOM_RLE_ZIP = new Uint8Array(fs.readFileSync(path.resolve('testdata/models/dicom/phantom-ct-rle.zip')))
+const PHANTOM_DEFLATED_ZIP = new Uint8Array(fs.readFileSync(path.resolve('testdata/models/dicom/phantom-ct-deflated.zip')))
 
 // The series is stacked into one NRRD at the seam, so OPFS holds a `.nrrd`.
 const LOCAL_NRRD_ROUTE = /\/share\/v\/local-only\/[0-9a-f-]+\.nrrd$/i
@@ -211,6 +214,16 @@ describeMobileAndDesktop('Open a zip of DICOM slices as a volume', () => {
 
   test('a dropped DICOM zip opens as a volume', async ({page}) => {
     await dropFile(page, PHANTOM_ZIP, 'CT1.zip')
+    await expectVolumeOpened(page)
+  })
+
+  test('a dropped RLE-compressed DICOM zip opens as a volume', async ({page}) => {
+    await dropFile(page, PHANTOM_RLE_ZIP, 'CT1.zip')
+    await expectVolumeOpened(page)
+  })
+
+  test('a dropped deflated DICOM zip opens as a volume', async ({page}) => {
+    await dropFile(page, PHANTOM_DEFLATED_ZIP, 'CT1.zip')
     await expectVolumeOpened(page)
   })
 
