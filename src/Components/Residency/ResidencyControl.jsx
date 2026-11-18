@@ -20,6 +20,7 @@ import {MotionResidency, MotionResidencyMode} from '../../viewer/residency/Motio
 import {ColorMode} from '../../viewer/display/colorMode'
 import {RESIDENCY_FULL} from '../../viewer/display/residencyMode'
 import {ShadingMode} from '../../viewer/display/shadingMode'
+import {VOLUME_DEFAULT, VOLUME_OPACITY_MAX, isDefaultVolume, volumeOf} from '../../viewer/display/volumeMode'
 import {
   applyDisplayOverrides,
   applyMotionResidencyOverrides,
@@ -126,6 +127,10 @@ function ResidencyMenu() {
   // inert radio group implies a choice that does nothing. (The shading and
   // residency sections self-gate the same way.)
   const showColor = modelHasColorChoice(model)
+
+  // A volume (loader/nrrd.js): its window and opacity (volumeMode.js).
+  const volumeFound = volumeOf(model)
+  const volume = appearance.volume
 
   // Shading section (S4) — gated on `displayControls` (default-on since the
   // S7 landing; the gate is kept for S5's scoped controls). Whole-model scope.
@@ -257,7 +262,7 @@ function ResidencyMenu() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model])
 
-  if (!controller && !showColor && !showShading) {
+  if (!controller && !showColor && !showShading && !volumeFound) {
     return null
   }
 
@@ -318,6 +323,19 @@ function ResidencyMenu() {
   const onShadingMode = (event) => {
     setModelAppearance({shading: event.target.value})
   }
+  // The volume sliders, like the residency one: the store and the scene on
+  // every tick (a uniform; nothing to rebuild), the user's change noted on
+  // release. The axis carries both halves, since `setDisplayOverride` merges
+  // axes but not within one.
+  const setVolume = (patch) => {
+    const next = {...volume, ...patch}
+    setDisplayOverride({kind: 'model'}, {volume: next})
+    applyDisplayOverrides(model, [{scope: {kind: 'model'}, appearance: {volume: next}}])
+  }
+  const onVolumeWindow = (event, value) => setVolume({window: value})
+  const onVolumeOpacity = (event, value) => setVolume({opacity: value})
+  const onVolumeCommitted = () => noteUserDisplayChange()
+  const onVolumeReset = () => setModelAppearance({volume: {...VOLUME_DEFAULT}})
 
   return (
     <>
@@ -328,7 +346,8 @@ function ResidencyMenu() {
         placement='top'
         variant='solid'
         selected={anchorEl !== null || percent < RESIDENCY_FULL ||
-          colorMode === ColorMode.SOURCE || shadingMode === ShadingMode.WIREFRAME}
+          colorMode === ColorMode.SOURCE || shadingMode === ShadingMode.WIREFRAME ||
+          !isDefaultVolume(volume)}
         dataTestId='control-button-residency'
       />
       <Popover
@@ -342,6 +361,16 @@ function ResidencyMenu() {
         transformOrigin={{vertical: 'bottom', horizontal: 'center'}}
       >
         <Stack spacing={1} sx={{p: 2, width: '16em'}}>
+          {volumeFound &&
+            <VolumeSection
+              info={volumeFound.info}
+              volume={volume}
+              onWindow={onVolumeWindow}
+              onOpacity={onVolumeOpacity}
+              onCommitted={onVolumeCommitted}
+              onReset={onVolumeReset}
+            />}
+
           {showShading &&
             <>
               <Typography variant='subtitle2'>Shading</Typography>
@@ -523,6 +552,99 @@ function ResidencyMenu() {
       </Popover>
     </>
   )
+}
+
+
+/**
+ * The Volume section: a volume's window (the range its opacity ramps over,
+ * in the volume's units) and its opacity. Shown alone for a volume, which has
+ * none of the other sections' choices.
+ *
+ * @property {object} info what nrrd.js recorded: `{range, defaultWindow, unit}`
+ * @property {object} volume the axis value, `{window, opacity}`
+ * @property {Function} onWindow `(event, [low, high])` while dragging
+ * @property {Function} onOpacity `(event, percent)` while dragging
+ * @property {Function} onCommitted on release
+ * @property {Function} onReset back to the volume's defaults
+ * @return {ReactElement}
+ */
+function VolumeSection({info, volume, onWindow, onOpacity, onCommitted, onReset}) {
+  const [lo, hi] = info.range
+  const window = volume.window ?? info.defaultWindow
+  // About 256 steps across the range, rounded to a figure that reads well:
+  // the texture holds 8 bits, so finer steps change nothing on screen.
+  const step = niceStep((hi - lo) / BYTE_LEVELS)
+  const unit = info.unit ? ` ${info.unit}` : ''
+  const format = (value) => `${Number(value.toPrecision(SHOWN_DIGITS))}`
+  // Keep the thumbs a step apart, moving back the one being dragged: equal
+  // ends aren't a window (volumeMode.js#volumeOrDefault reads one as "the
+  // default", and the slider would jump back to it). `disableSwap` alone lets
+  // them meet.
+  const onWindowChange = (event, value, activeThumb) => {
+    const [low, high] = value
+    if (high - low >= step) {
+      onWindow(event, value)
+    } else if (activeThumb === 0) {
+      onWindow(event, [Math.max(lo, high - step), high])
+    } else {
+      onWindow(event, [low, Math.min(hi, low + step)])
+    }
+  }
+  return (
+    <>
+      <Typography variant='subtitle2' data-testid='volume-window-label'>
+        Window: {format(window[0])} – {format(window[1])}{unit}
+      </Typography>
+      <Slider
+        value={window}
+        onChange={onWindowChange}
+        onChangeCommitted={onCommitted}
+        min={lo}
+        max={hi}
+        step={step}
+        disableSwap
+        getAriaLabel={(index) => (index === 0 ? 'Window low' : 'Window high')}
+        data-testid='volume-window-slider'
+      />
+      <Typography variant='subtitle2' data-testid='volume-opacity-label'>
+        Opacity: {Math.round(volume.opacity)}%
+      </Typography>
+      <Slider
+        value={volume.opacity}
+        onChange={onOpacity}
+        onChangeCommitted={onCommitted}
+        min={0}
+        max={VOLUME_OPACITY_MAX}
+        aria-label='Opacity'
+        data-testid='volume-opacity-slider'
+      />
+      <Box>
+        <Button size='small' onClick={onReset} data-testid='volume-reset'>Reset</Button>
+      </Box>
+    </>
+  )
+}
+
+
+// The volume texture's 8-bit levels, and the figures the window label shows.
+const BYTE_LEVELS = 255
+const SHOWN_DIGITS = 4
+
+
+/**
+ * A slider step near `raw`, rounded to 1, 2 or 5 times a power of ten.
+ *
+ * @param {number} raw
+ * @return {number}
+ */
+function niceStep(raw) {
+  if (!(raw > 0)) {
+    return 1
+  }
+  const power = 10 ** Math.floor(Math.log10(raw))
+  const scaled = raw / power
+  const nice = [1, 2, 5, 10].find((m) => scaled <= m)
+  return nice * power
 }
 
 

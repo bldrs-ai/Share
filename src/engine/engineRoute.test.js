@@ -2,7 +2,6 @@ import {flags} from '../FeatureFlags'
 import {
   MainThreadReason,
   hasLegacyViewRules,
-  isLegacyBotRequested,
   mainThreadEngineNote,
   mainThreadEngineReason,
 } from './engineRoute'
@@ -45,30 +44,18 @@ describe('engine/engineRoute', () => {
     expect(mainThreadEngineReason()).toBeNull()
   })
 
-  it('the legacy ?feature=bot chat loads on the main-thread engine; ?feature=assist does not', () => {
-    setSearch('?feature=bot')
-    expect(mainThreadEngineReason()).toBe(MainThreadReason.LEGACY_BOT)
-    setSearch('?feature=assist')
-    expect(mainThreadEngineReason()).toBeNull()
-  })
-
-  // Codex review on #2083: a `#bot:` permalink opens the legacy chat with no
-  // `?feature=bot` (BotSlice reads the hash), so the route has to read the
-  // same hash, or the chat sits on a worker model it cannot read.
-  it('a #bot: permalink loads on the main-thread engine, as ?feature=bot does', () => {
-    setSearch('', '#bot:')
-    expect(isLegacyBotRequested()).toBe(true)
-    expect(mainThreadEngineReason()).toBe(MainThreadReason.LEGACY_BOT)
-    setSearch('', '#c:1,2,3;bot:')
-    expect(mainThreadEngineReason()).toBe(MainThreadReason.LEGACY_BOT)
-    // A hash without the bot token leaves the load in the worker.
-    setSearch('', '#c:1,2,3')
-    expect(isLegacyBotRequested()).toBe(false)
-    expect(mainThreadEngineReason()).toBeNull()
+  // The bot chat's eval read the main-thread engine; the Assist port (#1675)
+  // deleted it, and the chat's tools read either engine, so neither its flag
+  // nor its permalink moves a load any more.
+  it('?feature=bot and a #bot: permalink load in the worker, as ?feature=assist does', () => {
+    for (const [search, hash] of [['?feature=bot', ''], ['?feature=assist', ''], ['', '#bot:'], ['', '#c:1,2,3;bot:']]) {
+      setSearch(search, hash)
+      expect(mainThreadEngineReason()).toBeNull()
+    }
   })
 
   it('names the switch the user set before a legacy consumer that is on too', () => {
-    setSearch('?feature=bot,disableEngineWorker&view=ch.sia380-1.heatmap')
+    setSearch('?feature=disableEngineWorker&view=ch.sia380-1.heatmap')
     expect(mainThreadEngineReason()).toBe(MainThreadReason.KILL_SWITCH)
   })
 

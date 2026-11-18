@@ -7,6 +7,7 @@ import {ErrorBoundary} from '@sentry/react'
 import Auth0ProviderWithHistory from './Auth0/Auth0ProviderWithHistory'
 import BaseRoutes from './BaseRoutes'
 import ApplicationError from './Components/ApplicationError'
+import {forgetLegacyKey} from './Components/Bot/legacyKey'
 import Auth0BridgeRegistrar from './connections/Auth0BridgeRegistrar'
 import {flags, isFeatureEnabled} from './FeatureFlags'
 import './compat'
@@ -39,6 +40,9 @@ setupSentry()
 setupGa()
 setupMSW()
 setupEsbuildWatch()
+// The old bot chat's plaintext OpenRouter key, deleted on every start
+// whether or not the assistant is used again (Components/Bot/legacyKey.js).
+forgetLegacyKey()
 
 const root = createRoot(document.getElementById('root'))
 

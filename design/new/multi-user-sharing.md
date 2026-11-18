@@ -1,245 +1,142 @@
-# Multi-user sharing: alignment across Drive and GitHub
+# Multi-user sharing: provider grants and visibility for Drive and GitHub
 
-**Status:** Proposed
-**Date:** 2026-05-07
+**Status:** Tracked in T4 [#2203](https://github.com/bldrs-ai/Share/issues/2203). PR1 (the interface and the Drive adapter, [#1505](https://github.com/bldrs-ai/Share/pull/1505)) is merged. PR5 (GitHub token health) shipped with the identity-decoupling work. The rest has not started.
+**Date:** 2026-11-18
 **Owner:** Pablo
-**Related design docs:**
-- [`identity-decoupling.md`](./identity-decoupling.md) — promotes GitHub to a `ConnectionProvider` peer of Drive; this proposal assumes that shape.
-- [`drive-recents-head-check.md`](./drive-recents-head-check.md) — typed pre-flight + typed alert pattern; this proposal extends both.
 
-**Related code:** `src/connections/`, `src/Components/Connections/`, `src/Components/Open/`, `src/net/github/`, `src/routes/`, `src/Components/Notes/`
+Related: [`identity-decoupling-decisions.md`](./identity-decoupling-decisions.md) (GitHub as a `ConnectionProvider` peer of Drive), [`model-versioning.md`](./model-versioning.md) (`share-200`'s link resolver and version manifest). The text before this rewrite, including the PR plan, the open questions and the old comments-and-versions Stretch section (now T6 [#2204](https://github.com/bldrs-ai/Share/issues/2204)), is at [commit 8c28c7d](https://github.com/bldrs-ai/Share/blob/8c28c7db619f81dab318885715af5f26d85e0549/design/new/multi-user-sharing.md).
 
 
 ## Problem
 
-Today the app can *open* a model someone else owns, but only if that person already shared it through the underlying provider's UI (Drive's share modal, GitHub's collaborators page). Bldrs has no in-app concept of "share this model with X." Several adjacent capabilities are also missing or asymmetric across the two providers we support:
-
-| Capability | Drive today | GitHub today |
-|---|---|---|
-| Pick a model from my account | ✓ Picker | ✓ Browser |
-| Pick from shared drives / multiple orgs | partial (`driveId` wired, no UI) | ✓ org list |
-| Persisted, cross-tab tokens | ✓ (`bldrs:gdrive-token:*`) | partial — Auth0 SPA cache only |
-| Server-side revocation check | ✓ `tokeninfo` on Sources mount (#1497) | ✗ |
-| In-app grant to a user / group | ✗ | ✗ |
-| In-app link-visibility toggle | ✗ | ✗ (GH has no link-share; only repo public/private) |
-| Folder-scoped browse boundary | partial (Sources folder for browse only) | ✗ |
-| Visibility indicator (public/org/private) | ✗ | ✗ |
-| Comments | ✗ | ✓ Issues + Comments backend |
-| Versions | ✗ | ✓ branches / tags / commits |
-| Reconnect UX on token loss | ✓ (#1498/#1499) | ✗ |
-| Anonymous load | ✓ via API key | ✓ via raw URL |
-| File-unreachable handling | proposed in [`drive-recents-head-check.md`](./drive-recents-head-check.md) | not addressed |
-
-The two PRs of recent infrastructure work — [`identity-decoupling.md`](./identity-decoupling.md) and [`drive-recents-head-check.md`](./drive-recents-head-check.md) — give us the substrate to close most of these. Identity decoupling means *every* per-source operation (browse, share, revoke) flows through a `Connection` rather than through primary Auth0 identity, so a sharing API has a single shape that works for one Drive account, one GitHub account, or several of each side-by-side. The HEAD-check pattern gives us the typed-error + typed-alert vocabulary we need for sharing's success and failure surfaces.
-
-This doc proposes the alignment plan that builds on both.
+Share can open someone else's model only if the owner already shared it in Drive's or GitHub's own UI. Share can't name who may see a model, show who can see it, or keep a folder's viewer out of the rest of the owner's Drive or repo. The providers hold the real access rules, so this design reads and changes them through each signed-in `Connection`. One account or several of each provider work the same way.
 
 
-## Proposal
+## What Share links mean
 
-Three orthogonal axes, each backed by a small extension to the `ConnectionProvider` interface defined in `src/connections/types.ts:94`:
+A private Share link is `share-200`'s unguessable token from the link resolver ([#2144](https://github.com/bldrs-ai/Share/issues/2144), [`model-versioning.md`](./model-versioning.md)). It is **not** Drive's "Anyone with the link" permission, and GitHub has no link-share at all. When Share's UI says "Anyone with the link", it means the `share-200` token.
 
-1. **Grant / revoke / list grants** — share the model with another principal.
-2. **Visibility** — read and (for owners) toggle public/org/private state.
-3. **Boundary** — encode a folder/repo-path scope into the route so the in-app navigation can refuse to climb above it.
+Provider link-share is just the `public` visibility state. Share never uses it for a private link: quota counting treats a link-shared Drive file as public, so such a link would be metered as public.
 
-A fourth axis — **comments and versions** — is provider-asymmetric and lives in §Stretch.
+The surfaces this design serves belong to three epics:
+
+| Surface | Epic |
+|---|---|
+| Private-by-default links and the visibility chip | `share-130` [#2206](https://github.com/bldrs-ai/Share/issues/2206) |
+| Naming people and groups (the people panel, provider grants) | `share-201` [#2207](https://github.com/bldrs-ai/Share/issues/2207) |
+| Folder-scoped routes | `share-400` [#2208](https://github.com/bldrs-ai/Share/issues/2208) |
+
+Dialog layout, chip copy and alert wording live in those epics, not here.
 
 
-### 1. Sharing as a `ConnectionProvider` capability
+## The sharing interface
 
-Extend `ConnectionProvider` with optional sharing methods. Mirrors how `checkFileAccess` was added in [`drive-recents-head-check.md`](./drive-recents-head-check.md): optional, default no-op, providers that can implement it do.
+**Decision: sharing is five optional methods on `ConnectionProvider`.** A provider implements what it can, and callers check a method exists first. Each takes the acting `Connection` and a `ResourceRef`, so each provider reuses its own token flow and the auth layer is untouched.
+
+The contract is in [`src/connections/types.ts`](https://github.com/bldrs-ai/Share/blob/8c28c7db619f81dab318885715af5f26d85e0549/src/connections/types.ts#L94):
 
 ```ts
-interface ConnectionProvider {
-  // ...existing fields from src/connections/types.ts:94...
-
-  /** List grants on a resource. */
-  listGrants?(connection: Connection, resource: ResourceRef): Promise<Grant[]>
-
-  /** Add a grant. principal is provider-shaped: email/domain for Drive, login/team for GH. */
-  shareWith?(connection: Connection, resource: ResourceRef, grant: GrantRequest): Promise<Grant>
-
-  /** Remove a grant. */
-  revokeGrant?(connection: Connection, resource: ResourceRef, grantId: string): Promise<void>
-
-  /** Read visibility; null when not knowable from the API. */
-  getVisibility?(connection: Connection, resource: ResourceRef): Promise<Visibility | null>
-
-  /** Owner-only: change visibility. */
-  setVisibility?(connection: Connection, resource: ResourceRef, v: Visibility): Promise<void>
-}
+listGrants?(connection, resource: ResourceRef): Promise<Grant[]>
+shareWith?(connection, resource: ResourceRef, grant: GrantRequest): Promise<Grant>
+revokeGrant?(connection, resource: ResourceRef, grantId: string): Promise<void>
+getVisibility?(connection, resource: ResourceRef): Promise<Visibility | null>
+setVisibility?(connection, resource: ResourceRef, v: Visibility): Promise<void>
 
 type ResourceRef =
-  | { kind: 'drive-file', fileId: string }
-  | { kind: 'drive-folder', folderId: string, driveId?: string }
-  | { kind: 'github-repo', org: string, repo: string }
-  | { kind: 'github-tree', org: string, repo: string, branch: string, path?: string }
+  | {kind: 'drive-file'; fileId: string}
+  | {kind: 'drive-folder'; folderId: string; driveId?: string}
+  | {kind: 'github-repo'; org: string; repo: string}
+  | {kind: 'github-tree'; org: string; repo: string; branch: string; path?: string}
 
 type Visibility = 'private' | 'org' | 'public'
 
 interface GrantRequest {
   principalType: 'user' | 'group' | 'domain' | 'anyone'
-  principalId?: string                    // email | domain | gh-login | team-slug
+  principalId?: string   // email | domain | GitHub login | team slug
   role: 'reader' | 'commenter' | 'writer' | 'owner'
-  notify?: boolean                        // Drive sends email by default; GH always emails
-  message?: string                        // Drive supports; GH ignored
+  notify?: boolean
+  message?: string
 }
 
-interface Grant {
-  id: string
-  principalType: GrantRequest['principalType']
-  principalId?: string
-  role: GrantRequest['role']
-  origin: 'drive' | 'github' | 'bldrs'    // bldrs = sidecar grant; see §Stretch
-}
+interface Grant {id, principalType, principalId?, role, origin}
 ```
 
-#### Drive adapter
-- `listGrants` → `drive.permissions.list({fileId, fields: 'permissions(id,type,role,emailAddress,domain)'})`.
-- `shareWith` → `drive.permissions.create({fileId, body, sendNotificationEmail, emailMessage})`. Maps `principalType` to Drive's `type`. `'anyone'` toggles link-share.
-- `revokeGrant` → `drive.permissions.delete`.
-- `getVisibility` → derived: `org` when an `application/domain` permission exists matching the user's Workspace domain; `public` when an `anyone` permission exists; `private` otherwise.
-- `setVisibility('public')` → adds an `anyone` `reader` permission. `setVisibility('org')` → requires the user to supply a domain (the Drive Connection metadata already has `email`, so we infer the default domain). `setVisibility('private')` removes both.
-- All calls reuse the existing `googleDriveProvider.getAccessToken(connection)` flow; nothing new in the auth layer. `drive.file` scope is sufficient because the resource was picker-acquired or app-created.
+`getVisibility` returns `null` when the API can't tell, never a guess.
 
-#### GitHub adapter (assumes the [`identity-decoupling.md`](./identity-decoupling.md) `GitHubProvider` lands)
-- `listGrants` for `github-repo` → `GET /repos/{org}/{repo}/collaborators` + `GET /repos/{org}/{repo}/teams`.
-- `shareWith` user → `PUT /repos/{org}/{repo}/collaborators/{username}`. team → `PUT /orgs/{org}/teams/{team}/repos/{org}/{repo}`. `'anyone'` is rejected (no link-share at file granularity).
-- `revokeGrant` → matching `DELETE`.
-- `getVisibility` → `GET /repos/{org}/{repo}` `private` flag → `private` or `public`. `org` is "internal" repos on GH Enterprise; surface that when the field is present.
-- `setVisibility('public')` → `PATCH /repos/{org}/{repo} {private:false}` with a strong confirmation modal (irreversible publish). `private` and `org`/`internal` likewise.
+**Typed errors** are in [`src/connections/errors.ts`](https://github.com/bldrs-ai/Share/blob/8c28c7db619f81dab318885715af5f26d85e0549/src/connections/errors.ts):
 
-#### UI surface
-A new `ShareDialog` reachable from the loaded model and from each `RecentFilesList` row. Shape:
+- `NeedsReconnectError`: HTTP 401, the token was revoked.
+- `InsufficientPermissionError`: HTTP 403, the user may not do this.
+- `GrantFailedError`: anything else. Its `cause` is a short tag such as `http_500`, `wrong_provider` (a Drive helper asked about a GitHub resource, or the reverse), `domain_unknown` or `unsupported`.
 
-- Header: model name + visibility chip (the same chip from §2 below).
-- Tabs / segmented control: **People & groups** | **Link**.
-- People panel: list current grants (`listGrants`), input row to add (autocomplete from Sources Connection metadata where possible — Drive contacts API is gated, so v1 just accepts free-text email/domain/login/team-slug + a role dropdown).
-- Link panel: provider-specific. Drive shows the link-share toggle and "Anyone with the link can {view|comment|edit}". GitHub explains "GitHub shares at repo level" and links to §1's repo-visibility action.
-- A footer makes the acting identity explicit: *Sharing as `pablo@bldrs.ai` — Drive*. If multiple connections of the same provider exist, the user can switch (this is exactly the `identity-decoupling.md` motivating case: two GitHub accounts in Sources).
-
-Errors route through the typed-error pattern: `GrantFailedError`, `InsufficientPermissionError`, `NeedsReconnectError` (already exists), with `AlertDialog` variants modelled on `fileUnreachable`.
+Transport lives in a `*Sharing.ts` file that takes an explicit token; the provider delegates to it ([`GoogleDriveProvider.ts`](https://github.com/bldrs-ai/Share/blob/8c28c7db619f81dab318885715af5f26d85e0549/src/connections/google-drive/GoogleDriveProvider.ts#L459)). One wrapper (`driveFetch`) maps HTTP status to the typed errors. GitHub gets the same shape: `GitHubSharing.ts` with a `githubFetch` wrapper.
 
 
-### 2. Visibility chip + viewer-side affordances
+## Drive adapter
 
-Read-only first; mutate from the Share dialog above.
+Shipped in [`GoogleDriveSharing.ts`](https://github.com/bldrs-ai/Share/blob/8c28c7db619f81dab318885715af5f26d85e0549/src/connections/google-drive/GoogleDriveSharing.ts). Files and folders are treated the same: both have a `permissions` collection.
 
-- New `RouteResult.visibility?: Visibility` set lazily by the Share component after first load.
-- Title-bar chip: 🔒 Private / 🏢 Org / 🌐 Public, with a tooltip explaining who can see this file.
-- When an anonymous viewer hits a private permalink the existing fetch fails 401/403; we already have `NeedsReconnectError` and (per [`drive-recents-head-check.md`](./drive-recents-head-check.md)) `FileUnreachableError` with `reason: 'forbidden'`. The change here is that the alert body distinguishes the two: *forbidden* = "ask owner to share with you" with copy-share-link affordance; *needs reconnect* = current Reconnect button.
-- When the visibility is `public`, an anonymous viewer is never prompted to sign in.
-
-This axis costs essentially zero new infrastructure once the `getVisibility` provider method exists.
-
-
-### 3. Folder-scoped routes
-
-The honest constraint: neither provider grants below file-level (Drive) or repo-level (GitHub). What we *can* do is enforce a navigation scope inside Bldrs so that a viewer of a folder-share doesn't get an in-app door to the rest of the user's Drive or repo.
-
-Route extensions:
-
-- Drive: `/share/v/g/f/{folderId}/{fileId}` — viewer is locked to `folderId`; the in-app file picker / breadcrumbs only show files inside that folder. Uses the Drive `parents` field check we already query.
-- GitHub: add a boundary marker to the existing `/share/v/gh/{org}/{repo}/{branch}/...` schema. Use `//` to split boundary path from leaf, matching the `splitAroundExtensionRemoveFirstSlash` style already in `src/Filetype`. So `/share/v/gh/acme/bim/main/projects/towers//05-mech.ifc` locks browse to `projects/towers/`.
-- The Sources tab and Open dialog refuse to navigate above the boundary when the route's boundary segment is set.
-
-Critical caveat to put in the UI copy and docs: **this is a UX boundary, not a security boundary** — anyone with the underlying access can read sibling files via Drive's or GitHub's own UI. We are honest about that.
-
-Drive does have one true scope: a folder grant (`drive.permissions.create` with `folderId` + `type: 'user'`) restricts the recipient's actual access in Drive itself. The Share dialog should call this out: "Share this folder with X" produces a folder grant *and* the boundary route, so the UX boundary and the security boundary line up.
+- `listGrants`: `permissions.list` with `supportsAllDrives`, fields `id,type,role,emailAddress,domain`.
+- `shareWith`: `permissions.create`. `principalType` maps one-to-one onto Drive's `type`. Email notification flags are forwarded only where Drive accepts them.
+- `revokeGrant`: `permissions.delete`.
+- `getVisibility` is derived from the grants. Any `anyone` permission means `public`, and `public` wins over `org`. A `domain` permission for the connection's own domain means `org`. A domain permission when the connection's domain is unknown means `null`. Anything else means `private`.
+- `setVisibility` reads the current grants first, so it is idempotent. `public` adds an `anyone` reader. `org` adds a reader for the connection's domain. `private` removes `anyone` and same-domain grants but keeps named users and groups, because a private file can still have collaborators.
+- **The connection's domain comes from its email.** Free-email domains (`gmail.com`, `outlook.com` and the like) count as unknown, so `setVisibility('org')` throws `domain_unknown` rather than grant to every Gmail user. Share does not lean on Drive's own refusal of such grants.
 
 
-### 4. Provider parity follow-ups (small)
+## GitHub adapter
 
-- **GitHub token-health parity.** Mirror `tokeninfo`/Sources mount validation: call `GET /user` on Sources mount, route 401 to `NeedsReconnectError`. Falls naturally out of [`identity-decoupling.md`](./identity-decoupling.md) because the GitHub `ConnectionProvider` will own a real `checkStatus`.
-- **Shared-Drive picker UI.** `driveId` is wired in `GoogleDriveBrowser.ts:59-71` but no UI exists to switch corpus. Add a "Drive: My Drive | Shared Drives ▾" selector to the Picker pre-flow.
-- **Public-discovery surface.** Out of v1 scope. A per-org feed of public Bldrs-published models is a separate proposal.
+Not built. GitHub shares at repo level, so a `github-tree` resource shares through its repo.
 
+- `listGrants`: `GET /repos/{org}/{repo}/collaborators` and `GET /repos/{org}/{repo}/teams`.
+- `shareWith`: a user is `PUT /repos/{org}/{repo}/collaborators/{username}`. A team is `PUT /orgs/{org}/teams/{team}/repos/{org}/{repo}`.
+- `revokeGrant`: the matching `DELETE` on the same paths.
 
-## Migration
+It differs from Drive in four ways:
 
-Pure additive. No existing routes change meaning. Existing recents continue to resolve. The Share dialog is reachable but optional — users who never click it see today's behavior.
-
-Schema additions:
-- `RouteResult.visibility?: Visibility`.
-- Optional `ConnectionProvider` methods: `listGrants`, `shareWith`, `revokeGrant`, `getVisibility`, `setVisibility`.
-- New typed errors in `src/connections/errors.ts`: `GrantFailedError`, `InsufficientPermissionError`.
-- New `AlertDialog` variants: `grantFailed`, `cannotShare`, `visibilityChanged`.
-- New routes: `/v/g/f/:folderId/*` and the `//` boundary split in `/v/gh/...`.
-
-Telemetry from day one: count Share dialog opens, grants created (per provider), public toggles. Calibrates whether the alignment was worth the surface area.
+- **`getVisibility` is one `GET /repos/{org}/{repo}`** that reads the `.private` field. Unlike Drive, it is not derived from `listGrants`.
+- **An `anyone` principal is rejected** with `GrantFailedError` (cause `unsupported`). GitHub has no link-share; a repo is only public or private.
+- **`setVisibility` is `PATCH /repos/{org}/{repo}`.** Making a repo public is close to irreversible. The strong confirmation belongs in the UI, not the adapter, which only makes the call.
+- **`org` maps to GitHub Enterprise's `internal` visibility.** Offer it only when the repo's `internal` field is present. On github.com personal and team plans, `org` is not selectable.
 
 
-## Alternatives considered
+## Visibility semantics
 
-- **Build sharing only on the Bldrs side**, using a server-side ACL, ignoring Drive/GitHub permissions. Decoupled and uniform, but two competing access systems (Drive's real one + ours) is a footgun: a user revokes in Drive and we keep showing the file because our DB still grants. Provider-native sharing wins on truthfulness.
-- **Treat GitHub repo-visibility toggle as the only "share" surface there**, no in-app collaborators API. Simpler, but loses the strongest GH multi-user case (add a teammate to a private repo from inside Bldrs). Worth doing in v1.
-- **Make Drive folders the only sharing unit.** Conceptually clean (folder = boundary = grant), but most users open single files from recents; forcing them to share a folder is friction. Support both file and folder, default to file.
-- **Defer until the comments/versions stretch is figured out.** Tempting because the stretch is conceptually larger, but visibility + grant are independently valuable and don't wait on it.
+**Decision: visibility is three provider-neutral states read from the provider, never stored by Share.**
 
+- `private`: only the owner and named grants.
+- `org`: everyone in the owner's Workspace domain (Drive) or Enterprise (GitHub `internal`).
+- `public`: anyone. For Drive this includes link-shared files.
 
-## Scope
-
-Sequenced PRs. Each lands behind a `sharing` feature flag.
-
-1. **Provider sharing scaffolding.** Extend `ConnectionProvider` interface; implement Drive adapter (`listGrants`, `shareWith`, `revokeGrant`, `getVisibility`, `setVisibility`); typed errors. No UI. Lands behind flag. Depends on nothing.
-2. **Share dialog UI (Drive).** Reachable from title bar + recents row. People panel + Link panel. Visibility chip. Behind flag.
-3. **GitHub sharing.** Implements GH adapter once [`identity-decoupling.md`](./identity-decoupling.md) PR-1 lands. Same Share dialog surfaces it; "Sharing as" footer becomes meaningful with multiple GitHub connections. Behind flag.
-4. **Folder-scoped routes.** Route schema extension; in-app boundary enforcement; Share dialog "share folder" path. Behind a separate `folder-boundary` flag.
-5. **Token-health parity for GitHub.** Small; mirrors Drive's `tokeninfo` pattern. Independent of the rest.
-6. **Flag retirement** after metrics show the dialog being used and not regressing the open path.
-
-Estimated effort: PR1–PR3 ≈ 1 week each with reviews; PR4 ≈ 1–2 weeks (route schema discussion); PR5 ≈ 1–2 days.
+**Drive `getVisibility` already feeds quota counting.** [`src/quota/driveVisibility.js`](https://github.com/bldrs-ai/Share/blob/8c28c7db619f81dab318885715af5f26d85e0549/src/quota/driveVisibility.js#L58) calls it, unflagged, to decide whether a Drive load is metered as private ([`quotas.md`](./quotas.md) §"Drive visibility"); on `null` it falls back to an API-key download check. Changing these semantics changes quota counting, so change both together. (The `sharing` flag in `src/FeatureFlags.js` gates nothing.)
 
 
-## Stretch — comments and versions, with portable git-importable formats
+## Folder-scoped routes
 
-Drive has neither comments nor versions in our stack today; GitHub has both via Issues/Comments and branches/commits. Closing this gap *generically* — and making the result round-trip to git — is multi-quarter work. Treat as a development program, not a sprint.
+**Decision: a route can carry a boundary that Share's own navigation will not climb above.**
 
-### Sidecar formats (Q1)
+- Drive: `/share/v/g/f/{folderId}/{fileId}`. The file picker and breadcrumbs show only files under `folderId`, checked against the file's `parents`.
+- GitHub: a `//` in the existing `/share/v/gh/{org}/{repo}/{branch}/...` path splits the boundary from the leaf, in the style of `splitAroundExtensionRemoveFirstSlash` in `src/Filetype.js`. So `/share/v/gh/acme/bim/main/projects/towers//05-mech.ifc` keeps browsing inside `projects/towers/`.
+- The Sources tab and Open dialog refuse to go above the boundary when it is set.
 
-Two JSON files stored alongside the model:
+**Caveat: this is a navigation boundary, not a security boundary.** Neither provider grants below file level (Drive) or repo level (GitHub). Anyone with the underlying access can read sibling files in Drive's or GitHub's own UI, and the UI must say so. The one exception is a Drive folder grant, which does limit the recipient's real access. Sharing a folder should create both the folder grant and the boundary route, so the two line up.
 
-- `<model>.bld-notes.json`: ordered list of notes, each `{id, parentId|null, authorEmail, authorName, createdAt, updatedAt, markdown, anchor: {ifcGuids?, camera?, screenshotUrl?}, status, provenance: {provider, originId}}`. Anchors reference IFC `GlobalId` so notes survive re-export of the same model.
-- `<model>.bld-versions.json`: `{versions: [{id, parentId|null, createdAt, author, message, contentRef}]}`. `contentRef` is `{kind:'drive', revisionId} | {kind:'git', sha} | {kind:'blob', sha256}`. The git mapping is identity (commit SHA = version id).
-
-Both formats:
-- Carry a `schemaVersion` and a JSON-Schema, validated by a small CLI in `tools/bld-notes/`.
-- Have a flat-Markdown projection (`notes/<id>.md` with YAML frontmatter) for git-friendly diffing and PR review.
-- Embed `provenance` so an import knows where each record came from and can round-trip without dup'ing.
-
-### Drive backend (Q2)
-
-A `NotesProvider` interface lifts the existing `src/Components/Notes/` UI off the GH-backed implementation. The Drive backend writes `<model>.bld-notes.json` next to the model. `drive.file` scope already permits this for picker-acquired files. Reads cache the JSON in IDB; writes are append-then-rewrite with optimistic concurrency on `etag`.
-
-### Versions for Drive (Q3)
-
-`drive.revisions.list` enumerates Drive's native revisions per file. We maintain `<model>.bld-versions.json` mapping our version ids ↔ Drive revisionIds. UI shows a version timeline parity with what GitHub already gets natively from `git log`.
-
-### Round-trippers (Q4)
-
-- **Promote to Git.** From a Drive model: create a new GH repo (via `identity-decoupling`'s GitHub Connection), push the model + sidecars, import notes into Issues (preserving `bldrs-id:<uuid>` markers in issue bodies), import versions as commits/tags.
-- **Snapshot to Drive.** Reverse: serialize Issues/Comments → sidecar JSON, snapshot a chosen ref's tree to a Drive folder.
-- Conflict UX: notes edited on both sides since last sync surface a `notesConflict` `AlertDialog` variant; resolution uses the markdown projection so a human can three-way-merge in their editor of choice.
-
-### Stretch quarters
-
-| Quarter | Scope |
-|---|---|
-| Q1 | Schemas + JSON-Schema validators + round-trip CLI in `tools/bld-notes/`. No UI. |
-| Q2 | `NotesProvider` abstraction; Drive backend; UI parity with GH-backed notes. |
-| Q3 | Versions for Drive via Revisions API + manifest; versions UI parity. |
-| Q4 | Promote-to-Git + Snapshot-to-Drive migrators; conflict UX. |
-| Stretch+ | Per-note ACLs (Drive sidecars in sub-folders with their own grants); CRDT for offline comment editing; notes federation across providers. |
-
-Q1 is honestly a discovery sprint: the schemas need real model data to firm up. Subsequent quarters resize once Q1 is concrete.
+`folderId` survives a rename or move, but the folder's name doesn't. Look the name up live, with any cached name only as a hint.
 
 
-## Open questions
+## Alternatives rejected
 
-- **Permissions audit log.** Should we persist a Bldrs-side log of grant/revoke events for an audit trail, or rely entirely on the providers' own audit logs (Drive's activity API, GitHub's audit log for orgs)? Provider-native is simpler and doesn't drift; Bldrs-side gives us cross-provider analytics. Lean provider-native for v1.
-- **`drive.file` scope ceiling.** A file shared *to* a viewer cannot be opened from a permalink under `drive.file` until the viewer opens the Picker once and selects it. This is intrinsic to the scope choice in `b72a53c`. Document in the share-link UX: "the recipient must open this in Drive once to grant Bldrs access on their account." Workaround would be widening to `drive.readonly`, which we explicitly stepped away from.
-- **GitHub Enterprise `internal` visibility.** `org` maps cleanly to `internal` for GHE users but is undefined on github.com personal/team plans. Show `org` only when `internal` is a valid setting for the repo's owner.
-- **Share-link revocation feedback.** When a viewer's access is revoked mid-session, today we discover it on next API call. Sources-mount validation catches stale tokens; should we periodically re-`getVisibility` to catch stale grants? Probably not in v1 — too chatty — but flag the pattern.
-- **Identity attribution on grants.** A grant added by Bldrs is attributed to the acting `Connection`'s user in Drive/GitHub's own audit log. The Bldrs-side telemetry should also record the Auth0 user (the "P" identity) so we can correlate. Coordinate with the quotas work flagged in [`identity-decoupling.md`](./identity-decoupling.md)'s open questions.
-- **Folder-boundary route stability.** If a Drive folder is renamed or moved, `folderId` is stable but the breadcrumb display name isn't. Do we cache the name in the route, or look it up live? Live lookup is honest but adds a request to the boundary check; cached is brittle. Probably live, with the cached name as a hint.
+- **A Share-side access list that ignores provider permissions.** Uniform, but it makes two competing access systems. A user who revokes in Drive would still see Share grant the file. Provider-native grants stay true.
+- **Provider link-share as Share's private link.** It is metered as public, GitHub has none, and it can't be revoked per recipient. Share mints its own token instead (`share-200`).
+- **Only the repo-visibility toggle on GitHub.** Simpler, but it loses the main GitHub case: adding a teammate to a private repo from inside Share.
+- **Folders as the only sharing unit on Drive.** Clean, but most users open single files from recents. Support files and folders, and default to files.
+- **A Share-side audit log of grants.** The providers' own audit logs don't drift.
+
+
+## Lasting constraints
+
+- **The `drive.file` scope ceiling.** Under `drive.file`, a viewer can't open a file shared to them from a permalink until they pick it once in the Google Picker. This comes from the scope choice in `b72a53c`. Widening to `drive.readonly` would remove it, and Share chose not to. `drive.file` is enough for the owner's side: it lets Share read and change the permissions of files the owner picked or Share created.
+- **No grants below file level (Drive) or repo level (GitHub).** Folder routes are navigation only, except where a Drive folder grant backs them.
+- **Grants are attributed to the acting `Connection`'s user** in the provider's audit log, not to the Auth0 user.
+- **GitHub `org` exists only on Enterprise.**
+- **Revocation is noticed on the next API call.** Share does not poll visibility during a session.
