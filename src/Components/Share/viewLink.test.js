@@ -53,6 +53,28 @@ describe('Share/viewLink', () => {
       expect(write).toHaveBeenCalledTimes(1)
     })
 
+    // open-205 #2021: a Back, a Forward or an in-app open within the
+    // debounce makes another entry the page's (react-router keys each entry
+    // in `history.state.key`); a pending write, settled or flushed, is
+    // dropped rather than written into it.
+    it('drops a pending write once the page is in another history entry', () => {
+      const write = jest.fn()
+      const term = createLiveTerm({write, waitMs: 100})
+      window.history.replaceState({key: 'entry-b'}, '')
+      term.start()
+      window.history.replaceState({key: 'entry-a'}, '')
+      jest.advanceTimersByTime(100)
+      term.changed()
+      window.history.replaceState({key: 'entry-b'}, '')
+      term.flush()
+      expect(write).not.toHaveBeenCalled()
+      // A change made in the entry the page is in is written there.
+      term.changed()
+      jest.advanceTimersByTime(100)
+      expect(write).toHaveBeenCalledTimes(1)
+      window.history.replaceState(null, '')
+    })
+
     it('flushes a pending write, and writes nothing once disposed', () => {
       const write = jest.fn()
       const term = createLiveTerm({write, waitMs: 100})

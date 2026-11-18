@@ -47,4 +47,17 @@ describe('quota/driveExportVisibility', () => {
     expect(await isDriveModelPublic(DRIVE_ROUTE, download)).toBe(false)
     expect(driveFileQuotaVisibility).toHaveBeenCalledTimes(1)
   })
+
+  // Per open (routes/modelOpen.ts), open-205 #2022: an in-app return to the
+  // file is a new open, as a page load was, and its sharing may have changed.
+  it('asks again for a new open of the same file, not for the same open', async () => {
+    driveFileQuotaVisibility.mockResolvedValueOnce('private').mockResolvedValueOnce('public')
+    const download = {fileId: 'file-1', connection: null}
+    const open = {...DRIVE_ROUTE}
+    expect(await isDriveModelPublic(open, download)).toBe(false)
+    expect(await isDriveModelPublic(open, download)).toBe(false)
+    expect(driveFileQuotaVisibility).toHaveBeenCalledTimes(1)
+    expect(await isDriveModelPublic({...DRIVE_ROUTE}, download)).toBe(true)
+    expect(driveFileQuotaVisibility).toHaveBeenCalledTimes(2)
+  })
 })
