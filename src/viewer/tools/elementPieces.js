@@ -45,14 +45,21 @@ import {DEFAULT_CHUNK} from './meshMeasure'
  * @param {object} [opts]
  * @param {number} [opts.chunk] steps between yields
  * @param {Function} [opts.pause] `async () => void`, the yield
+ * @param {number} [opts.maxTriangles] the call's triangle bound: an element with
+ *   more triangles than this is indexed as a refusal marker ({@link tooLargePiece}),
+ *   not accumulated, so a huge element can't exhaust memory only to be rejected
+ * @param {number} [opts.maxPlacements] most placed pieces the index builds; the
+ *   rest of a ref's placements become one refusal marker (a placement costs the
+ *   triangle budget at least 1, so more than this could never be measured)
  * @return {Promise<{forTarget: Function, empty: boolean}>} `forTarget({ids,
  *   instanceIds})` → the target's pieces, deduplicated; `empty` when nothing
  *   wanted has geometry
  */
-export async function indexElementPieces(model, {ids, instanceIds}, {chunk = DEFAULT_CHUNK, pause = null} = {}) {
+export async function indexElementPieces(model, {ids, instanceIds}, opts = {}) {
+  const {chunk = DEFAULT_CHUNK, pause = null, maxTriangles = Infinity, maxPlacements = Infinity} = opts
   const byId = new Map()
   const byInstance = new Map()
-  const work = {n: 0, chunk, pause}
+  const work = {n: 0, chunk, pause, maxTriangles, maxPlacements, placements: 0}
   const add = (map, id, piece) => {
     const list = map.get(id)
     if (list) {
@@ -119,6 +126,24 @@ export async function indexElementPieces(model, {ids, instanceIds}, {chunk = DEF
 
 
 /**
+ * A refusal marker standing in for a run of triangles too big to index: a
+ * piece whose size already exceeds the bound, so `model.measure` refuses it
+ * (reporting `tooLarge`, `complete: false`) without reading any triangle. It
+ * holds no buffers.
+ *
+ * @param {string} key unique per marker, so a ref's pieces dedupe
+ * @param {number} maxTriangles the bound it exceeds
+ * @return {object} a piece
+ */
+function tooLargePiece(key, maxTriangles) {
+  return {
+    key, tooLarge: true, position: null, index: null, indexStart: 0,
+    indexCount: (maxTriangles + 1) * 3, matrix: null, shape: null,
+  }
+}
+
+
+/**
  * @param {object} mesh a THREE.BatchedMesh with `instanceParents`
  * @param {object} want `{ids, instanceIds}`
  * @param {object} work the shared step counter `{n, chunk, pause}`
@@ -149,6 +174,16 @@ async function indexBatched(mesh, {ids, instanceIds}, work, onId, onInstance) {
       continue
     }
     if (!instanceGeometryRangeAt(mesh, batchId, range)) {
+      continue
+    }
+    if (++work.placements > work.maxPlacements) {
+      const marker = tooLargePiece(`x${mesh.id}:${parent}:${occurrence}`, work.maxTriangles)
+      if (byParent) {
+        onId(parent, marker)
+      }
+      if (byOccurrence) {
+        onInstance(occurrence, marker)
+      }
       continue
     }
     mesh.getMatrixAt(batchId, instanceMatrix)
@@ -183,13 +218,16 @@ async function mergedPieces(mesh, owners, ids, work) {
   const index = geometry.index ? geometry.index.array : null
   const corners = index ? index.length : geometry.attributes.position.count
   const perOwner = new Map()
+  // Owners past the bound stop accumulating at once: the list of a
+  // tens-of-millions-triangle element is never built.
+  const over = new Set()
   for (let t = 0; t + 2 < corners; t += 3) {
     if (work.pause && ++work.n % work.chunk === 0) {
       await work.pause()
     }
     const first = index ? index[t] : t
     const owner = owners.getX(first)
-    if (!ids.has(owner)) {
+    if (!ids.has(owner) || over.has(owner)) {
       continue
     }
     let list = perOwner.get(owner)
@@ -198,8 +236,15 @@ async function mergedPieces(mesh, owners, ids, work) {
       perOwner.set(owner, list)
     }
     list.push(first, index ? index[t + 1] : t + 1, index ? index[t + 2] : t + 2)
+    if (list.length / 3 > work.maxTriangles) {
+      over.add(owner)
+      perOwner.delete(owner)
+    }
   }
   const pieces = new Map()
+  for (const owner of over) {
+    pieces.set(owner, tooLargePiece(`m${mesh.id}:${owner}`, work.maxTriangles))
+  }
   for (const [owner, list] of perOwner) {
     pieces.set(owner, {
       key: `m${mesh.id}:${owner}`,
@@ -235,10 +280,18 @@ async function wholeMeshPieces(mesh, work) {
     return [{...base, key: `s${mesh.id}`, matrix: mesh.matrixWorld, shape: null}]
   }
   const pieces = []
+  if (Math.floor(base.indexCount / 3) > work.maxTriangles) {
+    // The geometry alone is past the bound: no placement of it could be measured.
+    return [tooLargePiece(`s${mesh.id}`, work.maxTriangles)]
+  }
   const instanceMatrix = new Matrix4()
   for (let i = 0; i < mesh.count; i++) {
     if (work.pause && ++work.n % work.chunk === 0) {
       await work.pause()
+    }
+    if (++work.placements > work.maxPlacements) {
+      pieces.push(tooLargePiece(`s${mesh.id}:more`, work.maxTriangles))
+      break
     }
     mesh.getMatrixAt(i, instanceMatrix)
     pieces.push({

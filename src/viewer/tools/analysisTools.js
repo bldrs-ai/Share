@@ -2,6 +2,7 @@ import {ToolError} from '../../assist'
 import {indexElementPieces} from './elementPieces'
 import {QUANTITY_KIND_NAMES, readElementQuantities, readProjectUnits} from './ifcQuantities'
 import {linearDeterminant, localSolid, measureWorld, pieceTriangleCount} from './meshMeasure'
+import {findNodeByOccurrencePath} from '../../utils/occurrencePaths'
 import {assertResolved, nodeName, nodeType, nodesById, resolveRefs, walkTree} from './refs'
 
 
@@ -45,10 +46,12 @@ import {assertResolved, nodeName, nodeType, nodesById, resolveRefs, walkTree} fr
  * `maxTriangles`: triangles one call processes. A tessellated building is a
  * few million; this keeps a call to seconds, and the call stops BETWEEN
  * pieces (a piece is never half-measured) and reports what it left out.
+ * `maxPlacements`: placed pieces indexing builds before it refuses the rest
+ * (each placement costs the budget at least 1, and each is a matrix and an object).
  * `yieldEvery`: triangles between yields to the event loop, so Stop and the
  * page's own work get through during a long call.
  */
-export const MEASURE_LIMITS = {maxTriangles: 3_000_000, yieldEvery: 200_000}
+export const MEASURE_LIMITS = {maxTriangles: 3_000_000, yieldEvery: 200_000, maxPlacements: 250_000}
 
 /** Most elements `model.quantities` reads in one call. */
 const MAX_QUANTITY_ELEMENTS = 300
@@ -120,7 +123,7 @@ export function createAnalysisTools({readState, loadedState, visibilityTargets, 
     const nodes = nodesById(rootElement)
     const startNodes = refs === undefined || refs.length === 0 ? [rootElement] :
       assertResolved(resolveRefs(refs, state)).map((target) =>
-        nodes.get(target.kind === 'id' ? target.id : Number(target.occurrence.nodeId)))
+        targetNode(target, rootElement, nodes))
     const candidates = elementsUnder(startNodes)
     const scope = refs === undefined || refs.length === 0 ? 'the whole model' : `${refs.length} ref(s) and their contents`
     const units = await readProjectUnits(model, Number(rootElement.expressID))
@@ -228,7 +231,12 @@ export function createAnalysisTools({readState, loadedState, visibilityTargets, 
     const index = await indexElementPieces(model, {
       ids: new Set(resolved.flatMap(({ids}) => ids)),
       instanceIds: new Set(resolved.flatMap(({instanceIds}) => instanceIds)),
-    }, {chunk: MEASURE_LIMITS.yieldEvery, pause})
+    }, {
+      chunk: MEASURE_LIMITS.yieldEvery,
+      pause,
+      maxTriangles: MEASURE_LIMITS.maxTriangles,
+      maxPlacements: MEASURE_LIMITS.maxPlacements,
+    })
     if (index.empty) {
       throw new ToolError('rejected', 'None of these elements has geometry to measure.', {refs})
     }
@@ -299,8 +307,7 @@ export function createAnalysisTools({readState, loadedState, visibilityTargets, 
     let noGeometry = 0
     for (const {target, ids, instanceIds} of resolved) {
       const pieces = index.forTarget({ids, instanceIds})
-      const nodeId = target.kind === 'id' ? target.id : Number(target.occurrence.nodeId)
-      const node = nodes.get(nodeId)
+      const node = targetNode(target, rootElement, nodes)
       const item = {ref: target.ref, type: nodeType(node), name: nodeName(node)}
       if (pieces.length === 0) {
         noGeometry++
@@ -385,7 +392,7 @@ export function createAnalysisTools({readState, loadedState, visibilityTargets, 
     let start = rootElement
     if (ref !== undefined) {
       const [target] = assertResolved(resolveRefs([ref], state))
-      start = nodes.get(target.kind === 'id' ? target.id : Number(target.occurrence.nodeId))
+      start = targetNode(target, rootElement, nodes)
     }
     let hasSpatialTypes = false
     walkTree(rootElement, (node) => {
@@ -550,6 +557,28 @@ function unavailable(reason, scope) {
     },
     echo: 'The model carries no quantities',
   }
+}
+
+
+/**
+ * The NavTree node a resolved ref names. An occurrence is found by its full
+ * path: in a reused STEP sub-assembly the copies' rows share express ids, and
+ * `nodesById` keeps only the first, so looking up `occurrence.nodeId` would
+ * answer for the first copy (its subtree, ancestors and name). A body
+ * (solid) row has its own id and is looked up by it.
+ *
+ * @param {object} target from resolveRefs
+ * @param {object} rootElement NavTree root
+ * @param {Map<number, object>} nodes nodesById
+ * @return {object|undefined}
+ */
+function targetNode(target, rootElement, nodes) {
+  if (target.kind === 'id') {
+    return nodes.get(target.id)
+  }
+  const {occurrencePath, solidExpressId, nodeId} = target.occurrence
+  return (solidExpressId === null || solidExpressId === undefined ?
+    findNodeByOccurrencePath(rootElement, occurrencePath) : null) ?? nodes.get(Number(nodeId))
 }
 
 

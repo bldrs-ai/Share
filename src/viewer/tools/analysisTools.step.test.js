@@ -8,7 +8,7 @@ jest.mock('../three/IfcIsolator', () => jest.requireActual('../three/IfcIsolator
 import '../../../__mocks__/shareViewerTestHarness'
 import {ShareViewer} from '../ShareViewer'
 import {createShareAssistRegistry} from './assistHost'
-import {loadFixture, makeStepModel} from './tools.fixture'
+import {loadFixture, makeReusedStepModel, makeStepModel} from './tools.fixture'
 
 
 describe('viewer/tools analysis on a STEP assembly', () => {
@@ -44,5 +44,35 @@ describe('viewer/tools analysis on a STEP assembly', () => {
     const result = await registry.call('model.quantities', {})
     expect(result.content.available).toBe(false)
     expect(result.content.hint).toMatch(/model\.measure/)
+  })
+})
+
+
+// A reused sub-assembly's copies share row ids (Sub 10, Bolt 11 under both A and
+// B), and nodesById keeps the first. A ref to the second copy must answer for
+// the second copy.
+describe('viewer/tools analysis on a reused STEP sub-assembly', () => {
+  let registry
+
+  beforeEach(async () => {
+    await loadFixture({build: makeReusedStepModel, viewer: Object.create(ShareViewer.prototype)})
+    registry = createShareAssistRegistry()
+  })
+
+  afterEach(() => registry.dispose())
+
+  it.each([
+    ['o30.10.11', ['Top', 'A', 'Sub']],
+    ['o40.10.11', ['Top', 'B', 'Sub']],
+  ])('model.spatial puts %s under its own copy', async (ref, ancestors) => {
+    const {content} = await registry.call('model.spatial', {ref})
+    expect(content.path.map(({name}) => name)).toEqual(ancestors)
+    expect(content.root.name).toBe('Bolt')
+  })
+
+  it('model.measure names the copy it measured', async () => {
+    const {content} = await registry.call('model.measure', {refs: ['o40.10.11'], metric: 'surfaceArea'})
+    expect(content.items[0]).toMatchObject({ref: 'o40.10.11', name: 'Bolt'})
+    expect(content.items[0].value).toBeCloseTo(0.5, 6)
   })
 })

@@ -141,6 +141,7 @@ describe('viewer/tools analysis: model.measure', () => {
     afterEach(() => {
       MEASURE_LIMITS.maxTriangles = 3_000_000
       MEASURE_LIMITS.yieldEvery = 200_000
+      MEASURE_LIMITS.maxPlacements = 250_000
     })
 
     // The cap stops BETWEEN refs; a ref cut short adds nothing to the total,
@@ -233,6 +234,17 @@ describe('viewer/tools analysis: model.measure', () => {
       } finally {
         spy.mockRestore()
       }
+    })
+
+    // Indexing builds a matrix and an object per placement, so it stops at
+    // maxPlacements and refuses the ref whose placements it left out.
+    it('refuses refs whose placements exceed the indexing bound, and is not complete', async () => {
+      MEASURE_LIMITS.maxPlacements = 3
+      const {content} = await registry.call('model.measure', {refs: ['e100', 'e101', 'e200'], metric: 'surfaceArea'})
+      // e100 and e101 take two placements, e200's first the third, its second is over.
+      expect(content.complete).toBe(false)
+      expect(content.tooLarge).toEqual(['e200'])
+      expect(content.items.map(({ref}) => ref)).toEqual(['e100', 'e101'])
     })
 
     it('stops between pieces when the call is aborted', async () => {

@@ -188,3 +188,67 @@ describe('viewer/tools elementPieces indexing yields', () => {
     expect(turns).toBeLessThan(20)
   })
 })
+
+
+// An element with tens of millions of triangles must not be accumulated into a
+// JS array and copied, only to be refused afterwards: indexing stops at the cap
+// and leaves a marker that model.measure reports as tooLarge.
+describe('viewer/tools elementPieces refuses oversize elements while indexing', () => {
+  const want = (ids) => ({ids: new Set(ids), instanceIds: new Set()})
+
+  it('stops accumulating a merged-mesh element at the cap and returns a marker', async () => {
+    // Element 7: 50 triangles. Element 8: 2.
+    const tris = Array.from({length: 52}, (_, i) => [i, 0, 0, i, 1, 0, i, 0, 1])
+    const owners = tris.flatMap((_, i) => (i < 50 ? [7, 7, 7] : [8, 8, 8]))
+    const root = new Group()
+    root.add(new Mesh(trianglesGeometry(tris, owners)))
+    const push = jest.spyOn(Array.prototype, 'push')
+    let index
+    let accumulations = 0
+    try {
+      index = await indexElementPieces(root, want([7, 8]), {maxTriangles: 10})
+    } finally {
+      // Corner accumulation pushes three numbers a triangle: 50 triangles
+      // would be 50 such pushes without the early stop; with it, 11 for
+      // element 7 plus 2 for element 8.
+      accumulations = push.mock.calls.filter((args) => args.length === 3 && args.every(Number.isFinite)).length
+      push.mockRestore()
+    }
+    expect(accumulations).toBeLessThanOrEqual(13)
+    const [big] = index.forTarget({ids: [7]})
+    expect(big.tooLarge).toBe(true)
+    expect(big.indexCount / 3).toBeGreaterThan(10)
+    expect(big.index).toBeNull()
+    const [small] = index.forTarget({ids: [8]})
+    expect(small.tooLarge).toBeUndefined()
+    expect(small.indexCount).toBe(6)
+  })
+
+  it('refuses an InstancedMesh whose geometry alone is over the cap, without expanding it', async () => {
+    const mesh = new InstancedMesh(trianglesGeometry(CUBE_TRIANGLES), undefined, 1000)
+    const node = new Group()
+    node.expressID = 5
+    node.add(mesh)
+    const root = new Group()
+    root.add(node)
+    const getMatrix = jest.spyOn(mesh, 'getMatrixAt')
+    const pieces = (await indexElementPieces(root, want([5]), {maxTriangles: 11})).forTarget({ids: [5]})
+    expect(pieces).toHaveLength(1)
+    expect(pieces[0].tooLarge).toBe(true)
+    expect(getMatrix).not.toHaveBeenCalled()
+  })
+
+  it('bounds how many placements it builds, leaving one marker for the rest', async () => {
+    const mesh = new InstancedMesh(trianglesGeometry(CUBE_TRIANGLES), undefined, 100)
+    const node = new Group()
+    node.expressID = 5
+    node.add(mesh)
+    const root = new Group()
+    root.add(node)
+    const getMatrix = jest.spyOn(mesh, 'getMatrixAt')
+    const pieces = (await indexElementPieces(root, want([5]), {maxPlacements: 10})).forTarget({ids: [5]})
+    expect(pieces.filter((piece) => !piece.tooLarge)).toHaveLength(10)
+    expect(pieces.filter((piece) => piece.tooLarge)).toHaveLength(1)
+    expect(getMatrix).toHaveBeenCalledTimes(10)
+  })
+})
