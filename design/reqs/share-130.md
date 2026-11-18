@@ -20,6 +20,6 @@ Migrated from the Sharing UX draft, 2026-11-18:
 
 Decided 2026-11-18: the unguessable link itself comes from `share-200`'s link resolver (#2144; the rules are in [`model-versioning.md` §5a](../new/model-versioning.md#5a-share-link-contract-binding-ux-requirement)), not from Drive's or GitHub's own link-sharing. Naming specific people is `share-201` (#2207). The visibility chip must show the same classification the quota meter uses, since a Drive file shared by link counts as public. The chip's technical work is Track T4 (#2203).
 
-Open, and recorded in the roadmap: `share-130` is in the MVP (Phase C), but `share-200`'s resolver is placed post-MVP.
+Decided the same day: `share-200`'s link-resolver slice moves into Phase C with `share-130`, while the rest of `share-200` stays post-MVP.
 
 This snapshot makes no completion claim. The [triage record](share-200-triage.md#sharing-ux-draft-migration--2026-11-18) has the provenance. Current tasks and decisions live in [#2206](https://github.com/bldrs-ai/Share/issues/2206) and its stories.
