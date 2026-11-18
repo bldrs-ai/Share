@@ -34,6 +34,7 @@ import {load} from '../loader/Loader'
 import {
   LOAD_OUTCOMES,
   attachLoadFailureContext,
+  loadStallCaptureTags,
   beginLoadProgress,
   captureLoadDiagnostics,
   currentLoadSerial,
@@ -970,14 +971,20 @@ export default function CadView({
       if (!isOOM && !(e instanceof UnsupportedSchemaError) && !(e instanceof InMemoryUploadGoneError) &&
           !(e instanceof UploadNotInBrowserError) && !(e instanceof ZipArchiveError)) {
         attachLoadFailureContext()
+        // A load that stalled before it failed says so on this event only
+        // (loadProgress.js#loadStallCaptureTags), never on the scope.
+        const stallTags = loadStallCaptureTags()
+        const withStall = (context) => (stallTags ? {...context, tags: {...context?.tags, ...stallTags}} : context)
         if (e instanceof EngineOpenFailureError) {
           // The engine's status and reason as tags/context on this event
           // only; the alert's GA count is AlertDialog's (trackAlertEvent).
-          captureException(e, engineFailureCaptureContext(e))
+          captureException(e, withStall(engineFailureCaptureContext(e)))
         } else if (e?.engineSource) {
           // A failed engine-worker open without a recorded reason: still say
           // how its source was read (engineOpenFailure.js#engineSourceTags).
-          captureException(e, {tags: engineSourceTags(e)})
+          captureException(e, withStall({tags: engineSourceTags(e)}))
+        } else if (stallTags) {
+          captureException(e, {tags: stallTags})
         } else {
           captureException(e)
         }

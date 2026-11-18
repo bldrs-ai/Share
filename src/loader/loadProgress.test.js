@@ -22,6 +22,7 @@ import {
   HANG_TIMEOUT_MS,
   LOAD_HUNG_MESSAGE,
   STALL_TIMEOUT_MS,
+  loadStallCaptureTags,
   _getActiveReporterForTests,
   attachLoadFailureContext,
   beginLoadProgress,
@@ -834,9 +835,11 @@ describe('loadProgress', () => {
 
       jest.advanceTimersByTime(HANG_TIMEOUT_MS - STALL_TIMEOUT_MS)
       expect(captureMessage).toHaveBeenCalledTimes(1)
-      expect(captureMessage).toHaveBeenCalledWith(LOAD_HUNG_MESSAGE, 'warning')
+      expect(captureMessage).toHaveBeenCalledWith(LOAD_HUNG_MESSAGE, {level: 'warning', tags: {'load.stalled': 'true'}})
       expect(setTag).toHaveBeenCalledWith('load.phase', 'geometry')
-      expect(setTag).toHaveBeenCalledWith('load.stalled', 'true')
+      // Per event, never on the scope, where it would outlive this load
+      // (codex on #2235).
+      expect(setTag).not.toHaveBeenCalledWith('load.stalled', expect.anything())
       jest.advanceTimersByTime(HANG_TIMEOUT_MS * 2)
       expect(captureMessage).toHaveBeenCalledTimes(1)
     })
@@ -880,7 +883,7 @@ describe('loadProgress', () => {
       jest.advanceTimersByTime(HANG_TIMEOUT_MS + 1)
       endLoadProgress()
       captureLoadDiagnostics()
-      expect(captureMessage).toHaveBeenCalledWith(LOAD_HUNG_MESSAGE, 'warning')
+      expect(captureMessage).toHaveBeenCalledWith(LOAD_HUNG_MESSAGE, expect.objectContaining({level: 'warning'}))
       expect(reportLoadStallRecovered).not.toHaveBeenCalled()
     })
 
@@ -891,6 +894,14 @@ describe('loadProgress', () => {
       jest.advanceTimersByTime(STALL_TIMEOUT_MS + 1)
       endLoadProgress(new Error('boom'))
       expect(loadFailureCaptureContext().tags).toEqual({'load.phase': 'geometry', 'load.stalled': 'true'})
+      expect(loadStallCaptureTags()).toEqual({'load.stalled': 'true'})
+      // The scope gets the phase only.
+      attachLoadFailureContext()
+      expect(setTag).not.toHaveBeenCalledWith('load.stalled', expect.anything())
+
+      // The next load starts clean.
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      expect(loadStallCaptureTags()).toBeNull()
     })
 
     it('failure context includes the accumulated report text, and not the file path', () => {
@@ -1230,9 +1241,9 @@ describe('loadProgress', () => {
        * empty build the file does not explain still must. The counts that
        * separate the two ride on the event either way.
        */
-      // Since 2026-11 a nothing-to-draw load is GA's alone, even when an
-      // engine diagnostic came with it: the input explains the empty build.
-      it('counts a no-geometry load in GA, not Sentry', () => {
+      // Since 2026-11 a nothing-to-draw load is counted in GA; an engine
+      // diagnostic it also hit still reaches Sentry (codex on #2235).
+      it('counts a no-geometry load in GA, and sends its engine gap to Sentry', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
         beginLoadProgress({fileInfo: 'tiny.ifc'})
         console.warn('No units defined.')
@@ -1244,11 +1255,32 @@ describe('loadProgress', () => {
         endLoadProgress()
         captureLoadDiagnostics({warningCount: 2})
 
-        expect(diagnosticsCall()).toBeUndefined()
+        const [message, context] = diagnosticsCall()
+        expect(message).toBe('Load diagnostics: No basis found for brep!')
+        expect(context.level).toBe('warning')
+        expect(context.tags.load_outcome).toBe('no_geometry')
+        expect(context.contexts.loadDiagnostics).toMatchObject({
+          productCount: 3, productsWithGeometryCount: 0, dataDefectCount: 1,
+        })
         expect(reportLoadDiagnosticsToGa).toHaveBeenCalledTimes(1)
         expect(reportLoadDiagnosticsToGa).toHaveBeenCalledWith(expect.objectContaining({
           outcome: 'no_geometry', defect: 'no_units', format: 'ifc',
         }))
+        warnSpy.mockRestore()
+      })
+
+      it('sends a no-geometry load with only defects to GA alone', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'tiny.ifc'})
+        console.warn('No units defined.')
+        reportGeometryStats({
+          vertexCount: 0, triangleCount: 0, productCount: 3, productsWithGeometryCount: 0, errorCount: 0, dataDefectCount: 1,
+        })
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1})
+
+        expect(diagnosticsCall()).toBeUndefined()
+        expect(reportLoadDiagnosticsToGa).toHaveBeenCalledWith(expect.objectContaining({outcome: 'no_geometry', defect: 'no_units'}))
         warnSpy.mockRestore()
       })
 

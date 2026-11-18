@@ -201,7 +201,7 @@ export function reportBvhDepthCapToGa({format, trees, maxLeafTriangles}) {
  *
  * Every param is closed-set or bucketed. `authoringTool` is already the
  * allowlisted family name (loadProgress.js#knownAuthoringTool); `schema` is
- * header text, so anything that isn't a plain schema identifier is `other`.
+ * header text, so it goes through an allowlist too (schemaParam).
  *
  * @param {object} args
  * @param {string} args.outcome loadProgress.js LOAD_OUTCOMES value
@@ -250,20 +250,43 @@ export function reportLoadStallRecovered({phase, format, sizeBytes}) {
 // Progress phases are code constants ('download', 'geometry', 'dataParse'…);
 // the pattern only keeps a future free-text phase out of GA.
 const PHASE_PATTERN = /^[A-Za-z]{1,24}$/
-// IFC2X3, IFC4X3_ADD2, AUTOMOTIVE_DESIGN, CONFIG_CONTROL_DESIGN…
-const SCHEMA_PATTERN = /^[A-Za-z0-9_]{1,40}$/
+
+/**
+ * The schemas `schema` may name. The reporter's schema is FILE_SCHEMA from
+ * a STEP/IFC header (exporter-written), or Loader's upper-cased extension
+ * for the other formats. A pattern on the charset would still pass a header
+ * like `CLIENT_ACME_TOWER` (codex on #2235), so it is a closed set: the IFC
+ * releases, the STEP application protocols' schema names, and the format
+ * tags. Anything else is `other`.
+ */
+const KNOWN_SCHEMAS = new Set([
+  'IFC2X_FINAL', 'IFC2X2_FINAL', 'IFC2X3', 'IFC2X3_TC1', 'IFC4', 'IFC4X1', 'IFC4X2',
+  'IFC4X3', 'IFC4X3_RC1', 'IFC4X3_RC2', 'IFC4X3_RC3', 'IFC4X3_RC4', 'IFC4X3_TC1',
+  'IFC4X3_ADD1', 'IFC4X3_ADD2',
+  'AUTOMOTIVE_DESIGN', 'CONFIG_CONTROL_DESIGN', 'STRUCTURAL_ANALYSIS_DESIGN',
+  'IFC', 'IFCZIP', 'STEP', 'STP', 'GLB', 'GLTF', 'OBJ', 'STL', 'FBX', 'PDB', 'XYZ', 'BLD', 'NRRD', 'ADF',
+])
+
+/** The AP203/AP214/AP242 schema names, which carry long qualified suffixes. */
+const AP_SCHEMA_FAMILY = /^(AP203|AP214|AP242)_/
 
 
 /**
- * @param {string} [schema] the header's schema
- * @return {string} the schema when it is a plain identifier, else 'other'
- *   ('unknown' when there was none)
+ * @param {string} [schema] the reporter's schema
+ * @return {string} a known schema, its AP family (`AP242`…), 'other', or
+ *   'unknown' when there was none. A STEP schema's object identifier
+ *   (`AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }`) is dropped first.
  */
 export function schemaParam(schema) {
-  if (typeof schema !== 'string' || schema === '') {
+  if (typeof schema !== 'string' || schema.trim() === '') {
     return 'unknown'
   }
-  return SCHEMA_PATTERN.test(schema) ? schema.toUpperCase() : 'other'
+  const name = schema.trim().split(/[\s{]/)[0].toUpperCase()
+  if (KNOWN_SCHEMAS.has(name)) {
+    return name
+  }
+  const family = AP_SCHEMA_FAMILY.exec(name)
+  return family ? family[1] : 'other'
 }
 
 

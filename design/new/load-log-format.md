@@ -64,12 +64,12 @@ A successful load's diagnostics are split by the Reported Conditions rule
 | Condition | Sink |
 | --- | --- |
 | A diagnostic the engine couldn't act on (geometry it couldn't build) | Sentry `Load diagnostics: <most frequent engine diagnostic>`, warning; error when the load drew nothing although the file had geometry |
-| Authoring defects: `No units defined.`, `No IfcProjects found?`, anything conway marks `DATA_DEFECT` | GA `load_diagnostics {outcome, defect, format, authoring_tool, schema, size_class}`; `defect` is `no_units`, `no_projects` or `marked`, never the text |
-| A model that read fine but has nothing to draw | The same GA event, `outcome: no_geometry` |
+| Authoring defects: `No units defined.`, `No IfcProjects found?`, anything conway marks `DATA_DEFECT` | GA `load_diagnostics {outcome, defect, format, authoring_tool, schema, size_class}`; `defect` is `no_units`, `no_projects` or `marked`, never the text; `schema` is a known schema, an AP family or `other` |
+| A model that read fine but has nothing to draw | The same GA event, `outcome: no_geometry`; an engine diagnostic it also hit still goes to Sentry, as above |
 | A load with no progress event for 30 s | The UI's stall cue only |
 | … still silent at 3 min | Sentry `Model load hung`, warning, once per load |
 | … that then finished | GA `load_stall_recovered {phase, format, size_class}` |
-| … that then failed | CadView's failure event, tagged `load.stalled: true` |
+| … that then failed | CadView's failure event, tagged `load.stalled: true` on that event only (never on the session scope, where it would outlive the load) |
 
 The Sentry event is titled by the most frequent diagnostic that is not a
 defect, so an engine gap behind a noisier defect still gets its own issue. An

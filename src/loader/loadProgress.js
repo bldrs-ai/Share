@@ -743,7 +743,7 @@ class LoadProgressReporter {
     this.stallReported = true
     try {
       this.applySentryLoadState()
-      captureMessage(LOAD_HUNG_MESSAGE, 'warning')
+      captureMessage(LOAD_HUNG_MESSAGE, {level: 'warning', tags: {'load.stalled': 'true'}})
     } catch (e) {
       debug().log('loadProgress#handleHang: ', e)
     }
@@ -778,11 +778,11 @@ class LoadProgressReporter {
     // Allowlisted: the raw state carries `fileInfo`, the route path or URL,
     // which names a private model's file (Share#2107).
     const {tags, contexts} = nonIdentifyingLoadContext(this.sentryLoadState())
+    // Phase only. `load.stalled` stays off the session's scope, where it
+    // would ride on every later event of the page, the next load's included
+    // (codex on #2235): the hang message and CadView's failure capture carry
+    // it per event (loadStallCaptureTags).
     setTag('load.phase', tags['load.phase'])
-    // Written on every call, undefined when this load didn't stall, so a
-    // previous load's stall can't stay on the session's scope: an undefined
-    // tag is dropped when the event is serialized.
-    setTag('load.stalled', tags['load.stalled'])
     setContext('load', contexts.load)
   }
 
@@ -961,9 +961,10 @@ class LoadProgressReporter {
    * users in two weeks.
    *
    * So the Sentry event is titled by the most frequent diagnostic that is
-   * NOT a defect. A load whose diagnostics are all defects sends nothing to
-   * Sentry, unless it was unusable: a file with geometry that drew nothing is
-   * an error whatever the console said.
+   * NOT a defect, whatever the outcome, a nothing-to-draw load included. A
+   * load whose diagnostics are all defects sends nothing to Sentry, unless
+   * it was unusable: a file with geometry that drew nothing is an error
+   * whatever the console said.
    *
    * @param {object} opts
    * @param {number} opts.errorCount the GA `stats_errorCount` for this load
@@ -991,11 +992,14 @@ class LoadProgressReporter {
     }
     // '' titles the event "Load completed with diagnostics": the counts came
     // from the engine and the console tee caught no text to name it by.
+    // A nothing-to-draw load reaches Sentry only for an engine diagnostic:
+    // the input explains the empty build, not an engine gap it also hit
+    // (codex on #2235).
     let sentryText
-    if (loadOutcome === LOAD_OUTCOMES.NO_GEOMETRY) {
-      sentryText = undefined
-    } else if (engineText !== undefined) {
+    if (engineText !== undefined) {
       sentryText = engineText
+    } else if (loadOutcome === LOAD_OUTCOMES.NO_GEOMETRY) {
+      sentryText = undefined
     } else if (summary.total === 0) {
       sentryText = ''
     } else if (loadOutcome === LOAD_OUTCOMES.UNUSABLE) {
@@ -1900,6 +1904,18 @@ export function captureLoadDiagnostics({
   } catch (e) {
     debug().log('loadProgress#captureLoadDiagnostics: ', e)
   }
+}
+
+
+/**
+ * `load.stalled` for one failure capture (CadView), or null when the last
+ * load never stalled. Per event, never on the scope: see
+ * LoadProgressReporter#applySentryLoadState.
+ *
+ * @return {?object} `{'load.stalled': 'true'}` or null
+ */
+export function loadStallCaptureTags() {
+  return activeReporter?.stallPhase === undefined ? null : {'load.stalled': 'true'}
 }
 
 

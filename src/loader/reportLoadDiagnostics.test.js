@@ -152,12 +152,17 @@ describe('loader/reportLoadDiagnostics', () => {
       }))
     })
 
-    // The schema is header text: only a plain identifier passes.
+    // The schema is header text: only a known schema or AP family passes.
     it.each([
       ['CONFIG_CONTROL_DESIGN', 'CONFIG_CONTROL_DESIGN'],
       ['IFC4X3_ADD2', 'IFC4X3_ADD2'],
+      ['ifc2x3', 'IFC2X3'],
+      ['AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }', 'AUTOMOTIVE_DESIGN'],
+      ['AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF', 'AP242'],
+      ['GLB', 'GLB'],
+      // A plain identifier is not enough (codex on #2235).
+      ['CLIENT_ACME_TOWER', 'other'],
       ['\\\\fileserver\\projects\\plan', 'other'],
-      ['IFC4 (draft)', 'other'],
       ['', 'unknown'],
     ])('passes schema %s as %s', (schema, expected) => {
       expect(schemaParam(schema)).toBe(expected)

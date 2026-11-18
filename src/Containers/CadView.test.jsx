@@ -38,6 +38,7 @@ import {makeTestTree} from '../utils/TreeUtils.test'
 import {actAsyncFlush, suppressActWarnings} from '../utils/tests'
 import CadView from './CadView'
 import * as viewerModule from './viewer'
+import * as loadProgressModule from '../loader/loadProgress'
 import * as clientCapabilities from '../privacy/clientCapabilities'
 import {WEBGL_UNAVAILABLE_TITLE} from '../viewer/webglUnavailable'
 
@@ -875,6 +876,30 @@ describe('CadView', () => {
     await waitFor(() => expect(result.current.alert).toBe(genericErr))
     expect(captureExceptionSpy).toHaveBeenCalledWith(genericErr)
   })
+
+  // SHARE-1HJ follow-up: a load that stalled before it failed says so on its
+  // failure event, per event rather than on the Sentry scope (codex on #2235).
+  it('tags a failed load that stalled first, on that event only', async () => {
+    const genericErr = new Error('parseIfcWithConway: OpenModel returned -1')
+    jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw genericErr
+    })
+    const stallTags = jest.spyOn(loadProgressModule, 'loadStallCaptureTags').mockReturnValue({'load.stalled': 'true'})
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    try {
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert).toBe(genericErr))
+      expect(captureExceptionSpy).toHaveBeenCalledWith(genericErr, {tags: {'load.stalled': 'true'}})
+    } finally {
+      stallTags.mockRestore()
+    }
+  })
+
 
   // #1955: SHARE-1NR, the top hard-failure group, was this case reported as
   // a defect with the worker's raw "Folder <id> not found" string. The
