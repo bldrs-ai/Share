@@ -2,8 +2,9 @@
 
 **Status:** Phase 0 landed (#2026). Phase 1 re-planned 2026-11-02 (§4);
 P1.0 measured (§4.1); Phase 1a step 0, the flagged switch and the first
-memory E2E, built (§4.6, §6); steps C (Back/Forward, every open surface,
-§4.6) and D (per-open dedupe, §5) built. Phase 2 planned. Per-step status lives on
+memory E2E, built (§4.6, §6); step A, load ownership and abort under the
+same flag, built (§4.5a); steps C (Back/Forward, every open surface, §4.6)
+and D (per-open dedupe, §5) built. Phase 2 planned. Per-step status lives on
 #2011 and its sub-issues, not here.
 **Epic:** `open-205` (#2011). Stories: Phase 0 #2012 (tasks #2013–#2018,
 closed; #2017 moved to Phase 1), Phase 1 #2028 (measure), #2029
@@ -90,9 +91,11 @@ the page load was quietly covering.
 **On the worker path this no longer matters:** `ShareIfc.dispose` closes
 the engine session of every *registered* model, which terminates its
 worker (checked by `modelSwitchMemory.spec.ts`, §6). A model registers only
-when its parse returns (`ShareIfcLoader.js`, `ifc.addIfcModel`), so a
-worker superseded mid-parse is not closed by the dispose (#2031). The rest
-of this section is the main-thread path.
+when its parse returns (`ShareIfcLoader.js`, `ifc.addIfcModel`), so before
+step A a worker superseded mid-parse was not closed by the dispose (#2031).
+Under `?feature=spaModelNav` it now is: the load is aborted, and the
+dispose also aborts every engine load still parsing into the viewer
+(§4.5a). The rest of this section is the main-thread path.
 
 `ShareViewer.dispose` (`:630`, async, **not awaited** by `disposeViewer`,
 `viewer.js:103`) calls `ShareIfc.dispose` (`ShareIfc.js:225-241`), which
@@ -569,6 +572,62 @@ exceeded (phones first).
 An evicted model reopens like any other (its GLB cache hit makes that
 cheap where one exists).
 
+### 4.5a Phase 1a step A, as built: the switch aborts the load it leaves
+
+Phase 1a is "switch = close", one model at a time (#2011), so until
+sessions (§4.3) the close path above is what a switch takes, and it is
+built for that case only: no `EngineHost`, budget, LRU or rehydrate. All
+of it is under `?feature=spaModelNav`; off the flag nothing is aborted and
+a switch mid-load still waits behind the load.
+
+- **Who owns a load.** Each CadView `onViewer` run gets an
+  `AbortController` (`loadAbortRef`). Leaving the model aborts it, in
+  `onModelPath`'s `initViewerCb`, before `initViewer` disposes the viewer
+  the load streams into: on a model change, and on a viewer re-created for
+  the same model (a theme or view-settings change), which `onViewer` then
+  reloads into the new viewer. The aborted run unwinds at its next await
+  and the next model's load starts then. Loads stay one at a time, which
+  the per-load module state (the load reporter, the artifact generation,
+  the streaming selection) still assumes; what changed is that "the end of
+  the load in flight" is now its next await, not its end.
+- **What the signal reaches** (`utils/loadAbort.js`). `Loader.js#load`
+  races its download, OPFS staging and parse against it, quiets its
+  `onProgress` and `setOpfsFile` for the work it cannot stop, never falls
+  back to a direct fetch for an abort, and skips the idle GLB writer of a
+  model left before it ran. `ShareIfcLoader#parse` (IFC and STEP alike)
+  terminates the engine worker (`engineModelLoad.js#abort`: the open, the
+  pump and every pending request reject; a spawn still starting is closed
+  when it lands), or, on the main-thread engine, stops the pump at its next
+  batch; the open there is one wasm call and runs to its end. Either way
+  nothing is registered with the viewer and the parse rejects with a
+  `LoadAbortedError`, not null. The mesh loaders (GLB, OBJ, STL, …) have no
+  engine and cannot be stopped: their parse runs on and its model is
+  dropped, never registered.
+- **The close path for a model that never registered** (#2031's).
+  `ShareIfc` tracks each engine load parsing into it (`trackEngineLoad`),
+  and its `dispose` aborts them, beside closing the registered models.
+- **Nothing of the left model is written after the abort.** Every CadView
+  guard reads an aborted run as superseded (`isLoadSuperseded`), so after
+  A → B → A a run given up for its viewer is not "current" again. The run's
+  catch takes an abort as an abort: no alert, no `load_failed`, no Sentry;
+  one GA `model_load_aborted` (`phase`, `format`, real opens only). The load
+  report is cleared, not frozen with a "Load failed" line
+  (`endLoadProgress(…, {isAborted})`).
+- **The store's per-model state goes when the user leaves**
+  (`CadView#forgetLoadedModelState`, the load-ownership part of #2019):
+  `model`, `isModelReady`, the tree, search, `loadedFileInfo`, the export
+  artifact, `opfsFile` and the load report, so the page reads as a fresh
+  page load does before the model arrives. Before, `model` stayed A until
+  B's `setModel` (§2.4).
+- **Off the flag** a theme change mid-load still lets the load run into
+  the disposed viewer, which then fails at `addIfcModel` with "Cannot read
+  properties of null (reading 'items')" (an alert, and a Sentry capture),
+  and the model is not reloaded. Seen in a probe on index.ifc held at its
+  index; unchanged here, and fixed under the flag.
+
+Verified by `modelSwitchMemory.spec.ts` (§6) and unit tests beside each
+piece.
+
 ### 4.6 `navigateToModel` in-app, behind a flag (#2021)
 
 `navigate()` instead of `location.assign`, keeping `withCurrentSearch`;
@@ -742,6 +801,16 @@ A heap-size number can't fail reliably, so the test asserts **collection**:
   asserts A's engine is collected once its parse has stopped.
 - Shown red with one close/eviction step reverted (e.g. the store or the
   idle GLB writer still holding the closed session's model).
+
+**As built in step A** (same spec, §4.5a): a switch while A is held at its
+index (the conway loaders' `__bldrsTestHoldGeometryPump` seam, so A is
+mid-load on any runner) terminates A's worker, loads B in the same
+document, raises no alert and logs no failure, and leaves nothing of A in
+B's store, NavTree root, title or load report, also once A's hold is let
+go. IFC and STEP in the worker, IFC on the main-thread engine. With B held
+instead, after A finished, the store's `model` is not A's while B loads.
+A theme change while A is held reloads A into the new viewer and
+terminates the first worker.
 
 **As built in step 0** (`src/Containers/modelSwitchMemory.spec.ts`, one
 model at a time, switch = close): load A, let it and its GLB writer finish,

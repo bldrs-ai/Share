@@ -44,6 +44,7 @@ import {BatchedMesh, BufferGeometry, Mesh} from 'three'
 import {acceleratedRaycast, disposeBoundsTree} from 'three-mesh-bvh'
 import {IfcAPI} from '@bldrs-ai/conway/web-ifc'
 import ShareIfcManager from './ShareIfcManager'
+import {isFeatureEnabled} from '../../FeatureFlags'
 import {raycastActiveInstances} from './batchedRaycast'
 import {computeQuietBatchedBoundsTree, computeQuietBoundsTree} from './bvhBuild'
 import {disposeDeferredBatchedBoundsTree} from './deferredBatchedBvh'
@@ -153,6 +154,27 @@ export default class ShareIfc {
     // (`'glb'`, `'obj'`, …). Capability flags on `ShareModel` (§8.2) are
     // the real source of truth; this stays a writable slot for compat.
     this.type = undefined
+    // Engine-worker loads still parsing into this viewer
+    // (`ShareIfcLoader#parse`, `trackEngineLoad`). A model joins
+    // `context.items.ifcModels` only once its parse returns, so these are the
+    // engines `dispose` would otherwise miss (open-205 #2011 step A, #2031).
+    this.engineLoads = new Set()
+  }
+
+
+  /**
+   * Note an engine-worker load that is parsing into this viewer, so
+   * `dispose` can terminate its engine if the viewer goes first.
+   *
+   * @param {{abort: Function}} engineLoad from engine/engineModelLoad.js
+   *   #createEngineModelLoad
+   * @return {function(): void} call once the parse has settled
+   */
+  trackEngineLoad(engineLoad) {
+    this.engineLoads.add(engineLoad)
+    return () => {
+      this.engineLoads.delete(engineLoad)
+    }
   }
 
 
@@ -234,6 +256,24 @@ export default class ShareIfc {
         console.warn('ShareIfc.dispose: engine session close failed:', e)
       }
     }
+    // An engine still parsing into this viewer has no model registered yet.
+    // Under the in-app switch (`?feature=spaModelNav`) its load is given up
+    // with the viewer: `abort` terminates the worker and the parse rejects as
+    // aborted, which CadView, having aborted the load itself first, takes as
+    // the switch it is (Containers/CadView.jsx#abortLoadInFlight). Off the
+    // flag the load keeps running into the disposed viewer, as before:
+    // there, a viewer is disposed mid-load only by a theme change, and what
+    // that load does next is unchanged.
+    if (isFeatureEnabled('spaModelNav')) {
+      for (const engineLoad of this.engineLoads) {
+        try {
+          engineLoad.abort()
+        } catch (e) {
+          console.warn('ShareIfc.dispose: engine load abort failed:', e)
+        }
+      }
+    }
+    this.engineLoads.clear()
     const ifcAPI = this.loader?.ifcManager?.ifcAPI
     const models = ifcAPI?.models
     if (models && typeof models.keys === 'function' && typeof ifcAPI.CloseModel === 'function') {
