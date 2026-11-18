@@ -1,4 +1,5 @@
-import {expect, test} from '@playwright/test'
+import {randomUUID} from 'crypto'
+import {expect, Page, test} from '@playwright/test'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 import {waitForModelReady} from '../../tests/e2e/models'
 import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
@@ -55,5 +56,130 @@ describeMobileAndDesktop('Open 110: a local-file link opened in another browser'
     // Still up after the home model finished loading, i.e. the navigation
     // didn't close it on the way.
     await expect(page.getByTestId('dialog-open-model-tabs-stack')).toBeVisible()
+  })
+})
+
+
+/**
+ * The analytics the same page load sends (`local_link_missing` and its
+ * follow-up action; design/new/quotas.md §"Gate events"). Read from
+ * `window.dataLayer`, which gtag's inline stub fills even with GA blocked
+ * (see Containers/realModelOpen.spec.ts).
+ *
+ * @param page Playwright page object
+ * @param eventName gtag event name
+ * @return The params of each such event
+ */
+async function gaEvents(page: Page, eventName: string): Promise<Record<string, unknown>[]> {
+  return await page.evaluate((name) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dataLayer: any[] = (window as any).dataLayer || []
+    return dataLayer
+      .filter((entry) => entry?.[0] === 'event' && entry?.[1] === name)
+      .map((entry) => ({...entry[2]}))
+  }, eventName)
+}
+
+
+// Mirrors OPFS/uploadLedger.js#UPLOAD_LEDGER_KEY, which a spec can't import.
+// Any file the loader accepts; this one is small and already served.
+const PICKED_FILE = 'public/index.ifc'
+// Two model loads in one test, as in shareLocalFile.spec.ts.
+const TEST_TIMEOUT_MS = 90_000
+
+
+const LEDGER_KEY = 'bldrs:local-upload-ledger'
+
+
+describeMobileAndDesktop('Open 110: local_link_missing analytics', () => {
+  test.beforeEach(async ({page, context}) => {
+    await homepageSetup(page)
+    await setIsReturningUser(context)
+  })
+
+  test('an id this browser never held reports origin unknown, then the open_file action', async ({page}) => {
+    await page.goto(`/share/v/local-only/${MISSING_ID}`, {waitUntil: 'domcontentloaded'})
+    await expect(page.getByRole('dialog')).toBeVisible({timeout: ALERT_TIMEOUT_MS})
+    await expect.poll(() => gaEvents(page, 'local_link_missing')).toEqual([
+      expect.objectContaining({origin: 'unknown', legacy_route: false, signed_in: false}),
+    ])
+    expect(await gaEvents(page, 'local_link_missing_action')).toHaveLength(0)
+
+    await page.getByRole('dialog').getByTestId('button-dialog-main-action').click()
+    await expect.poll(() => gaEvents(page, 'local_link_missing_action')).toEqual([
+      expect.objectContaining({action: 'open_file', origin: 'unknown'}),
+    ])
+    expect(await gaEvents(page, 'local_link_missing')).toHaveLength(1)
+  })
+
+  test('an id in the upload ledger reports origin this_browser', async ({page}) => {
+    // The "held it, lost it" browser: the ledger remembers, OPFS does not.
+    await page.addInitScript(([key, id]) => {
+      window.localStorage.setItem(key, JSON.stringify([id]))
+    }, [LEDGER_KEY, MISSING_ID])
+    await page.goto(`/share/v/local-only/${MISSING_ID}`, {waitUntil: 'domcontentloaded'})
+    await expect(page.getByRole('dialog')).toBeVisible({timeout: ALERT_TIMEOUT_MS})
+    await expect.poll(() => gaEvents(page, 'local_link_missing')).toEqual([
+      expect.objectContaining({origin: 'this_browser'}),
+    ])
+
+    await page.getByRole('dialog').getByTestId('button-dialog-main-action').click()
+    await expect.poll(() => gaEvents(page, 'local_link_missing_action')).toEqual([
+      expect.objectContaining({action: 'open_file', origin: 'this_browser'}),
+    ])
+  })
+
+  // What the scripted-seed test above cannot prove: that the ledger is
+  // written by the user's own successful open. Nothing here touches
+  // localStorage; the open must leave the entry behind, and losing the
+  // upload's bytes (clearOPFSCache, which empties OPFS only) must then read
+  // as "this browser held it". The entry comes from CadView's
+  // recordLocalUpload or the startup seed from the Open dialog's recents
+  // (seedUploadLedgerFromRecents); either is enough, and with both off
+  // this test reports origin unknown.
+  test('a file opened through the UI, then lost from OPFS, reports origin this_browser', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+    await page.goto('/share/v/p/index.ifc', {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page)
+    await page.getByTestId('control-button-open').click()
+    await page.getByRole('tab', {name: 'Local'}).click()
+    const chooserEvent = page.waitForEvent('filechooser')
+    await page.getByTestId('button_open_file').click()
+    await (await chooserEvent).setFiles(PICKED_FILE)
+    await expect(page).toHaveURL(/\/share\/v\/local-only\/.+\.ifc/)
+    await waitForModelReady(page)
+    const uploadUrl = page.url()
+
+    // The upload's engine worker holds a read handle that makes the delete
+    // skip the entry; a full page load onto a hosted model releases it.
+    await page.goto('/share/v/p/index.ifc', {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page)
+    // Empty OPFS from the page, leaving localStorage (the ledger) alone.
+    // Anything still held is reported back as skipped.
+    const skipped = await page.evaluate(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async () => await (window as any).clearOPFSCache())
+    expect(skipped).toEqual([])
+
+    // A real page load of the same link.
+    await page.goto(uploadUrl, {waitUntil: 'domcontentloaded'})
+    await expect(page.getByRole('dialog').getByText('File not in this browser'))
+      .toBeVisible({timeout: ALERT_TIMEOUT_MS})
+    await expect.poll(() => gaEvents(page, 'local_link_missing')).toEqual([
+      expect.objectContaining({origin: 'this_browser', legacy_route: false}),
+    ])
+  })
+
+  // What the other tests cannot prove: the legacy `/v/new/` redirect carries
+  // its router state through to the event, so GA can tell old links apart.
+  test('a legacy /v/new/ link redirects and reports legacy_route', async ({page}) => {
+    const id = `${randomUUID()}.ifc`
+    await page.goto(`/share/v/new/${id}`, {waitUntil: 'domcontentloaded'})
+    await expect(page).toHaveURL(new RegExp(`/share/v/local-only/${id}$`))
+    await expect(page.getByRole('dialog').getByText('File not in this browser'))
+      .toBeVisible({timeout: ALERT_TIMEOUT_MS})
+    await expect.poll(() => gaEvents(page, 'local_link_missing')).toEqual([
+      expect.objectContaining({legacy_route: true, origin: 'unknown'}),
+    ])
   })
 })

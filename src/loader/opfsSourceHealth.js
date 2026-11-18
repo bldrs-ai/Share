@@ -1,5 +1,6 @@
 import {PART21_LOADER_TYPES} from './part21Formats'
 import {looksLikeTruncatedPart21Blob} from './stepFormat'
+import {looksLikeZipBytes} from './zipArchive'
 
 
 /**
@@ -30,8 +31,22 @@ export async function isUnusableOpfsSource(file, loaderType) {
   if (file.size === 0) {
     return true
   }
-  return PART21_LOADER_TYPES.has(loaderType) && await looksLikeTruncatedPart21Blob(file)
+  if (!PART21_LOADER_TYPES.has(loaderType)) {
+    return false
+  }
+  // A zip under a part-21 name (a renamed `.ifczip`) is opened by its content
+  // after the read (Loader.js#load). A stored (uncompressed) entry puts
+  // `ISO-10303-21` in its head while its tail is the zip's directory, which
+  // the footer sniff would call truncated: evicted and re-fetched every load.
+  if (looksLikeZipBytes(await file.slice(0, ZIP_SIGNATURE_BYTES).arrayBuffer())) {
+    return false
+  }
+  return looksLikeTruncatedPart21Blob(file)
 }
+
+
+// The zip signatures' length (`zipArchive.js#looksLikeZipBytes`).
+const ZIP_SIGNATURE_BYTES = 4
 
 
 /**

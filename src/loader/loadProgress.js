@@ -1773,8 +1773,25 @@ export function setLoadSummary(text) {
  * @param {Error} [error] the loader error when the load failed; omitted /
  *   null on success. Called from CadView's load `finally`, which captures
  *   the thrown error before re-raising it to the outer handler.
+ * @param {object} [options]
+ * @param {boolean} [options.isAborted] the load was given up, not failed
+ *   (an in-app switch under `?feature=spaModelNav`, utils/loadAbort.js): its
+ *   report belongs to a model the user has left, so it is cleared rather
+ *   than frozen, and no grace line says the load failed. The reporter is
+ *   kept as the last one, so getLoadFailureInfo can still say where it
+ *   stopped.
  */
-export function endLoadProgress(error = null) {
+export function endLoadProgress(error = null, {isAborted = false} = {}) {
+  if (isAborted) {
+    if (activeReporter && !activeReporter.ended) {
+      activeReporter.dispose()
+      const store = useStore.getState()
+      store.setLoadReportLines([])
+      store.setCurrentLoadLine(null)
+      store.setLoadResult(null)
+    }
+    return
+  }
   if (activeReporter && !activeReporter.ended) {
     activeReporter.finishReport()
     // The collapsed grace line stays deliberately terse — just the outcome
