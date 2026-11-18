@@ -290,6 +290,22 @@ narrows misuse at near-zero cost, so I recommend it. Requiring `tools` to
 match the published registry (by schema hash) is a stronger option, but it
 couples relay deploys to client releases. Left as an open question (§15).
 
+**Built (2026-11-18): `netlify/functions/ai-chat.js`, a v2 streaming
+Function** (#1932). It runs §5 steps 1–6 as above, plus the preamble. The
+wall-clock and streaming limits below are still unmeasured on a deploy
+preview, and so is whether `context.waitUntil` keeps the function alive to
+the usage chunk after a client hangs up. What happens either way: a hold the
+function never settles expires into spend at its reservation
+(`_lib/aiLedger.js`), so a cut-off function can over-charge a user but
+never under-charge Bldrs. A settle that fails is retried (three attempts,
+jittered, within 3 s, safe because settle is idempotent); one that still
+fails, or that finds its hold already expired, leaves a reconciliation
+record (`ai/reconcile/<day>/<request>`: generation id, actual cost, the
+buckets left at their reservation) and a `settle_failed` warning (Codex on
+#2220). The generation-id reconciliation job that reads those records and
+the `estimates` entries is not built. The rest of this paragraph is the spike's framing, kept for the
+limits it still has to measure.
+
 **Vehicle: open, spike #1928.** Share has no streaming function today. Every
 function is a buffered v1 Lambda `handler(event)` except `proxy-handler.js`,
 a v2 `export default async (req) => Response` with an origin allowlist
@@ -671,10 +687,39 @@ Per-message metering would multiply that write rate by roughly 100.
     in full (§5 Amendment 3), and releases the difference.
 - **The reservation must be atomic.** That needs a conditional write
   (compare-and-swap on an ETag/version) or an atomic increment in the
-  store. Whether Netlify Blobs offers either is **UNVERIFIED** and is a
-  gating question for spike #1928. If Blobs can't, the ledger moves to a
-  store that can (for example a KV with atomic counters, or a small
-  Postgres row with `UPDATE … WHERE balance >= cost`) before #1932 ships.
+  store. **Settled (2026-11-18): Netlify Blobs has a conditional write.**
+  `store.set(key, value, {onlyIfMatch: etag})` sends `If-Match`,
+  `{onlyIfNew: true}` sends `If-None-Match: *`, and a lost race comes back
+  as a 412, which `@netlify/blobs` reports as `{modified: false}` (read in
+  the pinned 10.7.4's types and source). The ledger
+  (`netlify/functions/_lib/aiLedger.js`) is a compare-and-swap loop over
+  that, with strong-consistency reads. One trap: in 10.7.4 **`setJSON`
+  drops the condition** (it spreads `conditions` into the request instead
+  of passing them), so its write is unconditional and still reports
+  `modified: true`. The ledger uses `set` with `JSON.stringify`, and
+  `_tests/aiLedger.test.js` pins both the trap and the race: two
+  reservations against one balance, through the real client against a
+  server with the Blobs API's conditional-write contract, can't both land.
+  What this rests on is Netlify's service honouring `If-Match` atomically,
+  which is its documented contract and can't be shown locally: the local
+  `BlobsServer` checks then writes across awaits, and its ETag is the
+  file's mtime, so it is not atomic and is not used. The shared breaker
+  key is the hot one: every anonymous and free paid request CASes it
+  twice, so under real load it may need sharding.
+  **The reservation is an upper bound by construction** (Codex on #2220,
+  `ai-chat.js#reservationMicro`): input tokens counted as the UTF-8 bytes
+  sent (every token covers at least one byte) plus per-message, per-tool
+  and base allowances; output as the `max_tokens` sent; priced at the
+  dearest listed endpoint of the whole fallback chain (live catalog,
+  2026-11-18, long-context tiers included), which the relay also sends as
+  `provider.max_price`; times 1.1. A settle above it is booked in full and
+  reported (`settle_exceeded_reservation`). The cost of a genuine bound: at
+  the anonymous placeholder ($0.02) a request is admitted only while its
+  body is under about 43 KB on an empty budget, so the anonymous budget
+  (or a smaller anonymous body cap) is the owner's to revisit. A fetch that
+  fails after the request may have reached OpenRouter settles at the
+  reservation too, kept in the record's `estimates` with the generation id
+  when known, for the reconciliation job (§5 Amendment 3) to correct.
   The direction is "never more spend than budgeted", unlike quotas.md's
   "free extra, never wrongful block": for model loads an under-count costs
   nothing, but for AI credits it costs real money.

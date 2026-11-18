@@ -14,6 +14,8 @@ export type {AssistErrorCode} from './assistError'
 export {createMemoryConversationStore} from './conversation'
 export type {ConversationStore} from './conversation'
 export {ToolError} from './errors'
+export {HOSTED_TRANSPORT_ID, HOSTED_TRANSPORT_LABEL, hostedMetaOf, relayError} from './hosted'
+export type {HostedMeta} from './hosted'
 export type {ToolErrorCode} from './errors'
 export {copyJson, findNonJson} from './json'
 export {OPENROUTER_KEY_ID, createSessionKeyStore} from './keyStore'
@@ -32,7 +34,7 @@ export type {
   UndoReport,
 } from './session'
 export type {Assist, AssistOptions} from './loop'
-export type {OpenRouterTransportOptions, Transport} from './transport'
+export type {HostedTransportOptions, OpenRouterTransportOptions, Transport} from './transport'
 export type {
   ContextBlock,
   ContextSource,

@@ -2,9 +2,10 @@ import {transferableAbortController} from 'node:util'
 import React from 'react'
 import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react'
 import {http} from 'msw'
-import {OPENROUTER_KEY_ID, assistErrorMessage} from '../../assist'
+import {HOSTED_TRANSPORT_LABEL, OPENROUTER_KEY_ID, assistErrorMessage} from '../../assist'
 import {DEFAULT_MAX_STEPS} from '../../assist/loop'
-import {SCRIPT, SSE_HEADERS, sseText, toolCalls} from '../../assist/openrouterSse.fixture'
+import {SCRIPT, SSE_HEADERS, sseText, textReply, toolCalls} from '../../assist/openrouterSse.fixture'
+import {AI_RELAY_PATH, MOCK_ANON_TOKEN_PREFIX} from '../../__mocks__/api-handlers-openrouter'
 import {getServer} from '../../__mocks__/server'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import useStore from '../../store/useStore'
@@ -14,9 +15,10 @@ import BotChat, {
   TURN_FAILED_MESSAGE,
   stepLimitMessage,
 } from './BotChat'
-import {assistKeyStore, resetAssistChat} from './assistState'
+import {ANON_TOKEN_KEY, assistKeyStore, overflowNotice, resetAssistChat} from './assistState'
 import {BOT_TITLE} from './component'
 import {reportAssistCondition} from './reportAssistCondition'
+import {trackAssistQuotaLimit} from './trackAssistQuota'
 
 
 // The test DOM's AbortController must be Node's. The loop's AbortSignal
@@ -33,6 +35,14 @@ globalThis.AbortSignal = new NodeAbortController().signal.constructor as typeof 
 
 
 jest.mock('./reportAssistCondition', () => ({reportAssistCondition: jest.fn()}))
+jest.mock('./trackAssistQuota', () => ({trackAssistQuotaLimit: jest.fn()}))
+// The panel reads the sign-in for the hosted transport (assistState.js
+// assistAuth); signed out unless a test says otherwise.
+const mockAuth = {isAuthenticated: false, getAccessTokenSilently: () => Promise.resolve('auth0-access-token')}
+jest.mock('../../Auth0/Auth0Proxy', () => ({
+  ...jest.requireActual('../../Auth0/Auth0Proxy'),
+  useAuth0: () => mockAuth,
+}))
 const mockControl = {runtimeFails: false, runtimeDelayMs: 0, startThrows: false, labelThrows: false}
 
 
@@ -62,7 +72,9 @@ jest.mock('../../viewer/tools/assistHost', () => {
     createShareAssist: (runtime: {
       createAssist: (o: object) => object,
       openRouterTransport: (o: object) => {label: string},
-    }, deps: {keyStore: {get: (id: string) => string | null}, conversationStore: object}) => {
+      hostedTransport: (o: object) => {label: string},
+      selectTransport: (choose: () => object) => {label: string},
+    }, deps: {keyStore: {get: (id: string) => string | null}, conversationStore: object, hosted: object}) => {
       if (mockControl.startThrows) {
         throw new Error('builder broke')
       }
@@ -70,10 +82,14 @@ jest.mock('../../viewer/tools/assistHost', () => {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const {createRegistry: make} = require('../../assist')
       const registry = make([mockModelTools(), mockViewTools()])
-      const transport = runtime.openRouterTransport({
+      // The same choice as the real createShareAssist: the user's key, else the relay.
+      const byok = runtime.openRouterTransport({
         getKey: () => deps.keyStore.get('openrouter'), model: 'mock/model',
         baseURL: `${process.env.OPENROUTER_BASE_URL}/api/v1`,
       })
+      const hosted = runtime.hostedTransport({relayUrl: '/.netlify/functions/ai-chat', model: 'mock/model',
+        ...deps.hosted})
+      const transport = runtime.selectTransport(() => (deps.keyStore.get('openrouter') ? byok : hosted))
       // A transport whose label throws makes the panel's event handling throw.
       const shown = mockControl.labelThrows ? Object.defineProperty({...transport}, 'label', {get: () => {
         throw new Error('label broke')
@@ -141,6 +157,8 @@ describe('BotChat', () => {
     mockView.holdUndo = null
     Object.assign(mockControl, {runtimeFails: false, runtimeDelayMs: 0, startThrows: false, labelThrows: false})
     jest.mocked(reportAssistCondition).mockClear()
+    jest.mocked(trackAssistQuotaLimit).mockClear()
+    mockAuth.isAuthenticated = false
     act(() => {
       setStoreState({isBotVisible: true})
       assistKeyStore.set(OPENROUTER_KEY_ID, 'test-key')
@@ -214,14 +232,114 @@ describe('BotChat', () => {
     expect(reply.textContent).toBe(stopped)
   })
 
-  it('without a key, says where to add one and sends nothing', async () => {
-    act(() => {
-      assistKeyStore.forget(OPENROUTER_KEY_ID)
+  describe('without a key of the user\'s own (the hosted relay)', () => {
+    const HTTP_PAYMENT_REQUIRED = 402
+    const HTTP_SERVICE_UNAVAILABLE = 503
+
+    /**
+     * Record the relay requests a test makes.
+     *
+     * @return the requests seen, and `stop` to stop watching
+     */
+    function watchRelay() {
+      const requests: Array<{authorization: string | null}> = []
+      const onRequest = ({request}: {request: Request}) => {
+        if (new URL(request.url).pathname === AI_RELAY_PATH) {
+          requests.push({authorization: request.headers.get('authorization')})
+        }
+      }
+      getServer().events.on('request:start', onRequest)
+      return {requests, stop: () => getServer().events.removeListener('request:start', onRequest)}
+    }
+
+    /**
+     * @param status
+     * @param body the relay's JSON
+     * @param headers more response headers
+     */
+    function relayAnswers(status: number, body: object, headers: Record<string, string> = {}) {
+      getServer().use(http.post(AI_RELAY_PATH, () => new Response(JSON.stringify(body),
+        {status, headers: {'Content-Type': 'application/json', ...headers}})))
+    }
+
+    beforeEach(() => {
+      act(() => {
+        assistKeyStore.forget(OPENROUTER_KEY_ID)
+      })
     })
-    render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
-    send('Hello bot')
-    expect(await screen.findByTestId('BotChat-Error')).toHaveTextContent(assistErrorMessage('no_key', 'OpenRouter'))
-    expect(screen.queryByText('Test received.')).toBeNull()
+
+    it('answers through the relay, anonymously, and keeps the token it is given for the next turn', async () => {
+      const relay = watchRelay()
+      try {
+        render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        send('Hello bot')
+        expect(await screen.findByText('Test received.')).toBeInTheDocument()
+        expect(screen.queryByTestId('BotChat-Error')).toBeNull()
+        expect(localStorage.getItem(ANON_TOKEN_KEY)).toMatch(new RegExp(`^${MOCK_ANON_TOKEN_PREFIX.replace(/\./g, '\\.')}`))
+        await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
+        send('Hello again')
+        await waitFor(() => expect(screen.getAllByText('Test received.')).toHaveLength(2))
+        expect(relay.requests.map((r) => r.authorization)).toEqual([null, `Bearer ${localStorage.getItem(ANON_TOKEN_KEY)}`])
+      } finally {
+        relay.stop()
+      }
+    })
+
+    it('a signed-in user\'s turns carry their Auth0 token, not an anonymous one', async () => {
+      mockAuth.isAuthenticated = true
+      const relay = watchRelay()
+      try {
+        render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        send('Hello bot')
+        expect(await screen.findByText('Test received.')).toBeInTheDocument()
+        expect(relay.requests.map((r) => r.authorization)).toEqual(['Bearer auth0-access-token'])
+        expect(localStorage.getItem(ANON_TOKEN_KEY)).toBeNull()
+      } finally {
+        relay.stop()
+      }
+    })
+
+    it('an exhausted allowance says to sign in, and is counted for the funnel, not reported', async () => {
+      relayAnswers(HTTP_PAYMENT_REQUIRED, {error: {code: 'ai_credits_exhausted'}, tier: 'anonymous'})
+      render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+      send('Hello bot')
+      expect(await screen.findByTestId('BotChat-Error')).toHaveTextContent(
+        assistErrorMessage('credits_exhausted', HOSTED_TRANSPORT_LABEL, HTTP_PAYMENT_REQUIRED, 'anonymous'))
+      expect(screen.getByTestId('BotChat-Error')).toHaveTextContent('Sign in for more')
+      expect(trackAssistQuotaLimit).toHaveBeenCalledWith('anonymous')
+      expect(reportAssistCondition).not.toHaveBeenCalled()
+    })
+
+    it('a free user out of credits is told to upgrade', async () => {
+      relayAnswers(HTTP_PAYMENT_REQUIRED, {error: {code: 'ai_credits_exhausted'}, tier: 'free'})
+      render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+      send('Hello bot')
+      expect(await screen.findByTestId('BotChat-Error')).toHaveTextContent('Upgrade to Pro')
+      expect(trackAssistQuotaLimit).toHaveBeenCalledWith('free')
+    })
+
+    it('a hosted outage is shown, and left to the relay to report', async () => {
+      relayAnswers(HTTP_SERVICE_UNAVAILABLE, {error: {code: 'ai_unavailable'}, tier: 'anonymous'})
+      render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+      send('Hello bot')
+      expect(await screen.findByTestId('BotChat-Error'))
+        .toHaveTextContent(assistErrorMessage('service_unavailable', HOSTED_TRANSPORT_LABEL))
+      expect(reportAssistCondition).not.toHaveBeenCalled()
+      expect(trackAssistQuotaLimit).not.toHaveBeenCalled()
+    })
+
+    it('past the breaker, says once that replies now come from free models', async () => {
+      getServer().use(http.post(AI_RELAY_PATH, () => new Response(sseText(textReply('Free reply.')),
+        {status: 200, headers: {...SSE_HEADERS, 'x-bldrs-ai-overflow': 'free_models', 'x-bldrs-ai-tier': 'anonymous'}})))
+      render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+      send('Hello bot')
+      expect(await screen.findByText('Free reply.')).toBeInTheDocument()
+      expect(screen.getByTestId('BotChat-Notice')).toHaveTextContent(overflowNotice('anonymous'))
+      await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
+      send('Hello again')
+      await waitFor(() => expect(screen.getAllByText('Free reply.')).toHaveLength(2))
+      expect(screen.getAllByTestId('BotChat-Notice')).toHaveLength(1)
+    })
   })
 
   it('saves the key from settings to the session key store only', () => {

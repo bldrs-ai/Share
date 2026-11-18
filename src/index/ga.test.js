@@ -1,10 +1,12 @@
 import Cookies from 'js-cookie'
 import {captureException, setTag} from '@sentry/react'
 import {_resetGaClientIdForTests, getGaClientId, setIsAllowed} from '../privacy/analytics'
+import {reportClientCapability} from '../privacy/clientCapabilities'
 import setupGa, {GA_MEASUREMENT_ID, shouldInitGa} from './ga'
 
 
 jest.mock('@sentry/react', () => ({captureException: jest.fn(), setTag: jest.fn()}))
+jest.mock('../privacy/clientCapabilities', () => ({reportClientCapability: jest.fn()}))
 
 
 /** @return {HTMLScriptElement|null} the injected gtag/js tag, if any */
@@ -122,13 +124,14 @@ describe('setupGa', () => {
     consoleWarn.mockRestore()
   })
 
-  test('reports a load failure to Sentry, tagged ga_init', () => {
+  // A blocked client is expected, not a defect (AGENTS.md, Reported
+  // Conditions): counted as a client-capability report, not a Sentry event.
+  test('reports a load failure as a ga_blocked capability report, not to Sentry', () => {
     setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+    expect(reportClientCapability).not.toHaveBeenCalled()
     findGtagScript().onerror()
-    expect(captureException).toHaveBeenCalledWith(
-      expect.objectContaining({message: expect.stringContaining('ga_init: gtag/js failed to load')}),
-      {tags: {subsystem: 'ga_init'}},
-    )
+    expect(reportClientCapability).toHaveBeenCalledWith('ga_blocked')
+    expect(captureException).not.toHaveBeenCalled()
   })
 
   // GA4 has no user-id dimension, so the client id ships as an event
@@ -268,9 +271,11 @@ describe('setupGa', () => {
     delete window.gtag
     expect(() => setupGa({hostname: 'bldrs.ai', isWebdriver: false})).not.toThrow()
     expect(findGtagScript()).toBeNull()
+    // Fingerprinted, so one defect is one issue whatever the build's stack.
     expect(captureException).toHaveBeenCalledWith(
       expect.objectContaining({message: expect.stringContaining('ga_init: gtag bootstrap missing')}),
-      {tags: {subsystem: 'ga_init'}},
+      {tags: {subsystem: 'ga_init'}, fingerprint: ['ga_init', expect.stringContaining('gtag bootstrap missing')]},
     )
+    expect(reportClientCapability).not.toHaveBeenCalled()
   })
 })

@@ -25,35 +25,47 @@ export function createShareAssistRegistry() {
 /**
  * The OpenRouter model the assistant uses. Eval #1929's pick for the default
  * (ai-workspace.md D3, §6): reliable tool calls, deny routing available, and
- * about $0.00015 a turn. Choosing a model is #1934.
+ * about $0.00015 a turn. Choosing a model is #1934. The hosted relay accepts
+ * it on every tier and adds its own fallbacks (netlify/functions/_lib/aiModels.js).
  */
 export const ASSIST_MODEL = 'qwen/qwen3.7-flash'
 
 
+/** Bldrs' hosted assistant relay (netlify/functions/ai-chat.js), same origin. */
+export const AI_RELAY_URL = '/.netlify/functions/ai-chat'
+
+
 /**
- * The agent loop over Share's registry (#1675): the user's OpenRouter key
- * from `keyStore`, Share's instructions, and the conversation kept in
- * `conversationStore`. `runtime` is the lazy module
- * (viewer/tools/assistRuntime.js), passed in so this module never imports
- * the AI SDK.
+ * The agent loop over Share's registry (#1675), on one of two transports
+ * chosen afresh each turn (ai-workspace.md D1): the user's own OpenRouter key
+ * from `keyStore` when they have given one (BYOK, browser → OpenRouter), and
+ * otherwise Bldrs' hosted relay within their plan's credits (#1932). Share's
+ * instructions, and the conversation kept in `conversationStore`. `runtime`
+ * is the lazy module (viewer/tools/assistRuntime.js), passed in so this module
+ * never imports the AI SDK.
  *
  * @param {object} runtime `src/assist/runtime.ts`, loaded
  * @param {object} deps
  * @param {object} deps.keyStore an Assist KeyStore
  * @param {object} deps.conversationStore an Assist ConversationStore
+ * @param {object} deps.hosted the hosted transport's host side: `getAuthToken`,
+ *   `anonTokens` and `onMeta`, as `HostedTransportOptions` names them
  * @return {{assist: object, transport: object, dispose: Function}}
  */
-export function createShareAssist(runtime, {keyStore, conversationStore}) {
+export function createShareAssist(runtime, {keyStore, conversationStore, hosted}) {
   const base = process.env.OPENROUTER_BASE_URL
   assertDefined(base, 'OPENROUTER_BASE_URL is required')
+  assertDefined(hosted, 'the hosted transport\'s host side is required')
   const registry = createShareAssistRegistry()
-  const transport = runtime.openRouterTransport({
+  const byok = runtime.openRouterTransport({
     getKey: () => keyStore.get(OPENROUTER_KEY_ID),
     model: ASSIST_MODEL,
     baseURL: `${base}/api/v1`,
     appUrl: 'https://bldrs.ai',
     appTitle: 'Bldrs Share',
   })
+  const relay = runtime.hostedTransport({relayUrl: AI_RELAY_URL, model: ASSIST_MODEL, ...hosted})
+  const transport = runtime.selectTransport(() => (keyStore.get(OPENROUTER_KEY_ID) ? byok : relay))
   const assist = runtime.createAssist({
     transport,
     registry,

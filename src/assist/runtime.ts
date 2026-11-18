@@ -22,5 +22,5 @@ sdkGlobals.AI_SDK_LOG_WARNINGS = false
 
 export {DEFAULT_MAX_STEPS, createAssist} from './loop'
 export type {Assist, AssistOptions} from './loop'
-export {openRouterTransport} from './transport'
-export type {OpenRouterTransportOptions, Transport} from './transport'
+export {hostedTransport, openRouterTransport, selectTransport} from './transport'
+export type {HostedTransportOptions, OpenRouterTransportOptions, Transport} from './transport'

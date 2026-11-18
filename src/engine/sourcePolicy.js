@@ -54,11 +54,14 @@ export const BUFFERED_SOURCE_MAX_BYTES = 1024 * MIB
 export const SMALL_DEVICE_MEMORY_GIB = 4
 
 /**
- * The cap's ceiling on a small device: 256 MiB, conway's windowed provider's
- * own adaptive residency ceiling (`ADAPTIVE_MAX_RESIDENT_BYTES`,
- * `src/step/step_buffer_provider.ts`, 256 MiB in conway 1.1645.781). So on
- * those devices a buffered open never holds more source than a windowed open
- * may come to hold anyway. Caps: 0.25 GiB → 32 MiB, 0.5 → 64, 1 → 128,
+ * The cap's ceiling on a small device: 256 MiB. It was chosen when conway's
+ * windowed provider's adaptive residency ceiling
+ * (`ADAPTIVE_MAX_RESIDENT_BYTES`, `src/step/step_buffer_provider.ts`) was
+ * 256 MiB, so a buffered open never held more source than a windowed open
+ * could come to hold. Conway now caps that window at 160 MiB (conway#789),
+ * so on a small device a buffered open may hold up to 96 MiB more source than
+ * a windowed one would. The value is kept as is pending measurement on such
+ * devices (Share#2139). Caps: 0.25 GiB → 32 MiB, 0.5 → 64, 1 → 128,
  * 2 → 256, 4 → 256, 8 and up → 1 GiB.
  */
 // eslint-disable-next-line no-magic-numbers

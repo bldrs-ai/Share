@@ -778,10 +778,13 @@ heap snapshot and the after-fix numbers).
 largest size anything has been measured buffered at (`deviceMemory` is not
 capped at 8: headless Chromium 153 on a 17 GB machine reports 16). On a
 device reporting 4 GiB or less it is also never above
-`SMALL_DEVICE_BUFFERED_SOURCE_MAX_BYTES`, 256 MiB, conway's windowed
-provider's own adaptive residency ceiling (`ADAPTIVE_MAX_RESIDENT_BYTES`),
-so there a buffered open never holds more source than a windowed one may:
-no device that small has been measured. The caps: 0.25 GiB → 32 MiB, 0.5 →
+`SMALL_DEVICE_BUFFERED_SOURCE_MAX_BYTES`, 256 MiB. That value was set when
+conway's windowed provider's adaptive residency ceiling
+(`ADAPTIVE_MAX_RESIDENT_BYTES`) was also 256 MiB, so a buffered open never
+held more source than a windowed one. Conway#789 lowered the ceiling to
+160 MiB; the cap is kept as is, so a buffered open on a small device may now
+hold up to 96 MiB more than a windowed one. No device that small has been
+measured. The caps: 0.25 GiB → 32 MiB, 0.5 →
 64, 1 → 128, 2 → 256, 4 → 256, 8 and up → 1 GiB (8 GiB buffers PSB at
 860.7 MiB). Without `deviceMemory`, 1 GiB on a desktop and 256 MiB on a
 phone (the repo's form factor rule, `MOBILE_WIDTH`); that branch is only

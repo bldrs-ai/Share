@@ -14,6 +14,9 @@ import {SSE_HEADERS, scriptedReply, sseStream} from '../assist/openrouterSse.fix
  * registry, and their results decide the next reply. Real openrouter.ai is
  * refused here, and `tests/e2e/networkGuard.ts` blocks it in Playwright too.
  *
+ * Also answers Bldrs' hosted relay, `ai-chat`, which the assistant uses for a
+ * user with no key of their own (#1932).
+ *
  * @param defines - The defines that contains the OPENROUTER_BASE_URL.
  * @return The HTTP handlers.
  */
@@ -38,6 +41,29 @@ export default function apiHandlersOpenrouter(defines: Defines): HttpHandler[] {
     })
   }))
 
+  // Bldrs' hosted relay (netlify/functions/ai-chat.js), as the app sees it:
+  // same SSE as OpenRouter's (the relay passes it through), plus the relay's
+  // own headers. A request without a Bearer is anonymous and gets a minted
+  // token, as the real relay does; one with a `ba1.` token stays anonymous;
+  // anything else is a signed-in free user. The ledger, the breaker and the
+  // allowlist are the relay's, tested against it (netlify/functions/_tests/);
+  // this mock only has to be the wire.
+  handlers.push(http.post(AI_RELAY_PATH, async ({request}) => {
+    const bearer = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+    const anonymous = bearer === '' || bearer.startsWith('ba1.')
+    const {chunks, delayMs} = scriptedReply(await request.json() as Parameters<typeof scriptedReply>[0])
+    return new Response(sseStream(chunks, delayMs), {
+      status: HTTP_OK,
+      headers: {
+        ...SSE_HEADERS,
+        'x-bldrs-ai-tier': anonymous ? 'anonymous' : 'free',
+        'x-bldrs-ai-used': '0',
+        'x-bldrs-ai-limit': anonymous ? '20000' : '500000',
+        ...(bearer === '' ? {'x-bldrs-ai-token': `${MOCK_ANON_TOKEN_PREFIX}${++mintedTokens}`} : {}),
+      },
+    })
+  }))
+
   // Block prod
   handlers.push(http.all('https://openrouter.ai/*', () => {
     return new Response(JSON.stringify({error: 'Unexpected request from client in MSW sandbox'}), {
@@ -50,6 +76,14 @@ export default function apiHandlersOpenrouter(defines: Defines): HttpHandler[] {
 
   return handlers
 }
+
+
+/** The relay's path (viewer/tools/assistHost.js AI_RELAY_URL), same origin. */
+export const AI_RELAY_PATH = '/.netlify/functions/ai-chat'
+
+/** What the mock relay's minted anonymous tokens start with; a counter follows. */
+export const MOCK_ANON_TOKEN_PREFIX = 'ba1.mockAnonymousToken.'
+let mintedTokens = 0
 
 
 const OPENROUTER_CORS_HEADERS: Record<string, string> = {

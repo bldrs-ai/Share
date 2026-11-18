@@ -1,5 +1,6 @@
 /* eslint-disable require-await */
 import {ENGINE_PROTOCOL_VERSION} from './protocol'
+import {EngineSession} from './EngineSession'
 import {closeAllEngineSessions, resetEngineWorkerFailureForTests, spawnEngineSession} from './spawnEngine'
 
 
@@ -144,6 +145,26 @@ describe('engine/spawnEngineSession fallback', () => {
     // No second worker, and so no second wait on the init clock.
     expect(makeWorker).not.toHaveBeenCalled()
     expect(warnSpy).toHaveBeenCalledTimes(1)
+  })
+
+  // SHARE-1Y8: on a slow phone the worker failed, then the in-process engine
+  // took over 30 s to fetch and start its wasm, and its own init clock failed
+  // the load. As the last resort it has no clock.
+  it('gives the in-process engine no init clock, after a worker failed or by choice', async () => {
+    const init = jest.spyOn(EngineSession.prototype, 'init')
+    try {
+      await spawnEngineSession({inProcess: true, loadIfcAPI: async () => stubIfcAPI()})
+      await spawnEngineSession({
+        makeWorker: () => {
+          throw new Error('blocked by CSP')
+        },
+        loadIfcAPI: async () => stubIfcAPI(),
+      })
+      // EngineSession.init reads null as no clock (EngineSession.test.js).
+      expect(init.mock.calls.map(([options]) => options.timeoutMs)).toEqual([null, null])
+    } finally {
+      init.mockRestore()
+    }
   })
 
   it('an in-process failure is not retried: there is nowhere left to go', async () => {

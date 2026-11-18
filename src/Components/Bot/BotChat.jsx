@@ -16,7 +16,8 @@ import {
   Settings as SettingsIcon,
   Stop as StopIcon,
 } from '@mui/icons-material'
-import {OPENROUTER_KEY_ID, assistErrorMessage} from '../../assist'
+import {HOSTED_TRANSPORT_LABEL, OPENROUTER_KEY_ID, assistErrorMessage} from '../../assist'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
 import useStore from '../../store/useStore'
 import {createShareAssist} from '../../viewer/tools/assistHost'
 import {loadAssistRuntime} from '../../viewer/tools/assistRuntime'
@@ -24,24 +25,38 @@ import Panel from '../SideDrawer/Panel'
 import BotSettings from './BotSettings'
 import ChatMessage from './ChatMessage'
 import {
+  assistAuth,
   assistChat,
   assistConversationStore,
+  assistHostedSide,
   assistInstance,
   assistKeyStore,
   newAssistChat,
 } from './assistState'
 import {reportAssistCondition} from './reportAssistCondition'
+import {trackAssistQuotaLimit} from './trackAssistQuota'
 import 'react-chat-elements/dist/main.css'
 import './chat-bubbles.css'
 
 
-/** Until the transport has loaded, errors still name the provider. */
-const PROVIDER_LABEL = 'OpenRouter'
+/**
+ * Until the transport has loaded, errors still name the one this turn would
+ * use: the user's own OpenRouter key when given, else Bldrs' hosted relay
+ * (assistHost.js `createShareAssist` makes the same choice).
+ *
+ * @return {string}
+ */
+function providerLabel() {
+  return assistKeyStore.get(OPENROUTER_KEY_ID) ? 'OpenRouter' : HOSTED_TRANSPORT_LABEL
+}
 
 /** What the panel says for failures that aren't the provider's. */
 export const RUNTIME_LOAD_FAILED_MESSAGE = 'Couldn\'t load the assistant. Check your connection and try again.'
 export const START_FAILED_MESSAGE = 'The assistant couldn\'t start. Reload the page to try again.'
 export const TURN_FAILED_MESSAGE = 'Something went wrong showing this reply. Try again, or start a new chat.'
+
+/** Bubbles by kind; a 'notice' is the panel's own (the free-models overflow, assistState.js). */
+const BUBBLE_TEST_IDS = {error: 'BotChat-Error', assistant: 'BotChat-Reply', notice: 'BotChat-Notice'}
 
 /**
  * @param {number} steps
@@ -58,6 +73,9 @@ export function stepLimitMessage(steps) {
  * bubbles, and each step's viewer actions show as a compact line from the
  * tools' own `echo`, with Undo. Stop ends a reply mid-stream.
  *
+ * With no key of the user's own, it answers through Bldrs' hosted relay
+ * within the plan's credits (#1932); with one, straight from OpenRouter.
+ *
  * Kept in the prototype's place and look (ai-workspace.md D13: keep the
  * panel, bubbles and settings; the tray, sessions and rename are #1672 /
  * #2193). The prototype's `new Function` eval of model-written code and its
@@ -68,6 +86,9 @@ export function stepLimitMessage(steps) {
  */
 export default function BotChat() {
   const setIsBotVisible = useStore((state) => state.setIsBotVisible)
+  // The hosted transport reads the sign-in at each request (assistState.js).
+  const {isAuthenticated, getAccessTokenSilently} = useAuth0()
+  assistAuth.current = {isAuthenticated, getAccessTokenSilently}
   const apiKey = useSyncExternalStore(assistKeyStore.subscribe, () => assistKeyStore.get(OPENROUTER_KEY_ID) ?? '')
 
   // The chat lives outside the panel (assistState.js): the panel unmounts
@@ -128,10 +149,6 @@ export default function BotChat() {
     const update = (change) => assistChat.update((chat) => (chat.conversationId === conversationId ? change(chat) : chat))
     const setMessages = (change) => update((chat) => ({...chat, messages: change(chat.messages)}))
     setMessages((prev) => [...prev, {id: uuid(), kind: 'user', text: content}])
-    if (!assistKeyStore.get(OPENROUTER_KEY_ID)) {
-      setMessages((prev) => [...prev, errorMessage('no_key', PROVIDER_LABEL)])
-      return
-    }
     update((chat) => ({...chat, streamingTurn: turn}))
     try {
       let instance
@@ -161,7 +178,7 @@ export default function BotChat() {
       // view is a different conversation, which `update` leaves alone.)
       const chatNow = assistChat.get()
       if (chatNow.conversationId !== conversationId || chatNow.stoppedTurn === turn) {
-        setMessages((prev) => [...prev, errorMessage('aborted', PROVIDER_LABEL)])
+        setMessages((prev) => [...prev, errorMessage('aborted', providerLabel())])
         return
       }
       const {session, transport} = instance
@@ -169,6 +186,9 @@ export default function BotChat() {
         for await (const event of session.send(content)) {
           if (event.type === 'error' && event.code === 'unavailable') {
             reportAssistCondition('model_unavailable', {status: event.status, transport: transport.id})
+          }
+          if (event.type === 'error' && event.code === 'credits_exhausted') {
+            trackAssistQuotaLimit(event.tier)
           }
           update((chat) => ({
             ...chat,
@@ -266,7 +286,7 @@ export default function BotChat() {
         text={
           <span
             style={{color: fg}}
-            data-testid={message.kind === 'error' ? 'BotChat-Error' : (isUser ? undefined : 'BotChat-Reply')}
+            data-testid={BUBBLE_TEST_IDS[message.kind]}
           >
             {message.text}
           </span>
@@ -436,7 +456,8 @@ function ensureAssistInstance() {
       })
       .then((runtime) => {
         try {
-          const built = createShareAssist(runtime, {keyStore: assistKeyStore, conversationStore: assistConversationStore})
+          const built = createShareAssist(runtime, {keyStore: assistKeyStore, conversationStore: assistConversationStore,
+            hosted: assistHostedSide})
           assistInstance.current = {...built, session: built.assist.open(assistChat.get().conversationId)}
           return assistInstance.current
         } catch (e) {
@@ -488,7 +509,7 @@ export function applyEvent(messages, event, turn, provider) {
       return [...messages, {id: uuid(), kind: 'action', stepId: event.stepId, lines: [line], undoable: event.undoable}]
     }
     case 'error':
-      return [...messages, errorMessage(event.code, provider, event.status)]
+      return [...messages, errorMessage(event.code, provider, event.status, event.tier)]
     case 'step-limit':
       return [...messages, textMessage('error', stepLimitMessage(event.steps))]
     default:
@@ -519,10 +540,11 @@ function actionText(event) {
  * @param {string} code an AssistErrorCode
  * @param {string} provider
  * @param {number} [status]
+ * @param {string} [tier] the hosted relay's, for its codes' wording
  * @return {object} an error bubble
  */
-function errorMessage(code, provider, status) {
-  return {id: uuid(), kind: 'error', code, text: assistErrorMessage(code, provider, status)}
+function errorMessage(code, provider, status, tier) {
+  return {id: uuid(), kind: 'error', code, text: assistErrorMessage(code, provider, status, tier)}
 }
 
 

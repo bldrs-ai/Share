@@ -2,7 +2,58 @@ import {Page, expect} from '@playwright/test'
 import {readFile} from 'fs/promises'
 import {join} from 'path'
 import {fixtureBlobSha} from '../../__mocks__/fixtureBlobSha'
+import {MOCK_COMMITS} from '../../net/github/Commits.fixture'
 import {dismissLoadGrace} from './utils'
+
+
+/*
+ * Both GitHub API hosts the app can call, whatever suffix the build gives
+ * them (`.msw` locally, `.pw` in CI; tools/esbuild/vars.cypress.js and
+ * test-flows.yml): the unauthenticated `api.github.com` and the signed-in
+ * proxy `git.bldrs.dev/p/gh`. MSW mocks both, but its fallbacks below must
+ * match both too: a spec that signs in first (directLinkSoftGate.spec.ts)
+ * reaches GitHub through the proxy, and a fallback that only knew
+ * `api.github.com` let those requests through to real DNS whenever MSW was
+ * not yet in control after a full-page navigation.
+ */
+const GITHUB_API_HOSTS = String.raw`(?:api\.github\.com|git\.bldrs\.dev(?:\.[\w-]+)?/p/gh)(?:\.[\w-]+)?`
+
+
+/**
+ * Fallback for the Commits API the loader asks before the Contents API, for
+ * the file's latest sha. Same race as the Contents fallback: never fires
+ * while MSW intercepts first.
+ *
+ * MSW's own commits for a success repo (__mocks__/api-handlers-github.ts,
+ * `/repos/:owner/:repo/commits`), trimmed to the fields the app reads: `sha`
+ * (Commits.js#getLatestCommitHash) and `commit.{author, committer, message}`
+ * (useVersions, useGithubLastModified). The rest of `MOCK_COMMITS` embeds URLs
+ * built from an env var at module load, which in this (Playwright) process
+ * differs from the one MSW's bundle was built with, so it is left out rather
+ * than served wrong. Registered for `bldrs-ai/test-models` only: a success repo, so a
+ * 200 is what MSW would have answered — never for an error-flow repo, whose
+ * 404 a fallback must not turn into a pass.
+ *
+ * @param page
+ * @param owner
+ * @param repo
+ */
+async function routeCommitsFallback(page: Page, owner: string, repo: string) {
+  const HTTP_OK = 200
+  await page.context().route(
+    new RegExp(`^https://${GITHUB_API_HOSTS}/repos/${owner}/${repo}/commits(?:\\?.*)?$`),
+    async (route) => {
+      await route.fulfill({
+        status: HTTP_OK,
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify(MOCK_COMMITS.data.map(({sha, commit}) => ({
+          sha,
+          commit: {author: commit.author, committer: commit.committer, message: commit.message},
+        }))),
+      })
+    },
+  )
+}
 
 
 /**
@@ -64,10 +115,11 @@ export async function setupVirtualPathIntercept(
     const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const filePathInRegex = escapeRegex(filePath).replace(/\//g, '(?:/|%2F)')
     const contentsApiPattern = new RegExp(
-      `^https://api\\.github\\.com(?:\\.[\\w-]+)?` +
+      `^https://${GITHUB_API_HOSTS}` +
       `/repos/${owner}/${repo}/contents/${filePathInRegex}` +
       `\\?.*ref=${escapeRegex(ref)}.*$`,
     )
+    await routeCommitsFallback(page, owner, repo)
     await page.context().route(contentsApiPattern, async (route) => {
       await route.fulfill({
         status: HTTP_OK,
