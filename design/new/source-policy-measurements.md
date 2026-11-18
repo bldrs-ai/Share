@@ -1276,7 +1276,8 @@ Production `e7288bcb` (conway 1.1647.784) for the first three rows; the
   against 52.9 s) and Firefox (69.4 against 69.9 s).
 - **Decision: the sync-handle cap stays at 1 GiB** (256 MiB on devices
   reporting 4 GiB or less). Buffered is faster on every mid-sized model
-  measured and level on the largest.
+  measured and level on the largest. (These runs used conway's 256 MiB
+  window ceiling; conway#789 lowered it to 160 MiB.)
 
 Single runs: the two smaller differences (1.1 s and 3.5 s) carry less weight
 than the 15.6 s one; the direction is the same in all three. Not measured:
