@@ -1,7 +1,7 @@
 // Which engine a Conway load runs on: the model's own engine worker (the
 // default since engine-worker.md §7 step 9), or the page's main-thread engine.
 // One decision, read by `ShareIfcLoader#isEngineWorkerLoad` for every load
-// and by CadView's dev hook, so the kill switch and the two legacy consumers
+// and by CadView's dev hook, so the kill switch and the legacy consumer
 // below cannot disagree with the loader about where a model's engine is.
 //
 // The main-thread engine is kept permanently (§8 item 6). It serves:
@@ -17,14 +17,15 @@
 //     which style elements through `viewer.IFC.loader.ifcManager` and so need
 //     the model open in THAT engine. The stack is due to be deleted (§8 item
 //     7, viewer-replacement.md §8.1); until it is, a `?view=` link keeps
-//     working by loading on the main thread instead of silently doing nothing;
-//   - the legacy bot chat, whose `new Function` eval reads the
-//     main-thread engine synchronously (§8 item 7: it stays there and retires
-//     with the `?feature=assist` port, ai-workspace.md §13).
+//     working by loading on the main thread instead of silently doing nothing.
+// The legacy bot chat used to be a fourth: its `new Function` eval read the
+// main-thread engine. The Assist port (#1675, ai-workspace.md §13) deleted
+// the eval, and the chat now drives the viewer through the tool registry,
+// which reads either engine, so `?feature=bot` and `#bot:` loads stay in the
+// worker like any other.
 // Each is read from the URL at load time, like every other `?feature=`.
 import {flags, isFeatureEnabled} from '../FeatureFlags'
 import {viewRules} from '../viewer/legacyViewRules'
-import {isVisibleInitially as isBotVisibleInitially} from '../Components/Bot/hashState'
 
 
 /** Why a load runs on the main-thread engine, by `mainThreadEngineReason`. */
@@ -38,14 +39,12 @@ export const MainThreadReason = Object.freeze({
   KILL_SWITCH: 'disableEngineWorker',
   // A known `?view=` rule set is asked for.
   VIEW_RULES: 'viewRules',
-  // The legacy bot chat is on (`?feature=bot` or a `#bot:` permalink).
-  LEGACY_BOT: 'legacyBot',
 })
 
 
 /**
  * The load-report and console wording for each reason a load stays on the
- * main thread. The two legacy ones say what needs it, so a user who wonders
+ * main thread. The legacy one says what needs it, so a user who wonders
  * why a `?view=` link loaded on the slower path reads the answer in the report.
  */
 const REASON_TEXT = {
@@ -53,7 +52,6 @@ const REASON_TEXT = {
   [MainThreadReason.FLAG_OFF]: 'engineWorker is off',
   [MainThreadReason.KILL_SWITCH]: '?feature=disableEngineWorker',
   [MainThreadReason.VIEW_RULES]: '?view= rules need the main-thread engine',
-  [MainThreadReason.LEGACY_BOT]: 'the legacy bot chat needs the main-thread engine',
 }
 
 
@@ -68,22 +66,6 @@ const REASON_TEXT = {
 export function hasLegacyViewRules(search = globalThis.location?.search ?? '') {
   const view = new URLSearchParams(search).get('view')?.toLowerCase()
   return Boolean(view) && view !== 'default' && Object.hasOwn(viewRules, view)
-}
-
-
-/**
- * Will this page show the legacy bot chat? Either `?feature=bot`, or a `#bot:`
- * permalink: BotSlice opens the panel from the hash
- * (`Components/Bot/hashState.ts#isVisibleInitially`) and TabbedPanels shows it
- * without the flag. The route reads the hash through that same predicate, so
- * the two cannot disagree. Before they shared it, a `#bot:` link parsed in the
- * worker, and every chat message answered "reload", which repeated the worker
- * load (Codex review on #2083).
- *
- * @return {boolean}
- */
-export function isLegacyBotRequested() {
-  return isFeatureEnabled('bot') || isBotVisibleInitially()
 }
 
 
@@ -113,9 +95,6 @@ export function mainThreadEngineReason(search = undefined) {
   }
   if (hasLegacyViewRules(search)) {
     return MainThreadReason.VIEW_RULES
-  }
-  if (isLegacyBotRequested()) {
-    return MainThreadReason.LEGACY_BOT
   }
   return null
 }

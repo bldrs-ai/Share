@@ -3,7 +3,7 @@
 **Status:** Draft v0.1 — implementation plan; no feature shipped by this doc.
 **Date:** 2026-11-11
 
-**UX requirements:** [Sharing](../reqs/sharing.md) is a planning draft; Versions
+**UX requirements:** Sharing's stories are under #2144 and `share-130` #2206, with the link contract in §5a; Versions
 ([#57](https://github.com/bldrs-ai/Share/issues/57)) and Notes
 ([#670](https://github.com/bldrs-ai/Share/issues/670)) keep their requirements in
 their epic issues; the [shared index](../reqs/README.md) holds the common rules.
@@ -202,6 +202,17 @@ or divergent history, not permission to substitute another model. Commit author
 metadata is attribution, not proof of the author's identity; write access comes
 from the provider. Public readers need no GitHub login, while API limits still
 need a visible retry path.
+
+### 5a. Share link contract (binding UX requirement)
+
+Moved here from the retired Sharing UX draft on 2026-11-18 ([source](https://github.com/bldrs-ai/Share/blob/587c7e1e7ae464213fa4108802a529044eddbb54/design/reqs/sharing.md#L27-L47)). These rules come from the UX requirements and override §5 where they disagree: in particular, the copied link must be an unguessable token, not the raw `…/<commit>/model.json` route above. Existing direct-source routes stay supported as source navigation, but new Copy link actions produce Share links. Creating a link for an already-hosted model doesn't re-upload it. The stories that rely on this are under `share-200` (#2144) and `share-130` (#2206).
+
+- **Token.** A cryptographically random identifier with at least 122 independent random bits (UUIDv4 class or stronger), from a secure random source. Never an encoded repository path, a sequential number, a filename or a hash of public information. A UUID-looking string or Base64 alone doesn't qualify. The token resolves internally to one immutable version and its declared scope; reformatting a token never selects another record.
+- **Not discoverable.** No public API, sitemap, search, gallery, history listing or tag directory exposes issued tokens. Share pages and previews are noindex, referrers don't leak the token, and tokens are redacted from analytics, diagnostics and public repo or issue content. Resolution attempts are rate-limited. An unknown or malformed token gets a generic "link unavailable" answer: no model name, source, thumbnail or notes.
+- **The whole path is covered.** The same model, metadata or notes must not be reachable through a browsable index or a predictable alternate URL. Blob and notes fetches keep the declared audience, by an equally unguessable path or an authorized fetch. A public GitHub repo or public issue can't satisfy "unlisted" just because a random URL sits in front of it; already-public content is labelled "Public at source".
+- **Scope.** A link opens its original version, even after updates. It discloses whether it also allows browsing history or the published discussion, and never grants unrelated models, unpublished drafts or undeclared versions. A note link carries a valid share capability or its own unguessable token; guessing a note number grants nothing.
+- **What it isn't.** "Anyone with the link" is access, not encryption, named-recipient confidentiality, or recall of copies already downloaded. Noindex discourages indexing; it isn't access control.
+- **Before release:** review the generator and its entropy; test unknown and malformed tokens and the rate limits; check that listing, preview, metadata, blob and note endpoints neither enumerate nor bypass unlisted shares; check noindex, referrer and redaction. A few failed guesses don't prove brute-force resistance.
 
 ## 6. Integrity, ranges, chunking and retention
 

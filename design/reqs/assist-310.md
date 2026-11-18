@@ -19,7 +19,7 @@ Each linked issue carries the `assist-310:` prefix and owns its tasks and accept
 | [Start a session on some of a project's models · #1672](https://github.com/bldrs-ai/Share/issues/1672) | Start a session from a project or a model's chat icon, pick its models, and talk in the tray. |
 | [Resume a session · #2194](https://github.com/bldrs-ai/Share/issues/2194) | Reopen a session with its conversation, models and view as they were. |
 | [Keep sessions apart · #2195](https://github.com/bldrs-ai/Share/issues/2195) | Keep each session's changes to itself, even over the same model. |
-| [Ask the assistant about a model and see it act on the view · #1675](https://github.com/bldrs-ai/Share/issues/1675) | Ask a question and get a streamed reply while the assistant selects, isolates or frames. |
+| [Get the assistant's replies and actions as they happen · #1675](https://github.com/bldrs-ai/Share/issues/1675) | Ask a question and get a streamed reply while the assistant selects, isolates or frames. |
 | [Jump to an element or view the assistant mentions · #1673](https://github.com/bldrs-ai/Share/issues/1673) | Click an element or view named in a reply and go there, with a link that still works outside Share. |
 | [Use the hosted assistant within my plan's credits · #1933](https://github.com/bldrs-ai/Share/issues/1933) | Use the assistant without a key, see the credits left, and know what happens at the limit. |
 | [Use the assistant with my own provider key · #1930](https://github.com/bldrs-ai/Share/issues/1930) | Bring a provider key or account, test it, and forget it, knowing what the AI can see. |
@@ -28,6 +28,6 @@ Each linked issue carries the `assist-310:` prefix and owns its tasks and accept
 | [See answers as tables, filters or forms in the conversation · #1938](https://github.com/bldrs-ai/Share/issues/1938) | Get an answer as a small table, filter or form instead of prose. |
 | [Keep the view uncluttered while the assistant is open · #1676](https://github.com/bldrs-ai/Share/issues/1676) | Have the controls fold away while the tray is open (a proposal that can be dropped). |
 
-Support work is linked from the epic rather than parented under it: the design doc (#1671, closed), the viewer tool surface (#1674, Track T11), three spikes (#1927, #1928, #1929), CSP hardening (#1935), the Create seam contract (#1936), and BotChat's unsandboxed code path (#1822), whose owner is still open. Listing sessions in the left nav belongs to `assist-300` (#2193), and viewing a session's models together to `open-210` (#1251).
+Support work is linked from the epic rather than parented under it: the design doc (#1671, closed), the viewer tool surface (#1674, Track T11), three spikes (#1927, #1928, #1929), CSP hardening (#1935), the Create seam contract (#1936), and BotChat's unsandboxed code path (#1822), which #2199 removed; the issue awaits closing. Listing sessions in the left nav belongs to `assist-300` (#2193), and viewing a session's models together to `open-210` (#1251).
 
 This snapshot makes no completion claim. The [triage record](assist-310-triage.md) holds the reconciliation and its open decisions; progress, tasks and acceptance live in #1659 and its story issues. Revise this page when the epic's motivation or story scope changes, date the new snapshot, and use Git history to compare earlier versions.

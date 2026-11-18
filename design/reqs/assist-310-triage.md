@@ -70,7 +70,7 @@ Result, checked after the writes: #1659 has exactly the 11 stories in the snapsh
 
 | Issue | Question and next decision |
 |---|---|
-| [#1822](https://github.com/bldrs-ai/Share/issues/1822) | BotChat runs model-written code with [`new Function`](https://github.com/bldrs-ai/Share/blob/b16672d75172203544b20ca9273fe538d76845d8/src/Components/Bot/BotChat.jsx#L189). ai-workspace.md §14 has #1675 delete that path; #1919's body lists "Retire `new Function` in BotChat" as a `create-310` story. Left unparented until the owner picks one. |
+| [#1822](https://github.com/bldrs-ai/Share/issues/1822) | BotChat ran model-written code with [`new Function`](https://github.com/bldrs-ai/Share/blob/b16672d75172203544b20ca9273fe538d76845d8/src/Components/Bot/BotChat.jsx#L189). PR #2199 removed that path (see [Since the reconciliation](#since-the-reconciliation)), so the ownership question is moot; the issue is still open and waits for the owner to close it. |
 | [#1936](https://github.com/bldrs-ai/Share/issues/1936) | The Create seam lands output through `create-320` (#1920). Linked here for now; may move to `create-320` when that epic is reconciled. |
 | [#1674](https://github.com/bldrs-ai/Share/issues/1674) | Track T11's contract, shared with `assist-320` and `apps-300`. No T11 epic issue exists to hold it. |
 
@@ -78,7 +78,16 @@ Epic-level open decisions (budgets, generative UI timing, #1676, the ref separat
 
 ## Source evidence
 
-Source inspection at `b16672d` only; nothing was run. The tool contract and registry are in [`src/assist/`](https://github.com/bldrs-ai/Share/tree/b16672d75172203544b20ca9273fe538d76845d8/src/assist) and the view and share tools with their desktop and mobile spec in [`src/viewer/tools/`](https://github.com/bldrs-ai/Share/tree/b16672d75172203544b20ca9273fe538d76845d8/src/viewer/tools) (#1674 slice 1, PR #1946). The [`assist` flag](https://github.com/bldrs-ai/Share/blob/b16672d75172203544b20ca9273fe538d76845d8/src/FeatureFlags.js#L42-L49) gates only the dev hook. The prototype chat is still [`src/Components/Bot/`](https://github.com/bldrs-ai/Share/tree/b16672d75172203544b20ca9273fe538d76845d8/src/Components/Bot). No tray, agent loop, relay or session exists.
+Source inspection at `b16672d` only; nothing was run. The tool contract and registry are in [`src/assist/`](https://github.com/bldrs-ai/Share/tree/b16672d75172203544b20ca9273fe538d76845d8/src/assist) and the view and share tools with their desktop and mobile spec in [`src/viewer/tools/`](https://github.com/bldrs-ai/Share/tree/b16672d75172203544b20ca9273fe538d76845d8/src/viewer/tools) (#1674 slice 1, PR #1946). The [`assist` flag](https://github.com/bldrs-ai/Share/blob/b16672d75172203544b20ca9273fe538d76845d8/src/FeatureFlags.js#L42-L49) gates only the dev hook. The prototype chat is still [`src/Components/Bot/`](https://github.com/bldrs-ai/Share/tree/b16672d75172203544b20ca9273fe538d76845d8/src/Components/Bot). No tray, agent loop, relay or session existed at that commit; the agent loop has since landed (above).
+
+## Since the reconciliation
+
+Later on 2026-11-18, from the implementation session and checked on GitHub and `main` @ `6c8bda5`:
+
+- **PR #2199 merged** ([`c34ff58`](https://github.com/bldrs-ai/Share/commit/c34ff588)): the agent loop over the tool registry, run by the Bot panel. The owner closed #1675 and #1821; #1677 stays open under #1675. The loop also removed BotChat's `new Function` eval ([`BotChat.jsx`](https://github.com/bldrs-ai/Share/blob/6c8bda5c/src/Components/Bot/BotChat.jsx#L55-L66)), which is #1822's subject.
+- **PR #2219 (draft):** `model.quantities`, `model.measure` and `model.spatial`, slice 2 of #1674. It partly addresses #1674, which stays open for the STEP ref-contract slice, and closes no story. The tools are read-only, reuse `refs.js` for refs, and add their rows to ai-workspace.md's v0 tool table.
+- **Hosted relay and credits** (#1932 under #1933): in progress; no PR yet.
+- **Conway bug found on the way:** Conway returns `IfcSIUnit`'s attributes shifted by one slot (for `IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)`, `UnitType` reads `MILLI` and `Prefix` reads `METRE`). #2219 works around it by classifying the enum values; the implementation session is filing it in conway.
 
 ## Milestone hypothesis
 

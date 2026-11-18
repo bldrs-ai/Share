@@ -209,6 +209,17 @@ describe('viewer/tools (model, view and share providers)', () => {
   })
 
 
+  it('a view tool changes nothing when its call may no longer commit (stopped or undone)', async () => {
+    const before = useStore.getState().selectedAnchorIds
+    expect((before ?? []).map(Number)).not.toContain(102)
+    const error = await rejection(registry.call('view.select', {refs: ['e102']}, {shouldCommit: () => false}))
+    expect(error.code).toBe('rolled_back')
+    expect(useStore.getState().selectedAnchorIds).toEqual(before)
+    // And commits when it may.
+    await registry.call('view.select', {refs: ['e102']}, {shouldCommit: () => true})
+    expect(useStore.getState().selectedAnchorIds.map(Number)).toEqual([102])
+  })
+
   describe('model.properties', () => {
     it('summarizes attributes and property sets', async () => {
       const result = await registry.call('model.properties', {refs: ['e102']})
@@ -233,6 +244,24 @@ describe('viewer/tools (model, view and share providers)', () => {
       expect(attributes.Tag).toBe('Wé-A')
       expect(attributes).not.toHaveProperty('Position')
       expect(result.content.items[0].propertySets).toEqual([])
+    })
+
+    it('stops between reads once the call is aborted (a Stop in the assistant)', async () => {
+      const controller = new AbortController()
+      const {model} = useStore.getState()
+      const original = model.getItemProperties.bind(model)
+      const read = jest.spyOn(model, 'getItemProperties').mockImplementation((id) => {
+        controller.abort()
+        return original(id)
+      })
+      try {
+        const error = await rejection(registry.call('model.properties', {refs: ['e102', 'e100']},
+          {signal: controller.signal}))
+        expect(error.code).toBe('aborted')
+        expect(read).toHaveBeenCalledTimes(1)
+      } finally {
+        read.mockRestore()
+      }
     })
 
     it('accepts GlobalIds, prefixed or bare', async () => {

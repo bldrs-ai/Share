@@ -121,6 +121,23 @@ describe('Camera/liveCameraLink', () => {
     expect(write).toHaveBeenCalledTimes(1)
   })
 
+  it('drops a write still pending when the page moves to another history entry (Back, an in-app open)', () => {
+    // react-router's history keys each entry in `history.state.key`.
+    window.history.replaceState({key: 'entry-b', idx: 1}, '')
+    noteUserCameraMove(controls)
+    settle()
+    write.mockClear()
+    update()
+    // Back to A's entry before the settle lands: B's pose isn't A's.
+    window.history.replaceState({key: 'entry-a', idx: 0}, '')
+    settle()
+    expect(write).not.toHaveBeenCalled()
+    // The camera moving again in A's entry writes there, as before.
+    update()
+    settle()
+    expect(write).toHaveBeenCalledTimes(1)
+  })
+
   it('dispose drops a pending write and stops listening', () => {
     dispatch('controlstart')
     update()

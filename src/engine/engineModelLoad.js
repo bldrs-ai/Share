@@ -696,10 +696,10 @@ function warnIndexFailure(e) {
 
 
 /**
- * Was this model parsed by a worker engine? For the few legacy consumers
- * that reach for a main-thread engine directly and must refuse clearly
- * rather than read nothing (the `?feature=bot` eval, engine-worker.md §8
- * item 7).
+ * Was this model parsed by a worker engine? For the legacy consumers that
+ * reach for a main-thread engine directly and must refuse clearly rather
+ * than read nothing (the `?view=` rules, useLegacyViewRulesNotice.js;
+ * engine-worker.md §8 item 7).
  *
  * @param {object|null|undefined} model
  * @return {boolean}

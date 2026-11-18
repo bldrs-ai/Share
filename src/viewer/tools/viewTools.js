@@ -148,7 +148,7 @@ export function createViewToolProvider() {
         additionalProperties: false,
       },
       annotations: {viewState: true},
-      run: asTool(select),
+      run: asViewTool('view.select', select),
     },
     {
       name: 'view.isolate',
@@ -162,7 +162,7 @@ export function createViewToolProvider() {
         additionalProperties: false,
       },
       annotations: {viewState: true},
-      run: asTool(isolate),
+      run: asViewTool('view.isolate', isolate),
     },
     {
       name: 'view.hide',
@@ -176,14 +176,14 @@ export function createViewToolProvider() {
         additionalProperties: false,
       },
       annotations: {viewState: true},
-      run: asTool(hide),
+      run: asViewTool('view.hide', hide),
     },
     {
       name: 'view.showAll',
       description: 'End any isolation and show every hidden element. Undoable.',
       inputSchema: {type: 'object', properties: {}, additionalProperties: false},
       annotations: {viewState: true},
-      run: asTool(showAll),
+      run: asViewTool('view.showAll', showAll),
     },
     {
       name: 'view.focus',
@@ -196,7 +196,7 @@ export function createViewToolProvider() {
         additionalProperties: false,
       },
       annotations: {viewState: true},
-      run: asTool(focus),
+      run: asViewTool('view.focus', focus),
     },
   ]
   return {id: 'view', tools: () => tools}
@@ -212,6 +212,29 @@ export function createViewToolProvider() {
  */
 function asTool(fn) {
   return (input) => Promise.resolve().then(() => fn(input))
+}
+
+
+/**
+ * `asTool` for a tool that changes the view. Before the body runs it asks
+ * the call's `shouldCommit()` (assist/types.ts `ToolContext`): false when
+ * the user has stopped the turn or undone the step, and then the call
+ * changes nothing and says so. The bodies here are synchronous, so this
+ * check is the last moment before they mutate; a body that came to await
+ * must check again after its last await.
+ *
+ * @param {string} name the tool's name, for the error
+ * @param {Function} fn `(input) => ToolResult`
+ * @return {Function} `(input, ctx) => Promise<ToolResult>`
+ */
+function asViewTool(name, fn) {
+  return (input, ctx = {}) => Promise.resolve().then(() => {
+    if (typeof ctx.shouldCommit === 'function' && !ctx.shouldCommit()) {
+      throw new ToolError('rolled_back',
+        `${name} was not applied: the user stopped the reply or undid this step. It changed nothing.`)
+    }
+    return fn(input)
+  })
 }
 
 
@@ -476,16 +499,28 @@ async function summarizePset(model, set) {
 
 
 /**
+ * Reads up to 20 elements' attributes and psets, one engine round trip per
+ * read, so it can take a while on a worker engine. It checks the call's
+ * signal between reads, so a Stop ends it at the next one instead of after
+ * all of them (the agent loop also stops waiting at once: assist/loop.ts).
+ *
  * @param {object} input
+ * @param {object} [ctx] the registry's ToolContext; `signal` aborts the reads
  * @return {Promise<object>} ToolResult
  */
-async function properties({refs}) {
+async function properties({refs}, ctx = {}) {
   const state = readState()
   const {model, rootElement} = state
   const targets = assertResolved(resolveRefs(refs, state))
   const nodes = nodesById(rootElement)
   const items = []
+  const checkAborted = () => {
+    if (ctx.signal?.aborted) {
+      throw new ToolError('aborted', 'model.properties was stopped before it finished.')
+    }
+  }
   for (const target of targets) {
+    checkAborted()
     const id = target.kind === 'id' ? target.id : Number(target.occurrence.nodeId)
     const node = nodes.get(id)
     const item = {ref: target.ref, type: nodeType(node), name: nodeName(node)}
@@ -504,6 +539,7 @@ async function properties({refs}) {
       const sets = (await model.getPropertySets(id)) ?? []
       item.propertySets = []
       for (const set of sets.slice(0, MAX_PSETS)) {
+        checkAborted()
         item.propertySets.push(await summarizePset(model, set))
       }
       if (sets.length > MAX_PSETS) {
