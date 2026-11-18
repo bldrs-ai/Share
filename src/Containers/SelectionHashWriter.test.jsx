@@ -2,7 +2,7 @@ import React from 'react'
 import {act, render} from '@testing-library/react'
 import {BrowserRouter, useNavigate} from 'react-router-dom'
 import useStore from '../store/useStore'
-import SelectionHashWriter from './SelectionHashWriter'
+import SelectionHashWriter, {modelFileInPath} from './SelectionHashWriter'
 
 
 /* eslint-disable no-magic-numbers */
@@ -55,5 +55,14 @@ describe('Containers/SelectionHashWriter', () => {
     // The next model's viewer, ready, writes its own selection again.
     act(() => useStore.setState({viewer: {isolator: {ifcModel: {}, _isSceneGraphModel: () => false}}}))
     expect(window.location.hash).toBe('#sel:e621')
+  })
+
+  it('names the model by its file, or a Drive route by its file id, whatever element path follows', () => {
+    expect(modelFileInPath('/share/v/p/index.ifc/81/621')).toBe('/share/v/p/index.ifc')
+    expect(modelFileInPath('/share/v/gh/o/r/main/as1.stp/1/2')).toBe('/share/v/gh/o/r/main/as1.stp')
+    expect(modelFileInPath('/share/v/g/1AbC_d-9/12/34')).toBe('/share/v/g/1AbC_d-9')
+    expect(modelFileInPath('/share/v/g/https:/drive.google.com/file/d/1AbC_d-9/view'))
+      .toBe('/share/v/g/https:/drive.google.com/file/d/1AbC_d-9')
+    expect(modelFileInPath('/share/v/g/1AbC')).not.toBe(modelFileInPath('/share/v/g/2XyZ'))
   })
 })

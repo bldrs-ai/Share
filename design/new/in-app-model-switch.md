@@ -615,8 +615,7 @@ What the walk found, and fixed:
   selection and `isModelReady` are replaced: it wrote the left model's
   `#sel:` into the next model's URL as a history entry, then removed it in
   another once the selection was reset. It now writes only into a URL with
-  the model file it became ready at (a Drive id route, with no file suffix,
-  is not guarded).
+  the model file (or, for a Drive route, the file id) it became ready at.
 - *Forward lost after a Back.* `useHashState` brought the hash in line with a
   panel's state with a push on every location change. On a Back to an entry
   whose panel token the state no longer held, that push dropped every

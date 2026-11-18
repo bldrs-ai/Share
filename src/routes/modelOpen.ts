@@ -19,6 +19,9 @@
  *   per open behaves as one keyed per page did whenever every open is a page
  *   load (`?feature=spaModelNav` off).
  *
+ * That single writer is the premise, pinned by modelOpenWriter.test.js: any
+ * other `setModelPath` caller has to be added there with its reason.
+ *
  * Kept in a WeakMap rather than stamped on the route result, so nothing that
  * copies or compares route results sees a new field, and an open's number
  * goes with its route result.

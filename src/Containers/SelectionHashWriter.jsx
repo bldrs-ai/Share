@@ -22,7 +22,8 @@ import {writeSelectionHash} from './selectionHash'
  * left model's `#sel:` into the next model's URL as a new history entry, and
  * removed it in another once the selection was reset (two entries per
  * switch, and a Back that stepped through them). A path whose model file is
- * not the one this viewer became ready at is another model's.
+ * not the one this viewer became ready at is another model's
+ * (`modelFileInPath`).
  *
  * @return {null}
  */
@@ -63,15 +64,20 @@ export default function SelectionHashWriter() {
 }
 
 
+// A Drive route's model: the id after `/v/g/`, or after a Drive link's `/d/`.
+const DRIVE_MODEL_REGEX = /\/v\/g\/(?:.*?\/d\/)?[A-Za-z0-9_-]+/
+
+
 /**
  * @param {string} pathname
- * @return {string|null} the path through the model file's suffix, which an
- *   element path below it leaves the same; null for a route with no file
- *   suffix (a Drive id), which can't be told from its element path and so
- *   isn't guarded
+ * @return {string|null} the part of the path that names the model, which an
+ *   element path below it leaves the same: through the model file's suffix,
+ *   or for a Drive route (no suffix) through the file id, bare
+ *   (`/v/g/<id>`) or in a Drive link (`/v/g/https:/drive.google.com/file/d/<id>`);
+ *   null for anything else, which is then not guarded
  */
-function modelFileInPath(pathname) {
-  const match = fileSuffixBoundaryRegex.exec(pathname)
+export function modelFileInPath(pathname) {
+  const match = fileSuffixBoundaryRegex.exec(pathname) ?? DRIVE_MODEL_REGEX.exec(pathname)
   return match ? pathname.slice(0, match.index + match[0].length) : null
 }
 
