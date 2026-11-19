@@ -328,6 +328,26 @@ const BYTES_PER_KIB = 1024
 const BYTES_PER_MIB = BYTES_PER_KIB * BYTES_PER_KIB
 
 /**
+ * `{engineWasmBytes}` for this load's engine, or `{}` when it cannot say.
+ * A worker load reads it from the engine's summary; a main-thread load from
+ * the engine's own heap — `engineHandler#wasmBytesOf`'s measure, inlined so
+ * the page bundle does not pull in the worker's handler. On the main thread
+ * the one engine serves every model the page has opened, so it is the
+ * page's engine heap, not this model's alone.
+ *
+ * @param {object|null} engineLoad the worker load, or null on the main thread
+ * @param {object} ifcAPI the engine API this load parsed with
+ * @return {{engineWasmBytes: number}|{}}
+ */
+export function engineWasmBytesOf(engineLoad, ifcAPI) {
+  const bytes = engineLoad !== null ?
+    engineLoad.ifcAPI.summary?.wasmBytes :
+    ifcAPI?.wasmModule?.HEAPU8?.byteLength
+  return Number.isFinite(bytes) && bytes > 0 ? {engineWasmBytes: bytes} : {}
+}
+
+
+/**
  * Does this parse run its engine in a worker (engine-worker.md §7 steps 3, 6
  * and 9)? Every format a Conway engine parses — IFC (and an unwrapped
  * `.ifczip`) and STEP/AP214 — through one worker load
@@ -819,6 +839,14 @@ export default class ShareIfcLoader {
           preprocessorVersion: statsApi.getPreprocessorVersion(),
           parseTime: statsApi.getParseTime(),
           totalTime,
+          // The engine's wasm heap at load end, in bytes (stats_engineWasmBytes).
+          // That heap only grows, so one reading is the load's high-water
+          // mark: the model's own memory cost, which the page heap behind
+          // stats_memoryUsed cannot see once the engine runs in a worker
+          // (engine-worker.md §2.4 G3). The worker reports it in its summary
+          // (engineHandler#wasmBytesOf); on the main thread the same measure
+          // is read off the shared engine directly.
+          ...engineWasmBytesOf(engineLoad, ifcAPI),
           // No `memoryUsed` here: that GA name is the reporter's end-of-load
           // JS heap in bytes for EVERY format (loadProgress#finishReport, the
           // Total line's "→ N MB heap"). Conway's figure rides alone as

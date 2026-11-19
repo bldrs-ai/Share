@@ -204,8 +204,18 @@ describe('viewer/ifc/deferredBatchedBvh', () => {
       const {mesh} = scatteredBatch()
       const queue = []
       scheduleBatchedBoundsTrees([mesh], {schedule: (run) => queue.push(run)})
-      queue.shift()({didTimeout: true, timeRemaining: () => 0})
-      // The fixture's trees take well under a slice to build.
+      // Freeze the clock: the slice's SLICE_MS budget is measured with
+      // performance.now(), and under `test-ci` (coverage instrumentation,
+      // parallel workers) building the fixture's trees can really take more
+      // than 8 ms, so the slice yields and this goes red for the machine's
+      // load rather than the budget logic. With time standing still the
+      // budget never runs out, which is what "a slice of its own" asserts.
+      const nowSpy = jest.spyOn(performance, 'now').mockReturnValue(0)
+      try {
+        queue.shift()({didTimeout: true, timeRemaining: () => 0})
+      } finally {
+        nowSpy.mockRestore()
+      }
       expect(mesh.boundsTrees.every(Boolean)).toBe(true)
       expect(queue).toHaveLength(0)
     })

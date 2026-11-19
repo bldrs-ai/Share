@@ -1038,6 +1038,15 @@ live on the reporter in `src/loader/loadProgress.js`.
   model is added to the scene. `stats_cacheHit` is `"true"` when the GLB
   artifact cache served the model (which `content_type` reports as plain `glb`),
   `"false"` otherwise, including every format that has no artifact cache.
+- **Memory.** `stats_memoryUsed` is the page's JS heap in bytes at load end,
+  for every format (Chromium only, `performance.memory`; Share#2236 stopped
+  `ShareIfcLoader` overwriting it with conway's `geometryMemory`, which read 0
+  on the demand path). `stats_engineWasmBytes` is the conway engine's wasm heap
+  at load end, in bytes: the heap only grows, so it is the load's high-water
+  mark, and with the engine in a worker it is the part of the model's cost the
+  page heap cannot see. On the main-thread engine it is that one shared
+  engine's heap, so it covers every model the page has opened.
+  `stats_geometryMemory` stays conway's own figure (binary MB).
 - **Sentry-only counts.** The load diagnostics event's `loadDiagnostics` context
   carries `productCount`, `productsWithGeometryCount` and `dataDefectCount`
   (conway's `getProductCount`, `getProductsWithGeometryCount`,
@@ -1065,7 +1074,7 @@ has a backfill, so these only start accruing data once registered:
   and `stats_openMs` (unit:
   milliseconds), `stats_engineErrorDistinct`, `stats_engineErrorTotal`,
   `stats_engineWarnDistinct`, `stats_dataDefectTotal`, `stats_pageErrorCount`,
-  `stats_pageWarnCount`. `content_type` is shared with `real_model_open`.
+  `stats_pageWarnCount`, `stats_engineWasmBytes` (unit: bytes). `content_type` is shared with `real_model_open`.
   `stats_loadTime` changes meaning for IFC/STEP (it was conway's parse timer, so
   it jumps up); mark the change date on the dashboard rather than comparing the
   series across it.
