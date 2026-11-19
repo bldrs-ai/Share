@@ -36,9 +36,12 @@ import {goToSubscription} from '../Profile/subscriptionNav'
  * @property {Function} onClose Called when the dialog should close
  * @property {string} [feature] Which QUOTA_FEATURES limit was hit; the
  *   `feature` param of the quota_limit_reached funnel event
+ * @property {boolean} [reportShowing] Whether this showing sends its
+ *   funnel events (default true). False for a reopen the user asked for, such
+ *   as the assistant meter's button: the wall it shows was already counted.
  * @return {ReactElement}
  */
-export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA_FEATURES.PRIVATE_LOAD}) {
+export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA_FEATURES.PRIVATE_LOAD, reportShowing = true}) {
   const appMetadata = useStore((state) => state.appMetadata)
   const {getAccessTokenSilently, isAuthenticated, user} = useAuth0()
   // The latest sign-in state, read at emit time if `tier` is missing
@@ -66,6 +69,9 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
       return
     }
     reportedShowingRef.current = true
+    if (!reportShowing) {
+      return
+    }
     // The funnel's "Hit a limit" step (analytics#FUNNEL_EVENTS). Fired from
     // the dialog itself, not from the three mount sites' gates, so it counts
     // what users actually saw — whatever decided to show it, and whether or
@@ -95,7 +101,7 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
       tier,
       getIsAuthenticated: () => isAuthenticatedRef.current,
     })
-  }, [isOpen, tier, feature, isAiCredits])
+  }, [isOpen, tier, feature, isAiCredits, reportShowing])
 
   const handleSubscribe = async () => {
     onClose()

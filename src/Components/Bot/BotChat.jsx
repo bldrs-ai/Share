@@ -106,13 +106,16 @@ export default function BotChat() {
   const [input, setInput] = useState('')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   // The tier the out-of-credits dialog is showing for, or null when closed.
-  const [creditsDialogTier, setCreditsDialogTier] = useState(null)
+  // `isNewWall` is true when a relay refusal opened it (counted once, by the
+  // dialog's quota_limit_reached) and false when the user reopened it from the
+  // meter, which is informational: one refusal, one event.
+  const [creditsDialog, setCreditsDialog] = useState(null)
   // A refusal that landed while the panel was away leaves its tier here; the
   // dialog opens from it, and taking it keeps a dismissed one from reopening.
   const owedWallTier = useSyncExternalStore(assistCreditsWall.subscribe, assistCreditsWall.get)
   useEffect(() => {
     if (owedWallTier !== null) {
-      setCreditsDialogTier(owedWallTier)
+      setCreditsDialog({tier: owedWallTier, isNewWall: true})
       assistCreditsWall.update(() => null)
     }
   }, [owedWallTier])
@@ -398,7 +401,7 @@ export default function BotChat() {
 
       {/* Hosted only: with the user's own key, Bldrs' credits aren't what's spent. */}
       {credits && !apiKey && (
-        <CreditsMeter credits={credits} onMore={() => setCreditsDialogTier(credits.tier)}/>
+        <CreditsMeter credits={credits} onMore={() => setCreditsDialog({tier: credits.tier, isNewWall: false})}/>
       )}
 
       <Box
@@ -466,9 +469,10 @@ export default function BotChat() {
         renderChat()
       )}
       <QuotaLimitDialog
-        tier={creditsDialogTier ?? 'anonymous'}
-        isOpen={creditsDialogTier !== null}
-        onClose={() => setCreditsDialogTier(null)}
+        tier={creditsDialog?.tier ?? 'anonymous'}
+        isOpen={creditsDialog !== null}
+        onClose={() => setCreditsDialog(null)}
+        reportShowing={creditsDialog?.isNewWall ?? true}
         feature={AI_CREDITS_FEATURE}
       />
     </Panel>

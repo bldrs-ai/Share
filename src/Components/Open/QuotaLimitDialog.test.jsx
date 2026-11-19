@@ -128,6 +128,14 @@ describe('QuotaLimitDialog', () => {
       expect(window.gtag.mock.calls.filter(([, name]) => name === 'model_share')).toEqual([])
     })
 
+    it('reportShowing false (a reopen the user asked for) sends nothing, and a later reported showing counts', () => {
+      const {show} = renderDialog({tier: 'anonymous', isOpen: true, feature: AI, reportShowing: false})
+      expect(limitEvents()).toHaveLength(0)
+      show({tier: 'anonymous', isOpen: false, feature: AI})
+      show({tier: 'anonymous', isOpen: true, feature: AI, reportShowing: true})
+      expect(limitEvents()).toHaveLength(1)
+    })
+
     it('signed out: offers Sign in, which closes and opens the login dialog', () => {
       act(() => useStore.setState({isLoginVisible: false}))
       const onClose = jest.fn()

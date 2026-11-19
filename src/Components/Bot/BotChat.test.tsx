@@ -443,6 +443,8 @@ describe('BotChat', () => {
         await waitFor(() => expect(screen.queryByTestId('dialog-ai-credits')).toBeNull())
         fireEvent.click(screen.getByTestId('BotChat-CreditsMeterMore'))
         expect(await screen.findByTestId('dialog-ai-credits')).toBeInTheDocument()
+        // One refusal, one event: the reopen from the meter isn't counted.
+        expect(limitEvents()).toHaveLength(1)
       })
 
       it('a successful reply with used at or past limit is a full low meter, not exhausted, and opens no dialog', async () => {
