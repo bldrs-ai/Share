@@ -34,9 +34,9 @@ on:
 
 # The draft gate defers this workflow's cost; this bounds it. Flows run on
 # free standard runners (public repo: 4 vCPU / 16 GB), not the paid 8 GB
-# larger-runner pool, so they no longer compete for that 4-job cap. Cancel
+# larger-runner pool, so they no longer compete for that pool. Cancel
 # still matters: three quick pushes to one ready PR would otherwise leave
-# a pile of 11-minute shard sets running for commits nobody will merge.
+# a pile of 8-11-minute shard sets running for commits nobody will merge.
 #
 # Grouped per ref, so PRs never cancel each other (refs/pull/<n>/merge is
 # unique per PR). Cancel-always, matching main.yml: superseded runs die rather
@@ -68,8 +68,11 @@ jobs:
   # with 2× the RAM). Packing 4 workers onto 4 vCPU would put four
   # SwiftShader Chromiums on four cores; more shards at 2 workers use
   # more machines instead, which is the cheaper way to cut wall clock
-  # because these specs are not timing-sensitive. Four shards × 2
-  # workers = 8 Chromiums.
+  # because these specs are not timing-sensitive. Six shards × 2
+  # workers = 12 Chromiums.
+  # Concurrency is not a reason to hold the count down: on 2026-11-18 ten
+  # Actions jobs of two PRs ran at once without queuing (PLAYBOOK.md
+  # §"Playwright workers").
   #
   # The SPA is built once (`playwright-build`) and downloaded by each
   # shard as `bun run test-flows-build` left it (no map-stripping, no
@@ -155,13 +158,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
-    name: playwright-shard ${{ matrix.shard }}/4
-    # Headroom on a quarter of the suite plus a tiny Playwright npm
+        shard: [1, 2, 3, 4, 5, 6]
+    name: playwright-shard ${{ matrix.shard }}/6
+    # Headroom on a sixth of the suite plus a tiny Playwright npm
     # install. The margin is for the degraded case — a failure drags a
     # 30 s timeout plus a retry. Tests are assigned to shards by measured
-    # duration (tools/playwrightShards.mjs), which levels the four shards
-    # at about 10 min instead of 9-14.6 (PLAYBOOK.md §"Playwright workers").
+    # duration (tools/playwrightShards.mjs), which levels the six shards
+    # at about 8 min instead of 9-14.6 (PLAYBOOK.md §"Playwright workers").
     # This is the hang guard; do not raise it to absorb an imbalance.
     timeout-minutes: 15
     steps:
@@ -211,7 +214,7 @@ jobs:
       # at 14.5 of 15 min, cancelled twice with every test passing (#1892),
       # and the light/heavy two-pass split that followed only moved the
       # export specs. Every shard lists the full suite, then
-      # tools/playwrightShards.mjs packs it into 4 bins longest-first from
+      # tools/playwrightShards.mjs packs it into 6 bins longest-first from
       # tools/playwrightTimings.json and writes this shard's tests as a
       # `--test-list` file. Same inputs, same plan, so the shards agree
       # without coordinating. A test with no timing (new, renamed) is
@@ -220,7 +223,7 @@ jobs:
       - name: Plan this shard's tests
         run: |
           npx playwright test --config=tools/playwright.config.js --list --reporter=json > all-tests.json
-          node tools/playwrightShards.mjs plan --list all-tests.json --shard ${{ matrix.shard }} --of 4 --out shard-tests.txt
+          node tools/playwrightShards.mjs plan --list all-tests.json --shard ${{ matrix.shard }} --of 6 --out shard-tests.txt
 
       # 2 workers on 4 vCPU matches Playwright's vCPU/2 heuristic and the
       # density that stayed green when RAM was the limit. Do not bump this
@@ -244,7 +247,7 @@ jobs:
       # This shard's per-test seconds, as a check-run annotation: a refresh
       # of tools/playwrightTimings.json reads them back with the REST API
       # alone (`node tools/playwrightShards.mjs collect`, PLAYBOOK.md), no
-      # log or artifact download. A run's four shards together are one full
+      # log or artifact download. A run's six shards together are one full
       # measurement of the suite.
       - name: Publish per-test timings
         if: ${{ !cancelled() }}

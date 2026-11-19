@@ -83,6 +83,8 @@ const PRODUCTION_LIKE_ENV = {
   SHARE_PRO_PRICE_ID: 'price_smoke',
   GH_OAUTH_CLIENT_ID: 'smoke-gh-client-id',
   GH_OAUTH_CLIENT_SECRET: 'smoke-gh-client-secret',
+  OPENROUTER_API_KEY: 'sk-or-smoke',
+  AI_TOKEN_SECRET: 'smoke-ai-token-secret',
 }
 
 // Runs inside the child. A v2 function's entry is Netlify's bootstrap, which
@@ -219,13 +221,14 @@ describe('netlify functions as deployed', () => {
           return {id: scenario.id, file: scenario.file, entry: '/nonexistent', loadMode: 'import'}
         }
         // A v2 bundle's entry is Netlify's streaming bootstrap, which needs
-        // the Lambda runtime; its handler is the bundled user module beside it.
+        // the Lambda runtime; its handler is the bundled user module the
+        // entry names (bundleFunctions.mjs `v2HandlerOf`).
         const v2 = bundle.runtimeAPIVersion === 2
         return {
           id: scenario.id,
           file: scenario.file,
           entry: v2 ?
-            path.join(bundle.path, 'functions', `${scenario.functionName}.mjs`) :
+            path.join(bundle.path, bundle.v2Handler) :
             path.join(bundle.path, bundle.entryFilename),
           loadMode: v2 ? 'import' : 'require',
           cwd: bundle.path,

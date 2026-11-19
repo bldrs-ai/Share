@@ -1,5 +1,6 @@
 import {captureException} from '@sentry/react'
 import {setGaClientId, setUserCidProperty, syncSentryCidTag} from '../privacy/analytics'
+import {reportClientCapability} from '../privacy/clientCapabilities'
 import {isFeatureEnabled} from '../FeatureFlags'
 
 
@@ -51,11 +52,16 @@ export function shouldInitGa({
  * localhost), so off-prod the app behaves identically minus the
  * network beacon.
  *
- * Any init failure is reported to Sentry tagged subsystem:ga_init so
- * we can see when prod loses its Ads-conversion signal. The expected
- * steady-state noise here is ad-blocker users failing the script load;
- * keep the tag stable so a future sentry.js filter (or a GA-side
- * blocked-client event, cf. netlify_rum_blocked) can key off it.
+ * A script that fails to load is the expected state of a blocked client
+ * (an ad blocker, a privacy browser, a DNS filter), not something to fix,
+ * so it is not a Sentry event (AGENTS.md, Reported Conditions). It is
+ * counted instead as a `ga_blocked` client-capability report, sent to
+ * Share's own origin and passed to GA from the server
+ * (privacy/clientCapabilities.js, netlify/functions/client-capabilities.js),
+ * which also shows a real tag outage as a spike. Any other init failure
+ * (the inline stub missing, a throw below) is a defect and goes to Sentry,
+ * fingerprinted as one `ga_init` issue: its stack varies by build, and it
+ * split into an issue per release before (SHARE-1M1 and its copies).
  *
  * @param {object} [env] overrides for tests, forwarded to shouldInitGa
  */
@@ -85,10 +91,7 @@ export default function setupGa(env = undefined) {
       if (isPreviewSmokeTest) {
         console.warn('[ga] gtag/js was blocked; allow googletagmanager.com and reload to send events')
       }
-      captureException(
-        new Error('ga_init: gtag/js failed to load (blocked client or network failure)'),
-        {tags: {subsystem: 'ga_init'}},
-      )
+      reportClientCapability('ga_blocked')
     }
     document.head.appendChild(script)
     // Second of three places the user property is published, each for a
@@ -120,6 +123,6 @@ export default function setupGa(env = undefined) {
       syncSentryCidTag()
     })
   } catch (err) {
-    captureException(err, {tags: {subsystem: 'ga_init'}})
+    captureException(err, {tags: {subsystem: 'ga_init'}, fingerprint: ['ga_init', String(err?.message ?? err)]})
   }
 }

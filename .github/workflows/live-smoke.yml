@@ -9,7 +9,7 @@ name: live-smoke
 # setup and what stays manual are in design/new/live-browser-smoke.md.
 #
 # Triggers — never on every push. A run takes one runner for its whole
-# length, and CI is capped at 4 concurrent jobs (CLAUDE.md, "PRs: open in
+# length, and runner concurrency is shared across PRs (CLAUDE.md, "PRs: open in
 # draft"):
 #  - `workflow_dispatch` with any https origin: a deploy preview, a branch
 #    deploy, production.

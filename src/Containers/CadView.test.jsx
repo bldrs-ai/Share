@@ -39,6 +39,9 @@ import {resetModelOpenReportForTest} from '../utils/reportModelOpen'
 import {actAsyncFlush, suppressActWarnings} from '../utils/tests'
 import CadView from './CadView'
 import * as viewerModule from './viewer'
+import * as loadProgressModule from '../loader/loadProgress'
+import * as clientCapabilities from '../privacy/clientCapabilities'
+import {WEBGL_UNAVAILABLE_TITLE} from '../viewer/webglUnavailable'
 
 
 window.HTMLElement.prototype.scrollIntoView = jest.fn()
@@ -302,6 +305,36 @@ describe('CadView', () => {
       expect(initViewer).toHaveBeenCalledTimes(2)
     } finally {
       initViewer.mockRestore()
+    }
+  })
+
+
+  // SHARE-1DZ: a browser with no WebGL context made three's WebGLRenderer
+  // throw inside initViewer, which took the app down into the error boundary.
+  // Now it is a notice in the viewer's place and one client-capability
+  // report, and nothing loads.
+  it('shows the no-WebGL notice instead of crashing when three gets no context', async () => {
+    const initViewer = jest.spyOn(viewerModule, 'initViewer').mockImplementation(() => {
+      throw new Error('THREE.WebGLRenderer: Error creating WebGL context.')
+    })
+    const report = jest.spyOn(clientCapabilities, 'reportClientCapability').mockResolvedValue(true)
+    const loadSpy = jest.spyOn(Loader, 'load')
+    const {result} = renderHook(() => useStore((state) => state))
+    try {
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(screen.getByTestId('webgl-unavailable')).toBeInTheDocument())
+      expect(screen.getByText(WEBGL_UNAVAILABLE_TITLE)).toBeInTheDocument()
+      expect(report).toHaveBeenCalledWith('webgl_unavailable')
+      // Cleared, not left pointing at a viewer initViewer already disposed
+      // (this file's earlier tests leave one in the shared store).
+      expect(result.current.viewer).toBeNull()
+      expect(loadSpy).not.toHaveBeenCalled()
+    } finally {
+      initViewer.mockRestore()
+      report.mockRestore()
+      loadSpy.mockRestore()
     }
   })
 
@@ -857,6 +890,30 @@ describe('CadView', () => {
     await waitFor(() => expect(result.current.alert).toBe(genericErr))
     expect(captureExceptionSpy).toHaveBeenCalledWith(genericErr)
   })
+
+  // SHARE-1HJ follow-up: a load that stalled before it failed says so on its
+  // failure event, per event rather than on the Sentry scope (codex on #2235).
+  it('tags a failed load that stalled first, on that event only', async () => {
+    const genericErr = new Error('parseIfcWithConway: OpenModel returned -1')
+    jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw genericErr
+    })
+    const stallTags = jest.spyOn(loadProgressModule, 'loadStallCaptureTags').mockReturnValue({'load.stalled': 'true'})
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    try {
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(result.current.alert).toBe(genericErr))
+      expect(captureExceptionSpy).toHaveBeenCalledWith(genericErr, {tags: {'load.stalled': 'true'}})
+    } finally {
+      stallTags.mockRestore()
+    }
+  })
+
 
   // #1955: SHARE-1NR, the top hard-failure group, was this case reported as
   // a defect with the worker's raw "Folder <id> not found" string. The

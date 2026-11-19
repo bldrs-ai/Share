@@ -65,7 +65,7 @@ const REASON_TEXT = {
  */
 export function hasLegacyViewRules(search = globalThis.location?.search ?? '') {
   const view = new URLSearchParams(search).get('view')?.toLowerCase()
-  return Boolean(view) && view !== 'default' && Object.hasOwn(viewRules, view)
+  return Boolean(view) && view !== 'default' && Object.prototype.hasOwnProperty.call(viewRules, view)
 }
 
 

@@ -15,6 +15,7 @@ import {
 } from '../../utils/occurrencePaths'
 import {FRAMING_MARGIN} from '../three/cameraLimits'
 import {occurrenceRef} from '../visibilityRefs'
+import {createAnalysisTools} from './analysisTools'
 import {elementBounds} from './elementBounds'
 import {assertResolved, nodeName, nodeType, nodesById, refMaker, resolveRefs, walkTree} from './refs'
 import {getSelectionFunnel} from './selectionFunnel'
@@ -125,6 +126,8 @@ export function createModelToolProvider() {
       annotations: {readOnly: true},
       run: properties,
     },
+    // Quantities, mesh measurement and spatial structure (analysisTools.js).
+    ...createAnalysisTools({readState, loadedState, visibilityTargets, nodeRefMaker}),
   ]
   return {id: 'model', tools: () => tools}
 }

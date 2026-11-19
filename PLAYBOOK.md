@@ -197,9 +197,16 @@ warning) and you can fall back to `--workers=1`.
 **CI:** Share is public, so `ubuntu-24.04` is 4 vCPU / 16 GB and free.
 Each shard still runs `--workers=2` (the density that stayed green on
 the old 8 GB larger runner; packing 4 SwiftShader Chromiums onto 4
-cores contends). The suite runs as four shards so eight Chromiums run
-across four free machines (the org caps CI at 4 concurrent runners, so
-more shards would starve other PRs). One `playwright-build` job
+cores contends). The suite runs as six shards so twelve Chromiums run
+across six free machines, which levels each shard at about 8 min (four
+shards left the slowest at about 11, and up to 14.7 on a stale plan). We
+once believed the org capped CI at 4 concurrent runners; that is not
+what was observed: on 2026-11-18 around 22:35 UTC, 10 Actions jobs ran
+at once without queuing (two PRs' four shards plus `build` each). GitHub's
+documented limit for standard runners on a plan is higher than 4, but we
+have not confirmed which plan the org is on. Concurrency is still shared
+across PRs: a full PR run is now 6 shards + `playwright-build` + `build` +
+the aggregator, so the draft gate still matters. One `playwright-build` job
 produces `docs/` as `bun run test-flows-build` left it; shards set
 `PLAYWRIGHT_SERVE_ONLY=true`, install `@playwright/test@1.56.1` plus
 `http-server`, and run `npx http-server` inside `docs/` (no Share
@@ -218,7 +225,7 @@ export specs) cluster by file. That left shard 1 at 14.5 of its 15 min
 imbalance**) and cancelled it twice with every test green (#1892). The
 first fix, a light pass and a heavy pass per shard (`PW_SPEC_SET`), only
 rebalanced the export specs: across 25 green main runs (2026-10-07 to
-10-28) the four shards' jobs averaged 12.7 / 12.1 / 9.5 / 9.2 min. Shard 1
+10-28) the then four shards' jobs averaged 12.7 / 12.1 / 9.5 / 9.2 min. Shard 1
 took 14 min or more in 8 of the 25 runs (max 14.6) and 13 or more in 14;
 shard 2 took 13 or more in 11. The slowest shard averaged 13.3 min and sat
 4.8 min above the fastest. Per-run noise is large on top of that: one
@@ -229,7 +236,7 @@ Now every shard does the same three things (`test-flows.yml`,
 `tools/playwrightShards.mjs`):
 
 1. **Plan.** List the whole suite (`playwright test --list --reporter=json`)
-   and pack it into 4 bins greedily, longest test first, each into the
+   and pack it into 6 bins greedily, longest test first, each into the
    lightest bin so far (ties break on test name, so every shard computes the
    same partition from the same inputs). Costs come from
    `tools/playwrightTimings.json`, seconds per test keyed by exactly the
@@ -249,8 +256,8 @@ Now every shard does the same three things (`test-flows.yml`,
    with `›`, edge whitespace or a newline.)
 
 **Keeping the timings fresh.** A stale file costs balance, never
-correctness. Refresh it when the shards drift apart again (compare the four
-`playwright-shard N/4` job durations on a recent main run), and after adding
+correctness. Refresh it when the shards drift apart again (compare the six
+`playwright-shard N/6` job durations on a recent main run), and after adding
 a spec whose tests are slow:
 
 ```sh
@@ -273,7 +280,7 @@ Reading a plan locally (no browsers needed) shows what the shards would do:
 
 ```sh
 CI=true npx playwright test --config=tools/playwright.config.js --list --reporter=json > /tmp/all-tests.json
-node tools/playwrightShards.mjs plan --list /tmp/all-tests.json --shard 1 --of 4 --out /tmp/shard-1.txt
+node tools/playwrightShards.mjs plan --list /tmp/all-tests.json --shard 1 --of 6 --out /tmp/shard-1.txt
 CI=true bun run test-flows --test-list=/tmp/shard-1.txt   # run that shard's tests
 ```
 

@@ -298,6 +298,15 @@ module.exports = {
     'no-lone-blocks': 'error',
     'no-lonely-if': 'error',
     'no-loop-func': 'error',
+    // esbuild lowers syntax to tools/esbuild/common.js's targets but adds no
+    // polyfills, so a built-in newer than those targets throws on the browsers
+    // they name (SHARE-1XY: `Object.hasOwn is not a function` from
+    // part21Formats.js). Use Object.prototype.hasOwnProperty.call instead.
+    'no-restricted-properties': ['error', {
+      object: 'Object',
+      property: 'hasOwn',
+      message: 'Not polyfilled for the build targets (SHARE-1XY); use Object.prototype.hasOwnProperty.call.',
+    }],
     'no-mixed-operators': 'error',
     'no-magic-numbers': ['error', {
       ignore: [-10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],

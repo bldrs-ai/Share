@@ -55,6 +55,9 @@ describe('viewer/tools (model, view and share providers)', () => {
     expect(registry.list().map(({name, policy}) => [name, policy])).toEqual([
       ['model.query', 'run'],
       ['model.properties', 'run'],
+      ['model.quantities', 'run'],
+      ['model.measure', 'run'],
+      ['model.spatial', 'run'],
       ['view.select', 'runWithUndo'],
       ['view.isolate', 'runWithUndo'],
       ['view.hide', 'runWithUndo'],
@@ -74,7 +77,7 @@ describe('viewer/tools (model, view and share providers)', () => {
     expect(names).not.toContain('view.properties')
     expect(registry.has('view.query')).toBe(false)
     expect((await rejection(registry.call('view.query', {}))).code).toBe('unknown_tool')
-    for (const name of ['model.query', 'model.properties']) {
+    for (const name of ['model.query', 'model.properties', 'model.quantities', 'model.measure', 'model.spatial']) {
       expect(registry.list().find((tool) => tool.name === name)?.annotations).toEqual({readOnly: true})
     }
     const result = await registry.call('model.query', {ifcType: 'IfcDoor'})
@@ -132,6 +135,9 @@ describe('viewer/tools (model, view and share providers)', () => {
     const calls = [
       ['model.query', {}],
       ['model.properties', {refs: ['e100', 'e102']}],
+      ['model.quantities', {}],
+      ['model.measure', {refs: ['e100'], metric: 'surfaceArea'}],
+      ['model.spatial', {}],
       ['view.select', {refs: ['e100']}],
       ['view.hide', {refs: ['e100']}],
       ['view.showAll', {}],

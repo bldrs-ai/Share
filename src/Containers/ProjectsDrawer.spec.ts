@@ -56,7 +56,7 @@ async function addSecondModelViaCapture(page: Page) {
 
 
 /**
- * Happy path through each flow the ProjectsDrawer ships (epic assist-300
+ * Happy path through each flow the ProjectsDrawer ships (epic open-200
  * #1657, story #1661; plan `design/new/conversational-cad.md` §2.1-2.5,
  * shipped deltas §2.8). One test per flow, run per form factor — the
  * shared bodies go through `ensureProjectsDrawerOpen`, which absorbs the

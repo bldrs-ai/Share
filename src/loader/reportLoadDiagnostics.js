@@ -190,6 +190,108 @@ export function reportBvhDepthCapToGa({format, trees, maxLeafTriangles}) {
 
 
 /**
+ * One event for a successful load whose diagnostics were the file's own
+ * authoring gaps, or that read fine but had nothing to draw
+ * (loadProgress.js#captureDiagnostics). Both used to be Sentry events: the
+ * defects as warnings tagged `data_defect` (Share#1863, SHARE-1MV "No units
+ * defined." and SHARE-1MZ "No IfcProjects found?"), the nothing-to-draw loads
+ * at info. Neither is something to go fix in Share, so GA counts them, split
+ * by authoring tool and schema, which is what says whether an exporter is
+ * worth a guide or a workaround.
+ *
+ * Every param is closed-set or bucketed. `authoringTool` is already the
+ * allowlisted family name (loadProgress.js#knownAuthoringTool); `schema` is
+ * header text, so it goes through an allowlist too (schemaParam).
+ *
+ * @param {object} args
+ * @param {string} args.outcome loadProgress.js LOAD_OUTCOMES value
+ * @param {string} args.defect 'none' | 'no_units' | 'no_projects' | 'marked'
+ * @param {string} args.format the model's format, e.g. 'ifc', 'step'
+ * @param {string} [args.authoringTool] the exporter family, when known
+ * @param {string} [args.schema] the header's schema, when known
+ * @param {number} [args.sizeBytes] the source's size, bucketed here
+ * @return {boolean} whether gtagEvent handed the event to gtag
+ */
+export function reportLoadDiagnosticsToGa({outcome, defect, format, authoringTool, schema, sizeBytes}) {
+  return sendToGa('load_diagnostics', {
+    outcome,
+    defect,
+    format,
+    authoring_tool: authoringTool ?? 'unknown',
+    schema: schemaParam(schema),
+    size_class: sizeClass(Number.isFinite(sizeBytes) ? sizeBytes : 0),
+  })
+}
+
+
+/**
+ * One event for a load that went STALL_TIMEOUT_MS without a progress event
+ * and then finished (loadProgress.js#reportStallRecoveredOnce). Until 2026-11
+ * every such stall was a Sentry warning at 30 s (SHARE-1HJ), though most were
+ * one long wasm call that completed; now only HANG_TIMEOUT_MS of silence
+ * reaches Sentry, and the recovered ones are counted here by phase, format
+ * and size, which is what says where the long calls are.
+ *
+ * @param {object} args
+ * @param {string} args.phase the progress phase the load stalled in
+ * @param {string} args.format the model's format, e.g. 'ifc', 'step'
+ * @param {number} [args.sizeBytes] the source's size, bucketed here
+ * @return {boolean} whether gtagEvent handed the event to gtag
+ */
+export function reportLoadStallRecovered({phase, format, sizeBytes}) {
+  return sendToGa('load_stall_recovered', {
+    phase: PHASE_PATTERN.test(phase ?? '') ? phase : 'other',
+    format,
+    size_class: sizeClass(Number.isFinite(sizeBytes) ? sizeBytes : 0),
+  })
+}
+
+
+// Progress phases are code constants ('download', 'geometry', 'dataParse'…);
+// the pattern only keeps a future free-text phase out of GA.
+const PHASE_PATTERN = /^[A-Za-z]{1,24}$/
+
+/**
+ * The schemas `schema` may name. The reporter's schema is FILE_SCHEMA from
+ * a STEP/IFC header (exporter-written), or Loader's upper-cased extension
+ * for the other formats. A pattern on the charset would still pass a header
+ * like `CLIENT_ACME_TOWER` (codex on #2235), so it is a closed set: the IFC
+ * releases, the STEP application protocols' schema names, and the format
+ * tags. Anything else is `other`.
+ */
+const KNOWN_SCHEMAS = new Set([
+  'IFC2X_FINAL', 'IFC2X2_FINAL', 'IFC2X3', 'IFC2X3_TC1',
+  'IFC4', 'IFC4_ADD1', 'IFC4_ADD2', 'IFC4_ADD2_TC1', 'IFC4X1', 'IFC4X2',
+  'IFC4X3', 'IFC4X3_RC1', 'IFC4X3_RC2', 'IFC4X3_RC3', 'IFC4X3_RC4', 'IFC4X3_TC1',
+  'IFC4X3_ADD1', 'IFC4X3_ADD2',
+  'AUTOMOTIVE_DESIGN', 'CONFIG_CONTROL_DESIGN', 'STRUCTURAL_ANALYSIS_DESIGN',
+  'IFC', 'IFCZIP', 'STEP', 'STP', 'GLB', 'GLTF', 'OBJ', 'STL', 'FBX', 'PDB', 'XYZ', 'BLD', 'NRRD', 'ADF',
+])
+
+/** The AP203/AP214/AP242 schema names, which carry long qualified suffixes. */
+const AP_SCHEMA_FAMILY = /^(AP203|AP214|AP242)_/
+
+
+/**
+ * @param {string} [schema] the reporter's schema
+ * @return {string} a known schema, its AP family (`AP242`…), 'other', or
+ *   'unknown' when there was none. A STEP schema's object identifier
+ *   (`AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }`) is dropped first.
+ */
+export function schemaParam(schema) {
+  if (typeof schema !== 'string' || schema.trim() === '') {
+    return 'unknown'
+  }
+  const name = schema.trim().split(/[\s{]/)[0].toUpperCase()
+  if (KNOWN_SCHEMAS.has(name)) {
+    return name
+  }
+  const family = AP_SCHEMA_FAMILY.exec(name)
+  return family ? family[1] : 'other'
+}
+
+
+/**
  * Best-effort; the load has its own outcome.
  *
  * @param {string} name

@@ -678,8 +678,12 @@ export function withEngineSource(error, sourceMode) {
  *   load report classify a worker's failure as they would a main-thread one
  */
 function engineLoadError(msg) {
-  const error = new Error(msg.message ?? `engine worker load failed (${msg.kind})`)
-  if (msg.name) {
+  // A string, whatever the worker sent: a stale worker beside a new page can
+  // still post an object here (SHARE-1Y7, `Error: [object Object]`).
+  const message = typeof msg.message === 'string' ? msg.message :
+    `engine worker load failed (${typeof msg.kind === 'string' ? msg.kind : 'unknown'})`
+  const error = new Error(message)
+  if (typeof msg.name === 'string' && msg.name) {
     error.name = msg.name
   }
   error.engineFailureKind = msg.kind

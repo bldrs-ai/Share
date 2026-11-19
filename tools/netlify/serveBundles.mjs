@@ -52,7 +52,7 @@ globalThis.awslambda = {streamifyResponse: (fn) => fn, HttpResponseStream: {from
  */
 async function loadFunction(bundle) {
   if (bundle.runtimeAPIVersion === 2) {
-    const mod = await import(pathToFileURL(path.join(bundle.path, 'functions', `${bundle.name}.mjs`)).href)
+    const mod = await import(pathToFileURL(path.join(bundle.path, bundle.v2Handler)).href)
     return {apiVersion: 2, fn: mod.default}
   }
   const entry = path.join(bundle.path, bundle.entryFilename)

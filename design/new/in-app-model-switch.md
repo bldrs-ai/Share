@@ -13,7 +13,7 @@ closed; #2017 moved to Phase 1), Phase 1 #2028 (measure), #2029
 (interactive at index), #2019 (sessions), #2030 (no blocking calls), #2031
 (close and eviction), #2017, #2021–#2023, Phase 2 #2024. #2020 folded into
 #2019.
-**Related:** #1251 (`open-210`, multi-model overlay), #1657 (`assist-300`,
+**Related:** #1251 (`open-210`, multi-model overlay), #1657 (`open-200`,
 workspace shell, `?feature=workspace`), #1906 / #1957 (the no-OPFS in-memory
 open — the first in-app switch), #91 (the `modelID = 0` hack), #1776 (burned
 model handles).

@@ -5,7 +5,7 @@
  *
  *   # every shard, from the same checkout: plan, run, verify
  *   npx playwright test --config=tools/playwright.config.js --list --reporter=json > all-tests.json
- *   node tools/playwrightShards.mjs plan --list all-tests.json --shard 2 --of 4 --out shard-tests.txt
+ *   node tools/playwrightShards.mjs plan --list all-tests.json --shard 2 --of 6 --out shard-tests.txt
  *   npx playwright test --config=tools/playwright.config.js --test-list=shard-tests.txt
  *   node tools/playwrightShards.mjs verify --plan shard-tests.txt --report results.json
  *
@@ -179,7 +179,7 @@ export function planShards(tests, timings, {shards, isIndivisible = () => false}
   const unknown = []
   const unitsByKey = new Map()
   for (const {key, file} of tests) {
-    const seconds = Object.hasOwn(known, key) ? known[key] : null
+    const seconds = Object.prototype.hasOwnProperty.call(known, key) ? known[key] : null
     if (seconds === null) {
       unknown.push(key)
     }
@@ -232,7 +232,7 @@ export function countShardSeconds(tests, timings, shards) {
     const from = (size * s) + Math.min(extra, s)
     const to = from + size + (s < extra ? 1 : 0)
     return tests.slice(from, to)
-      .reduce((sum, {key}) => sum + (Object.hasOwn(known, key) ? known[key] : defaultSeconds), 0)
+      .reduce((sum, {key}) => sum + (Object.prototype.hasOwnProperty.call(known, key) ? known[key] : defaultSeconds), 0)
   })
 }
 

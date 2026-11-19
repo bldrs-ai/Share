@@ -34,6 +34,7 @@ import {load} from '../loader/Loader'
 import {
   LOAD_OUTCOMES,
   attachLoadFailureContext,
+  loadStallCaptureTags,
   beginLoadProgress,
   captureLoadDiagnostics,
   currentLoadSerial,
@@ -129,6 +130,9 @@ import {elementSelection} from './selection'
 import {partsToPath} from './urls'
 import {initViewer} from './viewer'
 import {installDebugPanelsShortcut} from '../viewer/debugPanels'
+import {isWebGLUnavailableError} from '../viewer/webglUnavailable'
+import WebglUnavailable from '../Components/WebglUnavailable'
+import {reportClientCapability} from '../privacy/clientCapabilities'
 
 
 let count = 0
@@ -191,6 +195,9 @@ export default function CadView({
   // (not module-level state) so two CadView mounts in the same process —
   // tests, multi-pane layouts — don't stomp each other.
   const previousThemeChangeCbRef = useRef(null)
+  // Set when three got no WebGL context: no viewer exists, so nothing the
+  // viewer gates renders, and Components/WebglUnavailable takes its place.
+  const [isWebglUnavailable, setIsWebglUnavailable] = useState(false)
   // The `[modelPath, customViewSettings]` pair the viewer was last built for
   // (see that effect). Its dependencies change only when a new viewer is
   // wanted, so the only run that sees the same pair again is StrictMode's
@@ -394,7 +401,26 @@ export default function CadView({
         console.error(error.message)
         captureException(error)
       }
-      const initializedViewer = initViewer(pathPrefix, sceneBackground || '#abcdef')
+      let initializedViewer
+      try {
+        initializedViewer = initViewer(pathPrefix, sceneBackground || '#abcdef')
+      } catch (e) {
+        if (!isWebGLUnavailableError(e)) {
+          throw e
+        }
+        // No WebGL context (SHARE-1DZ): a property of this browser, not a
+        // Share defect. Count it as a client capability (its one sink) and
+        // tell the user what to try, rather than letting the throw take the
+        // app down into the error boundary. With no viewer set, nothing tries
+        // to load (viewer/webglUnavailable.js). The report dedupes itself, so
+        // a re-init that fails the same way (a theme change) sends nothing.
+        // initViewer disposed any previous viewer before it threw, so the
+        // store must not keep pointing at it.
+        reportClientCapability('webgl_unavailable')
+        setViewer(null)
+        setIsWebglUnavailable(true)
+        return
+      }
       // Apply the persisted §6e render look (profile-menu toggle). Runs on
       // every (re)init — including theme changes, which re-create the viewer —
       // so the chosen look survives re-creation.
@@ -966,14 +992,20 @@ export default function CadView({
       if (!isOOM && !(e instanceof UnsupportedSchemaError) && !(e instanceof InMemoryUploadGoneError) &&
           !(e instanceof UploadNotInBrowserError) && !(e instanceof ZipArchiveError)) {
         attachLoadFailureContext()
+        // A load that stalled before it failed says so on this event only
+        // (loadProgress.js#loadStallCaptureTags), never on the scope.
+        const stallTags = loadStallCaptureTags()
+        const withStall = (context) => (stallTags ? {...context, tags: {...context?.tags, ...stallTags}} : context)
         if (e instanceof EngineOpenFailureError) {
           // The engine's status and reason as tags/context on this event
           // only; the alert's GA count is AlertDialog's (trackAlertEvent).
-          captureException(e, engineFailureCaptureContext(e))
+          captureException(e, withStall(engineFailureCaptureContext(e)))
         } else if (e?.engineSource) {
           // A failed engine-worker open without a recorded reason: still say
           // how its source was read (engineOpenFailure.js#engineSourceTags).
-          captureException(e, {tags: engineSourceTags(e)})
+          captureException(e, withStall({tags: engineSourceTags(e)}))
+        } else if (stallTags) {
+          captureException(e, {tags: stallTags})
         } else {
           captureException(e)
         }
@@ -3262,6 +3294,7 @@ export default function CadView({
         * ElementsControl. The persisted visibility is left alone, so the
         * cube comes back when isolation ends.
         */}
+      {!viewer && isWebglUnavailable && <WebglUnavailable/>}
       {viewer && isViewCubeVisible && !isTempIsolationModeOn && <ViewCube/>}
       {viewer && (
         <RootLandscape

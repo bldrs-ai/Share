@@ -6,16 +6,23 @@ jest.mock('@sentry/react', () => ({
 }))
 
 // reportBvhDepthCapToGa returns whether GA took the event.
-jest.mock('./reportLoadDiagnostics', () => ({reportBvhDepthCapToGa: jest.fn(() => true)}))
+jest.mock('./reportLoadDiagnostics', () => ({
+  reportBvhDepthCapToGa: jest.fn(() => true),
+  reportLoadDiagnosticsToGa: jest.fn(() => true),
+  reportLoadStallRecovered: jest.fn(() => true),
+}))
 import Cookies from 'js-cookie'
-import {reportBvhDepthCapToGa} from './reportLoadDiagnostics'
+import {reportBvhDepthCapToGa, reportLoadDiagnosticsToGa, reportLoadStallRecovered} from './reportLoadDiagnostics'
 import Logger, {DATA_DEFECT} from '@bldrs-ai/conway/src/logging/logger'
 import {captureMessage, setContext, setTag} from '@sentry/react'
 import {_resetGaClientIdForTests} from '../privacy/analytics'
 import {consoleFileName, withSentrySafeMessage} from '../privacy/sentryRedaction'
 import useStore from '../store/useStore'
 import {
+  HANG_TIMEOUT_MS,
+  LOAD_HUNG_MESSAGE,
   STALL_TIMEOUT_MS,
+  loadStallCaptureTags,
   _getActiveReporterForTests,
   attachLoadFailureContext,
   beginLoadProgress,
@@ -632,6 +639,46 @@ describe('loadProgress', () => {
       })
     })
 
+    describe('sizes on a GLB cache hit', () => {
+      // A hit parses the cached artifact, so its bytes must never stand in for
+      // the source's: a 24 MB IFC used to report its 4 MB GLB as stats_fileSize
+      // and on the model line. The loader passes the source size the writer
+      // stamped (byteLength) and the artifact's own (artifactByteLength).
+      const SOURCE_BYTES = 5_879_866
+      const GLB_BYTES = 1_394_746
+
+      it('reports the source as fileSize and the GLB as artifactSize', () => {
+        beginLoadProgress({fileInfo: 'Momentum.ifc'})
+        reportModelInfo({fileName: 'Momentum.ifc', schema: 'IFC', byteLength: SOURCE_BYTES, artifactByteLength: GLB_BYTES})
+        endLoadProgress()
+        expect(getCompletedLoadStats().fileSize).toBe(SOURCE_BYTES)
+        expect(getCompletedLoadStats().artifactSize).toBe(GLB_BYTES)
+      })
+
+      it('shows both sizes on the model line', () => {
+        beginLoadProgress({fileInfo: 'Momentum.ifc'})
+        reportModelInfo({fileName: 'Momentum.ifc', schema: 'IFC', byteLength: SOURCE_BYTES, artifactByteLength: GLB_BYTES})
+        expect(reportLines()).toContain('Model: Momentum.ifc — IFC, 5.6 MB (cached GLB 1.3 MB)')
+        endLoadProgress()
+      })
+
+      it('reports no source size, not the GLB\'s, for an artifact that predates the stamp', () => {
+        beginLoadProgress({fileInfo: 'Momentum.ifc'})
+        reportModelInfo({fileName: 'Momentum.ifc', schema: 'IFC', artifactByteLength: GLB_BYTES})
+        expect(reportLines()).toContain('Model: Momentum.ifc — IFC (source size not recorded; cached GLB 1.3 MB)')
+        endLoadProgress()
+        expect(getCompletedLoadStats().fileSize).toBeUndefined()
+        expect(getCompletedLoadStats().artifactSize).toBe(GLB_BYTES)
+      })
+
+      it('has no artifact size on a load that parsed the source', () => {
+        beginLoadProgress({fileInfo: 'a.ifc'})
+        reportModelInfo({fileName: 'a.ifc', schema: 'IFC', byteLength: SOURCE_BYTES})
+        endLoadProgress()
+        expect(getCompletedLoadStats().artifactSize).toBeUndefined()
+      })
+    })
+
     describe('firstMeshMs', () => {
       it('is the load-clock time of the first mesh and latches', () => {
         const FIRST_MS = 400
@@ -816,14 +863,85 @@ describe('loadProgress', () => {
   })
 
   describe('sentry integration', () => {
-    it('fires the stall watchdog once and tags the phase', () => {
+    // SHARE-1HJ: a 30 s stall is the UI's cue only. Sentry hears about a load
+    // still silent at HANG_TIMEOUT_MS, once, tagged with its phase.
+    it('tells the UI at the stall, and Sentry only once the load is hung', () => {
       const onStall = jest.fn()
       beginLoadProgress({fileInfo: 'index.ifc', onStall})
       reportLoadProgress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
       jest.advanceTimersByTime(STALL_TIMEOUT_MS + 1)
       expect(onStall).toHaveBeenCalledWith(expect.objectContaining({phase: 'geometry'}))
-      expect(captureMessage).toHaveBeenCalledWith('Model load stalled', 'warning')
+      expect(captureMessage).not.toHaveBeenCalled()
+
+      jest.advanceTimersByTime(HANG_TIMEOUT_MS - STALL_TIMEOUT_MS)
+      expect(captureMessage).toHaveBeenCalledTimes(1)
+      expect(captureMessage).toHaveBeenCalledWith(LOAD_HUNG_MESSAGE, {level: 'warning', tags: {'load.stalled': 'true'}})
       expect(setTag).toHaveBeenCalledWith('load.phase', 'geometry')
+      // Per event, never on the scope, where it would outlive this load
+      // (codex on #2235).
+      expect(setTag).not.toHaveBeenCalledWith('load.stalled', expect.anything())
+      jest.advanceTimersByTime(HANG_TIMEOUT_MS * 2)
+      expect(captureMessage).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not report a hang when progress resumes after a stall', () => {
+      beginLoadProgress({fileInfo: 'index.ifc', onStall: jest.fn()})
+      reportLoadProgress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
+      jest.advanceTimersByTime(STALL_TIMEOUT_MS + 1)
+      reportLoadProgress({phase: 'geometry', completed: 4, total: 10, elapsedMs: 40_000})
+      jest.advanceTimersByTime(HANG_TIMEOUT_MS - STALL_TIMEOUT_MS)
+      // Still within one stall period of the last event: the hang clock reset.
+      expect(captureMessage).not.toHaveBeenCalled()
+      endLoadProgress()
+      jest.advanceTimersByTime(HANG_TIMEOUT_MS * 2)
+      expect(captureMessage).not.toHaveBeenCalled()
+    })
+
+    // One condition, one sink: a stall the load came back from is GA's.
+    it('counts a stall the load recovered from in GA, once, on success', () => {
+      beginLoadProgress({fileInfo: 'part.step', onStall: jest.fn()})
+      reportLoadProgress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
+      jest.advanceTimersByTime(STALL_TIMEOUT_MS + 1)
+      reportLoadProgress({phase: 'geometry', completed: 10, total: 10, elapsedMs: 40_000})
+      endLoadProgress()
+      captureLoadDiagnostics()
+      captureLoadDiagnostics()
+      expect(reportLoadStallRecovered).toHaveBeenCalledTimes(1)
+      expect(reportLoadStallRecovered).toHaveBeenCalledWith({phase: 'geometry', format: 'step', sizeBytes: undefined})
+      expect(captureMessage).not.toHaveBeenCalled()
+    })
+
+    it('does not count a load that never stalled, or one already reported hung', () => {
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      reportLoadProgress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
+      endLoadProgress()
+      captureLoadDiagnostics()
+      expect(reportLoadStallRecovered).not.toHaveBeenCalled()
+
+      beginLoadProgress({fileInfo: 'index.ifc', onStall: jest.fn()})
+      reportLoadProgress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
+      jest.advanceTimersByTime(HANG_TIMEOUT_MS + 1)
+      endLoadProgress()
+      captureLoadDiagnostics()
+      expect(captureMessage).toHaveBeenCalledWith(LOAD_HUNG_MESSAGE, expect.objectContaining({level: 'warning'}))
+      expect(reportLoadStallRecovered).not.toHaveBeenCalled()
+    })
+
+    // A load that fails after a stall: the stall rides the failure's own event.
+    it('tags a failed load that stalled', () => {
+      beginLoadProgress({fileInfo: 'index.ifc', onStall: jest.fn()})
+      reportLoadProgress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
+      jest.advanceTimersByTime(STALL_TIMEOUT_MS + 1)
+      endLoadProgress(new Error('boom'))
+      expect(loadFailureCaptureContext().tags).toEqual({'load.phase': 'geometry', 'load.stalled': 'true'})
+      expect(loadStallCaptureTags()).toEqual({'load.stalled': 'true'})
+      // The scope gets the phase only.
+      attachLoadFailureContext()
+      expect(setTag).not.toHaveBeenCalledWith('load.stalled', expect.anything())
+
+      // The next load starts clean.
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      expect(loadStallCaptureTags()).toBeNull()
     })
 
     it('failure context includes the accumulated report text, and not the file path', () => {
@@ -1163,23 +1281,46 @@ describe('loadProgress', () => {
        * empty build the file does not explain still must. The counts that
        * separate the two ride on the event either way.
        */
-      it('keeps a no-geometry load out of the error stream, with the counts', () => {
+      // Since 2026-11 a nothing-to-draw load is counted in GA; an engine
+      // diagnostic it also hit still reaches Sentry (codex on #2235).
+      it('counts a no-geometry load in GA, and sends its engine gap to Sentry', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
         beginLoadProgress({fileInfo: 'tiny.ifc'})
         console.warn('No units defined.')
+        console.warn('No basis found for brep!')
         reportGeometryStats({
           vertexCount: 0, triangleCount: 0,
           productCount: 3, productsWithGeometryCount: 0, errorCount: 0, dataDefectCount: 1,
         })
         endLoadProgress()
-        captureLoadDiagnostics({warningCount: 1})
+        captureLoadDiagnostics({warningCount: 2})
 
-        const [, context] = diagnosticsCall()
-        expect(context.level).toBe('info')
+        const [message, context] = diagnosticsCall()
+        expect(message).toBe('Load diagnostics: No basis found for brep!')
+        expect(context.level).toBe('warning')
         expect(context.tags.load_outcome).toBe('no_geometry')
         expect(context.contexts.loadDiagnostics).toMatchObject({
           productCount: 3, productsWithGeometryCount: 0, dataDefectCount: 1,
         })
+        expect(reportLoadDiagnosticsToGa).toHaveBeenCalledTimes(1)
+        expect(reportLoadDiagnosticsToGa).toHaveBeenCalledWith(expect.objectContaining({
+          outcome: 'no_geometry', defect: 'no_units', format: 'ifc',
+        }))
+        warnSpy.mockRestore()
+      })
+
+      it('sends a no-geometry load with only defects to GA alone', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'tiny.ifc'})
+        console.warn('No units defined.')
+        reportGeometryStats({
+          vertexCount: 0, triangleCount: 0, productCount: 3, productsWithGeometryCount: 0, errorCount: 0, dataDefectCount: 1,
+        })
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1})
+
+        expect(diagnosticsCall()).toBeUndefined()
+        expect(reportLoadDiagnosticsToGa).toHaveBeenCalledWith(expect.objectContaining({outcome: 'no_geometry', defect: 'no_units'}))
         warnSpy.mockRestore()
       })
 
@@ -1588,9 +1729,28 @@ describe('loadProgress', () => {
           errorSpy.mockRestore()
         })
 
-        it('tags a diagnostic conway marked as a data defect', () => {
+        // An authoring defect on a load the user is looking at is GA's: its
+        // family only ('marked'), never conway's prose about the file.
+        it('sends a diagnostic conway marked as a data defect to GA, not Sentry', () => {
           beginLoadProgress({fileInfo: 'part.step'})
           Logger.error(DANGLING, EXPRESS_ID, DATA_DEFECT)
+          endLoadProgress()
+          captureLoadDiagnostics({errorCount: 1})
+
+          expect(diagnosticsCall()).toBeUndefined()
+          expect(reportLoadDiagnosticsToGa).toHaveBeenCalledWith(expect.objectContaining({
+            outcome: 'displayed', defect: 'marked', format: 'step',
+          }))
+          expect(JSON.stringify(reportLoadDiagnosticsToGa.mock.calls)).not.toContain('Skipping')
+        })
+
+        // An unusable load is an error whatever the console said, so one
+        // whose diagnostics are all defects still reaches Sentry, titled and
+        // tagged by the defect.
+        it('still sends an unusable load to Sentry when its only diagnostic is a defect', () => {
+          beginLoadProgress({fileInfo: 'part.step'})
+          Logger.error(DANGLING, EXPRESS_ID, DATA_DEFECT)
+          reportGeometryStats({vertexCount: 0, triangleCount: 0})
           endLoadProgress()
           captureLoadDiagnostics({errorCount: 1})
 
@@ -1598,6 +1758,7 @@ describe('loadProgress', () => {
           // The tee holds conway's echo, record id appended — the separator
           // the classifier cuts at is really there (the title ellipsizes it).
           expect(message).toMatch(new RegExp(`^Load diagnostics: ${DANGLING} exp…$`))
+          expect(context.level).toBe('error')
           expect(context.tags.data_defect).toBe('true')
         })
 
@@ -1667,23 +1828,25 @@ describe('loadProgress', () => {
           // The info entry really was logged and echoed — to console.log,
           // which the tee does not capture.
           expect(logSpy).toHaveBeenCalledWith(DANGLING)
-          expect(diagnosticsCall()[1].contexts.loadDiagnostics.consoleDistinct).toBe(1)
-          expect(diagnosticsCall()[1].tags.data_defect).toBe('true')
+          expect(diagnosticsCall()).toBeUndefined()
+          expect(reportLoadDiagnosticsToGa).toHaveBeenCalledWith(expect.objectContaining({defect: 'marked'}))
           logSpy.mockRestore()
         })
 
+        // SHARE-1MV and SHARE-1MZ: the two unmarked fallbacks, by name.
         it.each([
-          ['No units defined.', 'No units defined.'],
-          ['No IfcProjects found?', 'No IfcProjects found?'],
+          ['No units defined.', 'No units defined.', 'no_units'],
+          ['No IfcProjects found?', 'No IfcProjects found?', 'no_projects'],
           // The tee collapses whitespace; the fallback must see the same form.
-          ['a whitespace variant', 'No  units\n  defined.'],
-        ])('tags the unmarked data-quality fallback: %s', (_label, text) => {
+          ['a whitespace variant', 'No  units\n  defined.', 'no_units'],
+        ])('sends the unmarked data-quality fallback to GA, not Sentry: %s', (_label, text, defect) => {
           beginLoadProgress({fileInfo: 'index.ifc'})
           Logger.warning(text)
           endLoadProgress()
           captureLoadDiagnostics({warningCount: 1})
 
-          expect(diagnosticsCall()[1].tags.data_defect).toBe('true')
+          expect(diagnosticsCall()).toBeUndefined()
+          expect(reportLoadDiagnosticsToGa).toHaveBeenCalledWith(expect.objectContaining({outcome: 'displayed', defect}))
         })
 
         it('does not tag an ordinary engine diagnostic', () => {
@@ -1715,6 +1878,25 @@ describe('loadProgress', () => {
           // The defect was seen — the tag's absence is the rule, not a miss.
           expect(_getActiveReporterForTests().dataDefectMessages.has(DANGLING)).toBe(true)
           expect(context.tags).not.toHaveProperty('data_defect')
+          // The defect is still counted, in GA.
+          expect(reportLoadDiagnosticsToGa).toHaveBeenCalledWith(expect.objectContaining({defect: 'marked'}))
+        })
+
+        // A minority engine gap is still the Sentry event when a defect is
+        // the most frequent diagnostic: it is what someone can go fix.
+        it('titles Sentry by the engine gap even when a defect is more frequent', () => {
+          beginLoadProgress({fileInfo: 'index.ifc'})
+          Logger.warning('No units defined.')
+          console.warn('No units defined.')
+          console.warn('No units defined.')
+          console.error('CDT Exception (hemisphere: 0)')
+          endLoadProgress()
+          captureLoadDiagnostics({errorCount: 1, warningCount: 3})
+
+          const [message, context] = diagnosticsCall()
+          expect(message).toBe('Load diagnostics: CDT Exception (hemisphere: #)')
+          expect(context.tags).not.toHaveProperty('data_defect')
+          expect(reportLoadDiagnosticsToGa).toHaveBeenCalledWith(expect.objectContaining({defect: 'no_units'}))
         })
 
         it('stops listening to conway when the load ends', () => {

@@ -27,13 +27,13 @@
 // We never write this into `extensionsRequired` — a generic GLTF reader
 // should still be able to load the geometry; only the NavTree degrades.
 //
-// TODO(viewer-replacement Phase 5+): when originator-side share lands
+// TODO(share-t101 Phases 4–6, #2201; post-MVP): once GLBs are shared between users
 // (design/new/glb-model-sharing.md §"Pipelines/A. Originator"), this
 // reader will be ingesting GLBs produced by arbitrary user browsers —
 // not just our own writer. At that point §"Validation and trust" of the
 // glb-model-sharing doc applies in full: schema-version range check,
 // cross-reference integrity (every `expressID` in the tree must exist
-// on some primitive's `_EXPRESS_ID` attribute), tree depth + size
+// on some primitive's per-vertex `expressID` attribute), tree depth + size
 // ceilings, HTML-strip on `Name.value` / `LongName.value` at the
 // NavTree consumer (untrusted strings become DOM text). Today's
 // validation is minimal (shape + recursion-depth guard) because the
