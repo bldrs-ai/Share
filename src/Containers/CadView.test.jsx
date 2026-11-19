@@ -2108,6 +2108,30 @@ describe('CadView', () => {
       expect(result.current.selectedElement.Name.value).toBe(`item ${leaf}`)
     })
 
+    // codex on #2242: a property read can reject with NotReadableError (a
+    // spilled source whose OPFS entry another tab replaced). It must reach
+    // Sentry as a handled capture, not an unhandled rejection, which
+    // index/sentry.js now drops as a picked file gone unreadable.
+    it('captures a failed property read as a handled Sentry event', async () => {
+      const Sentry = require('@sentry/react')
+      const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+      try {
+        const {result} = renderHook(() => useStore((state) => state))
+        const indexedModel = makeIndexedModel()
+        const notReadable = Object.assign(new Error('The requested file could not be read'), {name: 'NotReadableError'})
+        indexedModel.getItemProperties.mockRejectedValue(notReadable)
+        await mountOnStreamingLoad(result, indexedModel)
+        await waitFor(() => expect(result.current.rootElement).not.toBeNull())
+
+        const leaf = makeTestTree().children[0].children[0].expressID
+        await act(() => result.current.setSelectedElements([`${leaf}`]))
+        await actAsyncFlush()
+        await waitFor(() => expect(captureExceptionSpy).toHaveBeenCalledWith(notReadable, {tags: {subsystem: 'selection_properties'}}))
+      } finally {
+        captureExceptionSpy.mockRestore()
+      }
+    })
+
     it('paints a selection made while the geometry streamed once the model is in', async () => {
       const {result} = renderHook(() => useStore((state) => state))
       const setSelectionSpy = jest.spyOn(ShareViewer.prototype, 'setSelection')

@@ -138,7 +138,9 @@ function isInAppBrowserBridgeError(event) {
  * 8 users all-time), so it's counted in GA rather than raised in Sentry.
  * Unhandled only: a NotReadableError a load catches and captures itself (a
  * stale OPFS handle, engine/engineSources.js) can be Share's own fault and
- * keeps its Sentry event.
+ * keeps its Sentry event. So any path that can read a spilled source must
+ * catch and capture, as CadView's selection-properties read does (codex on
+ * #2242): an unhandled one would land here and be dropped.
  *
  * @param {object} event Sentry event payload
  * @return {boolean}

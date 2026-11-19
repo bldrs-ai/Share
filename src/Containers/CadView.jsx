@@ -3182,7 +3182,17 @@ export default function CadView({
       } else {
         setSelectedElement(null)
       }
-    })()
+    })().catch((e) => {
+      // Captured here, as a handled event, rather than left to reach Sentry
+      // as an unhandled rejection: a property read from a spilled source can
+      // throw NotReadableError when another tab replaced its OPFS entry
+      // (loader/opfsSourceByteStore.js), and index/sentry.js drops unhandled
+      // NotReadableErrors as a picked file gone unreadable (SHARE-1PZ). This
+      // one may be Share's fault, so it stays in Sentry (codex on #2242).
+      if (!isStale) {
+        captureException(e, {tags: {subsystem: 'selection_properties'}})
+      }
+    })
     return () => {
       isStale = true
     }
