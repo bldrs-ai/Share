@@ -336,7 +336,7 @@ Each track has a long-form design doc, and a tracking issue that holds its work 
 - **What:** The viewer's operations as one MCP tool surface for the in-process agent and sandboxed iframe apps; write tools ride the same contract (`create-t300`).
 - **Status:** The in-page MCP-shaped tool registry v0 exists on main behind `?feature=assist`, with the `model.*` analysis tools (quantities, measure, spatial; <a href="https://github.com/bldrs-ai/Share/issues/2219" target="_blank" rel="noopener noreferrer">#2219</a>). The sandbox and the postMessage bridge are not started; seeds are `WidgetApi/`, AppsDrawer and the `IfcModelService` query surface. <a href="https://github.com/bldrs-ai/Share/issues/1386" target="_blank" rel="noopener noreferrer">#1386</a> repair is still the precondition. <a href="https://github.com/bldrs-ai/Share/issues/2225" target="_blank" rel="noopener noreferrer">#2225</a>.
 - **MVP impact:** None, except the <a href="https://github.com/bldrs-ai/Share/issues/1386" target="_blank" rel="noopener noreferrer">#1386</a> repair.
-- **Doc:** `design/new/ai-workspace.md`.
+- **Docs:** snapshot `design/dx/apps-t300.md`; design `design/new/ai-workspace.md`.
 
 ### Track `create-t300`: Model edit substrate (NEW) (was T12)
 - **What:** Edits as an op log over the immutable source: mutation-safe batches, undo/redo, apply backends, persisted replay. IFC/STEP export of edits waits on a Conway writer.
