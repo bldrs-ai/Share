@@ -75,6 +75,8 @@ describeMobileAndDesktop('Assistant credits', () => {
     await expect(dialog).toHaveCount(0)
     await page.getByTestId('BotChat-CreditsMeterMore').click()
     await expect(dialog).toBeVisible()
+    // A reopen is informational: still the one refusal's one event.
+    expect(await funnelEvents(page, 'quota_limit_reached')).toHaveLength(1)
 
     await dialog.getByTestId('button-quota-sign-in').click()
     await expect(dialog).toHaveCount(0)
