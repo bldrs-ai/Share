@@ -23,13 +23,15 @@ export const assistConversationStore = createMemoryConversationStore()
 
 
 /**
- * The panel's view of the conversation, as a tiny external store for
- * `useSyncExternalStore`. A reply that is still streaming when the panel
- * unmounts keeps updating it, and the panel shows the result when it is back.
+ * A tiny external store for `useSyncExternalStore`: state outside React, with
+ * `get`, `update(change)` and `subscribe(cb)`.
+ *
+ * @param {*} initial
+ * @return {{get: Function, update: Function, subscribe: Function}}
  */
-export const assistChat = (() => {
+function createStore(initial) {
   const listeners = new Set()
-  let state = initialChat()
+  let state = initial
   return {
     get: () => state,
     /** @param {Function} change `(state) => nextState` */
@@ -48,7 +50,66 @@ export const assistChat = (() => {
       }
     },
   }
-})()
+}
+
+
+/**
+ * The panel's view of the conversation, as a tiny external store for
+ * `useSyncExternalStore`. A reply that is still streaming when the panel
+ * unmounts keeps updating it, and the panel shows the result when it is back.
+ */
+export const assistChat = createStore(initialChat())
+
+
+/**
+ * The hosted relay's last word on the caller's credits, for the panel's
+ * meter: `{tier, used, limit, exhausted}` (`used`/`limit` in the relay's
+ * micro-USD; the meter shows only a share of them), or null until a hosted
+ * response has said. Page-lifetime like the chat, and not part of it: a New
+ * chat doesn't refill anyone's credits.
+ */
+export const assistCredits = createStore(null)
+
+
+/**
+ * Take the relay's metering headers (hosted.ts `HostedMeta`) as the latest
+ * word on the caller's credits. A response that omits them leaves the last
+ * reading in place rather than blanking the meter.
+ *
+ * @param {object} meta a `HostedMeta`
+ */
+export function noteHostedCredits(meta) {
+  const {tier, used, limit} = meta
+  if (!tier || used === null || limit === null || limit <= 0) {
+    return
+  }
+  assistCredits.update(() => ({tier, used, limit, exhausted: used >= limit}))
+}
+
+
+/**
+ * The relay refused a turn for want of credits (`ai_credits_exhausted`).
+ * That is the authority on "exhausted": its reservation is an upper bound on
+ * the reply's cost, so it refuses while `used` is still under `limit`. Keeps
+ * the last reading's figures, or, if the refusal's headers carried none,
+ * stands in a full one, so the meter shows the wall either way.
+ *
+ * @param {?string} tier the relay's, from the refusal
+ */
+export function markCreditsExhausted(tier) {
+  assistCredits.update((credits) => ({
+    tier: tier ?? credits?.tier ?? AI_TIERS.ANONYMOUS,
+    used: credits?.used ?? 1,
+    limit: credits?.limit ?? 1,
+    exhausted: true,
+  }))
+}
+
+
+/** Forget the credits reading: the next hosted response sets it again. For a sign-in change, and tests. */
+export function resetAssistCredits() {
+  assistCredits.update(() => null)
+}
 
 
 /** `{assist, transport, dispose, session}`, once the first send has built it. */
@@ -96,9 +157,11 @@ export const assistAnonTokens = {
 /**
  * The hosted transport's host side (assistHost.js `createShareAssist`).
  *
- * `onMeta` shows the overflow notice (ai-workspace.md §6 path 3): once per
- * chat, the first time the relay says a reply comes from the free models
- * because the paid ones' daily budget is spent.
+ * `onMeta` runs on every relay response, refusals included. It keeps the
+ * credits reading the meter shows, and shows the overflow notice
+ * (ai-workspace.md §6 path 3): once per chat, the first time the relay says a
+ * reply comes from the free models because the paid ones' daily budget is
+ * spent.
  */
 export const assistHostedSide = {
   getAuthToken: async () => {
@@ -116,6 +179,7 @@ export const assistHostedSide = {
   },
   anonTokens: assistAnonTokens,
   onMeta: (meta) => {
+    noteHostedCredits(meta)
     if (!meta.overflow) {
       return
     }
@@ -160,6 +224,7 @@ export function resetAssistChat() {
   assistInstance.current?.session?.abort()
   assistInstance.current?.dispose()
   assistInstance.current = null
+  resetAssistCredits()
   assistChat.update(() => initialChat())
 }
 

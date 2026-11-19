@@ -1,5 +1,5 @@
 import {http, HttpHandler} from 'msw'
-import {HTTP_BAD_REQUEST, HTTP_OK} from '../net/http'
+import {HTTP_BAD_REQUEST, HTTP_OK, HTTP_PAYMENT_REQUIRED} from '../net/http'
 import {assertDefined} from '../utils/assert'
 import {SSE_HEADERS, scriptedReply, sseStream} from '../assist/openrouterSse.fixture'
 
@@ -47,18 +47,33 @@ export default function apiHandlersOpenrouter(defines: Defines): HttpHandler[] {
   // token, as the real relay does; one with a `ba1.` token stays anonymous;
   // anything else is a signed-in free user. The ledger, the breaker and the
   // allowlist are the relay's, tested against it (netlify/functions/_tests/);
-  // this mock only has to be the wire.
+  // this mock only has to be the wire. `window.__mockAiRelay` lets a spec say
+  // what the relay reports next (see relayKnob).
   handlers.push(http.post(AI_RELAY_PATH, async ({request}) => {
     const bearer = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
     const anonymous = bearer === '' || bearer.startsWith('ba1.')
+    const knob = relayKnob()
+    const tier = knob.tier ?? (anonymous ? 'anonymous' : 'free')
+    const meter = {
+      'x-bldrs-ai-tier': tier,
+      'x-bldrs-ai-used': String(knob.used ?? 0),
+      'x-bldrs-ai-limit': String(knob.limit ?? (anonymous ? DEFAULT_ANONYMOUS_LIMIT : DEFAULT_FREE_LIMIT)),
+    }
+    // The real relay's refusal (netlify/functions/ai-chat.js refusalResponse,
+    // replay scenario credits-exhausted.json): 402, the code and the tier in
+    // the body, the metering headers still set.
+    if (knob.exhausted) {
+      return new Response(JSON.stringify({error: {code: 'ai_credits_exhausted', message: 'Out of credits'}, tier}), {
+        status: HTTP_PAYMENT_REQUIRED,
+        headers: {'Content-Type': 'application/json', ...meter},
+      })
+    }
     const {chunks, delayMs} = scriptedReply(await request.json() as Parameters<typeof scriptedReply>[0])
     return new Response(sseStream(chunks, delayMs), {
       status: HTTP_OK,
       headers: {
         ...SSE_HEADERS,
-        'x-bldrs-ai-tier': anonymous ? 'anonymous' : 'free',
-        'x-bldrs-ai-used': '0',
-        'x-bldrs-ai-limit': anonymous ? '20000' : '500000',
+        ...meter,
         ...(bearer === '' ? {'x-bldrs-ai-token': `${MOCK_ANON_TOKEN_PREFIX}${++mintedTokens}`} : {}),
       },
     })
@@ -80,6 +95,30 @@ export default function apiHandlersOpenrouter(defines: Defines): HttpHandler[] {
 
 /** The relay's path (viewer/tools/assistHost.js AI_RELAY_URL), same origin. */
 export const AI_RELAY_PATH = '/.netlify/functions/ai-chat'
+
+/**
+ * What a spec sets on `window.__mockAiRelay` to steer the mock relay's next
+ * answers, as `window.__mockQuotaLoads` does for record-load. Unset fields
+ * keep the defaults: the caller's own tier, 0 used, and the placeholder
+ * limits of src/quota/aiCredits.js in micro-USD.
+ */
+export interface MockAiRelay {
+  tier?: 'anonymous' | 'free' | 'pro'
+  used?: number
+  limit?: number
+  /** Refuse with 402 `ai_credits_exhausted`, as the relay does. */
+  exhausted?: boolean
+}
+
+const DEFAULT_ANONYMOUS_LIMIT = 20000
+const DEFAULT_FREE_LIMIT = 500000
+
+
+/** @return the spec's steering for the mock relay, or none */
+function relayKnob(): MockAiRelay {
+  return (typeof window !== 'undefined' && (window as unknown as {__mockAiRelay?: MockAiRelay}).__mockAiRelay) || {}
+}
+
 
 /** What the mock relay's minted anonymous tokens start with; a counter follows. */
 export const MOCK_ANON_TOKEN_PREFIX = 'ba1.mockAnonymousToken.'

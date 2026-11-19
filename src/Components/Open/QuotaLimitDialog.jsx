@@ -2,6 +2,7 @@ import React, {ReactElement, useEffect, useRef} from 'react'
 import {Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Link, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {startLogin} from '../../Auth0/gateLogin'
 import {
   FUNNEL_EVENTS,
   MODEL_ACTIONS,
@@ -10,6 +11,7 @@ import {
   gtagFunnelEvent,
 } from '../../privacy/analytics'
 import {trackModelActionWhenAuthSettled} from '../../privacy/modelActionTracking'
+import {aiCreditsCopy} from '../../quota/aiCreditsCopy'
 import {LIMITS, QUOTA_FEATURES, ROLLING_WINDOW_DAYS, TIERS} from '../../quota/quota'
 import useStore from '../../store/useStore'
 import {useMock} from '../Profile/ProfileControl'
@@ -17,11 +19,19 @@ import {goToSubscription} from '../Profile/subscriptionNav'
 
 
 /**
- * Modal shown when the user hits their usage quota. Only a signed-in free
- * user can: signed-out users are never metered (quota.js#getTier), so the
- * Sign up offer the removed anonymous tier had is gone with it.
+ * Modal shown when the user hits a usage quota. For private models only a
+ * signed-in free user can: signed-out users are never metered
+ * (quota.js#getTier), so the Sign up offer the removed anonymous tier had is
+ * gone with it.
  *
- * @property {string} tier One of TIERS.*
+ * `feature: 'ai_credits'` is the hosted assistant's wall (#1933), where the
+ * signed-out user IS metered and has a tier of their own: it says what that
+ * tier can do next (quota/aiCreditsCopy.js: sign in, upgrade, or wait). Its
+ * `quota_limit_reached` is the one event for that condition: the panel sends
+ * none of its own, and the dialog sends no model-slot `model_share` twin.
+ *
+ * @property {string} tier One of TIERS.* for private models, or the relay's
+ *   AI tier ('anonymous' | 'free' | 'pro') for `ai_credits`
  * @property {boolean} isOpen Controls dialog visibility
  * @property {Function} onClose Called when the dialog should close
  * @property {string} [feature] Which QUOTA_FEATURES limit was hit; the
@@ -37,6 +47,8 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
   const isAuthenticatedRef = useRef(isAuthenticated)
   isAuthenticatedRef.current = isAuthenticated
   const theme = useTheme()
+  const setIsLoginVisible = useStore((state) => state.setIsLoginVisible)
+  const isAiCredits = feature === QUOTA_FEATURES.AI_CREDITS
   // Whether the current showing has been reported. A ref rather than a
   // dependency-driven fire because the event means "the dialog appeared",
   // once per closed→open edge: StrictMode's double effect run and a tier
@@ -59,6 +71,10 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
     // what users actually saw — whatever decided to show it, and whether or
     // not the `quotas` flag is what's enforcing.
     gtagFunnelEvent(FUNNEL_EVENTS.QUOTA_LIMIT_REACHED, {tier, feature})
+    if (isAiCredits) {
+      // No model twin: nothing was opened, shared or exported.
+      return
+    }
     // Its normalized twin (design/new/quotas.md §"Analytics: normalized tier
     // events"). Private-model opens are the tier model's "share" action ("open
     // and share N private models"), so the wall is model_share {blocked}.
@@ -79,7 +95,7 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
       tier,
       getIsAuthenticated: () => isAuthenticatedRef.current,
     })
-  }, [isOpen, tier, feature])
+  }, [isOpen, tier, feature, isAiCredits])
 
   const handleSubscribe = async () => {
     onClose()
@@ -97,11 +113,31 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
     })
   }
 
+  // The same login dialog as the Profile menu's, not a gate's sign-in
+  // (Auth0/gateLogin.js startLogin drops any stale gate attempt).
+  const handleSignIn = () => {
+    onClose()
+    startLogin()
+    setIsLoginVisible(true)
+  }
+
   const limitText = `${LIMITS[TIERS.FREE]} private models in any rolling ${ROLLING_WINDOW_DAYS}-day window`
   // The slots this dialog guards are the ones exports use too
   // (export/exportSlots.js), so it says so: a user here may also have just
   // been told no to an export, and the models already in their slots stay
   // open and exportable.
+
+  if (isAiCredits) {
+    return (
+      <AiCreditsDialog
+        tier={tier}
+        isOpen={isOpen}
+        onClose={onClose}
+        onSubscribe={handleSubscribe}
+        onSignIn={handleSignIn}
+      />
+    )
+  }
 
   return (
     <Dialog
@@ -140,6 +176,53 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
         <Button onClick={onClose} sx={{textTransform: 'none'}}>
           Not now
         </Button>
+      </DialogActions>
+    </Dialog>
+  )
+}
+
+
+/**
+ * The `ai_credits` body: the tier's own copy and the one thing it can do.
+ * Pro has no button, only the wait.
+ *
+ * @property {string} tier The relay's AI tier
+ * @property {boolean} isOpen Controls dialog visibility
+ * @property {Function} onClose Called when the dialog should close
+ * @property {Function} onSubscribe Free tier's Upgrade
+ * @property {Function} onSignIn Signed-out tier's Sign in
+ * @return {ReactElement}
+ */
+function AiCreditsDialog({tier, isOpen, onClose, onSubscribe, onSignIn}) {
+  const {title, body, cta, ctaLabel} = aiCreditsCopy(tier)
+  return (
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      maxWidth='xs'
+      fullWidth
+      closeAfterTransition={false}
+      data-testid='dialog-ai-credits'
+    >
+      <DialogTitle sx={{pb: 1}}>{title}</DialogTitle>
+      <DialogContent>
+        <Typography variant='body2'>{body}</Typography>
+      </DialogContent>
+      <DialogActions sx={{px: 3, pb: 2}}>
+        <Button onClick={onClose} sx={{textTransform: 'none'}}>
+          {cta === null ? 'Close' : 'Not now'}
+        </Button>
+        {cta !== null && (
+          <Button
+            onClick={cta === 'subscribe' ? onSubscribe : onSignIn}
+            variant='contained'
+            color='accent'
+            sx={{textTransform: 'none', whiteSpace: 'nowrap'}}
+            data-testid={cta === 'subscribe' ? 'button-quota-subscribe' : 'button-quota-sign-in'}
+          >
+            {ctaLabel}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   )

@@ -1,6 +1,7 @@
 import React, {
   ReactElement,
   useCallback,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -17,24 +18,29 @@ import {
   Stop as StopIcon,
 } from '@mui/icons-material'
 import {HOSTED_TRANSPORT_LABEL, OPENROUTER_KEY_ID, assistErrorMessage} from '../../assist'
+import {AI_CREDITS_FEATURE} from '../../quota/aiCredits'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import useStore from '../../store/useStore'
 import {createShareAssist} from '../../viewer/tools/assistHost'
 import {loadAssistRuntime} from '../../viewer/tools/assistRuntime'
+import QuotaLimitDialog from '../Open/QuotaLimitDialog'
 import Panel from '../SideDrawer/Panel'
 import BotSettings from './BotSettings'
 import ChatMessage from './ChatMessage'
+import CreditsMeter from './CreditsMeter'
 import {
   assistAuth,
   assistChat,
   assistConversationStore,
+  assistCredits,
   assistHostedSide,
   assistInstance,
   assistKeyStore,
+  markCreditsExhausted,
   newAssistChat,
+  resetAssistCredits,
 } from './assistState'
 import {reportAssistCondition} from './reportAssistCondition'
-import {trackAssistQuotaLimit} from './trackAssistQuota'
 import 'react-chat-elements/dist/main.css'
 import './chat-bubbles.css'
 
@@ -98,6 +104,20 @@ export default function BotChat() {
   const isStreaming = streamingTurn !== null
   const [input, setInput] = useState('')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  // The tier the out-of-credits dialog is showing for, or null when closed.
+  const [creditsDialogTier, setCreditsDialogTier] = useState(null)
+  const credits = useSyncExternalStore(assistCredits.subscribe, assistCredits.get)
+
+  // The meter's figures are the previous sign-in state's: the next hosted
+  // response says the new tier's. Not on mount, so a reading from before the
+  // panel was last closed survives reopening it.
+  const wasAuthenticated = useRef(isAuthenticated)
+  useEffect(() => {
+    if (wasAuthenticated.current !== isAuthenticated) {
+      wasAuthenticated.current = isAuthenticated
+      resetAssistCredits()
+    }
+  }, [isAuthenticated])
 
   const theme = useTheme()
   const messagesContainerRef = useRef(null)
@@ -188,7 +208,9 @@ export default function BotChat() {
             reportAssistCondition('model_unavailable', {status: event.status, transport: transport.id})
           }
           if (event.type === 'error' && event.code === 'credits_exhausted') {
-            trackAssistQuotaLimit(event.tier)
+            // The dialog sends the one `quota_limit_reached` for this wall.
+            markCreditsExhausted(event.tier)
+            setCreditsDialogTier(event.tier ?? 'anonymous')
           }
           update((chat) => ({
             ...chat,
@@ -366,6 +388,11 @@ export default function BotChat() {
         <Box ref={messagesEndRef} data-testid='BotChat-MessagesEnd' sx={{height: '1px', width: '100%'}}/>
       </Stack>
 
+      {/* Hosted only: with the user's own key, Bldrs' credits aren't what's spent. */}
+      {credits && !apiKey && (
+        <CreditsMeter credits={credits} onMore={() => setCreditsDialogTier(credits.tier)}/>
+      )}
+
       <Box
         sx={{
           display: 'flex',
@@ -430,6 +457,12 @@ export default function BotChat() {
       ) : (
         renderChat()
       )}
+      <QuotaLimitDialog
+        tier={creditsDialogTier ?? 'anonymous'}
+        isOpen={creditsDialogTier !== null}
+        onClose={() => setCreditsDialogTier(null)}
+        feature={AI_CREDITS_FEATURE}
+      />
     </Panel>
   )
 }

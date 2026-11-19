@@ -18,7 +18,6 @@ import BotChat, {
 import {ANON_TOKEN_KEY, assistKeyStore, overflowNotice, resetAssistChat} from './assistState'
 import {BOT_TITLE} from './component'
 import {reportAssistCondition} from './reportAssistCondition'
-import {trackAssistQuotaLimit} from './trackAssistQuota'
 
 
 // The test DOM's AbortController must be Node's. The loop's AbortSignal
@@ -35,7 +34,6 @@ globalThis.AbortSignal = new NodeAbortController().signal.constructor as typeof 
 
 
 jest.mock('./reportAssistCondition', () => ({reportAssistCondition: jest.fn()}))
-jest.mock('./trackAssistQuota', () => ({trackAssistQuotaLimit: jest.fn()}))
 // The panel reads the sign-in for the hosted transport (assistState.js
 // assistAuth); signed out unless a test says otherwise.
 const mockAuth = {isAuthenticated: false, getAccessTokenSilently: () => Promise.resolve('auth0-access-token')}
@@ -157,7 +155,6 @@ describe('BotChat', () => {
     mockView.holdUndo = null
     Object.assign(mockControl, {runtimeFails: false, runtimeDelayMs: 0, startThrows: false, labelThrows: false})
     jest.mocked(reportAssistCondition).mockClear()
-    jest.mocked(trackAssistQuotaLimit).mockClear()
     mockAuth.isAuthenticated = false
     act(() => {
       setStoreState({isBotVisible: true})
@@ -262,10 +259,20 @@ describe('BotChat', () => {
         {status, headers: {'Content-Type': 'application/json', ...headers}})))
     }
 
+    /** @return quota_limit_reached gtag calls so far */
+    function limitEvents() {
+      return (window.gtag as jest.Mock).mock.calls.filter(([kind, name]) => kind === 'event' && name === 'quota_limit_reached')
+    }
+
     beforeEach(() => {
+      window.gtag = jest.fn()
       act(() => {
         assistKeyStore.forget(OPENROUTER_KEY_ID)
       })
+    })
+
+    afterEach(() => {
+      delete window.gtag
     })
 
     it('answers through the relay, anonymously, and keeps the token it is given for the next turn', async () => {
@@ -299,23 +306,125 @@ describe('BotChat', () => {
       }
     })
 
-    it('an exhausted allowance says to sign in, and is counted for the funnel, not reported', async () => {
+    // The dialog is the one sender of the funnel event for this wall: the
+    // panel sends none of its own, so the user's one wall is one event.
+    it('an exhausted allowance says to sign in, opens the dialog, and is counted once, not reported', async () => {
       relayAnswers(HTTP_PAYMENT_REQUIRED, {error: {code: 'ai_credits_exhausted'}, tier: 'anonymous'})
       render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
       send('Hello bot')
       expect(await screen.findByTestId('BotChat-Error')).toHaveTextContent(
         assistErrorMessage('credits_exhausted', HOSTED_TRANSPORT_LABEL, HTTP_PAYMENT_REQUIRED, 'anonymous'))
       expect(screen.getByTestId('BotChat-Error')).toHaveTextContent('Sign in for more')
-      expect(trackAssistQuotaLimit).toHaveBeenCalledWith('anonymous')
+      const dialog = await screen.findByTestId('dialog-ai-credits')
+      expect(dialog).toHaveTextContent('Out of assistant credits for today')
+      expect(within(dialog).getByTestId('button-quota-sign-in')).toBeInTheDocument()
+      expect(limitEvents().map(([, , params]) => params)).toEqual([{tier: 'anonymous', feature: 'ai_credits'}])
       expect(reportAssistCondition).not.toHaveBeenCalled()
     })
 
-    it('a free user out of credits is told to upgrade', async () => {
+    it('a free user out of credits is told to upgrade, with the Pro offer in the dialog', async () => {
       relayAnswers(HTTP_PAYMENT_REQUIRED, {error: {code: 'ai_credits_exhausted'}, tier: 'free'})
       render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
       send('Hello bot')
       expect(await screen.findByTestId('BotChat-Error')).toHaveTextContent('Upgrade to Pro')
-      expect(trackAssistQuotaLimit).toHaveBeenCalledWith('free')
+      const dialog = await screen.findByTestId('dialog-ai-credits')
+      expect(within(dialog).getByTestId('button-quota-subscribe')).toHaveTextContent('Upgrade to Pro')
+      expect(limitEvents().map(([, , params]) => params)).toEqual([{tier: 'free', feature: 'ai_credits'}])
+    })
+
+    it('a Pro user out of credits is told to wait: no purchase button', async () => {
+      relayAnswers(HTTP_PAYMENT_REQUIRED, {error: {code: 'ai_credits_exhausted'}, tier: 'pro'})
+      render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+      send('Hello bot')
+      const dialog = await screen.findByTestId('dialog-ai-credits')
+      expect(dialog).toHaveTextContent('They come back as the days roll on')
+      expect(within(dialog).queryByRole('button', {name: /upgrade|sign in/i})).toBeNull()
+      expect(limitEvents().map(([, , params]) => params)).toEqual([{tier: 'pro', feature: 'ai_credits'}])
+    })
+
+    describe('the credits meter', () => {
+      const MICRO = 1000000
+      const USED_85_PERCENT = 850000
+      const USED_25_PERCENT = 250000
+      const USED_30_PERCENT = 300000
+      const FREE_USED = 499990
+      const FREE_LIMIT = 500000
+      const meterHeaders = (used: number, limit: number, tier = 'anonymous') => ({
+        'x-bldrs-ai-tier': tier, 'x-bldrs-ai-used': String(used), 'x-bldrs-ai-limit': String(limit),
+      })
+      /** @param headers the relay's metering headers for the next reply */
+      function relayReplies(headers: Record<string, string>) {
+        getServer().use(http.post(AI_RELAY_PATH, () => new Response(sseText(textReply('Hosted reply.')),
+          {status: 200, headers: {...SSE_HEADERS, ...headers}})))
+      }
+
+      it('is absent until a hosted response has said, then follows each response, normal to low', async () => {
+        relayReplies(meterHeaders(0, MICRO))
+        render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        expect(screen.queryByTestId('BotChat-CreditsMeter')).toBeNull()
+        send('Hello bot')
+        expect(await screen.findByText('Hosted reply.')).toBeInTheDocument()
+        const meter = screen.getByTestId('BotChat-CreditsMeter')
+        expect(meter).toHaveAttribute('data-state', 'normal')
+        expect(screen.getByRole('progressbar', {name: '0% of today\'s AI credits used'})).toHaveAttribute('aria-valuenow', '0')
+
+        relayReplies(meterHeaders(USED_85_PERCENT, MICRO))
+        await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
+        send('Hello again')
+        await waitFor(() => expect(screen.getAllByText('Hosted reply.')).toHaveLength(2))
+        expect(screen.getByTestId('BotChat-CreditsMeter')).toHaveAttribute('data-state', 'low')
+        expect(screen.getByRole('progressbar', {name: '85% of today\'s AI credits used'})).toHaveAttribute('aria-valuenow', '85')
+      })
+
+      it('never shows dollars, and words a signed-in tier by its 30-day window', async () => {
+        mockAuth.isAuthenticated = true
+        relayReplies(meterHeaders(USED_25_PERCENT, MICRO, 'free'))
+        render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        send('Hello bot')
+        expect(await screen.findByText('Hosted reply.')).toBeInTheDocument()
+        const meter = screen.getByTestId('BotChat-CreditsMeter')
+        expect(meter).toHaveTextContent('25% of your AI credits used over the last 30 days')
+        expect(meter).not.toHaveTextContent('$')
+      })
+
+      it('turns exhausted on the relay\'s refusal, even with used still under limit, and offers the next step again', async () => {
+        relayAnswers(HTTP_PAYMENT_REQUIRED, {error: {code: 'ai_credits_exhausted'}, tier: 'free'},
+          meterHeaders(FREE_USED, FREE_LIMIT, 'free'))
+        render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        send('Hello bot')
+        const dialog = await screen.findByTestId('dialog-ai-credits')
+        expect(screen.getByTestId('BotChat-CreditsMeter')).toHaveAttribute('data-state', 'exhausted')
+        // The open dialog hides the panel from the accessibility tree.
+        expect(screen.getByRole('progressbar', {hidden: true})).toHaveAttribute('aria-valuenow', '100')
+        fireEvent.click(within(dialog).getByRole('button', {name: 'Not now'}))
+        await waitFor(() => expect(screen.queryByTestId('dialog-ai-credits')).toBeNull())
+        fireEvent.click(screen.getByTestId('BotChat-CreditsMeterMore'))
+        expect(await screen.findByTestId('dialog-ai-credits')).toBeInTheDocument()
+      })
+
+      it('is not shown with a key of the user\'s own', async () => {
+        relayReplies(meterHeaders(0, MICRO))
+        render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        send('Hello bot')
+        expect(await screen.findByText('Hosted reply.')).toBeInTheDocument()
+        expect(screen.getByTestId('BotChat-CreditsMeter')).toBeInTheDocument()
+        act(() => {
+          assistKeyStore.set(OPENROUTER_KEY_ID, 'test-key')
+        })
+        expect(screen.queryByTestId('BotChat-CreditsMeter')).toBeNull()
+      })
+
+      it('leaves the last reading when a response says nothing of credits', async () => {
+        relayReplies(meterHeaders(USED_30_PERCENT, MICRO))
+        render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        send('Hello bot')
+        expect(await screen.findByText('Hosted reply.')).toBeInTheDocument()
+        relayReplies({})
+        await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
+        send('Hello again')
+        await waitFor(() => expect(screen.getAllByText('Hosted reply.')).toHaveLength(2))
+        expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '30')
+      })
     })
 
     it('a hosted outage is shown, and left to the relay to report', async () => {
@@ -325,7 +434,7 @@ describe('BotChat', () => {
       expect(await screen.findByTestId('BotChat-Error'))
         .toHaveTextContent(assistErrorMessage('service_unavailable', HOSTED_TRANSPORT_LABEL))
       expect(reportAssistCondition).not.toHaveBeenCalled()
-      expect(trackAssistQuotaLimit).not.toHaveBeenCalled()
+      expect(limitEvents()).toEqual([])
     })
 
     it('past the breaker, says once that replies now come from free models', async () => {
