@@ -40,6 +40,7 @@ import {actAsyncFlush, suppressActWarnings} from '../utils/tests'
 import CadView from './CadView'
 import * as viewerModule from './viewer'
 import * as loadProgressModule from '../loader/loadProgress'
+import {GITHUB_NOT_FOUND_MESSAGE, NotFoundError} from '../loader/notFoundError'
 import * as clientCapabilities from '../privacy/clientCapabilities'
 import {WEBGL_UNAVAILABLE_TITLE} from '../viewer/webglUnavailable'
 
@@ -874,6 +875,26 @@ describe('CadView', () => {
     })
     expect(captureExceptionSpy).not.toHaveBeenCalled()
   })
+
+  // SHARE-1XP: someone else's GitHub link, missing or private, is their
+  // link or access: the alert, and no Sentry exception (AlertDialog counts
+  // it in GA).
+  it('alerts on an expected GitHub not-found without capturing it', async () => {
+    const notFound = new NotFoundError(GITHUB_NOT_FOUND_MESSAGE, {source: 'github', isExpected: true})
+    jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw notFound
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(result.current.alert).toBe(notFound))
+    expect(captureExceptionSpy).not.toHaveBeenCalledWith(notFound)
+  })
+
 
   it('keeps the generic alert and capture when the engine gave no reason', async () => {
     const genericErr = new Error('parseIfcWithConway: OpenModel returned -1')
@@ -2152,6 +2173,30 @@ describe('CadView', () => {
       await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
       expect(indexedModel.getItemProperties).toHaveBeenCalledWith(leaf)
       expect(result.current.selectedElement.Name.value).toBe(`item ${leaf}`)
+    })
+
+    // codex on #2242: a property read can reject with NotReadableError (a
+    // spilled source whose OPFS entry another tab replaced). It must reach
+    // Sentry as a handled capture, not an unhandled rejection, which
+    // index/sentry.js now drops as a picked file gone unreadable.
+    it('captures a failed property read as a handled Sentry event', async () => {
+      const Sentry = require('@sentry/react')
+      const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+      try {
+        const {result} = renderHook(() => useStore((state) => state))
+        const indexedModel = makeIndexedModel()
+        const notReadable = Object.assign(new Error('The requested file could not be read'), {name: 'NotReadableError'})
+        indexedModel.getItemProperties.mockRejectedValue(notReadable)
+        await mountOnStreamingLoad(result, indexedModel)
+        await waitFor(() => expect(result.current.rootElement).not.toBeNull())
+
+        const leaf = makeTestTree().children[0].children[0].expressID
+        await act(() => result.current.setSelectedElements([`${leaf}`]))
+        await actAsyncFlush()
+        await waitFor(() => expect(captureExceptionSpy).toHaveBeenCalledWith(notReadable, {tags: {subsystem: 'selection_properties'}}))
+      } finally {
+        captureExceptionSpy.mockRestore()
+      }
     })
 
     it('paints a selection made while the geometry streamed once the model is in', async () => {

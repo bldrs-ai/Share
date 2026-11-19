@@ -25,6 +25,7 @@ import {
 import {UploadNotInBrowserError} from '../OPFS/messages'
 import {getInMemoryUpload} from './inMemoryUploads'
 import {HTTP_NOT_FOUND} from '../net/http'
+import {NotFoundError} from './notFoundError'
 import {looksLikeLfsPointer} from '../net/github/lfs'
 import {assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
@@ -2796,17 +2797,9 @@ function onDownloadProgressHandler(progressEvent, onProgress) {
 }
 
 
-/** For network or file resources that are not found. */
-export class NotFoundError extends Error {
-  /** @param {string} message */
-  constructor(message) {
-    super(message)
-    this.name = 'NotFoundError'
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, NotFoundError) // Captures stack trace, excluding constructor call
-    }
-  }
-}
+// NotFoundError moved to its own module (notFoundError.js) so urls.js can
+// throw it; re-exported here for existing imports.
+export {NotFoundError} from './notFoundError'
 
 
 /**
