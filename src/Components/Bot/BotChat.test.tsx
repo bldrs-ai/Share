@@ -185,15 +185,23 @@ describe('BotChat', () => {
     await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
   })
 
-  it('shows each step\'s actions from the tools\' echo, and Undo reverses the select once', async () => {
+  it('shows a turn\'s tool steps as one chip: the latest task compact, every task expanded, Undo reverses the select once', async () => {
     render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
     send(SCRIPT.selectPrompt)
     expect(await screen.findByText(SCRIPT.selectedAnswer(2), {exact: false})).toBeInTheDocument()
     expect(mockView.selected).toEqual(['e1', 'e2'])
 
+    // Compact: one chip, only the latest task, from the tool's own echo.
+    expect(screen.getAllByTestId('BotChat-Tasks')).toHaveLength(1)
+    expect(screen.getAllByTestId('BotChat-Action').map((a) => a.textContent)).toEqual(['Selected 2 elementsUndo'])
+
+    // Expanded: both, the read-only step without an Undo.
+    fireEvent.click(screen.getByRole('button', {name: 'Steps'}))
+    expect(screen.getByRole('button', {name: 'Steps'})).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByTestId('BotChat-TasksCount')).toHaveTextContent('2 commands')
     const actions = screen.getAllByTestId('BotChat-Action')
-    expect(actions.map((a) => a.textContent)).toEqual(['Found 2 elements', 'Selected 2 elementsUndo'])
-    // The read-only step has no Undo; the select's has one, labelled with what it undoes.
+    expect(actions.map((a) => a.textContent)).toEqual([expect.stringMatching(/^Found 2 elements\(\d+s\)$/),
+      expect.stringMatching(/^Selected 2 elements\(\d+s\)Undo$/)])
     expect(within(actions[0]).queryByTestId('BotChat-UndoButton')).toBeNull()
     const undo = within(actions[1]).getByRole('button', {name: 'Undo: Selected 2 elements'})
     fireEvent.click(undo)
@@ -201,6 +209,22 @@ describe('BotChat', () => {
     expect(mockView.selected).toEqual(['e9'])
     expect(mockView.undos).toBe(1)
     expect(within(actions[1]).queryByTestId('BotChat-UndoButton')).toBeNull()
+  })
+
+  it('shows the chip\'s times once the turn is done, and a click swaps a time to its full form', async () => {
+    render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+    send(SCRIPT.selectPrompt)
+    expect(await screen.findByText(SCRIPT.selectedAnswer(2), {exact: false})).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('BotChat-TasksStart')).toBeInTheDocument())
+    const start = screen.getByTestId('BotChat-TasksStart')
+    expect(start.textContent).toMatch(/^\(\d{1,2}:\d{2}.*, \d+s\)$/)
+    // The hover carries the date, seconds and zone.
+    expect(start.getAttribute('title')).toMatch(/\d{4}.*:\d{2}:\d{2}/)
+    const full = start.getAttribute('title') ?? ''
+    fireEvent.click(start)
+    expect(start.textContent).toContain(full)
+    fireEvent.click(start)
+    expect(start.textContent).not.toContain(full)
   })
 
   it('keeps the conversation when the panel unmounts and comes back (a phone\'s drawer tabs)', async () => {

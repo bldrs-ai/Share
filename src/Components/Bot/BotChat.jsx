@@ -9,7 +9,7 @@ import React, {
 } from 'react'
 import {v4 as uuid} from 'uuid'
 import {
-  Box, Button, IconButton, InputBase, Stack, Typography, useTheme,
+  Box, IconButton, InputBase, Stack, useTheme,
 } from '@mui/material'
 import {
   AddCommentOutlined as NewChatIcon,
@@ -26,8 +26,10 @@ import {loadAssistRuntime} from '../../viewer/tools/assistRuntime'
 import QuotaLimitDialog from '../Open/QuotaLimitDialog'
 import Panel from '../SideDrawer/Panel'
 import BotSettings from './BotSettings'
+import AssistantMarkdown from './AssistantMarkdown'
 import ChatMessage from './ChatMessage'
 import CreditsMeter from './CreditsMeter'
+import TaskChip from './TaskChip'
 import {
   assistAuth,
   assistChat,
@@ -77,8 +79,9 @@ export function stepLimitMessage(steps) {
 /**
  * The assistant panel (#1675): the user's message goes to the agent loop
  * (src/assist/loop.ts, loaded on first send), the reply streams into the
- * bubbles, and each step's viewer actions show as a compact line from the
- * tools' own `echo`, with Undo. Stop ends a reply mid-stream.
+ * bubbles as Markdown, and the turn's tool steps show as one task chip from
+ * the tools' own `echo`, with Undo (TaskChip.jsx). Stop ends a reply
+ * mid-stream.
  *
  * With no key of the user's own, it answers through Bldrs' hosted relay
  * within the plan's credits (#1932); with one, straight from OpenRouter.
@@ -171,6 +174,7 @@ export default function BotChat() {
     }
     setInput('')
     const turn = uuid()
+    const turnStartedAt = Date.now()
     // Updates from this send apply only to the chat it was sent in, so a
     // turn still finishing after the chat was reset can't write into the next.
     const update = (change) => assistChat.update((chat) => (chat.conversationId === conversationId ? change(chat) : chat))
@@ -222,7 +226,7 @@ export default function BotChat() {
           }
           update((chat) => ({
             ...chat,
-            messages: applyEvent(chat.messages, event, turn, transport.label),
+            messages: applyEvent(chat.messages, event, turn, transport.label, {turnStartedAt}),
             undoTop: session.lastUndoable(),
           }))
         }
@@ -237,7 +241,14 @@ export default function BotChat() {
       update((chat) => ({
         ...chat,
         streamingTurn: chat.streamingTurn === turn ? null : chat.streamingTurn,
-        messages: chat.messages.map((message) => (message.live ? {...message, live: false} : message)),
+        messages: chat.messages.map((message) => {
+          if (message.live) {
+            return {...message, live: false}
+          }
+          // The turn is over however it ended, so its chip gets its end time.
+          return message.kind === 'tasks' && message.turn === turn && message.endedAt === undefined ?
+            {...message, endedAt: Date.now()} : message
+        }),
       }))
     }
   }, [conversationId, input, isStreaming, undoPending])
@@ -277,8 +288,11 @@ export default function BotChat() {
     assistChat.update((chat) => ({
       ...chat,
       undoTop: session.lastUndoable(),
-      messages: chat.messages.map((message) => (message.kind === 'action' && report.steps.includes(message.stepId) ?
-        {...message, undone: true, undoFailed: failed} : message)),
+      messages: chat.messages.map((message) => (message.kind === 'tasks' ? {
+        ...message,
+        tasks: message.tasks.map((task) => (report.steps.includes(task.stepId) ?
+          {...task, undone: true, undoFailed: failed} : task)),
+      } : message)),
     }))
   }, [])
 
@@ -306,6 +320,9 @@ export default function BotChat() {
   const bubble = (message, index) => {
     const isUser = message.kind === 'user'
     const fg = isUser ? userText : botText
+    // The model's replies are Markdown; the user's own words, the panel's
+    // notices and its errors are plain text.
+    const isMarkdown = message.kind === 'assistant'
     return (
       <ChatMessage
         key={message.id ?? index}
@@ -313,14 +330,19 @@ export default function BotChat() {
         type='text'
         title={isUser ? 'You:' : 'Assistant:'}
         titleColor={fg}
-        text={
+        isRich={isMarkdown}
+        text={isMarkdown ? (
+          <div style={{color: fg}} data-testid={BUBBLE_TEST_IDS[message.kind]}>
+            <AssistantMarkdown text={message.text}/>
+          </div>
+        ) : (
           <span
             style={{color: fg}}
             data-testid={BUBBLE_TEST_IDS[message.kind]}
           >
             {message.text}
           </span>
-        }
+        )}
         notch={false}
         style={{
           backgroundColor: isUser ? userBg : botBg,
@@ -330,40 +352,6 @@ export default function BotChat() {
       />
     )
   }
-
-  // A step's viewer actions: one compact line per tool call, from the tool's
-  // own echo, and Undo on the newest step that can still be undone.
-  const actionLine = (message) => (
-    <Box
-      key={message.id}
-      data-testid='BotChat-Action'
-      data-step-id={message.stepId}
-      sx={{display: 'flex', alignItems: 'center', gap: 1, alignSelf: 'flex-start', maxWidth: '80%', px: 1}}
-    >
-      <Typography variant='caption' sx={{color: theme.palette.text.secondary, fontStyle: 'italic'}}>
-        {message.lines.join(' · ')}
-      </Typography>
-      {message.stepId === undoTop && !message.undone && (
-        <Button
-          size='small'
-          variant='text'
-          onClick={() => handleUndo(message.stepId)}
-          disabled={undoPending}
-          aria-busy={undoPending}
-          aria-label={`Undo: ${message.lines.join(', ')}`}
-          data-testid='BotChat-UndoButton'
-          sx={{minWidth: 0, py: 0, textTransform: 'none'}}
-        >
-          {undoPending ? 'Undoing…' : 'Undo'}
-        </Button>
-      )}
-      {message.undone && (
-        <Typography variant='caption' sx={{color: theme.palette.text.secondary}} data-testid='BotChat-Undone'>
-          {message.undoFailed ? 'Couldn\'t undo all of it' : 'Undone'}
-        </Typography>
-      )}
-    </Box>
-  )
 
   const renderChat = () => (
     <Box
@@ -392,7 +380,15 @@ export default function BotChat() {
           '& .rce-mbox': {marginBottom: 8},
         })}
       >
-        {messages.map((message, index) => (message.kind === 'action' ? actionLine(message) : bubble(message, index)))}
+        {messages.map((message, index) => (message.kind === 'tasks' ?
+          <TaskChip
+            key={message.id}
+            message={message}
+            undoTop={undoTop}
+            undoPending={undoPending}
+            onUndo={handleUndo}
+          /> :
+          bubble(message, index)))}
         <Box ref={messagesEndRef} data-testid='BotChat-MessagesEnd' sx={{height: '1px', width: '100%'}}/>
       </Stack>
 
@@ -518,9 +514,15 @@ let building = null
  * Fold one loop event into the message list.
  *
  * - Text streams into the turn's live assistant bubble, and a new bubble
- *   starts after an action line, so the reply reads in the order it happened.
- * - A tool result becomes a line under its step: the tool's echo, or what
- *   went wrong. A call declined for approval says so (#1675).
+ *   starts after the task chip, so the reply reads in the order it happened.
+ * - A turn's tool calls are one 'tasks' message (the chip), made where the
+ *   turn's first tool result lands and added to as later ones come, even
+ *   after text that came in between. Each task is the tool's echo, or what
+ *   went wrong; a call declined for approval says so (#1675).
+ * - Times, from `now`: a task runs from its `tool-call` event to its
+ *   `tool-result`; the turn from `turnStartedAt` to the chip's `endedAt`,
+ *   which the send sets when the turn ends. They are when the panel saw the
+ *   events, which is when the user did.
  * - An error is a bubble saying what happened and what to do.
  *
  * Exported for tests.
@@ -529,25 +531,35 @@ let building = null
  * @param {object} event an AssistEvent
  * @param {string} turn this send's id
  * @param {string} provider the transport's label, for error wording
+ * @param {object} [times]
+ * @param {number} [times.now] the event's time, default the clock's
+ * @param {number} [times.turnStartedAt] when the send began, default `now`
  * @return {Array<object>} the next list
  */
-export function applyEvent(messages, event, turn, provider) {
+export function applyEvent(messages, event, turn, provider, times = {}) {
+  const now = times.now ?? Date.now()
   const last = messages[messages.length - 1]
+  const chatIndex = messages.findIndex((message) => message.kind === 'tasks' && message.turn === turn)
   switch (event.type) {
     case 'text-delta':
       if (last?.kind === 'assistant' && last.live && last.turn === turn) {
         return [...messages.slice(0, -1), {...last, text: last.text + event.text}]
       }
       return [...messages, {id: uuid(), kind: 'assistant', text: event.text, live: true, turn}]
+    case 'tool-call': {
+      // Held on the chip until the result arrives: a call shows as a task
+      // only once it has an echo to say.
+      const chip = chatIndex >= 0 ? messages[chatIndex] : newTasksMessage(turn, times.turnStartedAt ?? now)
+      const next = {...chip, starts: {...chip.starts, [event.callId]: now}}
+      return chatIndex >= 0 ? messages.map((message, i) => (i === chatIndex ? next : message)) : [...messages, next]
+    }
     case 'tool-result': {
-      const line = actionText(event)
-      const index = messages.findIndex((message) => message.kind === 'action' && message.stepId === event.stepId)
-      if (index >= 0) {
-        const action = messages[index]
-        return messages.map((message, i) => (i === index ?
-          {...action, lines: [...action.lines, line], undoable: action.undoable || event.undoable} : message))
-      }
-      return [...messages, {id: uuid(), kind: 'action', stepId: event.stepId, lines: [line], undoable: event.undoable}]
+      const chip = chatIndex >= 0 ? messages[chatIndex] : newTasksMessage(turn, times.turnStartedAt ?? now)
+      const {[event.callId]: startedAt = now, ...starts} = chip.starts
+      const task = {callId: event.callId, stepId: event.stepId, line: actionText(event), ok: event.ok,
+        undoable: event.undoable, startedAt, endedAt: now}
+      const next = {...chip, starts, tasks: [...chip.tasks, task]}
+      return chatIndex >= 0 ? messages.map((message, i) => (i === chatIndex ? next : message)) : [...messages, next]
     }
     case 'error':
       return [...messages, errorMessage(event.code, provider, event.status, event.tier)]
@@ -556,6 +568,16 @@ export function applyEvent(messages, event, turn, provider) {
     default:
       return messages
   }
+}
+
+
+/**
+ * @param {string} turn
+ * @param {number} startedAt when the send began
+ * @return {object} an empty chip for the turn, still running (no `endedAt`)
+ */
+function newTasksMessage(turn, startedAt) {
+  return {id: uuid(), kind: 'tasks', turn, startedAt, starts: {}, tasks: []}
 }
 
 
