@@ -5,7 +5,7 @@
  *
  *   # every shard, from the same checkout: plan, run, verify
  *   npx playwright test --config=tools/playwright.config.js --list --reporter=json > all-tests.json
- *   node tools/playwrightShards.mjs plan --list all-tests.json --shard 2 --of 4 --out shard-tests.txt
+ *   node tools/playwrightShards.mjs plan --list all-tests.json --shard 2 --of 6 --out shard-tests.txt
  *   npx playwright test --config=tools/playwright.config.js --test-list=shard-tests.txt
  *   node tools/playwrightShards.mjs verify --plan shard-tests.txt --report results.json
  *
