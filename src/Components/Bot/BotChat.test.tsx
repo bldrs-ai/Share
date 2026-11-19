@@ -402,6 +402,31 @@ describe('BotChat', () => {
         expect(await screen.findByTestId('dialog-ai-credits')).toBeInTheDocument()
       })
 
+      it('a successful reply with used at or past limit is a full low meter, not exhausted, and opens no dialog', async () => {
+        relayReplies(meterHeaders(MICRO, MICRO))
+        render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        send('Hello bot')
+        expect(await screen.findByText('Hosted reply.')).toBeInTheDocument()
+        expect(screen.getByTestId('BotChat-CreditsMeter')).toHaveAttribute('data-state', 'low')
+        expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100')
+        expect(screen.queryByTestId('BotChat-CreditsMeterMore')).toBeNull()
+        expect(screen.queryByTestId('dialog-ai-credits')).toBeNull()
+        expect(limitEvents()).toEqual([])
+      })
+
+      it('drops the reading when the user signs in while the panel is closed', async () => {
+        relayReplies(meterHeaders(MICRO, MICRO))
+        const first = render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        send('Hello bot')
+        expect(await screen.findByText('Hosted reply.')).toBeInTheDocument()
+        expect(screen.getByTestId('BotChat-CreditsMeter')).toBeInTheDocument()
+        first.unmount()
+
+        mockAuth.isAuthenticated = true
+        render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        expect(screen.queryByTestId('BotChat-CreditsMeter')).toBeNull()
+      })
+
       it('is not shown with a key of the user\'s own', async () => {
         relayReplies(meterHeaders(0, MICRO))
         render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})

@@ -83,7 +83,10 @@ export function noteHostedCredits(meta) {
   if (!tier || used === null || limit === null || limit <= 0) {
     return
   }
-  assistCredits.update(() => ({tier, used, limit, exhausted: used >= limit}))
+  // Never exhausted from the figures: a reply that succeeded (a free-model
+  // answer after the paid budget is spent, say) proves the caller isn't
+  // refused. Only the relay's 402 says so (markCreditsExhausted).
+  assistCredits.update(() => ({tier, used, limit, exhausted: false}))
 }
 
 
@@ -103,6 +106,28 @@ export function markCreditsExhausted(tier) {
     limit: credits?.limit ?? 1,
     exhausted: true,
   }))
+}
+
+
+// The sign-in state the credits reading was taken under, kept here and not
+// in the panel: the panel unmounts when closed, so a sign-in change while it
+// is away must still be seen when it is back. undefined until first seen.
+let lastSeenAuth
+
+
+/**
+ * The panel reports the sign-in state as it mounts and as it changes. A
+ * change from the last one seen, even across an unmount, drops the credits
+ * reading: it belongs to the previous tier, and the next hosted response
+ * says the new one's.
+ *
+ * @param {boolean} isAuthenticated
+ */
+export function noteAssistAuth(isAuthenticated) {
+  if (lastSeenAuth !== undefined && lastSeenAuth !== isAuthenticated) {
+    resetAssistCredits()
+  }
+  lastSeenAuth = isAuthenticated
 }
 
 
@@ -224,6 +249,7 @@ export function resetAssistChat() {
   assistInstance.current?.session?.abort()
   assistInstance.current?.dispose()
   assistInstance.current = null
+  lastSeenAuth = undefined
   resetAssistCredits()
   assistChat.update(() => initialChat())
 }

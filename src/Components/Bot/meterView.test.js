@@ -23,9 +23,10 @@ describe('Bot/meterView', () => {
     expect(meterView(credits({used: 100, exhausted: true})).state).toBe('exhausted')
   })
 
-  it('floors the share, and keeps it under 100 until exhausted', () => {
+  it('floors the share and caps it at 100, which alone is still not exhausted', () => {
     expect(meterView(credits({used: NEARLY_ALL})).percent).toBe(UNDER_FULL)
-    expect(meterView(credits({used: OVER})).percent).toBe(UNDER_FULL)
+    expect(meterView(credits({used: OVER})).percent).toBe(FULL)
+    expect(meterView(credits({used: OVER})).state).toBe('low')
     expect(meterView(credits({used: NEARLY_ALL, exhausted: true})).percent).toBe(FULL)
     expect(meterView(credits({used: 0})).percent).toBe(0)
   })

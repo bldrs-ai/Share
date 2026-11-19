@@ -15,8 +15,9 @@ export const LOW_CREDITS_PERCENT = 80
  * `used >= limit`: a reply is refused when its worst-case reservation won't
  * fit, which happens with `used` still just under `limit`.
  *
- * Percent is floored, and held under 100 until `exhausted`, so a bar never
- * says "100% used" for credits that still answer.
+ * Percent is floored and capped at 100. `used` can reach `limit` on a reply
+ * that still succeeded (a free-model answer), so that is a full bar in the
+ * low state, not exhausted: only the relay's refusal is.
  *
  * @param {{tier: string, used: number, limit: number, exhausted: boolean}} credits
  * @return {{percent: number, state: string, label: string}} `state` is 'normal', 'low' or 'exhausted'
@@ -25,7 +26,7 @@ export function meterView(credits) {
   const {tier, used, limit, exhausted} = credits
   const {windowLabel} = aiCreditsCopy(tier)
   const raw = limit > 0 ? Math.floor((used / limit) * 100) : 100 // eslint-disable-line no-magic-numbers
-  const percent = exhausted ? 100 : Math.max(0, Math.min(99, raw)) // eslint-disable-line no-magic-numbers
+  const percent = exhausted ? 100 : Math.max(0, Math.min(100, raw)) // eslint-disable-line no-magic-numbers
   let state = 'normal'
   if (exhausted) {
     state = 'exhausted'

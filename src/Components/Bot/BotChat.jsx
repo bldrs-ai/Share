@@ -1,7 +1,6 @@
 import React, {
   ReactElement,
   useCallback,
-  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -38,7 +37,7 @@ import {
   assistKeyStore,
   markCreditsExhausted,
   newAssistChat,
-  resetAssistCredits,
+  noteAssistAuth,
 } from './assistState'
 import {reportAssistCondition} from './reportAssistCondition'
 import 'react-chat-elements/dist/main.css'
@@ -108,15 +107,12 @@ export default function BotChat() {
   const [creditsDialogTier, setCreditsDialogTier] = useState(null)
   const credits = useSyncExternalStore(assistCredits.subscribe, assistCredits.get)
 
-  // The meter's figures are the previous sign-in state's: the next hosted
-  // response says the new tier's. Not on mount, so a reading from before the
-  // panel was last closed survives reopening it.
-  const wasAuthenticated = useRef(isAuthenticated)
-  useEffect(() => {
-    if (wasAuthenticated.current !== isAuthenticated) {
-      wasAuthenticated.current = isAuthenticated
-      resetAssistCredits()
-    }
+  // The meter's figures belong to the sign-in state they were read under.
+  // The last-seen state lives in assistState, so a change made while the
+  // panel was closed is seen on reopening. Layout effect: no frame of the
+  // old tier's meter.
+  useLayoutEffect(() => {
+    noteAssistAuth(isAuthenticated)
   }, [isAuthenticated])
 
   const theme = useTheme()
