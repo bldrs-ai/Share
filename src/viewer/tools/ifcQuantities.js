@@ -79,13 +79,19 @@ function refId(handle) {
  * The SI unit an `IfcSIUnit` entity states, found by what its enumerations
  * ARE rather than by the attribute they are filed under.
  *
- * Conway files an `IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)`'s values one
- * attribute early — `Dimensions` = LENGTHUNIT, `UnitType` = MILLI, `Prefix` =
- * METRE, `Name` absent — because the leading `*` (the derived Dimensions) takes
- * no slot in its attribute list. Reading `Name` and `Prefix` by name then
- * finds nothing on a real model. The values themselves are unambiguous
- * (a prefix is never a unit name, a unit type always ends in UNIT), so they
- * are sorted by kind, which reads both the shifted layout and a corrected one.
+ * Conway >= 1.1651.790 (conway#790) returns the corrected layout: `Dimensions`
+ * is `{type: 0}` for the derived `*`, and `UnitType`, `Prefix` and `Name` hold
+ * their own values. Before it, an `IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)`'s
+ * values came one attribute early (`Dimensions` = LENGTHUNIT, `UnitType` =
+ * MILLI, `Prefix` = METRE, `Name` absent) because the `*` took no slot.
+ *
+ * The shifted layout is still read because Share's GLB cache stores these unit
+ * records (`BLDRS_element_properties`) and its key doesn't identify the engine,
+ * so a returning user's artifact cached by an older engine still carries it.
+ * The values are unambiguous (a prefix is never a unit name, a unit type always
+ * ends in UNIT), so they are sorted by kind, which reads both layouts. The
+ * shifted handling can be dropped only together with a
+ * `BLDRS_GLB_SCHEMA_VERSION` bump.
  *
  * @param {object} unit the entity
  * @return {{unitType: ?string, prefix: ?string, name: ?string}}
