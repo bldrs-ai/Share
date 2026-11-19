@@ -819,10 +819,12 @@ export default class ShareIfcLoader {
           preprocessorVersion: statsApi.getPreprocessorVersion(),
           parseTime: statsApi.getParseTime(),
           totalTime,
-          // These aliases are the cross-format GA names consumed by bizdev.
-          // For IFC/STEP they must describe Conway itself, rather than the
-          // browser-wide heap and console tee used as other-format fallbacks.
-          memoryUsed: geometryMemory,
+          // No `memoryUsed` here: that GA name is the reporter's end-of-load
+          // JS heap in bytes for EVERY format (loadProgress#finishReport, the
+          // Total line's "→ N MB heap"). Conway's figure rides alone as
+          // `geometryMemory` (binary MB). Aliasing it onto `memoryUsed`, as
+          // this block once did, gave one GA metric two units and two meanings,
+          // and left the bizdev card guessing which writer ran.
           // Conway's own total is a parse timer, NOT the wall clock. With
           // demand geometry it covers open + parse + demand-prep and excludes
           // download, wasm init, the geometry pump, the batched build and the

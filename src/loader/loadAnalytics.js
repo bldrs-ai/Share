@@ -192,7 +192,7 @@ export function omitUndefined(obj) {
  * Two sources merge. `completedStats` is the progress reporter's
  * cross-format snapshot (loadProgress#getCompletedLoadStats), `loadStats`
  * is conway's engine view for IFC/STEP (ShareIfcLoader). The engine wins
- * where both speak (memoryUsed, and counts once conway#740 adds them),
+ * where both speak (the engine's own counts, conway#740),
  * with ONE exception: `loadTime` always comes from the reporter. It is the
  * wall clock from load start to load end, the same definition for every
  * format. Conway's own total (`stats_openMs`) is a parse timer that
