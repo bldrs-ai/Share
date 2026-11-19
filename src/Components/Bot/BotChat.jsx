@@ -1,6 +1,7 @@
 import React, {
   ReactElement,
   useCallback,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -32,6 +33,7 @@ import {
   assistChat,
   assistConversationStore,
   assistCredits,
+  assistCreditsWall,
   assistHostedSide,
   assistInstance,
   assistKeyStore,
@@ -105,6 +107,15 @@ export default function BotChat() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   // The tier the out-of-credits dialog is showing for, or null when closed.
   const [creditsDialogTier, setCreditsDialogTier] = useState(null)
+  // A refusal that landed while the panel was away leaves its tier here; the
+  // dialog opens from it, and taking it keeps a dismissed one from reopening.
+  const owedWallTier = useSyncExternalStore(assistCreditsWall.subscribe, assistCreditsWall.get)
+  useEffect(() => {
+    if (owedWallTier !== null) {
+      setCreditsDialogTier(owedWallTier)
+      assistCreditsWall.update(() => null)
+    }
+  }, [owedWallTier])
   const credits = useSyncExternalStore(assistCredits.subscribe, assistCredits.get)
 
   // The meter's figures belong to the sign-in state they were read under.
@@ -205,8 +216,9 @@ export default function BotChat() {
           }
           if (event.type === 'error' && event.code === 'credits_exhausted') {
             // The dialog sends the one `quota_limit_reached` for this wall.
+            // Also owes the dialog (assistCreditsWall), which the panel opens
+            // even if it was unmounted when this arrived.
             markCreditsExhausted(event.tier)
-            setCreditsDialogTier(event.tier ?? 'anonymous')
           }
           update((chat) => ({
             ...chat,

@@ -72,6 +72,16 @@ export const assistCredits = createStore(null)
 
 
 /**
+ * The tier whose out-of-credits dialog the panel owes the user, or null. Set
+ * by the relay's refusal, which can land while the panel is unmounted (closed,
+ * or another mobile drawer tab shown); the panel opens the dialog from it
+ * whenever it is set, and clears it as it does, so a dismissed dialog isn't
+ * reopened by the next mount.
+ */
+export const assistCreditsWall = createStore(null)
+
+
+/**
  * Take the relay's metering headers (hosted.ts `HostedMeta`) as the latest
  * word on the caller's credits. A response that omits them leaves the last
  * reading in place rather than blanking the meter.
@@ -100,6 +110,7 @@ export function noteHostedCredits(meta) {
  * @param {?string} tier the relay's, from the refusal
  */
 export function markCreditsExhausted(tier) {
+  assistCreditsWall.update(() => tier ?? AI_TIERS.ANONYMOUS)
   assistCredits.update((credits) => ({
     tier: tier ?? credits?.tier ?? AI_TIERS.ANONYMOUS,
     used: credits?.used ?? 1,
@@ -126,6 +137,7 @@ let lastSeenAuth
 export function noteAssistAuth(isAuthenticated) {
   if (lastSeenAuth !== undefined && lastSeenAuth !== isAuthenticated) {
     resetAssistCredits()
+    assistCreditsWall.update(() => null)
   }
   lastSeenAuth = isAuthenticated
 }
@@ -251,6 +263,7 @@ export function resetAssistChat() {
   assistInstance.current = null
   lastSeenAuth = undefined
   resetAssistCredits()
+  assistCreditsWall.update(() => null)
   assistChat.update(() => initialChat())
 }
 

@@ -342,6 +342,49 @@ describe('BotChat', () => {
       expect(limitEvents().map(([, , params]) => params)).toEqual([{tier: 'pro', feature: 'ai_credits'}])
     })
 
+    describe('the out-of-credits dialog owed across an unmount', () => {
+      const REFUSAL_DELAY_MS = 150
+      const SETTLE_MS = 400
+
+      /** Make the relay refuse after a pause, so the panel can be closed meanwhile. */
+      function slowRefusal() {
+        getServer().use(http.post(AI_RELAY_PATH, async () => {
+          await new Promise((resolve) => setTimeout(resolve, REFUSAL_DELAY_MS))
+          return new Response(JSON.stringify({error: {code: 'ai_credits_exhausted'}, tier: 'anonymous'}),
+            {status: 402, headers: {'Content-Type': 'application/json'}})
+        }))
+      }
+
+      it('opens on remount when the refusal landed while the panel was closed', async () => {
+        slowRefusal()
+        const first = render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        send('Hello bot')
+        first.unmount()
+        await act(() => new Promise((resolve) => setTimeout(resolve, SETTLE_MS)))
+        render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        expect(await screen.findByTestId('dialog-ai-credits')).toBeInTheDocument()
+        expect(screen.getByTestId('BotChat-CreditsMeter')).toHaveAttribute('data-state', 'exhausted')
+        expect(limitEvents()).toHaveLength(1)
+      })
+
+      it('does not reopen once dismissed and the panel is remounted', async () => {
+        slowRefusal()
+        const first = render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        send('Hello bot')
+        first.unmount()
+        await act(() => new Promise((resolve) => setTimeout(resolve, SETTLE_MS)))
+        const second = render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        const dialog = await screen.findByTestId('dialog-ai-credits')
+        fireEvent.click(within(dialog).getByRole('button', {name: 'Not now'}))
+        await waitFor(() => expect(screen.queryByTestId('dialog-ai-credits')).toBeNull())
+        second.unmount()
+        render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        await act(() => Promise.resolve())
+        expect(screen.queryByTestId('dialog-ai-credits')).toBeNull()
+        expect(limitEvents()).toHaveLength(1)
+      })
+    })
+
     describe('the credits meter', () => {
       const MICRO = 1000000
       const USED_85_PERCENT = 850000
