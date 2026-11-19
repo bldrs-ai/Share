@@ -1,6 +1,6 @@
 import useStore from '../store/useStore'
 import {LoadAbortedError} from '../utils/loadAbort'
-import {ModelSessionHost} from './modelSession'
+import {LoadState, ModelSessionHost} from './modelSession'
 
 
 // open-205 #2019 (Phase 1b step 1): a model session owns its load job, and
@@ -111,7 +111,8 @@ describe('Containers/modelSession', () => {
   it('keeps a finished run\'s state when the next run of the session starts', () => {
     const session = host.open('A')
     const first = session.beginLoad({isAbortable: true})
-    first.isComplete = true
+    first.markReady()
+    expect(session.loadState).toBe(LoadState.READY)
     forget.mockClear()
     session.abortLoad()
     session.beginLoad({isAbortable: true})
@@ -131,6 +132,20 @@ describe('Containers/modelSession', () => {
     expect(window.ondblclick).toBeNull()
     expect(close).toHaveBeenCalledTimes(1)
     expect(sessionA.engine).toBeNull()
+    expect(sessionA.loadState).toBe(LoadState.CLOSED)
+  })
+
+  it('tells sessions apart by id, and tracks a run\'s state (engine-worker.md §5.2)', () => {
+    const sessionA = host.open('A')
+    const job = sessionA.beginLoad({isAbortable: true})
+    expect(sessionA.loadState).toBe(LoadState.LOADING)
+    job.markFailed()
+    expect(sessionA.loadState).toBe(LoadState.FAILED)
+    const sessionB = host.open('B')
+    expect(sessionB.id).not.toBe(sessionA.id)
+    // A left run's verdict is not the session's any more.
+    job.markReady()
+    expect(sessionA.loadState).toBe(LoadState.CLOSED)
   })
 
   it('leaves a handler alone once the next session has bound its own', () => {

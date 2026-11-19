@@ -26,6 +26,23 @@ import {LoadAbortedError, isAborted} from '../utils/loadAbort'
 import useStore from '../store/useStore'
 
 
+/**
+ * `ModelSession#loadState`, the shape engine-worker.md §5.2's `EngineHost`
+ * reads for its LRU tiers.
+ */
+export const LoadState = Object.freeze({
+  LOADING: 'loading',
+  READY: 'ready',
+  FAILED: 'failed',
+  CLOSED: 'closed',
+})
+
+
+// Ids for the life of the page, so a session is told apart from a later one
+// of the same model (engine-worker.md §5.2: the host's table, the dev hook).
+let lastSessionId = 0
+
+
 /** One load run of a session: what CadView's `onViewer` starts. */
 export class LoadJob {
   /**
@@ -39,10 +56,10 @@ export class LoadJob {
   constructor(session, {isAbortable}) {
     this.session = session
     this.controller = isAbortable ? new AbortController() : null
-    // Set once the run has put its model on screen (onViewerInternal's end).
-    // A job given up before then may have left part of its state behind (the
-    // tree at the index), which the next job of the same session must not
-    // start on (ModelSession#beginLoad).
+    // Set once the run has put its model on screen (markReady). A job given
+    // up before then may have left part of its state behind (the tree at the
+    // index), which the next job of the same session must not start on
+    // (ModelSession#beginLoad).
     this.isComplete = false
   }
 
@@ -100,6 +117,25 @@ export class LoadJob {
     return true
   }
 
+  /**
+   * The run has put its model on screen (onViewerInternal's end). A later
+   * run of the session given up before its own end does not take this one's
+   * state down with it (ModelSession#beginLoad).
+   */
+  markReady() {
+    if (this.isCurrent()) {
+      this.isComplete = true
+      this.session.loadState = LoadState.READY
+    }
+  }
+
+  /** The run failed, as the user sees it (its alert is up). */
+  markFailed() {
+    if (this.isCurrent()) {
+      this.session.loadState = LoadState.FAILED
+    }
+  }
+
   /** Give the run up. A no-op without a controller or once aborted. */
   abort() {
     this.controller?.abort()
@@ -114,15 +150,19 @@ export class ModelSession {
    * @param {string} modelKey routes/modelIdentity.js's key of the model
    */
   constructor(host, modelKey) {
+    this.id = ++lastSessionId
     this.host = host
     this.modelKey = modelKey
     /** @type {LoadJob|null} the run that may write; replaced per run */
     this.job = null
     this.isClosed = false
-    // The engine the session's model was parsed into: the model's `ifcAPI`
-    // (a worker proxy carrying its `engineSession`, or the main-thread
-    // engine itself on `?feature=disableEngineWorker`). Null until a load
-    // has put its model on screen, and again once closed.
+    this.loadState = LoadState.LOADING
+    // The `EngineSession` (engine/EngineSession.js) the session's model was
+    // parsed into, or null: a mesh format, a GLB cache hit, or the
+    // main-thread engine (`?feature=disableEngineWorker`), which has nothing
+    // to close (dropping it is what frees it, in-app-model-switch.md §2.3).
+    // Set once a load has put its model in the store; null again once
+    // closed.
     this.engine = null
     // The window handlers bound for this session, so closing it unbinds them
     // rather than leaving them on the next model's page until it binds its own.
@@ -149,6 +189,7 @@ export class ModelSession {
     const previous = this.job
     const job = new LoadJob(this, {isAbortable})
     this.job = job
+    this.loadState = LoadState.LOADING
     if (previous !== null) {
       const wasGivenUp = isAborted(previous.signal) && !previous.isComplete
       previous.abort()
@@ -177,7 +218,7 @@ export class ModelSession {
    * @param {object} model the loaded model
    */
   bindEngine(model) {
-    this.engine = model?.ifcManager?.ifcAPI ?? null
+    this.engine = model?.ifcManager?.ifcAPI?.engineSession ?? null
   }
 
   /**
@@ -202,6 +243,7 @@ export class ModelSession {
       return
     }
     this.isClosed = true
+    this.loadState = LoadState.CLOSED
     this.job?.abort()
     for (const [name, handler] of Object.entries(this.windowHandlers)) {
       if (window[name] === handler) {
@@ -209,12 +251,10 @@ export class ModelSession {
       }
     }
     this.windowHandlers = {}
-    // A worker engine is terminated here; the viewer the model was loaded
-    // into closes it too when disposed, and `EngineSession#close` is
-    // idempotent. A main-thread engine has nothing to close: dropping it is
-    // what frees it (design/new/in-app-model-switch.md §2.3).
+    // The worker is terminated here; the viewer the model was loaded into
+    // closes it too when disposed, and `EngineSession#close` is idempotent.
     try {
-      this.engine?.engineSession?.close?.()
+      this.engine?.close?.()
     } catch (e) {
       console.warn('ModelSession#close: engine close failed:', e)
     }

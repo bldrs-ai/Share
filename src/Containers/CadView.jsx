@@ -819,6 +819,7 @@ export default function CadView({
       // Properties and the TopBar would otherwise keep showing (codex review
       // on #2037). A walk still running stays out: isIndexedTreeStale.
       hasLoadFailed = true
+      job.markFailed()
       if (indexedTree !== null) {
         forgetIndexedTree(job)
         forgetIndexedSelection()
@@ -1089,9 +1090,7 @@ export default function CadView({
     modelPath.title = tmpModelRef.name // maybe undefined
     setIsViewerLoaded(true)
     job.set({isModelReady: true})
-    // On screen: a later run of this session given up before its own end
-    // does not take this one's state down with it (ModelSession#beginLoad).
-    job.isComplete = true
+    job.markReady()
     // After the model is on screen, never before: a direct link is metered
     // but not gated (quota/useDirectLinkQuota.js). The Open dialog already
     // recorded what it opened, which the hook sees as alreadyCounted. For
