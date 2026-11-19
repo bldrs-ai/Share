@@ -4,7 +4,10 @@
 and STEP both load in the worker, a worker load writes the GLB artifact
 (step 5, #2081), and the worker is on by default since #2083 merged
 (2026-11-07), with `?feature=disableEngineWorker` as the kill switch. Steps
-7–8 were not started; they moved to #2031.
+7–8 were not started; they moved to #2031. Their design (`EngineHost`:
+the cap, close, eviction and rehydrate) was refreshed on 2026-11-19 for
+Phase 1a, #2011 decision 6 and the source policy (§5.2–§5.5, §7 step 8,
+§8.1).
 **Epic:** `open-205` (#2011). Story: #2053 (closed 2026-11-18). Steps 7–8
 (sessions own their worker; close and eviction) are #2031's: with an engine
 in a worker, terminating the worker *is* the eviction.
@@ -571,141 +574,444 @@ reader, which already serves cache hits without an engine.
 
 ### 5.2 Engine host: live-worker cap and LRU
 
-One `EngineHost` per page owns every session's worker.
+**As of 2026-11-19 (main @ `0af98b3e`).** This section and §5.3–§5.5 were
+written on 2026-11-03, before four things that change them. They are
+refreshed here for #2031; what moved, and why:
 
-- **Budget per session** = max(45 MB, the engine's own estimate). The
-  engine is the whole worker (wasm plus its JS heap), and §3 puts it at
-  ~7.9× file size for SEESTRASSE (191 MB) and ~2.6× for PSB (2.25 GB) once
-  geometry is done; an index-only engine is 81 MB and 1.6 GB. The scene
-  stays main-side and is budgeted separately; P1.0's 6× covered both.
-- **Caps** (decided, §8 item 2; named constants in `src/engine/`):
-  - at most 3 live engines on desktop. Phones have no fixed count: the
-    budget alone governs them (§8 item 2, revisable);
-  - a total engine budget of half of `navigator.deviceMemory` where it
-    exists (Chrome reports at most 8 GiB, so at most 4 GiB), and 4 GiB on
-    desktop or 1 GiB on phones where it does not;
-  - a session's estimate is **live wasm + a non-wasm allowance + its
-    queued geometry**, with a 45 MB floor (§3's empty `Init`ed worker):
-    - *live wasm* is the worker's `memory.buffer.byteLength`. Every
-      `progress` and `batch` event carries it (§4), because it is cheap to
-      read and it grows during the pump: PSB goes from 16 MB at its index
-      to 899 MB at the end (§3). An estimate taken only at `init` and
-      `done` would miss all of that growth.
-    - *the non-wasm allowance* is the worker's JS heap, which §3 shows is
-      most of an engine (PSB holds 1,625 MB at its index with 16 MB of
-      wasm). Two named constants, each with its source measurement next to
-      it: `ENGINE_BASE_JS_BYTES` = 30 MB, which is the `Init`ed worker's
-      45.5 MB less its 16 MB of wasm; and `ENGINE_JS_BYTES_PER_SOURCE_BYTE`
-      = 1.9, which is PSB's index-only JS heap over its file size
-      (1,609 MB / 860 MB). Against §3, that gives SEESTRASSE 92 MB at its
-      index (81 measured) and 176 MB at the end (191 measured); and PSB
-      1,680 MB at its index (1,625 measured) and 2,563 MB at the end
-      (2,249 measured). It under-counts small models by about 10 % and
-      over-counts PSB by about 14 %.
-    - *queued geometry* is the transferred batch buffers that a background
-      session holds main-side unassembled (§5.3). It is not small: PSB
-      streams 337 MB of geometry (§3).
-  - **Admission and backpressure use this live figure.** It is recomputed
-    on every event, not at fixed points.
-  - **If Share is ever cross-origin isolated**,
-    `performance.measureUserAgentSpecificMemory()` breaks memory down per
-    worker (§3 used it). It would replace the estimate with a measurement,
-    and the two constants would go. It is unavailable today because prod is
-    not isolated (§6).
-  The active session is never evicted, even when it alone exceeds the
-  budget.
-- **Backpressure before eviction.** When the total reaches the budget, the
-  host first pauses every background pump (`pump {mode: 'pause'}`). A
-  paused worker stops at its next batch boundary and keeps its engine and
-  its place in the stream. It is resumed (`pump {mode: 'run'}`) as its
-  queue drains, which happens when it is foregrounded or assembled in idle
-  slices. **A paused background load is not an eviction:** nothing is
-  terminated or cancelled, and the load completes once it runs again.
-- **LRU by last-foreground time.** Among the rest, evict in this order:
-  1. *ready, with its GLB artifact written* — it loses least, because
-     properties fall back to the artifact;
-  2. *ready, without an artifact*;
-  3. *still loading in the background* — which cancels that load, and is
-     last on purpose.
-- **How this squares with #2031.** in-app-model-switch.md §4.0 says close
-  and eviction are the only paths that cancel a load. That stays true: they
-  are the only ones. But with the engine in a worker most evictions cancel
-  nothing, because they terminate an idle engine whose geometry is already
-  in the scene. Only the third tier cancels, and only when the first two are
-  empty.
+- **Phase 1a shipped a switch that is a close** (#2222, on by default;
+  in-app-model-switch.md §4.5a, §4.8). CadView owns each load through a
+  per-run `AbortController` (`utils/loadAbort.js`), a switch terminates the
+  left load's worker (`engineModelLoad.js#abort`), `ShareIfc#dispose`
+  aborts the loads still parsing into it, and `forgetLoadedModelState`
+  resets the store. The close path in §5.3 is therefore built, for one
+  model at a time. What is not built is everything that keeps a second
+  engine alive.
+- **Decision 6 (#2011, 2026-11-19): background sessions only under
+  `?feature=workspace`.** Outside it the host holds **one** live model,
+  which is today's switch = close. Under it the host holds N within a
+  budget. `disableBackgroundSessions` forces the cap back to 1 even under
+  `workspace`. The 2026-11-03 text assumed N everywhere.
+- **The source policy (§5.6, Share#2139)** made most opens buffered: the
+  worker holds the whole file from the open to the GLB writer's spill. And
+  the retainer fix in that PR changed what an engine costs once the load is
+  done. The estimate below is re-fitted to those numbers; the 2026-11-03
+  constant over-counted a finished PSB engine by 2.2× and under-counted
+  STEP.
+- **Per-model sessions (#2019, step 1 of Phase 1b) come first**, behaviour
+  neutral, with one live session. The host sits on top of that session
+  object. #2019's PR did not exist when this was written, so the interface
+  assumed from it is stated explicitly below ("What the host assumes of a
+  session"), for #2019 to match or flag.
+
+What did not change: one engine per model in its own worker, `terminate()`
+as the way memory comes back (§3), backpressure before eviction, the LRU
+tiers, the sidecar written after the first load rather than at eviction
+(§8 item 4), and the main-side session keeping its scene and refs (§5.5).
+
+**Naming.** "Session" means three things in nearby docs. Here:
+*engine session* is `EngineSession` (one worker's client); *model session*
+is #2019's per-model session (load, engine, state, selection); the user's
+*workspace session* is [workspace-sessions.md](workspace-sessions.md)'s.
+That doc proposes renaming `EngineSession` to `ModelEngine` in the first PR
+that adds workspace-session code. The host is written so the rename costs
+nothing: it holds model sessions and asks each for its engine.
+
+#### The cap: one predicate
+
+Whether a switch keeps the left model alive is one decision, in one module,
+shaped like `utils/spaModelNavMode.js` and `viewer/three/renderOnDemandMode.js`.
+Proposed: `engine/backgroundSessionsMode.js`.
+
+```js
+export const SingleModelReason = Object.freeze({
+  ROLLBACK: 'rollback',          // `disableBackgroundSessions` isActive in FeatureFlags.js
+  PAGE_LOADS: 'pageLoads',       // modelPageLoadReason() !== null: every open is a page load
+  NO_WORKSPACE: 'noWorkspace',   // `workspace` off: no surface to return to a left model (decision 6)
+  KILL_SWITCH: 'disableBackgroundSessions',  // ?feature=disableBackgroundSessions
+})
+export function singleModelReason()       // → a SingleModelReason, or null for background sessions
+export function isBackgroundSessionsOn()  // singleModelReason() === null
+export function backgroundSessionsMode()  // 'on' | 'off:<reason>', for a Sentry tag or a GA param
+```
+
+- **The rollback is read first, from the static flag alone**, so it beats
+  every URL, including a link that names `?feature=workspace`. That is the
+  shape `spaModelNavMode.js#modelPageLoadReason` and
+  `engineRoute.js#mainThreadEngineReason` already have, for the same reason:
+  `isFeatureEnabled` ORs a static flag with the URL, so turning
+  `workspace` off statically would not stop a `?feature=workspace` link.
+- **`PAGE_LOADS` comes before `NO_WORKSPACE`.** With the in-app switch
+  rolled back, a switch reloads the page, and nothing survives it to keep.
+- **Read at each acquire**, like `spaModelNavMode.js`: the query rides
+  from one open to the next (`withCurrentSearch`), so a page and the opens
+  it makes agree.
+- **Per engine, not per page: an in-process engine is never kept in the
+  background.** On the main-thread engine (`?feature=disableEngineWorker`,
+  a `?view=` rule set, the in-process fallback after a worker failed to
+  start) memory comes back only when the whole `IfcAPI` is collected
+  (in-app-model-switch.md §4.5), which nothing on the page can force. So a
+  switch away from a session whose `engine.kind` is in-process closes it,
+  whatever the predicate says. A test pins it.
+
+The host reads the predicate; nothing else does. A session asks the host
+what a switch does (below) and never reads the flags, so the two cannot
+disagree.
+
+#### What an engine costs, measured
+
+Two numbers decide the budget: what one engine holds **during its load**,
+and what it holds **once the load is done** (after the GLB writer's spill).
+Both from the source-policy matrix
+([source-policy-measurements.md](source-policy-measurements.md) §Tables and
+§"Source policy as built", headless Chromium, the worker path). *At rest* is
+wasm (the Total line's `engineWasmMb`, which never shrinks) plus the
+worker's ArrayBuffer backing store and JS heap, both GC'd 2 s after the
+spill. *During* is wasm plus the un-GC'd backing-store peak on the buffered
+arm, which is what the policy runs for every file under its cap; it is an
+upper bound.
+
+| Model | Format | MiB | wasm | at rest | at rest ÷ size | during, buffered |
+|---|---|---|---|---|---|---|
+| duplex | IFC | 2.3 | 19 | 45 | — (floor) | 37 |
+| SEESTRASSE | IFC | 13.6 | 69 | 111 | 8.2× | 101 |
+| MB-Khaya | IFC | 31.4 | 100 | 140 | 4.5× | 171 |
+| Arty_Z7 | STEP | 55.5 | 515 | 865 † | 15.6× | 636 |
+| DSA2 | STEP | 105.7 | 83 | 430 | 4.1× | 288 |
+| D3D | IFC | 213.6 | 611 | 979 | 4.6× | 1,268 |
+| sp-231MB | IFC | 231.4 | 515 | 645 | 2.8× | 892 |
+| BLSN_007 | STEP | 268.6 | 429 | 1,127 | 4.2× | 849 |
+| DOWA | IFC | 398.4 | 429 | 623 | 1.6× | 1,348 ‡ |
+| PSB | IFC | 860.7 | 899 | 1,158 | 1.3× | 2,288 ‡ |
+
+MiB throughout. † the windowed arm's backing store; the policy's was not
+measured on Arty_Z7. ‡ `policyDefault`'s own peak (§"Source policy as built"
+(b)); the other rows use the plain buffered arm, which holds the same file.
+
+- **A worker's floor is ~45 MiB and 0.4–0.6 s to stand up** (§3); duplex
+  at rest is exactly that.
+- **At rest, wasm dominates IFC; STEP carries a large JS heap besides.**
+  The non-wasm part at rest is 0.3–0.6× the file on the large IFCs (PSB
+  259 MiB, sp-231MB 130, DOWA 194), with D3D the outlier at 1.7×. On STEP
+  it is 2.6–6.3× (BLSN_007 698 MiB, of which 612 is JS heap). That is a
+  format difference that has to stay data (CLAUDE.md "IFC and STEP
+  converge"): one allowance per format, below.
+- **During a buffered load the worker also holds the file** until the
+  spill, by design (§5.6): PSB 1,093 MiB of backing store at Total + 3 s
+  against 293 windowed. The spill comes after the GLB writer, 17–21 s after
+  Total on PSB.
+- **The main-side scene is not in these numbers** and eviction does not
+  free it. Page heap after a worker load: PSB 522 MB, a 58 MB STEP 148 MB
+  (§7.1, step 5's row); GPU memory unmeasured. It is bounded separately
+  (the scene tier, §5.3).
+
+#### The estimate
+
+The host recomputes each live engine's estimate on every event that
+carries `wasmBytes` (every `progress`, `batch`, `log`, and the `open`,
+`capture`, `spill` and `stats` replies already do, `EngineSession#receive`
+keeps the last in `lastWasmBytes`), and on every change to the session's
+queued geometry:
+
+```
+estimate = max(ENGINE_FLOOR_BYTES,
+               wasmBytes + heldSourceBytes + ENGINE_BASE_JS_BYTES
+               + ENGINE_JS_BYTES_PER_SOURCE_BYTE[format] × sourceBytes)
+           + queuedBytes
+```
+
+- `ENGINE_FLOOR_BYTES` = 45 MiB (§3's `Init`ed worker).
+- `wasmBytes`: live, from the worker. PSB goes 16 → 899 MB during the pump.
+- `heldSourceBytes`: **new, reported by the worker**: the whole-file buffer
+  a buffered open holds (`takeWhole()`), or the Blob store's held copy,
+  until the spill releases it; 0 for a windowed open. The handler knows it
+  exactly. Today `stats` returns only `{wasmBytes, modelID}`
+  (`engineHandler.js` `Op.STATS`); the field is added to `stats`, `open`,
+  `spill` and `done`, an additive change that needs no protocol bump (§4,
+  "Version or capability").
+- `ENGINE_BASE_JS_BYTES` = 30 MiB, unchanged (the `Init`ed worker less its
+  wasm).
+- `ENGINE_JS_BYTES_PER_SOURCE_BYTE` = **0.6 for IFC, 3.0 for STEP**,
+  replacing the single 1.9 of 2026-11-03, which was PSB's index-time JS heap
+  in the prototype, before the conway property-index fixes (§3.1) and the
+  retainer fix (§5.6). Against the at-rest column: PSB 1,445 MiB estimated
+  for 1,158 (+25 %), DOWA +12 %, sp-231MB +6 %, MB-Khaya +6 %, SEESTRASSE
+  −4 %, DSA2 0 %, BLSN_007 +12 %; under on D3D (−21 %) and Arty_Z7 (−18 %),
+  both of whose wasm is measured live, so the miss is the JS allowance only.
+  The old constant read PSB at rest as 2,564 MiB and DOWA as 1,216.
+- `queuedBytes`: transferred batch buffers a background session holds
+  main-side unassembled (§5.3). PSB streams 337 MB of geometry (§3). The
+  host takes it through `noteQueued` / `noteDrained`; with a render worker
+  the drain acks of §9 feed the same two calls, so §9 does not change.
+- **Constants, each with its source measurement in a comment beside it**,
+  in `src/engine/engineBudget.js`. Slice 5 (§7 step 8) re-fits them.
+
+#### Caps and budget (proposed defaults)
+
+| | outside `workspace`, or `disableBackgroundSessions` | `workspace`, desktop | `workspace`, phone |
+|---|---|---|---|
+| `maxLiveEngines` | **1** (switch = close) | **3** | **2** |
+| engine byte budget | not used | ½ `deviceMemory`, at most 4 GiB; 4 GiB when absent | ½ `deviceMemory`, at most 1 GiB; 1 GiB when absent |
+| sessions keeping a scene | 1 | 3 (= `maxLiveEngines`) | 2 |
+
+- **Desktop 3** is §8 item 2's decision, and workspace-sessions.md §8
+  decision 5 took the same number. It was a guess and is still untuned.
+- **Phones: 2, not "budget only".** §8 item 2 left phones with no fixed
+  count. With the at-rest numbers above, a 1 GiB phone budget fits two
+  SEESTRASSE-sized engines (111 MiB each) with room for a third, while one
+  sp-231MB (645 MiB) leaves room for a small model and nothing large. A count of 2 keeps
+  the drawer's promise ("come back to it") for one model besides the
+  active one, and the budget still decides for large ones. P1.0's "one large
+  model resident" on phones (in-app-model-switch.md §4.5) is what the budget
+  enforces. Owner question 1.
+- **Phones are capped at 1 GiB even where `deviceMemory` says more.**
+  Chrome on Android reports 4 or 8 on most current phones, and half of that
+  is past what a mobile tab survives (P1.0: one 231 MB model already exceeds
+  typical tab limits). iOS Safari has no `deviceMemory` and takes the
+  1 GiB branch. The form factor is the repo's one rule, `MOBILE_WIDTH`, as
+  `spawnEngine.js#engineDeviceSnapshot` reads it for the source policy.
+- **Sessions keeping a scene equals the engine count, for now.** Eviction
+  keeps the scene (§5.5), so a byte-budget eviction leaves a session with
+  a scene and no engine. But a count beyond N goes to the *scene tier*
+  (§5.3) rather than keeping every scene: without that, ten switches would
+  hold ten scenes, and scene memory (main-side and GPU) is not measured.
+  Keeping more scenes than engines is owner question 3.
+- **A test-only override** of all three numbers, installed only outside
+  production builds (like `utils/gc.fixture.js`), for the eviction E2Es.
+
+#### Admission, backpressure, LRU
+
+On every acquire (a new open, or a rehydrate) and on every estimate change,
+while the total of live estimates plus the incoming open's is over the byte
+budget, or the live count would exceed `maxLiveEngines`:
+
+1. **Open the incoming load windowed instead of buffered.** A buffered open
+   holds the whole file until the spill (PSB +860 MiB, §5.6). When the
+   incoming open's `sourceBytes` would not fit buffered but would windowed,
+   the host passes the per-open `sourceOverride: {windowed: true}` that
+   `engineModelLoad.js#parse` already has for its out-of-memory retry. This
+   is §5.6's "live admission budget" follow-up. The report says
+   `Engine source: windowed (budget)`, a new reason in the policy's list.
+2. **Pause background pumps** (`pump {mode: 'pause'}`). A paused worker
+   stops at its next batch boundary and keeps its engine and its place in
+   the stream. Paused is not cancelled. It resumes (`pump {mode: 'run'}`)
+   when the total falls back under the budget by a hysteresis margin
+   (10 %), or when it is foregrounded.
+3. **Evict, by LRU on `lastForegroundAt` within tiers**, least loss first:
+   1. ready, with its GLB artifact written. Properties fall back to the
+      artifact (§5.5);
+   2. ready, without an artifact (no cache key, the write failed, or a
+      model the writer skips);
+   3. ready, with its GLB writer's capture still running. Evicting it
+      skips the artifact (a capture that rejects writes nothing, §7
+      step 5), so it waits for the tiers above. PSB's capture is 7.6 s;
+   4. still loading in the background. Evicting it **cancels the load**:
+      the session goes to *paused — will resume* (§5.3).
+4. **Never evicted:** the active session, even when it alone is over the
+   budget; and a session the host is rehydrating for a read in flight.
+
+**Under cap 1 there is no LRU.** Acquiring B's engine closes every other
+session (§5.3, "Switch"), which is Phase 1a's behaviour exactly.
+
+**How this squares with #2031 and in-app-model-switch.md §4.0.** Close and
+eviction stay the only paths that cancel a load. With the engine in a
+worker most evictions cancel nothing: they terminate an idle engine whose
+geometry is in the scene. Only tier 4 cancels, and only when tiers 1–3 are
+empty.
+
+#### The host's API
+
+One `EngineHost` per page (`src/engine/EngineHost.js`). It owns every live
+engine and replaces `spawnEngine.js`'s module-level `liveSessions` set and
+`closeAllEngineSessions` (`spawnEngine.js:181, 200`), which become thin
+calls into it. Its callers are model sessions (#2019); nothing else holds
+an engine.
+
+```js
+const host = getEngineHost()
+
+// Spawning. Passed as `spawn` to createEngineModelLoad({format, spawn})
+// (engineModelLoad.js:256 already takes one), so the load, its OOM retry on
+// a fresh engine, and a rehydrate all go through admission and are counted.
+host.spawnFor(session, {format, sourceBytes})   // → Promise<EngineSession>, after admission
+
+// Focus. The view calls these on a switch; the host answers what the left
+// session must do, so a session never reads the flags.
+host.foreground(session)   // lastForegroundAt = now; resumes its pump; drains its queue
+host.leave(session)        // → 'close' (cap 1, an in-process engine) | 'background'
+
+// Ending.
+host.release(session)      // close: await session.engine.close(), unregister, forget its bytes
+host.evict(session, reason)          // terminate only; session.onEngineEvicted({reason, tier})
+host.rehydrate(session)    // index-only reopen through spawnFor (§5.3) → EngineSession
+
+// Accounting. The worker's wasmBytes and heldSourceBytes arrive on the
+// engine session's own events; the host subscribes when it spawns it.
+host.noteQueued(session, bytes)
+host.noteDrained(session, bytes)
+
+// OPFS ordering (§7 step 4's requirement on step 7).
+host.whenEntryFree(entryKey)  // → Promise, once every engine reading that entry has closed
+host.closeAll()            // Clear cache (ProfileControl.jsx:416), via whenEntryFree for each
+
+// Tests and the dev hook.
+host.limits()              // {maxLiveEngines, budgetBytes, mode: backgroundSessionsMode()}
+host.snapshot()            // [{sessionId, engineState, estimate, lastForegroundAt, tier}]
+```
+
+- **The engine state is the host's**, one of `none` (a mesh format, a GLB
+  cache hit, or not yet spawned), `spawning`, `live`, `paused`, `evicted`,
+  `rehydrating`, `closed`. The session's *load* state (`loading`, `ready`,
+  `failed`) stays the session's. The drawer (Phase 1b step 3) shows the pair:
+  loading + paused is "paused", loading + evicted is "paused — will resume".
+- **Who owns the cap decision:** the host, through
+  `backgroundSessionsMode.js`, per acquire.
+
+#### What the host assumes of a session (#2019)
+
+#2019 had no PR when this was written. The host needs these of a model
+session; #2019 can match them, or flag what differs:
+
+| Assumed | Why the host needs it |
+|---|---|
+| `session.id`, stable for the open | keys the host's table and the dev hook |
+| `session.entryKey`: the OPFS entry its source is staged in, or null | `whenEntryFree`; one sync-handle lock per entry |
+| `session.engine`: its `EngineSession`, or null | close, evict, accounting; null for mesh formats and cache hits |
+| `session.format`, `session.sourceBytes` | the estimate's allowance |
+| `session.loadState`: `loading` \| `ready` \| `failed` \| `closed` | the LRU tiers |
+| `session.hasArtifact`, `session.isCapturing` | tiers 1–3 |
+| `session.rehydrateSource`: the OPFS `File`, or an in-memory upload's `File` (`inMemoryUploads`, #1906), or null | rehydrate |
+| `session.close()`: abort the load (its `AbortController`, `utils/loadAbort.js`), drop or cancel the idle GLB writer, `await host.release(this)`, then drop the scene and its state | close, and the cap-1 switch |
+| `session.onEngineEvicted({reason, tier})`, `session.onEngineRehydrated(engine)` | swapping the read model (§5.5) |
+| `session.dropScene()` | the scene tier |
+| the session owns its scene root (model object, `BatchedMesh`, instance maps, BVH), and the view can detach and re-attach it without disposing it | a background session keeps its scene |
+| **a session's load touches no module-level per-load state** | two loads at once |
+
+The last row is the one most likely to differ. in-app-model-switch.md §4.5a
+notes that loads stay one at a time because "the per-load module state (the
+load reporter, the artifact generation, the streaming selection) still
+assumes" it. #2019 lands behaviour-neutral with one live session, so it does
+not have to move those. Slice 2 below (cap N) cannot run until they are per
+session: either #2019 moves them, or slice 2 does, as its first PR.
 
 ### 5.3 Switch, background load, eviction, close
 
-- **Switch A → B.** B's session spawns its worker at once if the total
-  still fits the budget; A's keeps its worker and its load. Nothing is
-  disposed. This is the common case.
-- **Switch A → B when B does not fit.** One budget-governed rule on every
-  platform. It is most likely on a phone, but two still-loading PSB-sized
-  models (~2.5 GB each, §5.2) reach it on a 4 GiB desktop too. The host
-  pauses background pumps first, then evicts idle engines (§5.2). If A is
-  still loading and B still does not fit, A is cancelled into an explicit,
+- **Switch A → B, cap 1** (outside `workspace`, `disableBackgroundSessions`,
+  or A's engine in process). `host.leave(A)` answers `close`, and A closes
+  before B's engine is spawned. That is Phase 1a as built
+  (in-app-model-switch.md §4.5a): A's load is aborted, its worker
+  terminated, its state dropped. Slice 1 moves the call sites into the host
+  without changing the behaviour.
+- **Switch A → B, cap N.** `host.leave(A)` answers `background`. A keeps
+  its worker, its load and its scene; nothing is disposed. B's engine is
+  admitted (§5.2): it spawns at once if it fits; otherwise the host opens B
+  windowed, pauses background pumps, then evicts by tier. If A is still
+  loading and B still does not fit, A is cancelled into an explicit,
   user-visible **paused — will resume** state. It is not silently dropped:
-  A's tab says so, and when A is foregrounded again its load resumes from
-  the OPFS-staged source, through the sidecar if its first parse finished
-  and wrote one (§8 item 4), and otherwise by a re-parse. So in-app-model-switch.md §4.0's "come
-  back to a finished load" becomes **a finished background load when the
-  budget allows; otherwise paused — will resume**. This is a provisional
-  call, revisable (§8 item 2).
-- **Background load.** A's parse and pump run on A's worker thread and cost
-  the foreground nothing there. What still lands on the main thread is
-  *assembling* A's batches into A's scene (builder appends, the end-of-load
-  BVH), which runs at a frame cost even when A is not shown. Decided (§8
-  item 1): A keeps pumping in its worker, and its batches queue main-side
-  unassembled (they are transferred buffers, so queuing is cheap). They are
-  assembled when A is foregrounded, or in idle slices before then.
-- **Eviction** is `worker.terminate()`. It frees the whole engine — wasm
-  heap, parse buffers, resident windows — at once (§3 measures it). The
-  session keeps everything main-side: the scene, the instance maps and BVH,
-  the tree, `elementsById`, the search index, the selection, hidden and
-  isolated sets, display overrides and notes. Its `engine` state becomes
-  `evicted`.
-- **Rehydrate, lazily.** The first read that the artifact cannot answer
-  (an entity-ref `deref`, a recursive read, a model without an artifact,
-  later a document op) spawns a worker and re-opens the model **index-only**
-  from the OPFS-staged source: `DEFER_GEOMETRY` and no pump, because the
-  geometry is already in the scene. Cost (§3): ~0.5 s to stand the worker
-  up, then the open — ~1 s for SEESTRASSE, 13–17 s for PSB — and the engine
-  comes back smaller than it left (PSB 1.6 GB index-only against 2.25 GB
-  after geometry). Decided (§8 item 4): the respawn opens with
-  `OpenModelFromIndex` from an index sidecar (conway#756) in OPFS, skipping
-  the parse. **The sidecar is written after the model's first load, not at
-  eviction** (owner, 2026-11-07): the worker exports and writes it once the
-  first parse's pump has finished (`engineHandler.js#saveSidecar`, Share#2085),
-  so it is already on disk when an eviction comes. At eviction memory and
-  CPU are probably under load, which is why the engine is being evicted, so
-  pruning must be fast and cheap: `terminate()` and nothing else, with no
-  export (~0.2 s on 106 MB of STEP, more on PSB, plus a 144 MB write for
-  PSB) in the way. The same sidecar serves a page reload or a later visit.
-  The respawn falls back to the re-parse when the sidecar is missing (the
-  first load never finished, the write failed, the kill switch), or stale
-  against the source (its envelope's size and modification time, then
-  conway's full source hash), or when the engine lacks the export (a
-  capability from `init`). A source that is not in OPFS (the no-OPFS
-  in-memory upload, #1906) re-opens from the `File` that `inMemoryUploads`
-  already holds.
-- **Close** = `abort`, `terminate`, drop the scene and the session's state.
-  It is eviction plus a scene drop.
-- **Scene eviction** is a second, separate tier (GPU and main-side memory),
-  re-entered through a GLB cache hit. It is not designed here; the engine
-  tier does not depend on it.
+  the drawer says so, and when A is foregrounded again its load resumes
+  from the OPFS-staged source, through the sidecar if its first parse
+  finished and wrote one (§8 item 4), else by a re-parse. A paused-will-
+  resume load does not restart on its own when memory frees; only a
+  foreground does (owner question 4). So in-app-model-switch.md §4.0's
+  "come back to a finished load" is **a finished background load when the
+  budget allows; otherwise paused — will resume**.
+- **Switch back B → A.** `host.foreground(A)`. A live A rebinds at once,
+  with its tree, selection and camera (#2019's selection restore). Its
+  queued batches are assembled first. An evicted A rebinds its scene
+  (still there) and reads from its artifact until a read needs the engine
+  ("Rehydrate"). A dormant A (the scene tier) reopens through its GLB
+  cache hit. Each return is an open for the meter and analytics, by #2011
+  decision 1.
+- **Background load.** A's parse and pump run in A's worker and cost the
+  foreground nothing there. What would land on the main thread is
+  *assembling* A's batches (builder appends, the end-of-load BVH). Decided
+  (§8 item 1): A keeps pumping, and its batches queue main-side
+  unassembled; they are transferred buffers, so queuing costs no copy.
+  They are assembled when A is foregrounded, or in idle slices before then
+  (`requestIdleCallback`, one batch per slice, the same per-batch cost the
+  foreground load pays). Queued bytes count against the budget, and a
+  session's queue past `BACKGROUND_QUEUE_MAX_BYTES` (proposed 256 MiB
+  desktop, 64 MiB phone) pauses its own pump until idle slices drain it,
+  so one large background load cannot fill the budget with geometry the
+  user has not looked at. With a render worker, assembly moves off the main
+  thread (§9) and the idle-slice limit goes.
+- **Eviction** is `worker.terminate()` and nothing else. It frees the
+  whole engine (wasm heap, held source, parse buffers, resident windows) at
+  once (§3). No export, no write: at eviction memory and CPU are probably
+  under load, which is why it is happening. The session keeps everything
+  main-side (§5.5). For a sync-handle engine the terminate is
+  `EngineSession#close()`'s polite path: `close` sent, its reply awaited at
+  most `ENGINE_CLOSE_TIMEOUT_MS` (1 s), so the OPFS entry's lock is
+  released before anything re-stages it (§7 step 4).
+- **The OPFS ordering rule** (§7 step 4, "A requirement on step 7"),
+  enforced in one place. Every OPFS write, remove or re-stage of an entry
+  (a newer version of A downloaded while A's evicted engine is closing,
+  `downloadModelToOPFS`'s stale-commit remove, `deleteModelFromOPFS`,
+  Clear cache) first awaits `host.whenEntryFree(entryKey)`, which settles
+  once every engine reading that entry has closed or timed out. A rehydrate
+  of A waits for A's previous engine's close the same way, so two engines
+  never race on one entry's sync-access-handle lock or sidecar write.
+- **Rehydrate, lazily.** The first read the artifact cannot answer (an
+  entity-ref `deref`, a recursive read, any read on a session without an
+  artifact, later a document op or a workspace-session job) calls
+  `host.rehydrate(A)`. It spawns a worker through admission and opens the
+  model **index-only** from `rehydrateSource`: the handler finds the
+  sidecar the first load saved (`engineSidecars.js`, Share#2085), the
+  source policy opens it windowed (§5.6 rule 2), and the page never sends
+  `pump`, because the geometry is already in the scene. So a rehydrated
+  engine holds no buffered copy of the file, and is smaller than the one
+  evicted. What it costs, from the sidecar-reopen rows (the Index column,
+  timed from the end of the download, so the worker's spawn is in it; a
+  rehydrate has no download): SEESTRASSE 0.74 s, MB-Khaya 0.79 s,
+  DSA2 1.58 s, BLSN_007 1.44 s, sp-231MB 2.40 s, DOWA 3.41 s, PSB 4.38 s,
+  D3D 5.60 s. Fallback: a re-parse (no pump) when the sidecar is missing
+  (the first load never finished, the write failed, `disableEngineSidecar`)
+  or stale (size and modification time, then conway's full source hash),
+  or the engine lacks `openFromIndex`. A session whose source is gone
+  (`rehydrateSource` null: not staged in OPFS and not an in-memory upload,
+  or the entry was cleared) cannot rehydrate; its reads stay the artifact's,
+  as on a GLB cache hit today, where a reference outside the captured
+  records shows as `#id` (§7.1, #2066).
+  **Eager, not lazy, in one case:** a session without an artifact
+  rehydrates when it is foregrounded, because its Properties panel would
+  otherwise have nothing to read (owner question 5).
+- **Close** = abort the load (`utils/loadAbort.js`), drop or cancel the
+  idle GLB writer, `await host.release(session)` (the engine's close, polite
+  for a sync handle), then drop the scene and the session's state, the
+  store's `model` among them. Built for cap 1 by Phase 1a; under cap N it
+  is the drawer's close, and slice 1 makes the switch's close the same
+  call. **An evicted or closed model reopens like any other**: through its
+  GLB cache hit where one exists (0.1–0.7 s up to 106 MiB, 2.0–3.9 s on the
+  IFCs from 214 MiB; source-policy-measurements.md §(d)).
+- **The scene tier.** A session past "sessions keeping a scene" (§5.2)
+  becomes *dormant*: it drops its scene (`session.dropScene()`) after its engine. It keeps its
+  per-model state and selection, which are small and are refs, not batch
+  ids (§5.5). Foregrounding it is a GLB cache-hit open plus a selection
+  restore from those refs; without an artifact, a cold load from OPFS.
+  The 2026-11-03 text left this tier undesigned. It is now needed, because
+  under cap N a switch keeps scenes by default.
 
 ### 5.4 Failure isolation
 
 - An exception, a wasm trap or a wasm `RangeError` on memory growth inside a
   worker is caught there and reported as `failed{kind}`. Only that session
   shows the alert; other sessions do not see it.
+- **A background session that fails** keeps its failure until it is
+  foregrounded: the drawer marks it failed, and its alert shows when the
+  user returns to it, not over the model they are looking at. It is
+  captured to Sentry once, when it fails (not on return), from the page,
+  with the usual load-failure tags plus `session_focus: background`
+  (§5.5 "Reported conditions").
 - A worker that dies without a message (`error` / `messageerror`) or goes
   silent past the load report's stall watchdog is terminated and marked
   `failed`, with a retry.
+- **The out-of-memory retry** (§5.6) spawns its fresh engine through
+  `host.spawnFor`, so it is admitted and counted like any other; the failed
+  engine is released first, as today.
 - **What it does not isolate:** dedicated workers are threads in the page's
   renderer process. A process-level out-of-memory still takes the tab and
   every worker down. The budget in §5.2 is what prevents that; the worker
-  only makes the memory *returnable*.
+  only makes the memory *returnable*. Under cap N the budget is the only
+  thing between three PSB-sized loads and the tab.
 - A replaced or terminated worker's late messages carry an old `epoch` and
   are dropped.
 
@@ -713,17 +1019,61 @@ One `EngineHost` per page owns every session's worker.
 
 | Survives (main-side) | Lost until rehydrate (engine-side) |
 |---|---|
-| scene, `BatchedMesh`, instance maps, BVH | psets and records the artifact did not capture |
+| scene, `BatchedMesh`, instance maps, BVH (until the scene tier drops them) | psets and records the artifact did not capture |
 | `rootElement`, `elementsById`, search index | entity-ref `deref`, recursive reads |
 | selection, hidden / isolated sets, display overrides, notes | STEP sub-solid reads beyond the tree |
-| `e` / `o` / `n` / `g` refs and every permalink (`#sel:`, element path, `#d:`, `#c:`) | (later) document-op application |
-| the GLB artifact and the staged OPFS source | `modelID` (a new instance starts at 0) |
+| `e` / `o` / `n` / `g` refs and every permalink (`#sel:`, element path, `#d:`, `#c:`) | (later) document-op application and workspace-session jobs |
+| the GLB artifact, the staged OPFS source and its index sidecar | `modelID` (a new instance starts at 0) |
+| the session's load report and `loadResult` | the held source and resident windows (freed, which is the point) |
 
 Refs survive because they are pure strings keyed on expressIDs and STEP
 occurrence paths, which are the source file's own `#id`s and come back
-identical from a re-parse of the same bytes. model-edit.md §5 already
-forbids storing a `batchId` or any per-load id, and the scene's batch ids
-are not re-minted by an engine respawn because the scene is not rebuilt.
+identical from a re-parse or a sidecar reopen of the same bytes.
+model-edit.md §5 already forbids storing a `batchId` or any per-load id,
+and the scene's batch ids are not re-minted by an engine respawn because
+the scene is not rebuilt. The same argument is what lets the scene tier
+restore a selection after a GLB cache-hit reopen.
+
+**What the user sees on return to an evicted model.** The scene, tree and
+selection at once, with no load report. The Properties panel answers from
+the artifact's `BLDRS_element_properties` reader, as a cache hit does
+(the session's read model swaps to an artifact-backed handle at eviction,
+and back to the engine's at rehydrate; `Properties.jsx`'s `isStale` guard
+already drops an answer for a read model that is no longer current, §7.1).
+A read the artifact cannot answer shows the panel's loading state while the
+engine rehydrates (the times in §5.3), then answers. The load report gains
+one line, `Engine: rehydrated from the index sidecar (…)` or `… re-parsed
+(…)`, so a slow return can be told apart from a slow load.
+
+**Reported conditions** (CLAUDE.md "Reported Conditions"). Eviction and
+backpressure are expected and self-healing, so they go to GA through
+`gtagEvent`, never Sentry. A failed rehydrate is actionable. Every param is
+a closed enum or a bucket; no event carries a file name, URL or path, and
+the worker replies with structured fields only (it has no Sentry).
+`size_class` is the one `engine_source_fallback` already sends.
+
+| Condition | User sees | Sentry | GA | Why |
+|---|---|---|---|---|
+| Engine evicted (tiers 1–3) | nothing until a read needs the engine | — | `engine_evicted {reason: 'count' \| 'bytes', tier: 'artifact' \| 'noArtifact' \| 'capturing', format, size_class, live_engines}` | expected; volume tells whether the defaults are right |
+| Background load cancelled by eviction (tier 4) | the drawer's "paused — will resume" | — | `engine_evicted {tier: 'loading', …}`; not also `model_load_aborted` (one condition, one event) | expected under memory pressure; a high rate means the budget is too small |
+| Background pump paused by backpressure | the drawer's "paused" | — | `engine_backpressure {format, size_class, live_engines}`, once per load | self-healing; volume only |
+| Open admitted windowed for the budget | nothing (`Engine source: windowed (budget)` in the report) | — | `engine_source_fallback {failure: 'budget', …}`, after the load succeeds | a recovered fallback, reported once on success, as §5.6's are |
+| Session dropped to the scene tier | a reopen from cache on return | — | `engine_evicted {…, scene: 'dropped'}` | expected |
+| Rehydrate fell back to a re-parse | a slower answer | — | `engine_rehydrated {via: 'reparse', why: 'missing' \| 'stale' \| 'noCapability', format, size_class, ms_bucket}`, on success | recovered; after the fact |
+| Rehydrate succeeded from the sidecar | the answer | — | `engine_rehydrated {via: 'sidecar', …}` | volume and latency of returns |
+| Rehydrate impossible (no source) | `#id` for references outside the artifact, as on a cache hit | — | `engine_rehydrate_unavailable {why: 'noSource' \| 'entryGone'}` | expected for unstaged sources |
+| **Rehydrate failed** (both paths) | Properties keeps the artifact's answers; a note that the model's engine could not be reopened, with Reload | `error`, fingerprint `['engine-rehydrate-failed', <failed.kind>]`, tags `engine_rehydrate` (`sidecar` \| `reparse`), `engine_failure` (kind), `engine_source`, `model_open`, `model_nav`, `background_sessions`; captured in `EngineHost#rehydrate`'s catch, on the page | the shadow `reported_condition` only | actionable: a sidecar or re-parse that fails on a model that loaded once is a bug |
+| Polite close timed out before an OPFS write | none (the write meets the lock and the load falls back to the network, as today, §7 step 4) | — | `engine_close_timeout {op: 'evict' \| 'close' \| 'restage'}` | self-healing; a rising rate means a wedged engine |
+| Background load failed | its alert on return | as a foreground load failure today (CadView's `captureException`), plus tag `session_focus: background`; once | `load_failed` with `open_kind`, as today | the same failure, reported once, from where it is today |
+| Active session alone over the budget | nothing | — | `engine_over_budget {format, size_class}`, once per page | says how often the budget is wrong for the user's model |
+
+Every Sentry event also carries `background_sessions`
+(`backgroundSessionsMode()`, `on` or `off:<reason>`), set at the start of
+each load beside `model_nav` and `model_open` (`utils/reportModelOpen.js`),
+so a report can be read against the mode its page was in. GA's
+`real_model_open` gains `resume: 'none' | 'live' | 'evicted' | 'dormant'`
+beside `open_kind`, so a return to a live background session can be told
+from a new load.
 
 
 ### 5.6 Source policy: buffer for the parse, window at rest
@@ -904,7 +1254,9 @@ One session: `?feature=disableBufferedSource`.
   against hashing one ArrayBuffer).
 - A live admission budget (§5.2, steps 7–8): the cap here is static per
   device; once the engine host exists it should admit buffered opens
-  against live usage across workers.
+  against live usage across workers. Designed in §5.2 ("Admission,
+  backpressure, LRU", item 1): an open that would not fit buffered is
+  admitted windowed, `Engine source: windowed (budget)`.
 - Whether Firefox and Safari should stop holding the file at all above some
   size. Neither browser has been measured with the policy.
 - **A windowed open that fails falls through to buffered, even over the
@@ -1197,21 +1549,124 @@ How each step landed is in §7.1 and in the steps below.
      and cold compile;
    - the page heap is 30–73 % lower.
    The table is on #2067.
-7. **Sessions own their worker** (with #2019). The engine moves from the
-   viewer to the session; a switch keeps the old worker; the background
-   batch policy (§8 item 1). Tests, each shown failing on revert: queued
-   geometry bytes count against the budget, and reaching it pauses the
-   background pump rather than evicting it (a unit on `EngineHost` with a
-   lowered budget); and a `describeMobileAndDesktop` E2E where, on both
-   form factors, a lowered budget puts the background load into "paused —
-   will resume" and foregrounding it completes the load.
-8. **Close and eviction** (#2031, absorbed). `EngineHost`, the budget and
-   LRU, `terminate`, the artifact fallback, lazy index-only rehydrate
-   through the conway#756 sidecar the first load already wrote (re-parse
-   fallback; the eviction itself writes nothing, §5.3). E2E:
-   #2023's memory spec, asserting the evicted worker's memory is gone
-   (`measureUserAgentSpecificMemory` breakdown in an isolated test server,
-   or the renderer's RSS) and that properties still answer.
+7. **Sessions own their worker.** Now #2019 (Phase 1b step 1), and
+   behaviour neutral there: the engine moves from the viewer to the model
+   session, with one live session, so a switch still closes. Keeping the
+   old worker on a switch, and the background batch policy (§8 item 1),
+   moved into step 8's slice 2, under `workspace` (#2011 decision 6).
+8. **`EngineHost`: close, cap, eviction, rehydrate** (#2031; refreshed
+   2026-11-19, §5.2–§5.5). Five slices, in order. Each is green on its own
+   and either behaviour neutral or behind `workspace` with
+   `disableBackgroundSessions` as its kill switch. Every E2E below is
+   `describeMobileAndDesktop`, Chromium (CDP), and asserts what was
+   terminated or collected, never a heap number (STYLE.md §"Assertions
+   must be able to fail"): a worker's Playwright `close` event, and a
+   `WeakRef` to the model cleared after `HeapProfiler.collectGarbage`
+   (`utils/gc.fixture.js`, as `modelSwitchMemory.spec.ts` does today). Each
+   is shown red with the step it tests reverted, in its PR's break-it
+   table. Each runs on cap 1 and on cap N: cap 1 is a plain link and
+   `?feature=workspace,disableBackgroundSessions`; cap N is
+   `?feature=workspace`.
+   1. **`EngineHost` at cap 1, replacing today's close.** No behaviour
+      change. The host module and `engineBudget.js` (constants only); the
+      predicate `backgroundSessionsMode.js` with its rollback flag
+      `disableBackgroundSessions` declared (`isActive: false`), though
+      nothing yet widens the cap. `spawnEngine.js`'s `liveSessions` and
+      `closeAllEngineSessions` become the host's; `createEngineModelLoad`
+      gets `spawn: host.spawnFor`; the switch's close, `ShareIfc#dispose`'s
+      engine closes and Clear cache go through `host.release` /
+      `host.closeAll`; every OPFS write or remove of an entry awaits
+      `host.whenEntryFree` (§5.3, the ordering rule). The dev hook
+      `window.__bldrsEngineHost.snapshot()`, outside production builds.
+      Needs #2019 merged.
+      - *Unit:* the predicate's four reasons and their order, with the
+        rollback beating `?feature=workspace` (red if the static read moves
+        after the URL reads); `spawnFor` B at cap 1 resolves only after A's
+        `close()` has (red with the await dropped); `whenEntryFree` waits
+        for a sync-handle close and gives up at `ENGINE_CLOSE_TIMEOUT_MS`.
+      - *E2E:* `modelSwitchMemory.spec.ts` and the step-A mid-load cases,
+        unchanged and green; one new leg, A → B → C, asserting exactly one
+        live engine in `snapshot()` and one live engine worker after each
+        open, and A's and B's model `WeakRef`s cleared.
+      - *Rollback:* revert the PR. It changes no behaviour, so the
+        Phase 1a rollback (`disableSpaModelNav`) covers a regression in it.
+   2. **Cap N under `workspace`, with the kill switch.** The predicate
+      goes live; `host.leave` answers `background` under it. Background
+      loads keep pumping; batches queue and are assembled on foreground or
+      in idle slices; the per-session queue cap; admission with the live
+      estimate (the `heldSourceBytes` field added to the engine's replies),
+      windowed-for-budget, then backpressure. **Past the count or the
+      budget, the LRU background session is closed, not evicted**: the
+      scene drops with the engine, so nothing needs a rehydrate yet, and an
+      over-cap session reopens through its GLB cache hit. Selection restore
+      on return (#2019's deferred acceptance). First, if #2019 has not done
+      it, the per-load module state becomes per session (§5.2, the last row
+      of "What the host assumes").
+      - *Unit (`EngineHost.test.js`, a fake `EngineSession`):* cap N keeps
+        A on a switch; the fourth model closes the least recently
+        foregrounded by tier; the active session is never chosen, even
+        alone over the budget; queued bytes count, and reaching the budget
+        pauses the background pump before anything is closed (red with
+        `noteQueued` a no-op); an in-process engine is closed on a switch
+        under cap N.
+      - *E2E, #2023's first case:* A → B → C leaves three live engine
+        workers; closing A and B (through the dev hook until the drawer,
+        Phase 1b step 3, has a close) terminates their workers and clears
+        their model `WeakRef`s, leaving C's. On cap 1 the same walk leaves
+        one at each step.
+      - *E2E, #2019's deferred acceptance:* background finish: A held at its
+        pump (`__bldrsTestHoldGeometryPump`), switch to B, release A; A's
+        worker stays (no `close` event) and A's session reaches ready; back
+        to A, A is complete with no new worker and no "Opening model" line.
+        On cap 1, A's worker closes at the switch (step A's assertion).
+        Selection restore: select in A, switch to B, select there, back to
+        A; A's selection and its `#sel:` term are A's, and B's is untouched.
+        On cap 1 the return is a reopen and asserts today's behaviour.
+      - *E2E, the count cap:* with the test override `maxLiveEngines: 2`,
+        opening C closes A (worker `close`, `WeakRef` cleared) and B and C
+        stay live.
+      - *E2E, backpressure:* with a lowered byte budget, B's open pauses A's
+        background pump (A's worker stays, its batch count stops), and
+        foregrounding A completes its load.
+      - *Rollback:* `disableBackgroundSessions` `isActive: true` in
+        `FeatureFlags.js` (the static read beats every URL); one session:
+        `?feature=disableBackgroundSessions`. Both leave the drawer.
+   3. **Eviction keeps the session; lazy index-only rehydrate.** Past the
+      budget, tiers 1–3 are evicted (`terminate()`, the scene kept, the
+      read model swapped to the artifact's) and tier 4 goes to "paused —
+      will resume"; past the count, the LRU session becomes dormant (the
+      scene tier). `host.rehydrate` through `spawnFor`, from the sidecar
+      (§5.3), re-parse fallback, eager on foreground for a session without
+      an artifact. The Reported Conditions of §5.5 land here.
+      - *Unit:* evicting terminates the worker and keeps the scene, tree,
+        selection and refs; a property read after eviction answers from
+        the artifact; a `deref` rehydrates once, however many reads ask at
+        once; a missing sidecar re-parses; a failed rehydrate is one Sentry
+        event and the panel keeps the artifact's answers.
+      - *E2E, #2023's eviction case:* a lowered byte budget makes opening C
+        evict A (tier 1). A's worker `close` fires; B and C stay live; A's
+        model `WeakRef` is *not* cleared (its scene is kept, the assertion
+        that tells eviction from close). Back to A: no "Opening model"
+        line, the selected element's psets answer from the artifact with no
+        new worker; a nested reference then spawns one worker whose report
+        line is `Engine: rehydrated from the index sidecar`.
+      - *E2E, paused — will resume:* a budget too low for A's background
+        load: A's worker closes, A's session reads paused — will resume, and
+        foregrounding A completes it from the sidecar or a re-parse.
+      - *Rollback:* as slice 2; and one session can keep slice 2's
+        close-past-cap with `?feature=disableSessionEviction`, for a bug
+        that looks like an evicted model answering wrong.
+   4. **The ProjectsDrawer shows the states** (#2011 Phase 1b step 3; not
+      #2031's, listed for the order): live, loading, paused, paused — will
+      resume, evicted, dormant, failed; and the drawer's close. The E2Es of
+      slices 2–3 move from the dev hook to the drawer.
+   5. **Budget tuning.** Re-fit the estimate's constants and confirm the
+      defaults, with the bench (`tools/bench/sourceModes/`), which already
+      records every input except two: (a) two and three engines loading at
+      once in one page (not measured, §10), and (b) the main-side scene's
+      bytes per model, the scene tier's input, beside its GPU memory on the
+      owner's hardware. Then the phone numbers on a real phone. A change of
+      constant needs its measurement in the PR body; no behaviour flag.
 9. **Default on**, after steps 2–6 have merged. Steps 7–8 are only needed
    for in-app model switching (#2011), so they do not gate it. The in-process transport
    stays as the fallback for browsers without module workers, and
@@ -1234,7 +1689,7 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 | 6 — STEP in the worker | merged (#2067). Since conway#757 (Share#2085) a STEP staged in OPFS opens windowed in the worker through step 4's sync access handle, as an IFC does; conway faults AP214's synchronous reads in through the store's `readSync`. Measured: in the reopen table under §11 ("Measured, conway#757") |
 | 5 — GLB capture in the worker | merged (#2081), after #2073 (#2038: the capture dropped every record a windowed source did not have resident). n=1 each, flag off → on, `RAF_THROTTLE_MS=3600000`, persistent profile. PSB: time to artifact 171.6 → 118.9 s; the writer 38.1 → 31.0 s, of which the worker's capture is 7.6 s; main-thread long tasks before ready 536 (81.6 s) → 35 (13.7 s), and during the write 71 (7.85 s, max 624 ms) → 4 (0.43 s, max 208 ms); page heap (`performance.memory`) at the end 1,127 → 522 MB, sampled peak 1,766 → 848 MB; the worker's JS heap peaked at 140 MB, beside 899 MB of wasm. 58 MB STEP: time to artifact 47.6 → 43.2 s; writer 7.6 → 6.8 s, capture 2.5 s; long tasks before ready 292 (35.8 s) → 10 (3.6 s), during the write 4 (0.35 s) → 1 (0.07 s); page heap at the end 688 → 148 MB; worker JS heap peak 322 MB beside 515 MB of wasm. **Byte identity:** after the batch colour column became float64 (step 5 above), the two engines' whole PSB artifacts are identical, 86,341,686 B each with one SHA-256 (re-measured 2026-11-06, n=1 per side, on a less loaded machine: time to artifact 68.6 → 58.9 s, long tasks before ready 222 (27.8 s) → 13 (6.7 s)). Review fixes: protocol v2, so a stale cached worker without `capture` is refused at hello and the load runs in process (§4); `close()` waits for a spill still in flight before it decides whether to close politely |
 | 8 (part) — index sidecar reopen | Share#2085: a worker load from an OPFS entry saves conway's index sidecar, and the next open of the same entry opens from it instead of parsing, IFC and STEP alike (`engine/engineSidecars.js`). It is written after the first load, not at eviction (§5.3). Since Share#2093 a browser without `createWritable` (Safari before 26) writes it through a read-write sync access handle, and a failed save says why on the `Engine index:` line. Eviction itself is still deferred. The reopen runs conway's full source check, which the owner chose over the sampled one. Measured with it: on the 58 and 106 MB STEP models, Parsing goes from 1.3–1.8 s and 2.6–2.8 s to 0.31–0.39 s and 0.65–0.70 s, and the tree arrives 2.1–3.3 s and 2.9–3.7 s sooner (§11) |
-| 7, 8 | deferred; only in-app switching needs them |
+| 7, 8 | not started. Step 7 is #2019 (Phase 1b step 1, in progress); step 8 is #2031, designed in §5.2–§5.5 (refreshed 2026-11-19) and sliced in §7 step 8 |
 | 9 | in flight (#2083, draft): default on, the kill switch and rollback, the main-thread routes. #2061 explained (below). Waits on the real-GPU, Safari and Firefox checks |
 
 **Picking during the pump (#2084).** The durable batches are pickable from
@@ -1547,6 +2002,23 @@ These were the open questions of the scope. The user decided each one.
    numbers.
 
 
+### 8.1 Since 2026-11-03
+
+- **#2011 decision 6 (owner, 2026-11-19)** narrows items 1–3 to
+  `?feature=workspace`. Outside it the host holds one live model and a
+  switch is a close; `disableBackgroundSessions` forces that under
+  `workspace` too (§5.2, "The cap: one predicate").
+- **Item 2's estimate is re-fitted** to the source-policy numbers: wasm plus
+  a held-source term the worker reports, plus a per-format JS allowance (IFC
+  0.6, STEP 3.0 per source byte) instead of one 1.9 (§5.2, "The estimate").
+  Provisional until slice 5.
+- **Proposed, for the owner** (the PR that refreshed this section lists
+  them with recommendations): phones at 2 live engines and at most 1 GiB
+  under `workspace`; scenes bounded by the same count, with a dormant tier
+  past it; a cancelled background load resuming only on foreground; eager
+  rehydrate for a session without an artifact; an in-process engine always
+  closed on a switch.
+
 ## 9. Where this meets OffscreenCanvas rendering
 
 The engine worker and a render worker meet at the geometry stream and at
@@ -1608,8 +2080,12 @@ case in the worker.
 
 **Not measured:** real-GPU frames; Safari and Firefox (module workers and
 `createSyncAccessHandle({mode: 'read-only'})` support differ); two
-concurrent engine workers loading large models at once; a respawn with a
-sidecar; the main-side cost of assembling a background session's batches.
+concurrent engine workers loading large models at once; the main-side cost
+of assembling a background session's batches; the main-side scene's bytes
+and GPU memory per model, which the scene tier needs (§5.3); any phone. A
+respawn with a sidecar has since been measured as the bench's sidecar
+reopen (source-policy-measurements.md), which an index-only rehydrate
+(§5.3) is minus its pump; the rehydrate itself is not.
 
 
 ## 11. IFC and STEP, stage by stage
