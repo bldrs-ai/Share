@@ -31,6 +31,7 @@ import {getRenderMode} from '../privacy/preferences'
 import {resetPlanes as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
+import {NotFoundError} from '../loader/notFoundError'
 import {
   LOAD_OUTCOMES,
   attachLoadFailureContext,
@@ -967,9 +968,12 @@ export default function CadView({
       // the loader only raises it after OPFS confirmed the entry is absent,
       // so it's user state, not a bug — and it was SHARE-1NR, the top
       // hard-failure group (#1955). Its volume is still counted: an
-      // info-level message above, plus AlertDialog's analytics event.
+      // info-level message above, plus AlertDialog's analytics event. And
+      // for a GitHub link that isn't there or isn't visible to this user
+      // (SHARE-1XP, notFoundError.js): AlertDialog counts it in GA.
+      const isExpectedNotFound = e instanceof NotFoundError && e.isExpected
       if (!isOOM && !(e instanceof UnsupportedSchemaError) && !(e instanceof InMemoryUploadGoneError) &&
-          !(e instanceof UploadNotInBrowserError) && !(e instanceof ZipArchiveError)) {
+          !(e instanceof UploadNotInBrowserError) && !(e instanceof ZipArchiveError) && !isExpectedNotFound) {
         attachLoadFailureContext()
         // A load that stalled before it failed says so on this event only
         // (loadProgress.js#loadStallCaptureTags), never on the scope.

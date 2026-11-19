@@ -39,6 +39,7 @@ import {actAsyncFlush, suppressActWarnings} from '../utils/tests'
 import CadView from './CadView'
 import * as viewerModule from './viewer'
 import * as loadProgressModule from '../loader/loadProgress'
+import {GITHUB_NOT_FOUND_MESSAGE, NotFoundError} from '../loader/notFoundError'
 import * as clientCapabilities from '../privacy/clientCapabilities'
 import {WEBGL_UNAVAILABLE_TITLE} from '../viewer/webglUnavailable'
 
@@ -860,6 +861,26 @@ describe('CadView', () => {
     })
     expect(captureExceptionSpy).not.toHaveBeenCalled()
   })
+
+  // SHARE-1XP: someone else's GitHub link, missing or private, is their
+  // link or access: the alert, and no Sentry exception (AlertDialog counts
+  // it in GA).
+  it('alerts on an expected GitHub not-found without capturing it', async () => {
+    const notFound = new NotFoundError(GITHUB_NOT_FOUND_MESSAGE, {source: 'github', isExpected: true})
+    jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw notFound
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(result.current.alert).toBe(notFound))
+    expect(captureExceptionSpy).not.toHaveBeenCalledWith(notFound)
+  })
+
 
   it('keeps the generic alert and capture when the engine gave no reason', async () => {
     const genericErr = new Error('parseIfcWithConway: OpenModel returned -1')

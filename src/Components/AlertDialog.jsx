@@ -104,6 +104,12 @@ export default function AlertDialog({onClose}) {
       trackAlertEvent(UNRECOGNIZED_FORMAT_ALERT_EVENT, unrecognizedFormatGaParams(alert))
     } else if (alert.type === 'oom' || alert.type === 'needsReconnect') {
       trackAlert(alert.message, alert)
+    } else if (alert instanceof NotFoundError && alert.isExpected) {
+      // A GitHub link that isn't there or isn't visible to this user
+      // (SHARE-1XP): their link or access, not a defect, so GA only. The
+      // message is a constant (notFoundError.js#GITHUB_NOT_FOUND_MESSAGE);
+      // the route, which names the repository, is never counted.
+      trackAlertEvent(alert.message, {source: alert.source ?? 'unknown'})
     } else if (alert instanceof NotFoundError || alert instanceof Error) {
       if (!(alert instanceof NotFoundError)) {
         console.error('General error:', alert)
@@ -359,7 +365,9 @@ function createAlertReport(a) {
         a.type === DROP_REFUSED)) {
       return a.message
     } else if (a instanceof NotFoundError) {
-      return displayPathAlert(a)
+      // A GitHub not-found carries its own explanation; a URL fetch's is the
+      // generic "File not found" under the path hint.
+      return a.source === 'github' ? a.message : displayPathAlert(a.message)
     } else if (a instanceof Error) {
       return `${a}`
     }
@@ -369,14 +377,17 @@ function createAlertReport(a) {
 
 
 /**
- * @param {object} alert
+ * @param {string} message
  * @return {ReactElement}
  */
-function displayPathAlert(alert) {
+function displayPathAlert(message) {
+  // Takes the message, not the error: insertZeroWidthSpaces is a string
+  // replace, and handed the NotFoundError itself it threw while rendering,
+  // so a 404 ended at the error boundary instead of this dialog.
   return (
     <p>
       Check the file path:<br/>
-      {alert && insertZeroWidthSpaces(alert)}
+      {message && insertZeroWidthSpaces(String(message))}
     </p>
   )
 }
