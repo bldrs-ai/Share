@@ -599,9 +599,12 @@ refreshed here for #2031; what moved, and why:
   STEP.
 - **Per-model sessions (#2019, step 1 of Phase 1b) come first**, behaviour
   neutral, with one live session. The host sits on top of that session
-  object. #2019's PR did not exist when this was written, so the interface
-  assumed from it is stated explicitly below ("What the host assumes of a
-  session"), for #2019 to match or flag.
+  object. #2247 built it; what the host needs of it, and what is not built
+  yet, is below ("What the host needs of a session").
+- **One viewer for the page (owner, 2026-11-19).** #2247 found that the
+  scene is the viewer's, built per open and per theme rebuild, so no
+  session can keep its scene across a switch. That step is §5.2a, slice 2
+  of §7 step 8, between `EngineHost` at cap 1 and cap N.
 
 What did not change: one engine per model in its own worker, `terminate()`
 as the way memory comes back (§3), backpressure before eviction, the LRU
@@ -626,6 +629,7 @@ Proposed: `engine/backgroundSessionsMode.js`.
 export const SingleModelReason = Object.freeze({
   ROLLBACK: 'rollback',          // `disableBackgroundSessions` isActive in FeatureFlags.js
   PAGE_LOADS: 'pageLoads',       // modelPageLoadReason() !== null: every open is a page load
+  NO_SINGLE_VIEWER: 'noSingleViewer',  // a viewer per open (singleViewerMode.js): no scene outlives a switch (§5.2a)
   NO_WORKSPACE: 'noWorkspace',   // `workspace` off: no surface to return to a left model (decision 6)
   KILL_SWITCH: 'disableBackgroundSessions',  // ?feature=disableBackgroundSessions
 })
@@ -642,11 +646,14 @@ export function backgroundSessionsMode()  // 'on' | 'off:<reason>', for a Sentry
   `workspace` off statically would not stop a `?feature=workspace` link.
 - **`PAGE_LOADS` comes before `NO_WORKSPACE`.** With the in-app switch
   rolled back, a switch reloads the page, and nothing survives it to keep.
+  `NO_SINGLE_VIEWER` likewise: with a viewer per open (§5.2a), the left
+  model's scene is disposed with its viewer, so there is nothing to keep
+  either, and `disableSingleViewer` forces cap 1 too.
 - **Read at each acquire**, like `spaModelNavMode.js`: the query rides
   from one open to the next (`withCurrentSearch`), so a page and the opens
   it makes agree.
 - **Per engine, not per page: an in-process engine is never kept in the
-  background.** On the main-thread engine (`?feature=disableEngineWorker`,
+  background** (decided, owner, 2026-11-19). On the main-thread engine (`?feature=disableEngineWorker`,
   a `?view=` rule set, the in-process fallback after a worker failed to
   start) memory comes back only when the whole `IfcAPI` is collected
   (in-app-model-switch.md §4.5), which nothing on the page can force. So a
@@ -743,9 +750,9 @@ estimate = max(ENGINE_FLOOR_BYTES,
   host takes it through `noteQueued` / `noteDrained`; with a render worker
   the drain acks of §9 feed the same two calls, so §9 does not change.
 - **Constants, each with its source measurement in a comment beside it**,
-  in `src/engine/engineBudget.js`. Slice 5 (§7 step 8) re-fits them.
+  in `src/engine/engineBudget.js`. Slice 6 (§7 step 8) re-fits them.
 
-#### Caps and budget (proposed defaults)
+#### Caps and budget (decided 2026-11-19, owner)
 
 | | outside `workspace`, or `disableBackgroundSessions` | `workspace`, desktop | `workspace`, phone |
 |---|---|---|---|
@@ -753,8 +760,9 @@ estimate = max(ENGINE_FLOOR_BYTES,
 | engine byte budget | not used | ½ `deviceMemory`, at most 4 GiB; 4 GiB when absent | ½ `deviceMemory`, at most 1 GiB; 1 GiB when absent |
 | sessions keeping a scene | 1 | 3 (= `maxLiveEngines`) | 2 |
 
-- **Desktop 3** is §8 item 2's decision, and workspace-sessions.md §8
-  decision 5 took the same number. It was a guess and is still untuned.
+- **Desktop 3 engines, ½ `deviceMemory` up to 4 GiB** is §8 item 2's
+  decision, which workspace-sessions.md §8 decision 5 shares; kept by the
+  owner on 2026-11-19 until slice 6 measures.
 - **Phones: 2, not "budget only".** §8 item 2 left phones with no fixed
   count. With the at-rest numbers above, a 1 GiB phone budget fits two
   SEESTRASSE-sized engines (111 MiB each) with room for a third, while one
@@ -762,19 +770,20 @@ estimate = max(ENGINE_FLOOR_BYTES,
   the drawer's promise ("come back to it") for one model besides the
   active one, and the budget still decides for large ones. P1.0's "one large
   model resident" on phones (in-app-model-switch.md §4.5) is what the budget
-  enforces. Owner question 1.
+  enforces. Decided (owner, 2026-11-19), with the 1 GiB cap below.
 - **Phones are capped at 1 GiB even where `deviceMemory` says more.**
   Chrome on Android reports 4 or 8 on most current phones, and half of that
   is past what a mobile tab survives (P1.0: one 231 MB model already exceeds
   typical tab limits). iOS Safari has no `deviceMemory` and takes the
   1 GiB branch. The form factor is the repo's one rule, `MOBILE_WIDTH`, as
   `spawnEngine.js#engineDeviceSnapshot` reads it for the source policy.
-- **Sessions keeping a scene equals the engine count, for now.** Eviction
+- **Sessions keeping a scene equals the engine count** (decided, owner,
+  2026-11-19). Eviction
   keeps the scene (§5.5), so a byte-budget eviction leaves a session with
   a scene and no engine. But a count beyond N goes to the *scene tier*
   (§5.3) rather than keeping every scene: without that, ten switches would
   hold ten scenes, and scene memory (main-side and GPU) is not measured.
-  Keeping more scenes than engines is owner question 3.
+  Keeping more scenes than engines waits for slice 6's scene measurement.
 - **A test-only override** of all three numbers, installed only outside
   production builds (like `utils/gc.fixture.js`), for the eviction E2Es.
 
@@ -866,32 +875,247 @@ host.snapshot()            // [{sessionId, engineState, estimate, lastForeground
 - **Who owns the cap decision:** the host, through
   `backgroundSessionsMode.js`, per acquire.
 
-#### What the host assumes of a session (#2019)
+#### What the host needs of a session (#2019, as built in #2247)
 
-#2019 had no PR when this was written. The host needs these of a model
-session; #2019 can match them, or flag what differs:
+#2247 (Phase 1b step 1, draft) built the model session
+(`src/Containers/modelSession.js`): a `ModelSessionHost` per CadView whose
+active `ModelSession` is `{id, modelKey, loadState, job, engine,
+windowHandlers}`, with a `LoadJob` that owns the run's `AbortController`
+and gates every store write on `isCurrent()`. Against what the host needs:
 
-| Assumed | Why the host needs it |
+| Needed | In #2247 | Why the host needs it |
+|---|---|---|
+| `session.id`, stable for the open | built | keys the host's table and the dev hook |
+| `session.engine`: its `EngineSession`, or null | built | close, evict, accounting; null for mesh formats and cache hits |
+| `session.loadState`: `loading` \| `ready` \| `failed` \| `closed` | built | the LRU tiers |
+| `session.close()`: abort the run, unbind its window handlers, close its engine, drop it | built, **synchronous**. A GLB writer that has not run is skipped through the abort; one already running is not cancelled | close, and the cap-1 switch. `host.release(session)` takes `session.engine` first, calls `session.close()`, then awaits `engine.close()`, which is idempotent and hands back the same closing promise, so the polite sync-handle close (§5.3) is still awaited without making `close()` async |
+| `session.modelKey` | built (the dedupe identity) | the host's per-model chain for rehydrate ordering |
+| `session.entryKey`: the OPFS entry its source is staged in, or null | not built | `whenEntryFree`; one sync-handle lock per entry |
+| `session.format`, `session.sourceBytes` | not built | the estimate's allowance |
+| `session.hasArtifact`, `session.isCapturing` | not built | tiers 1–3 |
+| `session.rehydrateSource`: the OPFS `File`, an in-memory upload's `File` (`inMemoryUploads`, #1906), or null | not built | rehydrate |
+| `session.onEngineEvicted({reason, tier})`, `session.onEngineRehydrated(engine)` | not built | swapping the read model (§5.5) |
+| `session.root` and `session.viewState`, attached and detached by the viewer | not built: **the scene is the viewer's** (below) | a background session keeps its scene; `dropScene()` for the scene tier |
+| a session's load touches no module-level per-load state | not built | two loads at once |
+| a background session writes its own copy of `modelStateDefaults()` (`store/modelState.js`), pushed to the store when the view rebinds | not built; #2247's job writes into the store or nowhere | background finish |
+
+Slice 1 adds the fields it needs (`entryKey`, `format`, `sourceBytes`);
+slice 4 the eviction ones. The last three rows are the prerequisites of
+cap N, and each has its own place in the plan:
+
+- **The scene.** In #2247, as on main, a viewer is built per open and per
+  theme or view-settings rebuild (`Containers/viewer.js#initViewer`, called
+  from CadView's `onModelPath` → `initViewerCb`), and `disposeViewer`
+  traverses the whole scene and disposes every geometry, material and
+  texture. So a model's scene lives and dies with a viewer, and nothing can
+  detach it and re-attach it later. Slice 2 (§5.2a, "One viewer for the
+  page") makes the scene a session's.
+- **Module-level per-load state**, which keeps loads one at a time. #2247
+  lists four:
+  1. the load reporter: `loader/loadProgress.js`'s `activeReporter` and
+     `loadSerial`, the report lines, and the stall watchdog;
+  2. the artifact generation: `loader/glbArtifactPublish.js`'s `generation`;
+  3. the streaming selection: `viewer/streamingBatchPick.js`, one per scene,
+     kept on the viewer's `scene.userData`;
+  4. the GLB writer's in-flight owner: `Loader.js#cacheWriteOwner`, added in
+     #2247.
+
+  Each becomes the session's (a reporter per load job, a generation per
+  session, the streaming selection on `session.root.userData`, the writer's
+  owner the job). That is slice 3's first PR, its prerequisite.
+- **Background state.** A background session's job writes into its own copy
+  of `modelStateDefaults()`, and the view pushes that copy to the store when
+  it rebinds (#2247, "Left for EngineHost slice 2"). Also slice 3.
+
+How CadView itself divides between the view and the session is the CadView
+split plan the #2019 agent is writing into in-app-model-switch.md, with its
+own issue; this doc names only what the host and the viewer need of it.
+
+### 5.2a One viewer for the page
+
+**Decided (owner, 2026-11-19):** one viewer for the page, with models
+attached to it, as its own step between `EngineHost` at cap 1 and cap N
+(§7 step 8, slice 2). Why: cap N keeps a left model's scene, and today
+nothing can, because the scene belongs to a viewer that is built per open
+and per theme rebuild and disposed with it (§5.2, "What the host needs of a
+session"). The engine side of a background session is the host's; this is
+its scene side.
+
+**Today** (main @ `0af98b3e`, unchanged by #2247):
+- `Containers/viewer.js#initViewer` calls `disposeViewer()` and then builds
+  a `ShareViewer`. CadView calls it from `onModelPath`'s `initViewerCb`, on
+  every model change and on every theme change (it is the theme's change
+  listener). The `[modelPath, customViewSettings]` effect reloads the same
+  route into a fresh viewer for a Widget API view-settings change.
+- `disposeViewer` traverses the whole scene, disposes every geometry,
+  material and texture, disposes the renderer and forces context loss,
+  then `ShareViewer#dispose`, whose `ShareIfc#dispose` closes the
+  registered models' engines and aborts the tracked loads.
+- Each `ShareViewer` builds its own `ShareIfc`, whose `IfcAPI` is the
+  main-thread engine's (§2.1 rows 1–2), and its own `IfcIsolator`,
+  `Clipper` (a `MeshClipper` per `setModel`), `IfcHighlighter`, post
+  processor, `MotionAO`, ground plane and IBL environment. PlaceMark is
+  rebuilt per viewer context (#2017, `MarkerControl.jsx`).
+
+So "one viewer" is less a new viewer than a split of `ShareViewer` into
+what lives for the page and what lives for one model.
+
+#### What the viewer owns, and what a session owns
+
+| The viewer (one per page) | The session (one per open model) |
 |---|---|
-| `session.id`, stable for the open | keys the host's table and the dev hook |
-| `session.entryKey`: the OPFS entry its source is staged in, or null | `whenEntryFree`; one sync-handle lock per entry |
-| `session.engine`: its `EngineSession`, or null | close, evict, accounting; null for mesh formats and cache hits |
-| `session.format`, `session.sourceBytes` | the estimate's allowance |
-| `session.loadState`: `loading` \| `ready` \| `failed` \| `closed` | the LRU tiers |
-| `session.hasArtifact`, `session.isCapturing` | tiers 1–3 |
-| `session.rehydrateSource`: the OPFS `File`, or an in-memory upload's `File` (`inMemoryUploads`, #1906), or null | rehydrate |
-| `session.close()`: abort the load (its `AbortController`, `utils/loadAbort.js`), drop or cancel the idle GLB writer, `await host.release(this)`, then drop the scene and its state | close, and the cap-1 switch |
-| `session.onEngineEvicted({reason, tier})`, `session.onEngineRehydrated(engine)` | swapping the read model (§5.5) |
-| `session.dropScene()` | the scene tier |
-| the session owns its scene root (model object, `BatchedMesh`, instance maps, BVH), and the view can detach and re-attach it without disposing it | a background session keeps its scene |
-| **a session's load touches no module-level per-load state** | two loads at once |
+| the canvas, the renderer and its WebGL context | `session.root`: one `Group` holding everything the load added (the model object or `BatchedMesh`es, the load-preview group, its streaming batches) |
+| `ThreeContext`: the scene's top level, the camera object, camera-controls, the render loop, render-on-demand, the raycaster | `session.viewState.camera`: the camera's pose and target, saved at detach, restored at attach (the `#c:` term's content) |
+| the lights, the IBL environment, the look, the post processor, AO and `MotionAO`, the ground-plane object | the materials the look converted (`applyLookToModel` runs once per root, `root.userData.look` records which look) |
+| the `Clipper` facade | `viewState.planes`: the cut planes (the `#cp:` term's content); its `MeshClipper` is built at attach and dropped at detach |
+| the `IfcIsolator` and `IfcHighlighter` machinery, the hover picker and hover overlay, the window mouse handlers | hidden and isolated sets, display overrides, the selection and its highlight ids (#2019's per-model state) |
+| one `PlaceMark` for the page (#2017's rebinding becomes a no-op) | the notes' markers and their selection, re-placed at attach |
+| the `ResidencyControl` and `MotionResidency` UI, bound to the camera | the `ResidencyController` over `session.root` (already one per model object, #2189); its motion driver is started at attach and stopped at detach |
+| `ShareIfc`'s registry of attached models | `session.engine` (the host's), the instance maps and BVHs on its meshes, the streaming selection on `root.userData` |
 
-The last row is the one most likely to differ. in-app-model-switch.md §4.5a
-notes that loads stay one at a time because "the per-load module state (the
-load reporter, the artifact generation, the streaming selection) still
-assumes" it. #2019 lands behaviour-neutral with one live session, so it does
-not have to move those. Slice 2 below (cap N) cannot run until they are per
-session: either #2019 moves them, or slice 2 does, as its first PR.
+**The rule that makes it hold:** everything a load adds to the scene goes
+under its session's root, never into the viewer's scene directly. Today the
+loaders add to `viewer.context.getScene()` (the end-of-load add in
+CadView, the preview group in `ProgressiveLoadSession`, the mesh loaders'
+results). Under one viewer they add to `session.root`, so a background
+load's previews and batches never show in another model's view. A unit test
+pins it: after a load, the scene's children are the viewer's own objects
+and exactly one root.
+
+#### Attach, detach, rebuild, dispose
+
+- **Attach** (`viewer.attach(session)`): add `session.root` to the scene;
+  `isolator.setModel` and the highlighter over its model; build its
+  `MeshClipper` and recreate `viewState.planes`; re-apply its hidden,
+  isolated and selected sets; restore its camera, or fit to frame on its
+  first attach as today; refit the ground plane (`groundModel`); apply the
+  look if `root.userData.look` differs; start its motion-residency driver;
+  re-place its markers; `requestPaint`. The view binds to the session's
+  state (#2019).
+- **Detach** (`viewer.detach(session)`): save the camera and planes into
+  `viewState`; drop its `MeshClipper`, stop its motion driver, clear the
+  highlighter's and the hover overlay's references to it, `isolator.setModel(null)`;
+  remove `session.root` from the scene. **Nothing is disposed.**
+- **A switch.** Cap 1: detach A, `A.close()` (which now also disposes
+  A's root, below), attach B. Cap N: detach A, attach B; A keeps its root.
+  Either way the viewer, the renderer and the context stay.
+- **A theme change** sets the scene's background colour and re-applies the
+  look in place (`viewer.setBackground(color)`; `applyLook` already runs on
+  the live viewer). No viewer is built, no load is aborted, no model is
+  reloaded. in-app-model-switch.md §5.2's "a theme rebuild is not an open"
+  becomes true by construction.
+- **A view-settings change** (Widget API `customViewSettings`) is applied
+  in place by `viewer.setCustomViewSettings`, as the end of a load already
+  does (`CadView.jsx:1249`), instead of reloading the route.
+- **What close disposes, and when.** `session.close()` (synchronous, as
+  #2247 built it) detaches the root if it is attached, then disposes the
+  root's tree and nothing else: geometries (with their BVHs, and any
+  deferred BVH build cancelled, `deferredBatchedBvh.js`), materials,
+  textures, and any per-format resource a loader registered on the root
+  (below). That is `disposeViewer`'s scene traversal, moved from the whole
+  scene to one root (`disposeObjectTree(root)`). The scene tier's
+  `dropScene()` is the same call without the engine close.
+- **What viewer dispose frees, and when.** Only the page's things: the
+  renderer and its context, the environment, the post processor, the ground
+  plane, the handlers. It runs on CadView unmount (after the session host
+  has closed its sessions, `host.closeActive()`), on WebGL context loss, and
+  on the per-open path below. It never disposes a session's root.
+- **WebGL context loss.** The roots are CPU-side objects; three re-uploads
+  their buffers on the first paint after a restore. So a lost context
+  rebuilds the viewer and re-attaches the active session, keeping every
+  session's root. This replaces today's accidental recovery, in which the
+  next open built a fresh viewer anyway. If the rebuild fails, it falls back
+  to today's error path (`isWebGLUnavailableError`).
+
+#### The paths
+
+- **IFC and STEP, worker engine.** One path for both: the root holds the
+  `BatchedMesh`es and the preview group; the session holds the engine
+  (§5.2). STEP's occurrence paths and IFC's express IDs are on the instance
+  tables, under the root, so selection restore at attach needs nothing
+  format-specific.
+- **The main-thread engine keeps a viewer per open.** On that route
+  (`engineRoute.js#mainThreadEngineReason`: `?feature=disableEngineWorker`,
+  a `?view=` rule set, the in-process fallback) the engine is the viewer's
+  `ShareIfc` `IfcAPI`, which is collected only when the viewer and
+  everything else let go of it. Rather than move a per-model `IfcAPI` out of
+  the viewer, that route keeps today's per-open viewer, so the kill switch
+  stays the conservative path and `modelSwitchMemory.spec.ts`'s `IfcAPI`
+  check is unchanged. It is also cap 1 (§5.2, an in-process engine is never
+  kept in the background).
+- **Mesh loaders** (GLB, glTF, OBJ, STL, PLY, PDB, XYZ, USD, 3DM, ADF, FBX,
+  splats, volumes) have no engine. Their root is the loaded object.
+  Formats that hold more than geometry, materials and textures register a
+  dispose on `root.userData.dispose`: the splat sorter, a volume's
+  `Data3DTexture` and clip uniforms. A GLB cache hit is a mesh load with
+  IFC/STEP refs.
+
+#### How memory is checked
+
+- `modelSwitchMemory.spec.ts`'s assertion is unchanged and still the gate: a
+  closed session's model `WeakRef` is cleared after a forced GC, on both
+  form factors. It becomes harder to pass, because the viewer and its
+  helpers now outlive the model: an isolator, a clipper, a highlighter, a
+  hover-overlay cache, a ground fit, a PlaceMark or a residency driver that
+  keeps a reference to A's model is a leak that a per-open viewer used to
+  hide. #2189's retainer paths are the list to re-check.
+- **A new exact check, not a heap number:** the renderer's resource counts
+  (`renderer.info.memory.geometries` and `.textures`) after A → B equal
+  those of a fresh page showing B alone, in the same build. A root that was
+  detached but not disposed fails it.
+- On the main-thread route both are unchanged.
+
+#### Its slices (step 8 slice 2)
+
+Each is green alone. The first is behaviour neutral. The rest are behind
+`singleViewer`, off by default until its burn-in, then on with
+`disableSingleViewer` as the kill switch and the static prod rollback, read
+by one predicate, `viewer/singleViewerMode.js`, shaped like
+`spaModelNavMode.js`.
+
+- **2a. Session roots, viewer still per open (neutral).** `session.root`,
+  the loaders adding under it, `disposeObjectTree(root)` and
+  `root.userData.dispose`, and `viewer.attach` / `detach` with
+  `viewState` save and restore. A switch still builds a new viewer, then
+  attaches the new session: what users see is unchanged.
+  - *Unit:* after a load, the scene's children are the viewer's own and one
+    root (red if the preview group goes to the scene); `disposeObjectTree`
+    disposes every geometry, material and texture of a root and nothing
+    outside it; detach then attach restores the camera, planes, hidden and
+    selected sets.
+  - *E2E:* `modelSwitchMemory.spec.ts`, `markerModelSwitch.spec.ts`,
+    `openPerOpen.spec.ts`, the cut-plane and isolation specs, green
+    unchanged.
+  - *Rollback:* revert.
+- **2b. Theme and view settings in place** (under `singleViewer`). A theme
+  change and a view-settings change no longer build a viewer.
+  - *E2E:* with a model loaded, toggle the theme: the canvas element and the
+    viewer are the same objects, no engine worker closes, no "Opening model"
+    line, the clear colour is the new theme's and the look is kept. With the
+    flag off, the toggle rebuilds the viewer as today.
+  - *Rollback:* `disableSingleViewer`.
+- **2c. One viewer across switches** (under `singleViewer`, cap 1). A
+  switch detaches and closes A and attaches B into the same viewer. The
+  main-thread engine route keeps its per-open viewer.
+  - *E2E,* A → B → C: the same canvas and viewer throughout; A's and B's
+    model `WeakRef`s cleared after GC; the renderer's resource counts equal
+    a fresh page's C; C framed by its own fit, not A's camera; a cut plane
+    and an isolation made in A absent in C; C's markers only. Context loss
+    (`WEBGL_lose_context`): lose and restore, and C still draws (a pixel
+    probe) and picks. Each shown red with one detach step reverted (the
+    isolator keeping A, a root left undisposed).
+  - *Rollback:* `disableSingleViewer` (static first).
+- **2d. On by default**, after a burn-in of the whole suite with the flag
+  on, as `spaModelNav` had (in-app-model-switch.md §4.8). Cap N (slice 3)
+  needs it: `backgroundSessionsMode.js` returns `SingleModelReason.NO_SINGLE_VIEWER`
+  while one viewer is off, so `disableSingleViewer` also forces cap 1.
+
+**Not designed here:** how CadView divides between the view and the
+session, which is the CadView split plan (in-app-model-switch.md and its
+issue, from the #2019 agent). This section names the viewer's and the
+session's halves; that plan says where in CadView each call is made.
+**Meets §9:** a render worker would own the viewer half of the table above;
+the session half and the attach contract do not change.
 
 ### 5.3 Switch, background load, eviction, close
 
@@ -900,9 +1124,11 @@ session: either #2019 moves them, or slice 2 does, as its first PR.
   before B's engine is spawned. That is Phase 1a as built
   (in-app-model-switch.md §4.5a): A's load is aborted, its worker
   terminated, its state dropped. Slice 1 moves the call sites into the host
-  without changing the behaviour.
-- **Switch A → B, cap N.** `host.leave(A)` answers `background`. A keeps
-  its worker, its load and its scene; nothing is disposed. B's engine is
+  without changing the behaviour. With one viewer (§5.2a, slice 2) the
+  viewer stays: A is detached and its root disposed, and B is attached.
+- **Switch A → B, cap N.** `host.leave(A)` answers `background`, and the
+  viewer detaches A (§5.2a). A keeps its worker, its load and its scene
+  root; nothing is disposed. B's engine is
   admitted (§5.2): it spawns at once if it fits; otherwise the host opens B
   windowed, pauses background pumps, then evicts by tier. If A is still
   loading and B still does not fit, A is cancelled into an explicit,
@@ -911,7 +1137,7 @@ session: either #2019 moves them, or slice 2 does, as its first PR.
   from the OPFS-staged source, through the sidecar if its first parse
   finished and wrote one (§8 item 4), else by a re-parse. A paused-will-
   resume load does not restart on its own when memory frees; only a
-  foreground does (owner question 4). So in-app-model-switch.md §4.0's
+  foreground does (decided, owner, 2026-11-19). So in-app-model-switch.md §4.0's
   "come back to a finished load" is **a finished background load when the
   budget allows; otherwise paused — will resume**.
 - **Switch back B → A.** `host.foreground(A)`. A live A rebinds at once,
@@ -924,12 +1150,13 @@ session: either #2019 moves them, or slice 2 does, as its first PR.
 - **Background load.** A's parse and pump run in A's worker and cost the
   foreground nothing there. What would land on the main thread is
   *assembling* A's batches (builder appends, the end-of-load BVH). Decided
-  (§8 item 1): A keeps pumping, and its batches queue main-side
+  (§8 item 1, confirmed under decision 6 by the owner on 2026-11-19): A
+  keeps pumping, and its batches queue main-side
   unassembled; they are transferred buffers, so queuing costs no copy.
   They are assembled when A is foregrounded, or in idle slices before then
   (`requestIdleCallback`, one batch per slice, the same per-batch cost the
   foreground load pays). Queued bytes count against the budget, and a
-  session's queue past `BACKGROUND_QUEUE_MAX_BYTES` (proposed 256 MiB
+  session's queue past `BACKGROUND_QUEUE_MAX_BYTES` (256 MiB
   desktop, 64 MiB phone) pauses its own pump until idle slices drain it,
   so one large background load cannot fill the budget with geometry the
   user has not looked at. With a render worker, assembly moves off the main
@@ -973,7 +1200,7 @@ session: either #2019 moves them, or slice 2 does, as its first PR.
   records shows as `#id` (§7.1, #2066).
   **Eager, not lazy, in one case:** a session without an artifact
   rehydrates when it is foregrounded, because its Properties panel would
-  otherwise have nothing to read (owner question 5).
+  otherwise have nothing to read (decided, owner, 2026-11-19).
 - **Close** = abort the load (`utils/loadAbort.js`), drop or cancel the
   idle GLB writer, `await host.release(session)` (the engine's close, polite
   for a sync handle), then drop the scene and the session's state, the
@@ -1553,9 +1780,9 @@ How each step landed is in §7.1 and in the steps below.
    behaviour neutral there: the engine moves from the viewer to the model
    session, with one live session, so a switch still closes. Keeping the
    old worker on a switch, and the background batch policy (§8 item 1),
-   moved into step 8's slice 2, under `workspace` (#2011 decision 6).
+   moved into step 8's slice 3, under `workspace` (#2011 decision 6).
 8. **`EngineHost`: close, cap, eviction, rehydrate** (#2031; refreshed
-   2026-11-19, §5.2–§5.5). Five slices, in order. Each is green on its own
+   2026-11-19, §5.2–§5.5). Six slices, in order. Each is green on its own
    and either behaviour neutral or behind `workspace` with
    `disableBackgroundSessions` as its kill switch. Every E2E below is
    `describeMobileAndDesktop`, Chromium (CDP), and asserts what was
@@ -1590,7 +1817,20 @@ How each step landed is in §7.1 and in the steps below.
         open, and A's and B's model `WeakRef`s cleared.
       - *Rollback:* revert the PR. It changes no behaviour, so the
         Phase 1a rollback (`disableSpaModelNav`) covers a regression in it.
-   2. **Cap N under `workspace`, with the kill switch.** The predicate
+   2. **One viewer for the page** (§5.2a; decided by the owner,
+      2026-11-19). The scene becomes the session's (`session.root`), the
+      viewer lives for the page, and a theme or view-settings change no
+      longer rebuilds it. Four sub-slices, each green alone, at cap 1
+      throughout: 2a session roots with the viewer still per open
+      (behaviour neutral); 2b theme and view settings in place; 2c one
+      viewer across switches; 2d on by default. 2b–2c are behind
+      `singleViewer`, with `disableSingleViewer` as the kill switch and
+      static prod rollback (`viewer/singleViewerMode.js`). Their tests and
+      rollbacks are in §5.2a, "Its slices". The memory gate stays
+      `modelSwitchMemory.spec.ts`'s cleared `WeakRef`, plus the renderer's
+      resource counts equal to a fresh page's. The main-thread engine route
+      keeps a viewer per open.
+   3. **Cap N under `workspace`, with the kill switch.** The predicate
       goes live; `host.leave` answers `background` under it. Background
       loads keep pumping; batches queue and are assembled on foreground or
       in idle slices; the per-session queue cap; admission with the live
@@ -1599,9 +1839,19 @@ How each step landed is in §7.1 and in the steps below.
       budget, the LRU background session is closed, not evicted**: the
       scene drops with the engine, so nothing needs a rehydrate yet, and an
       over-cap session reopens through its GLB cache hit. Selection restore
-      on return (#2019's deferred acceptance). First, if #2019 has not done
-      it, the per-load module state becomes per session (§5.2, the last row
-      of "What the host assumes").
+      on return (#2019's deferred acceptance). **Prerequisites**, each its
+      own PR ahead of the flag (§5.2, "What the host needs of a session"):
+      - slice 2 on by default, since `NO_SINGLE_VIEWER` keeps cap 1 while it
+        is off;
+      - the four pieces of module-level per-load state #2247 lists, made
+        the session's: the load reporter (`loadProgress.js`'s
+        `activeReporter`, `loadSerial`, report lines and stall watchdog), the
+        artifact generation (`glbArtifactPublish.js`), the streaming
+        selection (`streamingBatchPick.js`, moved from the viewer's
+        `scene.userData` to `session.root.userData`), and the GLB writer's
+        in-flight owner (`Loader.js#cacheWriteOwner`);
+      - a background session's own copy of `modelStateDefaults()`, pushed
+        to the store when the view rebinds.
       - *Unit (`EngineHost.test.js`, a fake `EngineSession`):* cap N keeps
         A on a switch; the fourth model closes the least recently
         foregrounded by tier; the active session is never chosen, even
@@ -1631,7 +1881,7 @@ How each step landed is in §7.1 and in the steps below.
       - *Rollback:* `disableBackgroundSessions` `isActive: true` in
         `FeatureFlags.js` (the static read beats every URL); one session:
         `?feature=disableBackgroundSessions`. Both leave the drawer.
-   3. **Eviction keeps the session; lazy index-only rehydrate.** Past the
+   4. **Eviction keeps the session; lazy index-only rehydrate.** Past the
       budget, tiers 1–3 are evicted (`terminate()`, the scene kept, the
       read model swapped to the artifact's) and tier 4 goes to "paused —
       will resume"; past the count, the LRU session becomes dormant (the
@@ -1653,14 +1903,14 @@ How each step landed is in §7.1 and in the steps below.
       - *E2E, paused — will resume:* a budget too low for A's background
         load: A's worker closes, A's session reads paused — will resume, and
         foregrounding A completes it from the sidecar or a re-parse.
-      - *Rollback:* as slice 2; and one session can keep slice 2's
+      - *Rollback:* as slice 3; and one session can keep slice 3's
         close-past-cap with `?feature=disableSessionEviction`, for a bug
         that looks like an evicted model answering wrong.
-   4. **The ProjectsDrawer shows the states** (#2011 Phase 1b step 3; not
+   5. **The ProjectsDrawer shows the states** (#2011 Phase 1b step 3; not
       #2031's, listed for the order): live, loading, paused, paused — will
       resume, evicted, dormant, failed; and the drawer's close. The E2Es of
-      slices 2–3 move from the dev hook to the drawer.
-   5. **Budget tuning.** Re-fit the estimate's constants and confirm the
+      slices 3–4 move from the dev hook to the drawer.
+   6. **Budget tuning.** Re-fit the estimate's constants and confirm the
       defaults, with the bench (`tools/bench/sourceModes/`), which already
       records every input except two: (a) two and three engines loading at
       once in one page (not measured, §10), and (b) the main-side scene's
@@ -2002,22 +2252,45 @@ These were the open questions of the scope. The user decided each one.
    numbers.
 
 
-### 8.1 Since 2026-11-03
+### 8.1 Since 2026-11-03 (owner, 2026-11-19)
 
-- **#2011 decision 6 (owner, 2026-11-19)** narrows items 1–3 to
-  `?feature=workspace`. Outside it the host holds one live model and a
-  switch is a close; `disableBackgroundSessions` forces that under
-  `workspace` too (§5.2, "The cap: one predicate").
+- **#2011 decision 6** narrows items 1–3 to `?feature=workspace`. Outside it
+  the host holds one live model and a switch is a close;
+  `disableBackgroundSessions` forces that under `workspace` too (§5.2, "The
+  cap: one predicate").
 - **Item 2's estimate is re-fitted** to the source-policy numbers: wasm plus
   a held-source term the worker reports, plus a per-format JS allowance (IFC
   0.6, STEP 3.0 per source byte) instead of one 1.9 (§5.2, "The estimate").
-  Provisional until slice 5.
-- **Proposed, for the owner** (the PR that refreshed this section lists
-  them with recommendations): phones at 2 live engines and at most 1 GiB
-  under `workspace`; scenes bounded by the same count, with a dormant tier
-  past it; a cancelled background load resuming only on foreground; eager
-  rehydrate for a session without an artifact; an in-process engine always
-  closed on a switch.
+  The constants are provisional until slice 6; the defaults below are
+  settled.
+
+The seven questions of the design pass (#2244), each answered yes by the
+owner on 2026-11-19:
+
+1. **Phones under `workspace`: 2 live engines, at most 1 GiB**, even where
+   `deviceMemory` reports more (§5.2, "Caps and budget").
+2. **Desktop: 3 live engines, ½ `deviceMemory` up to 4 GiB** (4 GiB where it
+   is absent), kept until slice 6 measures.
+3. **Scenes are kept for as many sessions as there are live engines** (3 on
+   desktop, 2 on phones); a session past that is dormant: its scene is
+   dropped and it comes back through its GLB cache hit (§5.3, "The scene
+   tier").
+4. **A background load cancelled to "paused — will resume" resumes only
+   when foregrounded**, never on its own when memory frees (§5.3).
+5. **Rehydrate is lazy**, on the first read the artifact cannot answer,
+   **and eager on foreground for a session without an artifact** (§5.3).
+6. **A background parse keeps pumping** (item 1 (b), confirmed under
+   decision 6), with idle-slice assembly and a per-session queue cap of
+   256 MiB on desktop and 64 MiB on phones that pauses its own pump (§5.3).
+7. **An in-process engine is always closed on a switch**, under `workspace`
+   too (§5.2).
+
+Also decided that day:
+
+8. **One viewer for the page** (§5.2a), as its own slice (§7 step 8 slice 2)
+   between `EngineHost` at cap 1 and cap N. #2247 found the scene is the
+   viewer's, built per open and per theme rebuild, so no session could keep
+   one.
 
 ## 9. Where this meets OffscreenCanvas rendering
 
