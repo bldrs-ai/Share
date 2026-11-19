@@ -37,12 +37,25 @@ describe('applyEvent: the task chip\'s record', () => {
       [result('b', 'Found 10 elements'), at(75)],
     ])
     expect(messages).toHaveLength(1)
-    expect(messages[0]).toMatchObject({kind: 'tasks', turn: 'turn-1', startedAt: T0, starts: {}})
+    expect(messages[0]).toMatchObject({kind: 'tasks', turn: 'turn-1', startedAt: T0})
     expect(messages[0].endedAt).toBeUndefined()
     expect(messages[0].tasks.map(({line, startedAt, endedAt}) => [line, startedAt, endedAt])).toEqual([
       ['Read the spatial structure', at(2), at(72)],
       ['Found 10 elements', at(72), at(75)],
     ])
+  })
+
+  it('adds a task as running at its tool-call, and the result turns it into the echo', () => {
+    const running = fold([[call('a'), at(2)]])
+    expect(running[0].tasks).toEqual([expect.objectContaining({line: 'Finding elements…', running: true, startedAt: at(2)})])
+    const done = applyEvent(running, result('a', 'Found 10 elements'), 'turn-1', 'OpenRouter', {now: at(5)})
+    expect(done[0].tasks).toHaveLength(1)
+    expect(done[0].tasks[0]).toMatchObject({line: 'Found 10 elements', running: false, startedAt: at(2), endedAt: at(5)})
+  })
+
+  it('names an unlisted tool generically while it runs', () => {
+    const [chip] = fold([[{...call('a'), name: 'x.thing'}, T0]])
+    expect(chip.tasks[0].line).toBe('Running x.thing…')
   })
 
   it('keeps the chip where its first task landed, and adds later tasks to it after text', () => {
@@ -58,6 +71,19 @@ describe('applyEvent: the task chip\'s record', () => {
   it('words a failed task as before, and marks it not ok', () => {
     const [chip] = fold([[result('a', undefined, {ok: false, error: {code: 'boom', message: 'x'}}), T0]])
     expect(chip.tasks[0]).toMatchObject({line: 'model.query failed', ok: false})
+  })
+})
+
+
+describe('TaskChip, while a task runs', () => {
+  it('shows the running label and a progress mark, with no duration', () => {
+    const message = fold([[call('a'), at(1)]])[0]
+    render(<TaskChip message={message} undoTop={null} undoPending={false} onUndo={jest.fn()}/>, {wrapper: ThemeCtx})
+    expect(screen.getByText('Finding elements…')).toBeInTheDocument()
+    expect(screen.getByTestId('BotChat-TaskRunning')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', {name: 'Steps'}))
+    expect(screen.getByTestId('BotChat-TasksCount')).toHaveTextContent('1 command')
+    expect(screen.queryByTestId('BotChat-TaskDuration')).toBeNull()
   })
 })
 

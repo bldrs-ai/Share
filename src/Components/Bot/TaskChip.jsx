@@ -1,5 +1,5 @@
 import React, {ReactElement, useId, useState} from 'react'
-import {Box, Button, Typography, useTheme} from '@mui/material'
+import {Box, Button, CircularProgress, Typography, useTheme} from '@mui/material'
 import {ChevronRight, ExpandMore} from '@mui/icons-material'
 import {formatClock, formatDuration, formatFullTime} from './taskTimes'
 
@@ -71,7 +71,7 @@ function TimeButton({ms, suffix = '', testId}) {
  * One tool step's task chip for a whole assistant turn: the viewer actions
  * and reads it ran, in one line instead of a stack.
  *
- * Compact: the latest task, its Undo if it has one, and when the turn is
+ * Compact: the latest task (running or done), its Undo if it has one, and when the turn is
  * done, `(start, total duration)`. Expanded: the count and start time, every
  * task with its own duration, and the end time once the turn is done. The
  * list grows as the turn runs.
@@ -121,7 +121,8 @@ export default function TaskChip({message, undoTop, undoPending, onUndo}) {
       >
         {task.line}
       </Typography>
-      {showDuration && (
+      {task.running && <CircularProgress size={10} thickness={6} aria-hidden='true' data-testid='BotChat-TaskRunning'/>}
+      {showDuration && !task.running && (
         <Typography variant='caption' sx={{color: theme.palette.text.disabled}} data-testid='BotChat-TaskDuration'>
           ({formatDuration(task.endedAt - task.startedAt)})
         </Typography>

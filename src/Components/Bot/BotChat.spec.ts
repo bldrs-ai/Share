@@ -130,12 +130,15 @@ describeMobileAndDesktop('Assistant', (ff) => {
     const reply = page.getByTestId('BotChat-Reply')
     await expect(reply.locator('strong')).toHaveText('Project')
     await expect(reply.getByRole('listitem')).toHaveText(['first item', 'second item'])
-    await expect(reply.locator('code')).toHaveText('view.select')
+    await expect(reply.locator('code').first()).toHaveText('view.select')
+    // GFM loads as its own chunk (remarkGfmEntry.js); the table arrives with it.
+    await expect(reply.locator('th')).toHaveText(['Tool', 'Does'])
     // None of the markers survive into the text the user reads.
     const shown = await reply.innerText()
     expect(shown).not.toContain('**')
     expect(shown).not.toContain('`')
     expect(shown).not.toContain('- first')
+    expect(shown).not.toContain('|---')
     // The user's own words stay plain.
     await expect(page.getByText(SCRIPT.markdownPrompt)).toBeVisible()
   })
@@ -145,9 +148,25 @@ describeMobileAndDesktop('Assistant', (ff) => {
   // form with the zone, and the chip fits the narrow drawer.
   test('shows a turn\'s steps as one chip with durations and toggleable times', async ({page}) => {
     await openAssistant(page)
+    // The running state lasts as long as a tool does, a few ms here, so
+    // watch the DOM for it rather than poll: the call's label is on screen,
+    // with its progress mark, before the result replaces it.
+    await page.evaluate(() => {
+      const seen: string[] = []
+      ;(window as unknown as {__seenRunning: string[]}).__seenRunning = seen
+      new MutationObserver(() => {
+        const running = document.querySelector('[data-testid="BotChat-TaskRunning"]')
+        if (running) {
+          seen.push(running.parentElement?.textContent ?? '')
+        }
+      }).observe(document.body, {childList: true, subtree: true})
+    })
     await page.getByRole('textbox', {name: 'Message the assistant'}).fill(SCRIPT.selectPrompt)
     await page.keyboard.press('Enter')
     await expect(page.getByText(SCRIPT.selectedAnswer(PROXY_COUNT))).toBeVisible()
+    const seenRunning = await page.evaluate(() => (window as unknown as {__seenRunning: string[]}).__seenRunning)
+    expect(seenRunning).toContain('Finding elements…')
+    await expect(page.getByTestId('BotChat-TaskRunning')).toHaveCount(0)
 
     const chip = page.getByTestId('BotChat-Tasks')
     const actions = chip.getByTestId('BotChat-Action')

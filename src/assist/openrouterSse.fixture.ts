@@ -144,7 +144,8 @@ export const SCRIPT = {
   longDelayMs: 100,
   /** A prompt containing this gets a Markdown reply, streamed in pieces. */
   markdownPrompt: 'answer in markdown',
-  markdownReply: '**Project**: Bldrs\n\n- first item\n- second item\n\nTry `view.select` next.',
+  markdownReply: '**Project**: Bldrs\n\n- first item\n- second item\n\nTry `view.select` next.\n\n' +
+    '| Tool | Does |\n|------|------|\n| view.select | selects |',
   /** Any other prompt gets this, as the old bot mock did. */
   fallback: 'Test received.',
   queryType: 'IfcBuildingElementProxy',

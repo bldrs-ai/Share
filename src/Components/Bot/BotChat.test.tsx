@@ -61,8 +61,8 @@ jest.mock('../../viewer/tools/assistRuntime', () => ({
 // Share's registry needs a loaded model, which jsdom has none of. These
 // tests swap in a small registry with the same tool names, over a fake view,
 // and keep everything else of createShareAssist.
-const mockView: {selected: string[], undos: number, holdUndo: Promise<void> | null} =
-  {selected: ['e9'], undos: 0, holdUndo: null}
+const mockView: {selected: string[], undos: number, holdUndo: Promise<void> | null, holdQuery: Promise<void> | null} =
+  {selected: ['e9'], undos: 0, holdUndo: null, holdQuery: null}
 jest.mock('../../viewer/tools/assistHost', () => {
   const actual = jest.requireActual('../../viewer/tools/assistHost')
   return {
@@ -107,7 +107,8 @@ function mockModelTools() {
     tools: () => [{
       name: 'model.query', description: 'Find.', annotations: {readOnly: true},
       inputSchema: {type: 'object', properties: {ifcType: {type: 'string'}}, additionalProperties: false},
-      run: () => Promise.resolve({content: {total: 2, items: [{ref: 'e1'}, {ref: 'e2'}]}, echo: 'Found 2 elements'}),
+      run: () => (mockView.holdQuery ?? Promise.resolve()).then(() =>
+        ({content: {total: 2, items: [{ref: 'e1'}, {ref: 'e2'}]}, echo: 'Found 2 elements'})),
     }],
   }
 }
@@ -153,6 +154,7 @@ describe('BotChat', () => {
     mockView.selected = ['e9']
     mockView.undos = 0
     mockView.holdUndo = null
+    mockView.holdQuery = null
     Object.assign(mockControl, {runtimeFails: false, runtimeDelayMs: 0, startThrows: false, labelThrows: false})
     jest.mocked(reportAssistCondition).mockClear()
     mockAuth.isAuthenticated = false
@@ -209,6 +211,31 @@ describe('BotChat', () => {
     expect(mockView.selected).toEqual(['e9'])
     expect(mockView.undos).toBe(1)
     expect(within(actions[1]).queryByTestId('BotChat-UndoButton')).toBeNull()
+  })
+
+  it('shows the running task while its tool runs, then replaces it with the result and its duration', async () => {
+    let release = () => undefined
+    mockView.holdQuery = new Promise((resolve) => {
+      release = resolve
+    })
+    render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+    send(SCRIPT.selectPrompt)
+    // The call has been made and not answered: its label and a progress mark, no duration, no Undo.
+    const running = await screen.findByText('Finding elements…')
+    expect(within(screen.getByTestId('BotChat-Tasks')).getByTestId('BotChat-TaskRunning')).toBeInTheDocument()
+    expect(screen.getAllByTestId('BotChat-Action')).toHaveLength(1)
+    expect(screen.queryByText('Found 2 elements')).toBeNull()
+    expect(screen.queryByTestId('BotChat-UndoButton')).toBeNull()
+    expect(screen.queryByTestId('BotChat-TasksStart')).toBeNull()
+
+    await act(() => Promise.resolve(release()))
+    // Compact follows the latest task: the select's result replaces the read.
+    expect(await screen.findByText(SCRIPT.selectedAnswer(2), {exact: false})).toBeInTheDocument()
+    expect(running).not.toBeInTheDocument()
+    expect(screen.queryByTestId('BotChat-TaskRunning')).toBeNull()
+    fireEvent.click(screen.getByRole('button', {name: 'Steps'}))
+    expect(screen.getAllByTestId('BotChat-Action').map((a) => a.textContent)).toEqual([
+      expect.stringMatching(/^Found 2 elements\(\d+s\)$/), expect.stringMatching(/^Selected 2 elements\(\d+s\)Undo$/)])
   })
 
   it('shows the chip\'s times once the turn is done, and a click swaps a time to its full form', async () => {

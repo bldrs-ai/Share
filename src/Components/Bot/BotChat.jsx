@@ -44,6 +44,7 @@ import {
   noteAssistAuth,
 } from './assistState'
 import {reportAssistCondition} from './reportAssistCondition'
+import {runningLabel} from './taskLabels'
 import 'react-chat-elements/dist/main.css'
 import './chat-bubbles.css'
 
@@ -246,8 +247,10 @@ export default function BotChat() {
             return {...message, live: false}
           }
           // The turn is over however it ended, so its chip gets its end time.
+          // A call still running never came back (a stop): it has nothing
+          // to report, so it goes.
           return message.kind === 'tasks' && message.turn === turn && message.endedAt === undefined ?
-            {...message, endedAt: Date.now()} : message
+            {...message, endedAt: Date.now(), tasks: message.tasks.filter((task) => !task.running)} : message
         }),
       }))
     }
@@ -516,9 +519,10 @@ let building = null
  * - Text streams into the turn's live assistant bubble, and a new bubble
  *   starts after the task chip, so the reply reads in the order it happened.
  * - A turn's tool calls are one 'tasks' message (the chip), made where the
- *   turn's first tool result lands and added to as later ones come, even
- *   after text that came in between. Each task is the tool's echo, or what
- *   went wrong; a call declined for approval says so (#1675).
+ *   turn's first tool call lands and added to as later ones come, even
+ *   after text that came in between. A task is running from its `tool-call`
+ *   (a label from taskLabels.js), then the tool's echo, or what went wrong;
+ *   a call declined for approval says so (#1675).
  * - Times, from `now`: a task runs from its `tool-call` event to its
  *   `tool-result`; the turn from `turnStartedAt` to the chip's `endedAt`,
  *   which the send sets when the turn ends. They are when the panel saw the
@@ -547,19 +551,22 @@ export function applyEvent(messages, event, turn, provider, times = {}) {
       }
       return [...messages, {id: uuid(), kind: 'assistant', text: event.text, live: true, turn}]
     case 'tool-call': {
-      // Held on the chip until the result arrives: a call shows as a task
-      // only once it has an echo to say.
+      // Shown at once as a running task, so a long read isn't silent. Its
+      // result replaces the label with the tool's echo.
       const chip = chatIndex >= 0 ? messages[chatIndex] : newTasksMessage(turn, times.turnStartedAt ?? now)
-      const next = {...chip, starts: {...chip.starts, [event.callId]: now}}
-      return chatIndex >= 0 ? messages.map((message, i) => (i === chatIndex ? next : message)) : [...messages, next]
+      const task = {callId: event.callId, stepId: event.stepId, name: event.name, line: runningLabel(event.name),
+        running: true, ok: true, undoable: false, startedAt: now}
+      return withChip(messages, chatIndex, {...chip, tasks: [...chip.tasks, task]})
     }
     case 'tool-result': {
       const chip = chatIndex >= 0 ? messages[chatIndex] : newTasksMessage(turn, times.turnStartedAt ?? now)
-      const {[event.callId]: startedAt = now, ...starts} = chip.starts
-      const task = {callId: event.callId, stepId: event.stepId, line: actionText(event), ok: event.ok,
-        undoable: event.undoable, startedAt, endedAt: now}
-      const next = {...chip, starts, tasks: [...chip.tasks, task]}
-      return chatIndex >= 0 ? messages.map((message, i) => (i === chatIndex ? next : message)) : [...messages, next]
+      const done = {stepId: event.stepId, line: actionText(event), running: false, ok: event.ok,
+        undoable: event.undoable, endedAt: now}
+      const known = chip.tasks.some((task) => task.callId === event.callId)
+      const tasks = known ?
+        chip.tasks.map((task) => (task.callId === event.callId ? {...task, ...done} : task)) :
+        [...chip.tasks, {callId: event.callId, name: event.name, startedAt: now, ...done}]
+      return withChip(messages, chatIndex, {...chip, tasks})
     }
     case 'error':
       return [...messages, errorMessage(event.code, provider, event.status, event.tier)]
@@ -577,7 +584,18 @@ export function applyEvent(messages, event, turn, provider, times = {}) {
  * @return {object} an empty chip for the turn, still running (no `endedAt`)
  */
 function newTasksMessage(turn, startedAt) {
-  return {id: uuid(), kind: 'tasks', turn, startedAt, starts: {}, tasks: []}
+  return {id: uuid(), kind: 'tasks', turn, startedAt, tasks: []}
+}
+
+
+/**
+ * @param {Array<object>} messages
+ * @param {number} index the chip's place, or -1 if it is new
+ * @param {object} chip
+ * @return {Array<object>} the list with the chip replaced, or added at the end
+ */
+function withChip(messages, index, chip) {
+  return index >= 0 ? messages.map((message, i) => (i === index ? chip : message)) : [...messages, chip]
 }
 
 

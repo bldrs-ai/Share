@@ -1,7 +1,7 @@
-import React, {ReactElement} from 'react'
+import React, {ReactElement, useEffect, useState} from 'react'
 import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import {Box, Link} from '@mui/material'
+import {loadMarkdownGfm} from './markdownGfm'
 
 
 /**
@@ -51,6 +51,26 @@ function ScrollTable({node, ...props}) {
 
 
 /**
+ * The GFM plugin, once loaded; null until then, and if it can't be fetched.
+ * Until it is, replies render as plain Markdown (a table shows as its pipes),
+ * and re-render with it when it arrives.
+ *
+ * @return {?Function} the plugin
+ */
+function useGfm() {
+  const [plugin, setPlugin] = useState(null)
+  useEffect(() => {
+    let isCurrent = true
+    loadMarkdownGfm().then((loaded) => isCurrent && setPlugin(() => loaded), () => undefined)
+    return () => {
+      isCurrent = false
+    }
+  }, [])
+  return plugin
+}
+
+
+/**
  * An assistant reply as Markdown (#assist-310). The text can be steered by a
  * model file's contents as much as by the model, so it is rendered as
  * untrusted: react-markdown builds React elements, never HTML strings, and
@@ -65,6 +85,7 @@ function ScrollTable({node, ...props}) {
  * @return {ReactElement}
  */
 export default function AssistantMarkdown({text}) {
+  const gfm = useGfm()
   return (
     <Box
       sx={{
@@ -104,7 +125,7 @@ export default function AssistantMarkdown({text}) {
       }}
     >
       <Markdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={gfm ? [gfm] : []}
         skipHtml
         disallowedElements={['img']}
         transformLinkUri={allowedLinkUri}
