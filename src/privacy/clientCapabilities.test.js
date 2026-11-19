@@ -106,6 +106,16 @@ describe('privacy/clientCapabilities', () => {
     }
   })
 
+  // A condition that isn't about blocking skips the bait (and its settle
+  // time): its blocker is `none`.
+  it('reports webgl_unavailable without the bait check', async () => {
+    const schedule = jest.fn()
+    const report = await capabilityReport('webgl_unavailable', {doc: document, nav: {userAgent: UA.chrome, onLine: true}, consent: true, schedule})
+    expect(report).toEqual({condition: 'webgl_unavailable', browser: 'chrome', blocker: 'none', form_factor: 'desktop', consent: 'on'})
+    expect(schedule).not.toHaveBeenCalled()
+    expect(parseCapabilityReport(JSON.stringify(report))).toEqual(report)
+  })
+
   describe('reportClientCapability', () => {
     /** @return {object} a navigator whose beacon records what it was given */
     function beaconNav() {

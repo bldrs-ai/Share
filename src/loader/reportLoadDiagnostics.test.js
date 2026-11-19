@@ -6,7 +6,10 @@ import {
   reportBvhDepthCapToGa,
   reportEngineSourceBuffered,
   reportEngineSourceFallback,
+  reportLoadDiagnosticsToGa,
+  reportLoadStallRecovered,
   reportPreviewUnitsSkipped,
+  schemaParam,
   sizeClass,
   skippedBucket,
 } from './reportLoadDiagnostics'
@@ -125,6 +128,61 @@ describe('loader/reportLoadDiagnostics', () => {
       expect([1, 100, 101, 1000, 1001, 10000, 10001].map(leafBucket)).toEqual([
         '<=100', '<=100', '101-1000', '101-1000', '1001-10000', '1001-10000', '>10000',
       ])
+    })
+  })
+
+
+  // SHARE-1MV / SHARE-1MZ: authoring defects and nothing-to-draw loads.
+  describe('reportLoadDiagnosticsToGa', () => {
+    it('sends exactly the closed-set fields, with the size bucketed', () => {
+      reportLoadDiagnosticsToGa({
+        outcome: 'displayed', defect: 'no_units', format: 'ifc',
+        authoringTool: 'Revit', schema: 'ifc2x3', sizeBytes: 20 * MIB,
+      })
+      expect(gtagEvent.mock.calls).toEqual([['load_diagnostics', {
+        outcome: 'displayed', defect: 'no_units', format: 'ifc',
+        authoring_tool: 'Revit', schema: 'IFC2X3', size_class: '10-100MB',
+      }]])
+    })
+
+    it('says unknown for a missing tool, schema or size', () => {
+      reportLoadDiagnosticsToGa({outcome: 'no_geometry', defect: 'none', format: 'step'})
+      expect(gtagEvent.mock.calls[0][1]).toEqual(expect.objectContaining({
+        authoring_tool: 'unknown', schema: 'unknown', size_class: '<10MB',
+      }))
+    })
+
+    // The schema is header text: only a known schema or AP family passes.
+    it.each([
+      ['CONFIG_CONTROL_DESIGN', 'CONFIG_CONTROL_DESIGN'],
+      ['IFC4X3_ADD2', 'IFC4X3_ADD2'],
+      // IFC4's addenda, as real exporters write them (codex on #2235).
+      ['IFC4_ADD2_TC1', 'IFC4_ADD2_TC1'],
+      ['IFC4_ADD1', 'IFC4_ADD1'],
+      ['ifc2x3', 'IFC2X3'],
+      ['AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }', 'AUTOMOTIVE_DESIGN'],
+      ['AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF', 'AP242'],
+      ['GLB', 'GLB'],
+      // A plain identifier is not enough (codex on #2235).
+      ['CLIENT_ACME_TOWER', 'other'],
+      ['\\\\fileserver\\projects\\plan', 'other'],
+      ['', 'unknown'],
+    ])('passes schema %s as %s', (schema, expected) => {
+      expect(schemaParam(schema)).toBe(expected)
+    })
+  })
+
+
+  // SHARE-1HJ: a stall the load came back from.
+  describe('reportLoadStallRecovered', () => {
+    it('sends exactly phase, format and size class', () => {
+      reportLoadStallRecovered({phase: 'geometry', format: 'step', sizeBytes: 200 * MIB})
+      expect(gtagEvent.mock.calls).toEqual([['load_stall_recovered', {phase: 'geometry', format: 'step', size_class: '100MB-1GB'}]])
+    })
+
+    it('keeps anything but a plain phase name out', () => {
+      reportLoadStallRecovered({phase: 'geometry: /private/model.ifc', format: 'ifc'})
+      expect(gtagEvent.mock.calls[0][1].phase).toBe('other')
     })
   })
 })

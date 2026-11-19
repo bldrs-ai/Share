@@ -14,7 +14,7 @@ import {version as shareVersion} from '../../package.json'
 import {LoadLogAccumulator, formatMb} from '@bldrs-ai/conway/src/core/progress_log'
 import {nonIdentifyingLoadContext} from './loadCaptureContext'
 import {SENTRY_MODEL_LINE_PREFIX, redactConsoleMessage, sentrySafeMessageOf} from '../privacy/sentryRedaction'
-import {reportBvhDepthCapToGa} from './reportLoadDiagnostics'
+import {reportBvhDepthCapToGa, reportLoadDiagnosticsToGa, reportLoadStallRecovered} from './reportLoadDiagnostics'
 // Conway's static Logger, for the data-defect marker (conway#712) on the
 // entries it logs — see installDefectProxy. This is the SAME module instance
 // the engine logs through: `@bldrs-ai/conway/web-ifc` (ShareIfc's import)
@@ -62,6 +62,20 @@ const BYTES_PER_MB = 1024 * 1024 // eslint-disable-line no-magic-numbers
  * that a single opaque wasm call (one heavy product) rarely trips it.
  */
 export const STALL_TIMEOUT_MS = 30_000
+
+/**
+ * Silence this long → the load is hung, and that reaches Sentry. The 30 s
+ * stall above is only the UI's cue: one heavy STEP product or IFC boolean can
+ * take that long in a single wasm call and then finish, and reporting it at
+ * 30 s filled SHARE-1HJ (916 events, 180 users) with loads that went on to
+ * open. A stall that recovers is counted in GA instead (load_stall_recovered,
+ * reportLoadDiagnostics.js); one that ends in a failure is CadView's
+ * captureException, tagged `load.stalled`.
+ */
+export const HANG_TIMEOUT_MS = 180_000
+
+/** The Sentry message for a hung load. Not "stalled": that title is SHARE-1HJ's 30 s report. */
+export const LOAD_HUNG_MESSAGE = 'Model load hung'
 
 let activeReporter = null
 // Incremented by every beginLoadProgress, so a caller can tell whether a
@@ -151,7 +165,14 @@ class LoadProgressReporter {
     this.lastBreadcrumbTime = 0
     this.lastStatusLineTime = 0
     this.stallTimer = null
+    // Armed by a stall and cleared by the next progress event: fires only on
+    // HANG_TIMEOUT_MS of unbroken silence.
+    this.hangTimer = null
     this.stallReported = false
+    // The phase of this load's first stall, or undefined when it never
+    // stalled: what the GA recovery event and the failure tag go by.
+    this.stallPhase = undefined
+    this.stallRecoveryReported = false
     this.startTime = Date.now()
     this.fileSize = undefined
     // A GLB cache hit's artifact size, beside the source's fileSize: the
@@ -687,32 +708,71 @@ class LoadProgressReporter {
     this.stallTimer = setTimeout(() => this.handleStall(), STALL_TIMEOUT_MS)
   }
 
-  /** Cancel the pending watchdog timer, if any. */
+  /** Cancel the pending watchdog timers, if any: progress resumed, or the load ended. */
   clearStallWatchdog() {
     if (this.stallTimer !== null) {
       clearTimeout(this.stallTimer)
       this.stallTimer = null
     }
+    if (this.hangTimer !== null) {
+      clearTimeout(this.hangTimer)
+      this.hangTimer = null
+    }
   }
 
   /**
-   * The watchdog fired: tell the UI, and send one rate-limited Sentry
-   * message per load — a hung load that never throws is otherwise
-   * invisible to Sentry (issue #301 §7).
+   * The watchdog fired: tell the UI, note the stall for the load's eventual
+   * report, and start the hang clock. Nothing reaches Sentry yet: most of
+   * these loads finish (HANG_TIMEOUT_MS).
    */
   handleStall() {
+    this.stallTimer = null
     if (this.onStall) {
       this.onStall(this.lastEvent)
     }
-    if (!this.stallReported) {
-      this.stallReported = true
-      try {
-        this.applySentryLoadState()
-        captureMessage('Model load stalled', 'warning')
-      } catch (e) {
-        debug().log('loadProgress#handleStall: ', e)
-      }
+    if (this.stallPhase === undefined) {
+      this.stallPhase = typeof this.lastEvent?.phase === 'string' ? this.lastEvent.phase : 'unknown'
     }
+    this.hangTimer = setTimeout(() => this.handleHang(), HANG_TIMEOUT_MS - STALL_TIMEOUT_MS)
+  }
+
+  /**
+   * Still silent at HANG_TIMEOUT_MS: send one Sentry warning per load. A hung
+   * load that never throws is otherwise invisible to Sentry (issue #301 §7),
+   * and three minutes without a progress event is something to go fix.
+   */
+  handleHang() {
+    this.hangTimer = null
+    if (this.stallReported) {
+      return
+    }
+    this.stallReported = true
+    try {
+      this.applySentryLoadState()
+      captureMessage(LOAD_HUNG_MESSAGE, {level: 'warning', tags: {'load.stalled': 'true'}})
+    } catch (e) {
+      debug().log('loadProgress#handleHang: ', e)
+    }
+  }
+
+  /**
+   * Count a load that stalled and then finished in GA, once
+   * (reportLoadDiagnostics.js#reportLoadStallRecovered). No-op when it never
+   * stalled, or when it was already reported to Sentry as hung (one
+   * condition, one sink).
+   *
+   * @param {string} [contentType]
+   */
+  reportStallRecoveredOnce(contentType) {
+    if (this.stallPhase === undefined || this.stallReported || this.stallRecoveryReported) {
+      return
+    }
+    this.stallRecoveryReported = true
+    reportLoadStallRecovered({
+      phase: this.stallPhase,
+      format: this.modelFormat(contentType) ?? 'unknown',
+      sizeBytes: this.fileSize,
+    })
   }
 
   /**
@@ -724,6 +784,10 @@ class LoadProgressReporter {
     // Allowlisted: the raw state carries `fileInfo`, the route path or URL,
     // which names a private model's file (Share#2107).
     const {tags, contexts} = nonIdentifyingLoadContext(this.sentryLoadState())
+    // Phase only. `load.stalled` stays off the session's scope, where it
+    // would ride on every later event of the page, the next load's included
+    // (codex on #2235): the hang message and CadView's failure capture carry
+    // it per event (loadStallCaptureTags).
     setTag('load.phase', tags['load.phase'])
     setContext('load', contexts.load)
   }
@@ -738,8 +802,14 @@ class LoadProgressReporter {
   sentryLoadState() {
     const event = this.lastEvent
     const elapsedMs = Date.now() - this.startTime
+    const tags = {'load.phase': typeof event?.phase === 'string' ? event.phase : 'unknown'}
+    if (this.stallPhase !== undefined) {
+      // A load that failed after a stall: the stall is on the failure's own
+      // event, not a second one.
+      tags['load.stalled'] = 'true'
+    }
     return {
-      tags: {'load.phase': typeof event?.phase === 'string' ? event.phase : 'unknown'},
+      tags,
       contexts: {
         load: {
           phase: event?.phase,
@@ -882,9 +952,26 @@ class LoadProgressReporter {
   }
 
   /**
-   * Build and send this load's Sentry diagnostics event (issue #1767).
-   * Called only via captureLoadDiagnostics — see there for why the
-   * counts are the caller's rather than this reporter's.
+   * Report this load's diagnostics (issue #1767): engine gaps to Sentry,
+   * authoring defects and nothing-to-draw loads to GA. Called only via
+   * captureLoadDiagnostics — see there for why the counts are the caller's
+   * rather than this reporter's.
+   *
+   * The split is the Reported Conditions rule (AGENTS.md). Sentry gets what
+   * someone can go fix: geometry the engine could not build. An authoring
+   * defect ("No units defined.", "No IfcProjects found?", or anything conway
+   * marks DATA_DEFECT) is the file's own gap, and a model that read fine but
+   * has nothing to draw is a property of the input (Share#1962); both are
+   * counted in GA only (reportLoadDiagnostics.js#reportLoadDiagnosticsToGa).
+   * Until 2026-11 both went to Sentry, the defects as warnings tagged
+   * `data_defect` (Share#1863) and SHARE-1MV alone held 199 events from 123
+   * users in two weeks.
+   *
+   * So the Sentry event is titled by the most frequent diagnostic that is
+   * NOT a defect, whatever the outcome, a nothing-to-draw load included. A
+   * load whose diagnostics are all defects sends nothing to Sentry, unless
+   * it was unusable: a file with geometry that drew nothing is an error
+   * whatever the console said.
    *
    * @param {object} opts
    * @param {number} opts.errorCount the GA `stats_errorCount` for this load
@@ -894,12 +981,41 @@ class LoadProgressReporter {
    */
   captureDiagnostics({errorCount, warningCount, contentId, contentType}) {
     const summary = this.diagnosticsSummary()
-    const tags = {}
     // Severity is the load's outcome, not its noise level (ops#27 T0): a
     // model the user is looking at is a regular bug however many warnings it
     // took to get there, and only a load that produced nothing to look at is
     // a major one. This is why errorCount no longer decides the level.
     const loadOutcome = classifyLoadOutcome(this.outcomeInputs())
+    const {engineText, defectText} = this.topDiagnosticsByKind()
+    if (loadOutcome === LOAD_OUTCOMES.NO_GEOMETRY || defectText !== undefined) {
+      reportLoadDiagnosticsToGa({
+        outcome: loadOutcome,
+        defect: defectFamily(defectText),
+        format: this.modelFormat(contentType) ?? 'unknown',
+        authoringTool: this.authoringTool(),
+        schema: this.schema,
+        sizeBytes: this.fileSize,
+      })
+    }
+    // '' titles the event "Load completed with diagnostics": the counts came
+    // from the engine and the console tee caught no text to name it by.
+    // A nothing-to-draw load reaches Sentry only for an engine diagnostic:
+    // the input explains the empty build, not an engine gap it also hit
+    // (codex on #2235).
+    let sentryText
+    if (engineText !== undefined) {
+      sentryText = engineText
+    } else if (loadOutcome === LOAD_OUTCOMES.NO_GEOMETRY) {
+      sentryText = undefined
+    } else if (summary.total === 0) {
+      sentryText = ''
+    } else if (loadOutcome === LOAD_OUTCOMES.UNUSABLE) {
+      sentryText = defectText
+    }
+    if (sentryText === undefined) {
+      return
+    }
+    const tags = {}
     tags.load_outcome = loadOutcome
     // Also set on the global scope at init by index/ga.js. Re-read here
     // because this reads later: a first-ever visitor's id only resolves
@@ -942,25 +1058,19 @@ class LoadProgressReporter {
       tags.model_size_mb = Math.round(this.fileSize / BYTES_PER_MB)
     }
     // Share#1863 (ops#28 T1): lets triage filter authoring defects out of
-    // engine-gap searches. It classifies the diagnostic this event is titled
-    // and grouped by (summary.topText), not the load: a file with defects
+    // engine-gap searches. Since defects went to GA, only an unusable load
+    // whose diagnostics were all defects is titled by one. It classifies the
+    // diagnostic this event is titled and grouped by, not the load: a file with defects
     // can still hit a real engine gap, and when that gap is what dominated,
     // tagging the event would hide an engine bug behind the filter meant to
     // surface them. Independent of the load_outcome severity split above.
     // Present only when true — an absent tag already reads as "not a
     // defect", and a 'false' value on every other event is just noise.
-    if (this.isDataDefectDiagnostic(summary.topText)) {
+    if (this.isDataDefectDiagnostic(sentryText)) {
       tags.data_defect = 'true'
     }
-    captureMessage(diagnosticsTitle(summary.topText), {
-      // A file with nothing to draw is an input property, not a defect, so
-      // it stays out of the error stream like the 4.3 refusal does; the
-      // event is still sent because the chip it backs is coloured by the
-      // same counts (Share#1962).
-      level: {
-        [LOAD_OUTCOMES.UNUSABLE]: 'error',
-        [LOAD_OUTCOMES.NO_GEOMETRY]: 'info',
-      }[loadOutcome] ?? 'warning',
+    captureMessage(diagnosticsTitle(sentryText), {
+      level: loadOutcome === LOAD_OUTCOMES.UNUSABLE ? 'error' : 'warning',
       tags,
       contexts: {
         loadDiagnostics: {
@@ -991,6 +1101,32 @@ class LoadProgressReporter {
         },
       },
     })
+  }
+
+  /**
+   * The most frequent engine-gap diagnostic and the most frequent authoring
+   * defect (isDataDefectDiagnostic), each undefined when the load had none.
+   * captureDiagnostics sends the first to Sentry and the second to GA.
+   *
+   * @return {{engineText: (string|undefined), defectText: (string|undefined)}}
+   */
+  topDiagnosticsByKind() {
+    let engineText
+    let engineCount = 0
+    let defectText
+    let defectCount = 0
+    for (const [text, count] of this.diagnostics) {
+      if (this.isDataDefectDiagnostic(text)) {
+        if (count > defectCount) {
+          defectCount = count
+          defectText = text
+        }
+      } else if (count > engineCount) {
+        engineCount = count
+        engineText = text
+      }
+    }
+    return {engineText, defectText}
   }
 
   /**
@@ -1207,10 +1343,30 @@ function collapseWhitespace(text) {
  * `DATA_DEFECT` call site, and an entry here should come out once conway
  * marks it.
  */
-const DATA_DEFECT_FALLBACK_MESSAGES = new Set([
-  'No units defined.',
-  'No IfcProjects found?',
-])
+const NO_UNITS = 'No units defined.'
+const NO_PROJECTS = 'No IfcProjects found?'
+const DATA_DEFECT_FALLBACK_MESSAGES = new Set([NO_UNITS, NO_PROJECTS])
+
+
+/**
+ * A defect diagnostic as GA's closed-set `defect` param: the two fallback
+ * families by name, and `marked` for anything conway marked DATA_DEFECT.
+ * Never the text: a marked message is engine prose about the file, and GA
+ * gets structured fields only (AGENTS.md, Reported Conditions).
+ *
+ * @param {string} [text] a defect diagnostic as the console tee captured it
+ * @return {string} 'none' | 'no_units' | 'no_projects' | 'marked'
+ */
+function defectFamily(text) {
+  if (text === undefined) {
+    return 'none'
+  }
+  const base = normalizeMessageDigits(collapseWhitespace(text).split(' expressID: ')[0])
+  if (base === NO_UNITS) {
+    return 'no_units'
+  }
+  return base === NO_PROJECTS ? 'no_projects' : 'marked'
+}
 
 
 /**
@@ -1700,9 +1856,13 @@ export function attachLoadFailureContext() {
 
 
 /**
- * Send one Sentry event for a completed load that reported console or
- * engine diagnostics (issue #1767), so a dashboard model-open chip with
- * non-zero errors/warnings has a searchable counterpart to link to.
+ * Report a completed load's console or engine diagnostics (issue #1767), so
+ * a dashboard model-open chip with non-zero errors/warnings has a searchable
+ * counterpart to link to: a Sentry event for an engine gap, and a GA
+ * `load_diagnostics` event, under the same client id, for authoring defects
+ * and nothing-to-draw loads (captureDiagnostics has the split). A chip whose
+ * load had only defects therefore has no Sentry event behind it since
+ * 2026-11; its counterpart is the GA event.
  *
  * The two populations the bizdev dashboard tries to join were close to
  * disjoint before this. The counts behind each chip come from a load
@@ -1764,6 +1924,8 @@ export function captureLoadDiagnostics({
   // section"). Here, on a successful real open, so a failed load never also
   // counts it.
   activeReporter.reportBvhDepthCapOnce(contentType)
+  // Likewise a stall the load recovered from (HANG_TIMEOUT_MS).
+  activeReporter.reportStallRecoveredOnce(contentType)
   if (errorCount + warningCount === 0) {
     return
   }
@@ -1772,6 +1934,18 @@ export function captureLoadDiagnostics({
   } catch (e) {
     debug().log('loadProgress#captureLoadDiagnostics: ', e)
   }
+}
+
+
+/**
+ * `load.stalled` for one failure capture (CadView), or null when the last
+ * load never stalled. Per event, never on the scope: see
+ * LoadProgressReporter#applySentryLoadState.
+ *
+ * @return {?object} `{'load.stalled': 'true'}` or null
+ */
+export function loadStallCaptureTags() {
+  return activeReporter?.stallPhase === undefined ? null : {'load.stalled': 'true'}
 }
 
 

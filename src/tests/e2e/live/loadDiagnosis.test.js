@@ -112,6 +112,12 @@ describe('live/loadDiagnosis', () => {
       expect(describeModelNotReady({...render, hasDropzone: true, modelReady: 'false'}, []))
         .toContain('data-model-ready=false: the load itself did not finish')
     })
+
+    it('names the no-WebGL notice rather than an unfinished load', () => {
+      const text = describeModelNotReady({...render, hasDropzone: true, modelReady: 'false', bodyText: '3D view not available\n…'}, [])
+      expect(text).toContain('No WebGL')
+      expect(text).not.toContain('did not finish')
+    })
   })
 
   describe('opfsSkipReason', () => {
