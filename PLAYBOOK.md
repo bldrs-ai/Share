@@ -236,7 +236,7 @@ Now every shard does the same three things (`test-flows.yml`,
 `tools/playwrightShards.mjs`):
 
 1. **Plan.** List the whole suite (`playwright test --list --reporter=json`)
-   and pack it into 4 bins greedily, longest test first, each into the
+   and pack it into 6 bins greedily, longest test first, each into the
    lightest bin so far (ties break on test name, so every shard computes the
    same partition from the same inputs). Costs come from
    `tools/playwrightTimings.json`, seconds per test keyed by exactly the
