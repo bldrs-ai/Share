@@ -1,10 +1,10 @@
 # Multi-user sharing: provider grants and visibility for Drive and GitHub
 
-**Status:** Tracked in T4 [#2203](https://github.com/bldrs-ai/Share/issues/2203). PR1 (the interface and the Drive adapter, [#1505](https://github.com/bldrs-ai/Share/pull/1505)) is merged. PR5 (GitHub token health) shipped with the identity-decoupling work. The rest has not started.
+**Status:** Tracked in `share-t100` [#2203](https://github.com/bldrs-ai/Share/issues/2203). PR1 (the interface and the Drive adapter, [#1505](https://github.com/bldrs-ai/Share/pull/1505)) is merged. PR5 (GitHub token health) shipped with the identity-decoupling work. The rest has not started.
 **Date:** 2026-11-18
 **Owner:** Pablo
 
-Related: [`identity-decoupling-decisions.md`](./identity-decoupling-decisions.md) (GitHub as a `ConnectionProvider` peer of Drive), [`model-versioning.md`](./model-versioning.md) (`share-200`'s link resolver and version manifest). The text before this rewrite, including the PR plan, the open questions and the old comments-and-versions Stretch section (now T6 [#2204](https://github.com/bldrs-ai/Share/issues/2204)), is at [commit 8c28c7d](https://github.com/bldrs-ai/Share/blob/8c28c7db619f81dab318885715af5f26d85e0549/design/new/multi-user-sharing.md).
+Related: [`identity-decoupling-decisions.md`](./identity-decoupling-decisions.md) (GitHub as a `ConnectionProvider` peer of Drive), [`model-versioning.md`](./model-versioning.md) (`share-200`'s link resolver and version manifest). The text before this rewrite, including the PR plan, the open questions and the old comments-and-versions Stretch section (now `notes-t200` [#2204](https://github.com/bldrs-ai/Share/issues/2204)), is at [commit 8c28c7d](https://github.com/bldrs-ai/Share/blob/8c28c7db619f81dab318885715af5f26d85e0549/design/new/multi-user-sharing.md).
 
 
 ## Problem

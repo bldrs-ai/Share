@@ -675,7 +675,7 @@ describe('loader/bldrsElementProperties', () => {
         400: leaf(400),
       }
       const {mgr} = makeWindowedMgr(entities)
-      const hadScheduler = Object.hasOwn(globalThis, 'scheduler')
+      const hadScheduler = Object.prototype.hasOwnProperty.call(globalThis, 'scheduler')
       const savedScheduler = globalThis.scheduler
       const yieldSpy = jest.fn(() => Promise.resolve())
       globalThis.scheduler = {yield: yieldSpy}

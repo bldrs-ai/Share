@@ -18,6 +18,7 @@ import {ARCHIVE_ENTRY_CHOICE, ARCHIVE_UNREADABLE, noModelInArchiveAlert} from '.
 import {gtagEventWithCid} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
+import {DROP_REFUSED} from '../utils/dragAndDrop'
 import AlertDialog from './AlertDialog'
 
 
@@ -807,3 +808,30 @@ describe('AlertDialog — archives', () => {
     expect(screen.getByText(problem)).toBeInTheDocument()
   })
 })
+
+
+// SHARE-1PH, SHARE-1PS: a drop with no file in it, or several, is the user's
+// input being refused, not a defect.
+describe('AlertDialog — dropRefused alert type', () => {
+  const message = 'File upload initiated for more than 1 file'
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.getState().setAlert(null)
+    })
+  })
+
+  it('shows the message and counts it once, in analytics only', () => {
+    act(() => {
+      useStore.getState().setAlert({type: DROP_REFUSED, message})
+    })
+    render(<AlertDialog onClose={jest.fn()}/>, {wrapper: StoreRouteThemeCtx})
+    // A substring: the message shares its paragraph with the Discord footer.
+    expect(screen.getByText(/more than 1 file/)).toBeInTheDocument()
+    expect(trackAlertEvent).toHaveBeenCalledTimes(1)
+    expect(trackAlertEvent).toHaveBeenCalledWith(message)
+    expect(trackAlert).not.toHaveBeenCalled()
+  })
+})
+

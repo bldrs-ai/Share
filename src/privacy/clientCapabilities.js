@@ -147,7 +147,9 @@ export async function capabilityReport(condition, {
   return {
     condition,
     browser: browserFamily(nav),
-    blocker: await blockerKind(doc, nav, {delayMs, schedule}),
+    // Only a blocked tag is about blocking; for any other condition the bait
+    // would answer a question nobody asked, and cost its settle time.
+    blocker: condition === 'ga_blocked' ? await blockerKind(doc, nav, {delayMs, schedule}) : 'none',
     form_factor: formFactor(nav),
     consent: consent ? 'on' : 'off',
   }

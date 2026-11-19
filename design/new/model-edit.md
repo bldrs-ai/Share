@@ -1,4 +1,4 @@
-# Model edit — the create-300 substrate (Track T12)
+# Model edit — the create-300 substrate (Track `create-t300`)
 
 **Status:** L0 landing (#1915). L1–L3 planned.
 **Epics:** `create-300` (#1914), `create-310` (#1919), `create-320` (#1920).
@@ -44,10 +44,10 @@ A new verb group, **Create**, in the roadmap's 300 (Pro) band:
 | Epic | Issue | Scope |
 |---|---|---|
 | `create-300` | #1914 | Model edit substrate: L0–L3 below. |
-| `create-310` | #1919 | Agent write tools. Edit ops on the T11 tool surface; the agent writes ops, never scene code. |
+| `create-310` | #1919 | Agent write tools. Edit ops on the `apps-t300` tool surface; the agent writes ops, never scene code. |
 | `create-320` | #1920 | Generative model creation: engine selection. Research story #1921, summarised in §8. |
 
-All three belong to Track **T12 (Model edit substrate)** in roadmap §5.
+All three belong to Track **`create-t300` (Model edit substrate)** in roadmap §5.
 
 
 ## 3. Layers

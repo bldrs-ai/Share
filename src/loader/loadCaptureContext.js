@@ -16,7 +16,7 @@ const LOAD_CONTEXT_FIELDS = ['phase', 'completed', 'total', 'unit', 'elapsedMs',
 
 /**
  * A load's capture context minus anything that identifies the
- * model: `load.*` tags (phase only) and the allowlisted `load` fields.
+ * model: `load.*` tags (phase, and whether it stalled) and the allowlisted `load` fields.
  *
  * @param {{tags: object, contexts: object}} load LoadProgressReporter#sentryLoadState()
  * @return {{tags: object, contexts: object}}
@@ -24,7 +24,7 @@ const LOAD_CONTEXT_FIELDS = ['phase', 'completed', 'total', 'unit', 'elapsedMs',
 export function nonIdentifyingLoadContext(load) {
   const tags = {}
   for (const [key, value] of Object.entries(load?.tags ?? {})) {
-    if (key === 'load.phase') {
+    if (key === 'load.phase' || key === 'load.stalled') {
       tags[key] = value
     }
   }

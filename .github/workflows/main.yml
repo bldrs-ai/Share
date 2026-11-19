@@ -85,7 +85,10 @@ jobs:
     # coercion would make CI on main hinge on a documented-but-obscure corner
     # of the expression language. The clause states the intent instead.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    timeout-minutes: 10
+    # 15, not 10: build-prod + lint + test-ci (coverage) take ~10 min on a
+    # busy runner (test-ci alone ~7.5 min, 2026-11-18), so 10 cancelled
+    # runs whose every step had passed.
+    timeout-minutes: 15
     env:
       SHARE_CONFIG: dev
     runs-on: ubuntu-latest

@@ -40,6 +40,6 @@ export function engineFormatOf(loaderType) {
   if (loaderType === 'ifczip') {
     return 'ifc'
   }
-  return Object.hasOwn(PART21_FORMAT_BY_LOADER_TYPE, loaderType ?? '') ?
+  return Object.prototype.hasOwnProperty.call(PART21_FORMAT_BY_LOADER_TYPE, loaderType ?? '') ?
     PART21_FORMAT_BY_LOADER_TYPE[loaderType] : null
 }

@@ -14,17 +14,20 @@ export const flags = [
   // Mark / Summary / Download overlay; the trace stays on the page until the
   // user downloads it. Pairs with the replay page in tools/spikes/offscreen/.
   {name: 'mainThreadTrace', isActive: false},
-  // Multi-user sharing UI (Share dialog, visibility chip). Provider scaffolding
-  // ships unconditionally; this flag gates the consumer surface in PR2+.
-  // See design/new/multi-user-sharing.md.
+  // Multi-user sharing UI: the visibility chip (share-130) and the people
+  // panel (share-201). The provider scaffolding (`share-t100` PR1, #1505) ships
+  // unconditionally; nothing reads this flag until the first of those
+  // surfaces lands (`share-t100`, #2203). See design/new/multi-user-sharing.md.
   {name: 'sharing', isActive: false},
   // GitHub-as-Sources connection. The GitHubProvider, Netlify Functions and
-  // /auth/gh/callback.html ship unconditionally; this flag gates the
-  // SourcesTab "Connect GitHub" button + browse-via-connection wiring that
-  // land in identity-decoupling PR2.
+  // /auth/gh/callback.html ship unconditionally; this flag gates what
+  // identity-decoupling PR2 (#1508) added: GitHubTab's "Connect GitHub"
+  // button, browse-via-connection and the Save dialog's "Saving as" footer.
+  // It stays off until PR3 moves Save and model loads onto the connection's
+  // token (`identity-t100`, #2202; post-MVP).
   // See design/new/identity-decoupling-decisions.md.
   {name: 'githubAsSource', isActive: false},
-  // Workspace shell (conversational-CAD epic assist-300, #1657): the
+  // Workspace shell (conversational-CAD epic open-200, #1657): the
   // ProjectsDrawer (projects → models, localStorage-persisted) leftmost in
   // RootLandscape + the logo popup with marketing links. Flag-off layout
   // must stay byte-identical to today's — the merge into production chrome
@@ -86,7 +89,7 @@ export const flags = [
   // GLB runtime artifact pipeline (design/new/glb-model-sharing.md).
   // `glb` enables both the writer (post-IFC-parse cache warm-up) and the
   // reader (skip-IFC-when-GLB-cached fast path in Loader.js).
-  // Default-on as of the Phase-5 prep landing — cache-hit GLB loads
+  // Default-on: cache-hit GLB loads
   // bypass wit-three entirely (spatial tree + properties + per-element
   // picking all round-trip through BLDRS_* glTF extensions).
   {name: 'glb', isActive: true},
@@ -142,7 +145,7 @@ export const flags = [
   //     through the IFC→GLB→IFC cache automatically (GLTFExporter's
   //     `_INSTANCEID` rename + reader-side restore + capability
   //     inference + cache-hit IfcInstanceMap reconstruction).
-  // Default-on as of the Phase-5 prep landing. The Conway-direct
+  // Default-on. The Conway-direct
   // geometry assembler + per-instance picking are the production
   // rendering path; live IFC parses still run wit-three to drive the
   // FlatMesh stream (geometry is then replaced by the Conway-direct
