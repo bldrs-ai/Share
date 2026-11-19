@@ -1,16 +1,16 @@
 // ShareIfc#dispose, the engine's close path (open-205 #2011 step A, #2031):
-// a registered model's engine session is closed, and under
-// `?feature=spaModelNav` so is the engine of a load still parsing into the
-// viewer, which has no model registered yet. Off the flag that load is left
-// running, as before.
+// a registered model's engine session is closed, and under the in-app switch
+// (on by default since step F, utils/spaModelNavMode.js) so is the engine of a
+// load still parsing into the viewer, which has no model registered yet. With
+// the kill switch or the rollback on, that load is left running, as before.
 import ShareIfc from './ShareIfc'
-import {isFeatureEnabled} from '../../FeatureFlags'
+import {isSpaModelNavOn} from '../../utils/spaModelNavMode'
 
 
 jest.mock('@bldrs-ai/conway/web-ifc', () => ({
   IfcAPI: jest.fn().mockImplementation(() => ({models: new Map(), CloseModel: jest.fn()})),
 }))
-jest.mock('../../FeatureFlags', () => ({isFeatureEnabled: jest.fn()}))
+jest.mock('../../utils/spaModelNavMode', () => ({isSpaModelNavOn: jest.fn()}))
 
 
 /** @return {object} the context surface ShareIfc reads */
@@ -25,7 +25,7 @@ describe('viewer/ifc/ShareIfc#dispose', () => {
   })
 
   it('closes the engine of every registered model', () => {
-    isFeatureEnabled.mockReturnValue(false)
+    isSpaModelNavOn.mockReturnValue(false)
     const ifc = new ShareIfc(makeContext())
     const close = jest.fn()
     ifc.addIfcModel({ifcManager: {ifcAPI: {engineSession: {close}}}})
@@ -33,8 +33,8 @@ describe('viewer/ifc/ShareIfc#dispose', () => {
     expect(close).toHaveBeenCalledTimes(1)
   })
 
-  it('under spaModelNav, also gives up an engine still parsing, which has no model yet', () => {
-    isFeatureEnabled.mockImplementation((name) => name === 'spaModelNav')
+  it('under the in-app switch, also gives up an engine still parsing, which has no model yet', () => {
+    isSpaModelNavOn.mockReturnValue(true)
     const ifc = new ShareIfc(makeContext())
     const parsing = {abort: jest.fn()}
     const finished = {abort: jest.fn()}
@@ -50,8 +50,8 @@ describe('viewer/ifc/ShareIfc#dispose', () => {
     expect(ifc.engineLoads.size).toBe(0)
   })
 
-  it('off the flag, leaves an engine still parsing alone, as before', () => {
-    isFeatureEnabled.mockReturnValue(false)
+  it('with the kill switch on, leaves an engine still parsing alone, as before', () => {
+    isSpaModelNavOn.mockReturnValue(false)
     const ifc = new ShareIfc(makeContext())
     const parsing = {abort: jest.fn()}
     ifc.trackEngineLoad(parsing)
@@ -60,7 +60,7 @@ describe('viewer/ifc/ShareIfc#dispose', () => {
   })
 
   it('one load whose abort throws does not stop the others', () => {
-    isFeatureEnabled.mockImplementation((name) => name === 'spaModelNav')
+    isSpaModelNavOn.mockReturnValue(true)
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       const ifc = new ShareIfc(makeContext())

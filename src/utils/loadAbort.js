@@ -1,13 +1,14 @@
 /**
  * Cancelling a model load (open-205 #2011 Phase 1a step A).
  *
- * A model load is owned by the CadView run that started it. Under
- * `?feature=spaModelNav` an in-app switch away from a model that is still
- * loading aborts that run's `AbortController`, and the signal is handed down
- * the whole load: `Loader.js#load` (download, OPFS staging, parse),
+ * A model load is owned by the CadView run that started it. Under the
+ * in-app switch (`spaModelNav`, on by default; utils/spaModelNavMode.js) a
+ * switch away from a model that is still loading aborts that run's
+ * `AbortController`, and the signal is handed down the whole load: `Loader.js#load` (download, OPFS staging, parse),
  * `ShareIfcLoader#parse` (IFC and STEP alike) and the engine worker's load
- * (`engine/engineModelLoad.js`, which terminates the worker). Off the flag no
- * signal is passed anywhere, so every helper here is the identity.
+ * (`engine/engineModelLoad.js`, which terminates the worker). With the kill
+ * switch (`?feature=disableSpaModelNav`) or the rollback on, no signal is
+ * passed anywhere, so every helper here is the identity.
  *
  * The rule the helpers serve: a load that has been aborted unwinds at its
  * next await, and writes nothing on the way out. That keeps one load in

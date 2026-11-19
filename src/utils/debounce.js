@@ -76,7 +76,7 @@ export function currentHistoryEntryKey() {
  * Why: the write goes to whatever URL is the page's when it lands
  * (replaceHashParams reads `window.location` then), and a debounce lands
  * `waitMs` after the gesture. A Back, a Forward or an in-app open of another
- * model in that window (open-205, #2021: with `?feature=spaModelNav` they all
+ * model in that window (open-205, #2021: in-app, the default since step F, they all
  * stay in this document, and the viewer that streams is disposed only a few
  * renders after the URL has changed) made the PREVIOUS entry's camera or
  * planes the new entry's: the link to B carried A's pose, and Back to B later

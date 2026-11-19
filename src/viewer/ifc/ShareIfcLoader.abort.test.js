@@ -1,6 +1,6 @@
 /* eslint-disable require-await */
 // ShareIfcLoader#parse given up by its owner (open-205 #2011 step A): an
-// in-app switch under `?feature=spaModelNav` aborts the load's signal. A
+// in-app switch (`spaModelNav`, on by default) aborts the load's signal. A
 // worker load's engine is terminated, a main-thread one is handed the signal
 // for its pump, and either way the parse rejects as aborted with nothing
 // registered and no failure recorded. IFC and STEP take the same parse; the
