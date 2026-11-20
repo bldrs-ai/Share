@@ -18,6 +18,8 @@
  *  2. Body: JSON within MAX_BODY_BYTES, `stream: true`, messages and tools
  *     within their caps (§5 step 3). The deployed smoke probe sends `{}` and
  *     gets 400 `ai_bad_request` here, before anything touches an upstream.
+ *     Once the tier is known (3), a signed-out or free body is held to its
+ *     tier's smaller cap too (maxBodyBytesFor), refused the same way.
  *  3. Identity and tier (D5): an Auth0 Bearer → `free` or `pro` from
  *     app_metadata through the Management API (`src/quota/proStatus.js`, the
  *     one Pro definition); anything else is `anonymous`, under a relay-minted
@@ -34,9 +36,14 @@
  *  5. Reserve (D4, `_lib/aiLedger.js`): an upper bound on the request's cost
  *     (reservationMicro says why it is one) against the
  *     identity's budget, the IP bucket (anonymous), and the tier's global
- *     daily breaker (anonymous, free). A tripped breaker overflows the
- *     request to the free models rather than refusing it (§6 path 3), with
- *     `x-bldrs-ai-overflow: free_models` so the tray can say so.
+ *     daily breaker (anonymous, free). The identity and IP budgets of
+ *     anonymous and free are soft, admitted while under their limit; the
+ *     breakers and Pro are strict (bucketsFor says why). A tripped breaker
+ *     overflows the request to the free models rather than refusing it (§6
+ *     path 3), with `x-bldrs-ai-overflow: free_models` so the tray can say
+ *     so. An exhausted budget is a 402 that says when it will admit again
+ *     (`resumeAt`, body and `x-bldrs-ai-resume-at`), so the panel can pause
+ *     the turn until then.
  *  6. Stream upstream SSE through, watching for the final `usage.cost`
  *     (`_lib/aiSse.js`), then settle every hold to it. A client that hangs
  *     up doesn't stop the read: the upstream bills the whole generation
@@ -53,9 +60,10 @@
  * OpenRouter unreachable, or the connection lost after sending; a settle
  * above its reservation; a settle that still failed after its retries
  * (`settle_failed`, with a reconciliation record left in the ledger); the
- * ledger unavailable. An exhausted budget,
+ * ledger unavailable. An exhausted budget, a body past its tier's cap,
  * the concurrency cap and a busy free pool are expected and go to the user
- * only (the client sends `quota_limit_reached` to GA for the first).
+ * only (the client sends `quota_limit_reached` to GA for the first). A soft
+ * budget settling past its limit is the designed overshoot, not a report.
  *
  * Built as a v2 function because only v2 can stream (§5 "Vehicle"); Netlify
  * bundles v2 functions with nft whatever netlify.toml says, and
@@ -72,6 +80,7 @@ import {shareAssistInstructions} from '../../src/viewer/tools/assistInstructions
 import {getUserAppMetadata, verifyAuth0Bearer} from './_lib/auth0.js'
 import {
   LedgerUnavailableError,
+  latestResumeAt,
   recordForReconciliation,
   releaseAll,
   reserveAll,
@@ -90,6 +99,7 @@ export const LEDGER_STORE = 'ai-ledger'
 // size is far past any v0 conversation, and the Share registry has ~15 tools.
 const KIB = 1024
 const MAX_BODY_KIB = 512
+/** Every tier's cap, and Pro's own; anonymous and free have smaller ones (maxBodyBytesFor). */
 export const MAX_BODY_BYTES = MAX_BODY_KIB * KIB
 export const MAX_MESSAGES = 200
 export const MAX_TOOLS = 64
@@ -214,10 +224,11 @@ export default async function handler(req, context = {}) {
     return errorResponse('ai_not_configured')
   }
 
-  const body = await readRequestBody(req)
-  if (!body) {
+  const read = await readRequestBody(req)
+  if (!read) {
     return errorResponse('ai_bad_request')
   }
+  const {body, bytes} = read
 
   const identity = await identify(req, context, tokenSecret, nowMs)
   if (identity.response) {
@@ -225,6 +236,14 @@ export default async function handler(req, context = {}) {
   }
   const {tier} = identity
   const meta = {tier, token: identity.mintedToken}
+  const limits = aiCreditLimits(process.env)
+  if (bytes > maxBodyBytesFor(tier, limits)) {
+    // The same refusal as a body past MAX_BODY_BYTES, so the panel says the
+    // same thing: the conversation may be too long, start a new chat
+    // (src/assist/hosted.ts maps it to 'bad_request'). Expected, not reported.
+    logOutcome({outcome: 'too_large', tier})
+    return errorResponse('ai_bad_request', meta)
+  }
 
   let route = resolveModel(body.model ?? DEFAULT_MODEL, tier)
   if (!route.ok) {
@@ -239,7 +258,6 @@ export default async function handler(req, context = {}) {
     return errorResponse('ai_not_configured', meta)
   }
 
-  const limits = aiCreditLimits(process.env)
   const maxTokens = cappedMaxTokens(body.max_tokens, tier)
   const holdId = randomUUID()
   let overflow = false
@@ -268,6 +286,19 @@ export default async function handler(req, context = {}) {
     return errorResponse('ai_unavailable', meta)
   }
   if (!reservation.ok) {
+    if (reservation.reason === 'budget') {
+      // When the bucket that refused admits again, or a later bucket the
+      // refusal never reached, whichever is last. Never the breaker's: past
+      // it a request overflows rather than waits.
+      const refusedAt = buckets.findIndex((b) => b.name === reservation.bucket)
+      try {
+        reservation.resumeAt = await latestResumeAt(store,
+          buckets.slice(refusedAt + 1).filter((b) => b.name !== 'breaker'),
+          {micro: reserved, nowMs, resumeAt: reservation.resumeAt})
+      } catch {
+        // An estimate; the refusal stands without a later one.
+      }
+    }
     return refusalResponse(reservation, meta)
   }
   const identityStanding = reservation.standing.identity
@@ -334,7 +365,8 @@ export default async function handler(req, context = {}) {
  * Parse and check the request body (§5 step 3's caps).
  *
  * @param {Request} req
- * @return {Promise<object|null>} the body, or null when it isn't acceptable
+ * @return {Promise<{body: object, bytes: number}|null>} the body and its size as sent, or null when it
+ *   isn't acceptable
  */
 async function readRequestBody(req) {
   let text
@@ -343,7 +375,8 @@ async function readRequestBody(req) {
   } catch {
     return null
   }
-  if (!text || Buffer.byteLength(text) > MAX_BODY_BYTES) {
+  const bytes = text ? Buffer.byteLength(text) : 0
+  if (!text || bytes > MAX_BODY_BYTES) {
     return null
   }
   let body
@@ -372,7 +405,7 @@ async function readRequestBody(req) {
       (body.parallel_tool_calls !== undefined && typeof body.parallel_tool_calls !== 'boolean')) {
     return null
   }
-  return {
+  return {bytes, body: {
     model: body.model,
     max_tokens: body.max_tokens,
     ...conversation,
@@ -380,7 +413,32 @@ async function readRequestBody(req) {
     ...(body.tool_choice === undefined ? {} : {tool_choice: body.tool_choice}),
     ...(body.temperature === undefined ? {} : {temperature: body.temperature}),
     ...(body.parallel_tool_calls === undefined ? {} : {parallel_tool_calls: body.parallel_tool_calls}),
-  }
+  }}
+}
+
+
+/**
+ * The largest request body a tier may send. Anonymous and free budgets are
+ * soft (bucketsFor), so a bucket can overshoot by one request's hold, and the
+ * hold grows a token per byte of the body. Their cap
+ * (AI_MAX_BODY_BYTES_ANONYMOUS / _FREE, `src/quota/aiCredits.js`, 64 KiB by
+ * default) keeps that hold small. At 64 KiB, on the default chain's ceiling
+ * price (0.35 / 0.95 USD per million tokens) with the 1.1 margin:
+ *   input  65,536 bytes + ~1.8 KB server system message + 1,024 base
+ *          + 16 per message + 64 per tool  ≈ 68.4k tokens × 0.35 ≈ $0.0240
+ *   output 2,048 (anonymous) × 0.95 ≈ $0.0019, or 4,096 (free) ≈ $0.0039
+ *   × 1.1 ≈ $0.028 anonymous, $0.031 free for a one-message body; the
+ *   message and tool allowances add up to about $0.003 more at their caps.
+ * So a signed-out bucket can end a day at most about $0.03 past its limit
+ * (`_tests/ai-chat.test.js` pins the figure). Pro keeps MAX_BODY_BYTES: its
+ * budget is strict.
+ *
+ * @param {string} tier
+ * @param {object} limits aiCreditLimits(env)
+ * @return {number} bytes
+ */
+export function maxBodyBytesFor(tier, limits) {
+  return Math.min(MAX_BODY_BYTES, limits.maxBodyBytes[tier] ?? MAX_BODY_BYTES)
 }
 
 
@@ -692,10 +750,24 @@ async function identifySignedIn(bearer, nowMs) {
 function bucketsFor(identity, limits, nowMs, free) {
   const {tier} = identity
   const caps = {freeRequestsPerDay: limits.freeModelRequestsPerDay, concurrency: limits.concurrency}
+  // Which budgets are soft (admit while under the limit) and which strict
+  // (admit only if the worst case fits), _lib/aiLedger.js "Soft and strict
+  // budgets":
+  //  - anonymous and free identity, and the anonymous IP bucket: soft. Their
+  //    budgets are set near one request's worst case, which is 100x+ a real
+  //    turn's cost, so the strict rule refused after a few turns; the
+  //    overshoot is one hold, which maxBodyBytesFor keeps to ~$0.03.
+  //  - Pro identity: strict. Its budget is large next to one hold, so the
+  //    strict rule costs it a few cents of headroom at the very end, and it
+  //    has no body cap to bound an overshoot.
+  //  - the breakers: strict. They are the hard dollar safety across all
+  //    users of a tier; past one, requests overflow to the free models.
+  const soft = tier !== AI_TIERS.PRO
   const buckets = [{name: 'identity', key: identity.ledgerKey, limit: limits.budgets[tier],
-    windowDays: AI_WINDOW_DAYS[tier], ...caps}]
+    windowDays: AI_WINDOW_DAYS[tier], soft, ...caps}]
   if (identity.ipHash) {
-    buckets.push({name: 'ip', key: `ai/ip/${identity.ipHash}`, limit: limits.ipBudget, windowDays: 1, ...caps})
+    buckets.push({name: 'ip', key: `ai/ip/${identity.ipHash}`, limit: limits.ipBudget, windowDays: 1, soft: true,
+      ...caps})
   }
   if (!free && tier !== AI_TIERS.PRO) {
     buckets.push({name: 'breaker', key: `ai/breaker/${tier}/${utcDay(nowMs)}`, limit: limits.breakers[tier],
@@ -893,6 +965,9 @@ function relayStream(upstreamBody, {
     if (seen.micro !== null && seen.micro > reserved) {
       // Booked in full above: the money is spent. The bound didn't hold, so
       // the reservation formula or a ceiling price is wrong: ours to fix.
+      // Only this request against its own hold: a soft bucket that settles
+      // past its LIMIT (admitted just under it) is the expected overshoot
+      // (bucketsFor), not reported.
       await reports.report('settle_exceeded_reservation', {model: seen.model || route.model, tier})
     }
     logOutcome({
@@ -993,18 +1068,19 @@ function refusalResponse(reservation, meta) {
   if (reservation.reason === 'free_requests') {
     return errorResponse('ai_free_requests_exhausted', withStanding)
   }
-  return errorResponse('ai_credits_exhausted', withStanding)
+  return errorResponse('ai_credits_exhausted', {...withStanding, resumeAt: reservation.resumeAt ?? null})
 }
 
 
 /**
  * @param {string} code a key of ERRORS
- * @param {object} [meta] tier, token, used, limit
+ * @param {object} [meta] tier, token, used, limit, resumeAt (epoch ms)
  * @return {Response}
  */
 function errorResponse(code, meta = {}) {
   const [status, message] = ERRORS[code]
-  return new Response(JSON.stringify({error: {code, message}, ...(meta.tier ? {tier: meta.tier} : {})}), {
+  return new Response(JSON.stringify({error: {code, message}, ...(meta.tier ? {tier: meta.tier} : {}),
+    ...(Number.isFinite(meta.resumeAt) ? {resumeAt: new Date(meta.resumeAt).toISOString()} : {})}), {
     status,
     headers: metaHeaders(meta, {'Content-Type': 'application/json'}),
   })
@@ -1013,7 +1089,8 @@ function errorResponse(code, meta = {}) {
 
 /**
  * The `{used, limit, tier}` the client reads without a second call (§7
- * "Reuse"), the overflow notice, and a freshly minted anonymous token.
+ * "Reuse"), the overflow notice, a freshly minted anonymous token, and on a
+ * credits refusal when the budget admits again (ISO-8601 UTC, as in the body).
  *
  * @param {object} meta
  * @param {object} base
@@ -1035,6 +1112,9 @@ function metaHeaders(meta, base) {
   }
   if (meta.token) {
     headers.set('x-bldrs-ai-token', meta.token)
+  }
+  if (Number.isFinite(meta.resumeAt)) {
+    headers.set('x-bldrs-ai-resume-at', new Date(meta.resumeAt).toISOString())
   }
   return headers
 }

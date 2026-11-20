@@ -16,6 +16,7 @@ import axios from 'axios'
 import * as Sentry from '@sentry/serverless'
 import handler, {
   MAX_BODY_BYTES,
+  maxBodyBytesFor,
   MAX_MESSAGES,
   MAX_OUTPUT_TOKENS,
   MAX_TOOLS,
@@ -82,6 +83,9 @@ const IP = '203.0.113.9'
 const ENV = {OPENROUTER_API_KEY: OPENROUTER_KEY, AI_TOKEN_SECRET: SECRET,
   AI_BREAKER_ANONYMOUS_DAILY_USD: '5', AI_BREAKER_FREE_DAILY_USD: '5'}
 const TODAY = utcDay(Date.now())
+const DAY_MS = 86400000
+/** The next UTC midnight: when a one-day bucket's spend leaves its window. */
+const TOMORROW_ISO = `${utcDay(Date.parse(`${TODAY}T00:00:00.000Z`) + DAY_MS)}T00:00:00.000Z`
 const USER_TEXT = 'how many doors are on level 2'
 
 
@@ -333,28 +337,154 @@ describe('ai-chat', () => {
     expect(fake.requests).toEqual([])
   })
 
-  it('an exhausted anonymous budget is a 402 with the tier, and calls no upstream', async () => {
+  it('an exhausted anonymous budget is a 402 with the tier and when it resumes, and calls no upstream', async () => {
     const {token, anonId} = mintAnonToken(SECRET)
-    await fake.store.set(`ai/anonymous/${anonId}`, JSON.stringify({v: 1, days: {[TODAY]: {spent: 19990, free: 0}},
+    await fake.store.set(`ai/anonymous/${anonId}`, JSON.stringify({v: 1, days: {[TODAY]: {spent: 20000, free: 0}},
       holds: {}, estimates: {}}))
     const res = await call({bearer: token})
     expect(res.status).toBe(402)
-    expect(await res.json()).toMatchObject({error: {code: 'ai_credits_exhausted'}, tier: 'anonymous'})
-    expect(res.headers.get('x-bldrs-ai-used')).toBe('19990')
+    expect(await res.json()).toEqual({error: {code: 'ai_credits_exhausted', message: expect.any(String)},
+      tier: 'anonymous', resumeAt: TOMORROW_ISO})
+    expect(res.headers.get('x-bldrs-ai-used')).toBe('20000')
+    expect(res.headers.get('x-bldrs-ai-resume-at')).toBe(TOMORROW_ISO)
     expect(fetchSpy).not.toHaveBeenCalled()
     expect(Sentry.captureMessage).not.toHaveBeenCalled()
   })
 
-  it('the IP bucket catches token churn: a fresh token from a spent IP is refused', async () => {
+  it('the IP bucket catches token churn: a fresh token from a spent IP is refused, with the IP\'s resumeAt', async () => {
     await fake.store.set(`ai/ip/${hashIp(SECRET, IP, TODAY)}`, JSON.stringify({v: 1,
-      days: {[TODAY]: {spent: 99990, free: 0}}, holds: {}, estimates: {}}))
+      days: {[TODAY]: {spent: 100000, free: 0}}, holds: {}, estimates: {}}))
     const res = await call()
     expect(res.headers.get('x-bldrs-ai-token')).toMatch(/^ba1\./)
     expect(res.status).toBe(402)
-    expect(await res.json()).toMatchObject({error: {code: 'ai_credits_exhausted'}, tier: 'anonymous'})
+    expect(await res.json()).toMatchObject({error: {code: 'ai_credits_exhausted'}, tier: 'anonymous',
+      resumeAt: TOMORROW_ISO})
+    expect(res.headers.get('x-bldrs-ai-resume-at')).toBe(TOMORROW_ISO)
     expect(fetchSpy).not.toHaveBeenCalled()
     // The fresh identity's own hold was given back.
     expect(storedRecord(fake, anonKeyOf(fake)).holds).toEqual({})
+  })
+
+  describe('soft budgets (anonymous and free identity, IP) and strict ones (breakers, Pro)', () => {
+    it('admits just under the budget, settles past it unreported, then refuses with resumeAt', async () => {
+      const {token, anonId} = mintAnonToken(SECRET)
+      const key = `ai/anonymous/${anonId}`
+      // 10 micro-USD left of 20,000: far less than this request's worst-case
+      // hold, which the strict rule needed to fit.
+      await fake.store.set(key, JSON.stringify({v: 1, days: {[TODAY]: {spent: 19990, free: 0}}, holds: {},
+        estimates: {}}))
+      const res = await call({bearer: token})
+      expect(res.status).toBe(200)
+      expect(res.headers.get('x-bldrs-ai-resume-at')).toBeNull()
+      await res.text()
+      // Settled at usage.cost, past the budget: the designed overshoot, and
+      // not "exceeded its reservation" (143 is well within its own hold).
+      expect(storedRecord(fake, key).days[TODAY].spent).toBe(19990 + 143)
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+      const next = await call({bearer: token})
+      expect(next.status).toBe(402)
+      expect(await next.json()).toMatchObject({error: {code: 'ai_credits_exhausted'}, resumeAt: TOMORROW_ISO})
+      expect(next.headers.get('x-bldrs-ai-used')).toBe(String(19990 + 143))
+      expect(fetchSpy).toHaveBeenCalledTimes(1)
+    })
+
+    it('the breaker stays strict: under its limit but short of the hold overflows to the free models', async () => {
+      // 3,000 micro-USD of breaker, none spent: a soft rule would admit
+      // (0 < 3000); the hold of this request doesn't fit, so it overflows.
+      process.env.AI_BREAKER_ANONYMOUS_DAILY_USD = '0.003'
+      const res = await call()
+      expect(res.status).toBe(200)
+      expect(res.headers.get('x-bldrs-ai-overflow')).toBe('free_models')
+      await res.text()
+      expect(upstreamBody().model).toMatch(/:free$/)
+    })
+
+    it('a free user\'s 30-day budget is soft and resumes when its oldest spend leaves the window', async () => {
+      Object.assign(process.env, {AUTH0_DOMAIN: 'auth0.test', AUTH0_CLIENT_ID: 'id', AUTH0_CLIENT_SECRET: 'secret'})
+      jest.mocked(axios.post).mockResolvedValue({data: {access_token: 'mgmt', expires_in: 86400}})
+      jest.mocked(axios.get).mockImplementation((url) => Promise.resolve(url.endsWith('/userinfo') ?
+        {data: {sub: 'github|soft'}} : {data: {app_metadata: {}}}))
+      const todayStart = Date.parse(`${TODAY}T00:00:00.000Z`)
+      const tenDaysAgo = utcDay(todayStart - (10 * DAY_MS))
+      const key = 'ai/user/github%7Csoft'
+      await fake.store.set(key, JSON.stringify({v: 1, days: {[tenDaysAgo]: {spent: 400000, free: 0},
+        [TODAY]: {spent: 99999, free: 0}}, holds: {}, estimates: {}}))
+      const admitted = await call({bearer: 'auth0-access-token-soft'})
+      expect(admitted.status).toBe(200)
+      await admitted.text()
+      const refused = await call({bearer: 'auth0-access-token-soft'})
+      expect(refused.status).toBe(402)
+      // 500,142 used; the day ten days back leaving in 20 days takes it to 100,142.
+      expect((await refused.json()).resumeAt).toBe(new Date(todayStart + (20 * DAY_MS)).toISOString())
+    })
+
+    it('Pro stays strict: refused while still under its limit when the hold doesn\'t fit', async () => {
+      Object.assign(process.env, {AUTH0_DOMAIN: 'auth0.test', AUTH0_CLIENT_ID: 'id', AUTH0_CLIENT_SECRET: 'secret'})
+      jest.mocked(axios.post).mockResolvedValue({data: {access_token: 'mgmt', expires_in: 86400}})
+      jest.mocked(axios.get).mockImplementation((url) => Promise.resolve(url.endsWith('/userinfo') ?
+        {data: {sub: 'github|strict'}} : {data: {app_metadata: {subscriptionStatus: 'sharePro'}}}))
+      const todayStart = Date.parse(`${TODAY}T00:00:00.000Z`)
+      const fiveDaysAgo = utcDay(todayStart - (5 * DAY_MS))
+      await fake.store.set('ai/user/github%7Cstrict', JSON.stringify({v: 1,
+        days: {[fiveDaysAgo]: {spent: 4999000, free: 0}}, holds: {}, estimates: {}}))
+      const res = await call({bearer: 'auth0-access-token-strict', body: chatBody({model: 'anthropic/claude-haiku-4.5'})})
+      expect(res.status).toBe(402)
+      expect(await res.json()).toMatchObject({tier: 'pro', resumeAt: new Date(todayStart + (25 * DAY_MS)).toISOString()})
+      expect(fetchSpy).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('the signed-out and free body cap', () => {
+    // Past the anonymous cap (64 KiB by default), well inside MAX_BODY_BYTES.
+    const bigBody = () => chatBody({messages: [{role: 'user', content: 'x'.repeat(70 * 1024)}]})
+
+    it('refuses an anonymous body past its cap as "too long", before the ledger or the upstream', async () => {
+      const res = await call({body: bigBody()})
+      expect(res.status).toBe(400)
+      expect(await res.json()).toMatchObject({error: {code: 'ai_bad_request'}, tier: 'anonymous'})
+      expect(res.headers.get('x-bldrs-ai-tier')).toBe('anonymous')
+      expect(fetchSpy).not.toHaveBeenCalled()
+      expect(fake.requests).toEqual([])
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+    })
+
+    it('takes a body at the cap, and follows its env var', async () => {
+      const atCap = chatBody({messages: [{role: 'user', content: ''}]})
+      const pad = maxBodyBytesFor('anonymous', {maxBodyBytes: {anonymous: 65536}}) -
+        Buffer.byteLength(JSON.stringify(atCap))
+      atCap.messages[0].content = 'x'.repeat(pad)
+      expect(Buffer.byteLength(JSON.stringify(atCap))).toBe(65536)
+      expect((await call({body: atCap})).status).toBe(200)
+      process.env.AI_MAX_BODY_BYTES_ANONYMOUS = String(128 * 1024)
+      expect((await call({body: bigBody()})).status).toBe(200)
+    })
+
+    it('free has its own cap; Pro keeps the relay\'s 512 KiB', async () => {
+      Object.assign(process.env, {AUTH0_DOMAIN: 'auth0.test', AUTH0_CLIENT_ID: 'id', AUTH0_CLIENT_SECRET: 'secret'})
+      jest.mocked(axios.post).mockResolvedValue({data: {access_token: 'mgmt', expires_in: 86400}})
+      jest.mocked(axios.get).mockImplementation((url, config) => Promise.resolve(url.endsWith('/userinfo') ?
+        {data: {sub: config.headers.Authorization.includes('pro') ? 'github|p' : 'github|f'}} :
+        {data: {app_metadata: url.includes('github%7Cp') ? {subscriptionStatus: 'sharePro'} : {}}}))
+      const free = await call({bearer: 'auth0-token-free', body: bigBody()})
+      expect(free.status).toBe(400)
+      expect((await free.json()).tier).toBe('free')
+      const pro = await call({bearer: 'auth0-token-pro', body: bigBody()})
+      expect(pro.headers.get('x-bldrs-ai-tier')).toBe('pro')
+      expect(pro.status).toBe(200)
+    })
+
+    it('bounds the worst-case hold at the cap to about three cents', () => {
+      const route = resolveModel('qwen/qwen3.7-flash', 'anonymous')
+      const cap = maxBodyBytesFor('anonymous', {maxBodyBytes: {anonymous: 65536}})
+      for (const [tier, low, high] of [['anonymous', 27000, 29500], ['free', 29500, 31500]]) {
+        // What reaches OpenRouter: the server's system message, then a body at the cap.
+        const body = {messages: [{role: 'system', content: serverSystemMessage()},
+          {role: 'user', content: 'x'.repeat(cap - 200)}], max_tokens: MAX_OUTPUT_TOKENS[tier]}
+        const micro = reservationMicro(body, route, MAX_OUTPUT_TOKENS[tier])
+        expect(micro).toBeGreaterThan(low)
+        expect(micro).toBeLessThan(high)
+      }
+    })
   })
 
   it('caps requests in flight per identity', async () => {

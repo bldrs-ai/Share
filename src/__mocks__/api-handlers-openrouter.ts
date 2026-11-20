@@ -61,11 +61,16 @@ export default function apiHandlersOpenrouter(defines: Defines): HttpHandler[] {
     }
     // The real relay's refusal (netlify/functions/ai-chat.js refusalResponse,
     // replay scenario credits-exhausted.json): 402, the code and the tier in
-    // the body, the metering headers still set.
-    if (knob.exhausted) {
-      return new Response(JSON.stringify({error: {code: 'ai_credits_exhausted', message: 'Out of credits'}, tier}), {
+    // the body, the metering headers still set. With `resumeAt`, also when
+    // the budget admits again, in the body and its header, and the refusal
+    // lasts only until then, as the relay's window turning over does.
+    const resumeAtMs = knob.resumeAt === undefined ? NaN : Date.parse(knob.resumeAt)
+    if (knob.exhausted && !(Date.now() >= resumeAtMs)) {
+      const resume = Number.isFinite(resumeAtMs) ? new Date(resumeAtMs).toISOString() : null
+      return new Response(JSON.stringify({error: {code: 'ai_credits_exhausted', message: 'Out of credits'}, tier,
+        ...(resume ? {resumeAt: resume} : {})}), {
         status: HTTP_PAYMENT_REQUIRED,
-        headers: {'Content-Type': 'application/json', ...meter},
+        headers: {'Content-Type': 'application/json', ...meter, ...(resume ? {'x-bldrs-ai-resume-at': resume} : {})},
       })
     }
     const {chunks, delayMs} = scriptedReply(await request.json() as Parameters<typeof scriptedReply>[0])
@@ -108,6 +113,12 @@ export interface MockAiRelay {
   limit?: number
   /** Refuse with 402 `ai_credits_exhausted`, as the relay does. */
   exhausted?: boolean
+  /**
+   * With `exhausted`: the refusal's `resumeAt` (ISO-8601), and the time from
+   * which the mock serves again. Without it, the refusal carries none (an
+   * older relay) and lasts.
+   */
+  resumeAt?: string
 }
 
 const DEFAULT_ANONYMOUS_LIMIT = 20000

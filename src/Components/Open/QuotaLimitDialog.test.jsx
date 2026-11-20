@@ -136,6 +136,24 @@ describe('QuotaLimitDialog', () => {
       expect(limitEvents()).toHaveLength(1)
     })
 
+    it('by refusal: one event per refusal id, open or not; a count for several; none for null', () => {
+      const {show} = renderDialog({tier: 'anonymous', isOpen: true, feature: AI, refusal: {id: 1, count: 1}})
+      expect(limitEvents()).toHaveLength(1)
+      // Re-rendered while open for the same refusal: nothing new.
+      show({tier: 'anonymous', isOpen: true, feature: AI, refusal: {id: 1, count: 1}})
+      expect(limitEvents()).toHaveLength(1)
+      // Refused again while it is still open: counted.
+      show({tier: 'anonymous', isOpen: true, feature: AI, refusal: {id: 2, count: 1}})
+      expect(limitEvents()).toHaveLength(2)
+      // Closed, then reopened from the meter: no new refusal.
+      show({tier: 'anonymous', isOpen: false, feature: AI, refusal: null})
+      show({tier: 'anonymous', isOpen: true, feature: AI, refusal: null})
+      expect(limitEvents()).toHaveLength(2)
+      // Two refusals that landed while nothing was shown: both.
+      show({tier: 'anonymous', isOpen: true, feature: AI, refusal: {id: 4, count: 2}})
+      expect(limitEvents()).toHaveLength(4)
+    })
+
     it('signed out: offers Sign in, which closes and opens the login dialog', () => {
       act(() => useStore.setState({isLoginVisible: false}))
       const onClose = jest.fn()
