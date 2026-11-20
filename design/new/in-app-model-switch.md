@@ -6,8 +6,10 @@ memory E2E, built (§4.6, §6); step A, load ownership and abort under the
 same flag, built (§4.5a); steps C (Back/Forward, every open surface, §4.6)
 and D (per-open dedupe, §5) built; step F, the switch **on by default** with
 the kill switch `?feature=disableSpaModelNav` and the `disableSpaModelNav`
-prod rollback (§4.8). Phase 2 planned. Per-step status lives on #2011 and
-its sub-issues, not here.
+prod rollback (§4.8). Phase 1b step 1, per-model sessions (#2019), built
+with one live session and no change in behaviour (§4.9); the CadView split
+plan (§4.10). Phase 2 planned.
+Per-step status lives on #2011 and its sub-issues, not here.
 **Epic:** `open-205` (#2011). Stories: Phase 0 #2012 (tasks #2013–#2018,
 closed; #2017 moved to Phase 1), Phase 1 #2028 (measure), #2029
 (interactive at index), #2019 (sessions), #2030 (no blocking calls), #2031
@@ -174,8 +176,9 @@ Moving CadView's `initViewerCb` out of the render was tried and shown not to
 change the result, so it was left for step A, which owns that code.
 
 **The store's `model` during B's load** was A until B's `setModel`. Under
-the flag step A now clears it when the user leaves
-(`CadView#forgetLoadedModelState`, §4.5a). The WeakRef checks held before
+the flag step A now clears it when the user leaves (since #2019, with the
+rest of the model's state when its session closes: `store/modelState.js`,
+§4.9). The WeakRef checks held before
 that landed too: renders in that window captured A, but nothing long-lived
 keeps those renders any more, so A was collected once B was in. NotesControl's stable-deps `hashchange` listener was
 such a holder whenever NotesControl mounted with a model in the store; it is
@@ -370,7 +373,7 @@ Mid-stream property reads worked in the Node harness. Concurrent reads against S
 - **What CadView gets is the model at its index** (`makeIndexedModelHandle`): the finished model's property and spatial surface, with no geometry. It goes in the store as `indexedModel`, not `model`, because scene consumers (clipper, isolator, ViewCube) take `model` to be the object in the scene. The tree, Properties, TopBar, search and the assistant's read-only `model.*` tools and context read through `selectReadModel`, which prefers it; `view.*` still waits for the finished model. Three things clear it:
   - the load's own `setModel`, which only clears the handle that load set;
   - a failure, which also takes the tree down;
-  - the user leaving the model (the identity change, `forgetLoadedModel`), which takes the tree down too. The left load still runs to its end (#2019) and holds the next one back until it does, so without this the panels would serve its tree under the next model's URL. `installModelTree` re-checks that the load is current after its one await, so a load the user left never republishes its tree.
+  - the user leaving the model (its session closes, `forgetLoadedModel`), which takes the tree down too. `installModelTree` re-checks that its load job is current after its one await and writes the tree with one `job.set`, so a load the user left never republishes its tree (§4.9).
 - **The tree is walked and installed once.** The end-of-load path waits for the index's delivery, which can finish after the geometry, and `onModel` reuses its tree instead of reading the finished model again. A walk that settles after the user has left, or after the load has failed, installs nothing. The model is not ready until its tree is, as in prod.
 - **The loading overlay lifts at the index;** it swallowed every click. Since #2043 it lifts earlier still, at the first preview mesh (§4.2a), and the index matters for it only on a model too small to preview.
 - **Selections made while geometry streams are kept and painted at the end.** The logical selection, Properties and the URL path work at once. The scene highlight finds nothing to paint until the geometry is in, so `reapplySelectionToGeometry` re-runs the selection through the usual funnel once the model is installed. That includes STEP occurrence rows, whose instances only exist then.
@@ -388,10 +391,10 @@ selects an element. Tree, properties and search still need the index
 
 - **The overlay lifts at the load's first mesh** (`isFirstMeshShown`, set by
   CadView from the session's `onFirstMesh` and cleared when the load ends;
-  `LoadingBackdrop`). Only while the load is the one shown
-  (`isLoadSuperseded`): a load the user has left keeps running (#2019), and
-  its first mesh must not lift the overlay over the next model (codex review
-  on #2052). The snackbar's live load line stays up as the non-blocking
+  `LoadingBackdrop`). Only while the load is the one shown (a `job.set`,
+  §4.9): a load the user has left can still put a mesh into its disposed
+  viewer, and that must not lift the overlay over the next model (codex
+  review on #2052). The snackbar's live load line stays up as the non-blocking
   progress indicator.
 - **Preview meshes say which element they are.** `parsePreviewMesh` keeps the
   payload's `expressID` (the product the scene walk reached the placement
@@ -552,6 +555,17 @@ not reset or dispose the session. Viewer rebinding includes PlaceMark
 slice owns its session-scoped fields, so a new per-model field gets one by
 construction.
 
+**Status (2026-11-19).** The list above is the target. Decision 6 (#2011)
+splits it: step 1 (§4.9) builds the session with one live session, so a
+switch still closes the old one, and moves the load job, its abort, the
+engine handle, the GLB writer's engine binding, the window handlers and
+the load-written store fields under it. The selection, the inventory's
+other fields (isolation, `displayOverrides`, notes, versions,
+`preselectedElementIds`) and the load status the status bar reads stay
+where they are reset today, because only a session that outlives a switch
+needs them saved and restored: that is step 2 (#2031), under
+`?feature=workspace`.
+
 ### 4.4 No blocking calls (#2030)
 
 *Written before the engine worker.* Since #2083 each model's engine runs
@@ -614,11 +628,11 @@ F, §4.8); with the kill switch or the rollback on, nothing is aborted and a
 switch mid-load still waits behind the load.
 
 - **Who owns a load.** Each CadView `onViewer` run gets an
-  `AbortController` (`loadAbortRef`). Leaving the model aborts it, in
-  `onModelPath`'s `initViewerCb`, before `initViewer` disposes the viewer
-  the load streams into: on a model change, and on a viewer re-created for
-  the same model (a theme or view-settings change), which `onViewer` then
-  reloads into the new viewer. The aborted run unwinds at its next await
+  `AbortController`, since #2019 its model session's load job's (§4.9).
+  Leaving the model aborts it before `initViewer` disposes the viewer the
+  load streams into: on a model change, by closing the session, and on a
+  viewer re-created for the same model (a theme or view-settings change),
+  in `initViewerCb`, which `onViewer` then reloads into the new viewer. The aborted run unwinds at its next await
   and the next model's load starts then. Loads stay one at a time, which
   the per-load module state (the load reporter, the artifact generation,
   the streaming selection) still assumes; what changed is that "the end of
@@ -639,19 +653,20 @@ switch mid-load still waits behind the load.
 - **The close path for a model that never registered** (#2031's).
   `ShareIfc` tracks each engine load parsing into it (`trackEngineLoad`),
   and its `dispose` aborts them, beside closing the registered models.
-- **Nothing of the left model is written after the abort.** Every CadView
-  guard reads an aborted run as superseded (`isLoadSuperseded`), so after
-  A → B → A a run given up for its viewer is not "current" again. The run's
+- **Nothing of the left model is written after the abort.** Since #2019 a
+  write goes through the run's load job, which is not current once aborted
+  or once its session is closed (§4.9), so after A → B → A a run given up
+  for its viewer is not "current" again: the return is a new session. The run's
   catch takes an abort as an abort: no alert, no `load_failed`, no Sentry;
   one GA `model_load_aborted` (`phase`, `format`, real opens only). The load
   report is cleared, not frozen with a "Load failed" line
   (`endLoadProgress(…, {isAborted})`).
 - **The store's per-model state goes when the user leaves**
-  (`CadView#forgetLoadedModelState`, the load-ownership part of #2019):
-  `model`, `isModelReady`, the tree, search, `loadedFileInfo`, the export
-  artifact, `opfsFile` and the load report, so the page reads as a fresh
-  page load does before the model arrives. Before, `model` stayed A until
-  B's `setModel` (§2.4).
+  (`CadView#forgetLoadedModel`, through `store/modelState.js` since #2019,
+  §4.9): `model`, `isModelReady`, the tree, search, `loadedFileInfo`, the
+  export artifact, `opfsFile` and the load report, so the page reads as a
+  fresh page load does before the model arrives. Before, `model` stayed A
+  until B's `setModel` (§2.4).
 - **With the kill switch on** (`?feature=disableSpaModelNav`, §4.8; before
   step F, off the flag) a theme change mid-load still lets the load run
   into the disposed viewer, which then fails at `addIfcModel` with "Cannot
@@ -759,8 +774,8 @@ in-app switch or a page load is one predicate,
 `utils/spaModelNavMode.js#modelPageLoadReason`, read by everything that
 behaves differently for a switch, so none of them can disagree:
 `navigateToModel` (switch or `location.assign`), CadView's load ownership
-(`loadAbortRef`, `forgetLoadedModelState`, the viewer-replaced reload;
-§4.5a) and `ShareIfc#dispose` (the in-flight engine aborts). It is read
+(the load job's abort, the store reset, the viewer-replaced reload; §4.5a,
+§4.9) and `ShareIfc#dispose` (the in-flight engine aborts). It is read
 from the URL at each call; the query rides from one open to the next
 (`withCurrentSearch`), so a page and the opens it makes agree.
 `?feature=spaModelNav` is harmless: on is on.
@@ -808,6 +823,231 @@ theme toggle is one open with the switch off too; `navigate.test.js`,
 `?feature=spaModelNav` (the memory, marker, history, surfaces and per-open
 specs) runs on a plain link, so on the default path.
 
+### 4.9 Phase 1b step 1, as built: per-model sessions (#2019)
+
+Decision 6 (#2011) orders Phase 1b: this step, then `EngineHost` (#2031),
+then the ProjectsDrawer, then #2030. This step introduces the session as
+the unit that owns a model, **with one live session and no change in
+behaviour**: a switch still closes the old model, as in Phase 1a. Background
+sessions (a left load runs on and a return restores it) are step 2's, under
+`?feature=workspace`.
+
+**The shape** (`Containers/modelSession.js`):
+
+```
+ModelSessionHost            one per CadView (a ref, like previousThemeChangeCbRef)
+  active ──► ModelSession   {id, modelKey, loadState, job, engine, windowHandlers}
+               job ──► LoadJob   {controller (abortable under the switch), isCurrent(),
+                                  set(partial), ifCurrent(fn), throwIfLeft()}
+host.open(key)     same key → the active session (theme / view-settings rebuild, auth re-run);
+                   else close the active one, make a new one active, onForget({isSwitch: true})
+session.beginLoad  a new run; the previous is aborted and stops being current; one given up
+                   before its model was on screen is forgotten (onForget({isSwitch: false}))
+session.close()    abort the run, unbind its window handlers, close its EngineSession, drop it
+host.closeActive() CadView unmounting: close without forgetting (the next CadView forgets)
+```
+
+- **Writes are session-scoped.** A load writes the model's state only
+  through its job: a store field with `job.set`, anything else (the scene,
+  the viewer, a window handler, an analytics send, an alert) after
+  `job.isCurrent()` or `job.throwIfLeft()`. A job is current while its
+  session is the active one, it is the session's latest run, and it was not
+  aborted. A load the user has left belongs to a closed session, so
+  whatever it does next writes nothing, whether or not its work could be
+  stopped (a mesh parse can't) and whether or not it had a signal (the kill
+  switch has none). This is decision 4's "retire Phase 0's guards rather
+  than add more".
+- **What moved under the session:** the run's `AbortController` (was
+  `loadAbortRef`); the engine its model was parsed into (`session.engine`,
+  the model's `EngineSession`, closed with the session); the window
+  handlers (`window.ondblclick`, `window.onkeydown`, unbound at close); and
+  every load-written store field: `model`, `indexedModel`, `rootElement`,
+  `elementTypesMap`, `isModelReady`, `isFirstMeshShown`, `loadedFileInfo`,
+  `opfsFile` (the Loader's `setOpfsFile` is the job's), the tree's install
+  (one `job.set`, so the panels see the tree and its model together), the
+  failure path's alert and reports, the open's analytics, the meter and the
+  end-of-load scene and link work.
+- **The store's per-model state is declared by its slices.**
+  `IFCSlice#ifcModelState`, `NavTreeSlice#navTreeModelState` and
+  `BrowserSlice#browserModelState` are spread into each slice's initial
+  state, and `store/modelState.js#resetModelState` resets them all (plus the
+  search index, cleared in place). That replaced `forgetLoadedModelState`'s
+  field list. A static test (`modelState.test.js`) fails if CadView calls a
+  load-written field's setter itself rather than through its job.
+- **The idle GLB writer is bound to its own load** (`Loader.js`): its engine
+  (the worker's `EngineSession`, or the viewer's IFC manager) is read when
+  the load ends, not off `viewer.IFC.loader.ifcManager` when the browser is
+  idle, and only the writer that raised `isCacheWriteInFlight` clears it, so
+  a left model's writer ending can't take the next model's down.
+
+**Out of CadView** (#2247, at the owner's ask; §4.10 has the rest): the
+failure path's alert, reports and analytics (`Containers/loadFailure.js`),
+the open's analytics, engagement and no-geometry alert
+(`modelOpenEvents.js`), the scene placement and the hidden-element
+reapply (`modelPlacement.js`), the session host and its unmount close
+(`useModelSessionHost.js`), and the store half of the forget
+(`store/modelState.js#forgetModelState`).
+
+**A load owns its report and its loading UI** (codex on #2247). An in-app
+open across route families (`/v/u`, `/v/g` ↔ `/v/p`) remounts CadView, and
+each CadView has its own host and load queue. So the left view's load can
+still be unwinding after the next view's load has begun, as a mesh parse
+can't be stopped. Before, that unwind ended the next load's report
+(`endLoadProgress` acted on whichever reporter was active), took its overlay
+and snackbar down, and wrote its late progress into the next report. That
+was already on main since #2222. Now:
+
+- **The report.** A load holds the reporter `beginLoadProgress` returned,
+  and its `onProgress` and `endLoadProgress` are no-ops once that reporter
+  is not the active one.
+- **The overlay and the "Loading …" snackbar.** They belong to the load job
+  that put them up (`LoadJob#showLoading`, a page-wide owner), and only that
+  job takes them down. A job given up with no load after it still takes its
+  own down, so nothing is left stuck.
+- **The window before the unmount close.** The left view's session is
+  closed a microtask after it unmounts (useModelSessionHost.js), and the
+  next view can open its own first. A session is current only while its
+  host is the one that opened a session last (`pageHost`), so the left one
+  stops writing the moment the next view opens.
+- **What a switch inside one view does.** It leaves the left load's overlay
+  up until that load unwinds, as before. The overlay is not in the
+  per-model reset.
+
+ (`isLoadSuperseded` over
+`dedupeModelKeyRef`), the replay-time `forgetLoadedModel` and its alert
+restore (`alertAtLoadStartRef`; a left run's alert never lands now), and
+`forgetLoadedModelState`'s list. What stays in CadView is sequencing, not a
+guard: loads still run one at a time (`onViewer`'s in-flight queue), because
+of the module-level per-load state below.
+
+**What changed, and only with the kill switch on**
+(`?feature=disableSpaModelNav`). There a left load is not aborted and runs
+to its end before the next starts. Before, its tail still wrote the left
+model into the store under the new URL, rebound the window handlers to the
+disposed viewer, metered it, and reported its failure (an alert the replay
+then cleared, a Sentry capture, a `load_failed`). Now it writes none of
+that and ends as `model_load_aborted`, as the default path already did. The
+store reset on a switch stays the pre-step-A one there (the first mesh and
+an indexed tree), as §4.5a decided.
+
+**Left for step 2 (#2031, `EngineHost`).**
+- Background-finish (A finishes in the background and its session holds
+  its result), the selection restore on return, and the return-to-A E2E.
+  Step 1's job writes straight into the store or nowhere; step 2 gives a
+  background session its own copy of `modelStateDefaults()` to write into,
+  pushed to the store when the view rebinds.
+- **Module-level per-load state**, which keeps loads one at a time:
+  the load reporter (`loader/loadProgress.js`: the report lines, the stall
+  watchdog, `currentLoadSerial`), the artifact generation
+  (`loader/glbArtifactPublish.js`'s `generation`), the streaming selection
+  (`viewer/streamingBatchPick.js`, one per scene, on the viewer's
+  `scene.userData`), and the GLB writer's in-flight owner
+  added here (`Loader.js#cacheWriteOwner`). engine-worker.md §5.2's slice 2
+  (cap N) needs each per session. The reporter has ownership already (below),
+  but there is still one active reporter for the page: the loader's own
+  reports (`reportModelInfo`, `reportEngineLog`, `reportCacheHit`, …) still
+  go to whichever one is active.
+- **The scene is the viewer's, not the session's.** A viewer is built per
+  open (and per theme rebuild) and its dispose frees the model's scene, so
+  a session can't yet detach its scene root and re-attach it to a view.
+  engine-worker.md §5.2 assumes it can; that is a viewer change (one viewer
+  for the page, models attached to it) for step 2 to scope.
+- **Against engine-worker.md §5.2's table:** `id`, `engine` (the
+  `EngineSession` or null), `loadState` (`loading` | `ready` | `failed` |
+  `closed`, `LoadState`) and `close()` (abort, then drop) match. `close()`
+  is synchronous and nothing here drops or cancels a writer already running
+  (it is skipped if it has not run, by the abort); there is no host to
+  `await` yet. The rest of the assumed interface
+  (`entryKey`, `format`, `sourceBytes`, `hasArtifact`, `isCapturing`,
+  `rehydrateSource`, the eviction callbacks, `dropScene`) is not built;
+  step 1 has no host to serve.
+
+**Tests.** `modelSession.test.js` (a left session's writes and side effects
+are dropped, with and without a signal; a return is a new session; a run
+given up mid-load is forgotten before the replay, a finished one isn't;
+close unbinds and closes the engine; an unmount closes without forgetting),
+`modelState.test.js` (the defaults match the store's initial state, cover
+step A's list, reset, and the static guard), `Loader.writerBinding.test.js`,
+and three in `CadView.test.jsx` ("#2019"): a load that comes back with its
+model as the user leaves, and, with the kill switch, a left load that
+finishes or fails, write nothing of A into B's state, alert or analytics.
+The two kill-switch ones fail on the code before this step; all three fail
+with `LoadJob#isCurrent` forced true. Every Phase 1a test and E2E passes
+unchanged.
+
+### 4.10 CadView split plan
+
+`Containers/CadView.jsx` was 3,362 lines on main at `0af98b3e`. #2247 moved
+the session code and four load-end blocks out of it (`loadFailure.js`,
+`modelOpenEvents.js`, `modelPlacement.js`, `useModelSessionHost.js`,
+`store/modelState.js#forgetModelState`), which leaves 2,936. The rest is
+planned here and tracked on its own issue (the "CadView: split into
+focused modules (plan)" sub-issue of #2011). The goal is the one the owner
+set on #2247: CadView keeps the sequencing and the wiring, and each
+responsibility lives in a module with its own tests.
+
+**What it does today** (line counts after #2247, rounded):
+
+| Responsibility | Where in CadView | Lines |
+|---|---|---|
+| Store selectors, refs, the session host | top of the component | ~330 |
+| Viewer construction and theme rebuild: `initViewer`, the theme listener, `viewerBuiltForRef`, the no-WebGL notice, `abortLoadInFlight` | `onModelPath`, the `[modelPath]` effect | ~110 |
+| Load orchestration: the one-at-a-time queue, the auth wait and authed retry, the index and first-mesh callbacks, the Loader call, the end-of-load tail | `onViewer`, `onViewerInternal`, `loadModelWithAuthRetry`, `loadModel`, `endAbortedLoad` | ~740 |
+| Tree install: read, install, take down, search index | `onModel`, `readModelTree`, `installModelTree`, `forgetIndexed*`, `initSearch`, `onSearchParams`, `reportTreeReadFailure` | ~290 |
+| Selection funnel and picking: scene, tree, search, keyboard and URL selections, preview and streaming picks, STEP root-level instances, transient rows | `selectItemsInScene`, `canvasDoubleClickHandler`, `selectFromInstancePick`, `selectElementBasedOnFilepath`, `selectFromSelectionHash`, `reapplySelectionToGeometry`, the `rootLevel*` helpers, `resetState`, `deselectItems` | ~1,090 |
+| Effects (location and hash selection, preselection, the dev hooks, render-on-demand settle) and the JSX | the end of the component | ~390 |
+
+**Proposed modules, in extraction order:**
+
+1. **`useViewerLifecycle` (hook).** It builds, applies the look to and
+   disposes the viewer, owns the theme listener, `viewerBuiltForRef` and the
+   no-WebGL state, and returns `{viewer, isWebglUnavailable,
+   rebuildForTheme}`. **Phase 1b's single-viewer step wants this first.**
+   That step sits between EngineHost slices 1 and 2 (#2244): one viewer for
+   the page, with each session's scene root attached and detached instead
+   of a viewer per open. This hook is that seam: the per-open `initViewer`
+   in `onModelPath` becomes "attach the active session's scene", and a theme
+   change becomes a material and look update, not a rebuild and reload.
+   `modelPlacement.js#placeModelInScene` is where the attach goes.
+   *Tests:* a hook test over a mocked `initViewer` (one viewer per
+   `[modelPath, customViewSettings]` pair, StrictMode's repeat builds none,
+   a theme change rebuilds and aborts the active session's load, the
+   listener is removed on rebuild), plus `viewerInit.spec.ts` and
+   `modelSwitchMemory.spec.ts`'s collection legs unchanged.
+2. **`modelLoadRun.js`: one load run of a session.** It is
+   `onViewerInternal` + `loadModel` as a function of `(job, route, view)`
+   that returns the model or throws. The auth retry moves beside
+   `authLoadGate.js`. CadView keeps the queue. EngineHost slice 2 needs
+   this second, because two runs at once must not share CadView's closure
+   or refs: `previewPickedRef`, `pendingPreviewPickRef`,
+   `isCameraTakenDuringLoadRef` and `driveDownloadRef` move onto the job.
+   *Tests:* unit tests over a fake job and a mocked Loader (success, each
+   failure class into `loadFailure.js`, abort at each await, the
+   auth-retry branches). These move the matching `CadView.test.jsx` cases
+   down a layer and leave one integration case per path.
+3. **`modelTree.js`: read and install a tree into a job.** That is
+   `readModelTree`, `installModelTree`, the take-down and the search index.
+   It is per session for slice 2: a background session's tree goes into the
+   session's own copy of the state, not the store. *Tests:* the harness
+   model's tree installs once, a stale job installs nothing, and a walk
+   failure is reported once (today's "interactive at the index" cases).
+4. **`useSceneSelection` + `canvasPicks.js`: the selection funnel and the
+   pick handlers.** It has the biggest line count, but the fewest Phase 1b
+   dependencies, until the selection restore on return (step 2), which then
+   reads and writes the session's selection through it. *Tests:* the
+   funnel over a mocked viewer (selected and anchor ids, instances,
+   occurrence path, URL) and the pick resolution cases, which are in
+   `CadView.test.jsx` today; `navTree*.spec.ts`, `SynchronizedView.spec.ts`
+   and `sceneHighlightPermalink.spec.ts` unchanged.
+5. **`useLocationSelection`: the location and hash effects.** *Tests:*
+   `spaModelHistory.spec.ts` and the permalink specs unchanged, plus a hook
+   test for the multi-selection Back case.
+
+After these, CadView holds the store wiring, the queue, the session host
+and the JSX: about 500 lines. Each step is behaviour-neutral and lands
+with every existing test unchanged. A test that reached into a moved
+internal is repointed, and its break-it check is rerun.
+
 ## 5. "Once per page load" needs a per-open answer (#2022)
 
 ### 5.1 Decided 2026-11-01: a return to A is a new open
@@ -842,7 +1082,7 @@ page load, per open is per page.
 Share.jsx's route effect sets a new route result, which is also where it
 calls `NotesSlice#forgetModelMarkers` (#2189; not on the first route, which
 starts with that state fresh) and, through CadView's `[modelPath]` effect,
-where step A's `forgetLoadedModelState` runs under the switch (§4.5a). So the
+where the model session changes and its state is forgotten (§4.5a, §4.9). So the
 three agree on what a switch is. A load the user leaves is aborted before
 it reaches the open events or the meter (both sit after the model is on
 screen), so a left mid-load open sends nothing, as a page left mid-load

@@ -1598,9 +1598,14 @@ function knownAuthoringTool(value) {
  * load is active (e.g. background cache writes after dispose).
  *
  * @param {object|string} progressArg
+ * @param {LoadProgressReporter} [reporter] the load's own reporter, from
+ *   beginLoadProgress: when given, the signal is dropped unless that reporter
+ *   is still the active one. A load the user has left can still be running
+ *   after the next load has begun (a remount gives each view its own queue,
+ *   open-205 #2019), and its progress is not the next load's.
  */
-export function reportLoadProgress(progressArg) {
-  if (activeReporter) {
+export function reportLoadProgress(progressArg, reporter = undefined) {
+  if (activeReporter && (reporter === undefined || reporter === activeReporter)) {
     activeReporter.report(progressArg)
   }
 }
@@ -1984,8 +1989,15 @@ export function setLoadSummary(text) {
  *   than frozen, and no grace line says the load failed. The reporter is
  *   kept as the last one, so getLoadFailureInfo can still say where it
  *   stopped.
+ * @param {LoadProgressReporter} [options.reporter] the load's own reporter,
+ *   from beginLoadProgress: a no-op unless it is still the active one
  */
-export function endLoadProgress(error = null, {isAborted = false} = {}) {
+export function endLoadProgress(error = null, {isAborted = false, reporter = undefined} = {}) {
+  // A load ends only its own report: when the next load has begun meanwhile,
+  // the active reporter is that load's (see reportLoadProgress).
+  if (reporter !== undefined && reporter !== activeReporter) {
+    return
+  }
   if (isAborted) {
     if (activeReporter && !activeReporter.ended) {
       activeReporter.dispose()
