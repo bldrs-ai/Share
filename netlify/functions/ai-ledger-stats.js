@@ -158,6 +158,15 @@ export function lastDays(nowMs) {
  * HOLD_TTL_MS is spend at its reservation, as the ledger's own prune books it
  * on the record's next write, which a past day's record never gets.
  *
+ * `spent` is every day entry in the blob, not just the blob's own day: the
+ * relay builds a request's breaker key once, at reservation, but settle
+ * books the spend under the day it settles (`addToDay(utcDay(nowMs))`) and
+ * its 1-day prune then drops the reservation day's entry. So a request
+ * reserved before UTC midnight and settled after lands in the earlier day's
+ * blob under the later day's key (Codex on #2254), and reading only
+ * `days[day]` would lose it from both days. Each blob is one breaker-day,
+ * which is the day the relay counted the request against.
+ *
  * @param {object} store
  * @param {number} nowMs
  * @return {Promise<object>} {anonymous: [...], free: [...]}
@@ -181,7 +190,10 @@ export function summarizeBreakerDay(record, day, nowMs) {
   if (!record || typeof record !== 'object') {
     return {day, spent: 0, held: 0, recorded: false}
   }
-  let spent = Number(record.days?.[day]?.spent) || 0
+  let spent = 0
+  for (const entry of Object.values(record.days || {})) {
+    spent += Number(entry?.spent) || 0
+  }
   let held = 0
   for (const hold of Object.values(record.holds || {})) {
     const micro = Number(hold?.micro) || 0

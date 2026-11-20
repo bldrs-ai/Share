@@ -137,6 +137,15 @@ describe('ai-ledger-stats', () => {
     expect(body.limits.budgets.anonymous).toBe(20000)
   })
 
+  it('counts a request settled after midnight in the blob it reserved against (Codex on #2254)', () => {
+    // reserved on 11-19, settled on 11-20: settle books it under 11-20 inside
+    // the 11-19 blob, and its 1-day prune has dropped the 11-19 entry
+    const record = {v: 1, days: {[TODAY]: {spent: 400, free: 0}}, holds: {}}
+    expect(summarizeBreakerDay(record, '2026-11-19', NOW)).toEqual({day: '2026-11-19', spent: 400, held: 0, recorded: true})
+    const both = {v: 1, days: {'2026-11-19': {spent: 100, free: 0}, [TODAY]: {spent: 400, free: 0}}, holds: {}}
+    expect(summarizeBreakerDay(both, '2026-11-19', NOW).spent).toBe(500)
+  })
+
   it('reads a malformed record as nothing recorded', () => {
     expect(summarizeBreakerDay(null, TODAY, NOW)).toEqual({day: TODAY, spent: 0, held: 0, recorded: false})
     expect(summarizeBreakerDay({holds: {x: {micro: 'a', at: 'b'}}}, TODAY, NOW))
