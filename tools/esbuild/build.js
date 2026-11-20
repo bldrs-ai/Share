@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import * as path from 'node:path'
 import esbuild from 'esbuild'
 import {fileURLToPath} from 'url'
-import {ASSIST_RUNTIME_ENTRY, assertAiSdkNotInMain} from './assistEntry.js'
+import {ASSIST_RUNTIME_ENTRY, GFM_ENTRY, assertAiSdkNotInMain, assertGfmNotInMain} from './assistEntry.js'
 import config, {staticCopyPlugin} from './common.js'
 import {proModuleBuilds} from './proModules.js'
 
@@ -26,9 +26,10 @@ const subscribeFile = path.resolve(repoRoot, 'src', 'subscribe', 'index.jsx')
 const mainBuild = esbuild.build({
   ...config,
   plugins: [...config.plugins, staticCopyPlugin],
-  entryPoints: [indexFile, subscribeFile, ASSIST_RUNTIME_ENTRY],
+  entryPoints: [indexFile, subscribeFile, ASSIST_RUNTIME_ENTRY, GFM_ENTRY],
 }).then((result) => {
   assertAiSdkNotInMain(result.metafile)
+  assertGfmNotInMain(result.metafile)
   return result
 })
 

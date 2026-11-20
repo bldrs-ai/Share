@@ -142,6 +142,10 @@ export const SCRIPT = {
   longWord: 'story ',
   longWords: 200,
   longDelayMs: 100,
+  /** A prompt containing this gets a Markdown reply, streamed in pieces. */
+  markdownPrompt: 'answer in markdown',
+  markdownReply: '**Project**: Bldrs\n\n- first item\n- second item\n\nTry `view.select` next.\n\n' +
+    '| Tool | Does |\n|------|------|\n| view.select | selects |',
   /** Any other prompt gets this, as the old bot mock did. */
   fallback: 'Test received.',
   queryType: 'IfcBuildingElementProxy',
@@ -187,6 +191,10 @@ export function scriptedReply(body: {messages?: WireMessage[]}): {chunks: Chunk[
       chunks: toolCalls([{id: 'call_query', name: 'model_query', args: {ifcType: SCRIPT.queryType}}], SCRIPT.preamble),
       delayMs: 0,
     }
+  }
+  if (prompt.includes(SCRIPT.markdownPrompt)) {
+    // Many small pieces, so a marker is split across chunks somewhere.
+    return {chunks: textReply(SCRIPT.markdownReply, SCRIPT.markdownReply.length / 4), delayMs: 0}
   }
   if (prompt.includes(SCRIPT.longPrompt)) {
     return {chunks: textReply(SCRIPT.longWord.repeat(SCRIPT.longWords), SCRIPT.longWords), delayMs: SCRIPT.longDelayMs}
