@@ -724,8 +724,8 @@ Per-message metering would multiply that write rate by roughly 100.
   "free extra, never wrongful block": for model loads an under-count costs
   nothing, but for AI credits it costs real money.
 - **Soft budgets, strict breakers (2026-11-20, assist-310).** The owner
-  sets signed-out budgets near an ad's cost per click (Netlify env, not code
-  defaults), where a strict reservation admits almost nothing. So:
+  sets small signed-out budgets (Netlify env, not code defaults), where a
+  strict reservation admits almost nothing. So:
   - **Soft** (anonymous and free identity, the anonymous IP bucket): admit
     while `spent + held < budget`. The worst case is still held and settles
     to `usage.cost`. Admissions are serialized by the CAS, so spend stays
