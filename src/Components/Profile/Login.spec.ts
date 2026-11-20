@@ -5,6 +5,7 @@ import {
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
   setupAuthenticationIntercepts,
+  waitForModel,
 } from '../../tests/e2e/utils'
 import {expectScreen} from '../../tests/screens'
 
@@ -71,6 +72,13 @@ async function expectSignOutRoundTrip(page: Page, baseURL: string | undefined, s
 
   // Back from Auth0 at the app, and the SPA has routed on from the origin.
   await page.waitForURL(`${appOrigin}/share/**`)
+  // That was a full page load: it reloads the model (a Conway parse and a
+  // second GLB export if the first one hadn't reached OPFS yet) and comes up
+  // painting again, as the beforeEach's pause lived in the old page. Driving
+  // the menus over that cost the re-sign-in below ~1 s a click at desktop size
+  // and timed it out on a loaded CI shard (#2001's run); pauseViewerRendering
+  // has the measurements.
+  await waitForModel(page, {pauseRenderer: true})
   await expect(page.getByTestId('AccountBoxOutlinedIcon')).toBeVisible()
   await expect(page.getByTestId('control-button-profile-icon-authenticated')).toHaveCount(0)
 
@@ -82,7 +90,9 @@ describeMobileAndDesktop('Profile 100: Log out', () => {
   beforeEach(async ({page}) => {
     await homepageSetup(page)
     await setupAuthenticationIntercepts(page)
-    await returningUserVisitsHomepageWaitForModel(page)
+    // Nothing here looks at the scene, and three menu walks over a painting
+    // canvas are most of this suite's time (pauseViewerRendering).
+    await returningUserVisitsHomepageWaitForModel(page, {pauseRenderer: true})
     await auth0Login(page, 'github')
   })
 
