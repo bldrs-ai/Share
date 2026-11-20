@@ -1927,7 +1927,9 @@ describe('CadView', () => {
     function expectNothingOfA(result) {
       const state = result.current
       expect(state.model).toBeNull()
+      expect(state.indexedModel).toBeNull()
       expect(state.rootElement).toBeNull()
+      expect(state.elementTypesMap).toEqual([])
       expect(state.isModelReady).toBe(false)
       expect(state.loadedFileInfo).toBeNull()
       expect(state.isFirstMeshShown).toBe(false)
@@ -2092,10 +2094,17 @@ describe('CadView', () => {
       let finishA
       const calls = []
       loadSpy = jest.spyOn(Loader, 'load').mockImplementation((path, ...rest) => {
-        calls.push({path: String(path), signal: rest[5]?.signal})
+        const options = rest[5] ?? {}
+        calls.push({path: String(path), signal: options.signal})
         return calls.length === 1 ?
           new Promise((resolve) => {
-            finishA = () => resolve(getHarness()._loadedModel)
+            // A reaches its index only now, after the user has left it (the
+            // tree, properties and search would come up from here, #2029),
+            // and then finishes.
+            finishA = () => {
+              options.onIndexed?.(getHarness()._loadedModel)
+              resolve(getHarness()._loadedModel)
+            }
           }) :
           new Promise(() => {})
       })

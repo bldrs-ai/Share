@@ -148,6 +148,15 @@ describe('Containers/modelSession', () => {
     expect(sessionA.loadState).toBe(LoadState.CLOSED)
   })
 
+  it('runs what was bound to close with the session, once', () => {
+    const sessionA = host.open('A')
+    const closer = jest.fn()
+    sessionA.bindCloser(closer)
+    host.open('B')
+    sessionA.close()
+    expect(closer).toHaveBeenCalledTimes(1)
+  })
+
   it('leaves a handler alone once the next session has bound its own', () => {
     const sessionA = host.open('A')
     sessionA.bindWindowHandler('onkeydown', () => 'A')

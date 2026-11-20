@@ -7,7 +7,8 @@ same flag, built (§4.5a); steps C (Back/Forward, every open surface, §4.6)
 and D (per-open dedupe, §5) built; step F, the switch **on by default** with
 the kill switch `?feature=disableSpaModelNav` and the `disableSpaModelNav`
 prod rollback (§4.8). Phase 1b step 1, per-model sessions (#2019), built
-with one live session and no change in behaviour (§4.9). Phase 2 planned.
+with one live session and no change in behaviour (§4.9); the CadView split
+plan (§4.10). Phase 2 planned.
 Per-step status lives on #2011 and its sub-issues, not here.
 **Epic:** `open-205` (#2011). Stories: Phase 0 #2012 (tasks #2013–#2018,
 closed; #2017 moved to Phase 1), Phase 1 #2028 (measure), #2029
@@ -879,6 +880,14 @@ host.closeActive() CadView unmounting: close without forgetting (the next CadVie
   idle, and only the writer that raised `isCacheWriteInFlight` clears it, so
   a left model's writer ending can't take the next model's down.
 
+**Out of CadView** (#2247, at the owner's ask; §4.10 has the rest): the
+failure path's alert, reports and analytics (`Containers/loadFailure.js`),
+the open's analytics, engagement and no-geometry alert
+(`modelOpenEvents.js`), the scene placement and the hidden-element
+reapply (`modelPlacement.js`), the session host and its unmount close
+(`useModelSessionHost.js`), and the store half of the forget
+(`store/modelState.js#forgetModelState`).
+
 **Retired:** step A's identity guard (`isLoadSuperseded` over
 `dedupeModelKeyRef`), the replay-time `forgetLoadedModel` and its alert
 restore (`alertAtLoadStartRef`; a left run's alert never lands now), and
@@ -937,6 +946,79 @@ finishes or fails, write nothing of A into B's state, alert or analytics.
 The two kill-switch ones fail on the code before this step; all three fail
 with `LoadJob#isCurrent` forced true. Every Phase 1a test and E2E passes
 unchanged.
+
+### 4.10 CadView split plan
+
+`Containers/CadView.jsx` was 3,362 lines on main at `0af98b3e`. #2247 moved
+the session code and four load-end blocks out of it (`loadFailure.js`,
+`modelOpenEvents.js`, `modelPlacement.js`, `useModelSessionHost.js`,
+`store/modelState.js#forgetModelState`), which leaves 2,936. The rest is
+planned here and tracked on its own issue (the "CadView: split into
+focused modules (plan)" sub-issue of #2011). The goal is the one the owner
+set on #2247: CadView keeps the sequencing and the wiring, and each
+responsibility lives in a module with its own tests.
+
+**What it does today** (line counts after #2247, rounded):
+
+| Responsibility | Where in CadView | Lines |
+|---|---|---|
+| Store selectors, refs, the session host | top of the component | ~330 |
+| Viewer construction and theme rebuild: `initViewer`, the theme listener, `viewerBuiltForRef`, the no-WebGL notice, `abortLoadInFlight` | `onModelPath`, the `[modelPath]` effect | ~110 |
+| Load orchestration: the one-at-a-time queue, the auth wait and authed retry, the index and first-mesh callbacks, the Loader call, the end-of-load tail | `onViewer`, `onViewerInternal`, `loadModelWithAuthRetry`, `loadModel`, `endAbortedLoad` | ~740 |
+| Tree install: read, install, take down, search index | `onModel`, `readModelTree`, `installModelTree`, `forgetIndexed*`, `initSearch`, `onSearchParams`, `reportTreeReadFailure` | ~290 |
+| Selection funnel and picking: scene, tree, search, keyboard and URL selections, preview and streaming picks, STEP root-level instances, transient rows | `selectItemsInScene`, `canvasDoubleClickHandler`, `selectFromInstancePick`, `selectElementBasedOnFilepath`, `selectFromSelectionHash`, `reapplySelectionToGeometry`, the `rootLevel*` helpers, `resetState`, `deselectItems` | ~1,090 |
+| Effects (location and hash selection, preselection, the dev hooks, render-on-demand settle) and the JSX | the end of the component | ~390 |
+
+**Proposed modules, in extraction order:**
+
+1. **`useViewerLifecycle` (hook).** It builds, applies the look to and
+   disposes the viewer, owns the theme listener, `viewerBuiltForRef` and the
+   no-WebGL state, and returns `{viewer, isWebglUnavailable,
+   rebuildForTheme}`. **Phase 1b's single-viewer step wants this first.**
+   That step sits between EngineHost slices 1 and 2 (#2244): one viewer for
+   the page, with each session's scene root attached and detached instead
+   of a viewer per open. This hook is that seam: the per-open `initViewer`
+   in `onModelPath` becomes "attach the active session's scene", and a theme
+   change becomes a material and look update, not a rebuild and reload.
+   `modelPlacement.js#placeModelInScene` is where the attach goes.
+   *Tests:* a hook test over a mocked `initViewer` (one viewer per
+   `[modelPath, customViewSettings]` pair, StrictMode's repeat builds none,
+   a theme change rebuilds and aborts the active session's load, the
+   listener is removed on rebuild), plus `viewerInit.spec.ts` and
+   `modelSwitchMemory.spec.ts`'s collection legs unchanged.
+2. **`modelLoadRun.js`: one load run of a session.** It is
+   `onViewerInternal` + `loadModel` as a function of `(job, route, view)`
+   that returns the model or throws. The auth retry moves beside
+   `authLoadGate.js`. CadView keeps the queue. EngineHost slice 2 needs
+   this second, because two runs at once must not share CadView's closure
+   or refs: `previewPickedRef`, `pendingPreviewPickRef`,
+   `isCameraTakenDuringLoadRef` and `driveDownloadRef` move onto the job.
+   *Tests:* unit tests over a fake job and a mocked Loader (success, each
+   failure class into `loadFailure.js`, abort at each await, the
+   auth-retry branches). These move the matching `CadView.test.jsx` cases
+   down a layer and leave one integration case per path.
+3. **`modelTree.js`: read and install a tree into a job.** That is
+   `readModelTree`, `installModelTree`, the take-down and the search index.
+   It is per session for slice 2: a background session's tree goes into the
+   session's own copy of the state, not the store. *Tests:* the harness
+   model's tree installs once, a stale job installs nothing, and a walk
+   failure is reported once (today's "interactive at the index" cases).
+4. **`useSceneSelection` + `canvasPicks.js`: the selection funnel and the
+   pick handlers.** It has the biggest line count, but the fewest Phase 1b
+   dependencies, until the selection restore on return (step 2), which then
+   reads and writes the session's selection through it. *Tests:* the
+   funnel over a mocked viewer (selected and anchor ids, instances,
+   occurrence path, URL) and the pick resolution cases, which are in
+   `CadView.test.jsx` today; `navTree*.spec.ts`, `SynchronizedView.spec.ts`
+   and `sceneHighlightPermalink.spec.ts` unchanged.
+5. **`useLocationSelection`: the location and hash effects.** *Tests:*
+   `spaModelHistory.spec.ts` and the permalink specs unchanged, plus a hook
+   test for the multi-selection Back case.
+
+After these, CadView holds the store wiring, the queue, the session host
+and the JSX: about 500 lines. Each step is behaviour-neutral and lands
+with every existing test unchanged. A test that reached into a moved
+internal is repointed, and its break-it check is rerun.
 
 ## 5. "Once per page load" needs a per-open answer (#2022)
 

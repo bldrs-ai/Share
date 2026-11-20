@@ -48,3 +48,41 @@ export function resetModelState(store = useStore) {
   // One SearchIndex for the life of the page; the panels hold it.
   store.getState().searchIndex?.clearIndex?.()
 }
+
+
+/**
+ * Forget the model the view showed, in the store, when the active model
+ * session changes or its run was given up mid-load (CadView#forgetLoadedModel).
+ *
+ * @param {object} options
+ * @param {boolean} options.isFullReset under the in-app switch: every
+ *   per-model field (resetModelState). With the kill switch or the rollback
+ *   on, only what a load in flight showed early goes, as before step A
+ *   (design/new/in-app-model-switch.md §4.5a): the first mesh, and a tree
+ *   brought up at the index.
+ * @param {object} [store] the zustand store, for tests
+ */
+export function forgetModelState({isFullReset}, store = useStore) {
+  if (isFullReset) {
+    resetModelState(store)
+    return
+  }
+  // The left load's first mesh lifted the overlay (#2043); the model about
+  // to be shown has put nothing on screen yet.
+  store.setState({isFirstMeshShown: false})
+  if (store.getState().indexedModel !== null) {
+    forgetIndexedTreeInStore(store)
+  }
+}
+
+
+/**
+ * Take down a tree brought up at a load's index (open-205 #2029): the store's
+ * half; the view's element lookup is CadView's.
+ *
+ * @param {object} [store] the zustand store, for tests
+ */
+export function forgetIndexedTreeInStore(store = useStore) {
+  store.setState({indexedModel: null, rootElement: null, elementTypesMap: []})
+  store.getState().searchIndex?.clearIndex?.()
+}

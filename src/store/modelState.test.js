@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import {browserModelState} from './BrowserSlice'
 import {ifcModelState} from './IFCSlice'
-import {modelStateDefaults, resetModelState} from './modelState'
+import {forgetModelState, modelStateDefaults, resetModelState} from './modelState'
 import useStore from './useStore'
 
 
@@ -44,6 +44,32 @@ describe('store/modelState', () => {
     clearIndex.mockRestore()
   })
 
+  it('forgets everything under the in-app switch, and only what a load showed early without it', () => {
+    const model = {}
+    useStore.setState({model, isFirstMeshShown: true, indexedModel: {}, rootElement: {}, expandedElements: ['1']})
+    forgetModelState({isFullReset: false})
+    let state = useStore.getState()
+    // With the kill switch on, as before step A: the first mesh and the tree
+    // at the index go, the rest waits for the next load's own writes.
+    expect(state.isFirstMeshShown).toBe(false)
+    expect(state.indexedModel).toBeNull()
+    expect(state.rootElement).toBeNull()
+    expect(state.model).toBe(model)
+    expect(state.expandedElements).toEqual(['1'])
+
+    forgetModelState({isFullReset: true})
+    state = useStore.getState()
+    expect(state.model).toBeNull()
+    expect(state.expandedElements).toEqual([])
+  })
+
+  it('leaves a tree that did not come from an index alone without the switch', () => {
+    const rootElement = {}
+    useStore.setState({indexedModel: null, rootElement})
+    forgetModelState({isFullReset: false})
+    expect(useStore.getState().rootElement).toBe(rootElement)
+  })
+
   it('hands out fresh arrays, so a reset never shares one with the last model', () => {
     expect(modelStateDefaults().expandedElements).not.toBe(modelStateDefaults().expandedElements)
   })
@@ -60,11 +86,17 @@ describe('store/modelState', () => {
       // Comments may name the setters (and a commented-out block does).
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/\/\/.*$/gm, '')
-    const offenders = Object.keys({...ifcModelState(), ...browserModelState()})
+    const keys = Object.keys({...ifcModelState(), ...browserModelState()})
+    const offenders = keys
       .map((key) => `set${key[0].toUpperCase()}${key.slice(1)}`)
       // A bare call or the store's (`getState().setModel`), not another
       // object's method of the same name (`viewer.isolator.setModel`).
       .filter((setter) => new RegExp(`(?:^|[^.\\w]|getState\\(\\)\\.)${setter}\\b`, 'm').test(source))
     expect(offenders).toEqual([])
+    // Nor a raw store write naming one of them (`useStore.setState({model:
+    // …})`): the reset path that needs one is store/modelState.js's.
+    const rawWrites = [...source.matchAll(/setState\(\{([\s\S]*?)\}\)/g)]
+      .flatMap(([, written]) => keys.filter((key) => new RegExp(`\\b${key}\\b`).test(written)))
+    expect(rawWrites).toEqual([])
   })
 })

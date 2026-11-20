@@ -167,6 +167,9 @@ export class ModelSession {
     // The window handlers bound for this session, so closing it unbinds them
     // rather than leaving them on the next model's page until it binds its own.
     this.windowHandlers = {}
+    // Other listeners bound for this session (the camera's `rest` count),
+    // each a function that removes its own.
+    this.closers = []
   }
 
   /** @return {boolean} whether the view is bound to this session */
@@ -234,6 +237,18 @@ export class ModelSession {
   }
 
   /**
+   * Run `closer` when the session closes: for a listener bound for this
+   * session on something that can outlive it.
+   *
+   * @param {Function} closer
+   */
+  bindCloser(closer) {
+    if (typeof closer === 'function') {
+      this.closers.push(closer)
+    }
+  }
+
+  /**
    * Close the session: give its run up, unbind what it bound, close its
    * engine and drop every reference it holds, so nothing reachable from the
    * session keeps the model. Idempotent.
@@ -251,6 +266,14 @@ export class ModelSession {
       }
     }
     this.windowHandlers = {}
+    for (const closer of this.closers) {
+      try {
+        closer()
+      } catch (e) {
+        console.warn('ModelSession#close: a closer failed:', e)
+      }
+    }
+    this.closers = []
     // The worker is terminated here; the viewer the model was loaded into
     // closes it too when disposed, and `EngineSession#close` is idempotent.
     try {
