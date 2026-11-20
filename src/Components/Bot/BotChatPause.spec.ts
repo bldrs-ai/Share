@@ -1,10 +1,17 @@
 import {BrowserContext, Page, expect, test} from '@playwright/test'
 import {SCRIPT} from '../../assist/openrouterSse.fixture'
-import {AI_RELAY_PATH} from '../../__mocks__/api-handlers-openrouter'
 import type {MockAiRelay} from '../../__mocks__/api-handlers-openrouter'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 import {waitForModelReady} from '../../tests/e2e/models'
 import {homepageSetup, pauseViewerRendering, setIsReturningUser} from '../../tests/e2e/utils'
+
+
+// Restated rather than imported from the mock relay: api-handlers-openrouter.ts
+// imports `msw`, and the CI shards install only @playwright/test (no Share
+// deps), so a runtime import from it fails `playwright test --list` for the
+// whole suite. The `import type` above is erased and safe. Keep in sync with
+// AI_RELAY_PATH there (and BotChat.spec.ts, which restates it the same way).
+const AI_RELAY_PATH = '/.netlify/functions/ai-chat'
 
 
 /**
