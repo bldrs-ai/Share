@@ -27,6 +27,22 @@ export function ifcModelState() {
 
 
 /**
+ * The store fields `setIsModelLoading` writes, for a load job's `set`
+ * (Containers/modelSession.js) to write the same. A load that ends also ends
+ * its first mesh: `isFirstMeshShown` belongs to the load in flight, and the
+ * next one starts without it.
+ *
+ * @param {boolean} isLoading
+ * @return {object}
+ */
+export function modelLoadingState(isLoading) {
+  return isLoading ?
+    {isModelLoading: true} :
+    {isModelLoading: false, isFirstMeshShown: false}
+}
+
+
+/**
  * Data stored in Zustand for IFC state.
  *
  * @param {Function} set
@@ -45,12 +61,12 @@ export default function createIFCSlice(set, get) {
     customViewSettings: null,
     setCustomViewSettings: (settings) => set(() => ({customViewSettings: settings})),
 
+    // Not per-model state (ifcModelState): the overlay belongs to the load
+    // job that put it up, which alone takes it down
+    // (Containers/modelSession.js#LoadJob#showLoading), so a switch leaves
+    // the left load's overlay up until that load unwinds or the next begins.
     isModelLoading: false,
-    // A load that ends also ends its first mesh: `isFirstMeshShown` belongs to
-    // the load in flight, and the next one starts without it.
-    setIsModelLoading: (isLoading) => set(() => (isLoading ?
-      {isModelLoading: true} :
-      {isModelLoading: false, isFirstMeshShown: false})),
+    setIsModelLoading: (isLoading) => set(() => modelLoadingState(isLoading)),
 
     // Whether the load in flight has put geometry on screen yet (open-205
     // #2043): set by CadView when a progressive load's first preview mesh or

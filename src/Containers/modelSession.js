@@ -23,6 +23,7 @@
 // engine worker, engine/EngineSession.js). A model session holds at most one
 // of the latter.
 import {LoadAbortedError, isAborted} from '../utils/loadAbort'
+import {modelLoadingState} from '../store/IFCSlice'
 import useStore from '../store/useStore'
 
 
@@ -41,6 +42,17 @@ export const LoadState = Object.freeze({
 // Ids for the life of the page, so a session is told apart from a later one
 // of the same model (engine-worker.md §5.2: the host's table, the dev hook).
 let lastSessionId = 0
+
+// The load job whose loading UI is up: the overlay (`isModelLoading`) and
+// the snackbar's "Loading …" line. Page-wide, not per host, because the UI
+// is: an in-app open across route families remounts CadView, and each
+// CadView has its own host and its own load queue, so the left view's load
+// can still be unwinding after the next view's has begun (a mesh parse
+// can't be stopped; codex on #2247). Only the owner takes the UI down, so
+// that unwind can't clear the next load's; and a load given up with no
+// other load after it still takes its own down, so nothing is left stuck.
+// LoadJob#showLoading claims it.
+let loadingUiOwner = null
 
 
 /** One load run of a session: what CadView's `onViewer` starts. */
@@ -133,6 +145,57 @@ export class LoadJob {
   markFailed() {
     if (this.isCurrent()) {
       this.session.loadState = LoadState.FAILED
+    }
+  }
+
+  /**
+   * Put the loading UI up for this run, and own it (see `loadingUiOwner`).
+   * Only while the run is current: a run the user has left never claims it.
+   *
+   * @param {string} [snackMessage] the snackbar's line; left as it is if absent
+   */
+  showLoading(snackMessage = undefined) {
+    if (!this.isCurrent()) {
+      return
+    }
+    loadingUiOwner = this
+    useStore.setState({
+      ...modelLoadingState(true),
+      ...(snackMessage === undefined ? {} : {snackMessage}),
+    })
+  }
+
+  /**
+   * Replace the snackbar's loading line (the stall watchdog's "still
+   * working"), if this run's loading UI is up.
+   *
+   * @param {string} snackMessage
+   */
+  updateLoadingMessage(snackMessage) {
+    if (loadingUiOwner === this) {
+      useStore.setState({snackMessage})
+    }
+  }
+
+  /**
+   * Take the overlay down but keep the run's snackbar line and ownership:
+   * an attempt ended, and an authed retry may put it up again.
+   */
+  hideLoading() {
+    if (loadingUiOwner === this) {
+      useStore.setState(modelLoadingState(false))
+    }
+  }
+
+  /**
+   * The run is over, however it ended: take its loading UI down, if it is
+   * still the one up. Whether or not the run is current, so a run given up
+   * with no load after it leaves nothing stuck.
+   */
+  endLoading() {
+    if (loadingUiOwner === this) {
+      loadingUiOwner = null
+      useStore.setState({...modelLoadingState(false), snackMessage: null})
     }
   }
 

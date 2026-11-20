@@ -263,7 +263,6 @@ export default function CadView({
 
   // IFCSlice
   const model = useStore((state) => state.model)
-  const setIsModelLoading = useStore((state) => state.setIsModelLoading)
   const isModelReady = useStore((state) => state.isModelReady)
 
   // NavTreeSlice
@@ -413,12 +412,14 @@ export default function CadView({
    * open, so the homepage demo never reports. Each run ends here at most
    * once: every caller returns straight after.
    *
+   * @param {object} job the run (see onViewerInternal). Its loading UI goes
+   *   down only if it is still the one up (LoadJob#endLoading): after a
+   *   remount the next view's load may already have put up its own.
    * @param {number|null} [serialBefore] currentLoadSerial before the run's
    *   attempt, or null when it was aborted before one began (the auth wait)
    */
-  function endAbortedLoad(serialBefore = null) {
-    setIsModelLoading(false)
-    setSnackMessage(null)
+  function endAbortedLoad(job, serialBefore = null) {
+    job.endLoading()
     if (!isRealModelOpen(modelPath)) {
       return
     }
@@ -626,8 +627,7 @@ export default function CadView({
     // overlay only appeared once loadModel ran, and loadModel sat behind
     // full auth resolution — a slow Auth0 exchange meant ~10s of frozen
     // screen with no feedback. loadModel refines the message once it runs.
-    setIsModelLoading(true)
-    setSnackMessage('Loading model...')
+    job.showLoading('Loading model...')
 
     // Only GitHub-hosted models use the Auth0-brokered token; local files,
     // other external URLs, and Drive (its own connection tokens) shouldn't
@@ -657,7 +657,7 @@ export default function CadView({
         isAuthSettledBeforeLoad = await raceLoadAbort(waitForAuthSettled(AUTH_SETTLE_GRACE_MS), loadSignal)
       } catch (e) {
         // Only the abort rejects here (waitForAuthSettled never does).
-        endAbortedLoad()
+        endAbortedLoad(job)
         return
       }
     }
@@ -756,7 +756,7 @@ export default function CadView({
         // alert, no load_failed, no Sentry; the store's per-model state was
         // forgotten when the user left (forgetLoadedModel).
         pendingPreviewPickRef.current = null
-        endAbortedLoad(loadSerialBefore)
+        endAbortedLoad(job, loadSerialBefore)
         return
       }
       // A tree that came up at the index belongs to a model that then never
@@ -792,8 +792,7 @@ export default function CadView({
       // authed-retry path after loadModel's own finally cleared it) — a
       // load that ends in an alert must not leave the LoadingBackdrop
       // blocking the error dialog.
-      setIsModelLoading(false)
-      setSnackMessage(null)
+      job.endLoading()
       stopWatchingCamera()
       endOnDemand?.()
     }
@@ -812,7 +811,7 @@ export default function CadView({
     }
     if (!job.isCurrent()) {
       // Left after the load resolved, while its tree was still being walked.
-      endAbortedLoad(loadSerialBefore)
+      endAbortedLoad(job, loadSerialBefore)
       return
     }
     // Reuse the index's tree only while it is still the one shown: an
@@ -836,7 +835,7 @@ export default function CadView({
       // selection and visibility links, the camera listener) is this model's
       // to write any more. Everything below runs in one synchronous stretch,
       // so this one check covers it.
-      endAbortedLoad(loadSerialBefore)
+      endAbortedLoad(job, loadSerialBefore)
       return
     }
     // The finished model now answers everything the indexed one did, and it
@@ -928,7 +927,7 @@ export default function CadView({
         throw error
       }
       if (routeResult.kind === 'provider' && routeResult.provider === 'google') {
-        setIsModelLoading(true)
+        job.showLoading()
         await raceLoadAbort(waitForAuthSettled(AUTH_SETTLE_RETRY_MS), job.signal)
         // Without a signal (the kill switch) the wait is not raced: a run
         // left meanwhile stops here rather than download again.
@@ -947,7 +946,7 @@ export default function CadView({
       }
       // loadModel's finally just cleared the overlay; keep it up while we
       // wait for the token — to the user this is still the same load.
-      setIsModelLoading(true)
+      job.showLoading()
       await raceLoadAbort(waitForAuthSettled(AUTH_SETTLE_RETRY_MS), job.signal)
       job.throwIfLeft()
       if (!useStore.getState().accessToken) {
@@ -1000,8 +999,7 @@ export default function CadView({
       }
     }
     const loadingMessageBase = `Loading ${isGoogleResult ? routeResult.fileId : filepath}`
-    setIsModelLoading(true)
-    setSnackMessage(`${loadingMessageBase}`)
+    job.showLoading(`${loadingMessageBase}`)
 
     // Call this before loader, as IFCLoader needs it.
     viewer.setCustomViewSettings(customViewSettings)
@@ -1011,15 +1009,19 @@ export default function CadView({
     // mirror), Sentry breadcrumbs, and the stall watchdog. Disposed in the
     // finally below. Live progress renders in the snackbar (AlertDialogAndSnackbar),
     // so the snackbar keeps only the base "Loading <file>" message.
-    beginLoadProgress({
+    // This load's own reporter: its progress and its end reach the report
+    // only while it is still the active one (loadProgress.js), so a load the
+    // user has left, unwinding after the next one began, can't write into or
+    // end the next one's.
+    const reporter = beginLoadProgress({
       fileInfo: isGoogleResult ? `gdrive:${routeResult.fileId}` : filepath,
       onStall: (lastEvent) => {
         const where = lastEvent?.phase ? ` on ${lastEvent.phase}` : ''
-        setSnackMessage(`${loadingMessageBase}: still working${where}…`)
+        job.updateLoadingMessage(`${loadingMessageBase}: still working${where}…`)
       },
     })
 
-    const onProgress = (progressMsg) => reportLoadProgress(progressMsg)
+    const onProgress = (progressMsg) => reportLoadProgress(progressMsg, reporter)
     let loadedModel
     // Captured in the catch so the finally can tell endLoadProgress whether
     // the load succeeded (success grace line) or failed (error grace line),
@@ -1102,8 +1104,8 @@ export default function CadView({
       // onViewerInternal's catch stamps it onto Sentry via
       // attachLoadFailureContext before capturing. The captured error (or
       // null on success) drives the end-of-load grace snackbar.
-      endLoadProgress(loadError, {isAborted: isAborted(signal)})
-      setIsModelLoading(false)
+      endLoadProgress(loadError, {isAborted: isAborted(signal), reporter})
+      job.hideLoading()
     }
     // `load` checks the signal itself, up to its last await; this is the
     // synchronous step from there to the store, and the check for a load

@@ -166,6 +166,52 @@ describe('Containers/modelSession', () => {
     expect(window.onkeydown).toBe(ofB)
   })
 
+  describe('the loading UI belongs to the run that put it up (codex on #2247)', () => {
+    beforeEach(() => {
+      useStore.setState({isModelLoading: false, snackMessage: null})
+    })
+
+    it('a left run unwinding after the next view\'s run began leaves that run\'s overlay and snackbar', () => {
+      // Two views, as after a remount across route families: each its own host.
+      const jobOfA = host.open('A').beginLoad({isAbortable: true})
+      jobOfA.showLoading('Loading A')
+      host.closeActive()
+      const nextView = new ModelSessionHost({onForget: () => null})
+      const jobOfB = nextView.open('B').beginLoad({isAbortable: true})
+      jobOfB.showLoading('Loading B')
+
+      jobOfA.hideLoading()
+      jobOfA.updateLoadingMessage('Loading A: still working')
+      jobOfA.endLoading()
+
+      expect(useStore.getState().isModelLoading).toBe(true)
+      expect(useStore.getState().snackMessage).toBe('Loading B')
+      jobOfB.endLoading()
+      expect(useStore.getState().isModelLoading).toBe(false)
+      expect(useStore.getState().snackMessage).toBeNull()
+    })
+
+    it('a run given up with no run after it still takes its own down', () => {
+      const jobOfA = host.open('A').beginLoad({isAbortable: true})
+      jobOfA.showLoading('Loading A')
+      host.closeActive()
+      expect(jobOfA.isCurrent()).toBe(false)
+
+      jobOfA.endLoading()
+
+      expect(useStore.getState().isModelLoading).toBe(false)
+      expect(useStore.getState().snackMessage).toBeNull()
+    })
+
+    it('a run the user has already left never puts it up', () => {
+      const jobOfA = host.open('A').beginLoad({isAbortable: true})
+      host.open('B')
+      jobOfA.showLoading('Loading A')
+      expect(useStore.getState().isModelLoading).toBe(false)
+      expect(useStore.getState().snackMessage).toBeNull()
+    })
+  })
+
   it('closeActive (an unmount) closes the session without forgetting the store', () => {
     const job = host.open('A').beginLoad({isAbortable: true})
     forget.mockClear()

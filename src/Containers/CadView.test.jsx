@@ -1996,6 +1996,60 @@ describe('CadView', () => {
       expect(signal.aborted, 'an unmounted CadView gives its load up').toBe(true)
     })
 
+    // codex on #2247: an in-app open across route families (`/v/u`, `/v/g`
+    // and `/v/p`) remounts CadView, and each CadView has its own load queue,
+    // so the left load can still be unwinding after the next one has begun
+    // (a mesh parse can't be stopped). Its teardown must not take down the
+    // next load's overlay, snackbar or load report, nor write its late
+    // progress into that report.
+    it('keeps the next load\'s overlay and report when the left one unwinds after a remount', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      let finishA
+      let progressOfA
+      const calls = []
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation((path, loadViewer, onProgress) => {
+        calls.push(String(path))
+        if (calls.length === 1) {
+          progressOfA = onProgress
+          return new Promise((resolve) => {
+            finishA = () => resolve(getHarness()._loadedModel)
+          })
+        }
+        onProgress('Parsing B')
+        return new Promise(() => {})
+      })
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      const first = render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBe(1))
+      first.unmount()
+      await actAsyncFlush()
+
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBe(2))
+      await waitFor(() => expect(result.current.isModelLoading).toBe(true))
+      const reportOfB = loadProgressModule.loadReportToken()
+      const snackOfB = result.current.snackMessage
+      expect(snackOfB).toContain('other.ifc')
+
+      // A's work finishes now, after B has begun: its late progress, then the
+      // load's own end, finally and abort teardown.
+      await act(() => progressOfA('Parsing A late'))
+      await act(() => finishA())
+      await actAsyncFlush()
+
+      expect(loadProgressModule.loadReportToken(), 'B\'s reporter is still the active one').toBe(reportOfB)
+      expect(reportOfB.ended, 'and still reporting').toBe(false)
+      expect(result.current.isModelLoading, 'B\'s overlay stays up').toBe(true)
+      expect(result.current.snackMessage).toBe(snackOfB)
+      expect(result.current.loadResult).toBeNull()
+      const report = JSON.stringify([result.current.loadReportLines, result.current.currentLoadLine])
+      expect(report).not.toContain('Parsing A late')
+    })
+
     it('clears the left model from the store when the switch starts', async () => {
       const {result} = renderHook(() => useStore((state) => state))
       const {impl, calls} = hangingLoad()

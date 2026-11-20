@@ -888,7 +888,27 @@ reapply (`modelPlacement.js`), the session host and its unmount close
 (`useModelSessionHost.js`), and the store half of the forget
 (`store/modelState.js#forgetModelState`).
 
-**Retired:** step A's identity guard (`isLoadSuperseded` over
+**A load owns its report and its loading UI** (codex on #2247). An in-app
+open across route families (`/v/u`, `/v/g` ↔ `/v/p`) remounts CadView, and
+each CadView has its own host and load queue. So the left view's load can
+still be unwinding after the next view's load has begun, as a mesh parse
+can't be stopped. Before, that unwind ended the next load's report
+(`endLoadProgress` acted on whichever reporter was active), took its overlay
+and snackbar down, and wrote its late progress into the next report. That
+was already on main since #2222. Now:
+
+- **The report.** A load holds the reporter `beginLoadProgress` returned,
+  and its `onProgress` and `endLoadProgress` are no-ops once that reporter
+  is not the active one.
+- **The overlay and the "Loading …" snackbar.** They belong to the load job
+  that put them up (`LoadJob#showLoading`, a page-wide owner), and only that
+  job takes them down. A job given up with no load after it still takes its
+  own down, so nothing is left stuck.
+- **What a switch inside one view does.** It leaves the left load's overlay
+  up until that load unwinds, as before. The overlay is not in the
+  per-model reset.
+
+ (`isLoadSuperseded` over
 `dedupeModelKeyRef`), the replay-time `forgetLoadedModel` and its alert
 restore (`alertAtLoadStartRef`; a left run's alert never lands now), and
 `forgetLoadedModelState`'s list. What stays in CadView is sequencing, not a
@@ -918,7 +938,10 @@ an indexed tree), as §4.5a decided.
   (`viewer/streamingBatchPick.js`, one per scene, on the viewer's
   `scene.userData`), and the GLB writer's in-flight owner
   added here (`Loader.js#cacheWriteOwner`). engine-worker.md §5.2's slice 2
-  (cap N) needs each per session.
+  (cap N) needs each per session. The reporter has ownership already (below),
+  but there is still one active reporter for the page: the loader's own
+  reports (`reportModelInfo`, `reportEngineLog`, `reportCacheHit`, …) still
+  go to whichever one is active.
 - **The scene is the viewer's, not the session's.** A viewer is built per
   open (and per theme rebuild) and its dispose frees the model's scene, so
   a session can't yet detach its scene root and re-attach it to a view.
