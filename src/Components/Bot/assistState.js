@@ -23,13 +23,15 @@ export const assistConversationStore = createMemoryConversationStore()
 
 
 /**
- * The panel's view of the conversation, as a tiny external store for
- * `useSyncExternalStore`. A reply that is still streaming when the panel
- * unmounts keeps updating it, and the panel shows the result when it is back.
+ * A tiny external store for `useSyncExternalStore`: state outside React, with
+ * `get`, `update(change)` and `subscribe(cb)`.
+ *
+ * @param {*} initial
+ * @return {{get: Function, update: Function, subscribe: Function}}
  */
-export const assistChat = (() => {
+function createStore(initial) {
   const listeners = new Set()
-  let state = initialChat()
+  let state = initial
   return {
     get: () => state,
     /** @param {Function} change `(state) => nextState` */
@@ -48,7 +50,103 @@ export const assistChat = (() => {
       }
     },
   }
-})()
+}
+
+
+/**
+ * The panel's view of the conversation, as a tiny external store for
+ * `useSyncExternalStore`. A reply that is still streaming when the panel
+ * unmounts keeps updating it, and the panel shows the result when it is back.
+ */
+export const assistChat = createStore(initialChat())
+
+
+/**
+ * The hosted relay's last word on the caller's credits, for the panel's
+ * meter: `{tier, used, limit, exhausted}` (`used`/`limit` in the relay's
+ * micro-USD; the meter shows only a share of them), or null until a hosted
+ * response has said. Page-lifetime like the chat, and not part of it: a New
+ * chat doesn't refill anyone's credits.
+ */
+export const assistCredits = createStore(null)
+
+
+/**
+ * The tier whose out-of-credits dialog the panel owes the user, or null. Set
+ * by the relay's refusal, which can land while the panel is unmounted (closed,
+ * or another mobile drawer tab shown); the panel opens the dialog from it
+ * whenever it is set, and clears it as it does, so a dismissed dialog isn't
+ * reopened by the next mount.
+ */
+export const assistCreditsWall = createStore(null)
+
+
+/**
+ * Take the relay's metering headers (hosted.ts `HostedMeta`) as the latest
+ * word on the caller's credits. A response that omits them leaves the last
+ * reading in place rather than blanking the meter.
+ *
+ * @param {object} meta a `HostedMeta`
+ */
+export function noteHostedCredits(meta) {
+  const {tier, used, limit} = meta
+  if (!tier || used === null || limit === null || limit <= 0) {
+    return
+  }
+  // Never exhausted from the figures: a reply that succeeded (a free-model
+  // answer after the paid budget is spent, say) proves the caller isn't
+  // refused. Only the relay's 402 says so (markCreditsExhausted).
+  assistCredits.update(() => ({tier, used, limit, exhausted: false}))
+}
+
+
+/**
+ * The relay refused a turn for want of credits (`ai_credits_exhausted`).
+ * That is the authority on "exhausted": its reservation is an upper bound on
+ * the reply's cost, so it refuses while `used` is still under `limit`. Keeps
+ * the last reading's figures, or, if the refusal's headers carried none,
+ * stands in a full one, so the meter shows the wall either way.
+ *
+ * @param {?string} tier the relay's, from the refusal
+ */
+export function markCreditsExhausted(tier) {
+  assistCreditsWall.update(() => tier ?? AI_TIERS.ANONYMOUS)
+  assistCredits.update((credits) => ({
+    tier: tier ?? credits?.tier ?? AI_TIERS.ANONYMOUS,
+    used: credits?.used ?? 1,
+    limit: credits?.limit ?? 1,
+    exhausted: true,
+  }))
+}
+
+
+// The sign-in state the credits reading was taken under, kept here and not
+// in the panel: the panel unmounts when closed, so a sign-in change while it
+// is away must still be seen when it is back. undefined until first seen.
+let lastSeenAuth
+
+
+/**
+ * The panel reports the sign-in state as it mounts and as it changes. A
+ * change from the last one seen, even across an unmount, drops the credits
+ * reading: it belongs to the previous tier, and the next hosted response
+ * says the new one's.
+ *
+ * @param {boolean} isAuthenticated
+ */
+export function noteAssistAuth(isAuthenticated) {
+  if (lastSeenAuth !== undefined && lastSeenAuth !== isAuthenticated) {
+    resetAssistCredits()
+    assistCreditsWall.update(() => null)
+  }
+  lastSeenAuth = isAuthenticated
+}
+
+
+/** Forget the credits reading: the next hosted response sets it again. For a sign-in change, and tests. */
+export function resetAssistCredits() {
+  assistCredits.update(() => null)
+}
 
 
 /** `{assist, transport, dispose, session}`, once the first send has built it. */
@@ -96,9 +194,11 @@ export const assistAnonTokens = {
 /**
  * The hosted transport's host side (assistHost.js `createShareAssist`).
  *
- * `onMeta` shows the overflow notice (ai-workspace.md §6 path 3): once per
- * chat, the first time the relay says a reply comes from the free models
- * because the paid ones' daily budget is spent.
+ * `onMeta` runs on every relay response, refusals included. It keeps the
+ * credits reading the meter shows, and shows the overflow notice
+ * (ai-workspace.md §6 path 3): once per chat, the first time the relay says a
+ * reply comes from the free models because the paid ones' daily budget is
+ * spent.
  */
 export const assistHostedSide = {
   getAuthToken: async () => {
@@ -116,6 +216,7 @@ export const assistHostedSide = {
   },
   anonTokens: assistAnonTokens,
   onMeta: (meta) => {
+    noteHostedCredits(meta)
     if (!meta.overflow) {
       return
     }
@@ -160,6 +261,9 @@ export function resetAssistChat() {
   assistInstance.current?.session?.abort()
   assistInstance.current?.dispose()
   assistInstance.current = null
+  lastSeenAuth = undefined
+  resetAssistCredits()
+  assistCreditsWall.update(() => null)
   assistChat.update(() => initialChat())
 }
 

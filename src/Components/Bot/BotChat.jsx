@@ -1,6 +1,7 @@
 import React, {
   ReactElement,
   useCallback,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -17,24 +18,30 @@ import {
   Stop as StopIcon,
 } from '@mui/icons-material'
 import {HOSTED_TRANSPORT_LABEL, OPENROUTER_KEY_ID, assistErrorMessage} from '../../assist'
+import {AI_CREDITS_FEATURE} from '../../quota/aiCredits'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import useStore from '../../store/useStore'
 import {createShareAssist} from '../../viewer/tools/assistHost'
 import {loadAssistRuntime} from '../../viewer/tools/assistRuntime'
+import QuotaLimitDialog from '../Open/QuotaLimitDialog'
 import Panel from '../SideDrawer/Panel'
 import BotSettings from './BotSettings'
 import ChatMessage from './ChatMessage'
+import CreditsMeter from './CreditsMeter'
 import {
   assistAuth,
   assistChat,
   assistConversationStore,
+  assistCredits,
+  assistCreditsWall,
   assistHostedSide,
   assistInstance,
   assistKeyStore,
+  markCreditsExhausted,
   newAssistChat,
+  noteAssistAuth,
 } from './assistState'
 import {reportAssistCondition} from './reportAssistCondition'
-import {trackAssistQuotaLimit} from './trackAssistQuota'
 import 'react-chat-elements/dist/main.css'
 import './chat-bubbles.css'
 
@@ -98,6 +105,29 @@ export default function BotChat() {
   const isStreaming = streamingTurn !== null
   const [input, setInput] = useState('')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  // The tier the out-of-credits dialog is showing for, or null when closed.
+  // `isNewWall` is true when a relay refusal opened it (counted once, by the
+  // dialog's quota_limit_reached) and false when the user reopened it from the
+  // meter, which is informational: one refusal, one event.
+  const [creditsDialog, setCreditsDialog] = useState(null)
+  // A refusal that landed while the panel was away leaves its tier here; the
+  // dialog opens from it, and taking it keeps a dismissed one from reopening.
+  const owedWallTier = useSyncExternalStore(assistCreditsWall.subscribe, assistCreditsWall.get)
+  useEffect(() => {
+    if (owedWallTier !== null) {
+      setCreditsDialog({tier: owedWallTier, isNewWall: true})
+      assistCreditsWall.update(() => null)
+    }
+  }, [owedWallTier])
+  const credits = useSyncExternalStore(assistCredits.subscribe, assistCredits.get)
+
+  // The meter's figures belong to the sign-in state they were read under.
+  // The last-seen state lives in assistState, so a change made while the
+  // panel was closed is seen on reopening. Layout effect: no frame of the
+  // old tier's meter.
+  useLayoutEffect(() => {
+    noteAssistAuth(isAuthenticated)
+  }, [isAuthenticated])
 
   const theme = useTheme()
   const messagesContainerRef = useRef(null)
@@ -188,7 +218,10 @@ export default function BotChat() {
             reportAssistCondition('model_unavailable', {status: event.status, transport: transport.id})
           }
           if (event.type === 'error' && event.code === 'credits_exhausted') {
-            trackAssistQuotaLimit(event.tier)
+            // The dialog sends the one `quota_limit_reached` for this wall.
+            // Also owes the dialog (assistCreditsWall), which the panel opens
+            // even if it was unmounted when this arrived.
+            markCreditsExhausted(event.tier)
           }
           update((chat) => ({
             ...chat,
@@ -366,6 +399,11 @@ export default function BotChat() {
         <Box ref={messagesEndRef} data-testid='BotChat-MessagesEnd' sx={{height: '1px', width: '100%'}}/>
       </Stack>
 
+      {/* Hosted only: with the user's own key, Bldrs' credits aren't what's spent. */}
+      {credits && !apiKey && (
+        <CreditsMeter credits={credits} onMore={() => setCreditsDialog({tier: credits.tier, isNewWall: false})}/>
+      )}
+
       <Box
         sx={{
           display: 'flex',
@@ -430,6 +468,13 @@ export default function BotChat() {
       ) : (
         renderChat()
       )}
+      <QuotaLimitDialog
+        tier={creditsDialog?.tier ?? 'anonymous'}
+        isOpen={creditsDialog !== null}
+        onClose={() => setCreditsDialog(null)}
+        reportShowing={creditsDialog?.isNewWall ?? true}
+        feature={AI_CREDITS_FEATURE}
+      />
     </Panel>
   )
 }
