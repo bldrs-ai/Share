@@ -756,6 +756,13 @@ Per-message metering would multiply that write rate by roughly 100.
     at its time the notice offers Resume, and only that tab's press claims it.
     Each model keeps its own log: opening another model in the app shows that
     model's chat, and a paused turn re-arms when its model is open again. The
+    forwarder watches the store's route itself, and each resume checks the
+    loaded model against the turn's session key right before it claims, so a
+    closed panel can't resume A's turn on B. A turn stopped by a model switch
+    is kept as `interrupted`: shown with its question and a note, never
+    resent. One send per conversation is in flight at a time (a new one waits
+    for an aborted one to unwind), so each send's messages land on its own
+    turn, in order. The
     upsell stays one per refusal, and `quota_limit_reached` is sent once per
     refusal id, also for a resend refused again while the dialog is open and
     for refusals while the panel was closed. The log holds tool results

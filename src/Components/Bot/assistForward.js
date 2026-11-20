@@ -1,4 +1,6 @@
 import {v4 as uuid} from 'uuid'
+import modelIdentity from '../../routes/modelIdentity'
+import useStore from '../../store/useStore'
 import {openAssistLog, sweepAssistLogs} from './assistLog'
 import {assistSessionKey} from './assistSessionKey'
 import {
@@ -32,7 +34,12 @@ import {
  *
  * The chat follows the session key: opening another model in the app shows
  * that model's log (or an empty chat), and a paused turn waits on its own
- * model, re-armed when the user comes back to it.
+ * model, re-armed when the user comes back to it. Two things keep that true
+ * with the panel unmounted (closed, or another mobile drawer tab): this
+ * module watches the store's model route itself (listen), and every
+ * automatic or resumed forward checks, right before it claims, that the
+ * model loaded now is the turn's own (routeIsCurrent). Otherwise it leaves
+ * the turn queued and checks again later.
  *
  * The panel's restore runs when the panel first mounts on a model, once
  * Auth0 has settled (BotChat.jsx): a reload with the panel closed restores
@@ -59,6 +66,10 @@ export const REFUSED_AGAIN_MAX_MS = 15 * 60 * 1000 // eslint-disable-line no-mag
 // further out than that, so long waits re-arm in steps.
 const MAX_TIMER_MS = 24 * 60 * 60 * 1000 // eslint-disable-line no-magic-numbers
 const BUSY_RETRY_MS = 1000
+// A resume found another model loaded checks again this often.
+const ROUTE_RETRY_MS = 5000
+// How long a send waits for an earlier send of its conversation to unwind.
+const UNWIND_WAIT_MS = 15000
 
 export const SENT_ELSEWHERE_NOTICE = 'This message was sent from another tab.'
 /** Restored under a turn stopped by switching to another model in the app. */
@@ -69,12 +80,15 @@ export const CUT_OFF_NOTICE = 'The reply was cut off when the page reloaded. Ask
 
 let session = {log: openAssistLog(null), modelRoute: null, scope: null}
 let sender = null
-// The turns being forwarded, by conversation id, each with the log it
-// belongs to. More than one can be in flight: a model switch aborts A's
-// turn, but it is still unwinding when the user sends on B (Codex on
-// #2253). Each forward sets and clears only its own entry, so A's ending
-// can't take B's context, and the loop's messages for each conversation go
-// to that turn's own log.
+// The send in flight for each conversation: `{seq, log, done}`, the turn's
+// own log entry and log. The loop's store API carries no per-send token,
+// only the conversation id, so the token is the conversation's ONE send in
+// flight: a send waits for an earlier send of its conversation to unwind
+// before it starts (forward). That earlier one exists when a model switch
+// aborted A's turn and the user is back on A, sending, before it ended
+// (Codex rounds 2 and 3 on #2253). So each append lands on its own send's
+// turn, in seq order, in the log and in the page's store alike; A's ending
+// can't take B's context either, as each forward clears only its own entry.
 const forwarding = new Map()
 let timer = null
 let refusedAgain = 0
@@ -253,6 +267,15 @@ export function resetAssistForward() {
  */
 async function forward(seq, {text, messageId, turn, ignoreNotBefore = false, manual = false}) {
   const {log} = session
+  if (!turn && !routeIsCurrent(log)) {
+    // A timer, restore or Resume for a turn whose model isn't the one loaded
+    // (the panel was closed when the user moved on): its tools would act on
+    // the wrong model. It stays queued; this checks again, and a return to
+    // its model re-arms it anyway.
+    clearTimer()
+    timer = setTimeout(arm, ROUTE_RETRY_MS)
+    return
+  }
   const chat = assistChat.get()
   const {conversationId} = chat
   const turnId = turn ?? uuid()
@@ -285,7 +308,18 @@ async function forward(seq, {text, messageId, turn, ignoreNotBefore = false, man
     }
     return
   }
-  const context = {seq, log}
+  const earlier = forwarding.get(conversationId)
+  if (earlier) {
+    // An aborted send of this conversation still unwinding: let its
+    // messages land on its own turn first (the note on `forwarding`). An
+    // aborted turn ends promptly; the cap only keeps a stuck one from
+    // blocking the user.
+    await Promise.race([earlier.done, new Promise((resolve) => setTimeout(resolve, UNWIND_WAIT_MS))])
+  }
+  let finished
+  const context = {seq, log, done: new Promise((resolve) => {
+    finished = resolve
+  })}
   forwarding.set(conversationId, context)
   let outcome
   try {
@@ -294,6 +328,7 @@ async function forward(seq, {text, messageId, turn, ignoreNotBefore = false, man
     if (forwarding.get(conversationId) === context) {
       forwarding.delete(conversationId)
     }
+    finished()
   }
   // A New chat or another model while it ran: the outcome goes to this
   // turn's own log, and the chat on screen, another one's, is left alone.
@@ -497,12 +532,46 @@ function isHidden() {
 }
 
 
+/**
+ * @param {object} log the turn's
+ * @return {boolean} whether the model loaded now is the log's own (a
+ *   memory-only log, which has no model, always is)
+ */
+function routeIsCurrent(log) {
+  if (log.key === null) {
+    return true
+  }
+  const route = currentModelRoute()
+  return route !== null && session.scope !== null &&
+    assistSessionKey({modelRoute: route, scope: session.scope}) === log.key
+}
+
+
+/** @return {?string} the model loaded now, by the store's route (not the panel's) */
+function currentModelRoute() {
+  const {modelPath} = useStore.getState()
+  return modelPath ? modelIdentity(modelPath) : null
+}
+
+
 /** The page-level listeners, installed with the first session. */
 function listen() {
   if (listening || typeof window === 'undefined') {
     return
   }
   listening = true
+  // The model route, watched here rather than only by the panel, which is
+  // unmounted while closed: a switch to another model with the panel away
+  // still moves the chat to that model's session and stops A's timer.
+  useStore.subscribe((state, previous) => {
+    if (state.modelPath === previous.modelPath || session.scope === null) {
+      return
+    }
+    const route = currentModelRoute()
+    if (route !== null) {
+      void attachAssistSession({modelRoute: route, scope: session.scope})
+    }
+  })
   document.addEventListener('visibilitychange', () => {
     if (!isHidden()) {
       arm()

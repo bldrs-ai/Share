@@ -19,10 +19,14 @@ const START = Date.parse('2026-11-20T12:00:00.000Z')
 function page(outcomes = []) {
   let forward
   let state
+  let store
   jest.isolateModules(() => {
     forward = require('./assistForward')
     state = require('./assistState')
+    store = require('../../store/useStore').default
   })
+  // The model loaded now, which a resume checks its turn against.
+  store.setState({modelPath: {downloadUrl: ROUTE}})
   const sends = []
   forward.setTurnSender(async ({text, turn, conversationId}) => {
     sends.push(text)
@@ -40,7 +44,22 @@ function page(outcomes = []) {
         [...chat.messages, {id: `reply-${sends.length}`, kind: 'assistant', text: `re: ${text}`}]}))
     return outcome
   })
-  return {forward, state, sends}
+  return {forward, state, store, sends}
+}
+
+
+/**
+ * Open a model in the page, as the route does: the store's model path, which
+ * the forwarder watches, then the panel's own attach (a no-op by then).
+ *
+ * @param {object} tab from page()
+ * @param {string} modelRoute
+ * @return {Promise<void>}
+ */
+async function goTo(tab, modelRoute) {
+  tab.store.setState({modelPath: {downloadUrl: modelRoute}})
+  await tab.forward.attachAssistSession({modelRoute, scope: 'anonymous'})
+  await flush()
 }
 
 
@@ -192,7 +211,7 @@ describe('Bot/assistForward', () => {
   describe('after a reload', () => {
     it('restores the chat and the paused turn, and sends it once when due', async () => {
       const first = page([{refusal: {resumeAt: START + 20000, tier: 'anonymous'}}])
-      await first.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      await goTo(first, ROUTE)
       await first.forward.submitTurn('one')
       await first.forward.resumePausedTurnNow()
       // A second turn, refused: paused when the page reloads.
@@ -204,7 +223,7 @@ describe('Bot/assistForward', () => {
       first.forward.resetAssistForward()
 
       const reloaded = page()
-      await reloaded.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      await goTo(reloaded, ROUTE)
       const chat = reloaded.state.assistChat.get()
       expect(chat.messages.map((m) => [m.kind, m.text])).toEqual([
         ['user', 'one'], ['assistant', 're: one'], ['user', 'two']])
@@ -222,12 +241,12 @@ describe('Bot/assistForward', () => {
 
     it('restores nothing for another model, or another sign-in', async () => {
       const first = page()
-      await first.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      await goTo(first, ROUTE)
       first.state.assistChat.update((chat) => ({...chat, messages: [{id: 'x', kind: 'user', text: 'kept'}]}))
       openAssistLog(KEY).begin(first.state.assistChat.get().conversationId)
       openAssistLog(KEY).appendTurn({text: 'queued for index.ifc'})
       const other = page()
-      await other.forward.attachAssistSession({modelRoute: 'https://bldrs.ai/other.ifc', scope: 'anonymous'})
+      await goTo(other, 'https://bldrs.ai/other.ifc')
       expect(other.state.assistChat.get().messages).toEqual([])
       const signedIn = page()
       await signedIn.forward.attachAssistSession({modelRoute: ROUTE, scope: 'user-00000001'})
@@ -236,10 +255,10 @@ describe('Bot/assistForward', () => {
 
     it('two tabs restoring one paused turn send it once between them', async () => {
       const first = page([{refusal: {resumeAt: START + 5000, tier: 'anonymous'}}])
-      await first.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      await goTo(first, ROUTE)
       await first.forward.submitTurn('hello')
       const second = page()
-      await second.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      await goTo(second, ROUTE)
       expect(second.state.assistChat.get().paused).toMatchObject({text: 'hello'})
       // Each tab has its own jitter; both timers fire.
       await advance(5000 + first.forward.RESUME_JITTER_MAX_MS + 1000)
@@ -253,13 +272,14 @@ describe('Bot/assistForward', () => {
   // Codex on #2253: in-app navigation A -> B -> A.
   it('another model in the app shows its own chat; a paused turn waits on its model and re-arms there', async () => {
     const B = 'https://bldrs.ai/other.ifc'
-    const {forward, state, sends} = page([{refusal: {resumeAt: START + 5000, tier: 'anonymous'}}])
-    await forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+    const tab = page([{refusal: {resumeAt: START + 5000, tier: 'anonymous'}}])
+    const {forward, state, sends} = tab
+    await goTo(tab, ROUTE)
     await forward.submitTurn('about A')
     const onA = state.assistChat.get().conversationId
     expect(state.assistChat.get().paused).toMatchObject({text: 'about A'})
 
-    await forward.attachAssistSession({modelRoute: B, scope: 'anonymous'})
+    await goTo(tab, B)
     expect(state.assistChat.get()).toMatchObject({messages: [], paused: null})
     expect(state.assistChat.get().conversationId).not.toBe(onA)
     // A's time comes while B is shown: nothing is sent about A from B.
@@ -268,11 +288,10 @@ describe('Bot/assistForward', () => {
     await forward.submitTurn('about B')
     expect(sends).toEqual(['about A', 'about B'])
 
-    await forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+    await goTo(tab, ROUTE)
     expect(state.assistChat.get().conversationId).toBe(onA)
-    expect(state.assistChat.get().messages.map((m) => m.text)).toEqual(['about A'])
-    // Back on A, its time long past: it is sent once, at once.
-    await flush()
+    // Back on A, its time long past: its chat is back, and it is sent once, at once.
+    expect(state.assistChat.get().messages.map((m) => m.text)).toEqual(['about A', 're: about A'])
     expect(sends).toEqual(['about A', 'about B', 'about A'])
     expect(state.assistChat.get().paused).toBeNull()
     // B kept its own chat in its own log.
@@ -313,10 +332,10 @@ describe('Bot/assistForward', () => {
     it('the stopped turn ending late can\'t take the next model\'s turn context: B\'s messages reach B\'s log', async () => {
       const tab = page()
       const release = heldSender(tab)
-      await tab.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      await goTo(tab, ROUTE)
       void tab.forward.submitTurn('about A')
       await flush()
-      await tab.forward.attachAssistSession({modelRoute: B, scope: 'anonymous'})
+      await goTo(tab, B)
       void tab.forward.submitTurn('about B')
       await flush()
       // A unwinds while B's turn is still running.
@@ -334,20 +353,112 @@ describe('Bot/assistForward', () => {
     it('back on A, the stopped turn\'s question shows, with why it has no answer, and is not resent', async () => {
       const tab = page()
       const release = heldSender(tab)
-      await tab.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      await goTo(tab, ROUTE)
       void tab.forward.submitTurn('about A')
       await flush()
-      await tab.forward.attachAssistSession({modelRoute: B, scope: 'anonymous'})
+      await goTo(tab, B)
       await release('about A', {stopped: true})
       expect(openAssistLog(KEY).load().entries.find((e) => e.kind === 'turn'))
         .toMatchObject({text: 'about A', state: 'interrupted'})
-      await tab.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      await goTo(tab, ROUTE)
       expect(tab.state.assistChat.get().messages.map((m) => [m.kind, m.text])).toEqual([
         ['user', 'about A'], ['notice', tab.forward.INTERRUPTED_NOTICE]])
       expect(tab.state.assistChat.get().paused).toBeNull()
       await advance(60000)
       // Sent once, before the switch; never again.
       expect(tab.sends).toEqual(['about A'])
+    })
+  })
+
+  describe('the panel away (Codex round 3 on #2253)', () => {
+    const B = 'https://bldrs.ai/other.ifc'
+
+    it('a switch with the panel closed moves the chat to B; A\'s turn stays queued, and goes once back on A', async () => {
+      const tab = page([{refusal: {resumeAt: START + 5000, tier: 'anonymous'}}])
+      await goTo(tab, ROUTE)
+      await tab.forward.submitTurn('about A')
+      // The panel is closed: only the route changes, nothing calls attach.
+      tab.store.setState({modelPath: {downloadUrl: B}})
+      await flush()
+      expect(tab.state.assistChat.get()).toMatchObject({messages: [], paused: null})
+      await advance(5000 + tab.forward.RESUME_JITTER_MAX_MS + 10000)
+      expect(tab.sends).toEqual(['about A'])
+      expect(openAssistLog(KEY).queuedTurn()).toMatchObject({text: 'about A'})
+      tab.store.setState({modelPath: {downloadUrl: ROUTE}})
+      await flush()
+      expect(tab.sends).toEqual(['about A', 'about A'])
+      await advance(60000)
+      expect(tab.sends).toHaveLength(2)
+    })
+
+    it('a resume never sends while another model is loaded, whatever the session thinks', async () => {
+      // A route source the forwarder can't watch (no store subscription), so
+      // only its fire-time check stands between A's timer and model B.
+      let route = ROUTE
+      let tab
+      jest.isolateModules(() => {
+        jest.doMock('../../store/useStore', () => ({__esModule: true,
+          default: {getState: () => ({modelPath: {downloadUrl: route}}), subscribe: () => () => undefined}}))
+        tab = {forward: require('./assistForward'), state: require('./assistState'), sends: []}
+      })
+      // Later tests load the real store again.
+      jest.dontMock('../../store/useStore')
+      tab.forward.setTurnSender(async ({text, turn}) => {
+        tab.sends.push(text)
+        tab.state.assistChat.update((c) => ({...c, streamingTurn: c.streamingTurn === turn ? null : c.streamingTurn}))
+        return await Promise.resolve(tab.sends.length === 1 ? {refusal: {resumeAt: START + 5000, tier: 'anonymous'}} : {})
+      })
+      await tab.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      await tab.forward.submitTurn('about A')
+      route = B
+      await advance(5000 + tab.forward.RESUME_JITTER_MAX_MS + 10000)
+      await tab.forward.resumePausedTurnNow()
+      expect(tab.sends).toEqual(['about A'])
+      expect(openAssistLog(KEY).queuedTurn()).toMatchObject({text: 'about A'})
+      route = ROUTE
+      await advance(10000)
+      expect(tab.sends).toEqual(['about A', 'about A'])
+    })
+
+    it('A -> B -> A with A\'s first send still unwinding: the new A turn waits, and history stays in seq order', async () => {
+      const tab = page()
+      const held = new Map()
+      tab.forward.setTurnSender(({text, turn, conversationId}) => new Promise((resolve) => {
+        tab.sends.push(text)
+        held.set(text, async ({stopped = false} = {}) => {
+          await tab.forward.assistLoggedConversationStore.append(conversationId, stopped ?
+            [{role: 'user', content: text}] : [{role: 'user', content: text}, {role: 'assistant', content: `re: ${text}`}])
+          tab.state.assistChat.update((c) => ({...c, streamingTurn: c.streamingTurn === turn ? null : c.streamingTurn,
+            messages: c.conversationId === conversationId && !stopped ?
+              [...c.messages, {id: `reply-${text}`, kind: 'assistant', text: `re: ${text}`}] : c.messages}))
+          resolve({})
+        })
+      }))
+      await goTo(tab, ROUTE)
+      void tab.forward.submitTurn('first A')
+      await flush()
+      const conversation = tab.state.assistChat.get().conversationId
+      await goTo(tab, B)
+      await goTo(tab, ROUTE)
+      expect(tab.state.assistChat.get().conversationId).toBe(conversation)
+      void tab.forward.submitTurn('second A')
+      await flush()
+      // The old send hasn't ended: the new one waits for it.
+      expect(tab.sends).toEqual(['first A'])
+      await held.get('first A')({stopped: true})
+      await flush()
+      expect(tab.sends).toEqual(['first A', 'second A'])
+      await held.get('second A')()
+      await flush()
+      const record = openAssistLog(KEY).load()
+      const turns = Object.fromEntries(record.entries.filter((e) => e.kind === 'turn').map((e) => [e.text, e]))
+      expect(turns['first A'].state).toBe('interrupted')
+      expect(turns['second A'].state).toBe('answered')
+      // Each send's messages on its own turn, in seq order.
+      expect(record.entries.filter((e) => e.kind === 'messages').map((e) => [e.turn, e.messages.map((m) => m.content)]))
+        .toEqual([[turns['first A'].seq, ['first A']], [turns['second A'].seq, ['second A', 're: second A']]])
+      expect((await tab.state.assistConversationStore.load(conversation)).map((m) => m.content))
+        .toEqual(['first A', 'second A', 're: second A'])
     })
   })
 
@@ -359,10 +470,10 @@ describe('Bot/assistForward', () => {
 
     it('at its time the turn waits for Resume; only the tab that presses it sends, once', async () => {
       const first = page([{refusal: {resumeAt: START + 2000, tier: 'anonymous'}}])
-      await first.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      await goTo(first, ROUTE)
       await first.forward.submitTurn('hello')
       const second = page()
-      await second.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      await goTo(second, ROUTE)
       expect(second.state.assistChat.get().paused).toMatchObject({text: 'hello', awaitingResume: false})
       await advance(2000 + first.forward.RESUME_JITTER_MAX_MS + 1000)
       // Due in both tabs, sent by neither.
