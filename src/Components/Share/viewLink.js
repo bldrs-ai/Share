@@ -62,7 +62,7 @@ export function createLiveTerm({write, isEnabled = () => true, waitMs = HASH_DEB
   let isLive = false
   let isDisposed = false
   // Lands only in the history entry the change was made in: a Back, a
-  // Forward or an in-app open (open-205, #2021: with `?feature=spaModelNav`
+  // Forward or an in-app open (open-205, #2021: in-app, the default since step F,
   // they stay in this document) can make another entry the page's within
   // the debounce, and this value isn't that entry's. `flush` (a component
   // going away as the viewer is replaced) is dropped the same way

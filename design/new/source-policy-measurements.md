@@ -1304,3 +1304,23 @@ Chromium after #2172.
 Why geometry extraction over a window re-reads one authoring tool's 309 MB
 file 14 times. That is the cost the buffered open avoids, and a file over the
 cap, or a device under the small-device ceiling, still pays it.
+
+## Windowed aggregate pass without prefetch (conway#798)
+
+Since conway#798 the windowed aggregate pass also runs no relationship
+prefetch over a store that reads synchronously, the same condition under
+which conway#787 skips the per-product closure walk (see
+[engine-worker.md](engine-worker.md) §5.6). Headless Chromium, windowed arm,
+cold loads, medians of 5 interleaved rounds, conway main at
+10145220 (published as 1.1655.796) against the same plus #798
+(1.1656.798):
+
+| Model | Geometry | Total | Final window | Worker peak |
+|---|---|---|---|---|
+| D3D (IFC, 213.6 MiB) | 52.1 s to 46.7 s (-10%) | 60.8 s to 56.3 s | 158 to 126 MB | 1,389 to 989 MB |
+| ARCHICAD 22 IFC2X3 (309 MB) | 13.6 s to 12.8 s | 23.3 s to 22.4 s | 61 to 61 MB | 1,360 to 789 MB |
+
+PSB and a 243 MB ARCHICAD model were flat. First mesh is unchanged on every
+model, and the geometry digests are identical, so the output did not move.
+The preview-adapter walk skip was measured as well and showed no effect, so
+it stays as it is.

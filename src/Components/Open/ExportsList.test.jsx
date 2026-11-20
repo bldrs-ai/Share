@@ -131,7 +131,7 @@ describe('ExportsList', () => {
   // The list isn't mounted in the app today (SaveModelControl's Export tab
   // leaves it out), so no E2E reaches this: it is the open-205 surface check
   // (#2021) that the row opens its model through navigateToModel with the
-  // router's navigate, so it is in-app under ?feature=spaModelNav.
+  // router's navigate, so it is in-app (by default since open-205 step F).
   it('opens a row\'s model through navigateToModel, with the router\'s navigate', async () => {
     loadExports.mockResolvedValue({exports: [aRow()]})
 

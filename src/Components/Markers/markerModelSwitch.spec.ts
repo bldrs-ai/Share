@@ -25,8 +25,8 @@ import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
  * A is the hosted index.ifc, whose notes (MSW, `sampleIssues`) carry
  * placemarks. B is box.ifc from `bldrs-ai/test-models`, whose one note
  * carries a placemark of its own (`testModelsIssues`), so the two sets can be
- * told apart. The switch is the search bar's link open, in-app under
- * `?feature=spaModelNav`.
+ * told apart. The switch is the search bar's link open, in-app by default
+ * (`spaModelNav`, on since #2011 step F).
  */
 const TWO_LOADS_TIMEOUT_MS = 90_000
 const MARKERS_TIMEOUT_MS = 20_000
@@ -48,7 +48,7 @@ describeMobileAndDesktop('Markers: an in-app switch shows only the next model\'s
   })
 
   test('B\'s scene holds B\'s markers, and A\'s selection is gone', async ({page}) => {
-    await page.goto(`${HOME_PATH}?feature=spaModelNav`, {waitUntil: 'domcontentloaded'})
+    await page.goto(HOME_PATH, {waitUntil: 'domcontentloaded'})
     await waitForModelSettled(page)
     await page.getByTestId('control-button-notes').click()
     await expect(page.getByTestId('list-notes')).toBeVisible()
