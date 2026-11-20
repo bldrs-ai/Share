@@ -42,15 +42,13 @@ import {goToSubscription} from '../Profile/subscriptionNav'
  * @return {ReactElement}
  */
 export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA_FEATURES.PRIVATE_LOAD, reportShowing = true}) {
-  const appMetadata = useStore((state) => state.appMetadata)
-  const {getAccessTokenSilently, isAuthenticated, user} = useAuth0()
+  const {isAuthenticated} = useAuth0()
   // The latest sign-in state, read at emit time if `tier` is missing
   // (trackModelActionWhenAuthSettled's fallback). Not an effect dependency:
   // a sign-in while the dialog is open must not count a second showing.
   const isAuthenticatedRef = useRef(isAuthenticated)
   isAuthenticatedRef.current = isAuthenticated
-  const theme = useTheme()
-  const setIsLoginVisible = useStore((state) => state.setIsLoginVisible)
+  const {subscribe, signIn} = useQuotaActions()
   const isAiCredits = feature === QUOTA_FEATURES.AI_CREDITS
   // Whether the current showing has been reported. A ref rather than a
   // dependency-driven fire because the event means "the dialog appeared",
@@ -105,26 +103,12 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
 
   const handleSubscribe = async () => {
     onClose()
-    // Through the shared upgrade door rather than its own `/subscribe/` URL,
-    // so this CTA is counted as begin_checkout {from: 'quota'} like every
-    // other, and a lapsed subscriber (known Stripe customer) lands in the
-    // portal instead of being offered a second subscription.
-    await goToSubscription({
-      stripeCustomerId: appMetadata?.stripeCustomerId || null,
-      userEmail: appMetadata?.userEmail || user?.email || '',
-      isDay: theme.palette.mode === 'light',
-      getAccessTokenSilently,
-      useMock,
-      from: 'quota',
-    })
+    await subscribe()
   }
 
-  // The same login dialog as the Profile menu's, not a gate's sign-in
-  // (Auth0/gateLogin.js startLogin drops any stale gate attempt).
   const handleSignIn = () => {
     onClose()
-    startLogin()
-    setIsLoginVisible(true)
+    signIn()
   }
 
   const limitText = `${LIMITS[TIERS.FREE]} private models in any rolling ${ROLLING_WINDOW_DAYS}-day window`
@@ -185,6 +169,42 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
       </DialogActions>
     </Dialog>
   )
+}
+
+
+/**
+ * The quota walls' two ways out, for the dialog and for anything else that
+ * offers them (the assistant's paused-turn notice, BotChat.jsx).
+ *
+ * - `subscribe`: through the shared upgrade door rather than its own
+ *   `/subscribe/` URL, so the CTA is counted as begin_checkout {from:
+ *   'quota'} like every other, and a lapsed subscriber (known Stripe
+ *   customer) lands in the portal instead of being offered a second
+ *   subscription.
+ * - `signIn`: the same login dialog as the Profile menu's, not a gate's
+ *   sign-in (Auth0/gateLogin.js startLogin drops any stale gate attempt).
+ *
+ * @return {{subscribe: Function, signIn: Function}}
+ */
+export function useQuotaActions() {
+  const appMetadata = useStore((state) => state.appMetadata)
+  const {getAccessTokenSilently, user} = useAuth0()
+  const theme = useTheme()
+  const setIsLoginVisible = useStore((state) => state.setIsLoginVisible)
+  return {
+    subscribe: () => goToSubscription({
+      stripeCustomerId: appMetadata?.stripeCustomerId || null,
+      userEmail: appMetadata?.userEmail || user?.email || '',
+      isDay: theme.palette.mode === 'light',
+      getAccessTokenSilently,
+      useMock,
+      from: 'quota',
+    }),
+    signIn: () => {
+      startLogin()
+      setIsLoginVisible(true)
+    },
+  }
 }
 
 

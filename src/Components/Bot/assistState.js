@@ -17,6 +17,10 @@ import {AI_TIERS} from '../../quota/aiCredits'
  *   (workspace-sessions.md §7); until then the page has one conversation.
  * - The chat as shown (bubbles, action lines, whether a reply is streaming)
  *   and the assistant itself, built on first send.
+ *
+ * The conversation and the chat are also written to the session log on the
+ * device (assistLog.js, driven by assistForward.js), so a reload restores
+ * them and a paused turn is sent once its credits are back.
  */
 export const assistKeyStore = createSessionKeyStore()
 export const assistConversationStore = createMemoryConversationStore()
@@ -111,6 +115,18 @@ export function noteHostedCredits(meta) {
  */
 export function markCreditsExhausted(tier) {
   assistCreditsWall.update(() => tier ?? AI_TIERS.ANONYMOUS)
+  showCreditsExhausted(tier)
+}
+
+
+/**
+ * The meter's half of {@link markCreditsExhausted}, without owing the
+ * dialog: for a paused turn restored after a reload, whose refusal was shown
+ * and counted (quota_limit_reached) before it.
+ *
+ * @param {?string} tier
+ */
+export function showCreditsExhausted(tier) {
   assistCredits.update((credits) => ({
     tier: tier ?? credits?.tier ?? AI_TIERS.ANONYMOUS,
     used: credits?.used ?? 1,
@@ -269,17 +285,28 @@ export function resetAssistChat() {
 
 
 /**
+ * @return {object} an empty chat with its own conversation id (initialChat)
+ */
+export function initialAssistChat() {
+  return initialChat()
+}
+
+
+/**
  * - `streamingTurn`: the send in flight, or null.
  * - `stoppedTurn`: a send the user stopped before its session existed (the
  *   first send, while the runtime loads), so it doesn't start once it does.
  * - `undoTop`: the one step that offers Undo (session.lastUndoable()).
  * - `undoPending`: an undo is running; Undo, Send and New chat wait for it.
  * - `overflowNoticed`: this chat has shown the free-models overflow notice.
+ * - `paused`: the turn waiting for its credits to come back,
+ *   `{seq, text, notBefore, tier, messageId}` (assistForward.js), or null.
+ *   `seq` is its entry in the session log, `messageId` its bubble.
  *
  * @return {object} an empty chat with its own conversation id
  */
 function initialChat() {
   return {conversationId: uuid(), messages: [], streamingTurn: null, stoppedTurn: null, undoTop: null,
-    undoPending: false, overflowNoticed: false}
+    undoPending: false, overflowNoticed: false, paused: null}
 }
 

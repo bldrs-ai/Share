@@ -9,7 +9,7 @@ import React, {
 } from 'react'
 import {v4 as uuid} from 'uuid'
 import {
-  Box, IconButton, InputBase, Stack, useTheme,
+  Box, Button, IconButton, InputBase, Stack, Typography, useTheme,
 } from '@mui/material'
 import {
   AddCommentOutlined as NewChatIcon,
@@ -19,11 +19,13 @@ import {
 } from '@mui/icons-material'
 import {HOSTED_TRANSPORT_LABEL, OPENROUTER_KEY_ID, assistErrorMessage} from '../../assist'
 import {AI_CREDITS_FEATURE} from '../../quota/aiCredits'
+import {aiCreditsCopy} from '../../quota/aiCreditsCopy'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import modelIdentity from '../../routes/modelIdentity'
 import useStore from '../../store/useStore'
 import {createShareAssist} from '../../viewer/tools/assistHost'
 import {loadAssistRuntime} from '../../viewer/tools/assistRuntime'
-import QuotaLimitDialog from '../Open/QuotaLimitDialog'
+import QuotaLimitDialog, {useQuotaActions} from '../Open/QuotaLimitDialog'
 import Panel from '../SideDrawer/Panel'
 import BotSettings from './BotSettings'
 import AssistantMarkdown from './AssistantMarkdown'
@@ -31,9 +33,18 @@ import ChatMessage from './ChatMessage'
 import CreditsMeter from './CreditsMeter'
 import TaskChip from './TaskChip'
 import {
+  assistLoggedConversationStore,
+  attachAssistSession,
+  cancelPausedTurn,
+  forgetAssistConversation,
+  resumePausedTurnNow,
+  setTurnSender,
+  submitTurn,
+} from './assistForward'
+import {assistScope} from './assistSessionKey'
+import {
   assistAuth,
   assistChat,
-  assistConversationStore,
   assistCredits,
   assistCreditsWall,
   assistHostedSide,
@@ -43,6 +54,7 @@ import {
   newAssistChat,
   noteAssistAuth,
 } from './assistState'
+import {pausedNoticeText} from './pausedNotice'
 import {reportAssistCondition} from './reportAssistCondition'
 import {runningLabel} from './taskLabels'
 import 'react-chat-elements/dist/main.css'
@@ -98,15 +110,19 @@ export function stepLimitMessage(steps) {
 export default function BotChat() {
   const setIsBotVisible = useStore((state) => state.setIsBotVisible)
   // The hosted transport reads the sign-in at each request (assistState.js).
-  const {isAuthenticated, getAccessTokenSilently} = useAuth0()
+  const {isAuthenticated, isLoading, user, getAccessTokenSilently} = useAuth0()
   assistAuth.current = {isAuthenticated, getAccessTokenSilently}
   const apiKey = useSyncExternalStore(assistKeyStore.subscribe, () => assistKeyStore.get(OPENROUTER_KEY_ID) ?? '')
+  const modelPath = useStore((state) => state.modelPath)
+  const modelRoute = modelPath ? modelIdentity(modelPath) : null
 
   // The chat lives outside the panel (assistState.js): the panel unmounts
   // when closed, and on a phone whenever another drawer tab is shown.
-  const {messages, streamingTurn, conversationId, undoTop, undoPending} =
+  const {messages, streamingTurn, undoTop, undoPending, paused} =
     useSyncExternalStore(assistChat.subscribe, assistChat.get)
   const isStreaming = streamingTurn !== null
+  const isPaused = paused !== null && Number.isFinite(paused.notBefore)
+  const quotaActions = useQuotaActions()
   const [input, setInput] = useState('')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   // The tier the out-of-credits dialog is showing for, or null when closed.
@@ -132,6 +148,26 @@ export default function BotChat() {
   useLayoutEffect(() => {
     noteAssistAuth(isAuthenticated)
   }, [isAuthenticated])
+
+  // The session log (assistForward.js), keyed by this model and sign-in,
+  // once Auth0 has settled: a reload's first, signed-out render must not
+  // read as a sign-out. Its first call restores the chat and any paused
+  // turn; a sign-in change later sends a paused turn at once on the new tier.
+  const userSub = user?.sub ?? null
+  useEffect(() => {
+    if (!isLoading) {
+      attachAssistSession({modelRoute, scope: assistScope({isAuthenticated, userSub})})
+    }
+  }, [isLoading, isAuthenticated, userSub, modelRoute])
+
+  // A key of the user's own while paused: the wait was for Bldrs' credits,
+  // which the key doesn't spend, so the turn goes now.
+  const hasKey = apiKey !== ''
+  useEffect(() => {
+    if (hasKey) {
+      void resumePausedTurnNow()
+    }
+  }, [hasKey])
 
   const theme = useTheme()
   const messagesContainerRef = useRef(null)
@@ -160,7 +196,7 @@ export default function BotChat() {
     if (typeof container.scrollTo === 'function') {
       container.scrollTo({top: container.scrollHeight, behavior: 'smooth'})
     }
-  }, [messages])
+  }, [messages, paused])
 
   const handleClose = useCallback(() => {
     setIsSettingsOpen(false)
@@ -171,93 +207,23 @@ export default function BotChat() {
     assistKeyStore.set(OPENROUTER_KEY_ID, value)
   }, [])
 
-  const handleSend = useCallback(async () => {
+  const handleSend = useCallback(() => {
     const content = input.trim()
-    if (!content || isStreaming || undoPending) {
+    // While a turn waits for its credits, it goes first: Cancel gives its
+    // text back to edit, or it is sent at its time.
+    if (!content || isStreaming || undoPending || paused !== null) {
       return
     }
     setInput('')
-    const turn = uuid()
-    const turnStartedAt = Date.now()
-    // Updates from this send apply only to the chat it was sent in, so a
-    // turn still finishing after the chat was reset can't write into the next.
-    const update = (change) => assistChat.update((chat) => (chat.conversationId === conversationId ? change(chat) : chat))
-    const setMessages = (change) => update((chat) => ({...chat, messages: change(chat.messages)}))
-    setMessages((prev) => [...prev, {id: uuid(), kind: 'user', text: content}])
-    update((chat) => ({...chat, streamingTurn: turn}))
-    try {
-      let instance
-      try {
-        instance = await ensureAssistInstance()
-      } catch (e) {
-        if (e?.assistStage === 'load') {
-          // The lazy bundle didn't arrive. Offline is the user's to fix;
-          // online, it's a broken deploy (reportAssistCondition.js).
-          console.warn('assist: could not load the assistant runtime')
-          if (navigator.onLine !== false) {
-            reportAssistCondition('runtime_load_failed')
-          }
-          setMessages((prev) => [...prev, textMessage('error', RUNTIME_LOAD_FAILED_MESSAGE)])
-        } else {
-          // Building the assistant threw: a bug, not the user's doing. Its
-          // message isn't logged: it could carry whatever the builder was given.
-          console.warn('assist: the assistant failed to start')
-          reportAssistCondition('start_failed')
-          setMessages((prev) => [...prev, textMessage('error', START_FAILED_MESSAGE)])
-        }
-        return
-      }
-      // While the first send loaded the runtime there was no session to stop
-      // or replace: the user may have pressed Stop, or started a New chat, in
-      // the meantime. Either way this send never runs. (A New chat's own
-      // view is a different conversation, which `update` leaves alone.)
-      const chatNow = assistChat.get()
-      if (chatNow.conversationId !== conversationId || chatNow.stoppedTurn === turn) {
-        setMessages((prev) => [...prev, errorMessage('aborted', providerLabel())])
-        return
-      }
-      const {session, transport} = instance
-      try {
-        for await (const event of session.send(content)) {
-          if (event.type === 'error' && event.code === 'unavailable') {
-            reportAssistCondition('model_unavailable', {status: event.status, transport: transport.id})
-          }
-          if (event.type === 'error' && event.code === 'credits_exhausted') {
-            // The dialog sends the one `quota_limit_reached` for this wall.
-            // Also owes the dialog (assistCreditsWall), which the panel opens
-            // even if it was unmounted when this arrived.
-            markCreditsExhausted(event.tier)
-          }
-          update((chat) => ({
-            ...chat,
-            messages: applyEvent(chat.messages, event, turn, transport.label, {turnStartedAt}),
-            undoTop: session.lastUndoable(),
-          }))
-        }
-      } catch (e) {
-        // Showing the reply threw: a bug in this panel's event handling,
-        // not the provider or the user. The session ends its turn itself.
-        console.warn('assist: a reply failed while it was shown')
-        reportAssistCondition('turn_failed', {transport: transport.id})
-        setMessages((prev) => [...prev, textMessage('error', TURN_FAILED_MESSAGE)])
-      }
-    } finally {
-      update((chat) => ({
-        ...chat,
-        streamingTurn: chat.streamingTurn === turn ? null : chat.streamingTurn,
-        messages: chat.messages.map((message) => {
-          if (message.live) {
-            return {...message, live: false}
-          }
-          // The turn is over however it ended, so its chip gets its end time.
-          // A call still running never came back (a stop): it has nothing
-          // to report, so it goes.
-          return message.kind === 'tasks' && message.turn === turn && message.endedAt === undefined ?
-            {...message, endedAt: Date.now(), tasks: message.tasks.filter((task) => !task.running)} : message
-        }),
-      }))
+    void submitTurn(content)
+  }, [input, isStreaming, undoPending, paused])
+
+  const handleCancelPaused = useCallback(() => {
+    const text = cancelPausedTurn()
+    if (text !== null) {
+      setInput(text)
     }
-  }, [conversationId, input, isStreaming, undoPending])
+  }, [])
 
   const handleStop = useCallback(() => {
     assistChat.update((chat) => ({...chat, stoppedTurn: chat.streamingTurn}))
@@ -265,6 +231,7 @@ export default function BotChat() {
   }, [])
 
   const handleNewChat = useCallback(() => {
+    forgetAssistConversation()
     newAssistChat()
     setInput('')
   }, [])
@@ -395,6 +362,14 @@ export default function BotChat() {
             onUndo={handleUndo}
           /> :
           bubble(message, index)))}
+        {isPaused && (
+          <PausedNotice
+            paused={paused}
+            onAction={() => (aiCreditsCopy(paused.tier).cta === 'subscribe' ? quotaActions.subscribe() :
+              quotaActions.signIn())}
+            onCancel={handleCancelPaused}
+          />
+        )}
         <Box ref={messagesEndRef} data-testid='BotChat-MessagesEnd' sx={{height: '1px', width: '100%'}}/>
       </Stack>
 
@@ -439,7 +414,7 @@ export default function BotChat() {
         ) : (
           <IconButton
             onClick={handleSend}
-            disabled={undoPending}
+            disabled={undoPending || paused !== null}
             color='primary'
             aria-label='Send'
             data-testid='BotChat-SendButton'
@@ -500,8 +475,8 @@ function ensureAssistInstance() {
       })
       .then((runtime) => {
         try {
-          const built = createShareAssist(runtime, {keyStore: assistKeyStore, conversationStore: assistConversationStore,
-            hosted: assistHostedSide})
+          const built = createShareAssist(runtime, {keyStore: assistKeyStore,
+            conversationStore: assistLoggedConversationStore, hosted: assistHostedSide})
           assistInstance.current = {...built, session: built.assist.open(assistChat.get().conversationId)}
           return assistInstance.current
         } catch (e) {
@@ -515,6 +490,162 @@ function ensureAssistInstance() {
   return building
 }
 let building = null
+
+
+/**
+ * Run one claimed turn (assistForward.js forwards it): its user bubble is on
+ * screen and `streamingTurn` is set. Streams the reply into the chat as it
+ * comes, whether or not the panel is mounted.
+ *
+ * @param {object} turn
+ * @param {string} turn.text the user's message
+ * @param {string} turn.turn the `streamingTurn` id
+ * @param {string} turn.conversationId the chat it was sent in
+ * @return {Promise<object>} `{refusal: {resumeAt, tier}}` when the relay refused it for credits and
+ *   said when they come back (the forwarder pauses the turn, and no error bubble is added); else `{}`
+ */
+async function runTurn({text, turn, conversationId}) {
+  const turnStartedAt = Date.now()
+  let refusal = null
+  // Updates from this send apply only to the chat it was sent in, so a
+  // turn still finishing after the chat was reset can't write into the next.
+  const update = (change) => assistChat.update((chat) => (chat.conversationId === conversationId ? change(chat) : chat))
+  const setMessages = (change) => update((chat) => ({...chat, messages: change(chat.messages)}))
+  try {
+    let instance
+    try {
+      instance = await ensureAssistInstance()
+    } catch (e) {
+      if (e?.assistStage === 'load') {
+        // The lazy bundle didn't arrive. Offline is the user's to fix;
+        // online, it's a broken deploy (reportAssistCondition.js).
+        console.warn('assist: could not load the assistant runtime')
+        if (navigator.onLine !== false) {
+          reportAssistCondition('runtime_load_failed')
+        }
+        setMessages((prev) => [...prev, textMessage('error', RUNTIME_LOAD_FAILED_MESSAGE)])
+      } else {
+        // Building the assistant threw: a bug, not the user's doing. Its
+        // message isn't logged: it could carry whatever the builder was given.
+        console.warn('assist: the assistant failed to start')
+        reportAssistCondition('start_failed')
+        setMessages((prev) => [...prev, textMessage('error', START_FAILED_MESSAGE)])
+      }
+      return {}
+    }
+    // While the first send loaded the runtime there was no session to stop
+    // or replace: the user may have pressed Stop, or started a New chat, in
+    // the meantime. Either way this send never runs. (A New chat's own
+    // view is a different conversation, which `update` leaves alone.)
+    const chatNow = assistChat.get()
+    if (chatNow.conversationId !== conversationId || chatNow.stoppedTurn === turn) {
+      setMessages((prev) => [...prev, errorMessage('aborted', providerLabel())])
+      return {}
+    }
+    const {session, transport} = instance
+    try {
+      for await (const event of session.send(text)) {
+        if (event.type === 'error' && event.code === 'unavailable') {
+          reportAssistCondition('model_unavailable', {status: event.status, transport: transport.id})
+        }
+        if (event.type === 'error' && event.code === 'credits_exhausted') {
+          // The dialog sends the one `quota_limit_reached` for this wall.
+          // Also owes the dialog (assistCreditsWall), which the panel opens
+          // even if it was unmounted when this arrived. A resend refused
+          // again is a new refusal, and counts again.
+          markCreditsExhausted(event.tier)
+          if (Number.isFinite(event.resumeAt)) {
+            // The relay says when the credits come back: the turn waits for
+            // it (the paused notice) instead of ending in an error.
+            refusal = {resumeAt: event.resumeAt, tier: event.tier ?? null}
+            continue
+          }
+        }
+        update((chat) => ({
+          ...chat,
+          messages: applyEvent(chat.messages, event, turn, transport.label, {turnStartedAt}),
+          undoTop: session.lastUndoable(),
+        }))
+      }
+    } catch (e) {
+      // Showing the reply threw: a bug in this panel's event handling,
+      // not the provider or the user. The session ends its turn itself.
+      console.warn('assist: a reply failed while it was shown')
+      reportAssistCondition('turn_failed', {transport: transport.id})
+      setMessages((prev) => [...prev, textMessage('error', TURN_FAILED_MESSAGE)])
+    }
+  } finally {
+    update((chat) => ({
+      ...chat,
+      streamingTurn: chat.streamingTurn === turn ? null : chat.streamingTurn,
+      messages: chat.messages.map((message) => {
+        if (message.live) {
+          return {...message, live: false}
+        }
+        // The turn is over however it ended, so its chip gets its end time.
+        // A call still running never came back (a stop): it has nothing
+        // to report, so it goes.
+        return message.kind === 'tasks' && message.turn === turn && message.endedAt === undefined ?
+          {...message, endedAt: Date.now(), tasks: message.tasks.filter((task) => !task.running)} : message
+      }),
+    }))
+  }
+  return refusal ? {refusal} : {}
+}
+setTurnSender(runTurn)
+
+
+/**
+ * The turn waiting for its credits (assistForward.js): what is used up, when
+ * it will be sent, the tier's way out (sign in, or upgrade; Pro has none)
+ * and Cancel, which gives the text back to the input.
+ *
+ * @property {object} paused the chat's `paused`
+ * @property {Function} onAction the tier's call to action
+ * @property {Function} onCancel Drops the turn and gives its text back to the input
+ * @return {ReactElement}
+ */
+function PausedNotice({paused, onAction, onCancel}) {
+  const theme = useTheme()
+  const {cta, ctaLabel} = aiCreditsCopy(paused.tier)
+  return (
+    <Box
+      role='status'
+      data-testid='BotChat-Paused'
+      sx={{
+        alignSelf: 'stretch',
+        border: `1px solid ${theme.palette.divider}`,
+        borderRadius: `${theme.shape.borderRadius}px`,
+        px: 1.5,
+        py: 1,
+      }}
+    >
+      <Typography variant='body2' data-testid='BotChat-PausedText'>
+        {pausedNoticeText(paused.tier, paused.notBefore)}
+      </Typography>
+      <Box sx={{display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 0.5}}>
+        <Button
+          size='small'
+          onClick={onCancel}
+          data-testid='BotChat-PausedCancel'
+          sx={{textTransform: 'none'}}
+        >
+          Cancel
+        </Button>
+        {cta !== null && (
+          <Button
+            size='small'
+            onClick={onAction}
+            data-testid='BotChat-PausedAction'
+            sx={{textTransform: 'none', whiteSpace: 'nowrap'}}
+          >
+            {ctaLabel}
+          </Button>
+        )}
+      </Box>
+    </Box>
+  )
+}
 
 
 /**

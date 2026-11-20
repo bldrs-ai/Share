@@ -236,9 +236,11 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
     // One error event per turn: an abort, say, can surface both as the
     // stream's 'abort' part and as a rejection of what follows it.
     let failed = false
+    let resumable = false
     const fail = (event: AssistEvent & {type: 'error'}) => {
       if (!failed) {
         failed = true
+        resumable = event.resumeAt !== undefined
         events.push(event)
       }
     }
@@ -328,7 +330,13 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
         fail({type: 'error', ...classifyError(e, controller.signal.aborted)})
       }
     }
-    await opts.store.append(conversationId, failed ? [userMessage] : [userMessage, ...response])
+    // A refusal that says when to try again (`resumeAt`, the hosted relay's
+    // out-of-credits) keeps nothing, like a missing key: the host holds the
+    // message and sends it again as the turn (Share's paused turn), and a
+    // copy kept here would reach the model twice.
+    if (!resumable) {
+      await opts.store.append(conversationId, failed ? [userMessage] : [userMessage, ...response])
+    }
     if (failed) {
       events.push({type: 'done', finishReason: controller.signal.aborted ? 'aborted' : 'error'})
       return

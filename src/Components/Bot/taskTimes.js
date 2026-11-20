@@ -1,5 +1,6 @@
 /**
- * Formatting for the task chip's times (TaskChip.jsx). Kept apart so the
+ * Formatting for the task chip's times (TaskChip.jsx), and the paused turn's
+ * resume time (pausedNotice.js). Kept apart so the
  * clock and the zone can be fixed in tests: every function takes the locale
  * and zone it should use, and the panel passes neither, which means the
  * viewer's own.
@@ -19,6 +20,20 @@ const MINUTES_PER_HOUR = 60
  */
 export function formatClock(ms, {locale, timeZone} = {}) {
   return new Intl.DateTimeFormat(locale, {hour: 'numeric', minute: '2-digit', timeZone}).format(ms)
+}
+
+
+/**
+ * @param {number} ms epoch milliseconds
+ * @param {object} [options]
+ * @param {string} [options.locale] default the viewer's
+ * @param {string} [options.timeZone] an IANA zone, default the viewer's
+ * @return {string} the day and the time of day without seconds ("Dec 3, 10:01 AM"), for a time
+ *   too far off for the clock alone (the paused turn's resume, pausedNotice.js)
+ */
+export function formatDayAndClock(ms, {locale, timeZone} = {}) {
+  return new Intl.DateTimeFormat(locale, {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    timeZone}).format(ms)
 }
 
 

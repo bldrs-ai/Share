@@ -65,6 +65,12 @@ export class AssistError extends Error {
   status?: number
   /** The hosted relay's tier for the caller ('anonymous' | 'free' | 'pro'), when it said. */
   tier?: string
+  /**
+   * For `credits_exhausted`: when the relay says the budget admits again
+   * (epoch ms), when it said. A host can hold the turn until then and send
+   * it again (Share's paused turn); without it the refusal is final.
+   */
+  resumeAt?: number
 
 
   /**
@@ -72,8 +78,9 @@ export class AssistError extends Error {
    * @param message for a developer; hosts word the user-facing text with {@link assistErrorMessage}
    * @param status the HTTP status, when there was one
    * @param tier the hosted relay's tier for the caller, when it said
+   * @param resumeAt epoch ms the relay said its budget admits again, when it said
    */
-  constructor(code: AssistErrorCode, message: string, status?: number, tier?: string) {
+  constructor(code: AssistErrorCode, message: string, status?: number, tier?: string, resumeAt?: number) {
     super(message)
     this.name = 'AssistError'
     this.code = code
@@ -82,6 +89,9 @@ export class AssistError extends Error {
     }
     if (tier !== undefined) {
       this.tier = tier
+    }
+    if (resumeAt !== undefined) {
+      this.resumeAt = resumeAt
     }
   }
 }
@@ -112,14 +122,16 @@ const HTTP_TOO_MANY_REQUESTS = 429
  *   any of several errors depending on where the request was when it fired
  * @return the code and, for an HTTP failure, its status
  */
-export function classifyError(error: unknown, aborted = false): {code: AssistErrorCode, status?: number, tier?: string} {
+export function classifyError(error: unknown, aborted = false):
+  {code: AssistErrorCode, status?: number, tier?: string, resumeAt?: number} {
   if (aborted || isAbortError(error)) {
     return {code: 'aborted'}
   }
   const inner = unwrapRetry(error)
   if (inner instanceof AssistError || (isObject(inner) && inner.name === 'AssistError')) {
-    const {code, status, tier} = inner as AssistError
-    return {code, ...(status === undefined ? {} : {status}), ...(tier === undefined ? {} : {tier})}
+    const {code, status, tier, resumeAt} = inner as AssistError
+    return {code, ...(status === undefined ? {} : {status}), ...(tier === undefined ? {} : {tier}),
+      ...(resumeAt === undefined ? {} : {resumeAt})}
   }
   if (isAbortError(inner)) {
     return {code: 'aborted'}

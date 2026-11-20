@@ -82,9 +82,9 @@ function setup({answer, getAuthToken = () => Promise.resolve(null)} = {}) {
       run: ({refs}) => ({content: {selected: refs.length}, echo: `Selected ${refs.length} elements`}),
     }],
   }])
-  const assist = createAssist({transport, registry, store: createMemoryConversationStore(),
-    instructions: 'Use the tools.', maxRetries: 0})
-  return {session: assist.open('c1'), requests, metas, anonToken: () => anonToken, transport}
+  const store = createMemoryConversationStore()
+  const assist = createAssist({transport, registry, store, instructions: 'Use the tools.', maxRetries: 0})
+  return {session: assist.open('c1'), requests, metas, anonToken: () => anonToken, transport, store}
 }
 
 
@@ -203,6 +203,40 @@ describe('assist/hostedTransport', () => {
     expect(say('assistant_busy', 'anonymous')).toMatch(/Sign in/)
     expect(say('free_requests_exhausted', 'free')).not.toMatch(/Sign in/)
     expect(say('service_unavailable')).toMatch(/^Bldrs AI isn't available/)
+  })
+
+  describe('resumeAt on an out-of-credits refusal (the panel\'s paused turn)', () => {
+    const RESUME_ISO = '2026-11-19T00:00:00.000Z'
+    const RESUME_MS = Date.parse(RESUME_ISO)
+
+    it('rides on the error event from the body, and the refused turn keeps nothing', async () => {
+      const {session, store} = setup({answer: () => refusal(402,
+        {error: {code: 'ai_credits_exhausted'}, tier: 'anonymous', resumeAt: RESUME_ISO})})
+      const events = await collect(session.send('hello'))
+      expect(events.find((e) => e.type === 'error')).toEqual({type: 'error', code: 'credits_exhausted', status: 402,
+        tier: 'anonymous', resumeAt: RESUME_MS})
+      // The host holds the message and sends it again; a kept copy would reach the model twice.
+      expect(await store.load('c1')).toEqual([])
+    })
+
+    it('falls back to the header, and without either the refusal keeps the message as before', async () => {
+      const {relayError} = jest.requireActual('./hosted')
+      const fromHeader = await relayError(new Response(JSON.stringify({error: {code: 'ai_credits_exhausted'}}),
+        {status: 402, headers: {'x-bldrs-ai-resume-at': RESUME_ISO}}))
+      expect(fromHeader.resumeAt).toBe(RESUME_MS)
+      const {session, store} = setup({answer: () => refusal(402, {error: {code: 'ai_credits_exhausted'}, tier: 'free'})})
+      const events = await collect(session.send('hello'))
+      expect(events.find((e) => e.type === 'error')).not.toHaveProperty('resumeAt')
+      expect(await store.load('c1')).toEqual([{role: 'user', content: 'hello'}])
+    })
+
+    it('is ignored on any other code, and when it isn\'t a date', async () => {
+      const {relayError} = jest.requireActual('./hosted')
+      const busy = await relayError(refusal(429, {error: {code: 'ai_free_requests_exhausted'}, resumeAt: RESUME_ISO}))
+      expect(busy.resumeAt).toBeUndefined()
+      const junk = await relayError(refusal(402, {error: {code: 'ai_credits_exhausted'}, resumeAt: 'soon'}))
+      expect(junk.resumeAt).toBeUndefined()
+    })
   })
 
   it('classifyError carries an AssistError\'s tier', () => {

@@ -42,7 +42,13 @@ export type AssistEvent =
    * carries on from it.
    */
   | {type: 'step-limit', steps: number}
-  | {type: 'error', code: AssistErrorCode, status?: number, tier?: string}
+  /**
+   * `resumeAt` (epoch ms), on a hosted `credits_exhausted`: when the relay's
+   * budget admits again. A turn refused with one keeps nothing in the
+   * conversation (loop.ts): the host holds the message and sends it again
+   * as the turn, or gives it back to the user.
+   */
+  | {type: 'error', code: AssistErrorCode, status?: number, tier?: string, resumeAt?: number}
   | {type: 'done', finishReason: string}
 
 

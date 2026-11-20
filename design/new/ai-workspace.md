@@ -713,16 +713,48 @@ Per-message metering would multiply that write rate by roughly 100.
   dearest listed endpoint of the whole fallback chain (live catalog,
   2026-11-18, long-context tiers included), which the relay also sends as
   `provider.max_price`; times 1.1. A settle above it is booked in full and
-  reported (`settle_exceeded_reservation`). The cost of a genuine bound: at
-  the anonymous placeholder ($0.02) a request is admitted only while its
-  body is under about 43 KB on an empty budget, so the anonymous budget
-  (or a smaller anonymous body cap) is the owner's to revisit. A fetch that
+  reported (`settle_exceeded_reservation`). The cost of a genuine bound: a
+  real turn costs about 1% of its reservation, so admitting only when the
+  reservation fits refused small budgets after a few turns; hence the soft
+  budgets below. A fetch that
   fails after the request may have reached OpenRouter settles at the
   reservation too, kept in the record's `estimates` with the generation id
   when known, for the reconciliation job (§5 Amendment 3) to correct.
   The direction is "never more spend than budgeted", unlike quotas.md's
   "free extra, never wrongful block": for model loads an under-count costs
   nothing, but for AI credits it costs real money.
+- **Soft budgets, strict breakers (2026-11-20, assist-310).** The owner
+  sets signed-out budgets near an ad's cost per click (Netlify env, not code
+  defaults), where a strict reservation admits almost nothing. So:
+  - **Soft** (anonymous and free identity, the anonymous IP bucket): admit
+    while `spent + held < budget`. The worst case is still held and settles
+    to `usage.cost`. Admissions are serialized by the CAS, so spend stays
+    under the budget plus one hold, the last one admitted
+    (`_tests/aiLedger.test.js` proves it under a parallel burst).
+  - **Strict** (the global breakers, the hard dollar safety, and Pro, whose
+    budget is large next to one hold): admit only if the hold fits.
+  - **Size cap.** Anonymous and free bodies are capped at 64 KiB
+    (`AI_MAX_BODY_BYTES_ANONYMOUS` / `_FREE`, `src/quota/aiCredits.js`;
+    refused as `ai_bad_request`, "conversation may be too long"), so one hold,
+    and the overshoot, is at most about $0.03. A soft bucket settling past its
+    budget is the designed overshoot, not `settle_exceeded_reservation`.
+  - **`resumeAt`.** A credits refusal carries when the budget admits again:
+    the first UTC midnight at which enough of the window's spend has aged out
+    (the next midnight for the one-day anonymous buckets), the latest across
+    exhausted buckets, in the 402 body and `x-bldrs-ai-resume-at`.
+  - **The panel pauses instead of failing** (`src/Components/Bot/assistForward.js`).
+    Every turn is stored and forwarded through a session log on the device
+    (`assistLog.js`, localStorage, keyed by `assistSessionKey.js`: model route
+    and sign-in scope), an early local form of workspace-sessions.md §4's
+    session document. A refused turn is a queued entry with a `notBefore`: the
+    panel says "Paused: today's AI credits are used up. Resumes at …", with
+    Sign in or Upgrade to Pro and Cancel, and sends it at that time (plus a few
+    seconds' jitter), on sign-in, on adding a key, or after a reload. A claim
+    moves an entry from queued to sent once, under a Web Lock (a storage lease
+    without one), so no timer, reload or second tab sends it twice. The upsell
+    and `quota_limit_reached` stay one per refusal. The log holds tool results
+    (model data), stays on the device, and is cleared on New chat, Cancel (the
+    turn), a sign-in change and 48 h after its last write or pause.
 - **Reuse.** Add `QUOTA_FEATURES.AI_CREDITS = 'ai_credits'`
   (`src/quota/quota.js:21`, whose comment already invites a new value per
   metered feature). Reuse `getTier`, `QuotaBadge`-style usage display and
