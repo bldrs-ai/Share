@@ -191,6 +191,18 @@ describe('Containers/modelSession', () => {
       expect(useStore.getState().snackMessage).toBeNull()
     })
 
+    it('the left view\'s run stops being current as soon as the next view opens its session', () => {
+      const jobOfA = host.open('A').beginLoad({isAbortable: true})
+      // The next view mounts and opens B before the left view's unmount close
+      // (a microtask later) has run.
+      const nextView = new ModelSessionHost({onForget: () => null})
+      nextView.open('B').beginLoad({isAbortable: true})
+
+      expect(jobOfA.isCurrent()).toBe(false)
+      expect(jobOfA.set({model: {name: 'A'}})).toBe(false)
+      expect(useStore.getState().model).toBeNull()
+    })
+
     it('a run given up with no run after it still takes its own down', () => {
       const jobOfA = host.open('A').beginLoad({isAbortable: true})
       jobOfA.showLoading('Loading A')

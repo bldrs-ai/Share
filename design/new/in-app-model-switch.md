@@ -904,6 +904,11 @@ was already on main since #2222. Now:
   that put them up (`LoadJob#showLoading`, a page-wide owner), and only that
   job takes them down. A job given up with no load after it still takes its
   own down, so nothing is left stuck.
+- **The window before the unmount close.** The left view's session is
+  closed a microtask after it unmounts (useModelSessionHost.js), and the
+  next view can open its own first. A session is current only while its
+  host is the one that opened a session last (`pageHost`), so the left one
+  stops writing the moment the next view opens.
 - **What a switch inside one view does.** It leaves the left load's overlay
   up until that load unwinds, as before. The overlay is not in the
   per-model reset.

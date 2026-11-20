@@ -54,6 +54,14 @@ let lastSessionId = 0
 // LoadJob#showLoading claims it.
 let loadingUiOwner = null
 
+// The host of the view that opened a session last: the view on the page now.
+// A remount opens the next view's session before the left view's unmount
+// close has run (useModelSessionHost closes a microtask later, for
+// StrictMode), and in that window both views' sessions were each their own
+// host's active one (codex on #2247). The left one stops being current the
+// moment the next view opens its own.
+let pageHost = null
+
 
 /** One load run of a session: what CadView's `onViewer` starts. */
 export class LoadJob {
@@ -237,7 +245,7 @@ export class ModelSession {
 
   /** @return {boolean} whether the view is bound to this session */
   isActive() {
-    return !this.isClosed && this.host.active === this
+    return !this.isClosed && this.host.active === this && pageHost === this.host
   }
 
   /**
@@ -380,6 +388,7 @@ export class ModelSessionHost {
    * @return {ModelSession}
    */
   open(modelKey) {
+    pageHost = this
     if (this.active !== null && this.active.modelKey === modelKey) {
       return this.active
     }
