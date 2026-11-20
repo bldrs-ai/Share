@@ -3,7 +3,6 @@ import {
   assistScope,
   assistSessionKey,
   assistStorageKeys,
-  isAssistLeaseKey,
   isAssistLogKey,
 } from './assistSessionKey'
 
@@ -36,14 +35,14 @@ describe('Bot/assistSessionKey', () => {
     expect(() => assistSessionKey(inputs)).toThrow(TypeError)
   })
 
-  it('derives the lease and lock names from the key, and tells them apart from logs', () => {
+  it('derives the lock name from the key, and tells logs apart from other keys', () => {
     const key = assistSessionKey({modelRoute: route, scope: 'anonymous'})
-    const {log, lease, lock} = assistStorageKeys(key)
+    const {log, lock} = assistStorageKeys(key)
     expect(log).toBe(key)
-    expect(new Set([log, lease, lock]).size).toBe(3)
-    expect(isAssistLeaseKey(lease)).toBe(true)
-    expect(isAssistLogKey(lease)).toBe(false)
-    expect(isAssistLeaseKey(log)).toBe(false)
+    expect(lock).not.toBe(log)
+    expect(lock.startsWith(key)).toBe(true)
+    expect(isAssistLogKey(log)).toBe(true)
+    expect(isAssistLogKey(lock)).toBe(false)
     expect(isAssistLogKey('bldrs.assist.anonToken')).toBe(false)
   })
 

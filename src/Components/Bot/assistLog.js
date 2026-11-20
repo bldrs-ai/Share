@@ -1,4 +1,4 @@
-import {assistStorageKeys, isAssistLeaseKey, isAssistLogKey} from './assistSessionKey'
+import {assistStorageKeys, isAssistLogKey} from './assistSessionKey'
 
 
 /**
@@ -46,11 +46,18 @@ import {assistStorageKeys, isAssistLeaseKey, isAssistLogKey} from './assistSessi
  *
  * ## The lock: one tab forwards
  *
- * localStorage is not transactional across tabs, so a claim (read, check,
- * write) runs under a cross-tab lock: the Web Locks API where there is one
- * (`navigator.locks`, lock name from assistStorageKeys), else a lease entry
- * in storage with an owner and an expiry (LEASE_MS). Both are held
- * only for the claim itself, never for the reply.
+ * localStorage is not transactional across tabs, so an automatic claim (a
+ * timer's, a restore's) runs under the Web Locks API (`navigator.locks`,
+ * lock name from assistStorageKeys), held only for the claim itself, never
+ * for the reply. Every current browser has it (Chrome 69, Firefox 96,
+ * Safari 15.4). Without it there is no exclusive lock to be had over
+ * localStorage (a write-then-read-back lease lets two tabs both think they
+ * won, Codex on #2253), so nothing is forwarded automatically there at
+ * all (`canAutoForward()` is false when the log is in storage): the
+ * panel offers Resume, and only the tab where the user presses it claims
+ * the turn (`manual`), still through the ratchet, so a second press in
+ * another tab after it was sent does nothing. A user's own action in one
+ * tab (a send, Resume, signing in) claims the same way.
  *
  * ## Storage failing
  *
@@ -84,14 +91,8 @@ export const LOG_MAX_AGE_MS = 48 * 60 * 60 * 1000 // eslint-disable-line no-magi
  */
 export const LOG_MAX_CHARS = 1000000
 
-/** How long a fallback lease holds the claim without Web Locks. */
-export const LEASE_MS = 5000
-
 /** Turn states, in the only order they may move. */
 export const STATE_RANK = Object.freeze({queued: 0, sent: 1, answered: 2, refused: 2, cancelled: 2})
-
-const LEASE_ATTEMPTS = 8
-const LEASE_RETRY_MS = 40
 
 
 /**
@@ -117,10 +118,6 @@ function defaultLocks() {
     return null
   }
 }
-
-
-/** This tab's lease owner id. */
-const TAB_ID = `tab-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}` // eslint-disable-line no-magic-numbers
 
 
 /**
@@ -194,7 +191,9 @@ function fit(record) {
  * @property {Function} appendTurn `({text, notBefore?, tier?}) => seq`
  * @property {Function} appendMessages `(turn, messages) => void`
  * @property {Function} appendShown `(turn, bubbles) => void`
- * @property {Function} claim `(seq, {ignoreNotBefore?}) => Promise<boolean>`: queued → sent, once
+ * @property {Function} claim `(seq, {ignoreNotBefore?, manual?}) => Promise<boolean>`: queued → sent, once.
+ *   `manual`: the user asked for it in this tab, so it may claim without Web Locks
+ * @property {Function} canAutoForward `() => boolean`: whether a claim may run with no user action
  * @property {Function} settle `(seq, state) => boolean`: move a turn forward; false when it couldn't
  * @property {Function} requeue `(seq, {notBefore, tier}) => ?seq`: refused, and its text queued anew
  * @property {Function} cancel `(seq) => boolean`
@@ -210,13 +209,12 @@ function fit(record) {
  *   memory-only (no model to key it by)
  * @param {object} [deps] for tests
  * @param {?Storage} [deps.storage]
- * @param {?object} [deps.locks] a Web Locks manager, or null for the lease fallback
+ * @param {?object} [deps.locks] a Web Locks manager, or null for none (manual claims only)
  * @param {Function} [deps.now]
- * @param {string} [deps.tabId] this tab's lease owner
  * @return {AssistLog}
  */
 export function openAssistLog(sessionKey, {
-  storage = defaultStorage(), locks = defaultLocks(), now = Date.now, tabId = TAB_ID,
+  storage = defaultStorage(), locks = defaultLocks(), now = Date.now,
 } = {}) {
   const keys = sessionKey ? assistStorageKeys(sessionKey) : null
   let store = keys ? storage : null
@@ -305,9 +303,10 @@ export function openAssistLog(sessionKey, {
 
   /**
    * @param {Function} fn the claim, synchronous
-   * @return {Promise<*>} its result, or false when the lock couldn't be had
+   * @param {boolean} manual whether the user asked for it in this tab
+   * @return {Promise<*>} its result, or false when it may not run here
    */
-  const withLock = async (fn) => {
+  const withLock = async (fn, manual) => {
     if (!store) {
       // Memory only: no other tab can see this log.
       return fn()
@@ -316,50 +315,14 @@ export function openAssistLog(sessionKey, {
       try {
         return await locks.request(keys.lock, () => fn())
       } catch {
-        // A lock manager that refuses (an opaque origin): use the lease.
+        // A lock manager that refuses (an opaque origin): as if there were
+        // none, from now on (canAutoForward turns false).
+        locks = null
       }
     }
-    for (let attempt = 0; attempt < LEASE_ATTEMPTS; attempt++) {
-      if (takeLease()) {
-        try {
-          return fn()
-        } finally {
-          dropLease()
-        }
-      }
-      await new Promise((resolve) => setTimeout(resolve, LEASE_RETRY_MS * (attempt + 1)))
-    }
-    // Another tab has held the lease throughout: it is forwarding, and its
-    // claim moves the turn past queued.
-    return false
-  }
-
-  const takeLease = () => {
-    try {
-      const held = JSON.parse(store.getItem(keys.lease) ?? 'null')
-      if (held && held.owner !== tabId && held.until > now()) {
-        return false
-      }
-      store.setItem(keys.lease, JSON.stringify({owner: tabId, until: now() + LEASE_MS}))
-      // Read back: of two tabs that both found it free, the later write wins
-      // and the earlier one sees it lost.
-      return JSON.parse(store.getItem(keys.lease) ?? 'null')?.owner === tabId
-    } catch {
-      // Storage won't take the lease (full, or gone): it won't take the
-      // claim either, which then falls back to memory and removes the
-      // stored copy (write). Going ahead keeps the turn from being stuck.
-      return true
-    }
-  }
-
-  const dropLease = () => {
-    try {
-      if (JSON.parse(store.getItem(keys.lease) ?? 'null')?.owner === tabId) {
-        store.removeItem(keys.lease)
-      }
-    } catch {
-      // It expires.
-    }
+    // No exclusive lock across tabs: only the user's own action claims,
+    // through the ratchet alone (the header's "The lock").
+    return manual ? fn() : false
   }
 
   return {
@@ -381,7 +344,8 @@ export function openAssistLog(sessionKey, {
     appendShown: (turn, bubbles) => {
       append({kind: 'shown', turn, bubbles})
     },
-    claim: (seq, {ignoreNotBefore = false} = {}) => withLock(() => {
+    canAutoForward: () => store === null || locks !== null,
+    claim: (seq, {ignoreNotBefore = false, manual = false} = {}) => withLock(() => {
       const record = read()
       const entry = record && findTurn(record, seq)
       if (!entry || entry.state !== 'queued' ||
@@ -394,7 +358,7 @@ export function openAssistLog(sessionKey, {
       // can find this turn queued either.
       write(record)
       return true
-    }),
+    }, manual),
     settle: (seq, state) => Boolean(mutate((record) => settleIn(record, seq, state))),
     requeue: (seq, {notBefore, tier = null}) => mutate((record) => {
       const entry = findTurn(record, seq)
@@ -442,8 +406,7 @@ export function openAssistLog(sessionKey, {
 
 
 /**
- * Remove every expired or unreadable session log, and expired leases, from
- * storage: the logs of models not opened again, which no open log reaches.
+ * Remove every expired or unreadable session log from storage: the logs of models not opened again, which no open log reaches.
  *
  * @param {object} [deps]
  * @param {?Storage} [deps.storage]
@@ -464,12 +427,6 @@ export function sweepAssistLogs({storage = defaultStorage(), now = Date.now} = {
       let drop = false
       if (isAssistLogKey(key)) {
         drop = parseRecord(storage.getItem(key), key, now()) === null
-      } else if (isAssistLeaseKey(key)) {
-        try {
-          drop = !(JSON.parse(storage.getItem(key))?.until > now())
-        } catch {
-          drop = true
-        }
       }
       if (drop) {
         storage.removeItem(key)

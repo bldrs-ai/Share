@@ -750,9 +750,15 @@ Per-message metering would multiply that write rate by roughly 100.
     panel says "Paused: today's AI credits are used up. Resumes at …", with
     Sign in or Upgrade to Pro and Cancel, and sends it at that time (plus a few
     seconds' jitter), on sign-in, on adding a key, or after a reload. A claim
-    moves an entry from queued to sent once, under a Web Lock (a storage lease
-    without one), so no timer, reload or second tab sends it twice. The upsell
-    and `quota_limit_reached` stay one per refusal. The log holds tool results
+    moves an entry from queued to sent once, under a Web Lock, so no timer,
+    reload or second tab sends it twice. Without Web Locks (old browsers) no
+    exclusive lock exists over localStorage, so nothing is sent on its own:
+    at its time the notice offers Resume, and only that tab's press claims it.
+    Each model keeps its own log: opening another model in the app shows that
+    model's chat, and a paused turn re-arms when its model is open again. The
+    upsell stays one per refusal, and `quota_limit_reached` is sent once per
+    refusal id, also for a resend refused again while the dialog is open and
+    for refusals while the panel was closed. The log holds tool results
     (model data), stays on the device, and is cleared on New chat, Cancel (the
     turn), a sign-in change and 48 h after its last write or pause.
 - **Reuse.** Add `QUOTA_FEATURES.AI_CREDITS = 'ai_credits'`

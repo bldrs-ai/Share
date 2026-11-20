@@ -16,4 +16,9 @@ describe('Bot/pausedNotice', () => {
       .toBe('Paused: your free AI credits over the last 30 days are used up. Resumes Dec 3, 10:30 AM.')
     expect(pausedNoticeText('pro', later, {now, ...opts})).toMatch(/^Paused: your Pro AI credits over the last 30 days/)
   })
+
+  it('asks for Resume once the time has come in a browser that can\'t forward on its own', () => {
+    expect(pausedNoticeText('anonymous', now - 1, {awaitingResume: true, now, ...opts}))
+      .toBe('Paused: your AI credits should be back now. Resume to send your message.')
+  })
 })

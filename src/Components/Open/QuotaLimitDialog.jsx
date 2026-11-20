@@ -39,9 +39,17 @@ import {goToSubscription} from '../Profile/subscriptionNav'
  * @property {boolean} [reportShowing] Whether this showing sends its
  *   funnel events (default true). False for a reopen the user asked for, such
  *   as the assistant meter's button: the wall it shows was already counted.
+ * @property {?object} [refusal] For a caller that counts walls by refusal
+ *   rather than by showing (the assistant panel, assistState.js
+ *   assistCreditsWall): `{id, count}` sends `count` quota_limit_reached events
+ *   the first time this dialog sees `id`, whether it was just opened or was
+ *   already open; null sends nothing (a reopen from the meter). Given, it
+ *   replaces `reportShowing`.
  * @return {ReactElement}
  */
-export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA_FEATURES.PRIVATE_LOAD, reportShowing = true}) {
+export default function QuotaLimitDialog({
+  tier, isOpen, onClose, feature = QUOTA_FEATURES.PRIVATE_LOAD, reportShowing = true, refusal,
+}) {
   const {isAuthenticated} = useAuth0()
   // The latest sign-in state, read at emit time if `tier` is missing
   // (trackModelActionWhenAuthSettled's fallback). Not an effect dependency:
@@ -57,8 +65,27 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
   // without being a new showing. Refs survive StrictMode's simulated
   // remount, so the second run sees `true`.
   const reportedShowingRef = useRef(false)
+  // By refusal instead (the `refusal` prop): the last refusal id sent. A ref
+  // for the same StrictMode reason; one id, its events once.
+  const byRefusal = refusal !== undefined
+  const reportedRefusalRef = useRef(null)
+  const refusalId = refusal?.id ?? null
+  const refusalCount = refusal?.count ?? 0
 
   useEffect(() => {
+    if (!byRefusal || !isOpen || refusalId === null || refusalId === reportedRefusalRef.current) {
+      return
+    }
+    reportedRefusalRef.current = refusalId
+    for (let i = 0; i < refusalCount; i++) {
+      gtagFunnelEvent(FUNNEL_EVENTS.QUOTA_LIMIT_REACHED, {tier, feature})
+    }
+  }, [byRefusal, isOpen, refusalId, refusalCount, tier, feature])
+
+  useEffect(() => {
+    if (byRefusal) {
+      return
+    }
     if (!isOpen) {
       reportedShowingRef.current = false
       return
@@ -99,7 +126,7 @@ export default function QuotaLimitDialog({tier, isOpen, onClose, feature = QUOTA
       tier,
       getIsAuthenticated: () => isAuthenticatedRef.current,
     })
-  }, [isOpen, tier, feature, isAiCredits, reportShowing])
+  }, [byRefusal, isOpen, tier, feature, isAiCredits, reportShowing])
 
   const handleSubscribe = async () => {
     onClose()

@@ -23,9 +23,16 @@ import {
  *  - signing in, or adding a key of one's own, while paused: at once, on the
  *    new tier or the user's key;
  *  - a reload, which restores the log and forwards whatever is due.
- * The log's claim (queued → sent, once, under a cross-tab lock) is the only
- * way to forward, so none of these can send a turn twice, from this tab or
- * another one on the same model.
+ * The log's claim (queued → sent, once, under a Web Lock) is the only way to
+ * forward, so none of these can send a turn twice, from this tab or another
+ * one on the same model. Without Web Locks there is no safe automatic
+ * forward across tabs (assistLog.js "The lock"): when the time comes, the
+ * notice offers Resume instead (`paused.awaitingResume`), and only the
+ * user's own action in a tab claims the turn.
+ *
+ * The chat follows the session key: opening another model in the app shows
+ * that model's log (or an empty chat), and a paused turn waits on its own
+ * model, re-armed when the user comes back to it.
  *
  * The panel's restore runs when the panel first mounts on a model, once
  * Auth0 has settled (BotChat.jsx): a reload with the panel closed restores
@@ -58,7 +65,9 @@ export const SENT_ELSEWHERE_NOTICE = 'This message was sent from another tab.'
 
 let session = {log: openAssistLog(null), modelRoute: null, scope: null}
 let sender = null
-let forwardingSeq = null
+// The turn being forwarded, and the log it belongs to: a model switch while
+// it runs must not move its messages into the next model's log.
+let forwarding = null
 let timer = null
 let refusedAgain = 0
 let listening = false
@@ -89,41 +98,48 @@ export const assistLoggedConversationStore = {
   load: (conversationId) => assistConversationStore.load(conversationId),
   append: async (conversationId, messages) => {
     await assistConversationStore.append(conversationId, messages)
-    if (forwardingSeq !== null && assistChat.get().conversationId === conversationId) {
-      session.log.appendMessages(forwardingSeq, messages)
+    if (forwarding !== null && forwarding.conversationId === conversationId) {
+      forwarding.log.appendMessages(forwarding.seq, messages)
     }
   },
 }
 
 
 /**
- * Point the log at this model and sign-in. The first call on a page sweeps
- * expired logs and restores this one's. A later call with another scope on
- * the same model is a sign-in change: the old log is cleared (it was asked
- * under the old tier, and can hold model data), the chat on screen carries
- * on in a fresh log, and a paused turn is sent at once on the new tier.
- * Another model (in-app navigation) keeps its log for when it's opened
- * again, and leaves its paused turn waiting: it resumes only on its model.
+ * Point the chat at this model and sign-in's session (assistSessionKey).
+ *  - The first call on a page sweeps expired logs and restores this one's,
+ *    unless the page has a chat going already.
+ *  - Another model (in-app navigation, A → B): the turn in flight stops, the
+ *    chat shows B's log (or starts empty), and B's queued turn is re-armed.
+ *    A's log, paused turn included, stays for when the user is back on A,
+ *    where it is restored and re-armed the same way.
+ *  - Another scope on the same model is a sign-in change: the old log is
+ *    cleared (it was asked under the old tier, and can hold model data), the
+ *    chat on screen carries on in a fresh log, and a paused turn is sent at
+ *    once on the new tier.
  *
  * @param {object} inputs
  * @param {?string} inputs.modelRoute modelIdentity of the route, or null with no model
  * @param {string} inputs.scope assistSessionKey.js assistScope
+ * @return {Promise<void>} once the chat shows the session
  */
 export function attachAssistSession({modelRoute, scope}) {
   if (!modelRoute || !scope || (session.modelRoute === modelRoute && session.scope === scope)) {
-    return
+    return Promise.resolve()
   }
   const previous = session
   session = {log: openAssistLog(assistSessionKey({modelRoute, scope})), modelRoute, scope}
   listen()
   if (previous.modelRoute === null) {
     sweepAssistLogs()
-    restore()
-    return
+    return restore({replace: false})
   }
   clearTimer()
   if (previous.modelRoute !== modelRoute) {
-    return
+    // Its tools would act on the model now loading, not the one it was asked about.
+    assistInstance.current?.session?.abort()
+    refusedAgain = 0
+    return restore({replace: true})
   }
   previous.log.clear()
   const chat = assistChat.get()
@@ -133,8 +149,10 @@ export function attachAssistSession({modelRoute, scope}) {
   const {paused} = chat
   if (paused) {
     const seq = session.log.appendTurn({text: paused.text})
-    void forward(seq, {text: paused.text, messageId: paused.messageId})
+    // Signing in is the user's own action in this tab.
+    void forward(seq, {text: paused.text, messageId: paused.messageId, manual: true})
   }
+  return Promise.resolve()
 }
 
 
@@ -155,19 +173,19 @@ export function submitTurn(text) {
   }))
   session.log.ensure(assistChat.get().conversationId)
   const seq = session.log.appendTurn({text})
-  return forward(seq, {text, messageId, turn})
+  return forward(seq, {text, messageId, turn, manual: true})
 }
 
 
 /**
- * Forward the paused turn now, ignoring its `notBefore`: the user signed in
- * or added a key of their own, so the wait no longer applies. A no-op when
- * nothing is paused.
+ * Forward the paused turn now, from this tab, ignoring its `notBefore`: the
+ * user added a key of their own, or pressed Resume (offered without Web
+ * Locks once its time has come). A no-op when nothing is paused.
  *
  * @return {Promise<void>}
  */
 export function resumePausedTurnNow() {
-  return resume({ignoreNotBefore: true})
+  return resume({ignoreNotBefore: true, manual: true})
 }
 
 
@@ -205,7 +223,7 @@ export function forgetAssistConversation() {
 export function resetAssistForward() {
   clearTimer()
   session = {log: openAssistLog(null), modelRoute: null, scope: null}
-  forwardingSeq = null
+  forwarding = null
   refusedAgain = 0
 }
 
@@ -221,9 +239,10 @@ export function resetAssistForward() {
  * @param {string} turn.messageId its bubble
  * @param {string} [turn.turn] the `streamingTurn` already set by submitTurn; else set here
  * @param {boolean} [turn.ignoreNotBefore]
+ * @param {boolean} [turn.manual] the user's own action in this tab (assistLog.js "The lock")
  * @return {Promise<void>}
  */
-async function forward(seq, {text, messageId, turn, ignoreNotBefore = false}) {
+async function forward(seq, {text, messageId, turn, ignoreNotBefore = false, manual = false}) {
   const {log} = session
   const chat = assistChat.get()
   const {conversationId} = chat
@@ -236,51 +255,56 @@ async function forward(seq, {text, messageId, turn, ignoreNotBefore = false}) {
     }
     assistChat.update((c) => ({...c, streamingTurn: turnId, paused: null}))
   }
-  const claimed = sender !== null && await log.claim(seq, {ignoreNotBefore})
+  const claimed = sender !== null && await log.claim(seq, {ignoreNotBefore, manual})
   if (!claimed) {
     const entry = log.turn(seq)
+    // Without Web Locks an automatic claim never runs: wait for Resume.
+    const awaitingResume = entry?.state === 'queued' && !manual && !log.canAutoForward()
     assistChat.update((c) => {
       const next = {...c, streamingTurn: c.streamingTurn === turnId ? null : c.streamingTurn}
       if (entry?.state === 'queued') {
-        // Not due yet, or the lock was busy: still paused.
-        next.paused = {seq, text, notBefore: entry.notBefore, tier: entry.tier, messageId}
+        // Not due yet, the lock was busy, or it waits for Resume: still paused.
+        next.paused = {seq, text, notBefore: entry.notBefore, tier: entry.tier, messageId, awaitingResume}
       } else if (entry?.state === 'sent' || entry?.state === 'answered') {
         next.messages = [...c.messages, {id: uuid(), kind: 'notice', text: SENT_ELSEWHERE_NOTICE}]
       }
       return next
     })
-    if (entry?.state === 'queued') {
+    if (entry?.state === 'queued' && !awaitingResume) {
       clearTimer()
       timer = setTimeout(arm, BUSY_RETRY_MS)
     }
     return
   }
-  forwardingSeq = seq
+  forwarding = {seq, log, conversationId}
   let outcome
   try {
     outcome = await sender({text, messageId, turn: turnId, conversationId})
   } finally {
-    forwardingSeq = null
+    forwarding = null
   }
-  if (assistChat.get().conversationId !== conversationId) {
-    // A New chat while it ran: that chat's log is a new one.
-    return
-  }
+  // A New chat or another model while it ran: the outcome goes to this
+  // turn's own log, and the chat on screen, another one's, is left alone.
+  const onScreen = assistChat.get().conversationId === conversationId && session.log === log
   if (outcome?.refusal) {
     const notBefore = nextNotBefore(outcome.refusal.resumeAt, Boolean(!turn))
     const tier = outcome.refusal.tier ?? null
     let next = log.requeue(seq, {notBefore, tier})
-    if (next === null) {
+    if (next === null && onScreen) {
       log.ensure(conversationId)
       next = log.appendTurn({text, notBefore, tier})
     }
-    assistChat.update((c) => ({...c, paused: {seq: next, text, notBefore, tier, messageId}}))
-    arm()
+    if (onScreen) {
+      assistChat.update((c) => ({...c, paused: {seq: next, text, notBefore, tier, messageId, awaitingResume: false}}))
+      arm()
+    }
     return
   }
   refusedAgain = 0
   log.settle(seq, 'answered')
-  log.appendShown(seq, shownSince(messageId))
+  if (onScreen) {
+    log.appendShown(seq, shownSince(messageId))
+  }
 }
 
 
@@ -304,15 +328,16 @@ function nextNotBefore(resumeAt, wasResend) {
 /**
  * @param {object} [options]
  * @param {boolean} [options.ignoreNotBefore]
+ * @param {boolean} [options.manual]
  * @return {Promise<void>}
  */
-function resume({ignoreNotBefore = false} = {}) {
+function resume({ignoreNotBefore = false, manual = false} = {}) {
   const {paused} = assistChat.get()
   if (!paused) {
     return Promise.resolve()
   }
   clearTimer()
-  return forward(paused.seq, {text: paused.text, messageId: paused.messageId, ignoreNotBefore})
+  return forward(paused.seq, {text: paused.text, messageId: paused.messageId, ignoreNotBefore, manual})
 }
 
 
@@ -328,6 +353,13 @@ function arm() {
     timer = setTimeout(arm, Math.min(wait, MAX_TIMER_MS))
     return
   }
+  if (!session.log.canAutoForward()) {
+    // No Web Locks: the time has come, and the notice offers Resume.
+    if (!paused.awaitingResume) {
+      assistChat.update((c) => (c.paused ? {...c, paused: {...c.paused, awaitingResume: true}} : c))
+    }
+    return
+  }
   if (isHidden()) {
     // Background tabs' timers are throttled and their user isn't looking:
     // the visibilitychange listener forwards it when they are back.
@@ -337,21 +369,56 @@ function arm() {
 }
 
 
-/** Restore the log into the chat, if the chat is still empty, and forward what is due. */
-function restore() {
-  const chat = assistChat.get()
-  if (assistInstance.current || chat.messages.length > 0) {
-    // This page has a chat already: it carries on, logged from its next turn.
+/**
+ * Show the session's log in the chat and arm its queued turn.
+ *
+ * @param {object} options
+ * @param {boolean} options.replace false on a page's first session: leave a
+ *   chat already going (it carries on, logged from its next turn); true on a
+ *   model switch: the chat becomes this model's, or empty
+ * @return {Promise<void>}
+ */
+async function restore({replace}) {
+  const isBusy = () => assistInstance.current !== null || assistChat.get().messages.length > 0
+  if (!replace && isBusy()) {
     return
   }
-  const record = session.log.load()
-  if (!record) {
+  const {log} = session
+  const record = log.load()
+  const restored = record ? chatFromRecord(record) : {chat: initialAssistChat(), messages: []}
+  if (restored.messages.length > 0 &&
+      (await assistConversationStore.load(restored.chat.conversationId)).length === 0) {
+    // The history the next turn carries. A model this page has shown before
+    // still has its own in the page's store, so it isn't added twice.
+    await assistConversationStore.append(restored.chat.conversationId, restored.messages)
+  }
+  if (session.log !== log || (!replace && isBusy())) {
+    // Switched again, or the user started a chat, while that ran.
     return
   }
+  assistChat.update(() => restored.chat)
+  const instance = assistInstance.current
+  if (instance) {
+    instance.session = instance.assist.open(restored.chat.conversationId)
+  }
+  const {paused} = restored.chat
+  if (paused) {
+    if (Number.isFinite(paused.notBefore)) {
+      // The meter shows the wall, as it did before; the dialog and its
+      // quota_limit_reached were that refusal's, already counted.
+      showCreditsExhausted(paused.tier)
+    }
+    arm()
+  }
+}
+
+
+/**
+ * @param {object} record a session log's
+ * @return {{chat: object, messages: Array<object>}} the chat it shows, and the history it holds
+ */
+function chatFromRecord(record) {
   const messages = record.entries.filter((e) => e.kind === 'messages').flatMap((e) => e.messages)
-  if (messages.length > 0) {
-    void assistConversationStore.append(record.conversationId, messages)
-  }
   const shownTurns = new Set(record.entries.filter((e) => e.kind === 'shown').map((e) => e.turn))
   const bubbles = []
   let paused = null
@@ -365,19 +432,12 @@ function restore() {
       const messageId = `turn-${entry.seq}`
       bubbles.push({id: messageId, kind: 'user', text: entry.text})
       if (entry.state === 'queued') {
-        paused = {seq: entry.seq, text: entry.text, notBefore: entry.notBefore, tier: entry.tier, messageId}
+        paused = {seq: entry.seq, text: entry.text, notBefore: entry.notBefore, tier: entry.tier, messageId,
+          awaitingResume: false}
       }
     }
   }
-  assistChat.update(() => ({...initialAssistChat(), conversationId: record.conversationId, messages: bubbles, paused}))
-  if (paused) {
-    if (Number.isFinite(paused.notBefore)) {
-      // The meter shows the wall, as it did before the reload; the dialog
-      // and its quota_limit_reached were that refusal's, already counted.
-      showCreditsExhausted(paused.tier)
-    }
-    arm()
-  }
+  return {chat: {...initialAssistChat(), conversationId: record.conversationId, messages: bubbles, paused}, messages}
 }
 
 

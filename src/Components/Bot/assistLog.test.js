@@ -1,6 +1,5 @@
 import {
   ASSIST_LOG_VERSION,
-  LEASE_MS,
   LOG_MAX_AGE_MS,
   LOG_MAX_CHARS,
   openAssistLog,
@@ -51,10 +50,27 @@ function fakeStorage() {
 /**
  * @param {object} storage
  * @param {object} [deps]
- * @return {object} a log over the fake, with the lease fallback (no Web Locks) unless given
+ * @return {object} a log over the fake, with an in-process Web Locks stand-in unless given
  */
 function logOn(storage, deps = {}) {
-  return openAssistLog(KEY, {storage, locks: null, now: () => NOW, ...deps})
+  return openAssistLog(KEY, {storage, locks: fakeLocks(), now: () => NOW, ...deps})
+}
+
+
+/**
+ * Web Locks as one realm sees them: requests for one name run one at a time.
+ *
+ * @return {object} a `navigator.locks` stand-in
+ */
+function fakeLocks() {
+  const tails = new Map()
+  return {
+    request: jest.fn((name, cb) => {
+      const run = (tails.get(name) ?? Promise.resolve()).then(() => cb())
+      tails.set(name, run.catch(() => undefined))
+      return run
+    }),
+  }
 }
 
 
@@ -102,7 +118,7 @@ describe('Bot/assistLog', () => {
       const storage = fakeStorage()
       logOn(storage).begin('c1')
       const seq = logOn(storage).appendTurn({text: 'a'})
-      const tabs = [logOn(storage, {tabId: 'A'}), logOn(storage, {tabId: 'B'}), logOn(storage, {tabId: 'C'})]
+      const tabs = [logOn(storage), logOn(storage), logOn(storage)]
       const wins = await Promise.all(tabs.map((tab) => tab.claim(seq)))
       expect(wins.filter(Boolean)).toHaveLength(1)
     })
@@ -120,7 +136,7 @@ describe('Bot/assistLog', () => {
 
     it('waits for notBefore, unless told not to', async () => {
       let now = NOW
-      const log = openAssistLog(KEY, {storage: fakeStorage(), locks: null, now: () => now})
+      const log = openAssistLog(KEY, {storage: fakeStorage(), locks: fakeLocks(), now: () => now})
       log.begin('c1')
       const seq = log.appendTurn({text: 'a', notBefore: NOW + 1000})
       expect(await log.claim(seq)).toBe(false)
@@ -169,23 +185,42 @@ describe('Bot/assistLog', () => {
       log.begin('c1')
       expect(await log.claim(log.appendTurn({text: 'a'}))).toBe(true)
       expect(names).toEqual([assistStorageKeys(KEY).lock])
-      // No lease was written.
-      expect(storage.data.has(assistStorageKeys(KEY).lease)).toBe(false)
+      // Nothing but the log in storage.
+      expect([...storage.data.keys()]).toEqual([KEY])
     })
 
-    it('without them, a lease another tab holds blocks the claim until it expires', async () => {
-      let now = NOW
+    // Codex on #2253: a write-then-read-back lease over localStorage lets two
+    // tabs both win, so without Web Locks nothing claims on its own.
+    it('without them, an automatic claim never runs; the user\'s own (manual) claim does, once', async () => {
       const storage = fakeStorage()
-      const log = openAssistLog(KEY, {storage, locks: null, now: () => now, tabId: 'A'})
+      const log = logOn(storage, {locks: null})
       log.begin('c1')
       const seq = log.appendTurn({text: 'a'})
-      storage.setItem(assistStorageKeys(KEY).lease, JSON.stringify({owner: 'B', until: NOW + LEASE_MS}))
+      expect(log.canAutoForward()).toBe(false)
       expect(await log.claim(seq)).toBe(false)
       expect(log.turn(seq).state).toBe('queued')
-      now = NOW + LEASE_MS + 1
-      expect(await log.claim(seq)).toBe(true)
-      // Released after the claim.
-      expect(storage.data.has(assistStorageKeys(KEY).lease)).toBe(false)
+      expect(await log.claim(seq, {manual: true})).toBe(true)
+      // A press in another tab after it was sent: the ratchet makes it a no-op.
+      expect(await logOn(storage, {locks: null}).claim(seq, {manual: true})).toBe(false)
+      expect(storage.data.size).toBe(1)
+    })
+
+    it('a lock manager that refuses counts as none from then on', async () => {
+      const locks = {request: jest.fn(() => Promise.reject(new Error('SecurityError')))}
+      const log = logOn(fakeStorage(), {locks})
+      log.begin('c1')
+      const seq = log.appendTurn({text: 'a'})
+      expect(log.canAutoForward()).toBe(true)
+      expect(await log.claim(seq)).toBe(false)
+      expect(log.canAutoForward()).toBe(false)
+      expect(await log.claim(seq, {manual: true})).toBe(true)
+    })
+
+    it('a memory-only log, which no other tab sees, forwards on its own', async () => {
+      const log = openAssistLog(null, {locks: null})
+      log.begin('c1')
+      expect(log.canAutoForward()).toBe(true)
+      expect(await log.claim(log.appendTurn({text: 'a'}))).toBe(true)
     })
   })
 
@@ -256,14 +291,13 @@ describe('Bot/assistLog', () => {
       expect(record.entries[0].seq).toBeGreaterThan(1)
     })
 
-    it('a sweep removes expired logs and leases and keeps live ones', () => {
+    it('a sweep removes expired logs and keeps live ones', () => {
       const storage = fakeStorage()
       const old = assistSessionKey({modelRoute: 'https://bldrs.ai/old.ifc', scope: 'anonymous'})
       openAssistLog(old, {storage, locks: null, now: () => NOW - LOG_MAX_AGE_MS - 1}).begin('c0')
       logOn(storage).begin('c1')
-      storage.setItem(assistStorageKeys(KEY).lease, JSON.stringify({owner: 'gone', until: NOW - 1}))
       storage.setItem('unrelated', 'kept')
-      expect(sweepAssistLogs({storage, now: () => NOW})).toBe(2)
+      expect(sweepAssistLogs({storage, now: () => NOW})).toBe(1)
       expect([...storage.data.keys()].sort()).toEqual([KEY, 'unrelated'].sort())
       storage.fail.get = true
       expect(() => sweepAssistLogs({storage, now: () => NOW})).not.toThrow()

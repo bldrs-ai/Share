@@ -65,19 +65,40 @@ async function advance(ms) {
 }
 
 
+/**
+ * Web Locks as the browser gives every tab of an origin one manager: here,
+ * one stand-in shared by every page copy, running requests for a name one at
+ * a time. jsdom has none of its own.
+ *
+ * @return {object}
+ */
+function sharedLocks() {
+  const tails = new Map()
+  return {
+    request: (name, cb) => {
+      const run = (tails.get(name) ?? Promise.resolve()).then(() => cb())
+      tails.set(name, run.catch(() => undefined))
+      return run
+    },
+  }
+}
+
+
 describe('Bot/assistForward', () => {
   beforeEach(() => {
     jest.useFakeTimers({now: START})
     localStorage.clear()
+    Object.defineProperty(navigator, 'locks', {value: sharedLocks(), configurable: true})
   })
 
   afterEach(() => {
     jest.useRealTimers()
+    delete navigator.locks
   })
 
   it('sends a turn once, and logs it with its messages and what was shown', async () => {
     const {forward, sends} = page()
-    forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+    await forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
     await forward.submitTurn('how many doors')
     expect(sends).toEqual(['how many doors'])
     const record = openAssistLog(KEY).load()
@@ -89,7 +110,7 @@ describe('Bot/assistForward', () => {
   it('a refusal with resumeAt pauses the turn, then sends it once its time and the jitter have passed', async () => {
     const resumeAt = START + 10000
     const {forward, state, sends} = page([{refusal: {resumeAt, tier: 'anonymous'}}])
-    forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+    await forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
     await forward.submitTurn('hello')
     const {paused} = state.assistChat.get()
     expect(paused).toMatchObject({text: 'hello', tier: 'anonymous'})
@@ -108,7 +129,7 @@ describe('Bot/assistForward', () => {
 
   it('a hidden page waits to be visible again before sending', async () => {
     const {forward, sends} = page([{refusal: {resumeAt: START + 1000, tier: 'anonymous'}}])
-    forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+    await forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
     await forward.submitTurn('hello')
     const visibility = jest.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
     await advance(10000)
@@ -122,7 +143,7 @@ describe('Bot/assistForward', () => {
 
   it('Cancel gives the text back and nothing is sent at the time', async () => {
     const {forward, state, sends} = page([{refusal: {resumeAt: START + 1000, tier: 'anonymous'}}])
-    forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+    await forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
     await forward.submitTurn('hello')
     expect(forward.cancelPausedTurn()).toBe('hello')
     expect(state.assistChat.get().paused).toBeNull()
@@ -134,7 +155,7 @@ describe('Bot/assistForward', () => {
 
   it('a key of one\'s own (resume now) sends at once, despite the wait', async () => {
     const {forward, sends} = page([{refusal: {resumeAt: START + 3600000, tier: 'anonymous'}}])
-    forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+    await forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
     await forward.submitTurn('hello')
     await forward.resumePausedTurnNow()
     expect(sends).toEqual(['hello', 'hello'])
@@ -145,7 +166,7 @@ describe('Bot/assistForward', () => {
       {refusal: {resumeAt: START + 1000, tier: 'anonymous'}},
       {refusal: {resumeAt: START, tier: 'anonymous'}},
     ])
-    forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+    await forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
     await forward.submitTurn('hello')
     await advance(1000 + forward.RESUME_JITTER_MAX_MS)
     expect(sends).toHaveLength(2)
@@ -158,9 +179,9 @@ describe('Bot/assistForward', () => {
 
   it('a sign-in while paused sends at once, in a new log, and clears the old one', async () => {
     const {forward, sends} = page([{refusal: {resumeAt: START + 3600000, tier: 'anonymous'}}])
-    forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+    await forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
     await forward.submitTurn('hello')
-    forward.attachAssistSession({modelRoute: ROUTE, scope: 'user-00000001'})
+    await forward.attachAssistSession({modelRoute: ROUTE, scope: 'user-00000001'})
     await flush()
     expect(sends).toEqual(['hello', 'hello'])
     expect(localStorage.getItem(KEY)).toBeNull()
@@ -171,7 +192,7 @@ describe('Bot/assistForward', () => {
   describe('after a reload', () => {
     it('restores the chat and the paused turn, and sends it once when due', async () => {
       const first = page([{refusal: {resumeAt: START + 20000, tier: 'anonymous'}}])
-      first.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      await first.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
       await first.forward.submitTurn('one')
       await first.forward.resumePausedTurnNow()
       // A second turn, refused: paused when the page reloads.
@@ -183,7 +204,7 @@ describe('Bot/assistForward', () => {
       first.forward.resetAssistForward()
 
       const reloaded = page()
-      reloaded.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      await reloaded.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
       const chat = reloaded.state.assistChat.get()
       expect(chat.messages.map((m) => [m.kind, m.text])).toEqual([
         ['user', 'one'], ['assistant', 're: one'], ['user', 'two']])
@@ -199,26 +220,26 @@ describe('Bot/assistForward', () => {
       expect(reloaded.sends).toEqual(['two'])
     })
 
-    it('restores nothing for another model, or another sign-in', () => {
+    it('restores nothing for another model, or another sign-in', async () => {
       const first = page()
-      first.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      await first.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
       first.state.assistChat.update((chat) => ({...chat, messages: [{id: 'x', kind: 'user', text: 'kept'}]}))
       openAssistLog(KEY).begin(first.state.assistChat.get().conversationId)
       openAssistLog(KEY).appendTurn({text: 'queued for index.ifc'})
       const other = page()
-      other.forward.attachAssistSession({modelRoute: 'https://bldrs.ai/other.ifc', scope: 'anonymous'})
+      await other.forward.attachAssistSession({modelRoute: 'https://bldrs.ai/other.ifc', scope: 'anonymous'})
       expect(other.state.assistChat.get().messages).toEqual([])
       const signedIn = page()
-      signedIn.forward.attachAssistSession({modelRoute: ROUTE, scope: 'user-00000001'})
+      await signedIn.forward.attachAssistSession({modelRoute: ROUTE, scope: 'user-00000001'})
       expect(signedIn.state.assistChat.get().messages).toEqual([])
     })
 
     it('two tabs restoring one paused turn send it once between them', async () => {
       const first = page([{refusal: {resumeAt: START + 5000, tier: 'anonymous'}}])
-      first.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      await first.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
       await first.forward.submitTurn('hello')
       const second = page()
-      second.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      await second.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
       expect(second.state.assistChat.get().paused).toMatchObject({text: 'hello'})
       // Each tab has its own jitter; both timers fire.
       await advance(5000 + first.forward.RESUME_JITTER_MAX_MS + 1000)
@@ -229,9 +250,76 @@ describe('Bot/assistForward', () => {
     })
   })
 
+  // Codex on #2253: in-app navigation A -> B -> A.
+  it('another model in the app shows its own chat; a paused turn waits on its model and re-arms there', async () => {
+    const B = 'https://bldrs.ai/other.ifc'
+    const {forward, state, sends} = page([{refusal: {resumeAt: START + 5000, tier: 'anonymous'}}])
+    await forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+    await forward.submitTurn('about A')
+    const onA = state.assistChat.get().conversationId
+    expect(state.assistChat.get().paused).toMatchObject({text: 'about A'})
+
+    await forward.attachAssistSession({modelRoute: B, scope: 'anonymous'})
+    expect(state.assistChat.get()).toMatchObject({messages: [], paused: null})
+    expect(state.assistChat.get().conversationId).not.toBe(onA)
+    // A's time comes while B is shown: nothing is sent about A from B.
+    await advance(5000 + forward.RESUME_JITTER_MAX_MS + 1000)
+    expect(sends).toEqual(['about A'])
+    await forward.submitTurn('about B')
+    expect(sends).toEqual(['about A', 'about B'])
+
+    await forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+    expect(state.assistChat.get().conversationId).toBe(onA)
+    expect(state.assistChat.get().messages.map((m) => m.text)).toEqual(['about A'])
+    // Back on A, its time long past: it is sent once, at once.
+    await flush()
+    expect(sends).toEqual(['about A', 'about B', 'about A'])
+    expect(state.assistChat.get().paused).toBeNull()
+    // B kept its own chat in its own log.
+    const onB = openAssistLog(assistSessionKey({modelRoute: B, scope: 'anonymous'})).load()
+    expect(onB.entries.filter((e) => e.kind === 'turn').map((e) => [e.text, e.state])).toEqual([['about B', 'answered']])
+  })
+
+  // Codex on #2253: without Web Locks no tab may forward on its own.
+  describe('without Web Locks', () => {
+    beforeEach(() => {
+      delete navigator.locks
+    })
+
+    it('at its time the turn waits for Resume; only the tab that presses it sends, once', async () => {
+      const first = page([{refusal: {resumeAt: START + 2000, tier: 'anonymous'}}])
+      await first.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      await first.forward.submitTurn('hello')
+      const second = page()
+      await second.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      expect(second.state.assistChat.get().paused).toMatchObject({text: 'hello', awaitingResume: false})
+      await advance(2000 + first.forward.RESUME_JITTER_MAX_MS + 1000)
+      // Due in both tabs, sent by neither.
+      expect(first.sends).toEqual(['hello'])
+      expect(second.sends).toEqual([])
+      for (const tab of [first, second]) {
+        expect(tab.state.assistChat.get().paused).toMatchObject({awaitingResume: true})
+      }
+      await second.forward.resumePausedTurnNow()
+      expect(second.sends).toEqual(['hello'])
+      // A press in the other tab afterwards finds it sent.
+      await first.forward.resumePausedTurnNow()
+      expect(first.sends).toEqual(['hello'])
+      expect(first.state.assistChat.get().messages.map((m) => m.text))
+        .toContain(first.forward.SENT_ELSEWHERE_NOTICE)
+    })
+
+    it('the user\'s own send still goes at once', async () => {
+      const {forward, sends} = page()
+      await forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      await forward.submitTurn('hello')
+      expect(sends).toEqual(['hello'])
+    })
+  })
+
   it('New chat forgets the log', async () => {
     const {forward} = page()
-    forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+    await forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
     await forward.submitTurn('hello')
     expect(localStorage.getItem(KEY)).not.toBeNull()
     forward.forgetAssistConversation()

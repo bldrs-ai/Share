@@ -1,9 +1,8 @@
 /**
  * The storage key of the assistant's local session log (assistLog.js), and
- * every key derived from it. THE ONE PLACE these strings are built: the log,
- * its cross-tab lease and its Web Lock all take their names from here, so a
- * new input (below) changes them all together and nothing reads or writes a
- * hand-built key.
+ * every key derived from it. THE ONE PLACE these strings are built: the log
+ * and its Web Lock take their names from here, so a new input (below)
+ * changes them together and nothing reads or writes a hand-built key.
  *
  * What a session is keyed by today:
  *  - `modelRoute`: the model the conversation is about, as the route's
@@ -51,13 +50,12 @@ export function assistSessionKey({modelRoute, scope}) {
 
 /**
  * @param {string} sessionKey from {@link assistSessionKey}
- * @return {{log: string, lease: string, lock: string}} the storage key of the
- *   log, of its fallback lease, and the Web Lock name for forwarding
+ * @return {{log: string, lock: string}} the storage key of the log, and the
+ *   Web Lock name for forwarding (not a storage key)
  */
 export function assistStorageKeys(sessionKey) {
   return {
     log: sessionKey,
-    lease: `${sessionKey}${SEPARATOR}lease`,
     lock: `${sessionKey}${SEPARATOR}forward`,
   }
 }
@@ -65,21 +63,11 @@ export function assistStorageKeys(sessionKey) {
 
 /**
  * @param {string} storageKey any localStorage key
- * @return {boolean} whether it is a session log (not a lease)
+ * @return {boolean} whether it is a session log
  */
 export function isAssistLogKey(storageKey) {
   return typeof storageKey === 'string' && storageKey.startsWith(ASSIST_SESSION_KEY_PREFIX) &&
     storageKey.slice(ASSIST_SESSION_KEY_PREFIX.length).split(SEPARATOR).length === 2
-}
-
-
-/**
- * @param {string} storageKey any localStorage key
- * @return {boolean} whether it is a session log's lease
- */
-export function isAssistLeaseKey(storageKey) {
-  return typeof storageKey === 'string' && storageKey.startsWith(ASSIST_SESSION_KEY_PREFIX) &&
-    storageKey.endsWith(`${SEPARATOR}lease`)
 }
 
 

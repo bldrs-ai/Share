@@ -15,7 +15,7 @@ import BotChat, {
   TURN_FAILED_MESSAGE,
   stepLimitMessage,
 } from './BotChat'
-import {ANON_TOKEN_KEY, assistKeyStore, overflowNotice, resetAssistChat} from './assistState'
+import {ANON_TOKEN_KEY, assistKeyStore, markCreditsExhausted, overflowNotice, resetAssistChat} from './assistState'
 import {BOT_TITLE} from './component'
 import {reportAssistCondition} from './reportAssistCondition'
 
@@ -432,6 +432,45 @@ describe('BotChat', () => {
         render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
         await act(() => Promise.resolve())
         expect(screen.queryByTestId('dialog-ai-credits')).toBeNull()
+        expect(limitEvents()).toHaveLength(1)
+      })
+    })
+
+    // Codex on #2253: one quota_limit_reached per refusal, keyed by refusal id
+    // (assistState.js assistCreditsWall), not per showing of the dialog.
+    describe('one funnel event per refusal', () => {
+      it('a refusal while the dialog is already open counts again', async () => {
+        render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        act(() => markCreditsExhausted('anonymous'))
+        await screen.findByTestId('dialog-ai-credits')
+        expect(limitEvents()).toHaveLength(1)
+        // An automatic resend refused again, the dialog still up.
+        act(() => markCreditsExhausted('anonymous'))
+        await waitFor(() => expect(limitEvents()).toHaveLength(2))
+        expect(screen.getAllByTestId('dialog-ai-credits')).toHaveLength(1)
+      })
+
+      it('refusals while the panel was away are each counted when it mounts, under one showing', async () => {
+        act(() => {
+          markCreditsExhausted('anonymous')
+          markCreditsExhausted('anonymous')
+        })
+        render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        await screen.findByTestId('dialog-ai-credits')
+        await waitFor(() => expect(limitEvents()).toHaveLength(2))
+        expect(limitEvents().map(([, , params]) => params)).toEqual([
+          {tier: 'anonymous', feature: 'ai_credits'}, {tier: 'anonymous', feature: 'ai_credits'}])
+      })
+
+      it('a reopen from the meter is no new refusal: no event', async () => {
+        render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        act(() => markCreditsExhausted('free'))
+        const dialog = await screen.findByTestId('dialog-ai-credits')
+        fireEvent.click(within(dialog).getByRole('button', {name: 'Not now'}))
+        await waitFor(() => expect(screen.queryByTestId('dialog-ai-credits')).toBeNull())
+        fireEvent.click(screen.getByTestId('BotChat-CreditsMeterMore'))
+        await screen.findByTestId('dialog-ai-credits')
+        await act(() => Promise.resolve())
         expect(limitEvents()).toHaveLength(1)
       })
     })

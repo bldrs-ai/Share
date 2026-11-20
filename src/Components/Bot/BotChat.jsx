@@ -125,20 +125,22 @@ export default function BotChat() {
   const quotaActions = useQuotaActions()
   const [input, setInput] = useState('')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  // The tier the out-of-credits dialog is showing for, or null when closed.
-  // `isNewWall` is true when a relay refusal opened it (counted once, by the
-  // dialog's quota_limit_reached) and false when the user reopened it from the
-  // meter, which is informational: one refusal, one event.
+  // The out-of-credits dialog, `{tier, refusal}`, or null when closed.
+  // `refusal` is `{id, count}` when relay refusals opened (or re-opened) it:
+  // the dialog sends one quota_limit_reached per refusal, once per id
+  // (assistState.js assistCreditsWall). It is null when the user reopened it
+  // from the meter, which is informational: no new refusal, no event.
   const [creditsDialog, setCreditsDialog] = useState(null)
-  // A refusal that landed while the panel was away leaves its tier here; the
-  // dialog opens from it, and taking it keeps a dismissed one from reopening.
-  const owedWallTier = useSyncExternalStore(assistCreditsWall.subscribe, assistCreditsWall.get)
+  // Refusals that landed, here or while the panel was away, leave the wall;
+  // the dialog opens (or stays open) for them, and taking it keeps a
+  // dismissed one from reopening.
+  const owedWall = useSyncExternalStore(assistCreditsWall.subscribe, assistCreditsWall.get)
   useEffect(() => {
-    if (owedWallTier !== null) {
-      setCreditsDialog({tier: owedWallTier, isNewWall: true})
+    if (owedWall !== null) {
+      setCreditsDialog({tier: owedWall.tier, refusal: {id: owedWall.id, count: owedWall.unreported}})
       assistCreditsWall.update(() => null)
     }
-  }, [owedWallTier])
+  }, [owedWall])
   const credits = useSyncExternalStore(assistCredits.subscribe, assistCredits.get)
 
   // The meter's figures belong to the sign-in state they were read under.
@@ -368,6 +370,7 @@ export default function BotChat() {
             onAction={() => (aiCreditsCopy(paused.tier).cta === 'subscribe' ? quotaActions.subscribe() :
               quotaActions.signIn())}
             onCancel={handleCancelPaused}
+            onResume={() => void resumePausedTurnNow()}
           />
         )}
         <Box ref={messagesEndRef} data-testid='BotChat-MessagesEnd' sx={{height: '1px', width: '100%'}}/>
@@ -375,7 +378,7 @@ export default function BotChat() {
 
       {/* Hosted only: with the user's own key, Bldrs' credits aren't what's spent. */}
       {credits && !apiKey && (
-        <CreditsMeter credits={credits} onMore={() => setCreditsDialog({tier: credits.tier, isNewWall: false})}/>
+        <CreditsMeter credits={credits} onMore={() => setCreditsDialog({tier: credits.tier, refusal: null})}/>
       )}
 
       <Box
@@ -446,7 +449,7 @@ export default function BotChat() {
         tier={creditsDialog?.tier ?? 'anonymous'}
         isOpen={creditsDialog !== null}
         onClose={() => setCreditsDialog(null)}
-        reportShowing={creditsDialog?.isNewWall ?? true}
+        refusal={creditsDialog?.refusal ?? null}
         feature={AI_CREDITS_FEATURE}
       />
     </Panel>
@@ -598,16 +601,20 @@ setTurnSender(runTurn)
 /**
  * The turn waiting for its credits (assistForward.js): what is used up, when
  * it will be sent, the tier's way out (sign in, or upgrade; Pro has none)
- * and Cancel, which gives the text back to the input.
+ * and Cancel, which gives the text back to the input. In a browser without
+ * Web Locks nothing is sent on its own (assistLog.js "The lock"), so once
+ * its time has come it offers Resume instead.
  *
  * @property {object} paused the chat's `paused`
  * @property {Function} onAction the tier's call to action
  * @property {Function} onCancel Drops the turn and gives its text back to the input
+ * @property {Function} onResume Sends it now, from this tab
  * @return {ReactElement}
  */
-function PausedNotice({paused, onAction, onCancel}) {
+function PausedNotice({paused, onAction, onCancel, onResume}) {
   const theme = useTheme()
   const {cta, ctaLabel} = aiCreditsCopy(paused.tier)
+  const {awaitingResume} = paused
   return (
     <Box
       role='status'
@@ -621,7 +628,7 @@ function PausedNotice({paused, onAction, onCancel}) {
       }}
     >
       <Typography variant='body2' data-testid='BotChat-PausedText'>
-        {pausedNoticeText(paused.tier, paused.notBefore)}
+        {pausedNoticeText(paused.tier, paused.notBefore, {awaitingResume})}
       </Typography>
       <Box sx={{display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 0.5}}>
         <Button
@@ -632,7 +639,7 @@ function PausedNotice({paused, onAction, onCancel}) {
         >
           Cancel
         </Button>
-        {cta !== null && (
+        {cta !== null && !awaitingResume && (
           <Button
             size='small'
             onClick={onAction}
@@ -640,6 +647,18 @@ function PausedNotice({paused, onAction, onCancel}) {
             sx={{textTransform: 'none', whiteSpace: 'nowrap'}}
           >
             {ctaLabel}
+          </Button>
+        )}
+        {awaitingResume && (
+          <Button
+            size='small'
+            variant='contained'
+            color='accent'
+            onClick={onResume}
+            data-testid='BotChat-PausedResume'
+            sx={{textTransform: 'none'}}
+          >
+            Resume
           </Button>
         )}
       </Box>
