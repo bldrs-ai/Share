@@ -31,6 +31,7 @@ import {getRenderMode} from '../privacy/preferences'
 import {resetPlanes as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
+import {NotFoundError} from '../loader/notFoundError'
 import {
   LOAD_OUTCOMES,
   attachLoadFailureContext,
@@ -47,7 +48,7 @@ import {
   reportFramingExclusion,
   reportLoadProgress,
 } from '../loader/loadProgress'
-import {buildOutcomeParams, loadFailureParams} from '../loader/loadAnalytics'
+import {buildOutcomeParams, loadFailureParams, omitUndefined} from '../loader/loadAnalytics'
 import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
 import {EngineOpenFailureError, engineFailureCaptureContext, engineSourceTags} from '../loader/engineOpenFailure'
@@ -102,7 +103,8 @@ import {
 } from '../utils/occurrencePaths'
 import {isOutOfMemoryError} from '../utils/oom'
 import {isAborted, raceLoadAbort, throwIfLoadAborted} from '../utils/loadAbort'
-import {isFeatureEnabled} from '../FeatureFlags'
+import {modelOpenKind, tagModelOpen} from '../utils/reportModelOpen'
+import {isSpaModelNavOn} from '../utils/spaModelNavMode'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../viewer/three/Picker'
 import {isOnControl} from '../viewer/three/pickControls'
@@ -231,16 +233,18 @@ export default function CadView({
   const inFlightModelKeyRef = useRef(null)
   const isViewerReloadPendingRef = useRef(false)
   const latestOnViewerRef = useRef(null)
-  // open-205 #2011 step A (`?feature=spaModelNav`): who owns the load. Each
-  // onViewer run under the flag gets its own AbortController, and leaving
-  // the model aborts it (abortLoadInFlight): the download, OPFS staging and
-  // parse stop, the engine worker is terminated, and the run unwinds at its
-  // next await writing nothing, so the next model's load starts then instead
-  // of when this one would have ended. Kept after the run ends, so a switch
-  // before the idle GLB writer has run skips the writer too. Null off the
-  // flag, where nothing is aborted and a switch waits behind the load as
-  // before. The viewer the run loads into, because under the flag a viewer
-  // re-created for the SAME model (a theme change) supersedes the run too.
+  // open-205 #2011 step A (the in-app switch, on by default since step F;
+  // utils/spaModelNavMode.js): who owns the load. Each onViewer run under it
+  // gets its own AbortController, and leaving the model aborts it
+  // (abortLoadInFlight): the download, OPFS staging and parse stop, the
+  // engine worker is terminated, and the run unwinds at its next await
+  // writing nothing, so the next model's load starts then instead of when
+  // this one would have ended. Kept after the run ends, so a switch before
+  // the idle GLB writer has run skips the writer too. Null with the kill
+  // switch (`?feature=disableSpaModelNav`) or the rollback on, where nothing
+  // is aborted and a switch waits behind the load as before. The viewer the
+  // run loads into, because under the switch a viewer re-created for the
+  // SAME model (a theme change) supersedes the run too.
   const loadAbortRef = useRef(null)
   const inFlightViewerRef = useRef(null)
   // The alert as it stood when the in-flight load began. If that load is
@@ -438,13 +442,13 @@ export default function CadView({
 
 
   /**
-   * Give up the load this CadView started last, under `?feature=spaModelNav`
-   * (open-205 #2011 step A): the user is leaving it, for another model or for
+   * Give up the load this CadView started last, under the in-app switch
+   * (open-205 #2011 step A; utils/spaModelNavMode.js): the user is leaving it, for another model or for
    * a re-created viewer. Its run unwinds at its next await without writing
    * (onViewerInternal's `loadSignal`), and onViewer then starts the next one.
    * A load that has already ended is aborted too, which only stops its idle
-   * GLB writer if that has not run yet (Loader.js#load). Off the flag there
-   * is no controller, and nothing changes.
+   * GLB writer if that has not run yet (Loader.js#load). With the kill switch
+   * on there is no controller, and nothing changes.
    */
   function abortLoadInFlight() {
     loadAbortRef.current?.abort()
@@ -473,8 +477,7 @@ export default function CadView({
     const {phase, format} = serialBefore === null ?
       {phase: 'auth', format: undefined} :
       getLoadFailureInfo(serialBefore)
-    gtagEvent('model_load_aborted', Object.fromEntries(Object.entries({phase, format})
-      .filter(([, value]) => value !== undefined)))
+    gtagEvent('model_load_aborted', omitUndefined({phase, format, open_kind: modelOpenKind(modelPath)}))
   }
 
 
@@ -501,10 +504,10 @@ export default function CadView({
     // Playwright where viewer is still null at the [auth]-effect's render —
     // don't accidentally claim the slot and starve the eventual successful
     // load from the [viewer] effect.
-    const isSpaModelNav = isFeatureEnabled('spaModelNav')
+    const isSpaModelNav = isSpaModelNavOn()
     if (onViewerInFlightRef.current) {
       if (inFlightModelKeyRef.current !== modelIdentity(modelPath, installPrefix)) {
-        // Under spaModelNav the load in flight was aborted when the model
+        // Under the in-app switch the load in flight was aborted when the model
         // changed (initViewerCb), so "once it ends" is its next await.
         debug().warn('CadView#onViewer: model changed mid-load; loading it once the current load ends')
         isViewerReloadPendingRef.current = true
@@ -513,7 +516,7 @@ export default function CadView({
       if (isSpaModelNav && inFlightViewerRef.current !== useStore.getState().viewer) {
         // The same model, in a viewer re-created mid-load (a theme change):
         // the load in flight streams into the disposed one and was aborted
-        // with it, so load it again here. Off the flag this stays a
+        // with it, so load it again here. With the kill switch on this stays a
         // duplicate, as before. Compared with the store's viewer, not this
         // render's: the auth-state effect can run a render older than the
         // one that started the load, and that call is still a duplicate.
@@ -593,14 +596,14 @@ export default function CadView({
     if (useStore.getState().indexedModel !== null) {
       forgetIndexedTree()
     }
-    if (isFeatureEnabled('spaModelNav')) {
+    if (isSpaModelNavOn()) {
       forgetLoadedModelState()
     }
   }
 
 
   /**
-   * Under `?feature=spaModelNav`, drop the store's per-model state when the
+   * Under the in-app switch, drop the store's per-model state when the
    * user leaves a model, instead of leaving it to the next load's own writes
    * (open-205 #2011 step A, the load-ownership part of #2019). Without a page
    * load nothing else does: the store's `model` stayed the left model until
@@ -611,9 +614,9 @@ export default function CadView({
    * model arrives. The left load itself was aborted (abortLoadInFlight), so
    * it cannot write any of it back.
    *
-   * Not off the flag: there every open is a page load, and the in-app opens
-   * that remain (an in-memory upload, the alert's Reset, a search-bar URL)
-   * keep the behaviour they have today.
+   * Not with the kill switch or the rollback on: there every open is a page
+   * load, and the in-app opens that remain (an in-memory upload, the alert's
+   * Reset, a search-bar URL) keep the behaviour they had before step A.
    */
   function forgetLoadedModelState() {
     const state = useStore.getState()
@@ -628,6 +631,16 @@ export default function CadView({
     state.setLoadReportLines([])
     state.setCurrentLoadLine(null)
     state.setLoadResult(null)
+    // The NavTree's expansion is a set of the left model's element ids (and
+    // type names). Left in place, the next model's tree came up with whichever
+    // of its own ids collide expanded, and a toggle on one collapsed it
+    // instead (found by step F's burn-in, exportGlb.spec.ts's reopen of a
+    // second export of the same model: its root came up expanded, so the
+    // user's first click closed it). A page load starts with none.
+    state.setExpandedElements([])
+    state.setExpandedTypes([])
+    state.setDefaultExpandedElements([])
+    state.setDefaultExpandedTypes([])
   }
 
 
@@ -643,13 +656,19 @@ export default function CadView({
     // write, not here: on mount the [modelPath] effect, which sets the shown
     // identity, runs after the auth effect that may start this load.
     const loadModelKey = modelIdentity(modelPath, installPrefix)
-    // This run's abort signal under `?feature=spaModelNav` (onViewer sets the
-    // controller just before calling here), undefined off the flag. An
+    // This run's abort signal under the in-app switch (onViewer sets the
+    // controller just before calling here), undefined with the kill switch on. An
     // aborted run is superseded whatever the identity says: after A → B → A
     // the identity reads current again, but the run was given up for the
     // viewer it loaded into (open-205 #2011 step A).
     const loadSignal = loadAbortRef.current?.signal
     const isLoadSuperseded = () => dedupeModelKeyRef.current !== loadModelKey || isAborted(loadSignal)
+    // Whether this open is the page's first or one switched to in-app, and
+    // the page's nav mode, as Sentry scope tags from here on, so this load's
+    // failure capture and any later exception on the model say which it was
+    // (utils/reportModelOpen.js, open-205 step F). The GA events below take
+    // the same `open_kind`.
+    tagModelOpen(modelPath)
     setIsModelReady(false)
     // open-205 #2043: the canvas is live from the load's first preview mesh,
     // during the parse, so scene picks are too: the handler takes picks on
@@ -850,7 +869,10 @@ export default function CadView({
       if (isRealModelOpen(modelPath) && reportedLoadFailureRef.current !== failureKey) {
         reportedLoadFailureRef.current = failureKey
         const {phase, fileSize, format} = getLoadFailureInfo(loadSerialBefore)
-        gtagFunnelEvent(FUNNEL_EVENTS.LOAD_FAILED, loadFailureParams({error: e, format, fileSize, phase}))
+        gtagFunnelEvent(FUNNEL_EVENTS.LOAD_FAILED, omitUndefined({
+          ...loadFailureParams({error: e, format, fileSize, phase}),
+          open_kind: modelOpenKind(modelPath),
+        }))
       }
       if (isOOM) {
         // Provide actionable OOM alert object; AlertDialog will render a Refresh button.
@@ -967,9 +989,12 @@ export default function CadView({
       // the loader only raises it after OPFS confirmed the entry is absent,
       // so it's user state, not a bug — and it was SHARE-1NR, the top
       // hard-failure group (#1955). Its volume is still counted: an
-      // info-level message above, plus AlertDialog's analytics event.
+      // info-level message above, plus AlertDialog's analytics event. And
+      // for a GitHub link that isn't there or isn't visible to this user
+      // (SHARE-1XP, notFoundError.js): AlertDialog counts it in GA.
+      const isExpectedNotFound = e instanceof NotFoundError && e.isExpected
       if (!isOOM && !(e instanceof UnsupportedSchemaError) && !(e instanceof InMemoryUploadGoneError) &&
-          !(e instanceof UploadNotInBrowserError) && !(e instanceof ZipArchiveError)) {
+          !(e instanceof UploadNotInBrowserError) && !(e instanceof ZipArchiveError) && !isExpectedNotFound) {
         attachLoadFailureContext()
         // A load that stalled before it failed says so on this event only
         // (loadProgress.js#loadStallCaptureTags), never on the scope.
@@ -1193,8 +1218,8 @@ export default function CadView({
    *   geometry still streams (open-205 #2029); see onViewerInternal
    * @param {Function} [options.onFirstMesh] called when a progressive load's
    *   first geometry is on screen (open-205 #2043); see onViewerInternal
-   * @param {AbortSignal} [options.signal] the run's, under
-   *   `?feature=spaModelNav` (open-205 #2011 step A): handed to the Loader,
+   * @param {AbortSignal} [options.signal] the run's, under the in-app
+   *   switch (open-205 #2011 step A): handed to the Loader,
    *   and checked after each await here, so an aborted load writes nothing
    *   (setModel, the scene, the isolator, the open's analytics)
    * @return {object} loaded model
@@ -1447,6 +1472,13 @@ export default function CadView({
         // model_share / model_export elsewhere, so GA counts one model the
         // same way on every event. Equal to `filepath` above, by design.
         content_id: modelContentId(routeResult),
+      }
+      // The page's first open, or one switched to in-app
+      // (utils/reportModelOpen.js): splits opens, and with load_failed the
+      // failure rate, by whether a previous model was in this document.
+      const openKind = modelOpenKind(routeResult)
+      if (openKind) {
+        eventParams.open_kind = openKind
       }
       // How the load went: the reporter's cross-format snapshot merged with
       // Conway's engine stats for IFC/STEP, plus the displayed/no_geometry/
@@ -2910,6 +2942,33 @@ export default function CadView({
   useEffect(() => installDebugPanelsShortcut(), [])
 
 
+  // Give up this CadView's load when it unmounts. An in-app open across route
+  // families (`/v/p`, `/v/gh` and `/v/local-only` sit under one parent route;
+  // `/v/u` and `/v/g` do not, ShareRoutes.jsx) remounts Share and CadView,
+  // and the next CadView builds a new viewer and disposes the store's one.
+  // Left running, this instance's load streamed into that disposed viewer and
+  // failed at its scene: an alert, a Sentry capture, and `load_failed`, over
+  // the model the user had just opened (found by step F's burn-in,
+  // GoogleDriveConnect.spec.ts: a Drive pick from a hosted model). With the
+  // kill switch on there is no controller, so this does nothing. Checked a
+  // microtask later, defensively: StrictMode (index.jsx) runs this cleanup
+  // and the effect again at once in development, which is no unmount, and a
+  // load already started then (a remount into the store's viewer) would be
+  // given up and started again for nothing.
+  const isMountedRef = useRef(false)
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      queueMicrotask(() => {
+        if (!isMountedRef.current) {
+          abortLoadInFlight()
+        }
+      })
+    }
+  }, [])
+
+
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!isViewerLoaded) {
@@ -3178,7 +3237,17 @@ export default function CadView({
       } else {
         setSelectedElement(null)
       }
-    })()
+    })().catch((e) => {
+      // Captured here, as a handled event, rather than left to reach Sentry
+      // as an unhandled rejection: a property read from a spilled source can
+      // throw NotReadableError when another tab replaced its OPFS entry
+      // (loader/opfsSourceByteStore.js), and index/sentry.js drops unhandled
+      // NotReadableErrors as a picked file gone unreadable (SHARE-1PZ). This
+      // one may be Share's fault, so it stays in Sentry (codex on #2242).
+      if (!isStale) {
+        captureException(e, {tags: {subsystem: 'selection_properties'}})
+      }
+    })
     return () => {
       isStale = true
     }

@@ -130,6 +130,31 @@ function isInAppBrowserBridgeError(event) {
 }
 
 
+/**
+ * True for an unhandled rejection with a DOMException `NotReadableError`: a
+ * file the user picked or dropped became unreadable after the page got its
+ * handle (moved, deleted, a revoked permission, a removable drive gone).
+ * The client's own state, with no stack to point at a call site (SHARE-1PZ,
+ * 8 users all-time), so it's counted in GA rather than raised in Sentry.
+ * Unhandled only: a NotReadableError a load catches and captures itself (a
+ * stale OPFS handle, engine/engineSources.js) can be Share's own fault and
+ * keeps its Sentry event. So any path that can read a spilled source must
+ * catch and capture, as CadView's selection-properties read does (codex on
+ * #2242): an unhandled one would land here and be dropped.
+ *
+ * @param {object} event Sentry event payload
+ * @return {boolean}
+ */
+function isUnhandledFileNotReadable(event) {
+  const exception = event?.exception?.values?.[0]
+  if (exception?.mechanism?.type !== 'onunhandledrejection') {
+    return false
+  }
+  return exception.type === 'NotReadableError' ||
+    (typeof exception.value === 'string' && exception.value.startsWith('NotReadableError'))
+}
+
+
 const HEURISTIC_NOISE_MATCHERS = [
   {
     match: isAnonymousOnerrorEvent,
@@ -138,6 +163,10 @@ const HEURISTIC_NOISE_MATCHERS = [
   {
     match: isInAppBrowserBridgeError,
     gaEventName: 'in_app_browser_bridge_error',
+  },
+  {
+    match: isUnhandledFileNotReadable,
+    gaEventName: 'file_not_readable',
   },
 ]
 

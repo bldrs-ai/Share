@@ -795,6 +795,17 @@ a backstop, not a measured choice. The page snapshots both
 **Provisional:** it is static per device, and the PSB renderer peak with it
 is in the measurements doc's §"Source policy as built".
 
+**The windowed pump's closure walks and prefetch (conway#787, #798).** Over
+a store that reads synchronously (the sync access handle, the held Blob), a
+windowed pump does no per-product closure walk (#787), and since conway#798
+its aggregate pass runs no relationship prefetch either: nothing is gained
+by reading ahead from bytes that are one synchronous read away. Windowed
+geometry is faster and its worker peak lower on the IFC models that page
+most (D3D, one authoring tool's 309 MB IFC2X3 file); first mesh is
+unchanged. Numbers in the measurements doc's §"Windowed aggregate pass
+without prefetch (conway#798)". The preview-adapter walk skip was measured
+too and showed no effect, so it stays.
+
 **How the bytes are read.** `store.takeWhole()` (engineSources.js): on the
 sync access handle one read of the whole file into one buffer; on the Blob
 store the held copy, handed over. Neither store keeps a reference, so the
@@ -940,15 +951,19 @@ step 9, shipped: #2083 merged on 2026-11-07, and #2053 closed on
 2026-11-18 with steps 1–6 and 9. What is left of this plan is steps 7–8,
 now tracked on #2031, and they come with in-app model switching (#2011):
 
-- **#2011 Phase 1a** switches models in-app behind `?feature=spaModelNav`
-  (`utils/navigate.js#navigateToModel`). A switch is a close, one model at
-  a time: the old viewer's dispose closes its registered model's session,
-  and `modelSwitchMemory.spec.ts` checks that the old worker is
-  terminated. Its next step (A) is load ownership and abort, with the close
-  path of #2031. #2011's body has the step list and its status.
+- **#2011 Phase 1a** switches models in-app, on by default since step F
+  (`utils/navigate.js#navigateToModel`; kill switch
+  `?feature=disableSpaModelNav`, prod rollback `disableSpaModelNav`,
+  in-app-model-switch.md §4.8). A switch is a close, one model at a time:
+  a load the user leaves is aborted and its worker terminated (step A,
+  with the close path of #2031; §4.5a there), the old viewer's dispose
+  closes its registered model's session, and `modelSwitchMemory.spec.ts`
+  checks that the old worker is terminated and the old model collected.
+  What comes next is Phase 1b (switch is not close: sessions, `EngineHost`,
+  eviction); #2011's body has the step list.
 - **Step 4's requirement on step 7 still stands:** an in-app switch must
   await `close()` before it evicts or re-stages the previous model's OPFS
-  entry. The flagged switch does not re-stage anything yet.
+  entry. The switch does not re-stage anything yet.
 - **The source policy** (§5.6, Share#2139, 2026-11-11): a worker open is
   buffered under a device cap (or over the Blob store's held copy) and
   released to windows at the spill; windowed is the over-cap, sidecar-reopen

@@ -34,8 +34,9 @@ import Share from './Share'
  *   .../v/p/index.ifc
  *
  * keeps the CadView and swaps the viewer. Opening a model from the app's
- * own surfaces is still a page load unless `?feature=spaModelNav` is on
- * (utils/navigate.js#navigateToModel, open-205 #2021).
+ * own surfaces takes that path too, by default since open-205 step F; with
+ * `?feature=disableSpaModelNav` (or the rollback) it is a page load
+ * (utils/navigate.js#navigateToModel, utils/spaModelNavMode.js, #2021).
  *
  * Examples for this component:
  *   http://host/share/v/p/haus.ifc

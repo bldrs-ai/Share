@@ -287,7 +287,7 @@ describe('quota/useDirectLinkQuota', () => {
     expect(record.mock.calls).toEqual([[DRIVE_KEY], [DRIVE_KEY]])
   })
 
-  it('with every open a page load (spaModelNav off), per open is per page: one count per page', async () => {
+  it('with every open a page load (the disableSpaModelNav kill switch), per open is per page: one count per page', async () => {
     // Each page load mounts its own CadView, so its own hook; within one
     // page only re-inits of that page's one open follow.
     const {record} = mockQuota()

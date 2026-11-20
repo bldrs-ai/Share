@@ -1,7 +1,7 @@
 import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
-import {isFeatureEnabled} from '../FeatureFlags'
 import {isLocalOnlyPath} from '../routes/localOnly'
 import {disablePageReloadApprovalCheck} from './event'
+import {isSpaModelNavOn} from './spaModelNavMode'
 
 
 /**
@@ -149,11 +149,12 @@ function withCurrentSearch(path) {
 
 
 /**
- * Navigate to a model path. A full page load by default, which frees the
- * previous model's memory with the page; under `?feature=spaModelNav`
- * (open-205, #2021) an in-app react-router transition instead, which keeps
- * the page and leaves freeing the previous model to the viewer's teardown
- * (design/new/in-app-model-switch.md §2, §6). During unit tests, falls back
+ * Navigate to a model path. An in-app react-router transition by default
+ * (open-205 #2011, on since step F), which keeps the page and leaves freeing
+ * the previous model to the viewer's teardown and CadView's load ownership
+ * (design/new/in-app-model-switch.md §2, §4.5a, §6). With the kill switch
+ * or the rollback on (`utils/spaModelNavMode.js`), the full page load it
+ * always was, which frees the previous model's memory with the page. During unit tests, falls back
  * to SPA navigate to avoid jsdom reloads. The current query string is
  * carried forward when the target doesn't specify its own (see
  * `withCurrentSearch`), either way.
@@ -190,10 +191,15 @@ export function navigateToModel(target, navigate) {
     }
   }
 
-  // Read at call time, like every `isFeatureEnabled` check: the flag rides
-  // in the query string `withCurrentSearch` just carried forward, so the
-  // model it opens keeps it.
-  if (typeof navigate === 'function' && isFeatureEnabled('spaModelNav') && !isViewChange(path)) {
+  // Read at call time, like every `isFeatureEnabled` check: a kill switch
+  // (`?feature=disableSpaModelNav`) rides in the query string
+  // `withCurrentSearch` just carried forward, so the page it loads keeps it.
+  // A link that names the kill switch in its own query loads the page too:
+  // the destination's readers (CadView, ShareIfc) take the mode from ITS
+  // URL, so an in-app open there would run as the kill switch's page-load
+  // path (no abort, no store reset) without the page load (codex on #2222).
+  if (typeof navigate === 'function' && isSpaModelNavOn() && !isViewChange(path) &&
+      !namesKillSwitch(path)) {
     navigate(path)
     return
   }
@@ -219,13 +225,44 @@ export function navigateToModel(target, navigate) {
  */
 function isViewChange(path) {
   const viewOf = (search) => new URLSearchParams(search).get('view')?.toLowerCase() ?? null
-  const queryAt = path.indexOf('?')
-  if (queryAt === -1) {
+  const search = searchOf(path)
+  if (search === null) {
     return false
   }
-  const hashAt = path.indexOf('#', queryAt)
-  const search = path.slice(queryAt, hashAt === -1 ? undefined : hashAt)
   return viewOf(search) !== viewOf(window.location.search)
+}
+
+
+/**
+ * Whether `path`'s own query turns the in-app switch off
+ * (`?feature=disableSpaModelNav`, utils/spaModelNavMode.js). A path with no
+ * query of its own has the page's by now (`withCurrentSearch`), and a page
+ * with the kill switch already loads every open.
+ *
+ * @param {string} path
+ * @return {boolean}
+ */
+function namesKillSwitch(path) {
+  const search = searchOf(path)
+  if (search === null) {
+    return false
+  }
+  const features = (new URLSearchParams(search).get('feature') ?? '').split(',')
+  return features.some((name) => name.trim().toLowerCase() === 'disablespamodelnav')
+}
+
+
+/**
+ * @param {string} path a path, maybe with its own `?query` and `#hash`
+ * @return {string|null} its `?query`, or null when it has none
+ */
+function searchOf(path) {
+  const queryAt = path.indexOf('?')
+  if (queryAt === -1) {
+    return null
+  }
+  const hashAt = path.indexOf('#', queryAt)
+  return path.slice(queryAt, hashAt === -1 ? undefined : hashAt)
 }
 
 

@@ -417,6 +417,36 @@ describe('shouldSendSentryEvent — in-app browser bridge globals (SHARE-1X7)', 
 })
 
 
+describe('shouldSendSentryEvent — unreadable picked file (SHARE-1PZ)', () => {
+  // SHARE-1PZ's shape: an unhandled rejection with no stack, the DOMException
+  // reported as an Error whose value names it.
+  const notReadableEvent = ({type = 'Error', mechanism = 'onunhandledrejection'} = {}) => ({
+    exception: {
+      values: [{
+        type,
+        value: 'NotReadableError: The requested file could not be read, typically due to permission problems ' +
+          'that have occurred after a reference to a file was acquired.',
+        mechanism: {type: mechanism, handled: false},
+      }],
+    },
+  })
+
+  it('drops an unhandled NotReadableError and fires its GA signal once', () => {
+    expect(shouldSendSentryEvent(notReadableEvent())).toBe(false)
+    expect(shouldSendSentryEvent(notReadableEvent({type: 'NotReadableError'}))).toBe(false)
+    expect(gtagEvent).toHaveBeenCalledTimes(1)
+    expect(gtagEvent).toHaveBeenCalledWith('file_not_readable', {})
+  })
+
+  // A load that catches one and captures it (a stale OPFS handle) can be
+  // Share's own fault.
+  it('keeps a NotReadableError that something caught and captured', () => {
+    expect(shouldSendSentryEvent(notReadableEvent({mechanism: 'generic'}))).toBe(true)
+    expect(gtagEvent).not.toHaveBeenCalled()
+  })
+})
+
+
 describe('shadowReportedCondition', () => {
   const fingerprinted = (extra = {}) => ({
     level: 'warning',

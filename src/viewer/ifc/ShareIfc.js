@@ -44,7 +44,7 @@ import {BatchedMesh, BufferGeometry, Mesh} from 'three'
 import {acceleratedRaycast, disposeBoundsTree} from 'three-mesh-bvh'
 import {IfcAPI} from '@bldrs-ai/conway/web-ifc'
 import ShareIfcManager from './ShareIfcManager'
-import {isFeatureEnabled} from '../../FeatureFlags'
+import {isSpaModelNavOn} from '../../utils/spaModelNavMode'
 import {raycastActiveInstances} from './batchedRaycast'
 import {computeQuietBatchedBoundsTree, computeQuietBoundsTree} from './bvhBuild'
 import {disposeDeferredBatchedBoundsTree} from './deferredBatchedBvh'
@@ -257,14 +257,15 @@ export default class ShareIfc {
       }
     }
     // An engine still parsing into this viewer has no model registered yet.
-    // Under the in-app switch (`?feature=spaModelNav`) its load is given up
-    // with the viewer: `abort` terminates the worker and the parse rejects as
-    // aborted, which CadView, having aborted the load itself first, takes as
-    // the switch it is (Containers/CadView.jsx#abortLoadInFlight). Off the
-    // flag the load keeps running into the disposed viewer, as before:
+    // Under the in-app switch (on by default, utils/spaModelNavMode.js) its
+    // load is given up with the viewer: `abort` terminates the worker and the
+    // parse rejects as aborted, which CadView, having aborted the load itself
+    // first, takes as the switch it is (Containers/CadView.jsx#abortLoadInFlight).
+    // With the kill switch (`?feature=disableSpaModelNav`) or the rollback on,
+    // the load keeps running into the disposed viewer, as before step F:
     // there, a viewer is disposed mid-load only by a theme change, and what
-    // that load does next is unchanged.
-    if (isFeatureEnabled('spaModelNav')) {
+    // that load does next is the pre-step-A behaviour.
+    if (isSpaModelNavOn()) {
       for (const engineLoad of this.engineLoads) {
         try {
           engineLoad.abort()

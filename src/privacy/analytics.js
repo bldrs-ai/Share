@@ -353,9 +353,10 @@ export function getGaClientReference() {
  * constant.
  *
  * Params, and where each fires (design/new/quotas.md §"Funnel analytics"):
- *   REAL_MODEL_OPEN      {content_id, content_type, load_outcome, stats_*, …}
- *                        CadView, on success only
- *   LOAD_FAILED          {content_type, size_bucket, reason_class, last_phase}
+ *   REAL_MODEL_OPEN      {content_id, content_type, load_outcome, stats_*,
+ *                        open_kind, …}  CadView, on success only
+ *   LOAD_FAILED          {content_type, size_bucket, reason_class, last_phase,
+ *                        open_kind}
  *                        CadView's onViewerInternal catch, once per failed
  *                        attempt; closed-set values only (Share#1954)
  *   QUOTA_LIMIT_REACHED  {tier, feature}  QuotaLimitDialog, once per showing
