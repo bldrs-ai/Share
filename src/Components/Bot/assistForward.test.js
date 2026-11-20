@@ -280,6 +280,77 @@ describe('Bot/assistForward', () => {
     expect(onB.entries.filter((e) => e.kind === 'turn').map((e) => [e.text, e.state])).toEqual([['about B', 'answered']])
   })
 
+  describe('a switch while a turn is in flight (Codex round 2 on #2253)', () => {
+    const B = 'https://bldrs.ai/other.ifc'
+
+    /**
+     * A sender whose sends wait until released, as the loop does: on its
+     * way out it hands the store its messages (only the user's, for a turn
+     * that was stopped), then ends the turn.
+     *
+     * @param {object} tab from page()
+     * @return {Function} release(text, {stopped}) resolves that text's send
+     */
+    function heldSender(tab) {
+      const held = new Map()
+      tab.forward.setTurnSender(({text, turn, conversationId}) => new Promise((resolve) => {
+        tab.sends.push(text)
+        held.set(text, async ({stopped = false} = {}) => {
+          await tab.forward.assistLoggedConversationStore.append(conversationId, stopped ?
+            [{role: 'user', content: text}] : [{role: 'user', content: text}, {role: 'assistant', content: `re: ${text}`}])
+          tab.state.assistChat.update((c) => ({...c, streamingTurn: c.streamingTurn === turn ? null : c.streamingTurn,
+            messages: c.conversationId === conversationId && !stopped ?
+              [...c.messages, {id: `reply-${text}`, kind: 'assistant', text: `re: ${text}`}] : c.messages}))
+          resolve({})
+        })
+      }))
+      return async (text, options) => {
+        await held.get(text)(options)
+        await flush()
+      }
+    }
+
+    it('the stopped turn ending late can\'t take the next model\'s turn context: B\'s messages reach B\'s log', async () => {
+      const tab = page()
+      const release = heldSender(tab)
+      await tab.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      void tab.forward.submitTurn('about A')
+      await flush()
+      await tab.forward.attachAssistSession({modelRoute: B, scope: 'anonymous'})
+      void tab.forward.submitTurn('about B')
+      await flush()
+      // A unwinds while B's turn is still running.
+      await release('about A', {stopped: true})
+      await release('about B')
+      const onB = openAssistLog(assistSessionKey({modelRoute: B, scope: 'anonymous'})).load()
+      expect(onB.entries.filter((e) => e.kind === 'messages').flatMap((e) => e.messages)).toEqual([
+        {role: 'user', content: 'about B'}, {role: 'assistant', content: 're: about B'}])
+      // And A's stopped turn's message stayed in A's log, not B's.
+      const onA = openAssistLog(KEY).load()
+      expect(onA.entries.filter((e) => e.kind === 'messages').flatMap((e) => e.messages))
+        .toEqual([{role: 'user', content: 'about A'}])
+    })
+
+    it('back on A, the stopped turn\'s question shows, with why it has no answer, and is not resent', async () => {
+      const tab = page()
+      const release = heldSender(tab)
+      await tab.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      void tab.forward.submitTurn('about A')
+      await flush()
+      await tab.forward.attachAssistSession({modelRoute: B, scope: 'anonymous'})
+      await release('about A', {stopped: true})
+      expect(openAssistLog(KEY).load().entries.find((e) => e.kind === 'turn'))
+        .toMatchObject({text: 'about A', state: 'interrupted'})
+      await tab.forward.attachAssistSession({modelRoute: ROUTE, scope: 'anonymous'})
+      expect(tab.state.assistChat.get().messages.map((m) => [m.kind, m.text])).toEqual([
+        ['user', 'about A'], ['notice', tab.forward.INTERRUPTED_NOTICE]])
+      expect(tab.state.assistChat.get().paused).toBeNull()
+      await advance(60000)
+      // Sent once, before the switch; never again.
+      expect(tab.sends).toEqual(['about A'])
+    })
+  })
+
   // Codex on #2253: without Web Locks no tab may forward on its own.
   describe('without Web Locks', () => {
     beforeEach(() => {

@@ -61,13 +61,21 @@ const MAX_TIMER_MS = 24 * 60 * 60 * 1000 // eslint-disable-line no-magic-numbers
 const BUSY_RETRY_MS = 1000
 
 export const SENT_ELSEWHERE_NOTICE = 'This message was sent from another tab.'
+/** Restored under a turn stopped by switching to another model in the app. */
+export const INTERRUPTED_NOTICE = 'Stopped when you switched models. Ask again to carry on.'
+/** Restored under a turn whose reply a reload cut off. */
+export const CUT_OFF_NOTICE = 'The reply was cut off when the page reloaded. Ask again to carry on.'
 
 
 let session = {log: openAssistLog(null), modelRoute: null, scope: null}
 let sender = null
-// The turn being forwarded, and the log it belongs to: a model switch while
-// it runs must not move its messages into the next model's log.
-let forwarding = null
+// The turns being forwarded, by conversation id, each with the log it
+// belongs to. More than one can be in flight: a model switch aborts A's
+// turn, but it is still unwinding when the user sends on B (Codex on
+// #2253). Each forward sets and clears only its own entry, so A's ending
+// can't take B's context, and the loop's messages for each conversation go
+// to that turn's own log.
+const forwarding = new Map()
 let timer = null
 let refusedAgain = 0
 let listening = false
@@ -98,8 +106,9 @@ export const assistLoggedConversationStore = {
   load: (conversationId) => assistConversationStore.load(conversationId),
   append: async (conversationId, messages) => {
     await assistConversationStore.append(conversationId, messages)
-    if (forwarding !== null && forwarding.conversationId === conversationId) {
-      forwarding.log.appendMessages(forwarding.seq, messages)
+    const context = forwarding.get(conversationId)
+    if (context) {
+      context.log.appendMessages(context.seq, messages)
     }
   },
 }
@@ -223,7 +232,7 @@ export function forgetAssistConversation() {
 export function resetAssistForward() {
   clearTimer()
   session = {log: openAssistLog(null), modelRoute: null, scope: null}
-  forwarding = null
+  forwarding.clear()
   refusedAgain = 0
 }
 
@@ -276,16 +285,20 @@ async function forward(seq, {text, messageId, turn, ignoreNotBefore = false, man
     }
     return
   }
-  forwarding = {seq, log, conversationId}
+  const context = {seq, log}
+  forwarding.set(conversationId, context)
   let outcome
   try {
     outcome = await sender({text, messageId, turn: turnId, conversationId})
   } finally {
-    forwarding = null
+    if (forwarding.get(conversationId) === context) {
+      forwarding.delete(conversationId)
+    }
   }
   // A New chat or another model while it ran: the outcome goes to this
   // turn's own log, and the chat on screen, another one's, is left alone.
-  const onScreen = assistChat.get().conversationId === conversationId && session.log === log
+  // By key: a return to this model opens a new log object over the same key.
+  const onScreen = assistChat.get().conversationId === conversationId && session.log.key === log.key
   if (outcome?.refusal) {
     const notBefore = nextNotBefore(outcome.refusal.resumeAt, Boolean(!turn))
     const tier = outcome.refusal.tier ?? null
@@ -301,10 +314,16 @@ async function forward(seq, {text, messageId, turn, ignoreNotBefore = false, man
     return
   }
   refusedAgain = 0
-  log.settle(seq, 'answered')
-  if (onScreen) {
-    log.appendShown(seq, shownSince(messageId))
+  const shown = onScreen ? shownSince(messageId) : []
+  if (shown.length === 0) {
+    // Stopped by a switch to another model (attachAssistSession aborts it),
+    // and its bubbles went with the chat: kept as interrupted, which a
+    // return to this model shows with its question, and never resends.
+    log.settle(seq, 'interrupted')
+    return
   }
+  log.settle(seq, 'answered')
+  log.appendShown(seq, shown)
 }
 
 
@@ -426,14 +445,19 @@ function chatFromRecord(record) {
     if (entry.kind === 'shown') {
       bubbles.push(...entry.bubbles)
     } else if (entry.kind === 'turn' && !shownTurns.has(entry.seq) &&
-        (entry.state === 'queued' || entry.state === 'sent')) {
-      // A queued turn waits (or is due); a sent one with nothing shown was
-      // cut off by the reload, and is shown as asked, not sent again.
+        (entry.state === 'queued' || entry.state === 'sent' || entry.state === 'interrupted')) {
+      // A queued turn waits (or is due). A sent one with nothing shown was
+      // cut off by a reload, and an interrupted one by a switch to another
+      // model: each is shown as asked, with why it has no reply, and not
+      // sent again (it may have run tools); the user can ask again.
       const messageId = `turn-${entry.seq}`
       bubbles.push({id: messageId, kind: 'user', text: entry.text})
       if (entry.state === 'queued') {
         paused = {seq: entry.seq, text: entry.text, notBefore: entry.notBefore, tier: entry.tier, messageId,
           awaitingResume: false}
+      } else {
+        bubbles.push({id: `turn-${entry.seq}-stopped`, kind: 'notice',
+          text: entry.state === 'interrupted' ? INTERRUPTED_NOTICE : CUT_OFF_NOTICE})
       }
     }
   }

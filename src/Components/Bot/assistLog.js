@@ -24,8 +24,11 @@ import {assistStorageKeys, isAssistLogKey} from './assistSessionKey'
  *
  * - A **turn** is what the user asked, waiting to be sent or sent. Its
  *   `state` only moves forward ((STATE_RANK)): `queued` → `sent` →
- *   `answered` | `refused`; a queued turn can be `cancelled`. A pause is a
- *   queued turn with `notBefore` (the relay's `resumeAt`).
+ *   `answered` | `refused` | `interrupted`; a queued turn can be
+ *   `cancelled`. A pause is a queued turn with `notBefore` (the relay's
+ *   `resumeAt`). `interrupted` is a turn stopped by switching to another
+ *   model (assistForward.js): shown as asked and stopped, never sent again,
+ *   since it may have run tools.
  * - **messages** are what the agent loop kept for a turn (its conversation
  *   store's append), so a reload sends them as the history.
  * - **shown** is the panel's record of a turn (its bubbles and task chip),
@@ -92,7 +95,7 @@ export const LOG_MAX_AGE_MS = 48 * 60 * 60 * 1000 // eslint-disable-line no-magi
 export const LOG_MAX_CHARS = 1000000
 
 /** Turn states, in the only order they may move. */
-export const STATE_RANK = Object.freeze({queued: 0, sent: 1, answered: 2, refused: 2, cancelled: 2})
+export const STATE_RANK = Object.freeze({queued: 0, sent: 1, answered: 2, refused: 2, interrupted: 2, cancelled: 2})
 
 
 /**
