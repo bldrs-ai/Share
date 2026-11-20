@@ -613,6 +613,12 @@ What follows from that:
   - **Re-size *B* as traffic grows.** Rule of thumb: about 3× the trailing
     7-day median anonymous spend, never above a hard ceiling set by hand
     next to *A*. The ledger's own daily totals provide the median.
+    `netlify/functions/ai-ledger-stats.js` reads them for Bldrs' private
+    admin dashboard: each breaker's spend per UTC day for the last week,
+    the limits in force (`aiCreditLimits(process.env)`), which settings and
+    secrets are set (never their values) and a count of reconciliation
+    records. It is server-to-server only, behind `ADMIN_STATS_SECRET`, and
+    answers aggregates alone: no ledger key, so no identity, leaves it.
 - **A signed-in free-tier breaker too** (added here, not in the planning
   decisions). Per-user budgets bound one account, but free Auth0 accounts
   are cheap to create, so the free tier gets the same daily breaker
