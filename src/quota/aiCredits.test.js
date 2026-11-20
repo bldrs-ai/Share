@@ -20,6 +20,7 @@ describe('quota/aiCredits', () => {
     expect(limits.ipBudget).toBe(100000)
     expect(limits.freeModelRequestsPerDay).toBe(30)
     expect(limits.concurrency).toBe(2)
+    expect(limits.maxBodyBytes).toEqual({[AI_TIERS.ANONYMOUS]: 65536, [AI_TIERS.FREE]: 65536})
   })
 
   it('Pro gets substantially more than free, and free more than anonymous', () => {
@@ -39,6 +40,7 @@ describe('quota/aiCredits', () => {
       AI_BUDGET_ANONYMOUS_USD: '0.05', AI_BUDGET_FREE_USD: '1', AI_BUDGET_PRO_USD: '10',
       AI_BUDGET_IP_USD: '0.2', AI_BREAKER_ANONYMOUS_DAILY_USD: '3', AI_BREAKER_FREE_DAILY_USD: '2.5',
       AI_FREE_MODEL_REQUESTS_PER_DAY: '10', AI_CONCURRENCY_PER_IDENTITY: '4',
+      AI_MAX_BODY_BYTES_ANONYMOUS: '32768', AI_MAX_BODY_BYTES_FREE: '131072',
     })
     expect(limits).toEqual({
       budgets: {anonymous: 50000, free: 1000000, pro: 10000000},
@@ -47,8 +49,9 @@ describe('quota/aiCredits', () => {
       breakersConfigured: {anonymous: true, free: true},
       freeModelRequestsPerDay: 10,
       concurrency: 4,
+      maxBodyBytes: {anonymous: 32768, free: 131072},
     })
-    expect(AI_CREDIT_ENV_VARS).toHaveLength(8)
+    expect(AI_CREDIT_ENV_VARS).toHaveLength(10)
   })
 
   it('a malformed value falls back, never to unlimited', () => {

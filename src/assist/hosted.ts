@@ -14,7 +14,9 @@
  *    tripped, so this reply comes from the free models (§6 path 3)
  *  - `x-bldrs-ai-token`: a freshly minted anonymous token, to send as the
  *    Bearer from now on (signed out only)
- * and, on a refusal, a JSON body `{error: {code: 'ai_…', message}, tier}`.
+ *  - `x-bldrs-ai-resume-at`: on an `ai_credits_exhausted` refusal, when the
+ *    budget admits again (ISO-8601 UTC); also `resumeAt` in the body
+ * and, on a refusal, a JSON body `{error: {code: 'ai_…', message}, tier, resumeAt?}`.
  */
 import {AssistError, AssistErrorCode} from './assistError'
 
@@ -91,14 +93,34 @@ const RELAY_CODES: Record<string, AssistErrorCode> = {
 export async function relayError(res: Response): Promise<AssistError> {
   let code: string | undefined
   let tier: string | undefined
+  let resumeAt: number | undefined
   try {
-    const body = await res.json() as {error?: string | {code?: string}, tier?: string}
+    const body = await res.json() as {error?: string | {code?: string}, tier?: string, resumeAt?: string}
     code = typeof body.error === 'string' ? body.error : body.error?.code
     tier = typeof body.tier === 'string' ? body.tier : undefined
+    resumeAt = parseResumeAt(body.resumeAt)
   } catch {
     // Not the relay's JSON: the platform answered (a 502 page, a timeout).
   }
   const mapped = code === undefined ? undefined : RELAY_CODES[code]
-  return new AssistError(mapped ?? 'provider', `relay answered ${res.status}${code ? ` ${code}` : ''}`,
-    res.status, tier ?? res.headers.get('x-bldrs-ai-tier') ?? undefined)
+  const assistCode = mapped ?? 'provider'
+  // Only an out-of-credits refusal can be waited out; any other code's
+  // resumeAt (none is sent today) is ignored.
+  const resume = assistCode === 'credits_exhausted' ?
+    (resumeAt ?? parseResumeAt(res.headers.get('x-bldrs-ai-resume-at'))) : undefined
+  return new AssistError(assistCode, `relay answered ${res.status}${code ? ` ${code}` : ''}`,
+    res.status, tier ?? res.headers.get('x-bldrs-ai-tier') ?? undefined, resume)
+}
+
+
+/**
+ * @param value the relay's `resumeAt`, an ISO-8601 instant
+ * @return epoch ms, or undefined when absent or not a date
+ */
+function parseResumeAt(value: unknown): number | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  const ms = Date.parse(value)
+  return Number.isFinite(ms) ? ms : undefined
 }

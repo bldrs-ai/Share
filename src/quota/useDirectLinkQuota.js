@@ -129,8 +129,9 @@ export function directLinkQuotaKey(modelPath, appPrefix, meterLocalFiles = isLoc
  * record() treats the user as signed out and meters nothing, which would let
  * a signed-in user's load go uncounted.
  *
- * Per open, not per page (#2022): until `?feature=spaModelNav` every open
- * from an open surface was a page load, so the two were the same; a
+ * Per open, not per page (#2022): until the in-app switch (`spaModelNav`, on
+ * by default since open-205 step F) every open from an open surface was a
+ * page load, so the two were the same; a
  * per-page set of keys would have skipped the return to A.
  *
  * A Drive file counts only when it is private (design/new/quotas.md §"Drive

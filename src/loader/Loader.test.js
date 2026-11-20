@@ -462,7 +462,7 @@ describe('Loader', () => {
       const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
       expect(model).toBeDefined()
       expect(model.loadStats).toMatchObject({
-        memoryUsed: 1024,
+        geometryMemory: 1024,
         openMs: 150,
         productCount: 42,
         errorCount: 2,
@@ -471,6 +471,9 @@ describe('Loader', () => {
       // Conway's total is a parse timer, not the wall clock; it must never
       // again ride under the name that GA reports as the load time.
       expect(model.loadStats).not.toHaveProperty('loadTime')
+      // Nor Conway's geometry memory under the name GA reports as the heap:
+      // stats_memoryUsed is the reporter's heap in bytes for every format.
+      expect(model.loadStats).not.toHaveProperty('memoryUsed')
       expect(model).toMatchSnapshot()
 
       // The `[conwayDirect] parsed …` summary is the integration-boundary

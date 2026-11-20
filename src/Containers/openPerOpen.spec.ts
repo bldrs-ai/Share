@@ -24,9 +24,10 @@ import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
  * count (privacy/engagementTracking.js).
  *
  * - A theme toggle re-creates the viewer and reloads the model, but it is the
- *   same model and the same open, so none of them is sent again. That is
- *   the one change with the flag off: it used to send both events again.
- * - Under `?feature=spaModelNav`, a return to a model in-app is a new open
+ *   same model and the same open, so none of them is sent again; with the
+ *   kill switch (`?feature=disableSpaModelNav`) too, where the reload is the
+ *   same in-app rebuild. It used to send both events again.
+ * - In-app (the default since step F), a return to a model is a new open
  *   (decision 1 on #2011). From the hosted demo (never counted) to box.ifc,
  *   Back to the demo and Forward to box.ifc: box.ifc is opened twice. The
  *   engagement count used to skip the second, keyed by model, because the
@@ -43,21 +44,28 @@ describeMobileAndDesktop('open-205: the open events are sent once per open', () 
     await setupVirtualPathIntercept(page, BOX_PATH, 'box.ifc')
   })
 
-  test('a theme toggle reloads the model without counting another open', async ({page}) => {
-    await page.goto(BOX_PATH, {waitUntil: 'domcontentloaded'})
-    await waitForModelSettled(page)
-    expect(await openCounts(page)).toEqual({realModelOpen: 1, modelView: 1, engagementOpens: 1})
+  for (const {name, search} of [
+    {name: 'by default', search: ''},
+    {name: 'with the kill switch', search: '?feature=disableSpaModelNav'},
+  ]) {
+    test(`${name}, a theme toggle reloads the model without counting another open`, async ({page}) => {
+      await page.goto(`${BOX_PATH}${search}`, {waitUntil: 'domcontentloaded'})
+      await waitForModelSettled(page)
+      expect(await openCounts(page)).toEqual({realModelOpen: 1, modelView: 1, engagementOpens: 1})
 
-    await rememberShownModel(page, 'before-theme')
-    await toggleTheme(page)
-    // The model was loaded again, into the new viewer: a different model
-    // object, so the reload the events would have counted did happen.
-    await waitForModelOtherThan(page, 'before-theme')
-    expect(await openCounts(page)).toEqual({realModelOpen: 1, modelView: 1, engagementOpens: 1})
-  })
+      await rememberShownModel(page, 'before-theme')
+      await toggleTheme(page)
+      // The model was loaded again, into the new viewer: a different model
+      // object, so the reload the events would have counted did happen.
+      await waitForModelOtherThan(page, 'before-theme')
+      expect(await openCounts(page)).toEqual({realModelOpen: 1, modelView: 1, engagementOpens: 1})
+      // Opened by the page load: the page's first open.
+      expect((await gaEvents(page, 'real_model_open')).map((event) => event.params.open_kind)).toEqual(['page'])
+    })
+  }
 
-  test('under spaModelNav, Back and Forward to a model in-app opens it again', async ({page}) => {
-    await page.goto(`${HOME_PATH}?feature=spaModelNav`, {waitUntil: 'domcontentloaded'})
+  test('Back and Forward to a model in-app opens it again', async ({page}) => {
+    await page.goto(HOME_PATH, {waitUntil: 'domcontentloaded'})
     await waitForModelSettled(page)
     await markDocument(page)
     // The demo is never a real open.
@@ -76,6 +84,11 @@ describeMobileAndDesktop('open-205: the open events are sent once per open', () 
     await waitForModelOtherThan(page, 'demo')
     expect(await isSameDocument(page), 'Back and Forward stayed in the document').toBe(true)
     expect(await openCounts(page)).toEqual({realModelOpen: 2, modelView: 2, engagementOpens: 2})
+    // Both of box.ifc's opens followed the demo in this document, so both are
+    // in-app opens (utils/reportModelOpen.js): what splits a regression of
+    // the switch from a bad model in GA.
+    expect((await gaEvents(page, 'real_model_open')).map((event) => event.params.open_kind))
+      .toEqual(['in_app', 'in_app'])
   })
 })
 

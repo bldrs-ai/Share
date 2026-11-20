@@ -1,5 +1,7 @@
 import {getPathContents} from '../net/github/Files'
 import {parseGitHubRepositoryUrl} from '../net/github/utils'
+import {HTTP_NOT_FOUND} from '../net/http'
+import {GITHUB_NOT_FOUND_MESSAGE, NotFoundError, isExpectedGitHubNotFound} from './notFoundError'
 import matcher from './matcher.js'
 
 
@@ -141,15 +143,29 @@ export async function dereferenceAndProxyDownloadContents(urlStr, accessToken, _
  */
 async function getGitHubPathContents(urlStr, accessToken, useCache) {
   const repo = parseGitHubRepositoryUrl(urlStr)
-  const {content, sha, isCacheHit, isBase64} = await getPathContents(
-    {
-      orgName: repo.owner,
-      name: repo.repository,
-    },
-    repo.path,
-    useCache,
-    repo.ref,
-    accessToken,
-  )
+  let result
+  try {
+    result = await getPathContents(
+      {
+        orgName: repo.owner,
+        name: repo.repository,
+      },
+      repo.path,
+      useCache,
+      repo.ref,
+      accessToken,
+    )
+  } catch (error) {
+    // GitHub answers 404 for a path that isn't there AND for a private
+    // repository this request can't see. Either way it's the user's link or
+    // access (SHARE-1XP), unless the repository is one of ours
+    // (notFoundError.js#isExpectedGitHubNotFound). Octokit's own error read
+    // as a raw `HttpError: Not Found - <docs URL>` in the dialog.
+    if (error?.status === HTTP_NOT_FOUND) {
+      throw new NotFoundError(GITHUB_NOT_FOUND_MESSAGE, {source: 'github', isExpected: isExpectedGitHubNotFound(repo.owner)})
+    }
+    throw error
+  }
+  const {content, sha, isCacheHit, isBase64} = result
   return [content, sha, isCacheHit, isBase64]
 }

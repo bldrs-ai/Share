@@ -19,6 +19,7 @@ import {gtagEventWithCid} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
 import {DROP_REFUSED} from '../utils/dragAndDrop'
+import {GITHUB_NOT_FOUND_MESSAGE, NotFoundError} from '../loader/notFoundError'
 import AlertDialog from './AlertDialog'
 
 
@@ -835,3 +836,36 @@ describe('AlertDialog — dropRefused alert type', () => {
   })
 })
 
+
+describe('AlertDialog — NotFoundError', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.getState().setAlert(null)
+    })
+  })
+
+  // The dialog used to hand the error object to a string replace and throw
+  // while rendering, so a 404 ended at the error boundary.
+  it('renders a URL fetch\'s not-found under the path hint, and still reports it', () => {
+    const error = new NotFoundError('File not found')
+    act(() => {
+      useStore.getState().setAlert(error)
+    })
+    render(<AlertDialog onClose={jest.fn()}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText(/Check the file path/)).toBeInTheDocument()
+    expect(screen.getByText(/File not found/)).toBeInTheDocument()
+    expect(trackAlert).toHaveBeenCalledWith('File not found', error)
+  })
+
+  // SHARE-1XP: someone else's GitHub link, missing or private.
+  it('explains a GitHub not-found and counts it in analytics only', () => {
+    act(() => {
+      useStore.getState().setAlert(new NotFoundError(GITHUB_NOT_FOUND_MESSAGE, {source: 'github', isExpected: true}))
+    })
+    render(<AlertDialog onClose={jest.fn()}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText(/private repository/)).toBeInTheDocument()
+    expect(trackAlertEvent).toHaveBeenCalledWith(GITHUB_NOT_FOUND_MESSAGE, {source: 'github'})
+    expect(trackAlert).not.toHaveBeenCalled()
+  })
+})

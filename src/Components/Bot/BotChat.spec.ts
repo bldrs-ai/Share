@@ -34,6 +34,10 @@ const {describe} = test
 
 
 describeMobileAndDesktop('Assistant', (ff) => {
+  // The chip's times are in the viewer's locale and zone; fix them so the
+  // specs can name the zone.
+  test.use({locale: 'en-US', timezoneId: 'America/Los_Angeles'})
+
   test.beforeEach(async ({page}) => {
     await homepageSetup(page)
     await setIsReturningUser(page.context())
@@ -59,11 +63,12 @@ describeMobileAndDesktop('Assistant', (ff) => {
     // The reply streams in, around the actions it took.
     await expect(page.getByText(SCRIPT.preamble.trim())).toBeVisible()
     await expect(page.getByText(SCRIPT.selectedAnswer(PROXY_COUNT))).toBeVisible()
-    // Each action's line is the tool's own report, not the model's.
+    // The turn's steps are one chip, compact: the latest task's line, the
+    // tool's own report and not the model's.
+    await expect(page.getByTestId('BotChat-Tasks')).toHaveCount(1)
     const actions = page.getByTestId('BotChat-Action')
-    await expect(actions).toHaveCount(2)
-    await expect(actions.nth(0)).toHaveText(`Found ${PROXY_COUNT} elements`)
-    await expect(actions.nth(1)).toContainText(`Selected ${PROXY_COUNT} elements`)
+    await expect(actions).toHaveCount(1)
+    await expect(actions.nth(0)).toContainText(`Selected ${PROXY_COUNT} elements`)
 
     // The selection is in the tree: every proxy.
     let panel = await openTree(page)
@@ -103,8 +108,7 @@ describeMobileAndDesktop('Assistant', (ff) => {
     await expect(page.getByText(SCRIPT.preamble.trim())).toBeVisible()
     await expect(page.getByText(SCRIPT.selectedAnswer(PROXY_COUNT))).toBeVisible()
     await expect(page.getByTestId('BotChat-Error')).toHaveCount(0)
-    const actions = page.getByTestId('BotChat-Action')
-    await expect(actions.nth(1)).toContainText(`Selected ${PROXY_COUNT} elements`)
+    await expect(page.getByTestId('BotChat-Action').nth(0)).toContainText(`Selected ${PROXY_COUNT} elements`)
     const panel = await openTree(page)
     await expect(panel.locator('[data-is-selected="true"]')).toHaveCount(PROXY_COUNT)
 
@@ -114,6 +118,94 @@ describeMobileAndDesktop('Assistant', (ff) => {
     expect(relayAuth[0]).toBeNull()
     expect(relayAuth.slice(1)).toEqual(relayAuth.slice(1).map(() => `Bearer ${token}`))
     expect(realProviderRequests).toEqual([])
+  })
+
+  // assist-310: a reply is Markdown. The mock streams it in small pieces, so
+  // a marker is split across chunks mid-turn.
+  test('renders the reply as Markdown, not as raw characters', async ({page}) => {
+    await openAssistant(page)
+    await page.getByRole('textbox', {name: 'Message the assistant'}).fill(SCRIPT.markdownPrompt)
+    await page.keyboard.press('Enter')
+
+    const reply = page.getByTestId('BotChat-Reply')
+    await expect(reply.locator('strong')).toHaveText('Project')
+    await expect(reply.getByRole('listitem')).toHaveText(['first item', 'second item'])
+    await expect(reply.locator('code').first()).toHaveText('view.select')
+    // GFM loads as its own chunk (remarkGfmEntry.js); the table arrives with it.
+    await expect(reply.locator('th')).toHaveText(['Tool', 'Does'])
+    // None of the markers survive into the text the user reads.
+    const shown = await reply.innerText()
+    expect(shown).not.toContain('**')
+    expect(shown).not.toContain('`')
+    expect(shown).not.toContain('- first')
+    expect(shown).not.toContain('|---')
+    // The user's own words stay plain.
+    await expect(page.getByText(SCRIPT.markdownPrompt)).toBeVisible()
+  })
+
+  // assist-310: a turn's steps are one chip. Compact shows the latest task,
+  // expanded lists every one with its duration, the times toggle to the full
+  // form with the zone, and the chip fits the narrow drawer.
+  test('shows a turn\'s steps as one chip with durations and toggleable times', async ({page}) => {
+    await openAssistant(page)
+    // The running state lasts as long as a tool does, a few ms here, so
+    // watch the DOM for it rather than poll: the call's label is on screen,
+    // with its progress mark, before the result replaces it.
+    await page.evaluate(() => {
+      const seen: string[] = []
+      ;(window as unknown as {__seenRunning: string[]}).__seenRunning = seen
+      new MutationObserver(() => {
+        const running = document.querySelector('[data-testid="BotChat-TaskRunning"]')
+        if (running) {
+          seen.push(running.parentElement?.textContent ?? '')
+        }
+      }).observe(document.body, {childList: true, subtree: true})
+    })
+    await page.getByRole('textbox', {name: 'Message the assistant'}).fill(SCRIPT.selectPrompt)
+    await page.keyboard.press('Enter')
+    await expect(page.getByText(SCRIPT.selectedAnswer(PROXY_COUNT))).toBeVisible()
+    const seenRunning = await page.evaluate(() => (window as unknown as {__seenRunning: string[]}).__seenRunning)
+    expect(seenRunning).toContain('Finding elements…')
+    await expect(page.getByTestId('BotChat-TaskRunning')).toHaveCount(0)
+
+    const chip = page.getByTestId('BotChat-Tasks')
+    const actions = chip.getByTestId('BotChat-Action')
+    await expect(chip).toHaveCount(1)
+    await expect(actions).toHaveCount(1)
+    await expect(actions.nth(0)).toContainText(`Selected ${PROXY_COUNT} elements`)
+    await expect(chip.getByTestId('BotChat-TaskDuration')).toHaveCount(0)
+
+    // Done: the abbreviated start and total duration, no seconds on the clock.
+    const start = chip.getByTestId('BotChat-TasksStart')
+    await expect(start).toHaveText(/^\(\d{1,2}:\d{2}\s[AP]M, \d+(s|m( \d+s)?)\)$/)
+    await expect(start).toHaveAttribute('title', /\d{4}.*\d{1,2}:\d{2}:\d{2}\s[AP]M P[SD]T$/)
+    await start.click()
+    await expect(start).toHaveText(/^\(\w{3} \d{1,2}, \d{4}.*\d{1,2}:\d{2}:\d{2}\s[AP]M P[SD]T, .+\)$/)
+    await start.click()
+    await expect(start).toHaveText(/^\(\d{1,2}:\d{2}\s[AP]M, /)
+
+    // Expanded: the read, then the select, each with its own duration.
+    const toggle = chip.getByRole('button', {name: 'Steps'})
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(chip.getByTestId('BotChat-TasksCount')).toHaveText('2 commands')
+    await expect(actions).toHaveCount(2)
+    await expect(actions.nth(0)).toContainText(`Found ${PROXY_COUNT} elements`)
+    await expect(actions.nth(1)).toContainText(`Selected ${PROXY_COUNT} elements`)
+    await expect(chip.getByTestId('BotChat-TaskDuration')).toHaveText([/^\(\d+s\)$/, /^\(\d+s\)$/])
+    await expect(chip.getByTestId('BotChat-TasksStart')).toBeVisible()
+    await expect(chip.getByTestId('BotChat-TasksEnd')).toBeVisible()
+    // The earlier step has no Undo; the select's is still there.
+    await expect(actions.nth(0).getByRole('button')).toHaveCount(0)
+    await expect(actions.nth(1).getByRole('button', {name: `Undo: Selected ${PROXY_COUNT} elements`})).toBeVisible()
+
+    // It fits: nothing in the transcript scrolls sideways.
+    const overflow = await page.getByTestId('BotChat-Messages').evaluate((el) => el.scrollWidth - el.clientWidth)
+    expect(overflow).toBeLessThanOrEqual(0)
+
+    await toggle.click()
+    await expect(actions).toHaveCount(1)
   })
 
   test('Stop ends a reply mid-stream', async ({page}) => {

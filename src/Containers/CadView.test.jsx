@@ -35,10 +35,12 @@ import {
   inMemoryUploadGoneAlert,
 } from '../OPFS/messages'
 import {makeTestTree} from '../utils/TreeUtils.test'
+import {resetModelOpenReportForTest} from '../utils/reportModelOpen'
 import {actAsyncFlush, suppressActWarnings} from '../utils/tests'
 import CadView from './CadView'
 import * as viewerModule from './viewer'
 import * as loadProgressModule from '../loader/loadProgress'
+import {GITHUB_NOT_FOUND_MESSAGE, NotFoundError} from '../loader/notFoundError'
 import * as clientCapabilities from '../privacy/clientCapabilities'
 import {WEBGL_UNAVAILABLE_TITLE} from '../viewer/webglUnavailable'
 
@@ -245,6 +247,19 @@ describe('CadView', () => {
     viewer.context.getDomElement = jest.fn(() => {
       return document.createElement('div')
     })
+    // Each test mounts CadView as a fresh page does: with no viewer in the
+    // store. The previous test's viewer left there is one this mount never
+    // built, and the auth-state effect would start a load into it before
+    // this mount builds its own. Under the in-app switch (on by default
+    // since open-205 step F) that load is aborted and reloaded into the new
+    // viewer, as it must be; before it, the second start was skipped as a
+    // duplicate and the model went into the stale viewer. Either way the
+    // test would count a load the page never makes.
+    useStore.setState({viewer: null})
+    // And at the location a test hasn't set: `mockReturnValue` outlives
+    // `clearAllMocks`, so a test's `#c:`/`#cp:` link would otherwise be the
+    // next test's too, whose load then applies its cut plane.
+    reactRouting.useLocation.mockReturnValue(defaultLocationValue)
   })
 
 
@@ -861,6 +876,26 @@ describe('CadView', () => {
     expect(captureExceptionSpy).not.toHaveBeenCalled()
   })
 
+  // SHARE-1XP: someone else's GitHub link, missing or private, is their
+  // link or access: the alert, and no Sentry exception (AlertDialog counts
+  // it in GA).
+  it('alerts on an expected GitHub not-found without capturing it', async () => {
+    const notFound = new NotFoundError(GITHUB_NOT_FOUND_MESSAGE, {source: 'github', isExpected: true})
+    jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw notFound
+    })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const Sentry = require('@sentry/react')
+    const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => expect(result.current.alert).toBe(notFound))
+    expect(captureExceptionSpy).not.toHaveBeenCalledWith(notFound)
+  })
+
+
   it('keeps the generic alert and capture when the engine gave no reason', async () => {
     const genericErr = new Error('parseIfcWithConway: OpenModel returned -1')
     jest.spyOn(Loader, 'load').mockImplementation(() => {
@@ -1434,6 +1469,8 @@ describe('CadView', () => {
 
     beforeEach(() => {
       window.gtag = jest.fn()
+      // Each test is a fresh page: its first load is the page's first open.
+      resetModelOpenReportForTest()
       // '../Filetype' is automocked for this whole file, which leaves
       // supportedTypes empty; load_failed's content_type is allowlisted
       // against it, so seed the one format these tests load.
@@ -1457,6 +1494,7 @@ describe('CadView', () => {
       loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
         throw new Error('OpenModel returned -1 for /private/secret-house.ifc')
       })
+      const setTag = jest.spyOn(require('@sentry/react'), 'setTag')
       const {result} = renderHook(() => useStore((state) => state))
       await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
       render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
@@ -1468,9 +1506,15 @@ describe('CadView', () => {
         size_bucket: 'unknown',
         reason_class: 'parse',
         last_phase: 'none',
+        open_kind: 'page',
       }]])
       expect(JSON.stringify(failures)).not.toContain('secret')
       expect(gaEvents().filter(([name]) => name === 'real_model_open')).toHaveLength(0)
+      // The failure's Sentry capture carries the open's kind and the page's
+      // nav mode as scope tags, set before the load ran.
+      expect(setTag).toHaveBeenCalledWith('model_open', 'page')
+      expect(setTag).toHaveBeenCalledWith('model_nav', 'in-app')
+      setTag.mockRestore()
     })
 
     // The success half (real_model_open's load_outcome and timings) cannot
@@ -1530,6 +1574,11 @@ describe('CadView', () => {
       await act(() => result.current.setModelPath({filepath: `/other.ifc`}))
       await actAsyncFlush()
       await waitFor(() => expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(2))
+      // The second failure is of a model switched to in this document, which
+      // is what tells a regression of the in-app switch from a bad model
+      // (utils/reportModelOpen.js, open-205 step F).
+      expect(gaEvents().filter(([name]) => name === 'load_failed').map(([, params]) => params.open_kind))
+        .toEqual(['page', 'in_app'])
     })
 
     // A fails, a model that reports nothing opens (the demo is excluded from
@@ -1599,6 +1648,7 @@ describe('CadView', () => {
         size_bucket: 'unknown',
         reason_class: 'other',
         last_phase: 'none',
+        open_kind: 'page',
       }]])
     })
   })
@@ -1814,9 +1864,10 @@ describe('CadView', () => {
   })
 
 
-  // open-205 #2011 step A: under `?feature=spaModelNav` the load is owned by
-  // the CadView run that started it, and leaving the model aborts it, instead
-  // of queuing the next model behind it. Off the flag the queue stays.
+  // open-205 #2011 step A: under the in-app switch (on by default since step
+  // F) the load is owned by the CadView run that started it, and leaving the
+  // model aborts it, instead of queuing the next model behind it. With the
+  // kill switch (`?feature=disableSpaModelNav`) the queue stays.
   describe('a switch while the model is still loading (open-205 #2011 step A)', () => {
     let getHarness
     let loadSpy
@@ -1833,7 +1884,7 @@ describe('CadView', () => {
         .mockImplementation(() => getHarness().IFC.context.ifcCamera.cameraControls)
       // `viewer: null` as on a fresh page: an earlier test's viewer, left in
       // the store, lets the auth-state effect start a load into it before
-      // this mount builds its own, which under the flag is (rightly) aborted
+      // this mount builds its own, which under the switch is (rightly) aborted
       // and reloaded, and would muddy the load counts below.
       useStore.setState({
         alert: null, customViewSettings: null, isAuthResolved: false, isModelReady: false, viewer: null,
@@ -1867,7 +1918,8 @@ describe('CadView', () => {
     }
 
     it('aborts the load in flight and starts the next model at once, reporting nothing', async () => {
-      window.history.replaceState(null, '', '/?feature=disableEngineWorker,spaModelNav')
+      window.gtag = jest.fn()
+      resetModelOpenReportForTest()
       const {result} = renderHook(() => useStore((state) => state))
       const {impl, calls} = hangingLoad()
       loadSpy = jest.spyOn(Loader, 'load').mockImplementation(impl)
@@ -1890,10 +1942,38 @@ describe('CadView', () => {
       expect(calls[1].signal.aborted).toBe(false)
       expect(result.current.alert).toBeNull()
       expect(captureException).not.toHaveBeenCalled()
+      // Counted in GA only, with the kind of the open it gave up: the page's
+      // first (utils/reportModelOpen.js).
+      const aborted = window.gtag.mock.calls.filter(([, name]) => name === 'model_load_aborted')
+      expect(aborted.map(([, , params]) => params.open_kind)).toEqual(['page'])
+      delete window.gtag
+    })
+
+    // An in-app open across route families (`/v/p` → `/v/g` or `/v/u`)
+    // remounts CadView; the instance left must not go on loading into the
+    // viewer the next one disposes.
+    it('aborts its load when it unmounts', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      const {impl, calls} = hangingLoad()
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(impl)
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      // Under StrictMode, as index.jsx mounts the app: its double effect run
+      // is no unmount. (Not a pin of the microtask in the cleanup: no load has
+      // started yet when StrictMode re-runs the mount effects here.)
+      const {unmount} = render(
+        <React.StrictMode><ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock></React.StrictMode>)
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBeGreaterThan(0))
+      const signal = calls[calls.length - 1].signal
+      expect(signal.aborted).toBe(false)
+
+      unmount()
+      await actAsyncFlush()
+      expect(signal.aborted, 'an unmounted CadView gives its load up').toBe(true)
     })
 
     it('clears the left model from the store when the switch starts', async () => {
-      window.history.replaceState(null, '', '/?feature=disableEngineWorker,spaModelNav')
       const {result} = renderHook(() => useStore((state) => state))
       const {impl, calls} = hangingLoad()
       loadSpy = jest.spyOn(Loader, 'load')
@@ -1906,6 +1986,11 @@ describe('CadView', () => {
       await waitFor(() => expect(result.current.isModelReady).toBe(true))
       expect(result.current.model).toBe(getHarness()._loadedModel)
       expect(result.current.rootElement).not.toBeNull()
+      // The user opened part of A's tree.
+      await act(() => {
+        result.current.setExpandedElements(['89', '90'])
+        result.current.setExpandedTypes(['IFCWALL'])
+      })
 
       await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
       await actAsyncFlush()
@@ -1916,10 +2001,12 @@ describe('CadView', () => {
       expect(result.current.isModelReady).toBe(false)
       expect(result.current.rootElement).toBeNull()
       expect(result.current.loadedFileInfo).toBeNull()
+      // A's expansion is A's ids: B's tree starts closed, as on a page load.
+      expect(result.current.expandedElements).toEqual([])
+      expect(result.current.expandedTypes).toEqual([])
     })
 
     it('reloads the same model into a viewer re-created mid-load (a theme change)', async () => {
-      window.history.replaceState(null, '', '/?feature=disableEngineWorker,spaModelNav')
       const {result} = renderHook(() => useStore((state) => state))
       const {impl, calls} = hangingLoad()
       loadSpy = jest.spyOn(Loader, 'load').mockImplementation(impl)
@@ -1940,7 +2027,8 @@ describe('CadView', () => {
       expect(result.current.alert).toBeNull()
     })
 
-    it('off the flag, passes no signal and queues the next model behind the load, as before', async () => {
+    it('with ?feature=disableSpaModelNav, passes no signal and queues the next model behind the load, as before', async () => {
+      window.history.replaceState(null, '', '/?feature=disableEngineWorker,disableSpaModelNav')
       const {result} = renderHook(() => useStore((state) => state))
       let releaseA
       const calls = []
@@ -2085,6 +2173,30 @@ describe('CadView', () => {
       await waitFor(() => expect(result.current.selectedElement).toBeTruthy())
       expect(indexedModel.getItemProperties).toHaveBeenCalledWith(leaf)
       expect(result.current.selectedElement.Name.value).toBe(`item ${leaf}`)
+    })
+
+    // codex on #2242: a property read can reject with NotReadableError (a
+    // spilled source whose OPFS entry another tab replaced). It must reach
+    // Sentry as a handled capture, not an unhandled rejection, which
+    // index/sentry.js now drops as a picked file gone unreadable.
+    it('captures a failed property read as a handled Sentry event', async () => {
+      const Sentry = require('@sentry/react')
+      const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+      try {
+        const {result} = renderHook(() => useStore((state) => state))
+        const indexedModel = makeIndexedModel()
+        const notReadable = Object.assign(new Error('The requested file could not be read'), {name: 'NotReadableError'})
+        indexedModel.getItemProperties.mockRejectedValue(notReadable)
+        await mountOnStreamingLoad(result, indexedModel)
+        await waitFor(() => expect(result.current.rootElement).not.toBeNull())
+
+        const leaf = makeTestTree().children[0].children[0].expressID
+        await act(() => result.current.setSelectedElements([`${leaf}`]))
+        await actAsyncFlush()
+        await waitFor(() => expect(captureExceptionSpy).toHaveBeenCalledWith(notReadable, {tags: {subsystem: 'selection_properties'}}))
+      } finally {
+        captureExceptionSpy.mockRestore()
+      }
     })
 
     it('paints a selection made while the geometry streamed once the model is in', async () => {

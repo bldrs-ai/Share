@@ -1,5 +1,7 @@
 /* eslint-disable no-magic-numbers */
 import {getPathContents} from '../net/github/Files'
+import {isAuthShapedLoadError} from '../Containers/authLoadGate'
+import {GITHUB_NOT_FOUND_MESSAGE, NotFoundError} from './notFoundError'
 import {
   SOURCE_TYPE,
   dereferenceAndProxyDownloadContents,
@@ -131,6 +133,36 @@ describe('dereferenceAndProxyDownloadContents', () => {
       false,
     ])
     expect(getPathContents).toHaveBeenCalledTimes(1)
+  })
+
+
+  // SHARE-1XP: octokit's 404 read as a raw `HttpError: Not Found - <docs
+  // URL>`. It is now a NotFoundError that keeps its 404, so CadView's
+  // sign-in retry still treats it as auth-shaped.
+  it('turns a GitHub 404 into an expected NotFoundError for someone else\'s repository', async () => {
+    getPathContents.mockRejectedValueOnce(Object.assign(new Error('Not Found'), {status: 404}))
+    const error = await dereferenceAndProxyDownloadContents(
+      'https://github.com/Some-Org/Private/blob/main/plan.ifc', '', true).catch((e) => e)
+    expect(error).toBeInstanceOf(NotFoundError)
+    expect(error).toEqual(expect.objectContaining({
+      message: GITHUB_NOT_FOUND_MESSAGE, source: 'github', isExpected: true, status: 404,
+    }))
+    expect(isAuthShapedLoadError(error)).toBe(true)
+  })
+
+  // A broken link to one of our own models is ours to fix: still Sentry.
+  it('keeps a 404 in a bldrs-ai repository unexpected', async () => {
+    getPathContents.mockRejectedValueOnce(Object.assign(new Error('Not Found'), {status: 404}))
+    const error = await dereferenceAndProxyDownloadContents(
+      'https://github.com/bldrs-ai/test-models/blob/main/gone.ifc', '', true).catch((e) => e)
+    expect(error).toEqual(expect.objectContaining({source: 'github', isExpected: false}))
+  })
+
+  it('passes any other GitHub failure through unchanged', async () => {
+    const forbidden = Object.assign(new Error('Forbidden'), {status: 403})
+    getPathContents.mockRejectedValueOnce(forbidden)
+    await expect(dereferenceAndProxyDownloadContents(
+      'https://github.com/Some-Org/Private/blob/main/plan.ifc', '', true)).rejects.toBe(forbidden)
   })
 
 

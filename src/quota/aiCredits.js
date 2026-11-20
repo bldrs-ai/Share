@@ -82,6 +82,14 @@ const TUNABLES = Object.freeze({
   // §7 D4: in-flight requests per identity. Bounds the reservations, so a
   // client can't fire a parallel batch past its budget. Placeholder 2.
   concurrency: {env: 'AI_CONCURRENCY_PER_IDENTITY', count: 2},
+  // §7 D4: the largest request body the relay takes from a signed-out or
+  // free caller, in bytes. Their budgets are soft (_lib/aiLedger.js: admitted
+  // while under the limit), so one request's worst-case hold is how far a
+  // bucket can overshoot, and the hold grows with the body: at 64 KiB it is
+  // about $0.028 anonymous, $0.031 free (ai-chat.js maxBodyBytesFor has the
+  // arithmetic). Pro keeps the relay's technical cap, MAX_BODY_BYTES.
+  maxBodyBytesAnonymous: {env: 'AI_MAX_BODY_BYTES_ANONYMOUS', count: 65536},
+  maxBodyBytesFree: {env: 'AI_MAX_BODY_BYTES_FREE', count: 65536},
 })
 
 
@@ -120,7 +128,8 @@ function parseCount(value) {
  *   breakersConfigured: {anonymous: boolean, free: boolean},
  *   freeModelRequestsPerDay: number,
  *   concurrency: number,
- * }} micro-USD budgets and integer counts
+ *   maxBodyBytes: {anonymous: number, free: number},
+ * }} micro-USD budgets, integer counts, and byte caps (Pro has none here)
  */
 export function aiCreditLimits(env) {
   const usd = (key) => {
@@ -145,6 +154,10 @@ export function aiCreditLimits(env) {
     },
     freeModelRequestsPerDay: count('freeModelRequestsPerDay'),
     concurrency: Math.max(1, count('concurrency')),
+    maxBodyBytes: {
+      [AI_TIERS.ANONYMOUS]: count('maxBodyBytesAnonymous'),
+      [AI_TIERS.FREE]: count('maxBodyBytesFree'),
+    },
   }
 }
 

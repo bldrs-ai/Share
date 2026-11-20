@@ -17,7 +17,7 @@
  *   the route result and it is the same open;
  * - on a page load the page and its first open coincide, so a dedupe keyed
  *   per open behaves as one keyed per page did whenever every open is a page
- *   load (`?feature=spaModelNav` off).
+ *   load (the `?feature=disableSpaModelNav` kill switch).
  *
  * That single writer is the premise, pinned by modelOpenWriter.test.js: any
  * other `setModelPath` caller has to be added there with its reason.

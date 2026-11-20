@@ -18,8 +18,8 @@ import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
 
 
 /**
- * Back and Forward between models opened in-app under `?feature=spaModelNav`
- * (open-205 Phase 1a step C, #2021). With the flag every history entry
+ * Back and Forward between models opened in-app, the default since open-205
+ * step F (Phase 1a step C, #2021). In-app, every history entry
  * between models is in this document, so Share.jsx's route effect, not a
  * page load, is what brings each model back, and the state that lives in
  * the URL has to come back from THAT entry:
@@ -75,7 +75,7 @@ describeMobileAndDesktop('open-205: Back and Forward between models opened in-ap
 
   test('A → B → C, then Back, Back, Forward, Forward: each entry its own model and its own URL state', async ({page}) => {
     test.setTimeout(HISTORY_TEST_TIMEOUT_MS)
-    await page.goto(`${A_PATH}?feature=spaModelNav#${A_CAMERA};${A_CUT_PLANE}`, {waitUntil: 'domcontentloaded'})
+    await page.goto(`${A_PATH}#${A_CAMERA};${A_CUT_PLANE}`, {waitUntil: 'domcontentloaded'})
     await waitForModelSettled(page)
     // The link's state is applied on a cold load, or the walk below can't
     // tell a lost state from one that was never there.
@@ -127,7 +127,7 @@ describeMobileAndDesktop('open-205: Back and Forward between models opened in-ap
 
   test('Back right after an orbit: A\'s entry keeps its camera, and Forward finds B\'s pose', async ({page}) => {
     test.setTimeout(RACE_TEST_TIMEOUT_MS)
-    await page.goto(`${HOME_PATH}?feature=spaModelNav#${A_CAMERA}`, {waitUntil: 'domcontentloaded'})
+    await page.goto(`${HOME_PATH}#${A_CAMERA}`, {waitUntil: 'domcontentloaded'})
     await waitForModelSettled(page)
     await rememberShownModel(page, 'A')
     await markDocument(page)

@@ -20,8 +20,8 @@ import {
 
 
 /**
- * Every open surface opens its model in-app under `?feature=spaModelNav`
- * (open-205 Phase 1a step C, #2021): each goes through
+ * Every open surface opens its model in-app, the default since open-205 step
+ * F (Phase 1a step C, #2021): each goes through
  * navigate.js#navigateToModel with the caller's react-router `navigate`, so
  * the switch keeps the document. For each: start on the home model, open
  * another from the surface as a user would, and check that
@@ -29,8 +29,11 @@ import {
  *   a page load),
  * - the model shown is the new one, a model object other than the home
  *   model's, at the surface's URL,
- * - `?feature=spaModelNav` is still in the URL, so the next open is in-app
- *   too.
+ * - the page's own `?feature=` (none, or the ProjectsDrawer's `workspace`)
+ *   is the one still in the URL: an open neither drops nor adds a flag.
+ *
+ * On a plain link, so each runs on the default path. The way back to a page
+ * load, `?feature=disableSpaModelNav`, is spaModelNav.spec.ts's.
  *
  * Not here, and why (recorded on #2021): My Exports (`ExportsList.jsx`) is
  * not mounted anywhere in the app today (SaveModelControl's Export tab
@@ -41,7 +44,6 @@ import {
  * Forward spaModelHistory.spec.ts's.
  */
 const SWITCH_TEST_TIMEOUT_MS = 90_000
-const SPA_FLAG = 'spaModelNav'
 const PICKED_FILE = 'public/index.ifc'
 // An upload's id, `<uuid>.ifc`, under the `/v/local-only/` route (#1959).
 const UPLOAD_PATH = /\/share\/v\/local-only\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.ifc/
@@ -62,7 +64,7 @@ const COMMIT_SHA = 'testsha1testsha1testsha1testsha1testsha1'
 const BOX_AT_COMMIT_PATH = `/share/v/gh/bldrs-ai/test-models/${COMMIT_SHA}/ifc/misc/box.ifc`
 
 
-describeMobileAndDesktop('open-205: each open surface opens in-app under ?feature=spaModelNav', () => {
+describeMobileAndDesktop('open-205: each open surface opens in-app by default', () => {
   test.beforeEach(async ({page, context}) => {
     test.setTimeout(SWITCH_TEST_TIMEOUT_MS)
     await homepageSetup(page)
@@ -112,9 +114,10 @@ describeMobileAndDesktop('open-205: each open surface opens in-app under ?featur
     await expect(page).toHaveTitle(/^Local-only: /)
   })
 
-  test('drag-and-drop without OPFS: the in-memory open stays in-app and keeps the flag', async ({page}) => {
-    // The no-OPFS path (#1906, #1957) was in-app before the flag; under it
-    // the two are one path (navigate.js#navigateToInMemoryModel).
+  test('drag-and-drop without OPFS: the in-memory open stays in-app', async ({page}) => {
+    // The no-OPFS path (#1906, #1957) was always in-app, kill switch or not
+    // (a page load would end the File it reads); by default the two are one
+    // path (navigate.js#navigateToInMemoryModel).
     await page.addInitScript(() => {
       navigator.storage.getDirectory = () =>
         Promise.reject(new DOMException('The operation is insecure.', 'SecurityError'))
@@ -165,7 +168,7 @@ describeMobileAndDesktop('open-205: each open surface opens in-app under ?featur
         ungrouped: [],
       }))
     }, BOX_PATH)
-    await startOn(page, HOME_PATH, `workspace,${SPA_FLAG}`)
+    await startOn(page, HOME_PATH, 'workspace')
     const reopenLogo = page.getByTestId('projects-logo-open')
     if (await reopenLogo.isVisible()) {
       await reopenLogo.click()
@@ -175,22 +178,22 @@ describeMobileAndDesktop('open-205: each open surface opens in-app under ?featur
       await page.getByText('Maple Street').click()
     }
     await row.click()
-    await expectOpenedInApp(page, new RegExp(BOX_PATH), `workspace,${SPA_FLAG}`)
+    await expectOpenedInApp(page, new RegExp(BOX_PATH), 'workspace')
     await expect(page.getByTestId('ProjectsDrawer')).toBeVisible()
   })
 })
 
 
 /**
- * Load `path` with the flag, let it settle, remember its model and mark the
+ * Load `path`, with `feature` if one is given, let it settle, remember its model and mark the
  * document.
  *
  * @param page
  * @param path
  * @param feature the `?feature=` value
  */
-async function startOn(page: Page, path: string, feature = SPA_FLAG) {
-  await page.goto(`${path}?feature=${feature}`, {waitUntil: 'domcontentloaded'})
+async function startOn(page: Page, path: string, feature = '') {
+  await page.goto(`${path}${feature ? `?feature=${feature}` : ''}`, {waitUntil: 'domcontentloaded'})
   await waitForModelSettled(page)
   await rememberShownModel(page, 'start')
   await markDocument(page)
@@ -199,13 +202,13 @@ async function startOn(page: Page, path: string, feature = SPA_FLAG) {
 
 /**
  * The open happened in this document: another model is shown, at a URL
- * matching `path`, and the flag is still in the URL.
+ * matching `path`, with the page's `?feature=` as it was.
  *
  * @param page
  * @param path
- * @param feature the `?feature=` value expected to survive
+ * @param feature the `?feature=` value expected to survive (null: none)
  */
-async function expectOpenedInApp(page: Page, path: RegExp, feature = SPA_FLAG) {
+async function expectOpenedInApp(page: Page, path: RegExp, feature: string | null = null) {
   await expect(page).toHaveURL(path)
   await waitForModelOtherThan(page, 'start')
   await expect(page).toHaveURL(path)
