@@ -815,6 +815,27 @@ Per-message metering would multiply that write rate by roughly 100.
 - A determined abuser can rotate IPs (residential proxies) and tokens.
   The only hard bound is the global breaker, which also takes the free tier
   down for genuine users while it is tripped.
+- **Done (#2220 follow-up): an Origin check on the relay**
+  (`netlify/functions/_lib/aiOrigin.js`). Without it, another site's page
+  could POST to the relay from its visitors' browsers: each visitor mints
+  their own anonymous token and IP bucket, so the per-identity and per-IP
+  budgets never bind while the global breakers drain. The relay now answers
+  `403 ai_forbidden_origin` to any request whose `Origin` isn't allowed,
+  right after the method check: before the "not configured" check, token
+  minting, Auth0, the ledger and the body, so a refusal costs and mints
+  nothing (and a foreign site learns nothing about the deploy). Allowed:
+  `https://bldrs.ai` (the only production host; `www.bldrs.ai` isn't
+  served, and `bldrs.dev` 301s to bldrs.ai), this deploy's own `URL`,
+  `DEPLOY_PRIME_URL` and `DEPLOY_URL` (previews and branch deploys, read at
+  request time), `localhost` only under `netlify dev` (`CONTEXT=dev` or
+  `NETLIFY_DEV=true`), and the optional `AI_ALLOWED_ORIGINS`
+  (comma-separated exact origins). A request with no `Origin` passes only
+  with `Sec-Fetch-Site: same-origin`. The relay sends no
+  `Access-Control-Allow-Origin`, ever. **What it doesn't cover:** a
+  non-browser client sets any `Origin` it likes; that stays bounded by the
+  per-IP budgets and the breakers, and only a challenge on token mint
+  (below) closes it. The refusal logs `forbidden_origin` and the origin's
+  host, nothing else: not Sentry (expected abuse), not GA.
 - The server preamble (§5) and the cheap allowlist make it a poor general
   LLM, but not a useless one.
 - Mitigations in reserve, in order of cost: a proof-of-work or captcha

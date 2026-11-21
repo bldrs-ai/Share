@@ -36,6 +36,7 @@
 const HTTP_OK = 200
 const HTTP_BAD_REQUEST = 400
 const HTTP_UNAUTHORIZED = 401
+const HTTP_FORBIDDEN = 403
 const HTTP_NOT_FOUND = 404
 const HTTP_INTERNAL_ERROR = 500
 const HTTP_BAD_GATEWAY = 502
@@ -82,10 +83,15 @@ export const PROBES = [
     // Anonymous callers are served, so there is no "missing bearer" answer
     // to probe: an empty body is refused before any upstream or ledger call,
     // so the probe costs nothing. A context without the relay's secrets
-    // answers "not configured" first, which strict mode rejects.
+    // answers "not configured" first, which strict mode rejects. The probe
+    // sends the probed deploy's own Origin; a deploy reached through a host
+    // the relay doesn't know (an alias outside Netlify's URL variables)
+    // answers 403 ai_forbidden_origin: the handler ran, so lenient mode
+    // accepts it, strict mode (production, https://bldrs.ai) does not.
     accept: [
       {status: HTTP_BAD_REQUEST, body: 'ai_bad_request'},
       {status: HTTP_INTERNAL_ERROR, body: 'ai_not_configured'},
+      {status: HTTP_FORBIDDEN, body: 'ai_forbidden_origin'},
     ],
     strict: [{status: HTTP_BAD_REQUEST, body: 'ai_bad_request'}],
   },
@@ -246,7 +252,11 @@ async function runProbe(base, probe, strict, fetchImpl) {
   try {
     res = await fetchImpl(url, {
       method: probe.method,
-      headers: probe.body === undefined ? {} : {'content-type': 'application/json'},
+      // The deploy's own origin, as a browser on that site would send it:
+      // the relay (ai-chat) refuses any other Origin before it does
+      // anything else, so without this the probe never reaches its
+      // configuration check. Every other function ignores the header.
+      headers: {origin: base.origin, ...(probe.body === undefined ? {} : {'content-type': 'application/json'})},
       body: probe.body === undefined ? undefined : JSON.stringify(probe.body),
       redirect: 'manual',
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

@@ -222,6 +222,30 @@ describe('smokeFunctions', () => {
 })
 
 
+describe('smokeFunctions: the relay\'s Origin check', () => {
+  it('sends the probed deploy\'s own origin, which the ai-chat relay requires', async () => {
+    const origins = []
+    await smokeFunctions('https://deploy-preview-7--bldrs.netlify.app/some/path', {
+      retryDelayMs: 0,
+      fetchImpl: (url, init) => {
+        origins.push(init.headers.origin)
+        return fakeFetch({})(url)
+      },
+    })
+    expect(origins.length).toBeGreaterThan(0)
+    expect(new Set(origins)).toEqual(new Set(['https://deploy-preview-7--bldrs.netlify.app']))
+  })
+
+  it('accepts a 403 ai_forbidden_origin leniently (the handler ran) but not strictly', async () => {
+    const answers = {'ai-chat': {status: 403, body: '{"error":{"code":"ai_forbidden_origin"}}'}}
+    const lenient = await smokeFunctions(BASE, {fetchImpl: fakeFetch(answers), retryDelayMs: 0})
+    const strict = await smokeFunctions(BASE, {strict: true, fetchImpl: fakeFetch(answers), retryDelayMs: 0})
+    expect(lenient.find((r) => r.name === 'ai-chat').ok).toBe(true)
+    expect(strict.find((r) => r.name === 'ai-chat')).toMatchObject({ok: false, status: 403})
+  })
+})
+
+
 describe('smokeFunctions.mjs CLI', () => {
   let server
   let baseUrl

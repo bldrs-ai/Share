@@ -111,10 +111,16 @@ function chatBody(overrides = {}) {
  * @param {string} [options.bearer]
  * @param {string} [options.method]
  * @param {object} [options.context]
+ * @param {?string} [options.origin] the Origin header; null sends none
+ * @param {object} [options.headers] more request headers
  * @return {Promise<Response>}
  */
-function call({body = chatBody(), bearer, method = 'POST', context = {ip: IP}} = {}) {
-  const headers = {'Content-Type': 'application/json'}
+function call({body = chatBody(), bearer, method = 'POST', context = {ip: IP}, origin = 'https://bldrs.ai',
+  headers: extraHeaders = {}} = {}) {
+  const headers = {'Content-Type': 'application/json', ...extraHeaders}
+  if (origin !== null) {
+    headers.Origin = origin
+  }
   if (bearer) {
     headers.Authorization = `Bearer ${bearer}`
   }
@@ -214,6 +220,108 @@ describe('ai-chat', () => {
 
   /** @return {object} the JSON body the relay sent OpenRouter */
   const upstreamBody = () => JSON.parse(fetchSpy.mock.calls[0][1].body)
+
+  describe('Origin check (cross-site budget spending)', () => {
+    /** @return {Array<string>} every ledger or token artefact a refusal must not leave */
+    const writes = () => [...fake.data.keys()]
+
+    it.each([
+      ['production', 'https://bldrs.ai', {}],
+      ['URL', 'https://bldrs.example', {URL: 'https://bldrs.example'}],
+      ['DEPLOY_PRIME_URL', 'https://deploy-preview-9--bldrs.netlify.app',
+        {DEPLOY_PRIME_URL: 'https://deploy-preview-9--bldrs.netlify.app'}],
+      ['DEPLOY_URL', 'https://abc123--bldrs.netlify.app', {DEPLOY_URL: 'https://abc123--bldrs.netlify.app/'}],
+      ['an AI_ALLOWED_ORIGINS entry', 'https://staging.bldrs.ai',
+        {AI_ALLOWED_ORIGINS: 'https://other.example, https://staging.bldrs.ai'}],
+      ['localhost under netlify dev', 'http://localhost:8888', {CONTEXT: 'dev'}],
+      ['https localhost under NETLIFY_DEV', 'https://localhost:8888', {NETLIFY_DEV: 'true'}],
+    ])('allows %s', async (_name, origin, env) => {
+      process.env = {...ENV, ...env}
+      const res = await call({origin})
+      expect(res.status).toBe(200)
+      await res.text()
+    })
+
+    it('allows a same-origin fetch that sent no Origin, by Sec-Fetch-Site', async () => {
+      const res = await call({origin: null, headers: {'Sec-Fetch-Site': 'same-origin'}})
+      expect(res.status).toBe(200)
+      await res.text()
+    })
+
+    it.each([
+      ['a foreign origin', 'https://evil.example', {}],
+      ['the null origin', 'null', {AI_ALLOWED_ORIGINS: 'null'}],
+      ['a suffix lookalike', 'https://bldrs.ai.evil.com', {}],
+      ['a prefix lookalike', 'https://evilbldrs.ai', {}],
+      ['a subdomain', 'https://app.bldrs.ai', {}],
+      ['the wrong scheme', 'http://bldrs.ai', {}],
+      ['www, which nothing serves', 'https://www.bldrs.ai', {}],
+      ['localhost outside dev', 'http://localhost:8888', {}],
+      ['a localhost lookalike under dev', 'http://localhost.evil.com', {CONTEXT: 'dev'}],
+      ['a malformed extra, never widened', 'https://evil.example', {AI_ALLOWED_ORIGINS: '*, evil.example'}],
+    ])('refuses %s with 403, before anything is minted or read', async (_name, origin, env) => {
+      process.env = {...ENV, ...env}
+      mockStore.current = new Error('the ledger must not be opened')
+      const res = await call({origin})
+      expect(res.status).toBe(403)
+      expect((await res.json()).error.code).toBe('ai_forbidden_origin')
+      expect(res.headers.get('x-bldrs-ai-token')).toBeNull()
+      expect(res.headers.get('access-control-allow-origin')).toBeNull()
+      expect(fetchSpy).not.toHaveBeenCalled()
+      expect(writes()).toEqual([])
+    })
+
+    it.each([
+      ['no Origin and no fetch-site header', {}],
+      ['no Origin and a cross-site fetch', {'Sec-Fetch-Site': 'cross-site'}],
+      ['no Origin and a same-site (sibling) fetch', {'Sec-Fetch-Site': 'same-site'}],
+    ])('refuses %s', async (_name, headers) => {
+      const res = await call({origin: null, headers})
+      expect(res.status).toBe(403)
+      expect((await res.json()).error.code).toBe('ai_forbidden_origin')
+    })
+
+    it('does not let Sec-Fetch-Site excuse a foreign Origin', async () => {
+      const res = await call({origin: 'https://evil.example', headers: {'Sec-Fetch-Site': 'same-origin'}})
+      expect(res.status).toBe(403)
+    })
+
+    it('refuses before the configuration check, so a foreign site learns nothing about the deploy', async () => {
+      process.env = {}
+      const res = await call({origin: 'https://evil.example'})
+      expect((await res.json()).error.code).toBe('ai_forbidden_origin')
+      expect(errorSpy).not.toHaveBeenCalled()
+    })
+
+    it('still answers "not configured" to an allowed origin (the smoke probe\'s path)', async () => {
+      process.env = {}
+      const res = await call({origin: 'https://bldrs.ai'})
+      expect((await res.json()).error.code).toBe('ai_not_configured')
+    })
+
+    it('logs one outcome line with the origin host only, and reports nothing', async () => {
+      const bearer = 'secret-bearer-value'
+      await call({origin: 'https://evil.example:8443', bearer, body: chatBody({messages: [{role: 'user', content: 'private words'}]})})
+      const lines = logSpy.mock.calls.map(([line]) => String(line))
+      expect(lines).toEqual([JSON.stringify({fn: 'ai-chat', outcome: 'forbidden_origin', origin: 'evil.example:8443'})])
+      for (const text of [...lines, ...errorSpy.mock.calls.flat(), ...warnSpy.mock.calls.flat()].map(String)) {
+        expect(text).not.toContain(IP)
+        expect(text).not.toContain(bearer)
+        expect(text).not.toContain('private words')
+      }
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+      expect(Sentry.captureException).not.toHaveBeenCalled()
+    })
+
+    it('never sends Access-Control-Allow-Origin, on any answer', async () => {
+      const answers = [await call({origin: 'https://evil.example'}), await call(), await call({method: 'GET'}),
+        await call({body: {}})]
+      for (const res of answers) {
+        expect(res.headers.get('access-control-allow-origin')).toBeNull()
+        await res.text()
+      }
+    })
+  })
 
   it('answers anything but POST with 405', async () => {
     const res = await call({method: 'GET'})
@@ -804,7 +912,10 @@ describe('ai-chat', () => {
           token = t
         }},
         fetch: async (url, init) => {
-          const res = await handler(new Request(url, init), {ip: IP})
+          // A browser's same-origin POST carries its page's Origin.
+          const headers = new Headers(init.headers)
+          headers.set('Origin', 'https://bldrs.ai')
+          const res = await handler(new Request(`https://bldrs.ai${url}`, {...init, headers}), {ip: IP})
           statuses.push(res.status)
           return res
         },
