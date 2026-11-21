@@ -85,6 +85,7 @@ const PRODUCTION_LIKE_ENV = {
   GH_OAUTH_CLIENT_SECRET: 'smoke-gh-client-secret',
   OPENROUTER_API_KEY: 'sk-or-smoke',
   AI_TOKEN_SECRET: 'smoke-ai-token-secret',
+  ADMIN_STATS_SECRET: 'smoke-admin-stats-secret-0123456789abcdef',
 }
 
 // Runs inside the child. A v2 function's entry is Netlify's bootstrap, which

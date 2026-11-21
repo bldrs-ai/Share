@@ -90,6 +90,19 @@ export const PROBES = [
     strict: [{status: HTTP_BAD_REQUEST, body: 'ai_bad_request'}],
   },
   {
+    name: 'ai-ledger-stats',
+    scenario: 'ai-ledger-stats/unauthenticated',
+    method: 'GET',
+    // Server-to-server only, behind ADMIN_STATS_SECRET: no bearer is 401
+    // before the ledger is opened. A context without the secret answers
+    // "not configured" first, which strict mode rejects.
+    accept: [
+      {status: HTTP_UNAUTHORIZED, body: 'admin_stats_unauthorized'},
+      {status: HTTP_INTERNAL_ERROR, body: 'admin_stats_not_configured'},
+    ],
+    strict: [{status: HTTP_UNAUTHORIZED, body: 'admin_stats_unauthorized'}],
+  },
+  {
     name: 'client-capabilities',
     scenario: 'client-capabilities/invalid-report',
     method: 'POST',
