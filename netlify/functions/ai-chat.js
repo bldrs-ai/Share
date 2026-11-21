@@ -88,6 +88,7 @@ import {
   utcDay,
 } from './_lib/aiLedger.js'
 import {DEFAULT_MODEL, freeRoute, resolveModel} from './_lib/aiModels.js'
+import {isAllowedOrigin, originHostForLog} from './_lib/aiOrigin.js'
 import {createUsageWatcher} from './_lib/aiSse.js'
 import {hashIp, looksLikeAnonToken, mintAnonToken, verifyAnonToken} from './_lib/aiToken.js'
 
@@ -191,6 +192,7 @@ const HTTP = Object.freeze({
 // message is for a developer reading the network tab.
 const ERRORS = Object.freeze({
   ai_method_not_allowed: [HTTP.METHOD_NOT_ALLOWED, 'POST only'],
+  ai_forbidden_origin: [HTTP.FORBIDDEN, 'This assistant can only be called from Bldrs\' own site'],
   ai_not_configured: [HTTP.INTERNAL_ERROR, 'The hosted assistant is not configured on this deploy'],
   ai_bad_request: [HTTP.BAD_REQUEST, 'Expected a streaming chat completion request within the relay\'s caps'],
   ai_model_not_allowed: [HTTP.BAD_REQUEST, 'That model is not available on this tier'],
@@ -216,6 +218,18 @@ export default async function handler(req, context = {}) {
 
   if (req.method !== 'POST') {
     return errorResponse('ai_method_not_allowed')
+  }
+  // First thing after the method, ahead of the configuration check, token
+  // minting, Auth0, the ledger and the body: a refused request costs
+  // nothing and mints nothing, and a foreign site learns nothing about this
+  // deploy's configuration. A same-origin response sends no
+  // Access-Control-Allow-Origin, so browsers also refuse a cross-site page
+  // READING an answer. See `_lib/aiOrigin.js` for what this does not cover.
+  if (!isAllowedOrigin(req, process.env)) {
+    // An expected abuse refusal: not actionable, so neither Sentry nor GA.
+    // The origin's host only, never an IP, token or body.
+    logOutcome({outcome: 'forbidden_origin', origin: originHostForLog(req)})
+    return errorResponse('ai_forbidden_origin')
   }
   const openRouterKey = process.env.OPENROUTER_API_KEY
   const tokenSecret = process.env.AI_TOKEN_SECRET
