@@ -342,6 +342,30 @@ describe('loadProgress', () => {
       expect(getLoadFailureInfo(currentLoadSerial() - 1).phase).toBe('geometry')
     })
 
+    // open-205 #2019 (codex on #2247): a load the user has left can still be
+    // unwinding after the next load has begun (a remount gives each view its
+    // own queue). With its own reporter in hand, its end and its late
+    // progress touch nothing of the next load's report.
+    it('a load holding its own reporter cannot end, or write into, the next load\'s report', () => {
+      const reporterOfA = beginLoadProgress({fileInfo: 'a.ifc'})
+      const reporterOfB = beginLoadProgress({fileInfo: 'b.ifc'})
+      reportLoadProgress({phase: 'geometry', completed: 1, total: 10, elapsedMs: 10}, reporterOfB)
+      const linesOfB = reportLines()
+      const liveLineOfB = useStore.getState().currentLoadLine
+
+      reportLoadProgress('Parsing A late', reporterOfA)
+      endLoadProgress(null, {reporter: reporterOfA})
+      endLoadProgress(new Error('A gave up'), {isAborted: true, reporter: reporterOfA})
+
+      expect(loadReportToken()).toBe(reporterOfB)
+      expect(reporterOfB.ended).toBe(false)
+      expect(reportLines()).toEqual(linesOfB)
+      expect(useStore.getState().currentLoadLine).toBe(liveLineOfB)
+      expect(useStore.getState().loadResult).toBe(null)
+      endLoadProgress(null, {reporter: reporterOfB})
+      expect(reporterOfB.ended).toBe(true)
+    })
+
     it('summarizes captured console warnings/errors after the Total line', () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
       beginLoadProgress({fileInfo: 'index.ifc'})

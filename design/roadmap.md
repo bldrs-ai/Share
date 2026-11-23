@@ -233,7 +233,7 @@ Each track has a tracking issue (the Issue column) that holds its status, its wo
 | `subscribe-t100` | Pro/Billing (NEW) | 🟡 | D | <a href="https://github.com/bldrs-ai/Share/issues/2302" target="_blank" rel="noopener noreferrer">#2302</a> | [quotas](new/quotas.md), [glb-export-premium](new/glb-export-premium.md), [netlify-functions-testing](new/netlify-functions-testing.md) | `subscribe-100`, `subscribe-110`, `subscribe-120`, §7 AI metering |
 | T9 | Growth funnel & SEO surfaces (NEW) | → bizdev | G | bizdev | — | `grow-100`, `grow-200`, `grow-120` |
 | `assist-t300` | Agent runtime & conversation store (NEW) | 🟡 | AI (§7) | <a href="https://github.com/bldrs-ai/Share/issues/2303" target="_blank" rel="noopener noreferrer">#2303</a> | [ai-workspace](new/ai-workspace.md) | `assist-310`, `assist-400`, `search-310` |
-| `apps-t300` | App sandbox + MCP bridge (NEW) | 🟡 | AI (§7) | <a href="https://github.com/bldrs-ai/Share/issues/2225" target="_blank" rel="noopener noreferrer">#2225</a> | [ai-workspace](new/ai-workspace.md) | `assist-320`, `apps-300`, `apps-310` |
+| `apps-t300` | App sandbox + MCP bridge (NEW) | 🟡 | AI (§7) | <a href="https://github.com/bldrs-ai/Share/issues/2225" target="_blank" rel="noopener noreferrer">#2225</a> | [snapshot](dx/apps-t300.md), [ai-workspace](new/ai-workspace.md) | `assist-320`, `apps-300`, `apps-310` |
 | `create-t300` | Model edit substrate (NEW) | 🟡 | AI (§7) | <a href="https://github.com/bldrs-ai/Share/issues/2304" target="_blank" rel="noopener noreferrer">#2304</a> | [model-edit](new/model-edit.md), [create-engine](new/create-engine.md) | `create-300`, `create-310`, `create-320`, `share-200` V1+, §7.4 AI.5 |
 
 ## 4. Epic catalogue (retired)
