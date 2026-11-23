@@ -1,5 +1,5 @@
 {
-  "description": "A Pro user picks a model from the live catalogue (#1934): the relay finds it in OpenRouter's listing (tool-capable, with a ZDR endpoint), derives its ceiling from ALL its endpoints (8 / 24 per M: the priority endpoint's long-context tier, double the listed price), sends exactly that as max_price with no fallbacks, and settles the Pro bucket at usage.cost.",
+  "description": "A Pro user picks a model from the live catalogue (#1934): the relay finds it in OpenRouter's listing (tool-capable, with a ZDR endpoint), derives its ceiling from ALL its endpoints (8 / 24 per M: the priority endpoint's long-context tier, double the listed price), sends exactly that as max_price with no fallbacks, holds 250704 micro-USD against the Pro bucket (reservationMicro at 8 / 24: ceil(1.1 x (input bound x 8 + 8192 x 24)); at the listed 4 / 12 it would be half that), and settles it to usage.cost.",
   "env": {
     "$fixture": "env/ai-chat.json",
     "$merge": {
@@ -105,6 +105,16 @@
         "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/user/google-oauth2%7C103547991597142817347",
         "headers": {
           "if-none-match": "*"
+        },
+        "bodyJson": {
+          "v": 1,
+          "holds": {
+            "00000000-0000-4000-8000-00000000a1c0": {
+              "micro": 250704,
+              "free": 0,
+              "at": 1795003200000
+            }
+          }
         }
       },
       "response": {
@@ -159,7 +169,7 @@
           "days": {},
           "holds": {
             "00000000-0000-4000-8000-00000000a1c0": {
-              "micro": 4000,
+              "micro": 250704,
               "free": 0,
               "at": 1795003200000
             }
