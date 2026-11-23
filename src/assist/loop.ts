@@ -64,11 +64,25 @@ export interface Assist {
 
 
 /**
- * Model calls a turn may make. A select-then-isolate-then-frame request is 3
- * tool steps plus the answer; eval #1929's two-tool tasks needed at most 4.
- * The cap is what stops a model looping on a tool that keeps failing.
+ * Model calls a turn may make. The cap stops a model looping on a tool that
+ * keeps failing; spend is bounded separately, per request, by the relay's
+ * credits (each step is its own relay request). It was 8 until owner testing
+ * on SEESTRASSE ("show a plan view of the 3rd floor and identify an interior
+ * wall"): query, properties, a failed spatial call, two more queries, then
+ * isolate, select and frame used all 8 and the turn ended with no answer. A
+ * real multi-part request needs room to recover from a failed call.
  */
-export const DEFAULT_MAX_STEPS = 8
+export const DEFAULT_MAX_STEPS = 24
+
+
+/**
+ * Appended to the instructions for the turn's last step, which also runs
+ * with `toolChoice: 'none'`: rather than end on a tool call and a "stopped
+ * after N steps" notice, the model answers from what the tools returned.
+ */
+export const FINAL_STEP_NOTE =
+  'This is your last step in this turn and tools are now off. Answer from what the tools have returned ' +
+  'so far, and say in one short sentence what is left undone, if anything, so the user can ask you to continue.'
 
 
 /**
@@ -257,6 +271,12 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
       // is now ("Selection: 7" after a select), not as it was at send.
       prepareStep: ({stepNumber}) => {
         execStep = stepNumber
+        // The last step answers instead of calling another tool (FINAL_STEP_NOTE).
+        // A one-step cap has no earlier step to have gathered anything, so it
+        // keeps its tools.
+        if (maxSteps > 1 && stepNumber === maxSteps - 1) {
+          return {instructions: `${instructionsNow()}\n\n${FINAL_STEP_NOTE}`, toolChoice: 'none' as const}
+        }
         return {instructions: instructionsNow()}
       },
       // Errors are read from the stream below; without this the SDK also
@@ -342,7 +362,9 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
       return
     }
     const finishReason = String(await result.finishReason)
-    // Only the step cap ends a turn whose last step still called tools.
+    // Only the step cap ends a turn whose last step still called tools, and
+    // with the last step's tools off that is a provider that ignored
+    // `tool_choice: 'none'`.
     if (finishReason === 'tool-calls' && stepsRun >= maxSteps) {
       events.push({type: 'step-limit', steps: stepsRun})
     }

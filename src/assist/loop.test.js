@@ -11,6 +11,7 @@ import {
 import {createMemoryConversationStore} from './conversation'
 import {
   DEFAULT_MAX_STEPS,
+  FINAL_STEP_NOTE,
   FULL_RESULT_TURNS,
   MAX_WIRE_CHARS,
   UNDO_SETTLE_MS,
@@ -476,16 +477,51 @@ describe('assist/loop', () => {
     })
   })
 
-  it('stops after DEFAULT_MAX_STEPS model calls when every one calls a tool, and says so', async () => {
-    expect(DEFAULT_MAX_STEPS).toBe(8)
+  // The model here honours tool_choice the way OpenRouter's providers do: with
+  // tools off it can only answer.
+  const loopUntilToolsOff = () => {
     let n = 0
-    const {session, requests} = setup({}, () => ({
+    return (body) => (body.tool_choice === 'none' ?
+      {chunks: textReply('Here is what I found so far; framing the wall is left.'), delayMs: 0} :
+      {chunks: toolCalls([{id: `q${n++}`, name: 'model_query', args: {ifcType: 'IfcWall'}}]), delayMs: 0})
+  }
+
+  it('turns tools off for the last of DEFAULT_MAX_STEPS steps, so a long turn ends in an answer', async () => {
+    expect(DEFAULT_MAX_STEPS).toBe(24)
+    const {session, requests} = setup({}, loopUntilToolsOff())
+    const events = await collect(session.send('a long multi-part request'))
+
+    expect(requests).toHaveLength(DEFAULT_MAX_STEPS)
+    // Every step before the last may call tools; the last may not, and is told why.
+    requests.slice(0, -1).forEach(({body}) => expect(body.tool_choice).not.toBe('none'))
+    const last = requests.at(-1).body
+    expect(last.tool_choice).toBe('none')
+    // The system message's content may be a string or an array of text parts.
+    const systemText = (body) => JSON.stringify(body.messages[0].content)
+    expect(systemText(last)).toContain(FINAL_STEP_NOTE)
+    expect(systemText(requests[0].body)).not.toContain(FINAL_STEP_NOTE)
+
+    expect(textOf(events)).toBe('Here is what I found so far; framing the wall is left.')
+    expect(ofType(events, 'step-limit')).toEqual([])
+    expect(events.at(-1)).toEqual({type: 'done', finishReason: 'stop'})
+  })
+
+  it('still says it stopped when a provider ignores tool_choice none on the last step', async () => {
+    let n = 0
+    const {session, requests} = setup({maxSteps: 3}, () => ({
       chunks: toolCalls([{id: `q${n++}`, name: 'model_query', args: {ifcType: 'IfcWall'}}]), delayMs: 0,
     }))
     const events = await collect(session.send('loop forever'))
-    expect(requests).toHaveLength(DEFAULT_MAX_STEPS)
-    expect(ofType(events, 'step-limit')).toEqual([{type: 'step-limit', steps: DEFAULT_MAX_STEPS}])
+    expect(requests).toHaveLength(3)
+    expect(ofType(events, 'step-limit')).toEqual([{type: 'step-limit', steps: 3}])
     expect(events.at(-1)).toEqual({type: 'done', finishReason: 'tool-calls'})
+  })
+
+  it('keeps tools on a one-step cap, which has nothing gathered to answer from', async () => {
+    const {session, requests} = setup({maxSteps: 1}, loopUntilToolsOff())
+    await collect(session.send('one step'))
+    expect(requests).toHaveLength(1)
+    expect(requests[0].body.tool_choice).not.toBe('none')
   })
 
   describe('a tool still running when the user stops or undoes', () => {
