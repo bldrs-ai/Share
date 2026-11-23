@@ -45,7 +45,7 @@ The chat icon went to #1664 rather than to #1661 or #2193. #1661 is a completed 
 | [#1663](https://github.com/bldrs-ai/Share/issues/1663) closed | Formal story, retained. Breadcrumb-scoped search stays with `search-320` (#1669, #1699). |
 | [#1664](https://github.com/bldrs-ai/Share/issues/1664) open | Formal story, extended to "open a model on its own". |
 | [#1665](https://github.com/bldrs-ai/Share/issues/1665) closed | Formal story, retained; delivered by #1992. |
-| [#1666](https://github.com/bldrs-ai/Share/issues/1666) open | Formal story. Marketing links shipped; the manage-account entry waits on `identity-300` (roadmap §4.6, no epic issue yet) and stays here, cross-linked. |
+| [#1666](https://github.com/bldrs-ai/Share/issues/1666) open | Formal story. Marketing links shipped; the manage-account entry waits on `identity-300` (`identity-300`, now [#2287](https://github.com/bldrs-ai/Share/issues/2287); it had no epic issue when this was written) and stays here, cross-linked. |
 | [#1667](https://github.com/bldrs-ai/Share/issues/1667) open | Reclassified as support work (design-system tokens used across stories); detached from #1657 and linked from its body. `story` label removed. |
 | [#1989](https://github.com/bldrs-ai/Share/issues/1989) closed | Reclassified as support work (design-system alignment of the drawer and top bar); detached and linked. |
 | [#1992](https://github.com/bldrs-ai/Share/issues/1992) closed | Formal story, retained. Its Notes "New note" change was made in the shell's layout; Notes' own stories link it (#2150). |

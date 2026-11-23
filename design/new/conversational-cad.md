@@ -25,7 +25,7 @@ structure. Epic 3 depends on `ai-workspace.md` existing first.
 ## 1. Mapping the sequence onto the roadmap
 
 The four-step sequence corresponds almost 1:1 to the roadmap's Assist group
-(§4.11) and pivot stages (§7.4) — only step 2 is genuinely new:
+(§3.1) and pivot stages (§7.4) — only step 2 is genuinely new:
 
 | # | This plan | Roadmap ID | Pivot stage | Tracking issue |
 |---|---|---|---|---|
