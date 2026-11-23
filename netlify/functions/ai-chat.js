@@ -12,6 +12,12 @@
  *   → 200 text/event-stream, OpenRouter's SSE passed through byte for byte
  *   → 4xx/5xx {error: {code: 'ai_…', message}, tier}
  *
+ *   GET /.netlify/functions/ai-chat?catalogue
+ *   → 200 {source: 'live'|'static', default, free, models: [{id, name, price, tiers}]}
+ *   The model picker's list (#1934, `_lib/aiCatalogue.js`): public, behind
+ *   the same Origin check, and touching no ledger, token or secret. The
+ *   client shows it; what a POST may use is re-checked here per request.
+ *
  * Per request, in order:
  *  1. Config: OPENROUTER_API_KEY and AI_TOKEN_SECRET, or 500 not configured.
  *     First, so the live smoke probe's strict mode sees a missing secret.
@@ -24,7 +30,9 @@
  *     app_metadata through the Management API (`src/quota/proStatus.js`, the
  *     one Pro definition); anything else is `anonymous`, under a relay-minted
  *     HMAC token (`_lib/aiToken.js`) plus a day-salted IP-hash bucket.
- *  4. Model: the tier's allowlist (`_lib/aiModels.js`), or 400. Roles are
+ *  4. Model: the tier's allowlist (`_lib/aiModels.js`), or for Pro the live
+ *     catalogue (`_lib/aiCatalogue.js`, priced at its endpoints' ceiling at
+ *     pick time), or 400. Roles are
  *     checked (one leading `system` message, then user / assistant / tool;
  *     text only) and the body is rebuilt from a few fields (sanitizedMessages,
  *     the audit above TOOL_CHOICES), so a caller can't set routing, plugins,
@@ -60,10 +68,17 @@
  * OpenRouter unreachable, or the connection lost after sending; a settle
  * above its reservation; a settle that still failed after its retries
  * (`settle_failed`, with a reconciliation record left in the ledger); the
- * ledger unavailable. An exhausted budget, a body past its tier's cap,
+ * ledger unavailable; OpenRouter's catalogue answering in a shape the
+ * picker can't read, or a 4xx (`catalogue_broken`: our reader or URL is
+ * wrong). An exhausted budget, a body past its tier's cap,
  * the concurrency cap and a busy free pool are expected and go to the user
  * only (the client sends `quota_limit_reached` to GA for the first). A soft
  * budget settling past its limit is the designed overshoot, not a report.
+ * Neither is a picked model refused (another tier's, unlisted or unpriced),
+ * the catalogue unreachable or 5xx (the picker falls back to the curated
+ * table), or a picked catalogue model answering 404 under deny (the ZDR
+ * filter is a proxy for deny, so that is the user picking another, not a
+ * fix): each is logged only.
  *
  * Built as a v2 function because only v2 can stream (§5 "Vehicle"); Netlify
  * bundles v2 functions with nft whatever netlify.toml says, and
@@ -87,7 +102,8 @@ import {
   settleAll,
   utcDay,
 } from './_lib/aiLedger.js'
-import {DEFAULT_MODEL, freeRoute, resolveModel} from './_lib/aiModels.js'
+import {loadCatalogue, pickerModels, resolveCatalogueModel} from './_lib/aiCatalogue.js'
+import {DEFAULT_MODEL, FREE_MODELS_ALIAS, freeRoute, isFreeModel, resolveModel} from './_lib/aiModels.js'
 import {isAllowedOrigin, originHostForLog} from './_lib/aiOrigin.js'
 import {createUsageWatcher} from './_lib/aiSse.js'
 import {hashIp, looksLikeAnonToken, mintAnonToken, verifyAnonToken} from './_lib/aiToken.js'
@@ -191,7 +207,7 @@ const HTTP = Object.freeze({
 // What the client shows comes from the code (src/assist/assistError.ts); the
 // message is for a developer reading the network tab.
 const ERRORS = Object.freeze({
-  ai_method_not_allowed: [HTTP.METHOD_NOT_ALLOWED, 'POST only'],
+  ai_method_not_allowed: [HTTP.METHOD_NOT_ALLOWED, 'POST, or GET ?catalogue'],
   ai_forbidden_origin: [HTTP.FORBIDDEN, 'This assistant can only be called from Bldrs\' own site'],
   ai_not_configured: [HTTP.INTERNAL_ERROR, 'The hosted assistant is not configured on this deploy'],
   ai_bad_request: [HTTP.BAD_REQUEST, 'Expected a streaming chat completion request within the relay\'s caps'],
@@ -216,7 +232,8 @@ export default async function handler(req, context = {}) {
   const reports = createReporter(context)
   const nowMs = Date.now()
 
-  if (req.method !== 'POST') {
+  const isCatalogue = req.method === 'GET' && new URL(req.url).searchParams.has('catalogue')
+  if (req.method !== 'POST' && !isCatalogue) {
     return errorResponse('ai_method_not_allowed')
   }
   // First thing after the method, ahead of the configuration check, token
@@ -230,6 +247,12 @@ export default async function handler(req, context = {}) {
     // The origin's host only, never an IP, token or body.
     logOutcome({outcome: 'forbidden_origin', origin: originHostForLog(req)})
     return errorResponse('ai_forbidden_origin')
+  }
+  if (isCatalogue) {
+    // Before the configuration check: the catalogue is OpenRouter's public
+    // listing, read without Bldrs' key, so a deploy without its secrets can
+    // still show it. Nothing here mints, reads or spends.
+    return catalogueResponse(nowMs, reports)
   }
   const openRouterKey = process.env.OPENROUTER_API_KEY
   const tokenSecret = process.env.AI_TOKEN_SECRET
@@ -263,7 +286,22 @@ export default async function handler(req, context = {}) {
     return errorResponse('ai_bad_request', meta)
   }
 
-  let route = resolveModel(body.model ?? DEFAULT_MODEL, tier)
+  const requested = body.model ?? DEFAULT_MODEL
+  let route = resolveModel(requested, tier)
+  if (!route.ok && !isFreeModel(requested)) {
+    // Not curated for this tier: Pro may have picked it from the catalogue.
+    // resolveCatalogueModel refuses every other tier before it fetches.
+    route = await resolveCatalogueModel(requested, tier, {fetchImpl: fetch, nowMs})
+    if (!route.ok) {
+      // Expected: a pick this tier can't use, or one the catalogue doesn't
+      // list or price. Logged by reason, never the requested id (it is the
+      // caller's free text). A catalogue that can't be read at all is
+      // reported only when it looks like our bug (reportCatalogueFailure).
+      await reportCatalogueFailure(route, reports)
+      logOutcome({outcome: 'model_refused', tier, reason: route.reason})
+      return errorResponse(route.code, meta)
+    }
+  }
   if (!route.ok) {
     return errorResponse('ai_model_not_allowed', meta)
   }
@@ -376,6 +414,53 @@ export default async function handler(req, context = {}) {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
   })})
+}
+
+
+/**
+ * The model picker's list. Always 200: when OpenRouter can't be read, the
+ * curated table alone (`source: 'static'`), so the picker degrades to the
+ * models the relay serves without the catalogue.
+ *
+ * @param {number} nowMs
+ * @param {object} reports
+ * @return {Promise<Response>}
+ */
+async function catalogueResponse(nowMs, reports) {
+  const catalogue = await loadCatalogue({fetchImpl: fetch, nowMs})
+  if (!catalogue.ok) {
+    await reportCatalogueFailure({reason: `catalogue_${catalogue.reason}`, status: catalogue.status}, reports)
+  }
+  const {source, models} = pickerModels(catalogue)
+  logOutcome({outcome: 'catalogue', source, count: models.length})
+  return new Response(JSON.stringify({source, default: DEFAULT_MODEL, free: FREE_MODELS_ALIAS, models}), {
+    status: HTTP.OK,
+    headers: {
+      'Content-Type': 'application/json',
+      // The browser may keep it a few minutes; the relay's own cache
+      // (CATALOGUE_TTL_MS) is what bounds how stale it gets.
+      'Cache-Control': 'private, max-age=300',
+    },
+  })
+}
+
+
+/**
+ * Report a catalogue read that failed in a way someone has to fix: an
+ * answer the reader can't parse, or a 4xx (the URL or its contract moved).
+ * Unreachable and 5xx are OpenRouter's outage and heal on their own; the
+ * picker falls back meanwhile, so those are logged only.
+ *
+ * @param {object} failure `{reason, status?}`, reason as aiCatalogue.js gives it
+ * @param {object} reports
+ * @return {Promise<void>}
+ */
+async function reportCatalogueFailure({reason, status}, reports) {
+  const broken = typeof reason === 'string' && (reason.endsWith('_malformed') ||
+    (reason.endsWith('_status') && status >= HTTP.BAD_REQUEST && status < HTTP.INTERNAL_ERROR))
+  if (broken) {
+    await reports.report('catalogue_broken', {reason, ...(status ? {status} : {})})
+  }
 }
 
 
@@ -1064,8 +1149,13 @@ async function upstreamFailure(status, route, reports) {
     return route.free ? 'ai_busy' : 'ai_too_many_requests'
   }
   if (status === HTTP.NOT_FOUND) {
-    // No endpoint for our model under deny, or the model is gone: ours to fix.
-    await reports.report('model_unavailable', {status, model: route.model})
+    // No endpoint for our model under deny, or the model is gone: ours to
+    // fix. Not for a model the user picked from the catalogue: its listing
+    // is a proxy for deny (aiCatalogue.js), so a 404 there is that pick
+    // failing, which the user fixes by picking another.
+    if (route.source !== 'catalogue') {
+      await reports.report('model_unavailable', {status, model: route.model})
+    }
     return 'ai_model_unavailable'
   }
   await reports.report('upstream_error', {status, model: route.model})

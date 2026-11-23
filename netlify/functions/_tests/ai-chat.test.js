@@ -29,7 +29,16 @@ import handler, {
   serverSystemMessage,
 } from '../ai-chat.js'
 import {shareAssistInstructions} from '../../../src/viewer/tools/assistInstructions.js'
-import {PAID_MODELS, resolveModel} from '../_lib/aiModels.js'
+import {FREE_MODELS_ALIAS, PAID_MODELS, resolveModel} from '../_lib/aiModels.js'
+import {
+  OPENROUTER_MODELS_URL,
+  OPENROUTER_ZDR_URL,
+  ceilingFromEndpoints,
+  endpointsUrl,
+  pricingCeiling,
+  resetCatalogueCache,
+} from '../_lib/aiCatalogue.js'
+import {ASSIST_FREE_MODELS, ASSIST_MODEL} from '../../../src/viewer/tools/assistModels.js'
 import {createAssist} from '../../../src/assist/loop'
 import {createMemoryConversationStore} from '../../../src/assist/conversation'
 import {createRegistry} from '../../../src/assist/registry'
@@ -39,6 +48,8 @@ import {resetManagementApiTokenCache} from '../_lib/auth0.js'
 import {hashIp, mintAnonToken} from '../_lib/aiToken.js'
 import {utcDay} from '../_lib/aiLedger.js'
 import {createFakeBlobs, storedRecord} from './fakeBlobs.js'
+import {readFileSync} from 'fs'
+import {join as joinPath} from 'path'
 
 
 /* eslint-disable no-magic-numbers */
@@ -209,6 +220,7 @@ describe('ai-chat', () => {
     errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined)
     jest.mocked(Sentry.captureMessage).mockClear()
     resetReportedConditions()
+    resetCatalogueCache()
     jest.mocked(axios.get).mockReset()
     jest.mocked(axios.post).mockReset()
     resetManagementApiTokenCache()
@@ -1155,6 +1167,236 @@ describe('ai-chat', () => {
       expect(res.headers.get('x-bldrs-ai-tier')).toBe('free')
       await res.text()
       expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/^ai-chat: tier lookup failed/))
+    })
+  })
+
+  // #1934: the catalogue route and a Pro user's pick from it. OpenRouter's
+  // public listings are the replay fixtures (trimmed captures, 2026-11-23).
+  describe('the model picker (#1934)', () => {
+    const FIXTURES = joinPath(__dirname, 'replay', 'fixtures', 'openrouter')
+    const fixture = (name) => JSON.parse(readFileSync(joinPath(FIXTURES, name), 'utf8'))
+    const GROK = 'x-ai/grok-4.7'
+    const GROK_ENDPOINTS = fixture('endpoints-grok-4.7.json')
+    // Grok 4.7's dearest endpoint tier: priority, past 200k prompt tokens.
+    const GROK_CEILING = {input: 8, output: 24}
+    const NO_USAGE = [SSE_TEXT[0], 'data: [DONE]\n\n']
+
+    /**
+     * Answer OpenRouter's listings from the fixtures, and the chat with `chat`.
+     *
+     * @param {object} [overrides] url → Response
+     * @param {Function} [chat] the chat completion's answer
+     */
+    const openRouter = (overrides = {}, chat = () => sseResponse()) => {
+      const listings = {
+        [OPENROUTER_MODELS_URL]: () => Response.json(fixture('models.json')),
+        [OPENROUTER_ZDR_URL]: () => Response.json(fixture('zdr.json')),
+        [endpointsUrl(GROK)]: () => Response.json(GROK_ENDPOINTS),
+        ...Object.fromEntries(Object.entries(overrides).map(([url, res]) => [url, () => res.clone()])),
+      }
+      fetchSpy.mockImplementation((url) => (url === OPENROUTER_CHAT_URL ? Promise.resolve(chat()) :
+        (listings[url] ? Promise.resolve(listings[url]()) : Promise.reject(new Error(`unexpected ${url}`)))))
+    }
+    const urlsFetched = () => fetchSpy.mock.calls.map(([url]) => url)
+    const chatBodySent = () => JSON.parse(fetchSpy.mock.calls.find(([url]) => url === OPENROUTER_CHAT_URL)[1].body)
+
+    beforeEach(() => {
+      Object.assign(process.env, {AUTH0_DOMAIN: 'auth0.test', AUTH0_CLIENT_ID: 'id', AUTH0_CLIENT_SECRET: 'secret'})
+      jest.mocked(axios.post).mockResolvedValue({data: {access_token: 'mgmt', expires_in: 86400}})
+      openRouter()
+    })
+
+    /**
+     * @param {string} sub
+     * @param {object} appMetadata
+     */
+    const signedInAs = (sub, appMetadata) => {
+      jest.mocked(axios.get).mockImplementation((url) => Promise.resolve(url.endsWith('/userinfo') ?
+        {data: {sub}} : {data: {app_metadata: appMetadata}}))
+    }
+
+    it('the client names the relay\'s default and free alias exactly', () => {
+      expect(ASSIST_MODEL).toBe('qwen/qwen3.7-flash')
+      expect(resolveModel(ASSIST_MODEL, 'anonymous').ok).toBe(true)
+      expect(ASSIST_FREE_MODELS).toBe(FREE_MODELS_ALIAS)
+    })
+
+    describe('GET ?catalogue', () => {
+      /**
+       * @param {object} [options]
+       * @param {?string} [options.origin] null sends a same-origin fetch's Sec-Fetch-Site instead
+       * @return {Promise<Response>}
+       */
+      const getCatalogue = ({origin} = {}) => handler(new Request('https://bldrs.ai/.netlify/functions/ai-chat?catalogue',
+        {method: 'GET', headers: origin === null ? {'Sec-Fetch-Site': 'same-origin'} :
+          {Origin: origin ?? 'https://bldrs.ai'}}), {ip: IP})
+
+      it('lists the curated models, then the catalogue\'s for Pro, with listed prices', async () => {
+        const res = await getCatalogue()
+        expect(res.status).toBe(200)
+        const body = await res.json()
+        expect(body.source).toBe('live')
+        expect(body.default).toBe('qwen/qwen3.7-flash')
+        expect(body.free).toBe('bldrs/free')
+        expect(body.models.map((m) => m.id)).toEqual([...Object.keys(PAID_MODELS), 'anthropic/claude-sonnet-5.5',
+          'openai/gpt-5', GROK])
+        expect(body.models.find((m) => m.id === GROK)).toEqual({id: GROK, name: 'SpaceXSI: Grok 4.7',
+          price: {input: 4, output: 12}, tiers: ['pro']})
+        expect(urlsFetched()).toEqual([OPENROUTER_MODELS_URL, OPENROUTER_ZDR_URL])
+        // Public reads: Bldrs' key never goes on them.
+        for (const [, init] of fetchSpy.mock.calls) {
+          expect(JSON.stringify(init.headers)).not.toContain(OPENROUTER_KEY)
+        }
+        expect(fake.requests).toEqual([])
+        expect(res.headers.get('x-bldrs-ai-token')).toBeNull()
+      })
+
+      it('takes a same-origin fetch that sent no Origin, and answers on a deploy without secrets', async () => {
+        process.env = {}
+        const res = await getCatalogue({origin: null})
+        expect(res.status).toBe(200)
+        expect((await res.json()).source).toBe('live')
+      })
+
+      it('refuses a foreign Origin before it fetches anything', async () => {
+        const res = await getCatalogue({origin: 'https://evil.example'})
+        expect(res.status).toBe(403)
+        expect(fetchSpy).not.toHaveBeenCalled()
+      })
+
+      it('serves the curated table when OpenRouter is down, and reports nothing', async () => {
+        openRouter({[OPENROUTER_MODELS_URL]: new Response('', {status: 503})})
+        const body = await (await getCatalogue()).json()
+        expect(body.source).toBe('static')
+        expect(body.models.map((m) => m.id)).toEqual(Object.keys(PAID_MODELS))
+        expect(Sentry.captureMessage).not.toHaveBeenCalled()
+      })
+
+      it.each([
+        ['an answer it can\'t read', Response.json({models: []}), {ai_reason: 'catalogue_malformed'}],
+        ['a 404 (the URL moved)', new Response('', {status: 404}), {ai_reason: 'catalogue_status', ai_status: '404'}],
+      ])('reports %s as catalogue_broken, and still serves the curated table', async (_name, answer, tags) => {
+        openRouter({[OPENROUTER_MODELS_URL]: answer})
+        expect((await (await getCatalogue()).json()).source).toBe('static')
+        expect(Sentry.captureMessage).toHaveBeenCalledWith('ai-chat: catalogue_broken', 'warning')
+        for (const [name, value] of Object.entries(tags)) {
+          expect(Sentry.mockScope.setTag).toHaveBeenCalledWith(name, value)
+        }
+      })
+
+      it('any other GET is still 405', async () => {
+        const res = await call({method: 'GET'})
+        expect(res.status).toBe(405)
+        expect(fetchSpy).not.toHaveBeenCalled()
+      })
+    })
+
+    it('a Pro pick from the catalogue is sent alone, at max_price equal to its endpoints\' ceiling', async () => {
+      signedInAs('github|10', {subscriptionStatus: 'sharePro'})
+      const res = await call({bearer: 'auth0-pro-picker', body: chatBody({model: GROK})})
+      expect(res.status).toBe(200)
+      await res.text()
+      const sent = chatBodySent()
+      expect(sent.model).toBe(GROK)
+      expect(sent).not.toHaveProperty('models')
+      expect(ceilingFromEndpoints(GROK_ENDPOINTS.data.endpoints)).toEqual(GROK_CEILING)
+      expect(sent.provider).toEqual({data_collection: 'deny', require_parameters: true,
+        max_price: {prompt: GROK_CEILING.input, completion: GROK_CEILING.output}})
+      expect(urlsFetched()).toEqual([OPENROUTER_MODELS_URL, OPENROUTER_ZDR_URL, endpointsUrl(GROK), OPENROUTER_CHAT_URL])
+      expect(storedRecord(fake, 'ai/user/github%7C10').days[TODAY].spent).toBe(143)
+      expect(JSON.parse(logSpy.mock.calls.at(-1)[0])).toMatchObject({outcome: 'ok', tier: 'pro'})
+    })
+
+    it('a Pro pick is reserved at its ceiling, above its worst case on every endpoint and tier', async () => {
+      // No usage chunk: the hold settles at its reservation, which is how
+      // the reserved amount shows.
+      openRouter({}, () => sseResponse(NO_USAGE))
+      signedInAs('github|11', {subscriptionStatus: 'sharePro'})
+      await (await call({bearer: 'auth0-pro-picker-bound', body: chatBody({model: GROK})})).text()
+      const sent = chatBodySent()
+      const reserved = storedRecord(fake, 'ai/user/github%7C11').days[TODAY].spent
+      expect(reserved).toBe(reservationMicro(sent, {free: false, price: GROK_CEILING}, MAX_OUTPUT_TOKENS.pro))
+      const inputTokens = Buffer.byteLength(JSON.stringify(sent))
+      const tiers = GROK_ENDPOINTS.data.endpoints.flatMap((e) => [e.pricing, ...(e.pricing.overrides ?? [])])
+      expect(tiers.length).toBeGreaterThan(5)
+      for (const {prompt, completion} of tiers) {
+        const price = pricingCeiling({prompt, completion})
+        expect(reserved).toBeGreaterThan((inputTokens * price.input) + (MAX_OUTPUT_TOKENS.pro * price.output))
+      }
+      // The listed price, what the picker shows, would NOT have covered it.
+      expect(reservationMicro(sent, {free: false, price: {input: 4, output: 12}}, MAX_OUTPUT_TOKENS.pro))
+        .toBeLessThan(reserved)
+    })
+
+    it.each([
+      ['a free user', 'github|12', {}],
+      ['a Pro whose subscription lapsed', 'github|13', {subscriptionStatus: 'shareProCanceled'}],
+    ])('%s asking for a catalogue model is refused, with nothing fetched or held', async (_name, sub, appMetadata) => {
+      signedInAs(sub, appMetadata)
+      const res = await call({bearer: `auth0-${sub}`, body: chatBody({model: GROK})})
+      expect(res.status).toBe(400)
+      expect(await res.json()).toMatchObject({error: {code: 'ai_model_not_allowed'}, tier: 'free'})
+      expect(fetchSpy).not.toHaveBeenCalled()
+      expect(fake.requests).toEqual([])
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+    })
+
+    it('a signed-out caller asking for a Pro model is refused, with nothing fetched', async () => {
+      for (const model of [GROK, 'anthropic/claude-haiku-4.5']) {
+        const res = await call({body: chatBody({model})})
+        expect(res.status).toBe(400)
+        expect((await res.json()).tier).toBe('anonymous')
+      }
+      expect(fetchSpy).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['not in the catalogue', 'google/gemini-4-neon', {}, 400, 'ai_model_not_allowed', 'not_listed'],
+      ['priced in a way the bound can\'t cover', GROK, {[endpointsUrl(GROK)]: Response.json({data: {
+        ...GROK_ENDPOINTS.data, endpoints: [{pricing: {prompt: '0.000002', completion: '0.000006', request: '0.01'}}],
+      }})}, 400, 'ai_model_not_allowed', 'unpriced'],
+      ['unreadable while OpenRouter is down', GROK, {[OPENROUTER_MODELS_URL]: new Response('', {status: 503})}, 502,
+        'ai_model_unavailable', 'catalogue_status'],
+    ])('a Pro pick %s is refused, logged by reason and not reported', async (_n, model, answers, status, code, reason) => {
+      openRouter(answers)
+      signedInAs('github|14', {subscriptionStatus: 'sharePro'})
+      const res = await call({bearer: `auth0-pro-${reason}`, body: chatBody({model})})
+      expect(res.status).toBe(status)
+      expect((await res.json()).error.code).toBe(code)
+      expect(urlsFetched()).not.toContain(OPENROUTER_CHAT_URL)
+      expect(fake.requests).toEqual([])
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+      const line = JSON.parse(logSpy.mock.calls.at(-1)[0])
+      expect(line).toEqual({fn: 'ai-chat', outcome: 'model_refused', tier: 'pro', reason})
+    })
+
+    it('a Pro pick answering 404 under deny is unavailable, released, and not reported', async () => {
+      openRouter({}, () => new Response('{"error":{"message":"No endpoints found matching your data policy"}}',
+        {status: 404}))
+      signedInAs('github|15', {subscriptionStatus: 'sharePro'})
+      const res = await call({bearer: 'auth0-pro-404', body: chatBody({model: GROK})})
+      expect(res.status).toBe(502)
+      expect((await res.json()).error.code).toBe('ai_model_unavailable')
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+      expect(storedRecord(fake, 'ai/user/github%7C15')).toEqual({v: 1, days: {}, holds: {}, estimates: {}})
+    })
+
+    it('the free alias costs nothing on any tier: max_price 0, no hold, no breaker, deny kept', async () => {
+      signedInAs('github|16', {subscriptionStatus: 'sharePro'})
+      for (const bearer of [undefined, 'auth0-pro-free-alias']) {
+        fetchSpy.mockClear()
+        openRouter({}, () => sseResponse(NO_USAGE))
+        await (await call({bearer, body: chatBody({model: ASSIST_FREE_MODELS})})).text()
+        const sent = chatBodySent()
+        expect(sent.provider).toEqual({data_collection: 'deny', require_parameters: true,
+          max_price: {prompt: 0, completion: 0}})
+        expect(reservationMicro(sent, resolveModel(ASSIST_FREE_MODELS, 'pro'), MAX_OUTPUT_TOKENS.pro)).toBe(0)
+        expect(urlsFetched()).toEqual([OPENROUTER_CHAT_URL])
+      }
+      // Even with no usage chunk, a free request settles at zero: its reservation.
+      expect(storedRecord(fake, 'ai/user/github%7C16').days[TODAY]).toEqual({spent: 0, free: 1})
+      expect(storedRecord(fake, anonKeyOf(fake)).days[TODAY]).toEqual({spent: 0, free: 1})
+      expect([...fake.data.keys()].some((p) => p.includes('/ai/breaker/'))).toBe(false)
     })
   })
 

@@ -17,10 +17,11 @@ import {
   Settings as SettingsIcon,
   Stop as StopIcon,
 } from '@mui/icons-material'
-import {HOSTED_TRANSPORT_LABEL, OPENROUTER_KEY_ID, assistErrorMessage} from '../../assist'
+import {HOSTED_TRANSPORT_ID, HOSTED_TRANSPORT_LABEL, OPENROUTER_KEY_ID, assistErrorMessage} from '../../assist'
 import {AI_CREDITS_FEATURE} from '../../quota/aiCredits'
 import {aiCreditsCopy} from '../../quota/aiCreditsCopy'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {TIERS, getTier} from '../../quota/quota'
 import modelIdentity from '../../routes/modelIdentity'
 import useStore from '../../store/useStore'
 import {createShareAssist} from '../../viewer/tools/assistHost'
@@ -41,6 +42,11 @@ import {
   setTurnSender,
   submitTurn,
 } from './assistForward'
+import {
+  PICKED_MODEL_UNAVAILABLE_MESSAGE,
+  assistModelChoice,
+  isUserChosenModel,
+} from './assistModelChoice'
 import {assistScope} from './assistSessionKey'
 import {
   assistAuth,
@@ -111,7 +117,12 @@ export default function BotChat() {
   const setIsBotVisible = useStore((state) => state.setIsBotVisible)
   // The hosted transport reads the sign-in at each request (assistState.js).
   const {isAuthenticated, isLoading, user, getAccessTokenSilently} = useAuth0()
-  assistAuth.current = {isAuthenticated, getAccessTokenSilently}
+  // Pro decides whether a picked model is sent (assistModelChoice.js); the
+  // relay decides whether it is served.
+  const appMetadata = useStore((state) => state.appMetadata)
+  const isPro = getTier(appMetadata, isAuthenticated) === TIERS.PAID
+  assistAuth.current = {isAuthenticated, getAccessTokenSilently, isPro}
+  const modelChoice = useSyncExternalStore(assistModelChoice.subscribe, assistModelChoice.get)
   const apiKey = useSyncExternalStore(assistKeyStore.subscribe, () => assistKeyStore.get(OPENROUTER_KEY_ID) ?? '')
   const modelPath = useStore((state) => state.modelPath)
   const modelRoute = modelPath ? modelIdentity(modelPath) : null
@@ -440,6 +451,9 @@ export default function BotChat() {
         <BotSettings
           apiKey={apiKey}
           onApiKeyChange={handleApiKeySave}
+          modelChoice={modelChoice}
+          onModelChoiceChange={assistModelChoice.set}
+          isPro={isPro}
           onClose={() => setIsSettingsOpen(false)}
         />
       ) : (
@@ -548,6 +562,16 @@ async function runTurn({text, turn, conversationId}) {
     const {session, transport} = instance
     try {
       for await (const event of session.send(text)) {
+        const refusedModel = event.type === 'error' && (event.code === 'unavailable' || event.code === 'model_unavailable')
+        if (refusedModel && transport.id === HOSTED_TRANSPORT_ID && isUserChosenModel(assistHostedSide.lastModel)) {
+          // The relay refused the model the user picked (#1934): another
+          // tier's, no longer in its catalogue (`unavailable`), or not
+          // servable right now: 404 under deny, or its catalogue unreadable
+          // (`model_unavailable`). Theirs to change, not ours to fix, so no
+          // report; the bubble says where.
+          setMessages((prev) => [...prev, textMessage('error', PICKED_MODEL_UNAVAILABLE_MESSAGE)])
+          continue
+        }
         if (event.type === 'error' && event.code === 'unavailable') {
           reportAssistCondition('model_unavailable', {status: event.status, transport: transport.id})
         }

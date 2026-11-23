@@ -55,6 +55,14 @@ export type AssistErrorCode =
   | 'assistant_busy'
   /** The relay or its upstream failed. The relay reports it; the page doesn't. */
   | 'service_unavailable'
+  /**
+   * The relay couldn't serve the model asked for right now: it answered 404
+   * under deny, or the catalogue it is priced from couldn't be read
+   * (`ai_model_unavailable`). Worded as an outage, and the relay reports the
+   * default model's itself; kept apart from `service_unavailable` so a host
+   * whose user picked the model can say to pick another (#1934).
+   */
+  | 'model_unavailable'
   /** The Auth0 sign-in the request carried has lapsed. */
   | 'session_expired'
 
@@ -197,6 +205,7 @@ export function assistErrorMessage(code: AssistErrorCode, provider: string, stat
       return tier === 'anonymous' ?
         'The free assistant is busy right now. Sign in to keep going, or try again later.' :
         'The free models are busy right now. Try again in a few minutes.'
+    case 'model_unavailable':
     case 'service_unavailable': return `${provider} isn't available right now. Try again in a few minutes, or add ` +
       'your own OpenRouter key in the assistant\'s settings.'
     case 'session_expired': return 'Your sign-in has expired. Sign in again to keep using your assistant credits.'

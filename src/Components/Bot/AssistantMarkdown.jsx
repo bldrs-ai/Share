@@ -1,19 +1,26 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import Markdown from 'react-markdown'
 import {Box, Link} from '@mui/material'
+import {REF_SCHEME, refOfLinkUri, splitMultiRefLinks} from '../../viewer/tools/refLinks'
+import RefChip from './RefChip'
 import {loadMarkdownGfm} from './markdownGfm'
 
 
 /**
- * Only http(s) links are followed. The default allows `mailto:` and `tel:`
- * too, which a model reply has no business offering; anything else (a
- * `javascript:` URL, a relative path that would navigate Share itself) is
- * rendered as plain text by `LinkOrText`.
+ * Only http(s) links are followed, plus `ref:<ref>` element mentions (#1673;
+ * viewer/tools/refLinks.js), which `LinkOrText` renders as chips. The default
+ * allows `mailto:` and `tel:` too, which a model reply has no business
+ * offering; anything else (a `javascript:` URL, a relative path that would
+ * navigate Share itself, a `ref:` with a malformed ref) is rendered as plain
+ * text by `LinkOrText`.
  *
  * @param {string} uri
- * @return {string} the URI if it is http(s), else ''
+ * @return {string} the URI if it is http(s) or a well-formed `ref:`, else ''
  */
 export function allowedLinkUri(uri) {
+  if (typeof uri === 'string' && uri.startsWith(REF_SCHEME)) {
+    return refOfLinkUri(uri) === null ? '' : uri
+  }
   try {
     const {protocol} = new URL(uri)
     return protocol === 'https:' || protocol === 'http:' ? uri : ''
@@ -30,6 +37,10 @@ export function allowedLinkUri(uri) {
 function LinkOrText({href, children}) {
   if (!href) {
     return <>{children}</>
+  }
+  const ref = refOfLinkUri(href)
+  if (ref !== null) {
+    return <RefChip refText={ref}>{children}</RefChip>
   }
   return <Link href={href} target='_blank' rel='noopener noreferrer'>{children}</Link>
 }
@@ -131,7 +142,7 @@ export default function AssistantMarkdown({text}) {
         transformLinkUri={allowedLinkUri}
         components={{a: LinkOrText, table: ScrollTable}}
       >
-        {text}
+        {splitMultiRefLinks(text)}
       </Markdown>
     </Box>
   )
