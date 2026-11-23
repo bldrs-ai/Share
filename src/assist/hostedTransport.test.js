@@ -180,7 +180,7 @@ describe('assist/hostedTransport', () => {
     [429, {error: {code: 'ai_free_requests_exhausted'}, tier: 'anonymous'}, 'free_requests_exhausted', 'anonymous'],
     [429, {error: {code: 'ai_too_many_requests'}, tier: 'free'}, 'rate_limited', 'free'],
     [503, {error: {code: 'ai_busy'}, tier: 'anonymous'}, 'assistant_busy', 'anonymous'],
-    [502, {error: {code: 'ai_model_unavailable'}, tier: 'pro'}, 'service_unavailable', 'pro'],
+    [502, {error: {code: 'ai_model_unavailable'}, tier: 'pro'}, 'model_unavailable', 'pro'],
     [503, {error: {code: 'ai_unavailable'}}, 'service_unavailable', undefined],
     [400, {error: {code: 'ai_model_not_allowed'}, tier: 'free'}, 'unavailable', 'free'],
     [400, {error: {code: 'ai_request_rejected'}, tier: 'free'}, 'bad_request', 'free'],

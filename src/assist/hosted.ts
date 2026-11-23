@@ -72,8 +72,10 @@ const RELAY_CODES: Record<string, AssistErrorCode> = {
   // The model Share asked for isn't on the relay's list for this tier: the
   // host and the relay disagree, which is ours to fix (the panel reports it).
   ai_model_not_allowed: 'unavailable',
-  // The relay has already reported these server-side (ai-chat.js).
-  ai_model_unavailable: 'service_unavailable',
+  // The relay has already reported these server-side (ai-chat.js), when
+  // they are ours to fix. A model it can't serve right now is its own code,
+  // so a host can tell a user who picked that model to pick another.
+  ai_model_unavailable: 'model_unavailable',
   ai_upstream_error: 'service_unavailable',
   ai_unavailable: 'service_unavailable',
   ai_not_configured: 'service_unavailable',

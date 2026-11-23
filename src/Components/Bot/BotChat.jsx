@@ -562,14 +562,17 @@ async function runTurn({text, turn, conversationId}) {
     const {session, transport} = instance
     try {
       for await (const event of session.send(text)) {
+        const refusedModel = event.type === 'error' && (event.code === 'unavailable' || event.code === 'model_unavailable')
+        if (refusedModel && transport.id === HOSTED_TRANSPORT_ID && isUserChosenModel(assistHostedSide.lastModel)) {
+          // The relay refused the model the user picked (#1934): another
+          // tier's, no longer in its catalogue (`unavailable`), or not
+          // servable right now: 404 under deny, or its catalogue unreadable
+          // (`model_unavailable`). Theirs to change, not ours to fix, so no
+          // report; the bubble says where.
+          setMessages((prev) => [...prev, textMessage('error', PICKED_MODEL_UNAVAILABLE_MESSAGE)])
+          continue
+        }
         if (event.type === 'error' && event.code === 'unavailable') {
-          if (transport.id === HOSTED_TRANSPORT_ID && isUserChosenModel(assistHostedSide.lastModel)) {
-            // The relay refused the model the user picked (#1934): another
-            // tier's, or no longer in its catalogue. Theirs to change, not
-            // ours to fix, so no report; the bubble says where.
-            setMessages((prev) => [...prev, textMessage('error', PICKED_MODEL_UNAVAILABLE_MESSAGE)])
-            continue
-          }
           reportAssistCondition('model_unavailable', {status: event.status, transport: transport.id})
         }
         if (event.type === 'error' && event.code === 'credits_exhausted') {

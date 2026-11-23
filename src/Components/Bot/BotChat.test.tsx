@@ -291,6 +291,7 @@ describe('BotChat', () => {
   describe('without a key of the user\'s own (the hosted relay)', () => {
     const HTTP_BAD_REQUEST = 400
     const HTTP_PAYMENT_REQUIRED = 402
+    const HTTP_BAD_GATEWAY = 502
     const HTTP_SERVICE_UNAVAILABLE = 503
 
     /**
@@ -674,6 +675,31 @@ describe('BotChat', () => {
         render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
         send('Hello bot')
         expect(await screen.findByTestId('BotChat-Error')).toHaveTextContent(PICKED_MODEL_UNAVAILABLE_MESSAGE)
+        expect(reportAssistCondition).not.toHaveBeenCalled()
+      })
+
+      // Codex round 2 on #2269: a pick that resolves but can't be served (404
+      // under deny, or its catalogue unreadable) is the relay's
+      // `ai_model_unavailable`, not a refusal; it still says to pick another.
+      it('a pick the relay can\'t serve right now also says to pick another, and isn\'t reported', async () => {
+        mockAuth.isAuthenticated = true
+        act(() => {
+          setStoreState({appMetadata: {subscriptionStatus: 'sharePro'}})
+          assistModelChoice.set({freeModels: false, model: MOCK_CATALOGUE_MODEL.id})
+        })
+        relayAnswers(HTTP_BAD_GATEWAY, {error: {code: 'ai_model_unavailable'}, tier: 'pro'})
+        render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        send('Hello bot')
+        expect(await screen.findByTestId('BotChat-Error')).toHaveTextContent(PICKED_MODEL_UNAVAILABLE_MESSAGE)
+        expect(reportAssistCondition).not.toHaveBeenCalled()
+      })
+
+      it('the default the relay can\'t serve is an outage, left to the relay to report', async () => {
+        relayAnswers(HTTP_BAD_GATEWAY, {error: {code: 'ai_model_unavailable'}, tier: 'anonymous'})
+        render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        send('Hello bot')
+        expect(await screen.findByTestId('BotChat-Error'))
+          .toHaveTextContent(assistErrorMessage('service_unavailable', HOSTED_TRANSPORT_LABEL))
         expect(reportAssistCondition).not.toHaveBeenCalled()
       })
 
