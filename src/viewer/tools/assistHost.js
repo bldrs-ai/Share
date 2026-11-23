@@ -1,6 +1,7 @@
 import {OPENROUTER_KEY_ID, ToolError, createRegistry} from '../../assist'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
+import {AI_TIERS, aiCreditLimits} from '../../quota/aiCredits'
 import {shareAssistInstructions} from './assistInstructions'
 import {createShareToolProvider} from './shareTools'
 import {createViewContextSource} from './viewContext'
@@ -64,7 +65,7 @@ export function createShareAssist(runtime, {keyStore, conversationStore, hosted}
     appUrl: 'https://bldrs.ai',
     appTitle: 'Bldrs Share',
   })
-  const relay = runtime.hostedTransport({relayUrl: AI_RELAY_URL, model: ASSIST_MODEL, ...hosted})
+  const relay = runtime.hostedTransport({relayUrl: AI_RELAY_URL, model: ASSIST_MODEL, maxRequestBytesFor, ...hosted})
   const transport = runtime.selectTransport(() => (keyStore.get(OPENROUTER_KEY_ID) ? byok : relay))
   const assist = runtime.createAssist({
     transport,
@@ -73,6 +74,29 @@ export function createShareAssist(runtime, {keyStore, conversationStore, hosted}
     instructions: shareAssistInstructions(),
   })
   return {assist, transport, dispose: () => registry.dispose()}
+}
+
+
+/**
+ * The relay's request body cap for a tier, so the loop keeps each step under
+ * it (assist/loop.ts `boundStepMessages`). Signed out and free have one
+ * (quota/aiCredits.js `maxBodyBytes*`, ai-chat.js `maxBodyBytesFor`); Pro
+ * has only the relay's technical cap, far above what the loop sends. Before
+ * the relay has named the tier, the smallest cap holds: a first request
+ * that fits it fits every tier. The client reads the defaults: the relay's
+ * env overrides aren't visible here, so lowering them below the defaults
+ * would need this to learn the cap from the relay.
+ *
+ * @param {?string} tier the relay's, or null before it has said
+ * @return {number|undefined} bytes, or undefined for no cap
+ */
+export function maxRequestBytesFor(tier) {
+  if (tier === AI_TIERS.PRO) {
+    return undefined
+  }
+  const {maxBodyBytes} = aiCreditLimits({})
+  return tier === AI_TIERS.FREE ? maxBodyBytes[AI_TIERS.FREE] :
+    Math.min(maxBodyBytes[AI_TIERS.ANONYMOUS], maxBodyBytes[AI_TIERS.FREE])
 }
 
 

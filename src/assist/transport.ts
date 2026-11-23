@@ -21,6 +21,13 @@ export interface Transport {
    * @throws {AssistError} 'no_key' when the user hasn't given one
    */
   model(): LanguageModel
+  /**
+   * The largest request body, in bytes, this transport takes right now, or
+   * undefined for no cap of its own. The loop fits each step's request under
+   * it (loop.ts `boundStepMessages`): the hosted relay refuses a body over its
+   * tier's cap (ai-chat.js `maxBodyBytesFor`) as `ai_bad_request`.
+   */
+  maxRequestBytes?(): number | undefined
 }
 
 
@@ -99,6 +106,12 @@ export interface HostedTransportOptions {
   anonTokens: {get(): string | null, set(token: string): void}
   /** Called with each relay response's metering headers, before its body. */
   onMeta?: (meta: HostedMeta) => void
+  /**
+   * The relay's body cap for a tier (null before the relay has named one),
+   * or undefined for none. The host knows the caps (quota/aiCredits.js);
+   * this module stays free of Share's config.
+   */
+  maxRequestBytesFor?: (tier: string | null) => number | undefined
   /** For tests: a stand-in for `fetch`. */
   fetch?: typeof fetch
 }
@@ -130,6 +143,8 @@ export interface HostedTransportOptions {
  */
 export function hostedTransport(opts: HostedTransportOptions): Transport {
   const baseFetch = opts.fetch ?? globalThis.fetch
+  // The tier the relay last named, for the body cap; null until it has.
+  let lastTier: string | null = null
   const relayFetch = async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     let auth: string | null = null
     try {
@@ -150,7 +165,12 @@ export function hostedTransport(opts: HostedTransportOptions): Transport {
       opts.anonTokens.set(minted)
     }
     try {
-      opts.onMeta?.(hostedMetaOf(res.headers))
+      const meta = hostedMetaOf(res.headers)
+      // Signing in or out changes it; the next response says so.
+      if (meta.tier) {
+        lastTier = meta.tier
+      }
+      opts.onMeta?.(meta)
     } catch {
       // The host's display of the meta must not fail the turn.
     }
@@ -172,6 +192,7 @@ export function hostedTransport(opts: HostedTransportOptions): Transport {
       })
       return provider.chat(opts.model)
     },
+    maxRequestBytes: () => opts.maxRequestBytesFor?.(lastTier),
   }
 }
 
@@ -198,5 +219,6 @@ export function selectTransport(choose: () => Transport): Transport {
       current = choose()
       return current.model()
     },
+    maxRequestBytes: () => current.maxRequestBytes?.(),
   }
 }

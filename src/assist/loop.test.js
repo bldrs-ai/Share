@@ -13,7 +13,7 @@ import {
   DEFAULT_MAX_STEPS,
   FINAL_STEP_NOTE,
   FULL_RESULT_TURNS,
-  MAX_STEP_CHARS,
+  MAX_STEP_BYTES,
   boundStepMessages,
   MAX_WIRE_CHARS,
   UNDO_SETTLE_MS,
@@ -126,9 +126,12 @@ function setup(overrides = {}, reply = undefined) {
   const fake = fakeRegistry(overrides.extraProviders)
   const store = createMemoryConversationStore()
   let key = KEY
+  const transport = openRouterTransport({getKey: () => key, model: 'mock/model', baseURL: BASE_URL,
+    appUrl: 'https://bldrs.ai', appTitle: 'Bldrs Share', fetch: fetchFn})
   const assist = createAssist({
-    transport: openRouterTransport({getKey: () => key, model: 'mock/model', baseURL: BASE_URL,
-      appUrl: 'https://bldrs.ai', appTitle: 'Bldrs Share', fetch: fetchFn}),
+    // `maxRequestBytes` stands in for the hosted relay's per-tier body cap.
+    transport: overrides.maxRequestBytes === undefined ? transport :
+      {...transport, maxRequestBytes: () => overrides.maxRequestBytes},
     registry: fake.registry,
     store,
     instructions: 'Use the tools.',
@@ -557,7 +560,46 @@ describe('assist/loop', () => {
       expect(outputs(messages)[1]).toBe(big) // the input is not mutated
     })
 
-    it('keeps a long turn\'s requests under MAX_STEP_CHARS and the stored turn whole', async () => {
+    it('then stubs earlier turns\' results, then drops the oldest turns, keeping the current one', () => {
+      const big = 'y'.repeat(2000)
+      const messages = [
+        {role: 'user', content: 'first'}, callMessage('p'), toolMessage('p', big),
+        {role: 'user', content: 'second'}, callMessage('q'), toolMessage('q', big),
+        {role: 'user', content: 'now'}, callMessage('a'), toolMessage('a', big),
+      ]
+      const bytes = (list) => new TextEncoder().encode(JSON.stringify(list)).length
+      // Room for the current turn whole, plus a little: stubbing alone fits.
+      const stubbedOnly = boundStepMessages(messages, bytes(messages.slice(6)) + 900)
+      expect(stubbedOnly).toHaveLength(messages.length)
+      expect(outputs(stubbedOnly)).toEqual([expect.stringMatching(/earlier turn/), expect.stringMatching(/earlier turn/), big])
+      // Room for the current turn only: the earlier turns go, whole.
+      const current = boundStepMessages(messages, bytes(messages.slice(6)))
+      expect(current).toEqual(messages.slice(6))
+      expect(current[0].role).toBe('user')
+    })
+
+    it('fits every request of a long hosted turn under the transport\'s 64 KiB cap', async () => {
+      const CAP = 65536
+      const bigProvider = {
+        id: 'big',
+        tools: () => [{
+          name: 'big.read', description: 'A large read.', annotations: {readOnly: true},
+          inputSchema: {type: 'object', properties: {}, additionalProperties: false},
+          run: () => ({content: 'ü'.repeat(12_000), echo: 'Read a lot'}), // 2 bytes a character
+        }],
+      }
+      let n = 0
+      const {session, requests} = setup({maxSteps: 6, maxRequestBytes: CAP, extraProviders: [bigProvider]}, (body) =>
+        (body.tool_choice === 'none' ?
+          {chunks: textReply('Done reading.'), delayMs: 0} :
+          {chunks: toolCalls([{id: `b${n++}`, name: 'big_read', args: {}}]), delayMs: 0}))
+      const events = await collect(session.send('read everything'))
+      expect(requests).toHaveLength(6)
+      requests.forEach(({body}) => expect(new TextEncoder().encode(JSON.stringify(body)).length).toBeLessThanOrEqual(CAP))
+      expect(textOf(events)).toBe('Done reading.')
+    })
+
+    it('keeps a long turn\'s requests under MAX_STEP_BYTES and the stored turn whole', async () => {
       const BIG = 30_000
       const bigProvider = {
         id: 'big',
@@ -577,7 +619,7 @@ describe('assist/loop', () => {
       expect(requests).toHaveLength(steps)
       // Without the bound, the last request would carry 15 results of 30k.
       const last = requests.at(-1).body
-      expect(JSON.stringify(last.messages).length).toBeLessThanOrEqual(MAX_STEP_CHARS)
+      expect(new TextEncoder().encode(JSON.stringify(last.messages)).length).toBeLessThanOrEqual(MAX_STEP_BYTES)
       expect(JSON.stringify(last.messages)).toMatch(/earlier step, omitted/)
       const stored = await store.load('c1')
       const storedResults = stored.filter((m) => m.role === 'tool')

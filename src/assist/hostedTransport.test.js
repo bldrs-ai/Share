@@ -54,7 +54,7 @@ function fakeRelay(answer = () => undefined) {
  * @param {Array<object>} [options.tools] a tool provider set; defaults to one model.query
  * @return {object} the session and what the fakes saw
  */
-function setup({answer, getAuthToken = () => Promise.resolve(null)} = {}) {
+function setup({answer, getAuthToken = () => Promise.resolve(null), maxRequestBytesFor} = {}) {
   const {fetchFn, requests} = fakeRelay(answer)
   let anonToken = null
   const metas = []
@@ -64,6 +64,7 @@ function setup({answer, getAuthToken = () => Promise.resolve(null)} = {}) {
       anonToken = t
     }},
     onMeta: (meta) => metas.push(meta),
+    maxRequestBytesFor,
     fetch: fetchFn,
   })
   const registry = createRegistry([{
@@ -155,6 +156,25 @@ describe('assist/hostedTransport', () => {
     const {session, metas} = setup()
     await collect(session.send('hello'))
     expect(metas).toEqual([{tier: 'anonymous', used: 120, limit: 20000, overflow: false}])
+  })
+
+  // Codex on #2305: the relay refuses a body over its tier's cap, so the loop
+  // sizes each step to it (loop.ts boundStepMessages).
+  it('gives the body cap for the tier the relay last named, null before it has', async () => {
+    const asked = []
+    const {session, transport} = setup({maxRequestBytesFor: (tier) => {
+      asked.push(tier)
+      return tier === 'pro' ? undefined : 1000
+    }})
+    expect(transport.maxRequestBytes()).toBe(1000)
+    await collect(session.send('hello'))
+    expect(transport.maxRequestBytes()).toBe(1000)
+    expect(asked[0]).toBeNull()
+    expect(asked.at(-1)).toBe('anonymous')
+  })
+
+  it('has no body cap when the host gives none', () => {
+    expect(setup().transport.maxRequestBytes()).toBeUndefined()
   })
 
   it('reads the overflow header', () => {
@@ -262,5 +282,17 @@ describe('assist/selectTransport', () => {
     transport.model()
     expect(transport.id).toBe('openrouter')
     expect(transport.label).toBe('OpenRouter')
+  })
+
+  it('passes on the chosen transport\'s body cap: the relay\'s, and none for the user\'s own key', () => {
+    let key = null
+    const byok = openRouterTransport({getKey: () => key, model: 'm', baseURL: 'https://openrouter.test/api/v1'})
+    const hosted = hostedTransport({relayUrl: RELAY, model: 'm', getAuthToken: () => Promise.resolve(null),
+      anonTokens: {get: () => null, set: () => undefined}, maxRequestBytesFor: () => 65536})
+    const transport = selectTransport(() => (key ? byok : hosted))
+    expect(transport.maxRequestBytes()).toBe(65536)
+    key = 'sk-or-user'
+    transport.model()
+    expect(transport.maxRequestBytes()).toBeUndefined()
   })
 })
