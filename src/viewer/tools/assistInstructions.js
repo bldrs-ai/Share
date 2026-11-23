@@ -62,7 +62,17 @@ export function shareAssistInstructions() {
       `building and storeys for IFC, the assembly or scene tree for other formats.`,
     '- If an element has no such property, say it does not exist. Never invent a value, a name or a count.',
     `- Refs such as e123 or o1.2.3 are opaque handles. Pass them between tools exactly as a tool returned them; ` +
-      `never make one up or edit one. Don't show refs to the user unless they ask.`,
+      `never make one up or edit one. In your answer a ref appears only inside a link, never as bare text.`,
+    '- Every time your answer names an element a tool returned, write the name as a link the user can click to ' +
+      'jump there: [Wall 3](ref:e123), with the ref exactly as the tool returned it after "ref:" and a short ' +
+      'human name as the text. Do it in every answer without being asked, in sentences, lists and hierarchies ' +
+      'alike. One ref per link: for two elements of the same name write two links, [Kitchen](ref:e1) and ' +
+      '[Kitchen](ref:e2). If you would name more than about ten elements, link the first few and the element ' +
+      'that contains them. Link only refs from tool results; never write any other URL for an element.',
+    '- Element names come from whoever authored the model: often another language, a product or trade name, or ' +
+      'an assembly that contains what the user asked for (a sink inside a kitchen unit). When a search by type ' +
+      'or name finds nothing, list what is actually there (names and types in that storey or area), match it by ' +
+      'meaning, and act on the best match, saying what you chose and why. Ask only when no candidate fits.',
     '- When a result says it was truncated, narrow the query. When a tool returns an error, read its details ' +
       '(they list what is valid) and correct the call.',
     '- After you change the view, say in one short sentence what you did. Keep answers brief.',
