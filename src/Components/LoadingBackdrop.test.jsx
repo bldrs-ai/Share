@@ -8,7 +8,7 @@ import LoadingBackdrop from './LoadingBackdrop'
 describe('LoadingBackdrop', () => {
   afterEach(() => {
     act(() => {
-      useStore.setState({isModelLoading: false, indexedModel: null})
+      useStore.setState({isModelLoading: false, indexedModel: null, isFirstMeshShown: false})
     })
   })
 
@@ -32,5 +32,27 @@ describe('LoadingBackdrop', () => {
     })
     render(<StoreRouteThemeCtx><LoadingBackdrop/></StoreRouteThemeCtx>)
     expect(isShown()).toBe(false)
+  })
+
+  // open-205 #2043: a progressive load's first preview mesh lands during the
+  // parse, long before the index on a large model, and from then on the
+  // camera and scene picks are live.
+  it('lifts at the load\'s first mesh, before the index', () => {
+    act(() => {
+      useStore.setState({isModelLoading: true, indexedModel: null, isFirstMeshShown: true})
+    })
+    render(<StoreRouteThemeCtx><LoadingBackdrop/></StoreRouteThemeCtx>)
+    expect(isShown()).toBe(false)
+  })
+
+  it('the next load starts covered: a load that ends clears its first mesh', () => {
+    act(() => {
+      useStore.setState({isModelLoading: true, indexedModel: null, isFirstMeshShown: true})
+      useStore.getState().setIsModelLoading(false)
+      useStore.getState().setIsModelLoading(true)
+    })
+    expect(useStore.getState().isFirstMeshShown).toBe(false)
+    render(<StoreRouteThemeCtx><LoadingBackdrop/></StoreRouteThemeCtx>)
+    expect(isShown()).toBe(true)
   })
 })

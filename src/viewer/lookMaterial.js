@@ -1,19 +1,19 @@
 import {Color, MeshLambertMaterial, MeshStandardMaterial, SRGBColorSpace} from 'three'
-import {isFeatureEnabled} from '../FeatureFlags'
+import {isLookOn} from './lookMode'
 import {LOOKS, DEFAULT_LOOK} from './looks'
 
 
 // The whole §6e "look" — uniform PBR materials + gradient IBL + tone-mapping +
-// retuned lights + the Neutral/Flat profile toggle — sits behind a single
-// `?feature=look` flag, default OFF, so `main`'s rendering is unchanged until
-// the flag is flipped (atomic switch-over). This module is the material half:
+// retuned lights + AO + the Neutral/Flat profile toggle — is one decision,
+// `isLookOn()` (lookMode.js): on by default, `?feature=disableLook` /
+// the `disableLook` rollback turn it off. This module is the material half:
 // every generated-surface loader (IFC merged/batched, STL) builds its material
 // + albedo through here so the Lambert↔Standard switch is one decision.
 
 
 /**
  * Build a surface albedo Color from raw (linear-source) rgb components, gated
- * on `?feature=look`:
+ * on `isLookOn()` (lookMode.js):
  *   - ON  → `setRGB(..., SRGBColorSpace)` so the IFC-authored sRGB values are
  *     converted to the linear working space (the §6e "un-wash" fix).
  *   - OFF → legacy untagged `new Color(r, g, b)` (pre-§6e behaviour).
@@ -24,7 +24,7 @@ import {LOOKS, DEFAULT_LOOK} from './looks'
  * @return {Color}
  */
 export function makeSurfaceColor(r, g, b) {
-  return isFeatureEnabled('look') ?
+  return isLookOn() ?
     new Color().setRGB(r, g, b, SRGBColorSpace) :
     new Color(r, g, b)
 }
@@ -34,7 +34,7 @@ export function makeSurfaceColor(r, g, b) {
  * The vertex-color counterpart of `makeSurfaceColor`, for a `color` attribute
  * whose values the loader has already converted from sRGB to the linear
  * working space (three's STLLoader does, via
- * `color.setRGB(r, g, b, SRGBColorSpace)`). Gated on `?feature=look` the same
+ * `color.setRGB(r, g, b, SRGBColorSpace)`). Gated on `isLookOn()` the same
  * way:
  *   - ON  → left linear: the numbers `makeSurfaceColor`'s
  *     `setRGB(..., SRGBColorSpace)` would hold.
@@ -52,7 +52,7 @@ export function makeSurfaceColor(r, g, b) {
  * @return {object} the same attribute
  */
 export function makeSurfaceVertexColors(colorAttr) {
-  if (isFeatureEnabled('look')) {
+  if (isLookOn()) {
     return colorAttr
   }
   const color = new Color()
@@ -69,7 +69,7 @@ export function makeSurfaceVertexColors(colorAttr) {
 
 
 /**
- * Build a surface material, gated on `?feature=look`:
+ * Build a surface material, gated on `isLookOn()`:
  *   - ON  → `MeshStandardMaterial` (PBR), tagged `userData.isLookManaged` with
  *     the default look's roughness/metalness, so every format responds to the
  *     §6e IBL + `applyLook` uniformly.
@@ -82,7 +82,7 @@ export function makeSurfaceVertexColors(colorAttr) {
  * @return {MeshStandardMaterial|MeshLambertMaterial}
  */
 export function makeSurfaceMaterial(opts) {
-  if (isFeatureEnabled('look')) {
+  if (isLookOn()) {
     const material = new MeshStandardMaterial({
       ...opts,
       metalness: LOOKS[DEFAULT_LOOK].metalness,

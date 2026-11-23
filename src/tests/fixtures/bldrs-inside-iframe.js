@@ -1,5 +1,5 @@
 import * as mxwidgets from 'matrix-widget-api'
-import debug from '../../src/utils/debug'
+import debug from '../../utils/debug'
 
 
 /** The Bldrs widget */

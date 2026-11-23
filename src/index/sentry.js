@@ -2,6 +2,7 @@ import {init, reactRouterV6BrowserTracingIntegration} from '@sentry/react'
 import {useEffect} from 'react'
 import {useLocation, useNavigationType, createRoutesFromChildren, matchRoutes} from 'react-router-dom'
 import {gtagEvent} from '../privacy/analytics'
+import {redactBreadcrumb, redactEventExceptions} from '../privacy/sentryRedaction'
 // Named import (rather than `import pkg from '../../package.json'`) so
 // esbuild can prune the rest of the JSON — we only care about `version`.
 import {version as pkgVersion} from '../../package.json'
@@ -98,10 +99,74 @@ function isAnonymousOnerrorEvent(event) {
 }
 
 
+/*
+ * Globals that in-app browsers' native hosts call into the page as a JS
+ * bridge. The host evaluates its script against the document, so when the
+ * bridge isn't set up yet the browser reports a ReferenceError framed at
+ * the page's own URL, line 1 (the HTML), not `<anonymous>`, and
+ * isAnonymousOnerrorEvent can't see it. Share never references these names,
+ * so the name in an uncaught ReferenceError is the fingerprint.
+ *
+ *   zaloJSV2  Zalo (Vietnam's messenger) in-app browser on iOS WKWebView,
+ *             `Can't find variable: zaloJSV2` (SHARE-1X7).
+ */
+const IN_APP_BROWSER_BRIDGE_GLOBALS = /\bzaloJSV2\b/
+
+
+/**
+ * True for an uncaught ReferenceError naming an in-app browser's bridge
+ * global (IN_APP_BROWSER_BRIDGE_GLOBALS). Like isAnonymousOnerrorEvent,
+ * restricted to values[0] and `mechanism: onerror`.
+ *
+ * @param {object} event Sentry event payload
+ * @return {boolean}
+ */
+function isInAppBrowserBridgeError(event) {
+  const exception = event?.exception?.values?.[0]
+  return exception?.type === 'ReferenceError' &&
+    exception.mechanism?.type === 'onerror' &&
+    typeof exception.value === 'string' &&
+    IN_APP_BROWSER_BRIDGE_GLOBALS.test(exception.value)
+}
+
+
+/**
+ * True for an unhandled rejection with a DOMException `NotReadableError`: a
+ * file the user picked or dropped became unreadable after the page got its
+ * handle (moved, deleted, a revoked permission, a removable drive gone).
+ * The client's own state, with no stack to point at a call site (SHARE-1PZ,
+ * 8 users all-time), so it's counted in GA rather than raised in Sentry.
+ * Unhandled only: a NotReadableError a load catches and captures itself (a
+ * stale OPFS handle, engine/engineSources.js) can be Share's own fault and
+ * keeps its Sentry event. So any path that can read a spilled source must
+ * catch and capture, as CadView's selection-properties read does (codex on
+ * #2242): an unhandled one would land here and be dropped.
+ *
+ * @param {object} event Sentry event payload
+ * @return {boolean}
+ */
+function isUnhandledFileNotReadable(event) {
+  const exception = event?.exception?.values?.[0]
+  if (exception?.mechanism?.type !== 'onunhandledrejection') {
+    return false
+  }
+  return exception.type === 'NotReadableError' ||
+    (typeof exception.value === 'string' && exception.value.startsWith('NotReadableError'))
+}
+
+
 const HEURISTIC_NOISE_MATCHERS = [
   {
     match: isAnonymousOnerrorEvent,
     gaEventName: 'anonymous_injected_error',
+  },
+  {
+    match: isInAppBrowserBridgeError,
+    gaEventName: 'in_app_browser_bridge_error',
+  },
+  {
+    match: isUnhandledFileNotReadable,
+    gaEventName: 'file_not_readable',
   },
 ]
 
@@ -123,6 +188,7 @@ const reportedNoiseSessions = new Set()
  */
 export function _resetSentryFilterStateForTests() {
   reportedNoiseSessions.clear()
+  shadowedConditions.clear()
 }
 
 
@@ -195,12 +261,96 @@ function emitOncePerSession(eventName) {
   if (!eventName || reportedNoiseSessions.has(eventName)) {
     return
   }
-  reportedNoiseSessions.add(eventName)
   try {
-    gtagEvent(eventName, {})
+    // Don't consume the once-per-session slot unless gtagEvent actually sent:
+    // it returns false when gtag/js isn't loaded yet or blocked, or consent is
+    // off, and a later call (or opt-in) must still get the event (same
+    // rationale as shadowReportedCondition, #2110). Inside the try because
+    // isAllowed reads document.cookie, which throws in a sandboxed iframe, and
+    // this runs inside Sentry's beforeSend.
+    if (!gtagEvent(eventName, {})) {
+      return
+    }
+    // Record only after the call returned, so a throw retries (#2109).
+    reportedNoiseSessions.add(eventName)
   } catch {
     // GA not ready / consent declined / blocked — the Sentry drop
     // happens regardless. Best-effort signal capture.
+  }
+}
+
+
+/*
+ * Dedupe keys (`${level}|${category}`) already shadowed to GA in this
+ * page session. Same lifetime rationale as reportedNoiseSessions.
+ */
+const shadowedConditions = new Set()
+
+
+const SHADOW_LEVELS = new Set(['error', 'warning', 'fatal'])
+const SHADOW_CATEGORY_MAX = 100
+
+
+/**
+ * Send one coarse GA `reported_condition` event per page session per
+ * (level, category) for an event Sentry is about to receive.
+ *
+ * Why: GA shows roughly when sessions hit actionable error/warning
+ * conditions (and can segment by tier, source, etc.); Sentry holds the
+ * detail. The reverse link already exists: every Sentry event carries the
+ * GA client id as a tag (`syncSentryCidTag` in privacy/analytics.js), so
+ * no Sentry event id is sent to GA.
+ *
+ * Privacy: `category` comes ONLY from the custom fingerprint's first two
+ * entries or the first exception's type. Never the message, an exception
+ * value, a URL or any free text: those can name a private model.
+ *
+ * Once per session: GA counts sessions, and a looping error must not
+ * flood it.
+ *
+ * Call only for events that passed shouldSendSentryEvent. Never throws.
+ *
+ * @param {object} event Sentry event payload
+ */
+export function shadowReportedCondition(event) {
+  try {
+    const level = event?.level || 'error'
+    if (!SHADOW_LEVELS.has(level)) {
+      return
+    }
+    // A reporter that already counts this failure in GA marks its event
+    // `ga_counted` (alertTracking.js#trackAlert and its `alert` event), so
+    // one failure stays one GA event.
+    if (typeof event.tags?.ga_counted === 'string') {
+      return
+    }
+    let category
+    if (Array.isArray(event.fingerprint) && !event.fingerprint.includes('{{ default }}') &&
+        event.fingerprint.length > 0) {
+      category = event.fingerprint.slice(0, 2).join('/')
+    } else {
+      category = event.exception?.values?.[0]?.type || 'message'
+    }
+    category = String(category).slice(0, SHADOW_CATEGORY_MAX)
+    const key = `${level}|${category}`
+    if (shadowedConditions.has(key)) {
+      return
+    }
+    // No load phase: by the time beforeSend runs, `event.tags` already
+    // includes the global scope, where loadProgress#applySentryLoadState
+    // leaves a sticky `load.phase` after a stall or failure. An unrelated
+    // later event would carry that stale phase into GA. GA's own timestamp
+    // says roughly when; Sentry keeps the phase on the event.
+    // Record the key only when gtagEvent actually sent (it returns false with
+    // no gtag/js or no consent), so a user who opts in later, or an event after
+    // gtag/js loads, still gets the condition shadowed; and after a throw (as
+    // in reportRenderMode, #2109).
+    if (!gtagEvent('reported_condition', {level, category})) {
+      return
+    }
+    shadowedConditions.add(key)
+  } catch {
+    // Best-effort: never affect what Sentry receives.
   }
 }
 
@@ -218,9 +368,19 @@ export default function setupSentry() {
     // shipped it. Prefix with the project slug so the same Sentry org can
     // host multiple bldrs apps without release-tag collisions.
     release: `bldrs-share@${pkgVersion}`,
-    beforeSend(event) {
-      return shouldSendSentryEvent(event) ? event : null
+    beforeSend(event, hint) {
+      if (!shouldSendSentryEvent(event)) {
+        return null
+      }
+      shadowReportedCondition(event)
+      // An error whose message names the user's file carries a safe one for
+      // Sentry (privacy/sentryRedaction.js#withSentrySafeMessage).
+      return redactEventExceptions(event, hint)
     },
+    // Console and click breadcrumbs that name the user's file are rewritten
+    // before they're recorded (privacy/sentryRedaction.js); the page and the
+    // console keep them.
+    beforeBreadcrumb: redactBreadcrumb,
     integrations: [
       reactRouterV6BrowserTracingIntegration({
         useEffect,

@@ -1,0 +1,35 @@
+{
+  "description": "With OpenRouter's listing down (503), the picker's list is the curated table alone at its ceiling prices (source static), still 200, so the picker keeps the default chain and the two Pro models.",
+  "env": {
+    "$fixture": "env/ai-chat.json"
+  },
+  "request": {
+    "method": "GET",
+    "path": "/.netlify/functions/ai-chat",
+    "query": {
+      "catalogue": ""
+    },
+    "headers": {
+      "origin": "https://bldrs.ai"
+    }
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://openrouter.ai/api/v1/models"
+      },
+      "response": {
+        "status": 503,
+        "text": "upstream unavailable"
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "json": {
+      "source": "static"
+    },
+    "bodyIncludes": "\"id\":\"anthropic/claude-haiku-4.5\",\"name\":\"Anthropic: Claude Haiku 4.5\",\"price\":{\"input\":1,\"output\":5},\"tiers\":[\"pro\"]"
+  }
+}

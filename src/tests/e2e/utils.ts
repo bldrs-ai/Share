@@ -512,7 +512,11 @@ export async function captureRenderedFrame(page: Page): Promise<CanvasFrame> {
         rejectFrame(new Error(`captureRenderedFrame: no two matching frames within ${timeoutMs} ms ` +
           `(${frames} frame(s) rendered) — the render loop is not running, or every frame differs`))
       }, timeoutMs)
+      // A viewer painting on demand (`?feature=renderOnDemand`) skips the
+      // frames nothing asked for; this read needs one painted, so ask.
+      const demand = context.getRenderDemand?.() ?? null
       setUpdate((...args: unknown[]) => {
+        demand?.invalidate()
         painting(...args)
         frames++
         if (frames < settleFrames) {
@@ -551,6 +555,7 @@ type RenderSeamWindow = Window & {
     setRenderUpdate?: (fn: (...args: unknown[]) => void) => void
     getLegacyRendererWrapper?: () => {update?: (...args: unknown[]) => void}
     getRenderer?: () => {getContext: () => WebGLRenderingContext}
+    getRenderDemand?: () => {invalidate: () => void} | null
   }}}}
   __bldrsResumeRenderUpdate?: (...args: unknown[]) => void
 }

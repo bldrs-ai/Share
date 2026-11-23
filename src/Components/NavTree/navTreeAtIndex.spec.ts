@@ -1,4 +1,5 @@
 import {Locator, Page, expect, test} from '@playwright/test'
+import {watchEngineWorker} from '../../tests/e2e/engineWorker'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 import {waitForModelReady} from '../../tests/e2e/models'
 import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
@@ -59,6 +60,24 @@ async function releaseGeometry(page: Page) {
 
 
 /**
+ * @param page
+ * @return how many batched instances carry the selection's paint (the same
+ *   reading as stepVisibility.spec.ts#paintedInstances)
+ */
+function paintedInstances(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    let painted = 0
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    ;(window as any).useStore.getState().viewer.isolator.ifcModel.traverse((obj: any) => {
+      painted += obj.userData?.batchedHighlight?.selSet?.size ?? 0
+    })
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    return painted
+  })
+}
+
+
+/**
  * Expand the mounted tree, one toggle per settle. In-page clicks: the rows sit
  * over a live canvas that keeps Playwright's actionability wait busy.
  *
@@ -96,13 +115,25 @@ describeMobileAndDesktop('Open 205: NavTree usable before geometry finishes', ()
     await holdGeometry(page)
   })
 
-  for (const {format, path, row} of [
-    {format: 'IFC', path: '/share/v/p/index.ifc', row: 'Together'},
-    {format: 'STEP', path: '/share/v/p/index.step', row: null},
+  for (const {format, path, row, worker} of [
+    // The main-thread engine, through the kill switch (the worker is the
+    // default since engine-worker.md §7 step 9).
+    {format: 'IFC', path: '/share/v/p/index.ifc?feature=disableEngineWorker', row: 'Together', worker: false},
+    {format: 'STEP', path: '/share/v/p/index.step?feature=disableEngineWorker', row: null, worker: false},
+    // engine-worker.md §7 steps 3 and 6: the same, with the model's engine
+    // in its own worker. The hold is honoured there by starting the worker's pump
+    // paused (engine/engineModelLoad.js).
+    {format: 'IFC (engine worker)', path: '/share/v/p/index.ifc', row: 'Together', worker: true},
+    // §7 step 6: STEP through the same worker load. Its tree at the index is
+    // the worker's AP214 index, and the per-occurrence selection below holds
+    // across the load's end only if the occurrence paths crossed the worker
+    // boundary onto the batched instances.
+    {format: 'STEP (engine worker)', path: '/share/v/p/index.step', row: null, worker: true},
   ]) {
     test(`${format}: expand, select and read properties while geometry is held`, async ({page}) => {
       const TEST_TIMEOUT = 90_000
       test.setTimeout(TEST_TIMEOUT)
+      const engine = watchEngineWorker(page)
       await page.goto(path)
       await waitForGeometryHeld(page)
 
@@ -151,6 +182,15 @@ describeMobileAndDesktop('Open 205: NavTree usable before geometry finishes', ()
       await expect(rows.nth(targetIndex)).toHaveAttribute('data-is-selected', 'true')
       // ...and only it: a reused STEP part's other occurrences stay unselected.
       expect(await navTreePanel.locator('[data-is-selected="true"]').count()).toBe(1)
+      if (row === null) {
+        // In the scene too: the selection paints exactly one batched instance,
+        // the occurrence's, not every block sharing its part shape. On a
+        // worker load that holds only if each placement's occurrence path
+        // crossed the worker boundary.
+        await expect.poll(() => paintedInstances(page)).toBe(1)
+      }
+      // Each leg really ran on its engine.
+      await (worker ? engine.expectWorkerEngine() : engine.expectMainThreadEngine())
     })
   }
 })

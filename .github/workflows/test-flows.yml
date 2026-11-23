@@ -34,9 +34,9 @@ on:
 
 # The draft gate defers this workflow's cost; this bounds it. Flows run on
 # free standard runners (public repo: 4 vCPU / 16 GB), not the paid 8 GB
-# larger-runner pool, so they no longer compete for that 4-job cap. Cancel
+# larger-runner pool, so they no longer compete for that pool. Cancel
 # still matters: three quick pushes to one ready PR would otherwise leave
-# a pile of 11-minute shard sets running for commits nobody will merge.
+# a pile of 8-11-minute shard sets running for commits nobody will merge.
 #
 # Grouped per ref, so PRs never cancel each other (refs/pull/<n>/merge is
 # unique per PR). Cancel-always, matching main.yml: superseded runs die rather
@@ -68,12 +68,15 @@ jobs:
   # with 2× the RAM). Packing 4 workers onto 4 vCPU would put four
   # SwiftShader Chromiums on four cores; more shards at 2 workers use
   # more machines instead, which is the cheaper way to cut wall clock
-  # because these specs are not timing-sensitive. Four shards × 2
-  # workers = 8 Chromiums.
+  # because these specs are not timing-sensitive. Six shards × 2
+  # workers = 12 Chromiums.
+  # Concurrency is not a reason to hold the count down: on 2026-11-18 ten
+  # Actions jobs of two PRs ran at once without queuing (PLAYBOOK.md
+  # §"Playwright workers").
   #
   # The SPA is built once (`playwright-build`) and downloaded by each
-  # shard as `yarn test-flows-build` left it (no map-stripping, no
-  # rewrite). Shards skip `yarn install` of the Share tree: they npm
+  # shard as `bun run test-flows-build` left it (no map-stripping, no
+  # rewrite). Shards skip `bun install` of the Share tree: they npm
   # install `@playwright/test@1.56.1` plus `http-server` (browsers
   # already in the image) and run `npx http-server` inside `docs/`.
   # Specs import the runner plus
@@ -82,7 +85,7 @@ jobs:
   #
   # Screenshots stay on the Playwright noble container (chromium 1194),
   # not the host image. 14 GB disk vs the old 150 GB is the thing to
-  # watch if a shard dies in yarn install; browsers come with the image.
+  # watch if a shard dies in its npm install; browsers come with the image.
   #
   # Branch protection requires the check name `playwright-run`. Matrix
   # jobs would rename it to `playwright-run (1)` / `(2)` and the required
@@ -96,23 +99,29 @@ jobs:
       SKIP_MARKETING: 'true'
       SHARE_CONFIG: playwright
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: 'yarn'
-          cache-dependency-path: 'yarn.lock'
+
+      # Bun installs (bun.lock, bunfig.toml); Node above stays the runtime.
+      # Keep bun-version in step with package.json's packageManager and
+      # netlify.toml's BUN_VERSION. The one third-party action here, so it is
+      # pinned to a commit rather than a movable tag.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
 
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      - run: yarn install --frozen-lockfile --prefer-offline
+      - run: bun install --frozen-lockfile
 
       - name: Build Playwright SPA
-        run: yarn test-flows-build
+        run: bun run test-flows-build
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: playwright-docs
           path: docs
@@ -149,22 +158,32 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
-    name: playwright-shard ${{ matrix.shard }}/4
-    # Headroom on a quarter of the suite plus a tiny Playwright npm
+        shard: [1, 2, 3, 4, 5, 6]
+    name: playwright-shard ${{ matrix.shard }}/6
+    # Headroom on a sixth of the suite plus a tiny Playwright npm
     # install. The margin is for the degraded case — a failure drags a
     # 30 s timeout plus a retry. Tests are assigned to shards by measured
-    # duration (tools/playwrightShards.mjs), which levels the four shards
-    # at about 10 min instead of 9-14.6 (PLAYBOOK.md §"Playwright workers").
+    # duration (tools/playwrightShards.mjs), which levels the six shards
+    # at about 8 min instead of 9-14.6 (PLAYBOOK.md §"Playwright workers").
     # This is the hang guard; do not raise it to absorb an imbalance.
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      - uses: actions/download-artifact@v4
+      # The image brings its own Node (22 in v1.56.1-noble: Playwright's
+      # utils/docker/Dockerfile.noble installs nodesource node_22.x), which
+      # is not what the build job, Jest or Netlify run (24). Put 24 first on
+      # PATH so the test runner, npm and tools/playwrightShards.mjs match the
+      # rest of CI. Only Node changes: the browsers stay the image's, so
+      # screenshot baselines are unaffected.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v8
         with:
           name: playwright-docs
           path: docs
@@ -195,7 +214,7 @@ jobs:
       # at 14.5 of 15 min, cancelled twice with every test passing (#1892),
       # and the light/heavy two-pass split that followed only moved the
       # export specs. Every shard lists the full suite, then
-      # tools/playwrightShards.mjs packs it into 4 bins longest-first from
+      # tools/playwrightShards.mjs packs it into 6 bins longest-first from
       # tools/playwrightTimings.json and writes this shard's tests as a
       # `--test-list` file. Same inputs, same plan, so the shards agree
       # without coordinating. A test with no timing (new, renamed) is
@@ -204,7 +223,7 @@ jobs:
       - name: Plan this shard's tests
         run: |
           npx playwright test --config=tools/playwright.config.js --list --reporter=json > all-tests.json
-          node tools/playwrightShards.mjs plan --list all-tests.json --shard ${{ matrix.shard }} --of 4 --out shard-tests.txt
+          node tools/playwrightShards.mjs plan --list all-tests.json --shard ${{ matrix.shard }} --of 6 --out shard-tests.txt
 
       # 2 workers on 4 vCPU matches Playwright's vCPU/2 heuristic and the
       # density that stayed green when RAM was the limit. Do not bump this
@@ -228,7 +247,7 @@ jobs:
       # This shard's per-test seconds, as a check-run annotation: a refresh
       # of tools/playwrightTimings.json reads them back with the REST API
       # alone (`node tools/playwrightShards.mjs collect`, PLAYBOOK.md), no
-      # log or artifact download. A run's four shards together are one full
+      # log or artifact download. A run's six shards together are one full
       # measurement of the suite.
       - name: Publish per-test timings
         if: ${{ !cancelled() }}
@@ -237,7 +256,7 @@ jobs:
       # Always upload the HTML report (handy to debug failures)
       - name: Upload Playwright HTML report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-${{ matrix.shard }}
           path: playwright-report
@@ -247,7 +266,7 @@ jobs:
       # Optionally upload traces from failed tests
       - name: Upload Playwright traces
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-traces-${{ matrix.shard }}
           path: test-results
@@ -278,61 +297,3 @@ jobs:
         run: |
           echo "playwright-shard result: ${{ needs.playwright-shard.result }}"
           test "${{ needs.playwright-shard.result }}" = "success"
-
-  # web-ifc ENGINE smoke: builds with USE_WEBIFC_SHIM=false (real web-ifc,
-  # not the Conway shim) and serves it cross-origin isolated, then loads
-  # index.ifc in the browser. Separate job from the Conway shards because it
-  # needs a different build + an isolated static server. web-ifc is pinned
-  # to its single-threaded engine (0.0.35's MT build is unshippable as
-  # packaged — see webIfcSingleThreadPlugin in tools/esbuild/plugins.js);
-  # this job is advisory and expected GREEN. It forwards the browser
-  # console so any isolated-runtime failure is legible without a local
-  # browser (see design/new/viewer-replacement.md §5f).
-  playwright-webifc-run:
-    # Draft-gated for the same reason as playwright-shard above.
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04
-    container: mcr.microsoft.com/playwright:v1.56.1-noble
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: 'yarn'
-          cache-dependency-path: 'yarn.lock'
-
-      - name: Mark workspace as safe for git
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-
-      - run: yarn install --frozen-lockfile --prefer-offline
-
-      - name: Playwright Info
-        run: npx playwright --version
-
-      - name: Run web-ifc engine Playwright smoke
-        run: yarn test-flows-webifc --reporter=github,list,html --workers=1
-
-      - name: Upload web-ifc Playwright HTML report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-webifc
-          path: playwright-report-webifc
-          retention-days: 7
-          if-no-files-found: warn
-
-      - name: Upload web-ifc Playwright traces
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-traces-webifc
-          path: test-results
-          retention-days: 7
-          if-no-files-found: warn
-
-    env:
-      GITHUB_BASE_URL: https://git.bldrs.dev.pw/p/gh
-      GITHUB_BASE_URL_UNAUTHENTICATED: https://api.github.com.pw
-      MSW_IS_ENABLED: true

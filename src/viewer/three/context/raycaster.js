@@ -3,6 +3,7 @@
 
 import {Raycaster} from 'three'
 import {IfcComponent} from './base-types'
+import {visibleHits} from '../visibleHits'
 
 
 export class IfcRaycaster extends IfcComponent {
@@ -18,20 +19,12 @@ export class IfcRaycaster extends IfcComponent {
   castRay(items) {
     const camera = this.context.getCamera()
     this.raycaster.setFromCamera(this.context.mouse.position, camera)
-    return this.raycaster.intersectObjects(items)
+    // Only what the user sees under the pointer: see ../visibleHits.js.
+    return visibleHits(this.raycaster.intersectObjects(items), this.raycaster, this.context)
   }
   castRayIfc() {
     const items = this.castRay(this.context.items.pickableIfcModels)
-    const filtered = this.filterClippingPlanes(items)
-    return filtered.length > 0 ? filtered[0] : null
-  }
-  filterClippingPlanes(objs) {
-    const planes = this.context.getClippingPlanes()
-    if (objs.length <= 0 || !planes || (planes === null || planes === void 0 ? void 0 : planes.length) <= 0) {
-      return objs
-    }
-    // const planes = this.clipper?.planes.map((p) => p.plane);
-    return objs.filter((elem) => planes.every((elem2) => elem2.distanceToPoint(elem.point) > 0))
+    return items.length > 0 ? items[0] : null
   }
 }
 // # sourceMappingURL=raycaster.js.map

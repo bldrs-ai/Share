@@ -27,10 +27,10 @@ only, `BaseRoutes.jsx`) or from the three.js scene reachable through it.
 
 ```bash
 # whole harness, both form factors, default fixture model
-yarn test-flows src/viewer/loadTiming.spec.ts --workers=1
+bun run test-flows src/viewer/loadTiming.spec.ts --workers=1
 
 # desktop only, five iterations
-BLDRS_MEASURE_ITERATIONS=5 yarn test-flows src/viewer/loadTiming.spec.ts \
+BLDRS_MEASURE_ITERATIONS=5 bun run test-flows src/viewer/loadTiming.spec.ts \
   --workers=1 -g "\[desktop\].*cross-check"
 ```
 
@@ -334,7 +334,7 @@ rather than a CPU-versus-bandwidth one. Playwright has no `page.metrics()`
   `node_modules/@bldrs-ai/conway/package.json` — the version actually
   linked, not the pin in `package.json` — and sits next to `env.engineLine`,
   the engine's own claim. Disagreement between them means the run measured
-  something other than what you think. Run `yarn install` first.
+  something other than what you think. Run `bun install` first.
 - **Model too small to preview.** The default fixture is 320 KB. Its first
   mesh lands *after* the parse ends, so it exercises the harness but says
   nothing about whether a parse-time preview helps. That question needs a
@@ -430,6 +430,17 @@ rather than a CPU-versus-bandwidth one. Playwright has no `page.metrics()`
   The effect itself is real, though: per-frame cost competing with the pump
   for the main thread is what a weak GPU sees, and it matters for
   first-mesh interactivity (#2043).
+  **Since #2043 a progressive Conway load paints on demand**
+  (`src/viewer/three/renderDemand.js`): the loop still ticks, but between the
+  session's start and finish a frame paints only for the user (camera,
+  selection, resize) or within a budget for the load. So at a native frame
+  rate a load no longer pays for sixty paints a second, and native-rate
+  numbers from before and after #2043 are not comparable either; the frozen
+  loop still is the like-for-like setting for engine and pump time. What the
+  user's own interaction costs (an orbit paints every frame) is measured in
+  design/new/in-app-model-switch.md §4.2a. A probe that wants paints rather
+  than frames must count render-closure calls that did work — a skipped
+  frame returns in microseconds.
 - **`waitForModelReady`'s budget.** The shared helper defaults to 15 s;
   `measureLoad` passes its own `timeoutMs` (120 s default) because a big
   model or a throttled CPU blows straight through 15 s.

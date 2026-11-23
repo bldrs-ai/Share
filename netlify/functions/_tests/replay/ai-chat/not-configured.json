@@ -1,0 +1,20 @@
+{
+  "description": "Without OPENROUTER_API_KEY and AI_TOKEN_SECRET the relay says so (500), and loads at all without them.",
+  "env": {
+    "NODE_ENV": "test"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/ai-chat",
+    "headers": {
+      "content-type": "application/json",
+      "origin": "https://bldrs.ai"
+    },
+    "body": {}
+  },
+  "exchanges": [],
+  "expect": {
+    "statusCode": 500,
+    "bodyIncludes": "ai_not_configured"
+  }
+}

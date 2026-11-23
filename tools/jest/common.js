@@ -4,6 +4,9 @@
  * works.
  */
 export const excludedNodeModules = [
+  // The AI SDK and its OpenRouter provider (src/assist, #1675) ship ESM
+  // only, as do the two small packages they import that have no CJS build.
+  '@ai-sdk',
   '@bldrs-ai',
   // Scoped to the two subpackages the batched-native GLB writer imports
   // (they pull the ESM-only `property-graph`). Deliberately NOT the whole
@@ -11,6 +14,10 @@ export const excludedNodeModules = [
   // compression path resolves and its glbCompress test times out.
   '@gltf-transform/core',
   '@gltf-transform/extensions',
+  '@openrouter',
+  '@standard-schema',
+  '@workflow',
+  'ai',
   'bail',
   'character-entities',
   'comma-separated-tokens',
@@ -19,13 +26,24 @@ export const excludedNodeModules = [
   'is-plain-obj',
   'meshoptimizer',
   'mdast-util-definitions',
+  'mdast-util-find-and-replace',
+  'mdast-util-gfm',
+  'mdast-util-phrasing',
+  'mdast-util-to-markdown',
+  'markdown-table',
+  'ccount',
+  'escape-string-regexp',
+  'longest-streak',
+  'zwitch',
   'mdast-util-from-markdown',
   'mdast-util-to-hast',
   'mdast-util-to-string',
   'micromark',
+  'n8ao',
   'property-graph',
   'property-information',
   'space-separated-tokens',
+  'remark-gfm',
   'remark-rehype',
   'react-markdown',
   'remark-parse',
@@ -42,6 +60,20 @@ export const excludedNodeModules = [
   'uuid',
   'vfile',
   'vfile-message',
-  'web-ifc',
   'use-double-tap',
 ].join('|')
+
+
+/**
+ * The `transformIgnorePatterns` entry that leaves `excludedNodeModules` to be
+ * transformed and skips the rest of node_modules.
+ *
+ * bunfig.toml's isolated linker stores each package once, at
+ * `node_modules/.bun/<name>@<version>/node_modules/<name>/`, and jest matches
+ * against that real path. The lookahead therefore lets `.bun/` through, so the
+ * pattern is decided at the inner `/node_modules/<name>/`: a package listed
+ * above is transformed wherever it is stored, anything else is still ignored
+ * there. Without the `.bun/` arm the first `/node_modules/` of every store
+ * path matches and three, conway, uuid… reach jest as untransformed ESM.
+ */
+export const transformIgnoreNodeModules = `/node_modules/(?!\\.bun/|${excludedNodeModules}/)`

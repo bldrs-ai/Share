@@ -17,6 +17,7 @@
  *  - a bundle that fails to load, or a handler that throws, answers 502 with
  *    a Lambda-style `{errorType, errorMessage}` body, which is what Netlify
  *    returns for ops#33's `Runtime.ImportModuleError`;
+ *  - sets `URL` and `DEPLOY_URL` to its own origin, as the platform does;
  *  - v1 handlers get a Lambda event (lower-cased headers, string body); v2
  *    handlers get a `Request` and return a `Response`.
  *
@@ -52,7 +53,7 @@ globalThis.awslambda = {streamifyResponse: (fn) => fn, HttpResponseStream: {from
  */
 async function loadFunction(bundle) {
   if (bundle.runtimeAPIVersion === 2) {
-    const mod = await import(pathToFileURL(path.join(bundle.path, 'functions', `${bundle.name}.mjs`)).href)
+    const mod = await import(pathToFileURL(path.join(bundle.path, bundle.v2Handler)).href)
     return {apiVersion: 2, fn: mod.default}
   }
   const entry = path.join(bundle.path, bundle.entryFilename)
@@ -145,5 +146,12 @@ const server = http.createServer(async (req, res) => {
 })
 
 server.listen(Number(portArg), '127.0.0.1', () => {
+  // Netlify gives every function the URL of the deploy serving it. The ai-chat
+  // relay allowlists that origin (_lib/aiOrigin.js) and the smoke probe
+  // sends it, so a server on a random port has to name itself the same way.
+  // Bundles read env per request, so setting it after the port is known works.
+  const self = `http://127.0.0.1:${server.address().port}`
+  process.env.URL ??= self
+  process.env.DEPLOY_URL ??= self
   process.stdout.write(`LISTENING ${server.address().port}\n`)
 })

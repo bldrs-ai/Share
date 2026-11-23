@@ -1,0 +1,207 @@
+import fs from 'fs'
+import path from 'path'
+import {formatModelLine} from '@bldrs-ai/conway/src/core/progress_log'
+import {
+  SENTRY_MODEL_LINE_PREFIX,
+  consoleFileName,
+  redactBreadcrumb,
+  redactConsoleMessage,
+  redactEventExceptions,
+  withSentrySafeMessage,
+  workerErrorLabel,
+} from './sentryRedaction'
+
+
+/**
+ * A console breadcrumb as @sentry/browser's console integration records it.
+ *
+ * @param {string} message
+ * @param {string} [level]
+ * @return {object}
+ */
+function consoleCrumb(message, level = 'info') {
+  return {category: 'console', level, message, data: {arguments: [message], logger: 'console'}}
+}
+
+
+describe('privacy/sentryRedaction', () => {
+  // The load report's model line, echoed to the console, carries the
+  // header's FILE_NAME and author text (SHARE-1MT). Built by conway's real
+  // formatter, so a change to its shape can't slip past the pattern.
+  it('withholds the whole model line conway writes', () => {
+    const line = formatModelLine({
+      fileName: '\\\\10.0.0.5\\Projects\\ACME Tower\\Bracket rev2.stp',
+      schema: 'CONFIG_CONTROL_DESIGN',
+      byteLength: 127_611_699,
+      originatingSystem: 'CATIA V5 exported by jane@example.com',
+      preprocessorVersion: 'CATIA V5 STEP AP203 v1',
+    })
+    expect(line).toMatch(/^Model: .*Bracket rev2\.stp/)
+    const redacted = redactBreadcrumb(consoleCrumb(line))
+    expect(redacted.message).toBe(SENTRY_MODEL_LINE_PREFIX)
+    expect(redacted.data.arguments).toEqual([SENTRY_MODEL_LINE_PREFIX])
+    expect(JSON.stringify(redacted)).not.toMatch(/10\.0\.0\.5|ACME|Bracket|jane@example\.com/)
+    // Everything else about the breadcrumb is kept.
+    expect(redacted.level).toBe('info')
+    expect(redacted.data.logger).toBe('console')
+  })
+
+  // Any line of the consoleFileName shape is covered, so a new producer that
+  // follows the convention needs no pattern of its own.
+  it('withholds a file name written through consoleFileName, keeping the rest of the line', () => {
+    const name = 'Jane\'s "final" plan.dwg'
+    const line = `someNewSeam: ${consoleFileName(name)} (267 bytes) was refused`
+    expect(redactConsoleMessage(line)).toBe('someNewSeam: file (name withheld) (267 bytes) was refused')
+    expect(redactBreadcrumb(consoleCrumb(line, 'warning')).message).not.toMatch(/Jane|plan\.dwg/)
+  })
+
+  // The `file ` marker is what tells a file name from any other quoted text:
+  // three.js warns `THREE.Sprite: "Raycaster.camera" needs to be set …`,
+  // and Share renders sprites (Infrastructure/PlaceMark.js).
+  it('leaves a library warning with quoted text alone', () => {
+    const line = 'THREE.Sprite: "Raycaster.camera" needs to be set in order to raycast against sprites.'
+    expect(redactConsoleMessage(line)).toBe(line)
+  })
+
+  // Sentry's click breadcrumb is the element path as CSS-like text, values
+  // unescaped; the recent-files list puts the file name in `title`.
+  it('withholds named attribute values from click breadcrumbs', () => {
+    const crumb = {
+      category: 'ui.click',
+      message: 'div.MuiBox-root > p.MuiTypography-root[title="Tower "east" v2.ifc"] > ' +
+        'button.MuiIconButton-root[aria-label="Remove model Tower"]',
+    }
+    const redacted = redactBreadcrumb(crumb)
+    expect(redacted.message).toBe('div.MuiBox-root > p.MuiTypography-root[title="(withheld)"] > ' +
+      'button.MuiIconButton-root[aria-label="(withheld)"]')
+    // An unnamed click is passed through as the same object.
+    const plain = {category: 'ui.click', message: 'button.MuiButton-root'}
+    expect(redactBreadcrumb(plain)).toBe(plain)
+  })
+
+  it('withholds a click value with a newline in it, and an oversized element path whole', () => {
+    expect(redactBreadcrumb({category: 'ui.click', message: 'p[title="Sec\nret.ifc"]'}).message)
+      .toBe('p[title="(withheld)"]')
+    const OVERSIZED = 5000 // past the 4096-char element-path bound
+    const huge = {category: 'ui.click', message: `p[title="${'x'.repeat(OVERSIZED)}`}
+    expect(redactBreadcrumb(huge).message).toBe('(withheld)')
+  })
+
+  it('passes every other breadcrumb through untouched', () => {
+    const report = consoleCrumb('Geometry: 24.323s, +776.850690 MB heap')
+    expect(redactBreadcrumb(report)).toBe(report)
+    // A model line that isn't a console breadcrumb (navigation, fetch) is
+    // left alone: only the console echo carries header text.
+    const nav = {category: 'navigation', data: {from: '/', to: '/share'}, message: 'Model: x'}
+    expect(redactBreadcrumb(nav)).toBe(nav)
+    const noMessage = {category: 'console', data: {arguments: [{}]}}
+    expect(redactBreadcrumb(noMessage)).toBe(noMessage)
+    expect(redactBreadcrumb(undefined)).toBe(undefined)
+  })
+
+  // Share#2107: the OPFS worker's text interpolates cache keys, paths and file
+  // names; its structured condition is what Sentry keeps.
+  describe('OPFS worker errors', () => {
+    const SECRET = 'Error getting file handle for /Acme/secret-plan.ifc: NotFoundError'
+
+    it('keeps the condition and status of a worker error line and withholds its text', () => {
+      const data = {error: SECRET, condition: 'file-handle', status: 404}
+      const line = `${workerErrorLabel(data)} ${data.error}`
+      expect(line).toMatch(/secret-plan/)
+      const crumb = redactBreadcrumb({...consoleCrumb(line, 'error'), data: {arguments: [workerErrorLabel(data), data.error]}})
+      expect(crumb.message).toBe('Error from worker [condition=file-handle status=404]: (details withheld)')
+      expect(JSON.stringify(crumb)).not.toMatch(/Acme|secret-plan/)
+    })
+
+    it('withholds the text of a worker error with no condition, and of a logged Error', () => {
+      expect(redactConsoleMessage(`${workerErrorLabel({})} ${SECRET}`)).toBe('Error from worker: (details withheld)')
+      expect(redactConsoleMessage(`Error from worker: Error: ${SECRET}`)).toBe('Error from worker: (details withheld)')
+    })
+
+    it('does not let free text in `condition` into the label', () => {
+      expect(workerErrorLabel({condition: 'a b: /secret-plan.ifc'})).toBe('Error from worker:')
+    })
+
+    it('withholds the loader\'s OPFS fallback warning text', () => {
+      // The pattern is tied to the producer: Loader.js must still write this prefix.
+      expect(fs.readFileSync(path.join(__dirname, '../loader/Loader.js'), 'utf8')).toContain('`Loader#load: OPFS path failed (${')
+      const line = `Loader#load: OPFS path failed (${SECRET}); falling back to direct fetch. The OPFS cache is best-effort`
+      const crumb = redactBreadcrumb(consoleCrumb(line, 'warning'))
+      expect(crumb.message).toBe('Loader#load: OPFS path failed (details withheld); falling back to direct fetch.')
+      expect(JSON.stringify(crumb)).not.toMatch(/Acme|secret-plan/)
+    })
+  })
+})
+
+
+// An error whose message names the user's file can reach an exception event,
+// not just a breadcrumb: an upload's OPFS failure is rethrown by the loader and
+// captured by CadView (Share#2107).
+describe('privacy/sentryRedaction redactEventExceptions', () => {
+  /**
+   * @param {string} value
+   * @return {object} a Sentry event with one exception value
+   */
+  function exceptionEvent(value) {
+    return {exception: {values: [{type: 'Error', value}]}}
+  }
+
+  it('records the safe message in place of the error\'s own', () => {
+    const error = withSentrySafeMessage(new Error('Error getting file handle for Tower-of-Secrets.ifc'),
+      'Error from worker [condition=file-handle]: (details withheld)')
+    const event = redactEventExceptions(exceptionEvent(error.message), {originalException: error})
+    expect(event.exception.values[0].value).toBe('Error from worker [condition=file-handle]: (details withheld)')
+    // The page keeps the real text.
+    expect(error.message).toContain('Tower-of-Secrets.ifc')
+  })
+
+  it('reaches a safe error down a cause chain, inside a longer value', () => {
+    const inner = withSentrySafeMessage(new Error('Error writing to Tower-of-Secrets.ifc'), 'withheld')
+    const outer = new Error('load failed', {cause: inner})
+    const event = {exception: {values: [
+      {type: 'Error', value: `Caused by: ${inner.message}`},
+      {type: 'Error', value: outer.message},
+    ]}}
+    redactEventExceptions(event, {originalException: outer})
+    expect(event.exception.values.map((v) => v.value)).toEqual(['Caused by: withheld', 'load failed'])
+  })
+
+  // Codex on #2119: CadView logs the load's error with console.error(e)
+  // before capturing it, so the console breadcrumb carries the text too.
+  it('withholds a marked Error logged to the console, wrapped or bare', () => {
+    const inner = withSentrySafeMessage(new Error('Error writing to Tower-of-Secrets.ifc'),
+      'Error from worker [condition=write-failed]: (details withheld)')
+    const bare = redactBreadcrumb(consoleCrumb(`Error: ${inner.message}`, 'error'))
+    expect(bare.message).toBe('Error: Error writing to Tower-of-Secrets.ifc')
+    const crumb = consoleCrumb(`Error: ${inner.message}`, 'error')
+    crumb.data.arguments = [inner]
+    const redacted = redactBreadcrumb(crumb)
+    expect(redacted.message).toBe('Error: Error from worker [condition=write-failed]: (details withheld)')
+    expect(JSON.stringify(redacted.data.arguments)).not.toContain('Tower-of-Secrets')
+    const wrapped = consoleCrumb(`load failed Error: ${inner.message}`, 'error')
+    wrapped.data.arguments = ['load failed', new Error('outer', {cause: inner})]
+    expect(redactBreadcrumb(wrapped).message).not.toContain('Tower-of-Secrets')
+  })
+
+  // Sentry truncates an exception value to 250 characters plus '...' before
+  // beforeSend, so a long message is no longer in the value whole.
+  it('records the safe message for a value Sentry truncated', () => {
+    const MAX_VALUE_LENGTH = 250
+    const longPath = `${'deep/'.repeat(MAX_VALUE_LENGTH / 'deep/'.length)}Tower-of-Secrets.ifc`
+    const error = withSentrySafeMessage(new Error(`Error writing to ${longPath}`), 'withheld')
+    const truncated = `${error.message.slice(0, MAX_VALUE_LENGTH)}...`
+    expect(truncated).toContain('deep/deep')
+    const event = redactEventExceptions(exceptionEvent(truncated), {originalException: error})
+    expect(event.exception.values[0].value).toBe('withheld')
+  })
+
+  it('leaves every other event alone', () => {
+    const error = new Error('plain failure')
+    const event = exceptionEvent(error.message)
+    expect(redactEventExceptions(event, {originalException: error}).exception.values[0].value).toBe('plain failure')
+    const message = {message: 'no exception here'}
+    expect(redactEventExceptions(message, {})).toBe(message)
+    expect(redactEventExceptions(message, undefined)).toBe(message)
+  })
+})
+

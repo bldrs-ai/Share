@@ -41,6 +41,42 @@ describe('Analytics', () => {
   })
 
 
+  // Once-per-session senders (reportRenderMode, index/sentry.js) mark
+  // themselves sent only when this is true.
+  describe('gtagEvent return value', () => {
+    afterEach(() => {
+      delete window.gtag
+      Analytics.setIsAllowed(true)
+    })
+
+    it('is false while window.gtag is not loaded, and the event is dropped', () => {
+      delete window.gtag
+      expect(Analytics.gtagEvent('x', {})).toBe(false)
+    })
+
+    it('is false without consent, and does not call gtag', () => {
+      Analytics.setIsAllowed(false)
+      // After setIsAllowed: withdrawing consent itself makes a user-property call.
+      window.gtag = jest.fn()
+      expect(Analytics.gtagEvent('x', {})).toBe(false)
+      expect(window.gtag).not.toHaveBeenCalled()
+    })
+
+    it('is true only when the event was handed to gtag', () => {
+      window.gtag = jest.fn()
+      expect(Analytics.gtagEvent('x', {a: 1})).toBe(true)
+      expect(window.gtag).toHaveBeenCalledWith('event', 'x', {a: 1})
+    })
+
+    it('gtagEventWithCid passes the result through', () => {
+      delete window.gtag
+      expect(Analytics.gtagEventWithCid('x', {})).toBe(false)
+      window.gtag = jest.fn()
+      expect(Analytics.gtagEventWithCid('x', {})).toBe(true)
+    })
+  })
+
+
   describe('model engagement', () => {
     let hasFocusSpy
     let visibilityState

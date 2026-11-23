@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/react'
 import {gtagEvent} from '../privacy/analytics'
+import {withSentrySafeMessage} from '../privacy/sentryRedaction'
 import {trackAlert, trackAlertEvent} from './alertTracking'
 
 
@@ -17,6 +18,15 @@ describe('trackAlert', () => {
    * Sentry's stack-based grouping had no way to tell them apart and filed
    * them all under one issue (SHARE-1EA).
    */
+  it('marks both alert captures as already counted in GA, on the event only', () => {
+    // sentry.js#shadowReportedCondition skips ga_counted events, so the
+    // alert stays one GA event (`alert`), not two.
+    trackAlert('Failed to parse model')
+    trackAlert('boom', new Error('boom'))
+    const contexts = Sentry.captureException.mock.calls.map(([, ctx]) => ctx)
+    expect(contexts.map((ctx) => ctx.tags)).toEqual([{ga_counted: 'alert'}, {ga_counted: 'alert'}])
+  })
+
   it('fingerprints a string alert by its message, not by the shared stack', () => {
     trackAlert('Failed to parse model')
     trackAlert('Could not read full model structure.')
@@ -74,7 +84,7 @@ describe('trackAlert', () => {
   it('leaves a real error to Sentry default grouping', () => {
     const error = new Error('Load failed: out of memory')
     trackAlert(error.message, error)
-    expect(Sentry.captureException).toHaveBeenCalledWith(error)
+    expect(Sentry.captureException).toHaveBeenCalledWith(error, {tags: {ga_counted: 'alert'}})
   })
 
   it('reports the raw message to analytics, un-normalized', () => {
@@ -82,6 +92,18 @@ describe('trackAlert', () => {
     expect(gtagEvent).toHaveBeenCalledWith('alert', {
       message: 'File upload of unknown type: type() size(180384)',
     })
+  })
+})
+
+
+// Share#2107: an upload's OPFS failure reaches the alert with the worker's
+// text, which can name the file; GA gets the error's safe message.
+describe('trackAlert with a marked error', () => {
+  it('sends the safe message to GA, not the error\'s text', () => {
+    const error = withSentrySafeMessage(new Error('Error writing to Tower-of-Secrets.ifc'), 'withheld')
+    trackAlert(error.message, error)
+    expect(gtagEvent).toHaveBeenCalledWith('alert', {message: 'withheld'})
+    expect(JSON.stringify(gtagEvent.mock.calls)).not.toContain('Tower-of-Secrets')
   })
 })
 

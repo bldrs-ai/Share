@@ -28,30 +28,26 @@
 // `addIfcModel`, `setWasmPath`, `dispose`, `context`, `type`,
 // `ifcLastError`.
 //
-// Conway construction: `new IfcAPI()` from 'web-ifc'. In production the
-// esbuild `webIfcShimAlias` plugin resolves 'web-ifc' to Conway's own
-// web-ifc compat surface, `@bldrs-ai/conway/compiled/src/compat/web-ifc/
-// index.js` (tools/esbuild/plugins.js). The alias is the kept Conway↔
-// web-ifc engine switch (`USE_WEBIFC_SHIM`), not a deletion target.
-// In Jest 'web-ifc' resolves to the real package, but ShareIfc is mocked
-// in the ShareViewer test harness (`__mocks__/ShareViewer.js`) so the
-// real `IfcAPI` is never constructed there. The wasm `Init` is lazy —
+// Conway construction: `new IfcAPI()` from `@bldrs-ai/conway/web-ifc`,
+// Conway's web-ifc-shaped compat surface (its `exports` map points that
+// subpath at `compiled/src/compat/web-ifc/index.js`). Share imports it
+// directly; the real `web-ifc` engine and its comparison build were
+// removed (design/new/adapter-removal.md, 2026-11-01 status). ShareIfc
+// is mocked in the ShareViewer test harness (`__mocks__/ShareViewer.js`)
+// so `IfcAPI` is never constructed under Jest. The wasm `Init` is lazy —
 // `parseIfcWithConway` runs `if (ifcAPI.wasmModule === undefined) await
 // ifcAPI.Init()` on the first parse — so `setWasmPath` only records the
 // path; it deliberately does not await an Init that hasn't been kicked
 // off yet.
 
 import {BatchedMesh, BufferGeometry, Mesh} from 'three'
-import {
-  acceleratedRaycast,
-  computeBatchedBoundsTree,
-  computeBoundsTree,
-  disposeBatchedBoundsTree,
-  disposeBoundsTree,
-} from 'three-mesh-bvh'
-import {IfcAPI} from 'web-ifc'
+import {acceleratedRaycast, disposeBoundsTree} from 'three-mesh-bvh'
+import {IfcAPI} from '@bldrs-ai/conway/web-ifc'
 import ShareIfcManager from './ShareIfcManager'
+import {isSpaModelNavOn} from '../../utils/spaModelNavMode'
 import {raycastActiveInstances} from './batchedRaycast'
+import {computeQuietBatchedBoundsTree, computeQuietBoundsTree} from './bvhBuild'
+import {disposeDeferredBatchedBoundsTree} from './deferredBatchedBvh'
 
 
 // Install three-mesh-bvh's accelerated raycasting globally. The fork's
@@ -65,8 +61,11 @@ import {raycastActiveInstances} from './batchedRaycast'
 // idempotent (re-assigning the same functions is harmless). Runs in
 // production only: ShareIfc is mocked in the Jest harness (mirroring the
 // fork's manager, which was also mocked), so tests keep running against
-// unpatched three exactly as before.
-BufferGeometry.prototype.computeBoundsTree = computeBoundsTree
+// unpatched three exactly as before. The build is three-mesh-bvh's without
+// its depth-cap console warning, which became the title of SHARE-1MT's load
+// diagnostics; the cap is recorded on the load report instead (bvhBuild.js).
+// Every format's BVH goes through these two patches.
+BufferGeometry.prototype.computeBoundsTree = computeQuietBoundsTree
 BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree
 Mesh.prototype.raycast = acceleratedRaycast
 
@@ -80,9 +79,11 @@ Mesh.prototype.raycast = acceleratedRaycast
 // is safe even on batches we never call `computeBoundsTree()` on.
 // `raycastActiveInstances` is that same call, made safe for a batch with a
 // deleted instance, which the library's walk would otherwise throw on
-// (create-300 L0, #1915 — see batchedRaycast.js).
-BatchedMesh.prototype.computeBoundsTree = computeBatchedBoundsTree
-BatchedMesh.prototype.disposeBoundsTree = disposeBatchedBoundsTree
+// (create-300 L0, #1915 — see batchedRaycast.js). A model's trees are
+// built after it is on screen (deferredBatchedBvh.js), so the dispose also
+// stops a build still running for a model being torn down.
+BatchedMesh.prototype.computeBoundsTree = computeQuietBatchedBoundsTree
+BatchedMesh.prototype.disposeBoundsTree = disposeDeferredBatchedBoundsTree
 BatchedMesh.prototype.raycast = raycastActiveInstances
 
 
@@ -153,6 +154,27 @@ export default class ShareIfc {
     // (`'glb'`, `'obj'`, …). Capability flags on `ShareModel` (§8.2) are
     // the real source of truth; this stays a writable slot for compat.
     this.type = undefined
+    // Engine-worker loads still parsing into this viewer
+    // (`ShareIfcLoader#parse`, `trackEngineLoad`). A model joins
+    // `context.items.ifcModels` only once its parse returns, so these are the
+    // engines `dispose` would otherwise miss (open-205 #2011 step A, #2031).
+    this.engineLoads = new Set()
+  }
+
+
+  /**
+   * Note an engine-worker load that is parsing into this viewer, so
+   * `dispose` can terminate its engine if the viewer goes first.
+   *
+   * @param {{abort: Function}} engineLoad from engine/engineModelLoad.js
+   *   #createEngineModelLoad
+   * @return {function(): void} call once the parse has settled
+   */
+  trackEngineLoad(engineLoad) {
+    this.engineLoads.add(engineLoad)
+    return () => {
+      this.engineLoads.delete(engineLoad)
+    }
   }
 
 
@@ -223,6 +245,36 @@ export default class ShareIfc {
    * @return {void}
    */
   dispose() {
+    // A model whose engine runs in a worker (`?feature=engineWorker`,
+    // engine-worker.md) holds its session on its IfcAPI facade. Closing it
+    // terminates the worker, which frees the whole engine at once (§3) —
+    // the one thing `CloseModel` on a main-thread engine cannot do.
+    for (const model of this.context?.items?.ifcModels ?? []) {
+      try {
+        model?.ifcManager?.ifcAPI?.engineSession?.close()
+      } catch (e) {
+        console.warn('ShareIfc.dispose: engine session close failed:', e)
+      }
+    }
+    // An engine still parsing into this viewer has no model registered yet.
+    // Under the in-app switch (on by default, utils/spaModelNavMode.js) its
+    // load is given up with the viewer: `abort` terminates the worker and the
+    // parse rejects as aborted, which CadView, having aborted the load itself
+    // first, takes as the switch it is (Containers/CadView.jsx#abortLoadInFlight).
+    // With the kill switch (`?feature=disableSpaModelNav`) or the rollback on,
+    // the load keeps running into the disposed viewer, as before step F:
+    // there, a viewer is disposed mid-load only by a theme change, and what
+    // that load does next is the pre-step-A behaviour.
+    if (isSpaModelNavOn()) {
+      for (const engineLoad of this.engineLoads) {
+        try {
+          engineLoad.abort()
+        } catch (e) {
+          console.warn('ShareIfc.dispose: engine load abort failed:', e)
+        }
+      }
+    }
+    this.engineLoads.clear()
     const ifcAPI = this.loader?.ifcManager?.ifcAPI
     const models = ifcAPI?.models
     if (models && typeof models.keys === 'function' && typeof ifcAPI.CloseModel === 'function') {

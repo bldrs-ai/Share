@@ -1,6 +1,7 @@
 import {isFeatureEnabled} from '../FeatureFlags'
 import {viewRouteKind} from '../routes/localOnly'
 import {DRIVE_ROUTE_KIND, LIMITS, TIERS, isMeteredLocalRouteKind, loadsInsideRollingWindow} from './limits'
+import {AI_CREDITS_FEATURE} from './aiCredits'
 import {isProSubscriptionStatus} from './proStatus'
 
 
@@ -11,12 +12,15 @@ export {LIMITS, ROLLING_WINDOW_DAYS, TIERS} from './limits'
 
 /**
  * What a quota limits, as reported in the `feature` param of the
- * quota_limit_reached funnel event (analytics#FUNNEL_EVENTS). One today: the
- * private model loads every tier above is counted in. A second metered
- * feature gets its own value here so the dashboard can tell the walls apart.
+ * quota_limit_reached funnel event (analytics#FUNNEL_EVENTS): the private
+ * model loads every tier above is counted in, and the hosted assistant's
+ * credits (quota/aiCredits.js; sent by Open/QuotaLimitDialog.jsx, the assistant's out-of-credits dialog).
+ * Each metered feature has its own value so the dashboard can tell the walls
+ * apart.
  */
 export const QUOTA_FEATURES = {
   PRIVATE_LOAD: 'private_load',
+  AI_CREDITS: AI_CREDITS_FEATURE,
 }
 
 /** Subscribers notified after every saveQuota write */

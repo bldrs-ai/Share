@@ -1,10 +1,11 @@
-import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from './dragAndDrop'
+import {DROP_REFUSED, handleFileDrop, handleDragOverOrEnter, handleDragLeave} from './dragAndDrop'
 import {guessTypeFromFile} from '../Filetype'
 import {checkOPFSAvailability, deleteUploadFromOPFS, saveDnDFileToOpfs} from '../OPFS/utils'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
 import {getInMemoryUpload} from '../loader/inMemoryUploads'
 import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {disablePageReloadApprovalCheck} from './event'
+import {redactBreadcrumb} from '../privacy/sentryRedaction'
 import {trackAlert} from './alertTracking'
 import debug, {WARN} from './debug'
 
@@ -87,7 +88,7 @@ describe('dragAndDrop utility', () => {
         mockOnError,
       )
 
-      expect(mockSetAlert).toHaveBeenCalledWith('File upload initiated but found no data')
+      expect(mockSetAlert).toHaveBeenCalledWith({type: DROP_REFUSED, message: 'File upload initiated but found no data'})
       expect(mockOnError).toHaveBeenCalledWith('File upload initiated but found no data')
       expect(mockNavigate).not.toHaveBeenCalled()
     })
@@ -105,7 +106,7 @@ describe('dragAndDrop utility', () => {
         mockOnError,
       )
 
-      expect(mockSetAlert).toHaveBeenCalledWith('File upload initiated for more than 1 file')
+      expect(mockSetAlert).toHaveBeenCalledWith({type: DROP_REFUSED, message: 'File upload initiated for more than 1 file'})
       expect(mockOnError).toHaveBeenCalledWith('File upload initiated for more than 1 file')
       expect(mockNavigate).not.toHaveBeenCalled()
     })
@@ -137,6 +138,12 @@ describe('dragAndDrop utility', () => {
       expect(debug).toHaveBeenCalledWith(WARN)
       expect(mockDebug.warn).toHaveBeenCalledTimes(1)
       expect(mockDebug.warn).toHaveBeenCalledWith(expect.stringContaining('"test.unknown" (1024 bytes)'))
+      // Sentry records that line as a breadcrumb: the producer's real output
+      // must come out of the redactor with the name withheld and the size
+      // and verdict kept (privacy/sentryRedaction.js).
+      const [line] = mockDebug.warn.mock.calls[0]
+      const crumb = redactBreadcrumb({category: 'console', level: 'warning', message: line, data: {arguments: [line]}})
+      expect(crumb.message).toBe('handleFileDrop: file (name withheld) (1024 bytes) is not a recognized model format')
     })
 
     it('should handle successful file upload with OPFS available', async () => {
@@ -508,7 +515,7 @@ describe('dragAndDrop utility', () => {
         mockSetAlert,
       )
 
-      expect(mockSetAlert).toHaveBeenCalledWith('File upload initiated but found no data')
+      expect(mockSetAlert).toHaveBeenCalledWith({type: DROP_REFUSED, message: 'File upload initiated but found no data'})
       // Should not throw errors when onError callback is not provided
     })
   })

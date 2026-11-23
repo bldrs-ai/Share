@@ -10,24 +10,27 @@ import {
 import {getProvider} from '../connections/registry'
 import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
 import {NO_GEOMETRY_ALERT, noGeometryAlert} from '../loader/loadProgress'
-import {
-  UNRECOGNIZED_FORMAT_ALERT_EVENT,
-  reportUnrecognizedFormat,
-  unrecognizedFormatAlert,
-} from '../loader/unrecognizedFormat'
+import {cacheClearSkippedAlert} from '../OPFS/messages'
+import {UNRECOGNIZED_FORMAT_ALERT_EVENT, unrecognizedFormatAlert} from '../loader/unrecognizedFormat'
+import {UNSUPPORTED_SCHEMA_ALERT_EVENT, UnsupportedSchemaError, unsupportedSchemaAlert} from '../loader/unsupportedSchema'
 import {REVIT} from '../loader/formatGuidance'
 import {ARCHIVE_ENTRY_CHOICE, ARCHIVE_UNREADABLE, noModelInArchiveAlert} from '../loader/modelArchive'
+import {gtagEventWithCid} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
+import {DROP_REFUSED} from '../utils/dragAndDrop'
+import {GITHUB_NOT_FOUND_MESSAGE, NotFoundError} from '../loader/notFoundError'
 import AlertDialog from './AlertDialog'
 
 
 jest.mock('../connections/registry')
-jest.mock('../utils/alertTracking', () => ({trackAlert: jest.fn(), trackAlertEvent: jest.fn()}))
-jest.mock('../loader/unrecognizedFormat', () => ({
-  ...jest.requireActual('../loader/unrecognizedFormat'),
-  reportUnrecognizedFormat: jest.fn(),
+// Only gtagEventWithCid is stubbed: the rest of analytics (LOCAL_LINK_EVENTS
+// and friends) stays real.
+jest.mock('../privacy/analytics', () => ({
+  ...jest.requireActual('../privacy/analytics'),
+  gtagEventWithCid: jest.fn(),
 }))
+jest.mock('../utils/alertTracking', () => ({trackAlert: jest.fn(), trackAlertEvent: jest.fn()}))
 
 
 /**
@@ -244,11 +247,26 @@ describe('AlertDialog — unsupportedSchema alert type', () => {
   // review of Share#1875). Analytics only.
   it('counts the alert in analytics only, never through the Sentry path', () => {
     act(() => {
-      useStore.getState().setAlert({type: 'unsupportedSchema', message: 'Not displayable yet.'})
+      useStore.getState().setAlert(unsupportedSchemaAlert(
+        new UnsupportedSchemaError('IFC4X3_ADD2'), {kind: 'provider', provider: 'github'}))
     })
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
-    expect(trackAlertEvent).toHaveBeenCalledWith('Not displayable yet.')
+    // A constant label, the schema as a param: the dialog text is header text.
+    expect(trackAlertEvent.mock.calls).toEqual([
+      [UNSUPPORTED_SCHEMA_ALERT_EVENT, {schema: 'IFC4X3_ADD2', model_source: 'github'}],
+    ])
     expect(trackAlert).not.toHaveBeenCalled()
+  })
+
+  // CadView re-runs the same route after a refusal; the alert it shows again
+  // is marked `repeat` so one model is counted once (reportedRefusalRef).
+  it('does not count an alert marked as a repeat', () => {
+    act(() => {
+      useStore.getState().setAlert({...unsupportedSchemaAlert(new UnsupportedSchemaError('IFC4X3'), null), repeat: true})
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText(/IFC 4\.3/)).toBeInTheDocument()
+    expect(trackAlertEvent).not.toHaveBeenCalled()
   })
 })
 
@@ -378,6 +396,46 @@ describe('AlertDialog — uploadNotInBrowser alert type (#1955)', () => {
     expect(trackAlertEvent).toHaveBeenCalledWith(UPLOAD_NOT_IN_BROWSER_ALERT)
     expect(trackAlert).not.toHaveBeenCalled()
   })
+
+  describe('local_link_missing_action', () => {
+    const show = (extra = {}) => {
+      act(() => {
+        useStore.getState().setAlert({...uploadNotInBrowserAlert(), ...extra})
+      })
+      render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    }
+
+    it('"Open a file" sends one open_file with the alert\'s origin', () => {
+      show({origin: 'this_browser'})
+      fireEvent.click(screen.getByText('Open a file'))
+      expect(gtagEventWithCid.mock.calls).toEqual([
+        ['local_link_missing_action', {action: 'open_file', origin: 'this_browser'}],
+      ])
+    })
+
+    it('closing any other way sends one dismiss, defaulting origin to unknown', () => {
+      show()
+      fireEvent.click(screen.getByRole('button', {name: /close/i}))
+      expect(gtagEventWithCid.mock.calls).toEqual([
+        ['local_link_missing_action', {action: 'dismiss', origin: 'unknown'}],
+      ])
+    })
+
+    it('sends nothing for a repeat alert', () => {
+      show({repeat: true, origin: 'unknown'})
+      fireEvent.click(screen.getByText('Open a file'))
+      expect(gtagEventWithCid).not.toHaveBeenCalled()
+    })
+
+    it('sends nothing when an unrelated alert is closed', () => {
+      act(() => {
+        useStore.getState().setAlert(new Error('boom'))
+      })
+      render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+      fireEvent.click(screen.getByRole('button', {name: /close/i}))
+      expect(gtagEventWithCid).not.toHaveBeenCalled()
+    })
+  })
 })
 
 
@@ -422,6 +480,45 @@ describe('AlertDialog — noGeometry alert type (#1962)', () => {
     expect(trackAlertEvent).toHaveBeenCalledTimes(1)
     expect(trackAlertEvent).toHaveBeenCalledWith(NO_GEOMETRY_ALERT)
     expect(trackAlert).not.toHaveBeenCalled()
+  })
+})
+
+
+// engine-worker.md §7 step 4: Clear cache could not remove what an engine in
+// another tab holds; ProfileControl's reload waits for this to be read.
+describe('AlertDialog — cacheClearSkipped alert type', () => {
+  const onClose = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.getState().setAlert(null)
+    })
+  })
+
+  it('says how many were left, without the Discord footer, and counts nothing', () => {
+    act(() => {
+      useStore.getState().setAlert(cacheClearSkippedAlert(2, jest.fn()))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText('Cache partly cleared')).toBeInTheDocument()
+    expect(screen.getByText('2 files are open in another tab and weren\'t cleared. Close that tab and clear again.'))
+      .toBeInTheDocument()
+    expect(screen.queryByText(/Discord/i)).not.toBeInTheDocument()
+    expect(trackAlertEvent).not.toHaveBeenCalled()
+    expect(trackAlert).not.toHaveBeenCalled()
+  })
+
+  it('OK runs the held reload once, and not the failed-load close', () => {
+    const onDismiss = jest.fn()
+    act(() => {
+      useStore.getState().setAlert(cacheClearSkippedAlert(1, onDismiss))
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    fireEvent.click(screen.getByText('OK'))
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+    expect(useStore.getState().alert).toBeNull()
+    expect(onClose).not.toHaveBeenCalled()
   })
 })
 
@@ -502,17 +599,16 @@ describe('AlertDialog — unrecognizedFormat alert type', () => {
   })
 
   // As a string this went through trackAlert, whose fingerprint is the
-  // message text — with the file name in it, one Sentry issue per pick.
-  it('counts the alert once as an info report, with a constant analytics label', () => {
-    const alert = unrecognizedFormatAlert(message, 'Tower.rvt', 'picker')
+  // message text — with the file name in it, one Sentry issue per pick. Now
+  // GA only: a constant label, with the extension and entry as params.
+  it('counts the alert once in analytics, with a constant label and the extension', () => {
     act(() => {
-      useStore.getState().setAlert(alert)
+      useStore.getState().setAlert(unrecognizedFormatAlert(message, 'Tower.rvt', 'picker'))
     })
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
-    expect(reportUnrecognizedFormat).toHaveBeenCalledTimes(1)
-    expect(reportUnrecognizedFormat).toHaveBeenCalledWith(alert)
-    expect(trackAlertEvent).toHaveBeenCalledTimes(1)
-    expect(trackAlertEvent).toHaveBeenCalledWith(UNRECOGNIZED_FORMAT_ALERT_EVENT)
+    expect(trackAlertEvent.mock.calls).toEqual([
+      [UNRECOGNIZED_FORMAT_ALERT_EVENT, {upload_ext: 'rvt', upload_entry: 'picker'}],
+    ])
     expect(trackAlert).not.toHaveBeenCalled()
   })
 })
@@ -601,7 +697,6 @@ describe('AlertDialog — archives', () => {
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
     expect(trackAlert).not.toHaveBeenCalled()
     expect(trackAlertEvent).not.toHaveBeenCalled()
-    expect(reportUnrecognizedFormat).not.toHaveBeenCalled()
   })
 
   it('says what an archive with no model holds, and is counted as an unrecognized format', () => {
@@ -613,8 +708,10 @@ describe('AlertDialog — archives', () => {
     expect(screen.getByText('No model in this archive')).toBeInTheDocument()
     expect(screen.getByText('This archive has no model Share can open (it contains .dwg and .pdf).'))
       .toBeInTheDocument()
-    expect(reportUnrecognizedFormat).toHaveBeenCalledWith(alert)
-    expect(trackAlertEvent).toHaveBeenCalledWith(UNRECOGNIZED_FORMAT_ALERT_EVENT)
+    // The archive's own extension, never its name.
+    expect(trackAlertEvent.mock.calls).toEqual([
+      [UNRECOGNIZED_FORMAT_ALERT_EVENT, {upload_ext: 'zip', upload_entry: 'drop'}],
+    ])
   })
 
   // An archive of only empty files — a 0-byte a.ifc among them — reads as
@@ -676,7 +773,7 @@ describe('AlertDialog — archives', () => {
     expect(keyWarnings).toEqual([])
   })
 
-  // A hosted .ifczip that isn't one readable IFC (CadView raises it).
+  // A hosted archive that isn't one readable model (CadView raises it).
   it('says why a hosted .ifczip can\'t be opened, counted in analytics only', () => {
     const message = 'This .ifczip holds no IFC model.'
     act(() => {
@@ -688,7 +785,18 @@ describe('AlertDialog — archives', () => {
     expect(screen.queryByText(/Discord/)).not.toBeInTheDocument()
     expect(trackAlertEvent).toHaveBeenCalledWith(message)
     expect(trackAlert).not.toHaveBeenCalled()
-    expect(reportUnrecognizedFormat).not.toHaveBeenCalled()
+  })
+
+  it('shows a hosted archive\'s entries in the dialog, never in analytics', () => {
+    const message = 'This archive holds 2 models. A link opens an archive of one model.'
+    const dialogText = 'This archive holds 2 models (Tower.ifc, Annex.ifc). A link opens an archive of one model.'
+    act(() => {
+      useStore.getState().setAlert({type: ARCHIVE_UNREADABLE, message, dialogText})
+    })
+    render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText(dialogText)).toBeInTheDocument()
+    expect(trackAlertEvent).toHaveBeenCalledWith(message)
+    expect(JSON.stringify(trackAlertEvent.mock.calls)).not.toContain('Tower.ifc')
   })
 
   it('says why an archive can\'t be read', () => {
@@ -699,5 +807,65 @@ describe('AlertDialog — archives', () => {
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
     expect(screen.getByText('Can\'t open this archive')).toBeInTheDocument()
     expect(screen.getByText(problem)).toBeInTheDocument()
+  })
+})
+
+
+// SHARE-1PH, SHARE-1PS: a drop with no file in it, or several, is the user's
+// input being refused, not a defect.
+describe('AlertDialog — dropRefused alert type', () => {
+  const message = 'File upload initiated for more than 1 file'
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.getState().setAlert(null)
+    })
+  })
+
+  it('shows the message and counts it once, in analytics only', () => {
+    act(() => {
+      useStore.getState().setAlert({type: DROP_REFUSED, message})
+    })
+    render(<AlertDialog onClose={jest.fn()}/>, {wrapper: StoreRouteThemeCtx})
+    // A substring: the message shares its paragraph with the Discord footer.
+    expect(screen.getByText(/more than 1 file/)).toBeInTheDocument()
+    expect(trackAlertEvent).toHaveBeenCalledTimes(1)
+    expect(trackAlertEvent).toHaveBeenCalledWith(message)
+    expect(trackAlert).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('AlertDialog — NotFoundError', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    act(() => {
+      useStore.getState().setAlert(null)
+    })
+  })
+
+  // The dialog used to hand the error object to a string replace and throw
+  // while rendering, so a 404 ended at the error boundary.
+  it('renders a URL fetch\'s not-found under the path hint, and still reports it', () => {
+    const error = new NotFoundError('File not found')
+    act(() => {
+      useStore.getState().setAlert(error)
+    })
+    render(<AlertDialog onClose={jest.fn()}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText(/Check the file path/)).toBeInTheDocument()
+    expect(screen.getByText(/File not found/)).toBeInTheDocument()
+    expect(trackAlert).toHaveBeenCalledWith('File not found', error)
+  })
+
+  // SHARE-1XP: someone else's GitHub link, missing or private.
+  it('explains a GitHub not-found and counts it in analytics only', () => {
+    act(() => {
+      useStore.getState().setAlert(new NotFoundError(GITHUB_NOT_FOUND_MESSAGE, {source: 'github', isExpected: true}))
+    })
+    render(<AlertDialog onClose={jest.fn()}/>, {wrapper: StoreRouteThemeCtx})
+    expect(screen.getByText(/private repository/)).toBeInTheDocument()
+    expect(trackAlertEvent).toHaveBeenCalledWith(GITHUB_NOT_FOUND_MESSAGE, {source: 'github'})
+    expect(trackAlert).not.toHaveBeenCalled()
   })
 })

@@ -2,7 +2,7 @@
 
 Status: Draft v0.1 (2026-07-29)
 Owner: Pablo (with Claude).
-Epic: `view-140` (new — see roadmap §4.2).
+Epic: `view-140` (#1705; see roadmap §3.1).
 Related: [`viewer-replacement.md`](viewer-replacement.md) §3b (batched path,
 GLB cache shape), [`glb-model-sharing.md`](glb-model-sharing.md) (artifact +
 view-state round-trip), [`demand-tiled-rendering.md`](demand-tiled-rendering.md)
@@ -128,8 +128,20 @@ appearance = {
   opacity?:  0..1,
   hidden?:   boolean,
   residency?: {percent: 0..100, metric: 'occupancy'|'memory'|'distance'},
+  motionResidency?: {mode: 'auto'|'manual', percent: 0..100,
+                     metric: 'occupancy'|'memory'|'distance'},
 }
 ```
+
+`residency` is the **at-rest** setting; `motionResidency` (B3 of
+demand-tiled-rendering.md, on by default; `?feature=disableMotionResidency`
+turns it off) is what holds
+while the camera moves — a subset of the at-rest set, restored when the
+camera stops. Under `mode: 'auto'` the percent is inert and the frame
+budget picks the fraction. Defaults: `{percent: 100, metric: 'occupancy'}`
+at rest and `{mode: 'auto', metric: 'occupancy'}` in motion. Neither is
+serialized at its default. The `#d:` terms are `res=` and `mres=`
+(`mres=25`, `mres=auto.memory`).
 
 Resolution is **last-writer-wins by specificity**: `model` < `subtree` (longer
 occurrence path wins over shorter) < `element` / `occurrence` < `mesh`. Every
@@ -144,7 +156,7 @@ Why a stack rather than per-object mutation: it's the only structure that makes
 ask 5 tractable. A permalink has to serialize a *decision*, not a scene diff —
 "wireframe on this sub-tree" is 20 characters, the resulting per-instance state
 is 28,674 booleans. It also makes reset trivial (pop to base) and gives the
-conversational-CAD agent (T11 tool surface) a sane thing to call.
+conversational-CAD agent (`apps-t300` tool surface) a sane thing to call.
 
 **Non-goal:** this is not a materials editor. `color: '#rrggbb'` is in the
 schema because scoped solid-color is the obvious next ask and reserving the
@@ -308,9 +320,9 @@ the link carries the overall look but not the per-part edits.
 
 The durable home for a large view state already exists in the plan:
 glb-model-sharing §"Round-trippable Notes & Versions" — named view states
-(camera + cut planes + visibility) in the artifact, T2 Phase 4. Display
+(camera + cut planes + visibility) in the artifact, `share-t101` Phase 4. Display
 overrides are the same kind of object and should ride the same v0.1 view-state
-schema. **This epic should define the display-override schema so T2 Phase 4 can
+schema. **This epic should define the display-override schema so `share-t101` Phase 4 can
 embed it verbatim**, and the URL token is then the compact projection of it.
 
 ### 6.3 Hide and isolate (#1250) — landed
@@ -354,12 +366,14 @@ first time STEP occurrence paths needed encoding. Implemented in
   diffed: they are instance masks keyed by NavTree node, not a tree state. `IfcIsolator` keeps
   the path each was resolved from (`hiddenOccurrencePaths`), since instance
   ids are per load.
-- **Writing and reading.** `VisibilityHashWriter` (mounted by `CadView`)
-  rewrites the terms on every `hiddenElements` / `isolatedElements` /
-  `isTempIsolationModeOn` change, once `isModelReady`; `CadView#onViewer`
-  applies a link's terms after its in-place hidden-state reapply and before
-  raising `isModelReady`. A link with none of these terms leaves visibility
-  alone, so a re-init keeps the user's state. Refs that don't resolve are
+- **Writing and reading.** The terms are written by the display term of the
+  live view link (§6.4): `Residency/LiveDisplayLink.jsx`, mounted by
+  `CadView`, rewrites the whole `#d:` token on every `displayOverrides` /
+  `hiddenElements` / `isolatedElements` / `isTempIsolationModeOn` change,
+  once the user has changed the display themselves. `CadView#onViewer`
+  applies a link's terms after its in-place hidden-state reapply. A link with
+  none of these terms leaves visibility alone, so a re-init keeps the user's
+  state. Refs that don't resolve are
   skipped and warned about. Every `#d:` writer goes through
   `displayHash.mergeDisplayTerms`, which sets or drops only its own keys, so the
   Display menu and the isolator don't clobber each other.
@@ -368,6 +382,67 @@ first time STEP occurrence paths needed encoding. Implemented in
   complete.
 - **Not in the link:** reveal mode (R), and a type-group eye in the
   element-types tree (its members are written individually).
+
+
+### 6.3a A volume's window and opacity — the `volume` axis
+
+A volume (a CT or MR stacked from DICOM, `loader/nrrd.js`) has one axis of
+its own, `volume` (`viewer/display/volumeMode.js`): `{window: [low, high] |
+null, opacity: percent}`, the window in the volume's units (HU for a CT) and
+`null` meaning the volume's default ramp. It is in `APPEARANCE_AXES`, applied
+by `applyDisplayOverrides`, shown as the Display menu's Volume section, and
+written as `#d:vw=<low>_<high>,vo=<percent>` (`_` because the ends can be
+negative or fractional). Details:
+[adding-model-formats.md](adding-model-formats.md) §"A DICOM series becomes
+one NRRD".
+
+### 6.4 The live view link — one rule for camera, cut planes and display
+
+Every piece of view state the link carries follows one rule, set for the
+camera in Share#2175 and generalized in `Share/viewLink.js`: a term is
+dormant until the user's own first change of it; from then on the link
+follows every change of it, whoever makes it, debounced
+(`utils/debounce.js`) and written in place (`history.replaceState`: no history
+entry, no `hashchange`), while the Share dialog's switch for it is on (store
+`isCameraInUrl`, `isPlaneInUrl`, `isDisplayInUrl`, all default on, read when a
+write is scheduled and when it fires). The address bar is then always a link
+to what the user is looking at.
+
+| Term | The user's change that starts it | Followed after that |
+|---|---|---|
+| Camera `#c:` | camera-controls input that moved the camera, a ViewCube move (`Camera/liveCameraLink.js`) | every camera `update` |
+| Cut planes `#cp:` | a plane's drag (`CutPlaneMenu`'s `onPlaneMoved`) | each drag; turning a plane on or off stays its own history step |
+| Display `#d:` | a Display menu choice, a hide or unhide, isolation (`viewLink.js#noteUserDisplayChange`, from `ResidencyControl`, `ElementsControl`, `HideToggleButton`, the H / U / I keys) | every change of the override stack and of hide / isolate (`LiveDisplayLink.jsx`) |
+
+Why it waits for the user: until then every change is the page's (the load's
+framing, a link's own terms applied on load, the Display menu seeding itself
+from `#d:`, an Assist or widget-API tool). Writing those would put terms into a
+plain model link nobody set up, or strip a link's terms before they were
+applied. It replaced two writers that didn't wait: the Display menu's own
+`#d:` writes, and `VisibilityHashWriter`, which wrote hide / isolate from
+model-ready, as history entries, regardless of the switch.
+
+The Share dialog still writes every switched-on term when it opens, so the
+link it shows is complete even for terms that never went live.
+
+Three details of the display term (`LiveDisplayLink.jsx`), from the review
+of #2177:
+
+- **Nothing before `isModelReady`.** CadView raises it only after applying
+  the link's hide / isolate terms. On a big model the user can change the
+  display while the tree is still being walked, and a write then would
+  describe an isolator with nothing hidden yet, dropping the link's terms on
+  arrival. A change made in that window is written once the model is ready.
+- **Live per model route, for the session** (`livePaths`). A re-init of the
+  same model (a theme toggle builds a new viewer) keeps following, so
+  CadView's re-init reapply finds the terms current.
+- **A model swap cancels a pending write** rather than flushing it. By then
+  the page's location is the next model's.
+
+The Share dialog's Cut planes switch removes `#cp:` from the page's location
+(`CutPlane/hashState.js#removePlanesFromHashState`), not react-router's
+`useLocation()` object. History freezes that object outside production, and
+it lags the page after in-place writes.
 
 
 ## 7. Epic + stories

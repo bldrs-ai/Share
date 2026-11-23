@@ -83,6 +83,31 @@ export default function createNotesSlice(set, get) {
     writeMarkers: (newMarkers) => set({markers: newMarkers}), // Set markers
     clearMarkers: () => set({markers: []}), // Clear markers
 
+    // Drop the marker state of the model being left, for a switch to a
+    // different model without a page load (open-205, `?feature=spaModelNav`,
+    // and the alert's Reset). A page load starts from these initial values;
+    // in-app they used to carry over, so the next model's viewer put down the
+    // left model's markers, NotesControl skipped the refetch (it does while a
+    // note is selected and markers exist), and MarkerControl wrote the left
+    // selection back into the new model's URL hash. Called by Share.jsx when
+    // the model path's identity changes; a viewer re-created for the same
+    // model (a theme change) keeps all of it, as #2017 requires.
+    //
+    // Notes themselves are the repository's and are refetched for the new
+    // model; the note selection goes because it came from the old URL's hash.
+    forgetModelMarkers: () => set({
+      markers: [],
+      selectedPlaceMarkId: null,
+      selectedPlaceMarkInNoteId: null,
+      cameraHash: null,
+      forceMarkerNoteSync: false,
+      placeMarkId: null,
+      placeMarkMode: false,
+      isPlaceMarkActivated: false,
+      selectedNoteId: null,
+      selectedNoteIndex: null,
+    }),
+
     notes: null,
     setNotes: (notes) => set(() => ({notes: notes})),
 

@@ -5,51 +5,50 @@ This doc describes how to work in the project as a developer and in our team.
 ## Development Commands
 
 ### Build Commands
-- `yarn build` / `yarn build-conway` - Main production build using Conway engine
-- `yarn build-webifc` - Build using web-ifc instead of Conway
-- `yarn build-cosmos` - Build React Cosmos component library documentation
-- `yarn build-share-analyze` - Build with bundle analysis enabled
-- `yarn clean` - Remove build artifacts in `docs/` directory
+- `bun run build` / `bun run build-conway` - Main production build using Conway engine
+- `bun run build-cosmos` - Build React Cosmos component library documentation
+- `bun run build-share-analyze` - Build with bundle analysis enabled
+- `bun run clean` - Remove build artifacts in `docs/` directory
 
 ### Development Server
-- `yarn serve` - Start development server with hot reload (default: Conway, HTTP)
-- `yarn serve-https` - Start development server with HTTPS
-- `yarn serve-cosmos` - Start React Cosmos component development environment
+- `bun run serve` - Start development server with hot reload (default: Conway, HTTP)
+- `bun run serve-https` - Start development server with HTTPS
+- `bun run serve-cosmos` - Start React Cosmos component development environment
 - Environment variables: `SHARE_CONFIG=dev|prod`, `serveHttps=true|false`
 
 ### Testing
-- `yarn test` - Run all tests (src and tools)
-- `yarn test-src` - Run source code tests with Jest
-- `yarn test-tools` - Run build tool tests
-- `yarn lint` - Run ESLint and TypeScript type checking
-- `yarn typecheck` - Run TypeScript type checking only
-- `yarn precommit` - Run lint and test (pre-commit hook)
+- `bun run test` - Run all tests (src and tools)
+- `bun run test-src` - Run source code tests with Jest
+- `bun run test-tools` - Run build tool tests
+- `bun run lint` - Run ESLint and TypeScript type checking
+- `bun run typecheck` - Run TypeScript type checking only
+- `bun run precommit` - Run lint and test (pre-commit hook)
 
 **Don't `git commit --no-verify` unless you have an active reason.** The
-husky pre-commit hook runs `yarn precommit` = eslint + typecheck + jest.
-It catches things ad-hoc `yarn jest <file>` won't — cross-file lint
+husky pre-commit hook runs `bun run precommit` = eslint + typecheck + jest.
+It catches things ad-hoc `npx jest <file>` won't — cross-file lint
 rules, unused imports, `prefer-const` after a refactor, etc. Typical
 cost on a quiet machine is lint ~20 s + jest ~90 s.
 
 Legitimate bypass reasons exist (system under memory pressure with
 parallel jest workers fighting a dev server; intermediate rebase
 commits you'll squash). When you do bypass, run
-`yarn lint && yarn jest <changed paths>` as the manual substitute —
-**not** just `yarn jest <file>`. AI assistants should make this
+`bun run lint && npx jest <changed paths>` as the manual substitute —
+**not** just `npx jest <file>`. AI assistants should make this
 substitution explicit (and visible to the user) rather than letting
 `--no-verify` quietly calcify into a default.
 
 
 ### Playwright E2E Testing
-- `yarn test-flows [spec]` - Run Playwright tests (builds first, starts its own server — no separate setup needed)
-- `yarn test-flows [spec] --update-snapshots` - Run and update screenshot snapshots
-- `yarn test-flows [spec] -g "test name"` - Run a single test by name grep
+- `bun run test-flows [spec]` - Run Playwright tests (builds first, starts its own server — no separate setup needed)
+- `bun run test-flows [spec] --update-snapshots` - Run and update screenshot snapshots
+- `bun run test-flows [spec] -g "test name"` - Run a single test by name grep
 
 **Build config**: Playwright tests use `SHARE_CONFIG=playwright` (`tools/esbuild/vars.playwright.js`).
 Key differences from production: `MSW_IS_ENABLED=true`, `NODE_ENV=development`. `OPFS_IS_ENABLED` is
 **on**, as in production — it was off until #1779, so treat any older note saying otherwise as stale.
 The webServer also sets `SKIP_MARKETING=true`, so the Next.js marketing overlay is not built —
-no flow spec loads `/pricing` or `/blog` (they assert `href`s to bldrs.ai). `yarn build` / Netlify
+no flow spec loads `/pricing` or `/blog` (they assert `href`s to bldrs.ai). `bun run build` / Netlify
 still chain marketing.
 
 **SPA routing**: The static file server (`http-server docs`) has no SPA fallback. Missing paths return
@@ -121,7 +120,7 @@ does not) before assuming a fixture will be served.
 **Screenshot goldens**: A new `expectScreen(page, 'Name.png')` test has no baseline, so it fails until
 you generate one:
 ```bash
-yarn test-flows src/path/To.spec.ts --update-snapshots -g "test name"
+bun run test-flows src/path/To.spec.ts --update-snapshots -g "test name"
 ```
 The PNG lands in `src/path/To.spec.ts-snapshots/` (see `snapshotPathTemplate` in
 `tools/playwright.config.js`) and is committed with the test. Two things to know:
@@ -129,7 +128,7 @@ The PNG lands in `src/path/To.spec.ts-snapshots/` (see `snapshotPathTemplate` in
 - **Look at the generated golden before committing it.** `--update-snapshots` writes whatever
   rendered, so a broken render becomes the baseline and CI then enforces the bug.
 - **Fixtures must live in `src/tests/fixtures/github/...`,** not `docs/__test_fixtures__/`. The
-  `test-flows` web server runs `yarn test-flows-build`, which starts with `yarn clean` and then
+  `test-flows` web server runs `bun run test-flows-build`, which starts with `bun run clean` and then
   copies the fixture tree in — so anything hand-placed under `docs/` is deleted before the run.
 
 Re-running `--update-snapshots` over an existing golden rewrites it, which is how you intentionally
@@ -198,13 +197,20 @@ warning) and you can fall back to `--workers=1`.
 **CI:** Share is public, so `ubuntu-24.04` is 4 vCPU / 16 GB and free.
 Each shard still runs `--workers=2` (the density that stayed green on
 the old 8 GB larger runner; packing 4 SwiftShader Chromiums onto 4
-cores contends). The suite runs as four shards so eight Chromiums run
-across four free machines (the org caps CI at 4 concurrent runners, so
-more shards would starve other PRs). One `playwright-build` job
-produces `docs/` as `yarn test-flows-build` left it; shards set
+cores contends). The suite runs as six shards so twelve Chromiums run
+across six free machines, which levels each shard at about 8 min (four
+shards left the slowest at about 11, and up to 14.7 on a stale plan). We
+once believed the org capped CI at 4 concurrent runners; that is not
+what was observed: on 2026-11-18 around 22:35 UTC, 10 Actions jobs ran
+at once without queuing (two PRs' four shards plus `build` each). GitHub's
+documented limit for standard runners on a plan is higher than 4, but we
+have not confirmed which plan the org is on. Concurrency is still shared
+across PRs: a full PR run is now 6 shards + `playwright-build` + `build` +
+the aggregator, so the draft gate still matters. One `playwright-build` job
+produces `docs/` as `bun run test-flows-build` left it; shards set
 `PLAYWRIGHT_SERVE_ONLY=true`, install `@playwright/test@1.56.1` plus
 `http-server`, and run `npx http-server` inside `docs/` (no Share
-`yarn install`). The required
+`bun install`). The required
 check is still `playwright-run` (an aggregator over the shards). The paid
 `ubuntu-24.04-4vcpu-8gb-150gbssd` larger runner is not used here —
 larger runners are billed even on public repos.
@@ -219,7 +225,7 @@ export specs) cluster by file. That left shard 1 at 14.5 of its 15 min
 imbalance**) and cancelled it twice with every test green (#1892). The
 first fix, a light pass and a heavy pass per shard (`PW_SPEC_SET`), only
 rebalanced the export specs: across 25 green main runs (2026-10-07 to
-10-28) the four shards' jobs averaged 12.7 / 12.1 / 9.5 / 9.2 min. Shard 1
+10-28) the then four shards' jobs averaged 12.7 / 12.1 / 9.5 / 9.2 min. Shard 1
 took 14 min or more in 8 of the 25 runs (max 14.6) and 13 or more in 14;
 shard 2 took 13 or more in 11. The slowest shard averaged 13.3 min and sat
 4.8 min above the fastest. Per-run noise is large on top of that: one
@@ -230,7 +236,7 @@ Now every shard does the same three things (`test-flows.yml`,
 `tools/playwrightShards.mjs`):
 
 1. **Plan.** List the whole suite (`playwright test --list --reporter=json`)
-   and pack it into 4 bins greedily, longest test first, each into the
+   and pack it into 6 bins greedily, longest test first, each into the
    lightest bin so far (ties break on test name, so every shard computes the
    same partition from the same inputs). Costs come from
    `tools/playwrightTimings.json`, seconds per test keyed by exactly the
@@ -250,8 +256,8 @@ Now every shard does the same three things (`test-flows.yml`,
    with `›`, edge whitespace or a newline.)
 
 **Keeping the timings fresh.** A stale file costs balance, never
-correctness. Refresh it when the shards drift apart again (compare the four
-`playwright-shard N/4` job durations on a recent main run), and after adding
+correctness. Refresh it when the shards drift apart again (compare the six
+`playwright-shard N/6` job durations on a recent main run), and after adding
 a spec whose tests are slow:
 
 ```sh
@@ -274,8 +280,8 @@ Reading a plan locally (no browsers needed) shows what the shards would do:
 
 ```sh
 CI=true npx playwright test --config=tools/playwright.config.js --list --reporter=json > /tmp/all-tests.json
-node tools/playwrightShards.mjs plan --list /tmp/all-tests.json --shard 1 --of 4 --out /tmp/shard-1.txt
-CI=true yarn test-flows --test-list=/tmp/shard-1.txt   # run that shard's tests
+node tools/playwrightShards.mjs plan --list /tmp/all-tests.json --shard 1 --of 6 --out /tmp/shard-1.txt
+CI=true bun run test-flows --test-list=/tmp/shard-1.txt   # run that shard's tests
 ```
 
 The balance has a floor: a shard's wall time is its summed test time over 2
@@ -369,7 +375,7 @@ Verified on a fresh worktree of this repo: the commit aborts with
 and exits 1. That failure is at least loud. The danger is what it invites:
 `--no-verify` clears it instantly and lands a commit that nothing has
 linted, typechecked or tested — the exact gate CLAUDE.md tells you to trust
-instead of running by hand. **Don't.** Either `yarn install` in the worktree
+instead of running by hand. **Don't.** Either `bun install` in the worktree
 (which reinstalls `.husky/_`, and a full `node_modules`), or — cheaper, and
 what actually worked here — do the editing in the worktree, export the change,
 and `git apply` + `git commit` it in the main checkout, where the hook is
@@ -393,19 +399,47 @@ worktree that gets deleted.
 
 **2. Anything resolution-sensitive gives the wrong answer there.** A
 worktree starts with no `node_modules` at all, so the reflex is to symlink
-or copy the main checkout's. Both make the worktree lie about anything that
-depends on *where* a module resolves from:
+or copy the main checkout's. Done the wrong way, that makes the worktree lie
+about anything that depends on *where* a module resolves from:
 
-- `singleThreeInstance.test.js` failed in a worktree and passed in the main
-  checkout, on identical source — it asserts a single resolved `three`, and
-  a symlinked tree gives it two.
+- **A symlinked `node_modules` fails the hook.** `singleThreeInstance.test.js`
+  is the guard behind the muted "Multiple instances of Three.js being
+  imported" warning (`tools/jest/setupTests.js` silences it, so this test
+  is what still catches a duplicate three). It runs
+  `find node_modules -name three …` and expects every match to resolve to
+  the one real directory behind `node_modules/three` (Bun's isolated store,
+  `node_modules/.bun/three@<version>/node_modules/three`). Without `-L`,
+  `find` does not descend into a symlink given as its starting point, so a
+  linked tree yields **no** match and the test fails on source that is
+  fine. Checked on a scratch copy of the isolated tree: linked, no match;
+  hardlink-copied, the copy's own `.bun/three@0.184.0` (the store's links
+  are relative, so they resolve inside the copy).
+- **A partial copy fails it differently.** A `node_modules` that was only
+  partly hardlink-copied (some packages real directories, some missing or
+  linked from elsewhere) let the deferred-BVH picking tests load two copies
+  of three, which is exactly the duplicate the muted warning would have
+  named. Seen in a worktree while committing the #2054 doc refresh,
+  2026-11-09.
+- **What passed:** a *full* hardlinked copy of a sibling checkout's tree,
+  plus the untracked husky shim the hook sources:
+
+  ```sh
+  cp -al ../Share-other/node_modules ./node_modules
+  mkdir -p .husky && cp -a ../Share-other/.husky/_ .husky/
+  ```
+
+  `cp -al` shares the file data, so it costs inodes but almost no disk —
+  the reason to prefer it over a second `bun install` on a tight sandbox.
+  It is only right when the worktree's `package.json`/`bun.lock` match the
+  sibling's; if the branch changes dependencies, `bun install` instead.
 - An eslint probe run in a worktree did **not** reproduce the plugin-
   uniqueness error that motivated #1792's `root: true`, because the config
   cascade above the worktree is a different set of directories.
 
 So a worktree is fine for reading and editing. Confirm any result about
 module resolution, the eslint/babel config cascade, or the hook in the main
-checkout before you believe it — and before you write it into a PR body.
+checkout (or a worktree set up as above) before you believe it — and before
+you write it into a PR body.
 
 
 ## Drive Picker fails on Brave with Shields up

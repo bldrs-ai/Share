@@ -222,6 +222,32 @@ describe('smokeFunctions', () => {
 })
 
 
+describe('smokeFunctions: the relay\'s Origin check', () => {
+  it('sends the probed deploy\'s own origin, which the ai-chat relay requires', async () => {
+    const origins = []
+    await smokeFunctions('https://deploy-preview-7--bldrs.netlify.app/some/path', {
+      retryDelayMs: 0,
+      fetchImpl: (url, init) => {
+        origins.push(init.headers.origin)
+        return fakeFetch({})(url)
+      },
+    })
+    expect(origins.length).toBeGreaterThan(0)
+    expect(new Set(origins)).toEqual(new Set(['https://deploy-preview-7--bldrs.netlify.app']))
+  })
+
+  // The probe sends the deploy's own Origin, so a refusal means the relay
+  // refuses its own site: the assistant is unusable there (Codex on #2256).
+  it('fails a 403 ai_forbidden_origin in both lenient and strict mode', async () => {
+    const answers = {'ai-chat': {status: 403, body: '{"error":{"code":"ai_forbidden_origin"}}'}}
+    const lenient = await smokeFunctions(BASE, {fetchImpl: fakeFetch(answers), retryDelayMs: 0})
+    const strict = await smokeFunctions(BASE, {strict: true, fetchImpl: fakeFetch(answers), retryDelayMs: 0})
+    expect(lenient.find((r) => r.name === 'ai-chat')).toMatchObject({ok: false, status: 403})
+    expect(strict.find((r) => r.name === 'ai-chat')).toMatchObject({ok: false, status: 403})
+  })
+})
+
+
 describe('smokeFunctions.mjs CLI', () => {
   let server
   let baseUrl
@@ -268,7 +294,7 @@ describe('smokeFunctions.mjs CLI', () => {
     broken = 'unlink-identity'
     // The CLI's own retry waits 5 s before failing a crash for good.
     const {code, stdout} = await runCli([baseUrl, '--strict'])
-    expect(stdout).toContain('1 of 9 FAILED')
+    expect(stdout).toContain(`1 of ${PROBES.length} FAILED`)
     expect(stdout).toMatch(/\| unlink-identity \| 502 \|.*FAIL/)
     expect(code).toBe(1)
   }, 30000)

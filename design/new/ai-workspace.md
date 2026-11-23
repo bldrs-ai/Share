@@ -8,7 +8,7 @@ added; amended 2026-11-01 to place the document session in D15, add the
 [MVC-core review](reviews/2026-10-29-mvc-core-review_grok-4.7.md)). Story
 [#1671](https://github.com/bldrs-ai/Share/issues/1671) under epic `assist-310`
 [#1659](https://github.com/bldrs-ai/Share/issues/1659). Roadmap §7.4 AI.0,
-Tracks T10 and T11.
+Tracks `assist-t300` and `apps-t300`.
 **Owner:** Pablo (with Claude).
 
 This is the architecture doc that roadmap §7 and
@@ -95,12 +95,12 @@ browser chat turn. Worked example: §9 "Worked example".
 | D7 | **Vercel AI SDK**, lazy-loaded behind the flag, with the pinned set in §9. Fallback: thin hand-rolled adapters. **Confirmed by spike #1927** (2026-10-06), with three amendments (§9, §8, §5) | It handles Anthropic native, Gemini thought signatures and OpenAI-compatible endpoints. Measured cost is a 167 KB gz core plus 15–60 KB per provider (336 KB monolithic), paid only when the tray opens, **and only if the build splits assist out** (§9 Amendment 1) |
 | D8 | Typed in-page **tool registry in MCP shape**. v0 is read/annotate only, replaces the bot's `new Function` eval, and needs `selectItemsInScene` exposed | One contract, so `assist-320` can serve it over postMessage MCP later |
 | D9 | **Model bytes never leave the machine.** Conversation and tool results do. Tools return summaries, never geometry. A per-transport "what the AI can see" disclosure. CSP `connect-src` is a hardening story | Sovereignty is the enterprise wedge (roadmap §7.2) |
-| D10 | Conversations are local, per model, file-shaped (JSONL) and store AI SDK `responseMessages` whole, with `providerOptions` (§10), behind the `workspace/persistence.ts` seam, alongside the Tier-1 project struct | Durable and shared storage is `assist-400`'s problem. File-shaped now means the repo store adopts it later. **Amended by D15:** the host reaches it through Collab's conversation-store interface (local implementation first), which supersedes the storage *location* here |
+| D10 | Conversations are local, per session (per model until 2026-11-18; [workspace-sessions.md](workspace-sessions.md) §4), file-shaped (JSONL) and store AI SDK `responseMessages` whole, with `providerOptions` (§10), behind the `workspace/persistence.ts` seam, alongside the Tier-1 project struct | Durable and shared storage is `assist-400`'s problem. File-shaped now means the repo store adopts it later. **Amended by D15:** the host reaches it through Collab's conversation-store interface (local implementation first), which supersedes the storage *location* here |
 | D11 | Assist is the front door. Create plugs in as a **tool provider** (`create.design` → job). Create owns its own long-running loop, built on Assist's core (providers + ledger), and review checkpoints surface in the Collab thread (amended by D15) | Synthesis runs for minutes and iterates, which a chat turn cannot. One billing story |
 | D12 | Flag `assist`, with `bot` aliased via `FEATURE_IMPLICATIONS` during the port, then removed | Matches #1659/#1672. Fixes the `convo` drift |
 | D13 | Port `?feature=bot`: keep the tray, slice, bubbles, MSW mocks and network guard. Evolve the client and settings. Delete the eval and the plaintext key | The scope outgrew the prototype, but its UI and test scaffolding are sound |
 | D14 | **DECIDED (product owner, 2026-10-06).** **Jev is the fast intent/command layer: natural language → viewer action, dispatched through the registry, promoted to the LLM agent loop on low confidence, a free-text or numeric argument, or a multi-step utterance.** Through the relay. Router and tool-call gate are follow-on uses. Generative UI is separate and later (declarative renderer) | Jev is a non-generative decision model: ~210 ms and near-free for one-step commands over enumerable arguments, 97% exact first action. Its confidence did not separate its errors (eval #1929), so Undo and the visible "did X" echo are the safety net, not a threshold (§12.1). UI generation needs an LLM and a spec renderer, not Jev |
-| D15 | **Repo structure and dependency direction (§2.1).** Targets: conway, View, Share (app shell, cross-repo E2E), Collab, Assist, Create. **Assist never imports Share, View or Collab**: hosts import Assist and inject tool providers. The headless **document session** lives inside Share as a `src/` module and is extracted only once both `CadView` and a CLI call `apply`/`save`. Assist is built now as a package-shaped `src/assist/` inside Share with an enforced import boundary and its own esbuild entry; extracted to `bldrs-ai/Assist` once #1675 settles | Coupling to live viewer state belongs in the tool implementations, behind JSON-in/JSON-out tools. A boundary enforced from day one makes the later move a `git mv` + `package.json` |
+| D15 | **Repo structure and dependency direction (§2.1).** Targets: conway, View, Share (app shell, cross-repo E2E), Collab, Assist, Create. **Assist never imports Share, View or Collab**: hosts import Assist and inject tool providers. The headless **document session** lives inside Share as a `src/` module and is extracted only once both `CadView` and a CLI call `apply`/`save`. Its read layer is the per-model engine worker (`src/engine/`); the user's session holds the op logs and resolves refs ([workspace-sessions.md](workspace-sessions.md), 2026-11-18). Assist is built now as a package-shaped `src/assist/` inside Share with an enforced import boundary and its own esbuild entry; extracted to `bldrs-ai/Assist` once #1675 settles | Coupling to live viewer state belongs in the tool implementations, behind JSON-in/JSON-out tools. A boundary enforced from day one makes the later move a `git mv` + `package.json` |
 
 
 ### 2.1 D15 — Repo structure and dependency direction
@@ -112,7 +112,7 @@ browser chat turn. Worked example: §9 "Worked example".
 | conway | Engine (IFC/STEP parse, geometry). Exists |
 | **View** | Viewer library plus the `view.*` tool provider. The web projection of the document, not the document itself: `src/loader` + `src/viewer` are one pipeline (review §3), so they extract together. Extracted from Share's `src/viewer` + `src/loader` (~77k of Share's ~191k src LOC), as its own epic **after Assist v0**, starting with a coupling spike: zustand store, MUI, `CadView` |
 | **Share** | App shell: routing, auth, sources, billing, sharing, the Netlify functions host. **Home of cross-repo E2E**, and for now of the document session below |
-| **Document session** | The headless document: open a file over Conway, answer `list` / `get` / `select` by `e` / `o` / `n` / `g` ref ([model-edit.md](model-edit.md) §5), take the op log ([model-edit.md](model-edit.md) L1) as the only write API, and `save` to `*.ops.jsonl` + `manifest.json`. No Three, no Zustand. **Not a repo yet:** a `src/` module in Share, extracted only once both `CadView` and a CLI call `apply`/`save` ([MVC-core review](reviews/2026-10-29-mvc-core-review_grok-4.7.md) §7 and §8; [workspace-store.md](workspace-store.md) §3). Where it goes after extraction is undecided (review §8) |
+| **Document session** | Settled 2026-11-18 in [workspace-sessions.md](workspace-sessions.md): the per-model engine worker is the read layer, shared and read-only; each user session holds its own op log per model and resolves refs. The headless document: open a file over Conway, answer `list` / `get` / `select` by `e` / `o` / `n` / `g` ref ([model-edit.md](model-edit.md) §5), take the op log ([model-edit.md](model-edit.md) L1) as the only write API, and `save` to `*.ops.jsonl` + `manifest.json`. No Three, no Zustand. **Not a repo yet:** a `src/` module in Share, extracted only once both `CadView` and a CLI call `apply`/`save` ([MVC-core review](reviews/2026-10-29-mvc-core-review_grok-4.7.md) §7 and §8; [workspace-store.md](workspace-store.md) §3). Where it goes after extraction is undecided (review §8) |
 | **Collab** | Exists: threads, permissions, persistence/ChannelProvider. Assist conversations go through a Collab conversation-store interface (local implementation first), which supersedes D10's storage location |
 | **Assist** | Agent core, tray UI package, relay handler, knowledge tools |
 | **Create** | Exists: synthesis engine, tool server, and its own long-running agent loop built on Assist's core |
@@ -290,6 +290,22 @@ narrows misuse at near-zero cost, so I recommend it. Requiring `tools` to
 match the published registry (by schema hash) is a stronger option, but it
 couples relay deploys to client releases. Left as an open question (§15).
 
+**Built (2026-11-18): `netlify/functions/ai-chat.js`, a v2 streaming
+Function** (#1932). It runs §5 steps 1–6 as above, plus the preamble. The
+wall-clock and streaming limits below are still unmeasured on a deploy
+preview, and so is whether `context.waitUntil` keeps the function alive to
+the usage chunk after a client hangs up. What happens either way: a hold the
+function never settles expires into spend at its reservation
+(`_lib/aiLedger.js`), so a cut-off function can over-charge a user but
+never under-charge Bldrs. A settle that fails is retried (three attempts,
+jittered, within 3 s, safe because settle is idempotent); one that still
+fails, or that finds its hold already expired, leaves a reconciliation
+record (`ai/reconcile/<day>/<request>`: generation id, actual cost, the
+buckets left at their reservation) and a `settle_failed` warning (Codex on
+#2220). The generation-id reconciliation job that reads those records and
+the `estimates` entries is not built. The rest of this paragraph is the spike's framing, kept for the
+limits it still has to measure.
+
 **Vehicle: open, spike #1928.** Share has no streaming function today. Every
 function is a buffered v1 Lambda `handler(event)` except `proxy-handler.js`,
 a v2 `export default async (req) => Response` with an origin allowlist
@@ -375,9 +391,21 @@ picker. The UI can show the budget as a percentage or as abstract "credits"
    free-models router, [FAQ](https://openrouter.ai/docs/faq.md)) or to a
    curated `:free` list (below), and **costs zero credits**. The label says
    plainly that it may be rate-limited or unavailable. Those requests keep
-   `deny`, so the list needs no training disclosure. The one hosted
+   `deny`. The one hosted
    exception is the optional NVIDIA entry, sent without `deny` (§5), which
    shows §10's free-models disclosure before first use.
+   - **As built (#1934).** A "Free models (experimental)" switch in the
+     assistant's settings, on every tier, sends the relay's `bldrs/free`
+     alias (`max_price` 0, no reservation, no breaker; counted against the
+     daily free-request cap). The NVIDIA entry is still not listed, so every
+     free request keeps `deny`. The switch's text still says providers "may
+     log or train on prompts": `deny` filters by OpenRouter's data-policy
+     tags, which it calls "our best knowledge", and free providers' terms
+     are the least settled and change most. So the text says Bldrs asks
+     every provider not to store or train, and that free providers set
+     their own terms, rather than promise more than `deny` can. The choice
+     is kept per browser in localStorage
+     (`src/Components/Bot/assistModelChoice.js`).
 3. **Overflow.** When the global anonymous spend breaker trips (§7), the
    relay degrades anonymous traffic to the free-models path instead of
    refusing it. An in-tray notice says why ("free assistant busy, switched
@@ -486,7 +514,9 @@ literally. 17 are free and tool-capable.
 
 **A gap the live check found (spike #1929).** `/api/v1/models/{id}/endpoints`
 exposes no data-policy field, so the catalog can't say which endpoints
-survive `data_collection: "deny"`. Two consequences:
+survive `data_collection: "deny"` (still true on 2026-11-23; the picker
+uses `/api/v1/endpoints/zdr` as a conservative proxy, "Pro picker, as
+built" below). Two consequences:
 
 - Prices differ per endpoint. gpt-oss-120b has 23 endpoints, from
   $0.03/$0.17 to $0.35/$0.75 per M. Deny may route to a pricier one.
@@ -597,6 +627,12 @@ What follows from that:
   - **Re-size *B* as traffic grows.** Rule of thumb: about 3× the trailing
     7-day median anonymous spend, never above a hard ceiling set by hand
     next to *A*. The ledger's own daily totals provide the median.
+    `netlify/functions/ai-ledger-stats.js` reads them for Bldrs' private
+    admin dashboard: each breaker's spend per UTC day for the last week,
+    the limits in force (`aiCreditLimits(process.env)`), which settings and
+    secrets are set (never their values) and a count of reconciliation
+    records. It is server-to-server only, behind `ADMIN_STATS_SECRET`, and
+    answers aggregates alone: no ledger key, so no identity, leaves it.
 - **A signed-in free-tier breaker too** (added here, not in the planning
   decisions). Per-user budgets bound one account, but free Auth0 accounts
   are cheap to create, so the free tier gets the same daily breaker
@@ -606,7 +642,7 @@ What follows from that:
   for the whole account (above), so it saturates as soon as *V* · *p* · *t*
   approaches 300. That is the D3 rationale in numbers.
 
-At the $25/mo Pro price mocked in #1421 (roadmap §4.9), a $5 AI budget is
+At the $25/mo Pro price mocked in #1421 (roadmap §3.1, Subscribe), a $5 AI budget is
 20% of revenue, plus OpenRouter's 5.5% credit-purchase fee
 ([FAQ](https://openrouter.ai/docs/faq.md)). Whether Pro gets **top-ups**
 (buy more credits), **pay-as-you-go** past the budget, or a hard stop is an
@@ -621,6 +657,80 @@ allowlist are the same list. A model can sit in the catalog with no
 deny-compatible endpoint (above), so the relay surfaces OpenRouter's "no
 endpoints match" as a picker-level "unavailable under Bldrs privacy
 settings".
+
+**Pro picker, as built (#1934).** The plan above, with three changes the
+live API forced. Code: `netlify/functions/_lib/aiCatalogue.js`; the route
+is `GET /.netlify/functions/ai-chat?catalogue`.
+
+- **The list.** `GET /api/v1/models` and `GET /api/v1/endpoints/zdr`, both
+  public and read without Bldrs' key, behind the relay's Origin check and
+  cached per instance for 10 minutes (a failed read for 1). A model is
+  listed when it:
+  - takes `tools`;
+  - reads text and writes only text;
+  - has not expired;
+  - is a plain `vendor/model` id (no `:free`, `:batch` or other variant,
+    no `openrouter/*` router);
+  - has a listed price the reservation can bound (below);
+  - and has at least one tool-capable ZDR endpoint without Safety
+    Retention.
+
+  On 2026-11-23 that is 180 of the 415 tool-capable models. The route
+  returns the curated `PAID_MODELS` first, with their tiers, then those, as
+  Pro-only. When OpenRouter can't be read it returns the curated table
+  alone (`source: 'static'`), so the picker keeps the default chain and the
+  two curated Pro models.
+- **Why ZDR, not deny.** The gap above still holds on 2026-11-23: neither
+  `/models` nor `/models/{id}/endpoints` says which endpoints survive
+  `deny`. The ZDR list is the one machine-readable data policy. A ZDR
+  endpoint keeps nothing, so it can't collect, and a model that has one
+  routes under `deny`. It is a conservative proxy, so some deny-routable
+  models are left out. qwen3.7-flash is one: its one Alibaba endpoint isn't
+  ZDR, but the curated table keeps it. Safety Retention endpoints are not
+  counted: they keep prompts for abuse review, and whether `deny` admits
+  them is undocumented. That leaves gemini-3.8-flash out of the live list,
+  but curated. The filter decides what the picker offers, never what
+  privacy a request gets: every request is still sent with `deny`. A listed
+  model that answers 404 under it is refused with `ai_model_unavailable`
+  and isn't reported (the proxy failing, not a fix). Models left out are
+  omitted rather than shown disabled; the menu's caption says only
+  models that can answer without the provider keeping prompts are listed.
+- **The ceiling of a pick.** It is read at pick time from
+  `/models/{id}/endpoints`, never from `/models`. Grok 4.7 lists 2 / 6
+  (4 / 12 past 200k), but its priority endpoints charge double, 8 / 24 past
+  200k. The rule is the curated table's: the dearest of ALL endpoints,
+  long-context `overrides` included, with output at `internal_reasoning`
+  when that is dearer. A pricing field the bound doesn't cover makes the
+  model unpriced, and so refused. That covers a per-request fee, image or
+  audio output, or any field the reader doesn't know, at a non-zero value.
+  The bound can ignore cache, image and audio input, web search and
+  discount, because the relay never forwards what bills them. Applied to
+  the curated models' live endpoints, the rule reproduces their table
+  ceilings exactly: 0.20 / 0.80, 0.35 / 0.95, 1.35 / 6.75 and 1 / 5.
+  Both zero is refused too: it would be a free model that skips the free
+  path's request cap.
+- **Why the bound holds for a pick.** The relay sends that ceiling as
+  `provider.max_price`, prices the reservation from the same number, and
+  sends no fallbacks (the user picked this model). OpenRouter therefore
+  routes only to an endpoint at or under the ceiling, and the reservation
+  covers it. A cached ceiling that has gone stale can't break this. An
+  endpoint that raised its price past it is skipped rather than billed. If
+  every endpoint did, the request fails upstream and its hold is released.
+- **Tiers.** The catalogue is Pro only. `resolveCatalogueModel` refuses
+  any other tier before it fetches anything. A refused pick (another tier's,
+  unlisted, or unpriced) is `ai_model_not_allowed`. An OpenRouter read that
+  failed is `ai_model_unavailable`. Both are logged by reason only, never
+  the requested id. The panel tells the user to pick another and sends
+  nothing to Sentry, which it still does for the default model.
+- **Client.** The settings show Pro a menu of names and listed prices, plus
+  the free-models switch. Free and anonymous users get the switch and a
+  "Pro adds a choice of models" hint. The hosted transport reads the choice
+  at each turn and sends a pick only while the account is Pro. With a key
+  of the user's own, the model settings are replaced by a note: BYOK keeps
+  the default model, so a menu there would promise a choice it ignores.
+- **Not built.** The "≈ $ per turn" estimate, `context_length`, and the
+  health-check canary that would drop a listed model that keeps failing
+  (#1932).
 
 **OpenRouter-side guards** (from the research, recommended): keep prompt
 logging off on the Bldrs account. Opting in grants OpenRouter a licence to
@@ -671,13 +781,87 @@ Per-message metering would multiply that write rate by roughly 100.
     in full (§5 Amendment 3), and releases the difference.
 - **The reservation must be atomic.** That needs a conditional write
   (compare-and-swap on an ETag/version) or an atomic increment in the
-  store. Whether Netlify Blobs offers either is **UNVERIFIED** and is a
-  gating question for spike #1928. If Blobs can't, the ledger moves to a
-  store that can (for example a KV with atomic counters, or a small
-  Postgres row with `UPDATE … WHERE balance >= cost`) before #1932 ships.
+  store. **Settled (2026-11-18): Netlify Blobs has a conditional write.**
+  `store.set(key, value, {onlyIfMatch: etag})` sends `If-Match`,
+  `{onlyIfNew: true}` sends `If-None-Match: *`, and a lost race comes back
+  as a 412, which `@netlify/blobs` reports as `{modified: false}` (read in
+  the pinned 10.7.4's types and source). The ledger
+  (`netlify/functions/_lib/aiLedger.js`) is a compare-and-swap loop over
+  that, with strong-consistency reads. One trap: in 10.7.4 **`setJSON`
+  drops the condition** (it spreads `conditions` into the request instead
+  of passing them), so its write is unconditional and still reports
+  `modified: true`. The ledger uses `set` with `JSON.stringify`, and
+  `_tests/aiLedger.test.js` pins both the trap and the race: two
+  reservations against one balance, through the real client against a
+  server with the Blobs API's conditional-write contract, can't both land.
+  What this rests on is Netlify's service honouring `If-Match` atomically,
+  which is its documented contract and can't be shown locally: the local
+  `BlobsServer` checks then writes across awaits, and its ETag is the
+  file's mtime, so it is not atomic and is not used. The shared breaker
+  key is the hot one: every anonymous and free paid request CASes it
+  twice, so under real load it may need sharding.
+  **The reservation is an upper bound by construction** (Codex on #2220,
+  `ai-chat.js#reservationMicro`): input tokens counted as the UTF-8 bytes
+  sent (every token covers at least one byte) plus per-message, per-tool
+  and base allowances; output as the `max_tokens` sent; priced at the
+  dearest listed endpoint of the whole fallback chain (live catalog,
+  2026-11-18, long-context tiers included), which the relay also sends as
+  `provider.max_price`; times 1.1. A settle above it is booked in full and
+  reported (`settle_exceeded_reservation`). The cost of a genuine bound: a
+  real turn costs about 1% of its reservation, so admitting only when the
+  reservation fits refused small budgets after a few turns; hence the soft
+  budgets below. A fetch that
+  fails after the request may have reached OpenRouter settles at the
+  reservation too, kept in the record's `estimates` with the generation id
+  when known, for the reconciliation job (§5 Amendment 3) to correct.
   The direction is "never more spend than budgeted", unlike quotas.md's
   "free extra, never wrongful block": for model loads an under-count costs
   nothing, but for AI credits it costs real money.
+- **Soft budgets, strict breakers (2026-11-20, assist-310).** The owner
+  sets small signed-out budgets (Netlify env, not code defaults), where a
+  strict reservation admits almost nothing. So:
+  - **Soft** (anonymous and free identity, the anonymous IP bucket): admit
+    while `spent + held < budget`. The worst case is still held and settles
+    to `usage.cost`. Admissions are serialized by the CAS, so spend stays
+    under the budget plus one hold, the last one admitted
+    (`_tests/aiLedger.test.js` proves it under a parallel burst).
+  - **Strict** (the global breakers, the hard dollar safety, and Pro, whose
+    budget is large next to one hold): admit only if the hold fits.
+  - **Size cap.** Anonymous and free bodies are capped at 64 KiB
+    (`AI_MAX_BODY_BYTES_ANONYMOUS` / `_FREE`, `src/quota/aiCredits.js`;
+    refused as `ai_bad_request`, "conversation may be too long"), so one hold,
+    and the overshoot, is at most about $0.03. A soft bucket settling past its
+    budget is the designed overshoot, not `settle_exceeded_reservation`.
+  - **`resumeAt`.** A credits refusal carries when the budget admits again:
+    the first UTC midnight at which enough of the window's spend has aged out
+    (the next midnight for the one-day anonymous buckets), the latest across
+    exhausted buckets, in the 402 body and `x-bldrs-ai-resume-at`.
+  - **The panel pauses instead of failing** (`src/Components/Bot/assistForward.js`).
+    Every turn is stored and forwarded through a session log on the device
+    (`assistLog.js`, localStorage, keyed by `assistSessionKey.js`: model route
+    and sign-in scope), an early local form of workspace-sessions.md §4's
+    session document. A refused turn is a queued entry with a `notBefore`: the
+    panel says "Paused: today's AI credits are used up. Resumes at …", with
+    Sign in or Upgrade to Pro and Cancel, and sends it at that time (plus a few
+    seconds' jitter), on sign-in, on adding a key, or after a reload. A claim
+    moves an entry from queued to sent once, under a Web Lock, so no timer,
+    reload or second tab sends it twice. Without Web Locks (old browsers) no
+    exclusive lock exists over localStorage, so nothing is sent on its own:
+    at its time the notice offers Resume, and only that tab's press claims it.
+    Each model keeps its own log: opening another model in the app shows that
+    model's chat, and a paused turn re-arms when its model is open again. The
+    forwarder watches the store's route itself, and each resume checks the
+    loaded model against the turn's session key right before it claims, so a
+    closed panel can't resume A's turn on B. A turn stopped by a model switch
+    is kept as `interrupted`: shown with its question and a note, never
+    resent. One send per conversation is in flight at a time (a new one waits
+    for an aborted one to unwind), so each send's messages land on its own
+    turn, in order. The
+    upsell stays one per refusal, and `quota_limit_reached` is sent once per
+    refusal id, also for a resend refused again while the dialog is open and
+    for refusals while the panel was closed. The log holds tool results
+    (model data), stays on the device, and is cleared on New chat, Cancel (the
+    turn), a sign-in change and 48 h after its last write or pause.
 - **Reuse.** Add `QUOTA_FEATURES.AI_CREDITS = 'ai_credits'`
   (`src/quota/quota.js:21`, whose comment already invites a new value per
   metered feature). Reuse `getTier`, `QuotaBadge`-style usage display and
@@ -719,6 +903,31 @@ Per-message metering would multiply that write rate by roughly 100.
 - A determined abuser can rotate IPs (residential proxies) and tokens.
   The only hard bound is the global breaker, which also takes the free tier
   down for genuine users while it is tripped.
+- **Done (#2220 follow-up): an Origin check on the relay**
+  (`netlify/functions/_lib/aiOrigin.js`). Without it, another site's page
+  could POST to the relay from its visitors' browsers: each visitor mints
+  their own anonymous token and IP bucket, so the per-identity and per-IP
+  budgets never bind while the global breakers drain. The relay now answers
+  `403 ai_forbidden_origin` to any request whose `Origin` isn't allowed,
+  right after the method check: before the "not configured" check, token
+  minting, Auth0, the ledger and the body, so a refusal costs and mints
+  nothing (and a foreign site learns nothing about the deploy). Allowed:
+  `https://bldrs.ai` (the only production host; `www.bldrs.ai` isn't
+  served, and `bldrs.dev` 301s to bldrs.ai), the origin the request was
+  sent to (the app's own page on whichever deploy serves it: previews and
+  branch deploys; a browser on another site can't make its `Origin` match
+  the host it posts to), `URL`, `DEPLOY_PRIME_URL` and `DEPLOY_URL` when
+  the runtime sets them (it evidently doesn't: deploy-preview-2257 refused
+  its own origin until the request-origin rule landed), `localhost` only
+  under `netlify dev` (`CONTEXT=dev` or
+  `NETLIFY_DEV=true`), and the optional `AI_ALLOWED_ORIGINS`
+  (comma-separated exact origins). A request with no `Origin` passes only
+  with `Sec-Fetch-Site: same-origin`. The relay sends no
+  `Access-Control-Allow-Origin`, ever. **What it doesn't cover:** a
+  non-browser client sets any `Origin` it likes; that stays bounded by the
+  per-IP budgets and the breakers, and only a challenge on token mint
+  (below) closes it. The refusal logs `forbidden_origin` and the origin's
+  host, nothing else: not Sentry (expected abuse), not GA.
 - The server preamble (§5) and the cheap allowlist make it a poor general
   LLM, but not a useless one.
 - Mitigations in reserve, in order of cost: a proof-of-work or captcha
@@ -1010,8 +1219,9 @@ first. It is a task inside #1674.
 - IFC GlobalIds are accepted on input (`SearchSlice` maps GlobalId ↔
   expressId).
 
-Results render as element chips through #1673, so "the AI pointed at it"
-and "the user clicked it" are the same navigation.
+Results render as element chips through #1673 (the model links a ref as
+`[name](ref:e123)`; see [conversational-cad.md](conversational-cad.md) §4), so
+"the AI pointed at it" and "the user clicked it" are the same navigation.
 
 **v0 tools (read/annotate; #1674),** in the namespaced form. Annotation
 column: R = `readOnly`, V = `viewState`, P = `sendsPixels`.
@@ -1022,6 +1232,9 @@ The v0 slice is implemented in #1946 (`src/viewer/tools/`, `src/assist/`). The n
 |---|---|---|---|
 | `model.query` | R | Optional `ifcType`, `level`, `name` and `text` filters, to refs + names. ≤200 refs, with `total` and `truncated`. Every filter is optional (below) | `SearchIndex.search:138` |
 | `model.properties` | R | Attributes and psets for ≤20 refs | `getItemProperties:129`, `getPropertySets:140`, `ShareViewer.getProperties:836` |
+| `model.quantities` | R | Quantities the file carries (IFC `IfcElementQuantity`), per element and totalled by name, in SI; `available:false` when none, so the model falls back to `model.measure`. STEP has none. Async property API only, so it works over the engine worker (#1674 slice 2; `viewer/tools/ifcQuantities.js`, `analysisTools.js`) | `getPropertySets`, `getItemProperties` over the project's `IfcUnitAssignment` |
+| `model.measure` | R | `surfaceArea`, closed-mesh `volume` or world `extents` of refs, from the triangles with instance transforms applied, in metres; labelled a mesh measurement; bounded by a triangle cap and `ctx.signal` | batched instance ranges (`batchedInstanceGeometry.js`), merged-mesh and scene-graph meshes (`elementPieces.js`, `meshMeasure.js`) |
+| `model.spatial` | R | Project > site > building > storey > space with element counts; an element ref returns its container path and storey. STEP and scene graphs return their top hierarchy levels and say it is not spatial | NavTree (`rootElement`) |
 | `view.select` | V | Select refs (replace, add, or clear) | exposed `selectItemsInScene` |
 | `view.isolate` / `view.hide` / `view.showAll` | V | Visibility by refs, IFC ids or STEP occurrences; `showAll` unhides everything | `IfcIsolator.isolateElementsById:1591`, `hideElementsById:1295`, `unHideAllElements:1379`, `hideOccurrences:848`, `isolateOccurrences:1551` |
 | `view.focus` | V | Frame refs, or the whole model when `refs` is omitted; returns center and radius | `Selector.pickByIds(…, focus)`, `fitToFrame` (`context/context.js:215`), `setCameraFromParams` (`CameraControl.jsx:123`) |
@@ -1514,11 +1727,11 @@ because it rides the quota and billing rails.
 
 ## 16. Deferred (named so they are not lost)
 
-- **Sandbox and MCP security for toolbelt apps** (`assist-320`, T11).
+- **Sandbox and MCP security for toolbelt apps** (`assist-320`, `apps-t300`).
   Iframe origin isolation, per-app tool grants and approval, and versioned-app
   provenance (roadmap §10). A section of this doc when `assist-320` starts.
   #1386 is its precondition.
-- **Notes vs channels; shared conversation store** (`assist-400`, T10).
+- **Notes vs channels; shared conversation store** (`assist-400`, `assist-t300`).
   ChannelProvider, and workspace-store.md's record/stream split.
 - **Write tools** (`create-310`). Permissioning and preview-before-apply
   (model-edit.md §9). They append to the document session's op log, never

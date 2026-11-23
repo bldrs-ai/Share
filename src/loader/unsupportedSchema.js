@@ -1,8 +1,14 @@
-import {captureMessage} from '@sentry/react'
 import {stepSchemaName} from '../Filetype'
 import {isLocalOnlyPath} from '../routes/localOnly'
 import {EngineOpenFailureError} from './engineOpenFailure'
-import {loadFailureCaptureContext} from './loadProgress'
+import {sizeClass} from './reportLoadDiagnostics'
+
+
+// The engine-side half (marking an open, reading its refusal and failure
+// reason off conway's statistics) lives in `openAttempt.js`, which is
+// worker-safe: the engine worker classifies its own failed opens with it
+// (engine-worker.md §2.4 G3). Re-exported so existing callers are unchanged.
+export {beginOpenAttempt, conwayOpenFailure, conwayRefusedSchema} from './openAttempt'
 
 
 /**
@@ -23,9 +29,9 @@ import {loadFailureCaptureContext} from './loadProgress'
  *
  * Handled like the OOM and NeedsReconnect alerts in CadView: its own dialog
  * text, and kept out of Sentry's ERROR stream, because an unsupported schema
- * is an expected outcome and not a code defect. It is still counted there,
- * as an `info` message ({@link reportUnsupportedSchema}), because how often
- * users hit it is what ranks the IFC 4.3 work (Share#1879).
+ * is an expected outcome and not a code defect. It is counted in GA instead
+ * ({@link unsupportedSchemaAlert}), because how often users hit it is what
+ * ranks the IFC 4.3 work (Share#1879).
  */
 export class UnsupportedSchemaError extends Error {
   /**
@@ -42,59 +48,55 @@ export class UnsupportedSchemaError extends Error {
 }
 
 
+/** GA `alert` message for a schema refusal: a constant, as the dialog text is. */
+export const UNSUPPORTED_SCHEMA_ALERT_EVENT = 'Unsupported IFC schema'
+
+
+/** A FILE_SCHEMA spelling short and plain enough to be a GA param value. */
+const SCHEMA_TOKEN = /^[A-Z0-9_]{1,32}$/
+
+
 /**
- * Count one refusal in Sentry, to rank the IFC 4.3 work
- * (bldrs-ai/conway#716) by how often users actually hit it (Share#1879).
+ * The dialog for a schema refusal, carrying the GA params AlertDialog counts
+ * it with: the schema, where the model came from, and its size class.
  *
- * A message at level `info`, never an exception: this is demand, not a
- * defect, and must not count toward crash-free rates or read as an engine
- * bug in triage. One issue per schema spelling (the fingerprint), so the
- * issue list reads as a ranking — `IFC4X3_RC2` vs `IFC4X3_ADD2` — with
- * Sentry's own event and user counts on each.
+ * Counted to rank the IFC 4.3 work (bldrs-ai/conway#716) by how often users
+ * actually hit it (Share#1879). Demand, not a defect, so it goes to GA and
+ * never to Sentry (AGENTS.md, "PRs: a Reported Conditions section"). Until
+ * 2026-11 it was an info-level Sentry message (SHARE-1SP), one issue per
+ * schema; the `schema` param keeps that ranking.
  *
- * The load context (`load.phase` tag, `load` context with the report) is
- * the same a failed load's exception gets, so an event can be traced back
- * to the file without user contact — but attached to this event only, never
- * to the session's scope.
+ * Every param is closed-set or bucketed. `schema` comes from the file's
+ * header, so anything but a short upper-case token reads as `other`; conway
+ * only names 4x3 spellings here (`IFC4X3_RC2`, `IFC4X3_ADD2`, …) in practice.
  *
  * What it does not carry yet is WHICH 4.3 features caused the refusal
- * (alignments, spirals, sectioned solids, …) — the thing that maps a
- * refusal onto a #716 phase. conway computes those reasons but does not
- * hand them to Share; bldrs-ai/conway#720 tracks exposing them, and they
- * belong on this event as a tag when it lands.
+ * (alignments, spirals, sectioned solids, …), the thing that maps a refusal
+ * onto a #716 phase. conway computes those reasons but does not hand them
+ * to Share; bldrs-ai/conway#720 tracks exposing them, and they belong on
+ * this event as a param when it lands.
  *
  * @param {UnsupportedSchemaError} err the refusal
  * @param {object|null} routeResult the route the model was opened from
  *   (src/routes/routes.ts#RouteResult)
+ * @return {{type: 'unsupportedSchema', message: string, ga: object}} `ga` holds
+ *   the GA params, string values only
  */
-export function reportUnsupportedSchema(err, routeResult) {
-  try {
-    // The load context goes on THIS event only: applying it to the scope
-    // (attachLoadFailureContext) would leave the refused model's load
-    // details on every later event in the session.
-    const load = loadFailureCaptureContext()
-    const tags = {
-      ...load.tags,
-      schema: err.schema,
-      model_source: modelSourceOf(routeResult),
-    }
-    if (Number.isFinite(err.sizeBytes)) {
-      tags.model_size_mb = Math.round(err.sizeBytes / BYTES_PER_MB)
-    }
-    captureMessage(`Unsupported IFC schema: ${err.schema}`, {
-      level: 'info',
-      fingerprint: ['unsupported-schema', err.schema],
-      tags,
-      contexts: load.contexts,
-    })
-  } catch (_) {
-    // Reporting is best-effort; the user already has the dialog.
+export function unsupportedSchemaAlert(err, routeResult) {
+  const schema = String(err?.schema ?? '').toUpperCase()
+  const ga = {
+    schema: SCHEMA_TOKEN.test(schema) ? schema : 'other',
+    model_source: modelSourceOf(routeResult),
   }
+  if (Number.isFinite(err?.sizeBytes)) {
+    ga.size_class = sizeClass(err.sizeBytes)
+  }
+  return {type: 'unsupportedSchema', message: err.message, ga}
 }
 
 
 /**
- * Where the refused model came from, as a low-cardinality Sentry tag.
+ * Where the refused model came from, as a low-cardinality GA param.
  *
  * @param {object|null} routeResult
  * @return {string} 'upload' | 'hosted' | 'github' | 'google' | 'url' | 'unknown'
@@ -119,164 +121,17 @@ export function modelSourceOf(routeResult) {
  * section, which on any real model ends well inside this.
  */
 const BYTES_PER_KIB = 1024
-const BYTES_PER_MB = BYTES_PER_KIB * BYTES_PER_KIB
 const HEADER_SNIFF_KIB = 64
-const HEADER_SNIFF_BYTES = HEADER_SNIFF_KIB * BYTES_PER_KIB
-
-
-/**
- * An open about to be made: the id conway will attempt it under, and the
- * statistics object already under that id, if any.
- *
- * @typedef {object} OpenAttempt
- * @property {number} id the id conway will attempt the open under
- * @property {object} [before] the statistics object already under that id
- */
-
-
-/**
- * Mark an open about to be made, so {@link conwayRefusedSchema} can tell
- * afterwards whether THAT open was refused. Call immediately before the
- * open, with nothing awaited in between.
- *
- * conway keys a load's statistics — including the `UNSUPPORTED_SCHEMA` load
- * status its IFC4X3 refusal records — by the id the open was attempted
- * under, and a refused open returns -1 rather than that id. Every conway
- * open takes its id from the public `globalModelIDCounter` synchronously at
- * call time (the async opens increment it before their first await; the
- * sync `OpenModel` increments only on success), so the counter's value
- * immediately before the call IS the attempted id.
- *
- * That id is only unique within one `IfcAPI`, while conway's statistics
- * live in a module-level map that outlives it — Share builds a fresh
- * `IfcAPI` per load (ShareIfc.js), so ids restart at 0 while an earlier
- * load's statistics stay. An open that fails before its header parses
- * (a corrupt header) writes no statistics at all, and would read an
- * earlier refusal's. So the attempt also snapshots the statistics object
- * already under that id: conway creates a NEW one for every open that gets
- * far enough to refuse, and only a new one counts. Two loads running at
- * once in separate `IfcAPI`s would share id 0 in that map and could read
- * each other's status; Share runs one load at a time, so this is noted
- * rather than guarded.
- *
- * @param {object} ifcAPI
- * @return {OpenAttempt|undefined} undefined on an engine without the
- *   counter (real web-ifc), which never refuses on schema anyway
- */
-export function beginOpenAttempt(ifcAPI) {
-  const id = ifcAPI?.globalModelIDCounter
-  if (typeof id !== 'number') {
-    return undefined
-  }
-  return {id, before: statisticsFor(ifcAPI, id)}
-}
-
-
-/**
- * Did conway refuse the open marked by `attempt` because of its schema?
- *
- * This is the POSITIVE signal: conway sets `UNSUPPORTED_SCHEMA` only on its
- * IFC4X3 refusal paths (bldrs-ai/conway#713, #718), never on a geometry
- * failure or on a non-4X3 file, so an engine regression on an IFC4X3 file
- * conway does support keeps the generic error — the header alone cannot
- * tell those apart. One overlap is conway's by design: its eligibility
- * decision needs a COMPLETE parse, so a truncated or syntax-broken 4X3 file
- * is refused the same way (conway#718's `decide`) and gets this dialog
- * rather than the generic error; the message's "not this one yet" is
- * worded to stay true for it. And it must be THIS open's statistics (a
- * different object from the one {@link beginOpenAttempt} saw), not a
- * leftover.
- *
- * @param {object} ifcAPI
- * @param {OpenAttempt|undefined} attempt from {@link beginOpenAttempt}
- * @return {boolean}
- */
-export function conwayRefusedSchema(ifcAPI, attempt) {
-  const after = attemptStatistics(ifcAPI, attempt)
-  if (after === undefined) {
-    return false
-  }
-  try {
-    return after.getLoadStatus?.() === 'UNSUPPORTED_SCHEMA'
-  } catch (_) {
-    return false
-  }
-}
-
-
-/**
- * What conway recorded about WHY the open marked by `attempt` failed
- * (conway#742): its load status (`UNRECOGNIZED_FORMAT`, `OPEN_FAIL`,
- * `INDEX_RESTORE_FAIL`, …) and `getLoadFailureReason()`, read from the same
- * attempt-owned statistics object {@link conwayRefusedSchema} trusts, so an
- * earlier load's leftovers are never read as this open's.
- *
- * Undefined when there is nothing to report: an engine without the counter
- * or the statistics, a pre-#742 conway (no `getLoadFailureReason`), an open
- * that wrote no statistics, or no reason recorded. Callers then keep the
- * generic error.
- *
- * @param {object} ifcAPI
- * @param {OpenAttempt|undefined} attempt from {@link beginOpenAttempt}
- * @return {{status: string, reason: string}|undefined}
- */
-export function conwayOpenFailure(ifcAPI, attempt) {
-  const after = attemptStatistics(ifcAPI, attempt)
-  if (after === undefined) {
-    return undefined
-  }
-  try {
-    const reason = after.getLoadFailureReason?.()
-    if (typeof reason !== 'string' || reason.trim() === '') {
-      return undefined
-    }
-    const status = after.getLoadStatus?.()
-    return {status: typeof status === 'string' ? status : 'UNKNOWN', reason}
-  } catch (_) {
-    return undefined
-  }
-}
-
-
-/**
- * The statistics object THIS open created, as opposed to none or a
- * leftover (see {@link beginOpenAttempt} on why that distinction matters).
- *
- * @param {object} ifcAPI
- * @param {OpenAttempt|undefined} attempt
- * @return {object|undefined}
- */
-function attemptStatistics(ifcAPI, attempt) {
-  if (attempt === undefined) {
-    return undefined
-  }
-  const after = statisticsFor(ifcAPI, attempt.id)
-  return after === undefined || after === attempt.before ? undefined : after
-}
-
-
-/**
- * @param {object} ifcAPI
- * @param {number} id
- * @return {object|undefined} conway's statistics for `id`, if any
- */
-function statisticsFor(ifcAPI, id) {
-  if (typeof ifcAPI?.getStatistics !== 'function') {
-    return undefined
-  }
-  try {
-    return ifcAPI.getStatistics(id) ?? undefined
-  } catch (_) {
-    return undefined
-  }
-}
+// Exported for engine/engineModelLoad.js#openFailureSource, which keeps
+// exactly this much of a source whose bytes it transfers to a worker.
+export const HEADER_SNIFF_BYTES = HEADER_SNIFF_KIB * BYTES_PER_KIB
 
 
 /**
  * The error to throw when conway's open returned a non-model id.
  *
  * Only a load conway itself reported as a schema refusal
- * ({@link conwayRefusedSchema}) is singled out; everything else keeps the
+ * (`openAttempt.js#conwayRefusedSchema`) is singled out; everything else keeps the
  * original message verbatim, so genuine engine failures stay recognisable
  * in Sentry and in tests that assert on it — including a failed load of an
  * IFC4X3 file conway does support (codex review of Share#1875). The file's
@@ -290,9 +145,9 @@ function statisticsFor(ifcAPI, id) {
  *
  * @param {number|undefined} modelID what OpenModel* returned
  * @param {ArrayBuffer|Uint8Array|Blob} source the bytes that were opened
- * @param {boolean} refused {@link conwayRefusedSchema} for this open
+ * @param {boolean} refused `openAttempt.js#conwayRefusedSchema` for this open
  * @param {{status: string, reason: string}} [failure]
- *   {@link conwayOpenFailure} for this open, when conway recorded a reason
+ *   `openAttempt.js#conwayOpenFailure` for this open, when conway recorded a reason
  * @return {Promise<Error>} an UnsupportedSchemaError; else, when conway gave
  *   a reason, an EngineOpenFailureError carrying it; else the generic open
  *   error (older conway, or no statistics for this open)

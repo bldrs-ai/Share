@@ -1,14 +1,20 @@
 import React, {ReactElement, useEffect, useState} from 'react'
+import {captureException} from '@sentry/react'
 import {decodeIFCString} from '@bldrs-ai/ifclib'
 import {Box, Paper, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useIsMobile} from '../Hooks'
+import NoContent from '../NoContent'
 import Toggle from '../Toggle'
 import useStore from '../../store/useStore'
 import {selectReadModel} from '../../store/IFCSlice'
 import {hexToRgba} from '../../utils/color'
 import ExpansionPanel from './ExpansionPanel'
-import {createPropertyTable} from './itemProperties'
+import {createPropertyTable, createPropertyTables} from './itemProperties'
+
+
+/** Shown in place of a property table that could not be built. */
+export const PROPERTIES_UNAVAILABLE_MESSAGE = 'Properties for this element are not available.'
 
 
 /**
@@ -91,12 +97,30 @@ export default function Properties() {
         if (isStale) {
           return
         }
-        const table = await createPropertyTable(model, fullElement)
+        let table
+        try {
+          table = await createPropertyTable(model, fullElement)
+        } catch (e) {
+          // A table that cannot be built says so, rather than leaving the
+          // PREVIOUS element's properties on screen under this selection.
+          // (A throw while rendering is PropertiesPanel's ErrorBoundary's.)
+          console.warn('Properties: could not build the property table', e)
+          // Reported, as the unhandled rejection this used to be was (Sentry's
+          // GlobalHandlers), so the next bad reference shape is still heard.
+          reportBuildFailure(e, 'table', element)
+          table = <NoContent message={PROPERTIES_UNAVAILABLE_MESSAGE}/>
+        }
         if (isStale) {
           return
         }
         setPropTable(table)
-        const psets = await createPsetsList(model, fullElement, expandAll)
+        let psets = null
+        try {
+          psets = await createPsetsList(model, fullElement, expandAll)
+        } catch (e) {
+          console.warn('Properties: could not build the property sets', e)
+          reportBuildFailure(e, 'psets', element)
+        }
         if (isStale) {
           return
         }
@@ -117,15 +141,24 @@ export default function Properties() {
         'padding': '0.5em',
         'paddingBottom': isMobile ? '80px' : '0px',
         '& td': {
-          minWidth: '130px',
-          maxWidth: '130px',
           verticalAlign: 'top',
           cursor: 'pointer',
           padding: '3px 0',
           borderBottom: `.2px solid ${propSeparatorColor}`,
         },
+        // Members of a list of nested tables (UAxes, ...): spacing and a hairline.
+        '& .prop-member + .prop-member': {
+          marginTop: '3px',
+          paddingTop: '3px',
+          borderTop: `.2px solid ${propSeparatorColor}`,
+        },
+        '& .prop-nested': {
+          paddingLeft: '8px',
+        },
         '& table': {
-          tableLayout: 'fixed',
+          // Auto layout: Row sizes the label column to its content (capped)
+          // and gives the rest to the value column (Share#2075).
+          tableLayout: 'auto',
           width: '100%',
           overflow: 'hidden',
           borderSpacing: 0,
@@ -159,6 +192,20 @@ export default function Properties() {
       }
     </Paper>
   )
+}
+
+
+/**
+ * Send a failed property build to Sentry. Console output is not captured
+ * there (loadProgress.js says why), so the panel's catches must report
+ * explicitly or the failure is seen by no one.
+ *
+ * @param {Error} error
+ * @param {string} part 'table' or 'psets'
+ * @param {object} element the selected element
+ */
+function reportBuildFailure(error, part, element) {
+  captureException(error, {tags: {component: 'Properties', part}, extra: {expressID: element?.expressID}})
 }
 
 
@@ -219,18 +266,17 @@ function CacheWriteAffordance() {
  */
 async function createPsetsList(model, element, expandAll) {
   const psets = await model.getPropertySets(element.expressID)
+  // One resolve for every set: under the engine worker that is one request,
+  // not one per set and one per property in each (Share#2070).
+  const tables = await createPropertyTables(model, psets.map((ps) => ({record: ps, isPset: true})))
   return [
-    await Promise.all(
-      psets.map(async (ps, ndx) => {
-        return (
-          <ExpansionPanel
-            key={`pset-${ndx}`}
-            summary={decodeIFCString(ps.Name.value) || 'Property Set'}
-            detail={await createPropertyTable(model, ps, true, 0)}
-            expandState={expandAll}
-          />
-        )
-      }),
-    ),
+    psets.map((ps, ndx) => (
+      <ExpansionPanel
+        key={`pset-${ndx}`}
+        summary={decodeIFCString(ps.Name.value) || 'Property Set'}
+        detail={tables[ndx]}
+        expandState={expandAll}
+      />
+    )),
   ]
 }

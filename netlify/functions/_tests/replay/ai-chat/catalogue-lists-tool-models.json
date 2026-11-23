@@ -1,0 +1,54 @@
+{
+  "description": "The model picker's list (GET ?catalogue, #1934): OpenRouter's public model and ZDR listings, read without Bldrs' key, filtered to tool-capable text models with a ZDR endpoint, after the curated table; behind the Origin check, touching no ledger.",
+  "env": {
+    "$fixture": "env/ai-chat.json"
+  },
+  "request": {
+    "method": "GET",
+    "path": "/.netlify/functions/ai-chat",
+    "query": {
+      "catalogue": ""
+    },
+    "headers": {
+      "origin": "https://bldrs.ai"
+    }
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://openrouter.ai/api/v1/models"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "openrouter/models.json"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://openrouter.ai/api/v1/endpoints/zdr"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "openrouter/zdr.json"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "json": {
+      "source": "live",
+      "default": "qwen/qwen3.7-flash",
+      "free": "bldrs/free"
+    },
+    "bodyIncludes": "\"id\":\"x-ai/grok-4.7\",\"name\":\"SpaceXSI: Grok 4.7\",\"price\":{\"input\":4,\"output\":12},\"tiers\":[\"pro\"]",
+    "headers": {
+      "content-type": "application/json"
+    }
+  }
+}

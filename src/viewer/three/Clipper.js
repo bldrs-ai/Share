@@ -52,6 +52,10 @@ export default class Clipper {
   constructor(viewer) {
     this.viewer = viewer
     this._meshClipper = null
+    // Called on every drag move of a plane's arrow, with no arguments; set
+    // by CutPlaneMenu, which debounces it into the `#cp:` permalink. Kept
+    // here, not on the MeshClipper, so it survives `setModel`.
+    this.onPlaneMoved = null
 
     // Plugin-owned session state. With the fork backend gone these no
     // longer sync to any clipper impl — `MeshClipper` has no equivalent
@@ -86,7 +90,7 @@ export default class Clipper {
       this._meshClipper = null
     }
     if (model) {
-      this._meshClipper = new MeshClipper(this.viewer, model)
+      this._meshClipper = new MeshClipper(this.viewer, model, {onPlaneMoved: () => this.onPlaneMoved?.()})
     }
   }
 

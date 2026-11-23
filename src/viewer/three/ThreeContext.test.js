@@ -108,6 +108,20 @@ describe('viewer/three/ThreeContext', () => {
     expect(legacy.items.pickableIfcModels).toHaveLength(2)
   })
 
+  it('runs an onFrame callback as one of the loop\'s components, until stopped', () => {
+    const legacy = makeFakeLegacyContext()
+    legacy.items.components = []
+    legacy.addComponent = (component) => legacy.items.components.push(component)
+    const ctx = new ThreeContext(legacy)
+    const fn = jest.fn()
+    const stop = ctx.onFrame(fn)
+    legacy.items.components.forEach((component) => component.update(RENDER_UPDATE_SENTINEL))
+    expect(fn).toHaveBeenCalledWith(RENDER_UPDATE_SENTINEL)
+    stop()
+    stop()
+    expect(legacy.items.components).toHaveLength(0)
+  })
+
   it('routes setRenderUpdate to the legacy renderer wrapper', () => {
     const legacy = makeFakeLegacyContext()
     const ctx = new ThreeContext(legacy)

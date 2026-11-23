@@ -1,0 +1,24 @@
+{
+  "description": "A request from another website is refused 403 ai_forbidden_origin before anything else: no token minted, no ledger or upstream call (the scenario lists no exchanges), and no Access-Control-Allow-Origin.",
+  "env": {
+    "$fixture": "env/ai-chat.json"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/ai-chat",
+    "headers": {
+      "content-type": "application/json",
+      "origin": "https://evil.example"
+    },
+    "body": {
+      "model": "qwen/qwen3.7-flash",
+      "messages": [{"role": "user", "content": "spend your budget"}],
+      "stream": true
+    }
+  },
+  "exchanges": [],
+  "expect": {
+    "statusCode": 403,
+    "bodyIncludes": "ai_forbidden_origin"
+  }
+}

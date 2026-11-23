@@ -14,7 +14,21 @@ export default function createIFCSlice(set, get) {
     setCustomViewSettings: (settings) => set(() => ({customViewSettings: settings})),
 
     isModelLoading: false,
-    setIsModelLoading: (isLoading) => set(() => ({isModelLoading: isLoading})),
+    // A load that ends also ends its first mesh: `isFirstMeshShown` belongs to
+    // the load in flight, and the next one starts without it.
+    setIsModelLoading: (isLoading) => set(() => (isLoading ?
+      {isModelLoading: true} :
+      {isModelLoading: false, isFirstMeshShown: false})),
+
+    // Whether the load in flight has put geometry on screen yet (open-205
+    // #2043): set by CadView when a progressive load's first preview mesh or
+    // streamed batch lands (ProgressiveLoadSession's `onFirstMesh`) and that
+    // load is still the one shown, cleared when the load ends or the user
+    // leaves it. The loading overlay lifts on it, so the camera and
+    // scene picking are live from the first preview mesh, during the parse
+    // (Components/LoadingBackdrop.jsx).
+    isFirstMeshShown: false,
+    setIsFirstMeshShown: (isShown) => set(() => ({isFirstMeshShown: isShown})),
 
     // The normalized load-log report (design/new/load-log-format.md):
     // frozen lines (Share/engine/model preamble + finished stage lines +

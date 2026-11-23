@@ -181,6 +181,23 @@ describe('Loader#load — a user-opened Bldrs GLB artifact (#1844)', () => {
     expect(getCompletedLoadStats().cacheHit).toBe('false')
   })
 
+  // The size half of the same split. A hit reports the source's size as the
+  // writer stamped it (BLDRS_SOURCE_BYTES_EXTRAS_KEY), never its own; a file
+  // the user opened IS the source, so its own bytes are the size. Same caveat
+  // as above: the hit half is checked on a deploy preview, not here.
+  it('reports a file the user opened at its own size', async () => {
+    const bytes = await batchedArtifactBytes(liveBatchedModel())
+    const infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {})
+    beginLoadProgress({fileInfo: ARTIFACT_PATH})
+    try {
+      await openGlb(bytes)
+    } finally {
+      endLoadProgress()
+      infoSpy.mockRestore()
+    }
+    expect(getCompletedLoadStats().fileSize).toBe(bytes.byteLength)
+  })
+
   describe('…wrapped in a gzipped v3 container (#1855)', () => {
     // The cache-hit path end to end on compressed bytes: `readModel` sees
     // the BLDR magic, `parseBldrsGlbContainer` inflates both members back

@@ -4,7 +4,7 @@ module.exports = {
   // walking up the filesystem and merges every ancestor `.eslintrc` it finds,
   // so anything in a parent directory silently becomes part of this project's
   // lint config — and a plugin named there that this repo cannot resolve makes
-  // eslint fail outright rather than degrade, taking `yarn precommit` and the
+  // eslint fail outright rather than degrade, taking `bun run precommit` and the
   // husky hook down with it.
   //
   // Normally there is no ancestor config and this is a no-op, which is why it
@@ -40,13 +40,38 @@ module.exports = {
     'netlify/functions/_pro-modules/**',
   ],
   overrides: [
+    // ESLint 8 lints only `.js` in a directory argument (`eslint src netlify
+    // tools`) unless an override names more extensions, so every extension
+    // the repo writes code in has to appear in some override's `files` —
+    // `.cjs` included, or a require() in tools/jest/setupNodeFetch.cjs goes
+    // unchecked by everything below (codex on #2142).
     {
-      files: ['*.js', '*.mjs', '*.jsx'],
+      files: ['*.js', '*.mjs', '*.cjs', '*.jsx'],
     },
     {
       files: ['*.test.js', '*.test.jsx'],
       rules: {
         'no-empty-function': ['error', {allow: ['arrowFunctions']}],
+      },
+    },
+    // Measurement tools (`tools/spikes/**`, open-205 §9.1; offscreen-rendering.md
+    // §5b): scene constants and percentiles read better inline than as named
+    // constants, and the code is a standalone page, built only with
+    // MEASUREMENT_TOOLS (tools/esbuild/vars.prod.js), never part of the app.
+    {
+      files: ['tools/spikes/**/*.js'],
+      rules: {
+        'no-magic-numbers': 'off',
+      },
+    },
+    // The source-mode bench (`tools/bench/**`, tools/bench/sourceModes/README.md):
+    // a measurement harness run by hand, never part of the app or of CI. Its
+    // numbers are poll intervals, timeouts, unit conversions and /proc field
+    // offsets, each next to the comment that says what it is.
+    {
+      files: ['tools/bench/**/*.mjs'],
+      rules: {
+        'no-magic-numbers': 'off',
       },
     },
     // Vendored IfcContext family (`src/viewer/three/context/**`) — code
@@ -211,6 +236,47 @@ module.exports = {
     'eqeqeq': ['error', 'always'],
     'func-call-spacing': ['error', 'never'],
     'import/newline-after-import': ['error', {count: 2}],
+    // Every imported package must be declared in the root package.json. Under
+    // bunfig.toml's isolated linker an undeclared one doesn't resolve at all,
+    // but only on the paths that actually run it, so a rarely-run tool or a
+    // branch no test reaches fails at its user, not here; ten such imports
+    // were found when the linker landed (design/new/toolchain-node-bun.md).
+    // `packageDir` pins the check to the root manifest: the nested
+    // `{"type": "module"}` package.json files under src/, netlify/ and tools/
+    // declare nothing, and the rule would otherwise read the nearest one.
+    // App and function code may import only `dependencies` at runtime; tests,
+    // specs, fixtures, mocks and build tooling may also use `devDependencies`.
+    // Type-only imports (`import type`) are exempt by design, since they're
+    // erased before bundling, and @types/* packages belong in devDependencies.
+    // jest.mock()/requireActual() paths aren't checked here: jest throws
+    // "Cannot find module" for an undeclared package at run time, and every
+    // test runs in the gate.
+    'import/no-extraneous-dependencies': ['error', {
+      packageDir: [__dirname],
+      optionalDependencies: false,
+      peerDependencies: false,
+      devDependencies: [
+        '**/*.test.*',
+        '**/*.spec.*',
+        '**/*.fixture.*',
+        '**/__mocks__/**',
+        '**/_tests/**',
+        'src/tests/**',
+        'src/utils/tests.js',
+        'tools/**',
+        'netlify/cors-proxy.js',
+        '.eslintrc.cjs',
+        '.dependency-cruiser.js',
+      ],
+    }],
+    // The rule above skips an import it can't resolve, and on the isolated
+    // tree an undeclared package is exactly that, so this is the half that
+    // catches it (sharp and express in tools, found in review on #2142).
+    // Relative paths are checked too: the build and the tests only catch a
+    // broken relative import where they reach it, and one nothing reaches is
+    // dead code. Five such imports in four unreachable files were found when
+    // this rule landed and were fixed or deleted in the follow-up.
+    'import/no-unresolved': ['error', {commonjs: true}],
     'indent': ['error', 2, {SwitchCase: 1}],
     'jsdoc/check-param-names': 'off',
     'jsdoc/check-types': 'error',
@@ -232,6 +298,15 @@ module.exports = {
     'no-lone-blocks': 'error',
     'no-lonely-if': 'error',
     'no-loop-func': 'error',
+    // esbuild lowers syntax to tools/esbuild/common.js's targets but adds no
+    // polyfills, so a built-in newer than those targets throws on the browsers
+    // they name (SHARE-1XY: `Object.hasOwn is not a function` from
+    // part21Formats.js). Use Object.prototype.hasOwnProperty.call instead.
+    'no-restricted-properties': ['error', {
+      object: 'Object',
+      property: 'hasOwn',
+      message: 'Not polyfilled for the build targets (SHARE-1XY); use Object.prototype.hasOwnProperty.call.',
+    }],
     'no-mixed-operators': 'error',
     'no-magic-numbers': ['error', {
       ignore: [-10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],

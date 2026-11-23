@@ -5,10 +5,14 @@ import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
 import {archiveGuidance, formatGuidance} from '../loader/formatGuidance'
 import {ARCHIVE_ENTRY_CHOICE, ARCHIVE_UNREADABLE} from '../loader/modelArchive'
 import {NotFoundError} from '../loader/Loader'
-import {UNRECOGNIZED_FORMAT_ALERT_EVENT, reportUnrecognizedFormat} from '../loader/unrecognizedFormat'
+import {UNRECOGNIZED_FORMAT_ALERT_EVENT, unrecognizedFormatGaParams} from '../loader/unrecognizedFormat'
+import {UNSUPPORTED_SCHEMA_ALERT_EVENT} from '../loader/unsupportedSchema'
 import {getProvider} from '../connections/registry'
+import {CACHE_CLEAR_SKIPPED} from '../OPFS/messages'
 import useStore from '../store/useStore'
+import {gtagEventWithCid, LOCAL_LINK_EVENTS} from '../privacy/analytics'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
+import {DROP_REFUSED} from '../utils/dragAndDrop'
 import ArchiveEntryChoice from './ArchiveEntryChoice'
 import Dialog from './Dialog'
 
@@ -51,8 +55,15 @@ export default function AlertDialog({onClose}) {
     if (typeof alert !== 'object') {
       return
     }
-    if (alert.type === ARCHIVE_ENTRY_CHOICE) {
-      // A question, not a failure: nothing to count. Its entry names are the
+    if (alert.repeat === true) {
+      // Shown again for a model it was already counted for: CadView's
+      // re-runs of the same route (reportedRefusalRef) mark it so the demand
+      // counts below stay one per model.
+      return
+    }
+    if (alert.type === ARCHIVE_ENTRY_CHOICE || alert.type === CACHE_CLEAR_SKIPPED) {
+      // A question, or a cache clear another tab held back (ProfileControl):
+      // not a failure, nothing to count. Its entry names are the
       // user's file names, which must not reach Sentry or GA anyway.
       return
     }
@@ -64,8 +75,14 @@ export default function AlertDialog({onClose}) {
       // object would be a context-less duplicate; and load_failed carries
       // the closed-set reason_class.
       trackAlertEvent(ENGINE_FAILURE_ALERT_EVENT)
-    } else if (alert.type === 'unsupportedSchema' || alert.type === 'inMemoryUploadGone' ||
-        alert.type === 'uploadNotInBrowser' || alert.type === 'noGeometry' || alert.type === ARCHIVE_UNREADABLE) {
+    } else if (alert.type === 'unsupportedSchema') {
+      // Demand, not a defect (Share#1879): GA only. A constant message, with
+      // the schema, source and size class as params (unsupportedSchema.js
+      // #unsupportedSchemaAlert); the dialog text names the schema, which is
+      // header text.
+      trackAlertEvent(UNSUPPORTED_SCHEMA_ALERT_EVENT, alert.ga ?? {})
+    } else if (alert.type === 'inMemoryUploadGone' || alert.type === 'uploadNotInBrowser' ||
+        alert.type === 'noGeometry' || alert.type === ARCHIVE_UNREADABLE || alert.type === DROP_REFUSED) {
       // Expected outcome, not a defect: analytics only, never Sentry
       // (alertTracking.js#trackAlertEvent). `inMemoryUploadGone` is a
       // /v/local-only/ URL whose file, opened without OPFS, was held only by a
@@ -73,17 +90,26 @@ export default function AlertDialog({onClose}) {
       // a /v/local-only/ link, with OPFS available, to an upload this browser
       // doesn't hold (#1955). `noGeometry` is a model conway read fine that
       // has nothing to draw (loadProgress#classifyLoadOutcome, #1962).
-      // `archiveUnreadable` is a hosted `.ifczip` that isn't one readable
-      // IFC (loader/modelArchive.js); its message never names the file.
+      // `archiveUnreadable` is a downloaded archive (any URL whose bytes are
+      // a zip, `.ifczip` included) that isn't one readable model
+      // (loader/modelArchive.js#unwrapHostedArchive). Its message names no
+      // file; `dialogText`, which may name the entries inside, is shown but
+      // never counted. `dropRefused` is a drop with no file in it, or several
+      // (utils/dragAndDrop.js#handleFileDrop); its two messages are constants.
       trackAlertEvent(alert.message)
     } else if (alert.type === 'unrecognizedFormat') {
-      // Also an expected outcome, but counted in Sentry too, as one info
-      // issue tagged by extension (loader/unrecognizedFormat.js). GA gets the
-      // constant, since the picker's message names the user's file.
-      reportUnrecognizedFormat(alert)
-      trackAlertEvent(UNRECOGNIZED_FORMAT_ALERT_EVENT)
+      // Also an expected outcome, GA only: the constant, since the picker's
+      // message names the user's file, with the extension and entry as
+      // params (loader/unrecognizedFormat.js#unrecognizedFormatGaParams).
+      trackAlertEvent(UNRECOGNIZED_FORMAT_ALERT_EVENT, unrecognizedFormatGaParams(alert))
     } else if (alert.type === 'oom' || alert.type === 'needsReconnect') {
       trackAlert(alert.message, alert)
+    } else if (alert instanceof NotFoundError && alert.isExpected) {
+      // A GitHub link that isn't there or isn't visible to this user
+      // (SHARE-1XP): their link or access, not a defect, so GA only. The
+      // message is a constant (notFoundError.js#GITHUB_NOT_FOUND_MESSAGE);
+      // the route, which names the repository, is never counted.
+      trackAlertEvent(alert.message, {source: alert.source ?? 'unknown'})
     } else if (alert instanceof NotFoundError || alert instanceof Error) {
       if (!(alert instanceof NotFoundError)) {
         console.error('General error:', alert)
@@ -97,6 +123,23 @@ export default function AlertDialog({onClose}) {
     onClose()
   }
 
+  // local_link_missing_action, one per shown "File not in this browser"
+  // dialog: the "Open a file" button reports 'open_file' and every other
+  // close (X, backdrop, Escape) 'dismiss'. openAFile also runs onCloseInner,
+  // which is why the dismiss path is a separate wrapper below rather than
+  // living in onCloseInner. Skipped for a repeat alert, like the `alert` event
+  // above: the visitor already saw, and was counted for, this dialog.
+  const trackMissingLinkAction = (action) => {
+    if (alert?.type !== 'uploadNotInBrowser' || alert.repeat === true) {
+      return
+    }
+    gtagEventWithCid(LOCAL_LINK_EVENTS.ACTION, {action, origin: alert.origin ?? 'unknown'})
+  }
+  const onCloseDismiss = () => {
+    trackMissingLinkAction('dismiss')
+    onCloseInner()
+  }
+
   const isOom = alert && typeof alert === 'object' && alert.type === 'oom'
   const isNeedsReconnect = alert && typeof alert === 'object' && alert.type === 'needsReconnect'
   const isUnsupportedSchema = alert && typeof alert === 'object' && alert.type === 'unsupportedSchema'
@@ -104,6 +147,7 @@ export default function AlertDialog({onClose}) {
   const isUploadNotInBrowser = alert && typeof alert === 'object' && alert.type === 'uploadNotInBrowser'
   const isNoGeometry = alert && typeof alert === 'object' && alert.type === 'noGeometry'
   const isEntryChoice = alert && typeof alert === 'object' && alert.type === ARCHIVE_ENTRY_CHOICE
+  const isCacheClearSkipped = alert && typeof alert === 'object' && alert.type === CACHE_CLEAR_SKIPPED
   // A rejected file whose extension we can say something useful about: a
   // Revit project, a SolidWorks part, a PDF (loader/formatGuidance.js). Only
   // the header and body change; it is still an unrecognizedFormat alert, so
@@ -112,12 +156,12 @@ export default function AlertDialog({onClose}) {
   // A zip Share looked inside and couldn't open (loader/modelArchive.js)
   // carries `archive`, what it holds or why it can't be read. The file's own
   // extension still wins: a .docx is a zip, and NOT_A_MODEL says it better.
-  // A hosted `.ifczip` that couldn't be opened gets the same "why" text.
+  // A downloaded archive that couldn't be opened gets the same "why" text.
   let guidance = null
   if (alert && typeof alert === 'object' && alert.type === 'unrecognizedFormat') {
     guidance = formatGuidance(alert.ext) ?? (alert.archive ? archiveGuidance(alert.archive) : null)
   } else if (alert && typeof alert === 'object' && alert.type === ARCHIVE_UNREADABLE) {
-    guidance = archiveGuidance({problem: alert.message})
+    guidance = archiveGuidance({problem: alert.dialogText ?? alert.message})
   }
   const setIsOpenModelVisible = useStore((state) => state.setIsOpenModelVisible)
 
@@ -155,6 +199,7 @@ export default function AlertDialog({onClose}) {
   // useHashState re-asserts as `#open` after the navigation, so it survives
   // the route change.
   const openAFile = () => {
+    trackMissingLinkAction('open_file')
     onCloseInner()
     setIsOpenModelVisible(true)
   }
@@ -164,6 +209,13 @@ export default function AlertDialog({onClose}) {
   // (navToDefault); a no-geometry model did load, and its tree and properties
   // are still there to look at.
   const dismiss = () => setAlert(null)
+
+  // A partial cache clear: ProfileControl holds its reload until this is read.
+  const acknowledgeCacheClear = () => {
+    const onDismiss = alert.onDismiss
+    setAlert(null)
+    onDismiss?.()
+  }
 
   let actionCb
   let actionTitle
@@ -183,6 +235,9 @@ export default function AlertDialog({onClose}) {
     actionTitle = 'Open a file'
   } else if (isNoGeometry) {
     actionCb = dismiss
+    actionTitle = 'OK'
+  } else if (isCacheClearSkipped) {
+    actionCb = acknowledgeCacheClear
     actionTitle = 'OK'
   } else if (isEntryChoice) {
     // The rows are the actions; the close button is the way out.
@@ -208,6 +263,8 @@ export default function AlertDialog({onClose}) {
     headerText = 'No 3D geometry'
   } else if (isEntryChoice) {
     headerText = 'Choose a model'
+  } else if (isCacheClearSkipped) {
+    headerText = 'Cache partly cleared'
   } else if (guidance) {
     headerText = guidance.header
   } else {
@@ -220,7 +277,7 @@ export default function AlertDialog({onClose}) {
   // so there is nothing for support to diagnose. A guided format is the same:
   // the guidance, and its help link, is the help.
   const showHelpFooter = !isOom && !isNeedsReconnect && !isUnsupportedSchema && !isInMemoryUploadGone &&
-    !isUploadNotInBrowser && !isNoGeometry && !guidance && !isEntryChoice
+    !isUploadNotInBrowser && !isNoGeometry && !guidance && !isEntryChoice && !isCacheClearSkipped
   // Choosing finishes the drop or pick that raised the chooser, from inside
   // this click; closing leaves whatever model is open, as the user had it.
   const chooseEntry = (entry) => {
@@ -232,9 +289,9 @@ export default function AlertDialog({onClose}) {
     <Dialog
       headerText={headerText}
       isDialogDisplayed={alert !== null}
-      setIsDialogDisplayed={isNoGeometry || isEntryChoice ? dismiss : onCloseInner}
+      setIsDialogDisplayed={isCacheClearSkipped ? acknowledgeCacheClear : (isNoGeometry || isEntryChoice ? dismiss : onCloseDismiss)}
       actionCb={actionCb}
-      headerIcon={isNoGeometry || isEntryChoice ?
+      headerIcon={isNoGeometry || isEntryChoice || isCacheClearSkipped ?
         <InfoOutlinedIcon className='icon-share'/> :
         <ErrorOutlineIcon className='icon-share'/>}
       actionTitle={actionTitle}
@@ -304,10 +361,13 @@ function createAlertReport(a) {
   } else if (typeof a === 'object') {
     if (a && (a.type === 'oom' || a.type === 'needsReconnect' || a.type === 'unsupportedSchema' ||
         a.type === 'inMemoryUploadGone' || a.type === 'uploadNotInBrowser' || a.type === 'engineFailure' ||
-        a.type === 'noGeometry' || a.type === 'unrecognizedFormat')) {
+        a.type === 'noGeometry' || a.type === 'unrecognizedFormat' || a.type === CACHE_CLEAR_SKIPPED ||
+        a.type === DROP_REFUSED)) {
       return a.message
     } else if (a instanceof NotFoundError) {
-      return displayPathAlert(a)
+      // A GitHub not-found carries its own explanation; a URL fetch's is the
+      // generic "File not found" under the path hint.
+      return a.source === 'github' ? a.message : displayPathAlert(a.message)
     } else if (a instanceof Error) {
       return `${a}`
     }
@@ -317,14 +377,17 @@ function createAlertReport(a) {
 
 
 /**
- * @param {object} alert
+ * @param {string} message
  * @return {ReactElement}
  */
-function displayPathAlert(alert) {
+function displayPathAlert(message) {
+  // Takes the message, not the error: insertZeroWidthSpaces is a string
+  // replace, and handed the NotFoundError itself it threw while rendering,
+  // so a 404 ended at the error boundary instead of this dialog.
   return (
     <p>
       Check the file path:<br/>
-      {alert && insertZeroWidthSpaces(alert)}
+      {message && insertZeroWidthSpaces(String(message))}
     </p>
   )
 }

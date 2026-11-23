@@ -1,0 +1,168 @@
+{
+  "description": "A Pro user (sharePro, read from app_metadata through the Management API) gets a Pro model at the Pro output cap, metered on their own 30-day bucket, with no IP bucket and no breaker.",
+  "env": {
+    "$fixture": "env/ai-chat.json",
+    "$merge": {
+      "AUTH0_DOMAIN": "bldrs-replay.us.auth0.com",
+      "AUTH0_CLIENT_ID": "replay-client-id",
+      "AUTH0_CLIENT_SECRET": "replay-client-secret"
+    }
+  },
+  "now": "2026-11-18T12:00:00.000Z",
+  "uuid": "00000000-0000-4000-8000-00000000a1c0",
+  "exchangeOrder": "any",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/ai-chat",
+    "headers": {
+      "authorization": "Bearer user-access-token",
+      "content-type": "application/json",
+      "x-nf-client-connection-ip": "203.0.113.9",
+      "origin": "https://bldrs.ai"
+    },
+    "body": {
+      "$fixture": "openrouter/chat-request.json",
+      "$merge": {
+        "model": "anthropic/claude-haiku-4.5"
+      }
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-userinfo.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json",
+          "$merge": {
+            "app_metadata": {
+              "subscriptionStatus": "sharePro"
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/user/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/user/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "if-none-match": "*"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "body": {
+          "model": "anthropic/claude-haiku-4.5",
+          "max_tokens": 8192,
+          "provider": {
+            "data_collection": "deny",
+            "require_parameters": true,
+            "max_price": {
+              "prompt": 1,
+              "completion": 5
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream"
+        },
+        "text": {
+          "$fixture": "openrouter/stream-reply.json"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/user/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        },
+        "json": {
+          "v": 1,
+          "days": {},
+          "holds": {
+            "00000000-0000-4000-8000-00000000a1c0": {
+              "micro": 4000,
+              "free": 0,
+              "at": 1795003200000
+            }
+          },
+          "estimates": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/user/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "if-match": "\"e1\""
+        },
+        "bodyJson": {
+          "days": {
+            "2026-11-18": {
+              "spent": 143,
+              "free": 0
+            }
+          },
+          "holds": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e2\""
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "bodyIncludes": "There are 7 proxies.",
+    "headers": {
+      "x-bldrs-ai-tier": "pro",
+      "x-bldrs-ai-limit": "5000000"
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import {expect, test} from '@playwright/test'
+import {watchEngineWorker} from '../tests/e2e/engineWorker'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
 import {waitForModelReady} from '../tests/e2e/models'
 import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
@@ -36,6 +37,12 @@ const ALIGNMENT_TOLERANCE_M = 0.01
 // bounds separate lime from the failure they guard with room to spare.
 const CHANNEL_OFF_MAX = 0.2
 const CHANNEL_ON_MIN = 0.9
+// The engine worker is the default (engine-worker.md §7 step 9); the kill
+// switch keeps the main-thread engine's legs running.
+const ENGINES = [
+  {engine: 'main-thread engine', query: '?feature=disableEngineWorker', worker: false},
+  {engine: 'engine worker', query: '', worker: true},
+]
 
 
 /**
@@ -143,109 +150,127 @@ function modelColours(page: import('@playwright/test').Page) {
 }
 
 describeMobileAndDesktop('index.step logo', () => {
-  test('loads and shows the logo assembly, one selectable node per block', async ({page}) => {
-    test.setTimeout(TEST_TIMEOUT_MS)
+  // On both engines, like the colour and world-space checks below.
+  for (const {engine, query, worker: inWorker} of ENGINES) {
+    test(`loads and shows the logo assembly, one selectable node per block (${engine})`, async ({page}) => {
+      test.setTimeout(TEST_TIMEOUT_MS)
 
-    await homepageSetup(page)
-    await setIsReturningUser(page.context())
+      await homepageSetup(page)
+      await setIsReturningUser(page.context())
 
-    await page.goto('/share/v/p/index.step')
-    await waitForModelReady(page)
+      const watched = watchEngineWorker(page)
+      await page.goto(`/share/v/p/index.step${query}`)
+      await waitForModelReady(page)
+      await (inWorker ? watched.expectWorkerEngine() : watched.expectMainThreadEngine())
 
-    await page.getByTestId('control-button-navigation').click()
-    await expect(page.getByTestId('NavTreePanel')).toBeVisible()
+      await page.getByTestId('control-button-navigation').click()
+      await expect(page.getByTestId('NavTreePanel')).toBeVisible()
 
-    const node = (label: string) => page.locator(`[data-node-label="${label}"]`)
+      const node = (label: string) => page.locator(`[data-node-label="${label}"]`)
 
-    // The spatial chain the IFC tells as project/site/building/storey,
-    // told here as nested assemblies. Each level has exactly one child,
-    // so expanding straight down reaches the blocks.
-    for (const name of ['Bldrs', 'Build', 'Every', 'Thing']) {
-      await expect(node(name)).toHaveCount(1)
-      await node(name).getByTestId('NavTreeNodeToggle').click()
-    }
-
-    // Seven occurrences, not two part types: STEP reuse is resolved per
-    // occurrence, so every block gets its own row.
-    await expect(node(NAME_LEAF)).toHaveCount(BLOCK_COUNT)
-
-    // Selecting one block selects exactly that block — the four short
-    // blocks share a part shape, and a type-keyed selection would light
-    // up all of them.
-    await node(NAME_LEAF).first().getByTestId('NavTreeNodeLabel').click()
-    await expect(node(NAME_LEAF).first()).toHaveAttribute('data-is-selected', 'true')
-    await expect(page.locator('[data-is-selected="true"]')).toHaveCount(1)
-  })
-
-  test('renders lime, not the default grey of an unread styling chain', async ({page}) => {
-    test.setTimeout(TEST_TIMEOUT_MS)
-
-    await homepageSetup(page)
-    await setIsReturningUser(page.context())
-
-    await page.goto('/share/v/p/index.step')
-    await waitForModelReady(page)
-
-    // `emitSolidColour` writes the full chain Conway walks: STYLED_ITEM →
-    // PRESENTATION_STYLE_ASSIGNMENT → SURFACE_STYLE_USAGE →
-    // SURFACE_SIDE_STYLE → SURFACE_STYLE_FILL_AREA → FILL_AREA_STYLE →
-    // FILL_AREA_STYLE_COLOUR → COLOUR_RGB. Drop any one link and
-    // `extractSurfaceStyle` stops resolving a colour, leaving the blocks
-    // to Share's per-element default palette — verified by cutting
-    // SURFACE_SIDE_STYLE's link and watching the logo come back blue and
-    // orange, with every other assertion in this file still passing.
-    //
-    // Lime is (0,1,0), whose components are fixed points of the sRGB
-    // transfer function, so this reads the same whichever colour space
-    // three hands back.
-    const colours = await modelColours(page)
-    expect(colours.length).toBeGreaterThan(0)
-
-    // Counted, not `.some()`: the generator emits one STYLED_ITEM per
-    // part shape, so losing just the 30m one leaves the four 15m blocks
-    // lime and three blocks unstyled — which `.some()` would call a pass
-    // against this test's own "it renders lime".
-    const isLime = ([r, g, b]: number[]) =>
-      g > CHANNEL_ON_MIN && r < CHANNEL_OFF_MAX && b < CHANNEL_OFF_MAX
-    expect(
-      colours.filter(isLime).length,
-      `expected ${BLOCK_COUNT} lime blocks; got ${JSON.stringify(colours)}`,
-    ).toBe(BLOCK_COUNT)
-  })
-
-  test('lands in the same world space as index.ifc, so one camera frames both', async ({page}) => {
-    test.setTimeout(TEST_TIMEOUT_MS)
-
-    await homepageSetup(page)
-    await setIsReturningUser(page.context())
-
-    // Why this needs pinning: Conway's `COORDINATE_TO_ORIGIN` open puts a
-    // model's world origin at the FIRST geometry it emits — one
-    // coordination matrix derived from that placement × the geometry's
-    // first vertex, reused model-wide
-    // (`compat/web-ifc/coordination_f64.deriveCoordinationF64`). So world
-    // position depends on which element a file declares first, and the two
-    // logo files only coincide because `makeIndexStep.mjs` lists its blocks
-    // in the IFC's declaration order. Sorting that array by x — the obvious
-    // tidy-up — slides the STEP model 76m down +X, which auto-framing hides
-    // and only a `#c:` permalink reveals. That was the bug this test exists
-    // to catch.
-    await page.goto('/share/v/p/index.ifc')
-    await waitForModelReady(page)
-    const ifcBounds = await modelBounds(page)
-
-    await page.goto('/share/v/p/index.step')
-    await waitForModelReady(page)
-    const stepBounds = await modelBounds(page)
-
-    for (const corner of ['min', 'max'] as const) {
-      for (const [axis, name] of ['x', 'y', 'z'].entries()) {
-        const drift = Math.abs(stepBounds[corner][axis] - ifcBounds[corner][axis])
-        expect(
-          drift,
-          `${corner}.${name} drifted: STEP ${stepBounds[corner][axis]} vs IFC ${ifcBounds[corner][axis]}`,
-        ).toBeLessThan(ALIGNMENT_TOLERANCE_M)
+      // The spatial chain the IFC tells as project/site/building/storey,
+      // told here as nested assemblies. Each level has exactly one child,
+      // so expanding straight down reaches the blocks.
+      for (const name of ['Bldrs', 'Build', 'Every', 'Thing']) {
+        await expect(node(name)).toHaveCount(1)
+        await node(name).getByTestId('NavTreeNodeToggle').click()
       }
-    }
-  })
+
+      // Seven occurrences, not two part types: STEP reuse is resolved per
+      // occurrence, so every block gets its own row.
+      await expect(node(NAME_LEAF)).toHaveCount(BLOCK_COUNT)
+
+      // Selecting one block selects exactly that block — the four short
+      // blocks share a part shape, and a type-keyed selection would light
+      // up all of them.
+      await node(NAME_LEAF).first().getByTestId('NavTreeNodeLabel').click()
+      await expect(node(NAME_LEAF).first()).toHaveAttribute('data-is-selected', 'true')
+      await expect(page.locator('[data-is-selected="true"]')).toHaveCount(1)
+    })
+  }
+
+  // engine-worker.md §7 step 6: the colour and world-space checks on both
+  // engines, the worker (the default) and the main thread (the kill switch).
+  // On the worker, colours ride the batch's colour column, and the world
+  // frame is the builder's recentre plus the engine's applied frame from the
+  // `done` packet, so each can drift there without the main-thread legs
+  // noticing.
+  for (const {engine, query, worker: inWorker} of ENGINES) {
+    test(`renders lime, not the default grey of an unread styling chain (${engine})`, async ({page}) => {
+      test.setTimeout(TEST_TIMEOUT_MS)
+
+      await homepageSetup(page)
+      await setIsReturningUser(page.context())
+
+      const worker = watchEngineWorker(page)
+      await page.goto(`/share/v/p/index.step${query}`)
+      await waitForModelReady(page)
+      await (inWorker ? worker.expectWorkerEngine() : worker.expectMainThreadEngine())
+
+      // `emitSolidColour` writes the full chain Conway walks: STYLED_ITEM →
+      // PRESENTATION_STYLE_ASSIGNMENT → SURFACE_STYLE_USAGE →
+      // SURFACE_SIDE_STYLE → SURFACE_STYLE_FILL_AREA → FILL_AREA_STYLE →
+      // FILL_AREA_STYLE_COLOUR → COLOUR_RGB. Drop any one link and
+      // `extractSurfaceStyle` stops resolving a colour, leaving the blocks
+      // to Share's per-element default palette — verified by cutting
+      // SURFACE_SIDE_STYLE's link and watching the logo come back blue and
+      // orange, with every other assertion in this file still passing.
+      //
+      // Lime is (0,1,0), whose components are fixed points of the sRGB
+      // transfer function, so this reads the same whichever colour space
+      // three hands back.
+      const colours = await modelColours(page)
+      expect(colours.length).toBeGreaterThan(0)
+
+      // Counted, not `.some()`: the generator emits one STYLED_ITEM per
+      // part shape, so losing just the 30m one leaves the four 15m blocks
+      // lime and three blocks unstyled — which `.some()` would call a pass
+      // against this test's own "it renders lime".
+      const isLime = ([r, g, b]: number[]) =>
+        g > CHANNEL_ON_MIN && r < CHANNEL_OFF_MAX && b < CHANNEL_OFF_MAX
+      expect(
+        colours.filter(isLime).length,
+        `expected ${BLOCK_COUNT} lime blocks; got ${JSON.stringify(colours)}`,
+      ).toBe(BLOCK_COUNT)
+    })
+
+    test(`lands in the same world space as index.ifc, so one camera frames both (${engine})`, async ({page}) => {
+      test.setTimeout(TEST_TIMEOUT_MS)
+
+      await homepageSetup(page)
+      await setIsReturningUser(page.context())
+
+      // Why this needs pinning: Conway's `COORDINATE_TO_ORIGIN` open puts a
+      // model's world origin at the FIRST geometry it emits — one
+      // coordination matrix derived from that placement × the geometry's
+      // first vertex, reused model-wide
+      // (`compat/web-ifc/coordination_f64.deriveCoordinationF64`). So world
+      // position depends on which element a file declares first, and the two
+      // logo files only coincide because `makeIndexStep.mjs` lists its blocks
+      // in the IFC's declaration order. Sorting that array by x — the obvious
+      // tidy-up — slides the STEP model 76m down +X, which auto-framing hides
+      // and only a `#c:` permalink reveals. That was the bug this test exists
+      // to catch.
+      // The IFC from the main-thread engine either way: the reference frame.
+      await page.goto('/share/v/p/index.ifc?feature=disableEngineWorker')
+      await waitForModelReady(page)
+      const ifcBounds = await modelBounds(page)
+
+      const worker = watchEngineWorker(page)
+      await page.goto(`/share/v/p/index.step${query}`)
+      await waitForModelReady(page)
+      await (inWorker ? worker.expectWorkerEngine() : worker.expectMainThreadEngine())
+      const stepBounds = await modelBounds(page)
+
+      for (const corner of ['min', 'max'] as const) {
+        for (const [axis, name] of ['x', 'y', 'z'].entries()) {
+          const drift = Math.abs(stepBounds[corner][axis] - ifcBounds[corner][axis])
+          expect(
+            drift,
+            `${corner}.${name} drifted: STEP ${stepBounds[corner][axis]} vs IFC ${ifcBounds[corner][axis]}`,
+          ).toBeLessThan(ALIGNMENT_TOLERANCE_M)
+        }
+      }
+    })
+  }
 })

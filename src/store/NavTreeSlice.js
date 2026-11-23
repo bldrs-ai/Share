@@ -56,6 +56,28 @@ export default function createNavTreeSlice(set, get) {
     selectedInstanceIds: [],
     setSelectedInstanceIds: (ids) => set(() => ({selectedInstanceIds: ids})),
 
+    // Whether `selectedInstanceIds` are a scene pick's exact instances, as
+    // opposed to ones resolved from a selected occurrence or row. Only the
+    // pick funnel (CadView#selectFromInstancePick) sets it; every selection
+    // through `selectItemsInScene` clears it. The streaming paint and the
+    // end-of-load repaint read it, so a pick of one body keeps to that body
+    // while a selected occurrence takes rows that arrive later
+    // (streamingBatchPick.js; codex rounds 2 and 3 on #2084).
+    selectedInstancesExact: false,
+    setSelectedInstancesExact: (isExact) => set(() => ({selectedInstancesExact: isExact})),
+
+    // The geometry (shell) express id a ROOT-LEVEL STEP scene pick hit, or
+    // null. A root-level placement's path is `[]`, so the selection carries
+    // no path, and its owner (the product_definition_shape) is shared by the
+    // product's every root shell: this is what tells the clicked shell from
+    // its siblings in the load-time paint of the preview meshes and the
+    // streaming rows (previewSelection.js#paintPreviewSelection,
+    // IncrementalBatchedBuilder#isLoadSelected_; codex on #2088), which a
+    // preview pick before its shell has streamed in has nothing else to go
+    // on. Set by the pick funnels, cleared by every `selectItemsInScene`.
+    selectedRootGeometryId: null,
+    setSelectedRootGeometryId: (id) => set(() => ({selectedRootGeometryId: id})),
+
     // STEP occurrence path (NAUO express ids) of the selected occurrence, or
     // null. A reused part's occurrences share one `selectedElements` expressID,
     // so this is what lets the NavTree highlight the one clicked/picked node

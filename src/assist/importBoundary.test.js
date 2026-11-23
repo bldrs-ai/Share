@@ -27,7 +27,7 @@ describe('assist/importBoundary', () => {
 
   beforeAll(() => {
     // The zones are resolved against process.cwd() (the rule's default
-    // basePath), the same as when `yarn lint` runs; a different cwd would
+    // basePath), the same as when `bun run lint` runs; a different cwd would
     // test a different fence than CI enforces.
     expect(process.cwd(), 'jest must run from the repo root').toBe(REPO_ROOT)
     eslint = new ESLint({cwd: REPO_ROOT})

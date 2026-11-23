@@ -83,7 +83,7 @@ export function getSvgGroupFromObj({
         // depthWrite: false,
         wireframe: fillShapesWireframe,
       })
-      const shapes = SVGLoader.createShapes(path)
+      const shapes = path.toShapes()
 
       for (let j = 0; j < shapes.length; j++) {
         const shape = shapes[j]

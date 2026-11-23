@@ -16,6 +16,7 @@ import {
 } from './conwayDirectIfcLoader'
 import {EngineOpenFailureError} from '../../loader/engineOpenFailure'
 import {UnsupportedSchemaError} from '../../loader/unsupportedSchema'
+import {LoadAbortedError} from '../../utils/loadAbort'
 
 // Controllable flag surface: defaults to "everything off" (matching
 // the real module for every flag these tests touch except
@@ -307,7 +308,12 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
     it('refuses from the store open on the deferred-geometry path too', async () => {
       mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
       try {
+        // The demand pump is what makes parseIfcWithConway take the deferred
+        // branch (loader/conwayOpen.js#openDeferred, which the engine worker
+        // shares); without it the classic open runs and this test would not
+        // be exercising the path its name says (agent review on #2057).
         const ifcAPI = conwayLikeEngine(new Map(), {OpenModelStream: 'UNSUPPORTED_SCHEMA'})
+        ifcAPI.ExtractGeometryBatchAsync = jest.fn()
         await expect(parseIfcWithConway(new Blob([ifc4x3Header]), ifcAPI))
           .rejects.toBeInstanceOf(UnsupportedSchemaError)
         expect(ifcAPI.OpenModelStreamed).not.toHaveBeenCalled()
@@ -585,6 +591,40 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         const onIndexed = jest.fn()
         await parseIfcWithConway(new ArrayBuffer(4), ifcAPI, undefined, undefined, undefined, undefined, onIndexed)
         expect(onIndexed).not.toHaveBeenCalled()
+      })
+
+      // open-205 #2011 step A: a main-thread pump stops at the batch after its
+      // load is given up; the open before it cannot be interrupted.
+      it('stops pumping at the next batch once the signal aborts', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        // 150 products: batches of 64 (DEMAND_EXTRACT_BATCH_SIZE), so three.
+        const ifcAPI = makeDemandAPI(150)
+        const controller = new AbortController()
+        const batches = []
+        const parsing = parseIfcWithConway(
+          new ArrayBuffer(4), ifcAPI, undefined, undefined, (batch) => {
+            batches.push(batch.length)
+            controller.abort()
+          }, undefined, undefined, {signal: controller.signal})
+        await expect(parsing).rejects.toBeInstanceOf(LoadAbortedError)
+        expect(batches).toHaveLength(1)
+        expect(ifcAPI.ExtractGeometryBatch).toHaveBeenCalledTimes(1)
+        expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
+      })
+
+      it('does not start pumping for a signal aborted during the open', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        const controller = new AbortController()
+        ifcAPI.OpenModelStreamed.mockImplementation(() => {
+          controller.abort()
+          return Promise.resolve(5)
+        })
+        const onIndexed = jest.fn()
+        await expect(parseIfcWithConway(new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn(), undefined,
+          onIndexed, {signal: controller.signal})).rejects.toBeInstanceOf(LoadAbortedError)
+        expect(onIndexed).not.toHaveBeenCalled()
+        expect(ifcAPI.ExtractGeometryBatch).not.toHaveBeenCalled()
       })
 
       it('omits ON_PREVIEW_MESH when no preview callback is given', async () => {

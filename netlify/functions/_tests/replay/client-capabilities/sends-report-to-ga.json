@@ -1,0 +1,24 @@
+{
+  "description": "A ga_blocked report from Share's origin goes to the Measurement Protocol under the one fixed client id, with exactly its enum fields, and the page gets 204.",
+  "env": {"GA4_MEASUREMENT_ID": "G-REPLAY0001", "GA4_API_SECRET": "mp-secret-replay"},
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/client-capabilities",
+    "headers": {"origin": "https://bldrs.ai", "content-type": "text/plain;charset=UTF-8"},
+    "body": "{\"condition\":\"ga_blocked\",\"browser\":\"firefox\",\"blocker\":\"network\",\"form_factor\":\"desktop\",\"consent\":\"on\"}"
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://www.google-analytics.com/mp/collect?measurement_id=G-REPLAY0001&api_secret=mp-secret-replay",
+        "body": {
+          "client_id": "1766230857.3831044998",
+          "events": [{"name": "client_capability", "params": {"condition": "ga_blocked", "browser": "firefox", "blocker": "network", "form_factor": "desktop", "consent": "on"}}]
+        }
+      },
+      "response": {"status": 204, "text": ""}
+    }
+  ],
+  "expect": {"statusCode": 204}
+}

@@ -3,6 +3,7 @@ import {Box3, BufferAttribute, Group, Mesh, Object3D, Vector3} from 'three'
 import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader.js'
 import {FBXLoader} from 'three/examples/jsm/loaders/FBXLoader.js'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
+import {NRRDLoader} from 'three/examples/jsm/loaders/NRRDLoader.js'
 import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader.js'
 import {PDBLoader} from 'three/examples/jsm/loaders/PDBLoader.js'
 import {STLLoader} from 'three/examples/jsm/loaders/STLLoader.js'
@@ -24,11 +25,13 @@ import {
 import {UploadNotInBrowserError} from '../OPFS/messages'
 import {getInMemoryUpload} from './inMemoryUploads'
 import {HTTP_NOT_FOUND} from '../net/http'
+import {NotFoundError} from './notFoundError'
 import {looksLikeLfsPointer} from '../net/github/lfs'
 import {assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
 import {navigateBaseOnModelPath, parseGitHubPath} from '../utils/location'
+import {yieldForPaint} from '../utils/scheduling'
 import {loadAllRecentFiles, updateRecentFileLastModified} from '../connections/persistence'
 import {testUuid} from '../utils/strings'
 import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
@@ -46,15 +49,19 @@ import {BldrsFaceIdsReader} from './bldrsFaceIds'
 import {BldrsSpatialTreeReader} from './bldrsSpatialTree'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
 import {glbChunksHaveRenderableGeometry} from './glbArtifactHealth'
+import {parseGlbJsonChunk} from './glbArtifactSize'
 import {NESTED_LOAD_GENERATION, beginGlbArtifactLoad, publishGlbArtifact} from './glbArtifactPublish'
 import {glbCacheKey} from './glbCacheKey'
 import {activeArtifactSpec, glbCompressionModeFromExtensions, isGlbBatchedActive} from './glbCompress'
 import {isBldrsGlbContainer, readGlbContainerHeader, readGlbContainerJsonPrefixes, unpackGlbContainer} from './glbContainer'
-import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb} from './glbExport'
+import {
+  BLDRS_SOURCE_BYTES_EXTRAS_KEY, BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb, validSourceBytes,
+} from './glbExport'
 import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import glbToThree from './glb'
 import {decodeGzipEnvelope} from './gzipEnvelope'
-import {unwrapIfcZip} from './modelArchive'
+import {ZIP_MODEL_TYPES, unwrapHostedArchive} from './modelArchive'
+import {ZipArchiveError, looksLikeZipBytes} from './zipArchive'
 import {BldrsInstanceTablesReader} from './bldrsInstanceTables'
 import {
   APPLIED_COORDINATION_KEY,
@@ -64,7 +71,14 @@ import {
 } from '../viewer/ifc/appliedCoordination'
 import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
 import {spillModelSource} from './opfsSourceByteStore'
-import {STORE_DETECT_PREFIX_BYTES, isConwayIfcFormat, looksLikeTruncatedPart21Blob} from './stepFormat'
+import {EvictedOpfsSourceError, isUnusableOpfsSource} from './opfsSourceHealth'
+import {PART21_LOADER_TYPES, engineFormatOf} from './part21Formats'
+import {reportEngineSourceBuffered, reportEngineSourceFallback, reportPreviewUnitsSkipped} from './reportLoadDiagnostics'
+import {POLICY_BUFFERED_REASONS, SourceModeReason} from '../engine/sourcePolicy'
+import {reportRendererLimits} from './reportRendererLimits'
+import {reportOpfsDownloadFailed, reportOpfsNotCached, reportOpfsSourceEvicted} from '../OPFS/reportOpfsSourceCondition'
+import {STORE_DETECT_PREFIX_BYTES, conwayStoreOpenRequirement} from './stepFormat'
+import {isEngineWorkerLoad} from '../viewer/ifc/ShareIfcLoader'
 import {
   externalCacheKey,
   gitHubCacheKey,
@@ -72,6 +86,7 @@ import {
   uploadCacheKey,
 } from './sourceCacheKey'
 import adfToThree, {newAdfLoader} from './adf'
+import nrrdToThree from './nrrd'
 import objToThree from './obj'
 import pdbToThree from './pdb'
 import splatsToThree, {newSplatLoader} from './splats'
@@ -80,7 +95,9 @@ import xyzToThree from './xyz'
 import {isFeatureEnabled} from '../FeatureFlags'
 import useStore from '../store/useStore'
 import {sha1Hex, sha1HexFromBlob} from '../utils/contentHash'
+import {verifiedSourceSha} from '../utils/verifiedSourceSha'
 import {markIfOutOfMemory} from '../utils/oom'
+import {isAborted, raceLoadAbort, throwIfLoadAborted, unlessLoadAborted} from '../utils/loadAbort'
 
 
 // Defer to the browser's idle period when supported, otherwise to the
@@ -99,11 +116,6 @@ import {markIfOutOfMemory} from '../utils/oom'
 const SCHEDULE_IDLE_TIMEOUT_MS = 5_000
 const LFS_POINTER_PROBE_BYTES = 256
 
-// The formats `findLoader` routes to conway via `parseIfcWithConway`. All
-// three are ISO-10303-21 part-21 files sharing one loader; only FILE_SCHEMA
-// separates IFC from STEP, so the suffix is not evidence either way.
-const PART21_LOADER_TYPES = new Set(['ifc', 'step', 'stp'])
-
 
 /**
  * @param {Function} fn
@@ -118,41 +130,52 @@ function scheduleIdleWork(fn) {
 
 
 /**
- * True when Conway can parse an OPFS File through `OpenModelStream`
- * (M1b) so we never allocate a full-source ArrayBuffer.
+ * True when the engine that will parse this OPFS File can open it through
+ * `OpenModelStream` (M1b), so we never allocate a full-source ArrayBuffer.
  *
  * Decided by the file's own FILE_SCHEMA, because neither `isIfc` nor the
  * suffix is evidence of the format and both are wrong in a different
- * direction. Conway's store-backed open is IFC-only
- * (`IfcApiModelPassthroughFactory.fromStore` returns `undefined` for
- * AP214/AP203/AP242) and it reserves the model handle before it sniffs:
+ * direction:
  *
- *   - `isIfc` is true for STEP as well, so it offered STEP files a path
- *     that always refuses them. That burned handle 0 on a model which
- *     never opened, and the buffered `OpenModelStreamed` retry parsed as
- *     handle 1 — misaddressing every Share call site that passes the
- *     scene-level id 0 (`CadView.jsx#loadModel` pins `model.modelID` to
- *     it), the GLB writer's spatial-tree and element-properties captures
- *     among them (#1776).
+ *   - `isIfc` is true for STEP as well. On the main-thread engine a STEP
+ *     store open always refuses, and a refused store open still reserves
+ *     the model handle: it burned handle 0, and the buffered
+ *     `OpenModelStreamed` retry parsed as handle 1 — misaddressing every
+ *     Share call site that passes the scene-level id 0 (`CadView.jsx
+ *     #loadModel` pins `model.modelID` to it), the GLB writer's
+ *     spatial-tree and element-properties captures among them (#1776).
  *   - A suffix test is wrong the other way: `findLoader` takes
  *     `loader.type` from the filename, so an IFC payload named `.step`
- *     would be denied the windowed parse and buffer its whole source —
- *     re-introducing on a mislabelled large model exactly the
- *     hundreds-of-MB allocation M3 removed.
+ *     would be denied the windowed parse and buffer its whole source.
  *
- * The question is answered by conway's own `ModelFormatDetector`, over the
- * same 64 KiB prefix `fromStore` will read — see
- * {@link isConwayIfcFormat}, which explains why this must not go back to
- * being a header scan of our own. Anything it does not read as IFC —
- * AP214/AP203/AP242, and equally a truncated or malformed part-21 file it
- * cannot parse at all — buffers rather than gambling.
+ * The question is answered by conway itself (`stepFormat.js
+ * #conwayStoreOpenRequirement`): its detector over the same 64 KiB prefix
+ * `fromStore` will read, and its table of what each format's store open
+ * needs of the store (conway#757). IFC takes any store. The AP214 family
+ * (STEP) needs one that reads synchronously, because AP214's extraction
+ * reads records synchronously and faults its windows in. One predicate for
+ * both formats, with the format difference as data:
+ *
+ *   - an ENGINE SESSION's worker reads through stores that both read
+ *     synchronously (`engine/engineSources.js`: the OPFS sync access handle,
+ *     and FileReaderSync for its Blob store), so it takes either. In the
+ *     in-process fallback a STEP store open is refused
+ *     (STORE_NOT_SYNCHRONOUS) and buffers — inside that session's own
+ *     IfcAPI, so the burned handle is the session's and misaddresses
+ *     nothing;
+ *   - the viewer's MAIN-THREAD engine reads the File through a Blob store,
+ *     which cannot read synchronously, so it takes `'any'` only and a STEP
+ *     buffers, exactly as before.
+ *
+ * A truncated or malformed part-21 file conway cannot detect buffers rather
+ * than gambling.
  *
  * @param {object} viewer
  * @param {string} loaderType resolved format tag, i.e. `loader.type`
  * @param {Blob} file the source handle, sniffed for its part-21 header
  * @return {Promise<boolean>}
  */
-async function canOpenFromStore(viewer, loaderType, file) {
+export async function canOpenFromStore(viewer, loaderType, file) {
   if (!PART21_LOADER_TYPES.has(loaderType) || isFeatureEnabled('disableStreamOpen')) {
     return false
   }
@@ -169,10 +192,81 @@ async function canOpenFromStore(viewer, loaderType, file) {
     // from its — a multi-byte sequence cut at the slice boundary decodes to a
     // replacement character, which is a different byte than the one it sees.
     const head = await file.slice(0, STORE_DETECT_PREFIX_BYTES).arrayBuffer()
-    return isConwayIfcFormat(new Uint8Array(head))
+    const requirement = conwayStoreOpenRequirement(new Uint8Array(head))
+    if (requirement === 'any') {
+      return true
+    }
+    const scene = typeof viewer?.IFC?.context?.getScene === 'function' ?
+      viewer.IFC.context.getScene() : null
+    return requirement === 'synchronous' && isEngineWorkerLoad(loaderType, scene)
   } catch (e) {
     debug().warn('Loader#canOpenFromStore: header sniff failed; buffering:', e)
     return false
+  }
+}
+
+
+/**
+ * The source kind of a load that never reached the OPFS path, which is where
+ * `kindLabel` is set: an in-memory upload, or a direct fetch (OPFS off, or
+ * fallen back from). Categories only, so nothing here can name the file.
+ *
+ * @param {string} path
+ * @param {boolean} isInMemory
+ * @param {boolean} isLocallyHosted
+ * @return {string} 'upload' | 'local' | 'github' | 'external'
+ */
+function fallbackSourceKind(path, isInMemory, isLocallyHosted) {
+  if (isInMemory || path.startsWith('blob:')) {
+    return 'upload'
+  }
+  if (isLocallyHosted) {
+    return 'local'
+  }
+  try {
+    return new URL(path).host === 'github.com' ? 'github' : 'external'
+  } catch {
+    return 'external'
+  }
+}
+
+
+/**
+ * The GA diagnostics of a load that succeeded (reportLoadDiagnostics.js,
+ * Share#2106 follow-ups): preview units its loader skipped
+ * (`model.previewUnitsSkipped`, ShareIfcLoader#parse), and how an
+ * engine-worker source opened, from the worker's done summary:
+ * - the source policy's buffered open fell back to windowed for memory
+ *   (`sourceMode.reason` `bufferedFailed`, engine/sourcePolicy.js):
+ *   `engine_source_fallback`;
+ * - buffered because it could not window (no `Engine source I/O` line,
+ *   engineModelLoad.js#sourceIoLine, and not a buffered open the policy
+ *   chose over a store): `engine_source_buffered`.
+ * At most one of the two per load.
+ *
+ * @param {object} model the parsed model
+ * @param {object} context
+ * @param {string} context.format
+ * @param {string} context.kind
+ * @param {string} context.bufferedReason
+ * @param {number} context.sourceBytes size of the source, captured before the
+ *   open could transfer it away
+ */
+function reportLoadDiagnostics(model, {format, kind, bufferedReason, sourceBytes}) {
+  reportPreviewUnitsSkipped({format, kind, skipped: model?.previewUnitsSkipped})
+  const ifcAPI = model?.ifcManager?.ifcAPI
+  if (ifcAPI?.engineSession && ifcAPI.summary) {
+    const {source, sourceMode} = ifcAPI.summary
+    if (sourceMode?.reason === SourceModeReason.BUFFERED_FAILED) {
+      reportEngineSourceFallback({
+        format: sourceMode.format, storeKind: sourceMode.storeKind, failure: sourceMode.failure,
+        sizeBytes: sourceMode.bytes,
+      })
+    } else if (POLICY_BUFFERED_REASONS.includes(sourceMode?.reason)) {
+      // The policy's default: nothing degraded to report.
+    } else if (!source || source.kind === 'resident') {
+      reportEngineSourceBuffered({reason: bufferedReason, sizeBytes: sourceBytes})
+    }
   }
 }
 
@@ -220,6 +314,19 @@ function probeLfsBytes(data) {
  *   `ShareIfcLoader#parse`. Never called on a GLB cache hit, a non-Conway
  *   format, or a classic (non-deferred) open; the caller's end-of-load path
  *   covers those exactly as before.
+ * @param {Function} [options.onFirstMesh] open-205 #2043: called once when a
+ *   Conway parse's first geometry is on screen (`ShareIfcLoader#parse`).
+ *   Never called on the paths that put the model on screen only at its end.
+ * @param {AbortSignal} [options.signal] open-205 #2011 step A: the caller
+ *   gave the load up (CadView, on an in-app switch under
+ *   `?feature=spaModelNav`; utils/loadAbort.js). The load then rejects with a
+ *   LoadAbortedError at its next await: the download and OPFS waits are
+ *   raced against it (the OPFS worker's request runs on, its result
+ *   dropped), the parse is handed it (an engine worker is terminated), and
+ *   nothing after the parse runs, the GLB cache writer included. Its
+ *   `onProgress` and `setOpfsFile` go quiet at the abort, so work that could
+ *   not be stopped never writes into the next model's report or store.
+ *   Without one the load is exactly as before.
  * @return {object} The model or undefined
  */
 export async function load(
@@ -229,9 +336,14 @@ export async function load(
   isOpfsAvailable,
   setOpfsFile,
   accessToken = '',
-  {isNestedLoad = false, isUploadedRoute = false, onIndexed = undefined} = {},
+  {isNestedLoad = false, isUploadedRoute = false, onIndexed = undefined, onFirstMesh = undefined,
+    signal = undefined} = {},
 ) {
   assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
+  // Each is the identity without a signal (utils/loadAbort.js).
+  onProgress = unlessLoadAborted(onProgress, signal)
+  setOpfsFile = unlessLoadAborted(setOpfsFile, signal)
+  const untilAborted = (work) => raceLoadAbort(work, signal)
   // HACK: pathArg can be a URL or a string
   if (path instanceof URL) {
     path = path.toString()
@@ -301,7 +413,8 @@ export async function load(
       shaHash = ''
       isCacheHit = false
     } else {
-      [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable)
+      [derefPath, shaHash, isCacheHit, isBase64] =
+        await untilAborted(dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable))
     }
   } else if (isLocallyHostedFile) {
     debug().log('Loader#load: locally hosted file')
@@ -309,13 +422,14 @@ export async function load(
   } else {
     debug().log('Loader#load: download2', path, accessToken, isOpfsAvailable);
     // For logged in, you'll get a sha hash back.  otherwise null/undef
-    [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable)
+    [derefPath, shaHash, isCacheHit, isBase64] =
+      await untilAborted(dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable))
     debug().log('Loader#load: download2 DEREFERENCE', derefPath)
   }
 
   // Find loader can do a head download for content typecheck, but full download is delayed
   // GLB skip path below may swap these to the GLB loader tuple.
-  let [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
+  let [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await untilAborted(findLoader(path, viewer))
   debug().log(
     `Loader#load: loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText} path=${path}`)
 
@@ -324,6 +438,24 @@ export async function load(
   }
 
   let modelData
+  // The OPFS condition (eviction, failed download) this load fell back from,
+  // reported to Sentry only once the direct fetch has succeeded: a load that
+  // fails outright is CadView's captureException, and a second event for it
+  // would double the volume (reportOpfsSourceCondition.js).
+  let opfsFallbackCondition = null
+  // Set when the OPFS download was served uncached (no move(); utils.js#downloadToOPFS
+  // marks the File). Held like opfsFallbackCondition and reported with it.
+  let opfsNotCachedKind = null
+  // Source kind and why an engine-worker source would be buffered, for the
+  // GA diagnostics reported with the OPFS conditions below
+  // (reportLoadDiagnostics.js). Kind stays null until the OPFS path names it.
+  let sourceKind = null
+  let bufferedReason = 'unknown'
+  if (inMemoryFile !== undefined) {
+    bufferedReason = 'in-memory'
+  } else if (!isOpfsAvailable) {
+    bufferedReason = 'opfs-unavailable'
+  }
   // GLB export context: captured after the source file is in hand if the
   // `glb` feature is on and the source is IFC. Carries the cacheKeyArgs
   // (source-kind namespace + sourceHash) the post-parse writer will use.
@@ -332,11 +464,16 @@ export async function load(
   // Set when we swap the IFC source with a cached GLB. Drives post-parse
   // diagnostics so the user can see what the GLTF parser produced.
   let cameFromGlbCache = false
+  // On a hit, the SOURCE's size as the writer stamped it into the artifact
+  // (BLDRS_SOURCE_BYTES_EXTRAS_KEY), or null for an artifact that predates
+  // the stamp. The bytes this load parses are the artifact's, so this is the
+  // only source size a hit has.
+  let cachedSourceBytes = null
   // Not for a hosted `.ifczip`: every handle the cache path keeps is the
   // source file, which here is the zip — `spillModelSource` would back
   // conway's later reads of the IFC with it. It still opens, uncached. An
   // UPLOADED `.ifczip` is stored as the `.ifc` inside it and caches as one.
-  const wantGlb = isFeatureEnabled('glb') && isIfc && loader.type !== 'ifczip'
+  const wantGlb = isFeatureEnabled('glb') && isIfc && !ARCHIVE_LOADER_TYPES.has(loader.type)
   if (wantGlb) {
     glbVerbose('feature enabled')
   }
@@ -361,22 +498,27 @@ export async function load(
       // Only set for GitHub sources — the only kind whose bytes can be
       // an LFS pointer.
       let opfsEntryKey = null
+      // Removes this load's OPFS source entry, for the kinds a re-fetch can
+      // repair: GitHub, hosted/external URLs, locally hosted paths. Stays null
+      // for uploads, whose OPFS entry is the only copy there is.
+      let evictOpfsSource = null
 
       if (isUploadedFile) {
         kindLabel = 'upload'
         debug().log('Loader#load: getModelFromOPFS for upload:', path)
-        file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path)
+        file = await untilAborted(getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path))
       } else if (isLocallyHostedFile) {
         kindLabel = 'local'
         debug().log('Loader#load: local file:', path)
-        file = await downloadToOPFS(
+        evictOpfsSource = () => deleteFileFromOPFS(path, 'bldrs-ai', 'BldrsLocalStorage', 'V1', 'Projects')
+        file = await untilAborted(downloadToOPFS(
           path,
           path,
           'bldrs-ai',
           'BldrsLocalStorage',
           'V1',
           'Projects',
-          onProgress)
+          onProgress))
       } else {
         let pathUrl
         try {
@@ -392,11 +534,12 @@ export async function load(
           // if we got a cache hit and the file doesn't exist in OPFS, query with no cache
           if (isCacheHit && !(await doesFileExistInOPFS(filePath, shaHash, owner, repo, branch))) {
             [derefPath, shaHash, isCacheHit, isBase64] =
-              await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable, false)
+              await untilAborted(dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable, false))
           }
           // Captured after the re-dereference above, which can replace
           // shaHash — the key must match the one the OPFS lookup uses.
           opfsEntryKey = {filePath, shaHash, owner, repo, branch}
+          evictOpfsSource = () => deleteFileFromOPFS(filePath, shaHash, owner, repo, branch)
 
           // GitHub gives us a stable upstream sha *before* we download — so
           // the GLB cache lookup can happen pre-download (fastest hit path).
@@ -406,13 +549,15 @@ export async function load(
               `reader: cache lookup github key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
             `${cacheKeyArgs.sourcePath} sha=${cacheKeyArgs.sourceHash}`)
             glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
-            const glbFile = await tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel)
-            if (glbFile) {
+            const hit = await tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel)
+            if (hit) {
+              const glbFile = hit.file
               glbInfo(
                 `reader: github cache HIT (${glbFile.size}B); swapping to GLB loader for: ${filePath}`)
               ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
               file = glbFile
               cameFromGlbCache = true
+              cachedSourceBytes = hit.sourceBytes
             } else {
               glbInfo('reader: github cache MISS, will export after parse:', filePath)
             }
@@ -420,10 +565,11 @@ export async function load(
 
           if (!file) {
             if (isBase64) {
-              file = await writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile)
+              file = await untilAborted(
+                writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile))
             } else {
               debug().log(`Loader#load: downloadModel with owner, repo, branch, filePath:`, owner, repo, branch, filePath)
-              file = await downloadModel(
+              file = await untilAborted(downloadModel(
                 derefPath,
                 shaHash,
                 filePath,
@@ -436,47 +582,54 @@ export async function load(
                 (lastModifiedGithub) => {
                   const sharePath = navigateBaseOnModelPath(owner, repo, branch, `/${filePath}`)
                   updateRecentFileLastModified(sharePath, lastModifiedGithub)
-                })
-            }
-            // GitHub HIT keys off remote sha + OPFS existence, not local
-            // completeness. A truncated part-21 prefix under the right sha
-            // is served forever and Conway reports every tail ref as
-            // "not in the index". Same eviction shape as the LFS-pointer
-            // guard: GitHub only, because a re-fetch can repair it.
-            // Footer sniff is IFC/STEP only — an OBJ whose first comment
-            // mentions ISO-10303-21 is a valid cache entry, not truncated
-            // part-21. 0-byte files of any type are always unusable.
-            const truncatedPart21 = PART21_LOADER_TYPES.has(loader.type) &&
-              await looksLikeTruncatedPart21Blob(file)
-            if (file && (file.size === 0 || truncatedPart21)) {
-              debug().warn(
-                'Loader#load: OPFS source is truncated part-21; evicting and re-fetching')
-              try {
-                await deleteFileFromOPFS(filePath, shaHash, owner, repo, branch)
-              } catch (evictError) {
-                debug().warn('Loader#load: could not evict truncated source:', evictError)
-              }
-              setOpfsFile(null)
-              reportSourceInfo(
-                'Source: OPFS entry was truncated — evicted, re-fetching from network')
-              file = null
-              glbExportContext = null
+                }))
             }
           }
         } else {
           kindLabel = 'external'
           const opfsFilename = pathUrl.pathname
+          // Same key downloadToOPFS stores under: `<file>.<host>` in
+          // BldrsLocalStorage/V1/Projects.
+          evictOpfsSource = () =>
+            deleteFileFromOPFS(opfsFilename, pathUrl.host, 'BldrsLocalStorage', 'V1', 'Projects')
           debug().log(`Loader#load: downloadToOPFS with opfsFilename:`, opfsFilename)
-          file = await downloadToOPFS(
+          file = await untilAborted(downloadToOPFS(
             path,
             opfsFilename,
             pathUrl.host,
             'BldrsLocalStorage',
             'V1',
             'Projects',
-            onProgress)
+            onProgress))
         }
       }
+
+      // No source kind's cache key says the bytes are complete. GitHub's is
+      // the upstream sha plus the entry's existence. Hosted and external
+      // URLs key on the host, which never changes. So an entry left empty or
+      // truncated (by an interrupted download, or a short write from an older
+      // build; OPFS.worker.js#downloadModelToOPFS) would be served on every
+      // load: Conway reports `OpenModel returned -1: empty file` for 0 bytes,
+      // or every tail ref "not in the index" for a part-21 prefix. One check
+      // for every kind that can re-fetch (opfsSourceHealth.js). Skipped on a
+      // GLB cache hit, where `file` is the artifact, not the source.
+      if (evictOpfsSource !== null && !cameFromGlbCache &&
+          await isUnusableOpfsSource(file, loader.type)) {
+        debug().warn(
+          `Loader#load: ${kindLabel} OPFS source is empty or truncated; evicting and re-fetching`)
+        try {
+          await evictOpfsSource()
+        } catch (evictError) {
+          debug().warn('Loader#load: could not evict truncated source:', evictError)
+        }
+        setOpfsFile(null)
+        reportSourceInfo(
+          'Source: OPFS entry was truncated — evicted, re-fetching from network')
+        // The catch below takes it to the direct fetch; the next load stores
+        // a fresh entry.
+        throw new EvictedOpfsSourceError(kindLabel)
+      }
+      opfsNotCachedKind = file?.opfsNotCachedKind ?? null
       debug().log('Loader#load: File from OPFS:', file)
       setOpfsFile(file)
 
@@ -500,6 +653,7 @@ export async function load(
       // swap. Spill pages this File; the hash/parse ArrayBuffer is a
       // separate JS copy. An OPFS File pins nothing.
       const opfsSourceFile = file
+      sourceKind = kindLabel
 
       // One sniff, two decisions: whether to hash the File in slices
       // instead of buffering it (below) and whether to hand conway the
@@ -508,6 +662,7 @@ export async function load(
       // for the artifact; the second call site additionally guards on
       // `cameFromGlbCache` so a hit never takes the store path.
       const canStreamOpen = await canOpenFromStore(viewer, loader.type, opfsSourceFile)
+      bufferedReason = canStreamOpen ? 'store-open-refused' : 'not-store-openable'
 
       // Non-GitHub sources have no upstream sha. Hash the parse buffer
       // itself so we do not materialise the file twice (once for SHA-1,
@@ -537,26 +692,37 @@ export async function load(
           }
           const contentSha = modelData !== undefined ?
             await sha1Hex(modelData) :
-            await sha1HexFromBlob(file)
+            // Streaming opens only: `file` is the OPFS entry itself, whose
+            // size+lastModified identify it, so a reopen of an unchanged
+            // entry reuses the recorded digest and never reads the source
+            // (Share#2101). The buffered branch already holds the bytes.
+            await verifiedSourceSha(kindLabel, path, file, sha1HexFromBlob)
           cacheKeyArgs = buildNonGitHubCacheArgs(kindLabel, path, contentSha)
           if (cacheKeyArgs) {
             glbVerbose(
               `reader: cache lookup ${kindLabel} key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
             `${cacheKeyArgs.sourcePath} sha=${contentSha}`)
             glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
-            const glbFile = await tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel)
-            if (glbFile) {
+            const hit = await tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel)
+            if (hit) {
+              const glbFile = hit.file
               glbInfo(
                 `reader: ${kindLabel} cache HIT (${glbFile.size}B); swapping to GLB loader`)
               ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
               file = glbFile
               cameFromGlbCache = true
+              cachedSourceBytes = hit.sourceBytes
+              // Its own stage, so reading the artifact out of OPFS isn't
+              // counted as hashing the source (Share#2101).
+              onProgress('Reading model data...')
               modelData = await glbFile.arrayBuffer()
             } else {
               glbInfo(`reader: ${kindLabel} cache MISS, will export after parse`)
             }
           }
         } catch (cacheLookupError) {
+          // A cache miss is a fallback; a load given up is not.
+          throwIfLoadAborted(signal)
           glbInfo(
             `reader: ${kindLabel} cache lookup failed; treating as MISS and continuing:`,
             cacheLookupError)
@@ -628,6 +794,9 @@ export async function load(
         debug().log('Loader#load: modelData from OPFS (decoded):', modelData)
       }
     } catch (opfsError) {
+      // Given up while in the OPFS path: not an OPFS failure, and never a
+      // reason to fetch the model a second time (open-205 #2011 step A).
+      throwIfLoadAborted(signal)
       // Uploaded files (drag-drop, file picker) only exist in OPFS — there
       // is no remote URL to fall back to. Re-throw so the user sees the
       // error rather than a misleading "fall-through succeeded" outcome.
@@ -666,17 +835,32 @@ export async function load(
       if (opfsError?.message?.startsWith('Invalid URL path')) {
         throw opfsError
       }
-      debug().warn(
-        `Loader#load: OPFS path failed (${opfsError?.message || opfsError}); ` +
+      if (opfsError instanceof EvictedOpfsSourceError) {
+        opfsFallbackCondition = {evictedKind: opfsError.kindLabel}
+      } else if (opfsError?.opfsCondition) {
+        opfsFallbackCondition = {
+          kind: opfsError.opfsKind,
+          condition: opfsError.opfsCondition,
+          status: opfsError.opfsStatus,
+        }
+      }
+      if (!(opfsError instanceof EvictedOpfsSourceError)) {
+        // The text is withheld from the Sentry breadcrumb by its prefix
+        // (sentryRedaction.js OPFS_FALLBACK_LINE): the worker's messages can
+        // name the cache key or file path.
+        debug().warn(
+          `Loader#load: OPFS path failed (${opfsError?.message || opfsError}); ` +
         'falling back to direct fetch. ' +
         'The OPFS cache is treated as best-effort — corrupt or browser- ' +
         'rejected entries (Safari InvalidStateError, leaked sync handles, ' +
         'half-written files from previous sessions) should not block load.')
+      }
       // A GLB writer-side artifact context only makes sense for a load that
       // actually came through the OPFS path. Drop it on fallback so we don't
       // try to associate the freshly-fetched bytes with the failed cache key.
       glbExportContext = null
       cameFromGlbCache = false
+      bufferedReason = 'opfs-failed'
       // modelData stays undefined — falls through to the direct-fetch block
       // below, same as when `isOpfsAvailable` was false to begin with.
     }
@@ -701,7 +885,7 @@ export async function load(
       // above was skipped (no GitHub Contents API dereference for `/index.ifc`),
       // so `derefPath` is unset — `path` is the URL we want.
       const fetchUrl = derefPath || path
-      modelData = await axiosDownload(fetchUrl, isFormatText, onProgress)
+      modelData = await untilAborted(axiosDownload(fetchUrl, isFormatText, onProgress, signal))
       debug().log('Loader#load: modelData from axios download:', modelData)
     }
   }
@@ -730,16 +914,46 @@ export async function load(
   // gzip is that format's own container. See `loader/gzipEnvelope.js`.
   modelData = await decodeGzipEnvelope(modelData, loader.type)
 
-  // A hosted `.ifczip` is still the zip here (uploads were unwrapped before
-  // OPFS); conway gets the `.ifc` inside it. The type is the inner model's
-  // from here on, so the model and everything that reads `loader.type` after
-  // this — capabilities, analytics — see an IFC. The arms before this that
-  // key on it (`canOpenFromStore`, the truncated-part-21 check, `wantGlb`)
-  // correctly saw a zip. See `loader/modelArchive.js`.
-  if (loader.type === 'ifczip') {
-    const unwrapped = await unwrapIfcZip(modelData)
-    modelData = unwrapped.modelData
-    loader.type = unwrapped.type
+  // A downloaded archive is still the zip here (uploads were unwrapped before
+  // OPFS): a `.zip` or `.ifczip` route, or any download whose bytes are a zip
+  // whatever its name — content decides, as at the upload seams. The model
+  // inside is what gets parsed, and its type is the load's from here on, so
+  // the parse and everything that reads `loader.type` after this —
+  // capabilities, analytics — see it, not a zip. The arms before this that
+  // key on the route's type (`canOpenFromStore`, the truncated-part-21 check,
+  // `wantGlb`) correctly saw a zip. See `loader/modelArchive.js`.
+  // The model's own type once an archive is opened, for the model line.
+  let archivedType
+  if (ARCHIVE_LOADER_TYPES.has(loader.type) ||
+      (!isFormatText && !cameFromGlbCache && !ZIP_MODEL_TYPES.has(loader.type) && await isZipDownload(modelData))) {
+    const inner = await unwrapHostedArchive(modelData, path.substring(path.lastIndexOf('/') + 1))
+    let innerType
+    if (inner !== null) {
+      modelData = inner.modelData
+      innerType = inner.type
+      // A zip under a model's name (a renamed `.ifczip` at `x.ifc`) got past
+      // `wantGlb`, which went by the name: the export's source handle is the
+      // zip, which `spillModelSource` must never back conway's reads with. It
+      // opens uncached, as a `.ifczip` route does.
+      glbExportContext = null
+    } else if (ARCHIVE_LOADER_TYPES.has(loader.type)) {
+      // Named an archive but not one: typed by its header, as an upload is.
+      // A `.ifczip` the sniff can't place (a BOM, a UTF-16 IFC) still goes to
+      // conway as the IFC it was named, as it did before any zip was a type:
+      // conway's own refusal says more than ours would.
+      innerType = Filetype.analyzeHeader(modelData.slice(0, Filetype.HEADER_LIMIT), {fileByteLength: modelData.byteLength}) ??
+        (loader.type === 'ifczip' ? 'ifc' : null)
+      if (innerType === null) {
+        throw new ZipArchiveError('This file is named as an archive, but it isn\'t a zip or any model Share opens.')
+      }
+    }
+    if (innerType !== undefined) {
+      archivedType = innerType
+      ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await retypeLoader(loader, innerType, viewer)
+      if (isFormatText && typeof modelData !== 'string') {
+        modelData = new TextDecoder('utf-8').decode(modelData)
+      }
+    }
   }
 
   // Provide basePath for multi-file models.  Keep the last '/' for
@@ -753,26 +967,107 @@ export async function load(
   // its header parses.
   let formatTag
   try {
-    formatTag = Filetype.getValidExtension(path)?.toUpperCase()
+    // The archive's inner model, not the route's `.zip` (or the name a zip
+    // was given): the model line describes what was parsed.
+    formatTag = (archivedType ?? Filetype.getValidExtension(path))?.toUpperCase()
   } catch {
     // Extension-less upload paths — the loader was already resolved by
     // content sniffing in findLoader; the model line just omits the tag.
   }
+  // Read before readModel: a buffered worker open transfers the ArrayBuffer
+  // away, which leaves its byteLength 0 afterwards.
+  const sourceBytes = modelData?.byteLength ?? modelData?.length ?? modelData?.size
   reportModelInfo({
     fileName: path.substring(path.lastIndexOf('/') + 1) || path,
     schema: formatTag,
-    byteLength: modelData?.byteLength ?? modelData?.length ?? modelData?.size,
+    // On a GLB cache hit these bytes are the artifact's, and under the
+    // source's name and format tag they read as the file's size:
+    // "SEESTRASSE.ifc — IFC, 4.3 MB" for a 24 MB IFC, and the same 4.3 MB in
+    // stats_fileSize. So a hit reports the source's size as the writer
+    // stamped it (none for an artifact that predates the stamp), and the
+    // artifact's own size separately, as the cached GLB.
+    byteLength: cameFromGlbCache ? (cachedSourceBytes ?? undefined) : sourceBytes,
+    artifactByteLength: cameFromGlbCache ? sourceBytes : undefined,
   })
 
   // readModel throws on any falsy model (surfacing viewer.IFC.ifcLastError
   // for IFC loads, or a generic error otherwise), so `model` is always
   // truthy past this point — no post-call null check is needed here.
   let model
+  // The engine of a model parsed after the load was given up; nothing else
+  // would close it if the viewer outlived the abort.
+  const closeEngineOf = (parsed) => {
+    parsed?.ifcManager?.ifcAPI?.engineSession?.close?.()
+  }
   try {
-    model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress,
-      {onIndexed})
+    // Before the parse: the stretch since the last raced await (hashing, the
+    // cache lookup, buffering, the gzip and archive envelopes) is not.
+    throwIfLoadAborted(signal)
+    // An IFC/STEP parse takes the signal itself (ShareIfcLoader#parse). The
+    // mesh loaders cannot be stopped: their parse runs on and its model is
+    // dropped, never registered with the viewer (below).
+    const reading = readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb,
+      onProgress, {onIndexed, onFirstMesh, signal})
+    try {
+      model = await untilAborted(reading)
+    } catch (e) {
+      if (isAborted(signal)) {
+        reading.then(closeEngineOf, () => null)
+      }
+      throw e
+    }
   } catch (e) {
+    // The OPFS condition is dropped, unreported: this load failed, so
+    // CadView's captureException already covers it, and a message as well
+    // would make one failure two events (Share#2103 review).
     throw markIfOutOfMemory(e)
+  }
+  if (isAborted(signal)) {
+    // Parsed, but given up before it could be used. An IFC/STEP model is
+    // registered with the viewer, whose dispose closes its engine too; close
+    // it now so a viewer that outlives the abort doesn't keep it.
+    closeEngineOf(model)
+    throwIfLoadAborted(signal)
+  }
+  // "Recovered" means the fallback actually produced a model: the direct
+  // fetch succeeded AND its bytes passed the LFS, gzip/archive and readModel
+  // steps above. Only then is the OPFS condition a degraded-but-working load
+  // worth a message (reportOpfsSourceCondition.js). Any throw before this
+  // point leaves the failure to CadView's captureException alone.
+  if (opfsNotCachedKind !== null) {
+    reportOpfsNotCached(opfsNotCachedKind)
+  }
+  if (opfsFallbackCondition !== null) {
+    if (opfsFallbackCondition.evictedKind) {
+      reportOpfsSourceEvicted(opfsFallbackCondition.evictedKind)
+    } else {
+      reportOpfsDownloadFailed(opfsFallbackCondition)
+    }
+  }
+  reportLoadDiagnostics(model, {
+    format: engineFormatOf(loader.type) ?? loader.type,
+    kind: sourceKind ?? fallbackSourceKind(path, inMemoryFile !== undefined, isLocallyHostedFile),
+    bufferedReason,
+    sourceBytes,
+  })
+  // The session of the worker engine that parsed this model
+  // (`?feature=engineWorker`), or null for a main-thread parse. No engine on
+  // the page holds a worker load's model, so the GLB writer below reaches the
+  // worker instead of `viewer.IFC.loader.ifcManager`: its engine captures run
+  // there as one `capture` job, and its source spill as a `spill` request
+  // (engine-worker.md §7 step 5).
+  const engineSession = model?.ifcManager?.ifcAPI?.engineSession ?? null
+  if (engineSession) {
+    // Free the worker's native geometry now, once the scene is built: the
+    // writer reads the SCENE for geometry and the engine only for
+    // properties, so nothing reads it again (§2.1 row 30). A main-thread load
+    // frees it in the writer's `finally` (below), later than it needs to;
+    // here it would otherwise sit in the worker's heap through the idle wait
+    // before the writer runs.
+    if (isFeatureEnabled('demandGeometry')) {
+      // eslint-disable-next-line new-cap
+      model.ifcManager.ifcAPI.ReleaseModelGeometry?.(model.modelID)
+    }
   }
 
   // Conway's handle for THIS parse, latched before the model leaves
@@ -889,6 +1184,9 @@ export async function load(
   // (`stats_cacheHit`). Read here, after the OPFS block, because the stale
   // Git LFS pointer path above can still reset it to false.
   reportCacheHit(cameFromGlbCache)
+  // A batched model on a renderer without WEBGL_multi_draw draws per
+  // instance: say so in the report (Share#2094).
+  reportRendererLimits(model, () => viewer?.context?.getRenderer?.(), loader.type)
 
   // ShareModel decoration (see src/viewer/ShareModel.js): adds
   // `format` + `capabilities` so call-sites can branch on intrinsic
@@ -994,18 +1292,45 @@ export async function load(
     glbVerbose('writer: scheduling export, kind =', glbExportContext.kindLabel)
     useStore.getState().setIsCacheWriteInFlight(true)
     const runWriter = () => {
+      if (isAborted(signal)) {
+        // The user left the model before the browser was idle enough for
+        // the writer: its viewer is gone and its engine closed, so there is
+        // nothing to capture from (open-205 #2011 step A).
+        useStore.getState().setIsCacheWriteInFlight(false)
+        return
+      }
       exportAndCacheGlb({
         model,
         kindLabel: glbExportContext.kindLabel,
         cacheKeyArgs: glbExportContext.cacheKeyArgs,
-        ifcManager: viewer?.IFC?.loader?.ifcManager ?? null,
+        ifcManager: engineSession ? null : (viewer?.IFC?.loader?.ifcManager ?? null),
+        capture: engineSession ? (opts) => engineSession.capture(opts).then((captured) => {
+          // Page-side, so a spec can tell where the captures ran: the
+          // worker's own `[glb]` lines print in the worker's console.
+          glbVerbose(`writer: engine captures ran in the ${engineSession.kind} engine ` +
+            `in ${Math.round(captured.captureMs)}ms`)
+          return captured
+        }) : null,
         modelID: engineModelID,
         // Captured at the top of THIS load, not read when the writer finally
         // runs: by then the user may have navigated to another model, whose
         // own load owns the slot (glbArtifactPublish.js).
         artifactGeneration,
+        // Stamped into the artifact so its later cache hits report the
+        // source's size, not their own (BLDRS_SOURCE_BYTES_EXTRAS_KEY).
+        sourceBytes,
       }).finally(() => {
         useStore.getState().setIsCacheWriteInFlight(false)
+        if (engineSession) {
+          // The same safe point as below, in the worker: the capture is done.
+          // A windowed open already reads through its store and answers
+          // `windowed`; a buffered one (every STEP) is released to windows
+          // over the OPFS File. Its geometry went at load end (above).
+          // Returned, so the writer settles only once the spill has; a close
+          // meanwhile waits for the spill's reply itself
+          // (EngineSession#closePolitely).
+          return spillEngineSource(engineSession, glbExportContext.sourceFile)
+        }
         // The writer's property/tree captures were the LAST load-time
         // sweeps that read the parsed source synchronously — from here
         // on, everything (Properties panel, psets, on-demand subtree
@@ -1038,9 +1363,64 @@ export async function load(
       })
     }
     scheduleIdleWork(runWriter)
+  } else if (engineSession) {
+    // No writer follows, so the writer's spill (above) never comes: a GLB
+    // cache lookup that failed (a hash or OPFS error, which leaves no cache
+    // key), a GitHub source with no upstream sha, the `glb` flag off. On a
+    // windowed Blob-store open the worker still holds the whole source file
+    // for the load (engine/engineSources.js#makeBlobStore, Share#2092, up to
+    // RESIDENT_SOURCE_MAX_BYTES), and only a SPILL lets it go — so without
+    // this it stayed until the session closed (codex review of Share#2095).
+    // `readModel` resolved after the pump's `done`, so the load-time sweeps
+    // are over and this is that release's safe point; nothing races it,
+    // since no writer was scheduled. The same request as the writer's, with
+    // no file: a windowed store answers `released`, a buffered open
+    // `unsupported` (kept resident, as it was).
+    spillEngineSource(engineSession, null)
   }
 
   return model
+}
+
+
+/**
+ * The worker-engine twin of `opfsSourceByteStore.js#spillModelSource`: ask
+ * the session's engine to release its resident source to windows over the
+ * OPFS File the model was parsed from. Fire-and-forget and fail-soft, like
+ * the main-thread spill: a refusal or a closed session keeps the source
+ * resident, which is the pre-spill behaviour.
+ *
+ * The one release path for a worker load's source, called once per load:
+ * by the GLB writer once its capture is done, or straight after the parse
+ * when no writer was scheduled (`load`, below the writer). With no
+ * `sourceFile` it still asks: a windowed Blob-store open lets its whole-file
+ * copy go (`released`) without one, and a buffered open answers
+ * `unsupported`, keeping its source resident.
+ *
+ * @param {object} engineSession
+ * @param {Blob|null|undefined} sourceFile
+ * @return {Promise<void>} settles with the spill, never rejects
+ */
+function spillEngineSource(engineSession, sourceFile) {
+  return engineSession.spill(sourceFile ?? null).then((result) => {
+    if (result?.spilled) {
+      glbInfo(
+        `source spill (engine worker): released resident source buffer (${sourceFile?.size}B); ` +
+        `property reads now page windows through ${result.source?.kind ?? 'a store'}`)
+    } else if (result?.released) {
+      // A windowed open on the Blob store, which held the whole file for the
+      // load (engine/engineSources.js#makeBlobStore, Share#2092). Its size
+      // is the store's own count, there being no File on the no-writer path.
+      const bytes = result.source?.residentBytes ?? sourceFile?.size
+      glbInfo(
+        `source spill (engine worker): released the Blob store's whole-file copy (${bytes}B); ` +
+        'property reads now page windows from the File')
+    } else {
+      glbVerbose(`source spill (engine worker): kept resident (${result?.reason ?? 'no reason given'})`)
+    }
+  }).catch((e) => {
+    glbVerbose('source spill (engine worker): failed (kept resident):', e?.message ?? e)
+  })
 }
 
 
@@ -1497,10 +1877,13 @@ function decodeBase64ModelData(base64, isFormatText) {
  * @param {string} path
  * @param {boolean} isFormatText
  * @param {Function} onProgress Handler from UI to display progress messages
+ * @param {AbortSignal} [signal] cancels the request (open-205 #2011 step A);
+ *   the caller races the download against it too, so what this throws then
+ *   is never read
  * @return {Array}
  * @throws Error for different events, with custom messages
  */
-async function axiosDownload(path, isFormatText, onProgress) {
+async function axiosDownload(path, isFormatText, onProgress, signal = undefined) {
   // TODO(pablo): path feels a little underconstrained here.  axios works a
   // little magic here, as either a url string or /foo.pdb work fine
   try {
@@ -1510,6 +1893,8 @@ async function axiosDownload(path, isFormatText, onProgress) {
         responseType:
         isFormatText ? 'text' : 'arraybuffer',
         onDownloadProgress: (event) => onDownloadProgressHandler(event, onProgress),
+        // Only when given: an absent key keeps the request as it was.
+        ...(signal ? {signal} : {}),
       },
     )).data
   } catch (error) {
@@ -1979,7 +2364,7 @@ export function convertToShareModel(model, viewer, {fileName = null} = {}) {
  * @param {Function} [fixupCb] to modify the model
  * @param {Function} [onProgress] progress callback for IFC loading
  * @param {object} [parseOptions] passed to an IFC/STEP loader's `parse` as
- *   its options (`ShareIfcLoader#parse`: `onIndexed`)
+ *   its options (`ShareIfcLoader#parse`: `onIndexed`, `onFirstMesh`)
  * @return {object}
  */
 export async function readModel(
@@ -1989,6 +2374,12 @@ export async function readModel(
   // TODO(pablo): GLTF also generates errors for texture loads, but
   // that seems to be deep in the promise stack within the loader.
   if (loader instanceof GLTFLoader) {
+    // Inflating and parsing a GLB is a stage of its own. Without this line a
+    // cache hit's whole parse, and its heap (+1 GB on PSB), was reported
+    // under whatever stage came before, "Hashing model" (Share#2101).
+    if (onProgress) {
+      onProgress('Parsing model data...')
+    }
     if (isBldrsGlbContainer(modelData)) {
       model = await parseBldrsGlbContainer(loader, modelData)
     } else {
@@ -2046,6 +2437,10 @@ export async function readModel(
   if (fixupCb) {
     if (onProgress) {
       onProgress('Applying model fixups...')
+      // The fixups are synchronous (a GLB hit's hydration is seconds of it
+      // on a large model), so without a paint first the snackbar keeps
+      // showing the previous stage until they are done (Share#2101).
+      await yieldForPaint()
     }
     model = fixupCb(model, viewer)
   }
@@ -2078,6 +2473,48 @@ export async function readModel(
   }
 
   return model
+}
+
+
+// Route types that name an archive, resolved by content in `load`.
+const ARCHIVE_LOADER_TYPES = new Set(['zip', 'ifczip'])
+
+// The zip signatures' length (`zipArchive.js#looksLikeZipBytes`).
+const ZIP_SIGNATURE_BYTES = 4
+
+
+/**
+ * @param {string|ArrayBuffer|Uint8Array|Blob} modelData the download: bytes,
+ *   or the OPFS File itself for a streaming open
+ * @return {Promise<boolean>} whether it is a zip archive
+ */
+async function isZipDownload(modelData) {
+  if (modelData instanceof ArrayBuffer || ArrayBuffer.isView(modelData)) {
+    return looksLikeZipBytes(modelData)
+  }
+  if (modelData instanceof Blob) {
+    return looksLikeZipBytes(await modelData.slice(0, ZIP_SIGNATURE_BYTES).arrayBuffer())
+  }
+  return false
+}
+
+
+/**
+ * The loader tuple for an archive's inner model. A part-21 model behind the
+ * IFC arm (a `.ifczip`, or a STEP inside one) keeps its loader, retagged, as
+ * it always has; anything else gets its own arm.
+ *
+ * @param {object} loader the route's loader
+ * @param {string} type the inner model's format tag
+ * @param {object} viewer
+ * @return {Promise<Array>} `[loader, isLoaderAsync, isFormatText, isIfc, fixupCb]`
+ */
+function retypeLoader(loader, type, viewer) {
+  if (loader === viewer?.ifcLoader && PART21_LOADER_TYPES.has(type)) {
+    loader.type = type
+    return Promise.resolve([loader, true, false, true, undefined])
+  }
+  return findLoader(`model.${type}`, viewer)
 }
 
 
@@ -2136,8 +2573,8 @@ async function findLoader(pathname, viewer) {
     case 'stp':
     case 'ifc':
     case 'ifczip': {
-      // A `.ifczip` shares this arm and is unwrapped to its `.ifc` before
-      // `readModel` (`load`, beside the gzip net; `modelArchive.js`).
+      // A `.ifczip` shares this arm and is unwrapped to the model inside it
+      // before `readModel` (`load`, beside the gzip net; `modelArchive.js`).
       // ShareIfcLoader (`src/viewer/ifc/ShareIfcLoader.js`) is wired
       // up as `viewer.ifcLoader` at viewer construction (see
       // `src/viewer/ShareViewer.js`). It owns the Conway-direct parse
@@ -2151,6 +2588,28 @@ async function findLoader(pathname, viewer) {
       // TODO(pablo): true should work but currently causes IFCLoader to fail
       isFormatText = false
       isIfc = true
+      break
+    }
+    case 'nrrd': {
+      // A volume (CT, MR) — opened directly, or as the NRRD a zip of DICOM
+      // slices was stacked into at the upload seam (`loader/dicom.js`).
+      // NRRDLoader returns a `Volume`, not an Object3D; the fixup puts its
+      // voxels in a 3D texture on a ray-marched box (`loader/nrrd.js`).
+      loader = new NRRDLoader()
+      fixupCb = nrrdToThree
+      isFormatText = false
+      break
+    }
+    case 'zip': {
+      // A container, not a format: `load` resolves the model inside after the
+      // download (`modelArchive.js#unwrapHostedArchive`) and retypes the load
+      // to it. Nothing should ever reach this parse.
+      loader = {
+        parse: () => {
+          throw new Error('Loader#findLoader: an archive reached the parser unopened')
+        },
+      }
+      isFormatText = false
       break
     }
     case 'obj': {
@@ -2299,7 +2758,9 @@ function getDracoLoader() {
   if (!sharedDracoLoader) {
     sharedDracoLoader = new DRACOLoader()
     sharedDracoLoader.setDecoderPath('/static/js/draco/')
-    sharedDracoLoader.setDecoderConfig({type: 'wasm'})
+    // No setDecoderConfig({type: 'wasm'}): three r187 deprecated it (removal
+    // in r194) and picks the wasm decoder by default wherever WebAssembly
+    // exists, which is what that call asked for.
   }
   return sharedDracoLoader
 }
@@ -2336,17 +2797,9 @@ function onDownloadProgressHandler(progressEvent, onProgress) {
 }
 
 
-/** For network or file resources that are not found. */
-export class NotFoundError extends Error {
-  /** @param {string} message */
-  constructor(message) {
-    super(message)
-    this.name = 'NotFoundError'
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, NotFoundError) // Captures stack trace, excluding constructor call
-    }
-  }
-}
+// NotFoundError moved to its own module (notFoundError.js) so urls.js can
+// throw it; re-exported here for existing imports.
+export {NotFoundError} from './notFoundError'
 
 
 /**
@@ -2364,7 +2817,8 @@ export class NotFoundError extends Error {
  * @param {string} kindLabel Source kind of the model this artifact came from
  *   ('github' | 'local' | 'upload' | 'external'), carried onto the published
  *   slot as the analytics dimension — see the publish below.
- * @return {Promise<File|null>}
+ * @return {Promise<{file: File, sourceBytes: (number|null)}|null>} the
+ *   artifact, and the source size its writer stamped (null when absent)
  */
 async function tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel) {
   try {
@@ -2445,9 +2899,29 @@ async function tryLoadCachedGlb(cacheKeyArgs, artifactGeneration, kindLabel) {
       // cache-hit load never runs a writer.
       kindLabel,
     }, artifactGeneration)
-    return file
+    return {file, sourceBytes: stampedSourceBytes(prefixes)}
   } catch (e) {
     glbInfo('reader: lookup failed, falling back to source path:', e)
+    return null
+  }
+}
+
+
+/**
+ * The source size the writer stamped into a cached artifact
+ * (glbExport.js#BLDRS_SOURCE_BYTES_EXTRAS_KEY), read from the JSON prefixes
+ * `tryLoadCachedGlb` already holds, so a hit knows it before the parse and
+ * the model line can carry it. Validated: the artifact is an untrusted
+ * boundary. Null for an artifact that predates the stamp, or any doubt.
+ *
+ * @param {Uint8Array[]} prefixes chunk JSON prefixes (readGlbContainerJsonPrefixes)
+ * @return {number|null}
+ */
+export function stampedSourceBytes(prefixes) {
+  try {
+    const json = parseGlbJsonChunk(prefixes[0])
+    return validSourceBytes(json?.scenes?.[0]?.extras?.[BLDRS_SOURCE_BYTES_EXTRAS_KEY])
+  } catch {
     return null
   }
 }

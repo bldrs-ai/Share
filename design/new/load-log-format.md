@@ -56,9 +56,55 @@ hugged box renders them as a narrow clipped column. Expanding also grows
 MUI's message slot (`flexGrow`), which otherwise stays content-sized and turns
 the extra width into empty space on the right.
 
-A user pasting any of these into a bug report produces the same text; Sentry
-receives the same trail as breadcrumbs plus the final report string in the
-`load` context.
+### Where a load's conditions go
+
+A successful load's diagnostics are split by the Reported Conditions rule
+(`LoadProgressReporter#captureDiagnostics`, since 2026-11):
+
+| Condition | Sink |
+| --- | --- |
+| A diagnostic the engine couldn't act on (geometry it couldn't build) | Sentry `Load diagnostics: <most frequent engine diagnostic>`, warning; error when the load drew nothing although the file had geometry |
+| Authoring defects: `No units defined.`, `No IfcProjects found?`, anything conway marks `DATA_DEFECT` | GA `load_diagnostics {outcome, defect, format, authoring_tool, schema, size_class}`; `defect` is `no_units`, `no_projects` or `marked`, never the text; `schema` is a known schema, an AP family or `other` |
+| A model that read fine but has nothing to draw | The same GA event, `outcome: no_geometry`; an engine diagnostic it also hit still goes to Sentry, as above |
+| A load with no progress event for 30 s | The UI's stall cue only |
+| … still silent at 3 min | Sentry `Model load hung`, warning, once per load |
+| … that then finished | GA `load_stall_recovered {phase, format, size_class}` |
+| … that then failed | CadView's failure event, tagged `load.stalled: true` on that event only (never on the session scope, where it would outlive the load) |
+
+The Sentry event is titled by the most frequent diagnostic that is not a
+defect, so an engine gap behind a noisier defect still gets its own issue. An
+unusable load whose only diagnostics are defects still goes to Sentry, tagged
+`data_defect`. Before 2026-11 the defects and the nothing-to-draw loads were
+Sentry events too (SHARE-1MV alone, 123 users in two weeks), and every 30 s
+stall was a Sentry warning (SHARE-1HJ), though most such loads finished.
+
+A user pasting any of these into a bug report produces the same text. Sentry
+receives the same trail as breadcrumbs, plus the final report string in the
+`load` context (hang and failure events) and the `loadDiagnostics` context
+(diagnostics events), **with one line changed: the model line.** conway's
+`Model: <header FILE_NAME> — <schema>, <size>, <originating system>
+(<preprocessor>)` is the exporter's free text, and in the wild that has
+included a full UNC path to a company file share, with its private IP and
+project folder names (SHARE-1MT). Sentry's server-side scrubber left it alone.
+So Sentry's copy reads `Model: (name withheld) — <schema>, <size>, <tool>`,
+built from the reporter's latched fields with the tool taken from the
+`authoring_tool` allowlist (`LoadProgressReporter#sentryModelLine`). `privacy/sentryRedaction.js` is Sentry's
+`beforeBreadcrumb`, and rewrites three things as breadcrumbs:
+- the model line's console echo;
+- any console line that names a user's file through `consoleFileName`, i.e.
+  `<prefix>: file "<name>" …` (the drop path's rejected-upload warning, the
+  no-model-in-archive warning). These have the quoted name withheld. The
+  `file ` marker keeps ordinary library warnings such as three.js's
+  `THREE.Sprite: "Raycaster.camera" …` from matching;
+- click breadcrumbs' `title`, `aria-label`, `alt` and `name` values, which
+  carry file names in the recent-files list and the projects drawer.
+
+The reporter's console tee runs teed text through the same redaction, because
+teed warnings reach the diagnostics event's title and `messages` without
+passing through `beforeBreadcrumb`. That makes the report's own `Warnings &
+errors` line redacted as well; the console prints the warning whole. The model
+line keeps the full header text in the report dialog, the snackbar and the
+console: that is the user reading their own file's header.
 
 Canonical implementation: conway `src/core/progress_log.ts`
 (`LoadLogAccumulator` + formatters), consumed by the conway CLI renderer.
@@ -79,6 +125,7 @@ Parsing: 3.201s, +210.512000 MB heap
 Geometry [0%........56%] 41.004s, +388.250000 MB heap   ← live OR failed-at-56% stage
 Total: 46.310s, 214.000000 → 852.000000 MB heap   ← 5. separate before/after
 Warnings & errors (1247, 224 distinct): CDT Exception (hemisphere: 0) (×892)  ← 6. one-line summary
+Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 triangles, tested one by one per pick  ← 7. optional
 ```
 
 1. **Host line** — Share version + used-JS-heap before the load begins
@@ -117,6 +164,69 @@ Warnings & errors (1247, 224 distinct): CDT Exception (hemisphere: 0) (×892)  �
    the report in the snackbar expando and the copyable "i" report alike.
    Nothing is lost: the console tee passes every message through to the real
    console, so full detail is one devtools panel away.
+7. **Health** — optional lines after Total, each for a condition the load
+   survived but that someone triaging the model wants to know about:
+   - `Health: stray geometry excluded from view framing (…)` — auto-framing
+     left outliers out (`reportFramingExclusion`; added post-load, since
+     framing runs after the load settles).
+   - `Health: picking index hit its depth cap (40) in N trees; largest leaf
+     M triangles, tested one by one per pick` (`reportBvhDepthCap`).
+     three-mesh-bvh stops splitting at `maxDepth` and makes one leaf of whatever is left, so a ray reaching
+     that leaf tests its triangles linearly; picks stay correct. Share builds
+     BVHs with `verbose: false` (`viewer/ifc/bvhBuild.js`) because the
+     library's console warning said only that the cap was hit, and as a
+     load-time warn it became the title of the diagnostics event
+     (SHARE-1MT). The line records the number the warning left out, the
+     largest capped leaf, which decides whether raising `maxDepth` or
+     building with the SAH strategy is worth it. Only leaves at the cap
+     count: an earlier leaf of identical centroids isn't something a deeper
+     cap would split. A successful load that hit the cap is counted in GA,
+     once, as `bvh_depth_cap {format, trees, max_leaf}` with both counts
+     bucketed (`loader/reportLoadDiagnostics.js`). It is volume-only signal,
+     so GA is its only sink (AGENTS.md, "Reported Conditions"): no Sentry
+     event and no field on one. Sentry's copy of the report still has the
+     Health line, since that is the load log.
+     A batched model (Conway-direct IFC and STEP, and their GLB cache hits)
+     builds its trees after it is on screen, in idle time
+     (`viewer/ifc/deferredBatchedBvh.js`), so its cap usually arrives after
+     Total. The build reports once, when its last tree is built, with the
+     token of the load that scheduled it (`loadReportToken`): the line is
+     added after Total, as the framing line is, or replaces the one the load
+     wrote; GA counts it once the load is known to have succeeded; a cap
+     from a load that has since been replaced is dropped. A tree built for
+     an edit's new geometry later carries no token and is not the load's.
+
+8. **Engine source lines** — an engine-worker load (engine-worker.md
+   §5.6, §7) adds up to three lines after its stages, each a fact about how
+   the engine read its source, never the file's name or path:
+   - `Engine source: <buffered|windowed> (<why>)` — the source policy's
+     decision as it ran (`engineModelLoad.js#sourceModeLine`,
+     `engine/sourcePolicy.js`): `buffered (231.4 MB, cap 1024 MB)` over the
+     sync access handle within the device's cap; `windowed (860.7 MB, over
+     cap 512 MB)` above it; `buffered (231.4 MB, held by the Blob store)`
+     (Firefox, Safari); `windowed (index reopen)` from a sidecar;
+     `windowed (disableBufferedSource)` under the kill switch;
+     `windowed (buffered open failed: RangeError)` when the whole-file
+     buffer could not be allocated, and `windowed (buffered open failed:
+     out of memory | engine exception | engine abort)` on the page's retry
+     after a buffered open failed as a heap exhaustion does
+     (engine-worker.md §5.6), preceded by `Engine retry: buffered open
+     failed (<code>); retrying windowed on a fresh engine`; `buffered (…, no store to window
+     over)` / `(…, disableStreamOpen)` / `(…, windowed open refused)` where
+     no windowed open was possible; and `buffered (…, windowed open
+     failed)` where conway's windowed open failed and the whole file was
+     buffered instead. Absent from a worker bundle older than the
+     policy. MB here is MiB, as on the lines below.
+   - `Engine source I/O: <store> …, N reads, M MB, Ts` — only after a
+     windowed open: the store it pages through (sync access handle, or the
+     Blob store and why) and its read counts (`sourceIoLine`).
+   - `Engine index: …` — where the index came from (a sidecar, or the
+     parse) and whether the parse saved one (`indexLine`). The size is
+     followed by the sidecar's source digest, `sha256` (conway's native
+     block digest, the default) or `fnv` (the per-byte loop: sidecars saved
+     before it, or under `?feature=disableNativeSourceHash`; Share#2092). A
+     reopen reports the digest the sidecar was saved with, not the current
+     flag's.
 
 **Precision** — seconds to millisecond precision (3 decimals), memory to
 byte precision (6 decimals of MB), per the report's diagnostic purpose.
@@ -139,6 +249,26 @@ Every format gets the format-independent core; richer formats add layers:
 | Parse stage | indeterminate (opaque three.js parse) | determinate (bytes) | determinate (bytes) |
 | Geometry stage | — (part of parse) | determinate (products) | indeterminate heartbeat (thunk-tree walk) |
 | Convert / fixup stages | as they occur | as they occur | as they occur |
+
+A GLB cache hit is a GLB load from then on: `Reading model data` (the
+artifact out of OPFS, on a local or Drive source; a GitHub hit reads it
+under `Buffering model bytes`), then `Parsing model data` (the container's
+inflate and GLTFLoader's parse), then `Applying model fixups` (hydrating the
+batched model). Before Share#2101 the parse had no line of its own, so its
+time and its heap (over 1 GB on PSB) were reported under whichever stage
+came before, `Hashing model`. The fixups are one synchronous call, so
+`readModel` waits for a paint (`yieldForPaint`) after announcing them;
+otherwise the snackbar's live line kept showing the previous stage until
+they were done.
+
+A batched model (Conway-direct IFC and STEP, and their GLB cache hits) drawn
+by a renderer without `WEBGL_multi_draw` gets a `Renderer: WEBGL_multi_draw
+unsupported; batched meshes draw one instance at a time` line during the load
+(`loader/reportRendererLimits.js`, Share#2094). three then issues one draw
+per instance: the load is unaffected, every frame is slower on a large model.
+Firefox 159 is the case seen so far. GA counts it, once per such load, as
+`renderer_fallback {condition: 'no_multi_draw', format}`; it is the browser's
+capability, nothing to fix on our side, so Sentry gets nothing.
 
 Mechanics: engine phases arrive as structured `ProgressEvent`s
 (`{phase, completed, total?, elapsedMs, memoryMb?}`); Share-side stages and
