@@ -1127,8 +1127,9 @@ first. It is a task inside #1674.
 - IFC GlobalIds are accepted on input (`SearchSlice` maps GlobalId ↔
   expressId).
 
-Results render as element chips through #1673, so "the AI pointed at it"
-and "the user clicked it" are the same navigation.
+Results render as element chips through #1673 (the model links a ref as
+`[name](ref:e123)`; see [conversational-cad.md](conversational-cad.md) §4), so
+"the AI pointed at it" and "the user clicked it" are the same navigation.
 
 **v0 tools (read/annotate; #1674),** in the namespaced form. Annotation
 column: R = `readOnly`, V = `viewState`, P = `sendsPixels`.

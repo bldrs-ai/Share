@@ -49,6 +49,16 @@ describe('viewer/tools/assistInstructions', () => {
     })
   })
 
+  // #1673: a mention is a `ref:` link the client turns into a chip. The model
+  // must not write a permalink itself, nor show a bare ref as prose.
+  it('has the model link named elements as ref: links, never URLs or bare refs', () => {
+    const text = shareAssistInstructions()
+    expect(text).toMatch(/\[Wall 3\]\(ref:e123\)/)
+    expect(text).toMatch(/Link only refs from tool results/)
+    expect(text).toMatch(/never write any other URL for an element/)
+    expect(text).toMatch(/Don't write refs as prose or show them to the user unless they ask/)
+  })
+
   it('imports nothing, so the relay can load it under plain Node ESM', () => {
     const source = fs.readFileSync(path.join(__dirname, 'assistInstructions.js'), 'utf8')
     expect(source).not.toMatch(/^\s*import\s/m)

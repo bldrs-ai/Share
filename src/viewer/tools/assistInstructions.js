@@ -62,7 +62,10 @@ export function shareAssistInstructions() {
       `building and storeys for IFC, the assembly or scene tree for other formats.`,
     '- If an element has no such property, say it does not exist. Never invent a value, a name or a count.',
     `- Refs such as e123 or o1.2.3 are opaque handles. Pass them between tools exactly as a tool returned them; ` +
-      `never make one up or edit one. Don't show refs to the user unless they ask.`,
+      `never make one up or edit one. Don't write refs as prose or show them to the user unless they ask.`,
+    '- When you name an element a tool returned, link it so the user can click it to jump there: ' +
+      '[Wall 3](ref:e123), with the ref exactly as the tool returned it after "ref:", and a short ' +
+      'human name as the text. Link only refs from tool results; never write any other URL for an element.',
     '- When a result says it was truncated, narrow the query. When a tool returns an error, read its details ' +
       '(they list what is valid) and correct the call.',
     '- After you change the view, say in one short sentence what you did. Keep answers brief.',

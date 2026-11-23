@@ -1,11 +1,18 @@
 import React from 'react'
 import {act, render, screen, within} from '@testing-library/react'
 import {ThemeCtx} from '../../theme/Theme.fixture'
+import {describeRef, jumpToRef} from '../../viewer/tools/refLinks'
 import AssistantMarkdown, {allowedLinkUri} from './AssistantMarkdown'
 
 
 // The plugin is a URL import in the app (markdownGfm.js); Jest has the module itself.
 const mockGfm = {load: () => Promise.resolve(jest.requireActual('remark-gfm').default)}
+// The chip's model lookup and jump have their own suite (refLinks.test.js); here only the wiring.
+jest.mock('../../viewer/tools/refLinks', () => ({
+  ...jest.requireActual('../../viewer/tools/refLinks'),
+  describeRef: jest.fn(),
+  jumpToRef: jest.fn(),
+}))
 jest.mock('./markdownGfm', () => ({loadMarkdownGfm: () => mockGfm.load()}))
 
 
@@ -97,11 +104,84 @@ describe('AssistantMarkdown', () => {
 })
 
 
+describe('AssistantMarkdown element chips', () => {
+  const PERMALINK = 'https://share.example/share/v/p/index.ifc#sel:e102'
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    describeRef.mockImplementation((ref) => (ref === 'e102' ?
+      {ok: true, permalink: PERMALINK} : {ok: false, reason: 'This element isn\'t in the model that is open.'}))
+  })
+
+  it('renders a ref: link as a chip that is a real link to the permalink', async () => {
+    await renderMarkdown('Look at [Window 1](ref:e102) first.')
+    const chip = screen.getByTestId('BotChat-RefChip')
+    expect(chip).toHaveTextContent('Window 1')
+    expect(chip.tagName).toBe('A')
+    expect(chip).toHaveAttribute('href', PERMALINK)
+    expect(chip).toHaveAttribute('data-ref', 'e102')
+  })
+
+  it('jumps in place on a plain click, and leaves a modified click to the browser', async () => {
+    await renderMarkdown('[Window 1](ref:e102)')
+    const chip = screen.getByTestId('BotChat-RefChip')
+    const plain = new MouseEvent('click', {bubbles: true, cancelable: true, button: 0})
+    act(() => {
+      chip.dispatchEvent(plain)
+    })
+    expect(jumpToRef).toHaveBeenCalledWith('e102')
+    expect(plain.defaultPrevented).toBe(true)
+
+    jumpToRef.mockClear()
+    const newTab = new MouseEvent('click', {bubbles: true, cancelable: true, button: 0, ctrlKey: true})
+    act(() => {
+      chip.dispatchEvent(newTab)
+    })
+    expect(jumpToRef).not.toHaveBeenCalled()
+    expect(newTab.defaultPrevented).toBe(false)
+  })
+
+  it('renders a mention the open model cannot resolve as a disabled chip, never a link', async () => {
+    await renderMarkdown('[Ghost](ref:e999)')
+    expect(screen.queryByRole('link')).toBeNull()
+    const chip = screen.getByTestId('BotChat-RefChip-Disabled')
+    expect(chip).toHaveTextContent('Ghost')
+    expect(chip).not.toHaveAttribute('href')
+    act(() => {
+      chip.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}))
+    })
+    expect(jumpToRef).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['ref:'], ['ref:nonsense'], ['ref:javascript:alert(1)'], ['REF:e102x'],
+  ])('renders a malformed mention %s as plain text', async (href) => {
+    const {container} = await renderMarkdown(`[odd](${href})`)
+    expect(screen.queryByRole('link')).toBeNull()
+    expect(screen.queryByTestId('BotChat-RefChip')).toBeNull()
+    expect(container.textContent).toBe('odd')
+  })
+
+  it('keeps an https link to another site an ordinary external link, not a chip', async () => {
+    await renderMarkdown('[docs](https://example.com/share/v/p/index.ifc#sel:e102)')
+    expect(screen.queryByTestId('BotChat-RefChip')).toBeNull()
+    expect(screen.getByRole('link', {name: 'docs'})).toHaveAttribute('target', '_blank')
+  })
+})
+
+
 describe('allowedLinkUri', () => {
   it('passes only http and https', () => {
     expect(allowedLinkUri('https://a.example')).toBe('https://a.example')
     expect(allowedLinkUri('http://a.example')).toBe('http://a.example')
     expect(allowedLinkUri('ftp://a.example')).toBe('')
     expect(allowedLinkUri('not a url')).toBe('')
+  })
+
+  it('passes a ref: link only when its ref is well formed', () => {
+    expect(allowedLinkUri('ref:e12')).toBe('ref:e12')
+    expect(allowedLinkUri('ref:o1.2.3')).toBe('ref:o1.2.3')
+    expect(allowedLinkUri('ref:e12; x')).toBe('')
+    expect(allowedLinkUri('ref:')).toBe('')
   })
 })
