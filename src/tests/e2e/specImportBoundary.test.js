@@ -141,19 +141,21 @@ function isInside(dir, p) {
 
 
 /**
- * Resolves a relative specifier the way the bundler would for a spec: as the
- * path itself, then with each extension, then as a directory's `index`.
- * Bare package specifiers return null.
+ * Resolves a local specifier the way Playwright's TypeScript loader would for
+ * a spec: as the path itself, then with each extension, then as a directory's
+ * `index`. A relative one resolves from the importing file. A bare one
+ * resolves from the repo root first, since tsconfig.json sets
+ * `"baseUrl": "."` (so `'src/__mocks__/x'` is a local file), and only
+ * otherwise is it a package, which returns null.
  *
  * @param {string} fromDir directory of the importing file
  * @param {string} specifier
  * @return {string|null} absolute path of the file, or null
  */
 function resolveLocal(fromDir, specifier) {
-  if (!specifier.startsWith('.')) {
-    return null
-  }
-  const base = path.resolve(fromDir, specifier)
+  const base = specifier.startsWith('.') ?
+    path.resolve(fromDir, specifier) :
+    path.resolve(REPO_ROOT, specifier)
   const candidates = [
     base,
     ...EXTENSIONS.map((ext) => base + ext),
@@ -192,6 +194,11 @@ describe('e2e/specImportBoundary', () => {
       expect(importsMswValue(`import 'msw'`)).toBe(true)
       expect(importsMswValue(`import 'msw/node'`)).toBe(true)
       expect(importsMswValue(`import {} from 'msw'`)).toBe(true)
+    })
+
+    it('resolves root-relative imports through the tsconfig baseUrl', () => {
+      expect(resolveLocal(SRC_ROOT, 'src/tests/e2e/formFactor')).toBe(path.join(SRC_ROOT, 'tests', 'e2e', 'formFactor.ts'))
+      expect(resolveLocal(SRC_ROOT, '@playwright/test')).toBeNull()
     })
 
     it('ignores type-only msw imports and look-alike packages', () => {
