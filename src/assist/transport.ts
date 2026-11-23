@@ -88,8 +88,13 @@ export function openRouterTransport(opts: OpenRouterTransportOptions): Transport
 export interface HostedTransportOptions {
   /** The relay's path or URL, e.g. '/.netlify/functions/ai-chat'. Relative resolves against the page. */
   relayUrl: string
-  /** The model to ask the relay for; it must be on the relay's list for the caller's tier. */
-  model: string
+  /**
+   * The model to ask the relay for; it must be on the relay's list for the
+   * caller's tier, which the relay checks on every request. A function is
+   * read afresh at each turn, so a choice made in the host's settings (the
+   * model picker, #1934) applies from the next turn without a rebuild.
+   */
+  model: string | (() => string)
   /**
    * The signed-in user's Auth0 access token for this request, or null when
    * signed out (or when getting one failed: the turn then goes anonymous).
@@ -170,7 +175,7 @@ export function hostedTransport(opts: HostedTransportOptions): Transport {
         compatibility: 'strict',
         fetch: relayFetch as typeof fetch,
       })
-      return provider.chat(opts.model)
+      return provider.chat(typeof opts.model === 'function' ? opts.model() : opts.model)
     },
   }
 }

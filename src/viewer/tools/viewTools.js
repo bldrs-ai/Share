@@ -207,6 +207,28 @@ export function createViewToolProvider() {
 
 
 /**
+ * What an element chip in a reply does (refLinks.js): `view.select` then
+ * `view.focus` on the same refs, called directly because the click is the
+ * user's own, not a model step, so it takes no registry round trip and
+ * offers no Undo (the task chip's Undo is for what the assistant did).
+ * Throws `unresolved_refs` before changing anything, as the tools do. A
+ * ref with nothing to frame still selects.
+ *
+ * @param {Array<string>} refs
+ */
+export function selectAndFrame(refs) {
+  select({refs})
+  try {
+    focus({refs})
+  } catch (e) {
+    if (!(e instanceof ToolError)) {
+      throw e
+    }
+  }
+}
+
+
+/**
  * Wrap a synchronous tool body as `run`, so a throw becomes a rejection like
  * an async body's would.
  *

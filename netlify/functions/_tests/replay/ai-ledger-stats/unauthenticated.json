@@ -1,0 +1,7 @@
+{
+  "description": "No bearer: 401 before the ledger is touched (the deployed smoke probe sends exactly this).",
+  "env": {"NODE_ENV": "test", "ADMIN_STATS_SECRET": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"},
+  "request": {"method": "GET", "path": "/.netlify/functions/ai-ledger-stats", "headers": {}},
+  "exchanges": [],
+  "expect": {"statusCode": 401, "json": {"error": {"code": "admin_stats_unauthorized"}}}
+}

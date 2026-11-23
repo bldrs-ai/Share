@@ -391,9 +391,21 @@ picker. The UI can show the budget as a percentage or as abstract "credits"
    free-models router, [FAQ](https://openrouter.ai/docs/faq.md)) or to a
    curated `:free` list (below), and **costs zero credits**. The label says
    plainly that it may be rate-limited or unavailable. Those requests keep
-   `deny`, so the list needs no training disclosure. The one hosted
+   `deny`. The one hosted
    exception is the optional NVIDIA entry, sent without `deny` (§5), which
    shows §10's free-models disclosure before first use.
+   - **As built (#1934).** A "Free models (experimental)" switch in the
+     assistant's settings, on every tier, sends the relay's `bldrs/free`
+     alias (`max_price` 0, no reservation, no breaker; counted against the
+     daily free-request cap). The NVIDIA entry is still not listed, so every
+     free request keeps `deny`. The switch's text still says providers "may
+     log or train on prompts": `deny` filters by OpenRouter's data-policy
+     tags, which it calls "our best knowledge", and free providers' terms
+     are the least settled and change most. So the text says Bldrs asks
+     every provider not to store or train, and that free providers set
+     their own terms, rather than promise more than `deny` can. The choice
+     is kept per browser in localStorage
+     (`src/Components/Bot/assistModelChoice.js`).
 3. **Overflow.** When the global anonymous spend breaker trips (§7), the
    relay degrades anonymous traffic to the free-models path instead of
    refusing it. An in-tray notice says why ("free assistant busy, switched
@@ -502,7 +514,9 @@ literally. 17 are free and tool-capable.
 
 **A gap the live check found (spike #1929).** `/api/v1/models/{id}/endpoints`
 exposes no data-policy field, so the catalog can't say which endpoints
-survive `data_collection: "deny"`. Two consequences:
+survive `data_collection: "deny"` (still true on 2026-11-23; the picker
+uses `/api/v1/endpoints/zdr` as a conservative proxy, "Pro picker, as
+built" below). Two consequences:
 
 - Prices differ per endpoint. gpt-oss-120b has 23 endpoints, from
   $0.03/$0.17 to $0.35/$0.75 per M. Deny may route to a pricier one.
@@ -613,6 +627,12 @@ What follows from that:
   - **Re-size *B* as traffic grows.** Rule of thumb: about 3× the trailing
     7-day median anonymous spend, never above a hard ceiling set by hand
     next to *A*. The ledger's own daily totals provide the median.
+    `netlify/functions/ai-ledger-stats.js` reads them for Bldrs' private
+    admin dashboard: each breaker's spend per UTC day for the last week,
+    the limits in force (`aiCreditLimits(process.env)`), which settings and
+    secrets are set (never their values) and a count of reconciliation
+    records. It is server-to-server only, behind `ADMIN_STATS_SECRET`, and
+    answers aggregates alone: no ledger key, so no identity, leaves it.
 - **A signed-in free-tier breaker too** (added here, not in the planning
   decisions). Per-user budgets bound one account, but free Auth0 accounts
   are cheap to create, so the free tier gets the same daily breaker
@@ -637,6 +657,80 @@ allowlist are the same list. A model can sit in the catalog with no
 deny-compatible endpoint (above), so the relay surfaces OpenRouter's "no
 endpoints match" as a picker-level "unavailable under Bldrs privacy
 settings".
+
+**Pro picker, as built (#1934).** The plan above, with three changes the
+live API forced. Code: `netlify/functions/_lib/aiCatalogue.js`; the route
+is `GET /.netlify/functions/ai-chat?catalogue`.
+
+- **The list.** `GET /api/v1/models` and `GET /api/v1/endpoints/zdr`, both
+  public and read without Bldrs' key, behind the relay's Origin check and
+  cached per instance for 10 minutes (a failed read for 1). A model is
+  listed when it:
+  - takes `tools`;
+  - reads text and writes only text;
+  - has not expired;
+  - is a plain `vendor/model` id (no `:free`, `:batch` or other variant,
+    no `openrouter/*` router);
+  - has a listed price the reservation can bound (below);
+  - and has at least one tool-capable ZDR endpoint without Safety
+    Retention.
+
+  On 2026-11-23 that is 180 of the 415 tool-capable models. The route
+  returns the curated `PAID_MODELS` first, with their tiers, then those, as
+  Pro-only. When OpenRouter can't be read it returns the curated table
+  alone (`source: 'static'`), so the picker keeps the default chain and the
+  two curated Pro models.
+- **Why ZDR, not deny.** The gap above still holds on 2026-11-23: neither
+  `/models` nor `/models/{id}/endpoints` says which endpoints survive
+  `deny`. The ZDR list is the one machine-readable data policy. A ZDR
+  endpoint keeps nothing, so it can't collect, and a model that has one
+  routes under `deny`. It is a conservative proxy, so some deny-routable
+  models are left out. qwen3.7-flash is one: its one Alibaba endpoint isn't
+  ZDR, but the curated table keeps it. Safety Retention endpoints are not
+  counted: they keep prompts for abuse review, and whether `deny` admits
+  them is undocumented. That leaves gemini-3.8-flash out of the live list,
+  but curated. The filter decides what the picker offers, never what
+  privacy a request gets: every request is still sent with `deny`. A listed
+  model that answers 404 under it is refused with `ai_model_unavailable`
+  and isn't reported (the proxy failing, not a fix). Models left out are
+  omitted rather than shown disabled; the menu's caption says only
+  models that can answer without the provider keeping prompts are listed.
+- **The ceiling of a pick.** It is read at pick time from
+  `/models/{id}/endpoints`, never from `/models`. Grok 4.7 lists 2 / 6
+  (4 / 12 past 200k), but its priority endpoints charge double, 8 / 24 past
+  200k. The rule is the curated table's: the dearest of ALL endpoints,
+  long-context `overrides` included, with output at `internal_reasoning`
+  when that is dearer. A pricing field the bound doesn't cover makes the
+  model unpriced, and so refused. That covers a per-request fee, image or
+  audio output, or any field the reader doesn't know, at a non-zero value.
+  The bound can ignore cache, image and audio input, web search and
+  discount, because the relay never forwards what bills them. Applied to
+  the curated models' live endpoints, the rule reproduces their table
+  ceilings exactly: 0.20 / 0.80, 0.35 / 0.95, 1.35 / 6.75 and 1 / 5.
+  Both zero is refused too: it would be a free model that skips the free
+  path's request cap.
+- **Why the bound holds for a pick.** The relay sends that ceiling as
+  `provider.max_price`, prices the reservation from the same number, and
+  sends no fallbacks (the user picked this model). OpenRouter therefore
+  routes only to an endpoint at or under the ceiling, and the reservation
+  covers it. A cached ceiling that has gone stale can't break this. An
+  endpoint that raised its price past it is skipped rather than billed. If
+  every endpoint did, the request fails upstream and its hold is released.
+- **Tiers.** The catalogue is Pro only. `resolveCatalogueModel` refuses
+  any other tier before it fetches anything. A refused pick (another tier's,
+  unlisted, or unpriced) is `ai_model_not_allowed`. An OpenRouter read that
+  failed is `ai_model_unavailable`. Both are logged by reason only, never
+  the requested id. The panel tells the user to pick another and sends
+  nothing to Sentry, which it still does for the default model.
+- **Client.** The settings show Pro a menu of names and listed prices, plus
+  the free-models switch. Free and anonymous users get the switch and a
+  "Pro adds a choice of models" hint. The hosted transport reads the choice
+  at each turn and sends a pick only while the account is Pro. With a key
+  of the user's own, the model settings are replaced by a note: BYOK keeps
+  the default model, so a menu there would promise a choice it ignores.
+- **Not built.** The "≈ $ per turn" estimate, `context_length`, and the
+  health-check canary that would drop a listed model that keeps failing
+  (#1932).
 
 **OpenRouter-side guards** (from the research, recommended): keep prompt
 logging off on the Bldrs account. Opting in grants OpenRouter a licence to
@@ -713,16 +807,61 @@ Per-message metering would multiply that write rate by roughly 100.
   dearest listed endpoint of the whole fallback chain (live catalog,
   2026-11-18, long-context tiers included), which the relay also sends as
   `provider.max_price`; times 1.1. A settle above it is booked in full and
-  reported (`settle_exceeded_reservation`). The cost of a genuine bound: at
-  the anonymous placeholder ($0.02) a request is admitted only while its
-  body is under about 43 KB on an empty budget, so the anonymous budget
-  (or a smaller anonymous body cap) is the owner's to revisit. A fetch that
+  reported (`settle_exceeded_reservation`). The cost of a genuine bound: a
+  real turn costs about 1% of its reservation, so admitting only when the
+  reservation fits refused small budgets after a few turns; hence the soft
+  budgets below. A fetch that
   fails after the request may have reached OpenRouter settles at the
   reservation too, kept in the record's `estimates` with the generation id
   when known, for the reconciliation job (§5 Amendment 3) to correct.
   The direction is "never more spend than budgeted", unlike quotas.md's
   "free extra, never wrongful block": for model loads an under-count costs
   nothing, but for AI credits it costs real money.
+- **Soft budgets, strict breakers (2026-11-20, assist-310).** The owner
+  sets small signed-out budgets (Netlify env, not code defaults), where a
+  strict reservation admits almost nothing. So:
+  - **Soft** (anonymous and free identity, the anonymous IP bucket): admit
+    while `spent + held < budget`. The worst case is still held and settles
+    to `usage.cost`. Admissions are serialized by the CAS, so spend stays
+    under the budget plus one hold, the last one admitted
+    (`_tests/aiLedger.test.js` proves it under a parallel burst).
+  - **Strict** (the global breakers, the hard dollar safety, and Pro, whose
+    budget is large next to one hold): admit only if the hold fits.
+  - **Size cap.** Anonymous and free bodies are capped at 64 KiB
+    (`AI_MAX_BODY_BYTES_ANONYMOUS` / `_FREE`, `src/quota/aiCredits.js`;
+    refused as `ai_bad_request`, "conversation may be too long"), so one hold,
+    and the overshoot, is at most about $0.03. A soft bucket settling past its
+    budget is the designed overshoot, not `settle_exceeded_reservation`.
+  - **`resumeAt`.** A credits refusal carries when the budget admits again:
+    the first UTC midnight at which enough of the window's spend has aged out
+    (the next midnight for the one-day anonymous buckets), the latest across
+    exhausted buckets, in the 402 body and `x-bldrs-ai-resume-at`.
+  - **The panel pauses instead of failing** (`src/Components/Bot/assistForward.js`).
+    Every turn is stored and forwarded through a session log on the device
+    (`assistLog.js`, localStorage, keyed by `assistSessionKey.js`: model route
+    and sign-in scope), an early local form of workspace-sessions.md §4's
+    session document. A refused turn is a queued entry with a `notBefore`: the
+    panel says "Paused: today's AI credits are used up. Resumes at …", with
+    Sign in or Upgrade to Pro and Cancel, and sends it at that time (plus a few
+    seconds' jitter), on sign-in, on adding a key, or after a reload. A claim
+    moves an entry from queued to sent once, under a Web Lock, so no timer,
+    reload or second tab sends it twice. Without Web Locks (old browsers) no
+    exclusive lock exists over localStorage, so nothing is sent on its own:
+    at its time the notice offers Resume, and only that tab's press claims it.
+    Each model keeps its own log: opening another model in the app shows that
+    model's chat, and a paused turn re-arms when its model is open again. The
+    forwarder watches the store's route itself, and each resume checks the
+    loaded model against the turn's session key right before it claims, so a
+    closed panel can't resume A's turn on B. A turn stopped by a model switch
+    is kept as `interrupted`: shown with its question and a note, never
+    resent. One send per conversation is in flight at a time (a new one waits
+    for an aborted one to unwind), so each send's messages land on its own
+    turn, in order. The
+    upsell stays one per refusal, and `quota_limit_reached` is sent once per
+    refusal id, also for a resend refused again while the dialog is open and
+    for refusals while the panel was closed. The log holds tool results
+    (model data), stays on the device, and is cleared on New chat, Cancel (the
+    turn), a sign-in change and 48 h after its last write or pause.
 - **Reuse.** Add `QUOTA_FEATURES.AI_CREDITS = 'ai_credits'`
   (`src/quota/quota.js:21`, whose comment already invites a new value per
   metered feature). Reuse `getTier`, `QuotaBadge`-style usage display and
@@ -764,6 +903,31 @@ Per-message metering would multiply that write rate by roughly 100.
 - A determined abuser can rotate IPs (residential proxies) and tokens.
   The only hard bound is the global breaker, which also takes the free tier
   down for genuine users while it is tripped.
+- **Done (#2220 follow-up): an Origin check on the relay**
+  (`netlify/functions/_lib/aiOrigin.js`). Without it, another site's page
+  could POST to the relay from its visitors' browsers: each visitor mints
+  their own anonymous token and IP bucket, so the per-identity and per-IP
+  budgets never bind while the global breakers drain. The relay now answers
+  `403 ai_forbidden_origin` to any request whose `Origin` isn't allowed,
+  right after the method check: before the "not configured" check, token
+  minting, Auth0, the ledger and the body, so a refusal costs and mints
+  nothing (and a foreign site learns nothing about the deploy). Allowed:
+  `https://bldrs.ai` (the only production host; `www.bldrs.ai` isn't
+  served, and `bldrs.dev` 301s to bldrs.ai), the origin the request was
+  sent to (the app's own page on whichever deploy serves it: previews and
+  branch deploys; a browser on another site can't make its `Origin` match
+  the host it posts to), `URL`, `DEPLOY_PRIME_URL` and `DEPLOY_URL` when
+  the runtime sets them (it evidently doesn't: deploy-preview-2257 refused
+  its own origin until the request-origin rule landed), `localhost` only
+  under `netlify dev` (`CONTEXT=dev` or
+  `NETLIFY_DEV=true`), and the optional `AI_ALLOWED_ORIGINS`
+  (comma-separated exact origins). A request with no `Origin` passes only
+  with `Sec-Fetch-Site: same-origin`. The relay sends no
+  `Access-Control-Allow-Origin`, ever. **What it doesn't cover:** a
+  non-browser client sets any `Origin` it likes; that stays bounded by the
+  per-IP budgets and the breakers, and only a challenge on token mint
+  (below) closes it. The refusal logs `forbidden_origin` and the origin's
+  host, nothing else: not Sentry (expected abuse), not GA.
 - The server preamble (§5) and the cheap allowlist make it a poor general
   LLM, but not a useless one.
 - Mitigations in reserve, in order of cost: a proof-of-work or captcha
@@ -1055,8 +1219,9 @@ first. It is a task inside #1674.
 - IFC GlobalIds are accepted on input (`SearchSlice` maps GlobalId ↔
   expressId).
 
-Results render as element chips through #1673, so "the AI pointed at it"
-and "the user clicked it" are the same navigation.
+Results render as element chips through #1673 (the model links a ref as
+`[name](ref:e123)`; see [conversational-cad.md](conversational-cad.md) §4), so
+"the AI pointed at it" and "the user clicked it" are the same navigation.
 
 **v0 tools (read/annotate; #1674),** in the namespaced form. Annotation
 column: R = `readOnly`, V = `viewState`, P = `sendsPixels`.

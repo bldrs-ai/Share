@@ -17,7 +17,8 @@
     "headers": {
       "authorization": "Bearer user-access-token",
       "content-type": "application/json",
-      "x-nf-client-connection-ip": "203.0.113.9"
+      "x-nf-client-connection-ip": "203.0.113.9",
+      "origin": "https://bldrs.ai"
     },
     "body": {
       "$fixture": "openrouter/chat-request.json",

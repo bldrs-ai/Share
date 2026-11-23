@@ -90,13 +90,31 @@ export function walkTree(rootElement, visit) {
 }
 
 
+// Per isolator model: whether it is a scene graph, and its name-path index.
+const namePathIndexes = new WeakMap()
+
+
 /**
+ * Cached per model object, so it is rebuilt when the model is replaced. Both
+ * the scene-graph test and the index walk the whole model, and every chip in
+ * a reply (and each of its resolve and canonicalize steps) asks: dozens of
+ * traversals of a large GLB otherwise (#1673). A loaded scene graph's nodes
+ * don't change (edits go through the batched path, which isn't one), and
+ * callers reach this only with a loaded model's viewer.
+ *
  * @param {object} viewer ShareViewer
  * @return {object|null} name-path addressing for a scene-graph model, else null
  */
 function namePaths(viewer) {
   const isolator = viewer?.isolator
-  return isolator?.ifcModel && isolator._isSceneGraphModel() ? sceneGraphNamePaths(isolator.ifcModel) : null
+  const model = isolator?.ifcModel
+  if (!model) {
+    return null
+  }
+  if (!namePathIndexes.has(model)) {
+    namePathIndexes.set(model, isolator._isSceneGraphModel() ? sceneGraphNamePaths(model) : null)
+  }
+  return namePathIndexes.get(model)
 }
 
 

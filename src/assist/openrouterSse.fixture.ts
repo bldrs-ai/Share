@@ -126,6 +126,9 @@ export const SSE_HEADERS: Record<string, string> = {
 }
 
 
+const GHOST_REF = 'e99999999'
+
+
 /** What the scripted conversation says; tests assert on these strings. */
 export const SCRIPT = {
   /** A prompt containing this runs the two-tool loop below. */
@@ -142,6 +145,25 @@ export const SCRIPT = {
   longWord: 'story ',
   longWords: 200,
   longDelayMs: 100,
+  /** A prompt containing this gets a Markdown reply, streamed in pieces. */
+  markdownPrompt: 'answer in markdown',
+  markdownReply: '**Project**: Bldrs\n\n- first item\n- second item\n\nTry `view.select` next.\n\n' +
+    '| Tool | Does |\n|------|------|\n| view.select | selects |',
+  /**
+   * A prompt containing this runs `model.query` for one proxy, then answers
+   * naming it as an element mention (`[Together](ref:<the ref the query
+   * returned>)`), plus one to a ref no tool returned, which must render
+   * disabled. The ref is taken from the tool result, as a model must (#1673).
+   */
+  mentionPrompt: 'mention a proxy',
+  mentionedLabel: 'Together',
+  ghostLabel: 'Ghost',
+  ghostRef: GHOST_REF,
+  /**
+   * @param ref the ref the query returned
+   * @return the reply that links it
+   */
+  mentionReply: (ref: string) => `The first one is [Together](ref:${ref}). Not this one: [Ghost](ref:${GHOST_REF}).`,
   /** Any other prompt gets this, as the old bot mock did. */
   fallback: 'Test received.',
   queryType: 'IfcBuildingElementProxy',
@@ -172,6 +194,11 @@ export function scriptedReply(body: {messages?: WireMessage[]}): {chunks: Chunk[
   const last = messages[messages.length - 1]
   if (last?.role === 'tool') {
     const result = parseJson(last.content)
+    const isMention = messages.some((m) => m.role === 'user' && JSON.stringify(m.content).includes(SCRIPT.mentionPrompt))
+    if (isMention && Array.isArray(result?.items)) {
+      const [first] = result.items as Array<{ref: string}>
+      return {chunks: textReply(SCRIPT.mentionReply(first.ref), 6), delayMs: 0}
+    }
     if (Array.isArray(result?.items)) {
       const refs = (result.items as Array<{ref: string}>).map(({ref}) => ref)
       return {chunks: toolCalls([{id: 'call_select', name: 'view_select', args: {refs}}]), delayMs: 0}
@@ -187,6 +214,16 @@ export function scriptedReply(body: {messages?: WireMessage[]}): {chunks: Chunk[
       chunks: toolCalls([{id: 'call_query', name: 'model_query', args: {ifcType: SCRIPT.queryType}}], SCRIPT.preamble),
       delayMs: 0,
     }
+  }
+  if (prompt.includes(SCRIPT.mentionPrompt)) {
+    return {
+      chunks: toolCalls([{id: 'call_query', name: 'model_query', args: {ifcType: SCRIPT.queryType, limit: 1}}]),
+      delayMs: 0,
+    }
+  }
+  if (prompt.includes(SCRIPT.markdownPrompt)) {
+    // Many small pieces, so a marker is split across chunks somewhere.
+    return {chunks: textReply(SCRIPT.markdownReply, SCRIPT.markdownReply.length / 4), delayMs: 0}
   }
   if (prompt.includes(SCRIPT.longPrompt)) {
     return {chunks: textReply(SCRIPT.longWord.repeat(SCRIPT.longWords), SCRIPT.longWords), delayMs: SCRIPT.longDelayMs}

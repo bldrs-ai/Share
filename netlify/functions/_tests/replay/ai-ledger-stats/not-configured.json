@@ -1,0 +1,7 @@
+{
+  "description": "Without ADMIN_STATS_SECRET the endpoint says so (500) and opens nothing.",
+  "env": {"NODE_ENV": "test"},
+  "request": {"method": "GET", "path": "/.netlify/functions/ai-ledger-stats", "headers": {}},
+  "exchanges": [],
+  "expect": {"statusCode": 500, "json": {"error": {"code": "admin_stats_not_configured"}}}
+}

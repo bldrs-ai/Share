@@ -52,14 +52,15 @@ function fakeRelay(answer = () => undefined) {
  * @param {Function} [options.answer] fakeRelay's
  * @param {Function} [options.getAuthToken]
  * @param {Array<object>} [options.tools] a tool provider set; defaults to one model.query
+ * @param {string|Function} [options.model] the transport's `model`
  * @return {object} the session and what the fakes saw
  */
-function setup({answer, getAuthToken = () => Promise.resolve(null)} = {}) {
+function setup({answer, getAuthToken = () => Promise.resolve(null), model = 'qwen/qwen3.7-flash'} = {}) {
   const {fetchFn, requests} = fakeRelay(answer)
   let anonToken = null
   const metas = []
   const transport = hostedTransport({
-    relayUrl: RELAY, model: 'qwen/qwen3.7-flash', getAuthToken,
+    relayUrl: RELAY, model, getAuthToken,
     anonTokens: {get: () => anonToken, set: (t) => {
       anonToken = t
     }},
@@ -82,9 +83,9 @@ function setup({answer, getAuthToken = () => Promise.resolve(null)} = {}) {
       run: ({refs}) => ({content: {selected: refs.length}, echo: `Selected ${refs.length} elements`}),
     }],
   }])
-  const assist = createAssist({transport, registry, store: createMemoryConversationStore(),
-    instructions: 'Use the tools.', maxRetries: 0})
-  return {session: assist.open('c1'), requests, metas, anonToken: () => anonToken, transport}
+  const store = createMemoryConversationStore()
+  const assist = createAssist({transport, registry, store, instructions: 'Use the tools.', maxRetries: 0})
+  return {session: assist.open('c1'), requests, metas, anonToken: () => anonToken, transport, store}
 }
 
 
@@ -123,6 +124,17 @@ describe('assist/hostedTransport', () => {
     // No routing options from the browser: the relay sets and forces them.
     expect(requests[0].body).not.toHaveProperty('provider')
     expect(transport.id).toBe(HOSTED_TRANSPORT_ID)
+  })
+
+  // #1934: the host's model picker. A function is read at each turn, so a
+  // choice made in settings applies to the next turn without a rebuild.
+  it('reads a model function afresh at each turn', async () => {
+    let chosen = 'bldrs/free'
+    const {session, requests} = setup({model: () => chosen})
+    await collect(session.send('hello'))
+    chosen = 'x-ai/grok-4.7'
+    await collect(session.send('hello again'))
+    expect(requests.map((r) => r.body.model)).toEqual(['bldrs/free', 'x-ai/grok-4.7'])
   })
 
   it('goes anonymous first, keeps the token the relay mints, and sends it on the next request', async () => {
@@ -168,7 +180,7 @@ describe('assist/hostedTransport', () => {
     [429, {error: {code: 'ai_free_requests_exhausted'}, tier: 'anonymous'}, 'free_requests_exhausted', 'anonymous'],
     [429, {error: {code: 'ai_too_many_requests'}, tier: 'free'}, 'rate_limited', 'free'],
     [503, {error: {code: 'ai_busy'}, tier: 'anonymous'}, 'assistant_busy', 'anonymous'],
-    [502, {error: {code: 'ai_model_unavailable'}, tier: 'pro'}, 'service_unavailable', 'pro'],
+    [502, {error: {code: 'ai_model_unavailable'}, tier: 'pro'}, 'model_unavailable', 'pro'],
     [503, {error: {code: 'ai_unavailable'}}, 'service_unavailable', undefined],
     [400, {error: {code: 'ai_model_not_allowed'}, tier: 'free'}, 'unavailable', 'free'],
     [400, {error: {code: 'ai_request_rejected'}, tier: 'free'}, 'bad_request', 'free'],
@@ -203,6 +215,40 @@ describe('assist/hostedTransport', () => {
     expect(say('assistant_busy', 'anonymous')).toMatch(/Sign in/)
     expect(say('free_requests_exhausted', 'free')).not.toMatch(/Sign in/)
     expect(say('service_unavailable')).toMatch(/^Bldrs AI isn't available/)
+  })
+
+  describe('resumeAt on an out-of-credits refusal (the panel\'s paused turn)', () => {
+    const RESUME_ISO = '2026-11-19T00:00:00.000Z'
+    const RESUME_MS = Date.parse(RESUME_ISO)
+
+    it('rides on the error event from the body, and the refused turn keeps nothing', async () => {
+      const {session, store} = setup({answer: () => refusal(402,
+        {error: {code: 'ai_credits_exhausted'}, tier: 'anonymous', resumeAt: RESUME_ISO})})
+      const events = await collect(session.send('hello'))
+      expect(events.find((e) => e.type === 'error')).toEqual({type: 'error', code: 'credits_exhausted', status: 402,
+        tier: 'anonymous', resumeAt: RESUME_MS})
+      // The host holds the message and sends it again; a kept copy would reach the model twice.
+      expect(await store.load('c1')).toEqual([])
+    })
+
+    it('falls back to the header, and without either the refusal keeps the message as before', async () => {
+      const {relayError} = jest.requireActual('./hosted')
+      const fromHeader = await relayError(new Response(JSON.stringify({error: {code: 'ai_credits_exhausted'}}),
+        {status: 402, headers: {'x-bldrs-ai-resume-at': RESUME_ISO}}))
+      expect(fromHeader.resumeAt).toBe(RESUME_MS)
+      const {session, store} = setup({answer: () => refusal(402, {error: {code: 'ai_credits_exhausted'}, tier: 'free'})})
+      const events = await collect(session.send('hello'))
+      expect(events.find((e) => e.type === 'error')).not.toHaveProperty('resumeAt')
+      expect(await store.load('c1')).toEqual([{role: 'user', content: 'hello'}])
+    })
+
+    it('is ignored on any other code, and when it isn\'t a date', async () => {
+      const {relayError} = jest.requireActual('./hosted')
+      const busy = await relayError(refusal(429, {error: {code: 'ai_free_requests_exhausted'}, resumeAt: RESUME_ISO}))
+      expect(busy.resumeAt).toBeUndefined()
+      const junk = await relayError(refusal(402, {error: {code: 'ai_credits_exhausted'}, resumeAt: 'soon'}))
+      expect(junk.resumeAt).toBeUndefined()
+    })
   })
 
   it('classifyError carries an AssistError\'s tier', () => {
