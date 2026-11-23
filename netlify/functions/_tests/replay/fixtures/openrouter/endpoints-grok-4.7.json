@@ -1,0 +1,228 @@
+{
+  "data": {
+    "id": "x-ai/grok-4.7",
+    "name": "SpaceXSI: Grok 4.7",
+    "created": 1790007541,
+    "architecture": {
+      "tokenizer": "Grok",
+      "instruct_type": null,
+      "modality": "text+image+file->text",
+      "input_modalities": [
+        "text",
+        "image",
+        "file"
+      ],
+      "output_modalities": [
+        "text"
+      ]
+    },
+    "endpoints": [
+      {
+        "name": "Amazon Bedrock | x-ai/grok-4.7-20260916",
+        "model_id": "x-ai/grok-4.7",
+        "model_name": "SpaceXSI: Grok 4.7",
+        "context_length": 500000,
+        "pricing": {
+          "prompt": "0.000002",
+          "completion": "0.000006",
+          "web_search": "0.01",
+          "input_cache_read": "0.0000005",
+          "input_cache_write": "0",
+          "discount": 0,
+          "overrides": [
+            {
+              "min_prompt_tokens": 200000,
+              "prompt": "0.000004",
+              "completion": "0.000012",
+              "input_cache_read": "0.000001",
+              "input_cache_write": "0"
+            }
+          ]
+        },
+        "provider_name": "Amazon Bedrock",
+        "tag": "amazon-bedrock/global",
+        "quantization": "unknown",
+        "max_completion_tokens": 450000,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "structured_outputs",
+          "response_format",
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "top_k",
+          "stop",
+          "tools",
+          "tool_choice",
+          "reasoning_effort"
+        ],
+        "status": 0
+      },
+      {
+        "name": "xAI | x-ai/grok-4.7-20260916",
+        "model_id": "x-ai/grok-4.7",
+        "model_name": "SpaceXSI: Grok 4.7",
+        "context_length": 500000,
+        "pricing": {
+          "prompt": "0.000002",
+          "completion": "0.000006",
+          "web_search": "0.005",
+          "input_cache_read": "0.0000005",
+          "discount": 0,
+          "overrides": [
+            {
+              "min_prompt_tokens": 200000,
+              "prompt": "0.000004",
+              "completion": "0.000012",
+              "input_cache_read": "0.000001"
+            }
+          ]
+        },
+        "provider_name": "xAI",
+        "tag": "xai/zdr",
+        "quantization": "unknown",
+        "max_completion_tokens": 450000,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "structured_outputs",
+          "response_format",
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "seed",
+          "logprobs",
+          "top_logprobs",
+          "tools",
+          "tool_choice",
+          "reasoning_effort"
+        ],
+        "status": 0
+      },
+      {
+        "name": "xAI | x-ai/grok-4.7-20260916",
+        "model_id": "x-ai/grok-4.7",
+        "model_name": "SpaceXSI: Grok 4.7",
+        "context_length": 500000,
+        "pricing": {
+          "prompt": "0.000002",
+          "completion": "0.000006",
+          "web_search": "0.005",
+          "input_cache_read": "0.0000005",
+          "discount": 0,
+          "overrides": [
+            {
+              "min_prompt_tokens": 200000,
+              "prompt": "0.000004",
+              "completion": "0.000012",
+              "input_cache_read": "0.000001"
+            }
+          ]
+        },
+        "provider_name": "xAI",
+        "tag": "xai",
+        "quantization": "unknown",
+        "max_completion_tokens": 450000,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "structured_outputs",
+          "response_format",
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "seed",
+          "logprobs",
+          "top_logprobs",
+          "tools",
+          "tool_choice",
+          "reasoning_effort"
+        ],
+        "status": 0
+      },
+      {
+        "name": "xAI | x-ai/grok-4.7-20260916",
+        "model_id": "x-ai/grok-4.7",
+        "model_name": "SpaceXSI: Grok 4.7",
+        "context_length": 500000,
+        "pricing": {
+          "prompt": "0.000004",
+          "completion": "0.000012",
+          "web_search": "0.005",
+          "input_cache_read": "0.000001",
+          "discount": 0,
+          "overrides": [
+            {
+              "min_prompt_tokens": 200000,
+              "prompt": "0.000008",
+              "completion": "0.000024",
+              "input_cache_read": "0.000002"
+            }
+          ]
+        },
+        "provider_name": "xAI",
+        "tag": "xai/zdr/priority",
+        "quantization": "unknown",
+        "max_completion_tokens": 450000,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "structured_outputs",
+          "response_format",
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "seed",
+          "logprobs",
+          "top_logprobs",
+          "tools",
+          "tool_choice",
+          "reasoning_effort"
+        ],
+        "status": 0
+      },
+      {
+        "name": "xAI | x-ai/grok-4.7-20260916",
+        "model_id": "x-ai/grok-4.7",
+        "model_name": "SpaceXSI: Grok 4.7",
+        "context_length": 500000,
+        "pricing": {
+          "prompt": "0.000004",
+          "completion": "0.000012",
+          "web_search": "0.005",
+          "input_cache_read": "0.000001",
+          "discount": 0,
+          "overrides": [
+            {
+              "min_prompt_tokens": 200000,
+              "prompt": "0.000008",
+              "completion": "0.000024",
+              "input_cache_read": "0.000002"
+            }
+          ]
+        },
+        "provider_name": "xAI",
+        "tag": "xai/priority",
+        "quantization": "unknown",
+        "max_completion_tokens": 450000,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "structured_outputs",
+          "response_format",
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "seed",
+          "logprobs",
+          "top_logprobs",
+          "tools",
+          "tool_choice",
+          "reasoning_effort"
+        ],
+        "status": 0
+      }
+    ]
+  }
+}

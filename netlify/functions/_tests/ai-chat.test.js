@@ -16,6 +16,7 @@ import axios from 'axios'
 import * as Sentry from '@sentry/serverless'
 import handler, {
   MAX_BODY_BYTES,
+  maxBodyBytesFor,
   MAX_MESSAGES,
   MAX_OUTPUT_TOKENS,
   MAX_TOOLS,
@@ -28,7 +29,16 @@ import handler, {
   serverSystemMessage,
 } from '../ai-chat.js'
 import {shareAssistInstructions} from '../../../src/viewer/tools/assistInstructions.js'
-import {PAID_MODELS, resolveModel} from '../_lib/aiModels.js'
+import {FREE_MODELS_ALIAS, PAID_MODELS, resolveModel} from '../_lib/aiModels.js'
+import {
+  OPENROUTER_MODELS_URL,
+  OPENROUTER_ZDR_URL,
+  ceilingFromEndpoints,
+  endpointsUrl,
+  pricingCeiling,
+  resetCatalogueCache,
+} from '../_lib/aiCatalogue.js'
+import {ASSIST_FREE_MODELS, ASSIST_MODEL} from '../../../src/viewer/tools/assistModels.js'
 import {createAssist} from '../../../src/assist/loop'
 import {createMemoryConversationStore} from '../../../src/assist/conversation'
 import {createRegistry} from '../../../src/assist/registry'
@@ -38,6 +48,8 @@ import {resetManagementApiTokenCache} from '../_lib/auth0.js'
 import {hashIp, mintAnonToken} from '../_lib/aiToken.js'
 import {utcDay} from '../_lib/aiLedger.js'
 import {createFakeBlobs, storedRecord} from './fakeBlobs.js'
+import {readFileSync} from 'fs'
+import {join as joinPath} from 'path'
 
 
 /* eslint-disable no-magic-numbers */
@@ -82,6 +94,9 @@ const IP = '203.0.113.9'
 const ENV = {OPENROUTER_API_KEY: OPENROUTER_KEY, AI_TOKEN_SECRET: SECRET,
   AI_BREAKER_ANONYMOUS_DAILY_USD: '5', AI_BREAKER_FREE_DAILY_USD: '5'}
 const TODAY = utcDay(Date.now())
+const DAY_MS = 86400000
+/** The next UTC midnight: when a one-day bucket's spend leaves its window. */
+const TOMORROW_ISO = `${utcDay(Date.parse(`${TODAY}T00:00:00.000Z`) + DAY_MS)}T00:00:00.000Z`
 const USER_TEXT = 'how many doors are on level 2'
 
 
@@ -107,14 +122,21 @@ function chatBody(overrides = {}) {
  * @param {string} [options.bearer]
  * @param {string} [options.method]
  * @param {object} [options.context]
+ * @param {?string} [options.origin] the Origin header; null sends none
+ * @param {object} [options.headers] more request headers
+ * @param {string} [options.url] the URL the request is sent to
  * @return {Promise<Response>}
  */
-function call({body = chatBody(), bearer, method = 'POST', context = {ip: IP}} = {}) {
-  const headers = {'Content-Type': 'application/json'}
+function call({body = chatBody(), bearer, method = 'POST', context = {ip: IP}, origin = 'https://bldrs.ai',
+  headers: extraHeaders = {}, url = 'https://bldrs.ai/.netlify/functions/ai-chat'} = {}) {
+  const headers = {'Content-Type': 'application/json', ...extraHeaders}
+  if (origin !== null) {
+    headers.Origin = origin
+  }
   if (bearer) {
     headers.Authorization = `Bearer ${bearer}`
   }
-  const req = new Request('https://bldrs.ai/.netlify/functions/ai-chat', {
+  const req = new Request(url, {
     method, headers, body: method === 'GET' ? undefined : (typeof body === 'string' ? body : JSON.stringify(body)),
   })
   return handler(req, context)
@@ -198,6 +220,7 @@ describe('ai-chat', () => {
     errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined)
     jest.mocked(Sentry.captureMessage).mockClear()
     resetReportedConditions()
+    resetCatalogueCache()
     jest.mocked(axios.get).mockReset()
     jest.mocked(axios.post).mockReset()
     resetManagementApiTokenCache()
@@ -210,6 +233,131 @@ describe('ai-chat', () => {
 
   /** @return {object} the JSON body the relay sent OpenRouter */
   const upstreamBody = () => JSON.parse(fetchSpy.mock.calls[0][1].body)
+
+  describe('Origin check (cross-site budget spending)', () => {
+    /** @return {Array<string>} every ledger or token artefact a refusal must not leave */
+    const writes = () => [...fake.data.keys()]
+
+    it.each([
+      ['production', 'https://bldrs.ai', {}],
+      ['URL', 'https://bldrs.example', {URL: 'https://bldrs.example'}],
+      ['DEPLOY_PRIME_URL', 'https://deploy-preview-9--bldrs.netlify.app',
+        {DEPLOY_PRIME_URL: 'https://deploy-preview-9--bldrs.netlify.app'}],
+      ['DEPLOY_URL', 'https://abc123--bldrs.netlify.app', {DEPLOY_URL: 'https://abc123--bldrs.netlify.app/'}],
+      ['an AI_ALLOWED_ORIGINS entry', 'https://staging.bldrs.ai',
+        {AI_ALLOWED_ORIGINS: 'https://other.example, https://staging.bldrs.ai'}],
+      ['localhost under netlify dev', 'http://localhost:8888', {CONTEXT: 'dev'}],
+      ['https localhost under NETLIFY_DEV', 'https://localhost:8888', {NETLIFY_DEV: 'true'}],
+    ])('allows %s', async (_name, origin, env) => {
+      process.env = {...ENV, ...env}
+      const res = await call({origin})
+      expect(res.status).toBe(200)
+      await res.text()
+    })
+
+    // A deploy preview, as it runs: no Netlify URL variable names it, so only
+    // the request's own origin can admit the app's page (deploy-preview-2257).
+    const PREVIEW_FN = 'https://deploy-preview-9--bldrs.netlify.app/.netlify/functions/ai-chat'
+
+    it('allows the deploy\'s own origin with no URL variable set', async () => {
+      process.env = {...ENV}
+      const res = await call({url: PREVIEW_FN, origin: 'https://deploy-preview-9--bldrs.netlify.app'})
+      expect(res.status).toBe(200)
+      await res.text()
+    })
+
+    it.each([
+      ['a foreign origin', 'https://evil.example'],
+      ['a sibling preview', 'https://deploy-preview-10--bldrs.netlify.app'],
+      ['the same host over http', 'http://deploy-preview-9--bldrs.netlify.app'],
+      ['the same host on another port', 'https://deploy-preview-9--bldrs.netlify.app:444'],
+    ])('refuses %s posting to a preview', async (_name, origin) => {
+      process.env = {...ENV}
+      const res = await call({url: PREVIEW_FN, origin})
+      expect(res.status).toBe(403)
+      expect((await res.json()).error.code).toBe('ai_forbidden_origin')
+    })
+
+    it('allows a same-origin fetch that sent no Origin, by Sec-Fetch-Site', async () => {
+      const res = await call({origin: null, headers: {'Sec-Fetch-Site': 'same-origin'}})
+      expect(res.status).toBe(200)
+      await res.text()
+    })
+
+    it.each([
+      ['a foreign origin', 'https://evil.example', {}],
+      ['the null origin', 'null', {AI_ALLOWED_ORIGINS: 'null'}],
+      ['a suffix lookalike', 'https://bldrs.ai.evil.com', {}],
+      ['a prefix lookalike', 'https://evilbldrs.ai', {}],
+      ['a subdomain', 'https://app.bldrs.ai', {}],
+      ['the wrong scheme', 'http://bldrs.ai', {}],
+      ['www, which nothing serves', 'https://www.bldrs.ai', {}],
+      ['localhost outside dev', 'http://localhost:8888', {}],
+      ['a localhost lookalike under dev', 'http://localhost.evil.com', {CONTEXT: 'dev'}],
+      ['a malformed extra, never widened', 'https://evil.example', {AI_ALLOWED_ORIGINS: '*, evil.example'}],
+    ])('refuses %s with 403, before anything is minted or read', async (_name, origin, env) => {
+      process.env = {...ENV, ...env}
+      mockStore.current = new Error('the ledger must not be opened')
+      const res = await call({origin})
+      expect(res.status).toBe(403)
+      expect((await res.json()).error.code).toBe('ai_forbidden_origin')
+      expect(res.headers.get('x-bldrs-ai-token')).toBeNull()
+      expect(res.headers.get('access-control-allow-origin')).toBeNull()
+      expect(fetchSpy).not.toHaveBeenCalled()
+      expect(writes()).toEqual([])
+    })
+
+    it.each([
+      ['no Origin and no fetch-site header', {}],
+      ['no Origin and a cross-site fetch', {'Sec-Fetch-Site': 'cross-site'}],
+      ['no Origin and a same-site (sibling) fetch', {'Sec-Fetch-Site': 'same-site'}],
+    ])('refuses %s', async (_name, headers) => {
+      const res = await call({origin: null, headers})
+      expect(res.status).toBe(403)
+      expect((await res.json()).error.code).toBe('ai_forbidden_origin')
+    })
+
+    it('does not let Sec-Fetch-Site excuse a foreign Origin', async () => {
+      const res = await call({origin: 'https://evil.example', headers: {'Sec-Fetch-Site': 'same-origin'}})
+      expect(res.status).toBe(403)
+    })
+
+    it('refuses before the configuration check, so a foreign site learns nothing about the deploy', async () => {
+      process.env = {}
+      const res = await call({origin: 'https://evil.example'})
+      expect((await res.json()).error.code).toBe('ai_forbidden_origin')
+      expect(errorSpy).not.toHaveBeenCalled()
+    })
+
+    it('still answers "not configured" to an allowed origin (the smoke probe\'s path)', async () => {
+      process.env = {}
+      const res = await call({origin: 'https://bldrs.ai'})
+      expect((await res.json()).error.code).toBe('ai_not_configured')
+    })
+
+    it('logs one outcome line with the origin host only, and reports nothing', async () => {
+      const bearer = 'secret-bearer-value'
+      await call({origin: 'https://evil.example:8443', bearer, body: chatBody({messages: [{role: 'user', content: 'private words'}]})})
+      const lines = logSpy.mock.calls.map(([line]) => String(line))
+      expect(lines).toEqual([JSON.stringify({fn: 'ai-chat', outcome: 'forbidden_origin', origin: 'evil.example:8443'})])
+      for (const text of [...lines, ...errorSpy.mock.calls.flat(), ...warnSpy.mock.calls.flat()].map(String)) {
+        expect(text).not.toContain(IP)
+        expect(text).not.toContain(bearer)
+        expect(text).not.toContain('private words')
+      }
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+      expect(Sentry.captureException).not.toHaveBeenCalled()
+    })
+
+    it('never sends Access-Control-Allow-Origin, on any answer', async () => {
+      const answers = [await call({origin: 'https://evil.example'}), await call(), await call({method: 'GET'}),
+        await call({body: {}})]
+      for (const res of answers) {
+        expect(res.headers.get('access-control-allow-origin')).toBeNull()
+        await res.text()
+      }
+    })
+  })
 
   it('answers anything but POST with 405', async () => {
     const res = await call({method: 'GET'})
@@ -333,28 +481,154 @@ describe('ai-chat', () => {
     expect(fake.requests).toEqual([])
   })
 
-  it('an exhausted anonymous budget is a 402 with the tier, and calls no upstream', async () => {
+  it('an exhausted anonymous budget is a 402 with the tier and when it resumes, and calls no upstream', async () => {
     const {token, anonId} = mintAnonToken(SECRET)
-    await fake.store.set(`ai/anonymous/${anonId}`, JSON.stringify({v: 1, days: {[TODAY]: {spent: 19990, free: 0}},
+    await fake.store.set(`ai/anonymous/${anonId}`, JSON.stringify({v: 1, days: {[TODAY]: {spent: 20000, free: 0}},
       holds: {}, estimates: {}}))
     const res = await call({bearer: token})
     expect(res.status).toBe(402)
-    expect(await res.json()).toMatchObject({error: {code: 'ai_credits_exhausted'}, tier: 'anonymous'})
-    expect(res.headers.get('x-bldrs-ai-used')).toBe('19990')
+    expect(await res.json()).toEqual({error: {code: 'ai_credits_exhausted', message: expect.any(String)},
+      tier: 'anonymous', resumeAt: TOMORROW_ISO})
+    expect(res.headers.get('x-bldrs-ai-used')).toBe('20000')
+    expect(res.headers.get('x-bldrs-ai-resume-at')).toBe(TOMORROW_ISO)
     expect(fetchSpy).not.toHaveBeenCalled()
     expect(Sentry.captureMessage).not.toHaveBeenCalled()
   })
 
-  it('the IP bucket catches token churn: a fresh token from a spent IP is refused', async () => {
+  it('the IP bucket catches token churn: a fresh token from a spent IP is refused, with the IP\'s resumeAt', async () => {
     await fake.store.set(`ai/ip/${hashIp(SECRET, IP, TODAY)}`, JSON.stringify({v: 1,
-      days: {[TODAY]: {spent: 99990, free: 0}}, holds: {}, estimates: {}}))
+      days: {[TODAY]: {spent: 100000, free: 0}}, holds: {}, estimates: {}}))
     const res = await call()
     expect(res.headers.get('x-bldrs-ai-token')).toMatch(/^ba1\./)
     expect(res.status).toBe(402)
-    expect(await res.json()).toMatchObject({error: {code: 'ai_credits_exhausted'}, tier: 'anonymous'})
+    expect(await res.json()).toMatchObject({error: {code: 'ai_credits_exhausted'}, tier: 'anonymous',
+      resumeAt: TOMORROW_ISO})
+    expect(res.headers.get('x-bldrs-ai-resume-at')).toBe(TOMORROW_ISO)
     expect(fetchSpy).not.toHaveBeenCalled()
     // The fresh identity's own hold was given back.
     expect(storedRecord(fake, anonKeyOf(fake)).holds).toEqual({})
+  })
+
+  describe('soft budgets (anonymous and free identity, IP) and strict ones (breakers, Pro)', () => {
+    it('admits just under the budget, settles past it unreported, then refuses with resumeAt', async () => {
+      const {token, anonId} = mintAnonToken(SECRET)
+      const key = `ai/anonymous/${anonId}`
+      // 10 micro-USD left of 20,000: far less than this request's worst-case
+      // hold, which the strict rule needed to fit.
+      await fake.store.set(key, JSON.stringify({v: 1, days: {[TODAY]: {spent: 19990, free: 0}}, holds: {},
+        estimates: {}}))
+      const res = await call({bearer: token})
+      expect(res.status).toBe(200)
+      expect(res.headers.get('x-bldrs-ai-resume-at')).toBeNull()
+      await res.text()
+      // Settled at usage.cost, past the budget: the designed overshoot, and
+      // not "exceeded its reservation" (143 is well within its own hold).
+      expect(storedRecord(fake, key).days[TODAY].spent).toBe(19990 + 143)
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+      const next = await call({bearer: token})
+      expect(next.status).toBe(402)
+      expect(await next.json()).toMatchObject({error: {code: 'ai_credits_exhausted'}, resumeAt: TOMORROW_ISO})
+      expect(next.headers.get('x-bldrs-ai-used')).toBe(String(19990 + 143))
+      expect(fetchSpy).toHaveBeenCalledTimes(1)
+    })
+
+    it('the breaker stays strict: under its limit but short of the hold overflows to the free models', async () => {
+      // 3,000 micro-USD of breaker, none spent: a soft rule would admit
+      // (0 < 3000); the hold of this request doesn't fit, so it overflows.
+      process.env.AI_BREAKER_ANONYMOUS_DAILY_USD = '0.003'
+      const res = await call()
+      expect(res.status).toBe(200)
+      expect(res.headers.get('x-bldrs-ai-overflow')).toBe('free_models')
+      await res.text()
+      expect(upstreamBody().model).toMatch(/:free$/)
+    })
+
+    it('a free user\'s 30-day budget is soft and resumes when its oldest spend leaves the window', async () => {
+      Object.assign(process.env, {AUTH0_DOMAIN: 'auth0.test', AUTH0_CLIENT_ID: 'id', AUTH0_CLIENT_SECRET: 'secret'})
+      jest.mocked(axios.post).mockResolvedValue({data: {access_token: 'mgmt', expires_in: 86400}})
+      jest.mocked(axios.get).mockImplementation((url) => Promise.resolve(url.endsWith('/userinfo') ?
+        {data: {sub: 'github|soft'}} : {data: {app_metadata: {}}}))
+      const todayStart = Date.parse(`${TODAY}T00:00:00.000Z`)
+      const tenDaysAgo = utcDay(todayStart - (10 * DAY_MS))
+      const key = 'ai/user/github%7Csoft'
+      await fake.store.set(key, JSON.stringify({v: 1, days: {[tenDaysAgo]: {spent: 400000, free: 0},
+        [TODAY]: {spent: 99999, free: 0}}, holds: {}, estimates: {}}))
+      const admitted = await call({bearer: 'auth0-access-token-soft'})
+      expect(admitted.status).toBe(200)
+      await admitted.text()
+      const refused = await call({bearer: 'auth0-access-token-soft'})
+      expect(refused.status).toBe(402)
+      // 500,142 used; the day ten days back leaving in 20 days takes it to 100,142.
+      expect((await refused.json()).resumeAt).toBe(new Date(todayStart + (20 * DAY_MS)).toISOString())
+    })
+
+    it('Pro stays strict: refused while still under its limit when the hold doesn\'t fit', async () => {
+      Object.assign(process.env, {AUTH0_DOMAIN: 'auth0.test', AUTH0_CLIENT_ID: 'id', AUTH0_CLIENT_SECRET: 'secret'})
+      jest.mocked(axios.post).mockResolvedValue({data: {access_token: 'mgmt', expires_in: 86400}})
+      jest.mocked(axios.get).mockImplementation((url) => Promise.resolve(url.endsWith('/userinfo') ?
+        {data: {sub: 'github|strict'}} : {data: {app_metadata: {subscriptionStatus: 'sharePro'}}}))
+      const todayStart = Date.parse(`${TODAY}T00:00:00.000Z`)
+      const fiveDaysAgo = utcDay(todayStart - (5 * DAY_MS))
+      await fake.store.set('ai/user/github%7Cstrict', JSON.stringify({v: 1,
+        days: {[fiveDaysAgo]: {spent: 4999000, free: 0}}, holds: {}, estimates: {}}))
+      const res = await call({bearer: 'auth0-access-token-strict', body: chatBody({model: 'anthropic/claude-haiku-4.5'})})
+      expect(res.status).toBe(402)
+      expect(await res.json()).toMatchObject({tier: 'pro', resumeAt: new Date(todayStart + (25 * DAY_MS)).toISOString()})
+      expect(fetchSpy).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('the signed-out and free body cap', () => {
+    // Past the anonymous cap (64 KiB by default), well inside MAX_BODY_BYTES.
+    const bigBody = () => chatBody({messages: [{role: 'user', content: 'x'.repeat(70 * 1024)}]})
+
+    it('refuses an anonymous body past its cap as "too long", before the ledger or the upstream', async () => {
+      const res = await call({body: bigBody()})
+      expect(res.status).toBe(400)
+      expect(await res.json()).toMatchObject({error: {code: 'ai_bad_request'}, tier: 'anonymous'})
+      expect(res.headers.get('x-bldrs-ai-tier')).toBe('anonymous')
+      expect(fetchSpy).not.toHaveBeenCalled()
+      expect(fake.requests).toEqual([])
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+    })
+
+    it('takes a body at the cap, and follows its env var', async () => {
+      const atCap = chatBody({messages: [{role: 'user', content: ''}]})
+      const pad = maxBodyBytesFor('anonymous', {maxBodyBytes: {anonymous: 65536}}) -
+        Buffer.byteLength(JSON.stringify(atCap))
+      atCap.messages[0].content = 'x'.repeat(pad)
+      expect(Buffer.byteLength(JSON.stringify(atCap))).toBe(65536)
+      expect((await call({body: atCap})).status).toBe(200)
+      process.env.AI_MAX_BODY_BYTES_ANONYMOUS = String(128 * 1024)
+      expect((await call({body: bigBody()})).status).toBe(200)
+    })
+
+    it('free has its own cap; Pro keeps the relay\'s 512 KiB', async () => {
+      Object.assign(process.env, {AUTH0_DOMAIN: 'auth0.test', AUTH0_CLIENT_ID: 'id', AUTH0_CLIENT_SECRET: 'secret'})
+      jest.mocked(axios.post).mockResolvedValue({data: {access_token: 'mgmt', expires_in: 86400}})
+      jest.mocked(axios.get).mockImplementation((url, config) => Promise.resolve(url.endsWith('/userinfo') ?
+        {data: {sub: config.headers.Authorization.includes('pro') ? 'github|p' : 'github|f'}} :
+        {data: {app_metadata: url.includes('github%7Cp') ? {subscriptionStatus: 'sharePro'} : {}}}))
+      const free = await call({bearer: 'auth0-token-free', body: bigBody()})
+      expect(free.status).toBe(400)
+      expect((await free.json()).tier).toBe('free')
+      const pro = await call({bearer: 'auth0-token-pro', body: bigBody()})
+      expect(pro.headers.get('x-bldrs-ai-tier')).toBe('pro')
+      expect(pro.status).toBe(200)
+    })
+
+    it('bounds the worst-case hold at the cap to about three cents', () => {
+      const route = resolveModel('qwen/qwen3.7-flash', 'anonymous')
+      const cap = maxBodyBytesFor('anonymous', {maxBodyBytes: {anonymous: 65536}})
+      for (const [tier, low, high] of [['anonymous', 27000, 29500], ['free', 29500, 31500]]) {
+        // What reaches OpenRouter: the server's system message, then a body at the cap.
+        const body = {messages: [{role: 'system', content: serverSystemMessage()},
+          {role: 'user', content: 'x'.repeat(cap - 200)}], max_tokens: MAX_OUTPUT_TOKENS[tier]}
+        const micro = reservationMicro(body, route, MAX_OUTPUT_TOKENS[tier])
+        expect(micro).toBeGreaterThan(low)
+        expect(micro).toBeLessThan(high)
+      }
+    })
   })
 
   it('caps requests in flight per identity', async () => {
@@ -674,7 +948,10 @@ describe('ai-chat', () => {
           token = t
         }},
         fetch: async (url, init) => {
-          const res = await handler(new Request(url, init), {ip: IP})
+          // A browser's same-origin POST carries its page's Origin.
+          const headers = new Headers(init.headers)
+          headers.set('Origin', 'https://bldrs.ai')
+          const res = await handler(new Request(`https://bldrs.ai${url}`, {...init, headers}), {ip: IP})
           statuses.push(res.status)
           return res
         },
@@ -884,6 +1161,236 @@ describe('ai-chat', () => {
       expect(res.headers.get('x-bldrs-ai-tier')).toBe('free')
       await res.text()
       expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/^ai-chat: tier lookup failed/))
+    })
+  })
+
+  // #1934: the catalogue route and a Pro user's pick from it. OpenRouter's
+  // public listings are the replay fixtures (trimmed captures, 2026-11-23).
+  describe('the model picker (#1934)', () => {
+    const FIXTURES = joinPath(__dirname, 'replay', 'fixtures', 'openrouter')
+    const fixture = (name) => JSON.parse(readFileSync(joinPath(FIXTURES, name), 'utf8'))
+    const GROK = 'x-ai/grok-4.7'
+    const GROK_ENDPOINTS = fixture('endpoints-grok-4.7.json')
+    // Grok 4.7's dearest endpoint tier: priority, past 200k prompt tokens.
+    const GROK_CEILING = {input: 8, output: 24}
+    const NO_USAGE = [SSE_TEXT[0], 'data: [DONE]\n\n']
+
+    /**
+     * Answer OpenRouter's listings from the fixtures, and the chat with `chat`.
+     *
+     * @param {object} [overrides] url → Response
+     * @param {Function} [chat] the chat completion's answer
+     */
+    const openRouter = (overrides = {}, chat = () => sseResponse()) => {
+      const listings = {
+        [OPENROUTER_MODELS_URL]: () => Response.json(fixture('models.json')),
+        [OPENROUTER_ZDR_URL]: () => Response.json(fixture('zdr.json')),
+        [endpointsUrl(GROK)]: () => Response.json(GROK_ENDPOINTS),
+        ...Object.fromEntries(Object.entries(overrides).map(([url, res]) => [url, () => res.clone()])),
+      }
+      fetchSpy.mockImplementation((url) => (url === OPENROUTER_CHAT_URL ? Promise.resolve(chat()) :
+        (listings[url] ? Promise.resolve(listings[url]()) : Promise.reject(new Error(`unexpected ${url}`)))))
+    }
+    const urlsFetched = () => fetchSpy.mock.calls.map(([url]) => url)
+    const chatBodySent = () => JSON.parse(fetchSpy.mock.calls.find(([url]) => url === OPENROUTER_CHAT_URL)[1].body)
+
+    beforeEach(() => {
+      Object.assign(process.env, {AUTH0_DOMAIN: 'auth0.test', AUTH0_CLIENT_ID: 'id', AUTH0_CLIENT_SECRET: 'secret'})
+      jest.mocked(axios.post).mockResolvedValue({data: {access_token: 'mgmt', expires_in: 86400}})
+      openRouter()
+    })
+
+    /**
+     * @param {string} sub
+     * @param {object} appMetadata
+     */
+    const signedInAs = (sub, appMetadata) => {
+      jest.mocked(axios.get).mockImplementation((url) => Promise.resolve(url.endsWith('/userinfo') ?
+        {data: {sub}} : {data: {app_metadata: appMetadata}}))
+    }
+
+    it('the client names the relay\'s default and free alias exactly', () => {
+      expect(ASSIST_MODEL).toBe('qwen/qwen3.7-flash')
+      expect(resolveModel(ASSIST_MODEL, 'anonymous').ok).toBe(true)
+      expect(ASSIST_FREE_MODELS).toBe(FREE_MODELS_ALIAS)
+    })
+
+    describe('GET ?catalogue', () => {
+      /**
+       * @param {object} [options]
+       * @param {?string} [options.origin] null sends a same-origin fetch's Sec-Fetch-Site instead
+       * @return {Promise<Response>}
+       */
+      const getCatalogue = ({origin} = {}) => handler(new Request('https://bldrs.ai/.netlify/functions/ai-chat?catalogue',
+        {method: 'GET', headers: origin === null ? {'Sec-Fetch-Site': 'same-origin'} :
+          {Origin: origin ?? 'https://bldrs.ai'}}), {ip: IP})
+
+      it('lists the curated models, then the catalogue\'s for Pro, with listed prices', async () => {
+        const res = await getCatalogue()
+        expect(res.status).toBe(200)
+        const body = await res.json()
+        expect(body.source).toBe('live')
+        expect(body.default).toBe('qwen/qwen3.7-flash')
+        expect(body.free).toBe('bldrs/free')
+        expect(body.models.map((m) => m.id)).toEqual([...Object.keys(PAID_MODELS), 'anthropic/claude-sonnet-5.5',
+          'openai/gpt-5', GROK])
+        expect(body.models.find((m) => m.id === GROK)).toEqual({id: GROK, name: 'SpaceXSI: Grok 4.7',
+          price: {input: 4, output: 12}, tiers: ['pro']})
+        expect(urlsFetched()).toEqual([OPENROUTER_MODELS_URL, OPENROUTER_ZDR_URL])
+        // Public reads: Bldrs' key never goes on them.
+        for (const [, init] of fetchSpy.mock.calls) {
+          expect(JSON.stringify(init.headers)).not.toContain(OPENROUTER_KEY)
+        }
+        expect(fake.requests).toEqual([])
+        expect(res.headers.get('x-bldrs-ai-token')).toBeNull()
+      })
+
+      it('takes a same-origin fetch that sent no Origin, and answers on a deploy without secrets', async () => {
+        process.env = {}
+        const res = await getCatalogue({origin: null})
+        expect(res.status).toBe(200)
+        expect((await res.json()).source).toBe('live')
+      })
+
+      it('refuses a foreign Origin before it fetches anything', async () => {
+        const res = await getCatalogue({origin: 'https://evil.example'})
+        expect(res.status).toBe(403)
+        expect(fetchSpy).not.toHaveBeenCalled()
+      })
+
+      it('serves the curated table when OpenRouter is down, and reports nothing', async () => {
+        openRouter({[OPENROUTER_MODELS_URL]: new Response('', {status: 503})})
+        const body = await (await getCatalogue()).json()
+        expect(body.source).toBe('static')
+        expect(body.models.map((m) => m.id)).toEqual(Object.keys(PAID_MODELS))
+        expect(Sentry.captureMessage).not.toHaveBeenCalled()
+      })
+
+      it.each([
+        ['an answer it can\'t read', Response.json({models: []}), {ai_reason: 'catalogue_malformed'}],
+        ['a 404 (the URL moved)', new Response('', {status: 404}), {ai_reason: 'catalogue_status', ai_status: '404'}],
+      ])('reports %s as catalogue_broken, and still serves the curated table', async (_name, answer, tags) => {
+        openRouter({[OPENROUTER_MODELS_URL]: answer})
+        expect((await (await getCatalogue()).json()).source).toBe('static')
+        expect(Sentry.captureMessage).toHaveBeenCalledWith('ai-chat: catalogue_broken', 'warning')
+        for (const [name, value] of Object.entries(tags)) {
+          expect(Sentry.mockScope.setTag).toHaveBeenCalledWith(name, value)
+        }
+      })
+
+      it('any other GET is still 405', async () => {
+        const res = await call({method: 'GET'})
+        expect(res.status).toBe(405)
+        expect(fetchSpy).not.toHaveBeenCalled()
+      })
+    })
+
+    it('a Pro pick from the catalogue is sent alone, at max_price equal to its endpoints\' ceiling', async () => {
+      signedInAs('github|10', {subscriptionStatus: 'sharePro'})
+      const res = await call({bearer: 'auth0-pro-picker', body: chatBody({model: GROK})})
+      expect(res.status).toBe(200)
+      await res.text()
+      const sent = chatBodySent()
+      expect(sent.model).toBe(GROK)
+      expect(sent).not.toHaveProperty('models')
+      expect(ceilingFromEndpoints(GROK_ENDPOINTS.data.endpoints)).toEqual(GROK_CEILING)
+      expect(sent.provider).toEqual({data_collection: 'deny', require_parameters: true,
+        max_price: {prompt: GROK_CEILING.input, completion: GROK_CEILING.output}})
+      expect(urlsFetched()).toEqual([OPENROUTER_MODELS_URL, OPENROUTER_ZDR_URL, endpointsUrl(GROK), OPENROUTER_CHAT_URL])
+      expect(storedRecord(fake, 'ai/user/github%7C10').days[TODAY].spent).toBe(143)
+      expect(JSON.parse(logSpy.mock.calls.at(-1)[0])).toMatchObject({outcome: 'ok', tier: 'pro'})
+    })
+
+    it('a Pro pick is reserved at its ceiling, above its worst case on every endpoint and tier', async () => {
+      // No usage chunk: the hold settles at its reservation, which is how
+      // the reserved amount shows.
+      openRouter({}, () => sseResponse(NO_USAGE))
+      signedInAs('github|11', {subscriptionStatus: 'sharePro'})
+      await (await call({bearer: 'auth0-pro-picker-bound', body: chatBody({model: GROK})})).text()
+      const sent = chatBodySent()
+      const reserved = storedRecord(fake, 'ai/user/github%7C11').days[TODAY].spent
+      expect(reserved).toBe(reservationMicro(sent, {free: false, price: GROK_CEILING}, MAX_OUTPUT_TOKENS.pro))
+      const inputTokens = Buffer.byteLength(JSON.stringify(sent))
+      const tiers = GROK_ENDPOINTS.data.endpoints.flatMap((e) => [e.pricing, ...(e.pricing.overrides ?? [])])
+      expect(tiers.length).toBeGreaterThan(5)
+      for (const {prompt, completion} of tiers) {
+        const price = pricingCeiling({prompt, completion})
+        expect(reserved).toBeGreaterThan((inputTokens * price.input) + (MAX_OUTPUT_TOKENS.pro * price.output))
+      }
+      // The listed price, what the picker shows, would NOT have covered it.
+      expect(reservationMicro(sent, {free: false, price: {input: 4, output: 12}}, MAX_OUTPUT_TOKENS.pro))
+        .toBeLessThan(reserved)
+    })
+
+    it.each([
+      ['a free user', 'github|12', {}],
+      ['a Pro whose subscription lapsed', 'github|13', {subscriptionStatus: 'shareProCanceled'}],
+    ])('%s asking for a catalogue model is refused, with nothing fetched or held', async (_name, sub, appMetadata) => {
+      signedInAs(sub, appMetadata)
+      const res = await call({bearer: `auth0-${sub}`, body: chatBody({model: GROK})})
+      expect(res.status).toBe(400)
+      expect(await res.json()).toMatchObject({error: {code: 'ai_model_not_allowed'}, tier: 'free'})
+      expect(fetchSpy).not.toHaveBeenCalled()
+      expect(fake.requests).toEqual([])
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+    })
+
+    it('a signed-out caller asking for a Pro model is refused, with nothing fetched', async () => {
+      for (const model of [GROK, 'anthropic/claude-haiku-4.5']) {
+        const res = await call({body: chatBody({model})})
+        expect(res.status).toBe(400)
+        expect((await res.json()).tier).toBe('anonymous')
+      }
+      expect(fetchSpy).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['not in the catalogue', 'google/gemini-4-neon', {}, 400, 'ai_model_not_allowed', 'not_listed'],
+      ['priced in a way the bound can\'t cover', GROK, {[endpointsUrl(GROK)]: Response.json({data: {
+        ...GROK_ENDPOINTS.data, endpoints: [{pricing: {prompt: '0.000002', completion: '0.000006', request: '0.01'}}],
+      }})}, 400, 'ai_model_not_allowed', 'unpriced'],
+      ['unreadable while OpenRouter is down', GROK, {[OPENROUTER_MODELS_URL]: new Response('', {status: 503})}, 502,
+        'ai_model_unavailable', 'catalogue_status'],
+    ])('a Pro pick %s is refused, logged by reason and not reported', async (_n, model, answers, status, code, reason) => {
+      openRouter(answers)
+      signedInAs('github|14', {subscriptionStatus: 'sharePro'})
+      const res = await call({bearer: `auth0-pro-${reason}`, body: chatBody({model})})
+      expect(res.status).toBe(status)
+      expect((await res.json()).error.code).toBe(code)
+      expect(urlsFetched()).not.toContain(OPENROUTER_CHAT_URL)
+      expect(fake.requests).toEqual([])
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+      const line = JSON.parse(logSpy.mock.calls.at(-1)[0])
+      expect(line).toEqual({fn: 'ai-chat', outcome: 'model_refused', tier: 'pro', reason})
+    })
+
+    it('a Pro pick answering 404 under deny is unavailable, released, and not reported', async () => {
+      openRouter({}, () => new Response('{"error":{"message":"No endpoints found matching your data policy"}}',
+        {status: 404}))
+      signedInAs('github|15', {subscriptionStatus: 'sharePro'})
+      const res = await call({bearer: 'auth0-pro-404', body: chatBody({model: GROK})})
+      expect(res.status).toBe(502)
+      expect((await res.json()).error.code).toBe('ai_model_unavailable')
+      expect(Sentry.captureMessage).not.toHaveBeenCalled()
+      expect(storedRecord(fake, 'ai/user/github%7C15')).toEqual({v: 1, days: {}, holds: {}, estimates: {}})
+    })
+
+    it('the free alias costs nothing on any tier: max_price 0, no hold, no breaker, deny kept', async () => {
+      signedInAs('github|16', {subscriptionStatus: 'sharePro'})
+      for (const bearer of [undefined, 'auth0-pro-free-alias']) {
+        fetchSpy.mockClear()
+        openRouter({}, () => sseResponse(NO_USAGE))
+        await (await call({bearer, body: chatBody({model: ASSIST_FREE_MODELS})})).text()
+        const sent = chatBodySent()
+        expect(sent.provider).toEqual({data_collection: 'deny', require_parameters: true,
+          max_price: {prompt: 0, completion: 0}})
+        expect(reservationMicro(sent, resolveModel(ASSIST_FREE_MODELS, 'pro'), MAX_OUTPUT_TOKENS.pro)).toBe(0)
+        expect(urlsFetched()).toEqual([OPENROUTER_CHAT_URL])
+      }
+      // Even with no usage chunk, a free request settles at zero: its reservation.
+      expect(storedRecord(fake, 'ai/user/github%7C16').days[TODAY]).toEqual({spent: 0, free: 1})
+      expect(storedRecord(fake, anonKeyOf(fake)).days[TODAY]).toEqual({spent: 0, free: 1})
+      expect([...fake.data.keys()].some((p) => p.includes('/ai/breaker/'))).toBe(false)
     })
   })
 

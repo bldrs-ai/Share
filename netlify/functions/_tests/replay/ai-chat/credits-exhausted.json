@@ -1,5 +1,5 @@
 {
-  "description": "An anonymous id whose day is spent is refused 402 ai_credits_exhausted with its tier, after one ledger read and no upstream call.",
+  "description": "The request after soft-budget-admits-under-and-settles-over.json: an anonymous id whose day is spent past its budget (20,133 of 20,000) is refused 402 ai_credits_exhausted with its tier and resumeAt, the next UTC midnight when its one-day window turns over (body and x-bldrs-ai-resume-at), after one ledger read and no upstream call. The IP bucket's one-day window can't end later, so it isn't read.",
   "env": {
     "$fixture": "env/ai-chat.json"
   },
@@ -11,7 +11,8 @@
     "headers": {
       "authorization": "Bearer ba1.replayAnonymousId00001.1794999600.wBYdBmzPjjSIOmCGgCjkBbGlqWCrl22WTULDtGfPQzA",
       "content-type": "application/json",
-      "x-nf-client-connection-ip": "203.0.113.9"
+      "x-nf-client-connection-ip": "203.0.113.9",
+      "origin": "https://bldrs.ai"
     },
     "body": {
       "$fixture": "openrouter/chat-request.json"
@@ -35,7 +36,7 @@
           "v": 1,
           "days": {
             "2026-11-18": {
-              "spent": 19990,
+              "spent": 20133,
               "free": 0
             }
           },
@@ -50,11 +51,13 @@
       "error": {
         "code": "ai_credits_exhausted"
       },
-      "tier": "anonymous"
+      "tier": "anonymous",
+      "resumeAt": "2026-11-19T00:00:00.000Z"
     },
     "headers": {
-      "x-bldrs-ai-used": "19990",
-      "x-bldrs-ai-limit": "20000"
+      "x-bldrs-ai-used": "20133",
+      "x-bldrs-ai-limit": "20000",
+      "x-bldrs-ai-resume-at": "2026-11-19T00:00:00.000Z"
     }
   }
 }

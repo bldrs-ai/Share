@@ -14,7 +14,7 @@ export {LIMITS, ROLLING_WINDOW_DAYS, TIERS} from './limits'
  * What a quota limits, as reported in the `feature` param of the
  * quota_limit_reached funnel event (analytics#FUNNEL_EVENTS): the private
  * model loads every tier above is counted in, and the hosted assistant's
- * credits (quota/aiCredits.js; sent by Components/Bot/trackAssistQuota.js).
+ * credits (quota/aiCredits.js; sent by Open/QuotaLimitDialog.jsx, the assistant's out-of-credits dialog).
  * Each metered feature has its own value so the dashboard can tell the walls
  * apart.
  */

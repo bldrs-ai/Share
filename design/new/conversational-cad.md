@@ -25,7 +25,7 @@ structure. Epic 3 depends on `ai-workspace.md` existing first.
 ## 1. Mapping the sequence onto the roadmap
 
 The four-step sequence corresponds almost 1:1 to the roadmap's Assist group
-(§4.11) and pivot stages (§7.4) — only step 2 is genuinely new:
+(§3.1) and pivot stages (§7.4) — only step 2 is genuinely new:
 
 | # | This plan | Roadmap ID | Pivot stage | Tracking issue |
 |---|---|---|---|---|
@@ -272,6 +272,18 @@ Epic 4.
   out of Share still yields working deep links. This is the cheapest
   high-leverage slice: the whole anchor system already exists, the epic
   wires it into message rendering.
+  **Built for elements (#1673):** the model writes `[Wall 3](ref:e123)` with a
+  ref exactly as a tool returned it (`src/viewer/tools/refLinks.js`); the
+  reply's Markdown renders it as a chip (`Components/Bot/RefChip.jsx`) that
+  is a real link to a `#sel:<ref>` permalink (an `o` ref to its element
+  path). A plain click selects and frames in place (`view.select` +
+  `view.focus` bodies, `viewTools.js#selectAndFrame`), so the highlight,
+  NavTree and live view link follow; a modified click or "Copy link address"
+  gives the deep link. A ref the open model lacks renders disabled with a
+  tooltip. The `ref:` scheme, not a URL the model writes, so a model never
+  composes a permalink: only tool-returned refs can be linked, and any other
+  scheme still renders as text. A chip's click is not undoable (Undo belongs
+  to what the assistant did). View anchors (`#c:`) are not built.
 - **Reduced tool set while convo visible (W7 — proposal, TBD).** The
   bottom-center section cluster folds into the right column plus an active
   Conversation toggle; top-left ControlsGroup hidden; full layout returns
@@ -414,7 +426,7 @@ sub-issues (the drafts below are the record of what was filed):
 > Turns Share into a workspace: ProjectsDrawer (leftmost), TopBar
 > (breadcrumb + search), relocated Profile/Share, logo popup. Behind
 > `?feature=workspace`. Plan: `design/new/conversational-cad.md` §2;
-> roadmap §4.11 / §7.4 AI.1. Wireframes: production-merge set, W1–W4.
+> roadmap §3.1 / §7.4 AI.1. Wireframes: production-merge set, W1–W4.
 
 Sub-issues:
 - `story: workspace: ProjectsDrawer container + project→models struct (W1)`

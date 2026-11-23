@@ -1,5 +1,7 @@
 import * as path from 'node:path'
-import {ASSIST_RUNTIME_ENTRY, aiSdkInputsInMain, assertAiSdkNotInMain} from './assistEntry.js'
+import {
+  ASSIST_RUNTIME_ENTRY, GFM_ENTRY, aiSdkInputsInMain, assertAiSdkNotInMain, assertGfmNotInMain, gfmInputsInMain,
+} from './assistEntry.js'
 
 
 // The guard build.js runs on every main build's metafile. These metafiles
@@ -64,5 +66,29 @@ describe('esbuild/assistEntry', () => {
       ]},
     })
     expect(aiSdkInputsInMain(meta).map(({input}) => input)).toEqual(['node_modules/ai/dist/index.js'])
+  })
+})
+
+
+describe('esbuild/assistEntry GFM', () => {
+  const GFM = 'node_modules/.bun/remark-gfm@3.0.1/node_modules/remark-gfm/index.js'
+  const MICROMARK_GFM = 'node_modules/.bun/micromark-extension-gfm-table@1.0.7/node_modules/micromark-extension-gfm-table/index.js'
+  const GFM_ENTRY_REL = path.relative(process.cwd(), GFM_ENTRY)
+
+  it('passes a build whose remark-gfm is only in its own entry', () => {
+    const meta = metafile({
+      'docs/index.js': {entryPoint: 'src/index.jsx', inputs: ['src/index.jsx', 'node_modules/react-markdown/index.js']},
+      'docs/Components/Bot/remarkGfmEntry.js': {entryPoint: GFM_ENTRY_REL, inputs: [GFM_ENTRY_REL, GFM, MICROMARK_GFM]},
+    })
+    expect(gfmInputsInMain(meta)).toEqual([])
+    expect(() => assertGfmNotInMain(meta)).not.toThrow()
+  })
+
+  it('fails a build where the main bundle took in remark-gfm or its extensions', () => {
+    const meta = metafile({
+      'docs/index.js': {entryPoint: 'src/index.jsx', inputs: ['src/index.jsx', GFM, MICROMARK_GFM]},
+    })
+    expect(gfmInputsInMain(meta).map(({input}) => input)).toEqual([GFM, MICROMARK_GFM])
+    expect(() => assertGfmNotInMain(meta)).toThrow(/remark-gfm is in a main bundle \(2 inputs\)/)
   })
 })

@@ -9,8 +9,10 @@ import {captureMessage} from '@sentry/react'
  * `reported_condition` (src/index/sentry.js), so nothing here sends GA.
  *
  * - `model_unavailable`: the provider answered 404 for the model Share picks
- *   (assistHost.js ASSIST_MODEL), or found no endpoint for it that honours
+ *   (assistModels.js ASSIST_MODEL), or found no endpoint for it that honours
  *   `data_collection: 'deny'`. The user can't fix that; we change the model.
+ *   Not sent when the relay refuses a model the user picked themselves
+ *   (#1934): they pick another, and the panel says so (BotChat.jsx).
  * - `runtime_load_failed`: `docs/assist/runtime.js` didn't load while the
  *   browser says it is online: a broken deploy or a bad path.
  * - `start_failed`: building the assistant threw, which is a bug.

@@ -1,7 +1,7 @@
 import esbuild from 'esbuild'
 import * as path from 'node:path'
 import {fileURLToPath} from 'url'
-import {ASSIST_RUNTIME_ENTRY} from './assistEntry.js'
+import {ASSIST_RUNTIME_ENTRY, GFM_ENTRY} from './assistEntry.js'
 import config, {staticCopyPlugin} from './common.js'
 import {createProxyServer} from './proxy.js'
 import {log} from './utils.js'
@@ -21,7 +21,7 @@ const serveConfig = {
   ...config,
   plugins: [...config.plugins, staticCopyPlugin],
   // The lazy Assist runtime too, so watch mode rebuilds it (assistEntry.js).
-  entryPoints: [indexFile, subscribeFile, ASSIST_RUNTIME_ENTRY],
+  entryPoints: [indexFile, subscribeFile, ASSIST_RUNTIME_ENTRY, GFM_ENTRY],
 }
 
 const ctx = await esbuild.context(serveConfig)

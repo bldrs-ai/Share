@@ -2,6 +2,7 @@ import {OPENROUTER_KEY_ID, ToolError, createRegistry} from '../../assist'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import {shareAssistInstructions} from './assistInstructions'
+import {ASSIST_MODEL} from './assistModels'
 import {createShareToolProvider} from './shareTools'
 import {createViewContextSource} from './viewContext'
 import {createModelToolProvider, createViewToolProvider} from './viewTools'
@@ -22,13 +23,8 @@ export function createShareAssistRegistry() {
 }
 
 
-/**
- * The OpenRouter model the assistant uses. Eval #1929's pick for the default
- * (ai-workspace.md D3, §6): reliable tool calls, deny routing available, and
- * about $0.00015 a turn. Choosing a model is #1934. The hosted relay accepts
- * it on every tier and adds its own fallbacks (netlify/functions/_lib/aiModels.js).
- */
-export const ASSIST_MODEL = 'qwen/qwen3.7-flash'
+// The default model, and the free-models alias (assistModels.js).
+export {ASSIST_FREE_MODELS, ASSIST_MODEL} from './assistModels'
 
 
 /** Bldrs' hosted assistant relay (netlify/functions/ai-chat.js), same origin. */
@@ -49,7 +45,10 @@ export const AI_RELAY_URL = '/.netlify/functions/ai-chat'
  * @param {object} deps.keyStore an Assist KeyStore
  * @param {object} deps.conversationStore an Assist ConversationStore
  * @param {object} deps.hosted the hosted transport's host side: `getAuthToken`,
- *   `anonTokens` and `onMeta`, as `HostedTransportOptions` names them
+ *   `anonTokens` and `onMeta`, as `HostedTransportOptions` names them, and
+ *   optionally `model`, read at each turn (the model picker, #1934); without
+ *   one the hosted transport asks for ASSIST_MODEL. The BYOK transport always
+ *   uses ASSIST_MODEL: the picker is for Bldrs' hosted models
  * @return {{assist: object, transport: object, dispose: Function}}
  */
 export function createShareAssist(runtime, {keyStore, conversationStore, hosted}) {
@@ -64,7 +63,7 @@ export function createShareAssist(runtime, {keyStore, conversationStore, hosted}
     appUrl: 'https://bldrs.ai',
     appTitle: 'Bldrs Share',
   })
-  const relay = runtime.hostedTransport({relayUrl: AI_RELAY_URL, model: ASSIST_MODEL, ...hosted})
+  const relay = runtime.hostedTransport({relayUrl: AI_RELAY_URL, ...hosted, model: hosted.model ?? ASSIST_MODEL})
   const transport = runtime.selectTransport(() => (keyStore.get(OPENROUTER_KEY_ID) ? byok : relay))
   const assist = runtime.createAssist({
     transport,

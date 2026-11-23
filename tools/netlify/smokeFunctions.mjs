@@ -82,12 +82,29 @@ export const PROBES = [
     // Anonymous callers are served, so there is no "missing bearer" answer
     // to probe: an empty body is refused before any upstream or ledger call,
     // so the probe costs nothing. A context without the relay's secrets
-    // answers "not configured" first, which strict mode rejects.
+    // answers "not configured" first, which strict mode rejects. The probe
+    // sends the probed deploy's own Origin, so a 403 ai_forbidden_origin
+    // fails in both modes: it means the relay refuses the very site that
+    // serves the assistant (a missing deploy URL variable, or an allowlist
+    // regression), which leaves the assistant unusable there (Codex on #2256).
     accept: [
       {status: HTTP_BAD_REQUEST, body: 'ai_bad_request'},
       {status: HTTP_INTERNAL_ERROR, body: 'ai_not_configured'},
     ],
     strict: [{status: HTTP_BAD_REQUEST, body: 'ai_bad_request'}],
+  },
+  {
+    name: 'ai-ledger-stats',
+    scenario: 'ai-ledger-stats/unauthenticated',
+    method: 'GET',
+    // Server-to-server only, behind ADMIN_STATS_SECRET: no bearer is 401
+    // before the ledger is opened. A context without the secret answers
+    // "not configured" first, which strict mode rejects.
+    accept: [
+      {status: HTTP_UNAUTHORIZED, body: 'admin_stats_unauthorized'},
+      {status: HTTP_INTERNAL_ERROR, body: 'admin_stats_not_configured'},
+    ],
+    strict: [{status: HTTP_UNAUTHORIZED, body: 'admin_stats_unauthorized'}],
   },
   {
     name: 'client-capabilities',
@@ -233,7 +250,11 @@ async function runProbe(base, probe, strict, fetchImpl) {
   try {
     res = await fetchImpl(url, {
       method: probe.method,
-      headers: probe.body === undefined ? {} : {'content-type': 'application/json'},
+      // The deploy's own origin, as a browser on that site would send it:
+      // the relay (ai-chat) refuses any other Origin before it does
+      // anything else, so without this the probe never reaches its
+      // configuration check. Every other function ignores the header.
+      headers: {origin: base.origin, ...(probe.body === undefined ? {} : {'content-type': 'application/json'})},
       body: probe.body === undefined ? undefined : JSON.stringify(probe.body),
       redirect: 'manual',
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

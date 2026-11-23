@@ -18,7 +18,10 @@ import {
   HOLD_TTL_MS,
   LedgerUnavailableError,
   SETTLE_ATTEMPTS,
+  admits,
+  latestResumeAt,
   recordForReconciliation,
+  resumeAtOf,
   releaseAll,
   reserve,
   reserveAll,
@@ -74,6 +77,140 @@ describe('aiLedger', () => {
     expect(ok).toHaveLength(2)
     const record = storedRecord(fake, b.key)
     expect(Object.values(record.holds).reduce((sum, h) => sum + h.micro, 0)).toBeLessThanOrEqual(250)
+  })
+
+  // The soft rule's bound (aiLedger.js "Soft and strict budgets"): each
+  // admission is a CAS that sees every hold admitted before it, so the last
+  // one admitted saw `spent + held < limit`, and spend ends below `limit +
+  // that last hold`. Without the CAS (an unconditional write), every request
+  // in the burst reads the same empty record and is admitted: this goes red.
+  it('a soft burst of ten parallel reservations stays under the budget plus the last hold admitted', async () => {
+    const fake = createFakeBlobs({delayMs: 3})
+    const b = bucket({limit: 250, concurrency: 100, soft: true})
+    const sizes = [100, 30, 70, 120, 10, 90, 60, 40, 110, 80]
+    const results = await Promise.all(sizes.map((micro, i) =>
+      reserve(fake.store, b, {id: `r${i}`, micro, free: false, nowMs: NOW}).then((r) => ({...r, micro}),
+        (e) => e)))
+    const admitted = results.filter((r) => r.ok === true)
+    expect(admitted.length).toBeGreaterThan(0)
+    // Every admission saw usage under the limit ...
+    for (const r of admitted) {
+      expect(r.used).toBeLessThan(b.limit)
+    }
+    // ... so the total is under the limit plus the hold of the last one
+    // admitted (the one that saw the most), and never more than budget plus
+    // one hold.
+    const total = admitted.reduce((sum, r) => sum + r.micro, 0)
+    const last = admitted.reduce((a, r) => (r.used > a.used ? r : a))
+    expect(last.used + last.micro).toBe(total)
+    expect(total).toBeLessThan(b.limit + last.micro)
+    expect(total).toBeLessThan(b.limit + Math.max(...sizes))
+    // And no admission was lost to a blind write: the record holds them all.
+    const record = storedRecord(fake, b.key)
+    expect(Object.values(record.holds).reduce((sum, h) => sum + h.micro, 0)).toBe(total)
+    // Once over, the bucket refuses whatever the size, and says when it admits again.
+    expect(await reserve(fake.store, b, {id: 'next', micro: 1, free: false, nowMs: NOW}))
+      .toMatchObject({ok: false, reason: 'budget', resumeAt: Date.parse('2026-11-19T00:00:00.000Z')})
+  })
+
+  it('soft: admits a hold larger than what is left while under the limit, then refuses at it', async () => {
+    const fake = createFakeBlobs()
+    const b = bucket({limit: 100, soft: true})
+    expect((await reserve(fake.store, b, {id: 'r1', micro: 70, free: false, nowMs: NOW})).ok).toBe(true)
+    // 70 used, 30 left: a strict bucket refuses 31 (the test above); a soft one admits 500.
+    expect((await reserve(fake.store, b, {id: 'r2', micro: 500, free: false, nowMs: NOW})).ok).toBe(true)
+    await settle(fake.store, b, {id: 'r1', micro: 5, nowMs: NOW})
+    await settle(fake.store, b, {id: 'r2', micro: 95, nowMs: NOW})
+    // Exactly at the limit is not under it.
+    expect(await reserve(fake.store, b, {id: 'r3', micro: 1, free: false, nowMs: NOW}))
+      .toMatchObject({ok: false, reason: 'budget', used: 100})
+  })
+
+  it('soft: a request with no hold (a free model) is never refused for budget', async () => {
+    const fake = createFakeBlobs()
+    const b = bucket({limit: 100, soft: true})
+    await fake.store.set(b.key, JSON.stringify({v: 1, days: {[TODAY]: {spent: 150, free: 0}}, holds: {}}))
+    expect((await reserve(fake.store, b, {id: 'f1', micro: 0, free: true, nowMs: NOW})).ok).toBe(true)
+    expect(await reserve(fake.store, b, {id: 'p1', micro: 1, free: false, nowMs: NOW}))
+      .toMatchObject({ok: false, reason: 'budget'})
+  })
+
+  it('admits: strict needs the hold to fit, soft only usage under the limit', () => {
+    const strict = {limit: 100}
+    const soft = {limit: 100, soft: true}
+    expect([admits(strict, 50, 50), admits(strict, 50, 51), admits(strict, 0, 101)]).toEqual([true, false, false])
+    expect([admits(soft, 99, 1000), admits(soft, 100, 1), admits(soft, 100, 0)]).toEqual([true, false, true])
+  })
+
+  describe('resumeAtOf', () => {
+    const dayAt = (offset) => utcDay(NOW + (offset * DAY_MS))
+    const midnight = (offset) => Date.parse(`${dayAt(offset)}T00:00:00.000Z`)
+
+    it('a one-day bucket resumes at the next UTC midnight, holds counted as today\'s', () => {
+      const b = bucket({limit: 100, windowDays: 1, soft: true})
+      const record = {v: 1, days: {[TODAY]: {spent: 60, free: 0}}, holds: {h: {micro: 40, free: 0, at: NOW}},
+        estimates: {}}
+      expect(resumeAtOf(record, b, 10, NOW)).toBe(midnight(1))
+      expect(new Date(resumeAtOf(record, b, 10, NOW)).toISOString()).toBe('2026-11-19T00:00:00.000Z')
+    })
+
+    it('a 30-day bucket resumes when enough of its oldest spend has left the window', () => {
+      const b = bucket({limit: 100, windowDays: 30, soft: true})
+      const record = {v: 1, days: {
+        [dayAt(-29)]: {spent: 10, free: 0},
+        [dayAt(-20)]: {spent: 50, free: 0},
+        [dayAt(-3)]: {spent: 45, free: 0},
+      }, holds: {}, estimates: {}}
+      // 105 used. Day -29 leaving tomorrow drops it to 95: under the limit.
+      expect(resumeAtOf(record, b, 10, NOW)).toBe(midnight(1))
+      // Heavier recent spend: 10 + 50 + 95 = 155; only once day -20 leaves (in 10 days) is it 95.
+      record.days[dayAt(-3)].spent = 95
+      expect(resumeAtOf(record, b, 10, NOW)).toBe(midnight(10))
+      // Today's spend alone past the limit: the whole window has to turn over.
+      record.days[TODAY] = {spent: 150, free: 0}
+      expect(resumeAtOf(record, b, 10, NOW)).toBe(midnight(30))
+    })
+
+    it('strict: resumes when the hold itself fits; never, for a hold larger than the limit', () => {
+      const b = bucket({limit: 100, windowDays: 30})
+      const record = {v: 1, days: {[dayAt(-29)]: {spent: 40, free: 0}, [dayAt(-1)]: {spent: 40, free: 0}}, holds: {},
+        estimates: {}}
+      expect(resumeAtOf(record, b, 20, NOW)).toBeNull()
+      expect(resumeAtOf(record, b, 30, NOW)).toBe(midnight(1))
+      expect(resumeAtOf(record, b, 70, NOW)).toBe(midnight(29))
+      expect(resumeAtOf(record, b, 101, NOW)).toBeNull()
+    })
+
+    it('rides on the refusal, and latestResumeAt reads only a bucket whose window could end later', async () => {
+      const fake = createFakeBlobs()
+      const identity = bucket({limit: 100, windowDays: 1, soft: true})
+      const ip = bucket({name: 'ip', key: 'ai/ip/h', limit: 100, windowDays: 1, soft: true})
+      const monthly = bucket({name: 'org', key: 'ai/org/o', limit: 100, windowDays: 30, soft: true})
+      await fake.store.set(identity.key, JSON.stringify({v: 1, days: {[TODAY]: {spent: 100, free: 0}}, holds: {}}))
+      await fake.store.set(monthly.key, JSON.stringify({v: 1, days: {[dayAt(-5)]: {spent: 100, free: 0}},
+        holds: {}}))
+      const refused = await reserveAll(fake.store, [identity, ip, monthly],
+        {id: 'r1', micro: 10, free: false, nowMs: NOW})
+      expect(refused).toMatchObject({ok: false, bucket: 'identity', reason: 'budget', resumeAt: midnight(1)})
+      const reads = () => fake.requests.filter((r) => r.method === 'GET').length
+      const before = reads()
+      // The IP bucket's one-day window can't end after the identity's: not read.
+      expect(await latestResumeAt(fake.store, [ip], {micro: 10, nowMs: NOW, resumeAt: refused.resumeAt}))
+        .toBe(midnight(1))
+      expect(reads()).toBe(before)
+      // A 30-day one can, and does: its spend from five days ago leaves in 25.
+      expect(await latestResumeAt(fake.store, [ip, monthly], {micro: 10, nowMs: NOW, resumeAt: refused.resumeAt}))
+        .toBe(midnight(25))
+      expect(reads()).toBe(before + 1)
+    })
+
+    it('a refusal that isn\'t for budget carries no resumeAt', async () => {
+      const fake = createFakeBlobs()
+      const b = bucket({concurrency: 1, soft: true})
+      await reserve(fake.store, b, {id: 'r1', micro: 1, free: false, nowMs: NOW})
+      expect(await reserveAll(fake.store, [b], {id: 'r2', micro: 1, free: false, nowMs: NOW}))
+        .toMatchObject({ok: false, reason: 'concurrency', resumeAt: null})
+    })
   })
 
   it('writes with If-Match on an existing record (never an unconditional PUT)', async () => {

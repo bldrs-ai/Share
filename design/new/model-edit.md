@@ -47,7 +47,7 @@ A new verb group, **Create**, in the roadmap's 300 (Pro) band:
 | `create-310` | #1919 | Agent write tools. Edit ops on the `apps-t300` tool surface; the agent writes ops, never scene code. |
 | `create-320` | #1920 | Generative model creation: engine selection. Research story #1921, summarised in §8. |
 
-All three belong to Track **`create-t300` (Model edit substrate)** in roadmap §5.
+All three belong to Track **`create-t300` (Model edit substrate)** in roadmap §3.2.
 
 
 ## 3. Layers
