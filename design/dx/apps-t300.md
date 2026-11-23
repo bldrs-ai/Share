@@ -26,12 +26,13 @@ These are the sub-issues of #2225.
 
 | Work item | What becomes possible | Evidence that proves it |
 |---|---|---|
-| [#1674](https://github.com/bldrs-ai/Share/issues/1674) `apps-t300`: viewer tool surface v0 | The agent can drive the remaining v0 view operations: `view.explode`, `highlight`, `cutPlane`, `display`, `screenshot` (opt-in) and `notes.*`. It can also name a STEP occurrence unambiguously, and the registry ships in its own bundle entry. | Each tool has unit tests, and an E2E through the `?feature=assist` dev hook on desktop and mobile. The STEP ref contract has one table-driven test over the STEP fixture shapes. The build output shows `src/assist/` in its own chunk. |
+| [#1674](https://github.com/bldrs-ai/Share/issues/1674) `apps-t300`: viewer tool surface v0 | The agent can drive the remaining v0 view operations: `view.show` (unhide by refs), `view.explode`, `highlight`, `cutPlane`, `display`, `screenshot` (opt-in) and `notes.*`. It can also name a STEP occurrence unambiguously, and the registry ships in its own bundle entry. | Each tool has unit tests, and an E2E through the `?feature=assist` dev hook on desktop and mobile. The STEP ref contract has one table-driven test over the STEP fixture shapes. The build output shows `src/assist/` in its own chunk. |
 | [#1386](https://github.com/bldrs-ai/Share/issues/1386) Integration in iframe does not work anymore | An embedding page can load and drive a model in Share's iframe again, which is the precondition for the sandbox bridge. | The iframe integration suite (disabled since #809) is re-enabled and passes in CI. |
 
-Two pieces of planned work have no issue yet. They stay as lines on #2225 until someone picks them up, and become sub-issues then:
+Three pieces of planned work have no issue yet. They stay as lines on #2225 until someone picks them up, and become sub-issues then:
 - the sandbox security model for toolbelt apps: origin isolation, tool permissions and provenance;
-- the postMessage bridge from a sandboxed app to the registry.
+- the postMessage bridge from a sandboxed app to the registry;
+- an external transport, so apps outside the page (an MCP server) and a CLI can reach the registry. Which transport is still an open decision on #2225.
 
 **Landed:**
 - the tool contract, the registry and its approval policy, and the v0 `model.*` / `view.*` / `share.*` tools (#1946);
