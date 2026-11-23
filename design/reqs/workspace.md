@@ -36,7 +36,7 @@ Each story belongs to the epic the [roadmap](../roadmap.md) already assigns its 
 | `open-210` View several models together ([#2192](https://github.com/bldrs-ai/Share/issues/2192)) | Viewing a session's models together, placed correctly, and showing, hiding or fading each as a layer |
 
 Linked, not owned here:
-- **`open-205`** owns sharing one engine per model across tabs and sessions, and the multi-model viewer groundwork ([#2024](https://github.com/bldrs-ai/Share/issues/2024)).
+- **`open-205`** owns opening a model without a page reload, sharing one engine per model across tabs and sessions, and the multi-model viewer groundwork ([#2024](https://github.com/bldrs-ai/Share/issues/2024)); its stories are in [open-205.md](open-205.md). Leaving a model loading while a session moves on is its story [#2265](https://github.com/bldrs-ai/Share/issues/2265).
 - **`create-300` / `create-310`** own editing. A session's edits are stored with the session; how they are shown, undone and kept is theirs.
 - **`share-200`** owns model versions. A session records which version of each model it was made against.
 

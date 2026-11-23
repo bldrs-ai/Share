@@ -4,7 +4,7 @@
 
 A **track** is technical work that several epics depend on: the engine, the render loop, identity, an artifact format, the tool surface. The UX rubric organises what a person can do; this one organises what has to be built so they can. As in UX, the repository keeps short, dated snapshots and the durable design, and GitHub issues hold everything that changes: status, tasks, progress and open decisions.
 
-The [roadmap](../roadmap.md) owns which tracks exist, what each unblocks and its phase (§3.2, §5). This document owns how a track is written down and tracked.
+The [roadmap](../roadmap.md) owns which tracks exist, what each unblocks and its phase (§3.2). Each track's status lives in its tracking issue. This document owns how a track is written down and tracked.
 
 ## Track, work item and task
 
@@ -32,7 +32,7 @@ A track is named after the feature group and milestone band it mainly serves: `<
 - **One track per feature level, usually.** `share-t100` handles the technical work behind the `share-1xx` epics, and `share-t200` the work behind `share-2xx`. A level that needs more takes `t101`, `t102` and so on, but a level should seldom need more than one or two extra.
 - **The band follows the epics.** It is the band of the epics the track mainly serves, read from the UX rubric's tier table. A track whose epics move band is renamed, and the rename is recorded in the roadmap's ID lineage, as an epic's is.
 - **One primary feature group.** A track may serve several groups and bands. Its ID names the primary one, and its issue and snapshot list the others under Related, with the related tracks.
-- **A new track** gets a row in roadmap §3.2 and an entry in §5.
+- **A new track** gets a tracking issue and a row in roadmap §3.2 (its Issue and Docs columns).
 - **Kept, never reused.** A finished track stays listed with ✔, and its ID isn't given to another track.
 - **Work items** keep their issue numbers. A work item's title carries the track ID while it is a direct child of the track issue; one nested under a story keeps the epic's prefix. Bugs keep their own titles wherever they sit; only the parent link places them (owner, 2026-11-18).
 - **The old `T1`…`T12` numbers** are aliases in the roadmap's ID lineage (renamed 2026-11-18). T9, growth, lives in bizdev and keeps its number.
@@ -75,7 +75,7 @@ Move a file with `git mv`, and update the router ([AGENTS.md](../../AGENTS.md)) 
 
 ## Reconciling a track
 
-1. **Inventory:** the roadmap's §5 entry, its design docs, and its issues, open and closed, by search and by milestone, as in the UX rubric (§"Issue normalization").
+1. **Inventory:** the roadmap's §3.2 row and the track's tracking issue, its design docs, and its issues, open and closed, by search and by milestone, as in the UX rubric (§"Issue normalization").
 2. **Classify each issue:** it belongs to this track, to one story, or to another track, or it's a standalone bug.
 3. **Write the track issue** (above), and parent the work items under it.
 4. **Write the snapshot** and, if issues moved, the triage record.
