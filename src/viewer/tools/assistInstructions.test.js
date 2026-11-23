@@ -49,6 +49,47 @@ describe('viewer/tools/assistInstructions', () => {
     })
   })
 
+  // #1673: a mention is a `ref:` link the client turns into a chip. The model
+  // must not write a permalink itself, nor show a bare ref as prose.
+  it('has the model link named elements as ref: links, never URLs or bare refs', () => {
+    const text = shareAssistInstructions()
+    expect(text).toMatch(/\[Wall 3\]\(ref:e123\)/)
+    expect(text).toMatch(/Link only refs from tool results/)
+    expect(text).toMatch(/never write any other URL for an element/)
+    expect(text).toMatch(/a ref appears only inside a link, never as bare text/)
+  })
+
+  // Owner testing on the #2268 preview: with linking phrased as one rule beside
+  // "don't show refs unless they ask", the model linked only when asked. Linking
+  // is the default, and nothing may read as an opt-in.
+  it('makes linking the default in every answer, not something the user has to ask for', () => {
+    const text = shareAssistInstructions()
+    expect(text).toMatch(/Every time your answer names an element/)
+    expect(text).toMatch(/in every answer without being asked/)
+    expect(text).toMatch(/link the first few and the element that contains them/)
+    expect(text).not.toMatch(/unless they ask/)
+  })
+
+  // Owner testing on SEESTRASSE: two refs in one link target,
+  // [Küchenzeile](ref:e546633, ref:e546662), is not a Markdown link at all (a
+  // destination can't hold a space), so it rendered as text with the raw refs.
+  it('asks for one ref per link, with a same-name example', () => {
+    const text = shareAssistInstructions()
+    expect(text).toMatch(/One ref per link/)
+    expect(text).toMatch(/\[Kitchen\]\(ref:e1\) and \[Kitchen\]\(ref:e2\)/)
+  })
+
+  // Owner testing on SEESTRASSE: "select all the kitchen sinks" searched
+  // IfcSink, Spüle and Kitchen, found nothing, and asked, though the storey
+  // held Küchenzeile units with the sinks in them.
+  it('has the model look at what is there and act on the best match when a search finds nothing', () => {
+    const text = shareAssistInstructions()
+    expect(text).toMatch(/often another language, a product or trade name, or an assembly/)
+    expect(text).toMatch(/list what is actually there/)
+    expect(text).toMatch(/act on the best match, saying what you chose and why/)
+    expect(text).toMatch(/Ask only when no candidate fits/)
+  })
+
   it('imports nothing, so the relay can load it under plain Node ESM', () => {
     const source = fs.readFileSync(path.join(__dirname, 'assistInstructions.js'), 'utf8')
     expect(source).not.toMatch(/^\s*import\s/m)
