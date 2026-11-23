@@ -414,7 +414,7 @@ sub-issues (the drafts below are the record of what was filed):
 > Turns Share into a workspace: ProjectsDrawer (leftmost), TopBar
 > (breadcrumb + search), relocated Profile/Share, logo popup. Behind
 > `?feature=workspace`. Plan: `design/new/conversational-cad.md` §2;
-> roadmap §4.11 / §7.4 AI.1. Wireframes: production-merge set, W1–W4.
+> roadmap §3.1 / §7.4 AI.1. Wireframes: production-merge set, W1–W4.
 
 Sub-issues:
 - `story: workspace: ProjectsDrawer container + project→models struct (W1)`

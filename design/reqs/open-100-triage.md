@@ -18,7 +18,7 @@ None of the five had a tracker: the roadmap's §3.1 rows for `open-100`, `-110`,
 
 ## Inventory
 
-Searched on 2026-11-23 with the GitHub search API, `repo:bldrs-ai/Share is:issue`, open and closed: `open-100`, `open-110`, `open-120`, `open-130`, `open-300` and `open-205` (title and body), `"Open 100"`, `"Open 110"`, `"Open 120"`, `"Open 130"`, `"Open 300"` (title), and the topics `recents`, `recent`, `drive`, `google drive`, `gdrive`, `archive`, `zip`, `LFS`, `drag and drop`, `sample`, `stl`, `unsupported`, `"open dialog"`, `OpenModelControl`, `multi-account`, `"Sources tab"` and `private repo`. Each result set was read; none was marked incomplete. The roadmap's §4.1 and its ID lineage, `design/new/drive-recents-head-check.md`, `identity-decoupling-decisions.md` and `#2202`'s body were read for the epics' scope.
+Searched on 2026-11-23 with the GitHub search API, `repo:bldrs-ai/Share is:issue`, open and closed: `open-100`, `open-110`, `open-120`, `open-130`, `open-300` and `open-205` (title and body), `"Open 100"`, `"Open 110"`, `"Open 120"`, `"Open 130"`, `"Open 300"` (title), and the topics `recents`, `recent`, `drive`, `google drive`, `gdrive`, `archive`, `zip`, `LFS`, `drag and drop`, `sample`, `stl`, `unsupported`, `"open dialog"`, `OpenModelControl`, `multi-account`, `"Sources tab"` and `private repo`. Each result set was read; none was marked incomplete. The roadmap's §4.1 (before it was retired; see [roadmap §4.1 at `2154a8d`](https://github.com/bldrs-ai/Share/blob/2154a8d9a38408160a775a7e32d9259c9950d457/design/roadmap.md#41-open)) and its ID lineage, `design/new/drive-recents-head-check.md`, `identity-decoupling-decisions.md` and `#2202`'s body were read for the epics' scope.
 
 ## Milestones
 
@@ -40,8 +40,8 @@ Milestone names, states and dates are untouched.
 
 | Source | Owning issue | Decision |
 |---|---|---|
-| Roadmap §4.1 `open-100` (local) | #271, #2006 | **Extend** #271: it is the 2022 request for drag and drop and OS-level open. Drag and drop shipped; OS open did not. #2006 retained as shipped. |
-| Roadmap §4.1 `open-100` (samples; "Open 100: Open sample model") | #757 | **Retain.** The roadmap has no row for samples; the old "Open 100" milestone puts them with the first open. |
+| [roadmap §4.1 at `2154a8d`](https://github.com/bldrs-ai/Share/blob/2154a8d9a38408160a775a7e32d9259c9950d457/design/roadmap.md#41-open) `open-100` (local) | #271, #2006 | **Extend** #271: it is the 2022 request for drag and drop and OS-level open. Drag and drop shipped; OS open did not. #2006 retained as shipped. |
+| [roadmap §4.1 at `2154a8d`](https://github.com/bldrs-ai/Share/blob/2154a8d9a38408160a775a7e32d9259c9950d457/design/roadmap.md#41-open) `open-100` (samples; "Open 100: Open sample model") | #757 | **Retain.** The roadmap has no row for samples; the old "Open 100" milestone puts them with the first open. |
 | Failed-open reasons | #1962 | **Retain**, retitled as a story; the share of its text that is design stays in its original description. |
 | `open-110` | #765, #1159 | **Retain** both closed stories. Their open bugs nest beneath them. |
 | `open-120` | #244 | **Extend/Clarify.** The 2022 request is shipped but open; it stays open until verified. |

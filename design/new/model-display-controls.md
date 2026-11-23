@@ -2,7 +2,7 @@
 
 Status: Draft v0.1 (2026-07-29)
 Owner: Pablo (with Claude).
-Epic: `view-140` (new — see roadmap §4.2).
+Epic: `view-140` (#1705; see roadmap §3.1).
 Related: [`viewer-replacement.md`](viewer-replacement.md) §3b (batched path,
 GLB cache shape), [`glb-model-sharing.md`](glb-model-sharing.md) (artifact +
 view-state round-trip), [`demand-tiled-rendering.md`](demand-tiled-rendering.md)
