@@ -1,6 +1,7 @@
 import {OPENROUTER_KEY_ID, ToolError, createRegistry} from '../../assist'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
+import {AI_TIERS, aiCreditLimits} from '../../quota/aiCredits'
 import {shareAssistInstructions} from './assistInstructions'
 import {ASSIST_MODEL} from './assistModels'
 import {createShareToolProvider} from './shareTools'
@@ -63,7 +64,8 @@ export function createShareAssist(runtime, {keyStore, conversationStore, hosted}
     appUrl: 'https://bldrs.ai',
     appTitle: 'Bldrs Share',
   })
-  const relay = runtime.hostedTransport({relayUrl: AI_RELAY_URL, ...hosted, model: hosted.model ?? ASSIST_MODEL})
+  const relay = runtime.hostedTransport({relayUrl: AI_RELAY_URL, maxRequestBytesFor, ...hosted,
+    model: hosted.model ?? ASSIST_MODEL})
   const transport = runtime.selectTransport(() => (keyStore.get(OPENROUTER_KEY_ID) ? byok : relay))
   const assist = runtime.createAssist({
     transport,
@@ -72,6 +74,28 @@ export function createShareAssist(runtime, {keyStore, conversationStore, hosted}
     instructions: shareAssistInstructions(),
   })
   return {assist, transport, dispose: () => registry.dispose()}
+}
+
+
+/**
+ * The request body cap to assume for a tier until the relay says its own
+ * (`x-bldrs-ai-max-body-bytes`, which carries any env override), so the loop
+ * keeps each step under it (assist/loop.ts `boundStepMessages`). Signed out
+ * and free have one (quota/aiCredits.js `maxBodyBytes*`, ai-chat.js
+ * `maxBodyBytesFor`); Pro has only the relay's technical cap. With no tier
+ * (before the first response, or after a sign-in change) the smallest default
+ * holds: a request that fits it fits every tier at its defaults.
+ *
+ * @param {?string} tier the relay's, or null before it has said
+ * @return {number|undefined} bytes, or undefined for no cap
+ */
+export function maxRequestBytesFor(tier) {
+  if (tier === AI_TIERS.PRO) {
+    return undefined
+  }
+  const {maxBodyBytes} = aiCreditLimits({})
+  return tier === AI_TIERS.FREE ? maxBodyBytes[AI_TIERS.FREE] :
+    Math.min(maxBodyBytes[AI_TIERS.ANONYMOUS], maxBodyBytes[AI_TIERS.FREE])
 }
 
 

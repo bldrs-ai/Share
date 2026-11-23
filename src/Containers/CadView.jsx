@@ -6,71 +6,30 @@ import {useTheme} from '@mui/material/styles'
 import {captureException} from '@sentry/react'
 import {fileSuffixBoundaryRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
-import {onHash} from '../Components/Camera/CameraControl'
-import {
-  FUNNEL_EVENTS,
-  LOCAL_HOUR_PARAM,
-  MODEL_ACTIONS,
-  MODEL_GATES,
-  OPEN_CID_PARAM,
-  getLocalHour,
-  getOpenCid,
-  gtagEvent,
-  gtagEventWithCid,
-  gtagFunnelEvent,
-  isRealModelOpen,
-  LOCAL_LINK_EVENTS,
-  modelContentId,
-  modelRouteSource,
-  startModelEngagement,
-} from '../privacy/analytics'
-import {hasSeenLocalUpload, recordLocalUpload} from '../OPFS/uploadLedger'
-import {trackEngagementOnOpen} from '../privacy/engagementTracking'
-import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
+import {gtagEvent, isRealModelOpen} from '../privacy/analytics'
 import {getRenderMode} from '../privacy/preferences'
 import {resetPlanes as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
-import {NotFoundError} from '../loader/notFoundError'
 import {
-  LOAD_OUTCOMES,
-  attachLoadFailureContext,
-  loadStallCaptureTags,
   beginLoadProgress,
-  captureLoadDiagnostics,
   currentLoadSerial,
   endLoadProgress,
-  getCompletedLoadOutcome,
-  getCompletedLoadStats,
   getLoadFailureInfo,
-  noGeometryAlert,
-  reportFirstMesh,
-  reportFramingExclusion,
   reportLoadProgress,
 } from '../loader/loadProgress'
-import {buildOutcomeParams, loadFailureParams, omitUndefined} from '../loader/loadAnalytics'
-import {robustBoundsFor} from '../viewer/three/robustBounds'
-import {NeedsReconnectError} from '../connections/errors'
-import {EngineOpenFailureError, engineFailureCaptureContext, engineSourceTags} from '../loader/engineOpenFailure'
-import {UnsupportedSchemaError, unsupportedSchemaAlert} from '../loader/unsupportedSchema'
+import {omitUndefined} from '../loader/loadAnalytics'
 import {hasInMemoryUpload} from '../loader/inMemoryUploads'
-import {ARCHIVE_UNREADABLE} from '../loader/modelArchive'
 import {isVolumeModel} from '../loader/nrrd'
-import {ZipArchiveError} from '../loader/zipArchive'
-import {
-  InMemoryUploadGoneError,
-  UploadNotInBrowserError,
-  inMemoryUploadGoneAlert,
-  uploadNotInBrowserAlert,
-} from '../OPFS/messages'
+import {InMemoryUploadGoneError} from '../OPFS/messages'
 import {getBrowser} from '../connections/registry'
 import {installEngineDevHook} from '../engine/engineDevHook'
 import useLegacyViewRulesNotice from '../engine/useLegacyViewRulesNotice'
 import modelIdentity from '../routes/modelIdentity'
-import {modelOpenId} from '../routes/modelOpen'
 import useExistInFeature from '../hooks/useExistInFeature'
 import useDirectLinkQuota from '../quota/useDirectLinkQuota'
 import useStore from '../store/useStore'
+import {forgetIndexedTreeInStore, forgetModelState} from '../store/modelState'
 import {selectReadModel} from '../store/IFCSlice'
 import {
   expandedIdsForSelection,
@@ -102,7 +61,7 @@ import {
   trimToTreeOccurrencePath,
 } from '../utils/occurrencePaths'
 import {isOutOfMemoryError} from '../utils/oom'
-import {isAborted, raceLoadAbort, throwIfLoadAborted} from '../utils/loadAbort'
+import {isAborted, raceLoadAbort} from '../utils/loadAbort'
 import {modelOpenKind, tagModelOpen} from '../utils/reportModelOpen'
 import {isSpaModelNavOn} from '../utils/spaModelNavMode'
 import {setKeydownListeners} from '../utils/shortcutKeys'
@@ -130,6 +89,10 @@ import {
 import {elementSelection} from './selection'
 import {partsToPath} from './urls'
 import {initViewer} from './viewer'
+import {reportLoadFailure} from './loadFailure'
+import {reportModelOpened, trackModelInteraction} from './modelOpenEvents'
+import {placeModelInScene, reapplyHiddenElements} from './modelPlacement'
+import useModelSessionHost from './useModelSessionHost'
 import {installDebugPanelsShortcut} from '../viewer/debugPanels'
 import {isWebGLUnavailableError} from '../viewer/webglUnavailable'
 import WebglUnavailable from '../Components/WebglUnavailable'
@@ -169,15 +132,12 @@ export default function CadView({
   const setSelectedOccurrencePath = useStore((state) => state.setSelectedOccurrencePath)
   const setSelectedSolidExpressId = useStore((state) => state.setSelectedSolidExpressId)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
-  const setElementTypesMap = useStore((state) => state.setElementTypesMap)
   const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
   const setIsNotesVisible = useStore((state) => state.setIsNotesVisible)
   const setIsPropertiesVisible = useStore((state) => state.setIsPropertiesVisible)
   const setIsSearchBarVisible = useStore((state) => state.setIsSearchBarVisible)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
-  const setLoadedFileInfo = useStore((state) => state.setLoadedFileInfo)
   const rootElement = useStore((state) => state.rootElement)
-  const setRootElement = useStore((state) => state.setRootElement)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setSelectedAnchorIds = useStore((state) => state.setSelectedAnchorIds)
@@ -233,32 +193,29 @@ export default function CadView({
   const inFlightModelKeyRef = useRef(null)
   const isViewerReloadPendingRef = useRef(false)
   const latestOnViewerRef = useRef(null)
-  // open-205 #2011 step A (the in-app switch, on by default since step F;
-  // utils/spaModelNavMode.js): who owns the load. Each onViewer run under it
-  // gets its own AbortController, and leaving the model aborts it
-  // (abortLoadInFlight): the download, OPFS staging and parse stop, the
-  // engine worker is terminated, and the run unwinds at its next await
-  // writing nothing, so the next model's load starts then instead of when
-  // this one would have ended. Kept after the run ends, so a switch before
-  // the idle GLB writer has run skips the writer too. Null with the kill
-  // switch (`?feature=disableSpaModelNav`) or the rollback on, where nothing
-  // is aborted and a switch waits behind the load as before. The viewer the
-  // run loads into, because under the switch a viewer re-created for the
-  // SAME model (a theme change) supersedes the run too.
-  const loadAbortRef = useRef(null)
+  // The viewer the load in flight streams into: under the in-app switch a
+  // viewer re-created for the SAME model (a theme change) gives that load up
+  // too, and onViewer reloads the model into the new one.
   const inFlightViewerRef = useRef(null)
-  // The alert as it stood when the in-flight load began. If that load is
-  // superseded and fails, the alert it raises belongs to a model the user
-  // has already left; left up, it would sit over the replayed model, and
-  // dismissing it navigates home (codex review on #1957).
-  const alertAtLoadStartRef = useRef(null)
+  // open-205 #2019 (Phase 1b step 1): the model sessions this view binds to
+  // (Containers/modelSession.js; design/new/in-app-model-switch.md §4.9).
+  // The active session owns the model shown: its load job (the run's abort
+  // controller, under the in-app switch), its engine and its window
+  // handlers, and only its current job writes the model's state. A load the
+  // user has left belongs to a closed session, so whatever it does next
+  // writes nothing: this replaced step A's identity guard
+  // (`isLoadSuperseded`), its replay-time reset and alert restore, and
+  // `forgetLoadedModelState`'s field list. Step 1 holds one session, so a
+  // switch still closes the old one. Closed when this CadView unmounts
+  // (useModelSessionHost.js).
+  const sessionHost = useModelSessionHost(forgetLoadedModel)
   // The model a schema refusal was last counted for (in GA, by AlertDialog;
   // the alert is marked `repeat` after that). The auth-state effect
   // below can re-run onViewer for the SAME route after a refusal —
   // isViewerLoaded stays false on failure — and each re-run would count
   // the refusal again, inflating the demand numbers the report exists for
   // (codex review of Share#1899). Keyed by model identity and cleared when
-  // the identity changes (dedupeModelKeyRef, in the modelPath effect), not on
+  // the identity changes (a new model session, forgetLoadedModel), not on
   // every run of it: that effect also re-runs for the same model (Widget API
   // view settings), and clearing there let one model count twice (codex
   // review of Share#1961). The upload-not-in-browser count (#1955) is gated
@@ -289,12 +246,6 @@ export default function CadView({
   // it to tell a link-shared (public, unmetered) file from a private one
   // (quota/useDirectLinkQuota.js, design/new/quotas.md §"Drive visibility").
   const driveDownloadRef = useRef(null)
-  // The identity of the model this CadView is showing now: the one the two
-  // dedupe refs belong to, set synchronously when modelPath changes. A load
-  // compares it with its own model's identity before writing per-model state,
-  // so a load the user has navigated away from, which nothing cancels
-  // (#2019), cannot write over the model that replaced it (open-205).
-  const dedupeModelKeyRef = useRef(null)
   // The model a `load_failed` was last sent for, for the same reason and
   // with the same keying as reportedRefusalRef: the auth-state effect and
   // the customViewSettings effect re-run onViewer for the SAME route after
@@ -312,12 +263,7 @@ export default function CadView({
 
   // IFCSlice
   const model = useStore((state) => state.model)
-  const setIsModelLoading = useStore((state) => state.setIsModelLoading)
   const isModelReady = useStore((state) => state.isModelReady)
-  const setIsModelReady = useStore((state) => state.setIsModelReady)
-  const setModel = useStore((state) => state.setModel)
-  const setIsPropertiesEnabled = useStore((state) => state.setIsPropertiesEnabled)
-  const setIndexedModel = useStore((state) => state.setIndexedModel)
 
   // NavTreeSlice
   const expandedTypes = useStore((state) => state.expandedTypes)
@@ -371,7 +317,6 @@ export default function CadView({
   // Share#1971): records the load, never blocks it. Called after each
   // successful load below.
   const meterDirectLinkLoad = useDirectLinkQuota(appPrefix)
-  const setOpfsFile = useStore((state) => state.setOpfsFile)
   const navigate = useNavigate()
   // TODO(pablo): Removing this setter leads to a very strange stack overflow
   const [searchParams] = useSearchParams()
@@ -442,16 +387,18 @@ export default function CadView({
 
 
   /**
-   * Give up the load this CadView started last, under the in-app switch
-   * (open-205 #2011 step A; utils/spaModelNavMode.js): the user is leaving it, for another model or for
-   * a re-created viewer. Its run unwinds at its next await without writing
-   * (onViewerInternal's `loadSignal`), and onViewer then starts the next one.
-   * A load that has already ended is aborted too, which only stops its idle
-   * GLB writer if that has not run yet (Loader.js#load). With the kill switch
-   * on there is no controller, and nothing changes.
+   * Give up the active session's load, under the in-app switch (open-205
+   * #2011 step A; utils/spaModelNavMode.js): the viewer it loads into is
+   * being re-created (initViewerCb). Its run unwinds at its next await
+   * without writing (it is no longer its session's current job,
+   * modelSession.js), and onViewer then starts the next one. A load that has
+   * already ended is aborted too, which only stops its idle GLB writer if
+   * that has not run yet (Loader.js#load). With the kill switch on there is
+   * no controller, and nothing changes. A switch to another model closes the
+   * session instead (the [modelPath] effect), which aborts it the same way.
    */
   function abortLoadInFlight() {
-    loadAbortRef.current?.abort()
+    sessionHost.active?.abortLoad()
   }
 
 
@@ -465,12 +412,14 @@ export default function CadView({
    * open, so the homepage demo never reports. Each run ends here at most
    * once: every caller returns straight after.
    *
+   * @param {object} job the run (see onViewerInternal). Its loading UI goes
+   *   down only if it is still the one up (LoadJob#endLoading): after a
+   *   remount the next view's load may already have put up its own.
    * @param {number|null} [serialBefore] currentLoadSerial before the run's
    *   attempt, or null when it was aborted before one began (the auth wait)
    */
-  function endAbortedLoad(serialBefore = null) {
-    setIsModelLoading(false)
-    setSnackMessage(null)
+  function endAbortedLoad(job, serialBefore = null) {
+    job.endLoading()
     if (!isRealModelOpen(modelPath)) {
       return
     }
@@ -528,30 +477,32 @@ export default function CadView({
       return
     }
     onViewerInFlightRef.current = true
-    inFlightModelKeyRef.current = modelIdentity(modelPath, installPrefix)
+    const modelKey = modelIdentity(modelPath, installPrefix)
+    inFlightModelKeyRef.current = modelKey
     inFlightViewerRef.current = viewer
-    loadAbortRef.current = isSpaModelNav ? new AbortController() : null
-    alertAtLoadStartRef.current = useStore.getState().alert
+    // The model's session (opened by the [modelPath] effect, or here when the
+    // auth effect's call comes first on mount) and this run of it. Beginning
+    // the run supersedes the session's previous one, so from here only this
+    // run writes the model's state (modelSession.js). Under the in-app switch
+    // the run is abortable: leaving the model aborts it, so the next model's
+    // load starts as soon as this one unwinds. With the kill switch on it
+    // runs to its end, its writes dropped once it is not current, and a
+    // switch waits behind it, as before.
+    const job = sessionHost.open(modelKey).beginLoad({isAbortable: isSpaModelNav})
     try {
-      await onViewerInternal()
+      await onViewerInternal(job)
     } finally {
       onViewerInFlightRef.current = false
       inFlightModelKeyRef.current = null
       inFlightViewerRef.current = null
       if (isViewerReloadPendingRef.current) {
         isViewerReloadPendingRef.current = false
-        if (useStore.getState().alert !== alertAtLoadStartRef.current) {
-          setAlert(null)
-        }
-        // The load that just ended was superseded. If the replay is for
-        // another model, its isLoadSuperseded guard already kept it from
-        // writing the per-model state. But after A → B → A the replay is for
-        // the SAME model, so the guard counted the ended load as current
-        // again, and it may have marked itself loaded for geometry it put into
-        // a viewer that has since been disposed. Clear that state before the
-        // replay, so a replay that fails, or an auth change during it, still
-        // gets retried (codex review on #2026).
-        forgetLoadedModel()
+        // The load that just ended was superseded: by another model, whose
+        // session closed its own (the switch), or by a viewer re-created for
+        // this one. Either way it wrote nothing after that, an alert
+        // included, because it was no longer its session's current job. The
+        // replay's beginLoad forgets what a run given up mid-load had
+        // brought up (A → B → A, a theme change mid-load).
         await latestOnViewerRef.current()
       }
     }
@@ -560,123 +511,97 @@ export default function CadView({
 
 
   /**
-   * Drop the state that belongs to the model this CadView last loaded:
+   * Forget the model this CadView last showed, as a page load would start
+   * without it: the model session host's `onForget` (modelSession.js), so it
+   * runs when the active session changes (`isSwitch`: the [modelPath]
+   * effect's identity change, including the first) and when a run of the
+   * active session was given up mid-load and is about to be replayed (a
+   * theme change mid-load). Nothing the left load does afterwards can write
+   * any of this back: it is no longer its session's current job.
+   *
    * - `isViewerLoaded`, which gates the auth/OPFS retry effect. Left true from
    *   the previous model, it kept that effect from ever retrying a later one
    *   (open-205, #2015).
    * - The element lookup, that model's tree (#2016). Cleared in place: it is
    *   one object for the life of this CadView, and the handlers that read it
    *   hold that object. onModel refills it.
-   * - A tree brought up at the index of a load the user has now left
-   *   (open-205 #2029; codex review on #2037). That load still runs to its end
-   *   (#2019), and until it does the new model can't start, so without this
-   *   the panels would go on serving the left model's tree and properties
-   *   under the new model's URL, with the loading overlay lifted.
+   * - The preview pick of the left load (#2043), and on a switch, a
+   *   selection made in the left model while it was at its index or on its
+   *   preview (forgetIndexedSelection says why that one needs clearing).
+   * - The store's per-model state, under the in-app switch: every field the
+   *   slices declare as the model's (store/modelState.js), so the page reads
+   *   as a fresh page load does before the model arrives. Before step A the
+   *   store's `model` stayed the left model until the next load's own write,
+   *   so everything that rendered during that load (and any closure such a
+   *   render made) still held it, and its tree, load report and export
+   *   artifact stayed up under the new model's URL. The NavTree's expansion
+   *   is in it too: left in place, the next model's tree came up with
+   *   whichever of its own ids collided expanded (step F's burn-in,
+   *   exportGlb.spec.ts).
    *
-   * Runs when the model identity changes, and again just before a replay
-   * of a load that a model change superseded (onViewer's finally). Two
-   * mechanisms, because a superseded load is not cancelled (#2019): its
-   * `isLoadSuperseded` guard (onViewerInternal) keeps it from writing this
-   * state back while another model is shown, and the replay-time call
-   * covers a return to its own model (A → B → A), where the guard sees it as
-   * current again.
+   * With the kill switch or the rollback on, only the first mesh and a tree
+   * brought up at the index go from the store, as before step A: there every
+   * open is a page load, and the in-app opens that remain (an in-memory
+   * upload, the alert's Reset, a search-bar URL) keep the behaviour they had.
+   *
+   * @param {object} options
+   * @param {boolean} options.isSwitch
    */
-  function forgetLoadedModel() {
+  function forgetLoadedModel({isSwitch}) {
+    const wasIndexed = useStore.getState().indexedModel !== null
+    const wasPickedInPreview = previewPickedRef.current
+    if (isSwitch) {
+      // A different model starts a new open, so its failures count again
+      // even when the model in between never touched the dedupe refs (A
+      // fails, B loads, A fails). Reruns of the SAME model (customViewSettings)
+      // keep the session, and so these. Share#1961 codex review.
+      reportedRefusalRef.current = null
+      reportedLoadFailureRef.current = null
+    }
     setIsViewerLoaded(false)
     for (const id of Object.keys(elementsById)) {
       delete elementsById[id]
     }
-    // The left load's first mesh lifted the overlay (#2043); the model about
-    // to be shown has put nothing on screen yet. Its pick, if any, goes too.
-    useStore.getState().setIsFirstMeshShown(false)
     pendingPreviewPickRef.current = null
     previewPickedRef.current = false
-    // Nothing indexed belongs to the model about to be shown: its own load
-    // hasn't started (identity change), or hasn't been replayed yet.
-    if (useStore.getState().indexedModel !== null) {
-      forgetIndexedTree()
-    }
-    if (isSpaModelNavOn()) {
-      forgetLoadedModelState()
+    forgetModelState({isFullReset: isSpaModelNavOn()})
+    if (isSwitch && (wasIndexed || wasPickedInPreview)) {
+      forgetIndexedSelection()
     }
   }
 
 
   /**
-   * Under the in-app switch, drop the store's per-model state when the
-   * user leaves a model, instead of leaving it to the next load's own writes
-   * (open-205 #2011 step A, the load-ownership part of #2019). Without a page
-   * load nothing else does: the store's `model` stayed the left model until
-   * the next `setModel`, so everything that renders during the next load
-   * (and any closure such a render makes) still held it, and its tree, its
-   * load report and its export artifact stayed up under the new model's URL.
-   * After this the page reads as it does at a fresh page load before the
-   * model arrives. The left load itself was aborted (abortLoadInFlight), so
-   * it cannot write any of it back.
+   * Inner load body — preconditions checked + in-flight flag managed by `onViewer`.
    *
-   * Not with the kill switch or the rollback on: there every open is a page
-   * load, and the in-app opens that remain (an in-memory upload, the alert's
-   * Reset, a search-bar URL) keep the behaviour they had before step A.
+   * Every write of the model's state goes through `job` (modelSession.js):
+   * a store field through `job.set`, anything else (the scene, the viewer,
+   * a window handler, an analytics send) after `job.isCurrent()` or
+   * `job.throwIfLeft()`. The user can leave the model at any await below,
+   * before or after the next model's load begins; from then the job is not
+   * current and writes nothing (#2019). With A → B → A the return is a new
+   * session, so a run of the first A never reads as current again.
+   *
+   * @param {object} job this run (a LoadJob of the active session)
    */
-  function forgetLoadedModelState() {
-    const state = useStore.getState()
-    state.setIsModelReady(false)
-    state.setModel(null)
-    state.setRootElement(null)
-    state.setElementTypesMap([])
-    searchIndex.clearIndex()
-    state.setLoadedFileInfo(null)
-    state.setGlbArtifact(null)
-    state.setOpfsFile(null)
-    state.setLoadReportLines([])
-    state.setCurrentLoadLine(null)
-    state.setLoadResult(null)
-    // The NavTree's expansion is a set of the left model's element ids (and
-    // type names). Left in place, the next model's tree came up with whichever
-    // of its own ids collide expanded, and a toggle on one collapsed it
-    // instead (found by step F's burn-in, exportGlb.spec.ts's reopen of a
-    // second export of the same model: its root came up expanded, so the
-    // user's first click closed it). A page load starts with none.
-    state.setExpandedElements([])
-    state.setExpandedTypes([])
-    state.setDefaultExpandedElements([])
-    state.setDefaultExpandedTypes([])
-  }
-
-
-  /** Inner load body — preconditions checked + in-flight flag managed by `onViewer`. */
-  async function onViewerInternal() {
-    // Whether the model shown now is another one. Nothing cancels this load
-    // when the user moves on (#2019), and it can still settle at any await
-    // below, before or after the replacement's own load begins; checked at
-    // each write of the per-model state forgetLoadedModel drops, so a
-    // superseded load leaves that state to the model shown (codex review on
-    // #2026). By identity, so it reads current again after A → B → A; the
-    // replay-time forgetLoadedModel in onViewer covers that case. Read at the
-    // write, not here: on mount the [modelPath] effect, which sets the shown
-    // identity, runs after the auth effect that may start this load.
-    const loadModelKey = modelIdentity(modelPath, installPrefix)
-    // This run's abort signal under the in-app switch (onViewer sets the
-    // controller just before calling here), undefined with the kill switch on. An
-    // aborted run is superseded whatever the identity says: after A → B → A
-    // the identity reads current again, but the run was given up for the
-    // viewer it loaded into (open-205 #2011 step A).
-    const loadSignal = loadAbortRef.current?.signal
-    const isLoadSuperseded = () => dedupeModelKeyRef.current !== loadModelKey || isAborted(loadSignal)
+  async function onViewerInternal(job) {
+    // This run's abort signal under the in-app switch, undefined with the
+    // kill switch on (open-205 #2011 step A).
+    const loadSignal = job.signal
     // Whether this open is the page's first or one switched to in-app, and
     // the page's nav mode, as Sentry scope tags from here on, so this load's
     // failure capture and any later exception on the model say which it was
     // (utils/reportModelOpen.js, open-205 step F). The GA events below take
     // the same `open_kind`.
     tagModelOpen(modelPath)
-    setIsModelReady(false)
+    job.set({isModelReady: false})
     // open-205 #2043: the canvas is live from the load's first preview mesh,
     // during the parse, so scene picks are too: the handler takes picks on
     // the preview (canvasDoubleClickHandler) until the finished model is in.
     // onModel installs it again at the end, as before.
     pendingPreviewPickRef.current = null
     previewPickedRef.current = false
-    window.ondblclick = canvasDoubleClickHandler
+    job.session.bindWindowHandler('ondblclick', canvasDoubleClickHandler)
 
     // define mesh colors for selected and preselected element
     const preselectMat = new MeshLambertMaterial({
@@ -702,8 +627,7 @@ export default function CadView({
     // overlay only appeared once loadModel ran, and loadModel sat behind
     // full auth resolution — a slow Auth0 exchange meant ~10s of frozen
     // screen with no feedback. loadModel refines the message once it runs.
-    setIsModelLoading(true)
-    setSnackMessage('Loading model...')
+    job.showLoading('Loading model...')
 
     // Only GitHub-hosted models use the Auth0-brokered token; local files,
     // other external URLs, and Drive (its own connection tokens) shouldn't
@@ -733,7 +657,7 @@ export default function CadView({
         isAuthSettledBeforeLoad = await raceLoadAbort(waitForAuthSettled(AUTH_SETTLE_GRACE_MS), loadSignal)
       } catch (e) {
         // Only the abort rejects here (waitForAuthSettled never does).
-        endAbortedLoad()
+        endAbortedLoad(job)
         return
       }
     }
@@ -766,7 +690,7 @@ export default function CadView({
     let hasLoadFailed = false
     // Why the index's walk failed, for the load's end to report once.
     let indexedWalkError = null
-    const isIndexedTreeStale = () => isLoadSuperseded() || hasLoadFailed
+    const isIndexedTreeStale = () => !job.isCurrent() || hasLoadFailed
     const deliverIndexedTree = async (indexedModel) => {
       if (isIndexedTreeStale()) {
         return
@@ -780,7 +704,7 @@ export default function CadView({
       if (rootElt === null || isIndexedTreeStale()) {
         return
       }
-      if (await installModelTree(indexedModel, rootElt, isIndexedTreeStale, {indexedModel})) {
+      if (await installModelTree(job, indexedModel, rootElt, {isStale: isIndexedTreeStale, indexedModel})) {
         indexedTree = rootElt
         // A pick made on the preview before this tree existed (#2043) can now
         // be resolved against it: its row, its URL path, its properties.
@@ -814,27 +738,25 @@ export default function CadView({
     // can't leave the loop on demand.
     const endOnDemand = viewer.context.getRenderDemand?.()?.begin(viewer.context.getCameraControls?.())
     // open-205 #2043: the loading overlay lifts at the load's first mesh, but
-    // only for the load that is still shown. Nothing cancels a load the user
-    // has left (#2019), and its first mesh, which arrives in a viewer since
-    // disposed, must not lift the overlay over the next model's empty one
-    // (codex review on #2052). The same guard as every other per-model write.
+    // only for the load that is still shown. A load the user has left can
+    // still put its first mesh into a viewer since disposed (a mesh loader
+    // cannot be stopped), and that must not lift the overlay over the next
+    // model's empty one (codex review on #2052).
     const onFirstMesh = () => {
-      if (!isLoadSuperseded()) {
-        useStore.getState().setIsFirstMeshShown(true)
-      }
+      job.set({isFirstMeshShown: true})
     }
     try {
       tmpModelRef = await loadModelWithAuthRetry(modelPath, isAuthSettledBeforeLoad,
-        {onIndexed, onFirstMesh, signal: loadSignal})
+        {onIndexed, onFirstMesh, job})
     } catch (e) {
-      if (isAborted(loadSignal)) {
-        // Given up, not failed (open-205 #2011 step A): whatever the abort
-        // made the load throw is its consequence. No alert, no load_failed,
-        // no Sentry; the store's per-model state was cleared when the user
-        // left (forgetLoadedModelState), and every guard below reads this run
-        // as superseded.
+      if (!job.isCurrent()) {
+        // Given up or left, not failed (open-205 #2011 step A, #2019):
+        // whatever the abort made the load throw is its consequence, and a
+        // failure of a load the user has left is not the shown model's. No
+        // alert, no load_failed, no Sentry; the store's per-model state was
+        // forgotten when the user left (forgetLoadedModel).
         pendingPreviewPickRef.current = null
-        endAbortedLoad(loadSerialBefore)
+        endAbortedLoad(job, loadSerialBefore)
         return
       }
       // A tree that came up at the index belongs to a model that then never
@@ -843,177 +765,26 @@ export default function CadView({
       // Properties and the TopBar would otherwise keep showing (codex review
       // on #2037). A walk still running stays out: isIndexedTreeStale.
       hasLoadFailed = true
-      if (indexedTree !== null && !isLoadSuperseded()) {
-        forgetIndexedTree()
+      job.markFailed()
+      if (indexedTree !== null) {
+        forgetIndexedTree(job)
         forgetIndexedSelection()
-      } else if (previewPickedRef.current && !isLoadSuperseded()) {
+      } else if (previewPickedRef.current) {
         // The same for a pick on the preview of a load that never indexed
         // (#2043): its element is in no model that is coming.
         forgetIndexedSelection()
       }
       pendingPreviewPickRef.current = null
-      if (isOutOfMemoryError(e)) {
-        isOOM = true
-      }
-      // GA's view of a load that did not display: the other half of
-      // real_model_open, which only ever sees successes. Sent from here, the
-      // one place every failure of an attempt lands, and not from loadModel's
-      // own catch, which also sees the auth-shaped first try that
-      // loadModelWithAuthRetry then retries and may well win: that is not a
-      // failed load, and counting it would. The same isRealModelOpen guard as
-      // the success event, so the homepage demo never reports. Deduped per
-      // model like the schema refusal below, because the auth-state effect
-      // re-runs onViewer for the same route after a failure. Closed-set
-      // params only (loadAnalytics#loadFailureParams).
-      const failureKey = modelIdentity(modelPath, installPrefix)
-      if (isRealModelOpen(modelPath) && reportedLoadFailureRef.current !== failureKey) {
-        reportedLoadFailureRef.current = failureKey
-        const {phase, fileSize, format} = getLoadFailureInfo(loadSerialBefore)
-        gtagFunnelEvent(FUNNEL_EVENTS.LOAD_FAILED, omitUndefined({
-          ...loadFailureParams({error: e, format, fileSize, phase}),
-          open_kind: modelOpenKind(modelPath),
-        }))
-      }
-      if (isOOM) {
-        // Provide actionable OOM alert object; AlertDialog will render a Refresh button.
-        setAlert({
-          type: 'oom',
-          message: 'We ran out of memory attempting to load this model. ' +
-            'Try opening it on a desktop browser with more memory or ' +
-            'refresh the page.',
-        })
-      } else if (e instanceof UnsupportedSchemaError) {
-        // conway refused the model's schema by design (IFC4X3 content it
-        // can't read correctly — bldrs-ai/conway#713), not because the file
-        // or the engine is broken. Say what happened in the user's terms
-        // instead of the raw "OpenModel returned -1".
-        // Counted, not reported as a defect: AlertDialog counts it in GA,
-        // with the schema as a param, to rank the IFC 4.3 work (Share#1879).
-        // The captureException below stays skipped for it. A re-run for the
-        // same model shows it again as a `repeat`, which isn't counted.
-        const refusalKey = modelIdentity(modelPath, installPrefix)
-        const repeat = reportedRefusalRef.current === refusalKey
-        reportedRefusalRef.current = refusalKey
-        setAlert({...unsupportedSchemaAlert(e, modelPath), repeat})
-      } else if (e instanceof ZipArchiveError) {
-        // A downloaded archive that isn't one model in a readable zip — a
-        // hosted zip of several models, or of none
-        // (loader/modelArchive.js#unwrapHostedArchive). The user's file, not
-        // a defect: say why under its own header, counted in analytics only
-        // (AlertDialog), and kept out of the captureException below. The
-        // message names no file and is what analytics counts; `dialogText`
-        // may name the entries inside, for the dialog alone.
-        setAlert({type: ARCHIVE_UNREADABLE, message: e.message, dialogText: e.dialogText})
-      } else if (e instanceof EngineOpenFailureError) {
-        // conway said why the open failed (conway#742): a short form of the
-        // reason in place of the raw "OpenModel returned -1". Still a real
-        // failure, so it keeps the help footer and the Sentry capture below.
-        setAlert({type: 'engineFailure', message: e.alertMessage})
-      } else if (e instanceof NeedsReconnectError) {
-        // Deep-link / reload landed on a Drive route with a stale token, and
-        // GIS couldn't escalate to a popup outside a user gesture. Surface a
-        // Reconnect button (a future user gesture) instead of "Failed to
-        // parse model".
-        setAlert({
-          type: 'needsReconnect',
-          connection: e.connection,
-          message: 'Your Google Drive session expired. Reconnect to load this file.',
-        })
-      } else if (e instanceof InMemoryUploadGoneError) {
-        // No OPFS and this page doesn't hold the file (#1906). Distinct from
-        // the next case, where OPFS exists but lacks the entry.
-        setAlert(inMemoryUploadGoneAlert())
-      } else if (e instanceof UploadNotInBrowserError) {
-        // A /v/local-only/ URL whose upload this browser never held or no longer
-        // holds (#1955). Explain it and offer to open a file, instead of
-        // the worker's raw "Folder <id> not found" under an Error header.
-        // User state, not a defect (#1956): AlertDialog counts it in GA, how
-        // often stale or shared local-file links are opened, and so how much
-        // #705 is worth. Once per route, like a schema refusal.
-        const goneKey = `upload-not-in-browser:${modelIdentity(modelPath, installPrefix)}`
-        const repeat = reportedRefusalRef.current === goneKey
-        reportedRefusalRef.current = goneKey
-        // `origin` says whether this browser once held the file
-        // (OPFS/uploadLedger.js) or the link's source is unknown; it rides on
-        // the alert so AlertDialog's follow-up action event can repeat it.
-        const origin = hasSeenLocalUpload(e.storageId) ? 'this_browser' : 'unknown'
-        setAlert({...uploadNotInBrowserAlert(), repeat, origin})
-        // Beside, never instead of, AlertDialog's `alert` event. Same
-        // first-sighting rule as that one, and the same isRealModelOpen guard
-        // as load_failed above so deploy previews stay quiet.
-        if (!repeat && isRealModelOpen(modelPath)) {
-          // Snapshot what the failure itself knows, now; `signed_in` is read
-          // after auth settles. A local-only route never awaits auth, so at
-          // this point useAuth0().isAuthenticated can still be its loading-
-          // state false for a signed-in visitor. Only the GA send waits: the
-          // alert above is already up, and a rejection here must not reach
-          // the load path. The once-per-route dedupe (`repeat`) was decided
-          // synchronously above, so a re-run during the wait can't resend.
-          // Router state lives on the history entry, so a
-          // `window.location.hash = ...` push before this failure drops
-          // legacyUploadRoute: legacy links are undercounted, never
-          // mislabelled.
-          const legacyRoute = isLegacyUploadRouteRef.current
-          waitForAuthSettled(AUTH_SETTLE_RETRY_MS)
-            .then(() => {
-              gtagEventWithCid(LOCAL_LINK_EVENTS.MISSING, {
-                origin,
-                legacy_route: legacyRoute,
-                signed_in: isAuthenticatedRef.current === true,
-              })
-            })
-            .catch(() => {
-              // Analytics only: a failed send must not surface to the user.
-            })
-        }
-      } else {
-        setAlert(e)
-      }
-
-      console.error(e)
-      // Don't send the OOM/device-too-constrained case to Sentry's error
-      // stream: it's an expected, handled outcome on memory-constrained
-      // devices, already surfaced to the user with actionable advice (the
-      // 'oom' alert above). Capturing it generated the SHARE-RS noise
-      // (11k+ events / 2.7k users, ~100% old Android) — a device limit, not
-      // a code defect. Real (non-OOM) loader failures are still captured,
-      // and get load.* tags + context from the last progress event first
-      // (via attachLoadFailureContext), so they group by phase in Sentry
-      // instead of landing in one detail-free "model loading failed"
-      // bucket (conway #301 §7).
-      // Same for an unsupported schema: an intended, documented limit that
-      // is already explained to the user, not a defect for triage. And for
-      // an in-memory upload whose page is gone: a known limit of browsers
-      // without OPFS (#1906), counted in analytics by AlertDialog. And for
-      // an upload that isn't in this browser (OPFS present, entry absent):
-      // the loader only raises it after OPFS confirmed the entry is absent,
-      // so it's user state, not a bug — and it was SHARE-1NR, the top
-      // hard-failure group (#1955). Its volume is still counted: an
-      // info-level message above, plus AlertDialog's analytics event. And
-      // for a GitHub link that isn't there or isn't visible to this user
-      // (SHARE-1XP, notFoundError.js): AlertDialog counts it in GA.
-      const isExpectedNotFound = e instanceof NotFoundError && e.isExpected
-      if (!isOOM && !(e instanceof UnsupportedSchemaError) && !(e instanceof InMemoryUploadGoneError) &&
-          !(e instanceof UploadNotInBrowserError) && !(e instanceof ZipArchiveError) && !isExpectedNotFound) {
-        attachLoadFailureContext()
-        // A load that stalled before it failed says so on this event only
-        // (loadProgress.js#loadStallCaptureTags), never on the scope.
-        const stallTags = loadStallCaptureTags()
-        const withStall = (context) => (stallTags ? {...context, tags: {...context?.tags, ...stallTags}} : context)
-        if (e instanceof EngineOpenFailureError) {
-          // The engine's status and reason as tags/context on this event
-          // only; the alert's GA count is AlertDialog's (trackAlertEvent).
-          captureException(e, withStall(engineFailureCaptureContext(e)))
-        } else if (e?.engineSource) {
-          // A failed engine-worker open without a recorded reason: still say
-          // how its source was read (engineOpenFailure.js#engineSourceTags).
-          captureException(e, withStall({tags: engineSourceTags(e)}))
-        } else if (stallTags) {
-          captureException(e, {tags: stallTags})
-        } else {
-          captureException(e)
-        }
-      }
+      // The alert, GA's load_failed and the Sentry capture: loadFailure.js.
+      isOOM = reportLoadFailure(e, {
+        modelPath,
+        installPrefix,
+        loadSerialBefore,
+        reported: {loadFailure: reportedLoadFailureRef, refusal: reportedRefusalRef},
+        setAlert,
+        isLegacyUploadRoute: isLegacyUploadRouteRef.current,
+        getIsAuthenticated: () => isAuthenticatedRef.current,
+      }).isOOM
       return
     } finally {
       // Whatever the outcome, this load attempt is over. The overlay/snack
@@ -1021,8 +792,7 @@ export default function CadView({
       // authed-retry path after loadModel's own finally cleared it) — a
       // load that ends in an alert must not leave the LoadingBackdrop
       // blocking the error dialog.
-      setIsModelLoading(false)
-      setSnackMessage(null)
+      job.endLoading()
       stopWatchingCamera()
       endOnDemand?.()
     }
@@ -1039,9 +809,9 @@ export default function CadView({
     if (indexedDelivery !== null) {
       await indexedDelivery
     }
-    if (isAborted(loadSignal)) {
+    if (!job.isCurrent()) {
       // Left after the load resolved, while its tree was still being walked.
-      endAbortedLoad(loadSerialBefore)
+      endAbortedLoad(job, loadSerialBefore)
       return
     }
     // Reuse the index's tree only while it is still the one shown: an
@@ -1051,27 +821,29 @@ export default function CadView({
       indexedTree : null
     // At most one walk of this model's tree (codex review on #2037): on PSB a
     // walk was ~86 s before conway#753 and is still seconds after it, and
-    // this load holds the next one back until it ends. So
-    // none here when the load is superseded (it would install nothing), and
-    // none when the index's walk failed (report that failure instead). A
-    // walk that came up with a tree has delivered it (earlyTree).
-    if (indexedWalkError !== null && !isLoadSuperseded()) {
+    // this load holds the next one back until it ends. So none when the
+    // index's walk failed (report that failure instead); the job is current
+    // here (checked just above, nothing awaited since). A walk that came up
+    // with a tree has delivered it (earlyTree).
+    if (indexedWalkError !== null) {
       reportTreeReadFailure(indexedWalkError)
     }
-    const mayWalk = !isLoadSuperseded() && indexedWalkError === null
-    await onModel(tmpModelRef, isLoadSuperseded, earlyTree, {mayWalk})
-    if (isAborted(loadSignal)) {
+    const mayWalk = indexedWalkError === null
+    await onModel(job, tmpModelRef, earlyTree, {mayWalk})
+    if (!job.isCurrent()) {
       // Left during onModel's tree walk: nothing below (ready, metering, the
-      // selection and visibility links) is this model's to write any more.
-      endAbortedLoad(loadSerialBefore)
+      // selection and visibility links, the camera listener) is this model's
+      // to write any more. Everything below runs in one synchronous stretch,
+      // so this one check covers it.
+      endAbortedLoad(job, loadSerialBefore)
       return
     }
     // The finished model now answers everything the indexed one did, and it
     // is what readers should hold from here (store/IFCSlice.js
-    // #selectReadModel). Only this load's own handle: a superseded load still
-    // runs to its end (#2019), and must not take down the shown model's.
+    // #selectReadModel). Only this load's own handle: an auth retry may have
+    // replaced the attempt that published it.
     if (indexedHandle !== null && useStore.getState().indexedModel === indexedHandle) {
-      setIndexedModel(null)
+      job.set({indexedModel: null})
     }
 
     const pathToLoad = modelPath.srcUrl || modelPath.gitpath || (installPrefix + modelPath.filepath)
@@ -1079,10 +851,8 @@ export default function CadView({
     // A pick on the preview (#2043) whose tree came up only now, in onModel —
     // the index delivered none — resolves against it here.
     const wasPickedInPreview = previewPickedRef.current
-    if (!isLoadSuperseded()) {
-      resolvePendingPreviewPick()
-    }
-    if ((earlyTree !== null || wasPickedInPreview) && !isLoadSuperseded()) {
+    resolvePendingPreviewPick()
+    if (earlyTree !== null || wasPickedInPreview) {
       // Anything selected while geometry streamed — a tree row, a search, a
       // link's element path applied as the tree came up, a pick on the parse's
       // preview meshes — highlighted nothing on the model, there being no
@@ -1091,13 +861,7 @@ export default function CadView({
       reapplySelectionToGeometry()
     }
     previewPickedRef.current = false
-    // maintain hidden elements if any
-    const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
-      .filter(([, value]) => value === true).map(([key]) => Number(key))
-    if (previouslyHiddenELements.length > 0) {
-      viewer.isolator.unHideAllElements()
-      viewer.isolator.hideElementsById(previouslyHiddenELements)
-    }
+    reapplyHiddenElements(viewer)
     // A link's hide / isolate terms (`#d:hide=…,iso=…`) win over the above:
     // on a cold load there is nothing above, and on a re-init the live view
     // link has kept the terms current once the user changed them
@@ -1111,10 +875,9 @@ export default function CadView({
     }
 
     modelPath.title = tmpModelRef.name // maybe undefined
-    if (!isLoadSuperseded()) {
-      setIsViewerLoaded(true)
-    }
-    setIsModelReady(true)
+    setIsViewerLoaded(true)
+    job.set({isModelReady: true})
+    job.markReady()
     // After the model is on screen, never before: a direct link is metered
     // but not gated (quota/useDirectLinkQuota.js). The Open dialog already
     // recorded what it opened, which the hook sees as alreadyCounted. For
@@ -1123,27 +886,9 @@ export default function CadView({
     const driveDownload = driveDownloadRef.current?.fileId === modelPath.fileId ?
       driveDownloadRef.current : undefined
     meterDirectLinkLoad(modelPath, driveDownload)
-
-    let lastSent = 0
-    /** Debounced function to track model interaction for GA. */
-    function trackModelInteraction() {
-      const now = Date.now()
-      const debounceWaitMs = 10000
-      if (now - lastSent > debounceWaitMs) { // e.g. send once every 10s
-        gtagEvent('model_interact', {
-          interaction_type: 'rotate_or_zoom',
-        })
-        lastSent = now
-      }
-    }
-
-    const cameraControls = viewer.context.getCameraControls()
-    // Our visual testing waits until animations are finished to take screenshot
-    // Would like to use zero but doesn't work
-    // viewer.context.getCameraControls().restThreshold = 0.1
-    cameraControls.addEventListener('rest', () => {
-      trackModelInteraction()
-    })
+    // Removed when the session closes, as well as with the viewer's camera:
+    // the single-viewer step keeps the viewer past a session (§4.10).
+    job.session.bindCloser(trackModelInteraction(viewer))
   }
 
 
@@ -1169,19 +914,24 @@ export default function CadView({
    *
    * @param {object} routeResult
    * @param {boolean} isAuthSettledBeforeLoad
-   * @param {object} [loadOptions] passed to every attempt's loadModel
+   * @param {object} loadOptions passed to every attempt's loadModel; its
+   *   `job` is the run's (onViewerInternal)
    * @return {object} loaded model
    */
-  async function loadModelWithAuthRetry(routeResult, isAuthSettledBeforeLoad, loadOptions = {}) {
+  async function loadModelWithAuthRetry(routeResult, isAuthSettledBeforeLoad, loadOptions) {
+    const {job} = loadOptions
     try {
       return await loadModel(routeResult, loadOptions)
     } catch (error) {
-      if (isAuthSettledBeforeLoad || isAborted(loadOptions.signal)) {
+      if (isAuthSettledBeforeLoad || !job.isCurrent()) {
         throw error
       }
       if (routeResult.kind === 'provider' && routeResult.provider === 'google') {
-        setIsModelLoading(true)
-        await raceLoadAbort(waitForAuthSettled(AUTH_SETTLE_RETRY_MS), loadOptions.signal)
+        job.showLoading()
+        await raceLoadAbort(waitForAuthSettled(AUTH_SETTLE_RETRY_MS), job.signal)
+        // Without a signal (the kill switch) the wait is not raced: a run
+        // left meanwhile stops here rather than download again.
+        job.throwIfLeft()
         const hasDriveConnection = useStore.getState().connections.some((c) => c.providerId === 'google-drive')
         if (!isAuthenticatedRef.current || !hasDriveConnection) {
           // Settled signed out (or nothing to retry with): the API-key
@@ -1196,8 +946,9 @@ export default function CadView({
       }
       // loadModel's finally just cleared the overlay; keep it up while we
       // wait for the token — to the user this is still the same load.
-      setIsModelLoading(true)
-      await raceLoadAbort(waitForAuthSettled(AUTH_SETTLE_RETRY_MS), loadOptions.signal)
+      job.showLoading()
+      await raceLoadAbort(waitForAuthSettled(AUTH_SETTLE_RETRY_MS), job.signal)
+      job.throwIfLeft()
       if (!useStore.getState().accessToken) {
         // Auth settled without a GitHub token (logged out, Google-only) —
         // the anonymous failure was the real answer.
@@ -1218,13 +969,19 @@ export default function CadView({
    *   geometry still streams (open-205 #2029); see onViewerInternal
    * @param {Function} [options.onFirstMesh] called when a progressive load's
    *   first geometry is on screen (open-205 #2043); see onViewerInternal
-   * @param {AbortSignal} [options.signal] the run's, under the in-app
-   *   switch (open-205 #2011 step A): handed to the Loader,
-   *   and checked after each await here, so an aborted load writes nothing
-   *   (setModel, the scene, the isolator, the open's analytics)
+   * @param {object} options.job the run (onViewerInternal; modelSession.js).
+   *   Its signal, under the in-app switch, goes to the Loader (open-205 #2011
+   *   step A); it is checked after each await here, so a load the user has
+   *   left writes nothing (the model, the scene, the isolator, the open's
+   *   analytics), whether or not its work could be stopped (#2019)
    * @return {object} loaded model
    */
-  async function loadModel(routeResult, {onIndexed, onFirstMesh, signal} = {}) {
+  async function loadModel(routeResult, {onIndexed, onFirstMesh, job}) {
+    const signal = job.signal
+    // The OPFS file the Loader read the model from is the model's state: a
+    // load the user has left must not publish its file over the next one's
+    // (the Loader also quiets it at an abort, Loader.js#load).
+    const publishOpfsFile = (file) => job.set({opfsFile: file})
     const isGoogleResult = routeResult.kind === 'provider' && routeResult.provider === 'google'
     const filepath = isGoogleResult ? routeResult.downloadUrl : (routeResult.downloadUrl || routeResult.filepath)
     const gitpath = routeResult.gitpath
@@ -1242,8 +999,7 @@ export default function CadView({
       }
     }
     const loadingMessageBase = `Loading ${isGoogleResult ? routeResult.fileId : filepath}`
-    setIsModelLoading(true)
-    setSnackMessage(`${loadingMessageBase}`)
+    job.showLoading(`${loadingMessageBase}`)
 
     // Call this before loader, as IFCLoader needs it.
     viewer.setCustomViewSettings(customViewSettings)
@@ -1253,15 +1009,19 @@ export default function CadView({
     // mirror), Sentry breadcrumbs, and the stall watchdog. Disposed in the
     // finally below. Live progress renders in the snackbar (AlertDialogAndSnackbar),
     // so the snackbar keeps only the base "Loading <file>" message.
-    beginLoadProgress({
+    // This load's own reporter: its progress and its end reach the report
+    // only while it is still the active one (loadProgress.js), so a load the
+    // user has left, unwinding after the next one began, can't write into or
+    // end the next one's.
+    const reporter = beginLoadProgress({
       fileInfo: isGoogleResult ? `gdrive:${routeResult.fileId}` : filepath,
       onStall: (lastEvent) => {
         const where = lastEvent?.phase ? ` on ${lastEvent.phase}` : ''
-        setSnackMessage(`${loadingMessageBase}: still working${where}…`)
+        job.updateLoadingMessage(`${loadingMessageBase}: still working${where}…`)
       },
     })
 
-    const onProgress = (progressMsg) => reportLoadProgress(progressMsg)
+    const onProgress = (progressMsg) => reportLoadProgress(progressMsg, reporter)
     let loadedModel
     // Captured in the catch so the finally can tell endLoadProgress whether
     // the load succeeded (success grace line) or failed (error grace line),
@@ -1292,7 +1052,7 @@ export default function CadView({
           const download = await raceLoadAbort(browser.getFileDownload(connection, null, routeResult.fileId), signal)
           const blobUrl = URL.createObjectURL(download.blob)
           try {
-            loadedModel = await load(blobUrl, viewer, onProgress, false, setOpfsFile, '',
+            loadedModel = await load(blobUrl, viewer, onProgress, false, publishOpfsFile, '',
               {onIndexed, onFirstMesh, signal})
           } finally {
             // The URL pins the whole download for the life of the page, and
@@ -1307,7 +1067,7 @@ export default function CadView({
           // connection. Only a file shared "Anyone with the link" (or
           // published) downloads this way, which is why the quota meter
           // treats a Drive file loaded here as public.
-          loadedModel = await load(routeResult.downloadUrl, viewer, onProgress, false, setOpfsFile, '',
+          loadedModel = await load(routeResult.downloadUrl, viewer, onProgress, false, publishOpfsFile, '',
             {onIndexed, onFirstMesh, signal})
         }
       } else {
@@ -1317,7 +1077,7 @@ export default function CadView({
         // (usually empty) value.
         const tokenNow = useStore.getState().accessToken
         loadedModel = await load(filepath, viewer, onProgress,
-          (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, tokenNow,
+          (gitpath && gitpath === 'external') ? false : isOpfsAvailable, publishOpfsFile, tokenNow,
           // Route provenance, which the loader can't recover from `filepath`
           // alone: /v/local-only/<id> and /v/p/<id> give the same URL (#1956).
           {isUploadedRoute: routeResult.isUploadedFile === true, onIndexed, onFirstMesh, signal})
@@ -1344,12 +1104,14 @@ export default function CadView({
       // onViewerInternal's catch stamps it onto Sentry via
       // attachLoadFailureContext before capturing. The captured error (or
       // null on success) drives the end-of-load grace snackbar.
-      endLoadProgress(loadError, {isAborted: isAborted(signal)})
-      setIsModelLoading(false)
+      endLoadProgress(loadError, {isAborted: isAborted(signal), reporter})
+      job.hideLoading()
     }
     // `load` checks the signal itself, up to its last await; this is the
-    // synchronous step from there to the store.
-    throwIfLoadAborted(signal)
+    // synchronous step from there to the store, and the check for a load
+    // that could not be stopped (a mesh parse) or had no signal (the kill
+    // switch) but whose session the user has left meanwhile.
+    job.throwIfLeft()
 
 
     // Fix for https://github.com/bldrs-ai/Share/issues/91
@@ -1360,226 +1122,61 @@ export default function CadView({
     // leads to undefined refs e.g. in prePickIfcItem.  The id should
     // always be 0.
     loadedModel.modelID = 0
-    setModel(loadedModel)
-    // A volume (a CT/MR scan, `loader/nrrd.js`) has no elements and no
-    // properties, so its Properties panel would only ever be empty. Set on
-    // every load, so the next model gets it back.
-    setIsPropertiesEnabled(!isVolumeModel(loadedModel))
+    job.set({
+      model: loadedModel,
+      // A volume (a CT/MR scan, `loader/nrrd.js`) has no elements and no
+      // properties, so its Properties panel would only ever be empty. Set on
+      // every load, so the next model gets it back.
+      isPropertiesEnabled: !isVolumeModel(loadedModel),
+    })
+    // The session owns the engine its model was parsed into: closing the
+    // session (a switch) closes it, and drops the session's hold on it.
+    job.session.bindEngine(loadedModel)
     // For App API.  TODO(pablo): doublecheck this method still works with this
     // arg.. expected a url
-    updateLoadedFileInfo(filepath)
+    updateLoadedFileInfo(job)
 
-    viewer.context.getScene().add(loadedModel)
-    // First geometry in the scene, for formats with no progressive preview
-    // (and GLB cache hits): their one-shot arrival is their first mesh. A
-    // no-op when ProgressiveLoadSession already recorded an earlier one.
-    reportFirstMesh()
-
-    // Size the dolly range + near/far clip planes to the model *before*
-    // any camera pose is applied, so the first frame is already drawn
-    // with the right frustum. fitModelToFrame does this too, but a
-    // permalink with a `#c:` camera hash skips the fit — and then the
-    // model renders against the default far = 2000 plane and the first
-    // user input clamps the restored distance to maxDistance = 300
-    // (#1652).
-    viewer.context.fitCameraLimitsToModel(loadedModel)
-
-    const isCamHashSet = onHash(location, viewer.context.getCameraControls())
-    // A user who drove the camera while the model streamed in (open-205
-    // #2043: orbit and zoom are live from the first preview mesh) is looking
-    // at something; framing the whole model now would yank it away. The
-    // limits above are still sized, so the model draws and dollies right.
-    // design/new/in-app-model-switch.md §4.2a.
-    const isCameraTakenDuringLoad = isCameraTakenDuringLoadRef.current
     // Read once, for this load: loadModel is also called outside
     // onViewerInternal's watch (an upload), which must not see this load's.
+    const isCameraTakenDuringLoad = isCameraTakenDuringLoadRef.current
     isCameraTakenDuringLoadRef.current = false
-    if (!isCamHashSet && !isCameraTakenDuringLoad) {
-      // Framing target passed explicitly: the no-arg fallback frames the
-      // last scene child, which is the model only by luck of ordering.
-      viewer.context.fitModelToFrame(loadedModel)
-    }
-
-    // §6e: fit the contact-shadow ground + shadow frustum to the model's
-    // bounds (valid now it's added + framed). Optional-chained: the Jest
-    // viewer mock doesn't define it.
-    viewer.groundModel?.(loadedModel)
-
-    // Framing just ran on outlier-robust bounds (robustBounds.js), and
-    // this repeats that cached measurement. If strays were excluded, say
-    // so: Health line + console warning + grace-snackbar note. After
-    // endLoadProgress by design — it amends the published loadResult.
-    // The traverse guard skips the Jest MockModel, which isn't an
-    // Object3D.
-    if (typeof loadedModel.traverse === 'function') {
-      reportFramingExclusion(robustBoundsFor(loadedModel))
-    }
-
-    // §6e: apply the active render look's materials to the new model, so a
-    // model opened while a non-default look is active still matches.
-    viewer.applyLookToModel?.(loadedModel)
+    placeModelInScene(viewer, loadedModel, {location, isCameraTakenDuringLoad})
 
     // TODO(pablo): centralize capability check somewhere
     if (loadedModel.ifcManager) {
       await viewer.isolator.setModel(loadedModel)
       // Left while the isolator took the model: not an open to count.
-      throwIfLoadAborted(signal)
+      job.throwIfLeft()
     } else {
       console.warn('CadView#loadedModel: model without manager:', loadedModel)
     }
 
-    // Replaces the retired `select_content` event, whose counts were
-    // conflated with homepage visits because the demo model fired it
-    // too. The isRealModelOpen guard keeps that from recurring — see
-    // its doc for why the demo must stay out of this event.
-    // The successfully loaded model replaces the prior engagement window,
-    // including when this load is the bundled demo (which is never tracked).
-    stopModelEngagementRef.current?.()
-    stopModelEngagementRef.current = null
-    // The verdict the real_model_open below reports (load_outcome), read once
-    // so the user's message and GA's count cannot disagree about this load.
-    const loadOutcome = getCompletedLoadOutcome()
-    if (loadOutcome === LOAD_OUTCOMES.NO_GEOMETRY) {
-      // The engine read the file and it has nothing to draw (Share#1962): say
-      // so in place of leaving an empty viewer unexplained. Not a failure, so
-      // no captureException and no load_failed; GA still gets the open, as
-      // real_model_open with load_outcome 'no_geometry', and AlertDialog
-      // counts the alert. Once per model: the auth-state and view-settings
-      // effects re-run onViewerInternal for the same route, and the user has
-      // already dismissed it.
-      const noGeometryKey = `no-geometry:${modelIdentity(routeResult, installPrefix)}`
-      if (reportedRefusalRef.current !== noGeometryKey) {
-        reportedRefusalRef.current = noGeometryKey
-        setAlert(noGeometryAlert())
-      }
-    }
-    // Every way an upload opens (picker, drop, reload, recents) lands here,
-    // so this one seam keeps the ledger complete. Deliberately outside the
-    // isRealModelOpen guard: it is bookkeeping, not an analytics send, and
-    // the same storage id derivation as the loader (Loader.js#uploadStorageId).
-    if (routeResult.isUploadedFile === true) {
-      recordLocalUpload(routeResult.filepath.split('/').pop())
-    }
-    // Each open has its own number, so only a reload of this same open (a
-    // theme toggle, a view-settings change) finds it here already.
-    const openId = modelOpenId(routeResult)
-    const isNewOpen = reportedOpenRef.current !== openId
-    reportedOpenRef.current = openId
-    if (isRealModelOpen(routeResult)) {
-      const eventParams = {
-        content_type: loadedModel.type || 'undefined',
-        // The same helper stamps content_id on model_view below, and on
-        // model_share / model_export elsewhere, so GA counts one model the
-        // same way on every event. Equal to `filepath` above, by design.
-        content_id: modelContentId(routeResult),
-      }
-      // The page's first open, or one switched to in-app
-      // (utils/reportModelOpen.js): splits opens, and with load_failed the
-      // failure rate, by whether a previous model was in this document.
-      const openKind = modelOpenKind(routeResult)
-      if (openKind) {
-        eventParams.open_kind = openKind
-      }
-      // How the load went: the reporter's cross-format snapshot merged with
-      // Conway's engine stats for IFC/STEP, plus the displayed/no_geometry/
-      // unusable verdict. loadTime stays the reporter's wall clock whatever
-      // the engine says; see loadAnalytics#buildOutcomeParams.
-      Object.assign(eventParams, buildOutcomeParams({
-        completedStats: getCompletedLoadStats() ?? undefined,
-        loadStats: loadedModel.loadStats,
-        loadOutcome,
-      }))
-      // Per-user open depth: GA4 has no user-id dimension, so the
-      // client id rides along as an event-scoped custom dimension,
-      // prefix-tagged by getOpenCid so GA4 can't type it as a number.
-      // Absent whenever GA didn't initialize — see analytics#gaClientId.
-      const openCid = getOpenCid()
-      if (openCid) {
-        eventParams[OPEN_CID_PARAM] = openCid
-      }
-      // GA4's own `hour` dimension is in the *property's* timezone, which
-      // says nothing about when a user in Milan or São Paulo actually
-      // works — and the real-opens audience is Europe + Brazil (bizdev
-      // growth-strategy §2). This is their local hour, prefixed so gtag
-      // keeps it in the text slot; see analytics#getLocalHour.
-      eventParams[LOCAL_HOUR_PARAM] = getLocalHour()
-      if (isNewOpen) {
-        sendOpenEvents(routeResult, eventParams)
-      }
-      // The engagement window restarts on every load, a theme rebuild's
-      // too: the stop above ended the last one, and the user is still on
-      // the model.
-      stopModelEngagementRef.current = startModelEngagement({
-        content_type: eventParams.content_type,
-        content_id: eventParams.content_id,
-      })
-    }
+    // The engagement window, the no-geometry alert and the open's analytics:
+    // modelOpenEvents.js.
+    reportModelOpened(routeResult, loadedModel, {
+      installPrefix,
+      refs: {engagementStop: stopModelEngagementRef, refusal: reportedRefusalRef, open: reportedOpenRef},
+      setAlert,
+      getIsAuthenticated: () => isAuthenticatedRef.current,
+    })
 
     return loadedModel
   }
 
 
   /**
-   * The events that count an open of a real model, sent once per open
-   * (reportedOpenRef; routes/modelOpen.ts): not again for a theme toggle or a
-   * view-settings change, which reload the same open.
-   *
-   * @param {object} routeResult the route loaded, the store's modelPath
-   * @param {object} eventParams real_model_open's params, assembled by loadModel
-   */
-  function sendOpenEvents(routeResult, eventParams) {
-    gtagEvent(FUNNEL_EVENTS.REAL_MODEL_OPEN, eventParams)
-    // The normalized twin, beside — never instead of — real_model_open,
-    // which Ads and the dashboard key on. Sent once auth settles, with the
-    // auth state of then (privacy/modelActionTracking.js says why: a
-    // non-GitHub load doesn't wait for auth, and the auth-change reload is
-    // deduped). The route is read now, so a later navigation can't
-    // relabel it. Always `gate: 'none'`: a view a soft gate let through
-    // over the limit is still an ungated view; the over-limit fact is
-    // model_share {gate: 'soft'}. Not awaited.
-    trackModelActionWhenAuthSettled(MODEL_ACTIONS.VIEW, {
-      gate: MODEL_GATES.NONE,
-      ...modelRouteSource(routeResult),
-      contentId: eventParams.content_id,
-      getIsAuthenticated: () => isAuthenticatedRef.current,
-    })
-    // Engaged-use conversions (Share#1960). Same real-open gate as the
-    // event above; keyed by open, so a theme/view-settings reload of the
-    // same model is not a second open and an in-app return to it is.
-    // Resolves to the events it sent and never rejects, so it is not
-    // awaited.
-    trackEngagementOnOpen(Date.now(), modelOpenId(routeResult))
-    // Give a chip with non-zero errors/warnings a Sentry event to link
-    // to (issue #1767). Gated on the very counts just assembled above,
-    // because those are what colour the chip: Conway's own
-    // stats_errorCount / stats_warningCount when it supplies them
-    // (conway#740; it does not yet), else the page-wide console tee the
-    // reporter publishes as stats_pageErrorCount / stats_pageWarnCount.
-    // Siting the call here is also what keeps it to real, successful
-    // opens. See loadProgress#captureLoadDiagnostics.
-    captureLoadDiagnostics({
-      errorCount: eventParams.stats_errorCount ?? eventParams.stats_pageErrorCount,
-      warningCount: eventParams.stats_warningCount ?? eventParams.stats_pageWarnCount,
-      contentId: eventParams.content_id,
-      contentType: eventParams.content_type,
-    })
-  }
-
-
-  /**
    * Analyze loaded IFC model to configure UI elements.
    *
+   * @param {object} job the run (see onViewerInternal)
    * @param {object} m IFCjs loaded model.
-   * @param {Function} isLoadSuperseded True once the user has moved to another
-   *   model; see onViewerInternal.
    * @param {object|null} [earlyTree] The tree already brought up from this
    *   load's index (open-205 #2029), or null to read it from `m` now.
    * @param {object} [options]
    * @param {boolean} [options.mayWalk] False when `m`'s tree must not be read
-   *   here: the load is superseded, so nothing it reads would be installed, or
-   *   its index already walked this model's tree (onViewerInternal).
+   *   here: its index's walk failed, so the load's end reports that instead
+   *   (onViewerInternal).
    */
-  async function onModel(m, isLoadSuperseded, earlyTree = null, {mayWalk = true} = {}) {
+  async function onModel(job, m, earlyTree = null, {mayWalk = true} = {}) {
     assertDefined(m)
     debug().log('CadView#onModel', m)
     // TODO(pablo): centralize capability check somewhere
@@ -1587,8 +1184,13 @@ export default function CadView({
       console.warn('CadView#onModel, model without manager:', m)
       return
     }
-    window.ondblclick = canvasDoubleClickHandler
-    setKeydownListeners(viewer, selectItemsInScene)
+    // Bound for this session: closing it unbinds them, so they never reach
+    // the next model's page through this render's viewer (modelSession.js).
+    job.ifCurrent(() => {
+      job.session.bindWindowHandler('ondblclick', canvasDoubleClickHandler)
+      setKeydownListeners(viewer, selectItemsInScene)
+      job.session.bindWindowHandler('onkeydown', window.onkeydown)
+    })
     // Everything below here needs the rootElt, which may not be available
     // if we can't read the full model structure.
     if (earlyTree === null) {
@@ -1599,7 +1201,7 @@ export default function CadView({
       if (rootElt === null) {
         return
       }
-      await installModelTree(m, rootElt, isLoadSuperseded)
+      await installModelTree(job, m, rootElt)
     }
     // Load-time property reads are done: drop Conway's materialised
     // entity/descriptor caches (the 'names' walk + type sweep touched
@@ -1715,20 +1317,22 @@ export default function CadView({
    * Writes nothing once the user has moved to another model. The check sits
    * after the one await and before the first write, so every write then lands
    * in one synchronous run and none can republish this model's tree under the
-   * next (codex review on #2037). A superseded load is not cancelled (#2019),
-   * so it does reach here.
+   * next (codex review on #2037). The store's half is one `job.set`, so the
+   * panels see the tree and its model together.
    *
+   * @param {object} job the run (see onViewerInternal)
    * @param {object} m the model the tree was read from
    * @param {object} rootElt from readModelTree
-   * @param {Function} isLoadSuperseded see onViewerInternal
    * @param {object} [options]
+   * @param {Function} [options.isStale] True when the tree must not go up for
+   *   another reason than the job (the load has failed; onViewerInternal)
    * @param {object} [options.indexedModel] The model at its index, published
-   *   with the tree it was read from (open-205 #2029): before the tree, so the
-   *   panels never pair this tree with the model shown before it
+   *   with the tree it was read from (open-205 #2029), so the panels never
+   *   pair this tree with the model shown before it
    *   (store/IFCSlice.js#selectReadModel).
    * @return {Promise<boolean>} whether the tree was installed
    */
-  async function installModelTree(m, rootElt, isLoadSuperseded, {indexedModel = null} = {}) {
+  async function installModelTree(job, m, rootElt, {isStale = () => false, indexedModel = null} = {}) {
     // Root display name, in preference order: real properties from the
     // parser (IFC project Name/LongName), then whatever the tree root
     // already carries (convertToShareModel's composed
@@ -1739,7 +1343,7 @@ export default function CadView({
     // anything is written; applied after the search index is built, which
     // indexes the root under the name it came with, as it always has.
     const tmpProps = await viewer.getProperties(0, rootElt.expressID)
-    if (isLoadSuperseded()) {
+    if (!job.isCurrent() || isStale()) {
       return false
     }
     setupLookupAndParentLinks(rootElt, elementsById)
@@ -1751,14 +1355,14 @@ export default function CadView({
       rootElt.Name = {value: 'Model'}
       rootElt.LongName = {value: 'Model'}
     }
-    if (indexedModel !== null) {
-      setIndexedModel(indexedModel)
-    }
     // Ids are only unique within one file — transient anonymous-geometry
     // rows from the previous model must not leak into this tree.
     useStore.getState().clearTransientTreeNodes()
-    setRootElement(rootElt)
-    setElementTypesMap(groupElementsByTypes(rootElt))
+    job.set({
+      ...(indexedModel !== null ? {indexedModel} : {}),
+      rootElement: rootElt,
+      elementTypesMap: groupElementsByTypes(rootElt),
+    })
     return true
   }
 
@@ -1766,13 +1370,24 @@ export default function CadView({
   /**
    * Take down a tree brought up at the index of a load that then failed
    * (open-205 #2029): with no model behind it, its rows would select, search
-   * and show properties for a model that never arrived.
+   * and show properties for a model that never arrived. Only while the run
+   * is current: otherwise the tree up is another model's.
+   *
+   * @param {object} job the run whose tree it is (see onViewerInternal)
    */
-  function forgetIndexedTree() {
-    setIndexedModel(null)
-    setRootElement(null)
-    setElementTypesMap([])
-    searchIndex.clearIndex()
+  function forgetIndexedTree(job) {
+    if (job.isCurrent()) {
+      forgetIndexedTreeState()
+    }
+  }
+
+
+  /**
+   * The writes of forgetIndexedTree: the store's (store/modelState.js) and
+   * the view's element lookup.
+   */
+  function forgetIndexedTreeState() {
+    forgetIndexedTreeInStore()
     for (const id of Object.keys(elementsById)) {
       delete elementsById[id]
     }
@@ -2909,11 +2524,15 @@ export default function CadView({
 
   /**
    * handles updating the stored file meta data for all cases except local files.
+   *
+   * @param {object} job the run whose model it is (see onViewerInternal)
    */
-  function updateLoadedFileInfo() {
-    setLoadedFileInfo({
-      source: 'share', info: {
-        url: 'Foo',
+  function updateLoadedFileInfo(job) {
+    job.set({
+      loadedFileInfo: {
+        source: 'share', info: {
+          url: 'Foo',
+        },
       },
     })
     /*
@@ -2940,33 +2559,6 @@ export default function CadView({
   // The debug panels (Perf + Render) behind the backtick key, in prod too
   // (viewer/debugPanels.js; the dock is Components/DebugDock).
   useEffect(() => installDebugPanelsShortcut(), [])
-
-
-  // Give up this CadView's load when it unmounts. An in-app open across route
-  // families (`/v/p`, `/v/gh` and `/v/local-only` sit under one parent route;
-  // `/v/u` and `/v/g` do not, ShareRoutes.jsx) remounts Share and CadView,
-  // and the next CadView builds a new viewer and disposes the store's one.
-  // Left running, this instance's load streamed into that disposed viewer and
-  // failed at its scene: an alert, a Sentry capture, and `load_failed`, over
-  // the model the user had just opened (found by step F's burn-in,
-  // GoogleDriveConnect.spec.ts: a Drive pick from a hosted model). With the
-  // kill switch on there is no controller, so this does nothing. Checked a
-  // microtask later, defensively: StrictMode (index.jsx) runs this cleanup
-  // and the effect again at once in development, which is no unmount, and a
-  // load already started then (a remount into the store's viewer) would be
-  // given up and started again for nothing.
-  const isMountedRef = useRef(false)
-  useEffect(() => {
-    isMountedRef.current = true
-    return () => {
-      isMountedRef.current = false
-      queueMicrotask(() => {
-        if (!isMountedRef.current) {
-          abortLoadInFlight()
-        }
-      })
-    }
-  }, [])
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -2998,26 +2590,12 @@ export default function CadView({
       return
     }
     viewerBuiltForRef.current = {modelPath, customViewSettings}
-    // A different model starts a new open, so its failures count again even
-    // when the model in between never touched the dedupe refs (A fails, B
-    // loads, A fails). Reruns of the SAME model (customViewSettings) keep
-    // them, so one failed open stays one event. Share#1961 codex review.
-    const dedupeKey = modelIdentity(modelPath, installPrefix)
-    if (dedupeModelKeyRef.current !== dedupeKey) {
-      dedupeModelKeyRef.current = dedupeKey
-      reportedRefusalRef.current = null
-      reportedLoadFailureRef.current = null
-      // Only on an identity change: re-runs for the same model (view
-      // settings) keep this state, as they keep the dedupe refs above.
-      const wasIndexed = useStore.getState().indexedModel !== null
-      // A pick on the left load's preview (#2043) is a selection in a model
-      // the user has left, whether or not that load had reached its index.
-      const wasPickedInPreview = previewPickedRef.current
-      forgetLoadedModel()
-      if (wasIndexed || wasPickedInPreview) {
-        forgetIndexedSelection()
-      }
-    }
+    // The model's session. A different model closes the active one (step 1:
+    // a switch is a close; its load is aborted under the in-app switch) and
+    // forgets its state before anything renders with it (forgetLoadedModel).
+    // Re-runs for the SAME model (view settings) keep the session and that
+    // state, and so one failed open stays one event (Share#1961).
+    sessionHost.open(modelIdentity(modelPath, installPrefix))
     onModelPath()
   }, [modelPath, customViewSettings])
 

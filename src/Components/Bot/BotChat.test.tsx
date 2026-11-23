@@ -826,7 +826,7 @@ describe('BotChat', () => {
     }
   })
 
-  it('says so when a turn hits the step cap', async () => {
+  it('says so when a turn hits the step cap and the provider ignored tool_choice none', async () => {
     let n = 0
     getServer().use(http.post(`${process.env.OPENROUTER_BASE_URL}/api/v1/chat/completions*`, () =>
       new Response(sseText(toolCalls([{id: `q${n++}`, name: 'model_query', args: {}}])),

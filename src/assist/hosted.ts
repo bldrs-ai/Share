@@ -16,6 +16,9 @@
  *    Bearer from now on (signed out only)
  *  - `x-bldrs-ai-resume-at`: on an `ai_credits_exhausted` refusal, when the
  *    budget admits again (ISO-8601 UTC); also `resumeAt` in the body
+ *  - `x-bldrs-ai-max-body-bytes`: the largest request body this caller's tier
+ *    may send, env overrides included, so the loop sizes the next request to
+ *    it (loop.ts `boundStepMessages`)
  * and, on a refusal, a JSON body `{error: {code: 'ai_…', message}, tier, resumeAt?}`.
  */
 import {AssistError, AssistErrorCode} from './assistError'
@@ -36,6 +39,8 @@ export interface HostedMeta {
   limit: number | null
   /** this reply comes from the free models because the breaker tripped */
   overflow: boolean
+  /** the largest request body this caller's tier may send, in bytes; null when not said */
+  maxBodyBytes: number | null
 }
 
 
@@ -53,6 +58,7 @@ export function hostedMetaOf(headers: Headers): HostedMeta {
     used: number('x-bldrs-ai-used'),
     limit: number('x-bldrs-ai-limit'),
     overflow: headers.get('x-bldrs-ai-overflow') === 'free_models',
+    maxBodyBytes: number('x-bldrs-ai-max-body-bytes'),
   }
 }
 

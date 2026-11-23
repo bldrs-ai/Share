@@ -11,7 +11,10 @@ import {
 import {createMemoryConversationStore} from './conversation'
 import {
   DEFAULT_MAX_STEPS,
+  FINAL_STEP_NOTE,
   FULL_RESULT_TURNS,
+  MAX_STEP_BYTES,
+  boundStepMessages,
   MAX_WIRE_CHARS,
   UNDO_SETTLE_MS,
   createAssist,
@@ -123,16 +126,23 @@ function setup(overrides = {}, reply = undefined) {
   const fake = fakeRegistry(overrides.extraProviders)
   const store = createMemoryConversationStore()
   let key = KEY
+  const transport = openRouterTransport({getKey: () => key, model: 'mock/model', baseURL: BASE_URL,
+    appUrl: 'https://bldrs.ai', appTitle: 'Bldrs Share', fetch: fetchFn})
+  const capReads = []
   const assist = createAssist({
-    transport: openRouterTransport({getKey: () => key, model: 'mock/model', baseURL: BASE_URL,
-      appUrl: 'https://bldrs.ai', appTitle: 'Bldrs Share', fetch: fetchFn}),
+    // `maxRequestBytes` stands in for the hosted relay's per-tier body cap.
+    transport: overrides.maxRequestBytes === undefined ? transport :
+      {...transport, maxRequestBytes: () => {
+        capReads.push(overrides.maxRequestBytes)
+        return Promise.resolve(overrides.maxRequestBytes)
+      }},
     registry: fake.registry,
     store,
     instructions: 'Use the tools.',
     maxRetries: 0,
     ...overrides,
   })
-  return {session: assist.open('c1'), requests, store, setKey: (k) => {
+  return {session: assist.open('c1'), requests, store, capReads, setKey: (k) => {
     key = k
   }, ...fake}
 }
@@ -476,16 +486,161 @@ describe('assist/loop', () => {
     })
   })
 
-  it('stops after DEFAULT_MAX_STEPS model calls when every one calls a tool, and says so', async () => {
-    expect(DEFAULT_MAX_STEPS).toBe(8)
+  // The model here honours tool_choice the way OpenRouter's providers do: with
+  // tools off it can only answer.
+  const loopUntilToolsOff = () => {
     let n = 0
-    const {session, requests} = setup({}, () => ({
+    return (body) => (body.tool_choice === 'none' ?
+      {chunks: textReply('Here is what I found so far; framing the wall is left.'), delayMs: 0} :
+      {chunks: toolCalls([{id: `q${n++}`, name: 'model_query', args: {ifcType: 'IfcWall'}}]), delayMs: 0})
+  }
+
+  it('turns tools off for the last of DEFAULT_MAX_STEPS steps, so a long turn ends in an answer', async () => {
+    expect(DEFAULT_MAX_STEPS).toBe(24)
+    const {session, requests} = setup({}, loopUntilToolsOff())
+    const events = await collect(session.send('a long multi-part request'))
+
+    expect(requests).toHaveLength(DEFAULT_MAX_STEPS)
+    // Every step before the last may call tools; the last may not, and is told why.
+    requests.slice(0, -1).forEach(({body}) => expect(body.tool_choice).not.toBe('none'))
+    const last = requests.at(-1).body
+    expect(last.tool_choice).toBe('none')
+    // The system message's content may be a string or an array of text parts.
+    const systemText = (body) => JSON.stringify(body.messages[0].content)
+    expect(systemText(last)).toContain(FINAL_STEP_NOTE)
+    expect(systemText(requests[0].body)).not.toContain(FINAL_STEP_NOTE)
+
+    expect(textOf(events)).toBe('Here is what I found so far; framing the wall is left.')
+    expect(ofType(events, 'step-limit')).toEqual([])
+    expect(events.at(-1)).toEqual({type: 'done', finishReason: 'stop'})
+  })
+
+  it('still says it stopped when a provider ignores tool_choice none on the last step', async () => {
+    let n = 0
+    const {session, requests} = setup({maxSteps: 3}, () => ({
       chunks: toolCalls([{id: `q${n++}`, name: 'model_query', args: {ifcType: 'IfcWall'}}]), delayMs: 0,
     }))
     const events = await collect(session.send('loop forever'))
-    expect(requests).toHaveLength(DEFAULT_MAX_STEPS)
-    expect(ofType(events, 'step-limit')).toEqual([{type: 'step-limit', steps: DEFAULT_MAX_STEPS}])
+    expect(requests).toHaveLength(3)
+    expect(ofType(events, 'step-limit')).toEqual([{type: 'step-limit', steps: 3}])
     expect(events.at(-1)).toEqual({type: 'done', finishReason: 'tool-calls'})
+  })
+
+  it('answers on a one-step cap\'s only step too, so the turn never ends on a tool call', async () => {
+    const {session, requests} = setup({maxSteps: 1}, loopUntilToolsOff())
+    const events = await collect(session.send('one step'))
+    expect(requests).toHaveLength(1)
+    expect(requests[0].body.tool_choice).toBe('none')
+    expect(ofType(events, 'step-limit')).toEqual([])
+    expect(events.at(-1)).toEqual({type: 'done', finishReason: 'stop'})
+  })
+
+  describe('bounding one step\'s request (Codex on #2305)', () => {
+    const toolMessage = (id, value) => ({role: 'tool', content: [
+      {type: 'tool-result', toolCallId: id, toolName: 'model_query', output: {type: 'text', value}}]})
+    const callMessage = (id) => ({role: 'assistant', content: [
+      {type: 'tool-call', toolCallId: id, toolName: 'model_query', input: {}}]})
+    const outputs = (messages) => messages.filter((m) => m.role === 'tool').map((m) => m.content[0].output.value)
+
+    it('leaves a request under budget alone', () => {
+      expect(boundStepMessages([{role: 'user', content: 'hi'}, toolMessage('a', 'x')], 1000)).toBeUndefined()
+    })
+
+    it('stubs this turn\'s older results oldest first, keeping the newest and earlier turns as they were', () => {
+      const big = 'y'.repeat(400)
+      const messages = [
+        {role: 'user', content: 'earlier'}, callMessage('p'), toolMessage('p', 'earlier turn result'),
+        {role: 'user', content: 'now'},
+        callMessage('a'), toolMessage('a', big),
+        callMessage('b'), toolMessage('b', big),
+        callMessage('c'), toolMessage('c', big),
+      ]
+      const bounded = boundStepMessages(messages, JSON.stringify(messages).length - 300)
+      const [earlier, a, b, c] = outputs(bounded)
+      expect(earlier).toBe('earlier turn result')
+      expect(a).toMatch(/earlier step, omitted/)
+      expect(b).toBe(big) // one stub was enough
+      expect(c).toBe(big) // the newest step's result is never stubbed
+      expect(outputs(messages)[1]).toBe(big) // the input is not mutated
+    })
+
+    it('then stubs earlier turns\' results, then drops the oldest turns, keeping the current one', () => {
+      const big = 'y'.repeat(2000)
+      const messages = [
+        {role: 'user', content: 'first'}, callMessage('p'), toolMessage('p', big),
+        {role: 'user', content: 'second'}, callMessage('q'), toolMessage('q', big),
+        {role: 'user', content: 'now'}, callMessage('a'), toolMessage('a', big),
+      ]
+      const bytes = (list) => new TextEncoder().encode(JSON.stringify(list)).length
+      // Room for the current turn whole, plus a little: stubbing alone fits.
+      const stubbedOnly = boundStepMessages(messages, bytes(messages.slice(6)) + 900)
+      expect(stubbedOnly).toHaveLength(messages.length)
+      expect(outputs(stubbedOnly)).toEqual([expect.stringMatching(/earlier turn/), expect.stringMatching(/earlier turn/), big])
+      // Room for the current turn only: the earlier turns go, whole.
+      const current = boundStepMessages(messages, bytes(messages.slice(6)))
+      expect(current).toEqual(messages.slice(6))
+      expect(current[0].role).toBe('user')
+    })
+
+    it('drops the oldest turns when a request is over the message count, though its bytes fit', () => {
+      const turn = (n) => [{role: 'user', content: `q${n}`}, callMessage(`c${n}`), toolMessage(`c${n}`, 'ok')]
+      const messages = [...turn(1), ...turn(2), ...turn(3)]
+      const bounded = boundStepMessages(messages, 1e9, 7)
+      expect(bounded).toEqual([...turn(2), ...turn(3)])
+      // Count alone never stubs: the kept results are whole.
+      expect(outputs(bounded)).toEqual(['ok', 'ok'])
+    })
+
+    it('fits every request of a long hosted turn under the transport\'s 64 KiB cap', async () => {
+      const CAP = 65536
+      const bigProvider = {
+        id: 'big',
+        tools: () => [{
+          name: 'big.read', description: 'A large read.', annotations: {readOnly: true},
+          inputSchema: {type: 'object', properties: {}, additionalProperties: false},
+          run: () => ({content: 'ü'.repeat(12_000), echo: 'Read a lot'}), // 2 bytes a character
+        }],
+      }
+      let n = 0
+      const {session, requests, capReads} = setup({maxSteps: 6, maxRequestBytes: CAP, extraProviders: [bigProvider]}, (body) =>
+        (body.tool_choice === 'none' ?
+          {chunks: textReply('Done reading.'), delayMs: 0} :
+          {chunks: toolCalls([{id: `b${n++}`, name: 'big_read', args: {}}]), delayMs: 0}))
+      const events = await collect(session.send('read everything'))
+      expect(requests).toHaveLength(6)
+      requests.forEach(({body}) => expect(new TextEncoder().encode(JSON.stringify(body)).length).toBeLessThanOrEqual(CAP))
+      expect(textOf(events)).toBe('Done reading.')
+      // Asked before every step, so a cap the relay names mid-turn applies to the rest.
+      expect(capReads).toHaveLength(6)
+    })
+
+    it('keeps a long turn\'s requests under MAX_STEP_BYTES and the stored turn whole', async () => {
+      const BIG = 30_000
+      const bigProvider = {
+        id: 'big',
+        tools: () => [{
+          name: 'big.read', description: 'A large read.', annotations: {readOnly: true},
+          inputSchema: {type: 'object', properties: {}, additionalProperties: false},
+          run: () => ({content: 'z'.repeat(BIG), echo: 'Read a lot'}),
+        }],
+      }
+      let n = 0
+      const steps = 16
+      const {session, requests, store} = setup({maxSteps: steps, extraProviders: [bigProvider]}, (body) =>
+        (body.tool_choice === 'none' ?
+          {chunks: textReply('Done reading.'), delayMs: 0} :
+          {chunks: toolCalls([{id: `b${n++}`, name: 'big_read', args: {}}]), delayMs: 0}))
+      await collect(session.send('read everything'))
+      expect(requests).toHaveLength(steps)
+      // Without the bound, the last request would carry 15 results of 30k.
+      const last = requests.at(-1).body
+      expect(new TextEncoder().encode(JSON.stringify(last.messages)).length).toBeLessThanOrEqual(MAX_STEP_BYTES)
+      expect(JSON.stringify(last.messages)).toMatch(/earlier step, omitted/)
+      const stored = await store.load('c1')
+      const storedResults = stored.filter((m) => m.role === 'tool')
+      expect(storedResults).toHaveLength(steps - 1)
+      storedResults.forEach((m) => expect(JSON.stringify(m)).not.toMatch(/omitted/))
+    })
   })
 
   describe('a tool still running when the user stops or undoes', () => {

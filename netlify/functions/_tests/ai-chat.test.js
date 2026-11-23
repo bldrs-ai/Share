@@ -587,6 +587,8 @@ describe('ai-chat', () => {
       expect(res.status).toBe(400)
       expect(await res.json()).toMatchObject({error: {code: 'ai_bad_request'}, tier: 'anonymous'})
       expect(res.headers.get('x-bldrs-ai-tier')).toBe('anonymous')
+      // The refusal says the cap, so the client's next request can fit it.
+      expect(res.headers.get('x-bldrs-ai-max-body-bytes')).toBe('65536')
       expect(fetchSpy).not.toHaveBeenCalled()
       expect(fake.requests).toEqual([])
       expect(Sentry.captureMessage).not.toHaveBeenCalled()
@@ -600,7 +602,10 @@ describe('ai-chat', () => {
       expect(Buffer.byteLength(JSON.stringify(atCap))).toBe(65536)
       expect((await call({body: atCap})).status).toBe(200)
       process.env.AI_MAX_BODY_BYTES_ANONYMOUS = String(128 * 1024)
-      expect((await call({body: bigBody()})).status).toBe(200)
+      const overridden = await call({body: bigBody()})
+      expect(overridden.status).toBe(200)
+      // The client learns an override from here rather than its own default (Codex on #2305).
+      expect(overridden.headers.get('x-bldrs-ai-max-body-bytes')).toBe(String(128 * 1024))
     })
 
     it('free has its own cap; Pro keeps the relay\'s 512 KiB', async () => {
@@ -614,6 +619,7 @@ describe('ai-chat', () => {
       expect((await free.json()).tier).toBe('free')
       const pro = await call({bearer: 'auth0-token-pro', body: bigBody()})
       expect(pro.headers.get('x-bldrs-ai-tier')).toBe('pro')
+      expect(pro.headers.get('x-bldrs-ai-max-body-bytes')).toBe(String(MAX_BODY_BYTES))
       expect(pro.status).toBe(200)
     })
 

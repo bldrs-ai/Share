@@ -2,6 +2,22 @@ import {isVisibleInitially} from '../Components/NavTree/hashState'
 
 
 /**
+ * The NavTree's per-model state: its expansion is a set of one model's
+ * element ids and type names (open-205 #2019; see IFCSlice#ifcModelState).
+ *
+ * @return {object} fresh defaults
+ */
+export function navTreeModelState() {
+  return {
+    defaultExpandedElements: [],
+    defaultExpandedTypes: [],
+    expandedElements: [],
+    expandedTypes: [],
+  }
+}
+
+
+/**
  * NavTree store.
  *
  * @param {Function} set
@@ -13,16 +29,14 @@ export default function createNavTreeSlice(set, get) {
     isNavTreeEnabled: true,
     setNavTreeEnabled: (isEnabled) => set(() => ({isNavTreeEnabled: isEnabled})),
 
-    defaultExpandedElements: [],
+    ...navTreeModelState(),
+
     setDefaultExpandedElements: (elts) => set(() => ({defaultExpandedElements: elts})),
 
-    defaultExpandedTypes: [],
     setDefaultExpandedTypes: (types) => set(() => ({defaultExpandedTypes: types})),
 
-    expandedElements: [],
     setExpandedElements: (elts) => set(() => ({expandedElements: elts})),
 
-    expandedTypes: [],
     setExpandedTypes: (types) => set(() => ({expandedTypes: types})),
 
     isNavTreeVisible: isVisibleInitially(),

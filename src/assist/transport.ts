@@ -21,6 +21,15 @@ export interface Transport {
    * @throws {AssistError} 'no_key' when the user hasn't given one
    */
   model(): LanguageModel
+  /**
+   * The largest request body, in bytes, this transport takes for the request
+   * it is about to send, or undefined for no cap of its own. The loop asks
+   * before every step and fits that step's request under it (loop.ts
+   * `boundStepMessages`): the hosted relay refuses a body over its tier's cap
+   * (ai-chat.js `maxBodyBytesFor`) as `ai_bad_request`. May be async: the
+   * hosted transport checks which credential the request will carry.
+   */
+  maxRequestBytes?(): number | undefined | Promise<number | undefined>
 }
 
 
@@ -104,6 +113,15 @@ export interface HostedTransportOptions {
   anonTokens: {get(): string | null, set(token: string): void}
   /** Called with each relay response's metering headers, before its body. */
   onMeta?: (meta: HostedMeta) => void
+  /**
+   * The body cap to assume for a tier when the relay hasn't said its own
+   * (`x-bldrs-ai-max-body-bytes`): null before any response, or when the next
+   * request will carry a different credential than the last one did (signed
+   * out since, or a token that couldn't be had). Undefined for none. The host
+   * knows the defaults (quota/aiCredits.js); this module stays free of
+   * Share's config.
+   */
+  maxRequestBytesFor?: (tier: string | null) => number | undefined
   /** For tests: a stand-in for `fetch`. */
   fetch?: typeof fetch
 }
@@ -135,13 +153,21 @@ export interface HostedTransportOptions {
  */
 export function hostedTransport(opts: HostedTransportOptions): Transport {
   const baseFetch = opts.fetch ?? globalThis.fetch
-  const relayFetch = async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    let auth: string | null = null
+  // What the relay last said, for the body cap: its tier and cap, and whether
+  // that request went signed in. Null until it has said.
+  let lastTier: string | null = null
+  let lastCap: number | null = null
+  let lastSignedIn: boolean | null = null
+  // A token that can't be had sends the request anonymous.
+  const authToken = async (): Promise<string | null> => {
     try {
-      auth = await opts.getAuthToken()
+      return await opts.getAuthToken()
     } catch {
-      auth = null
+      return null
     }
+  }
+  const relayFetch = async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const auth = await authToken()
     const bearer = auth ?? opts.anonTokens.get()
     const headers = new Headers(init?.headers)
     headers.delete('authorization')
@@ -155,7 +181,14 @@ export function hostedTransport(opts: HostedTransportOptions): Transport {
       opts.anonTokens.set(minted)
     }
     try {
-      opts.onMeta?.(hostedMetaOf(res.headers))
+      const meta = hostedMetaOf(res.headers)
+      // Signing in or out changes these; the next response says so.
+      if (meta.tier) {
+        lastTier = meta.tier
+        lastCap = meta.maxBodyBytes
+        lastSignedIn = auth !== null
+      }
+      opts.onMeta?.(meta)
     } catch {
       // The host's display of the meta must not fail the turn.
     }
@@ -176,6 +209,17 @@ export function hostedTransport(opts: HostedTransportOptions): Transport {
         fetch: relayFetch as typeof fetch,
       })
       return provider.chat(typeof opts.model === 'function' ? opts.model() : opts.model)
+    },
+    // The cap the relay named holds only while the next request carries the
+    // same kind of credential: a sign-out, or an Auth0 token that can't be
+    // refreshed (the request then goes anonymous, `authToken`), changes the
+    // tier before the relay can say so (Codex on #2305).
+    maxRequestBytes: async () => {
+      const signedIn = (await authToken()) !== null
+      if (lastSignedIn !== null && signedIn !== lastSignedIn) {
+        return opts.maxRequestBytesFor?.(null)
+      }
+      return lastCap ?? opts.maxRequestBytesFor?.(lastTier)
     },
   }
 }
@@ -203,5 +247,6 @@ export function selectTransport(choose: () => Transport): Transport {
       current = choose()
       return current.model()
     },
+    maxRequestBytes: () => current.maxRequestBytes?.(),
   }
 }

@@ -1540,6 +1540,10 @@ now tracked on #2031, and they come with in-app model switching (#2011):
   checks that the old worker is terminated and the old model collected.
   What comes next is Phase 1b (switch is not close: sessions, `EngineHost`,
   eviction); #2011's body has the step list.
+- **Phase 1b step 1, per-model sessions (#2019), is built** with one live
+  session (in-app-model-switch.md §4.9, `Containers/modelSession.js`); it
+  lists where it differs from §5.2's assumed session interface and the
+  module-level per-load state slice 2 must move first.
 - **Step 4's requirement on step 7 still stands:** an in-app switch must
   await `close()` before it evicts or re-stages the previous model's OPFS
   entry. The switch does not re-stage anything yet.
