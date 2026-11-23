@@ -1,0 +1,70 @@
+{
+  "data": {
+    "id": "qwen/qwen3.7-flash",
+    "name": "Qwen: Qwen3.7 Flash",
+    "created": 1785190561,
+    "architecture": {
+      "tokenizer": "Qwen",
+      "instruct_type": null,
+      "modality": "text+image+video->text",
+      "input_modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ]
+    },
+    "endpoints": [
+      {
+        "name": "Alibaba | qwen/qwen3.7-flash-20260727",
+        "model_id": "qwen/qwen3.7-flash",
+        "model_name": "Qwen: Qwen3.7 Flash",
+        "context_length": 1000000,
+        "pricing": {
+          "prompt": "0.00000003",
+          "completion": "0.00000013",
+          "input_cache_read": "0.000000006",
+          "input_cache_write": "0.000000038",
+          "discount": 0,
+          "overrides": [
+            {
+              "min_prompt_tokens": 32000,
+              "prompt": "0.0000001",
+              "completion": "0.0000004",
+              "input_cache_read": "0.00000002",
+              "input_cache_write": "0.000000125"
+            },
+            {
+              "min_prompt_tokens": 256000,
+              "prompt": "0.0000002",
+              "completion": "0.0000008",
+              "input_cache_read": "0.00000004",
+              "input_cache_write": "0.00000025"
+            }
+          ]
+        },
+        "provider_name": "Alibaba",
+        "tag": "alibaba",
+        "quantization": "unknown",
+        "max_completion_tokens": 65536,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "seed",
+          "presence_penalty",
+          "response_format",
+          "logprobs",
+          "top_logprobs",
+          "tools",
+          "tool_choice"
+        ],
+        "status": 0
+      }
+    ]
+  }
+}

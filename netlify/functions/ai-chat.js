@@ -12,17 +12,27 @@
  *   → 200 text/event-stream, OpenRouter's SSE passed through byte for byte
  *   → 4xx/5xx {error: {code: 'ai_…', message}, tier}
  *
+ *   GET /.netlify/functions/ai-chat?catalogue
+ *   → 200 {source: 'live'|'static', default, free, models: [{id, name, price, tiers}]}
+ *   The model picker's list (#1934, `_lib/aiCatalogue.js`): public, behind
+ *   the same Origin check, and touching no ledger, token or secret. The
+ *   client shows it; what a POST may use is re-checked here per request.
+ *
  * Per request, in order:
  *  1. Config: OPENROUTER_API_KEY and AI_TOKEN_SECRET, or 500 not configured.
  *     First, so the live smoke probe's strict mode sees a missing secret.
  *  2. Body: JSON within MAX_BODY_BYTES, `stream: true`, messages and tools
  *     within their caps (§5 step 3). The deployed smoke probe sends `{}` and
  *     gets 400 `ai_bad_request` here, before anything touches an upstream.
+ *     Once the tier is known (3), a signed-out or free body is held to its
+ *     tier's smaller cap too (maxBodyBytesFor), refused the same way.
  *  3. Identity and tier (D5): an Auth0 Bearer → `free` or `pro` from
  *     app_metadata through the Management API (`src/quota/proStatus.js`, the
  *     one Pro definition); anything else is `anonymous`, under a relay-minted
  *     HMAC token (`_lib/aiToken.js`) plus a day-salted IP-hash bucket.
- *  4. Model: the tier's allowlist (`_lib/aiModels.js`), or 400. Roles are
+ *  4. Model: the tier's allowlist (`_lib/aiModels.js`), or for Pro the live
+ *     catalogue (`_lib/aiCatalogue.js`, priced at its endpoints' ceiling at
+ *     pick time), or 400. Roles are
  *     checked (one leading `system` message, then user / assistant / tool;
  *     text only) and the body is rebuilt from a few fields (sanitizedMessages,
  *     the audit above TOOL_CHOICES), so a caller can't set routing, plugins,
@@ -34,9 +44,14 @@
  *  5. Reserve (D4, `_lib/aiLedger.js`): an upper bound on the request's cost
  *     (reservationMicro says why it is one) against the
  *     identity's budget, the IP bucket (anonymous), and the tier's global
- *     daily breaker (anonymous, free). A tripped breaker overflows the
- *     request to the free models rather than refusing it (§6 path 3), with
- *     `x-bldrs-ai-overflow: free_models` so the tray can say so.
+ *     daily breaker (anonymous, free). The identity and IP budgets of
+ *     anonymous and free are soft, admitted while under their limit; the
+ *     breakers and Pro are strict (bucketsFor says why). A tripped breaker
+ *     overflows the request to the free models rather than refusing it (§6
+ *     path 3), with `x-bldrs-ai-overflow: free_models` so the tray can say
+ *     so. An exhausted budget is a 402 that says when it will admit again
+ *     (`resumeAt`, body and `x-bldrs-ai-resume-at`), so the panel can pause
+ *     the turn until then.
  *  6. Stream upstream SSE through, watching for the final `usage.cost`
  *     (`_lib/aiSse.js`), then settle every hold to it. A client that hangs
  *     up doesn't stop the read: the upstream bills the whole generation
@@ -53,9 +68,17 @@
  * OpenRouter unreachable, or the connection lost after sending; a settle
  * above its reservation; a settle that still failed after its retries
  * (`settle_failed`, with a reconciliation record left in the ledger); the
- * ledger unavailable. An exhausted budget,
+ * ledger unavailable; OpenRouter's catalogue answering in a shape the
+ * picker can't read, or a 4xx (`catalogue_broken`: our reader or URL is
+ * wrong). An exhausted budget, a body past its tier's cap,
  * the concurrency cap and a busy free pool are expected and go to the user
- * only (the client sends `quota_limit_reached` to GA for the first).
+ * only (the client sends `quota_limit_reached` to GA for the first). A soft
+ * budget settling past its limit is the designed overshoot, not a report.
+ * Neither is a picked model refused (another tier's, unlisted or unpriced),
+ * the catalogue unreachable or 5xx (the picker falls back to the curated
+ * table), or a picked catalogue model answering 404 under deny (the ZDR
+ * filter is a proxy for deny, so that is the user picking another, not a
+ * fix): each is logged only.
  *
  * Built as a v2 function because only v2 can stream (§5 "Vehicle"); Netlify
  * bundles v2 functions with nft whatever netlify.toml says, and
@@ -72,13 +95,16 @@ import {shareAssistInstructions} from '../../src/viewer/tools/assistInstructions
 import {getUserAppMetadata, verifyAuth0Bearer} from './_lib/auth0.js'
 import {
   LedgerUnavailableError,
+  latestResumeAt,
   recordForReconciliation,
   releaseAll,
   reserveAll,
   settleAll,
   utcDay,
 } from './_lib/aiLedger.js'
-import {DEFAULT_MODEL, freeRoute, resolveModel} from './_lib/aiModels.js'
+import {loadCatalogue, pickerModels, resolveCatalogueModel} from './_lib/aiCatalogue.js'
+import {DEFAULT_MODEL, FREE_MODELS_ALIAS, freeRoute, isFreeModel, resolveModel} from './_lib/aiModels.js'
+import {isAllowedOrigin, originHostForLog} from './_lib/aiOrigin.js'
 import {createUsageWatcher} from './_lib/aiSse.js'
 import {hashIp, looksLikeAnonToken, mintAnonToken, verifyAnonToken} from './_lib/aiToken.js'
 
@@ -90,6 +116,7 @@ export const LEDGER_STORE = 'ai-ledger'
 // size is far past any v0 conversation, and the Share registry has ~15 tools.
 const KIB = 1024
 const MAX_BODY_KIB = 512
+/** Every tier's cap, and Pro's own; anonymous and free have smaller ones (maxBodyBytesFor). */
 export const MAX_BODY_BYTES = MAX_BODY_KIB * KIB
 export const MAX_MESSAGES = 200
 export const MAX_TOOLS = 64
@@ -152,7 +179,8 @@ const MAX_TEMPERATURE = 2
  * §7 bans reselling model access), at near-zero cost.
  */
 export const SERVER_PREAMBLE =
-  'You are the assistant inside Bldrs Share, a viewer for building and CAD models. Help the user ' +
+  'You are the assistant inside Bldrs Share, a viewer for 3D models of every kind (buildings, CAD ' +
+  'parts and assemblies, meshes and more). Help the user ' +
   'understand and navigate the model open in their viewer, using the tools you are given. If a request ' +
   'has nothing to do with their model or with Share, say briefly that you can only help with the model.'
 
@@ -179,7 +207,8 @@ const HTTP = Object.freeze({
 // What the client shows comes from the code (src/assist/assistError.ts); the
 // message is for a developer reading the network tab.
 const ERRORS = Object.freeze({
-  ai_method_not_allowed: [HTTP.METHOD_NOT_ALLOWED, 'POST only'],
+  ai_method_not_allowed: [HTTP.METHOD_NOT_ALLOWED, 'POST, or GET ?catalogue'],
+  ai_forbidden_origin: [HTTP.FORBIDDEN, 'This assistant can only be called from Bldrs\' own site'],
   ai_not_configured: [HTTP.INTERNAL_ERROR, 'The hosted assistant is not configured on this deploy'],
   ai_bad_request: [HTTP.BAD_REQUEST, 'Expected a streaming chat completion request within the relay\'s caps'],
   ai_model_not_allowed: [HTTP.BAD_REQUEST, 'That model is not available on this tier'],
@@ -203,8 +232,27 @@ export default async function handler(req, context = {}) {
   const reports = createReporter(context)
   const nowMs = Date.now()
 
-  if (req.method !== 'POST') {
+  const isCatalogue = req.method === 'GET' && new URL(req.url).searchParams.has('catalogue')
+  if (req.method !== 'POST' && !isCatalogue) {
     return errorResponse('ai_method_not_allowed')
+  }
+  // First thing after the method, ahead of the configuration check, token
+  // minting, Auth0, the ledger and the body: a refused request costs
+  // nothing and mints nothing, and a foreign site learns nothing about this
+  // deploy's configuration. A same-origin response sends no
+  // Access-Control-Allow-Origin, so browsers also refuse a cross-site page
+  // READING an answer. See `_lib/aiOrigin.js` for what this does not cover.
+  if (!isAllowedOrigin(req, process.env)) {
+    // An expected abuse refusal: not actionable, so neither Sentry nor GA.
+    // The origin's host only, never an IP, token or body.
+    logOutcome({outcome: 'forbidden_origin', origin: originHostForLog(req)})
+    return errorResponse('ai_forbidden_origin')
+  }
+  if (isCatalogue) {
+    // Before the configuration check: the catalogue is OpenRouter's public
+    // listing, read without Bldrs' key, so a deploy without its secrets can
+    // still show it. Nothing here mints, reads or spends.
+    return catalogueResponse(nowMs, reports)
   }
   const openRouterKey = process.env.OPENROUTER_API_KEY
   const tokenSecret = process.env.AI_TOKEN_SECRET
@@ -214,10 +262,11 @@ export default async function handler(req, context = {}) {
     return errorResponse('ai_not_configured')
   }
 
-  const body = await readRequestBody(req)
-  if (!body) {
+  const read = await readRequestBody(req)
+  if (!read) {
     return errorResponse('ai_bad_request')
   }
+  const {body, bytes} = read
 
   const identity = await identify(req, context, tokenSecret, nowMs)
   if (identity.response) {
@@ -225,8 +274,31 @@ export default async function handler(req, context = {}) {
   }
   const {tier} = identity
   const meta = {tier, token: identity.mintedToken}
+  const limits = aiCreditLimits(process.env)
+  if (bytes > maxBodyBytesFor(tier, limits)) {
+    // The same refusal as a body past MAX_BODY_BYTES, so the panel says the
+    // same thing: the conversation may be too long, start a new chat
+    // (src/assist/hosted.ts maps it to 'bad_request'). Expected, not reported.
+    logOutcome({outcome: 'too_large', tier})
+    return errorResponse('ai_bad_request', meta)
+  }
 
-  let route = resolveModel(body.model ?? DEFAULT_MODEL, tier)
+  const requested = body.model ?? DEFAULT_MODEL
+  let route = resolveModel(requested, tier)
+  if (!route.ok && !isFreeModel(requested)) {
+    // Not curated for this tier: Pro may have picked it from the catalogue.
+    // resolveCatalogueModel refuses every other tier before it fetches.
+    route = await resolveCatalogueModel(requested, tier, {fetchImpl: fetch, nowMs})
+    if (!route.ok) {
+      // Expected: a pick this tier can't use, or one the catalogue doesn't
+      // list or price. Logged by reason, never the requested id (it is the
+      // caller's free text). A catalogue that can't be read at all is
+      // reported only when it looks like our bug (reportCatalogueFailure).
+      await reportCatalogueFailure(route, reports)
+      logOutcome({outcome: 'model_refused', tier, reason: route.reason})
+      return errorResponse(route.code, meta)
+    }
+  }
   if (!route.ok) {
     return errorResponse('ai_model_not_allowed', meta)
   }
@@ -239,7 +311,6 @@ export default async function handler(req, context = {}) {
     return errorResponse('ai_not_configured', meta)
   }
 
-  const limits = aiCreditLimits(process.env)
   const maxTokens = cappedMaxTokens(body.max_tokens, tier)
   const holdId = randomUUID()
   let overflow = false
@@ -268,6 +339,19 @@ export default async function handler(req, context = {}) {
     return errorResponse('ai_unavailable', meta)
   }
   if (!reservation.ok) {
+    if (reservation.reason === 'budget') {
+      // When the bucket that refused admits again, or a later bucket the
+      // refusal never reached, whichever is last. Never the breaker's: past
+      // it a request overflows rather than waits.
+      const refusedAt = buckets.findIndex((b) => b.name === reservation.bucket)
+      try {
+        reservation.resumeAt = await latestResumeAt(store,
+          buckets.slice(refusedAt + 1).filter((b) => b.name !== 'breaker'),
+          {micro: reserved, nowMs, resumeAt: reservation.resumeAt})
+      } catch {
+        // An estimate; the refusal stands without a later one.
+      }
+    }
     return refusalResponse(reservation, meta)
   }
   const identityStanding = reservation.standing.identity
@@ -331,10 +415,58 @@ export default async function handler(req, context = {}) {
 
 
 /**
+ * The model picker's list. Always 200: when OpenRouter can't be read, the
+ * curated table alone (`source: 'static'`), so the picker degrades to the
+ * models the relay serves without the catalogue.
+ *
+ * @param {number} nowMs
+ * @param {object} reports
+ * @return {Promise<Response>}
+ */
+async function catalogueResponse(nowMs, reports) {
+  const catalogue = await loadCatalogue({fetchImpl: fetch, nowMs})
+  if (!catalogue.ok) {
+    await reportCatalogueFailure({reason: `catalogue_${catalogue.reason}`, status: catalogue.status}, reports)
+  }
+  const {source, models} = pickerModels(catalogue)
+  logOutcome({outcome: 'catalogue', source, count: models.length})
+  return new Response(JSON.stringify({source, default: DEFAULT_MODEL, free: FREE_MODELS_ALIAS, models}), {
+    status: HTTP.OK,
+    headers: {
+      'Content-Type': 'application/json',
+      // The browser may keep it a few minutes; the relay's own cache
+      // (CATALOGUE_TTL_MS) is what bounds how stale it gets.
+      'Cache-Control': 'private, max-age=300',
+    },
+  })
+}
+
+
+/**
+ * Report a catalogue read that failed in a way someone has to fix: an
+ * answer the reader can't parse, or a 4xx (the URL or its contract moved).
+ * Unreachable and 5xx are OpenRouter's outage and heal on their own; the
+ * picker falls back meanwhile, so those are logged only.
+ *
+ * @param {object} failure `{reason, status?}`, reason as aiCatalogue.js gives it
+ * @param {object} reports
+ * @return {Promise<void>}
+ */
+async function reportCatalogueFailure({reason, status}, reports) {
+  const broken = typeof reason === 'string' && (reason.endsWith('_malformed') ||
+    (reason.endsWith('_status') && status >= HTTP.BAD_REQUEST && status < HTTP.INTERNAL_ERROR))
+  if (broken) {
+    await reports.report('catalogue_broken', {reason, ...(status ? {status} : {})})
+  }
+}
+
+
+/**
  * Parse and check the request body (§5 step 3's caps).
  *
  * @param {Request} req
- * @return {Promise<object|null>} the body, or null when it isn't acceptable
+ * @return {Promise<{body: object, bytes: number}|null>} the body and its size as sent, or null when it
+ *   isn't acceptable
  */
 async function readRequestBody(req) {
   let text
@@ -343,7 +475,8 @@ async function readRequestBody(req) {
   } catch {
     return null
   }
-  if (!text || Buffer.byteLength(text) > MAX_BODY_BYTES) {
+  const bytes = text ? Buffer.byteLength(text) : 0
+  if (!text || bytes > MAX_BODY_BYTES) {
     return null
   }
   let body
@@ -372,7 +505,7 @@ async function readRequestBody(req) {
       (body.parallel_tool_calls !== undefined && typeof body.parallel_tool_calls !== 'boolean')) {
     return null
   }
-  return {
+  return {bytes, body: {
     model: body.model,
     max_tokens: body.max_tokens,
     ...conversation,
@@ -380,7 +513,32 @@ async function readRequestBody(req) {
     ...(body.tool_choice === undefined ? {} : {tool_choice: body.tool_choice}),
     ...(body.temperature === undefined ? {} : {temperature: body.temperature}),
     ...(body.parallel_tool_calls === undefined ? {} : {parallel_tool_calls: body.parallel_tool_calls}),
-  }
+  }}
+}
+
+
+/**
+ * The largest request body a tier may send. Anonymous and free budgets are
+ * soft (bucketsFor), so a bucket can overshoot by one request's hold, and the
+ * hold grows a token per byte of the body. Their cap
+ * (AI_MAX_BODY_BYTES_ANONYMOUS / _FREE, `src/quota/aiCredits.js`, 64 KiB by
+ * default) keeps that hold small. At 64 KiB, on the default chain's ceiling
+ * price (0.35 / 0.95 USD per million tokens) with the 1.1 margin:
+ *   input  65,536 bytes + ~1.8 KB server system message + 1,024 base
+ *          + 16 per message + 64 per tool  ≈ 68.4k tokens × 0.35 ≈ $0.0240
+ *   output 2,048 (anonymous) × 0.95 ≈ $0.0019, or 4,096 (free) ≈ $0.0039
+ *   × 1.1 ≈ $0.028 anonymous, $0.031 free for a one-message body; the
+ *   message and tool allowances add up to about $0.003 more at their caps.
+ * So a signed-out bucket can end a day at most about $0.03 past its limit
+ * (`_tests/ai-chat.test.js` pins the figure). Pro keeps MAX_BODY_BYTES: its
+ * budget is strict.
+ *
+ * @param {string} tier
+ * @param {object} limits aiCreditLimits(env)
+ * @return {number} bytes
+ */
+export function maxBodyBytesFor(tier, limits) {
+  return Math.min(MAX_BODY_BYTES, limits.maxBodyBytes[tier] ?? MAX_BODY_BYTES)
 }
 
 
@@ -692,10 +850,24 @@ async function identifySignedIn(bearer, nowMs) {
 function bucketsFor(identity, limits, nowMs, free) {
   const {tier} = identity
   const caps = {freeRequestsPerDay: limits.freeModelRequestsPerDay, concurrency: limits.concurrency}
+  // Which budgets are soft (admit while under the limit) and which strict
+  // (admit only if the worst case fits), _lib/aiLedger.js "Soft and strict
+  // budgets":
+  //  - anonymous and free identity, and the anonymous IP bucket: soft. Their
+  //    budgets are set near one request's worst case, which is 100x+ a real
+  //    turn's cost, so the strict rule refused after a few turns; the
+  //    overshoot is one hold, which maxBodyBytesFor keeps to ~$0.03.
+  //  - Pro identity: strict. Its budget is large next to one hold, so the
+  //    strict rule costs it a few cents of headroom at the very end, and it
+  //    has no body cap to bound an overshoot.
+  //  - the breakers: strict. They are the hard dollar safety across all
+  //    users of a tier; past one, requests overflow to the free models.
+  const soft = tier !== AI_TIERS.PRO
   const buckets = [{name: 'identity', key: identity.ledgerKey, limit: limits.budgets[tier],
-    windowDays: AI_WINDOW_DAYS[tier], ...caps}]
+    windowDays: AI_WINDOW_DAYS[tier], soft, ...caps}]
   if (identity.ipHash) {
-    buckets.push({name: 'ip', key: `ai/ip/${identity.ipHash}`, limit: limits.ipBudget, windowDays: 1, ...caps})
+    buckets.push({name: 'ip', key: `ai/ip/${identity.ipHash}`, limit: limits.ipBudget, windowDays: 1, soft: true,
+      ...caps})
   }
   if (!free && tier !== AI_TIERS.PRO) {
     buckets.push({name: 'breaker', key: `ai/breaker/${tier}/${utcDay(nowMs)}`, limit: limits.breakers[tier],
@@ -893,6 +1065,9 @@ function relayStream(upstreamBody, {
     if (seen.micro !== null && seen.micro > reserved) {
       // Booked in full above: the money is spent. The bound didn't hold, so
       // the reservation formula or a ceiling price is wrong: ours to fix.
+      // Only this request against its own hold: a soft bucket that settles
+      // past its LIMIT (admitted just under it) is the expected overshoot
+      // (bucketsFor), not reported.
       await reports.report('settle_exceeded_reservation', {model: seen.model || route.model, tier})
     }
     logOutcome({
@@ -971,8 +1146,13 @@ async function upstreamFailure(status, route, reports) {
     return route.free ? 'ai_busy' : 'ai_too_many_requests'
   }
   if (status === HTTP.NOT_FOUND) {
-    // No endpoint for our model under deny, or the model is gone: ours to fix.
-    await reports.report('model_unavailable', {status, model: route.model})
+    // No endpoint for our model under deny, or the model is gone: ours to
+    // fix. Not for a model the user picked from the catalogue: its listing
+    // is a proxy for deny (aiCatalogue.js), so a 404 there is that pick
+    // failing, which the user fixes by picking another.
+    if (route.source !== 'catalogue') {
+      await reports.report('model_unavailable', {status, model: route.model})
+    }
     return 'ai_model_unavailable'
   }
   await reports.report('upstream_error', {status, model: route.model})
@@ -993,18 +1173,19 @@ function refusalResponse(reservation, meta) {
   if (reservation.reason === 'free_requests') {
     return errorResponse('ai_free_requests_exhausted', withStanding)
   }
-  return errorResponse('ai_credits_exhausted', withStanding)
+  return errorResponse('ai_credits_exhausted', {...withStanding, resumeAt: reservation.resumeAt ?? null})
 }
 
 
 /**
  * @param {string} code a key of ERRORS
- * @param {object} [meta] tier, token, used, limit
+ * @param {object} [meta] tier, token, used, limit, resumeAt (epoch ms)
  * @return {Response}
  */
 function errorResponse(code, meta = {}) {
   const [status, message] = ERRORS[code]
-  return new Response(JSON.stringify({error: {code, message}, ...(meta.tier ? {tier: meta.tier} : {})}), {
+  return new Response(JSON.stringify({error: {code, message}, ...(meta.tier ? {tier: meta.tier} : {}),
+    ...(Number.isFinite(meta.resumeAt) ? {resumeAt: new Date(meta.resumeAt).toISOString()} : {})}), {
     status,
     headers: metaHeaders(meta, {'Content-Type': 'application/json'}),
   })
@@ -1013,7 +1194,8 @@ function errorResponse(code, meta = {}) {
 
 /**
  * The `{used, limit, tier}` the client reads without a second call (§7
- * "Reuse"), the overflow notice, and a freshly minted anonymous token.
+ * "Reuse"), the overflow notice, a freshly minted anonymous token, and on a
+ * credits refusal when the budget admits again (ISO-8601 UTC, as in the body).
  *
  * @param {object} meta
  * @param {object} base
@@ -1035,6 +1217,9 @@ function metaHeaders(meta, base) {
   }
   if (meta.token) {
     headers.set('x-bldrs-ai-token', meta.token)
+  }
+  if (Number.isFinite(meta.resumeAt)) {
+    headers.set('x-bldrs-ai-resume-at', new Date(meta.resumeAt).toISOString())
   }
   return headers
 }

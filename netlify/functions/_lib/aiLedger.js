@@ -8,10 +8,49 @@
  * positive balance, call the paid upstream, and debit afterwards; with a
  * last-write-wins store only one debit may even stick. So before the call the
  * relay RESERVES the request's worst case (input estimate + `max_tokens` at
- * the chain's dearest price, `_lib/aiModels.js`) against the remaining budget,
- * refusing when it doesn't fit, and after the stream it SETTLES the hold to
- * OpenRouter's actual `usage.cost`. A per-identity cap on in-flight holds
- * bounds how much can be reserved at once.
+ * the chain's dearest price, `_lib/aiModels.js`) as a hold on each bucket,
+ * and after the stream it SETTLES the hold to OpenRouter's actual
+ * `usage.cost`. A per-identity cap on in-flight holds bounds how much can be
+ * reserved at once.
+ *
+ * ## Soft and strict budgets
+ *
+ * Each bucket admits a request by one of two rules ({@link admits}):
+ *  - **strict** (`soft` unset): admit only if `used + hold <= limit`, where
+ *    `used` is the window's spend plus every live hold. Spend can never pass
+ *    the limit (while a settle stays within its hold). For the global daily
+ *    breakers, the hard dollar safety, and for Pro, whose budget is large
+ *    next to any one request's hold.
+ *  - **soft** (`soft: true`): admit if `used < limit`. The hold is still
+ *    taken, so it counts against the next request, and still settles to
+ *    `usage.cost`. For the per-identity budgets of anonymous and free and the
+ *    anonymous IP bucket, whose budgets are set near one request's worst
+ *    case: a worst case priced at the chain's dearest model, a token per
+ *    byte and the whole `max_tokens` is 100x+ a real turn, so the strict rule
+ *    refused users who had spent a tenth of their budget (ai-workspace.md §7
+ *    D4). A request with no hold (a free model) is never refused for budget
+ *    on a soft bucket: it can't add spend, and the free-requests cap bounds
+ *    it instead.
+ *
+ * The soft rule's overshoot is bounded, and by less than one might think:
+ * every admission is a compare-and-swap, so admissions to one bucket are
+ * serialized, and each sees every hold admitted before it. The LAST request
+ * admitted saw `spent + held < limit`; everything that settles afterwards
+ * was in that `spent + held` or is that request's own hold. So a bucket's
+ * spend stays below `limit + one hold` (the last one admitted), as long as
+ * each settle stays within its hold (`settle_exceeded_reservation` in
+ * ai-chat.js is the report when one doesn't). The relay caps a signed-out or
+ * free request's size so that one hold is small (ai-chat.js
+ * `maxBodyBytesFor`). `_tests/aiLedger.test.js` proves the bound under a
+ * parallel burst.
+ *
+ * ## When a refused bucket admits again
+ *
+ * A budget refusal carries `resumeAt` ({@link resumeAtOf}): the first UTC
+ * day boundary at which enough of the window's spend has left it for the
+ * bucket to admit the same request. Live holds are counted as today's spend
+ * (they settle, or expire into spend, today). It is an estimate the client
+ * waits on, not a promise: a settle can lower the figure sooner.
  *
  * Every write is a compare-and-swap: read the record and its ETag with
  * strong consistency, change it, and write it back conditional on the ETag
@@ -195,6 +234,61 @@ export function usageOf(record, nowMs) {
 
 
 /**
+ * Whether a bucket admits a hold at its current usage (the header's "Soft
+ * and strict budgets").
+ *
+ * @param {Bucket} bucket
+ * @param {number} used spend in the window plus live holds
+ * @param {number} micro the hold asked for
+ * @return {boolean}
+ */
+export function admits(bucket, used, micro) {
+  if (bucket.soft) {
+    return micro === 0 || used < bucket.limit
+  }
+  return used + micro <= bucket.limit
+}
+
+
+/**
+ * When a bucket that refuses `micro` now would admit it again, as enough of
+ * its window's spend ages out (the header's "When a refused bucket admits
+ * again"). Call after {@link prune}.
+ *
+ * @param {object} record
+ * @param {Bucket} bucket
+ * @param {number} micro the hold asked for
+ * @param {number} nowMs
+ * @return {?number} epoch ms of that UTC midnight; null when the bucket admits now, or never would
+ *   (a strict hold larger than the whole limit)
+ */
+export function resumeAtOf(record, bucket, micro, nowMs) {
+  const today = utcDay(nowMs)
+  const byDay = new Map(Object.entries(record.days).map(([day, entry]) => [day, entry.spent]))
+  let held = 0
+  for (const hold of Object.values(record.holds)) {
+    held += hold.micro
+  }
+  byDay.set(today, (byDay.get(today) ?? 0) + held)
+  let remaining = 0
+  for (const spent of byDay.values()) {
+    remaining += spent
+  }
+  if (admits(bucket, remaining, micro)) {
+    return null
+  }
+  for (const day of [...byDay.keys()].sort()) {
+    remaining -= byDay.get(day)
+    if (admits(bucket, remaining, micro)) {
+      // Day D is in the window while now < D + windowDays (prune).
+      return Date.parse(`${day}T00:00:00.000Z`) + (bucket.windowDays * DAY_MS)
+    }
+  }
+  return null
+}
+
+
+/**
  * Read-modify-write one key under compare-and-swap.
  *
  * @param {object} store a @netlify/blobs Store (or anything with the same
@@ -246,6 +340,8 @@ async function compareAndSwap(store, key, change) {
  * @property {number} windowDays how many UTC days its spend is summed over
  * @property {?number} [freeRequestsPerDay] cap on free-model requests, or none
  * @property {?number} [concurrency] cap on in-flight holds, or none
+ * @property {boolean} [soft] admit while under the limit rather than only when the hold fits
+ *   (the header's "Soft and strict budgets")
  */
 
 
@@ -255,8 +351,9 @@ async function compareAndSwap(store, key, change) {
  * @param {object} store
  * @param {Bucket} bucket
  * @param {{id: string, micro: number, free: boolean, nowMs: number}} hold
- * @return {Promise<object>} `{ok, reason?, used, limit}`: `reason` is 'budget', 'free_requests' or
- *   'concurrency' when refused, and `used` is before this hold
+ * @return {Promise<object>} `{ok, reason?, used, limit, resumeAt?}`: `reason` is 'budget', 'free_requests' or
+ *   'concurrency' when refused, `used` is before this hold, and a budget refusal's `resumeAt`
+ *   is {@link resumeAtOf}'s
  */
 export function reserve(store, bucket, {id, micro, free, nowMs}) {
   return compareAndSwap(store, bucket.key, (record) => {
@@ -269,8 +366,8 @@ export function reserve(store, bucket, {id, micro, free, nowMs}) {
     if (free && Number.isInteger(bucket.freeRequestsPerDay) && freeToday >= bucket.freeRequestsPerDay) {
       return refuse('free_requests')
     }
-    if (used + micro > bucket.limit) {
-      return refuse('budget')
+    if (!admits(bucket, used, micro)) {
+      return {...refuse('budget'), resumeAt: resumeAtOf(record, bucket, micro, nowMs)}
     }
     record.holds[id] = {micro, free: free ? 1 : 0, at: nowMs}
     return {ok: true, used, limit: bucket.limit}
@@ -375,7 +472,8 @@ export async function settleWithRetry(store, bucket, settlement, {attempts = SET
  * @param {Array<Bucket>} buckets
  * @param {{id: string, micro: number, free: boolean, nowMs: number}} hold
  * @return {Promise<object>} `{ok: true, standing}`, or `{ok: false, bucket, reason, used, limit,
- *   standing}` naming the bucket that refused; `standing` maps each bucket reached to its `{used, limit}`
+ *   standing, resumeAt}` naming the bucket that refused (`resumeAt` its own, for a budget refusal, else
+ *   null); `standing` maps each bucket reached to its `{used, limit}`
  */
 export async function reserveAll(store, buckets, hold) {
   const taken = []
@@ -386,7 +484,8 @@ export async function reserveAll(store, buckets, hold) {
       standing[bucket.name] = {used: result.used, limit: result.limit}
       if (!result.ok) {
         await releaseAll(store, taken, hold)
-        return {ok: false, bucket: bucket.name, reason: result.reason, used: result.used, limit: result.limit, standing}
+        return {ok: false, bucket: bucket.name, reason: result.reason, used: result.used, limit: result.limit, standing,
+          resumeAt: result.resumeAt ?? null}
       }
       taken.push(bucket)
     }
@@ -395,6 +494,44 @@ export async function reserveAll(store, buckets, hold) {
     throw err
   }
   return {ok: true, standing}
+}
+
+
+/**
+ * The latest `resumeAt` among buckets that a refusal didn't reach
+ * (reserveAll stops at the first that refuses), given the refusing one's
+ * `resumeAt`: when several are exhausted, the user waits for the last. A
+ * bucket is read only if it could resume later than `resumeAt` at all (its
+ * window reaches past it), so the anonymous buckets, which share a one-day
+ * window and so a resume at the next UTC midnight, cost no read. Read-only,
+ * strong. A bucket that can't be read is skipped: the answer is an estimate.
+ *
+ * @param {object} store
+ * @param {Array<Bucket>} buckets the ones after the refusing bucket
+ * @param {{micro: number, nowMs: number, resumeAt: ?number}} refusal
+ * @return {Promise<?number>} epoch ms, or `resumeAt` when none is later
+ */
+export async function latestResumeAt(store, buckets, {micro, nowMs, resumeAt}) {
+  let latest = resumeAt
+  const todayStart = Date.parse(`${utcDay(nowMs)}T00:00:00.000Z`)
+  for (const bucket of buckets) {
+    if (latest !== null && todayStart + (bucket.windowDays * DAY_MS) <= latest) {
+      continue
+    }
+    let current
+    try {
+      current = await store.getWithMetadata(bucket.key, {type: 'json', consistency: 'strong'})
+    } catch {
+      continue
+    }
+    const record = normalize(current?.data)
+    prune(record, nowMs, bucket.windowDays)
+    const at = resumeAtOf(record, bucket, micro, nowMs)
+    if (at !== null && (latest === null || at > latest)) {
+      latest = at
+    }
+  }
+  return latest
 }
 
 

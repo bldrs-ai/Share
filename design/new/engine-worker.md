@@ -1372,6 +1372,17 @@ a backstop, not a measured choice. The page snapshots both
 **Provisional:** it is static per device, and the PSB renderer peak with it
 is in the measurements doc's §"Source policy as built".
 
+**The windowed pump's closure walks and prefetch (conway#787, #798).** Over
+a store that reads synchronously (the sync access handle, the held Blob), a
+windowed pump does no per-product closure walk (#787), and since conway#798
+its aggregate pass runs no relationship prefetch either: nothing is gained
+by reading ahead from bytes that are one synchronous read away. Windowed
+geometry is faster and its worker peak lower on the IFC models that page
+most (D3D, one authoring tool's 309 MB IFC2X3 file); first mesh is
+unchanged. Numbers in the measurements doc's §"Windowed aggregate pass
+without prefetch (conway#798)". The preview-adapter walk skip was measured
+too and showed no effect, so it stays.
+
 **How the bytes are read.** `store.takeWhole()` (engineSources.js): on the
 sync access handle one read of the whole file into one buffer; on the Blob
 store the held copy, handed over. Neither store keeps a reference, so the

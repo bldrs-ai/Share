@@ -79,3 +79,50 @@ export function assertAiSdkNotInMain(metafile) {
       `src/viewer/tools/assistRuntime.js, never directly (tools/esbuild/assistEntry.js).\n${shown}`)
   }
 }
+
+
+// The assistant's GFM plugin, split out the same way (src/Components/Bot/
+// remarkGfmEntry.js): ~10 KB gz that only a shown reply needs.
+export const GFM_ENTRY = path.resolve(repoRoot, 'src', 'Components', 'Bot', 'remarkGfmEntry.js')
+
+const GFM_INPUT = new RegExp(
+  '(^|/)node_modules/(\\.bun/[^/]+/node_modules/)?(remark-gfm|micromark-extension-gfm[^/]*|mdast-util-gfm[^/]*)/')
+
+
+/**
+ * @param {object} metafile esbuild's metafile
+ * @param {string} [gfmEntry] the exempt entry, as an absolute path
+ * @return {Array<{output: string, input: string}>} remark-gfm inputs in any other JS output
+ */
+export function gfmInputsInMain(metafile, gfmEntry = GFM_ENTRY) {
+  const exempt = path.relative(process.cwd(), gfmEntry).split(path.sep).join('/')
+  const offenders = []
+  for (const [output, meta] of Object.entries(metafile?.outputs ?? {})) {
+    if (!output.endsWith('.js') || !meta.entryPoint || meta.entryPoint === exempt) {
+      continue
+    }
+    for (const input of Object.keys(meta.inputs ?? {})) {
+      if (GFM_INPUT.test(input)) {
+        offenders.push({output, input})
+      }
+    }
+  }
+  return offenders
+}
+
+
+/**
+ * Fail the build when remark-gfm reaches a main entry's bundle.
+ *
+ * @param {object} metafile
+ * @throws {Error} naming the first few offending inputs
+ */
+export function assertGfmNotInMain(metafile) {
+  const offenders = gfmInputsInMain(metafile)
+  if (offenders.length > 0) {
+    const shown = offenders.slice(0, 5).map(({output, input}) => `  ${output} <- ${input}`).join('\n')
+    throw new Error(
+      `remark-gfm is in a main bundle (${offenders.length} inputs). It must load lazily, from ` +
+      `src/Components/Bot/remarkGfmEntry.js only, through markdownGfm.js (tools/esbuild/assistEntry.js).\n${shown}`)
+  }
+}

@@ -6,7 +6,7 @@ The [scope snapshot](open-210.md) has the motivation and the story list. This re
 
 ## Epic, tier and aliases
 
-No `open-210` tracker existed: the roadmap row ([roadmap.md L76](https://github.com/bldrs-ai/Share/blob/5dc1788f9825f2938f387ff36b27315073792557/design/roadmap.md#L76)) links no epic, and the searches below found none. [#2192](https://github.com/bldrs-ai/Share/issues/2192) was created as `open-210: View several models together`, labelled `epic` and `enhancement`, which is how the current epics #1657, #1659 and #2011 are labelled (`Tracking` appears only on older trackers such as #57). The title follows [workspace.md](workspace.md); the roadmap still calls the epic "Open multiple IFCs in one session", and renaming the row is the roadmap owner's call.
+No `open-210` tracker existed: the roadmap row ([roadmap.md L76](https://github.com/bldrs-ai/Share/blob/5dc1788f9825f2938f387ff36b27315073792557/design/roadmap.md#L76)) links no epic, and the searches below found none. [#2192](https://github.com/bldrs-ai/Share/issues/2192) was created as `open-210: View several models together`, labelled `epic` and `enhancement`, which is how the current epics #1657, #1659 and #2011 are labelled (`Tracking` appears only on older trackers such as #57). The title follows [workspace.md](workspace.md); the roadmap row was renamed to match on 2026-11-23 (it read "Open multiple IFCs in one session").
 
 **Tier.** The 2xx band stays. Seeing one model is the basic journey and has shipped (`open-100`–`open-120`). Seeing several together is a separately useful extension, and the roadmap places it post-MVP, as item 2 of the loveable backlog ([§8, L474](https://github.com/bldrs-ai/Share/blob/5dc1788f9825f2938f387ff36b27315073792557/design/roadmap.md#L474)). It can wait because it needs a session to hold several models (`assist-310`) and `open-205`'s Phase 2 (#2024), neither of which has been built.
 
@@ -18,7 +18,7 @@ No `open-210` tracker existed: the roadmap row ([roadmap.md L76](https://github.
 | v0.5 | `open-200` |
 | v0.6 onward | `open-210` |
 
-#1251's old title prefix "Open 200:" is the v0.5 alias. Two other issues carry "Open 200:" for unrelated work, [#1188](https://github.com/bldrs-ai/Share/issues/1188) (enable LFS) and [#1190](https://github.com/bldrs-ai/Share/issues/1190) (tabbed Open dialog, closed). They are not this epic and were left unchanged. The current `open-200` (Recents reliability) is also unrelated. No issue title uses the "Open 140" prefix.
+#1251's old title prefix "Open 200:" is the v0.5 alias. Two other issues carry "Open 200:" for unrelated work, [#1188](https://github.com/bldrs-ai/Share/issues/1188) (enable LFS) and [#1190](https://github.com/bldrs-ai/Share/issues/1190) (tabbed Open dialog, closed). They are not this epic and were left unchanged; #1188 is now listed as an open decision of `open-110` ([#2259](https://github.com/bldrs-ai/Share/issues/2259)). The current `open-200` (the workspace) is also unrelated to the 2024 "Open 200" titles. No issue title uses the "Open 140" prefix.
 
 ## Inventory
 

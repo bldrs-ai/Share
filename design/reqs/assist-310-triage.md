@@ -13,7 +13,7 @@ The epic is [#1659](https://github.com/bldrs-ai/Share/issues/1659), retitled `as
 |---|---|---|
 | `assist-110` | roadmap v0.3–v0.5 | This epic, before the AI band was renumbered |
 | `assist-310` | roadmap v0.6 onward | This epic |
-| `search-310` | roadmap §4.5 | Knowledge graph; absorbed, since natural-language questions are this epic's job and the graph becomes its retrieval layer (Track `assist-t300`) |
+| `search-310` | roadmap §3.1 (its former §4.5 entry) | Knowledge graph; absorbed, since natural-language questions are this epic's job and the graph becomes its retrieval layer (Track `assist-t300`) |
 | "Bot", `?feature=bot` | 2025 prototype (PRs #1391, #1447, #1452) | The chat prototype this epic replaces; `bot` stays an alias of `?feature=assist` (#1672) |
 
 **Tier.** The 3xx band (Pro): a power capability with its own product case, outside the MVP bar (roadmap §6.0; Track `assist-t300` "MVP impact: none"). The roadmap's validation target is large-model users running the assistant on models they can't open anywhere else, and paying (§7.5). Nothing here moves it.
