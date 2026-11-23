@@ -34,8 +34,13 @@ const MSW_SPECIFIER_RE = /^msw(?:\/.*)?$/
 
 
 /**
+ * The specs the dependency-free shards load. `*.live.spec.ts` is left out
+ * to match `testIgnore` in tools/playwright.config.js: the live smoke runs
+ * under tools/playwright.live.config.js after a full install, so its specs
+ * may import what they like.
+ *
  * @param {string} dir
- * @return {string[]} absolute paths of every `*.spec.ts` under `dir`
+ * @return {string[]} absolute paths of every shard `*.spec.ts` under `dir`
  */
 function listSpecs(dir) {
   return fs.readdirSync(dir, {withFileTypes: true}).flatMap((entry) => {
@@ -43,7 +48,7 @@ function listSpecs(dir) {
     if (entry.isDirectory()) {
       return entry.name === 'node_modules' ? [] : listSpecs(full)
     }
-    return entry.name.endsWith('.spec.ts') ? [full] : []
+    return entry.name.endsWith('.spec.ts') && !entry.name.endsWith('.live.spec.ts') ? [full] : []
   })
 }
 
@@ -201,6 +206,7 @@ describe('e2e/specImportBoundary', () => {
     const specs = listSpecs(SRC_ROOT)
     // A scan that found nothing would pass for the wrong reason.
     expect(specs.length).toBeGreaterThan(0)
+    expect(specs.some((p) => p.endsWith('.live.spec.ts'))).toBe(false)
 
     const offenders = []
     for (const specPath of specs) {
