@@ -1,0 +1,204 @@
+{
+  "description": "A Pro user picks a model from the live catalogue (#1934): the relay finds it in OpenRouter's listing (tool-capable, with a ZDR endpoint), derives its ceiling from ALL its endpoints (8 / 24 per M: the priority endpoint's long-context tier, double the listed price), sends exactly that as max_price with no fallbacks, and settles the Pro bucket at usage.cost.",
+  "env": {
+    "$fixture": "env/ai-chat.json",
+    "$merge": {
+      "AUTH0_DOMAIN": "bldrs-replay.us.auth0.com",
+      "AUTH0_CLIENT_ID": "replay-client-id",
+      "AUTH0_CLIENT_SECRET": "replay-client-secret"
+    }
+  },
+  "now": "2026-11-18T12:00:00.000Z",
+  "uuid": "00000000-0000-4000-8000-00000000a1c0",
+  "exchangeOrder": "any",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/ai-chat",
+    "headers": {
+      "authorization": "Bearer user-access-token",
+      "content-type": "application/json",
+      "x-nf-client-connection-ip": "203.0.113.9",
+      "origin": "https://bldrs.ai"
+    },
+    "body": {
+      "$fixture": "openrouter/chat-request.json",
+      "$merge": {
+        "model": "x-ai/grok-4.7"
+      }
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-userinfo.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json",
+          "$merge": {
+            "app_metadata": {
+              "subscriptionStatus": "sharePro"
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://openrouter.ai/api/v1/models"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "openrouter/models.json"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://openrouter.ai/api/v1/endpoints/zdr"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "openrouter/zdr.json"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://openrouter.ai/api/v1/models/x-ai/grok-4.7/endpoints"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "openrouter/endpoints-grok-4.7.json"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/user/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/user/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "if-none-match": "*"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "body": {
+          "model": "x-ai/grok-4.7",
+          "max_tokens": 8192,
+          "provider": {
+            "data_collection": "deny",
+            "require_parameters": true,
+            "max_price": {
+              "prompt": 8,
+              "completion": 24
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream"
+        },
+        "text": {
+          "$fixture": "openrouter/stream-reply.json"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/user/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        },
+        "json": {
+          "v": 1,
+          "days": {},
+          "holds": {
+            "00000000-0000-4000-8000-00000000a1c0": {
+              "micro": 4000,
+              "free": 0,
+              "at": 1795003200000
+            }
+          },
+          "estimates": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/user/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "if-match": "\"e1\""
+        },
+        "bodyJson": {
+          "days": {
+            "2026-11-18": {
+              "spent": 143,
+              "free": 0
+            }
+          },
+          "holds": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e2\""
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "bodyIncludes": "There are 7 proxies.",
+    "headers": {
+      "x-bldrs-ai-tier": "pro",
+      "x-bldrs-ai-limit": "5000000"
+    }
+  }
+}

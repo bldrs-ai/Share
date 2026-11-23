@@ -1,7 +1,10 @@
 /*
- * The hosted assistant's model allowlist (design/new/ai-workspace.md §6 D3,
- * §5 D2): which OpenRouter models the relay will route a tier to, and the
- * price it reserves against before each call.
+ * The hosted assistant's curated model allowlist (design/new/ai-workspace.md
+ * §6 D3, §5 D2): which OpenRouter models the relay will route a tier to, and
+ * the price it reserves against before each call. Pro may also pick from the
+ * live catalogue (`aiCatalogue.js`, #1934), priced the same way at pick time;
+ * this table stays the default chain, the whole list for anonymous and free,
+ * and Pro's list when the catalogue can't be read.
  *
  * Server config, never a client constant (§6 "Free availability is
  * volatile… It is never a client constant"): the client names a model, the
@@ -36,18 +39,22 @@ export const DEFAULT_MODEL = 'qwen/qwen3.7-flash'
 export const PAID_MODELS = Object.freeze({
   // One endpoint (Alibaba): 0.03 / 0.13, 0.10 / 0.40 from 32k prompt tokens,
   // 0.20 / 0.80 from 256k. The ceiling is the last tier.
-  [DEFAULT_MODEL]: {input: 0.20, output: 0.80, tiers: ['anonymous', 'free', 'pro'],
+  [DEFAULT_MODEL]: {name: 'Qwen: Qwen3.7 Flash', input: 0.20, output: 0.80, tiers: ['anonymous', 'free', 'pro'],
     fallbacks: ['deepseek/deepseek-v4-flash', 'openai/gpt-oss-120b']},
   // 15 endpoints, 0.04 / 0.10 to 0.21 / 0.56 (Azure).
-  'deepseek/deepseek-v4-flash': {input: 0.21, output: 0.56, tiers: ['anonymous', 'free', 'pro']},
+  'deepseek/deepseek-v4-flash': {name: 'DeepSeek: DeepSeek V4 Flash', input: 0.21, output: 0.56,
+    tiers: ['anonymous', 'free', 'pro']},
   // 24 endpoints, 0.03 / 0.15 to 0.35 (Cerebras) / 0.95 (SambaNova).
-  'openai/gpt-oss-120b': {input: 0.35, output: 0.95, tiers: ['anonymous', 'free', 'pro']},
-  // Pro: eval #1929's two Pro-row models. The live, priced picker from
-  // /api/v1/models replaces this list in #1934.
+  'openai/gpt-oss-120b': {name: 'OpenAI: gpt-oss-120b', input: 0.35, output: 0.95,
+    tiers: ['anonymous', 'free', 'pro']},
+  // Pro: eval #1929's two Pro-row models, kept curated so Pro has a choice
+  // even when the catalogue can't be read. Every other Pro model comes from
+  // the live catalogue (aiCatalogue.js, #1934), whose ceiling is derived at
+  // pick time by the same dearest-endpoint rule as these.
   // 6 endpoints, 0.375 / 1.875 to 1.35 / 6.75 (reasoning billed at output).
-  'google/gemini-3.8-flash': {input: 1.35, output: 6.75, tiers: ['pro']},
+  'google/gemini-3.8-flash': {name: 'Google: Gemini 3.8 Flash', input: 1.35, output: 6.75, tiers: ['pro']},
   // 4 endpoints, all 1 / 5.
-  'anthropic/claude-haiku-4.5': {input: 1, output: 5, tiers: ['pro']},
+  'anthropic/claude-haiku-4.5': {name: 'Anthropic: Claude Haiku 4.5', input: 1, output: 5, tiers: ['pro']},
 })
 
 /**

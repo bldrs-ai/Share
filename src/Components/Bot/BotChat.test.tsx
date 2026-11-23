@@ -5,7 +5,7 @@ import {http} from 'msw'
 import {HOSTED_TRANSPORT_LABEL, OPENROUTER_KEY_ID, assistErrorMessage} from '../../assist'
 import {DEFAULT_MAX_STEPS} from '../../assist/loop'
 import {SCRIPT, SSE_HEADERS, sseText, textReply, toolCalls} from '../../assist/openrouterSse.fixture'
-import {AI_RELAY_PATH, MOCK_ANON_TOKEN_PREFIX} from '../../__mocks__/api-handlers-openrouter'
+import {AI_RELAY_PATH, MOCK_ANON_TOKEN_PREFIX, MOCK_CATALOGUE_MODEL} from '../../__mocks__/api-handlers-openrouter'
 import {getServer} from '../../__mocks__/server'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import useStore from '../../store/useStore'
@@ -15,6 +15,13 @@ import BotChat, {
   TURN_FAILED_MESSAGE,
   stepLimitMessage,
 } from './BotChat'
+import {ASSIST_FREE_MODELS} from '../../viewer/tools/assistModels'
+import {
+  ASSIST_MODEL_CHOICE_KEY,
+  PICKED_MODEL_UNAVAILABLE_MESSAGE,
+  assistModelChoice,
+  resetAssistModelChoice,
+} from './assistModelChoice'
 import {ANON_TOKEN_KEY, assistKeyStore, markCreditsExhausted, overflowNotice, resetAssistChat} from './assistState'
 import {BOT_TITLE} from './component'
 import {reportAssistCondition} from './reportAssistCondition'
@@ -170,6 +177,7 @@ describe('BotChat', () => {
       assistKeyStore.forget(OPENROUTER_KEY_ID)
     })
     localStorage.clear()
+    resetAssistModelChoice()
   })
 
   it('closes when the panel close button is clicked', () => {
@@ -281,6 +289,7 @@ describe('BotChat', () => {
   })
 
   describe('without a key of the user\'s own (the hosted relay)', () => {
+    const HTTP_BAD_REQUEST = 400
     const HTTP_PAYMENT_REQUIRED = 402
     const HTTP_SERVICE_UNAVAILABLE = 503
 
@@ -584,6 +593,97 @@ describe('BotChat', () => {
         send('Hello again')
         await waitFor(() => expect(screen.getAllByText('Hosted reply.')).toHaveLength(2))
         expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '30')
+      })
+    })
+
+    // #1934: the model the settings chose is the one each turn asks for.
+    describe('the model choice', () => {
+      /**
+       * @return the `model` of each relay request, and `stop`
+       */
+      function watchRelayModels() {
+        const models: Array<Promise<string>> = []
+        const onRequest = ({request}: {request: Request}) => {
+          if (new URL(request.url).pathname === AI_RELAY_PATH && request.method === 'POST') {
+            models.push(request.clone().json().then((body: {model: string}) => body.model))
+          }
+        }
+        getServer().events.on('request:start', onRequest)
+        return {models: () => Promise.all(models), stop: () => getServer().events.removeListener('request:start', onRequest)}
+      }
+
+      // The choice is kept on the device; each test starts from none.
+      beforeEach(() => {
+        localStorage.removeItem(ASSIST_MODEL_CHOICE_KEY)
+        resetAssistModelChoice()
+      })
+
+      afterEach(() => {
+        act(() => {
+          setStoreState({appMetadata: {}})
+        })
+      })
+
+      it('turning on free models in settings sends the free alias, and keeps it on the device', async () => {
+        const relay = watchRelayModels()
+        try {
+          render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+          fireEvent.click(screen.getByTestId('BotSettings-OpenButton'))
+          expect(screen.getByTestId('BotSettings-ProHint')).toBeInTheDocument()
+          fireEvent.click(screen.getByRole('checkbox', {name: 'Free models (experimental)'}))
+          fireEvent.click(screen.getByTestId('BotSettings-OkButton'))
+          send('Hello bot')
+          expect(await screen.findByText('Test received.')).toBeInTheDocument()
+          expect(await relay.models()).toEqual([ASSIST_FREE_MODELS])
+          expect(JSON.parse(localStorage.getItem(ASSIST_MODEL_CHOICE_KEY) ?? 'null')).toEqual({freeModels: true, model: null})
+        } finally {
+          relay.stop()
+        }
+      })
+
+      it('a Pro user\'s pick from the menu is what the next turn asks for', async () => {
+        mockAuth.isAuthenticated = true
+        act(() => {
+          setStoreState({appMetadata: {subscriptionStatus: 'sharePro'}})
+        })
+        const relay = watchRelayModels()
+        try {
+          // The mock relay serves the catalogue model only to Pro, as the relay does.
+          Object.assign(window, {__mockAiRelay: {tier: 'pro'}})
+          render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+          fireEvent.click(screen.getByTestId('BotSettings-OpenButton'))
+          fireEvent.mouseDown(await screen.findByRole('combobox', {name: 'Model'}))
+          fireEvent.click(await screen.findByRole('option', {name: new RegExp(MOCK_CATALOGUE_MODEL.name)}))
+          fireEvent.click(screen.getByTestId('BotSettings-OkButton'))
+          send('Hello bot')
+          expect(await screen.findByText('Test received.')).toBeInTheDocument()
+          expect(await relay.models()).toEqual([MOCK_CATALOGUE_MODEL.id])
+        } finally {
+          relay.stop()
+          delete (window as {__mockAiRelay?: object}).__mockAiRelay
+        }
+      })
+
+      it('a pick the relay refuses says to pick another, and isn\'t reported', async () => {
+        mockAuth.isAuthenticated = true
+        act(() => {
+          setStoreState({appMetadata: {subscriptionStatus: 'sharePro'}})
+          assistModelChoice.set({freeModels: false, model: MOCK_CATALOGUE_MODEL.id})
+        })
+        relayAnswers(HTTP_BAD_REQUEST, {error: {code: 'ai_model_not_allowed'}, tier: 'free'})
+        render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        send('Hello bot')
+        expect(await screen.findByTestId('BotChat-Error')).toHaveTextContent(PICKED_MODEL_UNAVAILABLE_MESSAGE)
+        expect(reportAssistCondition).not.toHaveBeenCalled()
+      })
+
+      it('the default refused is still ours to fix, and reported', async () => {
+        relayAnswers(HTTP_BAD_REQUEST, {error: {code: 'ai_model_not_allowed'}, tier: 'anonymous'})
+        render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+        send('Hello bot')
+        expect(await screen.findByTestId('BotChat-Error'))
+          .toHaveTextContent(assistErrorMessage('unavailable', HOSTED_TRANSPORT_LABEL))
+        expect(reportAssistCondition).toHaveBeenCalledWith('model_unavailable', {status: 400, transport: 'hosted'})
       })
     })
 

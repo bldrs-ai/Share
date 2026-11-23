@@ -52,14 +52,15 @@ function fakeRelay(answer = () => undefined) {
  * @param {Function} [options.answer] fakeRelay's
  * @param {Function} [options.getAuthToken]
  * @param {Array<object>} [options.tools] a tool provider set; defaults to one model.query
+ * @param {string|Function} [options.model] the transport's `model`
  * @return {object} the session and what the fakes saw
  */
-function setup({answer, getAuthToken = () => Promise.resolve(null)} = {}) {
+function setup({answer, getAuthToken = () => Promise.resolve(null), model = 'qwen/qwen3.7-flash'} = {}) {
   const {fetchFn, requests} = fakeRelay(answer)
   let anonToken = null
   const metas = []
   const transport = hostedTransport({
-    relayUrl: RELAY, model: 'qwen/qwen3.7-flash', getAuthToken,
+    relayUrl: RELAY, model, getAuthToken,
     anonTokens: {get: () => anonToken, set: (t) => {
       anonToken = t
     }},
@@ -123,6 +124,17 @@ describe('assist/hostedTransport', () => {
     // No routing options from the browser: the relay sets and forces them.
     expect(requests[0].body).not.toHaveProperty('provider')
     expect(transport.id).toBe(HOSTED_TRANSPORT_ID)
+  })
+
+  // #1934: the host's model picker. A function is read at each turn, so a
+  // choice made in settings applies to the next turn without a rebuild.
+  it('reads a model function afresh at each turn', async () => {
+    let chosen = 'bldrs/free'
+    const {session, requests} = setup({model: () => chosen})
+    await collect(session.send('hello'))
+    chosen = 'x-ai/grok-4.7'
+    await collect(session.send('hello again'))
+    expect(requests.map((r) => r.body.model)).toEqual(['bldrs/free', 'x-ai/grok-4.7'])
   })
 
   it('goes anonymous first, keeps the token the relay mints, and sends it on the next request', async () => {
