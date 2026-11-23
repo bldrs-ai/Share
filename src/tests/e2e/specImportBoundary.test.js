@@ -29,8 +29,8 @@ const IMPORT_RE = /\bimport\s+(?:([^'"`;()]*?)\s+from\s+)?(['"])([^'"\n]+)\2/g
 // `export * as ns from '…'`, and `export type {A} from '…'` (erased). The
 // clause is held to those shapes so `export const …` is never mistaken for one.
 const REEXPORT_RE = /\bexport\s+((?:type\s+)?(?:\*(?:\s+as\s+[\w$]+)?|\{[^}]*\}))\s+from\s+(['"])([^'"\n]+)\2/g
-// `… from 'msw'`, `… from 'msw/node'`, or the side-effect `import 'msw'`.
-const MSW_IMPORT_RE = /(?:\bfrom|\bimport)\s+['"]msw(?:\/[^'"]*)?['"]/
+// The package itself or a subpath: 'msw', 'msw/node'. Not 'mswish'.
+const MSW_SPECIFIER_RE = /^msw(?:\/.*)?$/
 
 
 /**
@@ -92,7 +92,22 @@ function isTypeOnlyImport(clause) {
   if (!braces || rest !== '') {
     return false
   }
-  return braces[1].split(',').map((s) => s.trim()).filter(Boolean).every((s) => /^type\s/.test(s))
+  const names = braces[1].split(',').map((s) => s.trim()).filter(Boolean)
+  // `import {} from '…'` binds nothing but still runs the module.
+  return names.length > 0 && names.every((s) => /^type\s/.test(s))
+}
+
+
+/**
+ * Whether a file loads msw at runtime: a value import, re-export or bare
+ * import of it. Type-only ones are erased before Playwright loads the file.
+ *
+ * @param {string} source
+ * @return {boolean}
+ */
+function importsMswValue(source) {
+  return importsIn(source).some(({clause, specifier}) =>
+    MSW_SPECIFIER_RE.test(specifier) && !isTypeOnlyImport(clause))
 }
 
 
@@ -154,6 +169,7 @@ describe('e2e/specImportBoundary', () => {
       expect(valueSpecifiers([
         `import {a} from './a'`,
         `import './b'`,
+        `import {} from './empty'`,
         `export {c} from './c'`,
         `export * from './d'`,
         `export * as e from './e'`,
@@ -162,15 +178,22 @@ describe('e2e/specImportBoundary', () => {
         `export type {V} from './t3'`,
         `export const notAReexport = 1`,
         `import type {W} from './t4'`,
-      ].join('\n'))).toEqual(['./a', './b', './c', './d', './e'])
+      ].join('\n'))).toEqual(['./a', './b', './empty', './c', './d', './e'])
     })
 
-    it('recognizes msw imported for its value or its side effects', () => {
-      expect(MSW_IMPORT_RE.test(`import {http} from 'msw'`)).toBe(true)
-      expect(MSW_IMPORT_RE.test(`export * from 'msw/node'`)).toBe(true)
-      expect(MSW_IMPORT_RE.test(`import 'msw'`)).toBe(true)
-      expect(MSW_IMPORT_RE.test(`import 'msw/node'`)).toBe(true)
-      expect(MSW_IMPORT_RE.test(`import {x} from 'mswish'`)).toBe(false)
+    it('recognizes msw loaded for its value or its side effects', () => {
+      expect(importsMswValue(`import {http} from 'msw'`)).toBe(true)
+      expect(importsMswValue(`export * from 'msw/node'`)).toBe(true)
+      expect(importsMswValue(`import 'msw'`)).toBe(true)
+      expect(importsMswValue(`import 'msw/node'`)).toBe(true)
+      expect(importsMswValue(`import {} from 'msw'`)).toBe(true)
+    })
+
+    it('ignores type-only msw imports and look-alike packages', () => {
+      expect(importsMswValue(`import type {HttpHandler} from 'msw'`)).toBe(false)
+      expect(importsMswValue(`import {type HttpHandler} from 'msw'`)).toBe(false)
+      expect(importsMswValue(`export type {HttpHandler} from 'msw'`)).toBe(false)
+      expect(importsMswValue(`import {x} from 'mswish'`)).toBe(false)
     })
   })
 
@@ -186,6 +209,10 @@ describe('e2e/specImportBoundary', () => {
         if (isTypeOnlyImport(clause)) {
           continue
         }
+        if (MSW_SPECIFIER_RE.test(specifier)) {
+          offenders.push(`${rel} → '${specifier}' (imports msw directly)`)
+          continue
+        }
         const target = resolveLocal(path.dirname(specPath), specifier)
         if (!target) {
           continue
@@ -193,7 +220,7 @@ describe('e2e/specImportBoundary', () => {
         const targetRel = path.relative(REPO_ROOT, target)
         if (isInside(MOCKS_ROOT, target)) {
           offenders.push(`${rel} → '${specifier}' (${targetRel} is under src/__mocks__/)`)
-        } else if (MSW_IMPORT_RE.test(stripComments(fs.readFileSync(target, 'utf8')))) {
+        } else if (importsMswValue(fs.readFileSync(target, 'utf8'))) {
           offenders.push(`${rel} → '${specifier}' (${targetRel} imports msw)`)
         }
       }
