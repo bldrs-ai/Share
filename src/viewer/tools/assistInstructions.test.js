@@ -56,7 +56,18 @@ describe('viewer/tools/assistInstructions', () => {
     expect(text).toMatch(/\[Wall 3\]\(ref:e123\)/)
     expect(text).toMatch(/Link only refs from tool results/)
     expect(text).toMatch(/never write any other URL for an element/)
-    expect(text).toMatch(/Don't write refs as prose or show them to the user unless they ask/)
+    expect(text).toMatch(/a ref appears only inside a link, never as bare text/)
+  })
+
+  // Owner testing on the #2268 preview: with linking phrased as one rule beside
+  // "don't show refs unless they ask", the model linked only when asked. Linking
+  // is the default, and nothing may read as an opt-in.
+  it('makes linking the default in every answer, not something the user has to ask for', () => {
+    const text = shareAssistInstructions()
+    expect(text).toMatch(/Every time your answer names an element/)
+    expect(text).toMatch(/in every answer without being asked/)
+    expect(text).toMatch(/link the first few and the element that contains them/)
+    expect(text).not.toMatch(/unless they ask/)
   })
 
   it('imports nothing, so the relay can load it under plain Node ESM', () => {
