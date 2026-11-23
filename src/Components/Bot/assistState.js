@@ -1,6 +1,7 @@
 import {v4 as uuid} from 'uuid'
 import {createMemoryConversationStore, createSessionKeyStore} from '../../assist'
 import {AI_TIERS} from '../../quota/aiCredits'
+import {assistModelChoice, hostedModelFor} from './assistModelChoice'
 
 
 /**
@@ -185,12 +186,13 @@ export const assistInstance = {current: null}
 
 /**
  * The signed-in state the hosted transport reads at each request: Auth0's
- * `{isAuthenticated, getAccessTokenSilently}`, kept current by the panel. The
- * assistant is built once per page, so it reads this rather than closing over
- * the first render's values: a user who signs in mid-chat spends their own
- * credits from the next request on.
+ * `{isAuthenticated, getAccessTokenSilently}`, and whether the account is
+ * Pro (`quota/proStatus.js`, which decides whether a picked model is sent),
+ * kept current by the panel. The assistant is built once per page, so it
+ * reads this rather than closing over the first render's values: a user who
+ * signs in mid-chat spends their own credits from the next request on.
  */
-export const assistAuth = {current: {isAuthenticated: false, getAccessTokenSilently: null}}
+export const assistAuth = {current: {isAuthenticated: false, getAccessTokenSilently: null, isPro: false}}
 
 
 /** localStorage key of the hosted relay's anonymous token (netlify/functions/_lib/aiToken.js). */
@@ -231,6 +233,16 @@ export const assistAnonTokens = {
  * spent.
  */
 export const assistHostedSide = {
+  // Read at each turn (transport.ts hostedTransport): the viewer's model
+  // choice (assistModelChoice.js), the default unless they chose otherwise.
+  // The relay re-checks it against the caller's tier on every request.
+  model: () => {
+    const model = hostedModelFor(assistModelChoice.get(), assistAuth.current.isPro === true)
+    assistHostedSide.lastModel = model
+    return model
+  },
+  /** What the latest hosted turn asked for, so the panel can word a refusal of the user's own pick. */
+  lastModel: null,
   getAuthToken: async () => {
     const {isAuthenticated, getAccessTokenSilently} = assistAuth.current
     if (!isAuthenticated || typeof getAccessTokenSilently !== 'function') {

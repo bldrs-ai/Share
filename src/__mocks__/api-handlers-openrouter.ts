@@ -1,5 +1,6 @@
 import {http, HttpHandler} from 'msw'
 import {HTTP_BAD_REQUEST, HTTP_OK, HTTP_PAYMENT_REQUIRED} from '../net/http'
+import {ASSIST_FREE_MODELS, ASSIST_MODEL} from '../viewer/tools/assistModels'
 import {assertDefined} from '../utils/assert'
 import {SSE_HEADERS, scriptedReply, sseStream} from '../assist/openrouterSse.fixture'
 
@@ -73,7 +74,19 @@ export default function apiHandlersOpenrouter(defines: Defines): HttpHandler[] {
         headers: {'Content-Type': 'application/json', ...meter, ...(resume ? {'x-bldrs-ai-resume-at': resume} : {})},
       })
     }
-    const {chunks, delayMs} = scriptedReply(await request.json() as Parameters<typeof scriptedReply>[0])
+    const body = await request.json() as Parameters<typeof scriptedReply>[0] & {model?: string}
+    // The real relay's model check (ai-chat.js, _lib/aiCatalogue.js): the
+    // default chain and the free alias on every tier, the catalogue's models
+    // for Pro only; anything else is 400 `ai_model_not_allowed`. So a client
+    // that sends the wrong id, or a Pro pick on another tier, fails here as
+    // it would there.
+    if (!relayAllows(body.model, tier)) {
+      return new Response(JSON.stringify({error: {code: 'ai_model_not_allowed', message: 'Not on this tier'}, tier}), {
+        status: HTTP_BAD_REQUEST,
+        headers: {'Content-Type': 'application/json', ...meter},
+      })
+    }
+    const {chunks, delayMs} = scriptedReply(body)
     return new Response(sseStream(chunks, delayMs), {
       status: HTTP_OK,
       headers: {
@@ -82,6 +95,15 @@ export default function apiHandlersOpenrouter(defines: Defines): HttpHandler[] {
         ...(bearer === '' ? {'x-bldrs-ai-token': `${MOCK_ANON_TOKEN_PREFIX}${++mintedTokens}`} : {}),
       },
     })
+  }))
+
+  // The relay's model list for the picker (ai-chat.js `GET ?catalogue`),
+  // in its shape: the curated models, then a catalogue model for Pro.
+  handlers.push(http.get(AI_RELAY_PATH, ({request}) => {
+    if (!new URL(request.url).searchParams.has('catalogue')) {
+      return new Response(JSON.stringify({error: {code: 'ai_method_not_allowed'}}), {status: HTTP_BAD_REQUEST})
+    }
+    return new Response(JSON.stringify(MOCK_AI_CATALOGUE), {status: HTTP_OK, headers: {'Content-Type': 'application/json'}})
   }))
 
   // Block prod
@@ -100,6 +122,39 @@ export default function apiHandlersOpenrouter(defines: Defines): HttpHandler[] {
 
 /** The relay's path (viewer/tools/assistHost.js AI_RELAY_URL), same origin. */
 export const AI_RELAY_PATH = '/.netlify/functions/ai-chat'
+
+
+/** A Pro-only model the mock catalogue lists beyond the curated ones. */
+export const MOCK_CATALOGUE_MODEL = {id: 'x-ai/grok-4.7', name: 'SpaceXSI: Grok 4.7', price: {input: 4, output: 12},
+  tiers: ['pro']}
+
+/** What the mock relay answers `GET ?catalogue` with: the real route's shape, trimmed. */
+export const MOCK_AI_CATALOGUE = {
+  source: 'live',
+  default: ASSIST_MODEL,
+  free: ASSIST_FREE_MODELS,
+  models: [
+    {id: ASSIST_MODEL, name: 'Qwen: Qwen3.7 Flash', price: {input: 0.2, output: 0.8},
+      tiers: ['anonymous', 'free', 'pro']},
+    {id: 'anthropic/claude-haiku-4.5', name: 'Anthropic: Claude Haiku 4.5', price: {input: 1, output: 5},
+      tiers: ['pro']},
+    MOCK_CATALOGUE_MODEL,
+  ],
+}
+
+
+/**
+ * @param model the request's `model`
+ * @param tier the caller's
+ * @return whether the real relay would serve it on that tier
+ */
+function relayAllows(model: string | undefined, tier: string): boolean {
+  if (model === undefined || model === MOCK_AI_CATALOGUE.default || model === MOCK_AI_CATALOGUE.free) {
+    return true
+  }
+  const listed = MOCK_AI_CATALOGUE.models.find((m) => m.id === model)
+  return Boolean(listed && listed.tiers.includes(tier))
+}
 
 /**
  * What a spec sets on `window.__mockAiRelay` to steer the mock relay's next
