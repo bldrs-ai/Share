@@ -258,6 +258,7 @@ describe('ai-chat', () => {
       ['a foreign origin', 'https://evil.example'],
       ['a sibling preview', 'https://deploy-preview-10--bldrs.netlify.app'],
       ['the same host over http', 'http://deploy-preview-9--bldrs.netlify.app'],
+      ['the same host on another port', 'https://deploy-preview-9--bldrs.netlify.app:444'],
     ])('refuses %s posting to a preview', async (_name, origin) => {
       process.env = {...ENV}
       const res = await call({url: PREVIEW_FN, origin})
