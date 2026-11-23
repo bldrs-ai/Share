@@ -37,7 +37,9 @@ function fakeRelay(answer = () => undefined) {
       return given
     }
     const {chunks, delayMs} = scriptedReply(request.body)
-    const headers = {...SSE_HEADERS, 'x-bldrs-ai-tier': 'anonymous', 'x-bldrs-ai-used': '120', 'x-bldrs-ai-limit': '20000'}
+    const signedIn = request.headers.get('authorization') === 'Bearer auth0-token'
+    const headers = {...SSE_HEADERS, 'x-bldrs-ai-tier': signedIn ? 'pro' : 'anonymous', 'x-bldrs-ai-used': '120',
+      'x-bldrs-ai-limit': '20000', 'x-bldrs-ai-max-body-bytes': signedIn ? '1048576' : '40000'}
     if (!request.headers.get('authorization')) {
       headers['x-bldrs-ai-token'] = MINTED
     }
@@ -55,7 +57,8 @@ function fakeRelay(answer = () => undefined) {
  * @param {string|Function} [options.model] the transport's `model`
  * @return {object} the session and what the fakes saw
  */
-function setup({answer, getAuthToken = () => Promise.resolve(null), model = 'qwen/qwen3.7-flash'} = {}) {
+function setup({answer, getAuthToken = () => Promise.resolve(null), model = 'qwen/qwen3.7-flash',
+  maxRequestBytesFor} = {}) {
   const {fetchFn, requests} = fakeRelay(answer)
   let anonToken = null
   const metas = []
@@ -65,6 +68,7 @@ function setup({answer, getAuthToken = () => Promise.resolve(null), model = 'qwe
       anonToken = t
     }},
     onMeta: (meta) => metas.push(meta),
+    maxRequestBytesFor,
     fetch: fetchFn,
   })
   const registry = createRegistry([{
@@ -166,12 +170,48 @@ describe('assist/hostedTransport', () => {
   it('hands each response\'s metering headers to the host', async () => {
     const {session, metas} = setup()
     await collect(session.send('hello'))
-    expect(metas).toEqual([{tier: 'anonymous', used: 120, limit: 20000, overflow: false}])
+    expect(metas).toEqual([{tier: 'anonymous', used: 120, limit: 20000, overflow: false, maxBodyBytes: 40000}])
+  })
+
+  // Codex on #2305: the relay refuses a body over its tier's cap, so the loop
+  // sizes each step to it (loop.ts boundStepMessages).
+  it('assumes the host\'s smallest cap before the relay says, then uses the cap the relay names', async () => {
+    const asked = []
+    const {session, transport} = setup({maxRequestBytesFor: (tier) => {
+      asked.push(tier)
+      return 1000
+    }})
+    expect(await transport.maxRequestBytes()).toBe(1000)
+    expect(asked).toEqual([null])
+    await collect(session.send('hello'))
+    // The relay's header carries its deploy's value, env overrides included.
+    expect(await transport.maxRequestBytes()).toBe(40000)
+  })
+
+  it.each([
+    ['they sign out', () => Promise.resolve(null)],
+    ['their token can\'t be refreshed, so the request goes anonymous', () => Promise.reject(new Error('login_required'))],
+  ])('drops a Pro caller\'s cap once %s, before the relay has said again', async (_name, afterwards) => {
+    let token = () => Promise.resolve('auth0-token')
+    const {session, transport} = setup({
+      getAuthToken: () => token(),
+      maxRequestBytesFor: (tier) => (tier === null ? 1000 : undefined),
+    })
+    await collect(session.send('hello'))
+    expect(await transport.maxRequestBytes()).toBe(1048576)
+    token = afterwards
+    expect(await transport.maxRequestBytes()).toBe(1000)
+  })
+
+  it('has no body cap when the host gives none', async () => {
+    expect(await setup().transport.maxRequestBytes()).toBeUndefined()
   })
 
   it('reads the overflow header', () => {
     expect(hostedMetaOf(new Headers({'x-bldrs-ai-overflow': 'free_models'})).overflow).toBe(true)
     expect(hostedMetaOf(new Headers({'x-bldrs-ai-used': 'lots'})).used).toBeNull()
+    expect(hostedMetaOf(new Headers({'x-bldrs-ai-max-body-bytes': '65536'})).maxBodyBytes).toBe(65536)
+    expect(hostedMetaOf(new Headers({})).maxBodyBytes).toBeNull()
   })
 
   it.each([
@@ -274,5 +314,17 @@ describe('assist/selectTransport', () => {
     transport.model()
     expect(transport.id).toBe('openrouter')
     expect(transport.label).toBe('OpenRouter')
+  })
+
+  it('passes on the chosen transport\'s body cap: the relay\'s, and none for the user\'s own key', async () => {
+    let key = null
+    const byok = openRouterTransport({getKey: () => key, model: 'm', baseURL: 'https://openrouter.test/api/v1'})
+    const hosted = hostedTransport({relayUrl: RELAY, model: 'm', getAuthToken: () => Promise.resolve(null),
+      anonTokens: {get: () => null, set: () => undefined}, maxRequestBytesFor: () => 65536})
+    const transport = selectTransport(() => (key ? byok : hosted))
+    expect(await transport.maxRequestBytes()).toBe(65536)
+    key = 'sk-or-user'
+    transport.model()
+    expect(await transport.maxRequestBytes()).toBeUndefined()
   })
 })

@@ -273,9 +273,12 @@ export default async function handler(req, context = {}) {
     return identity.response
   }
   const {tier} = identity
-  const meta = {tier, token: identity.mintedToken}
   const limits = aiCreditLimits(process.env)
-  if (bytes > maxBodyBytesFor(tier, limits)) {
+  // The cap goes back on every response, refusals included, so the client
+  // sizes its next request to this deploy's value rather than a default
+  // (src/assist/loop.ts boundStepMessages; Codex on #2305).
+  const meta = {tier, token: identity.mintedToken, maxBodyBytes: maxBodyBytesFor(tier, limits)}
+  if (bytes > meta.maxBodyBytes) {
     // The same refusal as a body past MAX_BODY_BYTES, so the panel says the
     // same thing: the conversation may be too long, start a new chat
     // (src/assist/hosted.ts maps it to 'bad_request'). Expected, not reported.
@@ -1214,6 +1217,9 @@ function metaHeaders(meta, base) {
   }
   if (meta.overflow) {
     headers.set('x-bldrs-ai-overflow', 'free_models')
+  }
+  if (Number.isFinite(meta.maxBodyBytes)) {
+    headers.set('x-bldrs-ai-max-body-bytes', String(meta.maxBodyBytes))
   }
   if (meta.token) {
     headers.set('x-bldrs-ai-token', meta.token)

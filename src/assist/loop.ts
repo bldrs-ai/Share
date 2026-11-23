@@ -64,11 +64,25 @@ export interface Assist {
 
 
 /**
- * Model calls a turn may make. A select-then-isolate-then-frame request is 3
- * tool steps plus the answer; eval #1929's two-tool tasks needed at most 4.
- * The cap is what stops a model looping on a tool that keeps failing.
+ * Model calls a turn may make. The cap stops a model looping on a tool that
+ * keeps failing; spend is bounded separately, per request, by the relay's
+ * credits (each step is its own relay request). It was 8 until owner testing
+ * on SEESTRASSE ("show a plan view of the 3rd floor and identify an interior
+ * wall"): query, properties, a failed spatial call, two more queries, then
+ * isolate, select and frame used all 8 and the turn ended with no answer. A
+ * real multi-part request needs room to recover from a failed call.
  */
-export const DEFAULT_MAX_STEPS = 8
+export const DEFAULT_MAX_STEPS = 24
+
+
+/**
+ * Appended to the instructions for the turn's last step, which also runs
+ * with `toolChoice: 'none'`: rather than end on a tool call and a "stopped
+ * after N steps" notice, the model answers from what the tools returned.
+ */
+export const FINAL_STEP_NOTE =
+  'This is your last step in this turn and tools are now off. Answer from what the tools have returned ' +
+  'so far, and say in one short sentence what is left undone, if anything, so the user can ask you to continue.'
 
 
 /**
@@ -97,7 +111,31 @@ export const MAX_WIRE_TURNS = 30
  * blocks, and the tool schemas (a few thousand tokens).
  */
 export const MAX_WIRE_CHARS = 160_000
+/**
+ * Bytes one step's messages may take, as JSON, when the transport has no
+ * cap of its own (BYOK, Pro): about 100k tokens, leaving a 128k-token
+ * context room for the instructions, context blocks and tool schemas.
+ * {@link MAX_WIRE_CHARS} bounds earlier turns; this bounds the whole request,
+ * the current turn included, whose tool results pile up step by step (up to
+ * {@link DEFAULT_MAX_STEPS} − 1 of the registry's 32k-character cap, Codex on
+ * #2305). A transport with a cap (the hosted relay's 64 KiB for signed-out
+ * and free callers, `Transport.maxRequestBytes`) sets a tighter one.
+ */
+export const MAX_STEP_BYTES = 400_000
+/**
+ * Room left under a transport's cap for what the request carries besides
+ * the messages and the tools and instructions measured here: the provider's
+ * own fields (model, stream options, routing) and its message framing.
+ */
+export const REQUEST_SLACK_BYTES = 4096
+/**
+ * Messages one request may carry besides the system message. The hosted relay
+ * refuses more than 200 in all (ai-chat.js `MAX_MESSAGES`), and a few long
+ * turns get there under any byte budget (Codex on #2305).
+ */
+export const MAX_REQUEST_MESSAGES = 199
 const STUB_RESULT = 'Result of an earlier turn, omitted to save space. Call the tool again if you need it.'
+const STUB_STEP_RESULT = 'Result of an earlier step, omitted to save space. Call the tool again if you need it.'
 
 
 /** What the loop keeps of a finished tool call, keyed by its call id until the stream reports it. */
@@ -232,6 +270,12 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
       stepRecord,
     })
     const instructionsNow = () => withContext(opts.instructions, contextOf())
+    const toolsBytes = jsonBytes(opts.registry.list().map(({name, description, inputSchema}) =>
+      ({name, description, inputSchema})))
+    // A transport's cap can be above what a model's context takes (Pro's is
+    // the relay's technical one), so the smaller of the two holds.
+    const stepBudget = (instructions: string, requestCap: number | undefined) => (requestCap === undefined ? MAX_STEP_BYTES :
+      Math.min(MAX_STEP_BYTES, Math.max(0, requestCap - toolsBytes - jsonBytes(instructions) - REQUEST_SLACK_BYTES)))
 
     // One error event per turn: an abort, say, can surface both as the
     // stream's 'abort' part and as a rejection of what follows it.
@@ -255,9 +299,24 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
       ...(opts.maxRetries === undefined ? {} : {maxRetries: opts.maxRetries}),
       // The view changes as tools run, so each step gets the context as it
       // is now ("Selection: 7" after a select), not as it was at send.
-      prepareStep: ({stepNumber}) => {
+      prepareStep: async ({stepNumber, messages}) => {
         execStep = stepNumber
-        return {instructions: instructionsNow()}
+        // Asked at every step: the relay names its cap on each response, and
+        // the credential (so the tier) can change mid-turn (Codex on #2305).
+        const requestCap = await opts.transport.maxRequestBytes?.()
+        // The last step answers instead of calling another tool
+        // (FINAL_STEP_NOTE), a one-step cap's only step included: a turn
+        // never ends on a tool call while the provider honours this.
+        const last = stepNumber === maxSteps - 1
+        const instructions = last ? `${instructionsNow()}\n\n${FINAL_STEP_NOTE}` : instructionsNow()
+        // Only present when over budget; the SDK carries an override forward,
+        // so a result stubbed here stays stubbed for the steps after.
+        const bounded = boundStepMessages(messages, stepBudget(instructions, requestCap))
+        return {
+          ...(bounded ? {messages: bounded} : {}),
+          instructions,
+          ...(last ? {toolChoice: 'none' as const} : {}),
+        }
       },
       // Errors are read from the stream below; without this the SDK also
       // logs each one to the console.
@@ -342,7 +401,9 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
       return
     }
     const finishReason = String(await result.finishReason)
-    // Only the step cap ends a turn whose last step still called tools.
+    // Only the step cap ends a turn whose last step still called tools, and
+    // with the last step's tools off that is a provider that ignored
+    // `tool_choice: 'none'`.
     if (finishReason === 'tool-calls' && stepsRun >= maxSteps) {
       events.push({type: 'step-limit', steps: stepsRun})
     }
@@ -474,7 +535,7 @@ export function wireHistory(history: ModelMessage[]): ModelMessage[] {
     // A message before the first user message has no turn, and is not sent.
   }
   let sent = turns.slice(-MAX_WIRE_TURNS)
-  const stubbed = (turn: ModelMessage[]) => turn.map(stubToolResults)
+  const stubbed = (turn: ModelMessage[]) => turn.map((message) => stubToolResults(message))
   sent = sent.map((turn, index) => (index < sent.length - FULL_RESULT_TURNS ? stubbed(turn) : turn))
   const size = () => sent.reduce((sum, turn) => sum + JSON.stringify(turn).length, 0)
   for (let index = Math.max(0, sent.length - FULL_RESULT_TURNS); index < sent.length && size() > MAX_WIRE_CHARS; index++) {
@@ -488,17 +549,82 @@ export function wireHistory(history: ModelMessage[]): ModelMessage[] {
 
 
 /**
+ * @param value
+ * @return its JSON's size in UTF-8 bytes, as a request body counts it
+ */
+function jsonBytes(value: unknown): number {
+  return new TextEncoder().encode(JSON.stringify(value)).length
+}
+
+
+/**
+ * Bound one step's request (Codex on #2305): when the messages are over
+ * `budget` bytes or {@link MAX_REQUEST_MESSAGES} messages, cut what goes over
+ * the wire in this order, stopping as soon as they fit (stubbing only helps
+ * bytes, so a request over on count alone goes straight to step 3):
+ *
+ * 1. this turn's tool results, oldest step first; the newest step's are what
+ *    the model is about to act on, so they stay;
+ * 2. earlier turns' tool results ({@link wireHistory} already stubbed all but
+ *    the last few, and sizes them against a far larger budget);
+ * 3. earlier turns themselves, oldest first, whole turns only.
+ *
+ * Only the wire changes: the stored turn keeps every result whole (D10), since
+ * the store takes the SDK's response messages, not the request. What still
+ * doesn't fit (one result over a small cap) goes as it is, and the transport's
+ * refusal surfaces as it did before.
+ *
+ * @param messages what the SDK is about to send for this step
+ * @param budget bytes, as JSON
+ * @return the bounded messages, or undefined when they already fit
+ */
+export function boundStepMessages(messages: ModelMessage[], budget = MAX_STEP_BYTES,
+  maxMessages = MAX_REQUEST_MESSAGES): ModelMessage[] | undefined {
+  let out = [...messages]
+  const bytesFit = () => jsonBytes(out) <= budget
+  const fits = () => out.length <= maxMessages && bytesFit()
+  if (fits()) {
+    return undefined
+  }
+  const turnStart = () => out.map((m) => m.role).lastIndexOf('user')
+  const toolIndexes = (from: number, to: number) =>
+    out.map((m, index) => (index >= from && index < to && m.role === 'tool' ? index : -1)).filter((i) => i >= 0)
+  const stubbing = [
+    ...toolIndexes(turnStart() + 1, out.length).slice(0, -1).map((index) => ({index, stub: STUB_STEP_RESULT})),
+    ...toolIndexes(0, turnStart()).map((index) => ({index, stub: STUB_RESULT})),
+  ]
+  for (const {index, stub} of stubbing) {
+    if (bytesFit()) {
+      break
+    }
+    out[index] = stubToolResults(out[index], stub)
+    if (fits()) {
+      return out
+    }
+  }
+  while (turnStart() > 0 && !fits()) {
+    // Drop through the next user message after the first, so the request
+    // still starts at a user message and keeps every call with its result.
+    const next = out.findIndex((m, index) => index > 0 && m.role === 'user')
+    out = out.slice(next)
+  }
+  return out
+}
+
+
+/**
  * @param message
+ * @param stub the text that replaces each result
  * @return the message with each tool result's output cut to a stub
  */
-function stubToolResults(message: ModelMessage): ModelMessage {
+function stubToolResults(message: ModelMessage, stub = STUB_RESULT): ModelMessage {
   if (message.role !== 'tool' || !Array.isArray(message.content)) {
     return message
   }
   return {
     ...message,
     content: message.content.map((part) => (part.type === 'tool-result' ?
-      {...part, output: {type: 'text' as const, value: STUB_RESULT}} : part)),
+      {...part, output: {type: 'text' as const, value: stub}} : part)),
   } as ModelMessage
 }
 
