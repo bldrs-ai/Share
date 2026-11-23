@@ -1917,6 +1917,29 @@ describe('CadView', () => {
       return {impl, calls}
     }
 
+    /**
+     * Nothing of A (the harness's loaded model, `/index.ifc`) in the store
+     * or the open's analytics while B loads: #2019's "A → B mid-load"
+     * acceptance.
+     *
+     * @param {object} result renderHook result over the whole store
+     */
+    function expectNothingOfA(result) {
+      const state = result.current
+      expect(state.model).toBeNull()
+      expect(state.indexedModel).toBeNull()
+      expect(state.rootElement).toBeNull()
+      expect(state.elementTypesMap).toEqual([])
+      expect(state.isModelReady).toBe(false)
+      expect(state.loadedFileInfo).toBeNull()
+      expect(state.isFirstMeshShown).toBe(false)
+      expect(state.alert).toBeNull()
+      expect(captureException).not.toHaveBeenCalled()
+      const events = window.gtag.mock.calls.map(([, name]) => name)
+      expect(events).not.toContain('real_model_open')
+      expect(events).not.toContain('load_failed')
+    }
+
     it('aborts the load in flight and starts the next model at once, reporting nothing', async () => {
       window.gtag = jest.fn()
       resetModelOpenReportForTest()
@@ -1973,6 +1996,60 @@ describe('CadView', () => {
       expect(signal.aborted, 'an unmounted CadView gives its load up').toBe(true)
     })
 
+    // codex on #2247: an in-app open across route families (`/v/u`, `/v/g`
+    // and `/v/p`) remounts CadView, and each CadView has its own load queue,
+    // so the left load can still be unwinding after the next one has begun
+    // (a mesh parse can't be stopped). Its teardown must not take down the
+    // next load's overlay, snackbar or load report, nor write its late
+    // progress into that report.
+    it('keeps the next load\'s overlay and report when the left one unwinds after a remount', async () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      let finishA
+      let progressOfA
+      const calls = []
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation((path, loadViewer, onProgress) => {
+        calls.push(String(path))
+        if (calls.length === 1) {
+          progressOfA = onProgress
+          return new Promise((resolve) => {
+            finishA = () => resolve(getHarness()._loadedModel)
+          })
+        }
+        onProgress('Parsing B')
+        return new Promise(() => {})
+      })
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      const first = render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBe(1))
+      first.unmount()
+      await actAsyncFlush()
+
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBe(2))
+      await waitFor(() => expect(result.current.isModelLoading).toBe(true))
+      const reportOfB = loadProgressModule.loadReportToken()
+      const snackOfB = result.current.snackMessage
+      expect(snackOfB).toContain('other.ifc')
+
+      // A's work finishes now, after B has begun: its late progress, then the
+      // load's own end, finally and abort teardown.
+      await act(() => progressOfA('Parsing A late'))
+      await act(() => finishA())
+      await actAsyncFlush()
+
+      expect(loadProgressModule.loadReportToken(), 'B\'s reporter is still the active one').toBe(reportOfB)
+      expect(reportOfB.ended, 'and still reporting').toBe(false)
+      expect(result.current.isModelLoading, 'B\'s overlay stays up').toBe(true)
+      expect(result.current.snackMessage).toBe(snackOfB)
+      expect(result.current.loadResult).toBeNull()
+      const report = JSON.stringify([result.current.loadReportLines, result.current.currentLoadLine])
+      expect(report).not.toContain('Parsing A late')
+    })
+
     it('clears the left model from the store when the switch starts', async () => {
       const {result} = renderHook(() => useStore((state) => state))
       const {impl, calls} = hangingLoad()
@@ -2025,6 +2102,115 @@ describe('CadView', () => {
       await waitFor(() => expect(calls.length).toBe(2))
       expect(calls[1].path).toContain('index.ifc')
       expect(result.current.alert).toBeNull()
+    })
+
+    // open-205 #2019: the left load's writes are dropped because its session
+    // is closed, not only because its work stopped. Here A's load finishes as
+    // the user leaves (its parse resolved before the abort could reject it),
+    // so the run comes back with A's model; nothing of it may reach B.
+    it('drops what a load brings back as the user leaves it (#2019)', async () => {
+      window.gtag = jest.fn()
+      resetModelOpenReportForTest()
+      const {result} = renderHook(() => useStore((state) => state))
+      const calls = []
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation((path, ...rest) => {
+        const signal = rest[5]?.signal
+        calls.push({path: String(path), signal})
+        return calls.length === 1 ?
+          new Promise((resolve) => {
+            signal.addEventListener('abort', () => resolve(getHarness()._loadedModel))
+          }) :
+          new Promise(() => {})
+      })
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBe(1))
+
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBe(2))
+      await actAsyncFlush()
+
+      expectNothingOfA(result)
+      delete window.gtag
+    })
+
+    // With the kill switch there is no abort at all: the left load runs to
+    // its end before B starts. Before sessions its tail wrote A into the
+    // store under B's URL (#2019's inventory); now its session is closed.
+    it('with ?feature=disableSpaModelNav, a load left mid-way writes nothing when it ends (#2019)', async () => {
+      window.history.replaceState(null, '', '/?feature=disableEngineWorker,disableSpaModelNav')
+      window.gtag = jest.fn()
+      resetModelOpenReportForTest()
+      const {result} = renderHook(() => useStore((state) => state))
+      let finishA
+      const calls = []
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation((path, ...rest) => {
+        const options = rest[5] ?? {}
+        calls.push({path: String(path), signal: options.signal})
+        return calls.length === 1 ?
+          new Promise((resolve) => {
+            // A reaches its index only now, after the user has left it (the
+            // tree, properties and search would come up from here, #2029),
+            // and then finishes.
+            finishA = () => {
+              options.onIndexed?.(getHarness()._loadedModel)
+              resolve(getHarness()._loadedModel)
+            }
+          }) :
+          new Promise(() => {})
+      })
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBe(1))
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+      expect(calls.length, 'B waits for A').toBe(1)
+
+      await act(() => finishA())
+      await actAsyncFlush()
+      // B's load has started, and nothing of A is in its state meanwhile.
+      await waitFor(() => expect(calls.length).toBe(2))
+      expectNothingOfA(result)
+      delete window.gtag
+    })
+
+    it('with ?feature=disableSpaModelNav, a load left mid-way that then fails raises nothing (#2019)', async () => {
+      window.history.replaceState(null, '', '/?feature=disableEngineWorker,disableSpaModelNav')
+      window.gtag = jest.fn()
+      resetModelOpenReportForTest()
+      const {result} = renderHook(() => useStore((state) => state))
+      let failA
+      const calls = []
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation((path, ...rest) => {
+        calls.push({path: String(path), signal: rest[5]?.signal})
+        return calls.length === 1 ?
+          new Promise((resolve, reject) => {
+            failA = () => reject(new Error('OpenModel returned -1'))
+          }) :
+          new Promise(() => {})
+      })
+      await act(() => result.current.setIsOpfsAvailable(false))
+      await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBe(1))
+      await act(() => result.current.setModelPath({filepath: '/other.ifc'}))
+      await actAsyncFlush()
+
+      await act(() => failA())
+      await actAsyncFlush()
+      await waitFor(() => expect(calls.length).toBe(2))
+      // A's failure is not B's: no alert over B, no Sentry, no load_failed.
+      expect(result.current.alert).toBeNull()
+      expect(captureException).not.toHaveBeenCalled()
+      const events = window.gtag.mock.calls.map(([, name]) => name)
+      expect(events).not.toContain('load_failed')
+      delete window.gtag
     })
 
     it('with ?feature=disableSpaModelNav, passes no signal and queues the next model behind the load, as before', async () => {

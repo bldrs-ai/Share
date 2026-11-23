@@ -1,4 +1,48 @@
 /**
+ * The IFC slice's per-model state: what belongs to the one model the view
+ * shows, and so goes with it when the user leaves it (open-205 #2019,
+ * Containers/modelSession.js). The slice's initial state spreads this, so a
+ * field declared here starts and resets to the same value by construction;
+ * `store/modelState.js#resetModelState` is the one place that resets it.
+ * A new per-model field belongs here, not in a list somewhere else.
+ *
+ * @return {object} fresh defaults (new arrays on every call)
+ */
+export function ifcModelState() {
+  return {
+    isFirstMeshShown: false,
+    loadReportLines: [],
+    currentLoadLine: null,
+    loadResult: null,
+    isModelReady: false,
+    isCacheWriteInFlight: false,
+    glbArtifact: null,
+    elementTypesMap: [],
+    loadedFileInfo: null,
+    model: null,
+    indexedModel: null,
+    rootElement: null,
+  }
+}
+
+
+/**
+ * The store fields `setIsModelLoading` writes, for a load job's `set`
+ * (Containers/modelSession.js) to write the same. A load that ends also ends
+ * its first mesh: `isFirstMeshShown` belongs to the load in flight, and the
+ * next one starts without it.
+ *
+ * @param {boolean} isLoading
+ * @return {object}
+ */
+export function modelLoadingState(isLoading) {
+  return isLoading ?
+    {isModelLoading: true} :
+    {isModelLoading: false, isFirstMeshShown: false}
+}
+
+
+/**
  * Data stored in Zustand for IFC state.
  *
  * @param {Function} set
@@ -7,18 +51,22 @@
  */
 export default function createIFCSlice(set, get) {
   return {
+    // Per-model fields are declared in ifcModelState (above) and documented
+    // beside their setters below.
+    ...ifcModelState(),
+
     cameraControls: null,
     setCameraControls: (controls) => set(() => ({cameraControls: controls})),
 
     customViewSettings: null,
     setCustomViewSettings: (settings) => set(() => ({customViewSettings: settings})),
 
+    // Not per-model state (ifcModelState): the overlay belongs to the load
+    // job that put it up, which alone takes it down
+    // (Containers/modelSession.js#LoadJob#showLoading), so a switch leaves
+    // the left load's overlay up until that load unwinds or the next begins.
     isModelLoading: false,
-    // A load that ends also ends its first mesh: `isFirstMeshShown` belongs to
-    // the load in flight, and the next one starts without it.
-    setIsModelLoading: (isLoading) => set(() => (isLoading ?
-      {isModelLoading: true} :
-      {isModelLoading: false, isFirstMeshShown: false})),
+    setIsModelLoading: (isLoading) => set(() => modelLoadingState(isLoading)),
 
     // Whether the load in flight has put geometry on screen yet (open-205
     // #2043): set by CadView when a progressive load's first preview mesh or
@@ -27,7 +75,6 @@ export default function createIFCSlice(set, get) {
     // leaves it. The loading overlay lifts on it, so the camera and
     // scene picking are live from the first preview mesh, during the parse
     // (Components/LoadingBackdrop.jsx).
-    isFirstMeshShown: false,
     setIsFirstMeshShown: (isShown) => set(() => ({isFirstMeshShown: isShown})),
 
     // The normalized load-log report (design/new/load-log-format.md):
@@ -35,13 +82,11 @@ export default function createIFCSlice(set, get) {
     // Total) mirrored 1:1 with what loader/loadProgress.js prints to the
     // console. Drives the status-bar expando and the post-load report
     // dialog. Reset by beginLoadProgress on each load.
-    loadReportLines: [],
     setLoadReportLines: (lines) => set(() => ({loadReportLines: lines})),
 
     // The running stage's animated line ("Geometry [0%....56%] 41.0s,
     // +388 MB heap"), or null when no load is in flight — the collapsed
     // status-bar expando's one-liner.
-    currentLoadLine: null,
     setCurrentLoadLine: (line) => set(() => ({currentLoadLine: line})),
 
     // End-of-load grace state (conway #301 UX): once a load settles, the
@@ -54,11 +99,9 @@ export default function createIFCSlice(set, get) {
     // snackbar is dismissed. Set by loader/loadProgress.js#endLoadProgress,
     // cleared by beginLoadProgress (next load) and by the snackbar on
     // dismiss. See AlertDialogAndSnackbar.jsx for the grace state machine.
-    loadResult: null,
     setLoadResult: (result) => set(() => ({loadResult: result})),
 
     // TODO(pablo): really needed?
-    isModelReady: false,
     setIsModelReady: (isReady) => set(() => ({isModelReady: isReady})),
 
     // True while the post-IFC-parse GLB cache writer is running. Set by
@@ -71,7 +114,6 @@ export default function createIFCSlice(set, get) {
     // immediately post-load. Clears regardless of writer success/fail.
     // See design/new/viewer-replacement.md §3b.iii for the next slice
     // (moving the heavy phases to a worker).
-    isCacheWriteInFlight: false,
     setIsCacheWriteInFlight: (inFlight) => set(() => ({isCacheWriteInFlight: inFlight})),
 
     // Where the current model's cached GLB artifact sits in OPFS:
@@ -99,16 +141,12 @@ export default function createIFCSlice(set, get) {
     // from a NESTED load (a .bld assembly's children, which have no
     // page-level artifact of their own).
     // See design/new/glb-export-premium.md §1.2.
-    glbArtifact: null,
     setGlbArtifact: (artifact) => set(() => ({glbArtifact: artifact})),
 
-    elementTypesMap: [],
     setElementTypesMap: (map) => set(() => ({elementTypesMap: map})),
 
-    loadedFileInfo: null,
     setLoadedFileInfo: (loadedFileInfo) => set(() => ({loadedFileInfo: loadedFileInfo})),
 
-    model: null,
     setModel: (m) => set(() => ({model: m})),
 
     // The model at its index while a Conway (IFC/STEP) load still streams
@@ -119,13 +157,11 @@ export default function createIFCSlice(set, get) {
     // the object in the scene. Readers of properties and the tree take it
     // through `selectReadModel` below. Cleared when a load begins, and by the
     // load that set it once its finished model is in `model`, or once it fails.
-    indexedModel: null,
     setIndexedModel: (m) => set(() => ({indexedModel: m})),
 
     preselectedElementIds: null,
     setPreselectedElementIds: (ids) => set(() => ({preselectedElementIds: ids})),
 
-    rootElement: null,
     setRootElement: (elt) => set(() => ({rootElement: elt})),
 
     viewer: {},

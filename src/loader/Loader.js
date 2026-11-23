@@ -117,6 +117,37 @@ const SCHEDULE_IDLE_TIMEOUT_MS = 5_000
 const LFS_POINTER_PROBE_BYTES = 256
 
 
+// The GLB writer that set `isCacheWriteInFlight` last, so only it clears
+// the flag (open-205 #2019). A writer outlives its load: after an in-app
+// switch the left model's writer can still be running, or scheduled, while
+// the next model's own writer runs, and its end must not take the next
+// model's "Caching for next load…" down. A switch also resets the flag with
+// the rest of the left model's state (store/modelState.js).
+let cacheWriteOwner = null
+
+
+/**
+ * @param {object} owner the writer setting the flag
+ */
+function beginCacheWrite(owner) {
+  cacheWriteOwner = owner
+  useStore.getState().setIsCacheWriteInFlight(true)
+}
+
+
+/**
+ * @param {object} owner the writer ending; the flag is left alone unless it
+ *   is the one that set it
+ */
+function endCacheWrite(owner) {
+  if (cacheWriteOwner !== owner) {
+    return
+  }
+  cacheWriteOwner = null
+  useStore.getState().setIsCacheWriteInFlight(false)
+}
+
+
 /**
  * @param {Function} fn
  */
@@ -1290,20 +1321,29 @@ export async function load(
   // is the source of truth.
   if (glbExportContext) {
     glbVerbose('writer: scheduling export, kind =', glbExportContext.kindLabel)
-    useStore.getState().setIsCacheWriteInFlight(true)
+    // The engine THIS load parsed into, bound now, at the load's end, not
+    // read off the viewer when the writer finally runs (open-205 #2019): by
+    // then the user may have left the model, and a viewer re-created
+    // meanwhile (a theme change) carries the next load's engine. A worker
+    // load's engine is its `engineSession` (above); a main-thread load's is
+    // the viewer's shared IFC manager as it stands now.
+    const writerIfcManager = engineSession ? null : (viewer?.IFC?.loader?.ifcManager ?? null)
+    const writerIfcAPI = writerIfcManager?.ifcAPI
+    const writer = {}
+    beginCacheWrite(writer)
     const runWriter = () => {
       if (isAborted(signal)) {
         // The user left the model before the browser was idle enough for
         // the writer: its viewer is gone and its engine closed, so there is
         // nothing to capture from (open-205 #2011 step A).
-        useStore.getState().setIsCacheWriteInFlight(false)
+        endCacheWrite(writer)
         return
       }
       exportAndCacheGlb({
         model,
         kindLabel: glbExportContext.kindLabel,
         cacheKeyArgs: glbExportContext.cacheKeyArgs,
-        ifcManager: engineSession ? null : (viewer?.IFC?.loader?.ifcManager ?? null),
+        ifcManager: writerIfcManager,
         capture: engineSession ? (opts) => engineSession.capture(opts).then((captured) => {
           // Page-side, so a spec can tell where the captures ran: the
           // worker's own `[glb]` lines print in the worker's console.
@@ -1320,7 +1360,7 @@ export async function load(
         // source's size, not their own (BLDRS_SOURCE_BYTES_EXTRAS_KEY).
         sourceBytes,
       }).finally(() => {
-        useStore.getState().setIsCacheWriteInFlight(false)
+        endCacheWrite(writer)
         if (engineSession) {
           // The same safe point as below, in the worker: the capture is done.
           // A windowed open already reads through its store and answers
@@ -1341,8 +1381,7 @@ export async function load(
         // model was parsed from. Cache-hit GLB loads never get here
         // (no writer is scheduled) — nothing to spill. Fail-soft: any
         // guard failure keeps the resident buffer (pre-spill behavior).
-        spillModelSource(
-          viewer?.IFC?.loader?.ifcManager?.ifcAPI, engineModelID, glbExportContext.sourceFile)
+        spillModelSource(writerIfcAPI, engineModelID, glbExportContext.sourceFile)
         // Same safe point, wasm-side twin of the source spill: the
         // scene is built and the GLB written, so nothing reads conway's
         // native geometry again — free it (per-model) so repeated loads
@@ -1350,7 +1389,7 @@ export async function load(
         // model scenes until the tab crashes. Feature-detected;
         // burn-in gated with the demand path.
         try {
-          const releaseAPI = viewer?.IFC?.loader?.ifcManager?.ifcAPI
+          const releaseAPI = writerIfcAPI
           if (isFeatureEnabled('demandGeometry') &&
               typeof releaseAPI?.ReleaseModelGeometry === 'function') {
             // eslint-disable-next-line new-cap
