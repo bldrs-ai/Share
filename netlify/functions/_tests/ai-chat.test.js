@@ -113,10 +113,11 @@ function chatBody(overrides = {}) {
  * @param {object} [options.context]
  * @param {?string} [options.origin] the Origin header; null sends none
  * @param {object} [options.headers] more request headers
+ * @param {string} [options.url] the URL the request is sent to
  * @return {Promise<Response>}
  */
 function call({body = chatBody(), bearer, method = 'POST', context = {ip: IP}, origin = 'https://bldrs.ai',
-  headers: extraHeaders = {}} = {}) {
+  headers: extraHeaders = {}, url = 'https://bldrs.ai/.netlify/functions/ai-chat'} = {}) {
   const headers = {'Content-Type': 'application/json', ...extraHeaders}
   if (origin !== null) {
     headers.Origin = origin
@@ -124,7 +125,7 @@ function call({body = chatBody(), bearer, method = 'POST', context = {ip: IP}, o
   if (bearer) {
     headers.Authorization = `Bearer ${bearer}`
   }
-  const req = new Request('https://bldrs.ai/.netlify/functions/ai-chat', {
+  const req = new Request(url, {
     method, headers, body: method === 'GET' ? undefined : (typeof body === 'string' ? body : JSON.stringify(body)),
   })
   return handler(req, context)
@@ -240,6 +241,29 @@ describe('ai-chat', () => {
       const res = await call({origin})
       expect(res.status).toBe(200)
       await res.text()
+    })
+
+    // A deploy preview, as it runs: no Netlify URL variable names it, so only
+    // the request's own origin can admit the app's page (deploy-preview-2257).
+    const PREVIEW_FN = 'https://deploy-preview-9--bldrs.netlify.app/.netlify/functions/ai-chat'
+
+    it('allows the deploy\'s own origin with no URL variable set', async () => {
+      process.env = {...ENV}
+      const res = await call({url: PREVIEW_FN, origin: 'https://deploy-preview-9--bldrs.netlify.app'})
+      expect(res.status).toBe(200)
+      await res.text()
+    })
+
+    it.each([
+      ['a foreign origin', 'https://evil.example'],
+      ['a sibling preview', 'https://deploy-preview-10--bldrs.netlify.app'],
+      ['the same host over http', 'http://deploy-preview-9--bldrs.netlify.app'],
+      ['the same host on another port', 'https://deploy-preview-9--bldrs.netlify.app:444'],
+    ])('refuses %s posting to a preview', async (_name, origin) => {
+      process.env = {...ENV}
+      const res = await call({url: PREVIEW_FN, origin})
+      expect(res.status).toBe(403)
+      expect((await res.json()).error.code).toBe('ai_forbidden_origin')
     })
 
     it('allows a same-origin fetch that sent no Origin, by Sec-Fetch-Site', async () => {
