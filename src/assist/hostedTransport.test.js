@@ -56,7 +56,7 @@ function fakeRelay(answer = () => undefined) {
  * @param {Array<object>} [options.tools] a tool provider set; defaults to one model.query
  * @return {object} the session and what the fakes saw
  */
-function setup({answer, getAuthToken = () => Promise.resolve(null), maxRequestBytesFor, isSignedIn} = {}) {
+function setup({answer, getAuthToken = () => Promise.resolve(null), maxRequestBytesFor} = {}) {
   const {fetchFn, requests} = fakeRelay(answer)
   let anonToken = null
   const metas = []
@@ -67,7 +67,6 @@ function setup({answer, getAuthToken = () => Promise.resolve(null), maxRequestBy
     }},
     onMeta: (meta) => metas.push(meta),
     maxRequestBytesFor,
-    isSignedIn,
     fetch: fetchFn,
   })
   const registry = createRegistry([{
@@ -169,28 +168,30 @@ describe('assist/hostedTransport', () => {
       asked.push(tier)
       return 1000
     }})
-    expect(transport.maxRequestBytes()).toBe(1000)
+    expect(await transport.maxRequestBytes()).toBe(1000)
     expect(asked).toEqual([null])
     await collect(session.send('hello'))
     // The relay's header carries its deploy's value, env overrides included.
-    expect(transport.maxRequestBytes()).toBe(40000)
+    expect(await transport.maxRequestBytes()).toBe(40000)
   })
 
-  it('drops a signed-in caller\'s cap once they sign out, before the relay has said again', async () => {
-    let signedIn = true
+  it.each([
+    ['they sign out', () => Promise.resolve(null)],
+    ['their token can\'t be refreshed, so the request goes anonymous', () => Promise.reject(new Error('login_required'))],
+  ])('drops a Pro caller\'s cap once %s, before the relay has said again', async (_name, afterwards) => {
+    let token = () => Promise.resolve('auth0-token')
     const {session, transport} = setup({
-      getAuthToken: () => Promise.resolve(signedIn ? 'auth0-token' : null),
-      isSignedIn: () => signedIn,
+      getAuthToken: () => token(),
       maxRequestBytesFor: (tier) => (tier === null ? 1000 : undefined),
     })
     await collect(session.send('hello'))
-    expect(transport.maxRequestBytes()).toBe(1048576)
-    signedIn = false
-    expect(transport.maxRequestBytes()).toBe(1000)
+    expect(await transport.maxRequestBytes()).toBe(1048576)
+    token = afterwards
+    expect(await transport.maxRequestBytes()).toBe(1000)
   })
 
-  it('has no body cap when the host gives none', () => {
-    expect(setup().transport.maxRequestBytes()).toBeUndefined()
+  it('has no body cap when the host gives none', async () => {
+    expect(await setup().transport.maxRequestBytes()).toBeUndefined()
   })
 
   it('reads the overflow header', () => {
@@ -302,15 +303,15 @@ describe('assist/selectTransport', () => {
     expect(transport.label).toBe('OpenRouter')
   })
 
-  it('passes on the chosen transport\'s body cap: the relay\'s, and none for the user\'s own key', () => {
+  it('passes on the chosen transport\'s body cap: the relay\'s, and none for the user\'s own key', async () => {
     let key = null
     const byok = openRouterTransport({getKey: () => key, model: 'm', baseURL: 'https://openrouter.test/api/v1'})
     const hosted = hostedTransport({relayUrl: RELAY, model: 'm', getAuthToken: () => Promise.resolve(null),
       anonTokens: {get: () => null, set: () => undefined}, maxRequestBytesFor: () => 65536})
     const transport = selectTransport(() => (key ? byok : hosted))
-    expect(transport.maxRequestBytes()).toBe(65536)
+    expect(await transport.maxRequestBytes()).toBe(65536)
     key = 'sk-or-user'
     transport.model()
-    expect(transport.maxRequestBytes()).toBeUndefined()
+    expect(await transport.maxRequestBytes()).toBeUndefined()
   })
 })

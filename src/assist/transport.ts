@@ -22,12 +22,14 @@ export interface Transport {
    */
   model(): LanguageModel
   /**
-   * The largest request body, in bytes, this transport takes right now, or
-   * undefined for no cap of its own. The loop fits each step's request under
-   * it (loop.ts `boundStepMessages`): the hosted relay refuses a body over its
-   * tier's cap (ai-chat.js `maxBodyBytesFor`) as `ai_bad_request`.
+   * The largest request body, in bytes, this transport takes for the request
+   * it is about to send, or undefined for no cap of its own. The loop asks
+   * before every step and fits that step's request under it (loop.ts
+   * `boundStepMessages`): the hosted relay refuses a body over its tier's cap
+   * (ai-chat.js `maxBodyBytesFor`) as `ai_bad_request`. May be async: the
+   * hosted transport checks which credential the request will carry.
    */
-  maxRequestBytes?(): number | undefined
+  maxRequestBytes?(): number | undefined | Promise<number | undefined>
 }
 
 
@@ -108,18 +110,13 @@ export interface HostedTransportOptions {
   onMeta?: (meta: HostedMeta) => void
   /**
    * The body cap to assume for a tier when the relay hasn't said its own
-   * (`x-bldrs-ai-max-body-bytes`): null before any response, or once the
-   * sign-in state has changed since the last one. Undefined for none. The
-   * host knows the defaults (quota/aiCredits.js); this module stays free of
+   * (`x-bldrs-ai-max-body-bytes`): null before any response, or when the next
+   * request will carry a different credential than the last one did (signed
+   * out since, or a token that couldn't be had). Undefined for none. The host
+   * knows the defaults (quota/aiCredits.js); this module stays free of
    * Share's config.
    */
   maxRequestBytesFor?: (tier: string | null) => number | undefined
-  /**
-   * Whether the user is signed in now, read without waiting. A cap the relay
-   * named for a signed-in caller (Pro's) is stale once they sign out, and
-   * the next request goes anonymous (Codex on #2305).
-   */
-  isSignedIn?: () => boolean
   /** For tests: a stand-in for `fetch`. */
   fetch?: typeof fetch
 }
@@ -156,13 +153,16 @@ export function hostedTransport(opts: HostedTransportOptions): Transport {
   let lastTier: string | null = null
   let lastCap: number | null = null
   let lastSignedIn: boolean | null = null
-  const relayFetch = async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    let auth: string | null = null
+  // A token that can't be had sends the request anonymous.
+  const authToken = async (): Promise<string | null> => {
     try {
-      auth = await opts.getAuthToken()
+      return await opts.getAuthToken()
     } catch {
-      auth = null
+      return null
     }
+  }
+  const relayFetch = async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const auth = await authToken()
     const bearer = auth ?? opts.anonTokens.get()
     const headers = new Headers(init?.headers)
     headers.delete('authorization')
@@ -205,9 +205,13 @@ export function hostedTransport(opts: HostedTransportOptions): Transport {
       })
       return provider.chat(opts.model)
     },
-    maxRequestBytes: () => {
-      const stale = lastSignedIn !== null && opts.isSignedIn !== undefined && opts.isSignedIn() !== lastSignedIn
-      if (stale) {
+    // The cap the relay named holds only while the next request carries the
+    // same kind of credential: a sign-out, or an Auth0 token that can't be
+    // refreshed (the request then goes anonymous, `authToken`), changes the
+    // tier before the relay can say so (Codex on #2305).
+    maxRequestBytes: async () => {
+      const signedIn = (await authToken()) !== null
+      if (lastSignedIn !== null && signedIn !== lastSignedIn) {
         return opts.maxRequestBytesFor?.(null)
       }
       return lastCap ?? opts.maxRequestBytesFor?.(lastTier)

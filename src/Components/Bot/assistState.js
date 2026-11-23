@@ -245,7 +245,6 @@ export const assistHostedSide = {
     }
   },
   anonTokens: assistAnonTokens,
-  isSignedIn: () => Boolean(assistAuth.current?.isAuthenticated),
   onMeta: (meta) => {
     noteHostedCredits(meta)
     if (!meta.overflow) {

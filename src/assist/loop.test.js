@@ -128,17 +128,21 @@ function setup(overrides = {}, reply = undefined) {
   let key = KEY
   const transport = openRouterTransport({getKey: () => key, model: 'mock/model', baseURL: BASE_URL,
     appUrl: 'https://bldrs.ai', appTitle: 'Bldrs Share', fetch: fetchFn})
+  const capReads = []
   const assist = createAssist({
     // `maxRequestBytes` stands in for the hosted relay's per-tier body cap.
     transport: overrides.maxRequestBytes === undefined ? transport :
-      {...transport, maxRequestBytes: () => overrides.maxRequestBytes},
+      {...transport, maxRequestBytes: () => {
+        capReads.push(overrides.maxRequestBytes)
+        return Promise.resolve(overrides.maxRequestBytes)
+      }},
     registry: fake.registry,
     store,
     instructions: 'Use the tools.',
     maxRetries: 0,
     ...overrides,
   })
-  return {session: assist.open('c1'), requests, store, setKey: (k) => {
+  return {session: assist.open('c1'), requests, store, capReads, setKey: (k) => {
     key = k
   }, ...fake}
 }
@@ -598,7 +602,7 @@ describe('assist/loop', () => {
         }],
       }
       let n = 0
-      const {session, requests} = setup({maxSteps: 6, maxRequestBytes: CAP, extraProviders: [bigProvider]}, (body) =>
+      const {session, requests, capReads} = setup({maxSteps: 6, maxRequestBytes: CAP, extraProviders: [bigProvider]}, (body) =>
         (body.tool_choice === 'none' ?
           {chunks: textReply('Done reading.'), delayMs: 0} :
           {chunks: toolCalls([{id: `b${n++}`, name: 'big_read', args: {}}]), delayMs: 0}))
@@ -606,6 +610,8 @@ describe('assist/loop', () => {
       expect(requests).toHaveLength(6)
       requests.forEach(({body}) => expect(new TextEncoder().encode(JSON.stringify(body)).length).toBeLessThanOrEqual(CAP))
       expect(textOf(events)).toBe('Done reading.')
+      // Asked before every step, so a cap the relay names mid-turn applies to the rest.
+      expect(capReads).toHaveLength(6)
     })
 
     it('keeps a long turn\'s requests under MAX_STEP_BYTES and the stored turn whole', async () => {

@@ -270,14 +270,11 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
       stepRecord,
     })
     const instructionsNow = () => withContext(opts.instructions, contextOf())
-    // Read per turn: the hosted relay's cap follows the caller's tier, which
-    // signing in or out changes.
-    const requestCap = opts.transport.maxRequestBytes?.()
     const toolsBytes = jsonBytes(opts.registry.list().map(({name, description, inputSchema}) =>
       ({name, description, inputSchema})))
     // A transport's cap can be above what a model's context takes (Pro's is
     // the relay's technical one), so the smaller of the two holds.
-    const stepBudget = (instructions: string) => (requestCap === undefined ? MAX_STEP_BYTES :
+    const stepBudget = (instructions: string, requestCap: number | undefined) => (requestCap === undefined ? MAX_STEP_BYTES :
       Math.min(MAX_STEP_BYTES, Math.max(0, requestCap - toolsBytes - jsonBytes(instructions) - REQUEST_SLACK_BYTES)))
 
     // One error event per turn: an abort, say, can surface both as the
@@ -302,8 +299,11 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
       ...(opts.maxRetries === undefined ? {} : {maxRetries: opts.maxRetries}),
       // The view changes as tools run, so each step gets the context as it
       // is now ("Selection: 7" after a select), not as it was at send.
-      prepareStep: ({stepNumber, messages}) => {
+      prepareStep: async ({stepNumber, messages}) => {
         execStep = stepNumber
+        // Asked at every step: the relay names its cap on each response, and
+        // the credential (so the tier) can change mid-turn (Codex on #2305).
+        const requestCap = await opts.transport.maxRequestBytes?.()
         // The last step answers instead of calling another tool
         // (FINAL_STEP_NOTE), a one-step cap's only step included: a turn
         // never ends on a tool call while the provider honours this.
@@ -311,7 +311,7 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
         const instructions = last ? `${instructionsNow()}\n\n${FINAL_STEP_NOTE}` : instructionsNow()
         // Only present when over budget; the SDK carries an override forward,
         // so a result stubbed here stays stubbed for the steps after.
-        const bounded = boundStepMessages(messages, stepBudget(instructions))
+        const bounded = boundStepMessages(messages, stepBudget(instructions, requestCap))
         return {
           ...(bounded ? {messages: bounded} : {}),
           instructions,
