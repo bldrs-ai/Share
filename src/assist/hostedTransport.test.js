@@ -52,14 +52,15 @@ function fakeRelay(answer = () => undefined) {
  * @param {Function} [options.answer] fakeRelay's
  * @param {Function} [options.getAuthToken]
  * @param {Array<object>} [options.tools] a tool provider set; defaults to one model.query
+ * @param {string|Function} [options.model] the transport's `model`
  * @return {object} the session and what the fakes saw
  */
-function setup({answer, getAuthToken = () => Promise.resolve(null)} = {}) {
+function setup({answer, getAuthToken = () => Promise.resolve(null), model = 'qwen/qwen3.7-flash'} = {}) {
   const {fetchFn, requests} = fakeRelay(answer)
   let anonToken = null
   const metas = []
   const transport = hostedTransport({
-    relayUrl: RELAY, model: 'qwen/qwen3.7-flash', getAuthToken,
+    relayUrl: RELAY, model, getAuthToken,
     anonTokens: {get: () => anonToken, set: (t) => {
       anonToken = t
     }},
@@ -125,6 +126,17 @@ describe('assist/hostedTransport', () => {
     expect(transport.id).toBe(HOSTED_TRANSPORT_ID)
   })
 
+  // #1934: the host's model picker. A function is read at each turn, so a
+  // choice made in settings applies to the next turn without a rebuild.
+  it('reads a model function afresh at each turn', async () => {
+    let chosen = 'bldrs/free'
+    const {session, requests} = setup({model: () => chosen})
+    await collect(session.send('hello'))
+    chosen = 'x-ai/grok-4.7'
+    await collect(session.send('hello again'))
+    expect(requests.map((r) => r.body.model)).toEqual(['bldrs/free', 'x-ai/grok-4.7'])
+  })
+
   it('goes anonymous first, keeps the token the relay mints, and sends it on the next request', async () => {
     const {session, requests, anonToken} = setup()
     await collect(session.send(SCRIPT.selectPrompt))
@@ -168,7 +180,7 @@ describe('assist/hostedTransport', () => {
     [429, {error: {code: 'ai_free_requests_exhausted'}, tier: 'anonymous'}, 'free_requests_exhausted', 'anonymous'],
     [429, {error: {code: 'ai_too_many_requests'}, tier: 'free'}, 'rate_limited', 'free'],
     [503, {error: {code: 'ai_busy'}, tier: 'anonymous'}, 'assistant_busy', 'anonymous'],
-    [502, {error: {code: 'ai_model_unavailable'}, tier: 'pro'}, 'service_unavailable', 'pro'],
+    [502, {error: {code: 'ai_model_unavailable'}, tier: 'pro'}, 'model_unavailable', 'pro'],
     [503, {error: {code: 'ai_unavailable'}}, 'service_unavailable', undefined],
     [400, {error: {code: 'ai_model_not_allowed'}, tier: 'free'}, 'unavailable', 'free'],
     [400, {error: {code: 'ai_request_rejected'}, tier: 'free'}, 'bad_request', 'free'],
