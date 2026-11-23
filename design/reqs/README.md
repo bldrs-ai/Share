@@ -1,6 +1,6 @@
 # Share UX Requirements Index
 
-**Draft v0.10 · 2026-11-23 · Index and shared requirements**
+**Draft v0.11 · 2026-11-23 · Index and shared requirements**
 
 ## Feature documents
 
@@ -13,6 +13,9 @@
 | [Notes — live requirements](https://github.com/bldrs-ai/Share/issues/670) | Anchored discussions, private drafts, publication/replies and colored topic tags | `notes-100` (former N17–N20) |
 | [Workspace](workspace.md) | Projects, their models and sessions; a session as a conversation thread over several models; viewing them together | `open-200` (#1657), `assist-310` (#1659), `open-210` (#2192), reconciled 2026-11-18 |
 | [Open — sources and recents](open-100.md) | Opening a model from a local file, a sample, GitHub or Google Drive; saying why a model didn't open; recents; several connected accounts | `open-100` (#2258), `open-110` (#2259), `open-120` (#2260), `open-130` (#2261), `open-300` (#2262), reconciled 2026-11-23; [triage](open-100-triage.md) |
+| [View](view-100.md) | Looking at a model: tree, properties, selection, cut planes, camera, display, hide and isolate, placemarks, tables | `view-100` (#2270) to `view-300` (#2277), `view-140` (#1705), `view-220` (#1881), reconciled 2026-11-23; [triage](view-100-triage.md) |
+| [Search](search-100.md) | Finding elements, linking to one, fluid NavTree | `search-100` (#2278), `search-300` (#2279), `search-320` (#1658); [triage](search-100-triage.md) |
+| [Later Notes and Versions epics](notes-200.md) | BCF, notes and versions on Drive, version diff (all post-MVP) | `notes-200` (#2280) to `versions-310` (#2283); [triage](notes-200-triage.md) |
 | [In-app model switching](open-205.md) | Opening a model without a page reload; leaving one loading while working on another | `open-205` (#2011), reconciled 2026-11-23; [triage](open-205-triage.md) |
 
 Sharing's requirements moved into issues on 2026-11-18: [#2144](https://github.com/bldrs-ai/Share/issues/2144) and [#2206](https://github.com/bldrs-ai/Share/issues/2206), with the link contract in `design/new/model-versioning.md` §5a and the migration record in [share-200-triage.md](share-200-triage.md#sharing-ux-draft-migration--2026-11-18). Versions requirements, tasks and decisions now live in [#57](https://github.com/bldrs-ai/Share/issues/57) and its stories; the [Versions snapshot](versions-100.md) and [triage record](versions-100-triage.md) preserve scope and migration evidence. Later semantic requirements retain their existing owner [#2144](https://github.com/bldrs-ai/Share/issues/2144), with a [scope snapshot](share-200.md) and [triage slice](share-200-triage.md). Notes requirements remain in [#670](https://github.com/bldrs-ai/Share/issues/670) and its stories; its [snapshot](notes-100.md) and [triage](notes-100-triage.md) retain their established scope and history. This index owns common requirements and cross-feature decisions. The workspace's stories live in [#1657](https://github.com/bldrs-ai/Share/issues/1657), [#1659](https://github.com/bldrs-ai/Share/issues/1659) and [#2192](https://github.com/bldrs-ai/Share/issues/2192); [workspace.md](workspace.md) keeps their shared decisions and rules, and each epic has a snapshot and triage record ([open-200](open-200.md), [assist-310](assist-310.md), [open-210](open-210.md)). The rest of the Open family, from opening a file to in-app switching, is in [open-100.md](open-100.md) and [open-205.md](open-205.md).

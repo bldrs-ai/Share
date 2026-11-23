@@ -1,6 +1,6 @@
 # Bldrs Share Roadmap
 
-**Status:** Draft v0.20 — the Open epics reconciled (`open-100`…`open-300`); §4 retired for epics that have an issue
+**Status:** Draft v0.21 — View, Search, Notes & Versions epics have issues; §4 keeps only epics without one
 **Date:** 2026-11-23
 **Owner:** Pablo
 **Source baseline:** `Share Requirements` Google Doc (Aug 2021, last updated Nov 2022); PDF extract is in this repo's history.
@@ -75,16 +75,16 @@ One row per Epic and Track. An epic's description is in its issue, or in §4 if 
 | Open | `open-205` | In-app model switching | 🟡 | AI | `view-t100` | <a href="https://github.com/bldrs-ai/Share/issues/2011" target="_blank" rel="noopener noreferrer">#2011</a> |
 | Open | `open-210` | View several models together | ⬜ | Post | — | <a href="https://github.com/bldrs-ai/Share/issues/2192" target="_blank" rel="noopener noreferrer">#2192</a> |
 | Open | `open-300` | Open from any account I've connected | 🟡 | B | `identity-t100` | <a href="https://github.com/bldrs-ai/Share/issues/2262" target="_blank" rel="noopener noreferrer">#2262</a> |
-| View | `view-100` | 3D + NavTree + Properties | ✔ | — | `view-t100`, `share-t101` | |
-| View | `view-110` | Cut planes | ✔ | — | `view-t100` | |
-| View | `view-120` | Shareable camera position | ✔ | — | — | |
-| View | `view-130` | Performance + large-model viewing | 🟡 | A | `view-t100`, `share-t101` | |
+| View | `view-100` | 3D + NavTree + Properties | ✔ | — | `view-t100`, `share-t101` | <a href="https://github.com/bldrs-ai/Share/issues/2270" target="_blank" rel="noopener noreferrer">#2270</a> |
+| View | `view-110` | Cut planes | ✔ | — | `view-t100` | <a href="https://github.com/bldrs-ai/Share/issues/2271" target="_blank" rel="noopener noreferrer">#2271</a> |
+| View | `view-120` | Shareable camera position | ✔ | — | — | <a href="https://github.com/bldrs-ai/Share/issues/2272" target="_blank" rel="noopener noreferrer">#2272</a> |
+| View | `view-130` | Performance + large-model viewing | 🟡 | A | `view-t100`, `share-t101` | <a href="https://github.com/bldrs-ai/Share/issues/2273" target="_blank" rel="noopener noreferrer">#2273</a> |
 | View | `view-140` | Scoped display controls + shareable display state | 🟡 | C | `view-t100`, `share-t101` | <a href="https://github.com/bldrs-ai/Share/issues/1705" target="_blank" rel="noopener noreferrer">#1705</a> |
-| View | `view-200` | Persistent visibility / Isolate | 🟡 | Post | `view-t100` | |
-| View | `view-210` | Selection-based camera + measurement | ⬜ | Post | — | |
+| View | `view-200` | Persistent visibility / Isolate | 🟡 | Post | `view-t100` | <a href="https://github.com/bldrs-ai/Share/issues/2274" target="_blank" rel="noopener noreferrer">#2274</a> |
+| View | `view-210` | Selection-based camera + measurement | ⬜ | Post | — | <a href="https://github.com/bldrs-ai/Share/issues/2275" target="_blank" rel="noopener noreferrer">#2275</a> |
 | View | `view-220` | Common view ops (nav-cube, explode, undo, IDS) | ⬜ | Post | — | <a href="https://github.com/bldrs-ai/Share/issues/1881" target="_blank" rel="noopener noreferrer">#1881</a> |
-| View | `view-230` | Placemarks + maps-style issues w/filtering (🥇) | 🟡 | C, Post | `view-t100`, `notes-t200` | |
-| View | `view-300` | ETL / Table view (❤️ Markus) | 🔮 | Post | `view-t100` | |
+| View | `view-230` | Placemarks + maps-style issues w/filtering (🥇) | 🟡 | C, Post | `view-t100`, `notes-t200` | <a href="https://github.com/bldrs-ai/Share/issues/2276" target="_blank" rel="noopener noreferrer">#2276</a> |
+| View | `view-300` | ETL / Table view (❤️ Markus) | 🔮 | Post | `view-t100` | <a href="https://github.com/bldrs-ai/Share/issues/2277" target="_blank" rel="noopener noreferrer">#2277</a> |
 | Share | `share-100` | Share link to current view | ✔ | — | — | |
 | Share | `share-110` | Save a model to Google Drive | ⬜ | C | — | <a href="https://github.com/bldrs-ai/Share/issues/2205" target="_blank" rel="noopener noreferrer">#2205</a> |
 | Share | `share-120` | Extended Share/Login flow | 🟡 | C, D | — | <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a> |
@@ -93,15 +93,15 @@ One row per Epic and Track. An epic's description is in its issue, or in §4 if 
 | Share | `share-200` | Model versioning and sharing: git + progressive decomposition | 🟡 | C (link resolver), Post, AI | `share-t101`, `create-t300` (V1+) | <a href="https://github.com/bldrs-ai/Share/issues/2144" target="_blank" rel="noopener noreferrer">#2144</a> |
 | Share | `share-201` | Share with named people (grants) | ⬜ | Post | `share-t100` | <a href="https://github.com/bldrs-ai/Share/issues/2207" target="_blank" rel="noopener noreferrer">#2207</a> |
 | Share | `share-400` | Folder-scoped boundaries | ⬜ | Post | `share-t100` | <a href="https://github.com/bldrs-ai/Share/issues/2208" target="_blank" rel="noopener noreferrer">#2208</a> |
-| Notes | `notes-100` | Anchored notes (GitHub-backed) | ✔ | — | — | |
-| Notes | `notes-200` | BCF round-trip | ⬜ | Post | — | |
-| Notes | `notes-300` | Drive-backed notes (NotesProvider) | 🔮 | Post | `notes-t200` | |
+| Notes | `notes-100` | Anchored notes (GitHub-backed) | ✔ | — | — | <a href="https://github.com/bldrs-ai/Share/issues/670" target="_blank" rel="noopener noreferrer">#670</a> |
+| Notes | `notes-200` | BCF round-trip | ⬜ | Post | — | <a href="https://github.com/bldrs-ai/Share/issues/2280" target="_blank" rel="noopener noreferrer">#2280</a> |
+| Notes | `notes-300` | Drive-backed notes (NotesProvider) | 🔮 | Post | `notes-t200` | <a href="https://github.com/bldrs-ai/Share/issues/2281" target="_blank" rel="noopener noreferrer">#2281</a> |
 | Versions | `versions-100` | Exact revisions, history and local retention | 🟡 | — | — | <a href="https://github.com/bldrs-ai/Share/issues/57" target="_blank" rel="noopener noreferrer">#57</a> |
-| Versions | `versions-300` | Diff between versions | ⬜ | Post | — | |
-| Versions | `versions-310` | Portable versions for Drive | 🔮 | Post | `notes-t200` | |
-| Search | `search-100` | Search current model | 🟡 | — | — | |
-| Search | `search-300` | Search across GitHub repos (❤️ Oleg) | 🔮 | Post | — | |
-| Search | `search-310` | Knowledge graph (🥇, ❤️ Johannes) | 🔮 | AI | `assist-t300` | |
+| Versions | `versions-300` | Diff between versions | ⬜ | Post | — | <a href="https://github.com/bldrs-ai/Share/issues/2282" target="_blank" rel="noopener noreferrer">#2282</a> |
+| Versions | `versions-310` | Portable versions for Drive | 🔮 | Post | `notes-t200` | <a href="https://github.com/bldrs-ai/Share/issues/2283" target="_blank" rel="noopener noreferrer">#2283</a> |
+| Search | `search-100` | Search current model | 🟡 | — | — | <a href="https://github.com/bldrs-ai/Share/issues/2278" target="_blank" rel="noopener noreferrer">#2278</a> |
+| Search | `search-300` | Search across GitHub repos (❤️ Oleg) | 🔮 | Post | — | <a href="https://github.com/bldrs-ai/Share/issues/2279" target="_blank" rel="noopener noreferrer">#2279</a> |
+| Search | `search-310` | Knowledge graph (🥇, ❤️ Johannes) | 🔮 | AI | `assist-t300` | <a href="https://github.com/bldrs-ai/Share/issues/1659" target="_blank" rel="noopener noreferrer">#1659</a> (absorbed) |
 | Search | `search-320` | Fluid NavTree + breadcrumb-scoped search (NEW) | ⬜ | AI | — | <a href="https://github.com/bldrs-ai/Share/issues/1658" target="_blank" rel="noopener noreferrer">#1658</a> |
 | Identity | `identity-100` | Auth0 primary login | ✔ | — | — | |
 | Identity | `identity-110` | GitHub as Sources peer | 🟡 | B | `identity-t100` | |
@@ -150,41 +150,13 @@ One row per Epic and Track. An epic's description is in its issue, or in §4 if 
 
 ## 4. Epics without an issue yet
 
-An epic with an issue is described there: its scope, stories, decisions and status live in the issue (the Issue column in §3.1), and the UX epics have a dated snapshot under `design/reqs/`. This section keeps a short description only for epics that have no issue yet, mostly shipped (✔) or post-MVP (🔮). Task-level detail lives in the issues. When an epic gets an issue, move its description there and delete its entry here. Open (4.1), Grow (4.10) and Create (4.12) have no entries left: every epic in those groups has an issue, and Grow's are in bizdev.
-
-### 4.2 View
-
-User can inspect the model in 3D with the navigation, properties, search-by-element, slice, and isolation controls expected of a BIM viewer.
-
-- `view-100` 3D + NavTree + Properties ✔ (incl. STEP occurrence-keyed selection and permalinks; follow-ups under Phase A: <a href="https://github.com/bldrs-ai/Share/issues/1569" target="_blank" rel="noopener noreferrer">#1569</a>, <a href="https://github.com/bldrs-ai/Share/issues/1570" target="_blank" rel="noopener noreferrer">#1570</a>, <a href="https://github.com/bldrs-ai/Share/issues/1249" target="_blank" rel="noopener noreferrer">#1249</a>). `view-110` Cut planes ✔ (surface-aligned cut UI <a href="https://github.com/bldrs-ai/Share/issues/1045" target="_blank" rel="noopener noreferrer">#1045</a> is post-MVP polish). `view-120` Shareable camera position ✔.
-- **`view-130` Performance + large-model viewing** 🟡. Fast re-open and large-model handling via the OPFS/GLB cache, Conway-direct, GPU instancing, residency and a per-model engine worker (default-on; render-on-demand and motion residency default-on, PR <a href="https://github.com/bldrs-ai/Share/pull/2104" target="_blank" rel="noopener noreferrer">#2104</a>, as of 2026-11-10; hover is drawn on a held frame). Tested extensively per the owner (2026-11-10): mostly smooth frame rate on a ~900 MB IFC, with interactivity during load. Streaming-loader work (faster loads, lower memory, interactivity during load) is tracked as a `view-t100` sub-track, <a href="https://github.com/bldrs-ai/Share/issues/1601" target="_blank" rel="noopener noreferrer">#1601</a>. Remaining: the **public-launch gate** (4-angle screenshot harness + GLB bit-level diff; **Required for MVP**), flag-flip decisions (`batchedMesh` always-on, `?feature=look` default-on), residency for non-batched formats (planned as `view-140` S6), real geometry release (<a href="https://github.com/bldrs-ai/Share/issues/1913" target="_blank" rel="noopener noreferrer">#1913</a>). Docs: `viewer-replacement.md`, `demand-tiled-rendering.md`, `engine-worker.md`.
-- **`view-200` Persistent visibility / Isolate** 🟡. Remaining slice is URL persistence, planned as part of `view-140`'s `#d:` token (<a href="https://github.com/bldrs-ai/Share/issues/1250" target="_blank" rel="noopener noreferrer">#1250</a>); its remaining slice is tracked under `view-140` (<a href="https://github.com/bldrs-ai/Share/issues/1705" target="_blank" rel="noopener noreferrer">#1705</a>). Post-MVP.
-- **`view-210` Selection-based camera + measurement** ⬜ (<a href="https://github.com/bldrs-ai/Share/issues/1044" target="_blank" rel="noopener noreferrer">#1044</a>, <a href="https://github.com/bldrs-ai/Share/issues/1047" target="_blank" rel="noopener noreferrer">#1047</a>). **Post-MVP.**
-- **`view-230` Placemarks + maps-style issues view** 🟡 (🥇). The pin primitive (`#m:x,y,z`, transient or anchored to a Note) is largely built behind `?feature=placemark`; the Google-Maps-style filtering UI on top is not started. Polish (<a href="https://github.com/bldrs-ai/Share/issues/929" target="_blank" rel="noopener noreferrer">#929</a>, <a href="https://github.com/bldrs-ai/Share/issues/930" target="_blank" rel="noopener noreferrer">#930</a>, <a href="https://github.com/bldrs-ai/Share/issues/931" target="_blank" rel="noopener noreferrer">#931</a>, <a href="https://github.com/bldrs-ai/Share/issues/932" target="_blank" rel="noopener noreferrer">#932</a>, <a href="https://github.com/bldrs-ai/Share/issues/985" target="_blank" rel="noopener noreferrer">#985</a>, <a href="https://github.com/bldrs-ai/Share/issues/998" target="_blank" rel="noopener noreferrer">#998</a>, <a href="https://github.com/bldrs-ai/Share/issues/892" target="_blank" rel="noopener noreferrer">#892</a>) is a Phase C candidate; <a href="https://github.com/bldrs-ai/Share/issues/930" target="_blank" rel="noopener noreferrer">#930</a> blocks the share-a-note flow. Filtering UI is **Post-MVP** (§8).
-- **`view-300` ETL / Table view** 🔮 (❤️ Markus). Select a subset, choose attributes, export CSV or stream to an API. **Post-MVP.**
+An epic with an issue is described there: its scope, stories, decisions and status live in the issue (the Issue column in §3.1), and the UX epics have a dated snapshot under `design/reqs/`. This section keeps a short description only for epics that have no issue yet, mostly shipped (✔) or post-MVP (🔮). Task-level detail lives in the issues. When an epic gets an issue, move its description there and delete its entry here. Open, View, Notes & Versions, Search, Grow and Create have no entries left: every epic in those groups has an issue, and Grow's are in bizdev.
 
 ### 4.3 Share
 
 User shares a model, a view, a note, or a region with another user — privately or publicly — and the recipient sees what was intended.
 
 - `share-100` Share link to current view ✔.
-
-### 4.4 Notes & Versions
-
-User leaves comments anchored to model elements, replies in a thread, and can revisit a specific version of the model.
-
-- **`notes-200` BCF round-trip** ⬜. Issues interoperate with Solibri/Navisworks/Tekla. **Post-MVP.**
-- **`notes-300` Drive-backed notes (NotesProvider)** 🔮 (NEW). Track `notes-t200` (#2204). **Post-MVP.**
-- **`versions-300` Diff between versions** ⬜. Needs a structural IFC diff. **Post-MVP.**
-- **`versions-310` Portable versions for Drive** 🔮 (NEW). Track `notes-t200` (#2204), on `share-200`'s version layout. **Post-MVP.**
-
-### 4.5 Search
-
-User finds elements in the current model, across their repos, or across the building data graph.
-
-- **`search-100` Search current model** 🟡. Permalinks done; search by element name with scene highlighting (<a href="https://github.com/bldrs-ai/Share/issues/1254" target="_blank" rel="noopener noreferrer">#1254</a>) folds into `search-320`.
-- **`search-300` Search across GitHub repos** 🔮 (❤️ Oleg). **Post-MVP.**
-- **`search-310` Knowledge graph / ask questions** 🔮 (🥇, ❤️ Johannes). Absorbed by the AI pivot (§7): natural-language QA is the job of `assist-310`; the graph becomes its retrieval layer (`assist-t300`).
 
 ### 4.6 Identity & Account (NEW group)
 
@@ -479,6 +451,7 @@ Standing convention (the original migration is done):
 
 # Changelog
 
+- **v0.21 (2026-11-23):** View, Search, Notes & Versions follow the Open pattern. Created epic issues for `view-100`, `view-110`, `view-120`, `view-130`, `view-200`, `view-210`, `view-230`, `view-300`, `search-100`, `search-300`, `notes-200`, `notes-300`, `versions-300` and `versions-310` (<a href="https://github.com/bldrs-ai/Share/issues/2270" target="_blank" rel="noopener noreferrer">#2270</a>–<a href="https://github.com/bldrs-ai/Share/issues/2283" target="_blank" rel="noopener noreferrer">#2283</a>); linked `notes-100`'s existing epic (<a href="https://github.com/bldrs-ai/Share/issues/670" target="_blank" rel="noopener noreferrer">#670</a>) and pointed `search-310` at the assistant epic that absorbed it (<a href="https://github.com/bldrs-ai/Share/issues/1659" target="_blank" rel="noopener noreferrer">#1659</a>). Existing stories were retitled and nested under them (`view-100`…`view-210`, `view-230`, `view-300`, `search-100`, `notes-200`). §4's View, Notes & Versions and Search groups are removed: their text is in the epics. No IDs changed, §6.0 is unchanged. Evidence: [view-100-triage.md](reqs/view-100-triage.md), [search-100-triage.md](reqs/search-100-triage.md), [notes-200-triage.md](reqs/notes-200-triage.md).
 - **v0.20 (2026-11-23):** reconciled the Open epics with the UX rubric. Created epic issues for `open-100`, `open-110`, `open-120`, `open-130` and `open-300` (<a href="https://github.com/bldrs-ai/Share/issues/2258" target="_blank" rel="noopener noreferrer">#2258</a>–<a href="https://github.com/bldrs-ai/Share/issues/2262" target="_blank" rel="noopener noreferrer">#2262</a>), each with its stories; gave `open-205` two UX stories and nested eight of its 18 technical children under them (<a href="https://github.com/bldrs-ai/Share/issues/2021" target="_blank" rel="noopener noreferrer">#2021</a>, <a href="https://github.com/bldrs-ai/Share/issues/2265" target="_blank" rel="noopener noreferrer">#2265</a>) and moved its decision log to `design/new/in-app-model-switch.md` §0; renamed the Open rows to their epic titles (`open-210` was "Open multiple IFCs in one session"); corrected §4.1's stale `open-200` text. Retired §4 for every epic that has an issue (29 of its 58 entries; Open, Grow and Create are now empty): descriptions live in the issues, and what an issue lacked (the `share-200` MVP slice, `subscribe-130` parked, the `share-140` default-on status, and seven smaller placements) was added to ten of them (#1421, #2144, #57, #1831, #1658, #1422, #1524, #1659, #1660, #1920). §4 keeps only epics without an issue. No IDs changed, §6.0 is unchanged. [Reconciliation evidence](reqs/open-100-triage.md), [`open-205`](reqs/open-205-triage.md).
 - **v0.19 (2026-11-18):** moved `share-200`'s link-resolver slice into Phase C, so `share-130`'s private links can ship in the MVP; the rest of `share-200` stays post-MVP (owner's decision). Closes the open question v0.16 added.
 - **v0.18 (2026-11-18):** renamed the tracks `<feature>-t<band><nn>` per the DX rubric (`design/dx/dx-rubric.md`), each named for its primary feature group and band; T9 stays with bizdev. ID lineage amended.
