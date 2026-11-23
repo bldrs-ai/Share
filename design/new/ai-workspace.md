@@ -825,9 +825,13 @@ Per-message metering would multiply that write rate by roughly 100.
   minting, Auth0, the ledger and the body, so a refusal costs and mints
   nothing (and a foreign site learns nothing about the deploy). Allowed:
   `https://bldrs.ai` (the only production host; `www.bldrs.ai` isn't
-  served, and `bldrs.dev` 301s to bldrs.ai), this deploy's own `URL`,
-  `DEPLOY_PRIME_URL` and `DEPLOY_URL` (previews and branch deploys, read at
-  request time), `localhost` only under `netlify dev` (`CONTEXT=dev` or
+  served, and `bldrs.dev` 301s to bldrs.ai), the origin the request was
+  sent to (the app's own page on whichever deploy serves it: previews and
+  branch deploys; a browser on another site can't make its `Origin` match
+  the host it posts to), `URL`, `DEPLOY_PRIME_URL` and `DEPLOY_URL` when
+  the runtime sets them (it evidently doesn't: deploy-preview-2257 refused
+  its own origin until the request-origin rule landed), `localhost` only
+  under `netlify dev` (`CONTEXT=dev` or
   `NETLIFY_DEV=true`), and the optional `AI_ALLOWED_ORIGINS`
   (comma-separated exact origins). A request with no `Origin` passes only
   with `Sec-Fetch-Site: same-origin`. The relay sends no

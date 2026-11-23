@@ -61,6 +61,14 @@ specs. Keep it that way.
   `glbNode` and `spz` are Playwright-free and Jest-tested beside it. See
   [design/new/live-browser-smoke.md](../../../design/new/live-browser-smoke.md).
 
+## Specs must not value-import mocks
+
+A spec may not value-import from `src/__mocks__/` or from anything that imports
+`msw`. The CI Playwright shards install only `@playwright/test`, not Share's
+dependencies, so such an import crashes `playwright test --list` for every shard
+(#2255). `import type` is erased and is fine; restate a constant in the spec if you
+need its value. `specImportBoundary.test.js` enforces this.
+
 ## Put specs next to their subject, not here
 
 A new E2E `*.spec.ts` belongs **next to the code it exercises**, so the
