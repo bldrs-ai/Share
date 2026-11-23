@@ -578,6 +578,15 @@ describe('assist/loop', () => {
       expect(current[0].role).toBe('user')
     })
 
+    it('drops the oldest turns when a request is over the message count, though its bytes fit', () => {
+      const turn = (n) => [{role: 'user', content: `q${n}`}, callMessage(`c${n}`), toolMessage(`c${n}`, 'ok')]
+      const messages = [...turn(1), ...turn(2), ...turn(3)]
+      const bounded = boundStepMessages(messages, 1e9, 7)
+      expect(bounded).toEqual([...turn(2), ...turn(3)])
+      // Count alone never stubs: the kept results are whole.
+      expect(outputs(bounded)).toEqual(['ok', 'ok'])
+    })
+
     it('fits every request of a long hosted turn under the transport\'s 64 KiB cap', async () => {
       const CAP = 65536
       const bigProvider = {

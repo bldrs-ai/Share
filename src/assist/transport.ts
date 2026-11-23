@@ -107,11 +107,19 @@ export interface HostedTransportOptions {
   /** Called with each relay response's metering headers, before its body. */
   onMeta?: (meta: HostedMeta) => void
   /**
-   * The relay's body cap for a tier (null before the relay has named one),
-   * or undefined for none. The host knows the caps (quota/aiCredits.js);
-   * this module stays free of Share's config.
+   * The body cap to assume for a tier when the relay hasn't said its own
+   * (`x-bldrs-ai-max-body-bytes`): null before any response, or once the
+   * sign-in state has changed since the last one. Undefined for none. The
+   * host knows the defaults (quota/aiCredits.js); this module stays free of
+   * Share's config.
    */
   maxRequestBytesFor?: (tier: string | null) => number | undefined
+  /**
+   * Whether the user is signed in now, read without waiting. A cap the relay
+   * named for a signed-in caller (Pro's) is stale once they sign out, and
+   * the next request goes anonymous (Codex on #2305).
+   */
+  isSignedIn?: () => boolean
   /** For tests: a stand-in for `fetch`. */
   fetch?: typeof fetch
 }
@@ -143,8 +151,11 @@ export interface HostedTransportOptions {
  */
 export function hostedTransport(opts: HostedTransportOptions): Transport {
   const baseFetch = opts.fetch ?? globalThis.fetch
-  // The tier the relay last named, for the body cap; null until it has.
+  // What the relay last said, for the body cap: its tier and cap, and whether
+  // that request went signed in. Null until it has said.
   let lastTier: string | null = null
+  let lastCap: number | null = null
+  let lastSignedIn: boolean | null = null
   const relayFetch = async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     let auth: string | null = null
     try {
@@ -166,9 +177,11 @@ export function hostedTransport(opts: HostedTransportOptions): Transport {
     }
     try {
       const meta = hostedMetaOf(res.headers)
-      // Signing in or out changes it; the next response says so.
+      // Signing in or out changes these; the next response says so.
       if (meta.tier) {
         lastTier = meta.tier
+        lastCap = meta.maxBodyBytes
+        lastSignedIn = auth !== null
       }
       opts.onMeta?.(meta)
     } catch {
@@ -192,7 +205,13 @@ export function hostedTransport(opts: HostedTransportOptions): Transport {
       })
       return provider.chat(opts.model)
     },
-    maxRequestBytes: () => opts.maxRequestBytesFor?.(lastTier),
+    maxRequestBytes: () => {
+      const stale = lastSignedIn !== null && opts.isSignedIn !== undefined && opts.isSignedIn() !== lastSignedIn
+      if (stale) {
+        return opts.maxRequestBytesFor?.(null)
+      }
+      return lastCap ?? opts.maxRequestBytesFor?.(lastTier)
+    },
   }
 }
 

@@ -128,6 +128,12 @@ export const MAX_STEP_BYTES = 400_000
  * own fields (model, stream options, routing) and its message framing.
  */
 export const REQUEST_SLACK_BYTES = 4096
+/**
+ * Messages one request may carry besides the system message. The hosted relay
+ * refuses more than 200 in all (ai-chat.js `MAX_MESSAGES`), and a few long
+ * turns get there under any byte budget (Codex on #2305).
+ */
+export const MAX_REQUEST_MESSAGES = 199
 const STUB_RESULT = 'Result of an earlier turn, omitted to save space. Call the tool again if you need it.'
 const STUB_STEP_RESULT = 'Result of an earlier step, omitted to save space. Call the tool again if you need it.'
 
@@ -269,8 +275,10 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
     const requestCap = opts.transport.maxRequestBytes?.()
     const toolsBytes = jsonBytes(opts.registry.list().map(({name, description, inputSchema}) =>
       ({name, description, inputSchema})))
+    // A transport's cap can be above what a model's context takes (Pro's is
+    // the relay's technical one), so the smaller of the two holds.
     const stepBudget = (instructions: string) => (requestCap === undefined ? MAX_STEP_BYTES :
-      Math.max(0, requestCap - toolsBytes - jsonBytes(instructions) - REQUEST_SLACK_BYTES))
+      Math.min(MAX_STEP_BYTES, Math.max(0, requestCap - toolsBytes - jsonBytes(instructions) - REQUEST_SLACK_BYTES)))
 
     // One error event per turn: an abort, say, can surface both as the
     // stream's 'abort' part and as a rejection of what follows it.
@@ -551,8 +559,9 @@ function jsonBytes(value: unknown): number {
 
 /**
  * Bound one step's request (Codex on #2305): when the messages are over
- * `budget` bytes, cut what goes over the wire in this order, stopping as soon
- * as they fit:
+ * `budget` bytes or {@link MAX_REQUEST_MESSAGES} messages, cut what goes over
+ * the wire in this order, stopping as soon as they fit (stubbing only helps
+ * bytes, so a request over on count alone goes straight to step 3):
  *
  * 1. this turn's tool results, oldest step first; the newest step's are what
  *    the model is about to act on, so they stay;
@@ -569,24 +578,26 @@ function jsonBytes(value: unknown): number {
  * @param budget bytes, as JSON
  * @return the bounded messages, or undefined when they already fit
  */
-export function boundStepMessages(messages: ModelMessage[], budget = MAX_STEP_BYTES): ModelMessage[] | undefined {
-  if (jsonBytes(messages) <= budget) {
+export function boundStepMessages(messages: ModelMessage[], budget = MAX_STEP_BYTES,
+  maxMessages = MAX_REQUEST_MESSAGES): ModelMessage[] | undefined {
+  let out = [...messages]
+  const bytesFit = () => jsonBytes(out) <= budget
+  const fits = () => out.length <= maxMessages && bytesFit()
+  if (fits()) {
     return undefined
   }
-  let out = [...messages]
-  const fits = () => jsonBytes(out) <= budget
   const turnStart = () => out.map((m) => m.role).lastIndexOf('user')
   const toolIndexes = (from: number, to: number) =>
     out.map((m, index) => (index >= from && index < to && m.role === 'tool' ? index : -1)).filter((i) => i >= 0)
-  const current = toolIndexes(turnStart() + 1, out.length)
-  for (const index of current.slice(0, -1)) {
-    out[index] = stubToolResults(out[index], STUB_STEP_RESULT)
-    if (fits()) {
-      return out
+  const stubbing = [
+    ...toolIndexes(turnStart() + 1, out.length).slice(0, -1).map((index) => ({index, stub: STUB_STEP_RESULT})),
+    ...toolIndexes(0, turnStart()).map((index) => ({index, stub: STUB_RESULT})),
+  ]
+  for (const {index, stub} of stubbing) {
+    if (bytesFit()) {
+      break
     }
-  }
-  for (const index of toolIndexes(0, turnStart())) {
-    out[index] = stubToolResults(out[index])
+    out[index] = stubToolResults(out[index], stub)
     if (fits()) {
       return out
     }

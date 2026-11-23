@@ -78,14 +78,13 @@ export function createShareAssist(runtime, {keyStore, conversationStore, hosted}
 
 
 /**
- * The relay's request body cap for a tier, so the loop keeps each step under
- * it (assist/loop.ts `boundStepMessages`). Signed out and free have one
- * (quota/aiCredits.js `maxBodyBytes*`, ai-chat.js `maxBodyBytesFor`); Pro
- * has only the relay's technical cap, far above what the loop sends. Before
- * the relay has named the tier, the smallest cap holds: a first request
- * that fits it fits every tier. The client reads the defaults: the relay's
- * env overrides aren't visible here, so lowering them below the defaults
- * would need this to learn the cap from the relay.
+ * The request body cap to assume for a tier until the relay says its own
+ * (`x-bldrs-ai-max-body-bytes`, which carries any env override), so the loop
+ * keeps each step under it (assist/loop.ts `boundStepMessages`). Signed out
+ * and free have one (quota/aiCredits.js `maxBodyBytes*`, ai-chat.js
+ * `maxBodyBytesFor`); Pro has only the relay's technical cap. With no tier
+ * (before the first response, or after a sign-in change) the smallest default
+ * holds: a request that fits it fits every tier at its defaults.
  *
  * @param {?string} tier the relay's, or null before it has said
  * @return {number|undefined} bytes, or undefined for no cap

@@ -37,7 +37,9 @@ function fakeRelay(answer = () => undefined) {
       return given
     }
     const {chunks, delayMs} = scriptedReply(request.body)
-    const headers = {...SSE_HEADERS, 'x-bldrs-ai-tier': 'anonymous', 'x-bldrs-ai-used': '120', 'x-bldrs-ai-limit': '20000'}
+    const signedIn = request.headers.get('authorization') === 'Bearer auth0-token'
+    const headers = {...SSE_HEADERS, 'x-bldrs-ai-tier': signedIn ? 'pro' : 'anonymous', 'x-bldrs-ai-used': '120',
+      'x-bldrs-ai-limit': '20000', 'x-bldrs-ai-max-body-bytes': signedIn ? '1048576' : '40000'}
     if (!request.headers.get('authorization')) {
       headers['x-bldrs-ai-token'] = MINTED
     }
@@ -54,7 +56,7 @@ function fakeRelay(answer = () => undefined) {
  * @param {Array<object>} [options.tools] a tool provider set; defaults to one model.query
  * @return {object} the session and what the fakes saw
  */
-function setup({answer, getAuthToken = () => Promise.resolve(null), maxRequestBytesFor} = {}) {
+function setup({answer, getAuthToken = () => Promise.resolve(null), maxRequestBytesFor, isSignedIn} = {}) {
   const {fetchFn, requests} = fakeRelay(answer)
   let anonToken = null
   const metas = []
@@ -65,6 +67,7 @@ function setup({answer, getAuthToken = () => Promise.resolve(null), maxRequestBy
     }},
     onMeta: (meta) => metas.push(meta),
     maxRequestBytesFor,
+    isSignedIn,
     fetch: fetchFn,
   })
   const registry = createRegistry([{
@@ -155,22 +158,35 @@ describe('assist/hostedTransport', () => {
   it('hands each response\'s metering headers to the host', async () => {
     const {session, metas} = setup()
     await collect(session.send('hello'))
-    expect(metas).toEqual([{tier: 'anonymous', used: 120, limit: 20000, overflow: false}])
+    expect(metas).toEqual([{tier: 'anonymous', used: 120, limit: 20000, overflow: false, maxBodyBytes: 40000}])
   })
 
   // Codex on #2305: the relay refuses a body over its tier's cap, so the loop
   // sizes each step to it (loop.ts boundStepMessages).
-  it('gives the body cap for the tier the relay last named, null before it has', async () => {
+  it('assumes the host\'s smallest cap before the relay says, then uses the cap the relay names', async () => {
     const asked = []
     const {session, transport} = setup({maxRequestBytesFor: (tier) => {
       asked.push(tier)
-      return tier === 'pro' ? undefined : 1000
+      return 1000
     }})
     expect(transport.maxRequestBytes()).toBe(1000)
+    expect(asked).toEqual([null])
     await collect(session.send('hello'))
+    // The relay's header carries its deploy's value, env overrides included.
+    expect(transport.maxRequestBytes()).toBe(40000)
+  })
+
+  it('drops a signed-in caller\'s cap once they sign out, before the relay has said again', async () => {
+    let signedIn = true
+    const {session, transport} = setup({
+      getAuthToken: () => Promise.resolve(signedIn ? 'auth0-token' : null),
+      isSignedIn: () => signedIn,
+      maxRequestBytesFor: (tier) => (tier === null ? 1000 : undefined),
+    })
+    await collect(session.send('hello'))
+    expect(transport.maxRequestBytes()).toBe(1048576)
+    signedIn = false
     expect(transport.maxRequestBytes()).toBe(1000)
-    expect(asked[0]).toBeNull()
-    expect(asked.at(-1)).toBe('anonymous')
   })
 
   it('has no body cap when the host gives none', () => {
@@ -180,6 +196,8 @@ describe('assist/hostedTransport', () => {
   it('reads the overflow header', () => {
     expect(hostedMetaOf(new Headers({'x-bldrs-ai-overflow': 'free_models'})).overflow).toBe(true)
     expect(hostedMetaOf(new Headers({'x-bldrs-ai-used': 'lots'})).used).toBeNull()
+    expect(hostedMetaOf(new Headers({'x-bldrs-ai-max-body-bytes': '65536'})).maxBodyBytes).toBe(65536)
+    expect(hostedMetaOf(new Headers({})).maxBodyBytes).toBeNull()
   })
 
   it.each([
