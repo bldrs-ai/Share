@@ -143,6 +143,19 @@ describeMobileAndDesktop('Analytics consent', () => {
     expect(googleRequests).toEqual([])
   })
 
+  // The link pointed at /share/privacy, which no route serves. It now opens
+  // the policy in a new tab and leaves the dialog where it was.
+  test('the privacy policy link opens the policy in a new tab', async ({page}) => {
+    const [policy] = await Promise.all([
+      page.context().waitForEvent('page'),
+      page.getByTestId('consent-privacy-link').click(),
+    ])
+    await policy.waitForLoadState('domcontentloaded')
+    await expect(policy.getByRole('heading', {name: /Privacy Policy/i}).first()).toBeVisible()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    expect(await consentCookie(page)).toBeUndefined()
+  })
+
   test('Browse only on the slider, then OK, is a decline too', async ({page}) => {
     const sliderInput = page.getByRole('slider', {name: 'Privacy level'})
     await sliderInput.focus()

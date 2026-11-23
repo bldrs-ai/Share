@@ -28,6 +28,10 @@ export const CONSENT_COPY = Object.freeze({
 })
 
 
+/** Served by the marketing build (netlify.toml: /privacy/ is a file match). */
+export const PRIVACY_POLICY_HREF = '/privacy/'
+
+
 /**
  * The privacy-level slider in the About (welcome) dialog. Controlled: it
  * only reports the position. Nothing is stored or collected until the
@@ -44,7 +48,20 @@ export default function ConsentControl({level, setLevel}) {
     <Stack spacing={1} sx={{width: '100%', textAlign: 'left'}} data-testid='consent-control'>
       <Stack direction='row' justifyContent='space-between' alignItems='baseline'>
         <Typography variant='overline'>Privacy</Typography>
-        <Link href='/share/privacy' variant='caption' color='inherit'>Privacy policy</Link>
+        {/* The marketing site's static page, as in LogoMenu's links. The
+            app has no /share/privacy route, so that path rendered nothing.
+            A new tab, so reading the policy doesn't leave the dialog (and
+            the loaded model) mid-choice. */}
+        <Link
+          href={PRIVACY_POLICY_HREF}
+          target='_blank'
+          rel='noopener noreferrer'
+          variant='caption'
+          color='inherit'
+          data-testid='consent-privacy-link'
+        >
+          Privacy policy
+        </Link>
       </Stack>
       {/* Side padding so the end marks' labels, centered on their marks,
           stay inside the dialog at phone width. */}

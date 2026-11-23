@@ -5,7 +5,7 @@ import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {CONSENT_COOKIE_NAME, CONSENT_LEVELS, getConsentLevel, setConsentLevel} from '../../privacy/consent'
 import useStore from '../../store/useStore'
 import AboutControl, {testId} from './AboutControl'
-import {CONSENT_COPY} from './ConsentControl'
+import {CONSENT_COPY, PRIVACY_POLICY_HREF} from './ConsentControl'
 
 
 /** Open About from its control, as a visitor would. */
@@ -110,6 +110,16 @@ describe('About dialog privacy choice', () => {
     expect(window.dataLayer).toContainEqual(expect.objectContaining({
       0: 'consent', 1: 'update', 2: expect.objectContaining({analytics_storage: 'denied'}),
     }))
+  })
+
+  // It pointed at /share/privacy, which no route serves, so it opened a
+  // blank page.
+  test('links to the privacy policy page, in a new tab', () => {
+    openAbout()
+    const link = screen.getByTestId('consent-privacy-link')
+    expect(PRIVACY_POLICY_HREF).toBe('/privacy/')
+    expect(link).toHaveAttribute('href', '/privacy/')
+    expect(link).toHaveAttribute('target', '_blank')
   })
 
   test('starts at Browse only when the browser sends Global Privacy Control', () => {
