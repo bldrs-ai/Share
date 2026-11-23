@@ -17,7 +17,7 @@ structural diff and portable Drive sidecars keep their own epics. Technical
 reconciliation and Sharing's own issue migration are still to come.
 
 **Epic / source proposal:** [#2144](https://github.com/bldrs-ai/Share/issues/2144).
-**Roadmap:** [`share-200`](../roadmap.md#43-share). The former `share-200`
+**Roadmap:** [`share-200`](../roadmap.md#31-epics). The former `share-200`
 (grant/revoke per-principal sharing) is now `share-201`.
 
 Share a model at an exact version, then build toward reviewable model edits in

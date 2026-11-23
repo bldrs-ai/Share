@@ -8,11 +8,15 @@ and D (per-open dedupe, §5) built; step F, the switch **on by default** with
 the kill switch `?feature=disableSpaModelNav` and the `disableSpaModelNav`
 prod rollback (§4.8). Phase 2 planned. Per-step status lives on #2011 and
 its sub-issues, not here.
-**Epic:** `open-205` (#2011). Stories: Phase 0 #2012 (tasks #2013–#2018,
-closed; #2017 moved to Phase 1), Phase 1 #2028 (measure), #2029
-(interactive at index), #2019 (sessions), #2030 (no blocking calls), #2031
-(close and eviction), #2017, #2021–#2023, Phase 2 #2024. #2020 folded into
-#2019.
+**Epic:** `open-205` (#2011). Its two UX stories (reconciled 2026-11-23,
+`design/reqs/open-205.md`): #2021 switch to another model without a page
+reload (Phase 1a, done) and #2265 leave a model loading and come back to it
+(Phase 1b). The technical work sits beneath them: under #2021 Phase 0 #2012
+(tasks #2013–#2018, closed), #2028 (measure), #2020, #2022, #2017; under #2265
+#2019 (sessions), #2031 (close and eviction), #2023 (memory E2E). Still
+direct children of the epic, for the engine and rendering track:
+#2029 (interactive at index), #2043, #2030 (no blocking calls), #2044,
+#2042, #2053, #2055, #2250, and Phase 2 #2024. #2020 folded into #2019.
 **Related:** #1251 (`open-210`, multi-model overlay), #1657 (`open-200`,
 workspace shell, `?feature=workspace`), #1906 / #1957 (the no-OPFS in-memory
 open — the first in-app switch), #91 (the `modelID = 0` hack), #1776 (burned
@@ -29,6 +33,23 @@ This doc records what the reload frees today, what goes stale without it,
 and the phased plan to drop it. It is based on reading the code at
 `7b6355f` with conway pinned at `1.1626.740-g64c84fc2`; §8 says which claims
 were checked by reading and which are unmeasured.
+
+
+## 0. Decision log
+
+The owner's decisions, in order, moved here from the epic's description
+(#2011) on 2026-11-23 so the issue can stay short. Decisions 1–4 are argued
+in §4.0, §4.6, §5.1 and §7; 5–7 are recorded only here.
+
+| Date | # | Decision |
+|---|---|---|
+| 2026-11-01 | 1 | **Returning to a model counts as a new open.** After an in-app A → B → A, the return to A is counted again. The direct-link meter is the quota metric (`record-load`'s rolling 7-day count of private-model loads, the same slots as free GLB export). Counting again costs no slot, because `record-load`'s ledger answers `alreadyCounted` for a key the user already holds. The per-page dedupe (`meteredKeysRef`) becomes per open (#2022). |
+| 2026-11-01 | 2 | **Own flag.** The in-app switch uses `?feature=spaModelNav`, not `?feature=workspace` (#2021). |
+| 2026-11-01 | 3 | **One engine per model**, now one worker per model. We ask Conway for a non-destructive `CloseModel` only if per-instance overhead turns out to matter (#2024). |
+| 2026-11-02 | 4 | **Switching away is not closing.** A switch leaves the old model's load running in its own session. Only an explicit close, or eviction under memory pressure, cancels it (#2031). Models become interactive at the index (#2029). Blocking calls are avoided (#2030). Stale writes are solved by session-scoped state (#2019), which retires Phase 0's guards. |
+| 2026-11-18 | 5 | **Switch first, then hunt leaks.** Phase 1a starts with the flagged in-app switch and a memory E2E (step 0), ahead of the fixes, so leaks show up early and set what the fixes must cover. Phase 1a is "switch = close, one model at a time", a stepping stone and not a reversal of decision 4. |
+| 2026-11-19 | 6 | **Background sessions come with `?feature=workspace`.** Switching without closing (decision 4) is enabled only under `workspace`, because the ProjectsDrawer is the only surface that lets a user return to a model left in the background. Outside it a switch stays a close and `EngineHost` holds one live model. Background sessions get their own kill switch and prod rollback, `disableBackgroundSessions`, which forces the cap back to one even under `workspace`. This refines decision 2: `spaModelNav` (the switch) is now on by default. |
+| 2026-11-19 | 7 | **`EngineHost` defaults and one viewer per page** (the owner accepted all seven recommendations on #2244). Phones under `workspace`: 2 live engines and at most 1 GiB, whatever `deviceMemory` reports. Desktop: 3 engines and ½ `deviceMemory`, up to 4 GiB, until the bench slice measures. Scenes are kept for only as many sessions as there are live engines; the rest go dormant and come back through their GLB cache hit. A background load cancelled by eviction resumes only when foregrounded. Rehydrate is lazy, on the first read the artifact can't answer, except eagerly on foreground for a session with no artifact. Background parses keep pumping, with idle-slice assembly and a per-session queue cap of 256 MiB on desktop and 64 MiB on phones. In-process engines are always closed on a switch, even under `workspace`. **One viewer for the page:** a viewer is built per open and per theme rebuild today and its dispose frees the model's scene (#2247), so a session cannot keep its scene in the background; a step between `EngineHost` slices 1 and 2 makes the viewer one per page, with each session's scene attached and detached. CadView is split into focused modules as part of this (#2250). |
 
 
 ## 1. Conclusion first

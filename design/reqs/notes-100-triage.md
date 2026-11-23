@@ -147,7 +147,7 @@ The nine new stories and reused #894 were made direct formal UX sub-issues of #6
 
 ### Correction · 2026-11-14: #894 belongs to `view-230`
 
-The migration above made #894 a direct `notes-100` story on the reasoning that basic topic filtering is part of the MVP workflow. The roadmap already assigns the maps-style notes filtering UI to `view-230` and calls it post-MVP (its rows in roadmap §3 and §4.2, and §8's post-MVP backlog), and no roadmap decision changed that. Codex raised this on #2147 after merge.
+The migration above made #894 a direct `notes-100` story on the reasoning that basic topic filtering is part of the MVP workflow. The roadmap already assigns the maps-style notes filtering UI to `view-230` and calls it post-MVP (its rows in roadmap §3 and its former §4.2, and §8's post-MVP backlog), and no roadmap decision changed that. Codex raised this on #2147 after merge.
 
 Applied: #894 was removed from #670's sub-issues and retitled `view-230: Find model notes using colored topic tags`. Its body, labels, Collab milestone 64, state and assignees are unchanged. #670's owner table now names #894 as a `view-230` dependency outside the epic. `view-230` has no epic issue yet, so #894 has no native parent. #670 now has 20 formal direct stories, and the [snapshot](notes-100.md) is re-dated to list them. If basic tag filtering should be MVP after all, that is a roadmap reassignment with a changelog line, not a triage change; bizdev#366 is where the evidence for it would come from ([rubric](ux-rubric.md#milestones-are-hypotheses)).
 

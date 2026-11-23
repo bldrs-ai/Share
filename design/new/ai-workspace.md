@@ -642,7 +642,7 @@ What follows from that:
   for the whole account (above), so it saturates as soon as *V* · *p* · *t*
   approaches 300. That is the D3 rationale in numbers.
 
-At the $25/mo Pro price mocked in #1421 (roadmap §4.9), a $5 AI budget is
+At the $25/mo Pro price mocked in #1421 (roadmap §3.1, Subscribe), a $5 AI budget is
 20% of revenue, plus OpenRouter's 5.5% credit-purchase fee
 ([FAQ](https://openrouter.ai/docs/faq.md)). Whether Pro gets **top-ups**
 (buy more credits), **pay-as-you-go** past the budget, or a hard stop is an
