@@ -13,6 +13,8 @@ import {
   DEFAULT_MAX_STEPS,
   FINAL_STEP_NOTE,
   FULL_RESULT_TURNS,
+  MAX_STEP_CHARS,
+  boundStepMessages,
   MAX_WIRE_CHARS,
   UNDO_SETTLE_MS,
   createAssist,
@@ -517,11 +519,71 @@ describe('assist/loop', () => {
     expect(events.at(-1)).toEqual({type: 'done', finishReason: 'tool-calls'})
   })
 
-  it('keeps tools on a one-step cap, which has nothing gathered to answer from', async () => {
+  it('answers on a one-step cap\'s only step too, so the turn never ends on a tool call', async () => {
     const {session, requests} = setup({maxSteps: 1}, loopUntilToolsOff())
-    await collect(session.send('one step'))
+    const events = await collect(session.send('one step'))
     expect(requests).toHaveLength(1)
-    expect(requests[0].body.tool_choice).not.toBe('none')
+    expect(requests[0].body.tool_choice).toBe('none')
+    expect(ofType(events, 'step-limit')).toEqual([])
+    expect(events.at(-1)).toEqual({type: 'done', finishReason: 'stop'})
+  })
+
+  describe('bounding one step\'s request (Codex on #2305)', () => {
+    const toolMessage = (id, value) => ({role: 'tool', content: [
+      {type: 'tool-result', toolCallId: id, toolName: 'model_query', output: {type: 'text', value}}]})
+    const callMessage = (id) => ({role: 'assistant', content: [
+      {type: 'tool-call', toolCallId: id, toolName: 'model_query', input: {}}]})
+    const outputs = (messages) => messages.filter((m) => m.role === 'tool').map((m) => m.content[0].output.value)
+
+    it('leaves a request under budget alone', () => {
+      expect(boundStepMessages([{role: 'user', content: 'hi'}, toolMessage('a', 'x')], 1000)).toBeUndefined()
+    })
+
+    it('stubs this turn\'s older results oldest first, keeping the newest and earlier turns as they were', () => {
+      const big = 'y'.repeat(400)
+      const messages = [
+        {role: 'user', content: 'earlier'}, callMessage('p'), toolMessage('p', 'earlier turn result'),
+        {role: 'user', content: 'now'},
+        callMessage('a'), toolMessage('a', big),
+        callMessage('b'), toolMessage('b', big),
+        callMessage('c'), toolMessage('c', big),
+      ]
+      const bounded = boundStepMessages(messages, JSON.stringify(messages).length - 300)
+      const [earlier, a, b, c] = outputs(bounded)
+      expect(earlier).toBe('earlier turn result')
+      expect(a).toMatch(/earlier step, omitted/)
+      expect(b).toBe(big) // one stub was enough
+      expect(c).toBe(big) // the newest step's result is never stubbed
+      expect(outputs(messages)[1]).toBe(big) // the input is not mutated
+    })
+
+    it('keeps a long turn\'s requests under MAX_STEP_CHARS and the stored turn whole', async () => {
+      const BIG = 30_000
+      const bigProvider = {
+        id: 'big',
+        tools: () => [{
+          name: 'big.read', description: 'A large read.', annotations: {readOnly: true},
+          inputSchema: {type: 'object', properties: {}, additionalProperties: false},
+          run: () => ({content: 'z'.repeat(BIG), echo: 'Read a lot'}),
+        }],
+      }
+      let n = 0
+      const steps = 16
+      const {session, requests, store} = setup({maxSteps: steps, extraProviders: [bigProvider]}, (body) =>
+        (body.tool_choice === 'none' ?
+          {chunks: textReply('Done reading.'), delayMs: 0} :
+          {chunks: toolCalls([{id: `b${n++}`, name: 'big_read', args: {}}]), delayMs: 0}))
+      await collect(session.send('read everything'))
+      expect(requests).toHaveLength(steps)
+      // Without the bound, the last request would carry 15 results of 30k.
+      const last = requests.at(-1).body
+      expect(JSON.stringify(last.messages).length).toBeLessThanOrEqual(MAX_STEP_CHARS)
+      expect(JSON.stringify(last.messages)).toMatch(/earlier step, omitted/)
+      const stored = await store.load('c1')
+      const storedResults = stored.filter((m) => m.role === 'tool')
+      expect(storedResults).toHaveLength(steps - 1)
+      storedResults.forEach((m) => expect(JSON.stringify(m)).not.toMatch(/omitted/))
+    })
   })
 
   describe('a tool still running when the user stops or undoes', () => {

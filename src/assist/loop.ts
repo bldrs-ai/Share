@@ -111,7 +111,17 @@ export const MAX_WIRE_TURNS = 30
  * blocks, and the tool schemas (a few thousand tokens).
  */
 export const MAX_WIRE_CHARS = 160_000
+/**
+ * Characters one step's request may carry in messages, as JSON: about 100k
+ * tokens, leaving a 128k-token context room for the instructions, context
+ * blocks and tool schemas. {@link MAX_WIRE_CHARS} bounds earlier turns; this
+ * bounds the current one, whose tool results pile up step by step (up to
+ * {@link DEFAULT_MAX_STEPS} − 1 of the registry's 32k-character cap, Codex on
+ * #2305). Over it, {@link boundStepMessages} stubs this turn's older results.
+ */
+export const MAX_STEP_CHARS = 400_000
 const STUB_RESULT = 'Result of an earlier turn, omitted to save space. Call the tool again if you need it.'
+const STUB_STEP_RESULT = 'Result of an earlier step, omitted to save space. Call the tool again if you need it.'
 
 
 /** What the loop keeps of a finished tool call, keyed by its call id until the stream reports it. */
@@ -269,15 +279,19 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
       ...(opts.maxRetries === undefined ? {} : {maxRetries: opts.maxRetries}),
       // The view changes as tools run, so each step gets the context as it
       // is now ("Selection: 7" after a select), not as it was at send.
-      prepareStep: ({stepNumber}) => {
+      prepareStep: ({stepNumber, messages}) => {
         execStep = stepNumber
-        // The last step answers instead of calling another tool (FINAL_STEP_NOTE).
-        // A one-step cap has no earlier step to have gathered anything, so it
-        // keeps its tools.
-        if (maxSteps > 1 && stepNumber === maxSteps - 1) {
-          return {instructions: `${instructionsNow()}\n\n${FINAL_STEP_NOTE}`, toolChoice: 'none' as const}
+        // Only present when over budget; the SDK carries an override forward,
+        // so a result stubbed here stays stubbed for the steps after.
+        const bounded = boundStepMessages(messages)
+        const sent = bounded ? {messages: bounded} : {}
+        // The last step answers instead of calling another tool
+        // (FINAL_STEP_NOTE), a one-step cap's only step included: a turn
+        // never ends on a tool call while the provider honours this.
+        if (stepNumber === maxSteps - 1) {
+          return {...sent, instructions: `${instructionsNow()}\n\n${FINAL_STEP_NOTE}`, toolChoice: 'none' as const}
         }
-        return {instructions: instructionsNow()}
+        return {...sent, instructions: instructionsNow()}
       },
       // Errors are read from the stream below; without this the SDK also
       // logs each one to the console.
@@ -496,7 +510,7 @@ export function wireHistory(history: ModelMessage[]): ModelMessage[] {
     // A message before the first user message has no turn, and is not sent.
   }
   let sent = turns.slice(-MAX_WIRE_TURNS)
-  const stubbed = (turn: ModelMessage[]) => turn.map(stubToolResults)
+  const stubbed = (turn: ModelMessage[]) => turn.map((message) => stubToolResults(message))
   sent = sent.map((turn, index) => (index < sent.length - FULL_RESULT_TURNS ? stubbed(turn) : turn))
   const size = () => sent.reduce((sum, turn) => sum + JSON.stringify(turn).length, 0)
   for (let index = Math.max(0, sent.length - FULL_RESULT_TURNS); index < sent.length && size() > MAX_WIRE_CHARS; index++) {
@@ -510,17 +524,50 @@ export function wireHistory(history: ModelMessage[]): ModelMessage[] {
 
 
 /**
+ * Bound one step's request (Codex on #2305): when the messages are over
+ * {@link MAX_STEP_CHARS}, stub the current turn's tool results oldest step
+ * first, keeping the newest step's whole, until they fit. Earlier turns are
+ * already bounded by {@link wireHistory}. Only what goes over the wire
+ * changes; the stored turn keeps every result whole (D10), since the store
+ * takes the SDK's response messages, not the request.
+ *
+ * @param messages what the SDK is about to send for this step
+ * @param budget characters, as JSON
+ * @return the bounded messages, or undefined when they already fit
+ */
+export function boundStepMessages(messages: ModelMessage[], budget = MAX_STEP_CHARS): ModelMessage[] | undefined {
+  const size = (list: ModelMessage[]) => JSON.stringify(list).length
+  if (size(messages) <= budget) {
+    return undefined
+  }
+  const turnStart = messages.map((m) => m.role).lastIndexOf('user')
+  const results = messages.map((m, index) => (index > turnStart && m.role === 'tool' ? index : -1))
+    .filter((index) => index >= 0)
+  const out = [...messages]
+  // The newest step's results are what the model is about to act on.
+  for (const index of results.slice(0, -1)) {
+    out[index] = stubToolResults(out[index], STUB_STEP_RESULT)
+    if (size(out) <= budget) {
+      break
+    }
+  }
+  return out
+}
+
+
+/**
  * @param message
+ * @param stub the text that replaces each result
  * @return the message with each tool result's output cut to a stub
  */
-function stubToolResults(message: ModelMessage): ModelMessage {
+function stubToolResults(message: ModelMessage, stub = STUB_RESULT): ModelMessage {
   if (message.role !== 'tool' || !Array.isArray(message.content)) {
     return message
   }
   return {
     ...message,
     content: message.content.map((part) => (part.type === 'tool-result' ?
-      {...part, output: {type: 'text' as const, value: STUB_RESULT}} : part)),
+      {...part, output: {type: 'text' as const, value: stub}} : part)),
   } as ModelMessage
 }
 
