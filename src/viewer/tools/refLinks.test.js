@@ -39,6 +39,7 @@ describe('viewer/tools/refLinks', () => {
 
     beforeEach(async () => {
       await loadFixture()
+      useStore.setState({isModelReady: true})
       unregister = registerSelectionFunnel(makeStoreFunnel())
     })
 
@@ -64,6 +65,11 @@ describe('viewer/tools/refLinks', () => {
       const result = describeRef('e102', WHERE)
       expect(result.ok).toBe(false)
       expect(result.reason).toMatch(/Open the model/)
+    })
+
+    it('does not resolve while the model is still being set up', () => {
+      useStore.setState({isModelReady: false})
+      expect(describeRef('e102', WHERE).ok).toBe(false)
     })
 
     it('selects the element on a jump, as view.select does', () => {

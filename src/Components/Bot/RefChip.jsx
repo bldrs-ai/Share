@@ -25,9 +25,10 @@ export default function RefChip({refText, children}) {
   const viewer = useStore((state) => state.viewer)
   const model = useStore((state) => state.model)
   const rootElement = useStore((state) => state.rootElement)
+  const isModelReady = useStore((state) => state.isModelReady)
   // describeRef reads the store itself; these are its re-resolve triggers.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const link = useMemo(() => describeRef(refText), [refText, viewer, model, rootElement])
+  const link = useMemo(() => describeRef(refText), [refText, viewer, model, rootElement, isModelReady])
 
   const onClick = (event) => {
     // Let the browser's own handling of a link win for open-in-new-tab.

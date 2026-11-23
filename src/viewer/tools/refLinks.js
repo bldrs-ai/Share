@@ -56,8 +56,11 @@ export function refOfLinkUri(uri) {
  */
 export function describeRef(ref, location = window.location) {
   const state = useStore.getState()
-  const {viewer, model, rootElement, searchIndex} = state
-  if (!viewer?.isolator || !model || !rootElement) {
+  const {viewer, model, rootElement, searchIndex, isModelReady} = state
+  // `isModelReady` is raised only once CadView has finished the isolator's
+  // `setModel`, which a scene-graph model's name paths (`n` refs) wait on; the
+  // store's model and tree are set earlier, so they alone would resolve too soon.
+  if (!isModelReady || !viewer?.isolator || !model || !rootElement) {
     return {ok: false, reason: 'Open the model this reply is about to jump to this element.'}
   }
   const {targets} = resolveRefs([ref], {viewer, rootElement, searchIndex})
