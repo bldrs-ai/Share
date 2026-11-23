@@ -141,6 +141,14 @@ describe('AssistantMarkdown element chips', () => {
     expect(newTab.defaultPrevented).toBe(false)
   })
 
+  // Owner testing on SEESTRASSE: the model wrote two refs in one link, which
+  // Markdown can't parse, so the raw refs showed as text.
+  it('renders several refs in one link as one chip each, with no raw refs left', async () => {
+    const {container} = await renderMarkdown('The [Window 1](ref:e102, ref:e102) units.')
+    expect(screen.getAllByTestId('BotChat-RefChip')).toHaveLength(2)
+    expect(container.textContent).not.toMatch(/ref:/)
+  })
+
   it('renders a mention the open model cannot resolve as a disabled chip, never a link', async () => {
     await renderMarkdown('[Ghost](ref:e999)')
     expect(screen.queryByRole('link')).toBeNull()

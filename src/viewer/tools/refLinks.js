@@ -44,6 +44,41 @@ export function refOfLinkUri(uri) {
 }
 
 
+// A Markdown inline link on one line; its target is inspected below.
+const INLINE_LINK = /\[([^\]\n]+)\]\(([^()\n]*)\)/g
+
+
+/**
+ * Repair the one malformed mention models produce: several refs in one link,
+ * `[Küchenzeile](ref:e546633, ref:e546662)` (owner testing on SEESTRASSE).
+ * A Markdown link target can't hold a space, so that renders as text and
+ * shows the raw refs. It becomes one link per ref with the same label,
+ * `[Küchenzeile](ref:e546633), [Küchenzeile](ref:e546662)`. Only a target
+ * made entirely of refs (each `ref:x` or a bare `x` after the first),
+ * separated by commas or spaces, is rewritten; every other link is left as
+ * written, and each ref is still validated by {@link refOfLinkUri} at render.
+ *
+ * @param {string} markdown
+ * @return {string}
+ */
+export function splitMultiRefLinks(markdown) {
+  if (typeof markdown !== 'string' || !markdown.includes(REF_SCHEME)) {
+    return markdown
+  }
+  return markdown.replace(INLINE_LINK, (link, label, target) => {
+    const parts = target.trim().split(/[\s,]+/).filter(Boolean)
+    if (parts.length < 2 || !parts[0].startsWith(REF_SCHEME)) {
+      return link
+    }
+    const refs = parts.map((part) => (part.startsWith(REF_SCHEME) ? part.substring(REF_SCHEME.length) : part))
+    if (refs.some((ref) => ref === '' || ref.includes(':'))) {
+      return link
+    }
+    return refs.map((ref) => `[${label}](${REF_SCHEME}${ref})`).join(', ')
+  })
+}
+
+
 /**
  * Resolve a mention against the model that is open now.
  *

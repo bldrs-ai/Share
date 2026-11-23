@@ -70,6 +70,26 @@ describe('viewer/tools/assistInstructions', () => {
     expect(text).not.toMatch(/unless they ask/)
   })
 
+  // Owner testing on SEESTRASSE: two refs in one link target,
+  // [Küchenzeile](ref:e546633, ref:e546662), is not a Markdown link at all (a
+  // destination can't hold a space), so it rendered as text with the raw refs.
+  it('asks for one ref per link, with a same-name example', () => {
+    const text = shareAssistInstructions()
+    expect(text).toMatch(/One ref per link/)
+    expect(text).toMatch(/\[Kitchen\]\(ref:e1\) and \[Kitchen\]\(ref:e2\)/)
+  })
+
+  // Owner testing on SEESTRASSE: "select all the kitchen sinks" searched
+  // IfcSink, Spüle and Kitchen, found nothing, and asked, though the storey
+  // held Küchenzeile units with the sinks in them.
+  it('has the model look at what is there and act on the best match when a search finds nothing', () => {
+    const text = shareAssistInstructions()
+    expect(text).toMatch(/often another language, a product or trade name, or an assembly/)
+    expect(text).toMatch(/list what is actually there/)
+    expect(text).toMatch(/act on the best match, saying what you chose and why/)
+    expect(text).toMatch(/Ask only when no candidate fits/)
+  })
+
   it('imports nothing, so the relay can load it under plain Node ESM', () => {
     const source = fs.readFileSync(path.join(__dirname, 'assistInstructions.js'), 'utf8')
     expect(source).not.toMatch(/^\s*import\s/m)

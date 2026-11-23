@@ -1,7 +1,7 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import Markdown from 'react-markdown'
 import {Box, Link} from '@mui/material'
-import {REF_SCHEME, refOfLinkUri} from '../../viewer/tools/refLinks'
+import {REF_SCHEME, refOfLinkUri, splitMultiRefLinks} from '../../viewer/tools/refLinks'
 import RefChip from './RefChip'
 import {loadMarkdownGfm} from './markdownGfm'
 
@@ -142,7 +142,7 @@ export default function AssistantMarkdown({text}) {
         transformLinkUri={allowedLinkUri}
         components={{a: LinkOrText, table: ScrollTable}}
       >
-        {text}
+        {splitMultiRefLinks(text)}
       </Markdown>
     </Box>
   )

@@ -1,6 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import useStore from '../../store/useStore'
-import {describeRef, jumpToRef, refOfLinkUri} from './refLinks'
+import {describeRef, jumpToRef, refOfLinkUri, splitMultiRefLinks} from './refLinks'
 import {registerSelectionFunnel} from './selectionFunnel'
 import {globalIdOf, loadFixture, makeStoreFunnel} from './tools.fixture'
 
@@ -15,6 +15,25 @@ const WHERE = {origin: 'https://share.example', pathname: '/share/v/p/index.ifc/
 
 
 describe('viewer/tools/refLinks', () => {
+  describe('splitMultiRefLinks', () => {
+    it('splits several refs in one link into one link per ref, keeping the label', () => {
+      expect(splitMultiRefLinks('the [Küchenzeile](ref:e546633, ref:e546662) units'))
+        .toBe('the [Küchenzeile](ref:e546633), [Küchenzeile](ref:e546662) units')
+      expect(splitMultiRefLinks('[Sink](ref:e1,e2 e3)')).toBe('[Sink](ref:e1), [Sink](ref:e2), [Sink](ref:e3)')
+    })
+
+    it('leaves single refs, other links and look-alikes as written', () => {
+      const unchanged = [
+        '[Wall 3](ref:e123)',
+        '[docs](https://bldrs.ai/a b)',
+        '[x](ref:e1, https://evil.example)',
+        '[x](https://bldrs.ai, ref:e1)',
+        'plain text with ref:e1, ref:e2',
+      ]
+      unchanged.forEach((md) => expect(splitMultiRefLinks(md)).toBe(md))
+    })
+  })
+
   describe('refOfLinkUri', () => {
     it.each([
       ['ref:e123', 'e123'],
