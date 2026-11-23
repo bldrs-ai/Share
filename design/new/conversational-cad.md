@@ -272,6 +272,18 @@ Epic 4.
   out of Share still yields working deep links. This is the cheapest
   high-leverage slice: the whole anchor system already exists, the epic
   wires it into message rendering.
+  **Built for elements (#1673):** the model writes `[Wall 3](ref:e123)` with a
+  ref exactly as a tool returned it (`src/viewer/tools/refLinks.js`); the
+  reply's Markdown renders it as a chip (`Components/Bot/RefChip.jsx`) that
+  is a real link to a `#sel:<ref>` permalink (an `o` ref to its element
+  path). A plain click selects and frames in place (`view.select` +
+  `view.focus` bodies, `viewTools.js#selectAndFrame`), so the highlight,
+  NavTree and live view link follow; a modified click or "Copy link address"
+  gives the deep link. A ref the open model lacks renders disabled with a
+  tooltip. The `ref:` scheme, not a URL the model writes, so a model never
+  composes a permalink: only tool-returned refs can be linked, and any other
+  scheme still renders as text. A chip's click is not undoable (Undo belongs
+  to what the assistant did). View anchors (`#c:`) are not built.
 - **Reduced tool set while convo visible (W7 — proposal, TBD).** The
   bottom-center section cluster folds into the right column plus an active
   Conversation toggle; top-left ControlsGroup hidden; full layout returns
