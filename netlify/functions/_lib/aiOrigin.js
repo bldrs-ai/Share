@@ -22,7 +22,14 @@
 /** Every host that serves the app in production. `www.` is not one: nothing serves it. */
 const PRODUCTION_ORIGINS = ['https://bldrs.ai']
 
-/** Netlify sets these in the Functions environment: the site's primary URL, and this deploy's own. */
+/**
+ * The site's primary URL and this deploy's own, when the Functions runtime
+ * has them. They are not to be relied on: on deploy-preview-2257 the smoke
+ * probe sent the preview's own Origin and was refused, so they evidently
+ * are not set at function runtime there. The request's own origin
+ * (`isAllowedOrigin`) is what admits a preview; these stay for any runtime
+ * that does set them.
+ */
 const DEPLOY_URL_VARS = ['URL', 'DEPLOY_PRIME_URL', 'DEPLOY_URL']
 
 const LOCAL_HOST_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/
@@ -94,7 +101,25 @@ export function isAllowedOrigin(req, env) {
   }
   // Compared as sent: the browser's serialization is canonical, and `null`
   // (sandboxed iframes, file:, redirects) is deliberately not in the set.
-  return allowedOrigins(env).has(origin) || (isLocalDev(env) && LOCAL_HOST_PATTERN.test(origin))
+  return origin === ownOrigin(req) ||
+    allowedOrigins(env).has(origin) ||
+    (isLocalDev(env) && LOCAL_HOST_PATTERN.test(origin))
+}
+
+
+/**
+ * The origin this request was sent to. A page on that same origin is the
+ * app itself, on whichever deploy serves it: production, a deploy preview
+ * or a branch deploy, with no variable naming it. It is safe to trust: a
+ * browser sets the request's host from the URL it fetched, so a foreign
+ * page posting here still arrives with this host and its own `Origin`,
+ * which differ. A non-browser client can set both, as it can any `Origin`.
+ *
+ * @param {Request} req
+ * @return {?string}
+ */
+function ownOrigin(req) {
+  return originOf(req.url)
 }
 
 
