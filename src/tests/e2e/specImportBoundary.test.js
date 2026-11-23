@@ -25,7 +25,12 @@ const EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx']
 // `import … from '…'` across lines, or a bare `import '…'`. The clause cannot
 // hold quotes, `;`, or parens, so a dynamic `import('…')` does not match.
 const IMPORT_RE = /\bimport\s+(?:([^'"`;()]*?)\s+from\s+)?(['"])([^'"\n]+)\2/g
-const MSW_IMPORT_RE = /from\s+['"]msw(?:\/[^'"]*)?['"]/
+// A re-export loads its module too: `export {a} from '…'`, `export * from '…'`,
+// `export * as ns from '…'`, and `export type {A} from '…'` (erased). The
+// clause is held to those shapes so `export const …` is never mistaken for one.
+const REEXPORT_RE = /\bexport\s+((?:type\s+)?(?:\*(?:\s+as\s+[\w$]+)?|\{[^}]*\}))\s+from\s+(['"])([^'"\n]+)\2/g
+// `… from 'msw'`, `… from 'msw/node'`, or the side-effect `import 'msw'`.
+const MSW_IMPORT_RE = /(?:\bfrom|\bimport)\s+['"]msw(?:\/[^'"]*)?['"]/
 
 
 /**
@@ -56,11 +61,14 @@ function stripComments(source) {
 
 
 /**
+ * Every module a file loads statically: its imports and its re-exports.
+ *
  * @param {string} source
  * @return {Array<{clause: string, specifier: string}>} clause is '' for a bare import
  */
 function importsIn(source) {
-  return [...stripComments(source).matchAll(IMPORT_RE)].map((m) => ({
+  const code = stripComments(source)
+  return [...code.matchAll(IMPORT_RE), ...code.matchAll(REEXPORT_RE)].map((m) => ({
     clause: (m[1] ?? '').trim(),
     specifier: m[3],
   }))
@@ -136,6 +144,36 @@ function resolveLocal(fromDir, specifier) {
 
 
 describe('e2e/specImportBoundary', () => {
+  // The scan's own shapes, so a regex change that stops seeing one goes red
+  // here rather than letting a real offender through.
+  describe('scanner', () => {
+    const valueSpecifiers = (source) =>
+      importsIn(source).filter(({clause}) => !isTypeOnlyImport(clause)).map(({specifier}) => specifier)
+
+    it('sees value imports and re-exports, and skips type-only ones', () => {
+      expect(valueSpecifiers([
+        `import {a} from './a'`,
+        `import './b'`,
+        `export {c} from './c'`,
+        `export * from './d'`,
+        `export * as e from './e'`,
+        `import type {T} from './t1'`,
+        `import {type U} from './t2'`,
+        `export type {V} from './t3'`,
+        `export const notAReexport = 1`,
+        `import type {W} from './t4'`,
+      ].join('\n'))).toEqual(['./a', './b', './c', './d', './e'])
+    })
+
+    it('recognizes msw imported for its value or its side effects', () => {
+      expect(MSW_IMPORT_RE.test(`import {http} from 'msw'`)).toBe(true)
+      expect(MSW_IMPORT_RE.test(`export * from 'msw/node'`)).toBe(true)
+      expect(MSW_IMPORT_RE.test(`import 'msw'`)).toBe(true)
+      expect(MSW_IMPORT_RE.test(`import 'msw/node'`)).toBe(true)
+      expect(MSW_IMPORT_RE.test(`import {x} from 'mswish'`)).toBe(false)
+    })
+  })
+
   it('no Playwright spec value-imports a msw mock', () => {
     const specs = listSpecs(SRC_ROOT)
     // A scan that found nothing would pass for the wrong reason.
