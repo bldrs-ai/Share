@@ -4,7 +4,11 @@
 the six layers on 2026-11-23 (decision 8 on #2011,
 [in-app-model-switch.md](in-app-model-switch.md) §0); this doc turns that
 decision into a layer map, the seams between the layers, a lint rule that
-holds them, and a slice plan.
+holds them, and a slice plan. On 2026-11-24 the owner answered five of
+this doc's six questions (decision 9, §9). One is open: what the
+main-thread engine and the lease's engine fields are called. Until it is
+answered, `IfcAPI`, `lease.connection`, `lease.api` and the `mainThread`
+kind below are working names.
 **Epic:** `open-205` (#2011). Stories #2021 (done) and #2265. This is the
 design of #2031 (`EngineHost`) and of the cleanup that comes with it.
 **Related:** #2019 (per-model sessions, #2247), #2023 (memory E2E), #2250
@@ -359,6 +363,14 @@ one owner, and it cannot be the viewer (layer 5 owns no engines) or the
 session alongside the host (two owners again). So it is a lease of kind
 `mainThread`, never kept in the background (engine-worker.md §8.1 item 7).
 
+**The names here are not settled** (§9, question 1). The owner agreed
+that the main-thread engine is a lease the host owns. The owner does not
+want it called `IfcAPI`: it parses STEP too, and other mesh types will
+probably move under the same thing. The likely outcome is one
+format-neutral engine interface that a lease exposes, in place of the two
+fields `lease.connection` and `lease.api`. Ownership, lifetime and the
+slices do not depend on the name; only the spelling below does.
+
 A `mainThread` lease is outside the count and the byte budget: the host
 can neither measure it nor free it. It exists so that there is one owner
 and one release path. `host.acquireMainThread(owner)` is synchronous for
@@ -428,6 +440,7 @@ host.acquire({
 
 lease.id, lease.owner
 lease.kind                       // 'worker' | 'inProcess' | 'mainThread'
+// The next two fields and the kind's name are working names: §9, question 1.
 lease.connection                 // the EngineConnection; null when kind is 'mainThread'
 lease.api                        // the IfcAPI when kind is 'mainThread'; else null
 lease.sourceOverride             // {windowed: true} when admission chose windowed for the budget; else null
@@ -668,6 +681,8 @@ report.end(error, {isAborted})
     `report.engineLog`); it loses page-side lines (`[glb]`, the builder's
     warnings) from its diagnostics count. Only worker engines load in the
     background, so the engine's diagnostics are never the ones lost.
+    Accepted by the owner on 2026-11-24 (§9, item 6) as a known gap, to be
+    closed by the console cleanup that is coming anyway, not here.
 
     The tee needs **one owner for the page**, not a reporter's own saved
     originals. Each reporter saves `console.warn` and `console.error` when
@@ -1013,7 +1028,8 @@ fails.
    allowlist and asserts every pair is still an import in the source. A
    slice that removes an import must delete its entry in the same PR.
 2. **A new entry fails CI.** `tools/lint/checkLayerAllowlist.mjs`, a step
-   of `main.yml`'s `build` job on pull requests, compares the file with
+   of `main.yml`'s `build` job on pull requests (decided 2026-11-24, §9
+   item 5: in `build`, though drafts skip that job), compares the file with
    the merge base's and fails on any pair that was not there. It prints
    the pair and this doc's section. A new upward import therefore fails
    `bun run lint` locally, and cannot be bought with an allowlist edit.
@@ -1192,6 +1208,8 @@ M1 and can go beside slice 1.
 
 ### M2. The UI-level files
 
+- **Decided (owner, 2026-11-24):** `src/tools/` and `src/app/` as new
+  top-level directories.
 - **Builds:** `viewer/tools/` → `src/tools/`; `utils/dragAndDrop.js`,
   `utils/loader.js`, `utils/navigate.js`, `utils/shortcutKeys.js`,
   `utils/modelDisplayName.js` → `src/app/`; `privacy/modelActionTracking.js`,
@@ -1205,6 +1223,9 @@ M1 and can go beside slice 1.
 ### V. Delete the `?view=` rules stack
 
 Decided on 2026-11-03 (engine-worker.md §8 item 7) and not done.
+Confirmed on 2026-11-24 (§9, item 3): delete it, with no replacement and
+no flag. The owner: "it was old client work that never went anywhere".
+The Widget API's `ChangeViewSettings` keeps answering success.
 
 - **Builds:** removes `IfcViewsManager`
   (`Infrastructure/IfcElementsStyleManager.js`), `ViewRulesCompiler.js`,
@@ -1237,8 +1258,7 @@ Decided on 2026-11-03 (engine-worker.md §8 item 7) and not done.
   So a `?view=` link and the Widget API's `ChangeViewSettings` already
   colour nothing, on either engine, though engine-worker.md §7.2 item 2
   routes `?view=` loads to the main thread so the manager can read them.
-  Read from code and confirmed by the review; not run (§10). Owner
-  question 3.
+  Read from code and confirmed by the review; not run (§10).
 - **Tests:** the Widget API handler still answers success;
   the `engineRoute` tests lose the `viewRules` reason; an E2E that a
   `?view=ch.sia380-1.heatmap` link loads in a worker.
@@ -1407,7 +1427,8 @@ Decided on 2026-11-03 (engine-worker.md §8 item 7) and not done.
 
 As engine-worker.md §5.2a's 2b–2d, renumbered, with two changes:
 
-- **The main-thread engine route uses the one viewer too.** #2244 kept a
+- **The main-thread engine route uses the one viewer too** (decided,
+  owner, 2026-11-24, §9 item 2). #2244 kept a
   viewer per open there so the `IfcAPI` could stay in the viewer. It is
   now a lease (slice 1), and 2d moves its acquire from the viewer build
   to the load (§4.1), so nothing ties it to a viewer. It stays cap 1: an
@@ -1572,38 +1593,48 @@ failed rehydrate is captured in `ModelSession#ensureEngine`, on the page.
     the detail.
 
 
-## 9. Open questions for the owner
+## 9. The owner's answers (2026-11-24), and one open question
 
-1. **The main-thread `IfcAPI` as a lease.** Decision 8 lists the
-   main-thread path among the sessions with no engine. This design gives
-   it a lease of kind `mainThread`, so the host is the one owner and the
-   viewer owns nothing (§4.1). *Recommended.* The alternative is the
-   session constructing the `IfcAPI` itself, outside the host, which
-   leaves two owners of engines.
-2. **One viewer on the main-thread route too** (§7, 2c–2e), dropping
-   #2244's viewer-per-open exception. *Recommended*, with the fallback in
-   §8 if the `IfcAPI` collection check cannot be kept green. The cost of
-   the exception is two viewer lifecycles kept alive for good.
-3. **Delete the `?view=` stack with no replacement** (slice V), with no
-   flag. From the code it colours nothing on either engine; what a user
-   can see change is where a `?view=` link loads, one report line, one
-   notice, and a reload that stops (§7, V). *Recommended:* delete,
-   keep the Widget API's `ChangeViewSettings` answering success, and file
-   the replacement (colour overrides through `view-140`'s display
-   controls) only if an embedder asks. Is anyone known to use it?
-4. **`src/tools/` and `src/app/` as new top-level directories** (M2).
-   *Recommended.* The alternative for the eight leaf files is to leave
-   them where they are with 16 allowlist entries that this redesign never
-   removes.
-5. **The CI check that the allowlist only shrinks** (§5, check 2) runs in
-   the `build` job, which is skipped on drafts. *Recommended as is:* the
-   lint rule itself runs in the pre-commit hook, so a new upward import
-   fails locally at once; only "bought with an allowlist edit" waits for
-   the flip to ready.
-6. **Page-side console lines of a background load are not counted in its
-   diagnostics** (§4.4). *Recommended to accept:* the engine's own
-   diagnostics are kept, and the alternative is tagging every `[glb]`
-   and builder log line with its session.
+The design pass asked six questions. The owner answered them on
+2026-11-24; five are settled and are decision 9 of
+in-app-model-switch.md §0.
+
+**Open.**
+
+1. **What the main-thread engine, and the engine a lease exposes, are
+   called.** The owner agreed with the shape: the main-thread engine is a
+   lease the host owns, so the host is the one owner and the viewer owns
+   nothing (§4.1). The owner does not want the name `IfcAPI` carried into
+   it: it covers STEP too, and other mesh types will probably move under
+   the same thing. The likely outcome is one format-neutral engine
+   interface on the lease, in place of the separate `lease.connection`
+   and `lease.api`. **No name in this doc changes until the owner picks
+   one.** What waits on it: the lease's field names (§4.2), the
+   `mainThread` kind's name, `mainThreadEngine.js`, and whether slice 1's
+   rename commit carries this rename beside `EngineSession` →
+   `EngineConnection`. What does not: who owns what, the lifetimes
+   (§4.9), and the slice order.
+
+**Settled.**
+
+2. **One viewer on the main-thread route too.** The viewer-per-open
+   exception of the 2026-11-19 design is dropped (§7, 2c–2e). The
+   fallback stays only for one case: if `modelSwitchMemory.spec.ts`'s
+   `IfcAPI` collection check cannot be kept green under one viewer, that
+   route goes back to a viewer per open (§8).
+3. **Delete the `?view=` stack, with no replacement and no flag** (§7,
+   slice V). "It was old client work that never went anywhere." The
+   Widget API's `ChangeViewSettings` keeps answering success. No
+   replacement is filed.
+4. **`src/tools/` and `src/app/`** are new top-level directories (§7, M2).
+5. **The check that the allowlist only shrinks runs in the `build` job**
+   (§5, check 2), as designed. Drafts skip that job; the lint rule itself
+   runs in the pre-commit hook, so a new upward import still fails
+   locally at once.
+6. **A background load's page-side console lines are not counted in its
+   diagnostics** (§4.4). Accepted as a known gap. The owner expects a
+   console cleanup soon; that work closes it, and this redesign does not
+   tag log lines by session.
 
 
 ## 10. Evidence status
@@ -1636,7 +1667,9 @@ context-restore paths, `FeatureFlags.js:529`, `utils/location.js:9`,
 
 **Not run, and a slice has to:**
 
-- that the `?view=` stack colours nothing (slice V's E2E);
+- that the `?view=` stack colours nothing (slice V's E2E). The owner's
+  account agrees with the reading: old client work that never went
+  anywhere (§9, item 3);
 - that the headless load passes once the store is out of the loader
   (3a). Conway under Jest in process is run today, on an IFC only
   (`engine/engineCapture.test.js:23`); no Node test parses a STEP in

@@ -1080,8 +1080,8 @@ and exactly one root.
   (§5.2). STEP's occurrence paths and IFC's express IDs are on the instance
   tables, under the root, so selection restore at attach needs nothing
   format-specific.
-- **The main-thread engine uses the one viewer too** (changed
-  2026-11-23). On that route (`engineRoute.js#mainThreadEngineReason`:
+- **The main-thread engine uses the one viewer too** (decided by the
+  owner on 2026-11-24). On that route (`engineRoute.js#mainThreadEngineReason`:
   `?feature=disableEngineWorker`, the rollback) the engine is a bare
   `IfcAPI`, collected only when everything lets go of it. The 2026-11-19
   text kept a viewer per open there, so the `IfcAPI` could stay in the
@@ -2182,10 +2182,18 @@ Every item needs either a merged PR or a measurement in a PR body.
    need the main-thread engine)`). Legacy `?feature=bot` routed the same
    way until #1675 deleted its eval; it now loads in the worker. Deleting the stack (§8 item 7, WidgetApi's
    `ChangeViewSettingsEventHandler` first) is now a cleanup, not a gate.
-   *2026-11-23:* that cleanup is layering.md §7's slice V. Read from code,
-   the stack already colours nothing on either engine: it only sets fields
-   on `ShareIfcManager`'s empty `parser` object (`ShareIfcManager.js:70–77`),
-   which no parse reads.
+   **Superseded on 2026-11-24 (owner): the stack is deleted, with no
+   replacement and no flag** (layering.md §7, slice V; "it was old client
+   work that never went anywhere"). And the sentence above is wrong about
+   what the routing bought. IfcViewsManager reads nothing on the
+   main-thread engine either: it only sets fields on `ShareIfcManager`'s
+   empty `parser` object (`ShareIfcManager.js:70–77`), which no parse
+   reads, and both engines parse through Conway directly. So since the
+   Conway-direct path became the default, a `?view=` link has coloured
+   nothing; the routing only made it load on the slower engine. With the
+   stack gone, `MainThreadReason.VIEW_RULES` goes, a `?view=` link loads
+   in the worker, and the Widget API's `ChangeViewSettings` answers
+   success and does nothing.
 3. **#2061 explained. Met:** a measurement artifact, 56.5 MB live after
    GC (§7.1).
 4. **#2070 fixed. Met, by #2074.** One round trip per Properties table: a
@@ -2356,6 +2364,27 @@ Decided on 2026-11-23 (#2011 decision 8, in-app-model-switch.md §0):
    host's API (§5.2, a lease in place of session-taking calls), the
    predicate's home (`utils/`), the main-thread route under one viewer
    (§5.2a), and the slice plan (§7 step 8).
+
+Decided on 2026-11-24 (#2011 decision 9; the owner's answers to
+layering.md §9):
+
+10. **One viewer on the main-thread engine route too** (§5.2a). The
+    viewer-per-open exception is dropped; it comes back only if the
+    `IfcAPI` collection check cannot be kept green.
+11. **The `?view=` rules stack is deleted, with no replacement and no
+    flag** (§7.2 item 2; layering.md slice V). This closes item 7's first
+    bullet: there is no migration of the Widget API handler, which keeps
+    answering success.
+12. **`src/tools/` and `src/app/`** as top-level directories; the
+    allowlist check in the `build` job; a background load's page-side
+    console lines left out of its diagnostics until the console cleanup.
+
+**Open:** the main-thread engine is agreed to be a lease the host owns,
+but its name is not. The owner wants `IfcAPI` renamed, since it covers
+STEP and probably more formats later; the lease may expose one
+format-neutral engine interface in place of `connection` and `api`
+(layering.md §9, question 1). The names in §5.2 and §5.2a are working
+names until then.
 
 ## 9. Where this meets OffscreenCanvas rendering
 
