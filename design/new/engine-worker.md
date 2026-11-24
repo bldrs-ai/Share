@@ -812,6 +812,10 @@ estimate = max(ENGINE_FLOOR_BYTES,
   (§5.3) rather than keeping every scene: without that, ten switches would
   hold ten scenes, and scene memory (main-side and GPU) is not measured.
   Keeping more scenes than engines waits for slice 6's scene measurement.
+  **This host does not enforce the number.** It sees leases, and a scene
+  can outlive its engine (a byte eviction) or never have had one (a mesh
+  model). The session host holds it, in `ModelSessionHost#open`
+  ([layering.md](../tracks/open-t200/layering.md) §4.5, "The scene count is the session host's").
 - **A test-only override** of all three numbers, installed only outside
   production builds (like `utils/gc.fixture.js`), for the eviction E2Es.
 
@@ -1273,7 +1277,18 @@ the session half and the attach contract do not change.
   GLB cache hit where one exists (0.1–0.7 s up to 106 MiB, 2.0–3.9 s on the
   IFCs from 214 MiB; source-policy-measurements.md §(d)).
 - **The scene tier.** A session past "sessions keeping a scene" (§5.2)
-  becomes *dormant*: it drops its scene (`session.dropScene()`) after its engine. It keeps its
+  becomes *dormant*: it drops its scene after its engine. **The session
+  host decides it, not this host, and it is not an eviction.** In
+  `ModelSessionHost#open`, before the incoming load acquires, the
+  session host counts the sessions holding a scene and calls
+  `session.dropScene()` on the least-loss background one, by the tiers
+  of §5.2 and then LRU ([layering.md](../tracks/open-t200/layering.md) §4.5). `dropScene()` releases
+  the session's leases, then disposes its root. An eviction is this host
+  terminating an engine, for bytes or for the engine count, and it
+  always leaves the scene: `lease.onEvict` never drops one. Because the
+  session host goes first and the two counts are equal, releasing the
+  dormant session's leases is what makes room for the incoming engine.
+  It keeps its
   per-model state and selection, which are small and are refs, not batch
   ids (§5.5). Foregrounding it is a GLB cache-hit open plus a selection
   restore from those refs; without an artifact, a cold load from OPFS.
@@ -1349,7 +1364,7 @@ the worker replies with structured fields only (it has no Sentry).
 | Background load cancelled by eviction (tier 4) | the drawer's "paused — will resume" | — | `engine_evicted {tier: 'loading', …}`; not also `model_load_aborted` (one condition, one event) | expected under memory pressure; a high rate means the budget is too small |
 | Background pump paused by backpressure | the drawer's "paused" | — | `engine_backpressure {format, size_class, live_engines}`, once per load | self-healing; volume only |
 | Open admitted windowed for the budget | nothing (`Engine source: windowed (budget)` in the report) | — | `engine_source_fallback {failure: 'budget', …}`, after the load succeeds | a recovered fallback, reported once on success, as §5.6's are |
-| Session dropped to the scene tier | a reopen from cache on return | — | `engine_evicted {…, scene: 'dropped'}` | expected |
+| Session dropped to the scene tier (over the scene count; §5.3) | a reopen from cache on return | — | `engine_evicted {reason: 'count', scene: 'dropped', tier, format, size_class, live_engines}`, sent by the session host at `dropScene()`. Its leases are released, not evicted, so this host sends no event of its own; a mesh session with no engine sends it too | expected; volume tells whether the scene count is right |
 | Rehydrate fell back to a re-parse | a slower answer | — | `engine_rehydrated {via: 'reparse', why: 'missing' \| 'stale' \| 'noCapability', format, size_class, ms_bucket}`, on success | recovered; after the fact |
 | Rehydrate succeeded from the sidecar | the answer | — | `engine_rehydrated {via: 'sidecar', …}` | volume and latency of returns |
 | Rehydrate impossible (no source) | `#id` for references outside the artifact, as on a cache hit | — | `engine_rehydrate_unavailable {why: 'noSource' \| 'entryGone'}` | expected for unstaged sources |
@@ -1910,7 +1925,12 @@ How each step landed is in §7.1 and in the steps below.
       windowed-for-budget, then backpressure. **Past the count or the
       budget, the LRU background session is closed, not evicted**: the
       scene drops with the engine, so nothing needs a rehydrate yet, and an
-      over-cap session reopens through its GLB cache hit. Selection restore
+      over-cap session reopens through its GLB cache hit. Two callers
+      close: past the scene count, the session host in `open()`, before
+      the incoming load acquires, which also covers a mesh model with no
+      lease; past the byte budget, this host evicts the lease and the
+      session closes itself in `onEvict` (layering.md §4.5 and §7, 3b,
+      which has the scene-count tests). Selection restore
       on return (#2019's deferred acceptance). A detached root's batches
       are assembled with paint requests suppressed, because the
       render-on-demand hooks are page-wide (layering.md §7, 3b). Its
@@ -1950,7 +1970,9 @@ How each step landed is in §7.1 and in the steps below.
       Past the budget, tiers 1–3 are evicted (`terminate()`, then
       `lease.onEvict`: the scene kept, the read model swapped to the
       artifact's) and tier 4 goes to "paused — will resume"; past the
-      count, the LRU session becomes dormant (the scene tier).
+      scene count, the session host's step in `open()` changes from a
+      close to `session.dropScene()`, and that session is dormant (the
+      scene tier, §5.3; its tests are layering.md §7, 4).
       `session.ensureEngine()` through `host.acquire`, from the sidecar
       (§5.3), re-parse fallback, eager on foreground for a session without
       an artifact. The Reported Conditions of §5.5 land here.

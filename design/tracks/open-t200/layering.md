@@ -590,7 +590,7 @@ host.acquireMainThread(owner) → EngineLease     // synchronous; kind 'mainThre
 host.mayKeepInBackground(owner) → boolean       // what a switch does to the owner's engines
 host.whenEntryFree(entryKey) → Promise<void>    // §4.7
 host.closeAll() → Promise<number>               // Clear cache
-host.limits()                    // {maxLiveOwners, budgetBytes, mode}
+host.limits()                    // {maxLiveOwners, maxScenes, budgetBytes, mode}; maxScenes is for the session host (§4.5)
 host.snapshot()                  // live and paused leases: [{leaseId, owner, kind, state, phase, estimate, lastForegroundAt}]
 ```
 
@@ -867,12 +867,13 @@ session.job                         // the current LoadJob, or null
 session.load(source) → Promise      // one run: makes the LoadJob, the reporter and the ctx; calls loader.load
 session.ensureEngine() → Promise<EngineLease>     // rehydrate, engine-worker.md §5.3
 session.on(event, cb)               // 'indexed' | 'firstMesh' | 'ready' | 'failed' | 'engineEvicted' | 'engineRehydrated' | 'closing' | 'closed'
-session.dropScene()                 // the scene tier: dispose the root, keep the state
+session.dropScene()                 // dormant: emit 'closing'; abort; release every lease; dispose the root; keep the state
 session.close()                     // emit 'closing'; abort; release every lease; dispose the root; drop everything
 
 // session/ModelSessionHost.js: one for the page
 getModelSessionHost()
-host.open(modelKey) → ModelSession  // the same model → the active session; else leave the active one
+host.open(modelKey) → ModelSession  // the same model → the active session; else leave the active one,
+                                    //   then hold the scene count (below) before the new load starts
 host.active
 host.leave(session)                 // close, or keep in the background (EngineHost#mayKeepInBackground)
 ```
@@ -900,17 +901,41 @@ host.leave(session)                 // close, or keep in the background (EngineH
     `SelectElementsEventHandler.js:50`, `modelSession.js:121`). The
     middleware replaces `api.setState` with the wrapped setter and keeps
     the original as the raw one;
-  - `bindSession(session)`: `store.setState(session.state.all())`, then
-    subscribe, so what a load writes into the bound session appears in the
-    store;
-  - `unbindSession()`: unsubscribe, then
-    `store.setState(modelStateDefaults())`.
+  - the middleware mirrors into one pointer, `bound`: the session whose
+    state a per-model write also reaches, or null;
+  - `bindSession(session)`, in this order: unsubscribe from the session
+    bound before and clear `bound`; point `bound` at the new session;
+    write `session.state.all()` to the store **with the raw setter**;
+    subscribe, so what a load writes into the bound session appears in
+    the store;
+  - `unbindSession()`, in this order: unsubscribe and clear `bound`; then
+    write `modelStateDefaults()` to the store **with the raw setter**.
 
-  Two details keep it from looping. The projection writes the store with
-  the raw setter the middleware wraps, not through the middleware. And
-  `ModelState#set` notifies only for keys whose value changed
-  (`Object.is`). A functional `set((state) => partial)` is resolved
-  first, then split.
+  **Every write the projection makes itself is raw, and the left
+  session is unbound before it.** `store.setState` is the wrapped setter
+  (above). A reset or a bind that went through it while the left session
+  was still `bound` would mirror the defaults, or the next model's
+  fields, into the session being left. At cap 1 nobody would see it: a
+  left session is closed. Under cap N it would wipe the selection,
+  isolation, display overrides and load state that a return has to
+  restore (found by review on #2244, which read the two bullets above as
+  they first stood, with `store.setState` and no order). Either rule
+  alone prevents it. Both are stated so that neither depends on the
+  other being remembered, and 3a's tests are on the outcome: the left
+  session's state after an unbind and after the next bind.
+
+  `bound` points at the new session *before* its fields are written, so
+  that a store subscriber which reacts to the bind synchronously and
+  writes a per-model key writes the session and the store together. One
+  consequence: code that resets per-model state when the model changes
+  would now reset the *returned* model's state. After 3a the only reset
+  is a new session's own defaults; 3b's restore E2E is what catches one
+  that was missed.
+
+  Two details keep it from looping. The projection's own writes are raw,
+  as above. And `ModelState#set` notifies only for keys whose value
+  changed (`Object.is`). A functional `set((state) => partial)` is
+  resolved first, then split.
 
   The selection, isolation, display overrides and the rest of
   in-app-model-switch.md §4.3's inventory become per-model keys the same
@@ -930,6 +955,60 @@ host.leave(session)                 // close, or keep in the background (EngineH
 
   `useModelSessionHost` becomes a binding: on unmount, a microtask later
   and only if no view has bound since, it calls `host.leave(active)`.
+- **The scene count is the session host's. Engine eviction is the engine
+  host's.** They are two bounds with two owners:
+
+  | | Engine eviction | The scene count |
+  |---|---|---|
+  | Bounds | engine bytes, and owners holding an engine | sessions holding or building a scene |
+  | Limit | `budgetBytes`, `maxLiveOwners` | `maxScenes` (= `maxLiveOwners`, #2011 decision 7) |
+  | Decided by | `EngineHost`, at every `acquire` and estimate change | `ModelSessionHost`, in `open()` |
+  | It sees | leases | sessions |
+  | It does | terminates the engine, then `lease.onEvict` | slice 3b: `session.close()`. From slice 4: `session.dropScene()` |
+  | What is left, from slice 4 | the scene and the state | the state |
+
+  The engine host cannot hold the second bound, for three reasons. It
+  never sees a session. A mesh session holds a scene and no lease, so
+  nothing can evict it. And a session evicted for bytes keeps its scene
+  while it frees an engine slot: with A evicted, opening B, C and D
+  gives three engines and four scenes, and no count eviction ever fires.
+  So no eviction, of either reason, drops a scene, and
+  `lease.onEvict` never calls `dropScene()`.
+
+  `ModelSessionHost#open(modelKey)` holds it, after leaving the active
+  session and before the new session's load starts, so before its
+  `acquire`:
+
+  1. count the sessions that are neither closed nor dormant, with the
+     one being opened;
+  2. while that is over `engineHost.limits().maxScenes`, choose a
+     background session by least loss: admission's four tiers
+     (engine-worker.md §5.2: ready with an artifact, ready without one,
+     capturing, still loading), read from the session's own `loadState`
+     and artifact flag, then least recently foregrounded. Never the
+     active session, and never the one being opened;
+  3. slice 3b closes it (`session.close()`). From slice 4 it goes
+     dormant instead: `session.dropScene()` emits `closing` (a binder
+     detaches, §4.6), aborts a run still loading, releases every lease,
+     then disposes the root (`disposeModelRoot`). It keeps `state`,
+     `viewState` and its key, and its `loadState` reads `dormant`.
+
+  Going first matters. Releasing the chosen session's leases is what
+  makes room, so the engine host's own count admission then finds a free
+  slot and chooses no second owner. While the two limits are equal, the
+  engine count therefore never bites before the scene count does. The
+  engine host keeps it because the limits are meant to part (keeping
+  more scenes than engines waits for the scene's bytes to be measured,
+  engine-worker.md §5.2), and a count eviction is then an engine
+  eviction like a byte one: the scene stays.
+
+  A return to a dormant session is `open(modelKey)` finding it: the
+  same count, then `session.load(source)`, which is a GLB cache-hit
+  open where an artifact exists, and its kept state restores the
+  selection from refs. At cap 1 the count is 1 and `host.leave` has
+  already closed the left session, so the step does nothing.
+  `limits()` is `engine/engineBudget.js`'s, where the two numbers sit
+  side by side; the engine host does nothing with `maxScenes`.
 
 ### 4.6 Session ↔ viewer
 
@@ -1083,9 +1162,9 @@ headless tool surface as the first thing that would want it.
 |---|---|---|---|---|
 | Switch at cap 1 | every lease released (`session.close()`) | detached, then `disposeModelRoot` | dropped with the session; the store goes to defaults at unbind | kept (slice 2d); rebuilt before it |
 | Switch at cap N | kept; `update({isForeground: false})` | detached, kept | kept in the session | kept |
-| Eviction | the host terminates; `onEvict` | kept | kept; the read model swaps to the artifact's | untouched |
-| Scene tier (dormant) | already gone | `session.dropScene()` | kept | untouched |
-| Close (drawer, cap overflow) | released | disposed | dropped | untouched |
+| Engine eviction (the engine host: over the byte budget, or over the engine count) | the host terminates; `onEvict` | kept, from slice 4. In 3b `onEvict` closes the session | kept, from slice 4; the read model swaps to the artifact's | untouched |
+| Over the scene count (the session host, in `open()`; §4.5) | every lease released first | from slice 4: `session.dropScene()`. In 3b: disposed by `session.close()` | from slice 4: kept (dormant). In 3b: dropped | untouched; a background session is not attached |
+| Close (the drawer) | released | disposed | dropped | untouched |
 | Theme change, from slice 2c | untouched | untouched | untouched | background and look set in place |
 | Theme change, before 2c (a reload into the same session) | `beginLoad` releases the previous run's leases; the new run acquires | the previous run's root content is disposed, the new run fills it | as today (`beginLoad`) | rebuilt, as today |
 | Authed retry (a second run of the same session) | as the row above | as above | as above | untouched |
@@ -1706,7 +1785,16 @@ A → B equals a fresh page's B.
     a plain `set`; `bindSession(B)` after A shows B's fields and none of
     A's (every key of `modelStateDefaults()` is checked, so a key added
     later is covered); a background session's `job.set` reaches its state
-    and not the store (red with the middleware writing through).
+    and not the store (red with the middleware writing through);
+  - *Unit, the left session keeps its state (§4.5):* with A bound and
+    every key of `modelStateDefaults()` set to a value that is not its
+    default, `unbindSession()` leaves `A.state.all()` equal to a copy
+    taken before, and so does `bindSession(B)` straight after A; the
+    store shows the defaults, then B's fields (red with the reset or
+    the bind written through `store.setState` while A is still `bound`,
+    which is how the first draft read). After `unbindSession()`, a
+    `useStore.setState` of a per-model key changes the store and not A
+    (red with `bound` left set).
   - *Static:* no file under `src/loader`, `src/session`, `src/model` or
     `src/engine` imports `src/store` (that is the lint rule with the
     entries gone).
@@ -1740,20 +1828,72 @@ synchronous scope with its own counter, checked by all three asks.
 `runPaint`'s `paintDepth` is not enough: it silences
 `requestBackgroundPaint` only (`renderDemand.js:209–215`).
 
-- **Tests,** beside that slice's: with A in the background and held at
-  its pump, releasing it assembles its batches and the foreground
-  `RenderDemand` records no paint request of any of the three kinds from
-  them (red without the scope; red with the scope built on `paintDepth`,
-  for a `requestPaint` from A's `ResidencyController`); a selection made in A, then in B, is A's again on return, with
-  A's `#sel:` term.
+A second addition: the scene count (§4.5, "The scene count is the
+session host's"). `ModelSessionHost#open` counts the sessions holding or
+building a scene and, past `limits().maxScenes`, closes the least-loss
+background one before the new load acquires. Without it a mesh model,
+which holds no lease, is closed by nothing, and ten switches between
+GLBs keep ten scenes.
+
+- **Tests,** beside that slice's:
+  - with A in the background and held at its pump, releasing it
+    assembles its batches and the foreground `RenderDemand` records no
+    paint request of any of the three kinds from them (red without the
+    scope; red with the scope built on `paintDepth`, for a
+    `requestPaint` from A's `ResidencyController`);
+  - *restore:* a selection made in A, then in B, is A's again on return,
+    with A's `#sel:` term; and the same walk with a hidden element and a
+    display override in A (its `#d:` term), which B's bind and A's unbind
+    must not have reset (red with §4.5's reset reaching the left
+    session);
+  - *Unit, the scene count (`ModelSessionHost.test.js`):* with
+    `maxScenes: 2`, three mesh sessions opened in turn leave two
+    sessions with a root, and the first closed with its root disposed
+    (red without the count: three roots, because a session with no
+    lease is never evicted); a ready session with an artifact is chosen
+    before one still loading, whichever was foregrounded last; the
+    active session is never chosen;
+  - *E2E, scenes stay at N:* with the test override at 2, four models
+    opened in turn, a GLB among them: after each open the dev hook's
+    session snapshot lists at most two sessions with a scene, and the
+    two closed models' `WeakRef`s clear.
 - **Rollback:** `disableBackgroundSessions`, static first.
 
 ### 4. Eviction and rehydrate
 
 As engine-worker.md §7 step 8's item 4. On the lease API:
-`lease.onEvict` → the session swaps its read model;
+`lease.onEvict` → the session swaps its read model and keeps its scene,
+whatever the reason;
 `session.ensureEngine()` → `host.acquire({purpose: 'rehydrate'})`; a
 failed rehydrate is captured in `ModelSession#ensureEngine`, on the page.
+
+The scene count stays where 3b put it, in `ModelSessionHost#open`
+(§4.5), and its step changes from `session.close()` to
+`session.dropScene()`: the over-count session goes dormant and keeps its
+state. Eviction and dormancy are then two things with two triggers, and
+the tests hold them apart:
+
+- *Unit:* with `maxScenes: N`, N+1 opens leave N sessions with a scene
+  and one dormant: its leases released, its root disposed, its
+  `state.all()` equal to a copy taken before (red with `dropScene()` not
+  called: N+1 roots; red with `close()` left in its place: the state is
+  gone);
+- *Unit, dormancy does not hang off eviction:* at `maxScenes: 3`, with A
+  evicted for bytes (its root kept) and B and C live, opening D makes
+  the least recently foregrounded session dormant although no engine
+  slot is short (red if `dropScene()` is called from
+  `onEvict({reason: 'count'})`: four roots); and an `onEvict` of either
+  reason leaves the session's root in place;
+- *E2E, dormant, on desktop and mobile:* with the test override at 2,
+  select an element in A, then open B, then C. The session snapshot
+  shows two scenes and A dormant; A's worker has closed and A's model
+  `WeakRef` clears (what tells dormant from evicted, whose `WeakRef`
+  does not, engine-worker.md §7 step 8 item 4). Back to A: a cache-hit
+  open, A's selection and `#sel:` term restored, and the snapshot shows
+  two scenes again, with B dormant.
+
+With `?feature=disableSessionEviction` the over-count step is 3b's
+close again.
 
 
 ## 8. Risks and hard parts
