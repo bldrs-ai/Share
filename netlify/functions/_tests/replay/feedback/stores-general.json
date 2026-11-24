@@ -1,0 +1,23 @@
+{
+  "description": "A general note (source `general`, empty context, no rating) is written to the feedback store under its feedback_id, with the server's time as `at`: 204. The general feedback item (Share#2312) is this source's client.",
+  "env": {"$fixture": "env/feedback.json"},
+  "now": "2026-11-24T12:00:00.000Z",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/feedback",
+    "headers": {"content-type": "application/json", "origin": "https://bldrs.ai"},
+    "body": {"$fixture": "feedback/general.json"}
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:feedback/0b9e8d7c-6a5b-4c3d-9e2f-1a0b9c8d7e6f",
+        "headers": {"if-none-match": "*"},
+        "bodyJson": {"$fixture": "feedback/general.json", "$merge": {"at": "2026-11-24T12:00:00.000Z"}}
+      },
+      "response": {"status": 200, "headers": {"etag": "\"e1\""}}
+    }
+  ],
+  "expect": {"statusCode": 204}
+}

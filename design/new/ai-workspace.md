@@ -1372,6 +1372,12 @@ GA), so it is its own story, #1935: start in `Report-Only` mode, then enforce.
   survives a save and reload.
 - **Keys never go into transcripts.** Screenshots are stored as a
   placeholder, not pixels, unless the user keeps them.
+- **Rating a reply (#2306).** Thumbs up or down under each reply, with an
+  optional note and an opt-in screenshot, send the reply and the message
+  before it to Bldrs' feedback store, and only structured counts to GA
+  (`feedback_submitted`). This is the one path by which conversation text
+  reaches Bldrs, at the user's choice per reply. It is a client of the
+  general feedback module: [feedback.md](feedback.md).
 - **Shared and durable conversations, channels, and the Notes-vs-channels
   question are `assist-400`.**
 
