@@ -97,29 +97,6 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
         navToDefault(navigate, appPrefix)
         return true
       }
-      // Local-only mode (privacy/localOnlyMode.js): a visitor who declined
-      // analytics opens local files and the samples, not models from
-      // GitHub, Drive or a link. This is the backstop for every way such a
-      // route is reached (a shared link, recents, search, the widget API);
-      // the Open dialog and Share gate their own controls too. The refused
-      // link is kept so Open/LocalOnlyDialog can explain and open it if the
-      // visitor raises their level. Returns false like a failed parse: no
-      // repository or share setup for a model that isn't opening.
-      if (isLocalOnlyLevel(useStore.getState().privacyLevel) && isRemoteModel(mp)) {
-        // Recorded only while the address bar still shows the remote route:
-        // the effect runs again with these (stale) params after navToDefault
-        // has moved it to the home model, and that run must not overwrite
-        // the link with the home model's address.
-        const {pathname, search, hash} = window.location
-        if (REMOTE_ROUTE_KINDS.includes(viewRouteKind(pathname))) {
-          useStore.getState().setBlockedRemoteModel({
-            path: `${pathname}${search}${hash}`,
-            source: mp.kind === 'url' ? 'url' : mp.provider,
-          })
-        }
-        navToDefault(navigate, appPrefix)
-        return false
-      }
       // "Same model" is `modelIdentity`, the key CadView already uses for
       // per-model state; it reads `downloadUrl`, which every route carries
       // and which excludes the element path. Comparing `filepath`/`gitpath`
@@ -138,11 +115,41 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       // `/share/v/p/<id>` do too, and CadView hands it to the loader as
       // `isUploadedRoute` (#1955, codex review on #1956); coerced because
       // non-file routes don't set it.
-      if (modelPath === null ||
+      const isNewModel = modelPath === null ||
           modelIdentity(modelPath, installPrefix) !== modelIdentity(mp, installPrefix) ||
           modelPath.kind !== mp.kind ||
           modelPath.provider !== mp.provider ||
-          Boolean(modelPath.isUploadedFile) !== Boolean(mp.isUploadedFile)) {
+          Boolean(modelPath.isUploadedFile) !== Boolean(mp.isUploadedFile)
+      // Local-only mode (privacy/localOnlyMode.js): a visitor who declined
+      // analytics opens local files and the samples, not models from
+      // GitHub, Drive or a link. This is the backstop for every way such a
+      // route is reached (a shared link, recents, search, the widget API);
+      // the Open dialog and Share gate their own controls too. The refused
+      // link is kept so Open/LocalOnlyDialog can explain and open it if the
+      // visitor raises their level. Returns false like a failed parse: no
+      // repository or share setup for a model that isn't opening.
+      //
+      // Only a new model is refused. A remote model opened before the
+      // visitor declined stays open (the decline applies to opens after
+      // it), and selecting an element in it rewrites the route's element
+      // path, which reruns this effect for the same model (codex review on
+      // #2051).
+      if (isNewModel && isLocalOnlyLevel(useStore.getState().privacyLevel) && isRemoteModel(mp)) {
+        // Recorded only while the address bar still shows the remote route:
+        // the effect runs again with these (stale) params after navToDefault
+        // has moved it to the home model, and that run must not overwrite
+        // the link with the home model's address.
+        const {pathname, search, hash} = window.location
+        if (REMOTE_ROUTE_KINDS.includes(viewRouteKind(pathname))) {
+          useStore.getState().setBlockedRemoteModel({
+            path: `${pathname}${search}${hash}`,
+            source: mp.kind === 'url' ? 'url' : mp.provider,
+          })
+        }
+        navToDefault(navigate, appPrefix)
+        return false
+      }
+      if (isNewModel) {
         // Not on the first path: a page load starts with this state fresh,
         // and the hash may already have seeded a note selection.
         if (modelPath !== null) {
