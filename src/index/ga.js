@@ -27,7 +27,7 @@ const DEPLOY_PREVIEW_HOSTNAME = /^deploy-preview-\d+--bldrs-share-prod\.netlify\
  * manually opted-in Netlify deploy preview, and never under automation
  * (Playwright/Selenium/Puppeteer set navigator.webdriver). Other off-prod and
  * automated traffic polluted the analytics (and, while Google Ads ran, the
- * metrics it bid on) — see
+ * metrics it bid on; history only) — see
  * design/roadmap.md grow-120 and the matching event-level guard in
  * privacy/analytics#isRealModelOpen.
  *

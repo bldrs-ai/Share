@@ -3,16 +3,17 @@ import {withCrossTabLock} from './crossTabLock'
 
 
 /*
- * Engaged-use conversion events (Share#1960, bizdev#339 option (b)):
+ * Engaged-use retention events (Share#1960, bizdev#339 option (b)):
  *
  *   engaged_use   the open that makes this browser's 3rd real model open
  *                 inside a rolling 7 days; at most once per browser per 30 days
  *   return_visit  an open, on a later calendar day, by a browser whose previous
  *                 open was 1-14 days earlier; at most once per return day
  *
- * Both are observe-only secondary conversions for Google Ads. GA4 cannot
- * express "3rd open in a rolling 7 days" itself, so the count is kept in the
- * browser, in localStorage, and the event is sent when it is reached.
+ * Both are retention steps on the bizdev funnel (design/new/quotas.md
+ * §"Funnel analytics"). GA4 cannot express "3rd open in a rolling 7 days"
+ * itself, so the count is kept in the browser, in localStorage, and the
+ * event is sent when it is reached.
  *
  * "Open" is whatever CadView counts as `real_model_open`: it calls
  * trackEngagementOnOpen from inside the isRealModelOpen branch, so the bundled
@@ -26,7 +27,8 @@ import {withCrossTabLock} from './crossTabLock'
  * Storage failure fails CLOSED. With no way to remember an open, the only
  * alternative is a per-page counter, which would fire engaged_use for anyone
  * who opens a few models in one session and would re-fire it every reload.
- * An under-count is the safe error for a conversion that Ads may learn from.
+ * An under-count is the safe error for a retention metric: over-counting
+ * inflates it, while a miss only understates it.
  */
 
 export const ENGAGEMENT_STORAGE_KEY = 'bldrs.ga.engagement'
