@@ -415,8 +415,9 @@ export const FUNNEL_EVENTS = Object.freeze({
   SUBSCRIPTION_ENDED: SUBSCRIPTION_EVENT_NAMES.ENDED,
   SUBSCRIPTION_STARTED_CLIENT: SUBSCRIPTION_EVENT_NAMES.STARTED_CLIENT,
   SUBSCRIPTION_ENDED_CLIENT: SUBSCRIPTION_EVENT_NAMES.ENDED_CLIENT,
-  // Engaged-use conversions for Google Ads (Share#1960, bizdev#339); sent
-  // by privacy/engagementTracking.js from the real-open path.
+  // Retention signals for the funnel (Share#1960, bizdev#339; quotas.md
+  // §"Funnel analytics"); sent by privacy/engagementTracking.js from the
+  // real-open path.
   ENGAGED_USE: 'engaged_use',
   RETURN_VISIT: 'return_visit',
 })
@@ -527,8 +528,7 @@ export function gtagEventWithCid(eventName, parameters = {}) {
  * the grid and which legacy event each cell shadows.
  *
  * These are ADDED beside the legacy events, never instead of them: GA4 has
- * no rename, Ads imports `real_model_open` as its conversion, and the bizdev
- * dashboard queries the old names verbatim. Each call site below fires both,
+ * no rename, and the bizdev dashboard queries the old names verbatim. Each call site below fires both,
  * the new one through modelActionTracking.js#trackModelActionWhenAuthSettled.
  *
  *   model_view    {tier, source, route_kind, content_id, gate: 'none', open_cid}
@@ -897,10 +897,10 @@ const HOSTED_DEMO_FILEPATHS = ['index.ifc', 'index.step']
  * any remote source (GitHub, Google Drive, generic URL) or an uploaded
  * file. False for the bundled demo model the homepage auto-loads
  * (navToDefault → /share/v/p/index.ifc) — counting it would fire on
- * every homepage visit. real_model_open is a GA4 key event imported
- * into Google Ads as the search campaigns' conversion, so
- * pageview-shaped noise here would poison bidding (bizdev
- * ads-campaign-build §1, growth-strategy §3).
+ * every homepage visit. real_model_open is a GA4 key event and the
+ * funnel's "opened a model" step (quotas.md §"Funnel analytics"), so
+ * pageview-shaped noise here would inflate every funnel rate the bizdev
+ * dashboard derives from it.
  *
  * Demo detection matches routes.ts#processFile output for hosted
  * project files: {kind: 'file', isUploadedFile: false, filepath}. Since

@@ -3,9 +3,10 @@ import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
 import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
 
 
-// Verbatim shape of a Google Ads landing URL. `gclid` is the load-bearing
-// one; the `utm_*` pair and the unknown `foo` are here to prove the whole
-// query survives rather than a allowlist of params we happened to name.
+// Shape of a campaign landing URL. `gclid` stays a realistic landing param,
+// like the `utm_*` pair; the unknown `foo` proves the whole query survives
+// rather than an allowlist of params we happened to name. GA attributes the
+// visit to its campaign source only if the query reaches gtag.js intact.
 const AD_CLICK_SEARCH = '?gclid=TEST123&utm_source=google&utm_medium=cpc&foo=bar'
 
 // The chain rewrites the URL three times and each hop waits on a React
@@ -19,7 +20,8 @@ describeMobileAndDesktop('Landing query string', () => {
     await setIsReturningUser(page.context())
   })
 
-  // Regression guard for the gclid-attribution bug (#1784). Landing on `/`
+  // Regression guard for the landing-query attribution bug (#1784, found
+  // through Ads attribution; the fix carries every param, not just gclid). Landing on `/`
   // walks `/` -> `/share` -> `/share/v/p` -> `/share/v/p/index.ifc`, each
   // hop a `navigate` out of a React effect, and any one of them calling
   // `navigate(dest)` bare drops `location.search`.
