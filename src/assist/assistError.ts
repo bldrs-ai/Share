@@ -30,6 +30,12 @@ export type AssistErrorCode =
    */
   | 'bad_request'
   /**
+   * The hosted relay refused a well-formed request as over the tier's body
+   * cap (`ai_body_too_large`). The loop retries a step once at the cap the
+   * refusal names; one that still ends the turn says what `bad_request` does.
+   */
+  | 'body_too_large'
+  /**
    * HTTP 404: the model or endpoint isn't there. For OpenRouter this is also
    * what a model with no `data_collection: 'deny'` endpoint answers, and
    * what the user's own account provider settings can cause by leaving it
@@ -213,7 +219,8 @@ export function assistErrorMessage(code: AssistErrorCode, provider: string, stat
     case 'bad_key': return `${provider} didn't accept your key. Check it in the assistant's settings and try again.`
     case 'no_credits': return `Your ${provider} account is out of credits. Add credits with ${provider}, then try again.`
     case 'rate_limited': return `${provider} is limiting requests right now. Wait a minute and try again.`
-    case 'bad_request': return `${provider} couldn't take this request; the conversation may be too long. ` +
+    case 'bad_request':
+    case 'body_too_large': return `${provider} couldn't take this request; the conversation may be too long. ` +
       'Start a new chat to carry on.'
     case 'unavailable': return `This AI model isn't available from ${provider} right now. It may be our ` +
       `configuration, or your ${provider} provider settings leave it no endpoint.`

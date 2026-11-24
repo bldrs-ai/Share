@@ -18,7 +18,9 @@
  *    budget admits again (ISO-8601 UTC); also `resumeAt` in the body
  *  - `x-bldrs-ai-max-body-bytes`: the largest request body this caller's tier
  *    may send, env overrides included, so the loop sizes the next request to
- *    it (loop.ts `boundStepMessages`)
+ *    it (loop.ts `boundStepMessages`). A request over it is refused 400
+ *    `ai_body_too_large` carrying the cap, which the loop retries once
+ *    re-sized; a malformed body is `ai_bad_request` and never retried
  * and, on a refusal, a JSON body `{error: {code: 'ai_…', message}, tier, resumeAt?}`.
  */
 import {AssistError, AssistErrorCode} from './assistError'
@@ -74,6 +76,9 @@ const RELAY_CODES: Record<string, AssistErrorCode> = {
   ai_too_many_requests: 'rate_limited',
   ai_busy: 'assistant_busy',
   ai_bad_request: 'bad_request',
+  // A well-formed body over the tier's cap: distinct so the loop can retry it
+  // re-sized to the cap the refusal names, where a malformed body is final.
+  ai_body_too_large: 'body_too_large',
   ai_request_rejected: 'bad_request',
   // The model Share asked for isn't on the relay's list for this tier: the
   // host and the relay disagree, which is ours to fix (the panel reports it).

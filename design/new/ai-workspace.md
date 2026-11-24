@@ -829,8 +829,15 @@ Per-message metering would multiply that write rate by roughly 100.
     budget is large next to one hold): admit only if the hold fits.
   - **Size cap.** Anonymous and free bodies are capped at 64 KiB
     (`AI_MAX_BODY_BYTES_ANONYMOUS` / `_FREE`, `src/quota/aiCredits.js`;
-    refused as `ai_bad_request`, "conversation may be too long"), so one hold,
-    and the overshoot, is at most about $0.03. A soft bucket settling past its
+    refused 400 `ai_body_too_large` with the cap in `x-bldrs-ai-max-body-bytes`,
+    "conversation may be too long"; a malformed body stays `ai_bad_request`), so
+    one hold, and the overshoot, is at most about $0.03. The loop retries a step
+    refused `ai_body_too_large` once, re-bounded to the cap the refusal names
+    (`loop.ts` `retryTooLarge`, Share#2307): a tier can drop between two requests
+    (Pro to Free, or the relay briefly serving Free), leaving the cached cap
+    stale. It is a model wrapper, so the SDK sees one call: no second step, usage
+    report, undo record or stored message. A malformed `ai_bad_request` is never
+    retried; the relay refuses before any ledger write, so a retry costs nothing. A soft bucket settling past its
     budget is the designed overshoot, not `settle_exceeded_reservation`.
   - **`resumeAt`.** A credits refusal carries when the budget admits again:
     the first UTC midnight at which enough of the window's spend has aged out
