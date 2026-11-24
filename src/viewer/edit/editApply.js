@@ -216,6 +216,47 @@ export function ifcGlobalIdIndex(rootElement) {
 
 
 /**
+ * The refs an op brings into being: a create's target, a duplicate's copies.
+ * Each must name nothing when the op is applied (or redone, after an undo
+ * deleted them again), or the op would overwrite or collide with a live
+ * element.
+ *
+ * @param {object} op
+ * @return {Array<string>}
+ */
+function outputRefs(op) {
+  switch (op.kind) {
+    case EditOpKind.CREATE:
+      return op.targets
+    case EditOpKind.DUPLICATE:
+      return op.payload.copies
+    default:
+      return []
+  }
+}
+
+
+/**
+ * The output refs that already name a live element. A ref the resolver
+ * cannot resolve, for any reason (never minted, deleted), is absent.
+ *
+ * @param {Array<string>} refs
+ * @param {EditRefResolver} resolver
+ * @return {Array<{ref: string, reason: string}>}
+ */
+function liveRefs(refs, resolver) {
+  const live = []
+  for (const ref of refs) {
+    const result = resolver.resolve(ref)
+    if (result && 'target' in result) {
+      live.push({ref, reason: 'already names a live element'})
+    }
+  }
+  return live
+}
+
+
+/**
  * The refs an op's revert must resolve: for a create or a duplicate, the
  * elements it made; for a delete, none (the backend restores by ref); for
  * the rest, its targets.
@@ -226,9 +267,8 @@ export function ifcGlobalIdIndex(rootElement) {
 function revertRefs(op) {
   switch (op.kind) {
     case EditOpKind.CREATE:
-      return op.targets
     case EditOpKind.DUPLICATE:
-      return op.payload.copies
+      return outputRefs(op)
     case EditOpKind.DELETE:
       return []
     default:
@@ -322,10 +362,14 @@ function forwardSteps(op, targets, backend) {
 /**
  * Apply an op, or redo one.
  *
- * - **Refusals change nothing.** An invalid op, or one with any target that
- *   does not resolve, returns why, and the backend is never called. Every
- *   target is resolved before the first backend call (the undo capture
- *   included), so a refusal can never follow a partial mutation. A partial
+ * - **Refusals change nothing.** An invalid op, one with any target that
+ *   does not resolve, or one whose output ref (a create's target, a
+ *   duplicate's copies) already names a live element, returns why, and the
+ *   backend is never called. Every ref is resolved before the first backend
+ *   call (the undo capture included), so a refusal can never follow a
+ *   partial mutation. An output ref that is live is what an untrusted or
+ *   hand-built log could carry; an undone create's or duplicate's outputs
+ *   are deleted, so they resolve to nothing again and redo proceeds. A partial
  *   edit that looked like success is worse than a report (the same rule as
  *   `viewer/tools/refs.js#assertResolved`).
  * - **A throw fail-stops.** If the backend or the resolver throws, nothing is
@@ -334,9 +378,6 @@ function forwardSteps(op, targets, backend) {
  *   (`BatchEditIdError`, `BatchEditReentryError`, a failed buffer allocation
  *   in `batchedGeometryCapacity.js`), and may have changed some of the scene
  *   when they do.
- *
- * A `create`'s target is not resolved first: it names an element that does
- * not exist yet.
  *
  * The op is canonicalized first (editOps.js#canonicalEditOp), and it is that
  * deep-frozen copy which is applied and returned as `op`, for the caller to
@@ -348,9 +389,9 @@ function forwardSteps(op, targets, backend) {
  * @param {EditRefResolver} context.resolver
  * @param {string} [direction] {@link EditDirection} APPLY or REDO, for the
  *   error's diagnostics
- * @return {object} `{ok: true, undo, op}`, or `{ok: false, reason, unresolved?}`
- *   with `unresolved` listing `{ref, reason}` for each target that named
- *   nothing
+ * @return {object} `{ok: true, undo, op}`, or `{ok: false, reason, unresolved?,
+ *   live?}` with `unresolved` listing `{ref, reason}` for each target that
+ *   named nothing and `live` each output ref that named something
  * @throws {EditInconsistentError}
  */
 export function applyEditOp(given, {backend, resolver}, direction = EditDirection.APPLY) {
@@ -359,13 +400,15 @@ export function applyEditOp(given, {backend, resolver}, direction = EditDirectio
     return {ok: false, reason}
   }
   return failStop(op, direction, () => {
-    let targets = []
-    if (op.kind !== EditOpKind.CREATE) {
-      const resolution = resolveEditRefs(op.targets, resolver)
-      if (resolution.unresolved.length > 0) {
-        return {ok: false, reason: 'unresolved refs; nothing was changed', unresolved: resolution.unresolved}
-      }
-      targets = resolution.targets
+    // Inputs must resolve and outputs must not, all checked before the
+    // first backend call. A create's target is an output, not an input.
+    const {targets, unresolved} = resolveEditRefs(op.kind === EditOpKind.CREATE ? [] : op.targets, resolver)
+    const live = liveRefs(outputRefs(op), resolver)
+    if (unresolved.length > 0) {
+      return {ok: false, reason: 'unresolved refs; nothing was changed', unresolved, ...(live.length > 0 && {live})}
+    }
+    if (live.length > 0) {
+      return {ok: false, reason: 'output refs already name live elements; nothing was changed', live}
     }
     const undo = captureUndo(op, targets, backend)
     for (const step of forwardSteps(op, targets, backend)) {

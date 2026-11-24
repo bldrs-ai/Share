@@ -627,8 +627,15 @@ into targets through a resolver. L2 implements both.
     plus its registry of created refs.
 - **Refusals change nothing, and come before the first backend call.**
   - An invalid op, or one with any unresolved target, changes nothing and
-    returns `{ok: false, reason, unresolved: [{ref, reason}]}`. A `create`'s
-    target is not resolved first, since it does not exist yet.
+    returns `{ok: false, reason, unresolved: [{ref, reason}]}`.
+  - **Output refs must be absent.** A `create`'s target and a `duplicate`'s
+    copies are refs the op brings into being. If any of them already names
+    a live element, the op is refused the same way, with `live: [{ref,
+    reason}]`. `makeEditOp` mints fresh ones, so only an untrusted or
+    hand-built log can carry such a ref; without the check it would
+    overwrite a live element or fail-stop (review of #2346, round 4). An
+    undone create's or duplicate's outputs are deleted, so they resolve to
+    nothing again and redo proceeds.
   - Every target is resolved before the backend is called at all, the undo
     capture's reads included. A refusal therefore never follows a partial
     mutation.
@@ -692,9 +699,18 @@ L3 (#1918) automates this. Until then, recovery is a reload.
 
 `markEditsRecovered` is the only way back to consistent, other than
 installing a different model. It is refused when the log is not
-inconsistent, and refused when given the backend that failed: a rebuilt
-scene comes with a new backend object, so the same one means nothing was
-rebuilt. That check is cheap and deliberately narrow. It cannot see a new
+inconsistent, and refused when given any backend that has failed: a rebuilt
+scene comes with a new backend object, so a failed one means nothing was
+rebuilt.
+
+**A failed backend is never installed again.** The slice keeps every backend
+that has thrown in a `WeakSet`, and `setEditContext` and
+`markEditsRecovered` both refuse one. Without it, backend A fails, B is
+installed (which rightly clears the state, as a new model), and reinstalling
+A passes the identity check because A is not B (review of #2346, round 4).
+The set is never cleared: by the contract, a recovered scene is a new
+backend object, so nothing in it can become usable again. These checks are
+cheap and deliberately narrow. It cannot see a new
 backend object wrapped around the old, broken scene; L2's one-backend-per-scene
 contract (EditSlice, below) rules that out.
 
@@ -713,8 +729,10 @@ were captured against.
     another scene's per-load state.
   - The same backend (with a new resolver or a rebuilt context object), or
     null, keeps the log and any inconsistency as they are. Clearing the
-    context and reinstalling the one that failed therefore changes nothing
-    (review of #2346, round 3).
+    context therefore does not clear an inconsistency (review of #2346,
+    round 3).
+  - A backend that has ever failed is refused, with `{ok: false, reason}`,
+    and nothing changes (above). `setEditContext` returns `{ok}`.
   - Why identity: the backend *is* the scene the undo records describe. A
     model or session id would call a rebuilt scene of the same model "the
     same", which is exactly the case that must not be. The context object

@@ -233,11 +233,13 @@ describe('EditSlice', () => {
     const fake = stopTheLog()
     const log = useStore.getState().editLog
     const {setEditContext} = useStore.getState()
-    setEditContext({backend: fake.backend, resolver: fake.resolver})
+    const refusedInstall = {ok: false, reason: expect.stringMatching(/failed/)}
+    expect(setEditContext({backend: fake.backend, resolver: fake.resolver})).toEqual(refusedInstall)
     expect(useStore.getState().isEditInconsistent).toBe(true)
     expect(useStore.getState().editLog).toBe(log)
-    setEditContext(null)
-    setEditContext({backend: fake.backend, resolver: fake.resolver})
+    expect(setEditContext(null)).toEqual({ok: true})
+    expect(setEditContext({backend: fake.backend, resolver: fake.resolver})).toEqual(refusedInstall)
+    expect(useStore.getState().editContext).toBe(null)
     expect(useStore.getState().isEditInconsistent).toBe(true)
     expect(useStore.getState().editLog).toBe(log)
     expectStopped(1)
@@ -259,6 +261,55 @@ describe('EditSlice', () => {
     expect(useStore.getState().isEditInconsistent).toBe(false)
     expect(flags().entries).toBe(0)
     expect(useStore.getState().applyEdit(move('document'))).toEqual({ok: true})
+  })
+
+
+  it.each([
+    ['A → B → A', (b) => [b]],
+    ['A → null → B → A', (b) => [null, b]],
+  ])('never reinstalls a backend that failed, after another model: %s', (name, between) => {
+    const a = stopTheLog()
+    const b = makeFakeEditModel({elements: [{expressID: 771, globalId: WALL_GID}]})
+    const {setEditContext} = useStore.getState()
+    for (const fake of between(b)) {
+      setEditContext(fake && {backend: fake.backend, resolver: fake.resolver})
+    }
+    expect(useStore.getState().isEditInconsistent).toBe(false)
+    expect(setEditContext({backend: a.backend, resolver: a.resolver}))
+      .toEqual({ok: false, reason: expect.stringMatching(/failed/)})
+    // B is still installed and consistent; A's unrebuilt scene takes no edit.
+    expect(useStore.getState().editContext.backend).toBe(b.backend)
+    const aBefore = a.state()
+    expect(useStore.getState().applyEdit(move('document'))).toEqual({ok: true})
+    expect(a.state()).toEqual(aBefore)
+    expect(useStore.getState().markEditsRecovered({backend: a.backend, resolver: a.resolver}, EMPTY_EDIT_LOG))
+      .toEqual({ok: false, reason: expect.stringMatching(/not inconsistent/)})
+  })
+
+
+  it('refuses recovery with any backend that failed, not only the latest', () => {
+    const a = stopTheLog()
+    const b = stopTheLog()
+    expect(useStore.getState().markEditsRecovered({backend: a.backend, resolver: a.resolver}, EMPTY_EDIT_LOG))
+      .toEqual({ok: false, reason: expect.stringMatching(/rebuilt scene/)})
+    expect(useStore.getState().markEditsRecovered({backend: b.backend, resolver: b.resolver}, EMPTY_EDIT_LOG))
+      .toEqual({ok: false, reason: expect.stringMatching(/rebuilt scene/)})
+    expect(useStore.getState().isEditInconsistent).toBe(true)
+  })
+
+
+  it('refuses an op whose output ref is already live as a clean refusal: the log stays consistent', () => {
+    const fake = installPair()
+    useStore.getState().applyEdit(move('document'))
+    const log = useStore.getState().editLog
+    const before = fake.state()
+    const result = useStore.getState().applyEdit(
+      {id: 'op1', kind: 'create', targets: [DOOR], payload: {geometry: {box: [1, 1, 1]}}, layer: 'document'})
+    expect(result).toEqual({ok: false, reason: expect.stringMatching(/already name live/),
+      live: [{ref: DOOR, reason: 'already names a live element'}]})
+    expect(fake.state()).toEqual(before)
+    expect(useStore.getState().editLog).toBe(log)
+    expect(useStore.getState().isEditInconsistent).toBe(false)
   })
 
 

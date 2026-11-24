@@ -251,6 +251,60 @@ describe('viewer/edit/editApply', () => {
 
 
   describe('resolve before the first backend call', () => {
+    const FRESH = 'g2Aa8Kc$Pr2ExS0vV8q9Zz0'
+
+    /**
+     * A model holding a box an earlier create made, for an op to collide with.
+     *
+     * @return {object} `{fake, box}`
+     */
+    function withCreatedBox() {
+      const fake = model()
+      const create = opOf({kind: 'create', payload: {geometry: {box: [1, 1, 1]}}}, 9)
+      expect(applyEditOp(create, fake).ok).toBe(true)
+      return {fake, box: create.targets[0]}
+    }
+
+    // An op from an untrusted or literal log can name an output ref that is
+    // already live. [name, build(box) → op literal, the live output refs]
+    const COLLISIONS = [
+      ['a create whose target is a live source element', () =>
+        ({id: 'op1', kind: 'create', targets: [WALL], payload: {geometry: {box: [2, 2, 2]}}, layer: 'document'}),
+      () => [WALL]],
+      ['a create whose target is an element an earlier create made', (box) =>
+        ({id: 'op1', kind: 'create', targets: [box], payload: {geometry: {box: [2, 2, 2]}}, layer: 'document'}),
+      (box) => [box]],
+      ['a duplicate with one live copy ref', (box) =>
+        ({id: 'op1', kind: 'duplicate', targets: [WALL, DOOR], payload: {copies: [FRESH, box]}, layer: 'document'}),
+      (box) => [box]],
+    ]
+
+    it.each(COLLISIONS)('refuses %s, with zero backend calls', (name, build, liveRefs) => {
+      const {fake, box} = withCreatedBox()
+      const before = fake.state()
+      const {spy, seen} = spyOn(fake.backend)
+      expect(applyEditOp(build(box), {backend: spy, resolver: fake.resolver})).toEqual({
+        ok: false,
+        reason: 'output refs already name live elements; nothing was changed',
+        live: liveRefs(box).map((ref) => ({ref, reason: 'already names a live element'})),
+      })
+      expect(seen).toEqual([])
+      expect(fake.state()).toEqual(before)
+    })
+
+    it.each([
+      ['create', {kind: 'create', payload: {geometry: {box: [1, 1, 1]}}}],
+      ['duplicate', {kind: 'duplicate', targets: [WALL, DOOR]}],
+    ])('still redoes an undone %s: its output refs are absent again', (name, spec) => {
+      const {backend, resolver, state} = model()
+      const op = opOf(spec)
+      const applied = applyEditOp(op, {backend, resolver})
+      const after = state()
+      expect(revertEditOp(op, applied.undo, {backend, resolver})).toEqual({ok: true})
+      expect(applyEditOp(op, {backend, resolver}, EditDirection.REDO).ok).toBe(true)
+      expect(state()).toEqual(after)
+    })
+
     it('makes zero backend calls, reads included, when only the last of several targets is unresolved', () => {
       const {backend, resolver} = model()
       const {spy, seen} = spyOn(backend)

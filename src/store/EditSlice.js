@@ -72,6 +72,15 @@ export default function createEditSlice(set, get) {
     reason: 'the edit log is inconsistent with the scene; rebuild from the source and replay its applied ops',
   }
   const consistent = {isEditInconsistent: false, editInconsistency: null}
+  // Every backend that has ever thrown. Its scene is in an unknown state for
+  // good, so it is never installed again, whatever was installed in between
+  // (A fails, B is installed, A comes back: review of #2346). The set is
+  // never cleared: a recovered scene is, by the EditBackend contract
+  // (editApply.js), a NEW backend object, so nothing in here ever becomes
+  // usable again. A WeakSet, so a failed scene can still be collected.
+  const failedBackends = new WeakSet()
+  const failedBackendReason = 'this edit backend failed and its scene state is unknown; ' +
+    'install a new backend over a rebuilt scene'
 
   /**
    * Run an edit and its log update, marking the log inconsistent if either
@@ -86,6 +95,7 @@ export default function createEditSlice(set, get) {
     try {
       return edit()
     } catch (error) {
+      failedBackends.add(get().editContext.backend)
       set(() => ({isEditInconsistent: true, editInconsistency: error}))
       throw error
     }
@@ -115,17 +125,25 @@ export default function createEditSlice(set, get) {
      *   records hold another scene's per-load state.
      * - The same backend (a resolver swapped, a context object rebuilt), or
      *   null, keeps the log and its consistency as they are. So clearing the
-     *   context and reinstalling the one that failed does not clear an
-     *   inconsistency: only `markEditsRecovered` does that.
+     *   context does not clear an inconsistency: only `markEditsRecovered`
+     *   does that.
+     * - A backend that has ever failed is refused, and nothing changes: not
+     *   the one that failed last, nor one that failed before another model
+     *   was installed.
      *
      * @param {object|null} context `{backend, resolver}` (editApply.js)
+     * @return {object} `{ok, reason?}`
      */
     setEditContext: (context) => {
+      if (context !== null && failedBackends.has(context.backend)) {
+        return {ok: false, reason: failedBackendReason}
+      }
       if (context === null || context.backend === get().editLogBackend) {
         set(() => ({editContext: context}))
-        return
+        return {ok: true}
       }
       set(() => ({editContext: context, editLogBackend: context.backend, ...withLog(EMPTY_EDIT_LOG), ...consistent}))
+      return {ok: true}
     },
 
     /**
@@ -134,9 +152,9 @@ export default function createEditSlice(set, get) {
      * #1918). `log` is the log that replay built, whose undo records belong
      * to the rebuilt scene.
      *
-     * Refused unless the log is inconsistent, and refused for the backend
-     * that failed: a rebuilt scene comes with a new backend object
-     * (editApply.js#EditBackend), so the same one means nothing was rebuilt.
+     * Refused unless the log is inconsistent, and refused for any backend
+     * that has failed: a rebuilt scene comes with a new backend object
+     * (editApply.js#EditBackend), so a failed one means nothing was rebuilt.
      *
      * @param {object} context `{backend, resolver}` over the rebuilt scene
      * @param {object} log the replayed log (editLog.js)
@@ -147,8 +165,8 @@ export default function createEditSlice(set, get) {
       if (!state.isEditInconsistent) {
         return {ok: false, reason: 'the edit log is not inconsistent; nothing to recover'}
       }
-      if (!context?.backend || context.backend === state.editLogBackend) {
-        return {ok: false, reason: 'recovery needs a backend over a rebuilt scene, not the one that failed'}
+      if (!context?.backend || failedBackends.has(context.backend)) {
+        return {ok: false, reason: `recovery needs a backend over a rebuilt scene: ${failedBackendReason}`}
       }
       set(() => ({editContext: context, editLogBackend: context.backend, ...withLog(log), ...consistent}))
       return {ok: true}
