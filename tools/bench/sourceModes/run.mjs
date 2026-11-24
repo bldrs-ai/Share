@@ -519,7 +519,12 @@ async function runTrial({spec, shared, chromium, executablePath, armName, withRe
     headless: true, executablePath, viewport: {width: 1280, height: 800}, deviceScaleFactor: 1,
   })
   try {
-    await context.addCookies([{name: 'isFirstTime', value: '1', domain: 'localhost', path: '/'}])
+    // About also opens for a visitor with no privacy choice yet
+    // (src/privacy/consent.js); Browse only keeps GA out of the bench.
+    await context.addCookies([
+      {name: 'isFirstTime', value: '1', domain: 'localhost', path: '/'},
+      {name: 'consentLevel', value: '1.restricted', domain: 'localhost', path: '/'},
+    ])
     const page = context.pages()[0] ?? await context.newPage()
     await page.addInitScript(shared.probeSource)
     await page.addInitScript(benchExtrasSource)

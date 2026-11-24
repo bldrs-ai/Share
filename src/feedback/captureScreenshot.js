@@ -8,7 +8,7 @@ import {FAILURE_STAGES, reportFeedbackFailure} from './submitFeedback'
  * A screenshot of the 3D view for a feedback record, taken only when the
  * user asks (the attach control in FeedbackNote.jsx): never on its own, and
  * only ever sent to Bldrs' feedback store with the record, never to GA,
- * which hears just `has_screenshot` (design/new/feedback.md §"Privacy").
+ * which hears just `has_screenshot` (design/tracks/community-t100/feedback.md §"Privacy").
  *
  * A capture can fail where the GPU or browser won't give the frame up (no
  * viewer yet, a lost context, a JPEG encoder missing). That is expected

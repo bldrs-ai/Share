@@ -83,14 +83,14 @@ Pinned to `2154a8d`; test definitions read, no test run, no runtime walkthrough.
 
 | Story | Specs | Form factors |
 |---|---|---|
-| Samples (#757) | [Samples.spec.ts](https://github.com/bldrs-ai/Share/blob/2154a8d9a38408160a775a7e32d9259c9950d457/src/Components/Open/Samples.spec.ts), 9 tests | Not under `describeMobileAndDesktop` |
+| Samples (#757) | [Samples.spec.ts](https://github.com/bldrs-ai/Share/blob/2154a8d9a38408160a775a7e32d9259c9950d457/src/Components/Open/Samples.spec.ts), 9 tests, with two `describe.skip` blocks (the ones that load a sample) | Not under `describeMobileAndDesktop` |
 | Local (#271) | [browseFileChooser.spec.ts](https://github.com/bldrs-ai/Share/blob/2154a8d9a38408160a775a7e32d9259c9950d457/src/Components/Open/browseFileChooser.spec.ts), [noOpfsUpload.spec.ts](https://github.com/bldrs-ai/Share/blob/2154a8d9a38408160a775a7e32d9259c9950d457/src/Components/Open/noOpfsUpload.spec.ts), [uploadNotInBrowser.spec.ts](https://github.com/bldrs-ai/Share/blob/2154a8d9a38408160a775a7e32d9259c9950d457/src/Components/Open/uploadNotInBrowser.spec.ts) | Desktop and mobile |
 | Archive (#2006) | [modelArchive.spec.ts](https://github.com/bldrs-ai/Share/blob/2154a8d9a38408160a775a7e32d9259c9950d457/src/loader/modelArchive.spec.ts), [hostedArchive.spec.ts](https://github.com/bldrs-ai/Share/blob/2154a8d9a38408160a775a7e32d9259c9950d457/src/loader/hostedArchive.spec.ts) | Desktop and mobile |
-| GitHub (#765, #1159) | [Github.spec.ts](https://github.com/bldrs-ai/Share/blob/2154a8d9a38408160a775a7e32d9259c9950d457/src/Components/Open/Github.spec.ts), 3 tests | Not under `describeMobileAndDesktop` |
+| GitHub (#765, #1159) | [Github.spec.ts](https://github.com/bldrs-ai/Share/blob/2154a8d9a38408160a775a7e32d9259c9950d457/src/Components/Open/Github.spec.ts), 5 tests; the two that open a model (by link and through the dialog) are `test.skip`, so only the file-browser dropdown tests run | Not under `describeMobileAndDesktop` |
 | Drive (#244) | [GoogleDriveConnect.spec.ts](https://github.com/bldrs-ai/Share/blob/2154a8d9a38408160a775a7e32d9259c9950d457/src/Components/Connections/GoogleDriveConnect.spec.ts), 5 tests | Not under `describeMobileAndDesktop` |
 | Recents, local (#2263) | [pruneLocalRecents.spec.ts](https://github.com/bldrs-ai/Share/blob/2154a8d9a38408160a775a7e32d9259c9950d457/src/connections/pruneLocalRecents.spec.ts) | Desktop and mobile |
 
-- "Not under `describeMobileAndDesktop`" means the spec has no `[mobile]` variant, as the [CLAUDE.md](../../AGENTS.md) rule for UI stories asks for. Whether the flows work on a phone is not established by this. #244 carries the task for Drive; for Samples and GitHub no follow-up issue exists yet (see decisions).
+- "Not under `describeMobileAndDesktop`" means the spec has no `[mobile]` variant, as the [CLAUDE.md](../../AGENTS.md) rule for UI stories asks for. Whether the flows work on a phone is not established by this. Follow-ups were filed on 2026-11-24 under the owning stories: [#2331](https://github.com/bldrs-ai/Share/issues/2331) (Samples), [#2332](https://github.com/bldrs-ai/Share/issues/2332) (GitHub) and [#2333](https://github.com/bldrs-ai/Share/issues/2333) (Drive).
 - A Drive recent that is gone is not detected: `checkFileAccess` and `FileUnreachableError` do not appear in `src/`. The message for a gone *local* upload does ([`src/OPFS/messages.js`](https://github.com/bldrs-ai/Share/blob/2154a8d9a38408160a775a7e32d9259c9950d457/src/OPFS/messages.js)).
 - Several Drive accounts: [GoogleDriveTab.test.jsx](https://github.com/bldrs-ai/Share/blob/2154a8d9a38408160a775a7e32d9259c9950d457/src/Components/Connections/GoogleDriveTab.test.jsx) checks the "Add another Google account" button, but no E2E spec connects two accounts.
 - The `googleDrive` flag is on and `githubAsSource` is off ([`src/FeatureFlags.js`](https://github.com/bldrs-ai/Share/blob/2154a8d9a38408160a775a7e32d9259c9950d457/src/FeatureFlags.js)).
@@ -104,7 +104,6 @@ Each is recorded in the issue named; this list only points there.
 - Whether LFS reads (#277) are done, and where enabling LFS (#1188) belongs ([#2259](https://github.com/bldrs-ai/Share/issues/2259)).
 - Whether Drive's missing OPFS cache is intended (#2100, [#2260](https://github.com/bldrs-ai/Share/issues/2260)).
 - Whether the Sources tab is the Google tab or its own ([#2262](https://github.com/bldrs-ai/Share/issues/2262)).
-- Whether to file desktop+mobile follow-ups for Samples and GitHub. The closed stories stay closed; a task issue would sit under #757 and #1159 ([#2258](https://github.com/bldrs-ai/Share/issues/2258)).
 
 ## Milestone hypotheses
 

@@ -15,7 +15,7 @@ import {feedbackView} from './feedbackView'
 
 /**
  * Feedback from the user to Bldrs, from any place in the app that offers it
- * (design/new/feedback.md). One rating, note or screenshot goes to two sinks,
+ * (design/tracks/community-t100/feedback.md). One rating, note or screenshot goes to two sinks,
  * split by what each may hold:
  *
  * - GA gets `feedback_submitted`, structured fields only (feedbackGaParams):

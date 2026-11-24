@@ -8,7 +8,7 @@ import {assistAuth, assistChat} from './assistState'
 
 /**
  * Rating an assistant reply (Share#2306): the assistant's source of the
- * general feedback module (design/new/feedback.md §"Worked example: the
+ * general feedback module (design/tracks/community-t100/feedback.md §"Worked example: the
  * assistant's thumbs"). This file holds only what is the assistant's: which
  * replies offer a rating, what a rating says about its turn (the `context`
  * of an `assist_reply` record), and remembering the rating on the reply.

@@ -307,9 +307,11 @@ describe('navToDefault', () => {
     expect(navCallsWithSearch('')).toEqual([`/share/v/p/index.ifc${CAMERA_HASH}`])
   })
 
-  // The gclid bug (#1784) was this query going missing across a redirect;
-  // this is the last hop in that chain, and feature flags (`?feature=…`)
-  // ride the same query.
+  // The landing query (`utm_*`, `gclid`, any param) must survive the
+  // redirect chain so GA attributes the visit to its campaign source;
+  // #1784 (found through Ads attribution) was it going missing. This is
+  // the last hop in that chain, and feature flags (`?feature=…`) ride the
+  // same query.
   it('carries the current query string forward', () => {
     expect(navCallsWithSearch('?gclid=TEST123&feature=bot')).toEqual([
       `/share/v/p/index.ifc?gclid=TEST123&feature=bot${CAMERA_HASH}`,

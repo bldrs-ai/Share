@@ -7,13 +7,18 @@ import {CloseButton} from './Buttons'
 import {useIsMobile} from './Hooks'
 
 
-// Mobile-only bottom inset, roughly the height of the collapsed snackbar
-// band (one line of content plus its action). The snackbar now renders
-// ABOVE dialogs (Theme.jsx `zIndex.snackbar`, #1838), so without this the
-// two would share the same pixels and the message would land on top of the
-// dialog's action button. Paired with the maxHeight below, which keeps a
-// tall dialog scrolling inside itself rather than growing into the band.
-const MOBILE_SNACKBAR_BAND = '4em'
+// Bottom inset, roughly the height of the collapsed snackbar band (one line
+// of content plus its action). The snackbar renders ABOVE dialogs
+// (Theme.jsx `zIndex.snackbar`, #1838), so without this the two would share
+// the same pixels and the message would land on top of the dialog's action
+// buttons. Paired with the maxHeight below, which keeps a tall dialog
+// scrolling inside itself rather than growing into the band.
+//
+// On every form factor: the snackbar is bottom-centred on desktop too. It
+// was mobile-only until the About dialog's Cancel/OK became the analytics
+// consent (design/new/analytics-consent.md): at 1280×800 the tall About
+// dialog ran under "Loaded …" and those two buttons were half covered.
+const SNACKBAR_BAND = '4em'
 // MUI's default paper margin, which we keep at the top.
 const DIALOG_MARGIN = '2em'
 
@@ -80,10 +85,10 @@ export default function Dialog({
       // is closed, the transition animation is not played.
       closeAfterTransition={false}
       PaperProps={{
-        sx: isMobile ? {
-          marginBottom: MOBILE_SNACKBAR_BAND,
-          maxHeight: `calc(100% - ${MOBILE_SNACKBAR_BAND} - ${DIALOG_MARGIN})`,
-        } : {},
+        sx: {
+          marginBottom: SNACKBAR_BAND,
+          maxHeight: `calc(100% - ${SNACKBAR_BAND} - ${DIALOG_MARGIN})`,
+        },
       }}
       // don't use data-testid, use getByRole('dialog') instead
     >

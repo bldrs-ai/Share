@@ -2,7 +2,7 @@
 
 Use this shared rubric to reconcile an epic's UX requirements with the roadmap and existing GitHub issues. Apply it to each epic using two documents: a concise `<epic-code>.md` scope snapshot and a detailed `<epic-code>-triage.md` reconciliation record. See the [Notes 100 snapshot](notes-100.md) and [Notes 100 triage](notes-100-triage.md) for the first worked example.
 
-The [UX index](README.md) owns shared product requirements; the [roadmap](../roadmap.md) owns feature assignments and business milestones. This document owns the reconciliation procedure. Technical work that serves several epics belongs to a track, under the [DX rubric](../dx/dx-rubric.md).
+The [UX index](README.md) owns shared product requirements; the [roadmap](../roadmap.md) owns feature assignments and business milestones. This document owns the reconciliation procedure. Technical work that serves several epics belongs to a track, under the [tracks rubric](../tracks/tracks-rubric.md).
 
 ## Where each kind of work lives
 

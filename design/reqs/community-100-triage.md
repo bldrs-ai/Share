@@ -19,18 +19,19 @@ Searched on 2026-11-23, `repo:bldrs-ai/Share is:issue`: `community in:title`, `w
 | #61 open | **Extend.** Retitled and rewritten as a story (the 2021 requirement was a link to a planning document). |
 | #38 closed | **Retain**, retitled `community-110: Measure usage with Google Analytics`. |
 | #62 open | **Extend.** Retitled and rewritten as a story; its "Github Related" milestone is kept. |
+| #2312 open | **Move** (2026-11-24). Filed standalone on 2026-11-24 for the app-wide feedback item; retitled `community-110: Send feedback from anywhere in Share` and made a story of #2294. Its recording code is Track `community-t100` (#2330). |
 
 ## Evidence
 
 Pinned to `3ab35f0`; test definitions read, no test run. "Not under `describeMobileAndDesktop`" means the spec has no `[mobile]` variant; it doesn't show the flow fails on a phone.
 
 - [firstVisitDismissal.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/About/firstVisitDismissal.spec.ts) and [onboardingQuotaDialog.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Onboarding/onboardingQuotaDialog.spec.ts): desktop and mobile.
-- [About.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/About/About.spec.ts) and [OnboardingOverlay.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Onboarding/OnboardingOverlay.spec.ts): not under `describeMobileAndDesktop`.
+- [About.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/About/About.spec.ts) and [OnboardingOverlay.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Onboarding/OnboardingOverlay.spec.ts): not under `describeMobileAndDesktop`. Follow-up filed 2026-11-24: [#2341](https://github.com/bldrs-ai/Share/issues/2341), under [#1320](https://github.com/bldrs-ai/Share/issues/1320).
 - A search of `src/` for a thumbs or exit-feedback widget and for a bug-report flow found none (the one hit, `reportRenderMode.js`, is unrelated).
 
 ## Decisions left open
 
-- Which single feedback affordance ships for the public launch: the thumbs widget or the survey link ([#2294](https://github.com/bldrs-ai/Share/issues/2294)).
+- Which single feedback affordance ships for the public launch: the app-wide feedback item ([#2312](https://github.com/bldrs-ai/Share/issues/2312), added 2026-11-24), the thumbs widget or the survey link ([#2294](https://github.com/bldrs-ai/Share/issues/2294)).
 
 ## Milestone hypotheses
 

@@ -9,7 +9,7 @@ export const CAPTURE_FAILED_TEXT = 'Couldn\'t capture the view.'
 
 
 /**
- * The note area every feedback source composes (design/new/feedback.md
+ * The note area every feedback source composes (design/tracks/community-t100/feedback.md
  * §"UI pieces"): a short note, an opt-in screenshot of the 3D view shown as
  * an attachment with an × to remove it, what is shared and with whom, and
  * Cancel / Send. The source owns what Send does (submitFeedback.js) and

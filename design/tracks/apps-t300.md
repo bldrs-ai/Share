@@ -1,6 +1,6 @@
 # `apps-t300`: App sandbox + MCP bridge
 
-> **Snapshot, 2026-11-19.** Status, progress and open decisions live in the track issue, [#2225](https://github.com/bldrs-ai/Share/issues/2225). This page changes only when the track's work items do ([DX rubric](dx-rubric.md) §"Docs in the repo").
+> **Snapshot, 2026-11-19.** Status, progress and open decisions live in the track issue, [#2225](https://github.com/bldrs-ai/Share/issues/2225). This page changes only when the track's work items do ([tracks rubric](tracks-rubric.md) §"Docs in the repo").
 
 **Primary:** `apps` (`apps-300` Public API + IDE, `apps-310` Bldrs Integrate). **Also serves:** `assist-310` (the in-page agent, #1659), `assist-320` (the AI-apps toolbelt), `create-310` (agent write tools, #1919). **Related tracks:** `assist-t300` (the agent runtime that calls these tools), `create-t300` (the edit substrate that write tools append to). Was T11.
 

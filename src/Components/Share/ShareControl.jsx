@@ -3,6 +3,7 @@ import {Link, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {useStartGateLogin} from '../../Auth0/gateLogin'
 import useStore from '../../store/useStore'
+import {LOCAL_ONLY_MODE_NAME, isLocalOnlyLevel} from '../../privacy/localOnlyMode'
 import {
   GATE_EVENTS,
   MODEL_ACTIONS,
@@ -53,6 +54,8 @@ export default function ShareControl() {
   const setIsShareVisible = useStore((state) => state.setIsShareVisible)
   const setIsOpenModelVisible = useStore((state) => state.setIsOpenModelVisible)
   const isLocalUpload = useStore((state) => state.modelPath?.isUploadedFile === true)
+  const isLocalOnly = isLocalOnlyLevel(useStore((state) => state.privacyLevel))
+  const setIsAboutVisible = useStore((state) => state.setIsAboutVisible)
   const {isAuthenticated} = useAuth0()
   // The latest auth state, for model_share's tier, which is read once auth
   // settles rather than at the click (privacy/modelActionTracking.js).
@@ -62,6 +65,33 @@ export default function ShareControl() {
   // Per opening of the help: the interest line becomes a thank-you once
   // clicked, so one opening counts at most one `share_interest`.
   const [isInterestNoted, setIsInterestNoted] = useState(false)
+
+  // Local-only mode (privacy/localOnlyMode.js) comes first: whatever the
+  // model, a visitor who declined analytics doesn't share, and the way out
+  // is the privacy settings, not a different file. No analytics: this mode
+  // sends none.
+  if (isLocalOnly) {
+    return (
+      <GatedAction
+        slug='share-local-only'
+        title={MSG_LOCAL_ONLY_SHARE_TITLE}
+        body={MSG_LOCAL_ONLY_SHARE_BODY}
+        actionLabel='Privacy settings'
+        onAction={() => setIsAboutVisible(true)}
+      >
+        <TooltipIconButton
+          title='Share'
+          onClick={() => setIsShareVisible(true)}
+          icon={<ShareIcon className='icon-share'/>}
+          placement='bottom'
+          variant='control'
+          color='success'
+          size='small'
+          dataTestId='control-button-share'
+        />
+      </GatedAction>
+    )
+  }
 
   if (isLocalUpload) {
     const onInterestClick = () => {
@@ -149,6 +179,10 @@ export default function ShareControl() {
 }
 
 
+export const MSG_LOCAL_ONLY_SHARE_TITLE = `Sharing isn't available in ${LOCAL_ONLY_MODE_NAME}`
+export const MSG_LOCAL_ONLY_SHARE_BODY =
+  `In ${LOCAL_ONLY_MODE_NAME}, Bldrs Share opens files from your computer and the sample models, and ` +
+  'doesn\'t share. To share, allow analytics in the privacy settings.'
 export const MSG_LOCAL_SHARE_TITLE = 'Local-only files can\'t be shared yet'
 // "Open it from GitHub or Google Drive" is the same way out the no-OPFS
 // alert offers (OPFS/messages.js), so local-file limits read alike.

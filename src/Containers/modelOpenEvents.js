@@ -148,7 +148,7 @@ export function reportModelOpened(routeResult, loadedModel, {installPrefix, refs
 function sendOpenEvents(routeResult, eventParams, getIsAuthenticated) {
   gtagEvent(FUNNEL_EVENTS.REAL_MODEL_OPEN, eventParams)
   // The normalized twin, beside — never instead of — real_model_open,
-  // which Ads and the dashboard key on. Sent once auth settles, with the
+  // which the bizdev dashboard keys on. Sent once auth settles, with the
   // auth state of then (privacy/modelActionTracking.js says why: a
   // non-GitHub load doesn't wait for auth, and the auth-change reload is
   // deduped). The route is read now, so a later navigation can't

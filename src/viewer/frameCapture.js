@@ -1,6 +1,6 @@
 /**
  * A screenshot of the 3D view as the user sees it, for a feedback report
- * (feedback/captureScreenshot.js, design/new/feedback.md): the main canvas's
+ * (feedback/captureScreenshot.js, design/tracks/community-t100/feedback.md): the main canvas's
  * next painted frame, downscaled and encoded as JPEG.
  *
  * Why not `ShareViewer#takeScreenshot`: it renders the scene again through a
