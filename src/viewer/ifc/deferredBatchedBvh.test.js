@@ -20,6 +20,7 @@ import {
   finishBatchedBoundsTrees,
   isBatchedBoundsTreeBuildDone,
   scheduleBatchedBoundsTrees,
+  SLICE_MS,
 } from './deferredBatchedBvh'
 
 
@@ -198,17 +199,45 @@ describe('viewer/ifc/deferredBatchedBvh', () => {
   })
 
   // A page that never goes idle runs each callback off its timeout, with no
-  // idle time left; the slice still gets a budget of its own.
+  // idle time left; the slice still gets a budget of its own (SLICE_MS of
+  // wall clock). Both cases pin the clock the budget reads, `performance.now`:
+  // on real time, a loaded machine (the full Jest suite) could spend the
+  // budget before the fixture's trees were built, and the first case failed
+  // that way once.
   it('keeps building several trees a slice when idle callbacks only time out', () => {
-    withBvhPrototypes(raycastActiveInstances, () => {
-      const {mesh} = scatteredBatch()
-      const queue = []
-      scheduleBatchedBoundsTrees([mesh], {schedule: (run) => queue.push(run)})
-      queue.shift()({didTimeout: true, timeRemaining: () => 0})
-      // The fixture's trees take well under a slice to build.
-      expect(mesh.boundsTrees.every(Boolean)).toBe(true)
-      expect(queue).toHaveLength(0)
-    })
+    const clock = jest.spyOn(globalThis.performance, 'now').mockReturnValue(1000)
+    try {
+      withBvhPrototypes(raycastActiveInstances, () => {
+        const {mesh} = scatteredBatch()
+        const queue = []
+        scheduleBatchedBoundsTrees([mesh], {schedule: (run) => queue.push(run)})
+        queue.shift()({didTimeout: true, timeRemaining: () => 0})
+        // No time passes, so the slice's own budget never runs out: every
+        // tree is built in it, though timeRemaining() said 0 throughout.
+        expect(mesh.boundsTrees.every(Boolean)).toBe(true)
+        expect(queue).toHaveLength(0)
+      })
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
+  it('stops a timed-out slice once its own budget is spent', () => {
+    let t = 1000
+    // Every read is a full slice later than the one before.
+    const clock = jest.spyOn(globalThis.performance, 'now').mockImplementation(() => (t += SLICE_MS))
+    try {
+      withBvhPrototypes(raycastActiveInstances, () => {
+        const {mesh} = scatteredBatch()
+        const queue = []
+        scheduleBatchedBoundsTrees([mesh], {schedule: (run) => queue.push(run)})
+        queue.shift()({didTimeout: true, timeRemaining: () => 0})
+        expect(mesh.boundsTrees.every(Boolean)).toBe(false)
+        expect(queue).toHaveLength(1)
+      })
+    } finally {
+      clock.mockRestore()
+    }
   })
 
   it('leaves the batch draw range as it was after a pick through the fallback', () => {
