@@ -263,6 +263,8 @@ export default class IfcIsolator {
       this.collectSpatialElementsId(await this._getSpatialStructure())
       this.hiddenOccurrences.clear()
       this.hiddenOccurrencePaths.clear()
+      // Its keys are `hiddenOccurrences` keys, so it goes with them.
+      this._productParts.clear()
       // Adopt what the loader left hidden as hidden elements, with their
       // subtrees as a NavTree eye would hide them, so the eyes tell the truth.
       // Only once per model path: `CadView#onViewer` reapplies the store's

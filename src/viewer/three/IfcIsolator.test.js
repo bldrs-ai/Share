@@ -1312,6 +1312,21 @@ describe('viewer/three/IfcIsolator', () => {
           expect(iso.productRootLevelOccurrence(1, rootElement)).toBeNull()
         })
 
+        // `_productParts` holds keys of `hiddenOccurrences`, so it is dropped
+        // wherever they are: Show All (`unHideAllElements`) and a
+        // scene-graph model set into the isolator (`setModel`).
+        it('a scene-graph model set up after a product hide does not inherit what the product hid with it', async () => {
+          const {iso} = setupRoot([])
+          iso.hideProduct(1)
+          expect(iso.productHidePartsSnapshot()).toEqual([['#1', ['10#']]])
+          const sceneGraph = new Group()
+          sceneGraph.expressID = 0
+          sceneGraph.getSpatialStructure = () => Promise.resolve({expressID: 0, children: []})
+          await iso.setModel(sceneGraph)
+          expect(iso.hiddenOccurrences.size).toBe(0)
+          expect(iso.productHidePartsSnapshot()).toEqual([])
+        })
+
         it('a pick narrowed to some of the root-level geometry keeps the owner-id route', () => {
           const {iso} = setupRoot([3])
           expect(iso._selectionOccurrences()).toEqual([])
