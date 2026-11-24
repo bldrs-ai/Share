@@ -162,6 +162,32 @@ describeMobileAndDesktop('Analytics consent', () => {
     expect(await consentCookie(page)).toBeUndefined()
   })
 
+  // Cancel and OK are the consent itself, so nothing may sit over them. The
+  // status bar renders above dialogs (Theme.jsx zIndex.snackbar), and at
+  // 1280×800 the tall About dialog ran under it; Dialog.jsx now keeps its
+  // band clear on every form factor. A hit test at each button's centre
+  // finds whatever is on top there.
+  test('Cancel and OK are clear of the status bar', async ({page}) => {
+    await page.evaluate(() => {
+      // A string stays up (an object message must auto-dismiss).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).store.getState().setSnackMessage('Loaded Bldrs')
+    })
+    await expect(page.getByTestId('snackbar')).toBeVisible()
+    for (const testId of ['button-dialog-cancel', 'button-dialog-main-action']) {
+      const button = page.getByTestId(testId)
+      await button.scrollIntoViewIfNeeded()
+      const box = await button.boundingBox()
+      if (!box) {
+        throw new Error(`${testId} has no box`)
+      }
+      const onTop = await page.evaluate(({x, y}) =>
+        document.elementFromPoint(x, y)?.closest('[data-testid]')?.getAttribute('data-testid') ?? null,
+      {x: box.x + (box.width / 2), y: box.y + (box.height / 2)})
+      expect(onTop, `${testId} is covered by ${onTop}`).toBe(testId)
+    }
+  })
+
   // Cancel is an answer, so a visitor who allowed analytics can take it back
   // from About later; the decline then stops collection on that page.
   test('a visitor who allowed analytics can take it back with Cancel', async ({page}) => {
