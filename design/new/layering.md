@@ -152,6 +152,8 @@ Production files only. Tests move with their subject.
 |---|---|
 | stays (13) | `Engine.worker.js`, `EngineSession.js` (renamed `EngineConnection.js`, §4.1), `engineHandler.js`, `engineModelLoad.js`, `engineRoute.js`, `engineSidecars.js`, `engineSources.js`, `engineStream.js`, `engineThreading.js`, `protocol.js`, `sourcePolicy.js`, `spawnEngine.js`, `transports.js` |
 | ui (2) | `engineDevHook.js` (installs `window.__bldrsEngine`), `useLegacyViewRulesNotice.js` (a React hook) |
+| in, from `loader/` (11) and `viewer/` (5) | listed in the two tables below |
+| in, from the UI (1) | `Components/Properties/propertyTable.js`: the worker's `propertyTables` op runs it (`engineHandler.js:28`); the Properties panel imports it downward |
 | new | `EngineHost.js`, `engineBudget.js`, `mainThreadEngine.js` (§4.1) |
 
 **`src/loader/` (69 files today)**
@@ -169,7 +171,7 @@ Production files only. Tests move with their subject.
 
 | To | Files |
 |---|---|
-| model (39) | `ShareModel.js`, `visibilityRefs.js`, `lookMaterial.js`, `lookMode.js`, `looks.js`, `previewSelection.js`, `streamingBatchPick.js`, `residency/ResidencyController.js`, `three/elementSubsets.js`, `three/subsetMaterialGroups.js`, `three/robustBounds.js`, `three/sceneGraphVisibility.js`, and from `ifc/`: `IfcInstanceMap.js`, `IfcItemsMap.js`, `appliedCoordination.js`, the thirteen `batched*.js`, `buildBatchedConwayModel.js`, `buildConwayIfcModel.js`, `bvhBuild.js`, `deferredBatchedBvh.js`, the three `flatMeshTo*.js`, `ifcItemsMapParity.js`, `incrementalBatchedBuilder.js`, `instancedGlbToBatchedModel.js`, `parsePreviewMesh.js`, `productPalette.js` |
+| model (39) | `ShareModel.js`, `visibilityRefs.js`, `lookMaterial.js`, `lookMode.js`, `looks.js`, `previewSelection.js`, `streamingBatchPick.js`, `residency/ResidencyController.js`, `three/elementSubsets.js`, `three/subsetMaterialGroups.js`, `three/robustBounds.js`, `three/sceneGraphVisibility.js`, and from `ifc/`: `IfcInstanceMap.js`, `IfcItemsMap.js`, `appliedCoordination.js`, the twelve `batched*.js`, `buildBatchedConwayModel.js`, `buildConwayIfcModel.js`, `bvhBuild.js`, `deferredBatchedBvh.js`, the three `flatMeshTo*.js`, `ifcItemsMapParity.js`, `incrementalBatchedBuilder.js`, `instancedGlbToBatchedModel.js`, `parsePreviewMesh.js`, `productPalette.js` |
 | engine (5) | `ifc/ShareIfcManager.js` (the accessor facade over an `IfcAPI`), `ifc/conwayDirectLog.js`, `ifc/conwayVector.js`, `ifc/pumpTestSeams.js`, `legacyViewRules.js` |
 | loader (3) | as above |
 | ui (16) | all of `tools/` → `src/tools/` (below) |
@@ -187,11 +189,17 @@ Two splits, both cut and paste:
   answers.
 - **`viewer/ifc/ShareIfc.js:68–87`.** The six prototype assignments that
   install three-mesh-bvh (`computeBoundsTree`, `raycast`, …) go to
-  `model/bvhPatch.js#installBvhPatches`, called from `ShareIfc.js` at
-  module load exactly as now. The model's builders call
-  `geometry.computeBoundsTree()`, which today works only because a viewer
-  module was imported first. A session with no viewer needs to install it
-  itself (§6).
+  `model/bvhPatch.js#installBvhPatches`, which returns a function that
+  restores the originals. `ShareIfc.js` calls it at module load exactly
+  as now. The model's builders call `geometry.computeBoundsTree()`, which
+  today works only because a viewer module was imported first.
+  **Nothing in the model or the session installs it on import.** It is
+  installed by whoever composes the app: `ShareIfc.js` on the page, and
+  the headless test for itself (§6). Jest mocks `ShareIfc` so that tests
+  run on unpatched three on purpose (`ShareIfc.js:61–63`), and
+  `deferredBatchedBvh.js:164` skips its work when the patch is absent. A
+  session module that patched three's prototypes when imported would
+  change what every later test in that Jest file exercises.
 
 **`viewer/tools/` is a UI surface.** Its 16 files are the assistant's
 tool providers. Eight of them import the UI (the store, the
@@ -223,6 +231,7 @@ What breaks that today, below the viewer:
 | `Loader.js:155` | `window.requestIdleCallback` for the idle GLB writer | already guarded (`typeof window`); falls back to `setTimeout` |
 | `Loader.js:1884` | `window.location` for an upload's blob path | the load context's `source` |
 | `loader/glbCompress.js:416–484` | Draco loaded by a `<script>` tag | stays; guarded, and only the export path reaches it |
+| `Loader.js:427` → `utils/event.js:3` | an upload's load arms the page-reload guard (`window.addEventListener('beforeunload', …)`). It is also page-wide: a background session's load would arm it for the model on screen | the UI arms and disarms it for the bound session (the binder), from `LoadResult`; the loader stops calling it |
 | `privacy/analytics.js:56` | `gtagEvent` reads `window.location` unguarded | one `typeof window` guard |
 | `Containers/modelSession.js:306` | `window[name] = handler` for `ondblclick` / `onkeydown`; `useStore` (`:121–206`) | the binder binds and unbinds window handlers at attach and detach (§4.6); state is §4.5 |
 | `engine/engineDevHook.js` | `window.__bldrsEngine` | moves to the UI |
@@ -235,7 +244,11 @@ What breaks that today, below the viewer:
 read with TypeScript's `preProcessFile` and resolved to a file. Tests,
 specs, fixtures, mocks and `src/tests/` are left out on both ends: 634
 production files, 1,878 production edges. An edge is one file importing
-one file. Counted on `main` `7cbc995d`.
+one file. Counted on `main` `7cbc995d`. Two kinds of specifier are not
+edges here: imports of `package.json`, and one that names no source file
+(`viewer/tools/assistRuntime.js`'s `./assist/runtime.js`, a URL relative
+to the built bundle). Counting that one, as the review's own resolver
+did, makes the first number 80.
 
 **As the directories stand** (`src/viewer` counted as the viewer layer,
 so the model inside it is not yet a layer, and `modelSession.js` counted
@@ -362,7 +375,10 @@ that reason, with no admission to wait for.
   the lease, only on the main-thread route. A worker-route page then has
   no `IfcAPI` object at all, which is engine-worker.md §5.1's aim. The
   probe reads the class (`IfcAPI.prototype.OpenModelStream`), and a mesh
-  model gets a manager with no engine.
+  model gets a manager of its own, with no engine. Its own, because the
+  shim today writes the model's `getSpatialStructure` onto the viewer's
+  one shared manager (`Loader.js:2261–2264`); under one viewer a second
+  mesh model's load would overwrite the first one's.
 
 **Host ↔ connection.**
 
@@ -400,8 +416,9 @@ const host = getEngineHost()                    // one per page
 
 host.acquire({
   owner,          // opaque id of the holder (a model session's id). Leases are grouped by owner
-  modelKey,       // serialises one model's engines: waits for the release of an earlier
-                  //   lease with the same owner and modelKey (a retry, a rehydrate)
+  entryHint,      // the OPFS path prefix the load is about to open, or null (§4.7)
+  modelKey,       // one engine per model per owner: an earlier lease with the same owner
+                  //   and modelKey is released by this call (not awaited)
   format,         // 'ifc' | 'step': the estimate's per-format allowance. Data, not a branch
   sourceBytes,    // the estimate, and windowed-for-budget
   purpose,        // 'load' | 'retry' | 'rehydrate'
@@ -417,7 +434,7 @@ lease.sourceOverride             // {windowed: true} when admission chose window
 lease.state                      // 'live' | 'paused' | 'evicted' | 'released'
 lease.update({isForeground, phase, hasArtifact, queuedBytes})
                                  // phase: 'loading' | 'capturing' | 'ready'
-lease.onEvict(cb)                // cb({reason: 'count' | 'bytes', tier}), after the engine is gone
+lease.onEvict(cb)                // cb({reason: 'count' | 'bytes' | 'restage', tier}), after the engine is gone
 lease.onPause(cb) / lease.onResume(cb)          // backpressure (engine-worker.md §5.2)
 lease.release() → Promise<void>  // idempotent; settles when the engine has let go of its OPFS entry
 
@@ -426,7 +443,7 @@ host.mayKeepInBackground(owner) → boolean       // what a switch does to the o
 host.whenEntryFree(entryKey) → Promise<void>    // §4.7
 host.closeAll() → Promise<number>               // Clear cache
 host.limits()                    // {maxLiveOwners, budgetBytes, mode}
-host.snapshot()                  // [{leaseId, owner, kind, state, phase, estimate, lastForegroundAt}], tests and the dev hook
+host.snapshot()                  // live and paused leases: [{leaseId, owner, kind, state, phase, estimate, lastForegroundAt}]
 ```
 
 **What `meta` is for.** Everything the host needs to choose a victim, and
@@ -439,7 +456,7 @@ nothing that would let it call up:
 | does a GLB artifact back it | `update({hasArtifact})` |
 | is a load or a capture running in it | `update({phase})` |
 | bytes queued main-side, unassembled | `update({queuedBytes})` |
-| which OPFS entry it holds open | the connection's `open` reply (`entryPath`, `engineSources.js#openSourceStore`): the entry the worker actually opened, not a claim |
+| which OPFS entry it holds open | `meta.entryHint` from the moment of acquire, narrowed to the connection's `open` reply (`entryPath`, `engineSources.js#openSourceStore`): the entry the worker actually opened |
 
 **Rules of ownership and lifetime.**
 
@@ -451,6 +468,14 @@ nothing that would let it call up:
   eviction (the host needs the memory). Both are final. `onEvict` runs
   after the terminate. A session that wants an engine again acquires a
   new lease.
+- **An ended lease holds nothing.** `release()` and eviction null
+  `lease.connection` and `lease.api` and take the lease out of the host's
+  table once its close has settled; until then the host keeps only the
+  closing promise and the entry key. `snapshot()` lists live and paused
+  leases. This matters for the main-thread engine, which is freed only by
+  being unreachable: `modelSwitchMemory.spec.ts:102–106` holds a `WeakRef`
+  to `model.ifcManager.ifcAPI`, and a host that remembered released
+  leases would keep it alive.
 - **A session holds a set of leases, usually zero or one.**
   - Zero: a mesh format, a GLB cache hit, an evicted session.
   - One: an IFC or a STEP.
@@ -464,19 +489,46 @@ nothing that would let it call up:
 
   | Event | What happens |
   |---|---|
-  | Out-of-memory retry (`engineModelLoad.js#parse`, engine-worker.md §5.6) | the loader releases the failed lease, then acquires with `purpose: 'retry'`; admission answers `sourceOverride: {windowed: true}` |
+  | Out-of-memory retry (`engineModelLoad.js#parse`, engine-worker.md §5.6) | the loader releases the failed lease (not awaited, as today), then acquires with `purpose: 'retry'`; admission answers `sourceOverride: {windowed: true}` |
   | Eviction | the host terminates and calls `onEvict`; the session drops the lease and keeps everything else |
   | Rehydrate | `session.ensureEngine()` acquires with `purpose: 'rehydrate'` and opens index-only from the sidecar (engine-worker.md §5.3). A rehydrating lease is not evicted until its first `update({phase: 'ready'})` |
   | Sidecar reopen | an ordinary `load` acquire; the worker finds the sidecar itself (`engineSidecars.js`) |
 
-- **`acquire` waits for admission, not for another model's close.**
-  Today a switch terminates the left engine and spawns the next without
-  awaiting the polite close, and read-only sync access handles on one
-  entry coexist. Awaiting every close would add up to 1 s
-  (`ENGINE_CLOSE_TIMEOUT_MS`) to a switch away from an engine busy in a
-  long wasm call. So `acquire` waits only for the same owner's earlier
-  lease on the same `modelKey`. What must never overlap a handle is an
-  OPFS *write*, and that is §4.7.
+- **What an eviction or a close interrupts.**
+
+  | In flight | What happens |
+  |---|---|
+  | `acquire`, waiting for admission or the spawn, and its `signal` aborts | it rejects with `LoadAbortedError`. A spawn that lands afterwards is closed by the host, as `engineModelLoad.js` does today for a spawn that outlives its abort |
+  | a background load, evicted (tier 4) | the run ends as *paused*, not failed and not aborted: no alert, no Sentry, one GA `engine_evicted {tier: 'loading'}` (engine-worker.md §5.5). `LoadState` gains `paused` in slice 4 |
+  | a GLB capture, evicted (tier 3) | the capture rejects and no artifact is written, as a failed capture today (engine-worker.md §7 step 5) |
+  | a read (`properties`, `propertyTables`, `tree`), evicted | it rejects with `CONNECTION_CLOSED`. The session's read facade retries it once on the read model it swapped to in `onEvict`, so the panel sees an answer or the artifact's gap, never the rejection |
+  | a rehydrate | not evicted until its first `update({phase: 'ready'})` |
+  | `session.close()` while its lease's polite close is still running | `close()` returns at once; the host keeps the closing lease until it settles, and `whenEntryFree` (§4.7) is what waits for it |
+
+- **`acquire` waits for admission, and for no close.** Today nothing
+  that starts an engine awaits the previous one's close: a switch
+  terminates the left engine and spawns the next, and the out-of-memory
+  retry closes the failed engine and respawns (`engineModelLoad.js:405,
+  427`). Read-only sync access handles on one entry coexist. Awaiting a
+  polite close would add up to 1 s (`ENGINE_CLOSE_TIMEOUT_MS`) to every
+  such step when the engine is busy in a long wasm call. So `acquire`
+  awaits no close.
+- **A new run supersedes the last one's engine, and says so in two
+  places.** Until slice 2c a theme change rebuilds the viewer and reloads
+  the model into the *same* session (`CadView.jsx:338–352`,
+  `modelSession.js:390–393`), and so does the authed retry. Today the old
+  run's engine is freed by the old viewer's dispose (`ShareIfc.js:247–258`),
+  which slice 1 takes away. So:
+  1. `ModelSession#beginLoad` releases every lease of the previous run
+     before the new run starts;
+  2. the host is the net under it: an `acquire` for an owner and
+     `modelKey` that already has a lease releases that lease itself (it
+     does not wait for someone to). Without one of these the old engine
+     would leak for as long as the session lived.
+
+  A `.bld` child acquires under its own key (`ctx.child({root,
+  modelKey})`), so siblings do not supersede each other. What must never
+  overlap a handle is an OPFS *write*, and that is §4.7.
 - **The cap is asked, not read.** The session layer calls
   `host.mayKeepInBackground(owner)`: false when
   `utils/backgroundSessionsMode.js` says single model
@@ -537,9 +589,10 @@ load(source, ctx) → Promise<LoadResult>
   releases them all whatever the load was doing. The loader releases a
   lease itself only where it knows the engine is finished: a failed open,
   the retry.
-- **A nested load** (`.bld`) gets `ctx.child({root: group})`: the same
-  signal, engine port and reporter, its own sub-root, and a state writer
-  that drops everything. That replaces `isNestedLoad` and the
+- **A nested load** (`.bld`) gets `ctx.child({root: group, modelKey})`:
+  the same signal and reporter, its own sub-root, an engine port that
+  acquires under the child's own key, and a state writer that drops
+  everything. That replaces `isNestedLoad` and the
   `NESTED_LOAD_GENERATION` sentinel (`glbArtifactPublish.js`).
 
 **What the loader no longer gets, and what stands in.**
@@ -615,10 +668,28 @@ report.end(error, {isAborted})
     `report.engineLog`); it loses page-side lines (`[glb]`, the builder's
     warnings) from its diagnostics count. Only worker engines load in the
     background, so the engine's diagnostics are never the ones lost.
-  - *Sentry's scope.* `applySentryLoadState` stamps `load.*` tags on the
-    global scope. A capture for a load uses `withScope` with that
-    reporter's tags instead, so a background failure cannot carry the
-    foreground model's tags.
+
+    The tee needs **one owner for the page**, not a reporter's own saved
+    originals. Each reporter saves `console.warn` and `console.error` when
+    it installs (`loadProgress.js:260–261`) and writes them back when it
+    ends (`:408–415`). That is safe today only because
+    `beginLoadProgress` disposes the previous reporter before the next
+    installs (`:1231–1240`). With a reporter per run, a left run that ends
+    late (a mesh parse that could not be stopped, a remount) would write
+    back the originals and strip the next load's tee: its warnings line
+    and its diagnostics count would go missing with no error. So slice R
+    adds `consoleTee.js`: it patches the console once, holds the true
+    originals, and routes captured lines to whichever reporter currently
+    holds it. A reporter takes it at its start and gives it up at its
+    end; giving it up when another reporter has since taken it does
+    nothing.
+  - *Sentry's scope.* `applySentryLoadState` (`loadProgress.js:783`)
+    stamps the `load.phase` tag and a `load` context on the global scope,
+    for whatever is captured next. Only the foreground job's reporter
+    does that. A background load's own captures carry its tags per event
+    (`sentryLoadState()`, as `loadFailureCaptureContext` already does),
+    so a background failure cannot carry the foreground model's phase, and
+    a foreground failure cannot carry a background one's.
   - *The stall watchdog* is per reporter. A pump paused by backpressure
     is not a stall: `lease.onPause` calls `report.pauseWatchdog()`.
 - **`OPFS/reportOpfsSourceCondition.js`** moves to the loader, with the
@@ -645,9 +716,9 @@ session.leases                      // Set<EngineLease>
 session.job                         // the current LoadJob, or null
 session.load(source) → Promise      // one run: makes the LoadJob, the reporter and the ctx; calls loader.load
 session.ensureEngine() → Promise<EngineLease>     // rehydrate, engine-worker.md §5.3
-session.on(event, cb)               // 'indexed' | 'firstMesh' | 'ready' | 'failed' | 'engineEvicted' | 'engineRehydrated' | 'closed'
+session.on(event, cb)               // 'indexed' | 'firstMesh' | 'ready' | 'failed' | 'engineEvicted' | 'engineRehydrated' | 'closing' | 'closed'
 session.dropScene()                 // the scene tier: dispose the root, keep the state
-session.close()                     // abort, release every lease, dispose the root, drop everything
+session.close()                     // emit 'closing'; abort; release every lease; dispose the root; drop everything
 
 // session/ModelSessionHost.js: one for the page
 getModelSessionHost()
@@ -668,10 +739,17 @@ host.leave(session)                 // close, or keep in the background (EngineH
   into their initial state, as now. `store/modelState.js#modelStateDefaults`
   becomes a re-export.
 - **One projection** (`store/modelProjection.js`, UI layer):
-  - a zustand middleware around the store's `set`. A partial that names
+  - a zustand middleware around the store's writes. A partial that names
     per-model keys is written to the bound session's `state` and to the
     store in the same call, so subscribers see one update. No slice setter
-    changes;
+    changes. It has to wrap both ways in: the `set` handed to the slices
+    *and* `api.setState`. zustand 4.0.0's `create((set, get) => …)`
+    (`store/useStore.js:27`) gives a middleware the first only if it asks,
+    and 21 production call sites write through `useStore.setState`, many
+    with per-model keys (`IfcIsolator.js:816, 1340`,
+    `SelectElementsEventHandler.js:50`, `modelSession.js:121`). The
+    middleware replaces `api.setState` with the wrapped setter and keeps
+    the original as the raw one;
   - `bindSession(session)`: `store.setState(session.state.all())`, then
     subscribe, so what a load writes into the bound session appears in the
     store;
@@ -750,6 +828,15 @@ disposeModelRoot(root)                   // geometries (their BVHs, a deferred b
   `Data3DTexture` for dispose.
 - **Window handlers** (`ondblclick`, `onkeydown`) are bound by the binder
   at attach and removed at detach, not recorded on the session.
+- **A root is never disposed while attached, and the session never calls
+  the viewer to make that so.** `session.close()` and `dropScene()` emit
+  `closing` synchronously before anything else. The binder listens while
+  a session is bound, and detaches there. Then the session disposes the
+  root. `disposeModelRoot` begins with `root.removeFromParent()`, a three
+  call that needs no viewer, as the net for a root some other code left
+  in a scene. A load that cannot be stopped (a mesh parse) and returns
+  after the close finds its run not current, adds nothing, and disposes
+  what it built (§4.3).
 
 ### 4.7 `whenEntryFree`: the OPFS ordering contract
 
@@ -770,10 +857,12 @@ setEntryGate((key) => this.whenEntryFree(key))
 ```
 
 - **Enforced in one place:** the mutators of `OPFS/utils.js`
-  (`downloadToOPFS`'s stale-commit remove, `writeSavedGithubModelOPFS`,
-  `writeBase64Model`, `deleteFileFromOPFS`, `deleteUploadFromOPFS`,
-  `clearOPFSCache`) each await `entryFree(key)` before they post to the
-  OPFS worker. Their callers (the loader, `connections/pruneLocalRecents`,
+  (`downloadToOPFS` and `downloadModel`, whose worker flows rename and
+  remove entries, `OPFS.worker.js:887–912, 1845–1928`;
+  `writeSavedGithubModelOPFS`, `writeBase64Model`, `deleteFileFromOPFS`,
+  `deleteUploadFromOPFS`, `clearOPFSCache`) each await `entryFree(key)`
+  before they post to the OPFS worker. A static test lists the module's
+  exports and fails on a mutator that does not. Their callers (the loader, `connections/pruneLocalRecents`,
   drag and drop, Clear cache) do not change.
 - **`entryKey` is a path prefix** under the OPFS root. The engine knows
   the exact path of the entry it opened (`engineSources.js#locateOpfsEntry`'s
@@ -794,9 +883,17 @@ setEntryGate((key) => this.whenEntryFree(key))
      the one doing the staging, and it released its previous run's leases
      first;
   2. it settles when every matching lease has finished closing or timed
-     out (`ENGINE_CLOSE_TIMEOUT_MS`). A lease still opening is terminated,
-     and its lock goes a little after; `clearLocalCacheReleasingEngines`
-     keeps its one retry for that (`ProfileControl.jsx:415`).
+     out (`ENGINE_CLOSE_TIMEOUT_MS`).
+- **A lease that is still opening is matched too.** The exact path comes
+  back only with the `open` reply, and the window before it is exactly
+  when the handle is being taken. So the load passes `entryHint` at
+  `acquire`: the prefix it is about to open, which the loader knows, since
+  it staged the file. The gate matches on the hint until the reply narrows
+  it. A lease with no hint and no reply yet (a `File` the worker has to
+  look up, `locateOpfsEntry`) matches every key. An opening lease caught
+  this way is terminated rather than closed politely, and its lock goes a
+  little after; `clearLocalCacheReleasingEngines` keeps its one retry for
+  that (`ProfileControl.jsx:415`).
 - **Reads do not wait.** Read-only handles on one entry coexist
   (`engineSources.js:359–362`), so a reopen of the same model never
   queues behind its previous engine.
@@ -828,7 +925,9 @@ the scene tier treats it like any other.
 | Eviction | the host terminates; `onEvict` | kept | kept; the read model swaps to the artifact's | untouched |
 | Scene tier (dormant) | already gone | `session.dropScene()` | kept | untouched |
 | Close (drawer, cap overflow) | released | disposed | dropped | untouched |
-| Theme or view-settings change | untouched | untouched | untouched | background and look set in place (slice 2c); rebuilt and the model reloaded before it |
+| Theme change, from slice 2c | untouched | untouched | untouched | background and look set in place |
+| Theme change, before 2c (a reload into the same session) | `beginLoad` releases the previous run's leases; the new run acquires | the previous run's root content is disposed, the new run fills it | as today (`beginLoad`) | rebuilt, as today |
+| Authed retry (a second run of the same session) | as the row above | as above | as above | untouched |
 | CadView unmount, another view mounts | untouched | re-attached by the next view's bind | untouched | kept |
 | CadView unmount, none follows | `host.leave(active)`: closed at cap 1, kept at cap N | as the row for that cap | as that row | disposed |
 | StrictMode's effect replay | untouched | not detached: the unbind is deferred a microtask and cancelled by the rebind | untouched | not rebuilt (ref-counted the same way) |
@@ -850,22 +949,29 @@ more zones of the same rule.
 ```js
 // Low to high. A layer may import itself and anything listed before it.
 const LAYERS = [
-  ['base', ['src/utils', 'src/privacy', 'src/routes', 'src/net', 'src/OPFS', 'src/search',
-    'src/FeatureFlags.js', 'src/Filetype.js']],
-  ['engine', ['src/engine']],
-  ['model', ['src/model']],
-  ['loader', ['src/loader']],
-  ['session', ['src/session']],
-  ['viewer', ['src/viewer']],
+  ['base', ['utils', 'privacy', 'routes', 'net', 'OPFS', 'search', 'FeatureFlags.js', 'Filetype.js']],
+  ['engine', ['engine']],
+  ['model', ['model']],
+  ['loader', ['loader']],
+  ['session', ['session']],
+  ['viewer', ['viewer']],
 ]
-// Everything else under src is the UI: it may import anything; nothing below may import it.
-const UI = ['src/Components', 'src/Containers', 'src/store', 'src/tools', …]
 ```
 
-`layerZones()` emits one zone per (lower target, higher `from`):
-`{target: './src/engine', from: './src/loader', message: 'layering
-(design/new/layering.md): engine may not import from loader, a layer above
-it'}`.
+`layerZones()` emits one zone per lower-layer target. It bans all of
+`./src` and excepts the layers at or below the target:
+
+```js
+{target: './src/engine', from: './src',
+  except: ['./utils', './privacy', './routes', './net', './OPFS', './search',
+    './FeatureFlags.js', './Filetype.js', './engine'],
+  message: 'layering (design/new/layering.md): engine may import only base, engine'}
+```
+
+The UI is never listed. It is whatever is left, so a directory nobody
+thought of (`src/app/`, a new feature folder, a root `.jsx`) is banned
+from below by default. A first version of this design enumerated the UI
+directories as `from`s, and an unlisted one would have passed.
 
 **Where it goes in the config.** An override replaces a rule's options
 (the comment at `.eslintrc.cjs:136` says why the two fences share one
@@ -896,7 +1002,7 @@ file to the upward imports it may still make:
 ```
 
 For each key, `layerOverrides()` emits one more override, `files:
-[thatFile]`, whose zones carry `except` for exactly those imports. The
+[thatFile]`, whose zone adds exactly those files to its `except`. The
 exception is a pair: that file, that import. A second file importing
 `loadProgress.js`, or the same file importing something else from above,
 fails.
@@ -921,18 +1027,18 @@ fails.
    obeys it.
 
 **Run on the repo** (§10), as a prototype on today's directories at
-`dfc342b9`, where the graph has 78 upward imports in 37 files:
+`7cbc995d`, where the graph has 79 upward imports in 37 files:
 
 | Run | Result |
 |---|---|
-| all of `src` (1,324 files), with the 78 pairs allowlisted | 0 errors |
-| the lower layers, with an empty allowlist | 78 errors in 37 files, the graph's count exactly |
+| all of `src` (1,334 files), with the 79 pairs allowlisted | 0 errors |
+| the same, with an empty allowlist | 79 errors in 37 files, the graph's count exactly |
 | an allowlisted pair, linted alone | 0 |
 | the same file with a second upward import | 1, on that line |
 | another file making the allowlisted import | 1 |
 | a downward import; a test file reaching up | 0; 0 |
 | the Assist fence, after the layer override | still 1 |
-| `eslint src`, wall clock, shared machine | 81 s without the zones, 86 s with them and the 37 per-file overrides |
+| `eslint src`, wall clock, shared machine (first prototype, at `dfc342b9`) | 81 s without the zones, 86 s with them and the 37 per-file overrides |
 
 **What it does not check:** a dynamic `import()` whose path is built at
 run time (none below the UI today), a global reached without an import
@@ -959,26 +1065,37 @@ read, and geometry assembled into `session.root`, with no `window` and no
   no fetch and no OPFS. The engine is in process: the in-process
   transport over real Conway, as `engine/engineCapture.test.js` already
   runs it on `index.ifc`;
-- it asserts: the session reaches `ready`; `session.state.get('rootElement')`
-  names the file's root; one property read answers with the element's
-  `GlobalId`; `session.root` holds at least one `BatchedMesh` with more
+- it asserts, for both files: the session reaches `ready`;
+  `session.state.get('rootElement')` names the file's root; one property
+  read of a known element answers with that element's record (an IFC
+  element's `GlobalId`; a STEP product's name, since AP214 has no
+  `GlobalId`); a ref resolves (`e<id>` on the IFC, an `o` occurrence path
+  on the STEP); `session.root` holds at least one `BatchedMesh` with more
   than zero instances; `session.close()` releases the lease
   (`host.snapshot()` is empty);
 - it asserts `typeof window` and `typeof document` are `'undefined'` at
   the start and at the end, so a module that defines them to get by fails
-  it.
+  it;
+- it installs the BVH patches in `beforeAll` and restores them in
+  `afterAll` (`installBvhPatches`, §2.2), as `batchedModel.fixture.js:104–119`
+  patches and restores per test.
 
 It can fail: importing `utils/location.js` anywhere in the graph throws
-at import (`window.onhashchange`, `:9`), and a `gtagEvent` on the load
-path throws at call. Those are today's two known offenders (§2.3).
+at import (`window.onhashchange`, `:9`), and `utils/event.js`'s reload
+guard and a `gtagEvent` on the load path throw at call. Those are
+today's three known offenders (§2.3).
 
 **The static guard**, from the slice that creates `src/session/`
 (before the run can pass): the esbuild metafile of `src/session/index.js`,
 as `engine/engineWorkerImports.test.js` does for the worker, contains no
 `src/store/`, `src/Components/`, `src/Containers/`, `src/viewer/`, no
-`.jsx`, and no `react`, `react-dom`, `@mui` or `zustand`. It lists what
-is still in the graph that the run will trip on, so each slice sees the
-list shrink.
+`.jsx`, and no `react`, `react-dom`, `@mui` or `zustand`. For what is
+still in the graph and should not be (the store through
+`modelSession.js`, `utils/location.js`, `utils/event.js`), it asserts the
+**exact set**: `expect(offenders).toEqual([...])`. A new offender fails
+it, and so does an entry that has gone, so the slice that removes one
+must delete it from the list. A guard that only printed the list could
+not fail.
 
 **When.** The guard lands with M1. The run goes green with 3a, the slice
 that takes the store and `utils/location.js` out of the loader. Until
@@ -1022,7 +1139,7 @@ table.
 |---|---|---|---|---|
 | M1 | move the model, the engine helpers and the Conway loader; the lint rule | 79 → 55 | neutral | 63 files moved, no logic lines |
 | M2 | `viewer/tools/` → `src/tools/`; the eight app-level leaf files | 55 → 19 | neutral | 26 files moved |
-| V | delete the `?view=` rules stack | 19 → 17 | neutral in effect (§8) | −700 lines |
+| V | delete the `?view=` rules stack | 19 → 17 | **no flag; three stated changes** (below) | about −500 lines, tests included |
 | 1 | `EngineHost` at cap 1; the lease; the rename; the load-context adapter | — (three ownership guards) | neutral | ~900 + the rename |
 | R | a reporter per load | 17 → 11 | neutral | ~500 |
 | 2a | session roots; the load adds under `ctx.root`; root events | 11 → 8 | neutral | ~700 |
@@ -1053,10 +1170,17 @@ M1 and can go beside slice 1.
 - **API changes:** none. Import paths only.
 - **Proof it is neutral:** a script in the PR body: for every file that
   is not a pure rename, each changed line matches an import, an
-  `export … from`, a `jest.mock(` path or a doc path. The three splits
-  are listed with the lines cut and the lines pasted. Every test passes
-  with only its import paths changed. `engineWorkerImports.test.js`'s
-  expected paths change and its assertions do not.
+  `export … from`, a `jest.mock(` path, a doc path, or a path string in
+  one of the files that name source files by path. Those are listed in
+  the PR: the static guards (`engineWorkerImports.test.js`,
+  `renderOnDemandSources.test.js`, `batchedEditGuard.test.js`,
+  `modelState.test.js`), the Jest setup and log-capture helpers under
+  `tools/jest/`, `tools/esbuild/` (`build.js`, `vars.*.js`),
+  `tools/glb/byteBudget.mjs`, and for M2 `tools/esbuild/assistEntry.js`
+  and `netlify/functions/ai-chat.js`. The three splits are listed with
+  the lines cut and the lines pasted. Every test passes with only its
+  paths changed; no assertion changes. `bun run build-prod` and the
+  Playwright suite run before the flip to ready, as for any PR.
 - **Tests:** `layerBoundary.test.js` (§5). Break-it: empty the allowlist
   and `bun run lint` reports the 55; add an import of the viewer to a
   model file and it reports one.
@@ -1094,7 +1218,17 @@ Decided on 2026-11-03 (engine-worker.md §8 item 7) and not done.
   which ties a page-lived viewer to an `IfcAPI` (2d). And 2c's "a
   view-settings change is applied in place" needs something to apply.
   Slice 1 does not need it.
-- **Neutral in effect:** that `parser` is an empty object
+- **Not neutral, and not flagged.** It removes a feature that does
+  nothing, and three things a user or a report can see change with it:
+  1. a `?view=` link loads in the engine worker, not on the main-thread
+     engine (`engineRoute.js`, `MainThreadReason.VIEW_RULES`);
+  2. the load report loses its line `Engine: main thread (?view= rules
+     need the main-thread engine)` (`REASON_TEXT`), and the snackbar
+     notice from `useLegacyViewRulesNotice.js` goes;
+  3. a Widget API `ChangeViewSettings` no longer reloads the model.
+
+  The PR's Reported Conditions says so. Rollback is a revert.
+- **Why it does nothing today:** that `parser` is an empty object
   (`ShareIfcManager.js:70–77`: "The mutations don't affect parse
   behaviour"). `IfcElementsStyleManager` does nothing but set four fields
   on it, and no file outside `src/Infrastructure/` reads `_rules`,
@@ -1103,11 +1237,10 @@ Decided on 2026-11-03 (engine-worker.md §8 item 7) and not done.
   So a `?view=` link and the Widget API's `ChangeViewSettings` already
   colour nothing, on either engine, though engine-worker.md §7.2 item 2
   routes `?view=` loads to the main thread so the manager can read them.
-  What changes: a `?view=` link stops moving its load to the slower
-  main-thread engine, and a `customViewSettings` change stops reloading
-  the model. Read from code, not run (§10). Owner question 3.
+  Read from code and confirmed by the review; not run (§10). Owner
+  question 3.
 - **Tests:** the Widget API handler still answers success;
-  `engineRoute.test.js` loses the `viewRules` reason; an E2E that a
+  the `engineRoute` tests lose the `viewRules` reason; an E2E that a
   `?view=ch.sia380-1.heatmap` link loads in a worker.
 - **Rollback:** revert.
 
@@ -1121,7 +1254,9 @@ Decided on 2026-11-03 (engine-worker.md §8 item 7) and not done.
     `utils/backgroundSessionsMode.js` with `disableBackgroundSessions`
     declared and nothing widening the cap;
   - `OPFS/entryGate.js`, awaited by `OPFS/utils.js`'s mutators;
-  - `ModelSession#leases` and its engine port;
+  - `ModelSession#leases` and its engine port; `beginLoad` releases the
+    previous run's leases (§4.2: the theme reload and the authed retry
+    run again in the same session);
   - the load-context adapter in `Loader.js` (§4.3), with `ctx.engine`
     real: `ShareIfcLoader#parse` → `createEngineModelLoad({format,
     acquire})`, whose out-of-memory retry releases and re-acquires;
@@ -1131,8 +1266,13 @@ Decided on 2026-11-03 (engine-worker.md §8 item 7) and not done.
     releases: the same lifetime as today, one per viewer build, owned by
     the host;
   - `ProfileControl.jsx`'s Clear cache calls `host.closeAll()`;
-  - the dev hook `window.__bldrsEngineHost.snapshot()`, outside
-    production builds.
+  - the dev hooks, outside production builds:
+    `window.__bldrsEngineHost.snapshot()`, and `engineDevHook.js`, which
+    spawns an engine of its own today (`:38`, used by
+    `engine/engineSession.spec.ts`). It acquires through the host as
+    owner `devHook` with `isUncounted: true`, a test-only flag that keeps
+    it out of the count and the budget, so a spec's extra engine does not
+    close the model on screen at cap 1.
 - **Removes:** the three ownership violations of §3. No allowlist entry.
 - **API changes:** `spawnEngineSession` and `closeAllEngineSessions` are
   gone from the module's exports; `createEngineModelLoad` takes `acquire`
@@ -1140,28 +1280,42 @@ Decided on 2026-11-03 (engine-worker.md §8 item 7) and not done.
 - **Neutral, with one stated difference:** an OPFS write of an entry now
   waits for an engine holding it to close. Today it meets the lock and
   the load falls back to the network (engine-worker.md §7 step 4). The
-  difference is a wait of at most 1 s where there was a fallback.
+  difference is a wait of at most 1 s where there was a fallback. Nothing
+  that starts an engine waits for a close, as today (§4.2).
 - **Tests:**
   - *Unit, `EngineHost.test.js`* (a fake connection): a lease released
     twice closes its connection once; `closeAll` resolves after every
     polite close; `whenEntryFree` waits for a sync-handle close and gives
-    up at `ENGINE_CLOSE_TIMEOUT_MS` (red with the await dropped);
-    `acquire` waits for the same owner's earlier lease on the same
-    `modelKey` and not for another owner's (red either way round); the
-    predicate's reasons and their order, the static rollback beating
-    `?feature=workspace`.
-  - *Unit, session:* a `.bld` of two IFCs holds two leases and `close()`
-    releases both (red on main: nothing but the viewer's dispose finds
-    the second).
+    up at `ENGINE_CLOSE_TIMEOUT_MS` (red with the await dropped), and
+    matches a lease that has an `entryHint` and no `open` reply yet (red
+    with the hint ignored); `acquire` for an owner and `modelKey` that
+    already hold a lease releases that lease and does not await its
+    close, and leaves another owner's alone (red if it waits: the fake
+    connection's close never settles; red if it releases the other
+    owner's); a released lease has no `connection` or `api` and is not in
+    `snapshot()`; the predicate's reasons and their order, the static
+    rollback beating `?feature=workspace`.
+  - *Unit, session:* a second `beginLoad` releases the first run's lease
+    (red with that line removed: `snapshot()` shows two). A nested load
+    of two engine-backed children holds two leases and `close()` releases
+    both, over `Loader.bldNested.test.js`'s mocked assembly with a fake
+    engine port (red with the port recording only the first lease, which
+    is what `bindEngine` does today).
   - *Static guards:* `viewer/ifc/ShareIfc.js` names no `IfcAPI`
     constructor, `CloseModel` or `engineConnection`; only
     `EngineHost.js` imports `spawnEngine.js`.
-  - *E2E:* `modelSwitchMemory.spec.ts` and the step-A mid-load cases
-    unchanged; a new leg A → B → C with exactly one `worker` lease in
-    `snapshot()` (the viewer build's idle `mainThread` lease is the other
-    row) and one live engine worker after each open, and A's and B's
-    model `WeakRef`s cleared; the `.bld` sample closed by a switch leaves no
-    engine worker (a `close` event per child).
+  - *E2E:* `modelSwitchMemory.spec.ts` and the step-A mid-load cases,
+    unchanged but for the renamed property they read
+    (`ifcAPI.engineSession`, `:182`); a new leg A → B → C with exactly one
+    `worker` lease in `snapshot()` (the viewer build's idle `mainThread`
+    lease is the other row) and one live engine worker after each open,
+    and A's and B's model `WeakRef`s cleared; **a theme toggle after a
+    finished load**: one engine worker `close` event, then exactly one
+    live worker and one `worker` lease, and the model drawn again (red
+    without `beginLoad`'s release: two leases). No `.bld` E2E: the repo
+    has no `.bld` fixture with engine-backed children, and the unit test
+    above covers the ownership; one is worth adding with a fixture when
+    `.bld` is next touched.
 - **Rollback:** revert. The Phase 1a rollback (`disableSpaModelNav`)
   covers a regression in it.
 
@@ -1170,16 +1324,21 @@ Decided on 2026-11-03 (engine-worker.md §8 item 7) and not done.
 - **Builds:** `LoadReporter` instances owned by `LoadJob`; `ctx.report`;
   the engine and the model take callbacks; `activeReporter`,
   `loadSerial`, and the module-level `report*` functions are deleted;
-  the reporter's store writes go through its sink;
+  the reporter's store writes go through its sink; `consoleTee.js`, the
+  page's one console patch (§4.4);
   `reportOpfsSourceCondition.js` moves to the loader.
 - **Removes:** entries 1–6.
 - **Neutral:** the report text is unchanged (`loadProgress.test.js`,
   `tests/e2e/loadReport.test.js` unchanged). #2247's remount fix holds by
   construction instead of by an `=== activeReporter` check.
 - **Tests:** two reporters at once keep their lines apart, each ending
-  only itself (red with a shared instance); the hang watchdog of a paused
-  reporter does not fire; a background reporter's Sentry capture carries
-  its own `load.*` tags and not the foreground's.
+  only itself (red with a shared instance); a left reporter that ends
+  after the next has begun leaves the next one's console tee in place, so
+  a `console.warn` after it still lands in the next report's warnings
+  (red with each reporter restoring its own saved originals, as
+  `restoreConsole` does today); the hang watchdog of a paused reporter
+  does not fire; a background reporter's Sentry capture carries its own
+  `load.phase` and not the foreground's.
 - **Rollback:** revert.
 
 ### 2a. Session roots
@@ -1192,14 +1351,34 @@ Decided on 2026-11-03 (engine-worker.md §8 item 7) and not done.
   `ShareIfcLoader`; `makeConwayDirectIfcManager` and
   `attachConwayDirectModelMethods` move to the model. The viewer is still
   built per open, and the root is added to its scene at the start of the
-  load.
+  load. Three things have to change with it, or the rule does not hold:
+  - **`ShareIfc#addIfcModel` stops adding to the scene.** It pushes to
+    the two registries and does `getScene().add(ifcMesh)`
+    (`ShareIfc.js:204–208`), which would re-parent a model out of its
+    root. In 2a it registers only; the model is already under the root.
+    (Registering at attach, not at load, is 2b.)
+  - **Every camera fit names its target.** `fitModelToFrame()` and
+    `fitCameraLimitsToModel()` with no argument frame the last scene
+    child (`orbit-control.js:67`, `context.js:251`), and the root, added
+    at load start, is no longer last once the isolator's subsets and the
+    clipper's arrows are appended (`IfcIsolator.js:379`,
+    `MeshClipper.js:152`; the `TODO(#1561)` at `orbit-control.js:64` says
+    as much). The load's own fits already pass the model
+    (`modelPlacement.js`). The no-argument default becomes the viewer's
+    current root; `ViewCube.jsx:201` is the one production caller.
+  - **A splat's `SparkRenderer` stays where it is until 2b.** It is added
+    straight to the scene (`splats.js:160–163`) and is a renderer helper,
+    not model content. The test below allows it by name.
 - **Removes:** entries 7–9.
 - **Neutral.** What users see is unchanged.
 - **Tests:**
-  - *Unit:* after a load, the scene's children are the viewer's own and
-    exactly one root (red if the preview group goes to the scene); a root
-    with no listener gets no camera call and no paint request (a counter
-    on a fake `RenderDemand`).
+  - *Unit:* after a load of an IFC, a STEP and a GLB, the scene's
+    children are the viewer's own and exactly one root (red if the
+    preview group goes to the scene; red with `addIfcModel` still adding
+    to the scene); a root with no listener gets no camera call and no
+    paint request (a counter on a fake `RenderDemand`); the no-argument
+    fit frames the root with a subset appended after it (red on the
+    last-child default).
   - *E2E, unchanged:* `modelSwitchMemory.spec.ts`,
     `markerModelSwitch.spec.ts`, `openPerOpen.spec.ts`,
     `windowedPreview.spec.ts`, `stepPreviewPick.spec.ts`, the camera-follow
@@ -1209,10 +1388,10 @@ Decided on 2026-11-03 (engine-worker.md §8 item 7) and not done.
 ### 2b. Attach and detach
 
 - **Builds:** `viewer.attach` / `detach` with `viewState`;
-  `disposeModelRoot` and `root.userData.view`; the isolator's
-  `statePort`; `ShareIfc`'s registry filled at attach; window handlers
-  bound by the caller at attach. A switch still builds a new viewer, then
-  attaches the new session's root.
+  `disposeModelRoot` and `root.userData.view` (the splat renderer moves
+  onto it); the isolator's `statePort`; `ShareIfc`'s registry filled at
+  attach; window handlers bound by the caller at attach. A switch still
+  builds a new viewer, then attaches the new session's root.
 - **Removes:** entry 10.
 - **Neutral.**
 - **Tests:**
@@ -1280,20 +1459,29 @@ As engine-worker.md §7 step 8's slice 3, on the lease API. Its
 prerequisites are now earlier slices: per-load module state (R, 2a, 3a),
 the session's own state (3a), one viewer on by default (2e).
 
-One addition, from the render-on-demand hooks. `installSceneHooks`
-(`renderDemandHooks.js:72`) patches three's prototypes for the page:
-every `Object3D#add` and every `BatchedMesh` mutator asks for a
-background paint, whichever scene the object is in. A background session
-assembling its batches would therefore make the foreground viewer paint
-once per idle slice, and a paint of a large foreground model is over
-33 ms (`EXPENSIVE_PAINT_MS`). So the session assembles a detached root's
-batches inside `utils/paintRequest.js#withoutPaintRequests(fn)`, the
-synchronous scope `runPaint` already uses (`paintDepth`).
+One addition, from render-on-demand. Two page-wide things would make a
+background session paint the foreground viewer, and a paint of a large
+foreground model is over 33 ms (`EXPENSIVE_PAINT_MS`):
+
+- `installSceneHooks` (`renderDemandHooks.js:72`) patches three's
+  prototypes: every `Object3D#add` and every `BatchedMesh` mutator asks
+  for a background paint, whichever scene the object is in;
+- the model asks directly: `requestPaint()` reaches every live
+  `RenderDemand` (`renderDemand.js:167, 181–185`), and
+  `ResidencyController.js:658` and `sceneGraphVisibility.js:158` call it.
+
+So the session does all work on a detached root (assembling its batches,
+a residency or visibility change an assistant tool makes to a background
+model) inside `utils/paintRequest.js#withoutPaintRequests(fn)`. It is a
+synchronous scope with its own counter, checked by all three asks.
+`runPaint`'s `paintDepth` is not enough: it silences
+`requestBackgroundPaint` only (`renderDemand.js:209–215`).
 
 - **Tests,** beside that slice's: with A in the background and held at
   its pump, releasing it assembles its batches and the foreground
-  `RenderDemand` records no paint request from them (red without the
-  scope); a selection made in A, then in B, is A's again on return, with
+  `RenderDemand` records no paint request of any of the three kinds from
+  them (red without the scope; red with the scope built on `paintDepth`,
+  for a `requestPaint` from A's `ResidencyController`); a selection made in A, then in B, is A's again on return, with
   A's `#sel:` term.
 - **Rollback:** `disableBackgroundSessions`, static first.
 
@@ -1396,8 +1584,10 @@ failed rehydrate is captured in `ModelSession#ensureEngine`, on the page.
    #2244's viewer-per-open exception. *Recommended*, with the fallback in
    §8 if the `IfcAPI` collection check cannot be kept green. The cost of
    the exception is two viewer lifecycles kept alive for good.
-3. **Delete the `?view=` stack with no replacement** (slice V). From the
-   code it colours nothing on the default path. *Recommended:* delete,
+3. **Delete the `?view=` stack with no replacement** (slice V), with no
+   flag. From the code it colours nothing on either engine; what a user
+   can see change is where a `?view=` link loads, one report line, one
+   notice, and a reload that stops (§7, V). *Recommended:* delete,
    keep the Widget API's `ChangeViewSettings` answering success, and file
    the replacement (colour overrides through `view-140`'s display
    controls) only if an embedder asks. Is anyone known to use it?
@@ -1424,11 +1614,18 @@ file list to that graph. The same script on `dfc342b9`, before #2247,
 gave 78 in 37 as the directories stand and 17 in 14 after the move.
 
 **Run:** the lint prototype of §5, on the repo's own eslint 8.22,
-eslint-plugin-import 2.26 and `.eslintrc.cjs`, at `dfc342b9`, on today's
-directories. It was not rerun on `7cbc995d`, and the zones for
-`src/model` and `src/session` matched no file, since neither directory
-exists yet. The prototype is not committed: the config belongs to M1,
-with the directories it names.
+eslint-plugin-import 2.26 and `.eslintrc.cjs`, at `7cbc995d`, on today's
+directories, in the default-deny shape §5 shows (and before that at
+`dfc342b9` in a first shape that enumerated the UI's directories, with
+the same counts for that commit). The zones for `src/model` and
+`src/session` matched no file, since neither directory exists yet. The
+prototype is not committed: the config belongs to M1, with the
+directories it names.
+
+**Reviewed:** one adversarial round by a fresh session, which rebuilt
+the import graph for itself (636 production files and 1,884 edges by its
+resolver) and found the same 19 after applying §2.2. Its 18 findings and
+what each changed are in the PR (#2244).
 
 **Read from code, at the cited lines:** every claim about `ShareIfc`,
 `spawnEngine.js`, `Loader.js`, `loadProgress.js`, `modelSession.js`
@@ -1441,8 +1638,9 @@ context-restore paths, `FeatureFlags.js:529`, `utils/location.js:9`,
 
 - that the `?view=` stack colours nothing (slice V's E2E);
 - that the headless load passes once the store is out of the loader
-  (3a). Conway under Jest in process is run today
-  (`engine/engineCapture.test.js`); the session layer above it is not;
+  (3a). Conway under Jest in process is run today, on an IFC only
+  (`engine/engineCapture.test.js:23`); no Node test parses a STEP in
+  process, and the session layer above it has never run there;
 - what survives a WebGL context restore (2d);
 - that a second engine reopening an entry the first is still closing
   gets its handle: read-only handles share a file by the spec

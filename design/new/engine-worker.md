@@ -903,7 +903,8 @@ meta, something the worker already reports, or the session's own business.
 | The host needs | Comes from |
 |---|---|
 | who holds the engine, as an id | `meta.owner` (the session's `id`, built) |
-| the per-model chain for a retry or a rehydrate | `meta.modelKey` (built: the dedupe identity) |
+| one engine per model per owner: a new run supersedes the last one's | `meta.modelKey` (built: the dedupe identity) |
+| the OPFS entry a lease is about to open, before the `open` reply | `meta.entryHint` |
 | the estimate's allowance | `meta.format`, `meta.sourceBytes` |
 | the LRU tiers | `lease.update({phase, hasArtifact})`: `loading`, `capturing`, `ready` |
 | who is on screen | `lease.update({isForeground})` |
@@ -1037,11 +1038,14 @@ and exactly one root.
   the live viewer). No viewer is built, no load is aborted, no model is
   reloaded. in-app-model-switch.md §5.2's "a theme rebuild is not an open"
   becomes true by construction.
-- **A view-settings change** (Widget API `customViewSettings`) is applied
-  in place by `viewer.setCustomViewSettings`, as the end of a load already
-  does (`CadView.jsx:1249`), instead of reloading the route.
+- **A view-settings change** (Widget API `customViewSettings`) reloads
+  the route today, to apply settings that colour nothing. Once the
+  `?view=` stack is deleted (layering.md §7, slice V) there is no
+  `viewer.setCustomViewSettings` and nothing to apply or reload.
 - **What close disposes, and when.** `session.close()` (synchronous, as
-  #2247 built it) detaches the root if it is attached, then disposes the
+  #2247 built it) first emits `closing`, on which the binder detaches the
+  root if it is attached: the session is below the viewer and does not
+  call it (layering.md §4.6). Then it disposes the
   root's tree and nothing else: geometries (with their BVHs, and any
   deferred BVH build cancelled, `deferredBatchedBvh.js`), materials,
   textures, and any per-format resource a loader registered on the root
@@ -1051,9 +1055,12 @@ and exactly one root.
   `dropScene()` is the same call without the engine close.
 - **What viewer dispose frees, and when.** Only the page's things: the
   renderer and its context, the environment, the post processor, the ground
-  plane, the handlers. It runs on CadView unmount (after the session host
-  has closed its sessions, `host.closeActive()`), on WebGL context loss, and
-  on the per-open path below. It never disposes a session's root.
+  plane, the handlers. It never disposes a session's root. It runs when
+  the last view goes: a CadView unmount that no mount follows within a
+  microtask (an in-app open across route families remounts CadView, and
+  the next view takes the same viewer). It also runs as the fallback
+  after a context loss that does not restore (below). Until 2d it also
+  runs per open, as today.
 - **WebGL context loss.** The roots are CPU-side objects; three re-uploads
   their buffers on the first paint after a restore. Today the next open
   builds a fresh viewer anyway, which hides a lost context. Under one
@@ -1211,10 +1218,12 @@ the session half and the attach contract do not change.
   `host.whenEntryFree(entryKey)`, which settles once every engine holding
   that entry has closed or timed out. The one place is the mutators of
   `OPFS/utils.js`, through a gate the host registers, so OPFS imports
-  nothing from the engine (layering.md §4.7). A rehydrate of A waits for
-  A's previous lease's release (the per-model chain in `acquire`), so one
-  model never has two engines writing one sidecar. Reads do not wait:
-  read-only handles on one entry coexist (`engineSources.js:359–362`).
+  nothing from the engine (layering.md §4.7). Nothing that starts an
+  engine waits for another's close, as today: an `acquire` for a model
+  its owner already holds an engine for releases that one, and a
+  rehydrate follows an eviction, whose engine is long terminated. Reads
+  do not wait either: read-only handles on one entry coexist
+  (`engineSources.js:359–362`).
 - **Rehydrate, lazily.** The first read the artifact cannot answer (an
   entity-ref `deref`, a recursive read, any read on a session without an
   artifact, later a document op or a workspace-session job) calls
