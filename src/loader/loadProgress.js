@@ -12,14 +12,15 @@ import {version as shareVersion} from '../../package.json'
 // (dependency-free — no wasm). Was an interim byte-identical local copy until
 // the 1.381.1195 pin shipped this module.
 import {LoadLogAccumulator, formatMb} from '@bldrs-ai/conway/src/core/progress_log'
+import {nonIdentifyingLoadContext} from './loadCaptureContext'
+import {SENTRY_MODEL_LINE_PREFIX, redactConsoleMessage, sentrySafeMessageOf} from '../privacy/sentryRedaction'
+import {reportBvhDepthCapToGa, reportLoadDiagnosticsToGa, reportLoadStallRecovered} from './reportLoadDiagnostics'
 // Conway's static Logger, for the data-defect marker (conway#712) on the
 // entries it logs — see installDefectProxy. This is the SAME module instance
-// the engine logs through: the esbuild `webIfcShimAlias` resolves 'web-ifc' to
-// compiled/src/compat/web-ifc/index.js, whose ifc_api.js imports
+// the engine logs through: `@bldrs-ai/conway/web-ifc` (ShareIfc's import)
+// resolves to compiled/src/compat/web-ifc/index.js, whose ifc_api.js imports
 // ../../logging/logger.js — the file this `./src/*` subpath resolves to — so
-// esbuild bundles one Logger, not two. In the real-web-ifc build nothing logs
-// through it and the proxy simply never fires; the import tree-shakes to a
-// few KB there (it does not drag in the conway-geom wasm glue).
+// esbuild bundles one Logger, not two.
 import Logger, {DATA_DEFECT} from '@bldrs-ai/conway/src/logging/logger'
 
 
@@ -61,6 +62,20 @@ const BYTES_PER_MB = 1024 * 1024 // eslint-disable-line no-magic-numbers
  * that a single opaque wasm call (one heavy product) rarely trips it.
  */
 export const STALL_TIMEOUT_MS = 30_000
+
+/**
+ * Silence this long → the load is hung, and that reaches Sentry. The 30 s
+ * stall above is only the UI's cue: one heavy STEP product or IFC boolean can
+ * take that long in a single wasm call and then finish, and reporting it at
+ * 30 s filled SHARE-1HJ (916 events, 180 users) with loads that went on to
+ * open. A stall that recovers is counted in GA instead (load_stall_recovered,
+ * reportLoadDiagnostics.js); one that ends in a failure is CadView's
+ * captureException, tagged `load.stalled`.
+ */
+export const HANG_TIMEOUT_MS = 180_000
+
+/** The Sentry message for a hung load. Not "stalled": that title is SHARE-1HJ's 30 s report. */
+export const LOAD_HUNG_MESSAGE = 'Model load hung'
 
 let activeReporter = null
 // Incremented by every beginLoadProgress, so a caller can tell whether a
@@ -135,13 +150,34 @@ class LoadProgressReporter {
     // stage lines interleaved as they actually happened) — the accumulator
     // tracks stage state; this list is the single source of line order.
     this.lines = []
+    // The same report as Sentry receives it: line for line `lines`, except
+    // that a model line is rebuilt from fields known to be safe
+    // (sentryModelLine). The header's FILE_NAME and its author and
+    // originating-system text are whatever the exporter wrote, and in the
+    // wild that has included a full UNC path to a company file share, with
+    // its private IP and project folder names (SHARE-1MT, 2026-11-03).
+    // Sentry's server-side scrubber did not touch it, so it is kept out
+    // here rather than left for the scrubber. `lines` still feeds the
+    // report dialog and the console, where the user reads their own file's
+    // header.
+    this.sentryLines = []
     this.lastEvent = null
     this.lastBreadcrumbTime = 0
     this.lastStatusLineTime = 0
     this.stallTimer = null
+    // Armed by a stall and cleared by the next progress event: fires only on
+    // HANG_TIMEOUT_MS of unbroken silence.
+    this.hangTimer = null
     this.stallReported = false
+    // The phase of this load's first stall, or undefined when it never
+    // stalled: what the GA recovery event and the failure tag go by.
+    this.stallPhase = undefined
+    this.stallRecoveryReported = false
     this.startTime = Date.now()
     this.fileSize = undefined
+    // A GLB cache hit's artifact size, beside the source's fileSize: the
+    // bytes that load actually parsed (recordModelInfo).
+    this.artifactSize = undefined
     // Page-wide console.warn / console.error calls in the load window, from
     // the console tee. NOT engine severity: see completedStats.
     this.warningCount = 0
@@ -184,6 +220,19 @@ class LoadProgressReporter {
     // preview feedback #4). Includes conway's engine warnings/errors, which
     // route through console.warn/error.
     this.diagnostics = new Map()
+    // BVH trees that reached three-mesh-bvh's depth cap during the load
+    // (reportBvhDepthCap), or null when none did.
+    this.bvhDepthCap = null
+    // Set once the cap has been counted in GA (reportBvhDepthCapOnce).
+    this.bvhDepthCapReported = false
+    // Set when the load succeeded and its cap may go to GA, with the content
+    // type to send it under, so a cap that arrives after the load (a batched
+    // model's deferred trees, deferredBatchedBvh.js) is still counted.
+    this.bvhDepthCapGaArmed = false
+    this.bvhDepthCapContentType = undefined
+    // Where the cap's Health line sits in the report, so a later update
+    // replaces it instead of adding a second one.
+    this.bvhDepthCapLineIndex = -1
     // Base messages (conway LogEntry.message, whitespace-collapsed like the
     // tee's text) conway logged during this load, split by whether the entry
     // carried the data-defect marker — what isDataDefectDiagnostic matches
@@ -217,9 +266,18 @@ class LoadProgressReporter {
       } else {
         this.errorCount++
       }
-      const text = collapseWhitespace(args
-        .map((arg) => (arg instanceof Error ? arg.message : String(arg)))
-        .join(' '))
+      // Redacted at capture: teed text reaches Sentry as the diagnostics
+      // event's title, its `messages` and the report's `Warnings & errors`
+      // line, none of which pass through beforeBreadcrumb. A warning that
+      // names the user's file (a drop rejected mid-load) would otherwise
+      // carry the name there (`privacy/sentryRedaction.js`). The user's own
+      // report shows the redacted form too, since its warnings line is built
+      // from the same tally; the console still prints the warning whole.
+      // Keying the tally by the redacted text also folds the same warning
+      // about different files into one diagnostic.
+      const text = redactConsoleMessage(collapseWhitespace(args
+        .map((arg) => (arg instanceof Error ? sentrySafeMessageOf(arg) ?? arg.message : String(arg)))
+        .join(' ')))
       if (text !== '') {
         this.diagnostics.set(text, (this.diagnostics.get(text) ?? 0) + 1)
       }
@@ -312,6 +370,38 @@ class LoadProgressReporter {
   }
 
   /**
+   * Fold in what an engine WORKER logged (engine-worker.md §2.4 G3). The
+   * worker's conway Logger is another module instance and its console is
+   * its own, so neither reaches {@link installDefectProxy} or the console
+   * tee; the worker folds both by text with a count
+   * (`engine/engineStream.js#makeLogForwarder`), and this replays each row
+   * `count` times through the same two paths, so Total vs Distinct, the
+   * data-defect join and the diagnostics block read as they would for a
+   * main-thread engine. Nothing is echoed: the worker already printed it.
+   *
+   * @param {object} log `{entries: [{level, category, message, count}],
+   *   lines: [{level, text, count}]}`
+   */
+  ingestEngineLog({entries = [], lines = []} = {}) {
+    for (const {count = 1, ...entry} of entries) {
+      for (let i = 0; i < count; i++) {
+        this.defectProxy?.log(entry)
+      }
+    }
+    for (const {level, text, count = 1} of lines) {
+      if (level === 'warning') {
+        this.warningCount += count
+      } else {
+        this.errorCount += count
+      }
+      const collapsed = collapseWhitespace(text)
+      if (collapsed !== '') {
+        this.diagnostics.set(collapsed, (this.diagnostics.get(collapsed) ?? 0) + count)
+      }
+    }
+  }
+
+  /**
    * Close the capture window: restore the console methods the tee replaced
    * and detach the conway log proxy. Idempotent.
    */
@@ -376,9 +466,12 @@ class LoadProgressReporter {
    * @param {string} line
    * @param {boolean} [echo] mirror to console.info (default true); false for
    *   the post-Total diagnostics, which were already on the console
+   * @param {string} [sentryLine] this line as the Sentry copy of the report
+   *   carries it, when that must differ (a model line: sentryModelLine)
    */
-  addReportLine(line, echo = true) {
+  addReportLine(line, echo = true, sentryLine = line) {
     this.lines.push(line)
+    this.sentryLines.push(sentryLine)
     if (echo) {
       // eslint-disable-next-line no-console
       console.info(line)
@@ -406,7 +499,7 @@ class LoadProgressReporter {
 
     if (isModelInfoProgress(progressArg)) {
       this.recordModelInfo(progressArg.modelInfo)
-      this.addReportLine(this.log.setModelInfo(progressArg.modelInfo))
+      this.addReportLine(this.log.setModelInfo(progressArg.modelInfo), true, this.sentryModelLine())
       this.armStallWatchdog()
       return
     }
@@ -481,6 +574,9 @@ class LoadProgressReporter {
     if (Number.isFinite(info?.byteLength)) {
       this.fileSize = info.byteLength
     }
+    if (Number.isFinite(info?.artifactByteLength)) {
+      this.artifactSize = info.artifactByteLength
+    }
     if (typeof info?.schema === 'string' && info.schema !== '') {
       this.schema = info.schema
     }
@@ -513,6 +609,38 @@ class LoadProgressReporter {
   authoringTool() {
     return knownAuthoringTool(this.originatingSystem) ??
       knownAuthoringTool(this.preprocessorVersion)
+  }
+
+  /**
+   * The model line as the Sentry copy of the report carries it: schema,
+   * size and the allowlisted authoring tool, which are the same fields the
+   * event's tags already hold, and no file name or header free text.
+   *
+   * conway's formatModelLine writes the header's FILE_NAME as the line's
+   * name and its originating system and preprocessor verbatim; this is
+   * built from this reporter's latched fields instead (recordModelInfo), so
+   * nothing in it is a span of the header. The name is withheld rather than
+   * replaced by `fallbackName`: that is the URL's basename, which for a
+   * Drive or GitHub model is the user's own file name.
+   *
+   * @return {string}
+   */
+  sentryModelLine() {
+    const parts = []
+    if (this.schema !== undefined) {
+      // FILE_SCHEMA is header text too; bounded as the model_schema tag is.
+      parts.push(this.schema.slice(0, MAX_TAG_CHARS))
+    }
+    if (Number.isFinite(this.fileSize)) {
+      // Same rounding as conway's formatModelLine, so the two copies of the
+      // report differ only in what is withheld.
+      parts.push(`${(this.fileSize / BYTES_PER_MB).toFixed(1)} MB`)
+    }
+    const tool = this.authoringTool()
+    if (tool !== undefined) {
+      parts.push(tool)
+    }
+    return `${SENTRY_MODEL_LINE_PREFIX}${parts.length > 0 ? ` — ${parts.join(', ')}` : ''}`
   }
 
   /**
@@ -580,32 +708,71 @@ class LoadProgressReporter {
     this.stallTimer = setTimeout(() => this.handleStall(), STALL_TIMEOUT_MS)
   }
 
-  /** Cancel the pending watchdog timer, if any. */
+  /** Cancel the pending watchdog timers, if any: progress resumed, or the load ended. */
   clearStallWatchdog() {
     if (this.stallTimer !== null) {
       clearTimeout(this.stallTimer)
       this.stallTimer = null
     }
+    if (this.hangTimer !== null) {
+      clearTimeout(this.hangTimer)
+      this.hangTimer = null
+    }
   }
 
   /**
-   * The watchdog fired: tell the UI, and send one rate-limited Sentry
-   * message per load — a hung load that never throws is otherwise
-   * invisible to Sentry (issue #301 §7).
+   * The watchdog fired: tell the UI, note the stall for the load's eventual
+   * report, and start the hang clock. Nothing reaches Sentry yet: most of
+   * these loads finish (HANG_TIMEOUT_MS).
    */
   handleStall() {
+    this.stallTimer = null
     if (this.onStall) {
       this.onStall(this.lastEvent)
     }
-    if (!this.stallReported) {
-      this.stallReported = true
-      try {
-        this.applySentryLoadState()
-        captureMessage('Model load stalled', 'warning')
-      } catch (e) {
-        debug().log('loadProgress#handleStall: ', e)
-      }
+    if (this.stallPhase === undefined) {
+      this.stallPhase = typeof this.lastEvent?.phase === 'string' ? this.lastEvent.phase : 'unknown'
     }
+    this.hangTimer = setTimeout(() => this.handleHang(), HANG_TIMEOUT_MS - STALL_TIMEOUT_MS)
+  }
+
+  /**
+   * Still silent at HANG_TIMEOUT_MS: send one Sentry warning per load. A hung
+   * load that never throws is otherwise invisible to Sentry (issue #301 §7),
+   * and three minutes without a progress event is something to go fix.
+   */
+  handleHang() {
+    this.hangTimer = null
+    if (this.stallReported) {
+      return
+    }
+    this.stallReported = true
+    try {
+      this.applySentryLoadState()
+      captureMessage(LOAD_HUNG_MESSAGE, {level: 'warning', tags: {'load.stalled': 'true'}})
+    } catch (e) {
+      debug().log('loadProgress#handleHang: ', e)
+    }
+  }
+
+  /**
+   * Count a load that stalled and then finished in GA, once
+   * (reportLoadDiagnostics.js#reportLoadStallRecovered). No-op when it never
+   * stalled, or when it was already reported to Sentry as hung (one
+   * condition, one sink).
+   *
+   * @param {string} [contentType]
+   */
+  reportStallRecoveredOnce(contentType) {
+    if (this.stallPhase === undefined || this.stallReported || this.stallRecoveryReported) {
+      return
+    }
+    this.stallRecoveryReported = true
+    reportLoadStallRecovered({
+      phase: this.stallPhase,
+      format: this.modelFormat(contentType) ?? 'unknown',
+      sizeBytes: this.fileSize,
+    })
   }
 
   /**
@@ -614,7 +781,13 @@ class LoadProgressReporter {
    * phase and diagnosable without user contact.
    */
   applySentryLoadState() {
-    const {tags, contexts} = this.sentryLoadState()
+    // Allowlisted: the raw state carries `fileInfo`, the route path or URL,
+    // which names a private model's file (Share#2107).
+    const {tags, contexts} = nonIdentifyingLoadContext(this.sentryLoadState())
+    // Phase only. `load.stalled` stays off the session's scope, where it
+    // would ride on every later event of the page, the next load's included
+    // (codex on #2235): the hang message and CadView's failure capture carry
+    // it per event (loadStallCaptureTags).
     setTag('load.phase', tags['load.phase'])
     setContext('load', contexts.load)
   }
@@ -629,8 +802,14 @@ class LoadProgressReporter {
   sentryLoadState() {
     const event = this.lastEvent
     const elapsedMs = Date.now() - this.startTime
+    const tags = {'load.phase': typeof event?.phase === 'string' ? event.phase : 'unknown'}
+    if (this.stallPhase !== undefined) {
+      // A load that failed after a stall: the stall is on the failure's own
+      // event, not a second one.
+      tags['load.stalled'] = 'true'
+    }
     return {
-      tags: {'load.phase': typeof event?.phase === 'string' ? event.phase : 'unknown'},
+      tags,
       contexts: {
         load: {
           phase: event?.phase,
@@ -640,7 +819,7 @@ class LoadProgressReporter {
           elapsedMs: event?.elapsedMs ?? elapsedMs,
           memoryMb: event?.memoryMb,
           fileInfo: this.fileInfo,
-          report: this.lines.join('\n'),
+          report: this.sentryLines.join('\n'),
         },
       },
     }
@@ -664,6 +843,9 @@ class LoadProgressReporter {
     // stage lines.
     const total = this.log.totalLine()
     this.addReportLine(this.summary ? `${total} | ${this.summary}` : total)
+    if (this.bvhDepthCap) {
+      this.writeBvhDepthCapLine(true)
+    }
 
     // Warnings & errors captured from the console during the load, appended
     // after Total (issue #301 preview feedback #4). Restore the console
@@ -693,6 +875,7 @@ class LoadProgressReporter {
     const hasEngine = this.geometryStats !== undefined
     this.completedStats = {
       fileSize: this.fileSize,
+      artifactSize: this.artifactSize,
       memoryUsed: heapMb === undefined ? undefined : Math.round(heapMb * BYTES_PER_MB),
       loadTime: finishedAt - this.startTime,
       pageErrorCount: this.errorCount,
@@ -730,9 +913,65 @@ class LoadProgressReporter {
   }
 
   /**
-   * Build and send this load's Sentry diagnostics event (issue #1767).
-   * Called only via captureLoadDiagnostics — see there for why the
-   * counts are the caller's rather than this reporter's.
+   * The model's format as a short token: its file extension, else the
+   * declared content type, else undefined.
+   *
+   * CadView populates content_type as `loadedModel.type || 'undefined'`, so
+   * the literal string is what an unknown type looks like by the time it
+   * reaches here: report nothing rather than that.
+   *
+   * @param {string} [contentType]
+   * @return {string|undefined}
+   */
+  modelFormat(contentType) {
+    const declaredType = contentType === undefined || contentType === null ?
+      '' : String(contentType).toLowerCase()
+    return extensionOf(this.fallbackName) ??
+      (declaredType !== '' && declaredType !== 'undefined' ?
+        declaredType.slice(0, MAX_TAG_CHARS) : undefined)
+  }
+
+  /**
+   * Count this load's BVH depth-cap hits in GA, once
+   * (reportLoadDiagnostics.js#reportBvhDepthCapToGa). No-op when no tree hit
+   * the cap.
+   *
+   * @param {string} [contentType]
+   */
+  reportBvhDepthCapOnce(contentType) {
+    this.bvhDepthCapGaArmed = true
+    this.bvhDepthCapContentType = contentType
+    if (!this.bvhDepthCap || this.bvhDepthCapReported) {
+      return
+    }
+    const {trees, maxLeafTriangles} = this.bvhDepthCap
+    // Counted as reported only once GA took it: with gtag/js not loaded yet
+    // (or no consent) a later call for this load may still send it.
+    this.bvhDepthCapReported =
+      reportBvhDepthCapToGa({format: this.modelFormat(contentType) ?? 'unknown', trees, maxLeafTriangles})
+  }
+
+  /**
+   * Report this load's diagnostics (issue #1767): engine gaps to Sentry,
+   * authoring defects and nothing-to-draw loads to GA. Called only via
+   * captureLoadDiagnostics — see there for why the counts are the caller's
+   * rather than this reporter's.
+   *
+   * The split is the Reported Conditions rule (AGENTS.md). Sentry gets what
+   * someone can go fix: geometry the engine could not build. An authoring
+   * defect ("No units defined.", "No IfcProjects found?", or anything conway
+   * marks DATA_DEFECT) is the file's own gap, and a model that read fine but
+   * has nothing to draw is a property of the input (Share#1962); both are
+   * counted in GA only (reportLoadDiagnostics.js#reportLoadDiagnosticsToGa).
+   * Until 2026-11 both went to Sentry, the defects as warnings tagged
+   * `data_defect` (Share#1863) and SHARE-1MV alone held 199 events from 123
+   * users in two weeks.
+   *
+   * So the Sentry event is titled by the most frequent diagnostic that is
+   * NOT a defect, whatever the outcome, a nothing-to-draw load included. A
+   * load whose diagnostics are all defects sends nothing to Sentry, unless
+   * it was unusable: a file with geometry that drew nothing is an error
+   * whatever the console said.
    *
    * @param {object} opts
    * @param {number} opts.errorCount the GA `stats_errorCount` for this load
@@ -742,12 +981,41 @@ class LoadProgressReporter {
    */
   captureDiagnostics({errorCount, warningCount, contentId, contentType}) {
     const summary = this.diagnosticsSummary()
-    const tags = {}
     // Severity is the load's outcome, not its noise level (ops#27 T0): a
     // model the user is looking at is a regular bug however many warnings it
     // took to get there, and only a load that produced nothing to look at is
     // a major one. This is why errorCount no longer decides the level.
     const loadOutcome = classifyLoadOutcome(this.outcomeInputs())
+    const {engineText, defectText} = this.topDiagnosticsByKind()
+    if (loadOutcome === LOAD_OUTCOMES.NO_GEOMETRY || defectText !== undefined) {
+      reportLoadDiagnosticsToGa({
+        outcome: loadOutcome,
+        defect: defectFamily(defectText),
+        format: this.modelFormat(contentType) ?? 'unknown',
+        authoringTool: this.authoringTool(),
+        schema: this.schema,
+        sizeBytes: this.fileSize,
+      })
+    }
+    // '' titles the event "Load completed with diagnostics": the counts came
+    // from the engine and the console tee caught no text to name it by.
+    // A nothing-to-draw load reaches Sentry only for an engine diagnostic:
+    // the input explains the empty build, not an engine gap it also hit
+    // (codex on #2235).
+    let sentryText
+    if (engineText !== undefined) {
+      sentryText = engineText
+    } else if (loadOutcome === LOAD_OUTCOMES.NO_GEOMETRY) {
+      sentryText = undefined
+    } else if (summary.total === 0) {
+      sentryText = ''
+    } else if (loadOutcome === LOAD_OUTCOMES.UNUSABLE) {
+      sentryText = defectText
+    }
+    if (sentryText === undefined) {
+      return
+    }
+    const tags = {}
     tags.load_outcome = loadOutcome
     // Also set on the global scope at init by index/ga.js. Re-read here
     // because this reads later: a first-ever visitor's id only resolves
@@ -782,14 +1050,7 @@ class LoadProgressReporter {
     if (this.schema !== undefined) {
       tags.model_schema = this.schema.slice(0, MAX_TAG_CHARS)
     }
-    // CadView populates content_type as `loadedModel.type || 'undefined'`, so
-    // the literal string is what an unknown type looks like by the time it
-    // reaches here — tag nothing rather than tag that.
-    const declaredType = contentType === undefined || contentType === null ?
-      '' : String(contentType).toLowerCase()
-    const format = extensionOf(this.fallbackName) ??
-      (declaredType !== '' && declaredType !== 'undefined' ?
-        declaredType.slice(0, MAX_TAG_CHARS) : undefined)
+    const format = this.modelFormat(contentType)
     if (format !== undefined) {
       tags.model_format = format
     }
@@ -797,25 +1058,19 @@ class LoadProgressReporter {
       tags.model_size_mb = Math.round(this.fileSize / BYTES_PER_MB)
     }
     // Share#1863 (ops#28 T1): lets triage filter authoring defects out of
-    // engine-gap searches. It classifies the diagnostic this event is titled
-    // and grouped by (summary.topText), not the load: a file with defects
+    // engine-gap searches. Since defects went to GA, only an unusable load
+    // whose diagnostics were all defects is titled by one. It classifies the
+    // diagnostic this event is titled and grouped by, not the load: a file with defects
     // can still hit a real engine gap, and when that gap is what dominated,
     // tagging the event would hide an engine bug behind the filter meant to
     // surface them. Independent of the load_outcome severity split above.
     // Present only when true — an absent tag already reads as "not a
     // defect", and a 'false' value on every other event is just noise.
-    if (this.isDataDefectDiagnostic(summary.topText)) {
+    if (this.isDataDefectDiagnostic(sentryText)) {
       tags.data_defect = 'true'
     }
-    captureMessage(diagnosticsTitle(summary.topText), {
-      // A file with nothing to draw is an input property, not a defect, so
-      // it stays out of the error stream like the 4.3 refusal does; the
-      // event is still sent because the chip it backs is coloured by the
-      // same counts (Share#1962).
-      level: {
-        [LOAD_OUTCOMES.UNUSABLE]: 'error',
-        [LOAD_OUTCOMES.NO_GEOMETRY]: 'info',
-      }[loadOutcome] ?? 'warning',
+    captureMessage(diagnosticsTitle(sentryText), {
+      level: loadOutcome === LOAD_OUTCOMES.UNUSABLE ? 'error' : 'warning',
       tags,
       contexts: {
         loadDiagnostics: {
@@ -838,10 +1093,40 @@ class LoadProgressReporter {
           consoleTotal: summary.total,
           consoleDistinct: summary.distinct,
           messages: this.topDiagnostics(MAX_SENTRY_DIAGNOSTICS),
-          report: this.lines.join('\n'),
+          // No BVH depth-cap field: the cap is counted in GA alone
+          // (reportBvhDepthCapOnce), one sink per condition (AGENTS.md,
+          // Reported Conditions). The report below keeps its Health line,
+          // as the load log it is.
+          report: this.sentryLines.join('\n'),
         },
       },
     })
+  }
+
+  /**
+   * The most frequent engine-gap diagnostic and the most frequent authoring
+   * defect (isDataDefectDiagnostic), each undefined when the load had none.
+   * captureDiagnostics sends the first to Sentry and the second to GA.
+   *
+   * @return {{engineText: (string|undefined), defectText: (string|undefined)}}
+   */
+  topDiagnosticsByKind() {
+    let engineText
+    let engineCount = 0
+    let defectText
+    let defectCount = 0
+    for (const [text, count] of this.diagnostics) {
+      if (this.isDataDefectDiagnostic(text)) {
+        if (count > defectCount) {
+          defectCount = count
+          defectText = text
+        }
+      } else if (count > engineCount) {
+        engineCount = count
+        engineText = text
+      }
+    }
+    return {engineText, defectText}
   }
 
   /**
@@ -881,6 +1166,49 @@ class LoadProgressReporter {
     const sample = ellipsize(topText)
     const sampleNote = topCount > 1 ? `${sample} (×${topCount})` : sample
     this.addReportLine(`Warnings & errors (${total}${distinctNote}): ${sampleNote}`, false)
+  }
+
+  /**
+   * Add the BVH depth-cap Health line, or replace it if it is already there.
+   *
+   * @param {boolean} echo whether to echo it to the console (only while the
+   *   console tee is still ours, during finishReport)
+   */
+  writeBvhDepthCapLine(echo) {
+    const {trees, maxLeafTriangles, maxDepth} = this.bvhDepthCap
+    const line = `Health: picking index hit its depth cap (${maxDepth}) in ` +
+      `${trees} ${trees === 1 ? 'tree' : 'trees'}; largest leaf ${maxLeafTriangles} triangles, ` +
+      'tested one by one per pick'
+    if (this.bvhDepthCapLineIndex >= 0) {
+      this.lines[this.bvhDepthCapLineIndex] = line
+      this.sentryLines[this.bvhDepthCapLineIndex] = line
+      this.publishReport()
+      return
+    }
+    this.bvhDepthCapLineIndex = this.lines.length
+    this.addReportLine(line, echo)
+  }
+
+  /**
+   * A depth cap that arrived after the load ended: a batched model builds its
+   * trees once it is on screen (deferredBatchedBvh.js). Same Health line,
+   * after Total like reportFramingExclusion's, and the same one GA event once
+   * the load is known to have succeeded. A cap already counted in GA during
+   * the load is not counted again; the line still shows the sum.
+   *
+   * @param {{trees: number, maxLeafTriangles: number, maxDepth: number}} capped
+   */
+  addLateBvhDepthCap({trees, maxLeafTriangles, maxDepth}) {
+    const previous = this.bvhDepthCap
+    this.bvhDepthCap = {
+      trees: (previous?.trees ?? 0) + trees,
+      maxLeafTriangles: Math.max(previous?.maxLeafTriangles ?? 0, maxLeafTriangles),
+      maxDepth,
+    }
+    this.writeBvhDepthCapLine(false)
+    if (this.bvhDepthCapGaArmed) {
+      this.reportBvhDepthCapOnce(this.bvhDepthCapContentType)
+    }
   }
 
   /** Stop watching (load finished or failed); restore the console tee. */
@@ -1015,10 +1343,30 @@ function collapseWhitespace(text) {
  * `DATA_DEFECT` call site, and an entry here should come out once conway
  * marks it.
  */
-const DATA_DEFECT_FALLBACK_MESSAGES = new Set([
-  'No units defined.',
-  'No IfcProjects found?',
-])
+const NO_UNITS = 'No units defined.'
+const NO_PROJECTS = 'No IfcProjects found?'
+const DATA_DEFECT_FALLBACK_MESSAGES = new Set([NO_UNITS, NO_PROJECTS])
+
+
+/**
+ * A defect diagnostic as GA's closed-set `defect` param: the two fallback
+ * families by name, and `marked` for anything conway marked DATA_DEFECT.
+ * Never the text: a marked message is engine prose about the file, and GA
+ * gets structured fields only (AGENTS.md, Reported Conditions).
+ *
+ * @param {string} [text] a defect diagnostic as the console tee captured it
+ * @return {string} 'none' | 'no_units' | 'no_projects' | 'marked'
+ */
+function defectFamily(text) {
+  if (text === undefined) {
+    return 'none'
+  }
+  const base = normalizeMessageDigits(collapseWhitespace(text).split(' expressID: ')[0])
+  if (base === NO_UNITS) {
+    return 'no_units'
+  }
+  return base === NO_PROJECTS ? 'no_projects' : 'marked'
+}
 
 
 /**
@@ -1250,9 +1598,14 @@ function knownAuthoringTool(value) {
  * load is active (e.g. background cache writes after dispose).
  *
  * @param {object|string} progressArg
+ * @param {LoadProgressReporter} [reporter] the load's own reporter, from
+ *   beginLoadProgress: when given, the signal is dropped unless that reporter
+ *   is still the active one. A load the user has left can still be running
+ *   after the next load has begun (a remount gives each view its own queue,
+ *   open-205 #2019), and its progress is not the next load's.
  */
-export function reportLoadProgress(progressArg) {
-  if (activeReporter) {
+export function reportLoadProgress(progressArg, reporter = undefined) {
+  if (activeReporter && (reporter === undefined || reporter === activeReporter)) {
     activeReporter.report(progressArg)
   }
 }
@@ -1272,6 +1625,40 @@ export function reportEngineVersion(versionLine) {
 
 
 /**
+ * An engine worker's forwarded log (see LoadProgressReporter#ingestEngineLog).
+ * Safe no-op with no active load.
+ *
+ * @param {object} log `{entries, lines}`
+ */
+export function reportEngineLog(log) {
+  if (activeReporter && !activeReporter.ended) {
+    activeReporter.ingestEngineLog(log)
+  }
+}
+
+
+/**
+ * The model line's tail on a GLB cache hit: the cached artifact's size,
+ * beside the source's that `formatModelLine` already printed, so
+ * "Momentum.ifc — IFC, 5.6 MB (cached GLB 1.3 MB)". When the artifact
+ * predates the source-size stamp the source's is unknown, and the line says
+ * so rather than leave the GLB's as the only size on it. Same MB rounding as
+ * conway's formatModelLine.
+ *
+ * @param {object} info model metadata, with `artifactByteLength` on a hit
+ * @param {number|undefined} sourceBytes the source size recorded for this load
+ * @return {string} '' when not a hit
+ */
+export function cachedArtifactSuffix(info, sourceBytes) {
+  if (!Number.isFinite(info?.artifactByteLength)) {
+    return ''
+  }
+  const glb = `cached GLB ${(info.artifactByteLength / BYTES_PER_MB).toFixed(1)} MB`
+  return Number.isFinite(sourceBytes) ? ` (${glb})` : ` (source size not recorded; ${glb})`
+}
+
+
+/**
  * Report early model-header info (log line 3) directly (the engine path
  * arrives via the onProgress envelope instead — see isModelInfoProgress).
  *
@@ -1280,7 +1667,9 @@ export function reportEngineVersion(versionLine) {
 export function reportModelInfo(info) {
   if (activeReporter && !activeReporter.ended) {
     activeReporter.recordModelInfo(info)
-    activeReporter.addReportLine(activeReporter.log.setModelInfo(info))
+    activeReporter.addReportLine(
+      activeReporter.log.setModelInfo(info) + cachedArtifactSuffix(info, activeReporter.fileSize),
+      true, activeReporter.sentryModelLine())
   }
 }
 
@@ -1404,6 +1793,20 @@ export function currentLoadSerial() {
 
 
 /**
+ * Report a renderer limit the load will draw under, as its own report line
+ * during the load (reportRendererLimits.js: no `WEBGL_multi_draw`). Safe
+ * no-op with no active load.
+ *
+ * @param {string} line e.g. 'Renderer: WEBGL_multi_draw unsupported; …'
+ */
+export function reportRendererInfo(line) {
+  if (activeReporter && !activeReporter.ended && line) {
+    activeReporter.addReportLine(line)
+  }
+}
+
+
+/**
  * Report where the model bytes came from — OPFS cache vs network — as its
  * own report line (PR #1727 feedback: reloads served from OPFS should say
  * "cache HIT" for every format, not just the GLB-artifact path's console
@@ -1458,9 +1861,13 @@ export function attachLoadFailureContext() {
 
 
 /**
- * Send one Sentry event for a completed load that reported console or
- * engine diagnostics (issue #1767), so a dashboard model-open chip with
- * non-zero errors/warnings has a searchable counterpart to link to.
+ * Report a completed load's console or engine diagnostics (issue #1767), so
+ * a dashboard model-open chip with non-zero errors/warnings has a searchable
+ * counterpart to link to: a Sentry event for an engine gap, and a GA
+ * `load_diagnostics` event, under the same client id, for authoring defects
+ * and nothing-to-draw loads (captureDiagnostics has the split). A chip whose
+ * load had only defects therefore has no Sentry event behind it since
+ * 2026-11; its counterpart is the GA event.
  *
  * The two populations the bizdev dashboard tries to join were close to
  * disjoint before this. The counts behind each chip come from a load
@@ -1514,7 +1921,17 @@ export function captureLoadDiagnostics({
   contentId = undefined,
   contentType = undefined,
 } = {}) {
-  if (errorCount + warningCount === 0 || activeReporter === null) {
+  if (activeReporter === null) {
+    return
+  }
+  // A depth-cap hit goes to GA whether or not the load had anything for
+  // Sentry: it is volume-only signal (AGENTS.md, "PRs: a Reported Conditions
+  // section"). Here, on a successful real open, so a failed load never also
+  // counts it.
+  activeReporter.reportBvhDepthCapOnce(contentType)
+  // Likewise a stall the load recovered from (HANG_TIMEOUT_MS).
+  activeReporter.reportStallRecoveredOnce(contentType)
+  if (errorCount + warningCount === 0) {
     return
   }
   try {
@@ -1522,6 +1939,18 @@ export function captureLoadDiagnostics({
   } catch (e) {
     debug().log('loadProgress#captureLoadDiagnostics: ', e)
   }
+}
+
+
+/**
+ * `load.stalled` for one failure capture (CadView), or null when the last
+ * load never stalled. Per event, never on the scope: see
+ * LoadProgressReporter#applySentryLoadState.
+ *
+ * @return {?object} `{'load.stalled': 'true'}` or null
+ */
+export function loadStallCaptureTags() {
+  return activeReporter?.stallPhase === undefined ? null : {'load.stalled': 'true'}
 }
 
 
@@ -1553,8 +1982,32 @@ export function setLoadSummary(text) {
  * @param {Error} [error] the loader error when the load failed; omitted /
  *   null on success. Called from CadView's load `finally`, which captures
  *   the thrown error before re-raising it to the outer handler.
+ * @param {object} [options]
+ * @param {boolean} [options.isAborted] the load was given up, not failed
+ *   (an in-app switch under `?feature=spaModelNav`, utils/loadAbort.js): its
+ *   report belongs to a model the user has left, so it is cleared rather
+ *   than frozen, and no grace line says the load failed. The reporter is
+ *   kept as the last one, so getLoadFailureInfo can still say where it
+ *   stopped.
+ * @param {LoadProgressReporter} [options.reporter] the load's own reporter,
+ *   from beginLoadProgress: a no-op unless it is still the active one
  */
-export function endLoadProgress(error = null) {
+export function endLoadProgress(error = null, {isAborted = false, reporter = undefined} = {}) {
+  // A load ends only its own report: when the next load has begun meanwhile,
+  // the active reporter is that load's (see reportLoadProgress).
+  if (reporter !== undefined && reporter !== activeReporter) {
+    return
+  }
+  if (isAborted) {
+    if (activeReporter && !activeReporter.ended) {
+      activeReporter.dispose()
+      const store = useStore.getState()
+      store.setLoadReportLines([])
+      store.setCurrentLoadLine(null)
+      store.setLoadResult(null)
+    }
+    return
+  }
   if (activeReporter && !activeReporter.ended) {
     activeReporter.finishReport()
     // The collapsed grace line stays deliberately terse — just the outcome
@@ -1578,6 +2031,53 @@ export function endLoadProgress(error = null) {
  * numbers live in the Health line one expand (or the "i" report) away.
  */
 const FRAMING_NOTE = 'stray geometry far from the model was left out of the zoom fit'
+
+
+/**
+ * Which load is being reported now, as an opaque token: for work that
+ * finishes after the load and must report against that load or not at all
+ * (reportBvhDepthCap).
+ *
+ * @return {object|null}
+ */
+export function loadReportToken() {
+  return activeReporter
+}
+
+
+/**
+ * Record BVH trees that reached three-mesh-bvh's depth cap
+ * (`viewer/ifc/bvhBuild.js`). Accumulates across the load's builds, a batched
+ * model building one tree per geometry, and becomes one `Health:` line after
+ * Total and, on a successful load, one GA `bvh_depth_cap` event
+ * (reportBvhDepthCapOnce). Safe no-op with no active load.
+ *
+ * Without a token, a no-op after the load ended too: a tree built later (an
+ * edit's new geometry, batchedEdit.js) is not part of the load. With the
+ * token a deferred build took when it was scheduled (loadReportToken), the
+ * cap is that load's however late it lands, and is dropped if another load
+ * has started since.
+ *
+ * @param {{trees: number, maxLeafTriangles: number, maxDepth: number}} capped
+ * @param {object} [token] from loadReportToken
+ */
+export function reportBvhDepthCap({trees, maxLeafTriangles, maxDepth}, token = undefined) {
+  if (!activeReporter || (token !== undefined && token !== activeReporter)) {
+    return
+  }
+  if (activeReporter.ended) {
+    if (token !== undefined) {
+      activeReporter.addLateBvhDepthCap({trees, maxLeafTriangles, maxDepth})
+    }
+    return
+  }
+  const previous = activeReporter.bvhDepthCap
+  activeReporter.bvhDepthCap = {
+    trees: (previous?.trees ?? 0) + trees,
+    maxLeafTriangles: Math.max(previous?.maxLeafTriangles ?? 0, maxLeafTriangles),
+    maxDepth,
+  }
+}
 
 
 /**

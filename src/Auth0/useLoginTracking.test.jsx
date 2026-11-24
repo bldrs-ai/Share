@@ -209,10 +209,10 @@ describe('useLoginTracking', () => {
     }
   })
 
-  // codex finding on #1912. The app's logouts keep the Auth0 session
-  // (ProfileControl's openUrl only reloads; OpenModelDialog passes
-  // openUrl:false), so the popup sign-in after one is completed from it and
-  // its ID token carries the same auth_time as the sign-in before.
+  // codex finding on #1912. An in-page sign-out that keeps the Auth0 session
+  // (the SDK dropping its cached user, or any logout passing `openUrl`) is
+  // followed by a popup sign-in completed from that session, whose ID token
+  // carries the same auth_time as the sign-in before.
   it('a sign-in after an in-page sign-out counts again, even with the same auth_time', async () => {
     const step = mountWith(mockedUserLoggedOut)
     step(withClaims(FIRST_SIGN_IN))
@@ -224,8 +224,11 @@ describe('useLoginTracking', () => {
     expect(loginEvents()).toHaveLength(2)
   })
 
-  // ProfileControl's logout reloads the page, so that sign-out reaches the
-  // hook as a page load that comes up signed out, not as an in-page edge.
+  // ProfileControl's Log out leaves the page for /v2/logout and comes back to
+  // the origin (Share#1923), so that sign-out reaches the hook as a page load
+  // that comes up signed out, not as an in-page edge. It ends the Auth0
+  // session, so the real next sign-in has a new auth_time; the same one here
+  // is the stricter case, and the hook does not rely on knowing which.
   it('a sign-in after a sign-out reload counts again, even with the same auth_time', async () => {
     const beforeLogout = mountWith(mockedUserLoggedOut)
     beforeLogout(withClaims(FIRST_SIGN_IN))

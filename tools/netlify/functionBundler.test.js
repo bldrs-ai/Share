@@ -83,6 +83,9 @@ const PRODUCTION_LIKE_ENV = {
   SHARE_PRO_PRICE_ID: 'price_smoke',
   GH_OAUTH_CLIENT_ID: 'smoke-gh-client-id',
   GH_OAUTH_CLIENT_SECRET: 'smoke-gh-client-secret',
+  OPENROUTER_API_KEY: 'sk-or-smoke',
+  AI_TOKEN_SECRET: 'smoke-ai-token-secret',
+  ADMIN_STATS_SECRET: 'smoke-admin-stats-secret-0123456789abcdef',
 }
 
 // Runs inside the child. A v2 function's entry is Netlify's bootstrap, which
@@ -159,7 +162,7 @@ describe('netlify functions as deployed', () => {
   it('keeps shipping the built pro modules beside the pro-module function', () => {
     expect(functionsConfig['pro-module'].included_files).toContain('netlify/functions/_pro-modules/*.js')
     // The config only says what to include; check the files really landed.
-    // `_pro-modules/` is gitignored and populated by `yarn build-prod`, so a
+    // `_pro-modules/` is gitignored and populated by `bun run build-prod`, so a
     // fresh checkout has none and only the config assertion above runs —
     // there is nothing on disk to compare against, and failing would make
     // the hook depend on a prior build. Where a build has run, each built
@@ -219,13 +222,14 @@ describe('netlify functions as deployed', () => {
           return {id: scenario.id, file: scenario.file, entry: '/nonexistent', loadMode: 'import'}
         }
         // A v2 bundle's entry is Netlify's streaming bootstrap, which needs
-        // the Lambda runtime; its handler is the bundled user module beside it.
+        // the Lambda runtime; its handler is the bundled user module the
+        // entry names (bundleFunctions.mjs `v2HandlerOf`).
         const v2 = bundle.runtimeAPIVersion === 2
         return {
           id: scenario.id,
           file: scenario.file,
           entry: v2 ?
-            path.join(bundle.path, 'functions', `${scenario.functionName}.mjs`) :
+            path.join(bundle.path, bundle.v2Handler) :
             path.join(bundle.path, bundle.entryFilename),
           loadMode: v2 ? 'import' : 'require',
           cwd: bundle.path,

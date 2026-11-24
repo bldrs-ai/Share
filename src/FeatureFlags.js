@@ -8,30 +8,63 @@ export const flags = [
   // smoke tests. Branch deploys and local builds remain excluded, and
   // navigator.webdriver still suppresses automated traffic.
   {name: 'gaEnableInPreview', isActive: false},
-  // Multi-user sharing UI (Share dialog, visibility chip). Provider scaffolding
-  // ships unconditionally; this flag gates the consumer surface in PR2+.
-  // See design/new/multi-user-sharing.md.
+  // Records main-thread long animation frames, long tasks, rAF cadence and
+  // input delay from page start, with load milestones, for the render-worker
+  // decision (open-205, design/new/offscreen-rendering.md §9.1). Adds a small
+  // Mark / Summary / Download overlay; the trace stays on the page until the
+  // user downloads it. Pairs with the replay page in tools/spikes/offscreen/.
+  {name: 'mainThreadTrace', isActive: false},
+  // Multi-user sharing UI: the visibility chip (share-130) and the people
+  // panel (share-201). The provider scaffolding (`share-t100` PR1, #1505) ships
+  // unconditionally; nothing reads this flag until the first of those
+  // surfaces lands (`share-t100`, #2203). See design/new/multi-user-sharing.md.
   {name: 'sharing', isActive: false},
   // GitHub-as-Sources connection. The GitHubProvider, Netlify Functions and
-  // /auth/gh/callback.html ship unconditionally; this flag gates the
-  // SourcesTab "Connect GitHub" button + browse-via-connection wiring that
-  // land in identity-decoupling PR2.
+  // /auth/gh/callback.html ship unconditionally; this flag gates what
+  // identity-decoupling PR2 (#1508) added: GitHubTab's "Connect GitHub"
+  // button, browse-via-connection and the Save dialog's "Saving as" footer.
+  // It stays off until PR3 moves Save and model loads onto the connection's
+  // token (`identity-t100`, #2202; post-MVP).
   // See design/new/identity-decoupling-decisions.md.
   {name: 'githubAsSource', isActive: false},
-  // Workspace shell (conversational-CAD epic assist-300, #1657): the
+  // Workspace shell (conversational-CAD epic open-200, #1657): the
   // ProjectsDrawer (projects → models, localStorage-persisted) leftmost in
   // RootLandscape + the logo popup with marketing links. Flag-off layout
   // must stay byte-identical to today's — the merge into production chrome
   // is invisible until flipped.
   // See design/new/conversational-cad.md §2.
   {name: 'workspace', isActive: false},
+  // Open a model in-app instead of with a page load (open-205 Phase 1a, #2011,
+  // #2021): `navigateToModel` (utils/navigate.js) routes through react-router's
+  // `navigate()` rather than `window.location.assign`, and the load the user
+  // leaves is aborted and its state dropped (CadView step A). Its own flag,
+  // not `workspace`, so the switch burns in and rolls back without the shell
+  // (decision 2 on #2011). What the reload used to free, and what an in-app
+  // switch still leaks, is design/new/in-app-model-switch.md §2 and §6.
+  // Default-ON since step F (§4.8). Where an open is decided is ONE place,
+  // `utils/spaModelNavMode.js#modelPageLoadReason`.
+  // Do NOT roll back by setting this to false: `?feature=spaModelNav` in a
+  // URL would still turn it on for that link, and the query rides from one
+  // open to the next. Roll back with `disableSpaModelNav` below.
+  {name: 'spaModelNav', isActive: true},
+  // OFF-switch for the in-app switch above, the same inverted shape as
+  // `disableEngineWorker`: `?feature=` can only turn flags ON, so
+  // `?feature=disableSpaModelNav` is the per-session way back to a page load
+  // per open, for a bug that looks like the previous model's state left
+  // behind. Setting it `isActive: true` here is the PROD ROLLBACK:
+  // spaModelNavMode.js reads the static value before any URL flag, so no
+  // link can opt back into the in-app switch (in-app-model-switch.md §4.8,
+  // "Rolling back").
+  {name: 'disableSpaModelNav', isActive: false},
   // The AI assistant (epic assist-310, #1659; design/new/ai-workspace.md §13,
-  // D12). Today it gates only the dev hook `window.__bldrsAssistTools` that
-  // drives the viewer tool registry (src/viewer/tools/assistHost.js, #1674);
-  // the tray and agent loop join it in #1672 / #1675, and #1672 also aliases
-  // the old `?feature=bot` to it. The registry and tool providers ship
+  // D12). It shows the assistant panel (Components/Bot/, whose agent loop is
+  // #1675) and installs the dev hook `window.__bldrsAssistTools` that drives
+  // the viewer tool registry (src/viewer/tools/assistHost.js, #1674). The old
+  // `?feature=bot` turns it on too (FEATURE_IMPLICATIONS below), until the
+  // tray's rename in #1672. A `#bot:` permalink opens the panel only where
+  // this flag is on (TabbedPanels.jsx, NotesAndPropertiesDrawer.jsx). The registry and tool providers ship
   // unconditionally — CadView registers the selection funnel they use either
-  // way — but nothing calls them without this flag.
+  // way — and the AI SDK loads only when the assistant first sends.
   {name: 'assist', isActive: false},
   // Usage quotas. The quota lib (src/quota), the record-load Netlify
   // function, the useQuota hook and QuotaLimitDialog all ship
@@ -70,7 +103,7 @@ export const flags = [
   // GLB runtime artifact pipeline (design/new/glb-model-sharing.md).
   // `glb` enables both the writer (post-IFC-parse cache warm-up) and the
   // reader (skip-IFC-when-GLB-cached fast path in Loader.js).
-  // Default-on as of the Phase-5 prep landing — cache-hit GLB loads
+  // Default-on: cache-hit GLB loads
   // bypass wit-three entirely (spatial tree + properties + per-element
   // picking all round-trip through BLDRS_* glTF extensions).
   {name: 'glb', isActive: true},
@@ -126,7 +159,7 @@ export const flags = [
   //     through the IFC→GLB→IFC cache automatically (GLTFExporter's
   //     `_INSTANCEID` rename + reader-side restore + capability
   //     inference + cache-hit IfcInstanceMap reconstruction).
-  // Default-on as of the Phase-5 prep landing. The Conway-direct
+  // Default-on. The Conway-direct
   // geometry assembler + per-instance picking are the production
   // rendering path; live IFC parses still run wit-three to drive the
   // FlatMesh stream (geometry is then replaced by the Conway-direct
@@ -158,6 +191,116 @@ export const flags = [
   // milestone: PSB 77s -> 57s); `?feature=disableStreamOpen` remains
   // the classic-path escape hatch and this flag the demand kill switch.
   {name: 'demandGeometry', isActive: true},
+  // Per-model engine worker (design/new/engine-worker.md, open-205 #2053):
+  // each model's Conway engine runs in its own module Worker and is freed
+  // by terminate(). An IFC or STEP load parses, pumps, answers property
+  // reads and captures its GLB artifact in the worker
+  // (engine/engineModelLoad.js); `window.__bldrsEngine` (engineDevHook.js)
+  // drives sessions directly when the URL names this flag.
+  // Default-ON since §7 step 9. Where a load's engine runs is decided in ONE
+  // place, `engine/engineRoute.js#mainThreadEngineReason`: the main-thread
+  // engine stays permanently (§8 item 6) for `disableEngineWorker` below
+  // and for the legacy `?view=` rules, which read the main-thread engine
+  // directly (the legacy `?feature=bot` eval did too, until #1675 deleted it). Where module workers
+  // are missing, or a worker fails to start, the same handler runs in
+  // process on this thread (spawnEngine.js).
+  // Do NOT roll back by setting this to false: `?feature=engineWorker` in a
+  // URL would still turn it on for that link. Roll back with
+  // `disableEngineWorker` below.
+  {name: 'engineWorker', isActive: true},
+  // OFF-switch for the engine worker above, same inverted shape and reason as
+  // `disableStreamOpen`: `?feature=` can only turn flags ON, so
+  // `?feature=disableEngineWorker` is the per-session way back to the
+  // main-thread engine (parseIfcWithConway), for one A/B or one bad model.
+  // Setting it `isActive: true` here is the PROD ROLLBACK: engineRoute.js
+  // reads the static value before any URL flag, so no link can opt back into
+  // the worker (engine-worker.md §7.2, "Rolling back").
+  {name: 'disableEngineWorker', isActive: false},
+  // Render on demand for the whole session (open-205 story #2055,
+  // design/new/offscreen-rendering.md §7.1): between loads as well as during
+  // them (#2043), the viewer paints only when something changed, so an idle
+  // viewer paints nothing. On by default since the flip after #2096's
+  // burn-in. src/viewer/three/renderDemand.js has the layers that ask for a
+  // paint; DESIGN.md §"Render loop & perf monitor" the summary; and
+  // viewer/three/renderOnDemandMode.js is the one predicate the viewer reads.
+  // Do NOT roll back by setting this to false: `?feature=renderOnDemand` in a
+  // URL would still turn it on for that link. Roll back with
+  // `disableRenderOnDemand` below.
+  {name: 'renderOnDemand', isActive: true},
+  // OFF-switch for render-on-demand above, the same inverted shape as
+  // `disableEngineWorker`: `?feature=` can only turn flags ON, so
+  // `?feature=disableRenderOnDemand` is the per-session way back to painting
+  // every frame between loads, for a stale-frame report or an A/B. Setting
+  // it `isActive: true` here is the PROD ROLLBACK: renderOnDemandMode.js
+  // reads the static value before any URL flag, so no link can opt back into
+  // on-demand painting (DESIGN.md §"Render loop & perf monitor", "Rolling
+  // back").
+  {name: 'disableRenderOnDemand', isActive: false},
+  // OFF-switch for the §6e render look (viewer/lookMode.js), on by default
+  // since #2167. `?feature=disableLook` puts one session back on the pre-§6e
+  // pipeline (Lambert materials, linear output, no IBL, no AO); setting this
+  // `isActive: true` is the PROD ROLLBACK, which no URL can override. Not
+  // `look: false`: `?feature=look` now only opens the tuning panels.
+  {name: 'disableLook', isActive: false},
+  // OFF-switch for the instance tree hover and click picks go through on a
+  // batched model (viewer/ifc/batchedInstanceBvh.js): with it on, no tree is
+  // built and every pick walks every instance, as before the tree. Same
+  // inverted shape as the two above: `?feature=disableInstanceBvh` is the
+  // per-session A/B (the before/after in that module's PR was measured with
+  // it), and `isActive: true` here is the prod rollback.
+  {name: 'disableInstanceBvh', isActive: false},
+  // OFF-switch for the frame-aligned hover pick (viewer/hoverPick.js
+  // #createFrameHoverPicker): with it on, hover picks in the mousemove
+  // handler at most every 33 ms with a setTimeout trailing pick
+  // (#createTimerHoverPicker), as #2127 shipped. Same inverted shape:
+  // `?feature=disableFrameHover` is the per-session A/B for a hover-lag
+  // report, and `isActive: true` here is the prod rollback.
+  {name: 'disableFrameHover', isActive: false},
+  // OFF-switch for the hover overlay (viewer/three/hoverOverlay.js), on by
+  // default since #2129: on a batched model a hover change presents the last
+  // full paint's colour + depth and draws only the hovered instance(s) on
+  // top, instead of recolouring the batch and redrawing the whole model. Same
+  // inverted shape as the switches above: `?feature=disableHoverOverlay` is
+  // the per-session way back to the recolour (an A/B, or a hover that looks
+  // wrong), and `isActive: true` here is the PROD ROLLBACK. The overlay only
+  // runs while the viewer paints on demand; hoverOverlayMode.js is the one
+  // predicate. DESIGN.md §"Render loop & perf monitor", "Overlay paints".
+  {name: 'disableHoverOverlay', isActive: false},
+  // Kill switch for the engine worker's OPFS sync access handle
+  // (engine-worker.md §7 step 4): read the source through the Blob store
+  // instead, as on the main thread. `?feature=` can only turn flags on, so
+  // this is phrased as the off switch.
+  {name: 'disableEngineSyncHandle', isActive: false},
+  // Kill switch for the engine worker's index sidecars (engine-worker.md
+  // §7 step 8, §11; engine/engineSidecars.js): neither reopen a model from
+  // its persisted sidecar nor write one, so every open parses.
+  {name: 'disableEngineSidecar', isActive: false},
+  // Kill switch for the Blob store's whole-file read (Share#2092;
+  // engine/engineSources.js#makeBlobStore): where the engine reads its OPFS
+  // source through the Blob store (Firefox and Safari, which have no
+  // read-only sync access handles), read windows from the Blob for the
+  // whole load instead of holding the file for it. Also the A/B for
+  // measuring what the whole-file read buys.
+  {name: 'disableEngineResidentSource', isActive: false},
+  // Kill switch for the engine's source policy (engine/sourcePolicy.js,
+  // Share#2139; engine-worker.md §"Source policy"): open every model the
+  // worker can window windowed, as before the policy, instead of buffered
+  // under the device's cap. `?feature=disableBufferedSource` reverts one
+  // session (and A/Bs the same build). Setting it `isActive: true` here is
+  // the PROD ROLLBACK: spawnEngine.js#engineFlagSnapshot reads the static
+  // value first, as engineRoute.js does `disableEngineWorker`.
+  {name: 'disableBufferedSource', isActive: false},
+  // Kill switch for the native source hash (engine/engineHandler.js#openModel,
+  // Share#2092; engine-worker.md §7.1): record the index sidecar's source digest
+  // with the platform's SHA-256 over 4 MiB blocks (conway's
+  // `SOURCE_HASH_ALGORITHM: 'sha256Blocks'`) instead of conway's per-byte FNV
+  // loop in JavaScript. `?feature=disableNativeSourceHash` reverts one session
+  // (and A/Bs the same build). Setting it `isActive: true` here is the PROD
+  // ROLLBACK: spawnEngine.js#engineFlagSnapshot reads the static value first,
+  // like `disableBufferedSource`. With it on, conway records FNV as before;
+  // sidecars already written natively stay valid and verify natively on
+  // reopen regardless, since a sidecar names its own algorithm.
+  {name: 'disableNativeSourceHash', isActive: false},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-
@@ -198,6 +341,22 @@ export const flags = [
   // both of which now run in the default configuration.
   // See design/new/model-display-controls.md §7.
   {name: 'displayControls', isActive: true},
+  // OFF-switch for adaptive residency during camera motion (B3 of
+  // design/new/demand-tiled-rendering.md; viewer/residency/MotionResidency.js),
+  // on by default since the owner's A/B on a real GPU (it was the opt-in
+  // `motionResidency` flag until then): while the camera moves, the Display
+  // menu's residency controller holds a smaller set — Auto (the default)
+  // picks it from measured GPU frame time against the display's frame
+  // budget, or a manual percent — and the camera coming to rest restores the
+  // at-rest residency with a full-detail paint. Same inverted shape as the
+  // switches above: `?feature=disableMotionResidency` is the per-session way
+  // back (the menu's "While moving" section and the driver behind it are not
+  // built, so the viewer is exactly as before: no camera listener, no timer),
+  // and `isActive: true` here is the PROD ROLLBACK, which no URL can
+  // override. A leftover `?feature=motionResidency` in a link is an unknown
+  // name and changes nothing. viewer/display/motionResidencyMode.js
+  // #isMotionResidencyOn is the one predicate.
+  {name: 'disableMotionResidency', isActive: false},
   // Batched-native GLB cache artifact (view-140 S9 / viewer-replacement
   // §3b.v): the writer serializes the batched model via
   // EXT_mesh_gpu_instancing + BLDRS_instance_tables instead of the merged
@@ -302,12 +461,17 @@ export const flags = [
   // `?feature=disableLoadOverlay` leaves the canvas live so a load can be
   // inspected while it streams.
   //
-  // Note when using it: taking the camera fires `controlstart`, which
-  // stops ProgressiveLoadSession's camera follow permanently (by design
-  // — the user outranks the follow). So the first interaction freezes
-  // the camera for the rest of the load. That is what makes the flag
-  // useful for "where did it go", and also why the follow's own framing
-  // can't be observed in the same run.
+  // Since open-205 the overlay lifts by itself at the first mesh (#2043),
+  // during the parse, so this only adds the stretch before it: download,
+  // wasm init, and the parse of a model too small to preview.
+  //
+  // Note when using it: taking the camera (a drag's `controlstart`, a
+  // wheel's `control`) stops ProgressiveLoadSession's camera follow
+  // permanently, and skips the end-of-load fit (by design — the user
+  // outranks the follow; design/new/in-app-model-switch.md §4.2a). So the
+  // first interaction freezes the camera for the rest of the load. That is
+  // what makes the flag useful for "where did it go", and also why the
+  // follow's own framing can't be observed in the same run.
   //
   // Inverted semantics on purpose: `?feature=` can only turn flags ON,
   // so an off-switch for default-on behavior has to be an off-flag.
@@ -329,6 +493,10 @@ export const flags = [
  */
 const FEATURE_IMPLICATIONS = {
   glb: ['glbdraco', 'glbmeshopt', 'glbverbose', 'glbbatched', 'glbcollapse'],
+  // The old name of the assistant (ai-workspace.md §13, D12), kept so
+  // `?feature=bot` links open the same panel during the port. Remove the
+  // alias once the Bot components are renamed (#1672).
+  assist: ['bot'],
 }
 
 

@@ -1,5 +1,5 @@
 import axios from 'axios'
-import {gzipSync} from 'three/examples/jsm/libs/fflate.module.js'
+import {gzipSync, zipSync} from 'three/examples/jsm/libs/fflate.module.js'
 import {
   FilenameParseError,
   analyzeHeader,
@@ -18,7 +18,15 @@ import {
 
 
 describe('Filetype', () => {
-  const unsupportedFiletypes = ['arff', 'zip']
+  // `zip` is supported as a container (Loader opens the model inside), so
+  // the unsupported control is formats Share has no reader for at all.
+  const unsupportedFiletypes = ['arff', 'rar', '7z']
+  it('matches an archive by its outermost suffix, so .ifczip is not read as .zip', () => {
+    expect(getValidExtension('a/b/Tower.ifczip')).toBe('ifczip')
+    expect(getValidExtension('a/b/Tower.ifc.zip')).toBe('zip')
+    expect(getValidExtension('a/b/scan.zip')).toBe('zip')
+  })
+
   it('supports only known extensions', () => {
     for (const ext of supportedTypes) {
       const extLower = ext.toLowerCase()
@@ -303,6 +311,15 @@ describe('Filetype', () => {
       expect(getValidExtension('scan.ADF')).toBe('adf')
     })
 
+    it('detects NRRD by its version line, ahead of the text checks its voxels could trip', () => {
+      // A small volume's binary voxels fall inside the sniff window, and can
+      // spell anything — here the `v x y z` an OBJ sniff takes.
+      const nrrd = new TextEncoder().encode('NRRD0004\ntype: short\nsizes: 2 2 1\n\nv 1 2 3\n').buffer
+      expect(analyzeHeader(nrrd)).toBe('nrrd')
+      expect(analyzeHeader(new TextEncoder().encode('NRRD0005\n').buffer)).toBe('nrrd')
+      expect(getValidExtension('CT1.NRRD')).toBe('nrrd')
+    })
+
     /**
      * Build the start of a zip: a local file header whose first entry
      * has the given name. Enough for the sniffing path, which only
@@ -410,6 +427,30 @@ describe('Filetype', () => {
       expect(() => getValidExtension('.gz')).toThrow(FilenameParseError)
       expect(() => getValidExtension('archive.gz')).toThrow(FilenameParseError)
       expect(() => getValidExtension('gz')).toThrow(FilenameParseError)
+    })
+
+    it('reads .ifczip as itself, not as its .ifc prefix', () => {
+      // `ifc` is a prefix of `ifczip`, the same trap as the USD family below.
+      // Before Share#2006 there was no `ifczip` entry, so this read `ifc` and
+      // a zip went to conway as part-21 text.
+      expect(getValidExtension('Tower.ifczip')).toBe('ifczip')
+      expect(getValidExtension('Tower.IFCZIP')).toBe('ifczip')
+      expect(getValidExtension('Tower.ifc')).toBe('ifc')
+      expect(splitAroundExtension('a/Tower.ifczip/12/34')).toStrictEqual(
+        {parts: ['a/Tower', '/12/34'], extension: '.ifczip'})
+      expect('/share/v/gh/o/r/main/ifc/Tower.ifczip/12'.split(fileSuffixBoundaryRegex)).toStrictEqual(
+        ['/share/v/gh/o/r/main/ifc/Tower', '/12'])
+      // Still only an extension at a path boundary: an `.ifczip` that runs on
+      // into more name is not one.
+      expect('/share/v/p/Tower.ifczipx/1'.split(fileSuffixBoundaryRegex)).toStrictEqual(['/share/v/p/Tower.ifczipx/1'])
+    })
+
+    it('splits a route at the file\'s outermost suffix, so a .ifc.zip routes to the zip', () => {
+      expect(splitAroundExtension('zip/box.ifc.zip')).toStrictEqual({parts: ['zip/box.ifc', ''], extension: '.zip'})
+      expect(splitAroundExtension('zip/box.ifc.zip/12/34')).toStrictEqual(
+        {parts: ['zip/box.ifc', '/12/34'], extension: '.zip'})
+      // A transport suffix that isn't a type still routes by the one inside.
+      expect(splitAroundExtension('glb/x.glb.gz').extension).toBe('.glb')
     })
 
     it('validates the USD family, matching the longest extension', () => {
@@ -722,6 +763,20 @@ describe('binary STL, recognized by its structure', () => {
     const get = jest.spyOn(axios, 'get').mockResolvedValue({status: 200, data: file.buffer, headers: {}})
     try {
       expect(await guessType('https://example.com/download')).toBe('stl')
+    } finally {
+      get.mockRestore()
+    }
+  })
+
+  it('routes an extension-less URL serving a plain zip as the archive it is', async () => {
+    // A Drive link has no name to go by; Loader opens the model inside.
+    // USDZ is still USDZ, though it's a zip too.
+    const zip = zipSync({'tower.ifc': new TextEncoder().encode('ISO-10303-21;')})
+    const get = jest.spyOn(axios, 'get').mockResolvedValue({status: 200, data: zip.buffer, headers: {}})
+    try {
+      expect(await guessType('https://example.com/download')).toBe('zip')
+      get.mockResolvedValue({status: 200, data: zipSync({'scene.usdc': new Uint8Array(8)}).buffer, headers: {}})
+      expect(await guessType('https://example.com/download')).toBe('usdz')
     } finally {
       get.mockRestore()
     }

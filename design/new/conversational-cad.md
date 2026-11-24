@@ -25,13 +25,13 @@ structure. Epic 3 depends on `ai-workspace.md` existing first.
 ## 1. Mapping the sequence onto the roadmap
 
 The four-step sequence corresponds almost 1:1 to the roadmap's Assist group
-(§4.11) and pivot stages (§7.4) — only step 2 is genuinely new:
+(§3.1) and pivot stages (§7.4) — only step 2 is genuinely new:
 
 | # | This plan | Roadmap ID | Pivot stage | Tracking issue |
 |---|---|---|---|---|
-| 1 | Base UI reorg (projects drawer, top bar) | `assist-300` | AI.1 | [#1657](https://github.com/bldrs-ai/Share/issues/1657) |
+| 1 | Base UI reorg (projects drawer, top bar) | `open-200` (was `assist-300`) | AI.1 | [#1657](https://github.com/bldrs-ai/Share/issues/1657) |
 | 2 | Search + Nav upgrade | `search-320` (new in roadmap v0.7) | AI.1a | [#1658](https://github.com/bldrs-ai/Share/issues/1658) |
-| 3 | Conversational CAD w/ AI | `assist-310` + T10 + T11 | AI.2 | [#1659](https://github.com/bldrs-ai/Share/issues/1659) |
+| 3 | Conversational CAD w/ AI | `assist-310` + `assist-t300` + `apps-t300` | AI.2 | [#1659](https://github.com/bldrs-ai/Share/issues/1659) |
 | 4 | Multi-user + Social | `assist-400` + `assist-410` (backlog) | AI.4 | [#1660](https://github.com/bldrs-ai/Share/issues/1660) |
 
 Why Search+Nav sits second, between shell and agent: the conversational
@@ -47,7 +47,7 @@ stays sequenced per the roadmap after the agent v0 and isn't re-planned by
 this doc. Same for the editing loop (AI.5).
 
 
-## 2. Epic 1 — Workspace shell (`assist-300`)
+## 2. Epic 1 — Workspace shell (`open-200`, was `assist-300`)
 
 Turns Share's chrome from single-document viewer into workspace: a projects
 drawer on the far left, a real top bar, and relocated header controls.
@@ -88,7 +88,7 @@ name), don't invent a second one.
   project/model list, wrong for conversation content), per-user not per-org,
   and read at login — so it's a sync/merge target for the local store, not a
   live database. If/when projects need sharing or org scope, that's a real
-  store decision that belongs to the T10 conversation-store question — don't
+  store decision that belongs to the `assist-t300` conversation-store question — don't
   solve it here. The direction for that decision is now pre-scoped in
   `workspace-store.md` (repo-as-workspace); these tiers are the
   stepping stones toward it, not rivals to it.
@@ -249,7 +249,7 @@ pivot, not the MVP trickle). If we decide it's wanted regardless of the
 pivot, it renumbers to `search-200` (MLP) per the maintenance rules.
 
 
-## 4. Epic 3 — Conversational CAD (`assist-310` + T10/T11)
+## 4. Epic 3 — Conversational CAD (`assist-310` + `assist-t300`/`apps-t300`)
 
 The conversation panel over the open model, single-user first, behind
 `?feature=assist` (W6; the flag was drafted as `convo` and renamed to match
@@ -261,7 +261,7 @@ Epic 4.
   "Roof plant access review"); the tray sits above the BottomBar (which
   could later absorb the Bot slot — W8). AI replies styled distinct (accent
   avatar + tinted bubble); composer carries a model-context chip.
-- **Conversation drives the UI.** The agent's tool surface is T11's MCP
+- **Conversation drives the UI.** The agent's tool surface is `apps-t300`'s MCP
   contract: camera/focus, select, isolate/hide (single element and bulk),
   properties/psets, model queries, notes. First consumer is the in-process
   agent; the sandboxed-app transport comes later with `assist-320`.
@@ -272,6 +272,18 @@ Epic 4.
   out of Share still yields working deep links. This is the cheapest
   high-leverage slice: the whole anchor system already exists, the epic
   wires it into message rendering.
+  **Built for elements (#1673):** the model writes `[Wall 3](ref:e123)` with a
+  ref exactly as a tool returned it (`src/viewer/tools/refLinks.js`); the
+  reply's Markdown renders it as a chip (`Components/Bot/RefChip.jsx`) that
+  is a real link to a `#sel:<ref>` permalink (an `o` ref to its element
+  path). A plain click selects and frames in place (`view.select` +
+  `view.focus` bodies, `viewTools.js#selectAndFrame`), so the highlight,
+  NavTree and live view link follow; a modified click or "Copy link address"
+  gives the deep link. A ref the open model lacks renders disabled with a
+  tooltip. The `ref:` scheme, not a URL the model writes, so a model never
+  composes a permalink: only tool-returned refs can be linked, and any other
+  scheme still renders as text. A chip's click is not undoable (Undo belongs
+  to what the assistant did). View anchors (`#c:`) are not built.
 - **Reduced tool set while convo visible (W7 — proposal, TBD).** The
   bottom-center section cluster folds into the right column plus an active
   Conversation toggle; top-left ControlsGroup hidden; full layout returns
@@ -281,7 +293,7 @@ Epic 4.
   provider strategy, store choice, and the data-sovereignty boundary (model
   bytes stay client-side; only conversation + tool results cross the wire —
   roadmap §7.2) are decided there, not improvised mid-epic. (b) #1386
-  iframe repair is a T11 pre-condition for the *sandbox* half but does not
+  iframe repair is an `apps-t300` pre-condition for the *sandbox* half but does not
   block the in-process agent — don't serialize on it.
 - **Persistence, initially:** per-model conversation log stored with the
   Tier-1 project struct (local). Durable/shared storage is Epic 4's
@@ -303,7 +315,7 @@ design, not code.
   §7.2.2). The scoping work here is the abstraction layer beneath it:
   a provider interface for **permissions + persistence** with pluggable
   backends — matrix.org, Discord, Slack — following the provider-pattern
-  precedent already in the codebase (T3 `ConnectionProvider`, T4 sharing
+  precedent already in the codebase (`identity-t100` `ConnectionProvider`, `share-t100` sharing
   providers). This *is* the roadmap §10 "conversation store" open question,
   sharpened (and now pre-scoped in `workspace-store.md` §1.3: the repo is
   the durable record, the ChannelProvider is the live layer, distillation
@@ -405,7 +417,7 @@ all its stories close.
 
 **Created 2026-07-27** as `epic`-labeled issues with `story`-labeled native
 sub-issues (the drafts below are the record of what was filed):
-- `assist-300` → [#1657](https://github.com/bldrs-ai/Share/issues/1657), stories #1661–#1667
+- `open-200` (was `assist-300`) → [#1657](https://github.com/bldrs-ai/Share/issues/1657), stories #1661–#1667
 - `search-320` → [#1658](https://github.com/bldrs-ai/Share/issues/1658), stories #1668–#1670 + existing #1254 attached
 - `assist-310` → [#1659](https://github.com/bldrs-ai/Share/issues/1659), stories #1671–#1677
 - `assist-400` → [#1660](https://github.com/bldrs-ai/Share/issues/1660), stories #1678–#1680
@@ -414,7 +426,7 @@ sub-issues (the drafts below are the record of what was filed):
 > Turns Share into a workspace: ProjectsDrawer (leftmost), TopBar
 > (breadcrumb + search), relocated Profile/Share, logo popup. Behind
 > `?feature=workspace`. Plan: `design/new/conversational-cad.md` §2;
-> roadmap §4.11 / §7.4 AI.1. Wireframes: production-merge set, W1–W4.
+> roadmap §3.1 / §7.4 AI.1. Wireframes: production-merge set, W1–W4.
 
 Sub-issues:
 - `story: workspace: ProjectsDrawer container + project→models struct (W1)`
@@ -437,10 +449,10 @@ scope mechanic + unified current-path model; Versions re-home decision;
 
 ### epic: assist-310: Conversational agent panel (single-user)
 > Convo tray (`?feature=assist`) + drawer threads; agent drives the viewer
-> through the T11 MCP tool surface; message element-chips/anchors reuse
+> through the `apps-t300` MCP tool surface; message element-chips/anchors reuse
 > existing permalink machinery. Prereq: `design/new/ai-workspace.md`
 > (runtime/provider/store/sovereignty). Plan: §4; roadmap §7.4 AI.2;
-> Tracks T10/T11. Wireframes W6, W7, W1b.
+> Tracks `assist-t300`/`apps-t300`. Wireframes W6, W7, W1b.
 
 Sub-issues: `ai-workspace.md` design doc (AI.0); convo tray UI + drawer
 threads (stub, no backend); message anchors/element chips over permalink
@@ -452,7 +464,7 @@ demo fixture + E2E.
 > Presence stubs (`?feature=presence`, W5) + the ChannelProvider
 > abstraction scoping: permissions + persistence plugins over
 > matrix.org/Discord/Slack; channels-vs-Notes decision. Plan: §5; roadmap
-> §7.2/§7.4 AI.4; Track T10.
+> §7.2/§7.4 AI.4; Track `assist-t300`.
 
 Sub-issues: presence avatar/badge stubs; ChannelProvider scoping doc
 (matrix-first evaluation, channels-vs-Notes); direct-address vs

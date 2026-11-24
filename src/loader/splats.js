@@ -1,5 +1,6 @@
 import {BoxGeometry, Group} from 'three'
 import debug from '../utils/debug'
+import {requestPaint} from '../viewer/three/renderDemand'
 
 
 // Share extension → Spark SplatFileType enum value (see
@@ -159,5 +160,11 @@ function ensureSparkRenderer(viewer) {
   if (scene.children.some((child) => child instanceof spark.SparkRenderer)) {
     return
   }
-  scene.add(new spark.SparkRenderer({renderer}))
+  scene.add(new spark.SparkRenderer({renderer, onDirty: requestPaint}))
+  // Under `?feature=renderOnDemand`, Spark sorts splats in its own worker
+  // and shows each sort on a later frame, a change no call of ours can ask
+  // for: a viewer with splats keeps painting every frame, as before
+  // (three/renderDemand.js#keepPainting). The hold lasts the viewer's life;
+  // the scene keeps its SparkRenderer as long.
+  viewer.context.getRenderDemand?.()?.keepPainting?.()
 }

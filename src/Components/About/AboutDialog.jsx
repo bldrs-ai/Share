@@ -19,11 +19,24 @@ import DiscordIcon from './Discord.svg'
  */
 export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, onClose}) {
   const isMobile = useIsMobile()
+  // Dialog closes itself on backdrop click, Escape and the X button by
+  // calling setIsDialogDisplayed(false) directly, which skips actionCb. Every
+  // close has to go through onClose instead: that's where the first-time
+  // cookie is set (AboutControl/LogoMenu), and without it a first-timer who
+  // dismissed About by clicking the backdrop got About + the onboarding
+  // overlay replayed on the reload after their first drag-and-drop.
+  const setIsDisplayed = (isDisplayed) => {
+    if (isDisplayed) {
+      setIsDialogDisplayed(true)
+    } else {
+      onClose()
+    }
+  }
   return (
     <Dialog
       headerText={ABOUT_MISSION}
       isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={setIsDialogDisplayed}
+      setIsDialogDisplayed={setIsDisplayed}
       headerIcon={
         <Link href='/'>
           <LogoB

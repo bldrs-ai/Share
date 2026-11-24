@@ -1,5 +1,6 @@
 import {captureException} from '@sentry/react'
 import {setGaClientId, setUserCidProperty, syncSentryCidTag} from '../privacy/analytics'
+import {reportClientCapability} from '../privacy/clientCapabilities'
 import {isFeatureEnabled} from '../FeatureFlags'
 
 
@@ -12,6 +13,12 @@ export const GA_MEASUREMENT_ID = 'G-GRLNVMZRGW'
 // any redirect settles. Everything else — localhost, *.netlify.app
 // previews/dev, GitHub Pages installs — must not feed prod analytics.
 const PROD_HOSTNAMES = ['bldrs.ai', 'www.bldrs.ai']
+
+// Deploy previews of bldrs' own Netlify project only (the one that serves
+// bldrs.ai; cf. tools/live-smoke/targets.js#LIVE_NETLIFY_PROJECTS). Any
+// other Netlify site, a fork's included, gets the same `deploy-preview-N--`
+// shape, and must not be able to opt into the production property.
+const DEPLOY_PREVIEW_HOSTNAME = /^deploy-preview-\d+--bldrs-share-prod\.netlify\.app$/
 
 
 /**
@@ -33,7 +40,7 @@ export function shouldInitGa({
   isWebdriver = navigator.webdriver === true,
   enableInPreview = isFeatureEnabled('gaEnableInPreview'),
 } = {}) {
-  const isDeployPreview = hostname.startsWith('deploy-preview-') && hostname.endsWith('.netlify.app')
+  const isDeployPreview = DEPLOY_PREVIEW_HOSTNAME.test(hostname)
   return (PROD_HOSTNAMES.includes(hostname) || (isDeployPreview && enableInPreview)) && !isWebdriver
 }
 
@@ -45,11 +52,16 @@ export function shouldInitGa({
  * localhost), so off-prod the app behaves identically minus the
  * network beacon.
  *
- * Any init failure is reported to Sentry tagged subsystem:ga_init so
- * we can see when prod loses its Ads-conversion signal. The expected
- * steady-state noise here is ad-blocker users failing the script load;
- * keep the tag stable so a future sentry.js filter (or a GA-side
- * blocked-client event, cf. netlify_rum_blocked) can key off it.
+ * A script that fails to load is the expected state of a blocked client
+ * (an ad blocker, a privacy browser, a DNS filter), not something to fix,
+ * so it is not a Sentry event (AGENTS.md, Reported Conditions). It is
+ * counted instead as a `ga_blocked` client-capability report, sent to
+ * Share's own origin and passed to GA from the server
+ * (privacy/clientCapabilities.js, netlify/functions/client-capabilities.js),
+ * which also shows a real tag outage as a spike. Any other init failure
+ * (the inline stub missing, a throw below) is a defect and goes to Sentry,
+ * fingerprinted as one `ga_init` issue: its stack varies by build, and it
+ * split into an issue per release before (SHARE-1M1 and its copies).
  *
  * @param {object} [env] overrides for tests, forwarded to shouldInitGa
  */
@@ -60,8 +72,7 @@ export default function setupGa(env = undefined) {
   try {
     const hostname = env?.hostname ?? window.location.hostname
     const enableInPreview = env?.enableInPreview ?? isFeatureEnabled('gaEnableInPreview')
-    const isPreviewSmokeTest = hostname.startsWith('deploy-preview-') &&
-      hostname.endsWith('.netlify.app') && enableInPreview
+    const isPreviewSmokeTest = DEPLOY_PREVIEW_HOSTNAME.test(hostname) && enableInPreview
     if (isPreviewSmokeTest) {
       // Unlike GA DebugView, this remains visible when Brave/Shields or an
       // extension blocks googletagmanager.com, making that failure explicit.
@@ -80,10 +91,7 @@ export default function setupGa(env = undefined) {
       if (isPreviewSmokeTest) {
         console.warn('[ga] gtag/js was blocked; allow googletagmanager.com and reload to send events')
       }
-      captureException(
-        new Error('ga_init: gtag/js failed to load (blocked client or network failure)'),
-        {tags: {subsystem: 'ga_init'}},
-      )
+      reportClientCapability('ga_blocked')
     }
     document.head.appendChild(script)
     // Second of three places the user property is published, each for a
@@ -115,6 +123,6 @@ export default function setupGa(env = undefined) {
       syncSentryCidTag()
     })
   } catch (err) {
-    captureException(err, {tags: {subsystem: 'ga_init'}})
+    captureException(err, {tags: {subsystem: 'ga_init'}, fingerprint: ['ga_init', String(err?.message ?? err)]})
   }
 }

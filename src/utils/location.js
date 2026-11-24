@@ -92,6 +92,78 @@ export function addParams(name, params, includeNames = false) {
  */
 export function addHashParams(location, name, params, includeNames = false) {
   debug().error('cur location hash:', window.location.hash, ', new params:', params)
+  location.hash = mergedHashBody(location, name, params, includeNames)
+}
+
+
+/**
+ * Like addHashParams — same merge into the named set, every other set passed
+ * through as written — but REPLACES the current history entry instead of
+ * navigating to a new fragment.
+ *
+ * For a value that streams while the user works, not for a user action that
+ * should be its own step back: the live camera (Camera/liveCameraLink.js) and
+ * a cut plane's drag (CutPlaneMenu.jsx#writeDraggedPlanes). Assigning
+ * `location.hash` there did two things a stream must not do: it pushed a
+ * history entry per settle, so Back stepped through every pose, and it fired
+ * `hashchange`/`popstate`, so react-router's location changed and
+ * CameraControl's location effect re-applied the camera from the token's
+ * ROUNDED coords, animated — a visible snap after every settle.
+ * `history.replaceState` does neither: no new entry, and it fires no event,
+ * so nothing re-reads the hash it wrote. It keeps `history.state`, which
+ * react-router's history stores its entry key and index in.
+ *
+ * By design react-router doesn't hear of the write either: `useLocation().hash`
+ * lags `window.location.hash` until the next navigation, which reads the real
+ * URL again. Read a streamed token (`c:`, a dragged `cp:`) from
+ * `window.location`, not from the router's location.
+ *
+ * A location-shaped double (`{hash}`, e.g. a test's or the Assist tool's
+ * composed link) isn't the page's URL, so it just gets its `hash` set.
+ *
+ * @param {Location} location The window.location object, or a `{hash}` double
+ * @param {string} name A unique name for the params
+ * @param {Record<string, any>} params The parameters to encode
+ * @param {boolean} includeNames Whether or not to include the
+ *   parameter names in the encoding, default is false.
+ */
+export function replaceHashParams(location, name, params, includeNames = false) {
+  replaceHash(location, mergedHashBody(location, name, params, includeNames))
+}
+
+
+/**
+ * Set the whole hash in place: `history.replaceState`, so no history entry
+ * and no `hashchange`/`popstate` ({@link replaceHashParams} explains why that
+ * matters). For a writer that composes the hash itself, like the `#d:`
+ * token's (Residency/displayHash.js#mergeDisplayTerms).
+ *
+ * @param {Location} location The window.location object, or a `{hash}` double
+ * @param {string} hash with or without its leading `#`; '' for none
+ */
+export function replaceHash(location, hash) {
+  const body = hash.startsWith('#') ? hash.substring(1) : hash
+  const isPageLocation = typeof Location !== 'undefined' && location instanceof Location
+  if (isPageLocation && typeof window.history?.replaceState === 'function') {
+    const url = `${location.pathname}${location.search}${body ? `#${body}` : ''}`
+    window.history.replaceState(window.history.state, '', url)
+    return
+  }
+  location.hash = body
+}
+
+
+/**
+ * The hash body (no leading `#`) with `params` merged into the named set's
+ * existing params, and every other set untouched (replaceHashSet).
+ *
+ * @param {Location} location
+ * @param {string} name
+ * @param {Record<string, any>} params
+ * @param {boolean} includeNames
+ * @return {string}
+ */
+function mergedHashBody(location, name, params, includeNames) {
   const hashGlobalParams = getHashParams(location, name)
   let objectGlobalParams = {}
   if (hashGlobalParams) {
@@ -107,7 +179,7 @@ export function addHashParams(location, name, params, includeNames = false) {
   }
 
   const encodedParams = getEncodedParam(objectGlobalParams, includeNames)
-  location.hash = replaceHashSet(location.hash.substring(1), name, `${name}:${encodedParams}`)
+  return replaceHashSet(location.hash.substring(1), name, `${name}:${encodedParams}`)
 }
 
 
@@ -478,6 +550,30 @@ export function removeHashParams(location, name, paramKeys = []) {
     history.pushState(
       '', document.title, window.location.pathname + window.location.search)
   }
+}
+
+
+/**
+ * Like removeHashParams for a whole set — every other set passed through as
+ * written (removeParamsFromHash) — but REPLACES the current history entry
+ * instead of making a new one, as replaceHashParams does for a write. For a
+ * rewrite that only brings the URL in line with the page after a navigation
+ * (hooks/useHashState.js), which must not be a step of its own.
+ *
+ * @param {Location} location The window.location object
+ * @param {string} name prefix of the set to remove
+ */
+export function removeHashParamsInPlace(location, name) {
+  const hash = removeParamsFromHash(location.hash, name)
+  if (hash === location.hash) {
+    return
+  }
+  const isPageLocation = typeof Location !== 'undefined' && location instanceof Location
+  if (isPageLocation && typeof window.history?.replaceState === 'function') {
+    window.history.replaceState(window.history.state, '', `${location.pathname}${location.search}${hash}`)
+    return
+  }
+  location.hash = hash
 }
 
 

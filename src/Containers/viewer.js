@@ -1,6 +1,8 @@
 import {Color} from 'three'
 import {getMeshMaterials} from '../viewer/ShareModel'
 import {ShareViewer} from '../viewer/ShareViewer'
+import {isFeatureEnabled} from '../FeatureFlags'
+import {createFrameHoverPicker, createTimerHoverPicker} from '../viewer/hoverPick'
 
 
 // Track the current viewer for cleanup so a subsequent call to
@@ -10,6 +12,8 @@ let currentViewer = null
 let mouseDownHandler = null
 let mouseUpHandler = null
 let mouseMoveHandler = null
+let hoverPicker = null
+let stopHoverFrame = null
 
 
 // Texture map slots that may exist on a Three.js material; iterated by
@@ -46,6 +50,10 @@ export function disposeViewer() {
     if (mouseMoveHandler) {
       window.removeEventListener('mousemove', mouseMoveHandler)
     }
+    stopHoverFrame?.()
+    stopHoverFrame = null
+    hoverPicker?.dispose()
+    hoverPicker = null
     mouseDownHandler = null
     mouseUpHandler = null
     mouseMoveHandler = null
@@ -133,7 +141,8 @@ export function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
     backgroundColor: new Color(backgroundColorStr),
   })
 
-  // Path to web-ifc.wasm in serving directory.
+  // Serving directory of Conway's conway-geom wasm + glue, which
+  // `build-share-copy-wasm-conway-MT` copies into docs/static/js.
   viewer.IFC.setWasmPath('./static/js/')
   viewer.clipper.active = true
   viewer.clipper.orthogonalY = false
@@ -143,24 +152,36 @@ export function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   }
   mouseUpHandler = () => {
     viewer.clipper.clickDrag = false
+    // A hover dropped while the button was down (the moves of a drag) is
+    // caught up where the pointer let go: on the next frame under the frame
+    // scheduler, at once under the timer one. A click that didn't move it
+    // picks nothing.
+    hoverPicker?.onMove()
   }
 
-  let lastPickTime = 0
-  const PICK_INTERVAL = 33 // 30fps
-  // Highlight items when hovering over them. Sample when mouse-over.
-  // Disable during a click-drag for rotation.
-  mouseMoveHandler = () => {
-    if (!viewer.clipper.clickDrag) {
-      const now = performance.now()
-      if (now - lastPickTime < PICK_INTERVAL) {
-        return
-      }
-      lastPickTime = now
-      // NB: This is VERY EXPENSIVE, so we sample it.
-      // If we're dragging, we don't need to highlight.
-      viewer.highlightIfcItem()
-    }
+  // Highlight items when hovering over them (viewer/hoverPick.js). The
+  // window's mousemove only marks the pointer dirty; the pick runs in the
+  // render loop's frame, after the camera moves and before the paint
+  // decision (ThreeContext#onFrame), so the highlight changes in the frame
+  // whose input moved the pointer. Skipped while dragging (rotation) and while
+  // the pointer hasn't moved over the canvas, spaced out by its own measured
+  // cost when picks are dear, and skipped while the pointer sweeps fast over
+  // a model whose paint is expensive (the last paint's cost, from the
+  // viewer's RenderDemand). `?feature=disableFrameHover` puts back the timer
+  // scheduler, which picks in the mousemove handler.
+  const hoverDeps = {
+    pick: () => viewer.highlightIfcItem(),
+    isDragging: () => Boolean(viewer.clipper.clickDrag),
+    pointer: () => viewer.context.getNormalizedMousePosition?.() ?? null,
+    paintCostMs: () => viewer.context.getRenderDemand?.()?.paintCostMs?.() ?? 0,
   }
+  if (isFeatureEnabled('disableFrameHover')) {
+    hoverPicker = createTimerHoverPicker(hoverDeps)
+  } else {
+    hoverPicker = createFrameHoverPicker(hoverDeps)
+    stopHoverFrame = viewer.context.onFrame?.(hoverPicker.onFrame) ?? null
+  }
+  mouseMoveHandler = hoverPicker.onMove
 
   window.addEventListener('mousedown', mouseDownHandler)
   window.addEventListener('mouseup', mouseUpHandler)

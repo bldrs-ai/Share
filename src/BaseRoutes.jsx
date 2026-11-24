@@ -5,11 +5,13 @@ import {Button, CssBaseline, Dialog, DialogActions, DialogContent, DialogTitle, 
 import * as Sentry from '@sentry/react'
 import {useAuth0} from './Auth0/Auth0Proxy'
 import {APP_METADATA_CLAIM} from './Auth0/appMetadata'
+import {endSessionLogoutOptions} from './Auth0/logoutOptions'
 import useLoginTracking from './Auth0/useLoginTracking'
 import PopupAuth from './Components/Auth/PopupAuth'
 import PopupCallback from './Components/Auth/PopupCallback'
 import {checkOPFSAvailability, setUpGlobalDebugFunctions} from './OPFS/utils'
 import pruneMissingLocalRecents from './connections/pruneLocalRecents'
+import {seedUploadLedgerFromRecents} from './OPFS/uploadLedger'
 import ShareRoutes from './ShareRoutes'
 import Styles from './Styles'
 import About from './pages/About'
@@ -74,12 +76,17 @@ export default function BaseRoutes({testElt = null}) {
 
   // Which sign-in state the auth effect last ran for, and a generation that
   // advances each time that state changes. A signed-in pass's token fetch
-  // can still be in flight when the state moves on: OpenModelDialog's GitHub
-  // Remove signs out IN PLACE (`logout({openUrl: false})`, no reload). The
-  // signed-out pass then records its settlement at once, and the older
-  // pass's .finally must not overwrite it with `true` when it lands, or
-  // every later model-action event would wait out its cap for a signed-in
-  // settlement that is no longer the state (codex review on Share#1986).
+  // can still be in flight when the state moves on to signed out IN PLACE,
+  // with no reload. The app's own sign-outs all navigate to /v2/logout
+  // (Auth0/logoutOptions.js), but an in-place flip is still reachable:
+  // auth0-react re-derives isAuthenticated from the SDK's cached user after
+  // every token call (GET_ACCESS_TOKEN_COMPLETE), and any `logout` passing
+  // `openUrl` dispatches LOGOUT in place (so does the Playwright mock, which
+  // follows the same rules: mockLogout.js). The signed-out pass then records
+  // its settlement at once, and the older pass's .finally must not overwrite
+  // it with `true` when it lands, or every later model-action event would
+  // wait out its cap for a signed-in settlement that is no longer the state
+  // (codex review on Share#1986).
   // A ref, not state: only the .finally reads it, after the fact.
   const authPassRef = useRef({isAuthenticated: null, generation: 0})
 
@@ -176,6 +183,12 @@ export default function BaseRoutes({testElt = null}) {
 
       if (available) {
         setUpGlobalDebugFunctions()
+        // Ordering requirement: seed the upload ledger from the local recents
+        // BEFORE the prune below deletes the recents of uploads OPFS has lost,
+        // or those lost uploads would never be recognised as "held here once"
+        // (OPFS/uploadLedger.js). Synchronous, so it finishes before the
+        // prune's first read.
+        seedUploadLedgerFromRecents()
         // Fire-and-forget: a handful of handle lookups, off the load path.
         // The Open dialog re-runs it when shown, so a sweep still in flight
         // here can't leave a dead row on screen.
@@ -249,7 +262,7 @@ export default function BaseRoutes({testElt = null}) {
           .then((token) => processAccessToken(token, {isFresh: true}))
           .catch((err) => {
             if (err.error === 'invalid_grant') {
-              logout({returnTo: window.location.origin})
+              logout(endSessionLogoutOptions())
             }
             // Anything else is non-fatal here: the cached-token pass
             // already established a working session; this pass only exists
@@ -286,7 +299,11 @@ export default function BaseRoutes({testElt = null}) {
         })
         .catch((err) => {
           if (err.error === 'invalid_grant') {
-            logout({returnTo: window.location.origin})
+            // The refresh token is dead, so end the Auth0 session too and
+            // come back to the origin signed out (Auth0/logoutOptions.js).
+            // A full navigation, so the in-place authPassRef race above
+            // does not arise here.
+            logout(endSessionLogoutOptions())
           } else if (err.error !== 'login_required') {
             throw err
           }

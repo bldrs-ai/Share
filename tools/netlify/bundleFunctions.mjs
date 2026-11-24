@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from 'node:fs'
 import path from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {resolveConfig} from '@netlify/config'
@@ -93,5 +94,29 @@ const results = await zipFunctions(
 process.stdout.write(JSON.stringify({
   functionsConfig: config.functions,
   bundles: results.map(({name, bundler, runtimeAPIVersion, path: bundlePath, entryFilename}) =>
-    ({name, bundler, runtimeAPIVersion, path: bundlePath, entryFilename})),
+    ({name, bundler, runtimeAPIVersion, path: bundlePath, entryFilename,
+      ...(runtimeAPIVersion === 2 ? {v2Handler: v2HandlerOf(bundlePath, entryFilename)} : {})})),
 }))
+
+
+/**
+ * Where a v2 bundle keeps the user's module, as its entry point names it. A
+ * v2 entry is Netlify's bootstrap (`getLambdaHandler('./…')`), which needs the
+ * Lambda runtime, so the replay and serve harnesses import the module it
+ * names directly. The path isn't fixed: a function that imports only from
+ * its own directory lands at `functions/<name>.mjs`, while one that also
+ * imports from elsewhere in the repo (ai-chat's `src/quota/*.js`) keeps the
+ * repo-relative layout, `netlify/functions/<name>.mjs`.
+ *
+ * @param {string} bundlePath
+ * @param {string} entryFilename
+ * @return {string} relative to the bundle's root
+ */
+function v2HandlerOf(bundlePath, entryFilename) {
+  const entry = fs.readFileSync(path.join(bundlePath, entryFilename), 'utf8')
+  const match = entry.match(/getLambdaHandler\(['"]([^'"]+)['"]\)/)
+  if (!match) {
+    throw new Error(`${bundlePath}: no getLambdaHandler(...) in ${entryFilename}`)
+  }
+  return match[1]
+}

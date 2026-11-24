@@ -1,5 +1,9 @@
 // Mock the entire module
+import {captureMessage} from '@sentry/react'
 import * as OPFSService from '../OPFS/OPFSService.js'
+import {HTTP_NOT_FOUND} from '../net/http'
+import {gtagEvent} from '../privacy/analytics'
+import {redactBreadcrumb, redactEventExceptions} from '../privacy/sentryRedaction'
 import {
   writeSavedGithubModelOPFS,
   getModelFromOPFS,
@@ -7,6 +11,7 @@ import {
   downloadModel,
   doesFileExistInOPFS,
   doesUploadExistInOPFS,
+  deleteUploadFromOPFS,
   deleteFileFromOPFS,
   checkOPFSAvailability,
   readModelByPathFromOPFS,
@@ -16,6 +21,15 @@ import {
 
 
 jest.mock('../OPFS/OPFSService.js')
+jest.mock('@sentry/react', () => ({captureMessage: jest.fn()}))
+// Captures what utils.js logs: a console.error line becomes a Sentry breadcrumb.
+jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn()}))
+const mockDebugError = jest.fn()
+jest.mock('../utils/debug', () => ({
+  __esModule: true,
+  default: () => ({log: jest.fn(), warn: jest.fn(), error: mockDebugError, time: jest.fn(), timeEnd: jest.fn()}),
+  WARN: 2,
+}))
 
 
 /**
@@ -148,6 +162,27 @@ describe('OPFS Test Suite', () => {
     })
   })
 
+  // The rejection's message is the worker's text, which can name the user's
+  // file; it reaches CadView's captureException for an upload (Share#2107).
+  it('rejects with the worker\'s text, which Sentry records only as the reply\'s label', async () => {
+    const mockWorker = {
+      addEventListener: jest.fn((_, handler) => {
+        process.nextTick(() => handler({data: {
+          error: 'Error getting file handle for Tower-of-Secrets.ifc', condition: 'file-handle',
+          requestId: currentRequestId(),
+        }}))
+      }),
+      removeEventListener: jest.fn(),
+    }
+    OPFSService.initializeWorker.mockReturnValue(mockWorker)
+    const error = await getModelFromOPFS('owner', 'repo', 'branch', 'path/to/Tower-of-Secrets.ifc')
+      .then(() => null, (e) => e)
+    expect(error.message).toBe('Error getting file handle for Tower-of-Secrets.ifc')
+    const event = redactEventExceptions({exception: {values: [{type: 'Error', value: error.message}]}},
+      {originalException: error})
+    expect(event.exception.values[0].value).toBe('Error from worker [condition=file-handle]: (details withheld)')
+  })
+
   describe('downloadToOPFS', () => {
     it('should resolve with file when download completes', async () => {
       const mockFile = new Blob(['dummy content'], {type: 'application/octet-stream'})
@@ -186,6 +221,83 @@ describe('OPFS Test Suite', () => {
       )
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalledTimes(1) // Ensure it's called to clean up
+    })
+
+    /**
+     * Run downloadToOPFS against a worker that sends one reply.
+     *
+     * @param {object} reply fields the worker sends, besides the request id
+     * @param {string} [commitHash]
+     * @return {Promise<*>}
+     */
+    function downloadWithReply(reply, commitHash = 'example.com') {
+      OPFSService.initializeWorker.mockReturnValue({
+        addEventListener: jest.fn((_, handler) => {
+          process.nextTick(() => handler({data: {requestId: currentRequestId(), ...reply}}))
+        }),
+        removeEventListener: jest.fn(),
+      })
+      return downloadToOPFS('https://example.com/secret-plan.ifc', '/secret-plan.ifc', commitHash,
+        'BldrsLocalStorage', 'V1', 'Projects')
+    }
+
+    it('carries the not-cached fact on the file and reports nothing itself', async () => {
+      // Loader.js#load reports it once readModel succeeds; a report here would
+      // double a load that fails afterwards.
+      gtagEvent.mockClear()
+      const file = await downloadWithReply({completed: true, event: 'download', cached: false, file: new Blob(['x'])})
+
+      expect(file.opfsNotCachedKind).toBe('external')
+      expect(gtagEvent).not.toHaveBeenCalled()
+      expect(captureMessage).not.toHaveBeenCalled()
+    })
+
+    it('reports nothing for a download that was cached', async () => {
+      gtagEvent.mockClear()
+      await downloadWithReply({completed: true, event: 'download', file: new Blob(['x'])})
+
+      expect(captureMessage).not.toHaveBeenCalled()
+      expect(gtagEvent).not.toHaveBeenCalled()
+    })
+
+    it('rejects with the worker\'s condition and status and sends no event itself', async () => {
+      // A failed download is reported by Loader.js#load, once its direct
+      // fetch has succeeded; reporting here too would double a failed load.
+      const error = await downloadWithReply(
+        {error: 'downloadModelToOPFS: HTTP 404 for /index.ifc; not cached', condition: 'http-error', status: HTTP_NOT_FOUND},
+        'bldrs-ai').catch((e) => e)
+
+      expect(error.opfsCondition).toBe('http-error')
+      expect(error.opfsStatus).toBe(HTTP_NOT_FOUND)
+      expect(error.opfsKind).toBe('local')
+      expect(captureMessage).not.toHaveBeenCalled()
+    })
+
+    it('logs the worker text to the console, but a Sentry breadcrumb of it keeps only condition and status', async () => {
+      // Red if the line stops using workerErrorLabel, or the label's shape
+      // stops matching sentryRedaction's pattern: the console line becomes a
+      // Sentry breadcrumb, and a private model's path must not.
+      mockDebugError.mockClear()
+      await downloadWithReply({
+        error: 'HTTP 404 for /secret-plan.ifc https://example.com/secret-plan.ifc',
+        condition: 'http-error',
+        status: HTTP_NOT_FOUND,
+      }).catch(() => {})
+
+      expect(mockDebugError).toHaveBeenCalledTimes(1)
+      const message = mockDebugError.mock.calls[0].join(' ')
+      expect(message).toMatch(/secret-plan/)
+      const crumb = redactBreadcrumb({category: 'console', level: 'error', message, data: {arguments: mockDebugError.mock.calls[0]}})
+      expect(JSON.stringify(crumb)).not.toMatch(/secret-plan|example\.com/)
+      expect(crumb.message).toBe('Error from worker [condition=http-error status=404]: (details withheld)')
+    })
+
+    it('does not mark a housekeeping condition as a reportable download failure', async () => {
+      // Loader.js#load reports opfsCondition as a Sentry warning; the worker's
+      // other conditions (Share#2107) are not that.
+      const error = await downloadWithReply(
+        {error: 'Error getting file handle for /secret.ifc: x', condition: 'file-handle'}).catch((e) => e)
+      expect(error.opfsCondition).toBeUndefined()
     })
 
     it('should call onProgress with progress data', async () => {
@@ -586,7 +698,8 @@ describe('OPFS Test Suite', () => {
 
       const result = await clearOPFSCache()
 
-      expect(result).toBe(true)
+      // Nothing was locked: nothing left behind.
+      expect(result).toEqual([])
       expect(OPFSService.initializeWorker).toHaveBeenCalled()
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalledTimes(1)
@@ -805,6 +918,52 @@ describe('OPFS Test Suite', () => {
     it('rejects when it could not look, rather than answering false', async () => {
       mockRoot(jest.fn().mockRejectedValue(domError('SecurityError')))
       await expect(doesUploadExistInOPFS('a.ifc')).rejects.toThrow('SecurityError')
+    })
+  })
+
+  // The refused-upload delete (bldrs-ai/ops#39): the same root-level
+  // <id>/<id> layout the probe above reads.
+  describe('deleteUploadFromOPFS', () => {
+    const originalStorage = global.navigator.storage
+
+    afterEach(() => {
+      global.navigator.storage = originalStorage
+    })
+
+    /**
+     * @param {Function} removeEntry Root's removeEntry
+     */
+    function mockRoot(removeEntry) {
+      global.navigator.storage = {getDirectory: jest.fn().mockResolvedValue({removeEntry})}
+    }
+
+    const domError = (name) => Object.assign(new Error(name), {name})
+
+    it('removes the upload\'s root-level folder, with the file in it', async () => {
+      const removeEntry = jest.fn().mockResolvedValue(undefined)
+      mockRoot(removeEntry)
+      expect(await deleteUploadFromOPFS('a.ifc')).toBe(true)
+      expect(removeEntry.mock.calls).toEqual([['a.ifc', {recursive: true}]])
+    })
+
+    it('is false when the upload is not there', async () => {
+      mockRoot(jest.fn().mockRejectedValue(domError('NotFoundError')))
+      expect(await deleteUploadFromOPFS('a.ifc')).toBe(false)
+    })
+
+    it('is false, without touching OPFS, for an id that is not a legal entry name', async () => {
+      const removeEntry = jest.fn()
+      mockRoot(removeEntry)
+      for (const id of ['', '.', '..', 'a/b.ifc', 'a\\b.ifc', undefined]) {
+        expect(await deleteUploadFromOPFS(id)).toBe(false)
+      }
+      expect(removeEntry).not.toHaveBeenCalled()
+      expect(global.navigator.storage.getDirectory).not.toHaveBeenCalled()
+    })
+
+    it('rejects when it could not delete, rather than answering false', async () => {
+      mockRoot(jest.fn().mockRejectedValue(domError('NoModificationAllowedError')))
+      await expect(deleteUploadFromOPFS('a.ifc')).rejects.toThrow('NoModificationAllowedError')
     })
   })
 })

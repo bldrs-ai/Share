@@ -1906,6 +1906,23 @@ describe('viewer/three/IfcIsolator', () => {
       expect(visibility(mesh)).toEqual([true, true, true, false])
     })
 
+    // open-205 (#2023): a disposed viewer can be held for a while by closures
+    // from before an in-app switch; its isolator must not keep the old model
+    // (and, on the main-thread engine, its IfcAPI) reachable through it.
+    it('dispose lets go of the model and the subsets cut from it', () => {
+      const {iso} = setupBatchedIsolator()
+      iso.viewer.getSelectedIds = jest.fn(() => [100])
+      iso.isolateSelectedElements()
+      expect(iso.ifcModel).not.toBeNull()
+
+      iso.dispose()
+
+      expect(iso.ifcModel).toBeNull()
+      expect(iso.unhiddenSubset).toBeNull()
+      expect(iso.isolationSubset).toBeNull()
+      expect(iso.revealedElementsSubset).toBeNull()
+    })
+
     it('preserves residency\'s eviction across an isolate / un-isolate round trip', () => {
       // Residency (ResidencyController) owns the same setVisibleAt bit. Its
       // intent must survive isolation rather than being blanket-restored —
@@ -1929,6 +1946,30 @@ describe('viewer/three/IfcIsolator', () => {
       expect(visibility(mesh)).toEqual([true, true, false, false])
 
       iso.resetTempIsolation()
+      expect(visibility(mesh)).toEqual([true, true, true, true])
+    })
+
+    it('keeps a user hide through a camera-motion overlay and brings back only what motion evicted', () => {
+      // B3: the motion overlay writes the same setVisibleAt bit, through the
+      // same mask, so a part the user hid stays hidden at rest and in motion,
+      // and the restore at rest shows only what motion took away.
+      const {iso, mesh} = setupBatchedIsolator()
+      const residency = new ResidencyController(mesh)
+      iso.hiddenIds = [300]
+      iso.initHideOperationsSubset(iso.visualElementsIds.filter((e) => e !== 300))
+      expect(visibility(mesh)).toEqual([true, true, true, false])
+
+      residency.beginMotion()
+      residency.setMotionFraction(0.5)
+      expect(visibility(mesh).filter(Boolean).length).toBeLessThan(3)
+      // Motion can only take away: the hidden part is never drawn.
+      expect(visibility(mesh)[3]).toBe(false)
+      residency.endMotion()
+      expect(visibility(mesh)).toEqual([true, true, true, false])
+
+      // And the hide still lifts to the full set, residency's intent intact.
+      iso.hiddenIds = []
+      iso.initHideOperationsSubset(iso.visualElementsIds)
       expect(visibility(mesh)).toEqual([true, true, true, true])
     })
 

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<!--
+  Auth0 custom error page. Auth0 redirects here, instead of showing its own
+  generic page, when a login fails before it can return to the app (denied
+  consent, a bad authorize request, tenant misconfiguration, …). It is set
+  in Auth0 Dashboard → Settings → General → Error Pages → "Redirect users to
+  your own error page" as https://bldrs.ai/auth/error/ (with the trailing
+  slash, so Netlify serves this file directly rather than redirecting).
+
+  Auth0 appends ?error=…&error_description=…&tracking=…&client_id=…
+  &connection=…&lang=…. Every one of those is attacker-controllable — anyone
+  can link here with any query — so error.js renders only allowlisted
+  characters, as text, and error_description never reaches the page at all
+  (it goes only into the support email draft). See error.js.
+
+  Static on purpose, like auth/gh/callback.html: it must load even when the
+  viewer bundle is broken, and needs none of it. The look follows the Bldrs
+  Share Design System (src/theme/ is the code truth); see error.css. The
+  strict CSP for this path is in netlify.toml.
+
+  The copy below is the no-JS fallback; error.js fills in the specifics.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="light dark">
+  <title>Sign-in problem · bldrs.ai</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/auth/error/error.css">
+</head>
+<body>
+  <main class="page">
+    <img class="logo" src="/icons/LogoB.svg" alt="Bldrs" width="48" height="70">
+    <section class="card" aria-labelledby="auth-error-title">
+      <h1 id="auth-error-title" class="h1">We couldn't sign you in</h1>
+      <p id="auth-error-message" class="body">
+        Something went wrong while signing you in. Try again from Share, or
+        contact support if it keeps happening.
+      </p>
+      <dl id="auth-error-details" class="details" hidden>
+        <div id="auth-error-code-row" class="detail" hidden>
+          <dt>Error</dt>
+          <dd><code id="auth-error-code"></code></dd>
+        </div>
+        <div id="auth-error-connection-row" class="detail" hidden>
+          <dt>Signing in with</dt>
+          <dd id="auth-error-connection"></dd>
+        </div>
+        <div id="auth-error-tracking-row" class="detail" hidden>
+          <dt>Tracking ID</dt>
+          <dd class="tracking">
+            <code id="auth-error-tracking"></code>
+            <button id="auth-error-copy" class="button-text" type="button" hidden>Copy</button>
+          </dd>
+        </div>
+      </dl>
+      <p id="auth-error-quote" class="body secondary" hidden>
+        Quote the tracking ID if you contact support. It lets us find what
+        happened.
+      </p>
+      <div class="actions">
+        <a id="auth-error-back" class="button-accent" href="/share">Back to Share</a>
+        <a id="auth-error-support" class="link" href="mailto:support@bldrs.ai">Email support@bldrs.ai</a>
+      </div>
+    </section>
+  </main>
+  <script src="/auth/error/error.js"></script>
+</body>
+</html>

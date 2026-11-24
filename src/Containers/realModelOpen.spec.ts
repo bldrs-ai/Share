@@ -150,7 +150,10 @@ describeMobileAndDesktop('real_model_open GA event', () => {
     expect(failure.content_type).toBe('ifc')
     expect(failure.reason_class).toBe('other')
     expect(Object.keys(failure).sort()).toEqual(
-      ['content_type', 'last_phase', 'reason_class', 'size_bucket'])
+      ['content_type', 'last_phase', 'open_kind', 'reason_class', 'size_bucket'])
+    // The page's first open: no previous model was in this document
+    // (utils/reportModelOpen.js, open-205 step F).
+    expect(failure.open_kind).toBe('page')
     expect(await realModelOpenEvents(page)).toHaveLength(0)
   })
 

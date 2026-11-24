@@ -74,7 +74,7 @@ GitHub API integration for model versioning and collaboration:
 
 ## Build System
 - **ESBuild** configuration in `tools/esbuild/`
-- Dual build targets: Conway engine (default) and web-ifc
+- Single engine: Conway (web-ifc-shaped API via `@bldrs-ai/conway/web-ifc`; the real-web-ifc comparison build was removed 2026-11-01, see design/new/adapter-removal.md)
 - Environment-specific configs: dev, prod, cypress
 - Multi-threading support with Conway engine
 - Bundle analysis and optimization tools
@@ -99,7 +99,7 @@ GitHub API integration for model versioning and collaboration:
 ## Model Processing Pipeline
 1. URL parsing and model path resolution (`Share.jsx`, `src/utils/urlHelpers.js`)
 2. File loading through format-specific loaders (`src/loader/`)
-3. IFC processing with Conway or web-ifc engines
+3. IFC processing with the Conway engine
 4. 3D scene setup and rendering (`Infrastructure/`)
 5. UI state synchronization and user interactions
 
@@ -118,6 +118,207 @@ future refactor pulls render-driving out of the highlighter — e.g. into
 a dedicated `RenderLoop` module — `setRenderUpdate` is the seam that
 moves with it.
 
+**On-demand painting while a model streams in (open-205 #2043).** The
+closure consults the viewer's `RenderDemand` (`src/viewer/three/renderDemand.js`,
+one per `IfcContext`, `ThreeContext#getRenderDemand`). Outside a load it is
+inert and every frame paints, as before. For the length of a load (CadView
+opens a scope as the load starts and closes it when the load settles;
+`ProgressiveLoadSession` holds a nested one for the parse) the loop keeps
+ticking — camera-controls still updates in it — but paints
+only when asked: on the next frame for camera moves (all but the load's
+camera follow, which snaps inside `runFollowMove` so its updates are told
+apart by call), a selection
+change (`ShareViewer#setPreviewSelection`), a resize or the load's first
+geometry; within a frame budget
+(at least 100 ms apart and four times the last paint's cost, measured from
+the paint to the next frame, because the draw call itself returns long
+before the GPU work behind it is done) for arriving geometry, the camera
+follow's refits and a one-second heartbeat. Anything
+new that changes the picture *during* a load and must show at once calls
+`getRenderDemand().invalidate()`; after the load nothing needs to (unless
+the session paints on demand too; next paragraph). Why:
+design/new/in-app-model-switch.md §4.2a.
+
+**On-demand painting for the whole session (render-on-demand, story #2055,
+on by default since the flip after #2096).** `IfcContext` calls
+`RenderDemand#startSession` when `renderOnDemandMode.js#isRenderOnDemandOn`
+says so, so between loads the loop still ticks but paints only when
+something asks, with no heartbeat and no budget: an idle viewer paints
+nothing. That predicate is the only reader of the flags; everything else
+that behaves differently on demand reads `RenderDemand#isSession`. With it
+off (the switches below) the loop paints every frame between loads, as
+before #2055, and the hooks in layer 3 are not installed. A change that
+never asks leaves a stale frame up, so asking is layered,
+cheapest-to-forget last:
+
+1. The camera: camera-controls `update` (input, damping, transitions:
+   ViewCube, fit, permalink pose), window resize. Between loads a
+   `controlstart` alone doesn't paint (the move after it does), and the
+   camera updates before the renderer in the frame rather than after it
+   (`IfcContext#updateAllComponents`), so a frame shows this frame's pose.
+   Both cut the first input from idle by a frame. Per-frame upkeep added
+   with `ThreeContext#onFrame` runs in the same place, after the camera and
+   before the paint decision: PlaceMark's sprite scale, and the hover pick
+   (`viewer/hoverPick.js#createFrameHoverPicker`). The window's mousemove
+   only marks the pointer, so the hover recolour, which asks through the
+   `setColorAt` hook, paints in the frame of the move that caused it
+   (glb-export-premium.md §1.1d "What a hover pick costs after it").
+   `?feature=disableFrameHover` puts back the old timer-driven pick. While
+   the last paint cost more than `EXPENSIVE_PAINT_MS` (33 ms,
+   `RenderDemand#paintCostMs`), fast hover moves skip the pick, and a
+   canvas pointermove opens no settle window (layer 5): what the pointer
+   changes asks for itself, and a sweep shouldn't queue repaints of an
+   unchanged picture on the GPU.
+2. `requestPaint()` (`renderDemand.js`), callable from anywhere, for what
+   three gives no signal for: `visible`, material colour, opacity and
+   wireframe, outline selections (IfcHighlighter, the isolation outline),
+   lights and look parameters, placemark colours, the cut-plane arrows.
+   `renderOnDemandSources.test.js` lists every file that makes one of those
+   mutations and fails on a new, unaudited one.
+3. Hooks on three's own change signals, installed only when the session
+   is on demand (`renderDemandHooks.js#installSceneHooks`): `Object3D#add`/`attach`/
+   `remove`, the BatchedMesh mutators (`setColorAt`, `setVisibleAt`, …), and
+   `needsUpdate` on materials, textures and attributes. They ask for a
+   background paint (the next frame between loads, the budget during one),
+   and ignore what three mutates while it draws (`runPaint`; BatchedMesh
+   rebuilds its indirect texture in `onBeforeRender`).
+4. A per-frame probe of what a paint reads that costs microseconds
+   (`createSceneProbe`): camera pose and projection, drawing-buffer size and
+   pixel ratio, cut planes, scene background/environment/root children,
+   tone mapping. Snapshotted at each paint.
+5. A settle window (`SETTLE_MS`, 200 ms of painting) after user input on
+   the page (not a bare press), a pointer move over the canvas (only while
+   paints are cheap; layer 1), and any store change
+   (CadView subscribes): for the change a React effect applies a frame
+   after the event. During a load these are background asks. While paints
+   cost more than `EXPENSIVE_PAINT_MS`, the window paints once, after
+   `EXPENSIVE_SETTLE_MS` (500 ms) with no input, instead of every frame
+   (`RenderDemand#frameKind`), so not on a menu's opening frames: on PSB, toggling the
+   cut-plane menu repainted the unchanged scene 4-5 times a second and the
+   menu's animation ran at that rate. The probe (layer 4) still paints a
+   change it sees at once.
+6. `keepPainting()` for what changes on its own clock: a scene with Spark
+   splats paints every frame, since the sort lands asynchronously.
+
+Tests that a source does ask: `renderDemand.test.js`,
+`renderDemandHooks.test.js` and the behavioural half of
+`renderOnDemandSources.test.js` (hooks off, so only the source's own ask can
+pass); `renderOnDemandMode.test.js` (the default, the kill switch, the
+rollback beating a URL opt-in); `renderOnDemand.spec.ts` (desktop + mobile,
+on the default URL) checks that an idle viewer stops painting, that a drag
+(through its damping tail), a selection and a resize repaint, and that a
+fresh parse in the engine worker and a GLB cache hit each end on a current
+frame, with the last on-demand paint matching a forced fresh one; its
+`?feature=disableRenderOnDemand` leg checks that an idle viewer keeps
+painting. The E2E `captureRenderedFrame` asks for its own paint, so it works
+either way.
+
+**Overlay paints (the hover overlay, on by default since #2129; off with
+`?feature=disableHoverOverlay`, prod rollback `disableHoverOverlay:
+isActive: true`).** On a batched
+model a hover change used to recolour the hovered instance in place
+(`batchedHighlight.js`), which the hooks turn into a full paint: the whole
+model redrawn for one element's colour. Measured on an M2 Air (a repaint
+probe forcing 60 repaints of a still view; GPU time to a WebGL2 fence after
+the draw): Momentum (72 k triangles) 9.2 ms GPU p50, of which ~9 ms is the
+screen-size floor at DPR 2; Seestrasse (1.06 M) 21.7 ms; PSB (12.0 M)
+47 ms, p95 106 ms, so on PSB the hover landed about three frames late.
+`viewer/three/hoverOverlay.js` keeps a copy of the scene's
+colour and depth as the RenderPass left them at every full paint, and a
+hover change asks for a third kind of paint, `requestOverlayPaint()`
+(`RenderDemand#frameKind` returns `PaintKind.OVERLAY`): the frame copies
+that cache back into the composer's input buffer instead of running the
+scene passes (RenderPass, the SSAO NormalPass when on, and the AO stages,
+which run in place before the overlay so the cache holds the AO'd frame:
+`viewer/three/inPlacePass.js`, #2167), draws only the
+hovered instances on it with their own batch, material and program
+(narrowed draw list, colour swapped for the draw and back), depth-tested
+LEQUAL against the cached depth, then runs the post passes as any frame
+does. A full paint draws the overlay too, so the hover looks the same on
+either kind of frame; the one difference from the recolour is that where
+another surface lies at the same 16-bit depth code, the hovered one wins.
+Where the overlay can't draw a hover (a transparent or transmissive
+batch, no per-instance colours) the hover recolours as before. The A/B
+is in the PR that added it, and design/new/glb-export-premium.md §1.1d
+"What a hover pick costs after it" has the summary.
+
+*Controls drawn over everything* (the cut-plane arrows,
+`hoverOverlay.js#isDrawnOverHover`) are kept out of the scene passes and
+the cache: every frame the overlay draws them itself, after the hover
+(#2171: drawn in the RenderPass, a hovered element nearer than an arrow
+painted over it). So a change to how one looks, its hover colour or its
+fade with distance from the pointer (`viewer/three/arrowFade.js`), asks
+with `requestControlsPaint()` and is an overlay paint; a plane that moves
+changes the clipping and is a full one.
+
+*The invalidation rule:* a frame is an overlay frame only when the overlay's
+ask is the ONLY thing pending in a session between loads. Anything else
+makes it a full paint, which re-captures the cache: any `requestPaint()`
+(visibility, material colour, outlines, lights, looks, a cut plane's drag,
+residency), any hook (`add`/`attach`/`remove`, so model load and unload;
+`setColorAt`, so selection and colour modes; `setVisibleAt`, so hide,
+isolate and residency; `setMatrixAt` and the rest of `batchedEdit`;
+`needsUpdate` on materials, textures and attributes), a camera `update`
+(damping included), a resize, a probe change (pose, projection, canvas size
+and DPR, cut planes, background, tone mapping), a settle window, a
+`keepPainting` hold, a load scope and a restored context. On top of that
+`HoverOverlay#canCompose` refuses (and a full paint is drawn) with no
+capture yet, after a resize (`setSize` drops the cache) or a context loss,
+from a multisampled buffer, or when the camera pose, projection or buffer
+size differ from the capture's. `hoverOverlay.test.js` has one test per
+source; `renderOnDemandSources.test.js` holds the overlay-only asks to the
+one file allowed to make them. With the overlay on, a canvas `pointermove` no
+longer opens a settle window (it would repaint in full for 200 ms after
+every move, and the overlay would save nothing; #2128 already drops it while
+paints are expensive); what a canvas pointer move
+changes asks for itself instead (`ShareViewer#highlightIfcItem`, a full
+`requestPaint` on every hover path but the overlay's, and
+`MeshClipper#setArrowColor`). The overlay is off while the viewer paints
+every frame (`hoverOverlayMode.js`), and off for a session with
+`?feature=disableHoverOverlay`, the first thing to try on a hover that looks
+wrong; `disableHoverOverlay: isActive: true` in FeatureFlags.js is the prod
+rollback (a static `true` beats every URL). A throw in the overlay's render path
+turns it off for the viewer's life (GA `hover_overlay_disabled {stage}`),
+repaints in full and lets the hover recolour. The overlay's paints count as
+paints for `RenderDemand#paintCostMs`, so once one has run, the hover
+picker's fast-move gate (#2128, `EXPENSIVE_PAINT_MS`) sees a cheap paint and
+picks on every frame again, on any model. The cache costs one colour +
+depth target at drawing-buffer size, 6 bytes a pixel (RGBA8 + 16-bit depth):
+~25 MB at 2560×1600, ~30 MB at 2940×1676.
+
+**Paint observers.** `RenderDemand#observePaints({beforePaint, afterPaint})`
+is told around every paint the render closure makes, on demand or not: the
+closure calls `paintStarting(kind)` just before the draw and
+`rendered(cost, kind)` just after, with the frame's `PaintKind`. It exists for what must bracket a frame's GL
+commands — the motion-residency GPU timer places its timer query or fence
+there (`viewer/residency/gpuFrameTimer.js`;
+design/new/demand-tiled-rendering.md §B3), and skips overlay-only paints,
+which say nothing about the scene's cost. An observer must not ask for a
+paint.
+
+**Rolling back.** Whether the session paints on demand is one decision,
+`viewer/three/renderOnDemandMode.js#paintEveryFrameReason`, read when the
+viewer is built (a theme change rebuilds it and reads it again).
+- *Prod-wide:* set `disableRenderOnDemand` to `isActive: true` in
+  `FeatureFlags.js` and deploy. The predicate reads that static value
+  before any URL flag, so every viewer paints every frame between loads,
+  including links that still carry `?feature=renderOnDemand`. Loads stay
+  on demand (#2043), as they were before #2055.
+- *Not* `renderOnDemand: false`. `isFeatureEnabled` ORs a static flag with
+  the URL, so that would leave every `?feature=renderOnDemand` link (the
+  burn-in links, older bug reports) on demand. The same trap as
+  `engineWorker` (engine-worker.md §7.2, Codex review on #2083).
+- *One session:* `?feature=disableRenderOnDemand`, the first thing to try
+  on a stale-frame report: if the frame is right with it and wrong without,
+  a change source isn't asking. Fix it at the source (`requestPaint()`, or
+  a hook) and add it to `renderOnDemandSources.test.js`.
+- *To confirm which mode a page is in:* `?feature=perf` reads 0 FPS on an
+  idle on-demand viewer and the display rate otherwise; from devtools,
+  `store.getState().viewer.context.getRenderDemand().isSession`.
+  The mode is also on every Sentry event as the `render_mode` tag and
+  counted in GA as the `render_mode` event (`reportRenderMode.js`, once per
+  page load): `on-demand` or `every-frame:<reason>`.
+
 Perf instrumentation attaches at that seam, not inside the closure:
 
 ```js
@@ -125,46 +326,60 @@ Perf instrumentation attaches at that seam, not inside the closure:
 context.setRenderUpdate(withPerf(newUpdateFunction(context, getComposer)))
 ```
 
-`withPerf` (in `src/utils/PerfMonitor.js`) is gated on the
-`?feature=perf` URL flag, evaluated once at module load:
+`withPerf` (in `src/utils/PerfMonitor.js`) always wraps the closure;
+whether it samples is the panel's live state (`isPerfVisible`):
 
-- **Flag off (default):** `withPerf(fn)` returns `fn` unchanged. The
-  render closure has no perf code; `window.perf` is not defined; no DOM
-  or sampling state is created. Zero per-frame cost.
-- **Flag on:** `withPerf` returns a wrapper that brackets `fn()` with
-  `monitor.begin()` / `monitor.end()`. The Monitor singleton is built
-  at module load but **not** attached to the DOM yet; sampling runs on
-  the offscreen canvases regardless. `window.perf` is installed for
-  show/hide/toggle from devtools.
+- **Hidden (default):** the wrapper calls `fn` after one boolean check and
+  samples nothing. The Monitor (canvases, DOM, `window.perf`) isn't built
+  until the panel is first shown.
+- **Shown:** the wrapper brackets `fn()` with `monitor.begin()` /
+  `monitor.end(painted)`. The render closure returns whether it painted,
+  and only painted frames count toward FPS and MS, so a viewer painting on
+  demand reads 0 FPS when idle.
+- **What shows it:** `?feature=perf` (the overlay alone) or
+  `?feature=look` (with the look panel) at startup, and in any session,
+  prod included, the backtick key, which shows or hides Perf and the Render
+  panel together (`src/viewer/debugPanels.js`, ignored while typing in a
+  field). `window.perf.on()` / `off()` / `toggle()` /
+  `fps()` exist once it has been shown.
 
-The panel is docked in the bottom bar, immediately left of the
-Help/Bot control — wrapped with that control in a small sub-stack
-inside `src/Containers/BottomBar.jsx` so the outer
-`justifyContent='space-between'` doesn't float perf into the middle
-of the bar. `src/Components/AppBar.jsx` is *not* used by the running
-app (the real chrome is the `ControlsGroup` / `OperationsGroup` /
-`BottomBar` trio laid out by `RootLandscape`).
+The panel lives in the **debug dock** (`src/Components/DebugDock/DebugDock.jsx`,
+rendered by `RootLandscape`).
+- **Order:** Perf, then the Render panel (the look-tuning lil-gui,
+  `LightingGui`), left to right, fixed and centred over the bottom bar's
+  Elements control.
+- **Minimise:** each panel minimises to its title bar.
+  - Minimised, the bar sits on the window's bottom edge.
+  - Expanded, the panel lifts to sit on top of the Elements control,
+    measured from its box at runtime, so the control stays usable under it.
+  - Perf's minimised title shows `fps/ms/MB`.
+- **Theme:** both take the app theme. That's the drawers' translucent ground
+  and blur, the theme's text and type, and the accent colour for the graphs
+  and values; lil-gui is themed through its CSS variables, scoped to the
+  dock.
+- **Opening:** `src/viewer/debugPanels.js` holds Render's shown state and the
+  backtick key; the Display menu's "Render..." opens Render alone.
+- **No mobile gate:** the dock works on phones too, where there's no devtools
+  console.
 
-`src/Components/PerfToolbarSlot.jsx` is the only React bridge: it
-reads the module-level `isPerfEnabled` exported from `PerfMonitor.js`
-(same source of truth as `window.perf` — synchronous, never lags a
-render the way `useExistInFeature` would), renders a `<Box ref>`, and
-bridges mount/unmount via `mountPerfPanel(slotEl)` /
-`unmountPerfPanel()` from `PerfMonitor.js`. No mobile gate — the
-panel needs to be visible on mobile (where users can't reach a
-devtools console) and the bottom bar has enough lateral room across
-form factors.
+The dock follows Perf's live state with
+`useSyncExternalStore(subscribePerf, isPerfVisible)`, the same source of
+truth as `window.perf` and the backtick key. It docks the graphs with
+`mountPerfPanel(el)` / `unmountPerfPanel()`, and shows the numbers from
+`getPerfStats()` (`subscribePerfStats`, about once a second).
 
-The panel is **on by default** when `?feature=perf` is set — the
-canvas wrapper is created without `display:none` and `mountPerfPanel`
-just `appendChild`s it. `window.perf.off()` / `on()` /  `toggle()`
-remain available for developers who want to hide/show it without
-reloading.
-
-Three panels rotate on click — FPS, frame time (ms), JS heap MB (the
-last only where Chromium's `performance.memory` is available). The
-module is a minimal port of mrdoob's stats.js — the panel the three.js
-examples use.
+Expanded, Perf shows three graphs side by side and four counts:
+- **Graphs:** FPS, frame time (ms), and JS heap MB (the last only where
+  Chromium's `performance.memory` is available). The graph module is a
+  minimal port of mrdoob's stats.js, the panel the three.js examples use.
+- **Counts:** the renderer's geometries and textures resident on the GPU,
+  plus the last painted frame's draw calls and triangles.
+  - three resets `renderer.info.render` on every `renderer.render()`, and a
+    composer frame is several of them.
+  - So while Perf is shown, `withPerf` turns `info.autoReset` off, reads the
+    totals after each painted frame and resets them itself.
+  - It puts auto-reset back when hidden.
+  - The counts therefore include the post passes' full-screen draws.
 
 Offscreen renders (screenshots taken via
 `ShareViewer.takeScreenshot()` -> `IfcRenderer.newScreenshot`) are

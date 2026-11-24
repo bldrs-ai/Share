@@ -36,7 +36,19 @@ describe('Comment: CRUD operations', () => {
       })
 
       test('Please login message to be visible', async ({page}) => {
-        await expect(page.locator('.MuiCardHeader-title')).toContainText('issueTitle_4')
+        // The selected note's comments render below it as note cards with an
+        // EMPTY .MuiCardHeader-title, so a bare title locator matches 1
+        // element before the comment fetch lands and 3 after, and the
+        // strict-mode assertion failed whenever the comments won the race.
+        // The fix Notes.spec.ts got in #2143: count only titles with text,
+        // which is exactly "one note shown".
+        const noteTitles = page.locator('.MuiCardHeader-title').filter({hasText: /\S/})
+        await expect(noteTitles).toHaveCount(1)
+        await expect(noteTitles).toHaveText('issueTitle_4')
+        // And the comments are in before the screenshot, so the frame doesn't
+        // depend on which way that race went either.
+        await expect(page.getByTestId('list-notes').locator(':nth-child(4) > [data-testid="note-card"] p'))
+          .toContainText('testComment_1')
         await expectScreen(page, 'Comment-login-required.png')
       })
 

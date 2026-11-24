@@ -9,7 +9,7 @@
 // what jsdom can't host: the Conway property API (entities and psets below,
 // in the shapes Conway's compat surface returns), the renderer, and the
 // camera-controls instance.
-import {Group, Vector3} from 'three'
+import {Group, Matrix4, Quaternion, Vector3} from 'three'
 import SearchIndex from '../../search/SearchIndex'
 import useStore from '../../store/useStore'
 import {groupElementsByTypes} from '../../utils/ifc'
@@ -148,6 +148,235 @@ export function makeModel() {
   model.getSpatialStructure = () => Promise.resolve(tree)
   model.getItemProperties = (id) => Promise.resolve(entities[id] ?? null)
   model.getPropertySets = (id) => Promise.resolve(psets[id] ?? [])
+  return {model, tree, batch: batches[0].mesh}
+}
+
+
+/** Products the measure fixture places: 100, 101, 102 (Level 1), 200 (Level 2). */
+export const MEASURE_PRODUCTS = [100, 101, 102, 200]
+
+// Conway geometry ids of the measure fixture's two shapes.
+const CUBE_SHAPE = 1
+const OPEN_BOX_SHAPE = 2
+
+// Each cube face as a quad whose first three corners wind counter-clockwise
+// seen from outside, so the signed volume is positive and every edge has its
+// opposite once (a closed, consistently wound mesh).
+const CUBE_FACES = {
+  top: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]],
+  bottom: [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]],
+  right: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]],
+  left: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]],
+  back: [[0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]],
+  front: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]],
+}
+
+
+/**
+ * @param {Array<string>} faces which of CUBE_FACES to emit
+ * @return {object} `{verts, indices}` for a unit cube with those faces, each
+ *   face its own four vertices (a triangulation does not share corners
+ *   across faces, so measuring must weld them)
+ */
+function cubeGeometry(faces) {
+  const verts = []
+  const indices = []
+  for (const face of faces) {
+    const base = verts.length / 6
+    for (const corner of CUBE_FACES[face]) {
+      verts.push(...corner, 0, 0, 0)
+    }
+    indices.push(base, base + 1, base + 2, base, base + 2, base + 3)
+  }
+  return {verts: new Float32Array(verts), indices: new Uint32Array(indices)}
+}
+
+
+/** @return {object} a mock Conway IfcAPI serving the closed cube and an open box */
+function cubeApi() {
+  const shapes = {
+    [CUBE_SHAPE]: cubeGeometry(Object.keys(CUBE_FACES)),
+    [OPEN_BOX_SHAPE]: cubeGeometry(['bottom', 'right', 'left', 'back', 'front']),
+  }
+  return {
+    GetGeometry: (_modelID, id) => (shapes[id] ? {
+      GetVertexData: () => id,
+      GetIndexData: () => id,
+      GetVertexDataSize: () => shapes[id].verts.length,
+      GetIndexDataSize: () => shapes[id].indices.length,
+    } : null),
+    GetVertexArray: (id) => shapes[id].verts,
+    GetIndexArray: (id) => shapes[id].indices,
+  }
+}
+
+
+/**
+ * @param {Array<number>} position
+ * @param {number} rotateZ radians
+ * @param {Array<number>} scale
+ * @return {Array<number>} column-major placement matrix
+ */
+function placement(position, rotateZ, scale) {
+  return new Matrix4().compose(
+    new Vector3(...position),
+    new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), rotateZ),
+    new Vector3(...scale)).toArray()
+}
+
+
+/**
+ * The units a project states, in the shapes Conway's property API returns
+ * them: an IfcSIUnit, a prefixed IfcSIUnit, or an IfcConversionBasedUnit
+ * (feet) with its IfcMeasureWithUnit. Ids from 2000.
+ *
+ * @param {string} units 'm', 'mm' (a milli prefix, area and volume implied
+ *   from it), 'mm-prefixed' (milli on all three) or 'ft' (conversion-based length, area and volume)
+ * @return {{entities: object, factors: object}} entities by id, and the
+ *   factor each kind's raw value is multiplied by to get SI
+ */
+function unitEntities(units) {
+  const wrap = (value, type = 1) => ({type, value})
+  const ref = (value) => ({type: 5, value})
+  // The pre-conway#790 layout of an IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)
+  // (ifcQuantities.js `siUnitFields`): one attribute early, `Name` absent. GLB
+  // artifacts cached by older engines can still carry it. And, as for every
+  // entity it returns, `type` is the numeric type code, never a name.
+  const si = (id, unitType, name, prefix = null) => ({
+    expressID: id, type: 448429030, Dimensions: wrap(unitType, 3), UnitType: prefix ? wrap(prefix, 3) : null,
+    Prefix: wrap(name, 3),
+  })
+  const conversion = (id, unitType, name, factor, measureId, siId, siName, siType) => ({
+    [id]: {expressID: id, type: 2889183280, UnitType: wrap(unitType, 3), Name: wrap(name),
+      ConversionFactor: ref(measureId)},
+    [measureId]: {expressID: measureId, type: 2415094496, ValueComponent: wrap(factor, 4),
+      UnitComponent: ref(siId)},
+    [siId]: si(siId, siType, siName),
+  })
+  const FOOT = 0.3048
+  if (units === 'mm') {
+    return {
+      entities: {2000: {expressID: 2000, type: 180925521, Units: [ref(2001)]},
+        2001: si(2001, 'LENGTHUNIT', 'METRE', 'MILLI')},
+      factors: {length: 1e-3, area: 1e-6, volume: 1e-9},
+    }
+  }
+  if (units === 'mm-prefixed') {
+    // Prefixes on the area and volume units themselves: (10^-3)^2 and ^3.
+    return {
+      entities: {
+        2000: {expressID: 2000, type: 180925521, Units: [ref(2001), ref(2002), ref(2003)]},
+        2001: si(2001, 'LENGTHUNIT', 'METRE', 'MILLI'),
+        2002: si(2002, 'AREAUNIT', 'SQUARE_METRE', 'MILLI'),
+        2003: si(2003, 'VOLUMEUNIT', 'CUBIC_METRE', 'MILLI'),
+      },
+      factors: {length: 1e-3, area: 1e-6, volume: 1e-9},
+    }
+  }
+  if (units === 'ft') {
+    return {
+      entities: {
+        2000: {expressID: 2000, type: 180925521, Units: [ref(2001), ref(2002), ref(2003)]},
+        ...conversion(2001, 'LENGTHUNIT', 'FOOT', FOOT, 2010, 2011, 'METRE', 'LENGTHUNIT'),
+        ...conversion(2002, 'AREAUNIT', 'SQUARE FOOT', FOOT ** 2, 2020, 2021, 'SQUARE_METRE', 'AREAUNIT'),
+        ...conversion(2003, 'VOLUMEUNIT', 'CUBIC FOOT', FOOT ** 3, 2030, 2031, 'CUBIC_METRE', 'VOLUMEUNIT'),
+      },
+      factors: {length: FOOT, area: FOOT ** 2, volume: FOOT ** 3},
+    }
+  }
+  return {
+    entities: {
+      2000: {expressID: 2000, type: 180925521, Units: [ref(2001), ref(2002), ref(2003)]},
+      2001: si(2001, 'LENGTHUNIT', 'METRE'),
+      2002: si(2002, 'AREAUNIT', 'SQUARE_METRE'),
+      2003: si(2003, 'VOLUMEUNIT', 'CUBIC_METRE'),
+    },
+    factors: {length: 1, area: 1, volume: 1},
+  }
+}
+
+
+/**
+ * The model for the analysis tools (`model.measure`, `model.quantities`,
+ * `model.spatial`): the IFC tree of {@link makeTree}, real batched geometry
+ * of known solids, and quantity sets in the project's units.
+ *
+ * Geometry (hand-computed expectations in analysisTools.test.js):
+ *   Wall A 100  unit cube scaled 2×1×3, turned 90° about Z, moved to x=5
+ *   Wall B 101  unit cube scaled (-2, 2, 2): a mirror, a 2 m cube
+ *   Window 1 102 a unit cube missing its top face: an open mesh
+ *   Wall C 200  two unit cubes, at x = 40 and x = 50
+ *   Window 2 103, Window 3 201, Front Door 202 have no geometry
+ *
+ * Quantities (SI values; stored in the project's units): Wall A NetSideArea 6,
+ * NetVolume 6, Length 2; Wall B NetSideArea 8, NetVolume 8; Wall C
+ * NetSideArea 2. Window 1 carries a property set and no quantities.
+ *
+ * @param {object} [opts]
+ * @param {string} [opts.units] 'm' (default), 'mm' or 'ft'
+ * @param {boolean} [opts.quantities] false builds a model with no quantity sets
+ * @return {object} `{model, tree, batch}`, as {@link makeModel}
+ */
+export function makeMeasureModel({units = 'm', quantities = true} = {}) {
+  const placements = [
+    [100, CUBE_SHAPE, placement([5, 0, 0], Math.PI / 2, [2, 1, 3])],
+    [101, CUBE_SHAPE, placement([20, 0, 0], 0, [-2, 2, 2])],
+    [102, OPEN_BOX_SHAPE, placement([30, 0, 0], 0, [1, 1, 1])],
+    [200, CUBE_SHAPE, placement([40, 0, 0], 0, [1, 1, 1])],
+    [200, CUBE_SHAPE, placement([50, 0, 0], 0, [1, 1, 1])],
+  ]
+  const flatMeshes = placements.map(([expressID, shape, flatTransformation]) => ({
+    expressID,
+    geometries: [{
+      geometryExpressID: shape,
+      flatTransformation,
+      color: {x: 0.5, y: 0.5, z: 0.5, w: 1},
+    }],
+  }))
+  const {batches} = flatMeshToBatchedModel(flatMeshes, cubeApi(), 0)
+  decorateBatchMeshes(batches)
+  const model = new Group()
+  batches.forEach(({mesh}) => model.add(mesh))
+  const tree = makeTree()
+  const wrap = (value, type = 1) => ({type, value})
+  const ref = (value) => ({type: 5, value})
+  const {entities: unitById, factors} = unitEntities(units)
+  const raw = (kind, value) => value / factors[kind]
+  const entities = {
+    ...makeEntities(),
+    ...unitById,
+    1: {expressID: 1, type: 103090709, Name: wrap('Proj'), UnitsInContext: ref(2000)},
+  }
+  const psets = {102: [entities[600]]}
+  // [element, set id, set name, [[id, ifc type, name, value key, kind, SI value]]]
+  const sets = quantities ? [
+    [100, 3100, 'Qto_WallBaseQuantities', [
+      [3101, 2044713172, 'NetSideArea', 'AreaValue', 'area', 6],
+      [3102, 931644368, 'Length', 'LengthValue', 'length', 2],
+      [3103, 2405470396, 'NetVolume', 'VolumeValue', 'volume', 6],
+    ]],
+    [101, 3200, 'Qto_WallBaseQuantities', [
+      [3201, 2044713172, 'NetSideArea', 'AreaValue', 'area', 8],
+      [3203, 2405470396, 'NetVolume', 'VolumeValue', 'volume', 8],
+    ]],
+    [200, 3300, 'Qto_WallBaseQuantities', [
+      [3301, 2044713172, 'NetSideArea', 'AreaValue', 'area', 2],
+    ]],
+  ] : []
+  for (const [element, setId, setName, quantityList] of sets) {
+    entities[setId] = {
+      expressID: setId, type: 1883228015, Name: wrap(setName),
+      Quantities: quantityList.map(([id]) => ref(id)),
+    }
+    for (const [id, type, name, key, kind, value] of quantityList) {
+      entities[id] = {expressID: id, type, Name: wrap(name), [key]: wrap(raw(kind, value), 4)}
+    }
+    psets[element] = [...(psets[element] ?? []), entities[setId]]
+  }
+  model.format = 'ifc'
+  model.getSpatialStructure = () => Promise.resolve(tree)
+  model.getItemProperties = jest.fn((id) => Promise.resolve(entities[id] ?? null))
+  model.getPropertySets = jest.fn((id) => Promise.resolve(psets[id] ?? []))
   return {model, tree, batch: batches[0].mesh}
 }
 
@@ -333,6 +562,9 @@ export function makeStoreFunnel() {
       selectedInstanceIds: instanceIds,
       selectedOccurrencePath: occurrencePath,
       selectedSolidExpressId: solidExpressId,
+      // The funnel's instances are derived unless the pick funnel says so.
+      selectedInstancesExact: false,
+      selectedRootGeometryId: null,
     })
   })
 }

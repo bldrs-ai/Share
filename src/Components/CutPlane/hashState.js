@@ -106,5 +106,11 @@ export function addPlanesToHashState(location, viewer, ifcModel) {
  * @param {object} location From react-router
  */
 export function removePlanesFromHashState(location) {
-  removeHashParams(location)
+  // The page's location, whatever is passed, as addPlanesToHashState writes
+  // to. The Share dialog passes react-router's `useLocation()` object, which
+  // history freezes outside production (an assignment there throws) and
+  // which lags the page after the live view link's in-place writes: a
+  // `#cp:` removal computed from it could push a hash without the `#c:` /
+  // `#d:` the page has (review of #2177).
+  removeHashParams(window.location)
 }

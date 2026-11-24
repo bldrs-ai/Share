@@ -4,6 +4,7 @@ import '@testing-library/jest-dom/extend-expect'
 import {act, render, screen, waitFor} from '@testing-library/react'
 import ViewerContainer from './ViewerContainer'
 import useStore from '../store/useStore'
+import {DROP_REFUSED} from '../utils/dragAndDrop'
 
 
 // We will mock out relevant modules (store, guessType, OPFS saving, fallback saving)
@@ -27,7 +28,10 @@ jest.mock('../store/useStore', () => {
 })
 
 jest.mock('react-router-dom', () => ({useNavigate: jest.fn()}))
-jest.mock('../Filetype', () => ({guessTypeFromFile: jest.fn()}))
+// The rest of Filetype stays real: the drop seam now looks inside zips
+// (`loader/modelArchive.js`), whose import graph reads `supportedTypes` at
+// module load (`loader/formatGuidance.js`).
+jest.mock('../Filetype', () => ({...jest.requireActual('../Filetype'), guessTypeFromFile: jest.fn()}))
 jest.mock('../OPFS/utils', () => ({saveDnDFileToOpfs: jest.fn()}))
 
 // We'll import the real dependencies from the mocks above
@@ -113,7 +117,7 @@ describe('ViewerContainer', () => {
 
     dropzone.dispatchEvent(mockEvent)
     await waitFor(() => {
-      expect(mockSetAlert).toHaveBeenCalledWith('File upload initiated but found no data')
+      expect(mockSetAlert).toHaveBeenCalledWith({type: DROP_REFUSED, message: 'File upload initiated but found no data'})
     })
   })
 
@@ -131,7 +135,7 @@ describe('ViewerContainer', () => {
 
     dropzone.dispatchEvent(mockEvent)
     await waitFor(() => {
-      expect(mockSetAlert).toHaveBeenCalledWith('File upload initiated for more than 1 file')
+      expect(mockSetAlert).toHaveBeenCalledWith({type: DROP_REFUSED, message: 'File upload initiated for more than 1 file'})
     })
   })
 
@@ -149,9 +153,11 @@ describe('ViewerContainer', () => {
 
     dropzone.dispatchEvent(mockEvent)
     await waitFor(() => {
-      expect(mockSetAlert).toHaveBeenCalledWith(
-        `File upload of unknown type: type(${file.type}) size(${file.size})`,
-      )
+      expect(mockSetAlert).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'unrecognizedFormat',
+        message: `File upload of unknown type: type(${file.type}) size(${file.size})`,
+        ext: 'abc',
+      }))
     })
   })
 

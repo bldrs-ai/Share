@@ -1,4 +1,4 @@
-import {yieldToBrowser} from './scheduling'
+import {yieldForPaint, yieldToBrowser} from './scheduling'
 
 
 describe('utils/scheduling', () => {
@@ -30,6 +30,56 @@ describe('utils/scheduling', () => {
         await yieldToBrowser()
       }
       expect(counter.fired).toBe(3)
+    })
+  })
+
+  describe('yieldForPaint', () => {
+    let originalRaf
+    let visibility
+
+    beforeEach(() => {
+      originalRaf = globalThis.requestAnimationFrame
+      visibility = jest.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    })
+
+    afterEach(() => {
+      globalThis.requestAnimationFrame = originalRaf
+      visibility.mockRestore()
+    })
+
+    it('waits for an animation frame, then a task past it', async () => {
+      const frames = []
+      globalThis.requestAnimationFrame = (cb) => frames.push(cb)
+      let resolved = false
+      const done = yieldForPaint().then(() => {
+        resolved = true
+      })
+      await yieldToBrowser()
+      await yieldToBrowser()
+      // No frame yet, so no paint yet: still waiting.
+      expect(resolved).toBe(false)
+      expect(frames).toHaveLength(1)
+      frames[0](0)
+      await done
+      expect(resolved).toBe(true)
+    })
+
+    it('does not wait on frames in a hidden tab, which runs none', async () => {
+      visibility.mockReturnValue('hidden')
+      const raf = jest.fn()
+      globalThis.requestAnimationFrame = raf
+      await yieldForPaint()
+      expect(raf).not.toHaveBeenCalled()
+    })
+
+    it('gives up on a frame that never comes', async () => {
+      const maxWaitMs = 20
+      // Timers may fire a millisecond or two early against Date.now().
+      const slackMs = 5
+      globalThis.requestAnimationFrame = () => 0
+      const started = Date.now()
+      await yieldForPaint({maxWaitMs})
+      expect(Date.now() - started).toBeGreaterThanOrEqual(maxWaitMs - slackMs)
     })
   })
 })

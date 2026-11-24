@@ -31,7 +31,9 @@ const URL_DIGEST_PREFIX = 'sha256-'
  *   (`routes/localOnly.ts#localOnlyPath`), the key OpenModelDialog#openFile
  *   passes to record() and the one the `meterLocalFiles` switch would count.
  *   The uuid is per pick, so opening the same file from disk again is a new
- *   model; reopening it from Recents or reloading the page is not.
+ *   model; reopening it from Recents or reloading the page is not. With that
+ *   switch on, directLinkQuotaKey answers for a local file too, with this
+ *   same string (bldrs-ai/ops#39), so the branch below goes unreached.
  * - A hosted file (`/v/p/`): `<appPrefix>/v/p/<file>`.
  * - A URL (`/v/u/`): `urlModelKey`, a digest of the URL — never the URL
  *   itself (below). No open records a `/v/u/` key today (record-load never

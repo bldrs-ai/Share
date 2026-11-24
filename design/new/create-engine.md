@@ -23,7 +23,7 @@ with a reference) or **[I]** (inferred or recommended).
    React/Supabase shell around three things: the upstream OpenSCAD WASM, a
    well-tuned system prompt, and a "compile → render several views → let the LLM
    look → rewrite" loop. What it adds on top (Supabase auth/DB/storage, billing,
-   fal.ai mesh generation, its own chat store) duplicates Share's T10/T11 plans
+   fal.ai mesh generation, its own chat store) duplicates Share's `assist-t300`/`apps-t300` plans
    or crosses the data-sovereignty boundary. [I]
 2. **Two generators, both landing as `create-300` ops** [I]:
    - **Tier 1 (ship first): IFC-shaped extrusions.** The `create` payload *is*
@@ -207,7 +207,7 @@ params) for provenance on export. One script per IFC element; a grouping
 | 1 | **Embed upstream OpenSCAD WASM with our own prompting; borrow CADAM's ideas** | Medium: ~1–2k lines in Share (worker, OFF→geometry, parameter parser, apply backend, `create-310` tool, mesh cache) plus a lazy 9.6 MB WASM and ~1 MB of libraries behind the flag | High: parametric, editable, client-side, native to the op log. The agent writes a DSL that runs in a DOM-less worker, so "the agent writes ops, never scene code" holds. |
 | 2 | **Tier 1 extrusions, no engine** | Low; largely model-edit.md L2 | Medium for BIM-ish creation (walls, slabs, columns); low for mechanical parts. The best fit to IFC and to a future Conway writer. Ship first. |
 | 3 | Iframe app over WidgetApi/postMessage | Looks low, is medium-high | Low (below) |
-| 4 | Call it as a service | — | Negative: no public API; endpoints need Supabase auth and billing (`aiChat.ts:1060-1123`); routes the conversation through a third party, against §7.2 and T10 |
+| 4 | Call it as a service | — | Negative: no public API; endpoints need Supabase auth and billing (`aiChat.ts:1060-1123`); routes the conversation through a third party, against §7.2 and `assist-t300` |
 
 Ideas worth borrowing for rank 1: the Customizer-annotation parameter
 contract, the multi-view self-inspection loop, the forced first tool call, and

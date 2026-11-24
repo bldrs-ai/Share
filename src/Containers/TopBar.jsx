@@ -11,6 +11,7 @@ import SearchBar from '../Components/Search/SearchBar'
 import ShareControl from '../Components/Share/ShareControl'
 import {entityTypeName} from '../Components/Properties/itemProperties'
 import useStore from '../store/useStore'
+import {selectReadModel} from '../store/IFCSlice'
 import {modelPathFromPathname} from '../workspace/modelPath'
 import {prettyType} from '../utils/ifc'
 import {labelForModelPath} from '../utils/modelDisplayName'
@@ -40,7 +41,7 @@ const WEIGHT_MEDIUM = 500
 
 /**
  * The workspace TopBar (`?feature=workspace` — story #1663, epic
- * assist-300 #1657; plan `conversational-cad.md` §2.3 / §3.1 slice 1):
+ * open-200 #1657; plan `conversational-cad.md` §2.3 / §3.1 slice 1):
  * the 58px ToolbarPaper placeholder becomes a real bar carrying the
  * project / model / element breadcrumb and the relocated SearchBar.
  *
@@ -61,7 +62,9 @@ export default function TopBar() {
   const isLoginEnabled = useStore((state) => state.isLoginEnabled)
   const isAppsEnabled = useStore((state) => state.isAppsEnabled)
   const isShareEnabled = useStore((state) => state.isShareEnabled)
-  const model = useStore((state) => state.model)
+  // The indexed model while geometry still streams (open-205 #2029): the
+  // crumb names a selection made in the tree before the load finishes.
+  const model = useStore(selectReadModel)
   const selectedElement = useStore((state) => state.selectedElement)
   const location = useLocation()
   const theme = useTheme()

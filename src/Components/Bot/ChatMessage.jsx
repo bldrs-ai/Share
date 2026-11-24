@@ -23,6 +23,7 @@ export default function ChatMessage({
   avatar, // string URL or React element
   date,
   notch = true,
+  isRich = false, // text is already laid out (Markdown): no pre-wrap, block children
   style = {},
 }) {
   const theme = useTheme()
@@ -65,7 +66,7 @@ export default function ChatMessage({
             px: 2,
             py: 1,
             wordBreak: 'break-word',
-            whiteSpace: 'pre-wrap',
+            whiteSpace: isRich ? 'normal' : 'pre-wrap',
             maxWidth: '100%',
             borderRadius: 2,
             ...(position === 'right' ?
@@ -90,6 +91,8 @@ export default function ChatMessage({
           {type === 'text' && (
             <Typography
               variant="body2"
+              // Rich text holds block elements, which a <p> can't.
+              component={isRich ? 'div' : undefined}
               sx={{
                 color: fg,
                 fontSize: '0.9rem',

@@ -45,6 +45,12 @@ export function setIsAllowed(allowed) {
 /**
  * @param {string} eventName
  * @param {object} parameters
+ * @return {boolean} whether the event was handed to `window.gtag`. False when
+ *   consent is off, the case that matters in practice: index.html defines a
+ *   `window.gtag` stub that queues into `dataLayer` before gtag/js loads, so a
+ *   missing `window.gtag` only happens without that page (tests, an embed). A
+ *   once-per-session sender must mark itself sent only on true, or a call made
+ *   while consent is off uses up its one event.
  */
 export function gtagEvent(eventName, parameters) {
   if (window.location.hostname.startsWith('deploy-preview-') &&
@@ -57,7 +63,9 @@ export function gtagEvent(eventName, parameters) {
   }
   if (window.gtag && isAllowed()) {
     window.gtag('event', eventName, parameters)
+    return true
   }
+  return false
 }
 
 
@@ -345,9 +353,10 @@ export function getGaClientReference() {
  * constant.
  *
  * Params, and where each fires (design/new/quotas.md §"Funnel analytics"):
- *   REAL_MODEL_OPEN      {content_id, content_type, load_outcome, stats_*, …}
- *                        CadView, on success only
- *   LOAD_FAILED          {content_type, size_bucket, reason_class, last_phase}
+ *   REAL_MODEL_OPEN      {content_id, content_type, load_outcome, stats_*,
+ *                        open_kind, …}  CadView, on success only
+ *   LOAD_FAILED          {content_type, size_bucket, reason_class, last_phase,
+ *                        open_kind}
  *                        CadView's onViewerInternal catch, once per failed
  *                        attempt; closed-set values only (Share#1954)
  *   QUOTA_LIMIT_REACHED  {tier, feature}  QuotaLimitDialog, once per showing
@@ -431,7 +440,8 @@ export function gtagFunnelEvent(eventName, parameters = {}) {
  *   SHARE_INTEREST  {feature: 'save_to_cloud', signed_in}  ShareControl, on
  *                   the "coming soon" line in that help
  *   QUOTA_SOFT_LIMIT_EXCEEDED  {tier, used, limit, route_kind: 'gdrive'|
- *                   'github'}  quota/useDirectLinkQuota, when a model opened
+ *                   'github'|'local' ('local' only with the meterLocalFiles
+ *                   switch on)}  quota/useDirectLinkQuota, when a model opened
  *                   straight from its URL is over the private-model limit.
  *                   The load is NOT blocked (a soft gate, measured first);
  *                   once per model per page load (design/new/quotas.md
@@ -449,6 +459,32 @@ export const GATE_EVENTS = Object.freeze({
   QUOTA_SOFT_LIMIT_EXCEEDED: 'quota_soft_limit_exceeded',
 })
 
+/*
+ * The "File not in this browser" outcome and what the visitor does next, for
+ * a `/v/local-only/` link whose upload this browser doesn't hold. The
+ * existing `alert` event (AlertDialog) keeps firing unchanged; these add the
+ * two things it can't say. Sent through gtagEventWithCid. Closed-set values
+ * only: never a file name, URL, path or storage id.
+ *
+ *   MISSING  {origin: 'this_browser'|'unknown', legacy_route, signed_in}
+ *            CadView, on the first UploadNotInBrowserError per route.
+ *            origin: 'this_browser' when the upload ledger
+ *            (OPFS/uploadLedger.js) shows this browser held the id and lost
+ *            it; 'unknown' otherwise (another machine, or site data fully
+ *            wiped, which clears the ledger too). legacy_route: the URL
+ *            arrived as the pre-#1959 `/v/new/` form.
+ *   ACTION   {action: 'open_file'|'dismiss', origin}  AlertDialog, once per
+ *            shown dialog: the "Open a file" button, or any other close.
+ *            origin repeats the paired MISSING event's value.
+ *
+ * Names are queried verbatim GA-side; GA4 has no rename. design/new/quotas.md
+ * §"Funnel analytics".
+ */
+export const LOCAL_LINK_EVENTS = Object.freeze({
+  MISSING: 'local_link_missing',
+  ACTION: 'local_link_missing_action',
+})
+
 
 /**
  * gtagEvent plus OPEN_CID_PARAM (getOpenCid()), omitted rather than blank
@@ -457,10 +493,11 @@ export const GATE_EVENTS = Object.freeze({
  *
  * @param {string} eventName
  * @param {object} [parameters]
+ * @return {boolean} as {@link gtagEvent}
  */
 export function gtagEventWithCid(eventName, parameters = {}) {
   const openCid = getOpenCid()
-  gtagEvent(eventName, openCid ? {...parameters, [OPEN_CID_PARAM]: openCid} : parameters)
+  return gtagEvent(eventName, openCid ? {...parameters, [OPEN_CID_PARAM]: openCid} : parameters)
 }
 
 

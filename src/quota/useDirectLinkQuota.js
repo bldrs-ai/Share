@@ -10,16 +10,27 @@ import {
   modelContentId,
 } from '../privacy/analytics'
 import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
+import {localOnlyPath} from '../routes/localOnly'
+import {modelOpenId} from '../routes/modelOpen'
 import {navigateBaseOnModelPath} from '../utils/location'
 import {driveFileQuotaVisibility} from './driveVisibility'
+import {isLocalFileMeteringEnabled} from './quota'
 
 
 /**
- * The `route_kind` param of quota_soft_limit_exceeded, by route.
+ * The `route_kind` param of quota_soft_limit_exceeded, by route. A closed
+ * set, registered GA-side as a custom dimension. `local` (bldrs-ai/ops#39)
+ * is sent only while the `meterLocalFiles` switch is on, and is the value
+ * MODEL_ROUTE_KINDS.LOCAL already gives a local file on model_view and
+ * model_share, so the events still share one vocabulary (the test pins the
+ * two equal). A literal, not a reference to that constant: suites that mock
+ * privacy/analytics wholesale load this module through quota/modelSlotKey.js,
+ * and a module-scope read of their mock fails at import.
  */
 export const DIRECT_LINK_ROUTE_KINDS = Object.freeze({
   GDRIVE: 'gdrive',
   GITHUB: 'github',
+  LOCAL: 'local',
 })
 
 
@@ -43,16 +54,35 @@ export const DIRECT_LINK_ROUTE_KINDS = Object.freeze({
  *   Whether a GitHub file is private is the SERVER's call (record-load's
  *   unauthenticated repo lookup): a public repo comes back not-quotable and
  *   is never counted.
- * - Everything else (local files, hosted `/v/p/`, generic `/v/u/` URLs):
- *   null. Local files are unmetered (Share#1966), and a `/v/local-only/` link
- *   only opens in the browser that already recorded it from the dialog.
+ * - Local files (`/v/local-only/`), only while the `meterLocalFiles` abuse
+ *   switch is on: `localOnlyPath(appPrefix, <storageId>)`, the key the drop
+ *   and the Open dialog record. Local files are unmetered (Share#1966), so
+ *   with the switch off this is null and record() is never called for one.
+ *   With it on, a refused drop or pick never navigates, but its storage id
+ *   could still be loaded straight from the URL, and a past upload reopened
+ *   from its URL after its slot rolled off was never counted
+ *   (bldrs-ai/ops#39). A legacy `/v/new/` route, should it load before
+ *   ShareRoutes' redirect lands, parses the same and gets the same key.
+ *   An upload the drop or the dialog just recorded is reported again here
+ *   once it loads, and comes back `alreadyCounted`.
+ * - Everything else (hosted `/v/p/`, generic `/v/u/` URLs): null.
  *
  * @param {object|null} modelPath route result (routes/routes.ts#handleRoute)
  * @param {string} appPrefix e.g. '/share'
+ * @param {boolean} [meterLocalFiles] the switch, parameterized for tests
  * @return {{key: string, routeKind: string, fileId: (string|undefined)}|null}
  */
-export function directLinkQuotaKey(modelPath, appPrefix) {
-  if (!modelPath || modelPath.kind !== 'provider') {
+export function directLinkQuotaKey(modelPath, appPrefix, meterLocalFiles = isLocalFileMeteringEnabled()) {
+  if (!modelPath) {
+    return null
+  }
+  if (modelPath.kind === 'file' && modelPath.isUploadedFile === true && meterLocalFiles === true) {
+    return {
+      key: localOnlyPath(appPrefix, modelPath.filepath),
+      routeKind: DIRECT_LINK_ROUTE_KINDS.LOCAL,
+    }
+  }
+  if (modelPath.kind !== 'provider') {
     return null
   }
   if (modelPath.provider === 'google' && modelPath.fileId) {
@@ -74,7 +104,8 @@ export function directLinkQuotaKey(modelPath, appPrefix) {
 
 /**
  * Meters a model loaded straight from its URL — a pasted or clicked
- * `/share/v/g/…` or `/share/v/gh/…` link — which never passes through the
+ * `/share/v/g/…` or `/share/v/gh/…` link, and with the `meterLocalFiles`
+ * switch on a `/share/v/local-only/…` one — which never passes through the
  * Open dialog's record() gate (codex P1 on Share#1971).
  *
  * This is a SOFT gate, by the owner's decision (2026-10-23): the load is
@@ -86,12 +117,22 @@ export function directLinkQuotaKey(modelPath, appPrefix) {
  * gate").
  *
  * Returns a function CadView calls after each successful load with the
- * route it loaded and, for Drive, how it downloaded the file. Each key is
- * metered at most once per page load (a theme change re-inits the viewer and
- * reloads the same model; navigating A → B → A in-app is one open of A), and
- * not before Auth0 has settled: while `isAuthenticated` is still false,
+ * route it loaded and, for Drive, how it downloaded the file. Each OPEN is
+ * metered at most once (routes/modelOpen.ts says what an open is): a theme
+ * change re-inits the viewer and reloads the same route, and that is the same
+ * open, as are the auth and view-settings re-runs and StrictMode's double
+ * effect. In-app A → B → A is two opens of A, and A is recorded again
+ * (decided on #2011, decision 1; design/new/in-app-model-switch.md §5.1): a
+ * return is a new open, and costs no slot, because record-load answers
+ * `alreadyCounted` for a key the user already holds. It is metered not
+ * before Auth0 has settled: while `isAuthenticated` is still false,
  * record() treats the user as signed out and meters nothing, which would let
  * a signed-in user's load go uncounted.
+ *
+ * Per open, not per page (#2022): until the in-app switch (`spaModelNav`, on
+ * by default since open-205 step F) every open from an open surface was a
+ * page load, so the two were the same; a
+ * per-page set of keys would have skipped the return to A.
  *
  * A Drive file counts only when it is private (design/new/quotas.md §"Drive
  * visibility"). CadView passes `driveDownload`: `{connection: null}` when it
@@ -123,10 +164,10 @@ export default function useDirectLinkQuota(appPrefix) {
   const isAuthenticatedRef = useRef(isAuthenticated)
   isAuthenticatedRef.current = isAuthenticated
   const [pending, setPending] = useState(null)
-  // Keys already metered this page load. A ref, so StrictMode's double
-  // effect run and the record identity changes (every quota update)
-  // that re-run the effect below can't meter a key twice.
-  const meteredKeysRef = useRef(new Set())
+  // The opens already metered (routes/modelOpen.ts#modelOpenId). A ref, so
+  // StrictMode's double effect run and the record identity changes (every
+  // quota update) that re-run the effect below can't meter an open twice.
+  const meteredOpensRef = useRef(new Set())
 
   const meterLoadedModel = useCallback((modelPath, driveDownload) => {
     const quotaKey = directLinkQuotaKey(modelPath, appPrefix)
@@ -136,25 +177,32 @@ export default function useDirectLinkQuota(appPrefix) {
     // contentId is snapshotted here, with the route it belongs to: the
     // outcome arrives after record-load answers, and a navigation meanwhile
     // must not credit model_share to the next model.
-    const target = {key: quotaKey.key, routeKind: quotaKey.routeKind, contentId: modelContentId(modelPath)}
+    const target = {
+      key: quotaKey.key,
+      open: modelOpenId(modelPath),
+      routeKind: quotaKey.routeKind,
+      contentId: modelContentId(modelPath),
+    }
     // No driveDownload, no resolver: record() then counts the file as private.
     if (quotaKey.routeKind === DIRECT_LINK_ROUTE_KINDS.GDRIVE && driveDownload) {
       target.resolveDriveVisibility = () => driveFileQuotaVisibility(driveDownload.connection, quotaKey.fileId)
     }
-    // Functional update keeps the previous object when the key is the same,
-    // so a same-model re-init causes no render.
-    setPending((prev) => (prev?.key === target.key ? prev : target))
+    // Functional update keeps the previous object for the same open, so a
+    // same-model re-init causes no render. By open, not by key alone: after
+    // A → (an unmetered model, which leaves this untouched) → A, the key is
+    // the same but the open is new.
+    setPending((prev) => (prev?.open === target.open && prev?.key === target.key ? prev : target))
   }, [appPrefix])
 
   useEffect(() => {
     if (pending === null || isAuthLoading) {
       return
     }
-    const {key, routeKind, contentId, resolveDriveVisibility} = pending
-    if (meteredKeysRef.current.has(key)) {
+    const {key, open, routeKind, contentId, resolveDriveVisibility} = pending
+    if (meteredOpensRef.current.has(open)) {
       return
     }
-    meteredKeysRef.current.add(key)
+    meteredOpensRef.current.add(open)
     // record() never rejects: network and token failures fall back to OPFS
     // inside useQuota. Not awaited — the model is already on screen and
     // nothing here may hold it.
@@ -179,7 +227,8 @@ export default function useDirectLinkQuota(appPrefix) {
       // itself is model_view {gate: 'none'} from CadView.
       trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {
         gate: MODEL_GATES.SOFT,
-        source: MODEL_SOURCES.HOSTED,
+        // A local file is the one route here that isn't hosted.
+        source: routeKind === DIRECT_LINK_ROUTE_KINDS.LOCAL ? MODEL_SOURCES.LOCAL : MODEL_SOURCES.HOSTED,
         routeKind,
         contentId,
         tier: outcome.tier,
