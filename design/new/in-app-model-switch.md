@@ -19,6 +19,9 @@ reload (Phase 1a, done) and #2265 leave a model loading and come back to it
 direct children of the epic, for the engine and rendering track:
 #2029 (interactive at index), #2043, #2030 (no blocking calls), #2044,
 #2042, #2053, #2055, #2250, and Phase 2 #2024. #2020 folded into #2019.
+**Track:** `open-t200` (#2315, [snapshot](../tracks/open-t200/README.md))
+holds the cross-epic technical work of Phase 1b: `EngineHost`, sessions,
+one viewer and the layering, one sub-issue per slice.
 **Related:** #1251 (`open-210`, multi-model overlay), #1657 (`open-200`,
 workspace shell, `?feature=workspace`), #1906 / #1957 (the no-OPFS in-memory
 open — the first in-app switch), #91 (the `modelID = 0` hack), #1776 (burned
@@ -41,7 +44,8 @@ were checked by reading and which are unmeasured.
 
 The owner's decisions, in order, moved here from the epic's description
 (#2011) on 2026-11-23 so the issue can stay short. Decisions 1–4 are argued
-in §4.0, §4.6, §5.1 and §7; 5–7 are recorded only here.
+in §4.0, §4.6, §5.1 and §7; 5–7 are recorded only here; 8–10 are
+designed in [layering.md](../tracks/open-t200/layering.md).
 
 | Date | # | Decision |
 |---|---|---|
@@ -52,6 +56,9 @@ in §4.0, §4.6, §5.1 and §7; 5–7 are recorded only here.
 | 2026-11-18 | 5 | **Switch first, then hunt leaks.** Phase 1a starts with the flagged in-app switch and a memory E2E (step 0), ahead of the fixes, so leaks show up early and set what the fixes must cover. Phase 1a is "switch = close, one model at a time", a stepping stone and not a reversal of decision 4. |
 | 2026-11-19 | 6 | **Background sessions come with `?feature=workspace`.** Switching without closing (decision 4) is enabled only under `workspace`, because the ProjectsDrawer is the only surface that lets a user return to a model left in the background. Outside it a switch stays a close and `EngineHost` holds one live model. Background sessions get their own kill switch and prod rollback, `disableBackgroundSessions`, which forces the cap back to one even under `workspace`. This refines decision 2: `spaModelNav` (the switch) is now on by default. |
 | 2026-11-19 | 7 | **`EngineHost` defaults and one viewer per page** (the owner accepted all seven recommendations on #2244). Phones under `workspace`: 2 live engines and at most 1 GiB, whatever `deviceMemory` reports. Desktop: 3 engines and ½ `deviceMemory`, up to 4 GiB, until the bench slice measures. Scenes are kept for only as many sessions as there are live engines; the rest go dormant and come back through their GLB cache hit. A background load cancelled by eviction resumes only when foregrounded. Rehydrate is lazy, on the first read the artifact can't answer, except eagerly on foreground for a session with no artifact. Background parses keep pumping, with idle-slice assembly and a per-session queue cap of 256 MiB on desktop and 64 MiB on phones. In-process engines are always closed on a switch, even under `workspace`. **One viewer for the page:** a viewer is built per open and per theme rebuild today and its dispose frees the model's scene (#2247), so a session cannot keep its scene in the background; a step between `EngineHost` slices 1 and 2 makes the viewer one per page, with each session's scene attached and detached. CadView is split into focused modules as part of this (#2250). |
+| 2026-11-23 | 8 | **Six layers, each importing only from the layers below it.** (1) *engine*: the worker protocol, the per-worker connection, sources, sidecars, and `EngineHost`, the one owner of every engine. (2) *model*: the in-memory model (`ShareModel`, element subsets, the batched-mesh builders, the instance tables), moved out of `viewer/`. (3) *loader*: fetch, sniff, cache and convert into a model, given a load context (signal, its own reporter, an engine lease, a scene root, a state writer) instead of `(viewer, useStore)`. (4) *session*: `ModelSession`, outside the engine layer. It holds an engine lease from the host, can have none (mesh formats, a GLB cache hit, the main-thread path) and can go through several (an out-of-memory retry, a rehydrate, a sidecar reopen); eviction drops the lease and keeps the session. (5) *viewer*: one per page, `attach(root)` / `detach(root)`, owning no engines. (6) *UI*: React and the store, which becomes a projection of the active session written by one binder, landing with cap N. `EngineSession` is renamed to a per-worker connection name in slice 1 (named `WorkerEngine` by decision 10; slice 1a), so that "session" means `ModelSession` only. The boundaries are linted from the first slice (`import/no-restricted-paths`), with an allowlist that shrinks slice by slice and never grows. The cleanups ride in the `EngineHost` slices, plus one standalone mechanical move; there is no separate refactor pass. Nothing below the UI touches the DOM, with how far to prove it left open. Designed in [layering.md](../tracks/open-t200/layering.md): the layer map, the seams, the lint rule, the headless test and the slice plan. |
+| 2026-11-24 | 9 | **Five answers to the layering design** (layering.md §9). **One viewer on the main-thread engine route too:** the viewer-per-open exception is dropped, and comes back only if the `IfcAPI` collection check (`modelSwitchMemory.spec.ts`) can't be kept green. **The `?view=` rules stack is deleted, with no replacement and no flag:** it was old client work that never went anywhere, and it colours nothing today; the Widget API's `ChangeViewSettings` keeps answering success. **`src/tools/` and `src/app/`** become top-level directories, for the assistant's tools and the app-level files that sit in leaf directories. **The check that the lint allowlist only shrinks runs in the `build` job**, though drafts skip it. **A background load's page-side console lines are not counted in its diagnostics**, a known gap left to the coming console cleanup. The main-thread engine is agreed to be a lease the host owns; its name is decision 10. |
+| 2026-11-24 | 10 | **The engine's names: one `Engine` interface, `WorkerEngine` and `ConwayEngine`.** The main-thread engine is a lease the host owns, and it is not called `IfcAPI`, which covers STEP too and which other mesh types will probably move under. `Engine` is the format-neutral interface (`open`, `tree`, `properties`, `propertiesMany`, `propertyTables`, `propertySets`, `itemsOfType`, `typeName`, `pump`, `capture`, `spill`, `stats`, `abort`, `close`), kept as small as the session, the tools and the loader need. The design adds the three members a load cannot do without: `on` (events), `geometry` (the batch builder's synchronous reads) and `capabilities`. A lease exposes one field, `lease.engine`; `lease.kind` stays as the host's bookkeeping for the budget and the tiers, and callers must not branch on it; a caller that must vary asks `engine.capabilities`. **`WorkerEngine`** is today's `EngineSession` renamed ("bc it's on a Worker thread"), replacing the `EngineConnection` the design first proposed; the in-process fallback stays a `WorkerEngine` on an in-process transport, with `kind: 'inProcess'` recording where it runs. **`ConwayEngine`** is Conway's `IfcAPI` in process (IFC and STEP) adapted to `Engine`: today's raw main-thread path, and a real change on the kill-switch path, landing in slice 1a with its own test. **`MeshEngine`** (the three.js-loaded formats answering the same reads from the parsed scene) is the convergence follow-up, not built. `IfcAPI` stays Conway's export; Share names it only inside the engine's adapters, held by a `no-restricted-imports` rule on `@bldrs-ai/conway/web-ifc` outside `src/engine/`. Designed in [layering.md](../tracks/open-t200/layering.md) §4.1. |
 
 
 ## 1. Conclusion first
@@ -963,8 +970,8 @@ an indexed tree), as §4.5a decided.
   (`loader/glbArtifactPublish.js`'s `generation`), the streaming selection
   (`viewer/streamingBatchPick.js`, one per scene, on the viewer's
   `scene.userData`), and the GLB writer's in-flight owner
-  added here (`Loader.js#cacheWriteOwner`). engine-worker.md §5.2's slice 2
-  (cap N) needs each per session. The reporter has ownership already (below),
+  added here (`Loader.js#cacheWriteOwner`). Cap N (slice 3b of
+  [layering.md](../tracks/open-t200/layering.md) §7) needs each per session. The reporter has ownership already (below),
   but there is still one active reporter for the page: the loader's own
   reports (`reportModelInfo`, `reportEngineLog`, `reportCacheHit`, …) still
   go to whichever one is active.
@@ -1024,7 +1031,8 @@ responsibility lives in a module with its own tests.
    disposes the viewer, owns the theme listener, `viewerBuiltForRef` and the
    no-WebGL state, and returns `{viewer, isWebglUnavailable,
    rebuildForTheme}`. **Phase 1b's single-viewer step wants this first.**
-   That step sits between EngineHost slices 1 and 2 (#2244): one viewer for
+   That step sits between `EngineHost` at cap 1 (slice 1b) and cap N
+   (slice 3b), as slices 2a–2e (#2244): one viewer for
    the page, with each session's scene root attached and detached instead
    of a viewer per open. This hook is that seam: the per-open `initViewer`
    in `onModelPath` becomes "attach the active session's scene", and a theme
@@ -1038,7 +1046,7 @@ responsibility lives in a module with its own tests.
 2. **`modelLoadRun.js`: one load run of a session.** It is
    `onViewerInternal` + `loadModel` as a function of `(job, route, view)`
    that returns the model or throws. The auth retry moves beside
-   `authLoadGate.js`. CadView keeps the queue. EngineHost slice 2 needs
+   `authLoadGate.js`. CadView keeps the queue. Cap N (slice 3b) needs
    this second, because two runs at once must not share CadView's closure
    or refs: `previewPickedRef`, `pendingPreviewPickRef`,
    `isCameraTakenDuringLoadRef` and `driveDownloadRef` move onto the job.
@@ -1048,7 +1056,7 @@ responsibility lives in a module with its own tests.
    down a layer and leave one integration case per path.
 3. **`modelTree.js`: read and install a tree into a job.** That is
    `readModelTree`, `installModelTree`, the take-down and the search index.
-   It is per session for slice 2: a background session's tree goes into the
+   It is per session for cap N (slice 3b): a background session's tree goes into the
    session's own copy of the state, not the store. *Tests:* the harness
    model's tree installs once, a stale job installs nothing, and a walk
    failure is reported once (today's "interactive at the index" cases).

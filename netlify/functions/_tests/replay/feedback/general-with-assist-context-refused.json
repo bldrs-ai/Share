@@ -1,0 +1,12 @@
+{
+  "description": "A `general` record carrying the assistant's context fields is refused 400 before the store is touched: each source's context is held to its own allowlist.",
+  "env": {"$fixture": "env/feedback.json"},
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/feedback",
+    "headers": {"content-type": "application/json", "origin": "https://bldrs.ai"},
+    "body": {"$fixture": "feedback/general.json", "$merge": {"context": {"reply": "anything at all"}}}
+  },
+  "exchanges": [],
+  "expect": {"statusCode": 400, "json": {"error": "invalid_feedback"}}
+}

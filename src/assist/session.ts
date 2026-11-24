@@ -43,6 +43,15 @@ export type AssistEvent =
    */
   | {type: 'step-limit', steps: number}
   /**
+   * A step the relay refused as over its body cap was re-sized and re-sent,
+   * and the retry was accepted (loop.ts `retryTooLarge`). The turn went on as
+   * if nothing happened; this is for the host to count, never to show. Only
+   * after the retry succeeded: a failed one is the `error` event instead.
+   * `fromBytes` and `toBytes` are the step's messages as JSON before and after
+   * re-bounding; `tier` is the relay's, from its refusal.
+   */
+  | {type: 'recovered', condition: 'body_resized', fromBytes: number, toBytes: number, tier?: string}
+  /**
    * `resumeAt` (epoch ms), on a hosted `credits_exhausted`: when the relay's
    * budget admits again. A turn refused with one keeps nothing in the
    * conversation (loop.ts): the host holds the message and sends it again

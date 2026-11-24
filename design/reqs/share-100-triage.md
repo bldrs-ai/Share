@@ -24,7 +24,7 @@ No title, label or parent changed.
 Pinned to `3ab35f0`; test definitions read, no test run. "Not under `describeMobileAndDesktop`" means the spec has no `[mobile]` variant; it doesn't show the flow fails on a phone.
 
 - [liveViewLink.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Share/liveViewLink.spec.ts), [shareDisplay.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Share/shareDisplay.spec.ts) and [shareLocalFile.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Share/shareLocalFile.spec.ts): desktop and mobile.
-- [ShareableCamera.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Share/ShareableCamera.spec.ts): not under `describeMobileAndDesktop`.
+- [ShareableCamera.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Share/ShareableCamera.spec.ts): not under `describeMobileAndDesktop`. Follow-up filed 2026-11-24: [#2336](https://github.com/bldrs-ai/Share/issues/2336), under `view-120`'s camera story.
 
 ## Decisions left open
 

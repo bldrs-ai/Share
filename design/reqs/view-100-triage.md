@@ -99,7 +99,7 @@ Pinned to `a709994`; test definitions read, no test run, no runtime walkthrough.
 | ViewCube | viewCube.spec.ts | Desktop and mobile |
 | Placemarks | markerRebind.spec.ts, markerModelSwitch.spec.ts (the in-app switch); the Notes specs for placemarks | Notes specs: not under `describeMobileAndDesktop` |
 
-The gaps worth a follow-up are the tree's synchronization with the scene (#1046), `Properties.spec.ts` (#1242) and the placemark flows in the Notes specs (#892). No follow-up issue was filed (see decisions).
+The gaps worth a follow-up are the tree's synchronization with the scene (#1046), `Properties.spec.ts` (#1242) and the placemark flows in the Notes specs (#892). Follow-ups were filed on 2026-11-24 under the owning stories: [#2334](https://github.com/bldrs-ai/Share/issues/2334) (tree and scene sync), [#2335](https://github.com/bldrs-ai/Share/issues/2335) (properties), [#2336](https://github.com/bldrs-ai/Share/issues/2336) (camera sharing) and [#2337](https://github.com/bldrs-ai/Share/issues/2337) (placemarks, where two `MarkerSelection.spec.ts` tests are `test.skip`).
 
 ## Decisions left open
 
@@ -108,7 +108,6 @@ Each is recorded in the issue named; this list only points there.
 - Whether `view-130` gets a formal story, and the fate of the empty stubs #883, #884 and #886 ([#2273](https://github.com/bldrs-ai/Share/issues/2273)).
 - Who owns #1243, the private-model access message ([#2270](https://github.com/bldrs-ai/Share/issues/2270), with `share-130`).
 - What is left of #1250 after #1712 ([#2274](https://github.com/bldrs-ai/Share/issues/2274)).
-- Whether to file desktop+mobile follow-ups for the three gaps above (the closed baselines stay closed).
 
 ## Milestone hypotheses
 

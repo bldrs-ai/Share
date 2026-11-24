@@ -20,7 +20,7 @@ No milestone is attached to #2011 or to any of its children.
 
 ## Placement of each issue
 
-The rule used: a work item that serves one story nests under it; one that serves several epics, or infrastructure no story owns, stays as it was, because the track that would hold it has no issue yet ([DX rubric](../dx/dx-rubric.md#where-technical-work-lives)).
+The rule used: a work item that serves one story nests under it; one that serves several epics, or infrastructure no story owns, stays as it was, because the track that would hold it has no issue yet ([tracks rubric](../tracks/tracks-rubric.md#where-technical-work-lives)).
 
 | Issue | Decision |
 |---|---|

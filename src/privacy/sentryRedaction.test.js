@@ -3,11 +3,14 @@ import path from 'path'
 import {formatModelLine} from '@bldrs-ai/conway/src/core/progress_log'
 import {
   SENTRY_MODEL_LINE_PREFIX,
+  WITHHELD_MODEL_NAME,
   consoleFileName,
+  modelNamesOf,
   redactBreadcrumb,
   redactConsoleMessage,
   redactEventExceptions,
   withSentrySafeMessage,
+  withholdModelNames,
   workerErrorLabel,
 } from './sentryRedaction'
 
@@ -205,3 +208,122 @@ describe('privacy/sentryRedaction redactEventExceptions', () => {
   })
 })
 
+
+describe('privacy/sentryRedaction withholdModelNames', () => {
+  const route = {
+    filepath: '/share/v/gh/acme/secret-repo/main/Tower%20B.ifc',
+    gitpath: 'https://github.com/acme/secret-repo/main/Tower B.ifc',
+    downloadUrl: new URL('https://raw.githubusercontent.com/acme/secret-repo/main/Tower%20B.ifc'),
+  }
+
+  it('names every path, the file name and its stem, longest first', () => {
+    const names = modelNamesOf(route, ['Acme HQ'])
+    expect(names).toEqual(expect.arrayContaining([
+      'https://raw.githubusercontent.com/acme/secret-repo/main/Tower%20B.ifc',
+      'https://github.com/acme/secret-repo/main/Tower B.ifc',
+      'Tower B.ifc', 'Tower B', 'Acme HQ',
+    ]))
+    expect([...names].sort((a, b) => b.length - a.length)).toEqual(names)
+  })
+
+  it('withholds each of them from free text, whatever the case, and keeps the rest', () => {
+    const names = modelNamesOf(route, ['Acme HQ'])
+    const text = 'Opened https://github.com/acme/secret-repo/main/Tower B.ifc: tower b.ifc has 7 walls (acme hq).'
+    const out = withholdModelNames(text, names)
+    expect(out).toBe(`Opened ${WITHHELD_MODEL_NAME}: ${WITHHELD_MODEL_NAME} has 7 walls (${WITHHELD_MODEL_NAME}).`)
+    expect(out.toLowerCase()).not.toContain('tower')
+    expect(out).not.toContain('secret-repo')
+  })
+
+  // Codex on #2313: a composed root label must withhold its file name, and
+  // that name's stem, on their own.
+  it('withholds the parts of a composed root label, `<scene> (<file>)`', () => {
+    const names = modelNamesOf({filepath: '/0b9e8d7c-6a5b-4c3d-9e2f-1a0b9c8d7e6f.glb'}, ['Scene (Secret.glb)'])
+    expect(names).toEqual(expect.arrayContaining(['Scene (Secret.glb)', 'Secret.glb', 'Secret', 'Scene']))
+    expect(withholdModelNames('Secret.glb has 3 meshes; Secret is big', names))
+      .toBe(`${WITHHELD_MODEL_NAME} has 3 meshes; ${WITHHELD_MODEL_NAME} is big`)
+  })
+
+  it('treats a further name that is a file name like a route\'s, stem included', () => {
+    expect(modelNamesOf(null, ['Secret.glb'])).toEqual(['Secret.glb', 'Secret'])
+  })
+
+  // Codex round 2 on #2313: every form a private URL is quoted in.
+  describe('a private generic URL', () => {
+    const urlRoute = {
+      kind: 'url',
+      downloadUrl: new URL('https://files.acme.example:8443/private/Secret%20Project.glb?sig=abc123#v2'),
+      originalUrl: new URL('https://bldrs.ai/share/v/u/https://files.acme.example:8443/private/Secret%20Project.glb?sig=abc123'),
+    }
+    const names = modelNamesOf(urlRoute)
+
+    it.each([
+      ['as stored', 'https://files.acme.example:8443/private/Secret%20Project.glb?sig=abc123#v2'],
+      ['decoded', 'https://files.acme.example:8443/private/Secret Project.glb?sig=abc123#v2'],
+      ['without its query', 'https://files.acme.example:8443/private/Secret%20Project.glb'],
+      ['decoded and without its query', 'https://files.acme.example:8443/private/Secret Project.glb'],
+      ['without its scheme', 'files.acme.example:8443/private/Secret Project.glb'],
+      ['its folder', 'https://files.acme.example:8443/private/'],
+      ['its folder without the scheme', 'files.acme.example:8443/private/'],
+      ['its host and port', 'files.acme.example:8443'],
+      ['its bare host', 'files.acme.example'],
+      ['the Share link', 'https://bldrs.ai/share/v/u/https://files.acme.example:8443/private/Secret%20Project.glb?sig=abc123'],
+      ['its file name, encoded', 'Secret%20Project.glb'],
+    ])('withholds it %s', (_, quoted) => {
+      const out = withholdModelNames(`see ${quoted} now`, names)
+      expect(out).toBe(`see ${WITHHELD_MODEL_NAME} now`)
+      expect(out).not.toMatch(/acme|secret|8443|sig=/i)
+    })
+  })
+
+  it('a GitHub model: owner/repo in any GitHub URL form, owner, repo and a non-default branch', () => {
+    const names = modelNamesOf({
+      kind: 'provider', provider: 'github', org: 'acme-corp', repo: 'secret-repo', branch: 'deal-2027',
+      filepath: 'models/Tower B.ifc', gitpath: 'https://github.com/acme-corp/secret-repo/deal-2027/models/Tower B.ifc',
+      downloadUrl: new URL('https://raw.githubusercontent.com/acme-corp/secret-repo/deal-2027/models/Tower%20B.ifc'),
+    })
+    for (const quoted of [
+      'https://github.com/acme-corp/secret-repo/blob/deal-2027/models/Tower%20B.ifc',
+      'https://api.github.com/repos/acme-corp/secret-repo/contents/models',
+      'the secret-repo repo of acme-corp, on deal-2027',
+    ]) {
+      expect(withholdModelNames(quoted, names)).not.toMatch(/acme|secret|deal-2027|Tower/i)
+    }
+    // Owner and repo too short to withhold alone are still withheld as a pair.
+    const short = modelNamesOf({kind: 'provider', provider: 'github', org: 'ac', repo: 'se', branch: 'main'})
+    expect(withholdModelNames('github.com/ac/se/tree/x', short)).toBe(`github.com/${WITHHELD_MODEL_NAME}/tree/x`)
+    // A default branch is a word, not a name.
+    expect(short).not.toContain('main')
+  })
+
+  it('a Drive model: its file id and resource key in any Drive URL form', () => {
+    // The id from the route's own field, not only as the download URL's last segment.
+    const names = modelNamesOf({kind: 'provider', provider: 'google', fileId: '1AbCdEfGhIjKlMnOpQrStUv',
+      resourceKey: '0-XyZresourceKey'})
+    const out = withholdModelNames(
+      'https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUv/view?usp=sharing&resourcekey=0-XyZresourceKey', names)
+    expect(out).not.toMatch(/1AbCdEf|XyZresourceKey/)
+  })
+
+  it('withholds no host for a model that is not a URL model', () => {
+    const names = modelNamesOf({kind: 'file', isUploadedFile: true, filepath: '/0b9e8d7c.glb',
+      downloadUrl: new URL('https://bldrs.ai/0b9e8d7c.glb')})
+    expect(names).not.toContain('bldrs.ai')
+    expect(names).not.toContain('https://bldrs.ai/')
+  })
+
+  it('leaves short stems and root names alone, as ordinary words', () => {
+    const names = modelNamesOf({filepath: '/a.ifc'}, ['HQ'])
+    expect(names).toEqual(['/a.ifc', 'a.ifc'])
+    expect(withholdModelNames('a wall in HQ', names)).toBe('a wall in HQ')
+  })
+
+  it('withholds in one pass, so a name inside the placeholder is not withheld again', () => {
+    const out = withholdModelNames('model.ifc is open', modelNamesOf({filepath: '/model.ifc'}))
+    expect(out).toBe(`${WITHHELD_MODEL_NAME} is open`)
+  })
+
+  it('treats a name as text, not a pattern', () => {
+    expect(withholdModelNames('see a+b (1).ifc and aab', ['a+b (1).ifc'])).toBe(`see ${WITHHELD_MODEL_NAME} and aab`)
+  })
+})

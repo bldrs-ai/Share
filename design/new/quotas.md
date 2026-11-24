@@ -106,9 +106,9 @@ otherwise keep opening restricted files, unmetered. Two parts:
   every Drive connection, its token and its sources whenever Auth0 settles
   signed out. Keyed on the settled state rather than one `logout()` call, so
   ProfileControl, BaseRoutes' `invalid_grant` logout, the Open dialog's
-  GitHub Remove, UserProfile's menu and a session that ended between visits
-  are all covered. Connecting Drive needs a sign-in, so nothing a signed-out
-  user legitimately holds is lost.
+  GitHub Remove and a session that ended between visits are all covered.
+  Connecting Drive needs a sign-in, so nothing a signed-out user legitimately
+  holds is lost.
 - `CadView#loadModel` never downloads through a Drive connection while signed
   out; it takes the API-key path, which serves link-shared files only, so a
   restricted file fails with the usual alert. A Drive route with a connection
@@ -1090,6 +1090,27 @@ has a backfill, so these only start accruing data once registered:
 - For the normalized events (§"Analytics: normalized tier events"):
   register **event-scoped custom dimensions** for `source` and `gate`.
   `tier`, `route_kind` and `open_cid` are already registered.
+- For the feedback events (§"Feedback events"): register **event-scoped
+  custom dimensions** for `feedback_source`, `rating`, `has_note`,
+  `has_screenshot`, `model_choice` and `stage`, and **metrics** for `steps`
+  and `tool_calls` (numeric). `tier`, `source`, `route_kind` and `reason`
+  are already registered.
+
+### Feedback events (Share#2306)
+
+Feedback to Bldrs (the assistant's thumbs under a reply now, the general
+feedback item #2312 next) sends two GA events, structured fields only. The
+text, the note and any screenshot go to Bldrs' own store, never to GA; the
+two share only `feedback_id`. [feedback.md](feedback.md) is the source for
+the module, the record and the privacy rules.
+
+| Event | Params | Fires |
+|---|---|---|
+| `feedback_submitted` | `feedback_id`, `feedback_source` (`assist_reply` \| `general`), `rating` (`up` \| `down` \| `none`, left out for none at all), `has_note`, `has_screenshot`, `tier`, the model's `source` and `route_kind`; for `assist_reply` also `model_choice` (`default` \| `free_models` \| `picked` \| `byok`), `steps`, `tool_calls` | `feedback/submitFeedback.js`, once per record: one per rating change |
+| `feedback_failed` | `feedback_source`, `stage` (`send` \| `screenshot`), `reason`, `status` (refused send), `feedback_id` (send) | a failed post (`postFeedback`, each failed retry too), or a failed screenshot capture (`captureViewerScreenshot`) |
+
+`feedback_source` is not `source`, which on these events stays the model's
+source as on the normalized events below: GA keys a dimension by name.
 
 ### Analytics: normalized tier events
 
