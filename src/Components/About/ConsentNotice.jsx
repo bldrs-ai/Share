@@ -1,5 +1,5 @@
 import React, {ReactElement} from 'react'
-import {Link, Stack, Typography} from '@mui/material'
+import {Link, Typography} from '@mui/material'
 import {LOCAL_ONLY_MODE_NAME} from '../../privacy/localOnlyMode'
 
 
@@ -26,28 +26,29 @@ export const PRIVACY_POLICY_HREF = '/privacy/'
  * @return {ReactElement}
  */
 export default function ConsentNotice() {
+  // No heading, and the policy link closes the paragraph: the dialog is
+  // tight on space and the text says what it's about (owner, 2026-11-24).
   return (
-    <Stack spacing={1} sx={{width: '100%', textAlign: 'left'}} data-testid='consent-control'>
-      <Stack direction='row' justifyContent='space-between' alignItems='baseline'>
-        <Typography variant='overline'>Privacy</Typography>
-        {/* The marketing site's static page, as in LogoMenu's links. The
-            app has no /share/privacy route, so that path rendered nothing.
-            A new tab, so reading the policy doesn't leave the dialog (and
-            the loaded model) mid-choice. */}
-        <Link
-          href={PRIVACY_POLICY_HREF}
-          target='_blank'
-          rel='noopener noreferrer'
-          variant='caption'
-          color='inherit'
-          data-testid='consent-privacy-link'
-        >
-          Privacy policy
-        </Link>
-      </Stack>
-      <Typography variant='body2' color='text.secondary' data-testid='consent-summary'>
-        {CONSENT_TEXT}
-      </Typography>
-    </Stack>
+    <Typography
+      variant='body2'
+      color='text.secondary'
+      sx={{width: '100%', textAlign: 'left'}}
+      data-testid='consent-summary'
+    >
+      {CONSENT_TEXT}{' '}
+      {/* The marketing site's static page, as in LogoMenu's links. The
+          app has no /share/privacy route, so that path rendered nothing.
+          A new tab, so reading the policy doesn't leave the dialog (and
+          the loaded model) mid-choice. */}
+      <Link
+        href={PRIVACY_POLICY_HREF}
+        target='_blank'
+        rel='noopener noreferrer'
+        color='inherit'
+        data-testid='consent-privacy-link'
+      >
+        Privacy policy
+      </Link>
+    </Typography>
   )
 }

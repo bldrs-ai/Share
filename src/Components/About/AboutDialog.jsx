@@ -184,8 +184,7 @@ function AboutContent() {
           </Typography>
         </li>
         <li>Drag &amp; Drop; no upload</li>
-        <li>Open: IFC 2&4, STL, OBJ, ...</li>
-        <li>STEP AP214 (<Link href='https://github.com/bldrs-ai/conway-viewer-demo'>early access</Link>)</li>
+        <li>Open: IFC 2&4, STEP, STL, OBJ, ...</li>
       </Box>
       <table style={{
         width: '100%',

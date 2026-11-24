@@ -18,8 +18,9 @@ mission it asks, in the owner's words (`About/ConsentNotice.jsx`,
 > models are opened (format, size, source). No advertising. Press Cancel
 > for Test only mode.
 
-with a link to the privacy policy, and Cancel and OK side by side at the
-same size. Nothing may cover those two buttons: the status bar ("Loaded …")
+with the privacy policy link closing the paragraph (no heading: the dialog
+is tight on space and the text says what it's about), and Cancel and OK
+side by side at the same size. Nothing may cover those two buttons: the status bar ("Loaded …")
 renders above dialogs, so `Dialog.jsx` keeps a band at the bottom clear of
 it on every form factor (it was mobile-only until the tall About dialog
 ran under it at 1280×800); `consent.spec.ts` hit-tests both buttons.
