@@ -139,7 +139,8 @@ per-load, and the op log never sees them.
 element. A scope is a set of node paths (#1710's scope algebra;
 [scope-model.md](scope-model.md), **pending**, being drafted alongside #1704),
 and a list lets an op carry that set later without a schema change. L1 gives
-the list no meaning beyond "apply to each, all or nothing" (§6b).
+the list no meaning beyond "apply to each, or refuse them all if one does
+not resolve" (§6b).
 
 ### 5.1 GlobalId on a cache-hit load: missing today
 
@@ -494,7 +495,7 @@ backend in `editBackend.fixture.js`.
 | `src/viewer/edit/editRefs.js` | `g` / `o` / `n` parse, format, validate; `e` refused; `isPortableEditRef` (§5, §5.2) |
 | `src/viewer/edit/editOps.js` | The op shape, `validateEditOp`, `makeEditOp` (mints) |
 | `src/viewer/edit/editLog.js` | The log and its cursor: record, undo/redo steps, dirty, `appliedOps` |
-| `src/viewer/edit/editApply.js` | `applyEditOp` / `revertEditOp`, the `EditBackend` and resolver contracts, `ifcGlobalIdIndex` |
+| `src/viewer/edit/editApply.js` | `applyEditOp` / `revertEditOp`, the `EditBackend` and resolver contracts, `EditInconsistentError` (fail-stop), `ifcGlobalIdIndex` |
 | `src/store/EditSlice.js` | The store's log, cursor, `isEditDirty`, `canUndoEdit` / `canRedoEdit`, `applyEdit` / `undoEdit` / `redoEdit` |
 
 ### The op
@@ -624,82 +625,108 @@ into targets through a resolver. L2 implements both.
   - For IFC, the `g` lookup starts from `ifcGlobalIdIndex(spatialTree)`
     (GlobalId → expressID, exact; §5.1). L2 adds expressID → live instances,
     plus its registry of created refs.
-- **Apply is all or nothing.**
+- **Refusals change nothing, and come before the first backend call.**
   - An invalid op, or one with any unresolved target, changes nothing and
     returns `{ok: false, reason, unresolved: [{ref, reason}]}`. A `create`'s
     target is not resolved first, since it does not exist yet.
-  - If the backend throws part way through, the targets already done are
-    reverted, newest first, and the error is rethrown. The L0 ops throw on
-    real states: `BatchEditIdError`, `BatchEditReentryError`, and a failed
-    allocation in `batchedGeometryCapacity.js`.
-- **Revert is all or nothing too.**
-  - It resolves first and reports. If a ref the revert needs doesn't
-    resolve, nothing is reverted and the cursor stays put. A session can
-    reach this state: a view-layer eviction is not in history, so it can
-    remove an element that an earlier document op's undo has to touch.
-  - If the backend throws part way through (a multi-delete's undo restores
-    one element, then fails to allocate the next), the revert steps already
-    done are re-applied, newest first, and the error is rethrown. The
-    cursor has not moved and the backend is as it was, so a retry starts
-    clean (review of #2346). What re-applies each step is captured before
-    the revert runs:
+  - Every target is resolved before the backend is called at all, the undo
+    capture's reads included. A refusal therefore never follows a partial
+    mutation.
+  - Revert does the same over the refs it needs. If one does not resolve,
+    nothing is reverted and the cursor stays put. A session can reach this
+    state: a view-layer eviction is not in history, so it can remove an
+    element that an earlier document op's undo has to touch.
+  - An unresolved ref is a report, not a failure: the resolver answers
+    `{reason}`, the log stays consistent, and the next op is accepted.
+- **Revert runs newest target first**, the mirror of apply. Redo is
+  `applyEditOp` again, capturing a fresh undo record.
 
-    | Kind | Revert | Re-applied by |
-    |---|---|---|
-    | `create`, `duplicate` | `delete` what it made | `restore` from a `capture` taken first |
-    | `delete` | `restore` | `delete` the restored element |
-    | `transform`, `setProperty`, `setGeometry` | write the prior value | write the current value, captured first |
-  - Redo is `applyEditOp` again, so it has apply's rollback.
+### When the backend throws: fail-stop, then replay
 
-### When compensation fails
+**The `EditBackend` contract: a throw from any method means the scene's
+state is unknown.** The method may have changed some of it before throwing,
+and so may the steps of the same op that ran before it. The L0 ops throw on
+real states: `BatchEditIdError`, `BatchEditReentryError`, and a failed
+allocation in `batchedGeometryCapacity.js`. A throw from the resolver is
+treated the same way, since a resolver that throws instead of answering
+`{reason}` is broken.
 
-No compensation loop can guarantee consistency over a backend that throws: the
-step that puts an element back can fail on the same allocation that failed the
-edit (review of #2346, round 2). So the failure is made **explicit and
-recoverable** instead.
+**L1 does not compensate.** On any such throw during apply, undo or redo:
 
-- **Compensation is best effort and loses no error.** If a compensation step
-  throws, the remaining steps still run. Then
-  `editApply.js#EditInconsistentError` is thrown, carrying the original error
-  as `cause` and every compensation error in `compensationErrors`. Apply's
-  rollback and revert's re-apply share this path
-  (`editApply.js#compensate`).
-- **The log is marked inconsistent.** `EditSlice` sets `isEditInconsistent`
-  and keeps the error in `editInconsistency`. While it is set, every
-  `applyEdit` (view ops included), `undoEdit` and `redoEdit` refuses. The
-  scene no longer matches the log, and nothing L1 can see says how.
-- **Recovery follows from §1: the source is immutable and the log is the
-  document.**
-  1. Rebuild the scene from the source.
-  2. Replay `appliedOps(editLog)` over it, which is the applied prefix up to
-     the cursor. The replay captures fresh undo records.
-  3. Call `markEditsRecovered(context, replayedLog)`.
+- Nothing is put back, and no partial step is rolled back.
+- `editApply.js#EditInconsistentError` is thrown. It carries the original
+  error as `cause`, plus the canonical `op` and the `direction` (`apply`,
+  `undo` or `redo`, `editApply.js#EditDirection`) for diagnostics.
+- `EditSlice` marks the log inconsistent: `isEditInconsistent` is set and the
+  error is kept in `editInconsistency`. The cursor stays where it was.
+- While it is set, every `applyEdit` (view ops included), `undoEdit` and
+  `redoEdit` refuses with a reason that says so. `resetEdits` does not clear
+  it, since dropping the history leaves the scene just as broken.
 
-  L3 (#1918) implements the replay. Installing a new model's context also
-  clears the state, and `resetEdits` does not, since dropping the history
-  leaves the scene just as broken.
-- **`EditBackend`'s compensation methods should not throw in normal
-  operation.** These are `restore`, `delete`, `setMatrix`, `setProperty` and
-  `setGeometry`, called to put back what an edit changed. An implementation
-  over `batchedEdit.js` should make putting back no more fallible than what
-  it undoes. For example, `restore` into capacity the edit has just freed, as
-  `deleteBatchedInstance` freeing an id that `addBatchedInstance` reuses does.
-  `EditInconsistentError` is for the failure that is still possible, not a
-  routine path.
+**Why fail-stop and not compensation (review of #2346).** The first design
+reverted the steps already done and rethrew. Each review round found the next
+way that was wrong:
+
+1. Undo had no rollback, so a multi-target undo that failed part way left the
+   backend half reverted under an unmoved cursor.
+2. The compensation can itself throw, on the same allocation that failed the
+   edit.
+3. A step that mutates and then throws is not compensated, because a step is
+   only counted as done once it returns.
+
+The third is not a counting bug to patch. A compensation is a further run of
+backend calls against a backend that has just shown it throws, over a state
+nobody can see. No version of it can be made safe, so there is none. Fewer
+mechanisms is the point: the code that could get this wrong was removed
+rather than grown.
+
+**Recovery is replay, which §1 already implies.** The source is immutable and
+the log is the document:
+
+1. Rebuild the scene from the source, with a **new** backend object.
+2. Replay `appliedOps(editLog)` over it, which is the applied prefix up to
+   the cursor. The replay captures fresh undo records.
+3. Call `markEditsRecovered(context, replayedLog)`.
+
+L3 (#1918) automates this. Until then, recovery is a reload.
+
+`markEditsRecovered` is the only way back to consistent, other than
+installing a different model. It is refused when the log is not
+inconsistent, and refused when given the backend that failed: a rebuilt
+scene comes with a new backend object, so the same one means nothing was
+rebuilt. That check is cheap and deliberately narrow. It cannot see a new
+backend object wrapped around the old, broken scene; L2's one-backend-per-scene
+contract (EditSlice, below) rules that out.
 
 ### EditSlice
 
 The store holds the log and the booleans derived from it (`editCursor`,
 `isEditDirty`, `canUndoEdit`, `canRedoEdit`), kept in step on every change.
 It also holds `editContext`, the `{backend, resolver}` pair L2 installs for
-the loaded model.
+the loaded model, and `editLogBackend`, the backend the log's undo records
+were captured against.
 
-- `setEditContext` resets the log, because undo records belong to one load.
+- **`setEditContext` tells a new model from a lifecycle update by the
+  backend's identity.**
+  - A backend other than `editLogBackend` is a new model. The log is reset
+    and the slice is consistent again, since the old undo records hold
+    another scene's per-load state.
+  - The same backend (with a new resolver or a rebuilt context object), or
+    null, keeps the log and any inconsistency as they are. Clearing the
+    context and reinstalling the one that failed therefore changes nothing
+    (review of #2346, round 3).
+  - Why identity: the backend *is* the scene the undo records describe. A
+    model or session id would call a rebuilt scene of the same model "the
+    same", which is exactly the case that must not be. The context object
+    is too fine, since a caller may rebuild `{backend, resolver}` around the
+    same scene.
+  - **So L2's contract is one backend object per built scene.** A rebuild
+    makes a new one.
 - `isEditInconsistent` / `editInconsistency` and `markEditsRecovered` are the
   inconsistent state and its exit (above).
 - With no context, every action reports `no edit backend` and changes nothing.
 - `applyEdit`, `undoEdit` and `redoEdit` return the applier's
-  `{ok, reason?, unresolved?}`.
+  `{ok, reason?, unresolved?}`, or throw `EditInconsistentError`.
 
 ### Left to L2 and L3
 

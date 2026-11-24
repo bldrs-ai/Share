@@ -48,6 +48,10 @@ function flags() {
 
 describe('EditSlice', () => {
   beforeEach(() => {
+    // setEditContext(null) alone keeps the log and any inconsistency (the
+    // same-backend rule), so a fresh model is installed first to reset both.
+    const blank = makeFakeEditModel()
+    useStore.getState().setEditContext({backend: blank.backend, resolver: blank.resolver})
     useStore.getState().setEditContext(null)
   })
 
@@ -111,56 +115,6 @@ describe('EditSlice', () => {
     expect(fake.state()).toEqual(atRedo)
   })
 
-  it('leaves backend and cursor as they were when an undo throws part way, and a retry succeeds', () => {
-    const fake = makeFakeEditModel({elements: [
-      {expressID: 771, globalId: WALL_GID},
-      {expressID: 812, globalId: DOOR_GID},
-    ]})
-    useStore.getState().setEditContext({backend: fake.backend, resolver: fake.resolver})
-    const before = fake.state()
-    useStore.getState().applyEdit(makeEditOp({kind: 'delete', layer: 'document', targets: [WALL, DOOR]}))
-    const afterDelete = fake.state()
-    const restore = fake.backend.restore
-    let calls = 0
-    fake.backend.restore = (...args) => {
-      if (++calls === 2) {
-        throw new Error('no headroom')
-      }
-      return restore(...args)
-    }
-    expect(() => useStore.getState().undoEdit()).toThrow('no headroom')
-    expect(fake.state()).toEqual(afterDelete)
-    expect(flags().editCursor).toBe(1)
-    fake.backend.restore = restore
-    expect(useStore.getState().undoEdit()).toEqual({ok: true})
-    expect(fake.state()).toEqual(before)
-  })
-
-  it('leaves backend and cursor as they were when a redo throws part way, and a retry succeeds', () => {
-    const fake = makeFakeEditModel({elements: [
-      {expressID: 771, globalId: WALL_GID},
-      {expressID: 812, globalId: DOOR_GID},
-    ]})
-    useStore.getState().setEditContext({backend: fake.backend, resolver: fake.resolver})
-    useStore.getState().applyEdit(move('document', [0, 2, 0], [WALL, DOOR]))
-    const moved = fake.state()
-    useStore.getState().undoEdit()
-    const undone = fake.state()
-    const transform = fake.backend.transform
-    let calls = 0
-    fake.backend.transform = (...args) => {
-      if (++calls === 2) {
-        throw new Error('no headroom')
-      }
-      return transform(...args)
-    }
-    expect(() => useStore.getState().redoEdit()).toThrow('no headroom')
-    expect(fake.state()).toEqual(undone)
-    expect(flags().editCursor).toBe(0)
-    fake.backend.transform = transform
-    expect(useStore.getState().redoEdit()).toEqual({ok: true})
-    expect(fake.state()).toEqual(moved)
-  })
 
   /** @return {object} a fake with a wall and a door, installed */
   function installPair() {
@@ -172,53 +126,162 @@ describe('EditSlice', () => {
     return fake
   }
 
+
   /**
-   * Undo a two-element delete whose 2nd restore fails, and whose
-   * compensating delete fails too.
+   * Make one backend method, on its `n`th call from now, do its work and
+   * THEN throw, once.
    *
-   * @return {object} `{fake, error}`
+   * @param {object} backend
+   * @param {string} method
+   * @param {number} n
    */
-  function breakTheLog() {
-    const fake = installPair()
-    useStore.getState().applyEdit(makeEditOp({kind: 'delete', layer: 'document', targets: [WALL, DOOR]}))
-    const {restore, delete: del} = fake.backend
-    let restores = 0
-    fake.backend.restore = (...args) => {
-      if (++restores === 2) {
-        throw new Error('restore failed')
+  function mutateThenThrow(backend, method, n) {
+    const original = backend[method]
+    let count = 0
+    backend[method] = (...args) => {
+      const result = original(...args)
+      if (++count === n) {
+        throw new Error(`${method} failed after mutating`)
       }
-      return restore(...args)
+      return result
     }
-    fake.backend.delete = () => {
-      throw new Error('delete failed')
-    }
-    let error
-    try {
-      useStore.getState().undoEdit()
-    } catch (e) {
-      error = e
-    }
-    fake.backend.restore = restore
-    fake.backend.delete = del
-    return {fake, error}
   }
 
-  it('marks the log inconsistent when a compensation throws, and refuses every op until recovery', () => {
-    const {error} = breakTheLog()
+
+  /**
+   * @param {Function} fn
+   * @return {Error} what `fn` threw
+   */
+  function thrown(fn) {
+    try {
+      fn()
+    } catch (error) {
+      return error
+    }
+    throw new Error('expected a throw')
+  }
+
+
+  const refused = {ok: false, reason: expect.stringMatching(/inconsistent/)}
+
+
+  /**
+   * Every action refuses, view ops included, and the cursor stays put.
+   *
+   * @param {number} cursor where it must still be
+   */
+  function expectStopped(cursor) {
+    const {applyEdit, undoEdit, redoEdit} = useStore.getState()
+    expect(applyEdit(move('document'))).toEqual(refused)
+    expect(applyEdit(move('view'))).toEqual(refused)
+    expect(undoEdit()).toEqual(refused)
+    expect(redoEdit()).toEqual(refused)
+    expect(flags().editCursor).toBe(cursor)
+  }
+
+
+  const bothUp = () => move('document', [0, 2, 0], [WALL, DOOR])
+
+  // [direction, arrange(fake) → the action that will throw]
+  const FAILURES = [
+    ['apply', (fake) => {
+      mutateThenThrow(fake.backend, 'transform', 2)
+      return () => useStore.getState().applyEdit(bothUp())
+    }],
+    ['undo', (fake) => {
+      useStore.getState().applyEdit(bothUp())
+      mutateThenThrow(fake.backend, 'setMatrix', 2)
+      return () => useStore.getState().undoEdit()
+    }],
+    ['redo', (fake) => {
+      useStore.getState().applyEdit(bothUp())
+      useStore.getState().undoEdit()
+      mutateThenThrow(fake.backend, 'transform', 2)
+      return () => useStore.getState().redoEdit()
+    }],
+  ]
+
+  it.each(FAILURES)('%s: a backend step that mutates and then throws stops the log', (direction, arrange) => {
+    const fake = installPair()
+    const act = arrange(fake)
+    const cursor = flags().editCursor
+    const error = thrown(act)
     expect(error).toBeInstanceOf(EditInconsistentError)
-    expect(error.cause.message).toBe('restore failed')
-    expect(error.compensationErrors.map((e) => e.message)).toEqual(['delete failed'])
+    expect(error.cause.message).toMatch(/failed after mutating$/)
+    expect(error.direction).toBe(direction)
     expect(useStore.getState().isEditInconsistent).toBe(true)
-    const refused = {ok: false, reason: expect.stringMatching(/inconsistent/)}
-    expect(useStore.getState().applyEdit(move('document'))).toEqual(refused)
-    expect(useStore.getState().applyEdit(move('view'))).toEqual(refused)
-    expect(useStore.getState().undoEdit()).toEqual(refused)
-    expect(useStore.getState().redoEdit()).toEqual(refused)
-    expect(flags().editCursor).toBe(1)
+    expect(useStore.getState().editInconsistency).toBe(error)
+    expectStopped(cursor)
   })
 
+
+  /**
+   * Apply a two-element delete, then fail its undo part way.
+   *
+   * @return {object} the installed fake
+   */
+  function stopTheLog() {
+    const fake = installPair()
+    useStore.getState().applyEdit(makeEditOp({kind: 'delete', layer: 'document', targets: [WALL, DOOR]}))
+    mutateThenThrow(fake.backend, 'restore', 2)
+    expect(() => useStore.getState().undoEdit()).toThrow(EditInconsistentError)
+    return fake
+  }
+
+
+  it('keeps an inconsistency, and the log, when the same backend is reinstalled', () => {
+    const fake = stopTheLog()
+    const log = useStore.getState().editLog
+    const {setEditContext} = useStore.getState()
+    setEditContext({backend: fake.backend, resolver: fake.resolver})
+    expect(useStore.getState().isEditInconsistent).toBe(true)
+    expect(useStore.getState().editLog).toBe(log)
+    setEditContext(null)
+    setEditContext({backend: fake.backend, resolver: fake.resolver})
+    expect(useStore.getState().isEditInconsistent).toBe(true)
+    expect(useStore.getState().editLog).toBe(log)
+    expectStopped(1)
+  })
+
+
+  it('keeps a consistent log when the same backend is reinstalled', () => {
+    const fake = installFake()
+    useStore.getState().applyEdit(move('document'))
+    useStore.getState().setEditContext(null)
+    useStore.getState().setEditContext({backend: fake.backend, resolver: fake.resolver})
+    expect(flags()).toEqual({entries: 1, editCursor: 1, isEditDirty: true, canUndoEdit: true, canRedoEdit: false})
+  })
+
+
+  it('clears an inconsistent log when a different model is installed', () => {
+    stopTheLog()
+    installFake()
+    expect(useStore.getState().isEditInconsistent).toBe(false)
+    expect(flags().entries).toBe(0)
+    expect(useStore.getState().applyEdit(move('document'))).toEqual({ok: true})
+  })
+
+
+  it('refuses recovery with the backend that failed', () => {
+    const fake = stopTheLog()
+    const result = useStore.getState().markEditsRecovered(
+      {backend: fake.backend, resolver: fake.resolver}, useStore.getState().editLog)
+    expect(result).toEqual({ok: false, reason: expect.stringMatching(/rebuilt scene/)})
+    expect(useStore.getState().isEditInconsistent).toBe(true)
+    expectStopped(1)
+  })
+
+
+  it('refuses recovery when nothing is inconsistent', () => {
+    installFake()
+    const rebuilt = makeFakeEditModel()
+    expect(useStore.getState().markEditsRecovered({backend: rebuilt.backend, resolver: rebuilt.resolver},
+      EMPTY_EDIT_LOG)).toEqual({ok: false, reason: expect.stringMatching(/not inconsistent/)})
+  })
+
+
   it('recovers once the scene is rebuilt from source and the applied ops replayed', () => {
-    breakTheLog()
+    stopTheLog()
     const ops = appliedOps(useStore.getState().editLog)
     // L3's job, done by hand: a fresh backend over the source, then replay.
     const rebuilt = makeFakeEditModel({elements: [
@@ -232,18 +295,13 @@ describe('EditSlice', () => {
       const result = applyEditOp(op, context)
       log = recordApplied(log, result.op, result.undo)
     }
-    useStore.getState().markEditsRecovered(context, log)
+    expect(useStore.getState().markEditsRecovered(context, log)).toEqual({ok: true})
     expect(useStore.getState().isEditInconsistent).toBe(false)
     expect(flags()).toEqual({entries: 1, editCursor: 1, isEditDirty: true, canUndoEdit: true, canRedoEdit: false})
     expect(useStore.getState().undoEdit()).toEqual({ok: true})
     expect(rebuilt.state()).toEqual(before)
   })
 
-  it('also clears an inconsistent log on a new context', () => {
-    breakTheLog()
-    installFake()
-    expect(useStore.getState().isEditInconsistent).toBe(false)
-  })
 
   it('truncates redo when a new document op follows an undo', () => {
     installFake()
@@ -258,12 +316,20 @@ describe('EditSlice', () => {
     expect(flags().canRedoEdit).toBe(false)
   })
 
-  it('reports an unresolved ref and records nothing', () => {
-    installFake()
-    const result = useStore.getState().applyEdit(move('document', [1, 0, 0], [WALL, NOWHERE]))
-    expect(result.ok).toBe(false)
-    expect(result.unresolved).toEqual([{ref: NOWHERE, reason: 'no element with this GlobalId in the loaded model'}])
+  it('refuses an unresolved ref cleanly: nothing applied, nothing recorded, the log still consistent', () => {
+    const fake = installPair()
+    const before = fake.state()
+    const result = useStore.getState().applyEdit(move('document', [1, 0, 0], [WALL, DOOR, NOWHERE]))
+    expect(result).toEqual({
+      ok: false,
+      reason: 'unresolved refs; nothing was changed',
+      unresolved: [{ref: NOWHERE, reason: 'no element with this GlobalId in the loaded model'}],
+    })
+    expect(fake.state()).toEqual(before)
+    expect(fake.calls).toEqual([])
     expect(flags().entries).toBe(0)
+    expect(useStore.getState().isEditInconsistent).toBe(false)
+    expect(useStore.getState().applyEdit(move('document'))).toEqual({ok: true})
   })
 
   it('leaves the cursor where it was when an undo cannot resolve its target', () => {

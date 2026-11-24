@@ -19,7 +19,7 @@ import {mintGlobalId} from './globalId'
  *   A scope is a set of node paths (#1710's scope algebra;
  *   design/new/scope-model.md, pending), and an array lets an op carry that
  *   set later without a schema change. L1 gives the set no meaning beyond
- *   "apply to each, all or nothing".
+ *   "apply to each, or refuse them all if one does not resolve".
  * - `layer` is required, `'view'` or `'document'` (§4). The two drive the same
  *   primitives — an eviction and a delete are both a delete — so the layer
  *   cannot be inferred from the kind and is never defaulted.

@@ -3,6 +3,7 @@ import {captureBldrsSpatialTree} from '../../loader/bldrsSpatialTree'
 import {makeFakeEditModel, translation} from './editBackend.fixture'
 import {seededRandomBytes} from './edit.fixture'
 import {
+  EditDirection,
   EditInconsistentError,
   applyEditOp,
   ifcGlobalIdIndex,
@@ -137,81 +138,28 @@ describe('viewer/edit/editApply', () => {
     expect(calls).toEqual([])
   })
 
-  it('rolls a multi-target op back when the backend throws part way, then rethrows', () => {
-    const {backend, resolver, state} = model()
-    const before = state()
-    const transform = backend.transform
-    let count = 0
-    backend.transform = (target, matrix) => {
-      if (++count === 2) {
-        throw new Error('allocation failed')
-      }
-      transform(target, matrix)
-    }
-    const op = opOf({kind: 'transform', targets: [WALL, DOOR], payload: {matrix: translation([0, 3, 0])}})
-    expect(() => applyEditOp(op, {backend, resolver})).toThrow('allocation failed')
-    expect(state()).toEqual(before)
-  })
-
-  it('rolls back a partly applied duplicate by deleting the copies it made', () => {
-    const {backend, resolver, state} = model()
-    const before = state()
-    const duplicate = backend.duplicate
-    let count = 0
-    backend.duplicate = (...args) => {
-      if (++count === 2) {
-        throw new Error('no headroom')
-      }
-      duplicate(...args)
-    }
-    expect(() => applyEditOp(opOf({kind: 'duplicate', targets: [WALL, DOOR]}), {backend, resolver}))
-      .toThrow('no headroom')
-    expect(state()).toEqual(before)
-  })
 
   /**
-   * Make one backend method throw on its `n`th call from now, once.
+   * Make one backend method, on its `n`th call from now, do its work and
+   * THEN throw, once: the step no compensation could count (review of #2346,
+   * round 3).
    *
    * @param {object} backend
    * @param {string} method
    * @param {number} n
-   * @return {Function} restores the original method
    */
-  function failNth(backend, method, n) {
+  function mutateThenThrow(backend, method, n) {
     const original = backend[method]
     let count = 0
     backend[method] = (...args) => {
+      const result = original(...args)
       if (++count === n) {
-        throw new Error(`${method} failed`)
+        throw new Error(`${method} failed after mutating`)
       }
-      return original(...args)
-    }
-    return () => {
-      backend[method] = original
+      return result
     }
   }
 
-  it.each([
-    // [kind, spec, the revert method that fails on its 2nd call]
-    ['delete', {kind: 'delete', targets: [WALL, DOOR]}, 'restore'],
-    ['transform', {kind: 'transform', targets: [WALL, DOOR], payload: {matrix: translation([0, 3, 0])}}, 'setMatrix'],
-    ['duplicate', {kind: 'duplicate', targets: [WALL, DOOR]}, 'delete'],
-    ['setProperty', {kind: 'setProperty', targets: [WALL, DOOR], payload: {key: 'Name', value: 'X'}}, 'setProperty'],
-    ['setGeometry', {kind: 'setGeometry', targets: [WALL, DOOR], payload: {geometry: {box: [2, 2, 2]}}}, 'setGeometry'],
-  ])('rolls a partly reverted %s back when the backend throws, so a retry succeeds', (kind, spec, method) => {
-    const {backend, resolver, state} = model()
-    const before = state()
-    const op = opOf(spec)
-    const applied = applyEditOp(op, {backend, resolver})
-    const after = state()
-    const heal = failNth(backend, method, 2)
-    expect(() => revertEditOp(op, applied.undo, {backend, resolver})).toThrow(`${method} failed`)
-    // The first target's revert ran and was re-applied: nothing moved.
-    expect(state()).toEqual(after)
-    heal()
-    expect(revertEditOp(op, applied.undo, {backend, resolver})).toEqual({ok: true})
-    expect(state()).toEqual(before)
-  })
 
   /**
    * @param {Function} fn
@@ -226,51 +174,112 @@ describe('viewer/edit/editApply', () => {
     throw new Error('expected a throw')
   }
 
-  it('surfaces both errors when an undo\'s compensation throws too', () => {
-    const {backend, resolver} = model()
-    const op = opOf({kind: 'duplicate', targets: [WALL, DOOR]})
-    const applied = applyEditOp(op, {backend, resolver})
-    // Undo deletes the door's copy, then fails on the wall's; compensating
-    // restores the door's copy, and that fails on the same allocation.
-    failNth(backend, 'delete', 2)
-    failNth(backend, 'restore', 1)
-    const error = thrown(() => revertEditOp(op, applied.undo, {backend, resolver}))
-    expect(error).toBeInstanceOf(EditInconsistentError)
-    expect(error.cause.message).toBe('delete failed')
-    expect(error.compensationErrors.map((e) => e.message)).toEqual(['restore failed'])
+
+  /**
+   * Wrap a backend so every method call is counted, reads included.
+   *
+   * @param {object} backend
+   * @return {object} `{spy, seen}`
+   */
+  function spyOn(backend) {
+    const seen = []
+    const spy = new Proxy(backend, {
+      get: (target, method) => (...args) => {
+        seen.push(method)
+        return target[method](...args)
+      },
+    })
+    return {spy, seen}
+  }
+
+
+  describe('fail-stop', () => {
+    const transformBoth = {kind: 'transform', targets: [WALL, DOOR], payload: {matrix: translation([0, 3, 0])}}
+
+    it.each([EditDirection.APPLY, EditDirection.REDO])(
+      '%s: a step that mutates and then throws is an EditInconsistentError, and nothing is put back', (direction) => {
+        const {backend, resolver, state} = model()
+        const before = state()
+        const op = opOf(transformBoth)
+        // The wall's transform returns; the door's moves the door, then throws.
+        mutateThenThrow(backend, 'transform', 2)
+        const error = thrown(() => applyEditOp(op, {backend, resolver}, direction))
+        expect(error).toBeInstanceOf(EditInconsistentError)
+        expect(error.cause.message).toBe('transform failed after mutating')
+        expect(error.direction).toBe(direction)
+        expect(error.op.id).toBe(op.id)
+        // Both moved and both stay moved: no rollback of the wall, and none
+        // of the door's half-done step.
+        expect(state()[WALL].matrix).toEqual(translation([0, 3, 0]))
+        expect(state()[DOOR].matrix).toEqual(translation([5, 3, 0]))
+        expect(state()).not.toEqual(before)
+      })
+
+    it('undo: a revert step that mutates and then throws is an EditInconsistentError, and nothing is re-applied', () => {
+      const {backend, resolver, state} = model()
+      const before = state()
+      const op = opOf(transformBoth)
+      const applied = applyEditOp(op, {backend, resolver})
+      // Revert runs newest first: the door's setMatrix returns, the wall's
+      // writes the wall back, then throws.
+      mutateThenThrow(backend, 'setMatrix', 2)
+      const error = thrown(() => revertEditOp(op, applied.undo, {backend, resolver}))
+      expect(error).toBeInstanceOf(EditInconsistentError)
+      expect(error.cause.message).toBe('setMatrix failed after mutating')
+      expect(error.direction).toBe(EditDirection.UNDO)
+      expect(error.op).toBe(op)
+      // Both reverted, and the door's revert was not re-applied over it.
+      expect(state()).toEqual(before)
+    })
+
+    it('a resolver that throws is an EditInconsistentError too', () => {
+      const {backend} = model()
+      const resolver = {
+        resolve() {
+          throw new Error('index corrupt')
+        },
+      }
+      const op = opOf(transformBoth)
+      const applyError = thrown(() => applyEditOp(op, {backend, resolver}))
+      expect(applyError).toBeInstanceOf(EditInconsistentError)
+      expect(applyError.cause.message).toBe('index corrupt')
+      const undoError = thrown(() => revertEditOp(op, {matrices: []}, {backend, resolver}))
+      expect(undoError).toBeInstanceOf(EditInconsistentError)
+      expect(undoError.direction).toBe(EditDirection.UNDO)
+    })
   })
 
-  it('keeps compensating, best effort, after one compensation step throws', () => {
-    const third = '2Aa8Kc$Pr2ExS0vV8q9Zz0'
-    const fake = makeFakeEditModel({elements: [
-      {expressID: 771, globalId: WALL_GID},
-      {expressID: 812, globalId: DOOR_GID},
-      {expressID: 900, globalId: third},
-    ]})
-    const ctx = {backend: fake.backend, resolver: fake.resolver}
-    const op = opOf({kind: 'transform', targets: [WALL, DOOR, `g${third}`], payload: {matrix: translation([0, 1, 0])}})
-    const applied = applyEditOp(op, ctx)
-    const after = fake.state()
-    // Revert writes the third, the door, then fails on the wall (call 3).
-    // Compensation re-applies the door (call 4, fails) and the third (call 5).
-    failNth(fake.backend, 'setMatrix', 3)
-    failNth(fake.backend, 'setMatrix', 4)
-    const error = thrown(() => revertEditOp(op, applied.undo, ctx))
-    expect(error).toBeInstanceOf(EditInconsistentError)
-    expect(error.compensationErrors).toHaveLength(1)
-    expect(fake.state()[`g${third}`]).toEqual(after[`g${third}`])
+
+  describe('resolve before the first backend call', () => {
+    it('makes zero backend calls, reads included, when only the last of several targets is unresolved', () => {
+      const {backend, resolver} = model()
+      const {spy, seen} = spyOn(backend)
+      const op = opOf({kind: 'transform', targets: [WALL, DOOR, NOWHERE], payload: {matrix: translation([0, 1, 0])}})
+      expect(applyEditOp(op, {backend: spy, resolver})).toEqual({
+        ok: false,
+        reason: 'unresolved refs; nothing was changed',
+        unresolved: [{ref: NOWHERE, reason: 'no element with this GlobalId in the loaded model'}],
+      })
+      expect(seen).toEqual([])
+    })
+
+    it('makes zero backend calls for an undo whose last target is unresolved', () => {
+      const {backend, resolver} = model()
+      const op = opOf({kind: 'setProperty', targets: [WALL, DOOR], payload: {key: 'Name', value: 'X'}})
+      const applied = applyEditOp(op, {backend, resolver})
+      // A view-layer eviction of the door: not in history.
+      expect(applyEditOp(opOf({kind: 'delete', targets: [DOOR], layer: 'view'}, 2), {backend, resolver}).ok)
+        .toBe(true)
+      const {spy, seen} = spyOn(backend)
+      expect(revertEditOp(op, applied.undo, {backend: spy, resolver})).toEqual({
+        ok: false,
+        reason: 'unresolved refs; nothing was reverted',
+        unresolved: [{ref: DOOR, reason: 'element is deleted'}],
+      })
+      expect(seen).toEqual([])
+    })
   })
 
-  it('surfaces both errors when apply\'s rollback throws too', () => {
-    const {backend, resolver} = model()
-    failNth(backend, 'transform', 2)
-    failNth(backend, 'setMatrix', 1)
-    const op = opOf({kind: 'transform', targets: [WALL, DOOR], payload: {matrix: translation([0, 3, 0])}})
-    const error = thrown(() => applyEditOp(op, {backend, resolver}))
-    expect(error).toBeInstanceOf(EditInconsistentError)
-    expect(error.cause.message).toBe('transform failed')
-    expect(error.compensationErrors.map((e) => e.message)).toEqual(['setMatrix failed'])
-  })
 
   it('applies and records one canonical object: the op the backend saw is the op in the log', () => {
     const {backend, resolver} = model()

@@ -1,4 +1,4 @@
-import {EditInconsistentError, applyEditOp, revertEditOp} from '../viewer/edit/editApply'
+import {EditDirection, applyEditOp, revertEditOp} from '../viewer/edit/editApply'
 import {
   EMPTY_EDIT_LOG,
   canRedo,
@@ -28,13 +28,27 @@ import {
  * (FeatureFlags.js). With no context installed every action reports
  * `no edit backend` and changes nothing.
  *
- * **Inconsistent.** When an edit fails and so does its compensation
- * (editApply.js#EditInconsistentError), the scene no longer matches the log.
- * The error is rethrown, `isEditInconsistent` is set and kept in
- * `editInconsistency`, and every `applyEdit` (view ops too), `undoEdit` and
- * `redoEdit` refuses until the scene is rebuilt from the source, the applied
- * ops replayed (L3, #1918), and `markEditsRecovered` called — or a new
- * model's context is installed. model-edit.md §6b, "When compensation fails".
+ * **Fail-stop.** When the backend throws during an apply, undo or redo
+ * (editApply.js#EditInconsistentError), the scene's state is unknown. The
+ * error is rethrown, `isEditInconsistent` is set and the error kept in
+ * `editInconsistency`, the cursor stays where it was, and every `applyEdit`
+ * (view ops too), `undoEdit` and `redoEdit` refuses. The way back is to
+ * rebuild the scene from the source, replay `appliedOps(editLog)` over it
+ * (L3, #1918; a reload until then) and call `markEditsRecovered` — or to
+ * install a different model's context. model-edit.md §6b, "When the backend
+ * throws".
+ *
+ * **Which backend the log belongs to.** `editLogBackend` is the backend the
+ * log's undo records were captured against. `setEditContext` with that same
+ * backend, or with null, is a lifecycle update and keeps the log and any
+ * inconsistency; only a different backend object is a new model. Identity of
+ * the backend is the signal because the backend IS the scene the undo
+ * records describe: a model or session id would call a rebuilt scene of the
+ * same model "the same", which is exactly the case that must not be, and the
+ * context object is too fine, since a caller may build a fresh
+ * `{backend, resolver}` around the same scene. The check cannot see a new
+ * backend object wrapped around the old, broken scene; the EditBackend
+ * contract (one backend per built scene, editApply.js) rules that out.
  *
  * @param {Function} set
  * @param {Function} get
@@ -60,7 +74,10 @@ export default function createEditSlice(set, get) {
   const consistent = {isEditInconsistent: false, editInconsistency: null}
 
   /**
-   * Run an edit, marking the log inconsistent if it throws that way.
+   * Run an edit and its log update, marking the log inconsistent if either
+   * throws. editApply.js turns every backend throw into an
+   * EditInconsistentError; anything else that throws here is a bug past the
+   * point where the backend may have changed, so it fail-stops too.
    *
    * @param {Function} edit
    * @return {*} what `edit` returns
@@ -69,9 +86,7 @@ export default function createEditSlice(set, get) {
     try {
       return edit()
     } catch (error) {
-      if (error instanceof EditInconsistentError) {
-        set(() => ({isEditInconsistent: true, editInconsistency: error}))
-      }
+      set(() => ({isEditInconsistent: true, editInconsistency: error}))
       throw error
     }
   }
@@ -89,16 +104,28 @@ export default function createEditSlice(set, get) {
     ...withLog(EMPTY_EDIT_LOG),
     ...consistent,
     editContext: null,
+    editLogBackend: null,
 
     /**
      * Install the backend and resolver for a loaded model, or null to remove
-     * them. The log is reset either way: its undo records hold that model's
-     * per-load state and mean nothing to another one.
+     * them.
+     *
+     * - A backend other than `editLogBackend` is a new model: the log is
+     *   reset and the slice is consistent again, since the old log's undo
+     *   records hold another scene's per-load state.
+     * - The same backend (a resolver swapped, a context object rebuilt), or
+     *   null, keeps the log and its consistency as they are. So clearing the
+     *   context and reinstalling the one that failed does not clear an
+     *   inconsistency: only `markEditsRecovered` does that.
      *
      * @param {object|null} context `{backend, resolver}` (editApply.js)
      */
     setEditContext: (context) => {
-      set(() => ({editContext: context, ...withLog(EMPTY_EDIT_LOG), ...consistent}))
+      if (context === null || context.backend === get().editLogBackend) {
+        set(() => ({editContext: context}))
+        return
+      }
+      set(() => ({editContext: context, editLogBackend: context.backend, ...withLog(EMPTY_EDIT_LOG), ...consistent}))
     },
 
     /**
@@ -107,11 +134,24 @@ export default function createEditSlice(set, get) {
      * #1918). `log` is the log that replay built, whose undo records belong
      * to the rebuilt scene.
      *
+     * Refused unless the log is inconsistent, and refused for the backend
+     * that failed: a rebuilt scene comes with a new backend object
+     * (editApply.js#EditBackend), so the same one means nothing was rebuilt.
+     *
      * @param {object} context `{backend, resolver}` over the rebuilt scene
      * @param {object} log the replayed log (editLog.js)
+     * @return {object} `{ok, reason?}`
      */
     markEditsRecovered: (context, log) => {
-      set(() => ({editContext: context, ...withLog(log), ...consistent}))
+      const state = get()
+      if (!state.isEditInconsistent) {
+        return {ok: false, reason: 'the edit log is not inconsistent; nothing to recover'}
+      }
+      if (!context?.backend || context.backend === state.editLogBackend) {
+        return {ok: false, reason: 'recovery needs a backend over a rebuilt scene, not the one that failed'}
+      }
+      set(() => ({editContext: context, editLogBackend: context.backend, ...withLog(log), ...consistent}))
+      return {ok: true}
     },
 
     /**
@@ -127,8 +167,9 @@ export default function createEditSlice(set, get) {
      * dirties the model; a view op is applied and leaves the log untouched.
      *
      * @param {object} op editOps.js#makeEditOp
-     * @return {object} `{ok, reason?, unresolved?}`; a backend error is
-     *   rethrown after the op is rolled back (editApply.js#applyEditOp)
+     * @return {object} `{ok, reason?, unresolved?}`
+     * @throws {Error} editApply.js#EditInconsistentError when the backend
+     *   throws; the log is then inconsistent (above)
      */
     applyEdit: (op) => {
       const refused = refusal()
@@ -136,20 +177,23 @@ export default function createEditSlice(set, get) {
         return refused
       }
       const {editContext, editLog} = get()
-      const result = guarded(() => applyEditOp(op, editContext))
-      if (!result.ok) {
-        return result
-      }
-      // `result.op` is the canonical copy that was applied; recording it,
-      // not the caller's `op`, keeps the two one object.
-      set(() => withLog(recordApplied(editLog, result.op, result.undo)))
-      return {ok: true}
+      return guarded(() => {
+        const result = applyEditOp(op, editContext, EditDirection.APPLY)
+        if (!result.ok) {
+          return result
+        }
+        // `result.op` is the canonical copy that was applied; recording it,
+        // not the caller's `op`, keeps the two one object.
+        set(() => withLog(recordApplied(editLog, result.op, result.undo)))
+        return {ok: true}
+      })
     },
 
     /**
      * Revert the op before the cursor.
      *
      * @return {object} `{ok, reason?, unresolved?}`
+     * @throws {Error} as `applyEdit`
      */
     undoEdit: () => {
       const refused = refusal()
@@ -161,11 +205,13 @@ export default function createEditSlice(set, get) {
       if (!entry) {
         return {ok: false, reason: 'nothing to undo'}
       }
-      const result = guarded(() => revertEditOp(entry.op, entry.undo, editContext))
-      if (result.ok) {
-        set(() => withLog(stepBack(editLog)))
-      }
-      return result
+      return guarded(() => {
+        const result = revertEditOp(entry.op, entry.undo, editContext)
+        if (result.ok) {
+          set(() => withLog(stepBack(editLog)))
+        }
+        return result
+      })
     },
 
     /**
@@ -173,6 +219,7 @@ export default function createEditSlice(set, get) {
      * the state it reverts to is the state now, not the one at first apply.
      *
      * @return {object} `{ok, reason?, unresolved?}`
+     * @throws {Error} as `applyEdit`
      */
     redoEdit: () => {
       const refused = refusal()
@@ -184,12 +231,14 @@ export default function createEditSlice(set, get) {
       if (!entry) {
         return {ok: false, reason: 'nothing to redo'}
       }
-      const result = guarded(() => applyEditOp(entry.op, editContext))
-      if (!result.ok) {
-        return result
-      }
-      set(() => withLog(stepForward(editLog, result.undo)))
-      return {ok: true}
+      return guarded(() => {
+        const result = applyEditOp(entry.op, editContext, EditDirection.REDO)
+        if (!result.ok) {
+          return result
+        }
+        set(() => withLog(stepForward(editLog, result.undo)))
+        return {ok: true}
+      })
     },
 
     /** Mark the applied ops as saved (L3, #1918, calls this). */
