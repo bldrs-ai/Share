@@ -3,11 +3,14 @@ import path from 'path'
 import {formatModelLine} from '@bldrs-ai/conway/src/core/progress_log'
 import {
   SENTRY_MODEL_LINE_PREFIX,
+  WITHHELD_MODEL_NAME,
   consoleFileName,
+  modelNamesOf,
   redactBreadcrumb,
   redactConsoleMessage,
   redactEventExceptions,
   withSentrySafeMessage,
+  withholdModelNames,
   workerErrorLabel,
 } from './sentryRedaction'
 
@@ -205,3 +208,45 @@ describe('privacy/sentryRedaction redactEventExceptions', () => {
   })
 })
 
+
+describe('privacy/sentryRedaction withholdModelNames', () => {
+  const route = {
+    filepath: '/share/v/gh/acme/secret-repo/main/Tower%20B.ifc',
+    gitpath: 'https://github.com/acme/secret-repo/main/Tower B.ifc',
+    downloadUrl: new URL('https://raw.githubusercontent.com/acme/secret-repo/main/Tower%20B.ifc'),
+  }
+
+  it('names every path, the file name and its stem, longest first', () => {
+    const names = modelNamesOf(route, ['Acme HQ'])
+    expect(names).toEqual(expect.arrayContaining([
+      'https://raw.githubusercontent.com/acme/secret-repo/main/Tower%20B.ifc',
+      'https://github.com/acme/secret-repo/main/Tower B.ifc',
+      'Tower B.ifc', 'Tower B', 'Acme HQ',
+    ]))
+    expect([...names].sort((a, b) => b.length - a.length)).toEqual(names)
+  })
+
+  it('withholds each of them from free text, whatever the case, and keeps the rest', () => {
+    const names = modelNamesOf(route, ['Acme HQ'])
+    const text = 'Opened https://github.com/acme/secret-repo/main/Tower B.ifc: tower b.ifc has 7 walls (acme hq).'
+    const out = withholdModelNames(text, names)
+    expect(out).toBe(`Opened ${WITHHELD_MODEL_NAME}: ${WITHHELD_MODEL_NAME} has 7 walls (${WITHHELD_MODEL_NAME}).`)
+    expect(out.toLowerCase()).not.toContain('tower')
+    expect(out).not.toContain('secret-repo')
+  })
+
+  it('leaves short stems and root names alone, as ordinary words', () => {
+    const names = modelNamesOf({filepath: '/a.ifc'}, ['HQ'])
+    expect(names).toEqual(['/a.ifc', 'a.ifc'])
+    expect(withholdModelNames('a wall in HQ', names)).toBe('a wall in HQ')
+  })
+
+  it('withholds in one pass, so a name inside the placeholder is not withheld again', () => {
+    const out = withholdModelNames('model.ifc is open', modelNamesOf({filepath: '/model.ifc'}))
+    expect(out).toBe(`${WITHHELD_MODEL_NAME} is open`)
+  })
+
+  it('treats a name as text, not a pattern', () => {
+    expect(withholdModelNames('see a+b (1).ifc and aab', ['a+b (1).ifc'])).toBe(`see ${WITHHELD_MODEL_NAME} and aab`)
+  })
+})

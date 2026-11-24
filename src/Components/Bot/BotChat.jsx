@@ -32,7 +32,9 @@ import BotSettings from './BotSettings'
 import AssistantMarkdown from './AssistantMarkdown'
 import ChatMessage from './ChatMessage'
 import CreditsMeter from './CreditsMeter'
+import ReplyFeedback, {FEEDBACK_CLASS} from './ReplyFeedback'
 import TaskChip from './TaskChip'
+import {modelChoiceOf, ratableReplyIds} from './assistFeedback'
 import {
   assistLoggedConversationStore,
   attachAssistSession,
@@ -63,6 +65,7 @@ import {
 import {pausedNoticeText} from './pausedNotice'
 import {reportAssistCondition} from './reportAssistCondition'
 import {runningLabel} from './taskLabels'
+import {useIsMobile} from '../Hooks'
 import 'react-chat-elements/dist/main.css'
 import './chat-bubbles.css'
 
@@ -85,6 +88,26 @@ export const TURN_FAILED_MESSAGE = 'Something went wrong showing this reply. Try
 
 /** Bubbles by kind; a 'notice' is the panel's own (the free-models overflow, assistState.js). */
 const BUBBLE_TEST_IDS = {error: 'BotChat-Error', assistant: 'BotChat-Reply', notice: 'BotChat-Notice'}
+
+/**
+ * A rated reply's thumbs (ReplyFeedback.jsx) are hidden until the reply is
+ * hovered or focused (focus-within, so a keyboard user tabbing in reveals
+ * them), and always shown where there is no hover: a touch screen, or while
+ * a rating stands or its note is open (`data-always-shown`). Opacity, not
+ * display, so the hidden thumbs still take focus and the layout doesn't
+ * jump when they appear.
+ */
+const REPLY_GROUP_SX = {
+  'display': 'flex',
+  'flexDirection': 'column',
+  'gap': 0.5,
+  [`& .${FEEDBACK_CLASS}`]: {opacity: 0, transition: 'opacity 150ms ease'},
+  [`& .${FEEDBACK_CLASS}[data-always-shown="true"]`]: {opacity: 1},
+  [`&:hover .${FEEDBACK_CLASS}, &:focus-within .${FEEDBACK_CLASS}`]: {opacity: 1},
+  '@media (hover: none)': {[`& .${FEEDBACK_CLASS}`]: {opacity: 1}},
+  '@media (prefers-reduced-motion: reduce)': {[`& .${FEEDBACK_CLASS}`]: {transition: 'none'}},
+}
+
 
 /**
  * @param {number} steps
@@ -125,6 +148,7 @@ export default function BotChat() {
   const modelChoice = useSyncExternalStore(assistModelChoice.subscribe, assistModelChoice.get)
   const apiKey = useSyncExternalStore(assistKeyStore.subscribe, () => assistKeyStore.get(OPENROUTER_KEY_ID) ?? '')
   const modelPath = useStore((state) => state.modelPath)
+  const isMobile = useIsMobile()
   const modelRoute = modelPath ? modelIdentity(modelPath) : null
 
   // The chat lives outside the panel (assistState.js): the panel unmounts
@@ -303,13 +327,14 @@ export default function BotChat() {
     </>
   ) : null
 
+  const ratable = ratableReplyIds(messages, streamingTurn)
   const bubble = (message, index) => {
     const isUser = message.kind === 'user'
     const fg = isUser ? userText : botText
     // The model's replies are Markdown; the user's own words, the panel's
     // notices and its errors are plain text.
     const isMarkdown = message.kind === 'assistant'
-    return (
+    const chatMessage = (
       <ChatMessage
         key={message.id ?? index}
         position={isUser ? 'right' : 'left'}
@@ -336,6 +361,16 @@ export default function BotChat() {
           maxWidth: '80%',
         }}
       />
+    )
+    if (!ratable.has(message.id)) {
+      return chatMessage
+    }
+    // The turn's last reply bubble carries its rating (Share#2306).
+    return (
+      <Box key={message.id} data-testid='BotChat-ReplyGroup' sx={REPLY_GROUP_SX}>
+        {chatMessage}
+        <ReplyFeedback message={message} alwaysShown={isMobile}/>
+      </Box>
     )
   }
 
@@ -524,6 +559,14 @@ let building = null
 async function runTurn({text, turn, conversationId}) {
   const turnStartedAt = Date.now()
   let refusal = null
+  // For the reply's rating (assistFeedback.js): the model calls the turn
+  // made, counted by the distinct step ids its events carry (loop.ts
+  // `streamStepId`: every step streams text or a tool call), and which
+  // model class answered. Read when the turn ends: the hosted transport
+  // reads the choice at each request (assistState.js lastModel), and the
+  // choice may change again before the reply is rated.
+  const stepIds = new Set()
+  let transportId = null
   // Updates from this send apply only to the chat it was sent in, so a
   // turn still finishing after the chat was reset can't write into the next.
   const update = (change) => assistChat.update((chat) => (chat.conversationId === conversationId ? change(chat) : chat))
@@ -561,7 +604,11 @@ async function runTurn({text, turn, conversationId}) {
     }
     const {session, transport} = instance
     try {
+      transportId = transport.id
       for await (const event of session.send(text)) {
+        if (typeof event.stepId === 'string') {
+          stepIds.add(event.stepId)
+        }
         const refusedModel = event.type === 'error' && (event.code === 'unavailable' || event.code === 'model_unavailable')
         if (refusedModel && transport.id === HOSTED_TRANSPORT_ID && isUserChosenModel(assistHostedSide.lastModel)) {
           // The relay refused the model the user picked (#1934): another
@@ -602,10 +649,14 @@ async function runTurn({text, turn, conversationId}) {
       setMessages((prev) => [...prev, textMessage('error', TURN_FAILED_MESSAGE)])
     }
   } finally {
+    const modelChoice = transportId === null ? 'default' : modelChoiceOf(transportId, assistHostedSide.lastModel)
     update((chat) => ({
       ...chat,
       streamingTurn: chat.streamingTurn === turn ? null : chat.streamingTurn,
       messages: chat.messages.map((message) => {
+        if (message.kind === 'assistant' && message.turn === turn) {
+          return {...message, live: false, stats: {steps: stepIds.size, modelChoice}}
+        }
         if (message.live) {
           return {...message, live: false}
         }

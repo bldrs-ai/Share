@@ -123,6 +123,16 @@ export const PROBES = [
     strict: [MISSING_BEARER],
   },
   {
+    name: 'feedback',
+    scenario: 'feedback/invalid-feedback',
+    method: 'POST',
+    body: {},
+    // An empty body is refused before the blob store is opened, so the
+    // probe stores nothing and needs no secret.
+    accept: [{status: HTTP_BAD_REQUEST, body: 'invalid_feedback'}],
+    strict: [{status: HTTP_BAD_REQUEST, body: 'invalid_feedback'}],
+  },
+  {
     name: 'gh-oauth-exchange',
     scenario: 'gh-oauth-exchange/unauthenticated',
     method: 'POST',

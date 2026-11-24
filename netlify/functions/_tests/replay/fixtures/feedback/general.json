@@ -1,0 +1,15 @@
+{
+  "v": 1,
+  "feedback_id": "0b9e8d7c-6a5b-4c3d-9e2f-1a0b9c8d7e6f",
+  "source": "general",
+  "rating": null,
+  "note": "The cut plane menu is hard to find.",
+  "screenshot": null,
+  "view": {
+    "model": {"route_kind": "project", "source": "hosted", "format": "ifc", "ref": "https://bldrs.ai/index.ifc"},
+    "camera": null,
+    "selection": {"count": 0, "refs": [], "types": {}}
+  },
+  "tier": "free",
+  "context": {}
+}

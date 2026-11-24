@@ -1,0 +1,12 @@
+{
+  "description": "A valid record posted by a browser on another site is refused 403 before the store is touched (no exchanges).",
+  "env": {"$fixture": "env/feedback.json"},
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/feedback",
+    "headers": {"content-type": "application/json", "origin": "https://elsewhere.example"},
+    "body": {"$fixture": "feedback/assist-reply.json"}
+  },
+  "exchanges": [],
+  "expect": {"statusCode": 403, "json": {"error": "feedback_forbidden_origin"}}
+}

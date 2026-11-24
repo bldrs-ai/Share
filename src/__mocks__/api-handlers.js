@@ -19,6 +19,7 @@ import {
   modelSlots,
   slotsHeaderValue,
 } from '../export/exportSlots'
+import {parseFeedbackRecord} from '../feedback/feedbackRecord'
 import {FREE_PRIVATE_MODEL_LIMIT, isCountedByRouteKind} from '../quota/limits'
 import {isProSubscriptionStatus} from '../quota/proStatus'
 import {isLocalFileMeteringEnabled, pruneLoads} from '../quota/quota'
@@ -195,6 +196,10 @@ function setMockSlotLedger(loads) {
 }
 
 
+const HTTP_NO_CONTENT_MOCK = 204
+const HTTP_BAD_GATEWAY_MOCK = 502
+
+
 /**
  * @param {number} status
  * @param {object} body
@@ -213,6 +218,30 @@ function jsonMockResponse(status, body, headers = {}) {
  */
 function netlifyHandlers() {
   return [
+    // User feedback (design/new/feedback.md): stands in for
+    // `netlify/functions/feedback.js` in dev, Playwright and Jest. Same
+    // shape check (the record module both share) and answers; the stored
+    // records go on `window.__mockFeedback`, keyed by feedback_id like the
+    // function's blobs, for a spec to read back. A spec sets
+    // `window.__mockFeedbackFail` to make the store answer 502.
+    http.post('/.netlify/functions/feedback', async ({request}) => {
+      const record = parseFeedbackRecord(await request.text())
+      if (!record) {
+        return jsonMockResponse(HTTP_BAD_REQUEST, {error: 'invalid_feedback'})
+      }
+      if (typeof window !== 'undefined' && window.__mockFeedbackFail) {
+        return jsonMockResponse(HTTP_BAD_GATEWAY_MOCK, {error: 'feedback_store_failed'})
+      }
+      if (typeof window !== 'undefined') {
+        const stored = window.__mockFeedback || {}
+        if (!(record.feedback_id in stored)) {
+          stored[record.feedback_id] = {...record, at: new Date().toISOString()}
+        }
+        window.__mockFeedback = stored
+      }
+      return new Response(null, {status: HTTP_NO_CONTENT_MOCK})
+    }),
+
     http.post('/.netlify/functions/create-portal-session', ({request}) => {
       // Real handler derives the Stripe customer server-side from the bearer
       // token; mock asserts the contract by requiring the Authorization

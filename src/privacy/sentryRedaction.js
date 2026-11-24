@@ -286,3 +286,99 @@ export function redactConsoleMessage(message) {
   }
   return message
 }
+
+
+/** What {@link withholdModelNames} writes in place of a model's name or path. */
+export const WITHHELD_MODEL_NAME = '(model name withheld)'
+
+// A bare stem shorter than this ("a", "v2") is too likely to be an ordinary
+// word in the text to withhold on sight; the full file name still is.
+const MIN_STEM_CHARS = 4
+
+
+/**
+ * The strings that name a private model, for {@link withholdModelNames}: each
+ * path the route carries (`filepath`, `gitpath`, `downloadUrl`, `srcUrl`), its
+ * last segment (the file name), that name without its extension, and any
+ * further names given (the tree root's name, which an IFC project carries).
+ * Longest first, so a path is withheld whole before its file name is.
+ *
+ * @param {object|null} routeResult routes.ts#handleRoute, the store's `modelPath`
+ * @param {Array<string>} [extraNames]
+ * @return {Array<string>}
+ */
+export function modelNamesOf(routeResult, extraNames = []) {
+  const names = new Set()
+  const add = (value) => {
+    const text = typeof value === 'string' ? value.trim() : ''
+    if (text) {
+      names.add(text)
+    }
+  }
+  const paths = ['filepath', 'gitpath', 'downloadUrl', 'srcUrl']
+    .map((key) => routeResult?.[key])
+    .filter((value) => value !== undefined && value !== null)
+    .map(String)
+  for (const path of paths) {
+    add(path)
+    let segment = path.split(/[?#]/)[0].split('/').filter(Boolean).pop() ?? ''
+    try {
+      segment = decodeURIComponent(segment)
+    } catch {
+      // Keep it as written: a stray % shouldn't cost the redaction.
+    }
+    add(segment)
+    const stem = segment.replace(/\.[^.]+$/, '')
+    if (stem.length >= MIN_STEM_CHARS) {
+      add(stem)
+    }
+  }
+  for (const name of extraNames) {
+    if (typeof name === 'string' && name.trim().length >= MIN_STEM_CHARS) {
+      add(name)
+    }
+  }
+  return [...names].sort((a, b) => b.length - a.length)
+}
+
+
+/**
+ * Free text with every occurrence of a private model's names and paths
+ * withheld (case-insensitive), for a sink outside the page that keeps text:
+ * the assistant's feedback store (Components/Bot/assistFeedback.js), whose
+ * reply and prompt can name the model the user was looking at. Like the rest
+ * of this file, the page keeps the real names.
+ *
+ * It catches the names Share knows, not every way free text can name a file
+ * (a misspelling, a name the user typed that isn't the model's), which is why
+ * the feedback note says what is shared.
+ *
+ * @param {string} text
+ * @param {Array<string>} names from {@link modelNamesOf}
+ * @return {string}
+ */
+export function withholdModelNames(text, names) {
+  if (typeof text !== 'string' || text === '' || !Array.isArray(names)) {
+    return typeof text === 'string' ? text : ''
+  }
+  const alternatives = names.filter((name) => typeof name === 'string' && name !== '')
+    .sort((a, b) => b.length - a.length)
+    .map(escapeRegExp)
+  if (alternatives.length === 0) {
+    return text
+  }
+  // One pass over one alternation, longest first: a path goes whole before
+  // its file name could match inside it, and a name that occurs in the
+  // placeholder itself ("model.ifc" → stem "model") can't match the text
+  // already replaced.
+  return text.replace(new RegExp(alternatives.join('|'), 'gi'), WITHHELD_MODEL_NAME)
+}
+
+
+/**
+ * @param {string} text
+ * @return {string} it, with every RegExp metacharacter escaped
+ */
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
