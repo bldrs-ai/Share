@@ -230,7 +230,7 @@ Two splits, both cut and paste:
 | From | To | Files |
 |---|---|---|
 | `src/workspace/` | session, where it is (2) | `modelPath.ts`, `persistence.ts`. Not moved: a directory of its own in layer 4, beside `src/session/` (§5). Decided by the owner on 2026-11-24 |
-| `src/viewer/edit/` | `src/session/edit/` (5) | `globalId.js`, `editRefs.js`, `editOps.js`, `editLog.js`, `editApply.js`, with their tests and the two fixtures (`edit.fixture.js`, `editBackend.fixture.js`). From #2346, which merges before M1; not in §3's counts, which are on `7cbc995d` |
+| `src/viewer/edit/` | `src/session/edit/` (5) | `globalId.js`, `editRefs.js`, `editOps.js`, `editLog.js`, `editApply.js`, with their tests and the two fixtures (`edit.fixture.js`, `editBackend.fixture.js`). From #2346, merged 2026-11-24 (`87625ffb`); not in §3's counts, which are on `7cbc995d` |
 
 **The edit layers** (agreed with the create-t300 session, 2026-11-24;
 [model-edit.md](../../new/model-edit.md) §3):
@@ -251,8 +251,8 @@ Two splits, both cut and paste:
 `Containers/ProjectsDrawer.jsx`, `Containers/TopBar.jsx` and
 `store/WorkspaceSlice.js`, all UI. Zoned in the session layer,
 `src/workspace/` makes no upward import, so §3's counts and the
-allowlist do not change. In `session/edit/`, read on #2346 at
-`689bdc18`, `editRefs.js` imports `viewer/visibilityRefs.js`, which M1
+allowlist do not change. In `session/edit/`, read on main at
+`87625ffb`, `editRefs.js` imports `viewer/visibilityRefs.js`, which M1
 moves to the model, so downward; the other files import only each other.
 
 **`viewer/tools/` is a UI surface.** Its 16 files are the assistant's
@@ -445,10 +445,17 @@ engine.capabilities                 // {openStream, openFromIndex, asyncPump, pr
   `Engine` method. That keeps the read interface to what every
   implementation, `MeshEngine` included, can answer (§8, "`Engine` could
   grow").
-- **A GlobalId lookup is a read, and not `SearchIndex`'s.** The op log
-  names source IFC elements by `g<GlobalId>` (model-edit.md §5), so the
-  model and engine read surface gains a GlobalId → instances lookup; its
-  name is chosen when it is built. `SearchIndex` is not exact: it
+- **A GlobalId lookup is a read, and not `SearchIndex`'s.** Since #2346
+  (merged 2026-11-24, `87625ffb`), `g<GlobalId>` is the only IFC ref an
+  op may carry, for a source element and for one the log created, and
+  `e<expressID>` is refused in an op because a re-export renumbers it
+  (model-edit.md §5; `viewer/edit/editRefs.js`, the module doc). A
+  *source* `g` ref resolves GlobalId → expressID → instances on each
+  load, so the model and engine read surface gains that lookup; its name
+  is chosen when it is built. A *created* element's GlobalId is minted
+  into its op (`viewer/edit/globalId.js#mintGlobalId`) and resolved from
+  the log's own applied ops, not from the source, so the lookup and
+  #2347 are for source refs only. `SearchIndex` is not exact: it
   lower-cases keys, puts description tokens into `eltsByGlobalId`, and
   returns the first element of a set (#2347). On a cache hit there is no
   engine, and today the artifact's spatial tree drops `GlobalId`
@@ -944,7 +951,7 @@ class ModelState {
 }
 
 // session/ModelSession.js
-session.id, session.modelKey, session.loadState
+session.id, session.modelKey, session.path, session.loadState
 session.state                       // ModelState: the truth for this model's fields
 session.root                        // Group
 session.viewState                   // {camera, planes} or null; written at detach
@@ -960,15 +967,17 @@ session.close()                     // emit 'closing'; abort; release every leas
 
 // session/ModelSessionHost.js: one for the page
 getModelSessionHost()
-host.open(modelKey) → ModelSession  // the same model → the active session; else leave the active one,
-                                    //   then hold the scene count (below) before the new load starts
+host.open(modelKey, {path}) → ModelSession   // the same model → the active session; else leave the active one,
+                                    //   then hold the scene count (below) before the new load starts.
+                                    //   path: the in-app route it was opened from, recorded on a new
+                                    //   session as session.path (§4.5a); null for a headless open
 host.active
 host.leave(session)                 // close, or keep in the background (EngineHost#mayKeepInBackground)
 
 // What the ProjectsDrawer consumes (3b; slice 4 adds the dormant and paused states)
-host.sessions() → [{modelKey, path, loadState}]   // read-only; path is what the session was opened from
+host.sessions() → [{modelKey, path, loadState}]   // read-only; path is session.path, given to open()
 host.subscribe(cb) → unsubscribe                  // cb() when the list or a loadState changes
-host.open(modelKey) / host.close(modelKey) / host.foreground(modelKey)
+host.open(modelKey, {path}) / host.close(modelKey) / host.foreground(modelKey)
 ```
 
 - **The session's state is the truth.** A `LoadJob`'s `set(partial)`
@@ -1053,9 +1062,19 @@ host.open(modelKey) / host.close(modelKey) / host.foreground(modelKey)
     (`utils/modelDisplayName.js`, `src/app/` after M2), which is UI, so
     the list carries the path and not a label. The path is the one the
     session was opened with, never rebuilt from the key (§4.5a).
-  - `open(modelKey)` is `ModelSessionHost#open`: it finds a session the
-    host holds. A model the drawer has only as a stored path opens by
-    route, as today, and the route gives the key.
+  - **The path comes in at creation.** Since nothing maps a key back to
+    a path, `open` takes both: `host.open(modelKey, {path})`. CadView
+    passes the route it is opening,
+    `modelPathFromPathname(location.pathname)`, the value the drawer
+    and the TopBar already compute (`ProjectsDrawer.jsx:159–161`,
+    `TopBar.jsx:75`). A new session records it as `session.path`. An
+    `open` that finds the session already held keeps the path it has:
+    the element segments are stripped, so a selection does not change
+    it.
+  - `open(modelKey, {path})` is `ModelSessionHost#open`: it finds a
+    session the host holds, or makes one. A model the drawer has only
+    as a stored path opens by route, as today, and the route gives the
+    key and the path.
   - Once background sessions land (3b), the drawer's `workspaceCapture`
     workaround (`workspace/persistence.ts#loadWorkspaceCapture`, a
     localStorage entry with a 10-minute TTL, kept there so that an armed
@@ -1141,8 +1160,10 @@ against the code on `d8542e42`.
 - **The key.** `ModelSession.modelKey` is
   `routes/modelIdentity.ts#modelIdentity(modelPath, installPrefix)`.
   CadView opens a session with it: `sessionHost.open(modelIdentity(modelPath,
-  installPrefix))` (`CadView.jsx:2598`). A top-level load passes the same
-  string to `EngineHost#acquire` as its `modelKey` (§4.2).
+  installPrefix))` (`CadView.jsx:2598`). From 3a the call also passes the
+  in-app path, `open(modelKey, {path})` (§4.5), because the key cannot
+  give it back. A top-level load passes the same string to
+  `EngineHost#acquire` as its `modelKey` (§4.2).
 - **One way only.** The in-app path is parsed (`routes/routes.ts#handleRoute`,
   `routes/github.ts`), then `modelIdentity` gives the key. **Nothing goes
   from a key back to a path.** The drawer keeps its in-app
@@ -1621,7 +1642,7 @@ slices around it shift by six if it lands earlier.
   `viewer/`, and `Components/Properties/propertyTable.js`); the three
   Conway load files and `export/glbGzip.js` into `src/loader/`;
   `loader/glbLog.js` to `utils/`; `Containers/modelSession.js` to
-  `src/session/`; `viewer/edit/` (#2346's op log and applier) to
+  `src/session/`; `viewer/edit/` (#2346's op log and applier, on main) to
   `src/session/edit/`; the two splits of §2.2 and `sizeClass` to `utils/`;
   `tools/lint/layers.cjs`, the allowlist, `checkLayerAllowlist.mjs`,
   `src/layerBoundary.test.js`; the headless static guard (§6).
@@ -2026,6 +2047,10 @@ A → B equals a fresh page's B.
     3a does not migrate them into per-model state. If #1704 has not
     landed when 3a starts, 3a leaves them where they are.
   - *The key* is `modelIdentity` (§4.5a), and 3a adds its tripwire.
+  - *The path* comes in with the key: `ModelSessionHost#open(modelKey,
+    {path})`, and CadView's call (`CadView.jsx:2598`) passes
+    `modelPathFromPathname(location.pathname)`. 3b's drawer list reads
+    it as `session.path`.
 - **Neutral at cap 1.** The store holds what it held, written through
   one more function.
 - **Tests:**
@@ -2050,6 +2075,9 @@ A → B equals a fresh page's B.
   - *Unit, the key (§4.5a):* the tripwire in
     `routes/modelIdentity.test.ts`, three legs (GitHub, `local-only`
     upload, bare `filepath`).
+  - *Unit, the path:* `open(key, {path})` records `session.path`; a
+    second `open` of the same key from the same route with element
+    segments keeps it (red with `path` not passed through: `null`).
   - *Unit, the edit log:* an op applied in A, then a bind of B, then a
     bind of A again shows A's `appliedOps` and cursor in `EditSlice`,
     and B's log is empty (red with the log left in the store).
@@ -2366,7 +2394,7 @@ context-restore paths, `FeatureFlags.js:529`, `utils/location.js:9`,
 `routes.ts#processFile`, `github.ts`; `CadView.jsx:2598`;
 `feedback/feedbackView.js:67`; `store/modelState.js`;
 `batchedEditGuard.test.js`'s allowlist. And `src/viewer/edit/`'s imports
-on #2346 at `689bdc18`.
+and model-edit.md §5's ref contract on main at `87625ffb`, after #2346.
 
 **Run:** `modelIdentity` on a GitHub route, a `local-only` upload and a
 bare `filepath`, each with and without element segments (§4.5a's

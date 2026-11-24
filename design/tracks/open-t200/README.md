@@ -41,7 +41,7 @@ The sub-issues of #2315, in order: the slices of [layering.md](layering.md) §7,
 | [#2327](https://github.com/bldrs-ai/Share/issues/2327) 3b: cap N under `?feature=workspace` | Leave a model loading and come back to it finished. | Background finish and selection restore, desktop and mobile. |
 | [#2328](https://github.com/bldrs-ai/Share/issues/2328) 4: eviction that keeps the session, and rehydrate | Under memory pressure a background model loses its engine and keeps its scene. | The eviction E2E. |
 
-**Sequencing (2026-11-24).** Create's #2346 merges first. Then M1 and M2, which the owner holds until the other sessions' work settles. Then the Conversational CAD work (`search-320` slice 2, #1704, the TopBar and drawer stories) starts on the new paths.
+**Sequencing (2026-11-24).** Create's #2346 merged first, the same day. Then M1 and M2, which the owner holds until the other sessions' work settles. Then the Conversational CAD work (`search-320` slice 2, #1704, the TopBar and drawer stories) starts on the new paths.
 
 Planned, with no issue yet (lines on #2315 until picked up):
 
