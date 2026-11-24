@@ -1324,3 +1324,62 @@ PSB and a 243 MB ARCHICAD model were flat. First mesh is unchanged on every
 model, and the geometry digests are identical, so the output did not move.
 The preview-adapter walk skip was measured as well and showed no effect, so
 it stays as it is.
+
+## Extraction-prep walk skip: no effect (not shipped)
+
+Date measured: 2026-11-20.
+
+**What was tested.** Under a store that reads synchronously
+(`sourceReadsSynchronously`), the extraction-prep walk
+(`ensureResidentForDemandPrep` → `pageForDemandPrep_`) was skipped. The prep
+sweeps then fault records in themselves, each sweep inside
+`readTrackingSourceViews`. The walk pages in, one record at a time, what the
+sweeps read: the project's units closure, the
+`IfcMaterialDefinitionRepresentation` closures, the records of
+`IfcRelAssociatesMaterial`, `IfcRelDefinesByType`, `IfcRelVoidsElement`,
+`IfcStyledItem` and `IfcRelAggregates`, and one hop over the rel-material and
+rel-void records.
+
+**Where it runs.** Three times per cold deferred load (preview generations
+plus the first `ExtractGeometryBatchAsync`), once per sidecar reopen, and in
+the non-deferred open. In Node the walk costs 0.3–0.8 s per open across those
+calls.
+
+**Rig.** Headless Chromium, `windowedHandle` arm of `tools/bench/sourceModes`,
+cold loads, fresh profiles. Baseline conway `1.1656.798-gac3a6af9` (main
+`ac3a6af9`) against the same build with the prep skip. Five interleaved
+rounds, medians.
+
+| Model | Arm | Geometry s | Total s | First mesh s | Store reads | MB read | Final window MB | Worker peak MB |
+|---|---|---|---|---|---|---|---|---|
+| PSB | main | 19.0 | 39.0 | 3.22 | 913 | 4074 | 61 | 1553 |
+| PSB | skip | 18.7 | 38.7 | 3.11 | 932 | 4150 | 61 | 1046 |
+| D3D | main | 43.5 | 52.0 | 1.27 | 606 | 2522 | 126 | 1037 |
+| D3D | skip | 44.7 | 53.1 | 1.29 | 518 | 2170 | 126 | 978 |
+| 309 MB ARCHICAD 22 IFC2X3 model | main | 12.3 | 22.0 | 1.42 | 569 | 2408 | 61 | 1216 |
+| same | skip | 12.1 | 21.5 | 1.42 | 689 | 2886 | 61 | 966 |
+| 243 MB ARCHICAD model | main | 13.3 | 20.9 | 1.23 | 396 | 1698 | 128 | 890 |
+| same | skip | 13.4 | 20.7 | 1.20 | 581 | 2438 | 64 | 1058 |
+
+Sidecar reopen, three rounds, geometry seconds main to skip: D3D 45.0 to 44.8
+(store reads 558 to 512); the 309 MB model 12.0 to 12.1 (store reads 603 to
+721; first mesh 2.34 to 2.57 s, three runs, likely noise).
+
+**Findings.**
+
+- Geometry, total and first mesh stay within 3.5% of main on every model. The
+  decision rule (at least 5% better somewhere, nothing more than 5% worse) was
+  not met, so the skip was not shipped and the walk stays.
+- Store reads rise on three of the four models. Records the walk batched now
+  fault in one at a time.
+- Worker peak memory moved both ways (PSB −33%, the 309 MB model −21%, the
+  243 MB model +19%). This is not read as a memory win.
+- Placed and payload geometry digests are byte-identical to main on all four
+  models.
+- Not covered: the read-failure path of the prototype (it rethrew
+  `StepSourceReadError` from the prep, so the load fails once instead of
+  leaving a partial materials, voids and styles map), the non-deferred open's
+  prep, Firefox and Safari.
+
+With this, all three walks left after conway#787 are measured. Only the
+aggregate skip (conway#798) paid off.
