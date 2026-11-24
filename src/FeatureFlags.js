@@ -341,6 +341,13 @@ export const flags = [
   // both of which now run in the default configuration.
   // See design/new/model-display-controls.md §7.
   {name: 'displayControls', isActive: true},
+  // Model editing (create-300, #1914; design/new/model-edit.md §7): delete,
+  // transform, duplicate and create over an op log with undo/redo. Gates the
+  // user-visible pieces only, and L1 (#1916) has none: the op log, the
+  // applier and the store's EditSlice ship unconditionally and nothing calls
+  // them yet. L2's minimal UI (#1917: Delete, copy/paste, undo/redo keys)
+  // is the first thing behind it. Default off.
+  {name: 'edit', isActive: false},
   // OFF-switch for adaptive residency during camera motion (B3 of
   // design/new/demand-tiled-rendering.md; viewer/residency/MotionResidency.js),
   // on by default since the owner's A/B on a real GPU (it was the opt-in

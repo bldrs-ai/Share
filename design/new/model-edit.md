@@ -1,6 +1,6 @@
 # Model edit — the create-300 substrate (Track `create-t300`)
 
-**Status:** L0 landing (#1915). L1–L3 planned.
+**Status:** L0 landed (#1915). L1 landing (#1916). L2–L3 planned.
 **Epics:** `create-300` (#1914), `create-310` (#1919), `create-320` (#1920).
 **Related:** #1913 (evict + rematerialize; the memory half builds on L0), #1710
 (S5 scoped application: the selection→ref wiring is shared),
@@ -57,7 +57,7 @@ Each layer is one story of #1914, in dependency order.
 | Layer | Story | What it adds |
 |---|---|---|
 | **L0** | #1915 | Mutation-safe batches. Consumers tolerate deleted and reused instance ids; side tables can grow; `addGeometry` works after load. No UI. §6. |
-| **L1** | #1916 | The op log and undo/redo. Pure data, `{id, kind, ref, payload, layer}`, kinds `create` / `delete` / `transform` / `duplicate` / `setProperty` / `setGeometry`. Invertible ops; undo is a cursor over the log. The resolver is pure, modelled on `src/viewer/display/overrideStack.js`. An `EditSlice` holds the log, cursor and `dirty`. |
+| **L1** | #1916 | The op log and undo/redo. Pure data, `{id, kind, targets, payload, layer}`, kinds `create` / `delete` / `transform` / `duplicate` / `setProperty` / `setGeometry`. Invertible ops; undo is a cursor over the log. The applier and resolver are pure, modelled on `src/viewer/display/overrideStack.js`. An `EditSlice` holds the log, cursor and `dirty`. §6b. |
 | **L2** | #1917 | Apply backends. Delete → `deleteInstance`, transform → `setMatrixAt` (plus BVH and bounds refit), duplicate → `addInstance`, create primitive → `addGeometry` + `addInstance`, swap shape → `setGeometryIdAt`. Batched first, then the scene graph. Minimal UI behind the flag. |
 | **L3** | #1918 | Persistence. The `document`-layer ops as a JSONL sidecar, replayed over the source on both cache-miss and cache-hit loads. The edited-model cache-key rule (§7). |
 
@@ -81,20 +81,32 @@ document, or a pasted part gets silently evicted and looks like data loss.
 
 ## 5. Stable refs
 
-An op names its target with a ref that survives a reload. The vocabulary is
-the one the hide/isolate permalink already uses (`src/viewer/visibilityRefs.js`,
-[model-display-controls.md](model-display-controls.md) §6.3), plus one new kind:
+An op names its targets with refs that survive a reload and, where the format
+allows it, a re-export of the source. The vocabulary is the one the
+hide/isolate permalink uses (`src/viewer/visibilityRefs.js`,
+[model-display-controls.md](model-display-controls.md) §6.3), narrowed for a
+log that is persisted. `src/viewer/edit/editRefs.js` parses, formats and
+validates it.
 
-| Ref | Names | Stable because |
-|---|---|---|
-| `e<expressID>` | an IFC element (and STEP product hides) | the source file is immutable |
-| `o<id>.<id>…` | a STEP occurrence: NAUO path, plus the solid when a named body is meant | same |
-| `n<seg>/<seg>…` | a scene-graph node (ADF, OBJ, GLB, …) by NavTree names | names are what the file carries |
-| `g<GlobalId>` | an element the log itself **created** | minted when the op is created |
+| Ref | Names | In an op? | Stable because |
+|---|---|---|---|
+| `g<GlobalId>` | an IFC element, **from the source or created by the log** | yes; the only IFC ref | `IfcRoot.GlobalId` is what the file carries, and authoring tools keep it across re-exports. A created element's is minted when the op is created. |
+| `o<id>.<id>…` | a STEP occurrence: NAUO path, plus the solid when a named body is meant | yes, **source-pinned** (§5.2) | only over the exact source bytes it was recorded against |
+| `n<seg>/<seg>…` | a scene-graph node (ADF, OBJ, GLB, …) by NavTree names | yes | names are what the file carries |
+| `e<expressID>` | an IFC element, or a STEP product row | **no**: permalinks and per-load resolution only | it is not: see below |
+
+**`e<expressID>` is refused in an op** (#1916 thread). An expressID is a STEP
+line number: local to one file, and reassigned by any re-export of the base
+model. A log keyed on it silently re-targets the wrong elements the first time
+the base is re-authored and re-uploaded. It stays correct in a permalink, which
+names one file, and as a **per-load resolution cache**: a source `g` ref
+resolves GlobalId → expressID → instances on each load, and only the GlobalId
+is stored.
 
 Created elements get a **22-character IFC GlobalId** minted when the `create`
 op is created (128 random bits, compressed to the IFC base64 alphabet;
-[create-engine.md](create-engine.md) §B3). The GlobalId is stored in the op,
+[create-engine.md](create-engine.md) §B3; `src/viewer/edit/globalId.js`). A
+`duplicate` mints one per copy the same way. The GlobalId is stored in the op,
 so replay is deterministic and a later op can refer to an element an earlier op
 created. It is also what an eventual IFC export writes as the element's
 `GlobalId`. **Express ids are never stored in the log.** They are a
@@ -112,6 +124,95 @@ reload:
   appending (`node_modules/three/src/objects/BatchedMesh.js:580-591`, three
   r0.184), so after one delete and one paste, the same `batchId` names a
   different element.
+
+The same holds for L0's minted occurrence and geometry ids (§6.2): they are
+per-load, and the op log never sees them.
+
+**Targets are a list.** An op carries `targets: [ref, …]` even for one
+element. A scope is a set of node paths (#1710's scope algebra;
+[scope-model.md](scope-model.md), **pending**, being drafted alongside #1704),
+and a list lets an op carry that set later without a schema change. L1 gives
+the list no meaning beyond "apply to each, all or nothing" (§6b).
+
+### 5.1 GlobalId on a cache-hit load: missing today
+
+Checked against `public/index.ifc` (Conway parse in Jest, then the GLB writer's
+own capture, `loader/glbEngineCapture.js#captureEngineExtensions`):
+
+| | fresh parse | cache hit |
+|---|---|---|
+| spatial-tree nodes | 11 | 11 |
+| nodes carrying `GlobalId` | 11 | **0** |
+| `SearchIndex.eltsByGlobalId` keys | 22 (11 GlobalIds and their lower-cased aliases) | **0** |
+| `getExpressIdByGlobalId('3hm2qpxcLC2QR6PjoCX$Ma')` | `'771'` | **`undefined`** |
+
+- **Why.** `CadView.jsx#installModelTree` builds the search index from the
+  spatial tree (`initSearch`). On a fresh parse that tree is Conway's `'names'`
+  mode, which carries Name, LongName and GlobalId. On a cache hit it is
+  `BLDRS_spatial_tree`, and `loader/bldrsSpatialTree.js#serializeNode` keeps
+  `expressID`, `type`, `Name`, `LongName`, the STEP fields and `children`,
+  but not `GlobalId`. `export/glbPortable.js#nodeNameOf` already notes this.
+- **The GlobalId is still in the artifact,** in `BLDRS_element_properties`:
+  #771's decodes from the container. But that payload is keyed by expressID
+  and inflated lazily, one block at a time. Going from GlobalId to expressID
+  would mean inflating every block, which is what its design avoids.
+- **Consequence.** On a cache hit, which is the default reload path, every
+  source `g` ref is unresolved. L1's resolver reports it rather than failing
+  silently (`editApply.test.js` pins this: the test flips when the artifact
+  carries GlobalId). Assist's `viewer/tools/refs.js` resolves `g` refs through
+  `SearchIndex` too, and has the same gap today.
+- **Proposed fix, for L2 (not done here, because it changes the artifact
+  payload).** Keep `GlobalId` in `serializeNode`. The live tree already has
+  it, so this is one field per node. It costs at least 16 bytes per node
+  compressed, since a GlobalId is 128 random bits and doesn't gzip: about
+  16 KB per 1,000 nodes. The field is additive, so readers that ignore it are
+  unaffected. Artifacts written before it lack it, and L2 needs one of two
+  answers for them:
+  - a cache-key bump, so they are rewritten; or
+  - a one-time reverse map built by inflating the element-properties blocks.
+  That choice is the owner's.
+
+Two more things about `SearchIndex` as a resolver:
+
+- **It is not exact.** `indexElementByString` also files every key
+  lower-cased, so a lower-cased GlobalId resolves to the element, and IFC's
+  alphabet is case-sensitive. `indexElement` also puts description tokens
+  into `eltsByGlobalId`. And `getExpressIdByGlobalId` answers with the
+  first element of a set without saying that there were others.
+- **What L1 uses instead.** Edit refs resolve through
+  `editApply.js#ifcGlobalIdIndex`. It is exact and case-sensitive, and it
+  reports a GlobalId that two elements share (a real exporter defect) rather
+  than picking one.
+
+Neither path indexes an IfcRoot that is not in the spatial tree, such as an
+opening. L1 does not change that.
+
+### 5.2 STEP: occurrence refs are source-pinned
+
+A STEP occurrence path is NAUO express ids. A re-export renumbers them just as
+it renumbers IFC express ids, and STEP has no GUID to fall back on. **No
+portable STEP identity is safe yet, so none is adopted.** The rule instead:
+
+- An `o` ref is accepted in an op, and `editRefs.js#isPortableEditRef` answers
+  false for it.
+- It is correct over the exact source bytes it was recorded against. A
+  re-parse of the same bytes yields the same ids (engine-worker.md §5.5).
+- **L3 (#1918) must bind a log holding a non-portable ref to the source's
+  content key** (`src/loader/sourceCacheKey.js`). It must also refuse to
+  replay such ops over any other source, and report each one as unresolved
+  because the source changed. A re-authored STEP base then drops its `o` ops
+  loudly, rather than re-targeting them silently.
+
+The candidates considered, and why each is unsafe:
+
+| Candidate | Fails when |
+|---|---|
+| Product-name path, like `n` | Names repeat: every instance of "Bolt M6" has the same one. Telling siblings apart needs ordinals, and those follow the file's NAUO order, so a re-export that reorders an assembly re-targets silently. It is the expressID failure, rarer but still silent. |
+| The NAUO's own `id` string (`'NAUO12'`) | Exporters regenerate it. |
+| A geometry content hash | It names the part, not the occurrence: every placement of a shared part collides. Any tessellation change also breaks it. |
+
+This interacts with the shared-part question in §9 (edit one occurrence or the
+part definition). Revisit both together.
 
 
 ## 6. L0: mutation-safe batches (#1915)
@@ -373,11 +474,162 @@ Left to L2:
   op can touch a hidden element.
 
 
+## 6b. L1: the op log (#1916)
+
+Numbered 6b so §7–§9, which other docs cite, keep their numbers. All of it is
+pure data and pure functions, with no THREE and no model. It ships
+unconditionally and nothing calls it until L2. Tests run against the fake
+backend in `editBackend.fixture.js`.
+
+| File | Holds |
+|---|---|
+| `src/viewer/edit/globalId.js` | The IFC compressed-GUID codec and `mintGlobalId` (128 random bits; an injectable byte source for tests) |
+| `src/viewer/edit/editRefs.js` | `g` / `o` / `n` parse, format, validate; `e` refused; `isPortableEditRef` (§5, §5.2) |
+| `src/viewer/edit/editOps.js` | The op shape, `validateEditOp`, `makeEditOp` (mints) |
+| `src/viewer/edit/editLog.js` | The log and its cursor: record, undo/redo steps, dirty, `appliedOps` |
+| `src/viewer/edit/editApply.js` | `applyEditOp` / `revertEditOp`, the `EditBackend` and resolver contracts, `ifcGlobalIdIndex` |
+| `src/store/EditSlice.js` | The store's log, cursor, `isEditDirty`, `canUndoEdit` / `canRedoEdit`, `applyEdit` / `undoEdit` / `redoEdit` |
+
+### The op
+
+`{id, kind, targets, payload, layer}`, plain JSON. `validateEditOp` checks the
+same rules whether an op was just made or came out of someone else's link
+(L3's untrusted-log check, §7, starts from it).
+
+- **`targets`** is a non-empty list of distinct edit refs (§5).
+- **`layer`** is required, either `'view'` or `'document'`, and never
+  defaulted (§4).
+- **`id`** is 128 random bits in the same 22-character encoding as a
+  GlobalId. It is not a ref.
+
+The payload by kind:
+
+| Kind | Targets | Payload |
+|---|---|---|
+| `create` | one `g` ref, minted by `makeEditOp` | what to build; opaque to L1 (L2; create-320's generators, §8) |
+| `delete` | the elements | `{}` |
+| `transform` | the elements | `{matrix}`: 16 finite numbers, column-major, a delta pre-multiplied onto each target's placement |
+| `duplicate` | the sources | `{copies, …}`: one minted `g` ref per target, in order, disjoint from the targets; the rest is opaque |
+| `setProperty` | the elements | `{key, value}`; `value: null` removes. `undefined` is refused because JSON drops it, and a persisted op would come back without a value. |
+| `setGeometry` | the elements | `{geometry}`, an object; opaque to L1 |
+
+L1 does not restrict which kinds a `view` op may be. Eviction is a view-layer
+`delete`. Whether any other pairing is meaningful is for the code that makes
+view ops (#1913) to say.
+
+### Invertibility: captured at apply, kept beside the op
+
+`applyEditOp` captures what reverts the op **before** any of its forward steps
+run. A multi-target op therefore records each target as it was, even if one of
+its own steps changes another.
+
+| Kind | Captured (per target) | Revert |
+|---|---|---|
+| `create` | nothing | `delete` what it made |
+| `duplicate` | nothing | `delete` each copy |
+| `delete` | `capture(target)`: everything `restore` needs (matrix, colour, row, geometry) | `restore(ref, snapshot)` |
+| `transform` | `getMatrix` | `setMatrix(prior)` |
+| `setProperty` | `getProperty(key)` (`null` when absent) | `setProperty(key, prior)` |
+| `setGeometry` | `getGeometry` | `setGeometry(prior)` |
+
+How the undo record is kept:
+
+- **It lives in the log entry, `{op, undo}`, and not in the op.** A delete's
+  snapshot holds per-load ids such as a row's `parent` and `occurrenceId`.
+- **It is never persisted.** `editLog.js#appliedOps` returns the applied ops
+  only, which is what L3 writes. A replay captures them afresh.
+- **Redo re-applies the op and captures again.** So the undo after a redo
+  returns to the state at the redo, including anything a view op changed in
+  between.
+
+### Undo/redo is a cursor
+
+The log is `{entries, cursor, cleanCursor}`. `entries[0 … cursor)` have been
+applied; the rest are the redo tail. Undo and redo move the cursor. Nothing
+is kept on a second stack.
+
+- **A document op recorded after an undo truncates the redo tail.**
+- **A view op is applied but leaves the log as it was.** It is not in
+  history, it does not dirty, and it does not truncate redo, since nothing
+  the user could undo has changed. `editLog.js#recordApplied` is the one
+  place this is decided.
+- **Dirty means `cursor !== cleanCursor`.** A fresh load is clean at 0, and
+  `markClean` (L3's save) moves the clean point. Undoing back to the saved
+  point is clean again. If a truncation drops the saved point, that state can
+  never come back, and `cleanCursor` becomes -1.
+
+### The applier and the resolver
+
+Both are pure. They turn an op into calls on an `EditBackend`, and its refs
+into targets through a resolver. L2 implements both.
+
+- **`EditBackend`** has one method per element action:
+  - `create(ref, payload)`, `delete(target)`, `capture(target)`,
+    `restore(ref, snapshot)` and `duplicate(target, copyRef, payload)`;
+  - `transform(target, matrix)`, `getMatrix`, `setMatrix`;
+  - `getProperty` / `setProperty`, `getGeometry` / `setGeometry`.
+
+  After `create`, `duplicate` and `restore` return, the resolver must resolve
+  the ref they were given. `restore` takes the ref, not a target, because a
+  deleted element may no longer resolve.
+- **The resolver** is `makeEditRefResolver({g, o, n})`, one lookup per ref
+  kind the model can answer. A ref of a kind the model has no lookup for is
+  reported with that reason.
+  - For IFC, the `g` lookup starts from `ifcGlobalIdIndex(spatialTree)`
+    (GlobalId → expressID, exact; §5.1). L2 adds expressID → live instances,
+    plus its registry of created refs.
+- **Apply is all or nothing.**
+  - An invalid op, or one with any unresolved target, changes nothing and
+    returns `{ok: false, reason, unresolved: [{ref, reason}]}`. A `create`'s
+    target is not resolved first, since it does not exist yet.
+  - If the backend throws part way through, the targets already done are
+    reverted, newest first, and the error is rethrown. The L0 ops throw on
+    real states: `BatchEditIdError`, `BatchEditReentryError`, and a failed
+    allocation in `batchedGeometryCapacity.js`.
+- **Revert resolves first and reports.** If a ref the revert needs doesn't
+  resolve, nothing is reverted and the cursor stays put. A session can reach
+  this state: a view-layer eviction is not in history, so it can remove an
+  element that an earlier document op's undo has to touch.
+
+### EditSlice
+
+The store holds the log and the booleans derived from it (`editCursor`,
+`isEditDirty`, `canUndoEdit`, `canRedoEdit`), kept in step on every change.
+It also holds `editContext`, the `{backend, resolver}` pair L2 installs for
+the loaded model.
+
+- `setEditContext` resets the log, because undo records belong to one load.
+- With no context, every action reports `no edit backend` and changes nothing.
+- `applyEdit`, `undoEdit` and `redoEdit` return the applier's
+  `{ok, reason?, unresolved?}`.
+
+### Left to L2 and L3
+
+- **L2 (#1917).**
+  - Implement `EditBackend` over `batchedEdit.js`: `delete` →
+    `deleteBatchedInstance`, `restore` / `duplicate` → `addBatchedInstance`
+    with minted ids (§6.2), `transform` / `setMatrix` →
+    `setBatchedInstanceMatrix`, `setGeometry` → `setBatchedInstanceGeometry`.
+  - Add the resolver's expressID → instances leg and the created-ref
+    registry.
+  - Make GlobalId resolvable on a cache hit (§5.1).
+  - Install the context per model.
+  - Ship the first UI behind `?feature=edit`. The flag exists, default off,
+    and gates nothing in L1.
+- **L3 (#1918).**
+  - Serialize `appliedOps`.
+  - Bind any log holding a non-portable ref to its source's content key
+    (§5.2).
+  - Validate untrusted logs with `validateEditOp` plus resolution, and report
+    what did not apply.
+
+
 ## 7. Constraints
 
 - **Feature flag.** Every user-visible piece ships behind `?feature=edit`,
-  default off. L0 has no UI and changes no behaviour for an unedited model, so
-  it needs no flag.
+  default off (`src/FeatureFlags.js`, added with L1). L0 has no UI and changes
+  no behaviour for an unedited model, so it needs no flag. L1 has no UI either,
+  so the flag gates nothing until L2.
 - **Data sovereignty** (roadmap §7.2). Model bytes stay client-side. Ops are
   small and model-derived; what an agent sends to an LLM is governed by the
   "what the AI can see" boundary, not by this doc.
