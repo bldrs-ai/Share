@@ -27,7 +27,7 @@ Searched on 2026-11-23, `repo:bldrs-ai/Share is:issue`: `identity-100`, `identit
 Pinned to `3ab35f0`; test definitions read, no test run. "Not under `describeMobileAndDesktop`" means the spec has no `[mobile]` variant; it doesn't show the flow fails on a phone.
 
 - [Login.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Profile/Login.spec.ts) and [auth0ErrorPage.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/connections/auth0ErrorPage.spec.ts): desktop and mobile.
-- [ManageProfile.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Profile/ManageProfile.spec.ts) and [theme.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Profile/theme.spec.ts): not under `describeMobileAndDesktop`.
+- [ManageProfile.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Profile/ManageProfile.spec.ts) and [theme.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Profile/theme.spec.ts): not under `describeMobileAndDesktop`. Follow-up filed 2026-11-24: [#2339](https://github.com/bldrs-ai/Share/issues/2339) for the Manage Profile dialog (its Google-only block is `describe.skip`). The theme spec has none, because #1070 has no owner.
 - `githubAsSource` is off in [FeatureFlags.js](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/FeatureFlags.js).
 
 ## Decisions left open

@@ -28,11 +28,10 @@ Applied: titles on #1180 and #1254; #1180 added under #2278. No other parent cha
 
 ## Evidence
 
-Pinned to `a709994`; test definitions read, no test run. [Search.spec.ts](https://github.com/bldrs-ai/Share/blob/a709994d761a29bad0554d4bc1df2b0a5a66777f/src/Components/Search/Search.spec.ts) doesn't use `describeMobileAndDesktop`, so there is no `[mobile]` variant of the search flow. The element-path link is covered on both form factors by the NavTree and Camera permalink specs listed in [view-100-triage.md](view-100-triage.md#evidence).
+Pinned to `a709994`; test definitions read, no test run. [Search.spec.ts](https://github.com/bldrs-ai/Share/blob/a709994d761a29bad0554d4bc1df2b0a5a66777f/src/Components/Search/Search.spec.ts) doesn't use `describeMobileAndDesktop`, so there is no `[mobile]` variant of the search flow. The follow-up is [#2338](https://github.com/bldrs-ai/Share/issues/2338), under [#1254](https://github.com/bldrs-ai/Share/issues/1254). The element-path link is covered on both form factors by the NavTree and Camera permalink specs listed in [view-100-triage.md](view-100-triage.md#evidence).
 
 ## Decisions left open
 
-- Whether a desktop+mobile follow-up for search is filed ([#2278](https://github.com/bldrs-ai/Share/issues/2278)).
 - Whether `search-300` stays a placeholder after the assistant's first release (roadmap §8, item 11).
 
 ## Milestone hypotheses

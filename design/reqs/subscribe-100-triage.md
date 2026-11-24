@@ -24,7 +24,7 @@ No title, label or parent changed.
 Pinned to `3ab35f0`; test definitions read, no test run. "Not under `describeMobileAndDesktop`" means the spec has no `[mobile]` variant; it doesn't show the flow fails on a phone.
 
 - [QuotaLimitDialog.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Open/QuotaLimitDialog.spec.ts), [directLinkSoftGate.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/quota/directLinkSoftGate.spec.ts) and [driveLinkVisibility.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/quota/driveLinkVisibility.spec.ts): desktop and mobile.
-- [Quota.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Open/Quota.spec.ts) and [Subscription.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Profile/Subscription.spec.ts): not under `describeMobileAndDesktop`.
+- [Quota.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Open/Quota.spec.ts) and [Subscription.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Profile/Subscription.spec.ts): not under `describeMobileAndDesktop`. Follow-ups filed 2026-11-24: [#2342](https://github.com/bldrs-ai/Share/issues/2342) (quota, under `subscribe-120`) and [#2343](https://github.com/bldrs-ai/Share/issues/2343) (subscription menu, under `subscribe-110`).
 - The live smoke specs for export and tiers (`*.live.spec.ts`) skip without secrets ([live-browser-smoke.md](../new/live-browser-smoke.md)).
 
 ## Decisions left open
