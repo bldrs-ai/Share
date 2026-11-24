@@ -9,7 +9,10 @@ the cap, close, eviction and rehydrate) was refreshed on 2026-11-19 for
 Phase 1a, #2011 decision 6 and the source policy (§5.2–§5.5, §7 step 8,
 §8.1), and again on 2026-11-23 for the six layers (#2011 decision 8): the
 host hands out leases and never sees a session, and the layer map, the
-seams and the slice plan are in [layering.md](layering.md).
+seams and the slice plan are in [layering.md](layering.md). On 2026-11-24
+the owner named the engine (#2011 decision 10): `Engine` is the one
+interface a lease exposes, `WorkerEngine` is `EngineSession` renamed, and
+`ConwayEngine` is the main-thread path behind the same interface.
 **Epic:** `open-205` (#2011). Story: #2053 (closed 2026-11-18). Steps 7–8
 (sessions own their worker; close and eviction) are #2031's: with an engine
 in a worker, terminating the worker *is* the eviction.
@@ -546,9 +549,14 @@ load's first parse (§5.3, "Rehydrate"), not at eviction.
 ### 5.1 The async read surface
 
 `EngineSession` is the client half of one worker. It is renamed
-**`EngineConnection`** in slice 1 (decided 2026-11-23; layering.md §4.1
-says why that name), after which "session" in code means `ModelSession`
-only. This doc keeps today's name where it describes what is built:
+**`WorkerEngine`** in slice 1a (owner, 2026-11-24: "bc it's on a Worker
+thread"), after which "session" in code means `ModelSession` only. Its
+surface below becomes the format-neutral **`Engine`** interface, which a
+`ConwayEngine` (Conway's `IfcAPI` on the page, today's kill-switch path)
+implements too, and which is all a lease exposes (`lease.engine`).
+layering.md §4.1 is the source for the interface, the two
+implementations and the reasons. This doc keeps today's name where it
+describes what is built:
 
 ```js
 session.indexed           // Promise, resolves at the index
@@ -625,12 +633,14 @@ tiers, the sidecar written after the first load rather than at eviction
 (§8 item 4), and the main-side session keeping its scene and refs (§5.5).
 
 **Naming.** "Session" means three things in nearby docs. Here: the
-*connection* is `EngineSession`, to be `EngineConnection` (one engine's
-client, over a worker or in process); the *model session* is #2019's
-per-model session (load, leases, state, selection); the user's *workspace
-session* is [workspace-sessions.md](workspace-sessions.md)'s. That doc
-proposed `ModelEngine` for the first; `EngineConnection` was chosen on
-2026-11-23, because one model session goes through several of them
+*engine* is `EngineSession`, to be `WorkerEngine` (one engine's client,
+over a worker or, as the fallback, the same handler in process); the
+*model session* is #2019's per-model session (load, leases, state,
+selection); the user's *workspace session* is
+[workspace-sessions.md](workspace-sessions.md)'s. That doc proposed
+`ModelEngine` for the first, and layering.md first proposed
+`EngineConnection`; the owner chose `WorkerEngine` on 2026-11-24, with
+`Engine` as the interface it and `ConwayEngine` implement
 (layering.md §4.1).
 
 #### The cap: one predicate
@@ -853,14 +863,16 @@ empty.
 #### The host's API
 
 One `EngineHost` per page (`src/engine/EngineHost.js`). It owns every
-engine: the worker connections, the in-process ones, and the main-thread
-`IfcAPI` that `viewer/ifc/ShareIfc.js:142` constructs today. It replaces
+engine: each `WorkerEngine`, in a worker or in process, and each
+`ConwayEngine`, which wraps the main-thread `IfcAPI` that
+`viewer/ifc/ShareIfc.js:142` constructs today. It replaces
 `spawnEngine.js`'s module-level `liveSessions` set and
 `closeAllEngineSessions` (`spawnEngine.js:181, 200`), and the engine half
 of `ShareIfc#dispose`. Nothing else holds an engine.
 
 **Its API is the lease**, and [layering.md](layering.md) §4.2 is the
-source for it: `host.acquire(meta) → lease`, `lease.update(…)`,
+source for it: `host.acquire(meta) → lease`, `lease.engine` (the
+`Engine`, the only way to reach one), `lease.update(…)`,
 `lease.onEvict(cb)`, `lease.release()`, `host.mayKeepInBackground(owner)`,
 `host.whenEntryFree(entryKey)`, `host.closeAll()`, `host.limits()`,
 `host.snapshot()`. In short:
@@ -871,9 +883,9 @@ source for it: `host.acquire(meta) → lease`, `lease.update(…)`,
   fresh engine, and a rehydrate are all admitted and counted.
 - **Focus, phase, artifact and queued bytes** reach the host through
   `lease.update`. The host stamps `lastForegroundAt` itself. It reads the
-  OPFS entry a lease holds from the connection's `open` reply.
+  OPFS entry a lease holds from the engine's `open` reply.
 - **Accounting** needs no call: the worker's `wasmBytes` and
-  `heldSourceBytes` arrive on the connection's own events, and the host
+  `heldSourceBytes` arrive on the engine's own events, and the host
   subscribes when it spawns it.
 - **The host never calls up.** It knows an `owner` id, not a session. What
   the 2026-11-19 text gave it as `host.leave(session)`,
@@ -909,7 +921,7 @@ meta, something the worker already reports, or the session's own business.
 | the LRU tiers | `lease.update({phase, hasArtifact})`: `loading`, `capturing`, `ready` |
 | who is on screen | `lease.update({isForeground})` |
 | queued, unassembled geometry | `lease.update({queuedBytes})` |
-| the OPFS entry the engine holds, for `whenEntryFree` | the connection's `open` reply (`entryPath`) |
+| the OPFS entry the engine holds, for `whenEntryFree` | the engine's `open` reply (`entryPath`) |
 | ending an engine | `lease.release()`. `ModelSession#close()` stays synchronous (as built) and does not await it; `whenEntryFree` is what waits |
 
 What a session needs that is not the host's:
@@ -1085,7 +1097,7 @@ and exactly one root.
   `?feature=disableEngineWorker`, the rollback) the engine is a bare
   `IfcAPI`, collected only when everything lets go of it. The 2026-11-19
   text kept a viewer per open there, so the `IfcAPI` could stay in the
-  viewer's `ShareIfc`. It is now a host lease of kind `mainThread`,
+  viewer's `ShareIfc`. It is now a `ConwayEngine` on a host lease,
   acquired by the load (layering.md §4.1), so nothing ties it to a viewer.
   It is still cap 1 (§5.2). `modelSwitchMemory.spec.ts`'s `IfcAPI`
   collection check is the gate and must stay green unchanged; if it
@@ -1254,7 +1266,7 @@ the session half and the attach contract do not change.
   idle GLB writer, release every lease (`lease.release()`, the engine's
   close, polite for a sync handle; not awaited by the synchronous
   `session.close()`), then dispose the root and drop the session's state. Built for cap 1 by Phase 1a; under cap N it
-  is the drawer's close, and slice 1 makes the switch's close the same
+  is the drawer's close, and slice 1b makes the switch's close the same
   call. **An evicted or closed model reopens like any other**: through its
   GLB cache hit where one exists (0.1–0.7 s up to 106 MiB, 2.0–3.9 s on the
   IFCs from 214 MiB; source-policy-measurements.md §(d)).
@@ -1596,7 +1608,8 @@ now tracked on #2031, and they come with in-app model switching (#2011):
   module-level per-load state slice 2 must move first.
 - **Next is #2031, and its plan is [layering.md](layering.md) §7**
   (2026-11-23): the mechanical move and the lint rule first (M1, M2),
-  then `EngineHost` at cap 1 with the lease (slice 1). §5.2–§5.5 here are
+  then one `Engine` interface over both engines (1a) and `EngineHost` at
+  cap 1 with the lease (1b). §5.2–§5.5 here are
   the engine layer's side of it.
 - **Step 4's requirement on step 7 still stands:** an in-app switch must
   await `close()` before it evicts or re-stages the previous model's OPFS
@@ -1852,15 +1865,18 @@ How each step landed is in §7.1 and in the steps below.
    moved into step 8's slice 3, under `workspace` (#2011 decision 6).
 8. **`EngineHost`: close, cap, eviction, rehydrate** (#2031; refreshed
    2026-11-19, §5.2–§5.5; re-sliced 2026-11-23 for the six layers).
-   **[layering.md](layering.md) §7 is the slice plan**: eleven slices,
-   each green on its own and either behaviour neutral or behind a flag
-   with a kill switch. In order:
+   **[layering.md](layering.md) §7 is the slice plan**: thirteen slices,
+   each green on its own. Each is behaviour neutral or behind a flag with
+   a kill switch, but V and 1a, which have no flag and say what they
+   change. In order:
 
    | Slice | What |
    |---|---|
    | M1, M2 | the mechanical move (the model out of `viewer/`, the engine's helpers down into `engine/`, `viewer/tools/` up to the UI) and the lint rule that holds the layers |
    | V | delete the `?view=` rules stack (§8 item 7) |
-   | 1 | `EngineHost` at cap 1 and the lease, replacing today's close; the `EngineConnection` rename |
+   | 1a | the `Engine` interface; `EngineSession` → `WorkerEngine`; `ConwayEngine` (the kill-switch path behind the interface); the Conway import rule |
+   | 1b | `EngineHost` at cap 1 and the lease, replacing today's close |
+   | N | the `ifcAPI` identifier out of everything but `src/engine` |
    | R | a reporter per load |
    | 2a, 2b | session roots; attach and detach |
    | 2c–2e | one viewer for the page (§5.2a) |
@@ -1879,7 +1895,7 @@ How each step landed is in §7.1 and in the steps below.
    table. Each runs on cap 1 and on cap N: cap 1 is a plain link and
    `?feature=workspace,disableBackgroundSessions`; cap N is
    `?feature=workspace`. (Items 1 and 2 of the 2026-11-19 list, `EngineHost`
-   at cap 1 and one viewer, are layering.md's slices 1 and 2a–2e.)
+   at cap 1 and one viewer, are layering.md's slices 1b and 2a–2e.)
 
    3. **Cap N under `workspace`, with the kill switch** (slice 3b). The
       predicate goes live; `host.mayKeepInBackground` answers yes under it.
@@ -1897,7 +1913,7 @@ How each step landed is in §7.1 and in the steps below.
       prerequisites are earlier slices now: one viewer on by default (2e),
       since `NO_SINGLE_VIEWER` keeps cap 1 while it is off; no module-level
       per-load state (R, 2a, 3a); the session's own state (3a).
-      - *Unit (`EngineHost.test.js`, a fake connection):* cap N keeps
+      - *Unit (`EngineHost.test.js`, a fake `Engine`):* cap N keeps
         A's lease on a switch; the fourth owner closes the least recently
         foregrounded by tier; the foreground owner is never chosen, even
         alone over the budget; queued bytes count, and reaching the budget
@@ -2379,12 +2395,36 @@ layering.md §9):
     allowlist check in the `build` job; a background load's page-side
     console lines left out of its diagnostics until the console cleanup.
 
-**Open:** the main-thread engine is agreed to be a lease the host owns,
-but its name is not. The owner wants `IfcAPI` renamed, since it covers
-STEP and probably more formats later; the lease may expose one
-format-neutral engine interface in place of `connection` and `api`
-(layering.md §9, question 1). The names in §5.2 and §5.2a are working
-names until then.
+Decided later on 2026-11-24 (#2011 decision 10; layering.md §4.1):
+
+13. **The engine's names.** `Engine` is the format-neutral interface:
+    `open`, `tree`, `properties`, `propertiesMany`, `propertyTables`,
+    `propertySets`, `itemsOfType`, `typeName`, `pump`, `capture`,
+    `spill`, `stats`, `abort`, `close`, with the events and the geometry
+    source a load needs. A lease exposes it as `lease.engine`, and
+    nothing else; `lease.kind` is the host's bookkeeping.
+    - **`WorkerEngine`** is `EngineSession` renamed ("bc it's on a Worker
+      thread"). The in-process fallback stays a `WorkerEngine` on an
+      in-process transport, `kind: 'inProcess'`: it runs the worker's
+      handler and protocol, and it is what a worker that failed to start
+      falls back to.
+    - **`ConwayEngine`** is Conway's `IfcAPI` on the page, IFC and STEP,
+      behind `Engine`: the raw main-thread path (`kind: 'mainThread'`).
+      It is a real change on the kill-switch path (item 6's permanent
+      fallback), which today calls `parseIfcWithConway` and reads the
+      `IfcAPI` synchronously. Slice 1a, with a contract test run against
+      both engines.
+    - **`MeshEngine`** is the follow-up: the three.js-loaded formats
+      answering the same reads from the scene. Not built.
+    - **`IfcAPI` stays Conway's name** and is named only inside
+      `src/engine`. A `no-restricted-imports` rule on
+      `@bldrs-ai/conway/web-ifc` holds it.
+
+    §5.1's `makeWorkerModelHandle` and the facade over a worker
+    (`engineModelLoad.js#makeEngineIfcApi`) are how a `WorkerEngine`
+    serves the model surface and the builder's geometry reads today;
+    under `Engine` the first is `model.engine` and the second is
+    `engine.geometry`.
 
 ## 9. Where this meets OffscreenCanvas rendering
 
