@@ -1,7 +1,7 @@
 {
   "name": "bldrs",
   "packageManager": "bun@1.4.4",
-  "version": "1.2137.bb3ba733",
+  "version": "1.1865.c6e33e61",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
