@@ -60,6 +60,15 @@ export default function FeedbackNote({
   }
 
   const isFrozen = isSending || isLocked
+  // One condition for the button and the keyboard: Enter while a capture
+  // the user asked for is still running would send without it, and the
+  // screenshot would be dropped when it lands (Codex on #2313).
+  const canSend = !isSending && !isCapturing
+  const send = () => {
+    if (canSend) {
+      onSend()
+    }
+  }
   const shownHint = hint ?? captureHint
   return (
     <Box
@@ -67,7 +76,7 @@ export default function FeedbackNote({
       data-testid='Feedback-Note'
       onSubmit={(event) => {
         event.preventDefault()
-        onSend()
+        send()
       }}
       sx={{display: 'flex', flexDirection: 'column', gap: 0.75}}
     >
@@ -83,7 +92,7 @@ export default function FeedbackNote({
           // Enter sends, as in the chat's own input; Shift+Enter is a new line.
           if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault()
-            onSend()
+            send()
           }
         }}
         placeholder={placeholder}
@@ -162,7 +171,7 @@ export default function FeedbackNote({
           type='submit'
           variant='contained'
           color='accent'
-          disabled={isSending || isCapturing}
+          disabled={!canSend}
           data-testid='Feedback-Send'
           sx={{textTransform: 'none'}}
         >

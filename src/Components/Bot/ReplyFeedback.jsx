@@ -41,7 +41,9 @@ const THUMBS = [
  *   the filled one with no note open clears it: each change is one event.
  * - A failed post keeps the note open with a quiet hint; Send tries the
  *   same record again. A failed clear offers "Try again", which posts the
- *   same clear record.
+ *   same clear record; a newer rating drops it.
+ * - One post at a time per reply: the thumbs are disabled while a rating or
+ *   a clear is in flight, so the store's latest record is the one shown.
  *
  * The thumbs are hidden until the reply is hovered or focused, and always
  * shown on touch screens and in the phone layout, where there is no hover
@@ -64,8 +66,16 @@ export default function ReplyFeedback({message, alwaysShown = false}) {
   // making the user re-rate and clear again (two more events; Codex on #2313).
   const [clearRetry, setClearRetry] = useState(null)
   const [isRetryingClear, setIsRetryingClear] = useState(false)
+  // A clear in flight. The rating is already cleared on the reply, but its
+  // post hasn't landed: a new rating sent now could reach the store first,
+  // and the slower clear would then stand as the latest record while the
+  // reply shows the new rating (Codex on #2313). So every post for a reply
+  // runs alone: the thumbs are disabled while a clear, a retry of one, or a
+  // rating is in flight.
+  const [isClearing, setIsClearing] = useState(false)
   const shown = draft?.rating ?? sent
   const isSending = draft?.status === 'sending'
+  const isPosting = isSending || isClearing || isRetryingClear
 
   const choose = (rating) => {
     setHint(null)
@@ -83,9 +93,14 @@ export default function ReplyFeedback({message, alwaysShown = false}) {
   }
 
   const clear = async () => {
-    const {ok, record} = await rateReply({replyId: message.id, rating: RATINGS.NONE})
-    setHint(ok ? null : SEND_FAILED_TEXT)
-    setClearRetry(ok ? null : record)
+    setIsClearing(true)
+    try {
+      const {ok, record} = await rateReply({replyId: message.id, rating: RATINGS.NONE})
+      setHint(ok ? null : SEND_FAILED_TEXT)
+      setClearRetry(ok ? null : record)
+    } finally {
+      setIsClearing(false)
+    }
   }
 
   const retryClear = async () => {
@@ -93,8 +108,12 @@ export default function ReplyFeedback({message, alwaysShown = false}) {
       return
     }
     setIsRetryingClear(true)
-    const ok = await postFeedback(clearRetry)
-    setIsRetryingClear(false)
+    let ok = false
+    try {
+      ok = await postFeedback(clearRetry)
+    } finally {
+      setIsRetryingClear(false)
+    }
     setHint(ok ? SENT_TEXT : SEND_FAILED_TEXT)
     setClearRetry(ok ? null : clearRetry)
   }
@@ -138,7 +157,7 @@ export default function ReplyFeedback({message, alwaysShown = false}) {
             title={label}
             aria-pressed={shown === rating}
             onClick={() => choose(rating)}
-            disabled={isSending || Boolean(draft?.record && rating !== shown)}
+            disabled={isPosting || Boolean(draft?.record && rating !== shown)}
             data-testid={testId}
           >
             {shown === rating ? <On fontSize='inherit'/> : <Off fontSize='inherit'/>}
@@ -153,7 +172,7 @@ export default function ReplyFeedback({message, alwaysShown = false}) {
           <Button
             size='small'
             onClick={() => void retryClear()}
-            disabled={isRetryingClear}
+            disabled={isPosting}
             data-testid='BotChat-FeedbackRetry'
             sx={{textTransform: 'none'}}
           >

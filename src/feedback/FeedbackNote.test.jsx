@@ -1,5 +1,5 @@
 import React, {useState} from 'react'
-import {fireEvent, render, screen} from '@testing-library/react'
+import {act, fireEvent, render, screen} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../Share.fixture'
 import FeedbackNote, {CAPTURE_FAILED_TEXT} from './FeedbackNote'
 import {captureViewerScreenshot} from './captureScreenshot'
@@ -81,6 +81,27 @@ describe('feedback/FeedbackNote', () => {
     fireEvent.click(screen.getByRole('button', {name: 'Remove screenshot'}))
     fireEvent.click(screen.getByTestId('Feedback-Send'))
     expect(onSend).toHaveBeenLastCalledWith({note: '', screenshot: null})
+  })
+
+  // Codex round 2 on #2313: Enter must not send while a requested capture runs.
+  it('Enter waits for a capture in flight: nothing is sent until the screenshot lands', async () => {
+    let finish = () => undefined
+    jest.mocked(captureViewerScreenshot).mockReturnValue(new Promise((resolve) => {
+      finish = () => resolve(SCREENSHOT)
+    }))
+    const onSend = jest.fn()
+    render(<Harness onSend={onSend}/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(screen.getByRole('button', {name: 'Attach screenshot'}))
+    const note = screen.getByPlaceholderText('Say something')
+    fireEvent.keyDown(note, {key: 'Enter'})
+    fireEvent.submit(screen.getByTestId('Feedback-Note'))
+    expect(screen.getByTestId('Feedback-Send')).toBeDisabled()
+    expect(onSend).not.toHaveBeenCalled()
+    await act(() => Promise.resolve(finish()))
+    await screen.findByTestId('Feedback-Screenshot')
+    fireEvent.keyDown(note, {key: 'Enter'})
+    expect(onSend).toHaveBeenCalledTimes(1)
+    expect(onSend).toHaveBeenCalledWith({note: '', screenshot: SCREENSHOT})
   })
 
   it('a failed capture is a quiet hint, and the user can try again', async () => {

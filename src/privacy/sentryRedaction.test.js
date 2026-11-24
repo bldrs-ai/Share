@@ -248,6 +248,70 @@ describe('privacy/sentryRedaction withholdModelNames', () => {
     expect(modelNamesOf(null, ['Secret.glb'])).toEqual(['Secret.glb', 'Secret'])
   })
 
+  // Codex round 2 on #2313: every form a private URL is quoted in.
+  describe('a private generic URL', () => {
+    const urlRoute = {
+      kind: 'url',
+      downloadUrl: new URL('https://files.acme.example:8443/private/Secret%20Project.glb?sig=abc123#v2'),
+      originalUrl: new URL('https://bldrs.ai/share/v/u/https://files.acme.example:8443/private/Secret%20Project.glb?sig=abc123'),
+    }
+    const names = modelNamesOf(urlRoute)
+
+    it.each([
+      ['as stored', 'https://files.acme.example:8443/private/Secret%20Project.glb?sig=abc123#v2'],
+      ['decoded', 'https://files.acme.example:8443/private/Secret Project.glb?sig=abc123#v2'],
+      ['without its query', 'https://files.acme.example:8443/private/Secret%20Project.glb'],
+      ['decoded and without its query', 'https://files.acme.example:8443/private/Secret Project.glb'],
+      ['without its scheme', 'files.acme.example:8443/private/Secret Project.glb'],
+      ['its folder', 'https://files.acme.example:8443/private/'],
+      ['its folder without the scheme', 'files.acme.example:8443/private/'],
+      ['its host and port', 'files.acme.example:8443'],
+      ['its bare host', 'files.acme.example'],
+      ['the Share link', 'https://bldrs.ai/share/v/u/https://files.acme.example:8443/private/Secret%20Project.glb?sig=abc123'],
+      ['its file name, encoded', 'Secret%20Project.glb'],
+    ])('withholds it %s', (_, quoted) => {
+      const out = withholdModelNames(`see ${quoted} now`, names)
+      expect(out).toBe(`see ${WITHHELD_MODEL_NAME} now`)
+      expect(out).not.toMatch(/acme|secret|8443|sig=/i)
+    })
+  })
+
+  it('a GitHub model: owner/repo in any GitHub URL form, owner, repo and a non-default branch', () => {
+    const names = modelNamesOf({
+      kind: 'provider', provider: 'github', org: 'acme-corp', repo: 'secret-repo', branch: 'deal-2027',
+      filepath: 'models/Tower B.ifc', gitpath: 'https://github.com/acme-corp/secret-repo/deal-2027/models/Tower B.ifc',
+      downloadUrl: new URL('https://raw.githubusercontent.com/acme-corp/secret-repo/deal-2027/models/Tower%20B.ifc'),
+    })
+    for (const quoted of [
+      'https://github.com/acme-corp/secret-repo/blob/deal-2027/models/Tower%20B.ifc',
+      'https://api.github.com/repos/acme-corp/secret-repo/contents/models',
+      'the secret-repo repo of acme-corp, on deal-2027',
+    ]) {
+      expect(withholdModelNames(quoted, names)).not.toMatch(/acme|secret|deal-2027|Tower/i)
+    }
+    // Owner and repo too short to withhold alone are still withheld as a pair.
+    const short = modelNamesOf({kind: 'provider', provider: 'github', org: 'ac', repo: 'se', branch: 'main'})
+    expect(withholdModelNames('github.com/ac/se/tree/x', short)).toBe(`github.com/${WITHHELD_MODEL_NAME}/tree/x`)
+    // A default branch is a word, not a name.
+    expect(short).not.toContain('main')
+  })
+
+  it('a Drive model: its file id and resource key in any Drive URL form', () => {
+    // The id from the route's own field, not only as the download URL's last segment.
+    const names = modelNamesOf({kind: 'provider', provider: 'google', fileId: '1AbCdEfGhIjKlMnOpQrStUv',
+      resourceKey: '0-XyZresourceKey'})
+    const out = withholdModelNames(
+      'https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUv/view?usp=sharing&resourcekey=0-XyZresourceKey', names)
+    expect(out).not.toMatch(/1AbCdEf|XyZresourceKey/)
+  })
+
+  it('withholds no host for a model that is not a URL model', () => {
+    const names = modelNamesOf({kind: 'file', isUploadedFile: true, filepath: '/0b9e8d7c.glb',
+      downloadUrl: new URL('https://bldrs.ai/0b9e8d7c.glb')})
+    expect(names).not.toContain('bldrs.ai')
+    expect(names).not.toContain('https://bldrs.ai/')
+  })
+
   it('leaves short stems and root names alone, as ordinary words', () => {
     const names = modelNamesOf({filepath: '/a.ifc'}, ['HQ'])
     expect(names).toEqual(['/a.ifc', 'a.ifc'])

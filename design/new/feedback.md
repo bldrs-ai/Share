@@ -114,8 +114,16 @@ Tests:
 
 - **Model names.** For any model that isn't one of Share's hosted files,
   the page withholds the model's names and paths from every text field.
-  These are the route's paths, the file name, its stem when it has at
-  least 4 characters, and the tree root's name. A root label Loader
+  These are:
+  - the route's paths and the Share link, each as stored, percent-decoded,
+    without its query and hash, both, and each of those without its scheme;
+  - the file name (raw, decoded and encoded) and its stem when it has at
+    least 4 characters;
+  - for a URL model, the folder it sits in and its host (not for the other
+    kinds, whose hosts are GitHub's, Google's or Share's);
+  - for GitHub, `owner/repo`, the owner, the repo and a non-default branch;
+    for Drive, the file id and resource key;
+  - the tree root's name. A root label Loader
   composes as `<scene> (<file>)` is also withheld in parts, and for a local
   upload, whose route holds only a storage UUID, the original file name is
   looked up (`loader/uploadedFileName.js`, as Loader does for the label), so
@@ -227,6 +235,11 @@ analytics" keeps the list.
   steps and model class that `runTurn` stamps on the bubbles when the turn
   ends. The steps are the turn's distinct step ids, and the tool calls are
   its task chip's tasks.
+- **One post at a time.** The thumbs are disabled while a rating, a clear
+  or a clear's retry is posting, so the latest record in the store is the
+  one the reply shows. A newer rating drops a failed clear's retry. In the
+  note area, Enter and Send share one condition, so neither sends while a
+  screenshot the user asked for is still being captured.
 - **Remembering.** The rating is kept on the bubble in `assistChat`, so the
   filled thumb survives the panel unmounting. It does not survive a reload:
   the session log snapshots a turn's bubbles when the turn ends.

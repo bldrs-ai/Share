@@ -296,21 +296,42 @@ export const WITHHELD_MODEL_NAME = '(model name withheld)'
 const MIN_STEM_CHARS = 4
 // Loader.js's composed root label, `<scene name> (<file name>)`.
 const COMPOSED_LABEL = /^(.*) \(([^()]+)\)$/s
+const SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i
+// Branch names too common to withhold on sight: they are words in a reply.
+const DEFAULT_BRANCHES = new Set(['main', 'master', 'develop', 'development', 'trunk'])
 
 
 /**
- * The strings that name a private model, for {@link withholdModelNames}: each
- * path the route carries (`filepath`, `gitpath`, `downloadUrl`, `srcUrl`), its
- * last segment (the file name), that name without its extension, and the
- * further names given, each treated the same way.
+ * The strings that name a private model, for {@link withholdModelNames}.
+ * Longest first, so a whole URL is withheld before a part of it is.
  *
- * Further names are the tree root's label and, for an upload, its original
- * file name (the route holds only a storage UUID; loader/uploadedFileName.js).
- * A root label can be composed, `<scene name> (<file name>)` (Loader.js,
- * #1595, for glTF, OBJ and the other mesh formats), so its parts are withheld
- * on their own too: a reply that says just `Secret.glb` or `Secret` must not
- * get past a label that says `Scene (Secret.glb)` (Codex on #2313).
- * Longest first, so a path is withheld whole before its file name is.
+ * - **Every path the route carries** (`filepath`, `gitpath`, `downloadUrl`,
+ *   `srcUrl`, and `originalUrl`, the Share link, which embeds the model's
+ *   URL), each in every form free text tends to quote it in: as stored,
+ *   percent-decoded, with its query and hash cut (a signed URL's `?sig=`),
+ *   both, and each of those without its scheme (Codex on #2313: a reply that
+ *   quotes `https://host/private/Secret Project.glb` must not leak the host
+ *   and path around a withheld file name).
+ * - **Its file name** (the last segment, decoded) and that name's stem.
+ * - **For a URL model** (route kind `url`), the folder it sits in
+ *   (`https://host/private/`, in the same forms) and its host: the host of a
+ *   private URL is itself telling, and withholding it costs only some
+ *   over-redaction. Not for the other kinds, whose hosts are GitHub's,
+ *   Google's or Share's own.
+ * - **For GitHub**, the owner, the repo and `owner/repo` (which every GitHub
+ *   URL form carries: github.com, raw.githubusercontent.com, the API), and a
+ *   branch other than a common default (`main` is a word too).
+ * - **For Drive**, the file id and resource key, which every Drive URL form
+ *   carries.
+ * - **The further names given**: the tree root's label and, for an upload,
+ *   its original file name (the route holds only a storage UUID;
+ *   loader/uploadedFileName.js). A root label can be composed,
+ *   `<scene name> (<file name>)` (Loader.js, #1595, for glTF, OBJ and the
+ *   other mesh formats), so its parts are withheld on their own too: a reply
+ *   that says just `Secret.glb` or `Secret` must not get past a label that
+ *   says `Scene (Secret.glb)` (Codex on #2313).
+ *
+ * A name shorter than MIN_STEM_CHARS is withheld only as part of a longer one.
  *
  * @param {object|null} routeResult routes.ts#handleRoute, the store's `modelPath`
  * @param {Array<string>} [extraNames]
@@ -324,29 +345,66 @@ export function modelNamesOf(routeResult, extraNames = []) {
       names.add(text)
     }
   }
-  const paths = ['filepath', 'gitpath', 'downloadUrl', 'srcUrl']
-    .map((key) => routeResult?.[key])
-    .filter((value) => value !== undefined && value !== null)
-    .map(String)
+  const addWord = (value) => {
+    if (typeof value === 'string' && value.trim().length >= MIN_STEM_CHARS) {
+      add(value)
+    }
+  }
   // A file name, and its stem when that is long enough to not be an
   // ordinary word.
   const addFileName = (name) => {
     add(name)
-    const stem = name.trim().replace(/\.[^.]+$/, '')
-    if (stem.length >= MIN_STEM_CHARS) {
-      add(stem)
-    }
-  }
-  for (const path of paths) {
-    add(path)
-    let segment = path.split(/[?#]/)[0].split('/').filter(Boolean).pop() ?? ''
+    addWord(name.trim().replace(/\.[^.]+$/, ''))
+    // As it appears inside a URL of a form the route doesn't hold.
     try {
-      segment = decodeURIComponent(segment)
+      add(encodeURIComponent(name.trim()))
     } catch {
-      // Keep it as written: a stray % shouldn't cost the redaction.
+      // A lone surrogate won't encode; the name itself is withheld above.
     }
-    addFileName(segment)
   }
+  // A path or URL in each form it is quoted in.
+  const addPathForms = (value) => {
+    for (const form of pathForms(value)) {
+      add(form)
+      add(form.replace(SCHEME, ''))
+    }
+  }
+  const isUrlModel = routeResult?.kind === 'url'
+  for (const key of ['filepath', 'gitpath', 'downloadUrl', 'srcUrl', 'originalUrl']) {
+    const value = routeResult?.[key]
+    if (value === undefined || value === null || String(value) === '') {
+      continue
+    }
+    const path = String(value)
+    addPathForms(path)
+    const segment = stripQuery(path).split('/').filter(Boolean).pop() ?? ''
+    addFileName(segment)
+    addFileName(safeDecode(segment))
+    if (isUrlModel && key !== 'originalUrl') {
+      const url = parseUrl(stripQuery(path))
+      if (url) {
+        addPathForms(`${url.origin}${url.pathname.replace(/[^/]*$/, '')}`)
+        addWord(url.host)
+        addWord(url.hostname)
+      }
+    }
+  }
+  if (routeResult?.kind === 'provider' && routeResult.provider === 'github') {
+    const {org, repo, branch} = routeResult
+    if (org && repo) {
+      add(`${org}/${repo}`)
+    }
+    addWord(org)
+    addWord(repo)
+    if (typeof branch === 'string' && !DEFAULT_BRANCHES.has(branch.toLowerCase())) {
+      addWord(branch)
+    }
+  }
+  if (routeResult?.kind === 'provider' && routeResult.provider === 'google') {
+    addWord(routeResult.fileId)
+    addWord(routeResult.resourceKey)
+  }
+  addWord(routeResult?.title)
   for (const name of extraNames) {
     if (typeof name !== 'string' || name.trim().length < MIN_STEM_CHARS) {
       continue
@@ -354,13 +412,57 @@ export function modelNamesOf(routeResult, extraNames = []) {
     addFileName(name)
     const composed = COMPOSED_LABEL.exec(name.trim())
     if (composed) {
-      if (composed[1].trim().length >= MIN_STEM_CHARS) {
-        add(composed[1])
-      }
+      addWord(composed[1])
       addFileName(composed[2])
     }
   }
   return [...names].sort((a, b) => b.length - a.length)
+}
+
+
+/**
+ * @param {string} value a path or URL
+ * @return {Set<string>} it as stored, decoded, without its query and hash, and both
+ */
+function pathForms(value) {
+  const stripped = stripQuery(value)
+  return new Set([value, safeDecode(value), stripped, safeDecode(stripped)])
+}
+
+
+/**
+ * @param {string} value
+ * @return {string} it without its `?query` and `#hash`
+ */
+function stripQuery(value) {
+  return value.split(/[?#]/)[0]
+}
+
+
+/**
+ * @param {string} value
+ * @return {string} it percent-decoded, or as written when a stray % won't decode
+ */
+function safeDecode(value) {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
+
+/**
+ * @param {string} value
+ * @return {URL|null}
+ */
+function parseUrl(value) {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url : null
+  } catch {
+    return null
+  }
 }
 
 

@@ -181,6 +181,78 @@ describe('Bot/ReplyFeedback', () => {
     expect(feedbackEvents()).toHaveLength(2)
   })
 
+  /**
+   * Hold the next feedback post until the test lets it go; every other
+   * request goes through as usual (MSW).
+   *
+   * @return {object} `{spy, release(response), fail()}`
+   */
+  function holdNextFeedbackPost() {
+    const original = globalThis.fetch
+    let settle = null
+    const spy = jest.spyOn(globalThis, 'fetch').mockImplementation((url, init) => {
+      if (String(url).endsWith('/.netlify/functions/feedback') && settle === null) {
+        return new Promise((resolve, reject) => {
+          settle = {resolve, reject}
+        })
+      }
+      return original(url, init)
+    })
+    return {
+      spy,
+      release: (response) => act(() => Promise.resolve(settle.resolve(response))),
+      fail: () => act(() => Promise.resolve(settle.reject(new TypeError('Failed to fetch')))),
+    }
+  }
+
+  // Codex round 2 on #2313: a slow clear must not land after a newer rating.
+  it('holds the thumbs while a clear posts, so a newer rating can\'t be overtaken by it', async () => {
+    render(<Harness/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(screen.getByRole('button', {name: 'Good reply'}))
+    fireEvent.click(screen.getByTestId('Feedback-Send'))
+    await screen.findByText(SENT_TEXT)
+
+    const held = holdNextFeedbackPost()
+    try {
+      fireEvent.click(screen.getByRole('button', {name: 'Good reply'}))
+      await waitFor(() => expect(screen.getByRole('button', {name: 'Bad reply'})).toBeDisabled())
+      expect(screen.getByRole('button', {name: 'Good reply'})).toBeDisabled()
+      // A click on the held thumbs does nothing: no note opens, nothing is sent.
+      fireEvent.click(screen.getByRole('button', {name: 'Bad reply'}))
+      expect(screen.queryByTestId('Feedback-Note')).toBeNull()
+      expect(feedbackEvents().map((p) => p.rating)).toEqual(['up', 'none'])
+
+      await held.release(new Response(null, {status: 204}))
+      await waitFor(() => expect(screen.getByRole('button', {name: 'Bad reply'})).toBeEnabled())
+    } finally {
+      held.spy.mockRestore()
+    }
+    fireEvent.click(screen.getByRole('button', {name: 'Bad reply'}))
+    fireEvent.click(screen.getByTestId('Feedback-Send'))
+    await waitFor(() => expect(feedbackEvents().map((p) => p.rating)).toEqual(['up', 'none', 'down']))
+  })
+
+  it('a newer rating drops a failed clear\'s retry, so the clear can\'t retract it later', async () => {
+    render(<Harness/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(screen.getByRole('button', {name: 'Good reply'}))
+    fireEvent.click(screen.getByTestId('Feedback-Send'))
+    await screen.findByText(SENT_TEXT)
+    const held = holdNextFeedbackPost()
+    try {
+      fireEvent.click(screen.getByRole('button', {name: 'Good reply'}))
+      await waitFor(() => expect(screen.getByRole('button', {name: 'Bad reply'})).toBeDisabled())
+      await held.fail()
+    } finally {
+      held.spy.mockRestore()
+    }
+    expect(await screen.findByTestId('BotChat-FeedbackRetry')).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', {name: 'Bad reply'}))
+    expect(screen.queryByTestId('BotChat-FeedbackRetry')).toBeNull()
+    fireEvent.click(screen.getByTestId('Feedback-Send'))
+    await waitFor(() => expect(stored().map((r) => r.rating)).toEqual(['up', 'down']))
+    expect(screen.queryByTestId('BotChat-FeedbackRetry')).toBeNull()
+  })
+
   it('a failed post shows the quiet hint and counts it; Send tries the same record again', async () => {
     window.__mockFeedbackFail = true
     render(<Harness/>, {wrapper: HelmetStoreRouteThemeCtx})
