@@ -620,12 +620,14 @@ the dashboard queries them verbatim, so rename both ends together or neither.
 Everything except `real_model_open` is sent through `gtagFunnelEvent`, which
 adds `open_cid` (the `cid.`-prefixed GA client id; left out when GA hasn't
 resolved one) so one client can be followed down the funnel. All of it sits
-behind the same analytics consent check as every other `gtagEvent`.
+behind the same analytics consent check as every other `gtagEvent`, except
+`model_open_count`, which is not a `gtagEvent` (below).
 
 | Step | Event | Params | Fires |
 |---|---|---|---|
 | Visit | `session_start` / `page_view` | — | GA4 sends these itself |
 | Model open | `real_model_open` | `content_id`, `content_type`, `load_outcome`, `stats_*` (below), `local_hour`, `open_kind` (`page` \| `in_app`: the page's first open, or one switched to in-app; `utils/reportModelOpen.js`, open-205 step F), `open_cid` | `CadView` after a real (non-demo) load, once per open: not again for a theme toggle or a view-settings change, which reload the same open (`routes/modelOpen.ts`; open-205 #2022). See `analytics#isRealModelOpen` |
+| Model open (all visitors) | `model_open_count` | `content_type`, `size_bucket`, `source` (`local` \| `sample` \| `github` \| `gdrive` \| `url`), `open_kind`, `form_factor`, `consent` (`on` \| `off`); enums only, no `open_cid` | **Server:** the `model-open-count` function, through the Measurement Protocol under one fixed client id, from a first-party beacon `modelOpenEvents.js` sends beside `real_model_open` (same opens). Sent **whatever the consent choice**, the one row here that is: no identifier, nothing stored, the visitor's IP not forwarded ([model-open-counts.md](model-open-counts.md)). The dashboard's open total since #2051 |
 | (failed open) | `load_failed` | `content_type`, `size_bucket`, `reason_class`, `last_phase`, `open_kind`, `open_cid` | `CadView#onViewerInternal`'s catch, once per failed attempt, real (non-demo) models only |
 | Hit a limit | `quota_limit_reached` | `tier` (`free`; `anonymous` before that tier was removed), `feature` (`QUOTA_FEATURES`: `private_load`) | `QuotaLimitDialog`, once each time the dialog opens, whatever made it show |
 | Signed in | `login` (GA4 recommended) | `method`: `google` \| `github` \| `email` \| `unknown`; plus `from: 'gate'` and `feature` (`export` \| `share`) when a visible gate started the sign-in (§"Gate events") | `src/Auth0/useLoginTracking.js`, once per completed sign-in (below) |
@@ -1090,6 +1092,11 @@ has a backfill, so these only start accruing data once registered:
 - For the normalized events (§"Analytics: normalized tier events"):
   register **event-scoped custom dimensions** for `source` and `gate`.
   `tier`, `route_kind` and `open_cid` are already registered.
+- For `model_open_count` ([model-open-counts.md](model-open-counts.md)):
+  register **event-scoped custom dimensions** for `open_kind`, `form_factor`
+  and `consent` (the last two also serve `client_capability`;
+  client-capabilities.md). `content_type`, `size_bucket` and `source` are
+  already registered.
 - For the feedback events (§"Feedback events"): register **event-scoped
   custom dimensions** for `feedback_source`, `rating`, `has_note`,
   `has_screenshot`, `model_choice` and `stage`, and **metrics** for `steps`

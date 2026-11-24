@@ -23,6 +23,7 @@ import {
 } from '../privacy/analytics'
 import {trackEngagementOnOpen} from '../privacy/engagementTracking'
 import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
+import {reportModelOpenCount} from '../privacy/modelOpenCount'
 import modelIdentity from '../routes/modelIdentity'
 import {modelOpenId} from '../routes/modelOpen'
 import {modelOpenKind} from '../utils/reportModelOpen'
@@ -124,6 +125,13 @@ export function reportModelOpened(routeResult, loadedModel, {installPrefix, refs
     eventParams[LOCAL_HOUR_PARAM] = getLocalHour()
     if (isNewOpen) {
       sendOpenEvents(routeResult, eventParams, getIsAuthenticated)
+      // The cookieless first-party count of the same open
+      // (privacy/modelOpenCount.js, design/new/model-open-counts.md): sent
+      // whatever the consent choice, so it counts the opens real_model_open
+      // stopped seeing when GA became opt-in (#2051). Same gate as
+      // real_model_open, so the two count the same opens; the size is the
+      // one real_model_open reports.
+      reportModelOpenCount(routeResult, loadedModel, {fileSize: eventParams.stats_fileSize, openKind})
     }
     // The engagement window restarts on every load, a theme rebuild's
     // too: the stop above ended the last one, and the user is still on

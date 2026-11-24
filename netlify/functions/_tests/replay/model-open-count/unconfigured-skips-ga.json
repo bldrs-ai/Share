@@ -1,0 +1,12 @@
+{
+  "description": "Without GA4_MEASUREMENT_ID and GA4_API_SECRET (every context but production) a valid count is skipped, not an error.",
+  "env": {},
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/model-open-count",
+    "headers": {"origin": "https://bldrs.ai", "content-type": "text/plain;charset=UTF-8"},
+    "body": "{\"content_type\":\"ifc\",\"size_bucket\":\"10-50mb\",\"source\":\"github\",\"open_kind\":\"page\",\"form_factor\":\"desktop\",\"consent\":\"off\"}"
+  },
+  "exchanges": [],
+  "expect": {"statusCode": 204}
+}

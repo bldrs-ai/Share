@@ -1,0 +1,24 @@
+{
+  "description": "A model open from Share's origin, consent off, goes to the Measurement Protocol under the one fixed client id, with exactly its enum fields, and the page gets 204.",
+  "env": {"GA4_MEASUREMENT_ID": "G-REPLAY0001", "GA4_API_SECRET": "mp-secret-replay"},
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/model-open-count",
+    "headers": {"origin": "https://bldrs.ai", "content-type": "text/plain;charset=UTF-8"},
+    "body": "{\"content_type\":\"ifc\",\"size_bucket\":\"10-50mb\",\"source\":\"github\",\"open_kind\":\"page\",\"form_factor\":\"desktop\",\"consent\":\"off\"}"
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://www.google-analytics.com/mp/collect?measurement_id=G-REPLAY0001&api_secret=mp-secret-replay",
+        "body": {
+          "client_id": "3587090903.711617492",
+          "events": [{"name": "model_open_count", "params": {"content_type": "ifc", "size_bucket": "10-50mb", "source": "github", "open_kind": "page", "form_factor": "desktop", "consent": "off"}}]
+        }
+      },
+      "response": {"status": 204, "text": ""}
+    }
+  ],
+  "expect": {"statusCode": 204}
+}

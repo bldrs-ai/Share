@@ -216,9 +216,10 @@ Cancel, then reload, makes no Google request and leaves no `_ga`.
   models the gap). Recovers modeled numbers; some EU regulators argue the
   pings need consent too.
 - **First-party, cookie-free counts** of the numbers the business depends
-  on (model opens by format/source, exports, quota hits), to a Netlify
-  function, no identifiers. Would keep the dashboard's core counts whatever
-  visitors choose.
+  on, to a Netlify function, no identifiers. **Model opens are built**
+  (`model_open_count`, [model-open-counts.md](model-open-counts.md)): by
+  format, size range and source, sent whatever visitors choose. Exports and
+  quota hits are still open.
 - **Privacy policy vs Share#2034.** §1's telemetry text is rewritten here
   (both copies, 2026-11-23, from the owner's draft). Share#2034 rewrites the
   same paragraph into "monitoring (always on)" and "Analytics (optional)";
