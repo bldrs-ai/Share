@@ -49,15 +49,17 @@ About 400 words, in this order:
 
 The roadmap's track Status line ends with the issue's link. When rewriting an existing issue, keep its original text collapsed at the bottom, as the UX rubric does (§"Write for a reader who wasn't there").
 
-The first track issues were written with checkbox lists (`share-t101` #2201, `identity-t100` #2202, `share-t100` #2203, `notes-t200` #2204); `apps-t300` (#2225) is the first with its work items as sub-issues. Convert the others as their tracks are next worked on.
+The first track issues were written with checkbox lists (`share-t101` #2201, `identity-t100` #2202, `share-t100` #2203, `notes-t200` #2204); `apps-t300` (#2225) is the first with its work items as sub-issues, and `open-t200` (#2315) the first whose work items were filed as sub-issues from the start, one per slice of its design. Convert the others as their tracks are next worked on.
 
 ## Docs in the repo
 
 | Kind | Where | What it holds | What it doesn't |
 |---|---|---|---|
-| Track snapshot | `design/tracks/<track-id>.md` | One page, dated: why the track exists, the end state, its work items with issue links, the design docs that govern it. | Status, checklists, progress. |
-| Design doc | `design/tracks/<topic>.md` (today mostly `design/new/`) | How it works and why: decisions, contracts, measurements with their date and commit, rejected alternatives. Durable. | A backlog, or "next steps" lists that are really issues. |
-| Triage record | `design/tracks/<track-id>-triage.md`, only when reconciling a track moved real issues | The inventory, crosswalk and changes applied, as in the UX rubric (§"Record the result"). | A copy of the issues. |
+| Track snapshot | `design/tracks/<track-id>.md`, or `design/tracks/<track-id>/README.md` (below) | One page, dated: why the track exists, the end state, its work items with issue links, the design docs that govern it. | Status, checklists, progress. |
+| Design doc | `design/tracks/<track-id>/<topic>.md` (today mostly `design/new/`) | How it works and why: decisions, contracts, measurements with their date and commit, rejected alternatives. Durable. | A backlog, or "next steps" lists that are really issues. |
+| Triage record | `design/tracks/<track-id>-triage.md` (in a track's directory, `triage.md`), only when reconciling a track moved real issues | The inventory, crosswalk and changes applied, as in the UX rubric (§"Record the result"). | A copy of the issues. |
+
+**One file or a directory.** A track whose only doc here is its snapshot stays a single file, `design/tracks/<track-id>.md` (`apps-t300.md`). A track with design docs of its own gets a directory, `design/tracks/<track-id>/`: `README.md` is the snapshot, and the design docs sit beside it (`open-t200/README.md` and `open-t200/layering.md`, the first). A track moves from the file to the directory with `git mv` when its first design doc arrives.
 
 A snapshot is updated in the same PR that changes the track's work items (adds, moves or retires one), and is re-dated. The design doc is updated by the PR that changes the behaviour it describes. Pin every link to code or a retired doc to a commit.
 
@@ -68,7 +70,7 @@ The UX rubric's lean-records and plain-language rules apply unchanged (§"Keep t
 `design/new/` mixes three things: user-facing requirements, technical design, and status. Split each doc as it's next worked on, not in one big move:
 
 - **User requirements** go to the epic's UX docs (`design/reqs/`), or into its stories.
-- **Technical design** goes to `design/tracks/`, under the track or topic that owns it.
+- **Technical design** goes to `design/tracks/`, into the directory of the track that owns it.
 - **Status, plans and next steps** go into the track or story issues, and the doc points at them.
 
 Move a file with `git mv`, and update the router ([AGENTS.md](../../AGENTS.md)) and every inbound link in the same PR. A doc that issues or other repositories link to keeps a one-line stub at its old path, pointing to the new one; where the inbound links are few, fix them in the issues instead and say so in the PR, as the 2026-11-24 rename of `design/dx/` did (one link, in #2225).

@@ -9,7 +9,7 @@ the cap, close, eviction and rehydrate) was refreshed on 2026-11-19 for
 Phase 1a, #2011 decision 6 and the source policy (§5.2–§5.5, §7 step 8,
 §8.1), and again on 2026-11-23 for the six layers (#2011 decision 8): the
 host hands out leases and never sees a session, and the layer map, the
-seams and the slice plan are in [layering.md](layering.md). On 2026-11-24
+seams and the slice plan are in [layering.md](../tracks/open-t200/layering.md). On 2026-11-24
 the owner named the engine (#2011 decision 10): `Engine` is the one
 interface a lease exposes, `WorkerEngine` is `EngineSession` renamed, and
 `ConwayEngine` is the main-thread path behind the same interface.
@@ -624,7 +624,7 @@ refreshed here for #2031; what moved, and why:
   (`host.spawnFor(session)`, `host.leave(session)`, `session.onEngineEvicted`).
   It hands out a **lease** and is told what it needs through it. A session
   holds zero, one or several leases, and can go through several in its
-  life. [layering.md](layering.md) §4.2 is the source for the lease, and
+  life. [layering.md](../tracks/open-t200/layering.md) §4.2 is the source for the lease, and
   §7 there for the slices; this section keeps what the host does inside.
 
 What did not change: one engine per model in its own worker, `terminate()`
@@ -870,7 +870,7 @@ engine: each `WorkerEngine`, in a worker or in process, and each
 `closeAllEngineSessions` (`spawnEngine.js:181, 200`), and the engine half
 of `ShareIfc#dispose`. Nothing else holds an engine.
 
-**Its API is the lease**, and [layering.md](layering.md) §4.2 is the
+**Its API is the lease**, and [layering.md](../tracks/open-t200/layering.md) §4.2 is the
 source for it: `host.acquire(meta) → lease`, `lease.engine` (the
 `Engine`, the only way to reach one), `lease.update(…)`,
 `lease.onEvict(cb)`, `lease.release()`, `host.mayKeepInBackground(owner)`,
@@ -973,7 +973,7 @@ host's; this is its scene side.
 
 **Since 2026-11-23 (#2011 decision 8)** the viewer is a layer above the
 session and owns no engines. Three things here changed with that, and
-[layering.md](layering.md) §4.6 is the source for the seam:
+[layering.md](../tracks/open-t200/layering.md) §4.6 is the source for the seam:
 - the viewer attaches a **root**, not a session
   (`viewer.attach(root, {viewState, statePort})`), and the binder in the UI
   makes the call;
@@ -1128,7 +1128,7 @@ and exactly one root.
 
 #### Its slices (step 8 slice 2)
 
-[layering.md](layering.md) §7 is the plan: its 2a (session roots, the
+[layering.md](../tracks/open-t200/layering.md) §7 is the plan: its 2a (session roots, the
 load adds under `ctx.root`) and 2b (attach and detach) are behaviour
 neutral, and replace the single "2a" this section had. The three below
 are its 2c, 2d and 2e, and this is where their E2Es are. They are behind
@@ -1606,8 +1606,9 @@ now tracked on #2031, and they come with in-app model switching (#2011):
   session (in-app-model-switch.md §4.9, `Containers/modelSession.js`); it
   lists where it differs from §5.2's assumed session interface and the
   module-level per-load state slice 2 must move first.
-- **Next is #2031, and its plan is [layering.md](layering.md) §7**
-  (2026-11-23): the mechanical move and the lint rule first (M1, M2),
+- **Next is #2031, and its plan is [layering.md](../tracks/open-t200/layering.md) §7**
+  (2026-11-23), tracked as Track `open-t200` (#2315), one sub-issue per
+  slice ([snapshot](../tracks/open-t200/README.md)): the mechanical move and the lint rule first (M1, M2),
   then one `Engine` interface over both engines (1a) and `EngineHost` at
   cap 1 with the lease (1b). §5.2–§5.5 here are
   the engine layer's side of it.
@@ -1865,7 +1866,7 @@ How each step landed is in §7.1 and in the steps below.
    moved into step 8's slice 3, under `workspace` (#2011 decision 6).
 8. **`EngineHost`: close, cap, eviction, rehydrate** (#2031; refreshed
    2026-11-19, §5.2–§5.5; re-sliced 2026-11-23 for the six layers).
-   **[layering.md](layering.md) §7 is the slice plan**: thirteen slices,
+   **[layering.md](../tracks/open-t200/layering.md) §7 is the slice plan**: thirteen slices,
    each green on its own. Each is behaviour neutral or behind a flag with
    a kill switch, but V and 1a, which have no flag and say what they
    change. In order:
@@ -2002,7 +2003,7 @@ Kept current by every code PR in the chain. Numbers are the PRs' own, with
 | 5 — GLB capture in the worker | merged (#2081), after #2073 (#2038: the capture dropped every record a windowed source did not have resident). n=1 each, flag off → on, `RAF_THROTTLE_MS=3600000`, persistent profile. PSB: time to artifact 171.6 → 118.9 s; the writer 38.1 → 31.0 s, of which the worker's capture is 7.6 s; main-thread long tasks before ready 536 (81.6 s) → 35 (13.7 s), and during the write 71 (7.85 s, max 624 ms) → 4 (0.43 s, max 208 ms); page heap (`performance.memory`) at the end 1,127 → 522 MB, sampled peak 1,766 → 848 MB; the worker's JS heap peaked at 140 MB, beside 899 MB of wasm. 58 MB STEP: time to artifact 47.6 → 43.2 s; writer 7.6 → 6.8 s, capture 2.5 s; long tasks before ready 292 (35.8 s) → 10 (3.6 s), during the write 4 (0.35 s) → 1 (0.07 s); page heap at the end 688 → 148 MB; worker JS heap peak 322 MB beside 515 MB of wasm. **Byte identity:** after the batch colour column became float64 (step 5 above), the two engines' whole PSB artifacts are identical, 86,341,686 B each with one SHA-256 (re-measured 2026-11-06, n=1 per side, on a less loaded machine: time to artifact 68.6 → 58.9 s, long tasks before ready 222 (27.8 s) → 13 (6.7 s)). Review fixes: protocol v2, so a stale cached worker without `capture` is refused at hello and the load runs in process (§4); `close()` waits for a spill still in flight before it decides whether to close politely |
 | 8 (part) — index sidecar reopen | Share#2085: a worker load from an OPFS entry saves conway's index sidecar, and the next open of the same entry opens from it instead of parsing, IFC and STEP alike (`engine/engineSidecars.js`). It is written after the first load, not at eviction (§5.3). Since Share#2093 a browser without `createWritable` (Safari before 26) writes it through a read-write sync access handle, and a failed save says why on the `Engine index:` line. Eviction itself is still deferred. The reopen runs conway's full source check, which the owner chose over the sampled one. Measured with it: on the 58 and 106 MB STEP models, Parsing goes from 1.3–1.8 s and 2.6–2.8 s to 0.31–0.39 s and 0.65–0.70 s, and the tree arrives 2.1–3.3 s and 2.9–3.7 s sooner (§11) |
 | 7 | merged (#2247, 2026-11-23): per-model sessions with one live session (in-app-model-switch.md §4.9) |
-| 8 | not started. #2031, designed in §5.2–§5.5 (refreshed 2026-11-19, and for the six layers on 2026-11-23) and sliced in [layering.md](layering.md) §7 |
+| 8 | not started. #2031, designed in §5.2–§5.5 (refreshed 2026-11-19, and for the six layers on 2026-11-23) and sliced in [layering.md](../tracks/open-t200/layering.md) §7 |
 | 9 | in flight (#2083, draft): default on, the kill switch and rollback, the main-thread routes. #2061 explained (below). Waits on the real-GPU, Safari and Firefox checks |
 
 **Picking during the pump (#2084).** The durable batches are pickable from
@@ -2376,7 +2377,7 @@ Decided on 2026-11-23 (#2011 decision 8, in-app-model-switch.md §0):
    the active session. `EngineSession` is renamed, the boundaries are
    linted from the first slice with an allowlist that only shrinks, and
    the cleanups ride in the `EngineHost` slices plus one mechanical move.
-   Designed in [layering.md](layering.md). What it changed here: the
+   Designed in [layering.md](../tracks/open-t200/layering.md). What it changed here: the
    host's API (§5.2, a lease in place of session-taking calls), the
    predicate's home (`utils/`), the main-thread route under one viewer
    (§5.2a), and the slice plan (§7 step 8).

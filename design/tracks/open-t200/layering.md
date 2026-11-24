@@ -2,17 +2,19 @@
 
 **Status:** design, 2026-11-23. Nothing here is built. The owner decided
 the six layers on 2026-11-23 (decision 8 on #2011,
-[in-app-model-switch.md](in-app-model-switch.md) §0); this doc turns that
+[in-app-model-switch.md](../../new/in-app-model-switch.md) §0); this doc turns that
 decision into a layer map, the seams between the layers, a lint rule that
 holds them, and a slice plan. On 2026-11-24 the owner answered this
 doc's six questions (decisions 9 and 10, §9). The last of them named the
 engine: one format-neutral `Engine` interface on the lease, implemented
 by `WorkerEngine` and `ConwayEngine` (§4.1).
+**Track:** `open-t200` (#2315): in-app model lifecycle. Its snapshot is
+[README.md](README.md), and each slice of §7 is a sub-issue of #2315.
 **Epic:** `open-205` (#2011). Stories #2021 (done) and #2265. This is the
 design of #2031 (`EngineHost`) and of the cleanup that comes with it.
 **Related:** #2019 (per-model sessions, #2247), #2023 (memory E2E), #2250
 (CadView split), #2024 (multi-model).
-**Reads with:** [engine-worker.md](engine-worker.md) §5.2–§5.5, which keeps
+**Reads with:** [engine-worker.md](../../new/engine-worker.md) §5.2–§5.5, which keeps
 the engine layer's internals (the cap, what an engine costs, the estimate,
 admission, eviction, rehydrate, Reported Conditions) and §5.2a (one viewer
 for the page). This doc is the source for the layers, the seams and the
@@ -217,7 +219,7 @@ tool providers. Eight of them import the UI (the store, the
 selection-hash writer, `Components/Camera`, `Components/Residency`,
 `Components/Share`, Assist, `export/`): they drive the app, not the
 renderer. They move whole to `src/tools/`, which
-the `apps-t300` track ([design/tracks/apps-t300.md](../tracks/apps-t300.md))
+the `apps-t300` track ([design/tracks/apps-t300.md](../apps-t300.md))
 already treats as one registry. The four pure measurement files
 (`elementBounds.js`, `elementPieces.js`, `meshMeasure.js`,
 `ifcQuantities.js`) can go down to the model later, when a headless tool
@@ -1123,7 +1125,7 @@ const LAYERS = [
 {target: './src/engine', from: './src',
   except: ['./utils', './privacy', './routes', './net', './OPFS', './search',
     './FeatureFlags.js', './Filetype.js', './engine'],
-  message: 'layering (design/new/layering.md): engine may import only base, engine'}
+  message: 'layering (design/tracks/open-t200/layering.md): engine may import only base, engine'}
 ```
 
 The UI is never listed. It is whatever is left, so a directory nobody
@@ -1212,7 +1214,7 @@ open an IFC and a STEP model under Node: index, spatial tree, a property
 read, and geometry assembled into `session.root`, with no `window` and no
 `document`. That is the claim worth a test, because it is the one the
 "document session" needs
-([reviews/2026-11-18-mvc-core-review-followup.md](reviews/2026-11-18-mvc-core-review-followup.md)).
+([reviews/2026-11-18-mvc-core-review-followup.md](../../new/reviews/2026-11-18-mvc-core-review-followup.md)).
 
 **The test** (`src/session/headless.test.js`, `@jest-environment node`):
 
