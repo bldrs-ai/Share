@@ -1,6 +1,8 @@
 import {Box3, BoxGeometry, Matrix4, Mesh, MeshBasicMaterial, Scene, Sphere, Vector3} from 'three'
 import {beginLoadProgress, endLoadProgress, getCompletedLoadStats} from '../loader/loadProgress'
 import ProgressiveLoadSession, {SessionState} from './ProgressiveLoadSession'
+import {LOAD_PREVIEW_GROUP_KEY, PREVIEW_EXPRESS_ID_KEY, loadPreviewGroups, paintPreviewSelection} from './previewSelection'
+import RenderDemand from './three/renderDemand'
 import {fitDistanceForRadius} from './three/cameraLimits'
 
 
@@ -167,7 +169,7 @@ describe('ProgressiveLoadSession', () => {
     expect(controls.fits[0].withTransition).toBe(false)
   })
 
-  it('strictly frames the union: an escaping mesh triggers a tweened refit', () => {
+  it('strictly frames the union: an escaping mesh triggers a refit', () => {
     session.addPreviewMesh(cubeAt(0))
     expect(controls.fits).toHaveLength(1)
     // Make the refit gate pass immediately.
@@ -175,7 +177,8 @@ describe('ProgressiveLoadSession', () => {
     // Far outside the first fitted sphere.
     session.addPreviewMesh(cubeAt(100))
     expect(controls.fits).toHaveLength(2)
-    expect(controls.fits[1].withTransition).toBe(true)
+    // A snap, not a tween (fitUnionToFrame_'s doc says why).
+    expect(controls.fits[1].withTransition).toBe(false)
     // The refit's sphere covers BOTH meshes — center between them,
     // radius spanning the whole union.
     const fit = controls.fits[1]
@@ -197,6 +200,151 @@ describe('ProgressiveLoadSession', () => {
     session.lastFitMs = Date.now() - 10000
     session.addPreviewMesh(cubeAt(100))
     expect(controls.fits).toHaveLength(1)
+  })
+
+  // open-205 #2043: camera-controls sends a wheel zoom as `control` alone, and
+  // a zoom is the user taking the camera as much as a drag is.
+  it('stops following forever when the user zooms with the wheel', () => {
+    session.addPreviewMesh(cubeAt(0))
+    controls.listeners['control']()
+    session.lastFitMs = Date.now() - 10000
+    session.addPreviewMesh(cubeAt(100))
+    expect(controls.fits).toHaveLength(1)
+  })
+
+  // open-205 #2043: the caller lifts its loading overlay on the first mesh.
+  it('reports the load\'s first geometry once, from either stream', () => {
+    session.finish()
+    const onFirstMesh = jest.fn()
+    session = new ProgressiveLoadSession({scene, getControls: () => controls, getCamera: () => camera, onFirstMesh})
+    expect(onFirstMesh).not.toHaveBeenCalled()
+    session.notifyBounds(new Box3(new Vector3(0, 0, 0), new Vector3(1, 1, 1)))
+    expect(onFirstMesh).toHaveBeenCalledTimes(1)
+    session.addPreviewMesh(cubeAt(0))
+    session.addPreviewMesh(cubeAt(1))
+    expect(onFirstMesh).toHaveBeenCalledTimes(1)
+  })
+
+  // open-205 #2043: CadView's preview pick finds the group by its mark.
+  it('marks its preview group so a pick can find it in the scene', () => {
+    session.addPreviewMesh(cubeAt(0))
+    expect(session.previewGroup.userData[LOAD_PREVIEW_GROUP_KEY]).toBe(true)
+    expect(loadPreviewGroups(scene)).toEqual([session.previewGroup])
+    session.finish()
+    expect(loadPreviewGroups(scene)).toEqual([])
+  })
+
+  // open-205 #2043: a preview mesh painted as selected wears the viewer's
+  // selection material, which must outlive the load.
+  it('finish disposes a painted preview mesh\'s own material, not the borrowed selection material', () => {
+    const own = new MeshBasicMaterial()
+    const selection = new MeshBasicMaterial()
+    const ownDispose = jest.spyOn(own, 'dispose')
+    const selectionDispose = jest.spyOn(selection, 'dispose')
+    const mesh = cubeAt(0)
+    mesh.material = own
+    mesh.userData[PREVIEW_EXPRESS_ID_KEY] = 7
+    session.addPreviewMesh(mesh)
+    expect(paintPreviewSelection(scene, [7], selection)).toBe(1)
+    session.finish()
+    expect(ownDispose).toHaveBeenCalledTimes(1)
+    expect(selectionDispose).not.toHaveBeenCalled()
+  })
+
+  // open-205 #2043: the load paints on demand from start to finish.
+  describe('on-demand rendering', () => {
+    let demand
+
+    beforeEach(() => {
+      session.finish()
+      demand = new RenderDemand()
+      jest.spyOn(demand, 'invalidateBackground')
+      session = new ProgressiveLoadSession({
+        scene,
+        getControls: () => controls,
+        getCamera: () => camera,
+        renderDemand: demand,
+      })
+    })
+
+    it('paints on demand from the start of the load, with the camera controls attached', () => {
+      expect(demand.isOnDemand).toBe(true)
+      expect(demand.controls).toBe(controls)
+    })
+
+    it('paints the first geometry at once, and asks for a background frame for the rest', () => {
+      jest.spyOn(demand, 'invalidate')
+      session.addPreviewMesh(cubeAt(0))
+      expect(demand.invalidate).toHaveBeenCalledTimes(1)
+      expect(demand.invalidateBackground).not.toHaveBeenCalled()
+      session.addPreviewMesh(cubeAt(1))
+      expect(demand.invalidateBackground).toHaveBeenCalledTimes(1)
+      session.notifyBounds(new Box3(new Vector3(0, 0, 0), new Vector3(1, 1, 1)))
+      expect(demand.invalidateBackground).toHaveBeenCalledTimes(2)
+      expect(demand.invalidate).toHaveBeenCalledTimes(1)
+    })
+
+    it('paints every frame again once the load finishes, or fails', () => {
+      session.finish()
+      expect(demand.isOnDemand).toBe(false)
+      session = new ProgressiveLoadSession({scene, renderDemand: demand})
+      expect(demand.isOnDemand).toBe(true)
+      session.abort()
+      expect(demand.isOnDemand).toBe(false)
+    })
+
+    // Codex review on #2052: CadView retries an auth-shaped first failure,
+    // and its load-long scope must outlive the failed attempt's session.
+    it('closes only its own scope, leaving a caller\'s open', () => {
+      session.finish()
+      const endLoad = demand.begin(controls)
+      session = new ProgressiveLoadSession({scene, renderDemand: demand})
+      session.abort()
+      expect(demand.isOnDemand).toBe(true)
+      endLoad()
+      expect(demand.isOnDemand).toBe(false)
+    })
+
+    // Codex review on #2052 (flip-time): with the overlay lifted before the
+    // first mesh, the user can take the camera before the follow has listeners
+    // to hear it; the load's RenderDemand heard it, and the follow must ask.
+    it('never starts following when the user took the camera before the first mesh', () => {
+      session.finish()
+      const endLoad = demand.begin(controls)
+      // A drag before any geometry: camera-controls' controlstart, which the
+      // load's RenderDemand (CadView's scope) is listening for.
+      controls.listeners['controlstart']()
+      expect(demand.isUserDriving).toBe(true)
+      session = new ProgressiveLoadSession({
+        scene, getControls: () => controls, getCamera: () => camera, renderDemand: demand,
+      })
+      session.addPreviewMesh(cubeAt(0))
+      session.lastFitMs = 0
+      session.addPreviewMesh(cubeAt(100))
+      expect(controls.fits).toHaveLength(0)
+      endLoad()
+    })
+
+    // Codex review on #2052: the follow's camera update has to be made where
+    // RenderDemand can tell it from a user's, synchronously in runFollowMove.
+    it('makes the follow\'s move inside runFollowMove, applied at once', () => {
+      let isInside = false
+      controls.update = jest.fn(() => {
+        expect(demand.isFollowMoving).toBe(true)
+        isInside = true
+      })
+      session.addPreviewMesh(cubeAt(0))
+      expect(controls.fits).toHaveLength(1)
+      expect(controls.update).toHaveBeenCalledWith(0)
+      expect(isInside).toBe(true)
+      expect(demand.isFollowMoving).toBe(false)
+    })
+
+    it('leaves the loop alone when nothing streams on screen', () => {
+      session.finish()
+      session = new ProgressiveLoadSession({scene: null, renderDemand: demand})
+      expect(demand.isOnDemand).toBe(false)
+    })
   })
 
   it('finish removes aabb imposters even if they left the preview group', () => {

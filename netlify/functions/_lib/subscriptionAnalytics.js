@@ -49,13 +49,17 @@ import {createHash} from 'node:crypto'
 import {decodeGaClientReference} from '../../../src/privacy/gaClientReference.js'
 import {SUBSCRIPTION_EVENT_NAMES} from '../../../src/privacy/subscriptionEventNames.js'
 import {ENTITLING_STRIPE_STATUSES, isEntitlingSubscription} from './subscriptions.js'
+import {GA_SEND_TIMEOUT_MS, gaMeasurementConfig, sendMeasurementProtocolEvent} from './measurementProtocol.js'
 
 
-export const MP_COLLECT_URL = 'https://www.google-analytics.com/mp/collect'
+// Shared with client-capabilities.js; re-exported so this module's callers and
+// tests keep their imports.
+export {GA_SEND_TIMEOUT_MS, MP_COLLECT_URL, gaMeasurementConfig, sendMeasurementProtocolEvent} from './measurementProtocol.js'
+
+
 // Each GA step gets its own short budget: the webhook runs under Netlify's
 // 10 s limit, and `settleUser` may already have spent much of it.
 export const GA_LOOKUP_TIMEOUT_MS = 1500
-export const GA_SEND_TIMEOUT_MS = 1500
 // Those caps alone don't keep the webhook inside its budget: a delivery that
 // reaches the report late (a slow settle loop) could still be cut off by the
 // platform mid-POST, which Stripe sees as a failure and redelivers (Codex on
@@ -136,17 +140,6 @@ export function subscriptionTransitionOf(stripeEvent, proPriceId, wasPro = null)
 
 
 /**
- * @param {object} env process.env
- * @return {?{measurementId: string, apiSecret: string}} null unless both are set
- */
-export function gaMeasurementConfig(env) {
-  const measurementId = env.GA4_MEASUREMENT_ID
-  const apiSecret = env.GA4_API_SECRET
-  return measurementId && apiSecret ? {measurementId, apiSecret} : null
-}
-
-
-/**
  * A stable GA client id for a Stripe customer, for when checkout carried none:
  * the same customer always maps to the same GA "user", so their start and end
  * pair up, and the customer id itself never reaches GA.
@@ -219,41 +212,6 @@ export function subscriptionEventParams(subscription, proPriceId, attribution) {
     params.plan = price.lookup_key
   }
   return params
-}
-
-
-/**
- * POST one event to the Measurement Protocol. Throws on a network failure,
- * a timeout or a non-2xx; the caller swallows it. GA answers 2xx even for a
- * malformed event or a wrong secret, so success here means "delivered", not
- * "counted" — the debug endpoint (/debug/mp/collect) is the way to validate.
- *
- * @param {object} args
- * @param {{measurementId: string, apiSecret: string}} args.config
- * @param {string} args.clientId
- * @param {string} args.name
- * @param {object} args.params
- * @param {number} [args.timeoutMs]
- * @return {Promise<void>}
- */
-export async function sendMeasurementProtocolEvent({config, clientId, name, params, timeoutMs = GA_SEND_TIMEOUT_MS}) {
-  const url = `${MP_COLLECT_URL}?measurement_id=${encodeURIComponent(config.measurementId)}` +
-    `&api_secret=${encodeURIComponent(config.apiSecret)}`
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {'content-type': 'application/json'},
-      body: JSON.stringify({client_id: clientId, events: [{name, params}]}),
-      signal: controller.signal,
-    })
-    if (!response.ok) {
-      throw new Error(`Measurement Protocol answered ${response.status}`)
-    }
-  } finally {
-    clearTimeout(timer)
-  }
 }
 
 

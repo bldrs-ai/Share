@@ -20,6 +20,8 @@
  * @see DisplayController — applies the resolved shading to the model.
  */
 
+import {requestPaint} from '../three/renderDemand'
+
 
 /** Shading modes selectable per scope. */
 export const ShadingMode = Object.freeze({
@@ -142,4 +144,6 @@ export function setShadingMode(model, mode) {
       mesh._visibilityChanged = true
     }
   })
+  // `wireframe` is no change the render-on-demand hooks see.
+  requestPaint()
 }

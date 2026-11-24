@@ -129,6 +129,24 @@ function expectRgbClose(actual, expected) {
 }
 
 
+/**
+ * Run `fn` with `search` as the page's query string. The look (lookMode.js)
+ * is read from the URL each time a material is built.
+ *
+ * @param {string} search e.g. '?feature=disableLook'
+ * @param {Function} fn
+ */
+function withSearch(search, fn) {
+  const originalUrl = window.location.href
+  window.history.pushState({}, '', `/${search}`)
+  try {
+    fn()
+  } finally {
+    window.history.pushState({}, '', originalUrl)
+  }
+}
+
+
 describe('loader/stl', () => {
   it('wraps the geometry in a Group containing a single Mesh', () => {
     const root = stlToThree(makeDedupableGeometry())
@@ -147,9 +165,18 @@ describe('loader/stl', () => {
   })
 
 
-  it('uses a MeshLambertMaterial', () => {
+  it('uses a look-managed MeshStandardMaterial (the look is on by default)', () => {
     const root = stlToThree(makeDedupableGeometry())
-    expect(root.children[0].material).toBeInstanceOf(MeshLambertMaterial)
+    expect(root.children[0].material).toBeInstanceOf(MeshStandardMaterial)
+    expect(root.children[0].material.userData.isLookManaged).toBe(true)
+  })
+
+
+  it('uses a MeshLambertMaterial with ?feature=disableLook', () => {
+    withSearch('?feature=disableLook', () => {
+      const root = stlToThree(makeDedupableGeometry())
+      expect(root.children[0].material).toBeInstanceOf(MeshLambertMaterial)
+    })
   })
 
 
@@ -175,31 +202,35 @@ describe('loader/stl', () => {
     })
 
 
-    it('paints per-face and default colors from the file, untinted', () => {
-      const geometry = parseBinaryStl({
-        colorRgba: DEFAULT_RGBA,
-        attributes: [MATERIALISE_RED, USE_DEFAULT_COLOR],
+    it('paints per-face and default colors from the file, untinted (look off)', () => {
+      // The legacy pipeline (`?feature=disableLook`) shows the attribute
+      // as-is; the look's linear values are pinned under 'color space'.
+      withSearch('?feature=disableLook', () => {
+        const geometry = parseBinaryStl({
+          colorRgba: DEFAULT_RGBA,
+          attributes: [MATERIALISE_RED, USE_DEFAULT_COLOR],
+        })
+
+        const {material, geometry: merged} = stlToThree(geometry).mesh
+        expect(material).toBeInstanceOf(MeshLambertMaterial)
+        expect(material.vertexColors).toBe(true)
+        // White base, or the vertex colors would be multiplied by 0xabcdef.
+        expect(material.color.getHex()).toBe(0xffffff)
+        expect(material.transparent).toBe(false)
+        expect(material.opacity).toBe(1)
+
+        // The file's own values, with the look off (the default): the legacy
+        // output shows the attribute as-is. (Color space is pinned below.)
+        const red = [23 / 31, 6 / 31, 4 / 31]
+        const grey = DEFAULT_RGBA.slice(0, 3).map((b) => b / 255)
+        const [first, second] = triangleColors(merged)
+        first.forEach((rgb) => expectRgbClose(rgb, red))
+        second.forEach((rgb) => expectRgbClose(rgb, grey))
+        // The shared edge's two vertices are coincident but differently
+        // colored, so mergeVertices (which hashes every attribute) must have
+        // kept them apart: 3 + 3, not 4.
+        expect(merged.getAttribute('position').count).toBe(6)
       })
-
-      const {material, geometry: merged} = stlToThree(geometry).mesh
-      expect(material).toBeInstanceOf(MeshLambertMaterial)
-      expect(material.vertexColors).toBe(true)
-      // White base, or the vertex colors would be multiplied by 0xabcdef.
-      expect(material.color.getHex()).toBe(0xffffff)
-      expect(material.transparent).toBe(false)
-      expect(material.opacity).toBe(1)
-
-      // The file's own values, with the look off (the default): the legacy
-      // output shows the attribute as-is. (Color space is pinned below.)
-      const red = [23 / 31, 6 / 31, 4 / 31]
-      const grey = DEFAULT_RGBA.slice(0, 3).map((b) => b / 255)
-      const [first, second] = triangleColors(merged)
-      first.forEach((rgb) => expectRgbClose(rgb, red))
-      second.forEach((rgb) => expectRgbClose(rgb, grey))
-      // The shared edge's two vertices are coincident but differently
-      // colored, so mergeVertices (which hashes every attribute) must have
-      // kept them apart: 3 + 3, not 4.
-      expect(merged.getAttribute('position').count).toBe(6)
     })
 
 
@@ -258,42 +289,32 @@ describe('loader/stl', () => {
       }
 
 
-      it('stores the authored sRGB values with the look off', () => {
+      it('stores the authored sRGB values with the look off (?feature=disableLook)', () => {
         // The legacy pipeline outputs linear-sRGB untouched, so the
         // attribute must hold what the file says, not its linearization —
         // otherwise 16/31 displays as 0.23.
-        midGreyComponents().forEach((c) => expect(c).toBeCloseTo(midGrey, SRGB_ROUND_TRIP_PRECISION))
+        withSearch('?feature=disableLook', () => {
+          midGreyComponents().forEach((c) => expect(c).toBeCloseTo(midGrey, SRGB_ROUND_TRIP_PRECISION))
+        })
       })
 
 
-      it('stores linear values with ?feature=look', () => {
-        const originalUrl = window.location.href
-        window.history.pushState({}, '', '/?feature=look')
-        try {
-          midGreyComponents().forEach((c) => expect(c).toBeCloseTo(srgbToLinear(midGrey), 5))
-        } finally {
-          window.history.pushState({}, '', originalUrl)
-        }
+      it('stores linear values with the look on (the default)', () => {
+        midGreyComponents().forEach((c) => expect(c).toBeCloseTo(srgbToLinear(midGrey), 5))
       })
     })
 
 
-    it('uses vertex colors on the ?feature=look material too', () => {
+    it('uses vertex colors on the look\'s material too (the default)', () => {
       const geometry = parseBinaryStl({
         colorRgba: DEFAULT_RGBA,
         attributes: [MATERIALISE_RED, MATERIALISE_RED],
       })
-      const originalUrl = window.location.href
-      window.history.pushState({}, '', '/?feature=look')
-      try {
-        const {material} = stlToThree(geometry).mesh
-        expect(material).toBeInstanceOf(MeshStandardMaterial)
-        expect(material.userData.isLookManaged).toBe(true)
-        expect(material.vertexColors).toBe(true)
-        expect(material.color.getHex()).toBe(0xffffff)
-      } finally {
-        window.history.pushState({}, '', originalUrl)
-      }
+      const {material} = stlToThree(geometry).mesh
+      expect(material).toBeInstanceOf(MeshStandardMaterial)
+      expect(material.userData.isLookManaged).toBe(true)
+      expect(material.vertexColors).toBe(true)
+      expect(material.color.getHex()).toBe(0xffffff)
     })
   })
 })

@@ -116,4 +116,71 @@ describe('QuotaLimitDialog', () => {
       getAccessTokenSilently: mockedUserLoggedIn.getAccessTokenSilently,
     }))
   })
+
+  // The assistant's wall (#1933): the same dialog, the tier's own words, and
+  // the one quota_limit_reached for the condition, with no model-slot twin.
+  describe('feature ai_credits', () => {
+    const AI = 'ai_credits'
+
+    it('sends one quota_limit_reached with the AI tier and feature, and no model_share', () => {
+      renderDialog({tier: 'anonymous', isOpen: true, feature: AI})
+      expect(limitEvents().map(([, , params]) => params)).toEqual([expect.objectContaining({tier: 'anonymous', feature: AI})])
+      expect(window.gtag.mock.calls.filter(([, name]) => name === 'model_share')).toEqual([])
+    })
+
+    it('reportShowing false (a reopen the user asked for) sends nothing, and a later reported showing counts', () => {
+      const {show} = renderDialog({tier: 'anonymous', isOpen: true, feature: AI, reportShowing: false})
+      expect(limitEvents()).toHaveLength(0)
+      show({tier: 'anonymous', isOpen: false, feature: AI})
+      show({tier: 'anonymous', isOpen: true, feature: AI, reportShowing: true})
+      expect(limitEvents()).toHaveLength(1)
+    })
+
+    it('by refusal: one event per refusal id, open or not; a count for several; none for null', () => {
+      const {show} = renderDialog({tier: 'anonymous', isOpen: true, feature: AI, refusal: {id: 1, count: 1}})
+      expect(limitEvents()).toHaveLength(1)
+      // Re-rendered while open for the same refusal: nothing new.
+      show({tier: 'anonymous', isOpen: true, feature: AI, refusal: {id: 1, count: 1}})
+      expect(limitEvents()).toHaveLength(1)
+      // Refused again while it is still open: counted.
+      show({tier: 'anonymous', isOpen: true, feature: AI, refusal: {id: 2, count: 1}})
+      expect(limitEvents()).toHaveLength(2)
+      // Closed, then reopened from the meter: no new refusal.
+      show({tier: 'anonymous', isOpen: false, feature: AI, refusal: null})
+      show({tier: 'anonymous', isOpen: true, feature: AI, refusal: null})
+      expect(limitEvents()).toHaveLength(2)
+      // Two refusals that landed while nothing was shown: both.
+      show({tier: 'anonymous', isOpen: true, feature: AI, refusal: {id: 4, count: 2}})
+      expect(limitEvents()).toHaveLength(4)
+    })
+
+    it('signed out: offers Sign in, which closes and opens the login dialog', () => {
+      act(() => useStore.setState({isLoginVisible: false}))
+      const onClose = jest.fn()
+      const {getByTestId, getByText, queryByTestId} = renderDialog({tier: 'anonymous', isOpen: true, feature: AI, onClose})
+      expect(getByText('Out of assistant credits for today')).toBeInTheDocument()
+      expect(queryByTestId('button-quota-subscribe')).toBeNull()
+      expect(queryByTestId('button-quota-sign-in')).toHaveTextContent('Sign in')
+      fireEvent.click(getByTestId('button-quota-sign-in'))
+      expect(onClose).toHaveBeenCalled()
+      expect(useStore.getState().isLoginVisible).toBe(true)
+    })
+
+    it('free: offers Upgrade to Pro through goToSubscription, and says nothing of private models', () => {
+      mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+      const {getByTestId, queryByText} = renderDialog({tier: 'free', isOpen: true, feature: AI})
+      expect(queryByText(/private models/)).toBeNull()
+      expect(getByTestId('button-quota-subscribe')).toHaveTextContent('Upgrade to Pro')
+      fireEvent.click(getByTestId('button-quota-subscribe'))
+      expect(goToSubscription).toHaveBeenCalledWith(expect.objectContaining({from: 'quota'}))
+    })
+
+    it('Pro: only a wait, with Close and no call to action', () => {
+      const {getByRole, queryByTestId, getByText} = renderDialog({tier: 'pro', isOpen: true, feature: AI})
+      expect(getByText(/They come back as the days roll on/)).toBeInTheDocument()
+      expect(queryByTestId('button-quota-subscribe')).toBeNull()
+      expect(queryByTestId('button-quota-sign-in')).toBeNull()
+      expect(getByRole('button', {name: 'Close'})).toBeInTheDocument()
+    })
+  })
 })

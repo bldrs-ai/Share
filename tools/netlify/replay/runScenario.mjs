@@ -31,7 +31,7 @@
  * Node resolves each `require` relative to the file that makes it, so the
  * bundle still sees only what it shipped.
  */
-import {createRequire} from 'node:module'
+import {createRequire, syncBuiltinESMExports} from 'node:module'
 import {pathToFileURL} from 'node:url'
 import {setupServer} from 'msw/node'
 import {http, HttpResponse} from 'msw'
@@ -62,6 +62,9 @@ Object.assign(process.env, scenario.env || {})
 if (scenario.now !== undefined) {
   freezeClock(scenario.now)
 }
+if (scenario.uuid !== undefined) {
+  fixRandomUuid(scenario.uuid)
+}
 
 const exchanges = scenario.exchanges || []
 // 'strict' (default): calls must arrive in the listed order. 'any': for a
@@ -91,6 +94,19 @@ const server = setupServer(http.all('*', async ({request}) => {
   }
   if (want.body !== undefined) {
     failures.push(...subsetMismatches(call.body, want.body, `${label} body`))
+  }
+  // `bodyJson`: a body that IS JSON but isn't sent as such — @netlify/blobs
+  // PUTs a string value as text/plain — matched as JSON anyway.
+  if (want.bodyJson !== undefined) {
+    let parsed
+    try {
+      parsed = typeof call.body === 'string' ? JSON.parse(call.body) : call.body
+    } catch {
+      failures.push(`${label} bodyJson: not JSON`)
+    }
+    if (parsed !== undefined) {
+      failures.push(...subsetMismatches(parsed, want.bodyJson, `${label} bodyJson`))
+    }
   }
   for (const [name, value] of Object.entries(want.headers || {})) {
     if (request.headers.get(name) !== value) {
@@ -373,4 +389,21 @@ function freezeClock(iso) {
     }
   }
   globalThis.Date = FrozenDate
+}
+
+
+/**
+ * Make `crypto.randomUUID()` answer `uuid`, for a function that names
+ * something it writes by one (ai-chat's ledger holds): a scenario's recorded
+ * read can then hold the very hold its request took. Patched on the CommonJS
+ * module and synced to the ESM named export, so `import {randomUUID} from
+ * 'node:crypto'` sees it in source and in a bundle alike.
+ *
+ * @param {string} uuid
+ */
+function fixRandomUuid(uuid) {
+  const require = createRequire(import.meta.url)
+  require('node:crypto').randomUUID = () => uuid
+  globalThis.crypto.randomUUID = () => uuid
+  syncBuiltinESMExports()
 }

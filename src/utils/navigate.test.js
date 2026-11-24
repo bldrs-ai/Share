@@ -1,6 +1,8 @@
 import {
   navigateToInMemoryModel, navigateToModel, isTempModelPath, homeModelPath, navToDefault, reloadAfterCacheClear,
 } from './navigate'
+import {flags} from '../FeatureFlags'
+import {enablePageReloadApprovalCheck, handleBeforeUnload} from './event'
 
 
 describe('navigateToModel', () => {
@@ -76,6 +78,117 @@ describe('navigateToModel', () => {
       expect(assignCalls).toEqual(['/share/v/new/haus.ifc?feature=bot'])
     })
   })
+
+  // open-205 #2021, on by default since step F: an open goes through
+  // react-router instead of a page load. Outside the test env, so the
+  // test-env fallback above can't be what navigates.
+  describe('in-app by default', () => {
+    const prevEnv = process.env.NODE_ENV
+
+    beforeEach(() => {
+      process.env.NODE_ENV = 'development'
+      locationGetter.mockReturnValue({
+        search: '?feature=workspace',
+        assign: (url) => assignCalls.push(url),
+      })
+    })
+
+    afterEach(() => {
+      process.env.NODE_ENV = prevEnv
+    })
+
+    it('navigates in-app, carrying the query, and loads no page', () => {
+      const navigate = jest.fn()
+      navigateToModel('/share/v/p/index.ifc#c:1,2,3', navigate)
+      expect(navigate).toHaveBeenCalledWith('/share/v/p/index.ifc?feature=workspace#c:1,2,3')
+      expect(assignCalls).toHaveLength(0)
+    })
+
+    it('with the old opt-in, ?feature=spaModelNav, still navigates in-app', () => {
+      locationGetter.mockReturnValue({search: '?feature=spaModelNav', assign: (url) => assignCalls.push(url)})
+      const navigate = jest.fn()
+      navigateToModel('/share/v/p/index.ifc', navigate)
+      expect(navigate).toHaveBeenCalledWith('/share/v/p/index.ifc?feature=spaModelNav')
+      expect(assignCalls).toHaveLength(0)
+    })
+
+    it('still loads the page when no navigate is given', () => {
+      navigateToModel('/share/v/p/index.ifc')
+      expect(assignCalls).toEqual(['/share/v/p/index.ifc?feature=workspace'])
+    })
+
+    // ShareViewer reads `?view=` once, at module load (open-205, #2022).
+    it('loads the page for a link that asks for another ?view=, and stays in-app for the same one', () => {
+      const navigate = jest.fn()
+      navigateToModel('/share/v/p/index.ifc?feature=spaModelNav&view=ifc#c:1', navigate)
+      expect(navigate).not.toHaveBeenCalled()
+      expect(assignCalls).toEqual(['/share/v/p/index.ifc?feature=spaModelNav&view=ifc#c:1'])
+      navigateToModel('/share/v/p/index.ifc?feature=spaModelNav', navigate)
+      expect(navigate).toHaveBeenCalledWith('/share/v/p/index.ifc?feature=spaModelNav')
+      expect(assignCalls).toHaveLength(1)
+    })
+
+    it('disarms the upload guard before navigating', () => {
+      const remove = jest.spyOn(window, 'removeEventListener')
+      const navigate = jest.fn(() => {
+        expect(remove).toHaveBeenCalledWith('beforeunload', handleBeforeUnload)
+      })
+      navigateToModel('/share/v/p/index.ifc', navigate)
+      expect(navigate).toHaveBeenCalled()
+      remove.mockRestore()
+    })
+  })
+
+  // The way back to a page load per open (utils/spaModelNavMode.js): the
+  // per-session kill switch, and the prod rollback that no URL overrides.
+  describe('page load with the kill switch or the rollback', () => {
+    const prevEnv = process.env.NODE_ENV
+
+    beforeEach(() => {
+      process.env.NODE_ENV = 'development'
+    })
+
+    afterEach(() => {
+      process.env.NODE_ENV = prevEnv
+    })
+
+    // codex on #2222: the destination's readers take the mode from its URL,
+    // so an in-app open of a link naming the kill switch would be neither
+    // mode. Such a link loads the page, from a page without the switch.
+    it('a link whose own query names the kill switch loads the page', () => {
+      locationGetter.mockReturnValue({search: '?feature=workspace', assign: (url) => assignCalls.push(url)})
+      const navigate = jest.fn()
+      navigateToModel('/share/v/p/index.ifc?feature=workspace,disableSpaModelNav#c:1', navigate)
+      expect(navigate).not.toHaveBeenCalled()
+      expect(assignCalls).toEqual(['/share/v/p/index.ifc?feature=workspace,disableSpaModelNav#c:1'])
+      // A link with a query of its own that doesn't name it stays in-app.
+      navigateToModel('/share/v/p/index.ifc?feature=workspace', navigate)
+      expect(navigate).toHaveBeenCalledWith('/share/v/p/index.ifc?feature=workspace')
+      expect(assignCalls).toHaveLength(1)
+    })
+
+    it('?feature=disableSpaModelNav: a navigate given does not stop the page load, which keeps the switch', () => {
+      locationGetter.mockReturnValue({search: '?feature=disableSpaModelNav', assign: (url) => assignCalls.push(url)})
+      const navigate = jest.fn()
+      navigateToModel('/share/v/p/index.ifc', navigate)
+      expect(navigate).not.toHaveBeenCalled()
+      expect(assignCalls).toEqual(['/share/v/p/index.ifc?feature=disableSpaModelNav'])
+    })
+
+    it('the rollback (disableSpaModelNav on in FeatureFlags.js) loads the page even under ?feature=spaModelNav', () => {
+      const flag = flags.find((f) => f.name === 'disableSpaModelNav')
+      flag.isActive = true
+      try {
+        locationGetter.mockReturnValue({search: '?feature=spaModelNav', assign: (url) => assignCalls.push(url)})
+        const navigate = jest.fn()
+        navigateToModel('/share/v/p/index.ifc', navigate)
+        expect(navigate).not.toHaveBeenCalled()
+        expect(assignCalls).toEqual(['/share/v/p/index.ifc?feature=spaModelNav'])
+      } finally {
+        flag.isActive = false
+      }
+    })
+  })
 })
 
 
@@ -103,6 +216,16 @@ describe('navigateToInMemoryModel', () => {
     navigateToInMemoryModel('/share/v/new/4be9c3dc-e138-47e9-962b-d0cf55cbbc26.ifc', navigate)
     expect(navigate).toHaveBeenCalledWith('/share/v/new/4be9c3dc-e138-47e9-962b-d0cf55cbbc26.ifc?feature=look')
     expect(assign).not.toHaveBeenCalled()
+  })
+
+  // Loader#load arms the guard for every upload; leaving one in-app has to
+  // take it down, as navigateToModel does (#2021).
+  it('disarms the upload guard', () => {
+    enablePageReloadApprovalCheck()
+    const remove = jest.spyOn(window, 'removeEventListener')
+    navigateToInMemoryModel('/share/v/new/4be9c3dc-e138-47e9-962b-d0cf55cbbc26.ifc', jest.fn())
+    expect(remove).toHaveBeenCalledWith('beforeunload', handleBeforeUnload)
+    remove.mockRestore()
   })
 })
 

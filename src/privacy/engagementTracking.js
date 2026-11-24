@@ -44,20 +44,21 @@ export const MAX_STORED_OPENS = 10
 
 /** Forget the page-load model memory. Test seam only. */
 export function resetEngagementPageState() {
-  lastCountedModelKey = null
+  lastCountedOpenKey = null
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000 // eslint-disable-line no-magic-numbers
 
-// The model the last counted open in THIS page load was for. CadView reloads
+// The open (routes/modelOpen.ts) the last counted open was. CadView reloads
 // the loaded model without the user opening anything (a theme change or
-// Widget API view settings re-create the viewer, which re-runs the load, and
-// each success sends real_model_open again), and counting those would let
-// toggling the theme twice on one model read as engaged use. A different
-// model, or a fresh page load, counts as a new open. Known under-count: A,
-// then the demo (never tracked, so it does not clear this), then A again in
-// one page load is skipped; that is the safe error for this conversion.
-let lastCountedModelKey = null
+// Widget API view settings re-create the viewer, which re-runs the load), and
+// counting those would let toggling the theme twice on one model read as
+// engaged use. Another open counts, including an in-app return to a model
+// already counted (A → B → A is three opens: decision 1 on #2011,
+// design/new/in-app-model-switch.md §5.1); so does a fresh page load. Keyed
+// by model identity until open-205 (#2022), which skipped A → demo → A in
+// one page: the demo is never tracked, so it did not clear the key.
+let lastCountedOpenKey = null
 
 
 /**
@@ -128,9 +129,10 @@ function readState() {
  * trackers (crossTabLock.js).
  *
  * @param {number} [now] epoch milliseconds; parameterized for tests
- * @param {string} [modelKey] identity of the model opened. When it equals the
- *   previous counted open's in this page load the call is a reload of the
- *   same model and counts nothing. Omit to always count.
+ * @param {string|number} [modelKey] the open (CadView passes
+ *   routes/modelOpen.ts#modelOpenId). When it equals the previous counted
+ *   open's the call is a reload of the same open and counts nothing. Omit
+ *   to always count.
  * @return {Promise<string[]>} names of the events sent
  */
 export function trackEngagementOnOpen(now = Date.now(), modelKey = undefined) {
@@ -138,10 +140,10 @@ export function trackEngagementOnOpen(now = Date.now(), modelKey = undefined) {
     return Promise.resolve([])
   }
   if (modelKey !== undefined) {
-    if (modelKey === lastCountedModelKey) {
+    if (modelKey === lastCountedOpenKey) {
       return Promise.resolve([])
     }
-    lastCountedModelKey = modelKey
+    lastCountedOpenKey = modelKey
   }
   return withCrossTabLock(ENGAGEMENT_STORAGE_KEY, () => {
     // Consent can be withdrawn while this request waits behind another tab's

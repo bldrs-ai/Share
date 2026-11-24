@@ -1,7 +1,7 @@
 // Build the marketing site and overlay its static export onto docs/.
 //
-// Chained from `build-share` so production/dev SPA builds (yarn build,
-// yarn serve, Netlify) produce the same merged tree. Playwright sets
+// Chained from `build-share` so production/dev SPA builds (bun run build,
+// bun run serve, Netlify) produce the same merged tree. Playwright sets
 // SKIP_MARKETING=true and bails out below — no flow spec loads /pricing
 // or /blog (they assert hrefs to bldrs.ai, not the local overlay).
 //
@@ -44,8 +44,8 @@ function run(label, cmd, cwd) {
 }
 
 
-run('installing deps (frozen lockfile)', 'yarn install --frozen-lockfile', MARKETING)
-run('building static export', 'yarn build', MARKETING)
+run('installing deps (frozen lockfile)', 'bun install --frozen-lockfile', MARKETING)
+run('building static export', 'bun run build', MARKETING)
 
 if (!existsSync(DOCS)) {
   mkdirSync(DOCS, {recursive: true})

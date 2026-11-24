@@ -1,5 +1,6 @@
 import {Page, expect, test} from '@playwright/test'
 import {captureGlbLogs, resetGlbLogs, waitForGlbLog} from '../tests/e2e/glbLogs'
+import {doubleClickSelectsAnElement} from '../tests/e2e/export'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
 import {setupVirtualPathIntercept, waitForModelReady} from '../tests/e2e/models'
 import {clearOpfs, homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
@@ -209,6 +210,36 @@ function instanceCentres(page: Page): Promise<Record<string, number[]>> {
 
 
 /**
+ * How many of the model's per-geometry picking trees are built, of how many
+ * slots (deferredBatchedBvh.js arms one null slot per geometry id).
+ *
+ * @param page Playwright page
+ * @return `{built, total}` over every batch
+ */
+function pickingTrees(page: Page): Promise<{built: number, total: number}> {
+  return page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const store = (window as unknown as {store?: {getState: () => {model?: unknown}}}).store
+    const model = store?.getState().model as any
+    const counts = {built: 0, total: 0}
+    const visit = (mesh: any) => {
+      if (mesh?.isBatchedMesh && Array.isArray(mesh.boundsTrees)) {
+        counts.total += mesh.boundsTrees.length
+        counts.built += mesh.boundsTrees.filter(Boolean).length
+      }
+    }
+    if (model?.traverse) {
+      model.traverse(visit)
+    } else {
+      visit(model)
+    }
+    return counts
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
+
+
+/**
  * How many distinct colors the model is displaying.
  *
  * @param state from {@link sceneState}
@@ -368,6 +399,59 @@ describeMobileAndDesktop('Batched-native GLB cache', () => {
 
     await page.getByTestId('control-button-residency').click()
     await expect(page.getByTestId('color-mode-group')).toBeVisible()
+  })
+
+  // Share#2101. A HIT's per-geometry picking trees are built once the model is
+  // on screen, in idle time. Here that idle time is held, so the model is
+  // looked at with no tree built at all: the user's own double-click must
+  // select an element anyway, through the per-geometry fallback. Then the
+  // idle time is let go and every tree has to land.
+  test('HIT: the model picks before its picking trees are built, then builds them', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+    const glbLogs = captureGlbLogs(page)
+    await setupVirtualPathIntercept(page, AS1_PATH, '')
+
+    await page.goto(`${AS1_PATH}${FLAGS}`, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page, MODEL_READY_TIMEOUT_MS)
+    await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_TIMEOUT_MS)
+
+    // From the next navigation on, idle callbacks wait until released. On a
+    // HIT the trees are the only thing scheduled that way (the cache writer,
+    // the other user, runs on a MISS).
+    await page.addInitScript(() => {
+      const w = window as unknown as Record<string, unknown>
+      // A whole idle period, as requestIdleCallback's deadline caps it. Inside
+      // the init script: it runs in the page, out of reach of module scope.
+      const IDLE_PERIOD_MS = 50
+      const held: Array<(deadline: object) => void> = []
+      w.requestIdleCallback = (callback: (deadline: object) => void) => held.push(callback)
+      w.__bldrsReleaseIdle = () => {
+        while (held.length > 0) {
+          held.shift()?.({didTimeout: false, timeRemaining: () => IDLE_PERIOD_MS})
+        }
+      }
+    })
+    resetGlbLogs(glbLogs)
+    await page.goto(`${AS1_PATH}${FLAGS}`, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page, MODEL_READY_TIMEOUT_MS)
+    await waitForGlbLog(glbLogs, 'hydrated instance-table', CACHE_TIMEOUT_MS)
+
+    // The parse is a stage of its own on a HIT, rather than counted into the
+    // stage before it.
+    await expect.poll(() => page.evaluate(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ((window as any).store.getState().loadReportLines as string[]).filter((line) =>
+        /^(Parsing model data|Applying model fixups): /.test(line)).length)).toBe(2)
+
+    const before = await pickingTrees(page)
+    expect(before.total, 'the batches are armed with a slot per geometry').toBeGreaterThan(0)
+    expect(before.built, 'no tree is built while idle time is held').toBe(0)
+    await doubleClickSelectsAnElement(page, 'collapsed')
+    expect((await pickingTrees(page)).built, 'the pick did not need a tree').toBe(0)
+
+    await page.evaluate(() => (window as unknown as {__bldrsReleaseIdle: () => void}).__bldrsReleaseIdle())
+    await expect.poll(() => pickingTrees(page)).toEqual({built: before.total, total: before.total})
   })
 
   test('with disableGlbCollapse: the un-collapsed batched artifact, in its own slot', async ({page}) => {

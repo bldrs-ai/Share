@@ -1,4 +1,5 @@
 import Cookies from 'js-cookie'
+import {modelOpenId} from '../routes/modelOpen'
 import {installGatedFakeLocks, uninstallFakeLocks} from './crossTabLock.fixture'
 import * as Analytics from './analytics'
 import {
@@ -102,6 +103,21 @@ describe('trackEngagementOnOpen', () => {
       await trackEngagementOnOpen(T0, 'gh:a')
       await trackEngagementOnOpen(T0 + HOUR, 'gh:b')
       await trackEngagementOnOpen(T0 + (2 * HOUR), 'gh:c')
+      expect(sentNames()).toEqual(['engaged_use'])
+    })
+
+    // CadView keys by open (routes/modelOpen.ts), not by model: open-205,
+    // #2022, decision 1 on #2011.
+    it('in-app A → B → A is three opens, and the return to A counts', async () => {
+      const a = {downloadUrl: 'https://example.test/a.ifc'}
+      const b = {downloadUrl: 'https://example.test/b.ifc'}
+      const aAgain = {downloadUrl: 'https://example.test/a.ifc'}
+      await trackEngagementOnOpen(T0, modelOpenId(a))
+      // A theme toggle on A reloads the same open.
+      await trackEngagementOnOpen(T0 + MINUTE, modelOpenId(a))
+      await trackEngagementOnOpen(T0 + HOUR, modelOpenId(b))
+      await trackEngagementOnOpen(T0 + (2 * HOUR), modelOpenId(aAgain))
+      expect(stored().opens).toEqual([T0, T0 + HOUR, T0 + (2 * HOUR)])
       expect(sentNames()).toEqual(['engaged_use'])
     })
 

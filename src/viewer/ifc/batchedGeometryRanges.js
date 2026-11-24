@@ -212,10 +212,10 @@ function findRangeEscapingItsVertices(index, ranges) {
  * all three's own. What this adds is the range bookkeeping afterwards: the id
  * `addGeometry` returned is REPURPOSED as range 0 rather than kept alongside.
  * Keeping it would leave a geometry id spanning the whole merged buffer, and
- * `decorateBatchMeshes` calls `computeBoundsTree()` with no index — which
- * builds a BVH for every id (ExtensionUtilities.js:245-252). A whole-buffer
- * id would therefore add a second, model-sized BVH next to the per-element
- * ones, paying in memory for something nothing draws.
+ * `decorateBatchMeshes` builds a BVH for every id (deferredBatchedBvh.js,
+ * one `computeBatchedBoundsTree(id)` per id). A whole-buffer id would
+ * therefore add a second, model-sized BVH next to the per-element ones,
+ * paying in memory for something nothing draws.
  *
  * @param {object} mesh a THREE.BatchedMesh with room for `geometry`
  * @param {object} geometry merged, indexed BufferGeometry

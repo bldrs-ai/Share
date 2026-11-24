@@ -93,3 +93,25 @@ export class UploadNotInBrowserError extends Error {
 export function uploadNotInBrowserAlert() {
   return {type: 'uploadNotInBrowser', message: UPLOAD_NOT_IN_BROWSER_ALERT}
 }
+
+
+/** AlertDialog type for a cache clear that left entries behind. */
+export const CACHE_CLEAR_SKIPPED = 'cacheClearSkipped'
+
+
+/**
+ * The alert for a Clear-cache that could not remove some entries, because an
+ * engine in another tab still reads them through an OPFS sync access handle
+ * (engine-worker.md §7 step 4). `onDismiss` runs when the user closes it:
+ * ProfileControl holds its reload until then.
+ *
+ * @param {number} count entries left behind
+ * @param {Function} onDismiss
+ * @return {{type: string, message: string, onDismiss: Function}}
+ */
+export function cacheClearSkippedAlert(count, onDismiss) {
+  const message = count === 1 ?
+    '1 file is open in another tab and wasn\'t cleared. Close that tab and clear again.' :
+    `${count} files are open in another tab and weren't cleared. Close that tab and clear again.`
+  return {type: CACHE_CLEAR_SKIPPED, message, onDismiss}
+}

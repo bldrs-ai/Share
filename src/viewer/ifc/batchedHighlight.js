@@ -389,6 +389,42 @@ export function applyBatchedInstancePreselection(model, occurrenceIds, color = D
 
 
 /**
+ * The live batch ids, per batch, that a highlight of `ids` would paint —
+ * what `applyBatchedPreselection` / `applyBatchedInstancePreselection` would
+ * recolour, without recolouring anything. The hover overlay
+ * (three/hoverOverlay.js) draws these instead. Resolved through the same
+ * indices the layers use, which follow every edit as it lands, so calling it
+ * again after an add or delete names the batch ids as they are now.
+ *
+ * @param {object} model BatchedMesh or Group
+ * @param {Array<number>|Set<number>} ids parent IFC product ids, or
+ *   occurrence ids when `byOccurrence`
+ * @param {boolean} [byOccurrence]
+ * @return {Array<{mesh: object, batchIds: Array<number>}>} one entry per
+ *   batch that holds any of them
+ */
+export function resolveBatchedHighlight(model, ids, byOccurrence = false) {
+  const wanted = ids instanceof Set ? ids : new Set(ids ?? [])
+  const out = []
+  eachBatch(model, (mesh) => {
+    // The same skip as `setLayer`, so the overlay draws exactly the batches
+    // the recolour would have painted.
+    if (!mesh.instanceParents || !mesh.instanceColors || typeof mesh.setColorAt !== 'function') {
+      return
+    }
+    if (byOccurrence && !mesh.instanceOccurrenceIds) {
+      return
+    }
+    const batchIds = resolveLayer(mesh, highlightState(mesh), wanted, byOccurrence)
+    if (batchIds.size > 0) {
+      out.push({mesh, batchIds: [...batchIds]})
+    }
+  })
+  return out
+}
+
+
+/**
  * Clear the transient preselection highlight.
  *
  * @param {object} model BatchedMesh or Group

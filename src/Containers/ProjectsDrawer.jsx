@@ -108,7 +108,7 @@ function projectInitials(name) {
 
 
 /**
- * Workspace-shell projects drawer (`?feature=workspace` — epic assist-300,
+ * Workspace-shell projects drawer (`?feature=workspace` — epic open-200,
  * #1657; design/new/conversational-cad.md §2.1): leftmost container in
  * RootLandscape, "further left" than NavTreeAndVersionsDrawer. Projects
  * expand to their model list; "Add model" routes through the existing

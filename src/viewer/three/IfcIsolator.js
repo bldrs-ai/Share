@@ -1,6 +1,7 @@
 import {ShareViewer} from '../ShareViewer'
 import {unsortedArraysAreEqual, arrayRemove} from '../../utils/arrays'
 import {clearBatchedSelection} from '../ifc/batchedHighlight'
+import {requestPaint} from './renderDemand'
 import {BatchEditKind, onBatchEdit} from '../ifc/batchedEdit'
 import {forEachActiveInstance, instanceIdSpan, isActive} from '../ifc/batchedInstanceTables'
 import {eachBatch, isBatchedModel} from '../ifc/batchedModel'
@@ -653,9 +654,11 @@ export default class IfcIsolator {
    *
    * @param {object} [opts]
    * @param {Array<number>} [opts.isolatedIds] isolate this set instead of the
-   *   isolator's own `isolatedIds` / `tempIsolationModeOn` state — for the
-   *   direct `initTemporaryIsolationSubset` callers that never enter isolation
-   *   mode (BotChat).
+   *   isolator's own `isolatedIds` / `tempIsolationModeOn` state — for a
+   *   direct `initTemporaryIsolationSubset` caller that never enters isolation
+   *   mode. The old BotChat eval was one (#1821); since #1675 every in-app
+   *   caller goes through isolation mode, but the parameter keeps the method
+   *   honest for any direct caller.
    * @private
    */
   _applyBatchedVisibility(opts = {}) {
@@ -973,17 +976,17 @@ export default class IfcIsolator {
     }
     if (sceneGraph) {
       // Isolate in place, like the batched path; `includedIds` explicitly for
-      // the same BotChat reason given there. Outline the isolated meshes.
-      this.isolationOutlineEffect.setSelection(applySceneGraphVisibility(
+      // the same reason given there. Outline the isolated meshes.
+      this.setIsolationOutline_(applySceneGraphVisibility(
         this.ifcModel, {hiddenIds: this.hiddenIds, isolatedIds: includedIds}))
       return
     }
     if (batched) {
       // Isolate in place (Share#1806) — see the class doc. `includedIds` is
-      // passed explicitly rather than read off `isolatedIds`, because
-      // `BotChat` calls this method directly without entering isolation mode
-      // (no `tempIsolationModeOn` / `isolatedIds`) — reading the fields would
-      // make a bot-driven isolate a no-op.
+      // passed explicitly rather than read off `isolatedIds`, so a direct
+      // caller that never entered isolation mode (no `tempIsolationModeOn` /
+      // `isolatedIds`) still isolates. The old BotChat eval was one (#1821,
+      // deleted in #1675); reading the fields would make such a call a no-op.
       // Drop the selection paint before masking. Isolate normally targets the
       // *selection*, so the isolated instances are exactly the ones
       // `applyBatchedSelection` painted cyan — leaving that on would show the
@@ -1002,7 +1005,7 @@ export default class IfcIsolator {
       // outline pass's mask traces exactly the isolated geometry.
       const batches = []
       eachBatch(this.ifcModel, (mesh) => batches.push(mesh))
-      this.isolationOutlineEffect.setSelection(batches)
+      this.setIsolationOutline_(batches)
       return
     }
     this.isolationSubset = this.ifcModel.createSubset({
@@ -1024,7 +1027,7 @@ export default class IfcIsolator {
     // Conway-direct path returns Mesh[]; the wit-three path returns
     // a single Mesh. Normalise so the postprocess pass sees a flat
     // list either way.
-    this.isolationOutlineEffect.setSelection(this._subsetMeshes(this.isolationSubset))
+    this.setIsolationOutline_(this._subsetMeshes(this.isolationSubset))
   }
 
   /**
@@ -1649,7 +1652,7 @@ export default class IfcIsolator {
     } else {
       this._restoreModelToScene()
     }
-    this.isolationOutlineEffect.setSelection([])
+    this.setIsolationOutline_([])
     // Rebuild the cyan selection visual. Covers the hide-then-
     // isolate-then-deisolate flow: hide cleared the visual, isolate
     // didn't touch it, and resetTempIsolation now restores it from
@@ -1661,6 +1664,19 @@ export default class IfcIsolator {
   }
 
   /**
+   * Outline the isolated meshes. The outline's selection is layers on the
+   * meshes, which the render-on-demand hooks don't see, so ask for a paint
+   * (renderDemandHooks.js).
+   *
+   * @param {Array<object>} meshes
+   */
+  setIsolationOutline_(meshes) {
+    this.isolationOutlineEffect.setSelection(meshes)
+    requestPaint()
+  }
+
+
+  /**
    * Release every batched visibility mask this isolator installed, handing the
    * `setVisibleAt` bit back to residency. Called by `ShareViewer#dispose` (via
    * optional chaining) when the viewer or its model goes away, so a model that
@@ -1669,6 +1685,17 @@ export default class IfcIsolator {
    */
   dispose() {
     eachBatch(this.ifcModel, (mesh) => this._releaseBatchedMask(mesh))
+    // Then let go of the model, and of the subsets cut from it. A disposed
+    // viewer can outlive its model: after an in-app switch (open-205,
+    // `?feature=spaModelNav`) CadView closures from the renders before the
+    // switch still hold the old ShareViewer for a while (its theme-change
+    // listener, stale React props), and through `isolator.ifcModel` that
+    // pinned the old model, and on the main-thread engine its whole IfcAPI.
+    // Found by heap snapshot in modelSwitchMemory.spec.ts's leak hunt (#2023).
+    this.ifcModel = null
+    this.unhiddenSubset = null
+    this.isolationSubset = null
+    this.revealedElementsSubset = null
   }
 
   /**

@@ -28,7 +28,7 @@ describe('Analytics', () => {
       configurable: true,
       value: {
         ...originalLocation,
-        hostname: 'deploy-preview-1757--bldrs-share-dev.netlify.app',
+        hostname: 'deploy-preview-1757--bldrs-share-prod.netlify.app',
         search: '?feature=gaEnableInPreview',
       },
     })
@@ -38,6 +38,42 @@ describe('Analytics', () => {
       '[ga] event real_model_open', {content_id: 'house.ifc'})
     Object.defineProperty(window, 'location', {configurable: true, value: originalLocation})
     consoleInfo.mockRestore()
+  })
+
+
+  // Once-per-session senders (reportRenderMode, index/sentry.js) mark
+  // themselves sent only when this is true.
+  describe('gtagEvent return value', () => {
+    afterEach(() => {
+      delete window.gtag
+      Analytics.setIsAllowed(true)
+    })
+
+    it('is false while window.gtag is not loaded, and the event is dropped', () => {
+      delete window.gtag
+      expect(Analytics.gtagEvent('x', {})).toBe(false)
+    })
+
+    it('is false without consent, and does not call gtag', () => {
+      Analytics.setIsAllowed(false)
+      // After setIsAllowed: withdrawing consent itself makes a user-property call.
+      window.gtag = jest.fn()
+      expect(Analytics.gtagEvent('x', {})).toBe(false)
+      expect(window.gtag).not.toHaveBeenCalled()
+    })
+
+    it('is true only when the event was handed to gtag', () => {
+      window.gtag = jest.fn()
+      expect(Analytics.gtagEvent('x', {a: 1})).toBe(true)
+      expect(window.gtag).toHaveBeenCalledWith('event', 'x', {a: 1})
+    })
+
+    it('gtagEventWithCid passes the result through', () => {
+      delete window.gtag
+      expect(Analytics.gtagEventWithCid('x', {})).toBe(false)
+      window.gtag = jest.fn()
+      expect(Analytics.gtagEventWithCid('x', {})).toBe(true)
+    })
   })
 
 
@@ -675,8 +711,8 @@ describe('Analytics', () => {
       expect(Analytics.isRealModelOpen({kind: 'url'})).toBe(true)
     })
 
-    // All *.netlify.app hosts (deploy previews, branch deploys, the dev
-    // site) serve the prod GA tag — opens there are team/CI traffic,
+    // All *.netlify.app hosts (deploy previews, branch deploys, the
+    // project's own netlify.app address) serve the prod GA tag — opens there are team/CI traffic,
     // not conversions.
     test('false on Netlify deploy hosts, even for real sources', () => {
       const githubOpen = {
@@ -685,14 +721,14 @@ describe('Analytics', () => {
         gitpath: 'https://github.com/bldrs-ai/test-models/blob/main/ifc/misc/box.ifc',
       }
       expect(Analytics.isRealModelOpen(githubOpen, 'deploy-preview-1741--bldrs-share-prod.netlify.app')).toBe(false)
-      expect(Analytics.isRealModelOpen(githubOpen, 'bldrs-share-dev.netlify.app')).toBe(false)
+      expect(Analytics.isRealModelOpen(githubOpen, 'bldrs-share-prod.netlify.app')).toBe(false)
     })
 
     it('counts an opted-in deploy-preview open but not a branch deploy', () => {
       const githubOpen = {kind: 'file', isUploadedFile: false, filepath: 'models/house.ifc'}
       const preview = 'deploy-preview-1741--bldrs-share-prod.netlify.app'
       expect(Analytics.isRealModelOpen(githubOpen, preview, true)).toBe(true)
-      expect(Analytics.isRealModelOpen(githubOpen, 'bldrs-share-dev.netlify.app', true)).toBe(false)
+      expect(Analytics.isRealModelOpen(githubOpen, 'main--bldrs-share-prod.netlify.app', true)).toBe(false)
     })
 
     test('true on production and localhost hosts for real sources', () => {

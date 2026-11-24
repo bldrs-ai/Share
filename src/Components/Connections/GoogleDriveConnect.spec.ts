@@ -16,7 +16,13 @@ declare global {
 
 
 const GOOGLE_APIS_FAKE_PATH = path.resolve(process.cwd(), 'src/Components/Connections/googleApisFake.js')
-const TEST_FILE_ID = 'fake-drive-file-id-123'
+// Shaped like a real Drive id (routes/google.ts#isValidDriveId: 25 to 44 of
+// [A-Za-z0-9_-]). The old 22-character one was never a valid route: Share
+// sent it on to the home model at once. While every open was a page load,
+// the URL sat on /v/g/ while the next page booted, long enough for the check
+// below; in-app (open-205 step F) the route is handled in the same tick, so
+// the id has to be one the route takes.
+const TEST_FILE_ID = 'fake-drive-file-id-0123456789'
 const TEST_FILE_NAME = 'test-model.ifc'
 
 const {beforeEach, describe} = test
@@ -115,7 +121,12 @@ describe('Google Drive connection', () => {
       }, {fileId: TEST_FILE_ID, fileName: TEST_FILE_NAME})
 
       // URL should change to /v/g/<fileId> preserving Google Drive source info
-      await expect(page).toHaveURL(/\/v\/g\//, {timeout: 10_000})
+      await expect(page).toHaveURL(new RegExp(`/v/g/${TEST_FILE_ID}`), {timeout: 10_000})
+      // And Share took the route: the model being opened is the Drive file,
+      // not the home model a bad id falls back to.
+      await expect.poll(() => page.evaluate(() =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).store.getState().modelPath?.fileId ?? null)).toBe(TEST_FILE_ID)
     })
 
     test('cancelling the picker keeps the dialog open', async ({page}) => {

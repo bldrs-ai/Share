@@ -172,12 +172,16 @@ function rebuildGeometry(mesh, range) {
  * a post-load geometry id is unique per batch by construction, so it keys
  * per mesh, as a range id does.
  *
+ * Exported for the batched GLB writer's snapshot
+ * (`loader/glbBatchedSnapshot.js`), which must dedupe shapes exactly as
+ * this module's reader does.
+ *
  * @param {object} mesh a THREE.BatchedMesh
  * @param {number} batchId instance id
  * @param {number} geometryId the batch's own geometry id
  * @return {string}
  */
-function sourceKey(mesh, batchId, geometryId) {
+export function instanceSourceKey(mesh, batchId, geometryId) {
   const sourceIds = mesh.instanceGeometryIds
   const sourceId = sourceIds ? sourceIds[batchId] : undefined
   if (sourceId === undefined || mesh[BATCHED_GEOMETRY_RANGE_IDS]?.has(geometryId) ||
@@ -206,7 +210,7 @@ export function instanceGeometryAt(mesh, batchId, cache = null) {
   if (cache === null) {
     return rebuildGeometry(mesh, range)
   }
-  const key = sourceKey(mesh, batchId, range.geometryId)
+  const key = instanceSourceKey(mesh, batchId, range.geometryId)
   let geometry = cache.get(key)
   if (geometry === undefined) {
     geometry = rebuildGeometry(mesh, range)

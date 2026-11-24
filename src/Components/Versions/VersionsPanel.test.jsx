@@ -1,7 +1,9 @@
 import React from 'react'
-import {act, render, renderHook, waitFor} from '@testing-library/react'
+import {act, fireEvent, render, renderHook, waitFor} from '@testing-library/react'
+import {handleRoute} from '../../routes/routes'
 import {StoreRouteThemeCtx} from '../../Share.fixture'
 import useStore from '../../store/useStore'
+import {navigateToModel} from '../../utils/navigate'
 import VersionsPanel from './VersionsPanel'
 import {
   MOCK_MODEL_PATH_GIT,
@@ -13,6 +15,10 @@ import {MOCK_COMMITS} from './VersionsTimeline.fixture'
 
 
 jest.mock('./useVersions')
+jest.mock('../../utils/navigate', () => ({
+  ...jest.requireActual('../../utils/navigate'),
+  navigateToModel: jest.fn(),
+}))
 
 
 describe('VersionsPanel', () => {
@@ -66,5 +72,27 @@ describe('VersionsPanel', () => {
       expect(getByText(commit.commitDate)).toBeInTheDocument()
       expect(getByText(commit.commitMessage)).toBeInTheDocument()
     })
+  })
+
+  // A GitHub route result's filepath has no leading slash (routes/github.ts),
+  // and the commit's link lost the slash between the sha and the file
+  // (open-205's surface E2E, #2021).
+  it('opens a commit at the route\'s own file, with a slash between the sha and the path', async () => {
+    useVersions.mockImplementation(() => ({
+      commits: MOCK_COMMITS.map((commit, i) => ({...commit, sha: `sha${i}`})),
+      loading: false,
+    }))
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setModelPath(handleRoute('/share/v/gh', {
+        'org': 'acme', 'repo': 'tower', 'branch': 'main', '*': 'models/tower.ifc',
+      }))
+    })
+    const {getByText} = render(
+      <VersionsPanel filePath='models/tower.ifc' currentRef='main'/>,
+      {wrapper: StoreRouteThemeCtx})
+    fireEvent.click(getByText(MOCK_COMMITS[1].commitMessage))
+    expect(navigateToModel).toHaveBeenCalledWith(
+      {pathname: '/share/v/gh/acme/tower/sha1/models/tower.ifc'}, expect.any(Function))
   })
 })

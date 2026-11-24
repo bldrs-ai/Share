@@ -1,4 +1,4 @@
-import {excludedNodeModules} from './common.js'
+import {transformIgnoreNodeModules} from './common.js'
 
 
 global.TextEncoder = global.TextEncoder || require('util').TextEncoder
@@ -15,7 +15,7 @@ export default {
     '^.+\\.svg$': '<rootDir>/tools/jest/svgTransform.js',
   },
   transformIgnorePatterns: [
-    `/node_modules/(?!${excludedNodeModules}/)`,
+    transformIgnoreNodeModules,
   ],
   moduleNameMapper: {
     '^.+\\.css$': 'identity-obj-proxy',

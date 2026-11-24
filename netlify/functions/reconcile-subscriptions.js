@@ -44,9 +44,10 @@
  *   - 'apply': also writes. Set it in the Netlify UI once a report run has
  *     been read and looks right.
  *   - 'off': doesn't sweep: one INFO line, nothing read, nothing to Sentry.
- *     For the Netlify project that isn't production (bldrs-ai/ops#36),
- *     which deploys the same scheduled function with the same credentials.
- *     It has to be set explicitly: an unset (or lost) variable still means
+ *     For a Netlify deploy that carries this function but mustn't sweep —
+ *     originally a second, non-production project with the same
+ *     credentials (bldrs-ai/ops#36), since retired. It has to be set
+ *     explicitly: an unset (or lost) variable still means
  *     report, so production can't silently stop sweeping.
  *
  * Every item is independent: one customer's failure is recorded in the

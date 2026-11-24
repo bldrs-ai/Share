@@ -3,10 +3,10 @@ import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../__mock
 import {getProvider} from '../connections/registry'
 import useQuota from '../hooks/useQuota'
 import {HTTP_BAD_REQUEST, HTTP_FORBIDDEN, HTTP_OK} from '../net/http'
-import {gtagEventWithCid, trackModelAction} from '../privacy/analytics'
+import {MODEL_ROUTE_KINDS, gtagEventWithCid, trackModelAction} from '../privacy/analytics'
 import {handleRoute} from '../routes/routes'
 import useStore from '../store/useStore'
-import useDirectLinkQuota, {directLinkQuotaKey} from './useDirectLinkQuota'
+import useDirectLinkQuota, {DIRECT_LINK_ROUTE_KINDS, directLinkQuotaKey} from './useDirectLinkQuota'
 
 
 // The quota hook is the seam under test's collaborator: its own suite
@@ -52,6 +52,29 @@ function routeFor(pathPrefix, params) {
 
 
 const driveRoute = () => routeFor('/share/v/g', {'*': DRIVE_ID})
+const LOCAL_ID = '0b4c2f1e-8d6a-4c3b-9e2f-000000000001.ifc'
+const LOCAL_KEY = `/share/v/local-only/${LOCAL_ID}`
+// With an element path, which the key leaves out as it does for GitHub.
+const localRoute = () => routeFor('/share/v/local-only', {'*': `${LOCAL_ID}/12/34`})
+
+
+/**
+ * Run `fn` with the `meterLocalFiles` abuse switch on, the way a user's
+ * session turns it on: `?feature=meterLocalFiles` (quota.js reads it through
+ * the real isFeatureEnabled). The URL is put back after.
+ *
+ * @param {Function} fn async
+ * @return {Promise<void>}
+ */
+async function withLocalFilesMetered(fn) {
+  const before = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  window.history.pushState({}, '', '/share/v/p/index.ifc?feature=meterLocalFiles')
+  try {
+    await fn()
+  } finally {
+    window.history.pushState({}, '', before)
+  }
+}
 const githubRoute = (repo = 'private-repo') =>
   routeFor('/share/v/gh', {'org': 'acme', repo, 'branch': 'main', '*': 'models/tower.ifc/12/34'})
 
@@ -211,6 +234,21 @@ describe('quota/useDirectLinkQuota', () => {
     expect(record).not.toHaveBeenCalled()
   })
 
+  // bldrs-ai/ops#39: with the abuse switch on, a /v/local-only/ URL is the
+  // way around a refused drop, so it gets the direct-link soft gate.
+  it('with meterLocalFiles on, soft-gates a local file under the drop\'s key, as route_kind local', async () => {
+    await withLocalFilesMetered(async () => {
+      const {record} = mockQuota({recordOutcome: {allowed: false, used: 2, limit: 2, tier: 'free', alreadyCounted: false}})
+      await meter(localRoute())
+      expect(record.mock.calls).toEqual([[LOCAL_KEY]])
+      expect(gtagEventWithCid.mock.calls).toEqual([['quota_soft_limit_exceeded',
+        {tier: 'free', used: 2, limit: 2, route_kind: 'local'}]])
+      expect(trackModelAction.mock.calls).toEqual([['share', {
+        gate: 'soft', source: 'local', routeKind: 'local', tier: 'free', contentId: String(localRoute().downloadUrl),
+      }]])
+    })
+  })
+
   it('a public GitHub load the server says is not quotable sends nothing', async () => {
     // Privacy of a /v/gh/ path is record-load's call (its unauthenticated
     // repo lookup), so the client asks; a public repo comes back allowed and
@@ -221,11 +259,44 @@ describe('quota/useDirectLinkQuota', () => {
     expect(gtagEventWithCid).not.toHaveBeenCalled()
   })
 
-  it('meters a model once per page load: a re-init or A → B → A is not a second open', async () => {
+  // Per open, not per page (open-205, #2022; decision 1 on #2011). An open is
+  // one route result from Share.jsx (routes/modelOpen.ts): a re-init (theme
+  // toggle, auth or view-settings re-run, StrictMode) passes the SAME object
+  // again; an in-app return to a model passes a new one.
+  it('meters an open once: a re-init of the same route result is not a second count', async () => {
     const {record} = mockQuota({recordOutcome: {allowed: false, used: 2, limit: 2, tier: 'free', alreadyCounted: false}})
-    await meter(driveRoute(), driveRoute(), githubRoute(), driveRoute())
-    expect(record.mock.calls).toEqual([[DRIVE_KEY], ['/share/v/gh/acme/private-repo/main/models/tower.ifc']])
-    expect(gtagEventWithCid).toHaveBeenCalledTimes(2)
+    const open = driveRoute()
+    await meter(open, open, open)
+    expect(record.mock.calls).toEqual([[DRIVE_KEY]])
+    expect(gtagEventWithCid).toHaveBeenCalledTimes(1)
+  })
+
+  it('in-app A → B → A records A again: a return is a new open', async () => {
+    const {record} = mockQuota({recordOutcome: {allowed: false, used: 2, limit: 2, tier: 'free', alreadyCounted: true}})
+    const a = driveRoute()
+    await meter(a, githubRoute(), a, driveRoute())
+    expect(record.mock.calls).toEqual([[DRIVE_KEY], ['/share/v/gh/acme/private-repo/main/models/tower.ifc'], [DRIVE_KEY]])
+    // Still over the limit on the return, so the soft gate says so again.
+    expect(gtagEventWithCid).toHaveBeenCalledTimes(3)
+  })
+
+  it('A → an unmetered model → A records A again, though the key it last saw is the same', async () => {
+    const {record} = mockQuota()
+    const hosted = routeFor('/share/v/p', {'*': 'index.ifc'})
+    await meter(driveRoute(), hosted, driveRoute())
+    expect(record.mock.calls).toEqual([[DRIVE_KEY], [DRIVE_KEY]])
+  })
+
+  it('with every open a page load (the disableSpaModelNav kill switch), per open is per page: one count per page', async () => {
+    // Each page load mounts its own CadView, so its own hook; within one
+    // page only re-inits of that page's one open follow.
+    const {record} = mockQuota()
+    for (let page = 0; page < 2; page++) {
+      const open = driveRoute()
+      const hook = await meter(open, open)
+      hook.unmount()
+    }
+    expect(record.mock.calls).toEqual([[DRIVE_KEY], [DRIVE_KEY]])
   })
 
   it('waits for Auth0 to settle before recording', async () => {
@@ -415,6 +486,67 @@ describe('quota/useDirectLinkQuota with the real useQuota', () => {
       {tier: 'free', used: 2, limit: 2, route_kind: 'gdrive'})
   })
 
+  it('with meterLocalFiles on, a free user loading a local file by URL takes a slot', async () => {
+    await withLocalFilesMetered(async () => {
+      mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+      mockOpfs()
+      const server = fakeRecordLoad(['/share/v/g/seeded-0'])
+      global.fetch = server.fetch
+      const {result} = await renderWithRealQuota()
+
+      await act(async () => {
+        result.current.meter(localRoute())
+        await Promise.resolve()
+      })
+      await act(async () => {})
+
+      expect(server.keys()).toEqual(['/share/v/g/seeded-0', LOCAL_KEY])
+      expect(gtagEventWithCid).not.toHaveBeenCalled()
+    })
+  })
+
+  it('with meterLocalFiles on, a free user at the limit loading a local file by URL is flagged, not blocked', async () => {
+    await withLocalFilesMetered(async () => {
+      mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+      mockOpfs()
+      const server = fakeRecordLoad(['/share/v/g/seeded-0', '/share/v/g/seeded-1'])
+      global.fetch = server.fetch
+      const {result} = await renderWithRealQuota()
+
+      await act(async () => {
+        result.current.meter(localRoute())
+        await Promise.resolve()
+      })
+      await act(async () => {})
+
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+      expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toEqual({key: LOCAL_KEY})
+      expect(gtagEventWithCid).toHaveBeenCalledWith('quota_soft_limit_exceeded',
+        {tier: 'free', used: 2, limit: 2, route_kind: 'local'})
+    })
+  })
+
+  // The switch meters signed-in free users only (design/new/quotas.md
+  // §"Metering local files again").
+  it('with meterLocalFiles on, a signed-out user loading a local file by URL records nothing', async () => {
+    await withLocalFilesMetered(async () => {
+      mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+      const opfs = mockOpfs()
+      global.fetch = jest.fn()
+      const {result} = await renderWithRealQuota()
+
+      await act(async () => {
+        result.current.meter(localRoute())
+        await Promise.resolve()
+      })
+      await act(async () => {})
+
+      expect(global.fetch).not.toHaveBeenCalled()
+      expect(opfs.read()).toBeNull()
+      expect(gtagEventWithCid).not.toHaveBeenCalled()
+    })
+  })
+
   it('a signed-in direct load asks the server even when this browser\'s OPFS holds the key', async () => {
     // The row came from another account in this browser; this account's
     // server ledger is full without it. Trusting the local mirror would
@@ -455,5 +587,14 @@ describe('quota/useDirectLinkQuota#directLinkQuotaKey', () => {
 
   it('is null for no route', () => {
     expect(directLinkQuotaKey(null, APP_PREFIX)).toBeNull()
+  })
+
+  it('keys a local file like the drop and the Open dialog only with meterLocalFiles on', () => {
+    expect(directLinkQuotaKey(localRoute(), APP_PREFIX, false)).toBeNull()
+    expect(directLinkQuotaKey(localRoute(), APP_PREFIX, true)).toEqual({key: LOCAL_KEY, routeKind: 'local'})
+    // One vocabulary with model_view / model_share's route_kind.
+    expect(DIRECT_LINK_ROUTE_KINDS.LOCAL).toBe(MODEL_ROUTE_KINDS.LOCAL)
+    // A hosted /v/p/ file is a `file` route too, and never metered.
+    expect(directLinkQuotaKey(routeFor('/share/v/p', {'*': 'index.ifc'}), APP_PREFIX, true)).toBeNull()
   })
 })

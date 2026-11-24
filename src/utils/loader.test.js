@@ -1,13 +1,21 @@
 import {DecompressionStream as NodeDecompressionStream} from 'node:stream/web'
 import {gzipSync} from 'node:zlib'
+import {zipSync} from 'three/examples/jsm/libs/fflate.module.js'
 import {initializeWorker, opfsWriteModel} from '../OPFS/OPFSService.js'
 import {getInMemoryUpload} from '../loader/inMemoryUploads'
+import {ARCHIVE_ENTRY_CHOICE} from '../loader/modelArchive'
+import {readZipDirectory} from '../loader/zipArchive'
 import {loadLocalFile} from './loader'
 
 
 // The OPFS worker is a real shared worker in the browser; what matters here
 // is the storage name the file is written under, which is the `/v/new/`
 // segment `findLoader` later resolves the upload by.
+// Real, but able to fail on demand the way a defect would.
+jest.mock('../loader/zipArchive', () => {
+  const actual = jest.requireActual('../loader/zipArchive')
+  return {...actual, readZipDirectory: jest.fn(actual.readZipDirectory)}
+})
 jest.mock('../OPFS/OPFSService.js', () => ({
   initializeWorker: jest.fn(() => ({addEventListener: jest.fn(), removeEventListener: jest.fn()})),
   nextRequestId: jest.fn(() => 7),
@@ -28,6 +36,26 @@ async function flushPick() {
   // and the `DecompressionStream` round trip each settle on their own turn.
   const TURNS = 10
   for (let i = 0; i < TURNS; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
+
+
+/**
+ * {@link flushPick}, then more turns until `isDone` holds, for the
+ * compressed path: how many turns the `DecompressionStream` round trip
+ * takes isn't fixed, and under the full parallel suite ten weren't always
+ * enough (the write hadn't happened yet when the test asserted it).
+ * Bounded, so a pick that really never settles still fails on the
+ * assertion after it, not on Jest's timeout.
+ *
+ * @param {Function} isDone
+ * @return {Promise<void>}
+ */
+async function flushPickUntil(isDone) {
+  await flushPick()
+  const MAX_TURNS = 500
+  for (let i = 0; i < MAX_TURNS && !isDone(); i++) {
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
 }
@@ -130,7 +158,7 @@ describe('loadLocalFile', () => {
     const picked = pickedFile(gzipped, 'index.glb.gz')
     Object.defineProperty(inputElement, 'files', {value: [picked]})
     inputElement.dispatchEvent(new Event('change', {bubbles: true}))
-    await flushPick()
+    await flushPickUntil(() => opfsWriteModel.mock.calls.length > 0)
 
     // Storage id `<blob-uuid>.glb`, display name the user's own `.glb.gz`.
     expect(opfsWriteModel).toHaveBeenCalledWith('testId', 'index.glb.gz', 'testId.glb', 7)
@@ -157,6 +185,34 @@ describe('loadLocalFile', () => {
     expect(opfsWriteModel).toHaveBeenCalledWith('testId', 'download', 'testId.glb', 7)
   })
 
+  // #2042: a write can come up short without throwing (a private window
+  // past ~1 GB of OPFS). The worker reports it and removes the partial
+  // entry; the pick then opens from memory instead of opening nothing.
+  it('holds the pick in memory when the OPFS worker reports a failed store', async () => {
+    const worker = {addEventListener: jest.fn(), removeEventListener: jest.fn()}
+    initializeWorker.mockReturnValueOnce(worker)
+    const onLoad = jest.fn()
+    loadLocalFile(onLoad, true)
+
+    const inputElement = document.querySelector('input[type="file"]')
+    const picked = pickedFile(GLB_BYTES, 'big.glb')
+    Object.defineProperty(inputElement, 'files', {value: [picked]})
+    inputElement.dispatchEvent(new Event('change', {bubbles: true}))
+    await flushPick()
+
+    expect(opfsWriteModel).toHaveBeenCalledWith('testId', 'big.glb', 'testId.glb', 7)
+    const listener = worker.addEventListener.mock.calls[0][1]
+    listener({data: {requestId: 7, error: 'OPFS write incomplete: 4294967288 of 1024 bytes at offset 0'}})
+
+    expect(onLoad).toHaveBeenCalledTimes(1)
+    const [storageId, lastModifiedUtc, displayName, held] = onLoad.mock.calls[0]
+    expect(storageId).toMatch(/^[0-9a-f-]{36}\.glb$/)
+    expect(getInMemoryUpload(storageId)).toBe(picked)
+    expect([lastModifiedUtc, displayName, held]).toEqual([PICKED_AT, 'big.glb', {inMemory: true}])
+    expect(worker.removeEventListener).toHaveBeenCalledWith('message', listener)
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('testId')
+  })
+
   it('reports a pick no name and no header can identify, and writes nothing', async () => {
     // The picker has already closed, so without `onError` nothing would tell
     // the user why their file did not open.
@@ -169,7 +225,14 @@ describe('loadLocalFile', () => {
     inputElement.dispatchEvent(new Event('change', {bubbles: true}))
     await flushPick()
 
-    expect(onError).toHaveBeenCalledWith(expect.stringContaining('Cannot extract filetype'))
+    // An alert object, so AlertDialog can count it as one info issue; the
+    // name stays in the dialog's text and out of the tag.
+    expect(onError).toHaveBeenCalledWith({
+      type: 'unrecognizedFormat',
+      message: 'Cannot extract filetype from filename: mystery',
+      ext: 'none',
+      entry: 'picker',
+    })
     expect(opfsWriteModel).not.toHaveBeenCalled()
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('testId')
   })
@@ -184,7 +247,7 @@ describe('loadLocalFile', () => {
     const gzipped = new Uint8Array(gzipSync(Buffer.from(GLB_BYTES)))
     Object.defineProperty(inputElement, 'files', {value: [pickedFile(gzipped, 'index.glb.gz')]})
     inputElement.dispatchEvent(new Event('change', {bubbles: true}))
-    await flushPick()
+    await flushPickUntil(() => onLoad.mock.calls.length > 0)
 
     expect(onLoad).toHaveBeenCalledWith(
       expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.glb$/),
@@ -207,7 +270,7 @@ describe('loadLocalFile', () => {
     inputElement.dispatchEvent(new Event('change', {bubbles: true}))
     await flushPick()
 
-    expect(onError).toHaveBeenCalledWith(expect.stringContaining('Cannot extract filetype'))
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({type: 'unrecognizedFormat', entry: 'picker'}))
     expect(onLoad).not.toHaveBeenCalled()
   })
 
@@ -215,5 +278,93 @@ describe('loadLocalFile', () => {
     loadLocalFile(jest.fn(), false, true)
     const inputElement = document.querySelector('input[type="file"]')
     expect(inputElement).toBeNull()
+  })
+})
+
+
+// Share#2006: a picked zip opens the model inside it (loader/modelArchive.js).
+describe('loadLocalFile — archives', () => {
+  // UTF-8 in this realm's Uint8Array: fflate tells files from folders by
+  // `instanceof`, and TextEncoder's arrays are Node's under jest-fixed-jsdom.
+  const utf8 = (text) => new Uint8Array(new TextEncoder().encode(text))
+  const IFC = utf8('ISO-10303-21;\nHEADER;\nFILE_SCHEMA((\'IFC4\'));\nENDSEC;\n')
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    document.body.innerHTML = `<div id="viewer-container"></div>`
+    URL.createObjectURL = jest.fn(() => 'testId')
+    URL.revokeObjectURL = jest.fn()
+  })
+
+  /**
+   * @param {Blob} picked
+   * @param {Function} [onError]
+   * @param {object} [options] loadLocalFile's
+   */
+  async function pick(picked, onError = jest.fn(), options = {}) {
+    loadLocalFile(jest.fn(), true, false, onError, options)
+    const inputElement = document.querySelector('input[type="file"]')
+    Object.defineProperty(inputElement, 'files', {value: [picked]})
+    inputElement.dispatchEvent(new Event('change', {bubbles: true}))
+    await flushPick()
+  }
+
+  it('stores the one model in a picked zip under its own name and type', async () => {
+    const zip = zipSync({'export/Tower.ifc': IFC, 'export/notes.pdf': utf8('%PDF')})
+    await pick(pickedFile(zip, 'Tower ifc.zip'))
+    // Storage `<blob-uuid>.ifc`, and the ENTRY's name for recents and the
+    // load report: the user opened Tower.ifc, not the zip.
+    expect(opfsWriteModel).toHaveBeenCalledWith('testId', 'Tower.ifc', 'testId.ifc', 7)
+    const written = URL.createObjectURL.mock.calls[0][0]
+    expect(written.size).toBe(IFC.length)
+  })
+
+  it('opens a picked .ifczip as the .ifc inside it', async () => {
+    await pick(pickedFile(zipSync({'Tower.ifc': IFC}), 'Tower.ifczip'))
+    expect(opfsWriteModel).toHaveBeenCalledWith('testId', 'Tower.ifc', 'testId.ifc', 7)
+  })
+
+  it('asks which model when there are several, and stores the one chosen', async () => {
+    const onError = jest.fn()
+    const zip = zipSync({'Tower.ifc': IFC, 'Bracket.stp': utf8('ISO-10303-21;\nHEADER;\nENDSEC;\n')})
+    await pick(pickedFile(zip, 'models.zip'), onError)
+    expect(opfsWriteModel).not.toHaveBeenCalled()
+    const [choice] = onError.mock.calls[0]
+    expect(choice.type).toBe(ARCHIVE_ENTRY_CHOICE)
+    expect(choice.entries.map((e) => e.name)).toEqual(['Tower.ifc', 'Bracket.stp'])
+    await choice.onChoose(choice.entries[1])
+    expect(opfsWriteModel).toHaveBeenCalledWith('testId', 'Bracket.stp', 'testId.stp', 7)
+  })
+
+  it('says what a picked zip holds when it holds no model', async () => {
+    const onError = jest.fn()
+    await pick(pickedFile(zipSync({'plan.pdf': utf8('%PDF')}), 'plans.zip'), onError)
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'unrecognizedFormat', ext: 'zip', entry: 'picker', archive: {exts: ['pdf']},
+    }))
+    expect(opfsWriteModel).not.toHaveBeenCalled()
+  })
+
+  // Review of Share#2010: a failure that isn't the archive's escaped the
+  // change handler as an unhandled rejection, and the pick did nothing.
+  it('alerts when looking inside a picked zip fails for a reason that isn\'t the archive', async () => {
+    const defect = new TypeError('a defect')
+    readZipDirectory.mockRejectedValueOnce(defect)
+    const onError = jest.fn()
+    await pick(pickedFile(zipSync({'Tower.ifc': IFC}), 'Tower.zip'), onError)
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onError.mock.calls[0][0]).toBe(defect)
+    expect(opfsWriteModel).not.toHaveBeenCalled()
+  })
+
+  it('holds the model from a zip in memory without OPFS', async () => {
+    const onLoad = jest.fn()
+    loadLocalFile(onLoad, true, false, null, {inMemory: true})
+    const inputElement = document.querySelector('input[type="file"]')
+    Object.defineProperty(inputElement, 'files', {value: [pickedFile(zipSync({'Tower.ifc': IFC}), 'Tower.zip')]})
+    inputElement.dispatchEvent(new Event('change', {bubbles: true}))
+    await flushPick()
+    expect(onLoad).toHaveBeenCalledWith(expect.stringMatching(/\.ifc$/), PICKED_AT, 'Tower.ifc')
+    expect(getInMemoryUpload(onLoad.mock.calls[0][0]).name).toBe('Tower.ifc')
   })
 })

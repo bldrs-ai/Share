@@ -15,7 +15,25 @@ import {
   opfsWriteBase64Model,
 } from '../OPFS/OPFSService.js'
 import {assertDefined} from '../utils/assert'
-import debug from '../utils/debug'
+import {withSentrySafeMessage, workerErrorLabel} from '../privacy/sentryRedaction'
+import {OPFS_DOWNLOAD_FAILURE_CONDITIONS, downloadSourceKind} from './reportOpfsSourceCondition'
+import debug, {WARN} from '../utils/debug'
+
+
+/**
+ * The Error a worker error reply rejects with. Its message is the worker's
+ * text, which can name the user's file: kept for the page, the console and
+ * the user's alert, while Sentry records only the reply's structured label
+ * (privacy/sentryRedaction.js#withSentrySafeMessage, Share#2107). An upload's
+ * OPFS failure is rethrown by Loader.js#load and reported by CadView, so this
+ * one reaches an exception event, not just a breadcrumb.
+ *
+ * @param {object} data the worker's reply
+ * @return {Error}
+ */
+function workerError(data) {
+  return withSentrySafeMessage(new Error(data.error), `${workerErrorLabel(data)} (details withheld)`)
+}
 
 
 /**
@@ -102,7 +120,7 @@ export function writeSavedGithubModelOPFS(modelFile, originalFilePath, commitHas
     (requestId) => opfsWriteModelFileHandle(modelFile, originalFilePath, commitHash, owner, repo, branch, requestId),
     (data, settle) => {
       if (data.error) {
-        debug().error('Error from worker:', data.error)
+        debug().error(workerErrorLabel(data), data.error)
         settle.resolve(false)
         return
       }
@@ -131,8 +149,8 @@ export function getModelFromOPFS(owner, repo, branch, filepath) {
     (requestId) => opfsReadModel(fileName, requestId),
     (data, settle) => {
       if (data.error) {
-        debug().error('Error from worker:', data.error)
-        settle.reject(new Error(data.error))
+        debug().error(workerErrorLabel(data), data.error)
+        settle.reject(workerError(data))
         return
       }
       if (data.completed) {
@@ -177,8 +195,20 @@ export function downloadToOPFS(
       opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, !!(onProgress), requestId),
     (data, settle) => {
       if (data.error) {
-        debug().error('Error from worker:', data.error)
-        settle.reject(new Error(data.error))
+        // The console keeps the worker's text; the Sentry breadcrumb of this
+        // line keeps only the label's condition/status (sentryRedaction.js).
+        debug().error(workerErrorLabel(data), data.error)
+        const error = workerError(data)
+        // Which download condition the worker hit, for Loader.js#load to
+        // report once its direct-fetch fallback has succeeded. Never the text.
+        // Only the download-failure conditions: the worker's other replies
+        // carry a condition too (Share#2107) but are not reported.
+        if (OPFS_DOWNLOAD_FAILURE_CONDITIONS.includes(data.condition)) {
+          error.opfsCondition = data.condition
+          error.opfsStatus = data.status
+        }
+        error.opfsKind = downloadSourceKind(commitHash)
+        settle.reject(error)
         return
       }
       if (data.progressEvent) {
@@ -194,6 +224,15 @@ export function downloadToOPFS(
       if (data.completed) {
         if (data.event === 'download') {
           debug().warn('Worker finished downloading file')
+          if (data.cached === false && data.file) {
+            // Carried on the File, not reported here: the load can still fail
+            // after this (LFS, decode, readModel), and CadView's exception
+            // would then be a second event for it. Loader.js#load reports
+            // once readModel succeeds. A property on the resolved file is the
+            // smallest shape: downloadToOPFS keeps returning the File its
+            // callers already take, and no caller has to learn a new tuple.
+            data.file.opfsNotCachedKind = downloadSourceKind(commitHash)
+          }
         } else if (data.event === 'exists') {
           debug().warn('Commit exists in OPFS.')
         }
@@ -257,8 +296,8 @@ export function writeBase64Model(
 function awaitTerminalWorkerEvent(kickoff, {setOpfsFile, onProgress, onLastModifiedGithub}) {
   return workerRequest(kickoff, (data, settle) => {
     if (data.error) {
-      debug().error('Error from worker:', data.error)
-      settle.reject(new Error(data.error))
+      debug().error(workerErrorLabel(data), data.error)
+      settle.reject(workerError(data))
       return
     }
     if (data.progressEvent) {
@@ -347,8 +386,8 @@ export function downloadModel(
 function makePromise(kickoff, eventStatus) {
   return workerRequest(kickoff, (data, settle) => {
     if (data.error) {
-      debug().error('Error from worker:', data.error)
-      settle.reject(new Error(data.error))
+      debug().error(workerErrorLabel(data), data.error)
+      settle.reject(workerError(data))
       return
     }
     if (!data.completed) {
@@ -413,8 +452,8 @@ export function writeGlbBytesToOPFS(bytes, originalFilePath, commitHash, owner, 
     (requestId) => opfsWriteBytesByPath(bytes, originalFilePath, commitHash, owner, repo, branch, requestId),
     (data, settle) => {
       if (data.error) {
-        debug().error('Error from worker:', data.error)
-        settle.reject(new Error(data.error))
+        debug().error(workerErrorLabel(data), data.error)
+        settle.reject(workerError(data))
         return
       }
       if (data.completed && data.event === 'wrote') {
@@ -442,8 +481,8 @@ export function readModelByPathFromOPFS(originalFilePath, commitHash, owner, rep
     (requestId) => opfsReadModelByPath(originalFilePath, commitHash, owner, repo, branch, requestId),
     (data, settle) => {
       if (data.error) {
-        debug().error('Error from worker:', data.error)
-        settle.reject(new Error(data.error))
+        debug().error(workerErrorLabel(data), data.error)
+        settle.reject(workerError(data))
         return
       }
       if (data.completed) {
@@ -467,12 +506,25 @@ export function snapshotOPFS(previewWindow = 0) {
 }
 
 /**
- * Deletes entirety of OPFS cache
+ * Deletes entirety of OPFS cache, except entries another handle holds: an
+ * engine worker reading its model through a read-only sync access handle
+ * locks that entry (engine-worker.md §7 step 4), in this tab or another.
  *
- * @return {boolean}
+ * @return {Promise<Array<string>>} OPFS paths left behind (locked); empty
+ *   when everything went
  */
 export function clearOPFSCache() {
-  return makePromise((requestId) => opfsClearCache(requestId), 'clear')
+  return workerRequest((requestId) => opfsClearCache(requestId), (data, settle) => {
+    if (data.error) {
+      debug().error(workerErrorLabel(data), data.error)
+      settle.reject(workerError(data))
+      return
+    }
+    if (data.completed && data.event === 'clear') {
+      console.warn('OPFS cache cleared.')
+      settle.resolve(Array.isArray(data.skipped) ? data.skipped : [])
+    }
+  })
 }
 
 /**
@@ -507,8 +559,12 @@ export function deleteFileFromOPFS(
  * @param {File} file
  * @param {string} type As defined in Filetype.
  * @param {Function} callback Not optional since all known flows require it.
+ * @param {Function} [onFailed] Called with the error when the worker could
+ *   not store the file. That includes a write that came up short (#2042):
+ *   the worker has already removed the partial entry, so the caller can
+ *   still open the dropped File some other way.
  */
-export function saveDnDFileToOpfs(file, type, callback) {
+export function saveDnDFileToOpfs(file, type, callback, onFailed) {
   assertDefined(file, type, callback)
 
   const tmpUrl = URL.createObjectURL(file)
@@ -525,7 +581,7 @@ export function saveDnDFileToOpfs(file, type, callback) {
     (requestId) => opfsWriteModel(tmpUrl, originalFilename, filename, requestId),
     (data, settle) => {
       if (data.error) {
-        settle.reject(new Error(data.error))
+        settle.reject(workerError(data))
         return
       }
       if (data.completed) {
@@ -538,7 +594,14 @@ export function saveDnDFileToOpfs(file, type, callback) {
         }
       }
     })
-    .then((fileName) => callback(fileName))
+    .then((fileName) => callback(fileName), (error) => {
+      // WARN, not a bare debug(): prod logs at WARN, and a drop that failed
+      // to store otherwise left nothing in the console.
+      debug(WARN).warn('saveDnDFileToOpfs: could not store the upload in OPFS:', error)
+      if (onFailed) {
+        return onFailed(error)
+      }
+    })
     .catch((error) => debug().error('Error from worker:', error))
     // We can't revoke tmpUrl until the worker is done with it, so revoke once
     // the request settles either way.
@@ -570,8 +633,7 @@ export function saveDnDFileToOpfs(file, type, callback) {
  */
 export async function doesUploadExistInOPFS(storageId) {
   const root = await navigator.storage.getDirectory()
-  if (typeof storageId !== 'string' || storageId === '' || storageId === '.' ||
-      storageId === '..' || /[/\\]/.test(storageId)) {
+  if (!isLegalUploadEntryName(storageId)) {
     return false
   }
   try {
@@ -585,6 +647,52 @@ export async function doesUploadExistInOPFS(storageId) {
     throw err
   }
 }
+
+/**
+ * Delete a local upload from OPFS: the root-level `<storageId>` folder that
+ * `OPFS.worker.js` `writeModelToOPFS` writes, and the file of the same name in
+ * it (the layout {@link doesUploadExistInOPFS} probes). For an upload that
+ * `record()` refused under the `meterLocalFiles` switch: the drop and the
+ * Open dialog's pick write before the quota answers, and a refused one left
+ * behind still opened by its `/v/local-only/` URL (bldrs-ai/ops#39).
+ *
+ * Not {@link deleteFileFromOPFS}: that walks the `<owner>/<repo>/<branch>`
+ * layout of a cached GitHub model, which an upload doesn't have. On the main
+ * thread for the reason the probe is: the async handle API works outside
+ * workers, and a request to the shared worker would queue behind its writes.
+ *
+ * @param {string} storageId `<blob-uuid>.<ext>`
+ * @return {Promise<boolean>} true if it was deleted, false if it wasn't
+ *   there (or the id can't name an entry); rejects if OPFS couldn't be asked
+ */
+export async function deleteUploadFromOPFS(storageId) {
+  if (!isLegalUploadEntryName(storageId)) {
+    return false
+  }
+  const root = await navigator.storage.getDirectory()
+  try {
+    await root.removeEntry(storageId, {recursive: true})
+    return true
+  } catch (err) {
+    if (err?.name === 'NotFoundError') {
+      return false
+    }
+    throw err
+  }
+}
+
+
+/**
+ * @param {string} storageId
+ * @return {boolean} whether it can name a root-level OPFS entry: a non-empty
+ *   string, not `.`/`..`, with no path separator. One that can't was never
+ *   written, and must not reach a lookup or a delete as a path.
+ */
+function isLegalUploadEntryName(storageId) {
+  return typeof storageId === 'string' && storageId !== '' && storageId !== '.' &&
+    storageId !== '..' && !/[/\\]/.test(storageId)
+}
+
 
 /**
  * Checks if OPFS is available on the browser

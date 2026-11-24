@@ -1,0 +1,206 @@
+/* eslint-disable no-magic-numbers */
+// Page-context reads of the app's dev handles (`window.store`), untyped in
+// the test's TypeScript, as hoverPick.spec.ts does.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import {Locator, Page, expect, test} from '@playwright/test'
+import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
+import {withLook} from '../tests/e2e/look'
+import {waitForModelReady} from '../tests/e2e/models'
+import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
+
+
+const {beforeEach} = test
+
+const RENDER_PANEL = '[data-testid="render-panel"]'
+const PERF_PANEL = '[data-testid="perf-panel"]'
+
+
+/**
+ * The debug panels (src/viewer/debugPanels.js): the look-tuning panel and
+ * the FPS / ms / MB overlay, kept in prod behind the backtick key, and the
+ * motion AO drop (src/viewer/motionAO.js) the look ships with. On the plain
+ * URL with the look opted in (withLook), so these test what prod ships: the
+ * look on, N8AO running at rest.
+ */
+describeMobileAndDesktop('viewer/debugPanels', () => {
+  beforeEach(async ({page}) => {
+    // About the look (its AO and its hover cache): opt in, since the
+    // Playwright build has it off by default (src/tests/e2e/look.ts).
+    await withLook(page)
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+  })
+
+
+  test('backtick docks Perf then Render above the Elements control, and hides them again', async ({page}) => {
+    await page.goto('/share/v/p/index.ifc')
+    await waitForModelReady(page)
+    await expect(page.locator(RENDER_PANEL)).toHaveCount(0)
+    await expect(page.locator(PERF_PANEL)).toHaveCount(0)
+
+    await page.keyboard.press('`')
+    await expect(page.locator(RENDER_PANEL)).toBeVisible()
+    await expect(page.locator(PERF_PANEL).locator('#perf-monitor canvas').first()).toBeVisible()
+    await expect(page.getByTestId('perf-panel-counts')).toContainText('Draw calls')
+    const perfBox = await boxOf(page.locator(PERF_PANEL))
+    const renderBox = await boxOf(page.locator(RENDER_PANEL))
+    // Both whole on screen: on a phone the two can't sit side by side, and
+    // a single row ran Render off the right edge (codex on #2167).
+    const viewportWidth = page.viewportSize()?.width ?? 0
+    for (const box of [perfBox, renderBox]) {
+      expect(box.x).toBeGreaterThanOrEqual(0)
+      expect(box.x + box.width).toBeLessThanOrEqual(viewportWidth + 1)
+    }
+    // Perf, then Render: left to right where they fit side by side (one row:
+    // the same bottom edge), else Render on the row above Perf's.
+    const sameRow = Math.abs((renderBox.y + renderBox.height) - (perfBox.y + perfBox.height)) <= 1
+    if (sameRow) {
+      expect(perfBox.x + perfBox.width).toBeLessThanOrEqual(renderBox.x + 1)
+    } else {
+      expect(renderBox.y + renderBox.height).toBeLessThanOrEqual(perfBox.y + 1)
+    }
+    // Expanded, both sit on top of the Elements control, clear of it.
+    const controlTop = (await boxOf(page.getByTestId('element-group'))).y
+    expect(perfBox.y + perfBox.height).toBeLessThanOrEqual(controlTop)
+    expect(renderBox.y + renderBox.height).toBeLessThanOrEqual(controlTop)
+
+    await page.keyboard.press('`')
+    await expect(page.locator(RENDER_PANEL)).toHaveCount(0)
+    await expect(page.locator(PERF_PANEL)).toHaveCount(0)
+  })
+
+
+  test('Perf minimises to fps/ms/MB on the window bottom', async ({page}) => {
+    await page.goto('/share/v/p/index.ifc')
+    await waitForModelReady(page)
+    await page.keyboard.press('`')
+    await page.getByTestId('perf-panel-title').click()
+    await expect(page.getByTestId('perf-panel-counts')).toHaveCount(0)
+    await expect(page.getByTestId('perf-panel-summary')).toHaveText(/^\S+\/\S+\/\S+$/)
+    const box = await boxOf(page.locator(PERF_PANEL))
+    const viewportHeight = page.viewportSize()?.height ?? 0
+    expect(Math.abs(box.y + box.height - viewportHeight), 'the minimised bar sits on the window bottom').toBeLessThanOrEqual(1)
+  })
+
+
+  test('each panel closes alone with the x at its top-right', async ({page}) => {
+    await page.goto('/share/v/p/index.ifc')
+    await waitForModelReady(page)
+    await page.keyboard.press('`')
+    for (const panel of [PERF_PANEL, RENDER_PANEL]) {
+      const box = await boxOf(page.locator(panel))
+      const close = await boxOf(page.getByTestId(panel === PERF_PANEL ? 'perf-panel-close' : 'render-panel-close'))
+      // Top-right: in the panel's right end and on its title row.
+      expect(close.x + close.width).toBeGreaterThan(box.x + box.width - 40)
+      expect(close.x + close.width).toBeLessThanOrEqual(box.x + box.width + 1)
+      expect(close.y).toBeLessThan(box.y + 30)
+    }
+    await page.getByTestId('perf-panel-close').click()
+    await expect(page.locator(PERF_PANEL)).toHaveCount(0)
+    await expect(page.locator(RENDER_PANEL)).toBeVisible()
+    await page.getByTestId('render-panel-close').click()
+    await expect(page.locator(RENDER_PANEL)).toHaveCount(0)
+    await expect(page.getByTestId('debug-dock')).toHaveCount(0)
+  })
+
+
+  test('Display > Render... opens the Render panel', async ({page}) => {
+    await page.goto('/share/v/p/index.ifc')
+    await waitForModelReady(page)
+    await page.getByTestId('control-button-residency').click()
+    await page.getByTestId('display-render').click()
+    await expect(page.locator(RENDER_PANEL)).toBeVisible()
+    await expect(page.locator(RENDER_PANEL)).toContainText('Render')
+  })
+
+
+  test('?feature=look opens both panels at startup', async ({page}) => {
+    await page.goto('/share/v/p/index.ifc?feature=look')
+    await waitForModelReady(page)
+    await expect(page.locator(RENDER_PANEL)).toBeVisible()
+    await expect(page.locator(PERF_PANEL).locator('#perf-monitor')).toBeVisible()
+  })
+
+
+  test('AO fades out as a drag starts, is gone while moving, and fades back in at rest', async ({page}) => {
+    await page.goto('/share/v/p/index.ifc')
+    await waitForModelReady(page)
+    // The load's own fade-in (motionAO.js) done: full AO on the still frame.
+    await expect.poll(() => page.evaluate(() => (window as any).store.getState().viewer.postProcessor.getAOLevel()),
+      {timeout: 15_000}).toBe(1)
+
+    await recordPaints(page)
+    const box = await page.locator('#viewer-container canvas').first().boundingBox()
+    if (box === null) {
+      throw new Error('the viewer canvas is not laid out')
+    }
+    const x = box.x + (box.width / 2)
+    const y = box.y + (box.height / 2)
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    for (let i = 1; i <= 8; i++) {
+      await page.mouse.move(x + (i * 15), y + (i * 4))
+    }
+    await page.mouse.up()
+
+    // Rest is 200 ms and three quiet frames after the last camera change
+    // (MotionResidency's rule), then a 500 ms fade-in; SwiftShader frames are
+    // slow.
+    await expect.poll(() => page.evaluate(() => (window as any).store.getState().viewer.postProcessor.getAOLevel()),
+      {timeout: 15_000}).toBe(1)
+    await page.waitForTimeout(500)
+    const paints = await page.evaluate(() => (window as any).__aoPaints as Array<{moved: boolean, level: number}>)
+    const firstMoved = paints.findIndex((p) => p.moved)
+    expect(firstMoved, 'the drag moved the camera and painted').toBeGreaterThanOrEqual(0)
+    // A fade, not a cut: the drag's first moved frame still has AO.
+    expect(paints[firstMoved].level, 'the first moved frame kept its AO').toBeGreaterThan(0)
+    // Gone while moving: Auto times only those frames.
+    const lastDark = paints.map((p) => p.level).lastIndexOf(0)
+    expect(lastDark, 'a moved frame was painted with AO fully out').toBeGreaterThan(firstMoved)
+    // Back in at rest by a fade: a paint part-way, then full at the end.
+    const after = paints.slice(lastDark + 1)
+    expect(after.some((p) => p.level > 0 && p.level < 1), 'AO came back through a part-way frame').toBe(true)
+    expect(paints[paints.length - 1].level, 'the last paint, at rest, has full AO').toBe(1)
+  })
+})
+
+
+/**
+ * Record, at every paint from now on, the AO level it drew with (0 when the
+ * pass didn't run) and whether the camera
+ * pose differs from now, into `window.__aoPaints`. Read in the render
+ * closure's paint observer (RenderDemand#observePaints), i.e. for the frame
+ * actually drawn.
+ *
+ * @param page
+ */
+async function recordPaints(page: Page) {
+  await page.evaluate(() => {
+    const viewer = (window as any).store.getState().viewer
+    const camera = viewer.context.getCamera()
+    const start = camera.position.clone()
+    const paints: Array<{moved: boolean, level: number}> = []
+    ;(window as any).__aoPaints = paints
+    viewer.context.getRenderDemand().observePaints({
+      beforePaint: () => {
+        paints.push({
+          moved: camera.position.distanceTo(start) > 1e-6,
+          level: viewer.postProcessor.isAORunning() ? viewer.postProcessor.getAOLevel() : 0,
+        })
+      },
+    })
+  })
+}
+
+
+/**
+ * @param locator
+ * @return its bounding box; throws when it isn't laid out
+ */
+async function boxOf(locator: Locator): Promise<{x: number, y: number, width: number, height: number}> {
+  const box = await locator.boundingBox()
+  if (box === null) {
+    throw new Error('boxOf: element is not laid out')
+  }
+  return box
+}

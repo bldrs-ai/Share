@@ -46,14 +46,22 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const displayOverrides = useStore((state) => state.displayOverrides)
   const hiddenElements = useStore((state) => state.hiddenElements)
   const isolatedElements = useStore((state) => state.isolatedElements)
-  const [isPlaneInUrl, setIsPlaneInUrl] = useState(false)
+  // In the store, like the camera's: the live view link reads both
+  // (Share/viewLink.js), and stops following the planes or the display while
+  // its switch is off.
+  const isPlaneInUrl = useStore((state) => state.isPlaneInUrl)
+  const setIsPlaneInUrl = useStore((state) => state.setIsPlaneInUrl)
   const [isLinkCopied, setIsLinkCopied] = useState(false)
-  const [isCameraInUrl, setIsCameraInUrl] = useState(true)
+  // In the store, not the dialog's state: the live camera link reads it too
+  // (Camera/liveCameraLink.js), and stops following the camera while it's off.
+  const isCameraInUrl = useStore((state) => state.isCameraInUrl)
+  const setIsCameraInUrl = useStore((state) => state.setIsCameraInUrl)
   // Default ON, like the camera: the Display menu's choices are part of "what
   // the sender was looking at" (model-display-controls §6), and the `#d:`
   // token is empty for a model nobody has touched, so leaving it on costs
   // the common share link nothing.
-  const [isDisplayInUrl, setIsDisplayInUrl] = useState(true)
+  const isDisplayInUrl = useStore((state) => state.isDisplayInUrl)
+  const setIsDisplayInUrl = useStore((state) => state.setIsDisplayInUrl)
   // False when the hidden / isolated state is past the link's size cap and
   // was left out (visibilityHash's VISIBILITY_TERMS_MAX_CHARS).
   const [isVisibilityInUrl, setIsVisibilityInUrl] = useState(true)
@@ -77,12 +85,14 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
         removeCameraUrlParams()
       }
 
-      if (isCutPlaneActive) {
-        setIsPlaneInUrl(true)
+      // Session state now (store `isPlaneInUrl`), so the dialog no longer
+      // turns it on when it finds planes: a user who switched it off keeps it
+      // off.
+      if (isCutPlaneActive && isPlaneInUrl) {
         addPlanesToHashState(location, viewer, model)
       }
     }
-  }, [cameraControls, isCameraInUrl, isCutPlaneActive, isDialogDisplayed, location, model, viewer, viewer?.clipper])
+  }, [cameraControls, isCameraInUrl, isCutPlaneActive, isDialogDisplayed, isPlaneInUrl, location, model, viewer, viewer?.clipper])
 
   // Display state (`#d:`) gets its own effect rather than another branch of
   // the one above, which is gated on `viewer?.clipper` — the clipper has
@@ -137,10 +147,15 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   }, [isDialogDisplayed, model])
 
 
-  /** Write every `#d:` term: the Display menu's, then hide / isolate. */
+  /**
+   * Write every `#d:` term: the Display menu's, then hide / isolate. In
+   * place, as the live view link writes them (Share/viewLink.js): the dialog
+   * re-writes on every display change while it's open, and none of those is
+   * a step for Back.
+   */
   function writeDisplayState() {
-    writeModelDisplayHash(window.location, appearance)
-    setIsVisibilityInUrl(writeVisibilityHash(window.location, viewer))
+    writeModelDisplayHash(window.location, appearance, {inPlace: true})
+    setIsVisibilityInUrl(writeVisibilityHash(window.location, viewer, {inPlace: true}))
   }
 
 

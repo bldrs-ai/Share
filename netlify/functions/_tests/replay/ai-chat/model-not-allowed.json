@@ -1,0 +1,34 @@
+{
+  "description": "An anonymous caller naming a Pro model is refused before the ledger is touched.",
+  "env": {
+    "$fixture": "env/ai-chat.json"
+  },
+  "now": "2026-11-18T12:00:00.000Z",
+  "uuid": "00000000-0000-4000-8000-00000000a1c0",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/ai-chat",
+    "headers": {
+      "authorization": "Bearer ba1.replayAnonymousId00001.1794999600.wBYdBmzPjjSIOmCGgCjkBbGlqWCrl22WTULDtGfPQzA",
+      "content-type": "application/json",
+      "x-nf-client-connection-ip": "203.0.113.9",
+      "origin": "https://bldrs.ai"
+    },
+    "body": {
+      "$fixture": "openrouter/chat-request.json",
+      "$merge": {
+        "model": "anthropic/claude-haiku-4.5"
+      }
+    }
+  },
+  "exchanges": [],
+  "expect": {
+    "statusCode": 400,
+    "json": {
+      "error": {
+        "code": "ai_model_not_allowed"
+      },
+      "tier": "anonymous"
+    }
+  }
+}

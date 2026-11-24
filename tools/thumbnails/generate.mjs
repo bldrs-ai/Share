@@ -18,7 +18,7 @@
  *   node tools/thumbnails/generate.mjs [--only Name,Name] [--size 512]
  *     [--margin 16] [--out public/static/thumbnails] [--port 8129]
  *
- * Requires a playwright-config build (`yarn test-flows-build`): that
+ * Requires a playwright-config build (`bun run test-flows-build`): that
  * build exposes `window.store` (so the scene background can be cleared
  * for transparency) and enables `preserveDrawingBuffer`. Models are
  * cached under tools/thumbnails/cache/ and re-used on later runs, so a

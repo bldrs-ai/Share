@@ -1,0 +1,22 @@
+{
+  "v": 1,
+  "feedback_id": "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+  "source": "assist_reply",
+  "rating": "down",
+  "note": "It selected the wrong walls.",
+  "screenshot": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP8=",
+  "view": {
+    "model": {"route_kind": "project", "source": "hosted", "format": "ifc", "ref": "https://bldrs.ai/index.ifc"},
+    "camera": {"position": [10, 5, 10], "target": [0, 0, 0]},
+    "selection": {"count": 7, "refs": ["e12", "e13"], "types": {"IFCBUILDINGELEMENTPROXY": 7}}
+  },
+  "tier": "anon",
+  "context": {
+    "reply_id": "a1b2c3d4-0000-4000-8000-000000000001",
+    "reply": "Selected 7 elements.",
+    "prompt": "select the proxies",
+    "model_choice": "default",
+    "steps": 3,
+    "tool_calls": 2
+  }
+}

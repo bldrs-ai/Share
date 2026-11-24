@@ -13,6 +13,7 @@ import {getProvider} from '../../connections/registry'
 import {loadLocalFile} from '../../utils/loader'
 import useQuota from '../../hooks/useQuota'
 import {getInMemoryUpload, registerInMemoryUpload} from '../../loader/inMemoryUploads'
+import {deleteUploadFromOPFS} from '../../OPFS/utils'
 import {navigateToInMemoryModel, navigateToModel} from '../../utils/navigate'
 import useStore from '../../store/useStore'
 import {GATE_RETURN_EXPORT, noteGateLogin, takeGateLoginReturn, takeGateLoginSource} from '../../Auth0/gateLogin'
@@ -59,6 +60,11 @@ jest.mock('../Connections/GitHubTab', () => function MockGitHubTab() {
 })
 jest.mock('../../utils/navigate', () => ({navigateToInMemoryModel: jest.fn(), navigateToModel: jest.fn()}))
 jest.mock('../../utils/loader', () => ({loadLocalFile: jest.fn()}))
+// The refused-pick delete only (bldrs-ai/ops#39); jsdom has no OPFS to delete from.
+jest.mock('../../OPFS/utils', () => ({
+  ...jest.requireActual('../../OPFS/utils'),
+  deleteUploadFromOPFS: jest.fn(() => Promise.resolve(true)),
+}))
 // The real hook, unless a test overrides it for one render (the quota denial
 // below); with the `quotas` flag off it always admits.
 jest.mock('../../hooks/useQuota', () => {
@@ -521,6 +527,51 @@ describe('OpenModelDialog — Local tab', () => {
     } finally {
       // Unmount before swapping the real hook back: it calls hooks the stub
       // doesn't, and a re-render across the swap breaks the hook order.
+      unmount()
+      useQuota.mockImplementation(realUseQuota)
+    }
+  })
+
+  // bldrs-ai/ops#39: the OPFS write lands before record() answers, and a
+  // refused pick left there still opened from its /v/local-only/ URL.
+  it('deletes an OPFS pick the quota denies', async () => {
+    const recordDenied = jest.fn().mockResolvedValue({allowed: false})
+    const realUseQuota = useQuota.getMockImplementation()
+    useQuota.mockImplementation(() => ({
+      tier: 'free', record: recordDenied, check: jest.fn(), hasCapacity: true,
+    }))
+    act(() => useStore.setState({isOpfsAvailable: true}))
+    loadLocalFile.mockImplementation((onLoad) => onLoad(STORAGE_ID, Date.now(), 'box.ifc'))
+    const {unmount} = renderLocalTab([])
+    try {
+      fireEvent.click(screen.getByTestId('button_open_file'))
+      await waitFor(() => expect(deleteUploadFromOPFS).toHaveBeenCalledWith(STORAGE_ID))
+      expect(recordDenied).toHaveBeenCalledWith(`/share/v/local-only/${STORAGE_ID}`)
+      expect(deleteUploadFromOPFS).toHaveBeenCalledTimes(1)
+      expect(navigateToModel).not.toHaveBeenCalled()
+      expect(addRecentFileEntry).not.toHaveBeenCalled()
+    } finally {
+      unmount()
+      useQuota.mockImplementation(realUseQuota)
+    }
+  })
+
+  // The delete is for the upload the refused pick just wrote, never for one
+  // the user already had: a Recents reopen the quota refuses keeps its file.
+  it('keeps the stored upload when the quota denies reopening a recent', async () => {
+    const recordDenied = jest.fn().mockResolvedValue({allowed: false})
+    const realUseQuota = useQuota.getMockImplementation()
+    useQuota.mockImplementation(() => ({
+      tier: 'free', record: recordDenied, check: jest.fn(), hasCapacity: true,
+    }))
+    const {unmount} = renderLocalTab([{id: STORAGE_ID, source: 'local', name: 'box.ifc'}])
+    try {
+      fireEvent.click(screen.getByTestId(`link-open-recent-${STORAGE_ID}`))
+      await waitFor(() => expect(recordDenied).toHaveBeenCalledWith(`/share/v/local-only/${STORAGE_ID}`))
+      await act(async () => {})
+      expect(deleteUploadFromOPFS).not.toHaveBeenCalled()
+      expect(navigateToModel).not.toHaveBeenCalled()
+    } finally {
       unmount()
       useQuota.mockImplementation(realUseQuota)
     }

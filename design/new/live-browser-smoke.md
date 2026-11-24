@@ -6,7 +6,7 @@ each tier, in every Playwright engine. It replaces most of the manual
 cross-browser checklist in [glb-export-premium.md](glb-export-premium.md) §8.
 Tracking issue: bldrs-ai/Share#1941.
 
-The mocked suite (`yarn test-flows`) cannot do this job. It runs against
+The mocked suite (`bun run test-flows`) cannot do this job. It runs against
 `http-server` plus MSW:
 
 - there are no Netlify Functions behind it;
@@ -92,9 +92,9 @@ These are final.
 Running it:
 
 ```sh
-yarn live-smoke-reset            # node tools/live-smoke/resetAccounts.mjs [--dry-run]
+bun run live-smoke-reset            # node tools/live-smoke/resetAccounts.mjs [--dry-run]
 LIVE_BASE_URL=https://deploy-preview-1939--bldrs-share-prod.netlify.app \
-  yarn test-flows-live [--project=chromium] [spec]
+  bun run test-flows-live [--project=chromium] [spec]
 ```
 
 
@@ -113,7 +113,8 @@ be silently dropped. `liveEnv.ts#liveTargetFrom` handles the variable this way:
 carries real test credentials (Codex, P1 on #1942). It allows:
 
 - `https://deploy-preview-<n>--<project>.netlify.app`, for a project in
-  `LIVE_NETLIFY_PROJECTS` (`bldrs-share-prod`, `bldrs-share-dev`);
+  `LIVE_NETLIFY_PROJECTS` — just `bldrs-share-prod`, the one Netlify project,
+  which also serves `https://bldrs.ai`;
 - the production origins in `LIVE_PRODUCTION_ORIGINS` (`https://bldrs.ai`);
 - localhost, outside CI only.
 
@@ -391,14 +392,16 @@ The owner provisions all of these. Names only; the workflow references them as
 | `LIVE_SMOKE_AUTH0_CLIENT_ID` | A machine-to-machine application for the Management API | Same | Same; if only some of the three are set, the run fails |
 | `LIVE_SMOKE_AUTH0_CLIENT_SECRET` | Its secret | Same | Same |
 
-Two optional repository variables:
+One optional repository variable:
 
-- **`LIVE_SMOKE_NETLIFY_PROJECT`** names the Netlify project whose deploy
-  preview a PR run targets. It defaults to `bldrs-share-prod`, and must be in
-  `targets.js#LIVE_NETLIFY_PROJECTS`.
 - **`LIVE_SMOKE_AUTH0_LOGIN_HOST`** names the browser's Universal Login host,
   if that is a custom domain (e.g. `login.bldrs.ai`) rather than the tenant
   domain. It is a variable, not a secret: it is a host name.
+
+A PR run always targets `bldrs-share-prod`'s deploy preview: `live-smoke.yml`
+sets `NETLIFY_PROJECT` to it directly. (While Share had a second Netlify
+project, a `LIVE_SMOKE_NETLIFY_PROJECT` variable chose between them; the
+workflow no longer reads it.)
 
 
 ## Skip, don't fail
@@ -550,7 +553,7 @@ gets no secrets.
 1. Install, then `npx playwright install --with-deps chromium firefox webkit`.
 2. Mask every email and password in the account JSON with `::add-mask::`.
 3. Run the reset with `--if-configured`.
-4. Run `yarn test-flows-live`.
+4. Run `bun run test-flows-live`.
 5. Upload the HTML report for 7 days.
 
 ### Safeguards
@@ -569,7 +572,7 @@ A `workflow_dispatch` workflow must exist on the default branch before it can
 be dispatched. So until this PR merges, run against #1939 locally:
 
 ```sh
-LIVE_BASE_URL=https://deploy-preview-1939--bldrs-share-prod.netlify.app yarn test-flows-live
+LIVE_BASE_URL=https://deploy-preview-1939--bldrs-share-prod.netlify.app bun run test-flows-live
 ```
 
 After it merges, use the dispatch, or the `live-smoke` label on #1939. A
@@ -868,11 +871,10 @@ This sandbox's network policy blocked the browser download from
    Nothing else.
 5. **GitHub Actions secrets:** `LIVE_SMOKE_ACCOUNTS`,
    `LIVE_SMOKE_AUTH0_DOMAIN`, `LIVE_SMOKE_AUTH0_CLIENT_ID`,
-   `LIVE_SMOKE_AUTH0_CLIENT_SECRET`. Optionally, the repository variables
-   `LIVE_SMOKE_NETLIFY_PROJECT` and, if Universal Login runs on a custom
-   domain, `LIVE_SMOKE_AUTH0_LOGIN_HOST`.
+   `LIVE_SMOKE_AUTH0_CLIENT_SECRET`. Optionally, if Universal Login runs on
+   a custom domain, the repository variable `LIVE_SMOKE_AUTH0_LOGIN_HOST`.
 6. **Label:** create `live-smoke`.
-7. **First run:** run `yarn live-smoke-reset --dry-run` locally with the
+7. **First run:** run `bun run live-smoke-reset --dry-run` locally with the
    secrets exported. It should print the seven accounts and no drift.
 
 
@@ -922,9 +924,12 @@ part of phase 1.
    ([above](#why-comped-pro-is-safe-from-the-sweep)).
 2. **Ready-for-review scoping.** Resolved: the owner chose label-only PR
    runs. Marking a PR ready no longer starts one.
-3. **Which Netlify project.** PR runs default to `bldrs-share-prod`'s
-   preview. If `bldrs-share-dev` uses a different Auth0 tenant or client, the
-   accounts must live in the one the chosen project uses.
+3. **Which Netlify project.** Resolved: Share has one Netlify project,
+   `bldrs-share-prod`, and PR runs target its preview. Its previews and
+   production share one Auth0 tenant and the Share client, whose allowed
+   URLs include `https://*--bldrs-share-prod.netlify.app`, so the accounts
+   live there. (A second project, `bldrs-share-dev`, once served production
+   and was retired in 2026-11.)
 4. **The Auth0 Action and the token claim.** Whether a token minted at the
    pending account's login claims `shareProPendingReauth` or `sharePro`
    depends on the Action. The pending spec reads the claim and says which

@@ -1,5 +1,10 @@
 /* eslint-disable no-magic-numbers */
-import {BufferAttribute, BufferGeometry} from 'three'
+import {
+  BufferAttribute,
+  BufferGeometry,
+  InterleavedBuffer,
+  InterleavedBufferAttribute,
+} from 'three'
 import {
   INSTANCE_TABLES_VERSION,
   INSTANCE_TABLES_VERSION_UNCOLLAPSED,
@@ -15,6 +20,11 @@ import {
   rowTagItemSize,
   rowWitnessStats,
 } from './bldrsInstanceTables'
+
+
+// See 'keeps the digests artifacts already in OPFS were written with'.
+const PINNED_PLAIN = 2356695865
+const PINNED_NORMALIZED = 917125513
 
 
 /** @return {Array<object>} two-node fixture, one STEP-ish and one bare */
@@ -234,6 +244,127 @@ describe('loader/bldrsInstanceTables', () => {
     it('returns null for a range outside the geometry, rather than a hash', () => {
       expect(rangeCanaryOf(geometryOf(TWO_TRIANGLES, [0, 1, 2, 3, 4, 5]),
         tableOf([{vertexStart: 3, vertexCount: 9, indexStart: 0, indexCount: 3}]))).toBeNull()
+    })
+
+    // A bigger fixture than the two triangles above, built to reach every
+    // branch the hash has: rows of several triangles, corner rotations that
+    // need canonicalising (and ties among them), a row whose index count is
+    // not a multiple of three, occurrence paths and geometry ids, and the
+    // three position layouts a GLTFLoader can hand the reader.
+    const MANY_ROWS = 7
+
+    /**
+     * @param {string} layout 'plain' | 'interleaved' | 'normalized'
+     * @return {{geometry: BufferGeometry, table: object}}
+     */
+    function manyRowFixture(layout) {
+      let seed = 12345
+      const next = () => {
+        seed = (Math.imul(seed, 1103515245) + 12345) >>> 0
+        return seed
+      }
+      const positions = []
+      const indices = []
+      const ranges = []
+      let vertexStart = 0
+      for (let r = 0; r < MANY_ROWS; r++) {
+        const vertexCount = 3 + (r % 4)
+        const indexStart = indices.length
+        // Row 3 carries a trailing partial triangle; row 5 repeats a corner.
+        const indexCount = r === 3 ? 7 : 3 * (1 + (r % 3))
+        for (let v = 0; v < vertexCount * 3; v++) {
+          positions.push(((next() % 20001) - 10000) / 7)
+        }
+        for (let i = 0; i < indexCount; i++) {
+          indices.push(vertexStart + (r === 5 && i % 3 === 2 ? 0 : next() % vertexCount))
+        }
+        ranges.push({vertexStart, vertexCount, indexStart, indexCount})
+        vertexStart += vertexCount
+      }
+      const geometry = new BufferGeometry()
+      if (layout === 'interleaved') {
+        const stride = 6
+        const data = new Float32Array(vertexStart * stride)
+        for (let v = 0; v < vertexStart; v++) {
+          for (let c = 0; c < 3; c++) {
+            data[(v * stride) + 3 + c] = positions[(v * 3) + c]
+            data[(v * stride) + c] = -1
+          }
+        }
+        const buffer = new InterleavedBuffer(data, stride)
+        geometry.setAttribute('position', new InterleavedBufferAttribute(buffer, 3, 3))
+        geometry.setIndex(new BufferAttribute(new Uint16Array(indices), 1))
+      } else if (layout === 'normalized') {
+        const quantized = new Int16Array(positions.map((p) => Math.round(p * 2)))
+        geometry.setAttribute('position', new BufferAttribute(quantized, 3, true))
+        geometry.setIndex(new BufferAttribute(new Uint32Array(indices), 1))
+      } else {
+        geometry.setAttribute('position', new BufferAttribute(new Float32Array(positions), 3))
+        geometry.setIndex(new BufferAttribute(new Uint32Array(indices), 1))
+      }
+      const table = {
+        ranges,
+        parents: ranges.map((_, r) => 1000 + r),
+        occurrenceIds: ranges.map((_, r) => r),
+        geometryIds: ranges.map((_, r) => (r % 2 === 0 ? 0 : 0x7fffff00 + r)),
+        occurrencePaths: ranges.map((_, r) => (r % 3 === 0 ? null : [r, 2 * r, 0xffffff])),
+      }
+      return {geometry, table}
+    }
+
+    it('keeps the digests artifacts already in OPFS were written with', () => {
+      // Pinned from the implementation before the #2101 rewrite. A cached
+      // artifact stores the WRITER's digest, so a reader whose hash moved by
+      // one bit would refuse every collapsed artifact anyone has cached —
+      // silently degrading each to a model with no picking.
+      expect(rangeCanaryOf(manyRowFixture('plain').geometry, manyRowFixture('plain').table))
+        .toBe(PINNED_PLAIN)
+      expect(rangeCanaryOf(
+        manyRowFixture('interleaved').geometry, manyRowFixture('interleaved').table))
+        .toBe(PINNED_PLAIN)
+      expect(rangeCanaryOf(
+        manyRowFixture('normalized').geometry, manyRowFixture('normalized').table))
+        .toBe(PINNED_NORMALIZED)
+
+      // The writer half, row by row through callbacks as glbCollapse.js and
+      // the portable/Draco exports call it.
+      const {geometry, table} = manyRowFixture('plain')
+      const position = geometry.getAttribute('position')
+      const index = geometry.getIndex()
+      const writer = makeRangeCanary()
+      for (let r = 0; r < MANY_ROWS; r++) {
+        const {vertexStart, vertexCount, indexStart, indexCount} = table.ranges[r]
+        writer.row({
+          parent: table.parents[r],
+          occurrenceId: table.occurrenceIds[r],
+          geometryId: table.geometryIds[r],
+          occurrencePath: table.occurrencePaths[r],
+        }, vertexCount, (v, c) => position.getComponent(vertexStart + v, c),
+        indexCount, (i) => index.getX(indexStart + i) - vertexStart)
+      }
+      expect(writer.digest()).toBe(PINNED_PLAIN)
+    })
+
+    it('reads a float32 position straight from its array, not through per-vertex getters', () => {
+      // #2101: on a big model the canary walks every vertex and index of the
+      // merged primitive, and doing that through getX/getY/getZ closures was
+      // 2.9 s of a 6.8 s cache-hit hydration. A geometry whose getters throw
+      // proves the reader takes the array path for both layouts GLTFLoader
+      // produces for a float32 POSITION.
+      for (const layout of ['plain', 'interleaved']) {
+        const {geometry, table} = manyRowFixture(layout)
+        const expected = rangeCanaryOf(geometry, table)
+        const position = geometry.getAttribute('position')
+        const index = geometry.getIndex()
+        for (const target of [position, index]) {
+          for (const getter of ['getX', 'getY', 'getZ', 'getComponent']) {
+            target[getter] = () => {
+              throw new Error(`${getter} called`)
+            }
+          }
+        }
+        expect(rangeCanaryOf(geometry, table)).toBe(expected)
+      }
     })
   })
 

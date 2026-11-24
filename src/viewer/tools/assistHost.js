@@ -1,5 +1,9 @@
-import {ToolError, createRegistry} from '../../assist'
+import {OPENROUTER_KEY_ID, ToolError, createRegistry} from '../../assist'
 import useStore from '../../store/useStore'
+import {assertDefined} from '../../utils/assert'
+import {AI_TIERS, aiCreditLimits} from '../../quota/aiCredits'
+import {shareAssistInstructions} from './assistInstructions'
+import {ASSIST_MODEL} from './assistModels'
 import {createShareToolProvider} from './shareTools'
 import {createViewContextSource} from './viewContext'
 import {createModelToolProvider, createViewToolProvider} from './viewTools'
@@ -8,8 +12,8 @@ import {createModelToolProvider, createViewToolProvider} from './viewTools'
 /**
  * Share as an Assist host (ai-workspace.md §2.1, D15): Share imports Assist
  * and injects its tool providers and context sources. This is the one place
- * they are assembled, so the dev hook below, and later the agent loop
- * (#1675), see the same registry.
+ * they are assembled, so the dev hook below and the agent loop
+ * ({@link createShareAssist}) see the same registry.
  *
  * @return {object} the Assist registry over Share's providers
  */
@@ -17,6 +21,81 @@ export function createShareAssistRegistry() {
   return createRegistry(
     [createModelToolProvider(), createViewToolProvider(), createShareToolProvider()],
     {contextSources: [createViewContextSource()]})
+}
+
+
+// The default model, and the free-models alias (assistModels.js).
+export {ASSIST_FREE_MODELS, ASSIST_MODEL} from './assistModels'
+
+
+/** Bldrs' hosted assistant relay (netlify/functions/ai-chat.js), same origin. */
+export const AI_RELAY_URL = '/.netlify/functions/ai-chat'
+
+
+/**
+ * The agent loop over Share's registry (#1675), on one of two transports
+ * chosen afresh each turn (ai-workspace.md D1): the user's own OpenRouter key
+ * from `keyStore` when they have given one (BYOK, browser → OpenRouter), and
+ * otherwise Bldrs' hosted relay within their plan's credits (#1932). Share's
+ * instructions, and the conversation kept in `conversationStore`. `runtime`
+ * is the lazy module (viewer/tools/assistRuntime.js), passed in so this module
+ * never imports the AI SDK.
+ *
+ * @param {object} runtime `src/assist/runtime.ts`, loaded
+ * @param {object} deps
+ * @param {object} deps.keyStore an Assist KeyStore
+ * @param {object} deps.conversationStore an Assist ConversationStore
+ * @param {object} deps.hosted the hosted transport's host side: `getAuthToken`,
+ *   `anonTokens` and `onMeta`, as `HostedTransportOptions` names them, and
+ *   optionally `model`, read at each turn (the model picker, #1934); without
+ *   one the hosted transport asks for ASSIST_MODEL. The BYOK transport always
+ *   uses ASSIST_MODEL: the picker is for Bldrs' hosted models
+ * @return {{assist: object, transport: object, dispose: Function}}
+ */
+export function createShareAssist(runtime, {keyStore, conversationStore, hosted}) {
+  const base = process.env.OPENROUTER_BASE_URL
+  assertDefined(base, 'OPENROUTER_BASE_URL is required')
+  assertDefined(hosted, 'the hosted transport\'s host side is required')
+  const registry = createShareAssistRegistry()
+  const byok = runtime.openRouterTransport({
+    getKey: () => keyStore.get(OPENROUTER_KEY_ID),
+    model: ASSIST_MODEL,
+    baseURL: `${base}/api/v1`,
+    appUrl: 'https://bldrs.ai',
+    appTitle: 'Bldrs Share',
+  })
+  const relay = runtime.hostedTransport({relayUrl: AI_RELAY_URL, maxRequestBytesFor, ...hosted,
+    model: hosted.model ?? ASSIST_MODEL})
+  const transport = runtime.selectTransport(() => (keyStore.get(OPENROUTER_KEY_ID) ? byok : relay))
+  const assist = runtime.createAssist({
+    transport,
+    registry,
+    store: conversationStore,
+    instructions: shareAssistInstructions(),
+  })
+  return {assist, transport, dispose: () => registry.dispose()}
+}
+
+
+/**
+ * The request body cap to assume for a tier until the relay says its own
+ * (`x-bldrs-ai-max-body-bytes`, which carries any env override), so the loop
+ * keeps each step under it (assist/loop.ts `boundStepMessages`). Signed out
+ * and free have one (quota/aiCredits.js `maxBodyBytes*`, ai-chat.js
+ * `maxBodyBytesFor`); Pro has only the relay's technical cap. With no tier
+ * (before the first response, or after a sign-in change) the smallest default
+ * holds: a request that fits it fits every tier at its defaults.
+ *
+ * @param {?string} tier the relay's, or null before it has said
+ * @return {number|undefined} bytes, or undefined for no cap
+ */
+export function maxRequestBytesFor(tier) {
+  if (tier === AI_TIERS.PRO) {
+    return undefined
+  }
+  const {maxBodyBytes} = aiCreditLimits({})
+  return tier === AI_TIERS.FREE ? maxBodyBytes[AI_TIERS.FREE] :
+    Math.min(maxBodyBytes[AI_TIERS.ANONYMOUS], maxBodyBytes[AI_TIERS.FREE])
 }
 
 

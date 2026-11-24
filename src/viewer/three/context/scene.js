@@ -8,18 +8,18 @@
 import {AmbientLight, Color, DirectionalLight, Scene} from 'three'
 import {IfcComponent} from './base-types'
 import {LOOKS} from '../../looks'
-import {isFeatureEnabled} from '../../../FeatureFlags'
+import {isLookOn} from '../../lookMode'
 
 
-// Direct-light intensities. The whole §6e look sits behind `?feature=look`
-// (default off): with the flag ON, the Neutral look's values (single source of
+// Direct-light intensities. With the §6e look on (`isLookOn()`, lookMode.js;
+// the default), the Neutral look's values (single source of
 // truth: src/viewer/looks.js LOOKS.neutral) — the gradient studio IBL (scaled
 // by `scene.environmentIntensity` in ShareViewer) carries most of the ambient
 // + fill, so these direct lights are a key + fill pair plus an ambient lift.
-// With the flag OFF, main's legacy `× Math.PI` intensities, so default
-// rendering is unchanged until the flag is flipped. `ShareViewer.applyLook`
+// With it off (`?feature=disableLook`), the legacy `× Math.PI` intensities
+// of the pre-§6e pipeline. `ShareViewer.applyLook`
 // overrides these at runtime on a render-mode toggle.
-const USE_LOOK = isFeatureEnabled('look')
+const USE_LOOK = isLookOn()
 const KEY_LIGHT_INTENSITY = USE_LOOK ? LOOKS.neutral.keyLight : 0.8 * Math.PI
 const FILL_LIGHT_INTENSITY = USE_LOOK ? LOOKS.neutral.fillLight : 0.8 * Math.PI
 const AMBIENT_LIGHT_INTENSITY = USE_LOOK ? LOOKS.neutral.ambient : 0.25 * Math.PI

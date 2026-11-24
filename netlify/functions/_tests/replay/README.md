@@ -25,6 +25,7 @@ One directory per function, named exactly like the function, with one
     "sign": "stripe"                                        // optional: add a fresh Stripe-Signature
   },
   "now": "2026-10-06T12:00:00.000Z",                        // optional: freeze the clock (below)
+  "uuid": "00000000-0000-4000-8000-000000000001",           // optional: fix crypto.randomUUID (below)
   "exchangeOrder": "any",                                   // optional; default "strict"
   "exchanges": [                                            // every outbound call, IN ORDER
     {
@@ -32,7 +33,8 @@ One directory per function, named exactly like the function, with one
         "method": "GET",
         "url": "https://…",                                  // exact, query included
         "headers": {"authorization": "Bearer …"},            // optional, subset
-        "body": {"app_metadata": {"…": "…"}}                  // optional, subset
+        "body": {"app_metadata": {"…": "…"}},                 // optional, subset
+        "bodyJson": {"days": {"…": "…"}}                      // optional: a JSON body sent as text, subset
       },
       "response": {"status": 200, "json": {}}                // or "text", "headers", or {"networkError": true}
     }
@@ -49,7 +51,9 @@ One directory per function, named exactly like the function, with one
 **Matching.** Objects match as subsets: keys a scenario doesn't name are
 ignored. Arrays match by length and position. Anything else matches by `===`.
 Outbound request bodies are decoded by content type, so a form-encoded body
-(the Stripe SDK's) matches as an object too.
+(the Stripe SDK's) matches as an object too. `bodyJson` is for a body that is
+JSON but isn't sent as such: @netlify/blobs PUTs a value as `text/plain`, so
+`ai-chat`'s ledger writes are matched with it.
 
 The replay fails if:
 - the function makes a call the scenario doesn't list;
@@ -81,6 +85,10 @@ populated the real, gitignored `netlify/functions/_pro-modules/`.
 loads. For a function that decides by the date, such as `pro-module`'s and
 `record-export`'s rolling 7-day free-export window, so a scenario's
 timestamps mean the same thing on any day the suite runs.
+
+**`uuid`.** Makes `crypto.randomUUID()` answer this value, so a function
+that names what it writes by a fresh UUID (ai-chat's ledger holds) can be
+replayed against recorded reads that contain it.
 
 **Signatures.** `"sign": "stripe"` signs the body at replay time with
 `env.STRIPE_WEBHOOK_SECRET`. A recorded `Stripe-Signature` would be rejected

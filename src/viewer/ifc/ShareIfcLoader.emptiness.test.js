@@ -99,7 +99,7 @@ function makeStatistics(counts) {
 
 /**
  * @param {?object} statistics what `getStatistics` answers, or null for an
- *   engine with no statistics API at all (stock web-ifc)
+ *   engine with no statistics API at all (e.g. an older Conway or a mock)
  * @return {object} IfcAPI stub for the post-build tail of `parse`
  */
 function makeIfcAPI(statistics) {

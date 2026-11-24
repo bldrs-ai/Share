@@ -61,6 +61,14 @@ specs. Keep it that way.
   `glbNode` and `spz` are Playwright-free and Jest-tested beside it. See
   [design/new/live-browser-smoke.md](../../../design/new/live-browser-smoke.md).
 
+## Specs must not value-import mocks
+
+A spec may not value-import from `src/__mocks__/` or from anything that imports
+`msw`. The CI Playwright shards install only `@playwright/test`, not Share's
+dependencies, so such an import crashes `playwright test --list` for every shard
+(#2255). `import type` is erased and is fine; restate a constant in the spec if you
+need its value. `specImportBoundary.test.js` enforces this.
+
 ## Put specs next to their subject, not here
 
 A new E2E `*.spec.ts` belongs **next to the code it exercises**, so the
@@ -70,16 +78,16 @@ test travels with its subject and a reader finds it where they'd look:
 |---|---|
 | A component | `src/Components/<Area>/` (e.g. `src/Components/Camera/permalinkCamera.spec.ts`) |
 | A container / page-level flow | `src/Containers/` (e.g. `src/Containers/sceneHighlightPermalink.spec.ts`) |
-| Engine / viewer internals with no component home | `src/viewer/` (e.g. `src/viewer/webIfcEngine.webifc.spec.ts`) |
+| Engine / viewer internals with no component home | `src/viewer/` (e.g. `src/viewer/loadTiming.spec.ts`) |
 
 Co-location is already the norm across `src/Components/**` — match it.
 Only add files here when they are genuinely **shared** across specs.
 
 ## How this still works after co-locating
 
-Both Playwright configs set `testDir: ../src` with a `**/*.spec.ts`
-(and `**/*.webifc.spec.ts`) glob, so a spec anywhere under `src/` is
-discovered — location is purely organizational.
+The Playwright configs set `testDir: ../src` with a `**/*.spec.ts`
+glob, so a spec anywhere under `src/` is discovered — location is
+purely organizational.
 
 Import the helpers by their path back to this directory, e.g. from a spec
 in `src/Components/<Area>/`:
@@ -91,3 +99,10 @@ import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 
 from `src/Containers/` or `src/viewer/` it's one fewer `..`
 (`../tests/e2e/...`).
+
+## The render look is opt-in here
+
+The Playwright build turns the §6e render look (PBR, IBL, N8AO) off unless
+a spec opts in, because CI's software renderer can't afford it on every
+load. A spec about the look calls `withLook(page)` (`look.ts`) before its
+first `goto`. See design/new/viewer-replacement.md §6e.

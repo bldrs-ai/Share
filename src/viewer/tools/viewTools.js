@@ -1,7 +1,9 @@
 import {Sphere, Vector3} from 'three'
 import {decodeIFCString} from '@bldrs-ai/ifclib'
 import {ToolError} from '../../assist'
+import {noteUserDisplayChange} from '../../Components/Share/viewLink'
 import useStore from '../../store/useStore'
+import {selectReadModel} from '../../store/IFCSlice'
 import {getDescendantExpressIds} from '../../utils/TreeUtils'
 import {prettyType} from '../../utils/ifc'
 import {
@@ -13,6 +15,7 @@ import {
 } from '../../utils/occurrencePaths'
 import {FRAMING_MARGIN} from '../three/cameraLimits'
 import {occurrenceRef} from '../visibilityRefs'
+import {createAnalysisTools} from './analysisTools'
 import {elementBounds} from './elementBounds'
 import {assertResolved, nodeName, nodeType, nodesById, refMaker, resolveRefs, walkTree} from './refs'
 import {getSelectionFunnel} from './selectionFunnel'
@@ -123,6 +126,8 @@ export function createModelToolProvider() {
       annotations: {readOnly: true},
       run: properties,
     },
+    // Quantities, mesh measurement and spatial structure (analysisTools.js).
+    ...createAnalysisTools({readState, loadedState, visibilityTargets, nodeRefMaker}),
   ]
   return {id: 'model', tools: () => tools}
 }
@@ -146,7 +151,7 @@ export function createViewToolProvider() {
         additionalProperties: false,
       },
       annotations: {viewState: true},
-      run: asTool(select),
+      run: asViewTool('view.select', select),
     },
     {
       name: 'view.isolate',
@@ -160,7 +165,7 @@ export function createViewToolProvider() {
         additionalProperties: false,
       },
       annotations: {viewState: true},
-      run: asTool(isolate),
+      run: asViewTool('view.isolate', isolate),
     },
     {
       name: 'view.hide',
@@ -174,14 +179,14 @@ export function createViewToolProvider() {
         additionalProperties: false,
       },
       annotations: {viewState: true},
-      run: asTool(hide),
+      run: asViewTool('view.hide', hide),
     },
     {
       name: 'view.showAll',
       description: 'End any isolation and show every hidden element. Undoable.',
       inputSchema: {type: 'object', properties: {}, additionalProperties: false},
       annotations: {viewState: true},
-      run: asTool(showAll),
+      run: asViewTool('view.showAll', showAll),
     },
     {
       name: 'view.focus',
@@ -194,10 +199,32 @@ export function createViewToolProvider() {
         additionalProperties: false,
       },
       annotations: {viewState: true},
-      run: asTool(focus),
+      run: asViewTool('view.focus', focus),
     },
   ]
   return {id: 'view', tools: () => tools}
+}
+
+
+/**
+ * What an element chip in a reply does (refLinks.js): `view.select` then
+ * `view.focus` on the same refs, called directly because the click is the
+ * user's own, not a model step, so it takes no registry round trip and
+ * offers no Undo (the task chip's Undo is for what the assistant did).
+ * Throws `unresolved_refs` before changing anything, as the tools do. A
+ * ref with nothing to frame still selects.
+ *
+ * @param {Array<string>} refs
+ */
+export function selectAndFrame(refs) {
+  select({refs})
+  try {
+    focus({refs})
+  } catch (e) {
+    if (!(e instanceof ToolError)) {
+      throw e
+    }
+  }
 }
 
 
@@ -214,6 +241,53 @@ function asTool(fn) {
 
 
 /**
+ * `asTool` for a tool that changes the view. Before the body runs it asks
+ * the call's `shouldCommit()` (assist/types.ts `ToolContext`): false when
+ * the user has stopped the turn or undone the step, and then the call
+ * changes nothing and says so. The bodies here are synchronous, so this
+ * check is the last moment before they mutate; a body that came to await
+ * must check again after its last await.
+ *
+ * @param {string} name the tool's name, for the error
+ * @param {Function} fn `(input) => ToolResult`
+ * @return {Function} `(input, ctx) => Promise<ToolResult>`
+ */
+function asViewTool(name, fn) {
+  return (input, ctx = {}) => Promise.resolve().then(() => {
+    if (typeof ctx.shouldCommit === 'function' && !ctx.shouldCommit()) {
+      throw new ToolError('rolled_back',
+        `${name} was not applied: the user stopped the reply or undid this step. It changed nothing.`)
+    }
+    return fn(input)
+  })
+}
+
+
+/**
+ * The store's state for the read-only `model.*` tools, with `model` the one to
+ * read from (store/IFCSlice.js#selectReadModel): the model at its index while a
+ * Conway load still streams geometry (open-205 #2029), else the loaded one. The
+ * tree and properties are complete at the index, so these answer from then
+ * on. STEP `o` refs still wait for the geometry: they resolve to instances,
+ * which only exist once it has streamed (refs.js#resolveOccurrence).
+ *
+ * @return {object} the store's state, `model` replaced by the read model
+ * @throws {ToolError} not_ready without a tree to read
+ */
+function readState() {
+  const state = useStore.getState()
+  const model = selectReadModel(state)
+  if (!state.viewer || !model || !state.rootElement) {
+    throw new ToolError('not_ready', 'No model is loaded yet.')
+  }
+  return {...state, model}
+}
+
+
+/**
+ * The store's state for the `view.*` tools, which act on the scene: they need
+ * the finished model, whose geometry is there to select, hide and frame.
+ *
  * @return {object} the store's model state
  * @throws {ToolError} not_ready without a loaded model
  */
@@ -287,7 +361,7 @@ function storeysOf(rootElement) {
  * @return {object} ToolResult
  */
 function query({ifcType, level, name, text, limit = DEFAULT_QUERY_LIMIT}) {
-  const {viewer, rootElement, searchIndex} = loadedState()
+  const {viewer, rootElement, searchIndex} = readState()
   const refOf = nodeRefMaker(viewer)
   let onLevel = null
   if (level !== undefined) {
@@ -450,16 +524,28 @@ async function summarizePset(model, set) {
 
 
 /**
+ * Reads up to 20 elements' attributes and psets, one engine round trip per
+ * read, so it can take a while on a worker engine. It checks the call's
+ * signal between reads, so a Stop ends it at the next one instead of after
+ * all of them (the agent loop also stops waiting at once: assist/loop.ts).
+ *
  * @param {object} input
+ * @param {object} [ctx] the registry's ToolContext; `signal` aborts the reads
  * @return {Promise<object>} ToolResult
  */
-async function properties({refs}) {
-  const state = loadedState()
+async function properties({refs}, ctx = {}) {
+  const state = readState()
   const {model, rootElement} = state
   const targets = assertResolved(resolveRefs(refs, state))
   const nodes = nodesById(rootElement)
   const items = []
+  const checkAborted = () => {
+    if (ctx.signal?.aborted) {
+      throw new ToolError('aborted', 'model.properties was stopped before it finished.')
+    }
+  }
   for (const target of targets) {
+    checkAborted()
     const id = target.kind === 'id' ? target.id : Number(target.occurrence.nodeId)
     const node = nodes.get(id)
     const item = {ref: target.ref, type: nodeType(node), name: nodeName(node)}
@@ -478,6 +564,7 @@ async function properties({refs}) {
       const sets = (await model.getPropertySets(id)) ?? []
       item.propertySets = []
       for (const set of sets.slice(0, MAX_PSETS)) {
+        checkAborted()
         item.propertySets.push(await summarizePset(model, set))
       }
       if (sets.length > MAX_PSETS) {
@@ -550,6 +637,12 @@ function captureSelection(state) {
     instances: [...(state.selectedInstanceIds ?? [])],
     occurrencePath: state.selectedOccurrencePath ?? null,
     solid: state.selectedSolidExpressId ?? null,
+    // A scene pick's narrowing (NavTreeSlice#selectedInstancesExact): the
+    // funnel clears it, so a restore puts it back.
+    exact: state.selectedInstancesExact === true,
+    // A root-level pick's shell (NavTreeSlice#selectedRootGeometryId),
+    // likewise cleared by the funnel.
+    rootGeometry: state.selectedRootGeometryId ?? null,
   }
 }
 
@@ -568,6 +661,8 @@ function restoreSelection(before) {
   }
   restore(before.elements.map(Number), true, before.instances, before.occurrencePath, before.solid,
     before.anchors.map(Number))
+  useStore.getState().setSelectedInstancesExact?.(before.exact)
+  useStore.getState().setSelectedRootGeometryId?.(before.rootGeometry)
 }
 
 
@@ -579,7 +674,8 @@ function selectionUnchanged(before) {
   const now = captureSelection(useStore.getState())
   const same = (a, b) => a.length === b.length && a.every((v, i) => String(v) === String(b[i]))
   return same(now.elements, before.elements) && same(now.anchors, before.anchors) &&
-    same(now.instances, before.instances) && now.solid === before.solid &&
+    same(now.instances, before.instances) && now.solid === before.solid && now.exact === before.exact &&
+    now.rootGeometry === before.rootGeometry &&
     same(now.occurrencePath ?? [], before.occurrencePath ?? [])
 }
 
@@ -809,6 +905,8 @@ function isolate({refs}) {
     throw new ToolError('rejected', 'Every one of these elements is hidden; nothing to isolate. ' +
       'Call view.showAll first.', {refs})
   }
+  // The user asked for it, so the link follows it (Share/viewLink.js).
+  noteUserDisplayChange()
   return {
     content: {isolated: targets.length, refs: targets.slice(0, MAX_RESULT_REFS).map(({ref}) => ref)},
     echo: `Isolated ${targets.length} element${targets.length === 1 ? '' : 's'}`,
@@ -840,6 +938,7 @@ function hide({refs}) {
   if (occurrences.length > 0) {
     isolator.hideOccurrences(occurrences)
   }
+  noteUserDisplayChange()
   return {
     content: {
       hidden: targets.length,
@@ -864,6 +963,7 @@ function showAll() {
   const wasIsolated = before.isolation !== null
   isolator.resetTempIsolation()
   isolator.unHideAllElements()
+  noteUserDisplayChange()
   return {
     content: {shown: hidden, endedIsolation: wasIsolated},
     echo: hidden === 0 && !wasIsolated ? 'Everything was already shown' :

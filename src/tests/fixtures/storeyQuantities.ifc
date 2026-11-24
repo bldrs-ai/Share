@@ -1,0 +1,70 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION(('ViewDefinition [CoordinationView]'),'2;1');
+FILE_NAME('storeyQuantities.ifc','2026-11-18T00:00:00',(''),(''),'','','');
+FILE_SCHEMA(('IFC4'));
+ENDSEC;
+DATA;
+/* Assist analysis fixture (src/viewer/tools/assistTools.spec.ts): two storeys,
+   one wall on each, authored in MILLIMETRES with area and volume in m2 / m3 —
+   the mix real exporters write — and a Qto_WallBaseQuantities set on each wall.
+
+   Wall A  Level 1  4000 x 200 x 3000 mm box: Length 4000 mm, NetSideArea 12 m2,
+                    NetVolume 2.4 m3;  mesh area 26.8 m2, volume 2.4 m3
+   Wall B  Level 2  500 x 2000 x 3000 mm box (turned 90 deg, raised 3000 mm,
+                    moved to x = 10000): Length 2000 mm, NetSideArea 6 m2,
+                    NetVolume 3 m3;    mesh area 17 m2, volume 3 m3
+   Room 1  Level 1  a space with no geometry */
+#1=IFCPROJECT('0QtyFixtureProject0001',$,'Quantities fixture',$,$,$,$,(#10),#20);
+#10=IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.0E-5,#11,$);
+#11=IFCAXIS2PLACEMENT3D(#12,$,$);
+#12=IFCCARTESIANPOINT((0.,0.,0.));
+#13=IFCGEOMETRICREPRESENTATIONSUBCONTEXT('Body','Model',*,*,*,*,#10,$,.MODEL_VIEW.,$);
+#20=IFCUNITASSIGNMENT((#21,#22,#23));
+#21=IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.);
+#22=IFCSIUNIT(*,.AREAUNIT.,$,.SQUARE_METRE.);
+#23=IFCSIUNIT(*,.VOLUMEUNIT.,$,.CUBIC_METRE.);
+#30=IFCSITE('0QtyFixtureSite0000002',$,'Site',$,$,$,$,$,.ELEMENT.,$,$,$,$,$);
+#31=IFCBUILDING('0QtyFixtureBuilding003',$,'Building',$,$,$,$,$,.ELEMENT.,$,$,$);
+#32=IFCBUILDINGSTOREY('0QtyFixtureLevel100004',$,'Level 1',$,$,$,$,$,.ELEMENT.,0.);
+#33=IFCBUILDINGSTOREY('0QtyFixtureLevel200005',$,'Level 2',$,$,$,$,$,.ELEMENT.,3000.);
+#34=IFCSPACE('0QtyFixtureRoom1000006',$,'Room 1',$,$,$,$,$,.ELEMENT.,.INTERNAL.,$);
+#40=IFCRELAGGREGATES('0QtyFixtureAgg10000007',$,$,$,#1,(#30));
+#41=IFCRELAGGREGATES('0QtyFixtureAgg20000008',$,$,$,#30,(#31));
+#42=IFCRELAGGREGATES('0QtyFixtureAgg30000009',$,$,$,#31,(#32,#33));
+#43=IFCRELAGGREGATES('0QtyFixtureAgg4000000A',$,$,$,#32,(#34));
+#44=IFCRELCONTAINEDINSPATIALSTRUCTURE('0QtyFixtureCont100000B',$,$,$,(#100),#32);
+#45=IFCRELCONTAINEDINSPATIALSTRUCTURE('0QtyFixtureCont200000C',$,$,$,(#200),#33);
+/* Wall A */
+#100=IFCWALL('0QtyFixtureWallA00000D',$,'Wall A',$,$,#101,#110,$,.STANDARD.);
+#101=IFCLOCALPLACEMENT($,#102);
+#102=IFCAXIS2PLACEMENT3D(#12,$,$);
+#110=IFCPRODUCTDEFINITIONSHAPE($,$,(#111));
+#111=IFCSHAPEREPRESENTATION(#13,'Body','SweptSolid',(#112));
+#112=IFCEXTRUDEDAREASOLID(#113,#102,#114,3000.);
+#113=IFCRECTANGLEPROFILEDEF(.AREA.,$,#115,4000.,200.);
+#114=IFCDIRECTION((0.,0.,1.));
+#115=IFCAXIS2PLACEMENT2D(#116,$);
+#116=IFCCARTESIANPOINT((0.,0.));
+#120=IFCELEMENTQUANTITY('0QtyFixtureQtoA000000E',$,'Qto_WallBaseQuantities',$,$,(#121,#122,#123));
+#121=IFCQUANTITYLENGTH('Length',$,$,4000.,$);
+#122=IFCQUANTITYAREA('NetSideArea',$,$,12.,$);
+#123=IFCQUANTITYVOLUME('NetVolume',$,$,2.4,$);
+#124=IFCRELDEFINESBYPROPERTIES('0QtyFixtureRelA000000F',$,$,$,(#100),#120);
+/* Wall B */
+#200=IFCWALL('0QtyFixtureWallB00000G',$,'Wall B',$,$,#201,#210,$,.STANDARD.);
+#201=IFCLOCALPLACEMENT($,#202);
+#202=IFCAXIS2PLACEMENT3D(#203,$,#204);
+#203=IFCCARTESIANPOINT((10000.,0.,3000.));
+#204=IFCDIRECTION((0.,1.,0.));
+#210=IFCPRODUCTDEFINITIONSHAPE($,$,(#211));
+#211=IFCSHAPEREPRESENTATION(#13,'Body','SweptSolid',(#212));
+#212=IFCEXTRUDEDAREASOLID(#213,#102,#114,3000.);
+#213=IFCRECTANGLEPROFILEDEF(.AREA.,$,#115,2000.,500.);
+#220=IFCELEMENTQUANTITY('0QtyFixtureQtoB000000H',$,'Qto_WallBaseQuantities',$,$,(#221,#222,#223));
+#221=IFCQUANTITYLENGTH('Length',$,$,2000.,$);
+#222=IFCQUANTITYAREA('NetSideArea',$,$,6.,$);
+#223=IFCQUANTITYVOLUME('NetVolume',$,$,3.,$);
+#224=IFCRELDEFINESBYPROPERTIES('0QtyFixtureRelB000000I',$,$,$,(#200),#220);
+ENDSEC;
+END-ISO-10303-21;
