@@ -22,7 +22,13 @@ function analyticsUpdates() {
  */
 function renderBanner(state = {}) {
   act(() => {
-    useStore.setState({isConsentBannerVisible: true, isAboutVisible: false, privacyLevel: getConsentLevel(), ...state})
+    useStore.setState({
+      isConsentBannerVisible: true,
+      isAboutVisible: false,
+      isOnboardingOverlayVisible: false,
+      privacyLevel: getConsentLevel(),
+      ...state,
+    })
   })
   render(<ConsentBanner/>, {wrapper: HelmetStoreRouteThemeCtx})
 }
@@ -84,10 +90,12 @@ describe('ConsentBanner', () => {
     expect(analyticsUpdates()).toEqual(['denied'])
   })
 
-  test('steps aside while About is open', () => {
-    renderBanner({isAboutVisible: true})
-    expect(screen.queryByTestId('consent-banner')).toBeNull()
-  })
+  // Both would cover it: a first-timer gets the welcome, the tour, then this.
+  test.each([['About', {isAboutVisible: true}], ['the onboarding overlay', {isOnboardingOverlayVisible: true}]])(
+    'steps aside while %s is up', (_, state) => {
+      renderBanner(state)
+      expect(screen.queryByTestId('consent-banner')).toBeNull()
+    })
 
   test('links to the privacy policy page, in a new tab', () => {
     renderBanner()

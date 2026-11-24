@@ -826,7 +826,7 @@ The parts that aren't obvious:
     guard before open-205 #2022 skipped).
   - **Consent:** analytics is opt-in since Share#2051. `isAllowed()` is
     `allowsAnalytics(getConsentLevel())`, which is false until the visitor
-    presses OK in About (`design/new/analytics-consent.md`). Nothing is read,
+    presses Accept in the privacy banner (`design/new/analytics-consent.md`). Nothing is read,
     written or sent without that consent, and opens made before it are never
     counted retroactively. The check repeats
     inside the lock, because consent can be withdrawn while an open waits

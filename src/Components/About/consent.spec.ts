@@ -64,6 +64,21 @@ async function openRealModel(page: Page, path = REAL_MODEL) {
 
 
 /**
+ * A first-timer's welcome: About, then the onboarding overlay, both of
+ * which the banner waits behind (ConsentBanner.jsx).
+ *
+ * @param page Playwright page
+ */
+async function closeWelcome(page: Page) {
+  await page.getByTestId('button-dialog-main-action').click()
+  const overlay = page.getByTestId('onboarding-overlay')
+  await expect(overlay).toBeVisible()
+  await overlay.click({position: {x: 2, y: 2}})
+  await expect(overlay).toHaveCount(0)
+}
+
+
+/**
  * @param commands from gtagCommands
  * @return the real_model_open events queued
  */
@@ -95,8 +110,10 @@ describeMobileAndDesktop('Analytics consent', () => {
 
   test('a fresh visitor is asked in a banner, and nothing is collected before they answer', async ({page}) => {
     const banner = page.getByTestId('consent-banner')
-    // First-timers get the About welcome too; the banner waits under it.
-    await page.getByTestId('button-dialog-main-action').click()
+    // First-timers get the About welcome and the tour; the banner waits.
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await expect(banner).toHaveCount(0)
+    await closeWelcome(page)
     await expect(banner).toBeVisible()
     await expect(page.getByTestId('consent-summary')).toContainText('Your models stay on your device.')
     await expect(page.getByTestId('consent-summary')).toContainText('If you decline, Bldrs runs in')
@@ -117,6 +134,8 @@ describeMobileAndDesktop('Analytics consent', () => {
   test('closing About answers nothing, and an unanswered visitor can open a GitHub model', async ({page}) => {
     await page.getByTestId(/^button-close-dialog-/).first().click()
     await expect(page.getByRole('dialog')).toHaveCount(0)
+    const overlay = page.getByTestId('onboarding-overlay')
+    await overlay.click({position: {x: 2, y: 2}})
     expect(await consentCookie(page)).toBeUndefined()
     await expect(page.getByTestId('consent-banner')).toBeVisible()
 
@@ -129,14 +148,14 @@ describeMobileAndDesktop('Analytics consent', () => {
   })
 
   test('the banner leaves the page usable: the Open control works while it is up', async ({page}) => {
-    await page.getByTestId('button-dialog-main-action').click()
+    await closeWelcome(page)
     await expect(page.getByTestId('consent-banner')).toBeVisible()
     await page.getByTestId('control-button-open').click()
     await expect(page.getByRole('dialog')).toBeVisible()
   })
 
   test('Accept allows analytics, which starts collection and survives a reload', async ({page}) => {
-    await page.getByTestId('button-dialog-main-action').click()
+    await closeWelcome(page)
     await page.getByTestId('consent-accept').click()
     await expect(page.getByTestId('consent-banner')).toHaveCount(0)
     expect(await consentCookie(page)).toBe('1.functional')
@@ -158,7 +177,7 @@ describeMobileAndDesktop('Analytics consent', () => {
   })
 
   test('Decline collects nothing, and stays declined after a reload', async ({page}) => {
-    await page.getByTestId('button-dialog-main-action').click()
+    await closeWelcome(page)
     await page.getByTestId('consent-decline').click()
     await expect(page.getByTestId('consent-banner')).toHaveCount(0)
     expect(await consentCookie(page)).toBe('1.restricted')
@@ -178,7 +197,7 @@ describeMobileAndDesktop('Analytics consent', () => {
   })
 
   test('the privacy policy link opens the policy in a new tab', async ({page}) => {
-    await page.getByTestId('button-dialog-main-action').click()
+    await closeWelcome(page)
     const [policy] = await Promise.all([
       page.context().waitForEvent('page'),
       page.getByTestId('consent-privacy-link').click(),
@@ -194,7 +213,7 @@ describeMobileAndDesktop('Analytics consent', () => {
   // zIndex.snackbar); the banner sits above its band. A hit test at each
   // button's centre finds whatever is on top there.
   test('Accept and Decline are clear of the status bar', async ({page}) => {
-    await page.getByTestId('button-dialog-main-action').click()
+    await closeWelcome(page)
     await page.evaluate(() => {
       // A string stays up (an object message must auto-dismiss).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -216,7 +235,7 @@ describeMobileAndDesktop('Analytics consent', () => {
   // Changing the choice is as easy as making it: About's Privacy settings
   // brings the same banner back.
   test('a visitor who accepted can take it back from About\'s Privacy settings', async ({page}) => {
-    await page.getByTestId('button-dialog-main-action').click()
+    await closeWelcome(page)
     await page.getByTestId('consent-accept').click()
     expect(await consentCookie(page)).toBe('1.functional')
 

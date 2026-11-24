@@ -45,7 +45,9 @@ const CURRENT_CHOICE = Object.freeze({
  * Shown while the store's `isConsentBannerVisible` is set: on every load
  * until the visitor answers (UISlice), and again from Privacy settings
  * (About, Open/LocalOnlyDialog) so a choice can be changed as easily as it
- * was made. Held back while About is open, whose backdrop would cover it.
+ * was made. Held back while About or the first-visit onboarding overlay
+ * (zIndex 9999, OnboardingOverlay.jsx) is up, which would cover it: a
+ * first-timer gets the welcome, then the tour, then this.
  *
  * @return {ReactElement|null}
  */
@@ -53,8 +55,9 @@ export default function ConsentBanner() {
   const isVisible = useStore((state) => state.isConsentBannerVisible)
   const setIsVisible = useStore((state) => state.setIsConsentBannerVisible)
   const isAboutVisible = useStore((state) => state.isAboutVisible)
+  const isOnboardingVisible = useStore((state) => state.isOnboardingOverlayVisible)
   const privacyLevel = useStore((state) => state.privacyLevel)
-  if (!isVisible || isAboutVisible) {
+  if (!isVisible || isAboutVisible || isOnboardingVisible) {
     return null
   }
   // Both answers apply even when unchanged: re-choosing is harmless, and it
