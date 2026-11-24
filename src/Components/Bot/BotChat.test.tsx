@@ -353,6 +353,38 @@ describe('BotChat', () => {
       }
     })
 
+    it('re-sends a step the relay refused as too large, re-sized, and counts it in GA with structured fields only', async () => {
+      const PAD = 12_000
+      render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+      // Earlier turns for the re-bound to cut.
+      for (let n = 1; n <= 3; n++) {
+        send(`earlier ${n} ${'q'.repeat(PAD)}`)
+        await waitFor(() => expect(screen.getAllByText('Test received.')).toHaveLength(n))
+        await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
+      }
+      const sizes: number[] = []
+      getServer().use(http.post(AI_RELAY_PATH, async ({request}) => {
+        sizes.push((await request.text()).length)
+        const meter = {'x-bldrs-ai-tier': 'free', 'x-bldrs-ai-used': '0', 'x-bldrs-ai-limit': '20000'}
+        if (sizes.length === 1) {
+          return new Response(JSON.stringify({error: {code: 'ai_body_too_large'}, tier: 'free'}),
+            {status: HTTP_BAD_REQUEST, headers: {'Content-Type': 'application/json', ...meter,
+              'x-bldrs-ai-max-body-bytes': '24000'}})
+        }
+        return new Response(sseText(textReply('Resized reply.')), {status: 200, headers: {...SSE_HEADERS, ...meter}})
+      }))
+      send('and now?')
+      expect(await screen.findByText('Resized reply.')).toBeInTheDocument()
+      expect(screen.queryByTestId('BotChat-Error')).toBeNull()
+      expect(sizes).toHaveLength(2)
+      expect(sizes[1]).toBeLessThan(sizes[0])
+      const resized = (window.gtag as jest.Mock).mock.calls.filter(([kind, name]) => kind === 'event' && name === 'assist_request_resized')
+      expect(resized).toHaveLength(1)
+      expect(resized[0][2]).toEqual({tier: 'free', from_bytes: expect.any(Number), to_bytes: expect.any(Number)})
+      expect(resized[0][2].to_bytes).toBeLessThan(resized[0][2].from_bytes)
+      expect(JSON.stringify(resized)).not.toContain('earlier')
+    })
+
     it('a signed-in user\'s turns carry their Auth0 token, not an anonymous one', async () => {
       mockAuth.isAuthenticated = true
       const relay = watchRelay()
