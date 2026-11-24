@@ -69,6 +69,12 @@ describe('ConsentBanner', () => {
     expect(getConsentLevel()).toBeNull()
   })
 
+  // Equal weight: an outlined Decline read as disabled beside a filled Accept.
+  test('Decline and Accept look the same', () => {
+    renderBanner()
+    expect(screen.getByTestId('consent-decline').className).toBe(screen.getByTestId('consent-accept').className)
+  })
+
   test('Accept allows analytics, grants GA consent and goes away', async () => {
     renderBanner()
     fireEvent.click(screen.getByTestId('consent-accept'))

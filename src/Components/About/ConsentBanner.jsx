@@ -76,9 +76,10 @@ export default function ConsentBanner() {
     <Box
       sx={{
         position: 'fixed',
-        // Clear of the status bar, which owns the bottom band (Dialog.jsx
-        // SNACKBAR_BAND) and renders above everything.
-        bottom: '4.5em',
+        // Clear of the status bar, which renders above everything and is
+        // taller than Dialog.jsx's 4em SNACKBAR_BAND with its padding
+        // (measured on the #2354 preview: ~60px desktop, ~75px phone).
+        bottom: '6em',
         left: 0,
         right: 0,
         display: 'flex',
@@ -114,11 +115,13 @@ export default function ConsentBanner() {
             Privacy policy
           </Link>
         </Typography>
-        {/* Decline and Accept side by side at the same size, so declining
-            is as easy as accepting. */}
+        {/* Decline and Accept side by side, same size and the same style, so
+            declining is as easy and as visible as accepting. An outlined
+            Decline read as disabled next to a filled Accept on the preview,
+            the visual nudge consent guidance calls a dark pattern. */}
         <Stack direction='row' spacing={1} justifyContent='flex-end' sx={{mt: '0.75em'}}>
           <Button
-            variant='outlined'
+            variant='contained'
             onClick={() => answer(CONSENT_LEVELS.RESTRICTED)}
             data-testid='consent-decline'
           >
