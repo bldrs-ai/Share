@@ -1,5 +1,6 @@
 import React, {ReactElement} from 'react'
 import {Button, Stack, Typography} from '@mui/material'
+import {LOCAL_ONLY_MODE_NAME} from '../../privacy/localOnlyMode'
 import useStore from '../../store/useStore'
 
 
@@ -24,8 +25,8 @@ export default function LocalOnlyNotice({source, action = 'open models from'}) {
       data-testid='local-only-notice'
     >
       <Typography variant='body2' color='text.secondary' sx={{textAlign: 'center'}}>
-        With Browse only, Bldrs Share opens files from your computer and the sample models. To {action}{' '}
-        {source}, choose Functional or higher in the privacy settings.
+        In {LOCAL_ONLY_MODE_NAME}, Bldrs Share opens files from your computer and the sample models.
+        To {action} {source}, allow analytics in the privacy settings.
       </Typography>
       <Button
         variant='contained'

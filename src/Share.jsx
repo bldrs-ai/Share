@@ -97,8 +97,8 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
         navToDefault(navigate, appPrefix)
         return true
       }
-      // Local-only mode (privacy/localOnlyMode.js): a visitor who chose
-      // Browse only opens local files and the samples, not models from
+      // Local-only mode (privacy/localOnlyMode.js): a visitor who declined
+      // analytics opens local files and the samples, not models from
       // GitHub, Drive or a link. This is the backstop for every way such a
       // route is reached (a shared link, recents, search, the widget API);
       // the Open dialog and Share gate their own controls too. The refused

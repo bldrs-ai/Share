@@ -2,7 +2,7 @@ import React, {ReactElement, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import {Button, Typography} from '@mui/material'
 import {CloudOffOutlined as CloudOffIcon} from '@mui/icons-material'
-import {isLocalOnlyLevel} from '../../privacy/localOnlyMode'
+import {LOCAL_ONLY_MODE_NAME, isLocalOnlyLevel} from '../../privacy/localOnlyMode'
 import useStore from '../../store/useStore'
 import {navigateToModel} from '../../utils/navigate'
 import Dialog from '../Dialog'
@@ -16,7 +16,7 @@ const SOURCE_NAMES = Object.freeze({
 })
 
 
-export const LOCAL_ONLY_TITLE = 'Browse only'
+export const LOCAL_ONLY_TITLE = LOCAL_ONLY_MODE_NAME
 
 
 /**
@@ -74,8 +74,8 @@ export default function LocalOnlyDialog() {
       }
     >
       <Typography variant='body1' data-testid='local-only-message'>
-        This model is {where}. With Browse only, Bldrs Share opens files from your computer and the
-        sample models. To open it, choose Functional or higher in the privacy settings.
+        This model is {where}. In {LOCAL_ONLY_MODE_NAME}, Bldrs Share opens files from your computer and
+        the sample models. To open it, allow analytics in the privacy settings.
       </Typography>
     </Dialog>
   )

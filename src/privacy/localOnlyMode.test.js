@@ -17,10 +17,9 @@ function ghRoute(path) {
 
 
 describe('localOnlyMode', () => {
-  test('only Browse only is local-only; undecided is not', () => {
+  test('only a decline is local-only; undecided is not', () => {
     expect(isLocalOnlyLevel(CONSENT_LEVELS.RESTRICTED)).toBe(true)
     expect(isLocalOnlyLevel(CONSENT_LEVELS.FUNCTIONAL)).toBe(false)
-    expect(isLocalOnlyLevel(CONSENT_LEVELS.PUBLIC)).toBe(false)
     expect(isLocalOnlyLevel(null)).toBe(false)
   })
 
@@ -28,7 +27,7 @@ describe('localOnlyMode', () => {
     expect(isRemoteModel(ghRoute('/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc'))).toBe(true)
   })
 
-  // The samples are GitHub routes, and Browse only keeps them.
+  // The samples are GitHub routes, and local-only mode keeps them.
   test.each(SAMPLE_MODELS.map((sample) => [sample.name, sample.path]))('the %s sample is not remote', (_, path) => {
     const route = ghRoute(path)
     expect(isSampleModel(route)).toBe(true)

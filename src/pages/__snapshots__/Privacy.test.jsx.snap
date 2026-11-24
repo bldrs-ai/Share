@@ -30,7 +30,7 @@ exports[`Privacy renders 1`] = `
         Privacy Policy
       </h1>
       <div
-        class="MuiBox-root css-lgj0h8"
+        class="MuiBox-root css-av31co"
       >
         <p
           class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
@@ -46,7 +46,7 @@ exports[`Privacy renders 1`] = `
           <strong>
             Last Updated:
           </strong>
-           November 23, 2026
+           November 24, 2026
         </p>
         <p
           class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
@@ -105,7 +105,7 @@ exports[`Privacy renders 1`] = `
           <strong>
             Usage metrics.
           </strong>
-           With your consent, we measure visits and feature use, including which kinds of models are opened (format, size, source), with Google Analytics, which sets cookies holding a pseudonymous ID. We do not use them for advertising. Nothing is collected for usage metrics until you choose in the welcome dialog.
+           With your consent, we measure visits and feature use, including which kinds of models are opened (format, size, source), with Google Analytics, which sets cookies holding a pseudonymous ID. We do not use them for advertising. Nothing is collected for usage metrics until you press OK in the welcome dialog.
         </p>
         <p
           class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
@@ -113,7 +113,7 @@ exports[`Privacy renders 1`] = `
           <strong>
             You may refuse normal operation
           </strong>
-           and Bldrs Share will operate in a reduced local-only mode (“Browse only”) to allow evaluation of basic viewer capabilities: you can open files from your computer and the sample models, but not models from GitHub, Google Drive or a web address, and you can’t save to GitHub or share. Error and reliability reports continue in this mode. Browsers that send a Global Privacy Control signal start at Browse only. You can change your choice at any time from the About dialog. If you choose “Public sharing,” we may also analyze the content of public models you open.
+           and Bldrs Share will operate in a reduced local-only mode (“Test only mode”) to allow evaluation of basic viewer capabilities: you can open files from your computer and the sample models, but not models from GitHub, Google Drive or a web address, and you can’t save to GitHub or share. Press Cancel in the welcome dialog to choose it. Error and reliability reports continue in this mode. You can change your choice at any time from the About dialog.
         </p>
         <h1
           class="MuiTypography-root MuiTypography-h1 css-1kqtlju-MuiTypography-root"

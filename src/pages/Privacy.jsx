@@ -7,9 +7,11 @@ import TitledLayout from '../layouts/TitledLayout'
 export default function Privacy() {
   return (
     <TitledLayout title='Privacy Policy'>
-      <Box sx={{display: 'grid'}}>
+      {/* A blank line's worth between paragraphs; headings keep their own
+          spacing. Same rule as the marketing copy (marketing/src/app/privacy). */}
+      <Box sx={{'display': 'grid', '& p.MuiTypography-body1': {mb: 2}}}>
         <Typography variant='body1'><strong>Effective Date:</strong> January 1, 2022</Typography>
-        <Typography variant='body1'><strong>Last Updated:</strong> November 23, 2026</Typography>
+        <Typography variant='body1'><strong>Last Updated:</strong> November 24, 2026</Typography>
 
         <Typography variant='body1'>
           Bldrs Share (“we,” “us,” “our”) provides open-source, browser-first tools for viewing and
@@ -49,16 +51,15 @@ export default function Privacy() {
           <strong>Usage metrics.</strong> With your consent, we measure visits and feature use, including
           which kinds of models are opened (format, size, source), with Google Analytics, which sets cookies
           holding a pseudonymous ID. We do not use them for advertising. Nothing is collected for usage
-          metrics until you choose in the welcome dialog.
+          metrics until you press OK in the welcome dialog.
         </Typography>
         <Typography variant='body1'>
           <strong>You may refuse normal operation</strong> and Bldrs Share will operate in a reduced
-          local-only mode (“Browse only”) to allow evaluation of basic viewer capabilities: you can open files
-          from your computer and the sample models, but not models from GitHub, Google Drive or a web address,
-          and you can’t save to GitHub or share. Error and reliability reports continue in this mode. Browsers
-          that send a Global Privacy Control signal start at Browse only. You can change your choice at any
-          time from the About dialog. If you choose “Public sharing,” we may also analyze the content of
-          public models you open.
+          local-only mode (“Test only mode”) to allow evaluation of basic viewer capabilities: you can open
+          files from your computer and the sample models, but not models from GitHub, Google Drive or a web
+          address, and you can’t save to GitHub or share. Press Cancel in the welcome dialog to choose it.
+          Error and reliability reports continue in this mode. You can change your choice at any time from the
+          About dialog.
         </Typography>
 
         <Typography variant='h1'>2. Open-Source and Self-Hosted Use</Typography>

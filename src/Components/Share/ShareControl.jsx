@@ -3,7 +3,7 @@ import {Link, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {useStartGateLogin} from '../../Auth0/gateLogin'
 import useStore from '../../store/useStore'
-import {isLocalOnlyLevel} from '../../privacy/localOnlyMode'
+import {LOCAL_ONLY_MODE_NAME, isLocalOnlyLevel} from '../../privacy/localOnlyMode'
 import {
   GATE_EVENTS,
   MODEL_ACTIONS,
@@ -67,8 +67,9 @@ export default function ShareControl() {
   const [isInterestNoted, setIsInterestNoted] = useState(false)
 
   // Local-only mode (privacy/localOnlyMode.js) comes first: whatever the
-  // model, Browse only doesn't share, and the way out is the privacy
-  // settings, not a different file. No analytics: Browse only sends none.
+  // model, a visitor who declined analytics doesn't share, and the way out
+  // is the privacy settings, not a different file. No analytics: this mode
+  // sends none.
   if (isLocalOnly) {
     return (
       <GatedAction
@@ -178,10 +179,10 @@ export default function ShareControl() {
 }
 
 
-export const MSG_LOCAL_ONLY_SHARE_TITLE = 'Sharing needs Functional'
+export const MSG_LOCAL_ONLY_SHARE_TITLE = `Sharing isn't available in ${LOCAL_ONLY_MODE_NAME}`
 export const MSG_LOCAL_ONLY_SHARE_BODY =
-  'With Browse only, Bldrs Share opens files from your computer and the sample models, and doesn\'t ' +
-  'share. To share, choose Functional or higher in the privacy settings.'
+  `In ${LOCAL_ONLY_MODE_NAME}, Bldrs Share opens files from your computer and the sample models, and ` +
+  'doesn\'t share. To share, allow analytics in the privacy settings.'
 export const MSG_LOCAL_SHARE_TITLE = 'Local-only files can\'t be shared yet'
 // "Open it from GitHub or Google Drive" is the same way out the no-OPFS
 // alert offers (OPFS/messages.js), so local-file limits read alike.

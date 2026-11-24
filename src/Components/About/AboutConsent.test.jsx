@@ -3,9 +3,10 @@ import React from 'react'
 import {fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {CONSENT_COOKIE_NAME, CONSENT_LEVELS, getConsentLevel, setConsentLevel} from '../../privacy/consent'
+import {LOCAL_ONLY_MODE_NAME} from '../../privacy/localOnlyMode'
 import useStore from '../../store/useStore'
 import AboutControl, {testId} from './AboutControl'
-import {CONSENT_COPY, PRIVACY_POLICY_HREF} from './ConsentControl'
+import {CONSENT_TEXT, PRIVACY_POLICY_HREF} from './ConsentNotice'
 
 
 /** Open About from its control, as a visitor would. */
@@ -19,17 +20,11 @@ function openAbout() {
 }
 
 
-/** @return {HTMLInputElement} the privacy slider's range input */
-function slider() {
-  return screen.getByRole('slider', {name: 'Privacy level'})
-}
-
-
-/**
- * @param {number} position 0 Browse only, 1 Functional, 2 Public sharing
- */
-function moveSliderTo(position) {
-  fireEvent.change(slider(), {target: {value: position}})
+/** @return {Array} analytics_storage values of every consent update queued */
+function analyticsUpdates() {
+  return window.dataLayer
+    .filter((entry) => entry[0] === 'consent' && entry[1] === 'update')
+    .map((entry) => entry[2].analytics_storage)
 }
 
 
@@ -44,33 +39,20 @@ describe('About dialog privacy choice', () => {
     }
   })
 
-  afterEach(() => {
-    delete navigator.globalPrivacyControl
-  })
-
-  test('starts at Functional, with nothing stored until OK', () => {
+  test('asks in the owner\'s words, naming the mode Cancel gives, with nothing stored yet', () => {
     openAbout()
-    expect(slider()).toHaveAttribute('aria-valuetext', 'Functional')
-    expect(screen.getByTestId('consent-summary'))
-      .toHaveTextContent(CONSENT_COPY[CONSENT_LEVELS.FUNCTIONAL].summary)
+    expect(screen.getByTestId('consent-summary')).toHaveTextContent(CONSENT_TEXT)
+    expect(CONSENT_TEXT).toContain('pseudonymous ID')
+    expect(CONSENT_TEXT).toContain(`Press Cancel for ${LOCAL_ONLY_MODE_NAME}.`)
+    expect(screen.queryByRole('slider')).toBeNull()
     expect(getConsentLevel()).toBeNull()
   })
 
-  test('OK stores Functional and grants GA consent', async () => {
+  test('OK allows analytics and grants GA consent', async () => {
     openAbout()
     fireEvent.click(screen.getByTestId('button-dialog-main-action'))
     await waitFor(() => expect(getConsentLevel()).toBe(CONSENT_LEVELS.FUNCTIONAL))
-    const update = window.dataLayer.find((entry) => entry[0] === 'consent' && entry[1] === 'update')
-    expect(update[2].analytics_storage).toBe('granted')
-  })
-
-  test('OK stores the level the slider was moved to', async () => {
-    openAbout()
-    moveSliderTo(2)
-    expect(screen.getByTestId('consent-summary'))
-      .toHaveTextContent(CONSENT_COPY[CONSENT_LEVELS.PUBLIC].summary)
-    fireEvent.click(screen.getByTestId('button-dialog-main-action'))
-    await waitFor(() => expect(getConsentLevel()).toBe(CONSENT_LEVELS.PUBLIC))
+    expect(analyticsUpdates()).toEqual(['granted'])
   })
 
   // Any close but OK is a decline for a visitor who hasn't chosen.
@@ -81,35 +63,39 @@ describe('About dialog privacy choice', () => {
     'logo button': () => fireEvent.click(screen.getByTestId(testId)),
   }
   Object.entries(closeBy).forEach(([how, close]) => {
-    test(`closing via ${how} stores Browse only and grants nothing`, async () => {
+    test(`closing via ${how} declines and grants nothing`, async () => {
       openAbout()
       close()
       await waitFor(() => expect(getConsentLevel()).toBe(CONSENT_LEVELS.RESTRICTED))
-      const grants = window.dataLayer.filter((entry) =>
-        entry[0] === 'consent' && entry[2]?.analytics_storage === 'granted')
-      expect(grants).toHaveLength(0)
+      expect(analyticsUpdates()).not.toContain('granted')
     })
   })
 
-  test('a visitor who already chose keeps their choice on Cancel', async () => {
-    setConsentLevel(CONSENT_LEVELS.PUBLIC)
-    openAbout()
-    expect(slider()).toHaveAttribute('aria-valuetext', 'Public sharing')
-    moveSliderTo(0)
-    fireEvent.click(screen.getByTestId('button-dialog-cancel'))
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(getConsentLevel()).toBe(CONSENT_LEVELS.PUBLIC)
-  })
-
-  test('a returning visitor can lower their level later', async () => {
+  // Cancel is an answer, so it can take consent back; closing About is not,
+  // so it leaves a choice alone.
+  test('a visitor who allowed analytics can take it back with Cancel', async () => {
     setConsentLevel(CONSENT_LEVELS.FUNCTIONAL)
     openAbout()
-    moveSliderTo(0)
-    fireEvent.click(screen.getByTestId('button-dialog-main-action'))
+    fireEvent.click(screen.getByTestId('button-dialog-cancel'))
     await waitFor(() => expect(getConsentLevel()).toBe(CONSENT_LEVELS.RESTRICTED))
-    expect(window.dataLayer).toContainEqual(expect.objectContaining({
-      0: 'consent', 1: 'update', 2: expect.objectContaining({analytics_storage: 'denied'}),
-    }))
+    expect(analyticsUpdates()).toEqual(['denied'])
+  })
+
+  test('a visitor who allowed analytics keeps it when closing About with X', async () => {
+    setConsentLevel(CONSENT_LEVELS.FUNCTIONAL)
+    openAbout()
+    fireEvent.click(screen.getByTestId(/^button-close-dialog-/))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(getConsentLevel()).toBe(CONSENT_LEVELS.FUNCTIONAL)
+    expect(analyticsUpdates()).toEqual([])
+  })
+
+  test('a visitor who declined can allow analytics later with OK', async () => {
+    setConsentLevel(CONSENT_LEVELS.RESTRICTED)
+    openAbout()
+    fireEvent.click(screen.getByTestId('button-dialog-main-action'))
+    await waitFor(() => expect(getConsentLevel()).toBe(CONSENT_LEVELS.FUNCTIONAL))
+    expect(useStore.getState().privacyLevel).toBe(CONSENT_LEVELS.FUNCTIONAL)
   })
 
   // It pointed at /share/privacy, which no route serves, so it opened a
@@ -120,11 +106,5 @@ describe('About dialog privacy choice', () => {
     expect(PRIVACY_POLICY_HREF).toBe('/privacy/')
     expect(link).toHaveAttribute('href', '/privacy/')
     expect(link).toHaveAttribute('target', '_blank')
-  })
-
-  test('starts at Browse only when the browser sends Global Privacy Control', () => {
-    Object.defineProperty(navigator, 'globalPrivacyControl', {value: true, configurable: true})
-    openAbout()
-    expect(slider()).toHaveAttribute('aria-valuetext', 'Browse only')
   })
 })

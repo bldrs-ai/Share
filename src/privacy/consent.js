@@ -4,18 +4,19 @@ import Expires from './Expires'
 
 
 /*
- * The visitor's privacy level, chosen in the About (welcome) dialog.
+ * The visitor's privacy level, chosen in the About (welcome) dialog: OK or
+ * Cancel. Design: design/new/analytics-consent.md.
  *
- * Design: design/new/analytics-consent.md. The three levels, lowest first:
+ *   functional  OK. GA with a pseudonymous client id, and our own model
+ *               events. Analytics only: no ad signal is granted (index/ga.js).
+ *   restricted  Cancel. Google Analytics never loads and sets no cookie, and
+ *               the app runs in local-only mode (privacy/localOnlyMode.js,
+ *               named to the visitor as LOCAL_ONLY_MODE_NAME).
  *
- *   restricted  "Browse only". Google Analytics never loads and sets no
- *               cookie. What else this level gives up (e.g. the free quota)
- *               is undecided; today it gives up nothing but GA.
- *   functional  GA with a pseudonymous client id, and our own model events.
- *               Analytics only: no ad signal is granted (index/ga.js).
- *   public      functional, plus consent to analyzing the content of public
- *               models the visitor opens. Nothing analyzes content yet; the
- *               level exists so the choice is collected before that ships.
+ * A third, "public" (consent to analyzing public models' content), was
+ * offered on a slider until 2026-11-24 and dropped with it: nothing analyzes
+ * content yet. Bringing it back means a new choice in the dialog, a level
+ * here and in public/index.html's stub, and a CONSENT_VERSION bump.
  *
  * Sentry error monitoring is NOT governed by this. It's first-party
  * functional processing and stays on at every level; only the GA client id
@@ -24,15 +25,13 @@ import Expires from './Expires'
 export const CONSENT_LEVELS = Object.freeze({
   RESTRICTED: 'restricted',
   FUNCTIONAL: 'functional',
-  PUBLIC: 'public',
 })
 
 
-/** Lowest to highest, the order the dialog's slider shows them in. */
+/** Every level a stored cookie may hold. */
 export const CONSENT_LEVEL_ORDER = Object.freeze([
   CONSENT_LEVELS.RESTRICTED,
   CONSENT_LEVELS.FUNCTIONAL,
-  CONSENT_LEVELS.PUBLIC,
 ])
 
 
@@ -48,8 +47,8 @@ export const CONSENT_COOKIE_NAME = 'consentLevel'
 /*
  * Bump to re-ask everyone: a stored choice from an older version reads as
  * undecided, which re-opens the dialog. Bump it when what a level means
- * changes in a way the visitor didn't agree to — e.g. when Browse only
- * starts costing features, or when public-model analysis actually starts.
+ * changes in a way the visitor didn't agree to — e.g. when local-only mode
+ * gives up more, or when public-model analysis is offered.
  */
 export const CONSENT_VERSION = 1
 
@@ -119,27 +118,5 @@ export function consentCookieValue(level) {
  * @return {boolean} whether this level consents to Google Analytics
  */
 export function allowsAnalytics(level) {
-  return level === CONSENT_LEVELS.FUNCTIONAL || level === CONSENT_LEVELS.PUBLIC
-}
-
-
-/**
- * Where the dialog's slider starts for a visitor who hasn't chosen yet.
- * This is only where the control starts: nothing is collected until the
- * visitor confirms with OK, and closing the dialog any other way stores
- * Browse only (AboutDialog).
- *
- * A browser sending Global Privacy Control (navigator.globalPrivacyControl;
- * Brave and DuckDuckGo by default, Firefox as a setting) starts at Browse
- * only. California treats GPC as a binding opt-out of "selling or sharing"
- * for businesses over its thresholds. GA with every ad signal off is
- * unlikely to be either, but a visitor who sends GPC has said what they
- * want, and honoring it everywhere is cheaper than deciding where we must.
- *
- * @param {object} [env] overrides for tests
- * @param {boolean} [env.gpc]
- * @return {string} one of CONSENT_LEVELS
- */
-export function defaultConsentLevel({gpc = navigator.globalPrivacyControl === true} = {}) {
-  return gpc ? CONSENT_LEVELS.RESTRICTED : CONSENT_LEVELS.FUNCTIONAL
+  return level === CONSENT_LEVELS.FUNCTIONAL
 }

@@ -477,7 +477,7 @@ export default function OpenModelDialog({
           </Stack>
           }
           {/* Local-only mode (privacy/localOnlyMode.js): the remote tabs stay
-              in place, so Browse only can see what it gives up, but show a
+              in place, so a visitor who declined can see what that gives up, but show a
               notice instead of their controls. Samples stay open. */}
           { isLocalOnly && (tabLabels[currentTab] === LABEL_GOOGLE || tabLabels[currentTab] === LABEL_GITHUB) &&
           <LocalOnlyNotice source={tabLabels[currentTab] === LABEL_GOOGLE ? 'Google Drive' : 'GitHub'}/>

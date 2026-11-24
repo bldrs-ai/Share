@@ -8,7 +8,6 @@ import {
   CONSENT_VERSION,
   allowsAnalytics,
   consentCookieValue,
-  defaultConsentLevel,
   getConsentLevel,
   isConsentDecided,
   setConsentLevel,
@@ -40,6 +39,7 @@ describe('getConsentLevel', () => {
     `${CONSENT_VERSION - 1}.functional`,
     'functional',
     `${CONSENT_VERSION}.everything`,
+    `${CONSENT_VERSION}.public`,
     `${CONSENT_VERSION}.`,
     'true',
   ])('treats %p as undecided', (raw) => {
@@ -69,22 +69,12 @@ describe('setConsentLevel', () => {
 
 
 describe('allowsAnalytics', () => {
-  test('only functional and public allow GA', () => {
+  test('only functional allows GA', () => {
     expect(allowsAnalytics(null)).toBe(false)
     expect(allowsAnalytics(CONSENT_LEVELS.RESTRICTED)).toBe(false)
     expect(allowsAnalytics(CONSENT_LEVELS.FUNCTIONAL)).toBe(true)
-    expect(allowsAnalytics(CONSENT_LEVELS.PUBLIC)).toBe(true)
-  })
-})
-
-
-describe('defaultConsentLevel', () => {
-  test('starts the slider at Functional', () => {
-    expect(defaultConsentLevel({gpc: false})).toBe(CONSENT_LEVELS.FUNCTIONAL)
-  })
-
-  test('starts at Browse only for a browser sending Global Privacy Control', () => {
-    expect(defaultConsentLevel({gpc: true})).toBe(CONSENT_LEVELS.RESTRICTED)
+    // The slider's old third level, never shipped, is not a choice.
+    expect(allowsAnalytics('public')).toBe(false)
   })
 })
 
@@ -120,7 +110,7 @@ describe('index.html gtag stub', () => {
 
   test.each([
     ['no choice', null],
-    ['Browse only', CONSENT_LEVELS.RESTRICTED],
+    ['a decline', CONSENT_LEVELS.RESTRICTED],
   ])('queues no config and no grant for %s', (_, level) => {
     if (level) {
       setConsentLevel(level)
@@ -135,7 +125,7 @@ describe('index.html gtag stub', () => {
     expect(runStub().filter(([cmd]) => cmd === 'config')).toHaveLength(0)
   })
 
-  test.each([CONSENT_LEVELS.FUNCTIONAL, CONSENT_LEVELS.PUBLIC])('grants, then configs, for %s', (level) => {
+  test.each([CONSENT_LEVELS.FUNCTIONAL])('grants, then configs, for %s', (level) => {
     setConsentLevel(level)
     expect(consentCookieValue(level)).toBe(Cookies.get(CONSENT_COOKIE_NAME))
     const commands = runStub()

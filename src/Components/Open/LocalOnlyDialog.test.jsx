@@ -28,7 +28,7 @@ describe('LocalOnlyDialog', () => {
     })
   })
 
-  test('says where the refused model is and what Browse only opens', () => {
+  test('says where the refused model is and what local-only mode opens', () => {
     render(<LocalOnlyDialog/>, {wrapper: HelmetStoreRouteThemeCtx})
     expect(screen.getByTestId('local-only-message')).toHaveTextContent('This model is on GitHub')
     expect(screen.getByTestId('local-only-message')).toHaveTextContent('files from your computer and the sample models')
@@ -60,7 +60,7 @@ describe('LocalOnlyDialog', () => {
     expect(useStore.getState().blockedRemoteModel).toBeNull()
   })
 
-  test('comes back, without opening anything, when About closes still on Browse only', async () => {
+  test('comes back, without opening anything, when About closes still declined', async () => {
     render(<LocalOnlyDialog/>, {wrapper: HelmetStoreRouteThemeCtx})
     fireEvent.click(screen.getByTestId('local-only-privacy-settings'))
     act(() => {

@@ -7,7 +7,7 @@ import {clearState, homepageSetup, visitHomepageWaitForModel} from '../../tests/
 // A model open that counts as real, so a consenting visitor queues a
 // real_model_open event and a declining one must not (realModelOpen.spec.ts).
 const REAL_MODEL = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc'
-// Also real, and a sample, so Browse only (local-only mode) still opens it.
+// Also real, and a sample, so local-only mode (the decline) still opens it.
 const SAMPLE_MODEL = '/share/v/gh/bldrs-ai/test-models/main/pdb/caffeine.pdb'
 
 
@@ -74,8 +74,8 @@ function realModelOpens(commands: unknown[][]): unknown[][] {
 
 /**
  * design/new/analytics-consent.md: Google Analytics is opt-in. The About
- * (welcome) dialog asks, with the slider at Functional; nothing is
- * collected until OK, and any other close is Browse only, remembered.
+ * (welcome) dialog asks; nothing is collected until OK, and Cancel (or any
+ * other close by a visitor who hasn't chosen) declines, remembered.
  */
 describeMobileAndDesktop('Analytics consent', () => {
   let googleRequests: string[]
@@ -95,7 +95,8 @@ describeMobileAndDesktop('Analytics consent', () => {
   test('a fresh visitor is asked, and nothing is collected before they answer', async ({page}) => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
-    await expect(page.getByRole('slider', {name: 'Privacy level'})).toHaveAttribute('aria-valuetext', 'Functional')
+    await expect(page.getByTestId('consent-summary')).toContainText('Press Cancel for')
+    await expect(page.getByRole('slider')).toHaveCount(0)
 
     const commands = await gtagCommands(page)
     expect(commands).toContainEqual(['consent', 'default', {
@@ -135,7 +136,7 @@ describeMobileAndDesktop('Analytics consent', () => {
     expect(await consentCookie(page)).toBe('1.restricted')
     expect(wasGranted(await gtagCommands(page))).toBe(false)
 
-    // A sample: Browse only refuses other GitHub models (local-only mode,
+    // A sample: local-only mode refuses other GitHub models (
     // Open/localOnlyMode.spec.ts), and a sample still counts as a real open.
     await openRealModel(page, SAMPLE_MODEL)
     await expect(page.getByRole('dialog')).toHaveCount(0)
@@ -161,14 +162,24 @@ describeMobileAndDesktop('Analytics consent', () => {
     expect(await consentCookie(page)).toBeUndefined()
   })
 
-  test('Browse only on the slider, then OK, is a decline too', async ({page}) => {
-    const sliderInput = page.getByRole('slider', {name: 'Privacy level'})
-    await sliderInput.focus()
-    await sliderInput.press('ArrowLeft')
-    await expect(sliderInput).toHaveAttribute('aria-valuetext', 'Browse only')
+  // Cancel is an answer, so a visitor who allowed analytics can take it back
+  // from About later; the decline then stops collection on that page.
+  test('a visitor who allowed analytics can take it back with Cancel', async ({page}) => {
     await page.getByTestId('button-dialog-main-action').click()
+    expect(await consentCookie(page)).toBe('1.functional')
+
+    // About again, through its link form (About/hashState.js). Same path,
+    // so the goto is only a hash change; the reload makes it a page load.
+    await page.goto('/share/v/p/index.ifc#about:', {waitUntil: 'domcontentloaded'})
+    await page.reload({waitUntil: 'domcontentloaded'})
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await page.getByTestId('button-dialog-cancel').click()
     await expect(page.getByRole('dialog')).toHaveCount(0)
     expect(await consentCookie(page)).toBe('1.restricted')
-    expect(wasGranted(await gtagCommands(page))).toBe(false)
+    const commands = await gtagCommands(page)
+    expect(commands.filter(([cmd, arg]) => cmd === 'consent' && arg === 'update').pop())
+      .toEqual(['consent', 'update', {
+        analytics_storage: 'denied', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied',
+      }])
   })
 })

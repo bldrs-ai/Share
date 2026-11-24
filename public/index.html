@@ -46,13 +46,13 @@
         ad_user_data: 'denied', ad_personalization: 'denied'
       });
       // The consent rule (privacy/consent.js: cookie `consentLevel`, value
-      // `<version>.<level>`, version >= CONSENT_VERSION, level functional or
-      // public) is duplicated here on purpose, because config has to be
+      // `<version>.<level>`, version >= CONSENT_VERSION, level functional)
+      // is duplicated here on purpose, because config has to be
       // decided before the bundle loads. No cookie, an old version or any
       // other level means not consented.
       function consentAllowsAnalytics() {
         var m = document.cookie.match(/(?:^|;\s*)consentLevel=(\d+)\.([a-z]+)/);
-        return !!m && parseInt(m[1], 10) >= 1 && (m[2] === 'functional' || m[2] === 'public');
+        return !!m && parseInt(m[1], 10) >= 1 && m[2] === 'functional';
       }
       // Carried IN the config call rather than a `set` queued before it.
       // config is what triggers page_view / session_start / first_visit — the

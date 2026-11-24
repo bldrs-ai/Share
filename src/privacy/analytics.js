@@ -48,7 +48,7 @@ export function setConsent(level) {
 
 /**
  * Boolean shorthand for setConsent: true is Functional, anything else
- * Browse only. Strictly `=== true`, so a merely truthy 'false' can't
+ * restricted (declined). Strictly `=== true`, so a merely truthy 'false' can't
  * grant consent.
  *
  * @param {boolean} allowed

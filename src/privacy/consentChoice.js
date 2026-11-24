@@ -25,7 +25,7 @@ export default function chooseConsentLevel(level) {
 /**
  * The About dialog closed without OK (Cancel, X, backdrop, Escape, or the
  * logo button toggling it shut). For a visitor who hasn't chosen yet that
- * is a decline: store Browse only, so nothing is collected and the dialog
+ * is a decline: store restricted (local-only mode), so nothing is collected and the dialog
  * doesn't re-open on every load. A visitor who already chose keeps their
  * choice; closing just discards the slider's unconfirmed position.
  */

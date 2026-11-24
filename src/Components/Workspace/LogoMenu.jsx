@@ -41,7 +41,7 @@ export default function LogoMenu() {
   const [anchorEl, setAnchorEl] = useState(null)
 
   // Mirrors AboutControl#handleDialogClose: an undecided visitor's
-  // dismissal is stored as Browse only, first-timers are marked
+  // dismissal is stored as a decline, first-timers are marked
   // visited so the dialog doesn't force itself open again, and Notes
   // opens to improve the first-run experience (#1320).
   const onAboutClose = () => {

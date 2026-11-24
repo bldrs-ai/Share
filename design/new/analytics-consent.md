@@ -10,37 +10,52 @@ first-party functional processing and stays on regardless.
 
 The About dialog opens on its own for a first-time visitor **and** for any
 visitor who hasn't made a privacy choice under the current
-`CONSENT_VERSION` (`About/hashState.js#isVisibleInitially`). It carries a
-three-position slider (`About/ConsentControl.jsx`) with a one-line summary
-of the selected level, a link to the privacy policy, and Cancel and OK side
-by side at the same size.
+`CONSENT_VERSION` (`About/hashState.js#isVisibleInitially`). Under the
+mission it asks, in the owner's words (`About/ConsentNotice.jsx`,
+2026-11-24):
 
-| Level (cookie value) | Label | What runs |
-|---|---|---|
-| `restricted` | Browse only | No GA: gtag/js is never requested, no `_ga` cookie, none of our GA events. **Local-only mode** (below): local files and the samples only. |
-| `functional` | Functional | GA with its pseudonymous client id (`_ga`) and our model events (`real_model_open`, …). Analytics only: no ad signal, no Google signals. |
-| `public` | Public sharing | Functional, plus consent to analyzing the content of public models the visitor opens. **Nothing analyzes content yet**; the level exists so the choice is collected before that ships. |
+> We collect analytics with a pseudonymous ID: visits, and which kinds of
+> models are opened (format, size, source). No advertising. Press Cancel
+> for Test only mode.
 
-- The slider **starts** at Functional, or at Browse only when the browser
-  sends Global Privacy Control (`consent.js#defaultConsentLevel`). That's
-  only where the control starts: nothing is stored or collected until OK.
-- **OK** stores the slider's level (`consentChoice.js#chooseConsentLevel`).
-- **Any other close** (Cancel, X, backdrop, Escape, the logo button) by an
-  undecided visitor stores Browse only (`consentChoice.js#dismissConsent`),
+with a link to the privacy policy, and Cancel and OK side by side at the
+same size.
+
+| Answer (cookie value) | What runs |
+|---|---|
+| OK (`functional`) | GA with its pseudonymous client id (`_ga`) and our model events (`real_model_open`, …). Analytics only: no ad signal, no Google signals. |
+| Cancel (`restricted`) | No GA: gtag/js is never requested, no `_ga` cookie, none of our GA events. **Local-only mode** (below): local files and the samples only. |
+
+- **OK** allows analytics; **Cancel** declines (`AboutDialog#answer`,
+  `consentChoice.js#chooseConsentLevel`). Both work for any visitor, so a
+  returning visitor changes their mind the same way, by reopening About
+  (logo button, the workspace LogoMenu's About, or a `#about:` link).
+- **Closing without answering** (X, backdrop, Escape, the logo button)
+  declines for a visitor who hasn't chosen (`consentChoice.js#dismissConsent`),
   so declining persists and the dialog doesn't nag on every load. A visitor
-  who already chose keeps their choice; closing only discards the slider's
-  unconfirmed move.
-- The visitor changes their choice later by reopening About (logo button,
-  or the workspace LogoMenu's About).
+  who already chose keeps their choice: closing About to get back to a
+  model is not an answer.
+- **The mode's name** is one constant, `localOnlyMode.js#LOCAL_ONLY_MODE_NAME`
+  ("Test only mode"; the owner is still settling it, "Restricted mode" is
+  the other candidate). Every UI string reads it; the privacy policy's two
+  copies spell it out and change with it.
+- **Dropped with the slider (2026-11-24).** It had three levels and a Global
+  Privacy Control preset. The third level, "Public sharing" (consent to
+  analyzing public models' content), went because nothing analyzes content
+  yet; bringing it back means a new choice in the dialog, a level in
+  `consent.js` and the inline stub, and a `CONSENT_VERSION` bump. The GPC
+  preset only chose where the slider started; GPC is an opt-out of selling
+  or sharing data, which GA with every ad signal off isn't, and every
+  visitor now makes the same explicit choice.
 
-## Local-only mode: what Browse only costs
+## Local-only mode: what declining costs
 
 Owner's call, 2026-11-23, written into the privacy policy: telemetry is
 required for normal operation, and a visitor who refuses gets "a reduced
 local-only mode to allow evaluation of basic viewer capabilities"
 (`src/privacy/localOnlyMode.js`).
 
-| In Browse only | Allowed? |
+| In local-only mode | Allowed? |
 |---|---|
 | Files from the visitor's computer (`/v/local-only`) | yes |
 | The hosted demo model (`/v/p/index.ifc`) | yes |
@@ -49,12 +64,12 @@ local-only mode to allow evaluation of basic viewer capabilities"
 | Save to GitHub | no; the Save dialog's Export tab (a local download) stays |
 | Share | no |
 
-- **Only an explicit Browse only restricts.** An undecided visitor is being
+- **Only an explicit decline restricts.** An undecided visitor is being
   asked by the About dialog right then and isn't blocked from the link that
   brought them; the choice applies to opens after it. A remote model that
-  is already open stays open when the visitor then picks Browse only.
+  is already open stays open when the visitor then declines.
 - **The backstop is the route** (`Share.jsx`'s route effect): a remote
-  route under Browse only falls back to the home model and records the link
+  route in local-only mode falls back to the home model and records the link
   in the store (`blockedRemoteModel`). That catches every way such a route
   is reached: a shared link, recents, search, the widget API, the
   workspace drawer. `Open/LocalOnlyDialog.jsx` says where the model is and
@@ -95,8 +110,8 @@ change. Moving one the other way must drop anything that identifies the
 browser across visits (`getOpenCidForSentry` already gates the GA client
 id), and must not add storage.
 
-Changing what Browse only allows changes the dialog's summary
-(`ConsentControl.jsx`), the policy's §1 "You may refuse normal operation",
+Changing what local-only mode allows changes the dialog's text
+(`ConsentNotice.jsx`), the policy's §1 "You may refuse normal operation",
 and `CONSENT_VERSION`, all together.
 
 ## How it's wired
@@ -154,19 +169,25 @@ and `CONSENT_VERSION`, all together.
 ## Tests
 
 - `src/privacy/consent.test.js`: cookie parsing and versions, the legacy
-  cookie, GPC default, and the inline stub run from `public/index.html`.
-- `src/index/ga.test.js` §consent: no loader for undecided or Browse only,
+  cookie, and the inline stub run from `public/index.html`.
+- `src/index/ga.test.js` §consent: no loader for undecided or declined,
   allow-mid-page ordering (grant before config, one config, one loader),
   the off-prod path, decline-after-load (kill switch, denied, cookies
   deleted), the signal objects.
-- `src/Components/About/AboutConsent.test.jsx`: the dialog's paths (OK,
-  slider then OK, each non-OK close, returning visitor lowering and
-  cancelling, GPC).
+- `src/Components/About/AboutConsent.test.jsx`: the dialog's paths (the
+  text, OK, each non-OK close, a consenting visitor's Cancel taking it
+  back and X leaving it alone, a declined visitor's OK, the policy link).
+- `src/privacy/localOnlyMode.test.js`, `src/Components/Open/LocalOnlyDialog.test.jsx`,
+  `ShareControl.test.jsx` §local-only: what local-only mode refuses and the
+  ways out of it.
 - `src/Components/About/consent.spec.ts` (desktop + mobile): a fresh visitor
   is asked with nothing queued but the denied default and no Google
   request; OK grants then configs, and a later page is configured from the
-  stub with `real_model_open` sent; Cancel stores Browse only and, after a
-  reload, there's no grant, no config and no `real_model_open`.
+  stub with `real_model_open` sent; Cancel declines and, after a reload,
+  there's no grant, no config and no `real_model_open`; a consenting
+  visitor's later Cancel denies consent. `src/Components/Open/localOnlyMode.spec.ts`
+  (desktop + mobile): a GitHub link falls back and explains, allowing
+  analytics opens it, a sample opens, the GitHub tab and Share are gated.
 - Jest's `tools/jest/setupTests.js` starts every test as a Functional
   visitor, because most suites predate opt-in and assert on GA events; the
   E2E `setIsReturningUser` does the same. Specs about the choice itself
@@ -182,7 +203,7 @@ Cancel, then reload, makes no Google request and leaves no `_ga`.
 ## Open questions (owner)
 
 - **Region split.** The law that requires opt-in is EU/UK/Swiss. Elsewhere
-  a notice with the slider preset and always reachable would be enough. A
+  a notice with consent preset and always reachable would be enough. A
   Netlify edge function knows the country (`context.geo.country`) without
   storing anything, and could tell the stub which mode to use. Not built:
   one behavior everywhere is the conservative choice until the GA country

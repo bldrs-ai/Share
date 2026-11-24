@@ -6,15 +6,15 @@ import {clearState, homepageSetup} from '../../tests/e2e/utils'
 import {ABOUT_MISSION} from '../About/component'
 
 
-// Not a sample: Browse only must refuse it.
+// Not a sample: local-only mode must refuse it.
 const GITHUB_MODEL = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc'
-// A sample (sampleModelRoster.js): Browse only keeps it.
+// A sample (sampleModelRoster.js): local-only mode keeps it.
 const SAMPLE_MODEL = '/share/v/gh/bldrs-ai/test-models/main/pdb/caffeine.pdb'
 const HOME_MODEL = /\/share\/v\/p\/index\.ifc/
 
 
 /**
- * A returning visitor who chose Browse only.
+ * A returning visitor who declined analytics (Cancel).
  *
  * @param page Playwright page
  */
@@ -27,11 +27,11 @@ async function browseOnlyVisitor(page: Page) {
 
 
 /**
- * design/new/analytics-consent.md §"Local-only mode": what Browse only costs.
+ * design/new/analytics-consent.md §"Local-only mode": what declining costs.
  * Files from the visitor's computer and the samples open; models from
  * GitHub, Drive or a link don't, nor do saving to GitHub or sharing.
  */
-describeMobileAndDesktop('Local-only mode (Browse only)', () => {
+describeMobileAndDesktop('Local-only mode (analytics declined)', () => {
   test.beforeEach(async ({page}) => {
     await clearState(page.context())
     await homepageSetup(page)
@@ -45,7 +45,7 @@ describeMobileAndDesktop('Local-only mode (Browse only)', () => {
     await expect(page.getByTestId('local-only-message')).toContainText('This model is on GitHub')
   })
 
-  test('choosing Functional in the privacy settings opens the link', async ({page}) => {
+  test('allowing analytics in the privacy settings opens the link', async ({page}) => {
     await setupVirtualPathIntercept(page, GITHUB_MODEL, 'box.ifc')
     await page.goto(GITHUB_MODEL, {waitUntil: 'domcontentloaded'})
     await page.waitForURL(HOME_MODEL)
@@ -53,12 +53,7 @@ describeMobileAndDesktop('Local-only mode (Browse only)', () => {
 
     const about = page.getByRole('dialog').filter({hasText: ABOUT_MISSION})
     await expect(about).toBeVisible()
-    const slider = page.getByRole('slider', {name: 'Privacy level'})
-    await expect(slider).toHaveAttribute('aria-valuetext', 'Browse only')
-    await slider.focus()
-    await slider.press('ArrowRight')
-    await expect(slider).toHaveAttribute('aria-valuetext', 'Functional')
-    await page.getByTestId('button-dialog-main-action').click()
+    await about.getByTestId('button-dialog-main-action').click()
 
     await page.waitForURL(/\/ifc\/misc\/box\.ifc/)
     await waitForModelReady(page)
@@ -83,6 +78,6 @@ describeMobileAndDesktop('Local-only mode (Browse only)', () => {
     await page.keyboard.press('Escape')
 
     await clickGate(page, 'gated-share-local-only')
-    await expect(page.getByTestId('gated-help')).toContainText('Sharing needs Functional')
+    await expect(page.getByTestId('gated-help')).toContainText('Sharing isn\'t available in')
   })
 })
