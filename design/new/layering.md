@@ -217,7 +217,7 @@ tool providers. Eight of them import the UI (the store, the
 selection-hash writer, `Components/Camera`, `Components/Residency`,
 `Components/Share`, Assist, `export/`): they drive the app, not the
 renderer. They move whole to `src/tools/`, which
-the `apps-t300` track ([design/dx/apps-t300.md](../dx/apps-t300.md))
+the `apps-t300` track ([design/tracks/apps-t300.md](../tracks/apps-t300.md))
 already treats as one registry. The four pure measurement files
 (`elementBounds.js`, `elementPieces.js`, `meshMeasure.js`,
 `ifcQuantities.js`) can go down to the model later, when a headless tool
