@@ -6,7 +6,7 @@
 - `assist-310`, the in-page agent (#1659), whose reply rating (#2306) was the pipeline's first client;
 - `community-200`, bug reports with a screenshot and session state (#2295).
 
-**Related track:** `assist-t300` (#2303), which holds the agent session log that a reply's rating is written into.
+**Related track:** `assist-t300` (#2303), which holds the agent session log. A reply's rating isn't written there yet; writing it there, so it survives a reload, is a task of #2329.
 
 ## Why
 

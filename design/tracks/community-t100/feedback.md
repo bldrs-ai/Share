@@ -296,15 +296,9 @@ context, so #2312 can build its UX on what's here. That work is:
 - deciding whether it rates or only takes a note;
 - any context fields it needs, added through §"Adding a source".
 
-## Follow-ups
+## Open work
 
-- **A reader.** Nothing reads the store yet. The quality task needs an
-  endpoint like `ai-ledger-stats`, server-to-server behind a secret, or a
-  Netlify token scoped to the job.
-- **Retention.** Records hold user text and images, with no expiry. A
-  retention period and a sweep are needed before volume grows.
-- **Rate limit.** Only the Origin check, the body cap and the shape check
-  bound a scripted caller. A per-IP bucket, like the relay's, would bound
-  volume.
-- **Persisting a rating across reloads** for the assistant: write it into
-  the session log.
+What is left (a reader for the quality task, retention, a rate limit,
+and a rating that survives a reload) is tracked in the track issue,
+[#2330](https://github.com/bldrs-ai/Share/issues/2330), and its work item
+[#2329](https://github.com/bldrs-ai/Share/issues/2329), not here.
