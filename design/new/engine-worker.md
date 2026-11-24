@@ -550,13 +550,14 @@ load's first parse (§5.3, "Rehydrate"), not at eviction.
 
 `EngineSession` is the client half of one worker. It is renamed
 **`WorkerEngine`** in slice 1a (owner, 2026-11-24: "bc it's on a Worker
-thread"), after which "session" in code means `ModelSession` only. Its
-surface below becomes the format-neutral **`Engine`** interface, which a
-`ConwayEngine` (Conway's `IfcAPI` on the page, today's kill-switch path)
-implements too, and which is all a lease exposes (`lease.engine`).
-layering.md §4.1 is the source for the interface, the two
-implementations and the reasons. This doc keeps today's name where it
-describes what is built:
+thread"), after which "session" in code means `ModelSession` only. The
+block below is today's surface, as built. The format-neutral
+**`Engine`** interface is [layering.md](../tracks/open-t200/layering.md) §4.1's: this surface with
+`open`, `pump`, `abort` and `stats`, the events, the geometry source and
+`capabilities`. A `ConwayEngine` (Conway's `IfcAPI` on the page, today's
+kill-switch path) implements it too, and it is all a lease exposes
+(`lease.engine`). This doc keeps today's name where it describes what is
+built:
 
 ```js
 session.indexed           // Promise, resolves at the index
@@ -616,8 +617,8 @@ refreshed here for #2031; what moved, and why:
   yet, is below ("What the host needs of a session").
 - **One viewer for the page (owner, 2026-11-19).** #2247 found that the
   scene is the viewer's, built per open and per theme rebuild, so no
-  session can keep its scene across a switch. That step is §5.2a, slice 2
-  of §7 step 8, between `EngineHost` at cap 1 and cap N.
+  session can keep its scene across a switch. That step is §5.2a, slices
+  2a–2e of the plan, between `EngineHost` at cap 1 and cap N.
 - **Six layers (owner, 2026-11-23, #2011 decision 8).** The engine is the
   lowest of them, and the session sits three above it, outside the engine
   layer. So the host cannot take a session, as the 2026-11-19 text had it
@@ -871,8 +872,9 @@ engine: each `WorkerEngine`, in a worker or in process, and each
 of `ShareIfc#dispose`. Nothing else holds an engine.
 
 **Its API is the lease**, and [layering.md](../tracks/open-t200/layering.md) §4.2 is the
-source for it: `host.acquire(meta) → lease`, `lease.engine` (the
-`Engine`, the only way to reach one), `lease.update(…)`,
+source for it: `host.acquire(meta) → lease`,
+`host.acquireMainThread(owner)` (synchronous, for a `ConwayEngine`),
+`lease.engine` (the `Engine`, the only way to reach one), `lease.update(…)`,
 `lease.onEvict(cb)`, `lease.release()`, `host.mayKeepInBackground(owner)`,
 `host.whenEntryFree(entryKey)`, `host.closeAll()`, `host.limits()`,
 `host.snapshot()`. In short:
@@ -928,7 +930,7 @@ What a session needs that is not the host's:
 
 | The session needs | State |
 |---|---|
-| a set of leases, not one `engine`, and an engine port for its loads | not built: `session.engine` is bound after the load, to the top model's connection only (`modelSession.js#bindEngine`). A `.bld` assembly's child engines are closed only by the viewer's dispose. Slice 1 |
+| a set of leases, not one `engine`, and an engine port for its loads | not built: `session.engine` is bound after the load, to the top model's connection only (`modelSession.js#bindEngine`). A `.bld` assembly's child engines are closed only by the viewer's dispose. Slice 1b |
 | `rehydrateSource`: the OPFS `File`, an in-memory upload's `File` (`inMemoryUploads`, #1906), or null | not built. Returned by the load (`LoadResult`, layering.md §4.3). Slice 4 |
 | `root` and `viewState`, attached and detached by the viewer | not built: **the scene is the viewer's** (below). Slices 2a, 2b |
 | a load that touches no module-level per-load state | not built (below). Slices R, 2a, 3a |
@@ -965,7 +967,7 @@ only what the host and the viewer need of it.
 
 **Decided (owner, 2026-11-19):** one viewer for the page, with models
 attached to it, as its own step between `EngineHost` at cap 1 and cap N
-(§7 step 8, slice 2). Why: cap N keeps a left model's scene, and today
+(slices 2a–2e). Why: cap N keeps a left model's scene, and today
 nothing can, because the scene belongs to a viewer that is built per open
 and per theme rebuild and disposed with it (§5.2, "What the host needs, and
 where it comes from"). The engine side of a background session is the
@@ -1126,7 +1128,7 @@ and exactly one root.
 - On the main-thread route the `IfcAPI` check is unchanged, and the
   resource count applies too.
 
-#### Its slices (step 8 slice 2)
+#### Its slices (2c–2e)
 
 [layering.md](../tracks/open-t200/layering.md) §7 is the plan: its 2a (session roots, the
 load adds under `ctx.root`) and 2b (attach and detach) are behaviour
@@ -1158,7 +1160,7 @@ read by one predicate, `utils/singleViewerMode.js`, shaped like
     isolator keeping A, a root left undisposed).
   - *Rollback:* `disableSingleViewer` (static first).
 - **2e. On by default**, after a burn-in of the whole suite with the flag
-  on, as `spaModelNav` had (in-app-model-switch.md §4.8). Cap N (slice 3)
+  on, as `spaModelNav` had (in-app-model-switch.md §4.8). Cap N (slice 3b)
   needs it: `backgroundSessionsMode.js` returns `SingleModelReason.NO_SINGLE_VIEWER`
   while one viewer is off, so `disableSingleViewer` also forces cap 1.
 
@@ -1175,8 +1177,8 @@ the session half and the attach contract do not change.
   or A's engine in process). `host.mayKeepInBackground(A)` answers no, and
   the session host closes A before B's load acquires. That is Phase 1a as built
   (in-app-model-switch.md §4.5a): A's load is aborted, its worker
-  terminated, its state dropped. Slice 1 moves the call sites into the host
-  without changing the behaviour. With one viewer (§5.2a, slice 2) the
+  terminated, its state dropped. Slice 1b moves the call sites into the host
+  without changing the behaviour. With one viewer (§5.2a, slice 2d) the
   viewer stays: A is detached and its root disposed, and B is attached.
 - **Switch A → B, cap N.** `host.mayKeepInBackground(A)` answers yes, A's
   leases get `update({isForeground: false})`, and the binder detaches A's
@@ -1605,7 +1607,7 @@ now tracked on #2031, and they come with in-app model switching (#2011):
 - **Phase 1b step 1, per-model sessions (#2019), is built** with one live
   session (in-app-model-switch.md §4.9, `Containers/modelSession.js`); it
   lists where it differs from §5.2's assumed session interface and the
-  module-level per-load state slice 2 must move first.
+  module-level per-load state that must move before cap N.
 - **Next is #2031, and its plan is [layering.md](../tracks/open-t200/layering.md) §7**
   (2026-11-23), tracked as Track `open-t200` (#2315), one sub-issue per
   slice ([snapshot](../tracks/open-t200/README.md)): the mechanical move and the lint rule first (M1, M2),
@@ -1863,7 +1865,8 @@ How each step landed is in §7.1 and in the steps below.
    behaviour neutral there: the engine moves from the viewer to the model
    session, with one live session, so a switch still closes. Keeping the
    old worker on a switch, and the background batch policy (§8 item 1),
-   moved into step 8's slice 3, under `workspace` (#2011 decision 6).
+   moved into step 8's item 3 (slice 3b), under `workspace` (#2011
+   decision 6).
 8. **`EngineHost`: close, cap, eviction, rehydrate** (#2031; refreshed
    2026-11-19, §5.2–§5.5; re-sliced 2026-11-23 for the six layers).
    **[layering.md](../tracks/open-t200/layering.md) §7 is the slice plan**: thirteen slices,
@@ -1966,13 +1969,13 @@ How each step landed is in §7.1 and in the steps below.
       - *E2E, paused — will resume:* a budget too low for A's background
         load: A's worker closes, A's session reads paused — will resume, and
         foregrounding A completes it from the sidecar or a re-parse.
-      - *Rollback:* as slice 3; and one session can keep slice 3's
+      - *Rollback:* as slice 3b; and one session can keep slice 3b's
         close-past-cap with `?feature=disableSessionEviction`, for a bug
         that looks like an evicted model answering wrong.
    5. **The ProjectsDrawer shows the states** (#2011 Phase 1b step 3; not
       #2031's, listed for the order): live, loading, paused, paused — will
       resume, evicted, dormant, failed; and the drawer's close. The E2Es of
-      slices 3–4 move from the dev hook to the drawer.
+      slices 3b and 4 move from the dev hook to the drawer.
    6. **Budget tuning.** Re-fit the estimate's constants and confirm the
       defaults, with the bench (`tools/bench/sourceModes/`), which already
       records every input except two: (a) two and three engines loading at
@@ -2363,7 +2366,7 @@ owner on 2026-11-19:
 
 Also decided that day:
 
-8. **One viewer for the page** (§5.2a), as its own slice (§7 step 8 slice 2)
+8. **One viewer for the page** (§5.2a), as its own slices (2a–2e)
    between `EngineHost` at cap 1 and cap N. #2247 found the scene is the
    viewer's, built per open and per theme rebuild, so no session could keep
    one.
@@ -2396,14 +2399,16 @@ layering.md §9):
     allowlist check in the `build` job; a background load's page-side
     console lines left out of its diagnostics until the console cleanup.
 
-Decided later on 2026-11-24 (#2011 decision 10; layering.md §4.1):
+Decided later on 2026-11-24 (#2011 decision 10; [layering.md](../tracks/open-t200/layering.md) §4.1):
 
 13. **The engine's names.** `Engine` is the format-neutral interface:
     `open`, `tree`, `properties`, `propertiesMany`, `propertyTables`,
     `propertySets`, `itemsOfType`, `typeName`, `pump`, `capture`,
-    `spill`, `stats`, `abort`, `close`, with the events and the geometry
-    source a load needs. A lease exposes it as `lease.engine`, and
-    nothing else; `lease.kind` is the host's bookkeeping.
+    `spill`, `stats`, `abort`, `close`, with the three members a load
+    needs: `on` (events), `geometry` (the builder's synchronous reads)
+    and `capabilities`. A lease exposes it as `lease.engine`, and nothing
+    else; `lease.kind` is the host's bookkeeping, and a caller that must
+    vary asks `engine.capabilities`, never the kind.
     - **`WorkerEngine`** is `EngineSession` renamed ("bc it's on a Worker
       thread"). The in-process fallback stays a `WorkerEngine` on an
       in-process transport, `kind: 'inProcess'`: it runs the worker's

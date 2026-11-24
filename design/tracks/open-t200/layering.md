@@ -58,8 +58,9 @@ the UI touches the DOM, with how far to go left open (§6).
   three Conway load files that sit in `viewer/ifc/`.
 - **The other 19 are real seams**, and each is removed by the slice that
   builds its seam: the reporter (6), the session's scene root and attach
-  (4), the store projection (6), the dead `?view=` stack (2), and one
-  that is not this redesign's (§3).
+  (3), the store projection (6), the split of the Conway loader (1, in
+  slice 1a), the dead `?view=` stack (2), and one that is not this
+  redesign's (§3).
 - **Three ownership faults no import shows**, each fixed by slice 1b:
   - a viewer owns engines (`viewer/ifc/ShareIfc.js:142, 161, 247`);
   - `engine/spawnEngine.js:181` keeps a second, partial list of them;
@@ -1318,7 +1319,9 @@ engine-worker.md §7 step 8's, unchanged.
 
 **Order.** M1 → M2 → V → 1a → 1b → 2a → 2b → 2c–2e → 3a → 3b → 4. R
 needs only M1 and can go beside 1a. N needs 1a and can go at any point
-after it.
+after it. The allowlist counts in the table assume the order of its
+rows; R removes six entries wherever it lands, and the counts of the
+slices around it shift by six if it lands earlier.
 
 ### M1. The mechanical move, and the lint rule
 
@@ -1715,7 +1718,7 @@ A → B equals a fresh page's B.
 
 ### 3b. Cap N under `workspace`
 
-As engine-worker.md §7 step 8's slice 3, on the lease API. Its
+As engine-worker.md §7 step 8's item 3, on the lease API. Its
 prerequisites are now earlier slices: per-load module state (R, 2a, 3a),
 the session's own state (3a), one viewer on by default (2e).
 
@@ -1747,7 +1750,7 @@ synchronous scope with its own counter, checked by all three asks.
 
 ### 4. Eviction and rehydrate
 
-As engine-worker.md §7 step 8's slice 4. On the lease API:
+As engine-worker.md §7 step 8's item 4. On the lease API:
 `lease.onEvict` → the session swaps its read model;
 `session.ensureEngine()` → `host.acquire({purpose: 'rehydrate'})`; a
 failed rehydrate is captured in `ModelSession#ensureEngine`, on the page.

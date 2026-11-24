@@ -47,7 +47,7 @@ About 400 words, in this order:
 4. **Open decisions,** each with its owner.
 5. **Related:** other feature groups and bands it serves, related tracks, the snapshot and the design docs.
 
-The roadmap's track Status line ends with the issue's link. When rewriting an existing issue, keep its original text collapsed at the bottom, as the UX rubric does (§"Write for a reader who wasn't there").
+The roadmap's §3.2 row links the issue in its Issue column. When rewriting an existing issue, keep its original text collapsed at the bottom, as the UX rubric does (§"Write for a reader who wasn't there").
 
 The first track issues were written with checkbox lists (`share-t101` #2201, `identity-t100` #2202, `share-t100` #2203, `notes-t200` #2204); `apps-t300` (#2225) is the first with its work items as sub-issues, and `open-t200` (#2315) the first whose work items were filed as sub-issues from the start, one per slice of its design. Convert the others as their tracks are next worked on.
 
@@ -81,7 +81,7 @@ Move a file with `git mv`, and update the router ([AGENTS.md](../../AGENTS.md)) 
 2. **Classify each issue:** it belongs to this track, to one story, or to another track, or it's a standalone bug.
 3. **Write the track issue** (above), and parent the work items under it.
 4. **Write the snapshot** and, if issues moved, the triage record.
-5. **Point the roadmap's track Status line** at the issue, and the router at the snapshot.
+5. **Put the issue in the roadmap's §3.2 row** (its Issue column), the snapshot in its Docs column, and point the router at the snapshot.
 
 ### Before marking the PR ready
 
