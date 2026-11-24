@@ -23,7 +23,7 @@ Searched on 2026-11-23, `repo:bldrs-ai/Share is:issue`: `apps-100`, `apps-110`, 
 
 Pinned to `3ab35f0`; test definitions read, no test run. "Not under `describeMobileAndDesktop`" means the spec has no `[mobile]` variant; it doesn't show the flow fails on a phone.
 
-- [AppsRail.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Apps/AppsRail.spec.ts): desktop and mobile. [Apps.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Apps/Apps.spec.ts): not under `describeMobileAndDesktop`.
+- [AppsRail.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Apps/AppsRail.spec.ts): desktop and mobile. [Apps.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Apps/Apps.spec.ts): not under `describeMobileAndDesktop`. Follow-up filed 2026-11-24: [#2340](https://github.com/bldrs-ai/Share/issues/2340), under [#1282](https://github.com/bldrs-ai/Share/issues/1282).
 - [IframeIntegration.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Apps/IframeIntegration.spec.ts) is `describe.skip`, matching #1386 and #780: the iframe suite doesn't run.
 
 ## Decisions left open

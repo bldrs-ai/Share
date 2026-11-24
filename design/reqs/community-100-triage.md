@@ -25,7 +25,7 @@ Searched on 2026-11-23, `repo:bldrs-ai/Share is:issue`: `community in:title`, `w
 Pinned to `3ab35f0`; test definitions read, no test run. "Not under `describeMobileAndDesktop`" means the spec has no `[mobile]` variant; it doesn't show the flow fails on a phone.
 
 - [firstVisitDismissal.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/About/firstVisitDismissal.spec.ts) and [onboardingQuotaDialog.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Onboarding/onboardingQuotaDialog.spec.ts): desktop and mobile.
-- [About.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/About/About.spec.ts) and [OnboardingOverlay.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Onboarding/OnboardingOverlay.spec.ts): not under `describeMobileAndDesktop`.
+- [About.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/About/About.spec.ts) and [OnboardingOverlay.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Onboarding/OnboardingOverlay.spec.ts): not under `describeMobileAndDesktop`. Follow-up filed 2026-11-24: [#2341](https://github.com/bldrs-ai/Share/issues/2341), under [#1320](https://github.com/bldrs-ai/Share/issues/1320).
 - A search of `src/` for a thumbs or exit-feedback widget and for a bug-report flow found none (the one hit, `reportRenderMode.js`, is unrelated).
 
 ## Decisions left open
