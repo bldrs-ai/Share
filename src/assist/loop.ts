@@ -620,8 +620,11 @@ function retryTooLarge(model: Exclude<LanguageModel, string>, hooks: {
           const rest = params.prompt.filter((message) => message.role !== 'system')
           const budget = hooks.budgetFor(system.map((message) => message.content).join('\n'), cap)
           const bounded = boundStepMessages(rest as unknown as ModelMessage[], budget)
-          if (!bounded) {
-            // It already fits by our count, so the same request would be refused again.
+          // undefined: it already fits by our count. Same size: over budget but
+          // nothing left to cut (one huge message, the newest result), which
+          // `boundStepMessages` returns as a copy. Either way the same request
+          // would be refused again.
+          if (!bounded || jsonBytes(bounded) >= jsonBytes(rest)) {
             throw refusal
           }
           return await inner.doStream({...params, prompt: [...system, ...bounded] as unknown as typeof params.prompt})

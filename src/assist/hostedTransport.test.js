@@ -422,6 +422,15 @@ describe('assist/selectTransport', () => {
       expect(requests.length - afterFirst).toBe(2)
     })
 
+    it('does not retry when nothing can be cut to fit the new cap', async () => {
+      // One huge current message and no earlier turns or results: re-bounding
+      // returns the same request, which the relay would refuse again.
+      const {session, requests} = setup({answer: (body) => (bytesOf(body) > FREE_CAP ? tooLarge() : undefined)})
+      const events = await collect(session.send('x'.repeat(100_000)))
+      expect(events.find((e) => e.type === 'error')).toMatchObject({code: 'body_too_large', status: 400})
+      expect(requests).toHaveLength(1)
+    })
+
     it('does not retry when the refusal names no smaller cap than the step was sized to', async () => {
       const {session, requests, afterFirst} = await afterTierDrop(() => tooLarge('ai_body_too_large', 4 * 1048576))
       const events = await collect(session.send('go on'))
