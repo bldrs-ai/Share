@@ -1,6 +1,7 @@
 import {makeFakeEditModel, translation} from '../viewer/edit/editBackend.fixture'
 import {seededRandomBytes} from '../viewer/edit/edit.fixture'
-import {appliedOps} from '../viewer/edit/editLog'
+import {applyEditOp, EditInconsistentError} from '../viewer/edit/editApply'
+import {EMPTY_EDIT_LOG, appliedOps, recordApplied} from '../viewer/edit/editLog'
 import {makeEditOp} from '../viewer/edit/editOps'
 import useStore from './useStore'
 
@@ -161,6 +162,89 @@ describe('EditSlice', () => {
     expect(fake.state()).toEqual(moved)
   })
 
+  /** @return {object} a fake with a wall and a door, installed */
+  function installPair() {
+    const fake = makeFakeEditModel({elements: [
+      {expressID: 771, globalId: WALL_GID},
+      {expressID: 812, globalId: DOOR_GID},
+    ]})
+    useStore.getState().setEditContext({backend: fake.backend, resolver: fake.resolver})
+    return fake
+  }
+
+  /**
+   * Undo a two-element delete whose 2nd restore fails, and whose
+   * compensating delete fails too.
+   *
+   * @return {object} `{fake, error}`
+   */
+  function breakTheLog() {
+    const fake = installPair()
+    useStore.getState().applyEdit(makeEditOp({kind: 'delete', layer: 'document', targets: [WALL, DOOR]}))
+    const {restore, delete: del} = fake.backend
+    let restores = 0
+    fake.backend.restore = (...args) => {
+      if (++restores === 2) {
+        throw new Error('restore failed')
+      }
+      return restore(...args)
+    }
+    fake.backend.delete = () => {
+      throw new Error('delete failed')
+    }
+    let error
+    try {
+      useStore.getState().undoEdit()
+    } catch (e) {
+      error = e
+    }
+    fake.backend.restore = restore
+    fake.backend.delete = del
+    return {fake, error}
+  }
+
+  it('marks the log inconsistent when a compensation throws, and refuses every op until recovery', () => {
+    const {error} = breakTheLog()
+    expect(error).toBeInstanceOf(EditInconsistentError)
+    expect(error.cause.message).toBe('restore failed')
+    expect(error.compensationErrors.map((e) => e.message)).toEqual(['delete failed'])
+    expect(useStore.getState().isEditInconsistent).toBe(true)
+    const refused = {ok: false, reason: expect.stringMatching(/inconsistent/)}
+    expect(useStore.getState().applyEdit(move('document'))).toEqual(refused)
+    expect(useStore.getState().applyEdit(move('view'))).toEqual(refused)
+    expect(useStore.getState().undoEdit()).toEqual(refused)
+    expect(useStore.getState().redoEdit()).toEqual(refused)
+    expect(flags().editCursor).toBe(1)
+  })
+
+  it('recovers once the scene is rebuilt from source and the applied ops replayed', () => {
+    breakTheLog()
+    const ops = appliedOps(useStore.getState().editLog)
+    // L3's job, done by hand: a fresh backend over the source, then replay.
+    const rebuilt = makeFakeEditModel({elements: [
+      {expressID: 771, globalId: WALL_GID},
+      {expressID: 812, globalId: DOOR_GID},
+    ]})
+    const context = {backend: rebuilt.backend, resolver: rebuilt.resolver}
+    const before = rebuilt.state()
+    let log = EMPTY_EDIT_LOG
+    for (const op of ops) {
+      const result = applyEditOp(op, context)
+      log = recordApplied(log, result.op, result.undo)
+    }
+    useStore.getState().markEditsRecovered(context, log)
+    expect(useStore.getState().isEditInconsistent).toBe(false)
+    expect(flags()).toEqual({entries: 1, editCursor: 1, isEditDirty: true, canUndoEdit: true, canRedoEdit: false})
+    expect(useStore.getState().undoEdit()).toEqual({ok: true})
+    expect(rebuilt.state()).toEqual(before)
+  })
+
+  it('also clears an inconsistent log on a new context', () => {
+    breakTheLog()
+    installFake()
+    expect(useStore.getState().isEditInconsistent).toBe(false)
+  })
+
   it('truncates redo when a new document op follows an undo', () => {
     installFake()
     const first = move('document', [1, 0, 0])
@@ -201,6 +285,22 @@ describe('EditSlice', () => {
     expect(result.ok).toBe(false)
     expect(result.reason).toMatch(/batchId/)
     expect(appliedOps(useStore.getState().editLog)).toEqual([])
+  })
+
+  it('records the very object it applied, not the caller\'s literal', () => {
+    const fake = installFake()
+    let seen
+    const create = fake.backend.create
+    fake.backend.create = (ref, payload) => {
+      seen = payload
+      create(ref, payload)
+    }
+    const literal = {id: 'op1', kind: 'create', targets: ['g2Bd8Kc$Pr2ExS0vV8q9Zz0'], layer: 'document',
+      payload: {geometry: {box: [1, 1, 1]}}}
+    expect(useStore.getState().applyEdit(literal)).toEqual({ok: true})
+    const [recorded] = appliedOps(useStore.getState().editLog)
+    expect(recorded).toEqual(literal)
+    expect(seen).toBe(recorded.payload)
   })
 
   it('is clean after a save, and a new context starts a new log', () => {

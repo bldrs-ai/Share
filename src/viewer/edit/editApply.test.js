@@ -2,7 +2,15 @@
 import {captureBldrsSpatialTree} from '../../loader/bldrsSpatialTree'
 import {makeFakeEditModel, translation} from './editBackend.fixture'
 import {seededRandomBytes} from './edit.fixture'
-import {applyEditOp, ifcGlobalIdIndex, makeEditRefResolver, resolveEditRefs, revertEditOp} from './editApply'
+import {
+  EditInconsistentError,
+  applyEditOp,
+  ifcGlobalIdIndex,
+  makeEditRefResolver,
+  resolveEditRefs,
+  revertEditOp,
+} from './editApply'
+import {EMPTY_EDIT_LOG, appliedOps, recordApplied} from './editLog'
 import {makeEditOp} from './editOps'
 
 
@@ -203,6 +211,96 @@ describe('viewer/edit/editApply', () => {
     heal()
     expect(revertEditOp(op, applied.undo, {backend, resolver})).toEqual({ok: true})
     expect(state()).toEqual(before)
+  })
+
+  /**
+   * @param {Function} fn
+   * @return {Error} what `fn` threw
+   */
+  function thrown(fn) {
+    try {
+      fn()
+    } catch (error) {
+      return error
+    }
+    throw new Error('expected a throw')
+  }
+
+  it('surfaces both errors when an undo\'s compensation throws too', () => {
+    const {backend, resolver} = model()
+    const op = opOf({kind: 'duplicate', targets: [WALL, DOOR]})
+    const applied = applyEditOp(op, {backend, resolver})
+    // Undo deletes the door's copy, then fails on the wall's; compensating
+    // restores the door's copy, and that fails on the same allocation.
+    failNth(backend, 'delete', 2)
+    failNth(backend, 'restore', 1)
+    const error = thrown(() => revertEditOp(op, applied.undo, {backend, resolver}))
+    expect(error).toBeInstanceOf(EditInconsistentError)
+    expect(error.cause.message).toBe('delete failed')
+    expect(error.compensationErrors.map((e) => e.message)).toEqual(['restore failed'])
+  })
+
+  it('keeps compensating, best effort, after one compensation step throws', () => {
+    const third = '2Aa8Kc$Pr2ExS0vV8q9Zz0'
+    const fake = makeFakeEditModel({elements: [
+      {expressID: 771, globalId: WALL_GID},
+      {expressID: 812, globalId: DOOR_GID},
+      {expressID: 900, globalId: third},
+    ]})
+    const ctx = {backend: fake.backend, resolver: fake.resolver}
+    const op = opOf({kind: 'transform', targets: [WALL, DOOR, `g${third}`], payload: {matrix: translation([0, 1, 0])}})
+    const applied = applyEditOp(op, ctx)
+    const after = fake.state()
+    // Revert writes the third, the door, then fails on the wall (call 3).
+    // Compensation re-applies the door (call 4, fails) and the third (call 5).
+    failNth(fake.backend, 'setMatrix', 3)
+    failNth(fake.backend, 'setMatrix', 4)
+    const error = thrown(() => revertEditOp(op, applied.undo, ctx))
+    expect(error).toBeInstanceOf(EditInconsistentError)
+    expect(error.compensationErrors).toHaveLength(1)
+    expect(fake.state()[`g${third}`]).toEqual(after[`g${third}`])
+  })
+
+  it('surfaces both errors when apply\'s rollback throws too', () => {
+    const {backend, resolver} = model()
+    failNth(backend, 'transform', 2)
+    failNth(backend, 'setMatrix', 1)
+    const op = opOf({kind: 'transform', targets: [WALL, DOOR], payload: {matrix: translation([0, 3, 0])}})
+    const error = thrown(() => applyEditOp(op, {backend, resolver}))
+    expect(error).toBeInstanceOf(EditInconsistentError)
+    expect(error.cause.message).toBe('transform failed')
+    expect(error.compensationErrors.map((e) => e.message)).toEqual(['setMatrix failed'])
+  })
+
+  it('applies and records one canonical object: the op the backend saw is the op in the log', () => {
+    const {backend, resolver} = model()
+    let seen
+    const create = backend.create
+    backend.create = (ref, payload) => {
+      seen = payload
+      create(ref, payload)
+    }
+    const literal = {id: 'op1', kind: 'create', targets: [DOOR.replace('g1', 'g2')], layer: 'document',
+      payload: {geometry: {box: [1, -0, 1]}}}
+    const result = applyEditOp(literal, {backend, resolver})
+    expect(result.ok).toBe(true)
+    const [recorded] = appliedOps(recordApplied(EMPTY_EDIT_LOG, result.op, result.undo))
+    expect(recorded).toBe(result.op)
+    expect(seen).toBe(recorded.payload)
+    expect(recorded).not.toBe(literal)
+    // -0 is normalized to 0, as JSON would write it.
+    expect(Object.is(recorded.payload.geometry.box[1], 0)).toBe(true)
+    expect(Object.isFrozen(recorded.payload.geometry)).toBe(true)
+  })
+
+  it('refuses a non-JSON payload before the backend sees it', () => {
+    const {backend, resolver, calls} = model()
+    const literal = {id: 'op1', kind: 'create', targets: [DOOR.replace('g1', 'g2')], layer: 'document',
+      payload: {size: 10n}}
+    const result = applyEditOp(literal, {backend, resolver})
+    expect(result.ok).toBe(false)
+    expect(result.reason).toMatch(/payload.size: bigint is not plain JSON/)
+    expect(calls).toEqual([])
   })
 
   it('reports an undo whose target a later view op removed, and reverts nothing', () => {

@@ -1,4 +1,4 @@
-import {EditOpKind, validateEditOp} from './editOps'
+import {EditOpKind, canonicalEditOp} from './editOps'
 import {parseEditRef} from './editRefs'
 import {isGlobalId} from './globalId'
 
@@ -44,6 +44,57 @@ import {isGlobalId} from './globalId'
  *   `setGeometry` payload
  * @property {function(*, object): void} setGeometry `(target, geometry)`
  */
+
+
+/**
+ * A failed edit whose compensation failed too: the backend no longer matches
+ * the log, and nothing L1 does can say how. Carries every error, the
+ * original one as `cause` and each compensation step's in
+ * `compensationErrors`, so neither is masked. `EditSlice` marks the log
+ * inconsistent on one and refuses further ops until recovery (model-edit.md
+ * §6b, "When compensation fails").
+ */
+export class EditInconsistentError extends Error {
+  /**
+   * @param {Error} cause the error the edit failed with
+   * @param {Array<Error>} compensationErrors one per compensation step that threw
+   */
+  constructor(cause, compensationErrors) {
+    super(`edit failed (${cause?.message}) and ${compensationErrors.length} compensation step(s) failed too; ` +
+      'the scene no longer matches the edit log. Rebuild it from the source and replay the applied ops.')
+    this.name = 'EditInconsistentError'
+    this.cause = cause
+    this.compensationErrors = compensationErrors
+  }
+}
+
+
+/**
+ * Run every compensation step after a failed edit, best effort: one that
+ * throws does not stop the rest, since each step left undone is one more
+ * element out of step. Then rethrow the original error, or, if any step
+ * threw, an {@link EditInconsistentError} carrying all of them. There is no
+ * making this bulletproof against a backend that throws; the aim is a
+ * failure that is explicit and recoverable.
+ *
+ * @param {Array<Function>} steps in the order to run them
+ * @param {Error} error what the edit failed with
+ * @throws {Error} always
+ */
+function compensate(steps, error) {
+  const compensationErrors = []
+  for (const step of steps) {
+    try {
+      step()
+    } catch (compensationError) {
+      compensationErrors.push(compensationError)
+    }
+  }
+  if (compensationErrors.length > 0) {
+    throw new EditInconsistentError(error, compensationErrors)
+  }
+  throw error
+}
 
 
 /**
@@ -256,7 +307,8 @@ function forwardSteps(op, targets, backend) {
  *   nothing and says why. A partial edit that looked like success is worse
  *   than a report (the same rule as `viewer/tools/refs.js#assertResolved`).
  * - If the backend throws part way through a multi-target op, the targets
- *   already done are reverted, newest first, and the error is rethrown. The
+ *   already done are reverted, newest first, and the error is rethrown (an
+ *   {@link EditInconsistentError} if a revert step throws as well). The
  *   L0 ops throw on real states (`BatchEditIdError`, `BatchEditReentryError`,
  *   a failed buffer allocation in `batchedGeometryCapacity.js`), and an op
  *   half applied would leave the scene and the log disagreeing.
@@ -264,18 +316,22 @@ function forwardSteps(op, targets, backend) {
  * A `create`'s target is not resolved first: it names an element that does
  * not exist yet.
  *
- * @param {object} op
+ * The op is canonicalized first (editOps.js#canonicalEditOp), and it is that
+ * deep-frozen copy which is applied and returned as `op`, for the caller to
+ * record: what was checked, applied and persisted is one object.
+ *
+ * @param {object} given the op, canonical or not
  * @param {object} context
  * @param {EditBackend} context.backend
  * @param {EditRefResolver} context.resolver
- * @return {object} `{ok: true, undo}`, or `{ok: false, reason, unresolved?}`
+ * @return {object} `{ok: true, undo, op}`, or `{ok: false, reason, unresolved?}`
  *   with `unresolved` listing `{ref, reason}` for each target that named
  *   nothing
  */
-export function applyEditOp(op, {backend, resolver}) {
-  const invalid = validateEditOp(op)
-  if (invalid) {
-    return {ok: false, reason: invalid}
+export function applyEditOp(given, {backend, resolver}) {
+  const {op, reason} = canonicalEditOp(given)
+  if (reason) {
+    return {ok: false, reason}
   }
   let targets = []
   if (op.kind !== EditOpKind.CREATE) {
@@ -294,33 +350,30 @@ export function applyEditOp(op, {backend, resolver}) {
       done++
     }
   } catch (error) {
-    rollBack(op, undo, done, {backend, resolver})
-    throw error
+    compensate(rollbackSteps(op, undo, targets, done, {backend, resolver}), error)
   }
-  return {ok: true, undo}
+  return {ok: true, undo, op}
 }
 
 
 /**
- * Revert the first `count` targets of a partly applied op.
+ * What reverts the first `count` targets of a partly applied op, newest
+ * first. A create's or duplicate's made elements are resolved inside each
+ * step, so a backend that broke its contract shows up as that step's
+ * compensation error rather than stopping the others.
  *
  * @param {object} op
  * @param {object|null} undo
+ * @param {Array<*>} targets the op's resolved targets
  * @param {number} count
  * @param {object} context `{backend, resolver}`
+ * @return {Array<Function>}
  */
-function rollBack(op, undo, count, {backend, resolver}) {
-  const refs = revertRefs(op).slice(0, count)
-  const {targets, unresolved} = resolveEditRefs(refs, resolver)
-  if (unresolved.length > 0) {
-    // The forward steps that ran made or kept these elements, so this is a
-    // backend breaking its contract. Say so instead of half rolling back.
-    throw new Error(`editApply: cannot roll back ${op.kind}; unresolved ${JSON.stringify(unresolved)}`)
-  }
-  const steps = revertSteps(op, undo, targets, backend).slice(0, count)
-  for (let i = steps.length - 1; i >= 0; i--) {
-    steps[i]()
-  }
+function rollbackSteps(op, undo, targets, count, {backend, resolver}) {
+  const steps = (op.kind === EditOpKind.CREATE || op.kind === EditOpKind.DUPLICATE) ?
+    revertRefs(op).map((ref) => () => backend.delete(targetAfterStep(ref, resolver))) :
+    revertSteps(op, undo, targets, backend)
+  return steps.slice(0, count).reverse()
 }
 
 
@@ -330,7 +383,8 @@ function rollBack(op, undo, count, {backend, resolver}) {
  * @return {*} its target
  * @throws {Error} when it names nothing. Used only for an element a step
  *   that has just returned made or kept, so this is a backend breaking its
- *   contract, and it is said so rather than half rolled back.
+ *   contract; inside a compensation step it becomes one of the
+ *   {@link EditInconsistentError}'s errors.
  */
 function targetAfterStep(ref, resolver) {
   const result = resolver.resolve(ref)
@@ -383,7 +437,9 @@ function reapplySteps(op, targets, {backend, resolver}) {
  *   one element and then fails to allocate for the next — the steps already
  *   done are re-applied, newest first, and the error is rethrown. Without
  *   that the backend would be half reverted while the log's cursor had not
- *   moved, and a retry would trip over the element already restored.
+ *   moved, and a retry would trip over the element already restored. If a
+ *   re-apply step throws as well, the rest still run and an
+ *   {@link EditInconsistentError} carries every error.
  *
  * @param {object} op
  * @param {object|null} undo the record {@link applyEditOp} returned
@@ -406,10 +462,7 @@ export function revertEditOp(op, undo, {backend, resolver}) {
       done++
     }
   } catch (error) {
-    for (let i = steps.length - done; i < steps.length; i++) {
-      reapply[i]()
-    }
-    throw error
+    compensate(reapply.slice(steps.length - done), error)
   }
   return {ok: true}
 }

@@ -191,13 +191,165 @@ function isMatrix(m) {
 
 
 /**
- * Check an op's shape. Ref RESOLUTION is not checked here — that needs a
- * loaded model (editApply.js#resolveEditRefs).
+ * Check an op: that it is plain JSON, then its schema, both on its canonical
+ * copy ({@link canonicalEditOp}). Ref RESOLUTION is not checked here — that
+ * needs a loaded model (editApply.js#resolveEditRefs).
  *
  * @param {*} op
  * @return {string|null} why the op is invalid, or null when it is valid
  */
 export function validateEditOp(op) {
+  return canonicalEditOp(op).reason ?? null
+}
+
+
+/** Thrown inside {@link copyJson}; never escapes {@link canonicalEditOp}. */
+class NotJsonError extends Error {}
+
+const MAX_JSON_DEPTH = 100
+
+// Ops canonicalEditOp made (deep-frozen), so a second pass is a lookup.
+const CANONICAL_OPS = new WeakSet()
+
+
+/**
+ * @param {*} value
+ * @return {string} what `value` is, for a message
+ */
+function describeValue(value) {
+  if (typeof value === 'number') {
+    return String(value)
+  }
+  if (typeof value !== 'object') {
+    return typeof value
+  }
+  return value.constructor?.name ?? 'object'
+}
+
+
+/**
+ * @param {string} path
+ * @param {string} key
+ * @return {string}
+ */
+function childPath(path, key) {
+  return path === 'op' ? key : `${path}.${key}`
+}
+
+
+/**
+ * The canonical JSON copy of `value`, deep-frozen, or a {@link NotJsonError}
+ * saying where it is not plain JSON.
+ *
+ * The copy is built by this walk rather than by `JSON.stringify`, so what is
+ * checked afterwards is exactly what will be applied and persisted. Refused:
+ * a prototype other than Object's or Array's (Map, Set, Date, typed arrays,
+ * class instances), BigInt, functions, symbols, non-finite numbers, an array
+ * hole or `undefined` element, any own `toJSON` (it would let the persisted
+ * form differ from the one scanned: a hook can emit `{batchId: 7}` after the
+ * per-load scan), a cycle, and nesting past {@link MAX_JSON_DEPTH} (an
+ * untrusted log must not overflow the stack). Normalized, as JSON itself
+ * would: an object property that is `undefined` is dropped, and `-0`
+ * becomes `0` (THREE's matrices produce `-0` routinely, so refusing it
+ * would refuse ordinary transforms). A shared, acyclic sub-object is fine;
+ * it is copied once per use.
+ *
+ * @param {*} value
+ * @param {string} path
+ * @param {Set<object>} ancestors objects on the path to `value`
+ * @param {number} depth
+ * @return {*}
+ * @throws {NotJsonError}
+ */
+function copyJson(value, path, ancestors, depth) {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+    return value
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      throw new NotJsonError(`${path}: ${describeValue(value)} is not plain JSON`)
+    }
+    return value === 0 ? 0 : value
+  }
+  if (typeof value !== 'object') {
+    throw new NotJsonError(`${path}: ${describeValue(value)} is not plain JSON`)
+  }
+  if (depth >= MAX_JSON_DEPTH) {
+    throw new NotJsonError(`${path}: nested deeper than ${MAX_JSON_DEPTH}`)
+  }
+  if (ancestors.has(value)) {
+    throw new NotJsonError(`${path}: cycle (an object contains itself)`)
+  }
+  const isArray = Array.isArray(value)
+  const proto = Object.getPrototypeOf(value)
+  if (isArray ? proto !== Array.prototype : (proto !== Object.prototype && proto !== null)) {
+    throw new NotJsonError(`${path}: ${describeValue(value)} is not plain JSON`)
+  }
+  if (Object.prototype.hasOwnProperty.call(value, 'toJSON')) {
+    throw new NotJsonError(`${path} has a toJSON hook; an op is plain JSON data`)
+  }
+  ancestors.add(value)
+  const out = isArray ? [] : {}
+  if (isArray) {
+    for (let i = 0; i < value.length; i++) {
+      out.push(copyJson(value[i], childPath(path, String(i)), ancestors, depth + 1))
+    }
+  } else {
+    for (const key of Object.keys(value)) {
+      const child = value[key]
+      if (child !== undefined) {
+        // defineProperty, not assignment: a `__proto__` key (JSON.parse makes
+        // one an own property) would otherwise set the copy's prototype.
+        Object.defineProperty(out, key, {
+          value: copyJson(child, childPath(path, key), ancestors, depth + 1),
+          enumerable: true, writable: true, configurable: true,
+        })
+      }
+    }
+  }
+  ancestors.delete(value)
+  return Object.freeze(out)
+}
+
+
+/**
+ * Canonicalize and check an op: the one gate between an op from anywhere —
+ * `makeEditOp`, an op literal, a persisted log — and the backend or the log.
+ * The returned op is a deep-frozen plain-JSON copy, and it is that copy that
+ * the schema and the per-load scan checked, that `applyEditOp` applies and
+ * that `recordApplied` records: one object throughout. An op this function
+ * returned is returned as is.
+ *
+ * @param {*} op
+ * @return {{op: object}|{reason: string}}
+ */
+export function canonicalEditOp(op) {
+  if (CANONICAL_OPS.has(op)) {
+    return {op}
+  }
+  let copy
+  try {
+    copy = copyJson(op, 'op', new Set(), 0)
+  } catch (error) {
+    if (error instanceof NotJsonError) {
+      return {reason: error.message}
+    }
+    throw error
+  }
+  const reason = schemaError(copy)
+  if (reason) {
+    return {reason}
+  }
+  CANONICAL_OPS.add(copy)
+  return {op: copy}
+}
+
+
+/**
+ * @param {*} op a canonical JSON copy
+ * @return {string|null} why it breaks the op schema, or null
+ */
+function schemaError(op) {
   if (!isPlainObject(op)) {
     return 'an op is an object'
   }
@@ -279,10 +431,9 @@ function payloadError(op) {
       // Scalars only: an IFC single value is one, and a structured value
       // would be an opaque object to scan. One that needs a structure
       // (an enumeration, a list) gets a schema when it is added.
-      // A non-finite number is refused for the same reason: JSON writes it
-      // as null, so a NaN would come back as a removal.
-      return (payload.value === null || ['string', 'boolean'].includes(typeof payload.value) ||
-        Number.isFinite(payload.value)) ?
+      // A non-finite number never gets here: copyJson refuses it, since JSON
+      // would write it as null and a NaN would come back as a removal.
+      return (payload.value === null || ['string', 'boolean', 'number'].includes(typeof payload.value)) ?
         null : 'setProperty payload.value must be a string, number, boolean or null'
     case EditOpKind.SET_GEOMETRY:
       if (!isPlainObject(payload.geometry)) {
@@ -312,7 +463,7 @@ function payloadError(op) {
  * @param {object} [options]
  * @param {function(number): Uint8Array} [options.randomBytes] see
  *   globalId.js#mintGlobalId; injected by tests
- * @return {object} a valid op
+ * @return {object} a valid op, canonical and deep-frozen ({@link canonicalEditOp})
  * @throws {EditOpError} when the spec would make an invalid op
  */
 export function makeEditOp({kind, layer, targets, payload = {}}, {randomBytes} = {}) {
@@ -328,12 +479,15 @@ export function makeEditOp({kind, layer, targets, payload = {}}, {randomBytes} =
     if (isPlainObject(payload) && payload.copies !== undefined) {
       throw new EditOpError('a duplicate op mints its own copies; pass no payload.copies')
     }
-    opPayload = {...payload, copies: (Array.isArray(targets) ? targets : []).map(() => globalIdRef(mint()))}
+    const copies = (Array.isArray(targets) ? targets : []).map(() => globalIdRef(mint()))
+    // Spread only a plain object: spreading a Map or a class instance would
+    // turn it into one, and hide it from the canonical check.
+    opPayload = isPlainObject(payload) && Object.getPrototypeOf(payload) === Object.prototype ?
+      {...payload, copies} : payload
   }
-  const op = {id: mint(), kind, targets: opTargets, payload: opPayload, layer}
-  const invalid = validateEditOp(op)
-  if (invalid) {
-    throw new EditOpError(invalid)
+  const {op, reason} = canonicalEditOp({id: mint(), kind, targets: opTargets, payload: opPayload, layer})
+  if (reason) {
+    throw new EditOpError(reason)
   }
   return op
 }

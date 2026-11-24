@@ -1,4 +1,4 @@
-import {EditLayer, EditOpError, validateEditOp} from './editOps'
+import {EditLayer, EditOpError, canonicalEditOp} from './editOps'
 
 
 /**
@@ -39,13 +39,12 @@ const UNREACHABLE = -1
 /**
  * Add an applied op to the log, if it is a document op.
  *
- * The op is validated again here, and a copy is recorded. This is the one
- * door into what {@link appliedOps} hands persistence, and it does not trust
- * its caller: an op literal that skipped `makeEditOp`, or one mutated after
- * it was applied, cannot put a per-load id into the log (editOps.js). The
- * copy is a JSON round trip, which is what persistence does to it anyway
- * (and `structuredClone` postdates the build targets in
- * tools/esbuild/common.js).
+ * This is the one door into what {@link appliedOps} hands persistence, and it
+ * does not trust its caller: the op goes through `canonicalEditOp` again, so
+ * an op literal that skipped `makeEditOp`, or one mutated after it was made,
+ * cannot put a per-load id or a non-JSON value into the log. For the op
+ * `applyEditOp` returned, which is already canonical and frozen, that is a
+ * lookup, and the object recorded is the object that was applied.
  *
  * @param {object} log
  * @param {object} op an op that has just been applied
@@ -54,14 +53,14 @@ const UNREACHABLE = -1
  * @throws {EditOpError} when `op` is not a valid op
  */
 export function recordApplied(log, op, undo) {
-  const invalid = validateEditOp(op)
-  if (invalid) {
-    throw new EditOpError(invalid)
+  const {op: canonical, reason} = canonicalEditOp(op)
+  if (reason) {
+    throw new EditOpError(reason)
   }
-  if (op.layer !== EditLayer.DOCUMENT) {
+  if (canonical.layer !== EditLayer.DOCUMENT) {
     return log
   }
-  const entries = [...log.entries.slice(0, log.cursor), {op: JSON.parse(JSON.stringify(op)), undo}]
+  const entries = [...log.entries.slice(0, log.cursor), {op: canonical, undo}]
   const cleanCursor = log.cleanCursor > log.cursor ? UNREACHABLE : log.cleanCursor
   return {entries, cursor: entries.length, cleanCursor}
 }

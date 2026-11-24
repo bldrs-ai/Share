@@ -1,4 +1,4 @@
-import {applyEditOp, revertEditOp} from '../viewer/edit/editApply'
+import {EditInconsistentError, applyEditOp, revertEditOp} from '../viewer/edit/editApply'
 import {
   EMPTY_EDIT_LOG,
   canRedo,
@@ -28,6 +28,14 @@ import {
  * (FeatureFlags.js). With no context installed every action reports
  * `no edit backend` and changes nothing.
  *
+ * **Inconsistent.** When an edit fails and so does its compensation
+ * (editApply.js#EditInconsistentError), the scene no longer matches the log.
+ * The error is rethrown, `isEditInconsistent` is set and kept in
+ * `editInconsistency`, and every `applyEdit` (view ops too), `undoEdit` and
+ * `redoEdit` refuses until the scene is rebuilt from the source, the applied
+ * ops replayed (L3, #1918), and `markEditsRecovered` called — or a new
+ * model's context is installed. model-edit.md §6b, "When compensation fails".
+ *
  * @param {Function} set
  * @param {Function} get
  * @return {object} Zustand slice
@@ -45,9 +53,41 @@ export default function createEditSlice(set, get) {
     canRedoEdit: canRedo(log),
   })
   const noBackend = {ok: false, reason: 'no edit backend'}
+  const inconsistent = {
+    ok: false,
+    reason: 'the edit log is inconsistent with the scene; rebuild from the source and replay its applied ops',
+  }
+  const consistent = {isEditInconsistent: false, editInconsistency: null}
+
+  /**
+   * Run an edit, marking the log inconsistent if it throws that way.
+   *
+   * @param {Function} edit
+   * @return {*} what `edit` returns
+   */
+  const guarded = (edit) => {
+    try {
+      return edit()
+    } catch (error) {
+      if (error instanceof EditInconsistentError) {
+        set(() => ({isEditInconsistent: true, editInconsistency: error}))
+      }
+      throw error
+    }
+  }
+
+  /** @return {object|null} the refusal for the current state, if any */
+  const refusal = () => {
+    const state = get()
+    if (state.isEditInconsistent) {
+      return inconsistent
+    }
+    return state.editContext ? null : noBackend
+  }
 
   return {
     ...withLog(EMPTY_EDIT_LOG),
+    ...consistent,
     editContext: null,
 
     /**
@@ -58,10 +98,26 @@ export default function createEditSlice(set, get) {
      * @param {object|null} context `{backend, resolver}` (editApply.js)
      */
     setEditContext: (context) => {
-      set(() => ({editContext: context, ...withLog(EMPTY_EDIT_LOG)}))
+      set(() => ({editContext: context, ...withLog(EMPTY_EDIT_LOG), ...consistent}))
     },
 
-    /** Drop the log, e.g. on model swap. Keeps the context. */
+    /**
+     * Leave the inconsistent state: the scene has been rebuilt from the
+     * immutable source and `appliedOps(editLog)` replayed over it (L3,
+     * #1918). `log` is the log that replay built, whose undo records belong
+     * to the rebuilt scene.
+     *
+     * @param {object} context `{backend, resolver}` over the rebuilt scene
+     * @param {object} log the replayed log (editLog.js)
+     */
+    markEditsRecovered: (context, log) => {
+      set(() => ({editContext: context, ...withLog(log), ...consistent}))
+    },
+
+    /**
+     * Drop the log. Keeps the context, and an inconsistent state too: the
+     * scene is as broken without its history as with it.
+     */
     resetEdits: () => {
       set(() => withLog(EMPTY_EDIT_LOG))
     },
@@ -75,15 +131,18 @@ export default function createEditSlice(set, get) {
      *   rethrown after the op is rolled back (editApply.js#applyEditOp)
      */
     applyEdit: (op) => {
-      const {editContext, editLog} = get()
-      if (!editContext) {
-        return noBackend
+      const refused = refusal()
+      if (refused) {
+        return refused
       }
-      const result = applyEditOp(op, editContext)
+      const {editContext, editLog} = get()
+      const result = guarded(() => applyEditOp(op, editContext))
       if (!result.ok) {
         return result
       }
-      set(() => withLog(recordApplied(editLog, op, result.undo)))
+      // `result.op` is the canonical copy that was applied; recording it,
+      // not the caller's `op`, keeps the two one object.
+      set(() => withLog(recordApplied(editLog, result.op, result.undo)))
       return {ok: true}
     },
 
@@ -93,15 +152,16 @@ export default function createEditSlice(set, get) {
      * @return {object} `{ok, reason?, unresolved?}`
      */
     undoEdit: () => {
-      const {editContext, editLog} = get()
-      if (!editContext) {
-        return noBackend
+      const refused = refusal()
+      if (refused) {
+        return refused
       }
+      const {editContext, editLog} = get()
       const entry = entryToUndo(editLog)
       if (!entry) {
         return {ok: false, reason: 'nothing to undo'}
       }
-      const result = revertEditOp(entry.op, entry.undo, editContext)
+      const result = guarded(() => revertEditOp(entry.op, entry.undo, editContext))
       if (result.ok) {
         set(() => withLog(stepBack(editLog)))
       }
@@ -115,15 +175,16 @@ export default function createEditSlice(set, get) {
      * @return {object} `{ok, reason?, unresolved?}`
      */
     redoEdit: () => {
-      const {editContext, editLog} = get()
-      if (!editContext) {
-        return noBackend
+      const refused = refusal()
+      if (refused) {
+        return refused
       }
+      const {editContext, editLog} = get()
       const entry = entryToRedo(editLog)
       if (!entry) {
         return {ok: false, reason: 'nothing to redo'}
       }
-      const result = applyEditOp(entry.op, editContext)
+      const result = guarded(() => applyEditOp(entry.op, editContext))
       if (!result.ok) {
         return result
       }

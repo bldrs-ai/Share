@@ -531,9 +531,33 @@ schema, `editOps.js#PER_LOAD_KEYS` is refused at any depth inside them:
 a plural `s`. `parent` is left out: it is the L0 row's expressID column, but
 also an ordinary word a payload may use for a ref.
 
-`editLog.js#recordApplied` validates again and records a JSON copy, so an op
-literal that skipped `makeEditOp`, or one its caller mutates after applying,
-cannot put anything else in the log either.
+**An op is plain JSON, checked on its canonical copy.**
+`editOps.js#canonicalEditOp` is the one gate between an op from anywhere
+(`makeEditOp`, an op literal, a persisted log) and the backend or the log.
+
+- **It first builds a deep-frozen copy by walking the op.** The walk refuses:
+  - a prototype other than Object's or Array's: Map, Set, Date, typed arrays
+    and class instances;
+  - BigInt, functions and symbols;
+  - non-finite numbers;
+  - array holes and `undefined` elements;
+  - any own `toJSON`;
+  - cycles;
+  - nesting past 100 levels.
+- **It normalizes two things the way JSON does.** An `undefined` property is
+  dropped, and `-0` becomes `0`. THREE produces `-0` in ordinary matrices.
+- **Only then do the schema and the per-load scan run, on that copy.**
+  `applyEditOp` applies the copy and returns it, and `recordApplied` records
+  it. So what was checked, applied and persisted is one object.
+- **What this closes (review of #2346, round 2):**
+  - A `toJSON` could emit `{batchId: 7}` after the scan.
+  - A `BigInt` used to fail only in the record step, after the backend had
+    already changed.
+  - A `Map` would have replayed as `{}`.
+
+`recordApplied` runs the gate again. For an op it already made, that is a
+lookup. Either way, an op literal that skipped `makeEditOp`, or an op mutated
+after it was applied, cannot put anything else in the log.
 
 L1 does not restrict which kinds a `view` op may be. Eviction is a view-layer
 `delete`. Whether any other pairing is meaningful is for the code that makes
@@ -627,6 +651,42 @@ into targets through a resolver. L2 implements both.
     | `transform`, `setProperty`, `setGeometry` | write the prior value | write the current value, captured first |
   - Redo is `applyEditOp` again, so it has apply's rollback.
 
+### When compensation fails
+
+No compensation loop can guarantee consistency over a backend that throws: the
+step that puts an element back can fail on the same allocation that failed the
+edit (review of #2346, round 2). So the failure is made **explicit and
+recoverable** instead.
+
+- **Compensation is best effort and loses no error.** If a compensation step
+  throws, the remaining steps still run. Then
+  `editApply.js#EditInconsistentError` is thrown, carrying the original error
+  as `cause` and every compensation error in `compensationErrors`. Apply's
+  rollback and revert's re-apply share this path
+  (`editApply.js#compensate`).
+- **The log is marked inconsistent.** `EditSlice` sets `isEditInconsistent`
+  and keeps the error in `editInconsistency`. While it is set, every
+  `applyEdit` (view ops included), `undoEdit` and `redoEdit` refuses. The
+  scene no longer matches the log, and nothing L1 can see says how.
+- **Recovery follows from §1: the source is immutable and the log is the
+  document.**
+  1. Rebuild the scene from the source.
+  2. Replay `appliedOps(editLog)` over it, which is the applied prefix up to
+     the cursor. The replay captures fresh undo records.
+  3. Call `markEditsRecovered(context, replayedLog)`.
+
+  L3 (#1918) implements the replay. Installing a new model's context also
+  clears the state, and `resetEdits` does not, since dropping the history
+  leaves the scene just as broken.
+- **`EditBackend`'s compensation methods should not throw in normal
+  operation.** These are `restore`, `delete`, `setMatrix`, `setProperty` and
+  `setGeometry`, called to put back what an edit changed. An implementation
+  over `batchedEdit.js` should make putting back no more fallible than what
+  it undoes. For example, `restore` into capacity the edit has just freed, as
+  `deleteBatchedInstance` freeing an id that `addBatchedInstance` reuses does.
+  `EditInconsistentError` is for the failure that is still possible, not a
+  routine path.
+
 ### EditSlice
 
 The store holds the log and the booleans derived from it (`editCursor`,
@@ -635,6 +695,8 @@ It also holds `editContext`, the `{backend, resolver}` pair L2 installs for
 the loaded model.
 
 - `setEditContext` resets the log, because undo records belong to one load.
+- `isEditInconsistent` / `editInconsistency` and `markEditsRecovered` are the
+  inconsistent state and its exit (above).
 - With no context, every action reports `no edit backend` and changes nothing.
 - `applyEdit`, `undoEdit` and `redoEdit` return the applier's
   `{ok, reason?, unresolved?}`.
