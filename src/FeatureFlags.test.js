@@ -32,6 +32,13 @@ describe('FeatureFlags', () => {
     expect(glbDraco.isActive).toBe(false)
   })
 
+  it('declares edit off by default', () => {
+    // create-300 (#1914): every user-visible editing piece ships behind
+    // `?feature=edit`, and L1 (#1916) adds none, so flipping it would gate
+    // nothing yet. Off until L2's UI has its E2E.
+    expect(flags.find((f) => f.name === 'edit')?.isActive).toBe(false)
+  })
+
   it('declares conwayDirectIfc active by default', () => {
     // The Conway-direct geometry assembler + per-instance picking is
     // the production rendering path. Off-switching is via a code change
