@@ -14,7 +14,14 @@ banner, not the About dialog (§"The banner").
 A banner at the foot of the page (`About/ConsentBanner.jsx`), mounted by
 `Share.jsx`, shown on every load to any visitor who hasn't answered under
 the current `CONSENT_VERSION` (store `isConsentBannerVisible`, seeded from
-`consent.js#isConsentDecided`). It leads with what never leaves the device:
+`consent.js#isConsentDecided`). It is layered, so the first look is two
+lines in a compact card (bottom-right on desktop, full width on a phone):
+
+> **Your models stay on your device.** May we measure usage with Google
+> Analytics cookies? No ads. If you decline, Bldrs runs in Test only mode.
+> [Details]
+
+and **Details** expands it to everything the policy's §1 says:
 
 > **Your models stay on your device.** Bldrs opens files in your browser;
 > they're never uploaded to our servers. To improve Bldrs, we'd like to
@@ -24,12 +31,13 @@ the current `CONSENT_VERSION` (store `isConsentBannerVisible`, seeded from
 > mode: files from your computer and the sample models. Error reports stay
 > on either way. [Privacy policy]
 
-It names everything Accept turns on and what Decline leaves on, as the
-policy's §1 does; a shorter first cut left those to the policy link (codex
-on #2354, an uninformed choice otherwise).
+The first layer names the tool, the cookies, the purpose and what Decline
+costs; the second, everything else (codex on #2354 asked that the banner
+describe the same outcomes as the policy; the owner found that paragraph
+imposing as a first look, so it moved behind Details).
 
-with **Decline** and **Accept** side by side at the same size, and **no
-close button**: only an answer takes it down.
+with **Decline** and **Accept** side by side, the same size and style, and
+**no close button**: only an answer takes it down.
 
 - **It never blocks.** It isn't a modal: the canvas, drag-and-drop and every
   control stay usable while it's up. It sits above the status bar's band

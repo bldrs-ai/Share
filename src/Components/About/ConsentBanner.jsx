@@ -1,9 +1,10 @@
-import React, {ReactElement} from 'react'
+import React, {ReactElement, useState} from 'react'
 import {Box, Button, Link, Paper, Stack, Typography} from '@mui/material'
 import {CONSENT_LEVELS} from '../../privacy/consent'
 import chooseConsentLevel from '../../privacy/consentChoice'
 import {LOCAL_ONLY_MODE_NAME} from '../../privacy/localOnlyMode'
 import useStore from '../../store/useStore'
+import {useIsMobile} from '../Hooks'
 
 
 /*
@@ -28,6 +29,16 @@ import useStore from '../../store/useStore'
  * informed (codex on #2354).
  */
 export const CONSENT_HEADLINE = 'Your models stay on your device.'
+/**
+ * The first layer: what Accept turns on (Google Analytics, its cookies, for
+ * measuring use, no ads) and what Decline costs, in two short lines. The
+ * owner found the full paragraph imposing (2026-11-24), and layered notice
+ * is the accepted shape: the essentials up front, the rest one click away
+ * (CONSENT_TEXT, behind Details) and in the policy.
+ */
+export const CONSENT_SHORT_TEXT =
+  `May we measure usage with Google Analytics cookies? No ads. If you decline, Bldrs runs in ${LOCAL_ONLY_MODE_NAME}.`
+/** The second layer, behind Details: everything, as the policy's §1 says it. */
 export const CONSENT_TEXT =
   'Bldrs opens files in your browser; they’re never uploaded to our servers. To improve Bldrs, we’d ' +
   'like to measure visits and feature use, like which kinds of models are opened (format, size, source), ' +
@@ -63,6 +74,8 @@ export default function ConsentBanner() {
   const isAboutVisible = useStore((state) => state.isAboutVisible)
   const isOnboardingVisible = useStore((state) => state.isOnboardingOverlayVisible)
   const privacyLevel = useStore((state) => state.privacyLevel)
+  const isMobile = useIsMobile()
+  const [isDetailed, setIsDetailed] = useState(false)
   if (!isVisible || isAboutVisible || isOnboardingVisible) {
     return null
   }
@@ -83,7 +96,9 @@ export default function ConsentBanner() {
         left: 0,
         right: 0,
         display: 'flex',
-        justifyContent: 'center',
+        // A compact card in the corner on desktop, clear of the model;
+        // full width (less the gutters) on a phone.
+        justifyContent: isMobile ? 'center' : 'flex-end',
         px: '16px',
         // Above the canvas, the controls and the drawers, under any dialog
         // (Theme.jsx raises modal to 2000), and it's not a modal: the page
@@ -97,31 +112,42 @@ export default function ConsentBanner() {
         role='region'
         aria-label='Privacy choice'
         data-testid='consent-banner'
-        sx={{maxWidth: '40em', width: '100%', p: '1em', pointerEvents: 'auto'}}
+        sx={{maxWidth: isDetailed ? '34em' : '26em', width: '100%', p: '0.75em 1em', pointerEvents: 'auto'}}
       >
         <Typography variant='body2' sx={{textAlign: 'left'}} data-testid='consent-summary'>
-          <strong>{CONSENT_HEADLINE}</strong> {CONSENT_TEXT}{' '}
+          <strong>{CONSENT_HEADLINE}</strong> {isDetailed ? CONSENT_TEXT : CONSENT_SHORT_TEXT}{' '}
           {CURRENT_CHOICE[privacyLevel] && <>{CURRENT_CHOICE[privacyLevel]}{' '}</>}
-          {/* The marketing site's static page. A new tab, so reading the
-              policy doesn't leave the loaded model mid-choice. */}
-          <Link
-            href={PRIVACY_POLICY_HREF}
-            target='_blank'
-            rel='noopener noreferrer'
-            color='inherit'
-            sx={{whiteSpace: 'nowrap'}}
-            data-testid='consent-privacy-link'
-          >
-            Privacy policy
-          </Link>
+          {isDetailed ?
+            // The marketing site's static page. A new tab, so reading the
+            // policy doesn't leave the loaded model mid-choice.
+            <Link
+              href={PRIVACY_POLICY_HREF}
+              target='_blank'
+              rel='noopener noreferrer'
+              color='inherit'
+              sx={{whiteSpace: 'nowrap'}}
+              data-testid='consent-privacy-link'
+            >
+              Privacy policy
+            </Link> :
+            <Link
+              component='button'
+              onClick={() => setIsDetailed(true)}
+              color='inherit'
+              sx={{verticalAlign: 'baseline', whiteSpace: 'nowrap'}}
+              data-testid='consent-details'
+            >
+              Details
+            </Link>}
         </Typography>
         {/* Decline and Accept side by side, same size and the same style, so
             declining is as easy and as visible as accepting. An outlined
             Decline read as disabled next to a filled Accept on the preview,
             the visual nudge consent guidance calls a dark pattern. */}
-        <Stack direction='row' spacing={1} justifyContent='flex-end' sx={{mt: '0.75em'}}>
+        <Stack direction='row' spacing={1} justifyContent='flex-end' sx={{mt: '0.5em'}}>
           <Button
             variant='contained'
+            size='small'
             onClick={() => answer(CONSENT_LEVELS.RESTRICTED)}
             data-testid='consent-decline'
           >
@@ -129,6 +155,7 @@ export default function ConsentBanner() {
           </Button>
           <Button
             variant='contained'
+            size='small'
             onClick={() => answer(CONSENT_LEVELS.FUNCTIONAL)}
             data-testid='consent-accept'
           >

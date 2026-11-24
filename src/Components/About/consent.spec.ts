@@ -116,7 +116,7 @@ describeMobileAndDesktop('Analytics consent', () => {
     await closeWelcome(page)
     await expect(banner).toBeVisible()
     await expect(page.getByTestId('consent-summary')).toContainText('Your models stay on your device.')
-    await expect(page.getByTestId('consent-summary')).toContainText('If you decline, Bldrs runs in')
+    await expect(page.getByTestId('consent-summary')).toContainText('Google Analytics cookies? No ads. If you decline')
 
     const commands = await gtagCommands(page)
     expect(commands).toContainEqual(['consent', 'default', {
@@ -196,8 +196,9 @@ describeMobileAndDesktop('Analytics consent', () => {
     expect(googleRequests).toEqual([])
   })
 
-  test('the privacy policy link opens the policy in a new tab', async ({page}) => {
+  test('Details shows the full text, and its policy link opens in a new tab', async ({page}) => {
     await closeWelcome(page)
+    await page.getByTestId('consent-details').click()
     const [policy] = await Promise.all([
       page.context().waitForEvent('page'),
       page.getByTestId('consent-privacy-link').click(),

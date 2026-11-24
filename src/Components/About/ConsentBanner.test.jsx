@@ -6,7 +6,7 @@ import {CONSENT_COOKIE_NAME, CONSENT_LEVELS, getConsentLevel, setConsentLevel} f
 import {LOCAL_ONLY_MODE_NAME} from '../../privacy/localOnlyMode'
 import useStore from '../../store/useStore'
 import AboutControl, {testId as aboutTestId} from './AboutControl'
-import ConsentBanner, {CONSENT_HEADLINE, CONSENT_TEXT, PRIVACY_POLICY_HREF} from './ConsentBanner'
+import ConsentBanner, {CONSENT_HEADLINE, CONSENT_SHORT_TEXT, CONSENT_TEXT, PRIVACY_POLICY_HREF} from './ConsentBanner'
 
 
 /** @return {Array} analytics_storage values of every consent update queued */
@@ -49,24 +49,37 @@ describe('ConsentBanner', () => {
     }
   })
 
-  test('leads with what stays local, says what decline gives, and stores nothing yet', () => {
+  // Layered: the essentials in two lines, everything behind Details.
+  test('leads with what stays local, names GA, its cookies and what decline costs, and stores nothing', () => {
     renderBanner()
     const summary = screen.getByTestId('consent-summary')
     expect(summary).toHaveTextContent(CONSENT_HEADLINE)
-    expect(summary).toHaveTextContent(CONSENT_TEXT)
-    expect(CONSENT_TEXT).toContain('never uploaded to our servers')
-    // Everything Accept turns on, and what Decline leaves on, as the policy
-    // says (src/pages/Privacy.jsx §1).
-    expect(CONSENT_TEXT).toContain('Google Analytics, which sets cookies holding a pseudonymous ID')
-    expect(CONSENT_TEXT).toContain('visits and feature use')
-    expect(CONSENT_TEXT).toContain('(format, size, source)')
-    expect(CONSENT_TEXT).toContain('No advertising.')
-    expect(CONSENT_TEXT).toContain('Error reports stay on either way.')
-    expect(CONSENT_TEXT).toContain(`If you decline, Bldrs runs in ${LOCAL_ONLY_MODE_NAME}`)
+    expect(summary).toHaveTextContent(CONSENT_SHORT_TEXT)
+    expect(CONSENT_SHORT_TEXT).toContain('Google Analytics cookies')
+    expect(CONSENT_SHORT_TEXT).toContain('No ads.')
+    expect(CONSENT_SHORT_TEXT).toContain(`If you decline, Bldrs runs in ${LOCAL_ONLY_MODE_NAME}.`)
     // Not a modal, and nothing to close it with but an answer.
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.queryByTestId(/^button-close/)).toBeNull()
     expect(getConsentLevel()).toBeNull()
+  })
+
+  test('Details shows everything the policy says, with its link', () => {
+    renderBanner()
+    expect(screen.queryByTestId('consent-privacy-link')).toBeNull()
+    fireEvent.click(screen.getByTestId('consent-details'))
+    const summary = screen.getByTestId('consent-summary')
+    expect(summary).toHaveTextContent(CONSENT_TEXT)
+    // Everything Accept turns on, and what Decline leaves on, as the policy
+    // says (src/pages/Privacy.jsx §1).
+    expect(CONSENT_TEXT).toContain('never uploaded to our servers')
+    expect(CONSENT_TEXT).toContain('Google Analytics, which sets cookies holding a pseudonymous ID')
+    expect(CONSENT_TEXT).toContain('visits and feature use')
+    expect(CONSENT_TEXT).toContain('(format, size, source)')
+    expect(CONSENT_TEXT).toContain('No advertising.')
+    expect(CONSENT_TEXT).toContain(`If you decline, Bldrs runs in ${LOCAL_ONLY_MODE_NAME}`)
+    expect(CONSENT_TEXT).toContain('Error reports stay on either way.')
+    expect(screen.getByTestId('consent-privacy-link')).toBeInTheDocument()
   })
 
   // Equal weight: an outlined Decline read as disabled beside a filled Accept.
@@ -111,6 +124,7 @@ describe('ConsentBanner', () => {
 
   test('links to the privacy policy page, in a new tab', () => {
     renderBanner()
+    fireEvent.click(screen.getByTestId('consent-details'))
     const link = screen.getByTestId('consent-privacy-link')
     expect(PRIVACY_POLICY_HREF).toBe('/privacy/')
     expect(link).toHaveAttribute('href', '/privacy/')
