@@ -2,7 +2,7 @@
  * Netlify Function (v2): feedback
  * -------------------------------
  * Stores one piece of user feedback in Netlify Blobs, from any place in the
- * app that offers it (design/new/feedback.md): a rating, a note, an opt-in
+ * app that offers it (design/tracks/community-t100/feedback.md): a rating, a note, an opt-in
  * screenshot of the 3D view, the view's structured snapshot (model ref,
  * camera, selection), and a context whose fields depend on the record's
  * `source` (the assistant's thumbs send the rated reply and the message

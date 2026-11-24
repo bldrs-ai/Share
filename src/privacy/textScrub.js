@@ -3,7 +3,7 @@ import {supportedTypes} from '../Filetype'
 
 /**
  * The structural backstop for free text Share sends to a store of its own
- * (feedback/submitFeedback.js, design/new/feedback.md §"Privacy").
+ * (feedback/submitFeedback.js, design/tracks/community-t100/feedback.md §"Privacy").
  *
  * The precise layer is sentryRedaction.js#withholdModelNames: it withholds
  * the names and paths Share knows for the model on screen, in the forms they

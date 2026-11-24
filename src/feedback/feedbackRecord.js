@@ -1,5 +1,5 @@
 /*
- * The shape of a feedback record (design/new/feedback.md): what the page
+ * The shape of a feedback record (design/tracks/community-t100/feedback.md): what the page
  * sends when someone gives Bldrs feedback, from any place in the app that
  * offers it, and the only thing the `feedback` function will store. Shared
  * by the page (feedback/submitFeedback.js) and the function

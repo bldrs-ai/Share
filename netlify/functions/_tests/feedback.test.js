@@ -1,6 +1,6 @@
 /*
  * Tests for the feedback Netlify Function: one piece of user feedback stored
- * in Netlify Blobs (design/new/feedback.md), with each source's context held
+ * in Netlify Blobs (design/tracks/community-t100/feedback.md), with each source's context held
  * to its own allowlist. The real @netlify/blobs client talks to fakeBlobs.js,
  * so the conditional write goes over the wire as in production. In
  * `_tests/`, not beside the function, for the reason pro-module.test.js

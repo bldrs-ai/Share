@@ -43,7 +43,7 @@ const THUMBS = [
 /**
  * Thumbs up and down under an assistant reply, and the note area a choice
  * opens (Share#2306). The assistant's entry point to the feedback module
- * (design/new/feedback.md): the thumbs are this file's, the note area with
+ * (design/tracks/community-t100/feedback.md): the thumbs are this file's, the note area with
  * its opt-in screenshot is the module's FeedbackNote, and assistFeedback.js
  * says what the rating is about.
  *
