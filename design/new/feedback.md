@@ -268,11 +268,13 @@ analytics" keeps the list.
   its task chip's tasks.
 - **One post at a time.** The thumbs are disabled while a rating, a clear
   or a clear's retry is posting, so the latest record in the store is the
-  one the reply shows. A newer rating drops a failed clear's retry. The
-  posts in flight and a failed clear's record are held at module scope
-  (`assistFeedback.js#replyFeedbackPosts`), not in the component, because
-  closing the panel or switching phone tabs unmounts it while the post
-  runs on.
+  one the reply shows. A newer rating drops a failed post's retry. The
+  posts in flight and a failed post's record (a rating or a clear) are held
+  at module scope (`assistFeedback.js#replyFeedbackPosts`), not in the
+  component, because closing the panel or switching phone tabs unmounts it
+  while the post runs on or after it failed. A reopened reply still shows
+  "Try again" for the same record. Choosing the filled thumb of a rating
+  that never landed takes it back without posting a `none`.
 - **Captures belong to their draft.** In the note area, Enter and Send
   share one condition, so neither sends while a screenshot the user asked
   for is still being captured. A capture that lands after its note area

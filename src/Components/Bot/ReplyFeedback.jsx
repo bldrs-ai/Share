@@ -11,12 +11,13 @@ import {FEEDBACK_SOURCES} from '../../feedback/feedbackRecord'
 import {postFeedback} from '../../feedback/submitFeedback'
 import {
   RATINGS,
-  clearRetryOf,
+  abandonUnsentRating,
   isReplyPosting,
   rateReply,
   replyFeedbackPosts,
+  retryOf,
   runReplyPost,
-  setClearRetry,
+  setRetry,
 } from './assistFeedback'
 
 
@@ -51,7 +52,9 @@ const THUMBS = [
  * - Choosing the other thumb later rates again, a new rating, and choosing
  *   the filled one with no note open clears it: each change is one event.
  * - A failed post keeps the note open with a quiet hint; Send tries the
- *   same record again. A failed clear offers "Try again", which posts the
+ *   same record again. The record is also kept at module scope, so after the
+ *   panel is closed and reopened the reply still offers "Try again" for it,
+ *   and its filled thumb takes the unsent rating back without posting. A failed clear offers "Try again", which posts the
  *   same clear record; a newer rating drops it.
  * - One post at a time per reply: the thumbs are disabled while a rating or
  *   a clear is in flight, so the store's latest record is the one shown.
@@ -73,25 +76,32 @@ export default function ReplyFeedback({message, alwaysShown = false}) {
   const [draft, setDraft] = useState(null)
   const [hint, setHint] = useState(null)
   // Every post for a reply runs alone, and the thumbs are disabled while one
-  // is in flight: a rating, a clear, or a clear's retry. That state, and a
-  // failed clear's record, live in assistFeedback.js#replyFeedbackPosts, not
-  // here, so a panel closed and reopened mid-post still holds them.
+  // is in flight: a rating, a clear, or a retry. That state, and a failed
+  // post's record, live in assistFeedback.js#replyFeedbackPosts, not here, so
+  // a panel closed and reopened mid-post, or after a failure, still holds
+  // them.
   const posts = useSyncExternalStore(replyFeedbackPosts.subscribe, replyFeedbackPosts.get)
   const isPosting = isReplyPosting(posts, message.id)
-  // A clear whose post failed: the rating is already cleared on the reply
-  // and counted in GA, so "Try again" posts this same record rather than
-  // making the user re-rate and clear again (two more events).
-  const clearRetry = clearRetryOf(posts, message.id)
+  // A rating or clear whose post failed: it already shows on the reply and is
+  // counted in GA, so "Try again" posts this same record rather than making
+  // the user act again (more events).
+  const retry = retryOf(posts, message.id)
   const shown = draft?.rating ?? sent
   const isSending = draft?.status === 'sending'
-  // A failed clear says so wherever the panel is reopened.
-  const shownHint = hint ?? (clearRetry ? SEND_FAILED_TEXT : null)
+  // A failed post says so wherever the panel is reopened.
+  const shownHint = hint ?? (retry ? SEND_FAILED_TEXT : null)
 
   const choose = (rating) => {
     setHint(null)
-    // A newer rating supersedes a failed clear: retrying it later would
-    // retract the rating the reply then shows.
-    setClearRetry(message.id, null)
+    if (!draft && rating === sent && retry && retry.rating === rating) {
+      // The filled thumb of a rating that never reached the store: take it
+      // back here. A `none` would retract a rating the store never got.
+      abandonUnsentRating(message.id)
+      return
+    }
+    // A newer rating supersedes a failed post: retrying it later would
+    // undo the rating the reply then shows.
+    setRetry(message.id, null)
     if (draft) {
       // A thumb while the note is open: the same one cancels, the other switches.
       setDraft(rating === draft.rating || draft.record ? null : {...draft, rating})
@@ -107,17 +117,17 @@ export default function ReplyFeedback({message, alwaysShown = false}) {
   const clear = async () => {
     const replyId = message.id
     const {ok, record} = await runReplyPost(replyId, () => rateReply({replyId, rating: RATINGS.NONE}))
-    setClearRetry(replyId, ok ? null : record)
+    setRetry(replyId, ok ? null : record)
     setHint(null)
   }
 
-  const retryClear = async () => {
+  const retryPost = async () => {
     const replyId = message.id
-    if (!clearRetry || isPosting) {
+    if (!retry || isPosting) {
       return
     }
-    const ok = await runReplyPost(replyId, () => postFeedback(clearRetry))
-    setClearRetry(replyId, ok ? null : clearRetry)
+    const ok = await runReplyPost(replyId, () => postFeedback(retry))
+    setRetry(replyId, ok ? null : retry)
     setHint(ok ? SENT_TEXT : null)
   }
 
@@ -134,6 +144,9 @@ export default function ReplyFeedback({message, alwaysShown = false}) {
       ({ok, record} = await runReplyPost(message.id, () => rateReply({replyId: message.id, rating: draft.rating,
         note: draft.note, screenshot: draft.screenshot})))
     }
+    // The failed record is kept at module scope too, so closing the panel
+    // doesn't lose it: a remount offers "Try again" for it.
+    setRetry(message.id, ok ? null : record)
     if (ok || !record) {
       setDraft(null)
       setHint(ok ? SENT_TEXT : null)
@@ -171,10 +184,10 @@ export default function ReplyFeedback({message, alwaysShown = false}) {
             {shownHint}
           </Typography>
         )}
-        {clearRetry && !draft && (
+        {retry && !draft && (
           <Button
             size='small'
-            onClick={() => void retryClear()}
+            onClick={() => void retryPost()}
             disabled={isPosting}
             data-testid='BotChat-FeedbackRetry'
             sx={{textTransform: 'none'}}

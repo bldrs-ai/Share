@@ -144,12 +144,14 @@ function noteRating(replyId, rating) {
 
 
 /**
- * The posts in flight for each reply, and a failed clear's record, held at
+ * The posts in flight for each reply, and a failed post's record, held at
  * module scope rather than in ReplyFeedback: the panel unmounts when it is
  * closed and on a phone whenever another drawer tab is shown (BotChat.jsx),
  * while a post it started keeps running. A remounted ReplyFeedback reads its
  * reply's state from here, so its thumbs stay disabled until the post lands
- * and a failed clear still offers its retry (Codex rounds 2 and 3 on #2313).
+ * and a failed rating or clear still offers its retry (Codex rounds 2 and 3
+ * on #2313, and its ready-time review): the record GA already counted is the
+ * one sent again, never a new one.
  *
  * Why one post at a time: a reply's latest stored record is the one that
  * counts (feedback.md §"Record"). If a new rating could be sent while a slow
@@ -159,7 +161,7 @@ function noteRating(replyId, rating) {
  * An external store for `useSyncExternalStore`: `get()` is a snapshot,
  * replaced on every change.
  */
-let postsState = {pending: new Map(), clearRetries: new Map()}
+let postsState = {pending: new Map(), retries: new Map()}
 const postsListeners = new Set()
 
 
@@ -196,10 +198,11 @@ export function isReplyPosting(state, replyId) {
 /**
  * @param {object} state replyFeedbackPosts.get()
  * @param {string} replyId
- * @return {?object} the record of this reply's failed clear, to post again
+ * @return {?object} the record of this reply's failed post (a rating or a
+ *   clear), to post again
  */
-export function clearRetryOf(state, replyId) {
-  return state.clearRetries.get(replyId) ?? null
+export function retryOf(state, replyId) {
+  return state.retries.get(replyId) ?? null
 }
 
 
@@ -233,23 +236,37 @@ export async function runReplyPost(replyId, post) {
 
 /**
  * @param {string} replyId
- * @param {?object} record a failed clear's record to keep for a retry, or
+ * @param {?object} record a failed post's record to keep for a retry, or
  *   null to drop it (it landed, or a newer rating superseded it)
  */
-export function setClearRetry(replyId, record) {
+export function setRetry(replyId, record) {
   updatePosts((state) => {
-    const clearRetries = new Map(state.clearRetries)
+    const retries = new Map(state.retries)
     if (record) {
-      clearRetries.set(replyId, record)
+      retries.set(replyId, record)
     } else {
-      clearRetries.delete(replyId)
+      retries.delete(replyId)
     }
-    return {...state, clearRetries}
+    return {...state, retries}
   })
+}
+
+
+/**
+ * Take back a rating that never reached the store: its post failed and the
+ * user chose the filled thumb again instead of retrying. Nothing is posted,
+ * since there is no stored rating to retract with a `none`; the reply just
+ * stops showing it.
+ *
+ * @param {string} replyId
+ */
+export function abandonUnsentRating(replyId) {
+  setRetry(replyId, null)
+  noteRating(replyId, null)
 }
 
 
 /** For tests: forget every reply's posts and retries. */
 export function resetReplyFeedbackPosts() {
-  updatePosts(() => ({pending: new Map(), clearRetries: new Map()}))
+  updatePosts(() => ({pending: new Map(), retries: new Map()}))
 }

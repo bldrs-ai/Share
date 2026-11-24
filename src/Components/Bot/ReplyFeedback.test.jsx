@@ -284,6 +284,48 @@ describe('Bot/ReplyFeedback', () => {
     expect(feedbackEvents()).toHaveLength(2)
   })
 
+  // Codex's ready-time review on #2313: a failed rating's record must
+  // outlive the component, which unmounts with the panel.
+  it('keeps a failed rating\'s retry across an unmount, retries the same record, and posts no none', async () => {
+    window.__mockFeedbackFail = true
+    const first = render(<Harness/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(screen.getByRole('button', {name: 'Bad reply'}))
+    fireEvent.change(screen.getByPlaceholderText(NOTE_PLACEHOLDER), {target: {value: 'wrong walls'}})
+    fireEvent.click(screen.getByTestId('Feedback-Send'))
+    expect(await screen.findByText(SEND_FAILED_TEXT)).toBeInTheDocument()
+    expect(stored()).toEqual([])
+    const ratedId = feedbackEvents()[0].feedback_id
+    first.unmount()
+
+    window.__mockFeedbackFail = false
+    render(<Harness/>, {wrapper: HelmetStoreRouteThemeCtx})
+    // The reopened reply still says it failed, and offers the retry.
+    expect(screen.getByRole('button', {name: 'Bad reply'})).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText(SEND_FAILED_TEXT)).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('BotChat-FeedbackRetry'))
+    expect(await screen.findByText(SENT_TEXT)).toBeInTheDocument()
+    expect(stored()).toEqual([expect.objectContaining({feedback_id: ratedId, rating: 'down', note: 'wrong walls'})])
+    expect(feedbackEvents()).toHaveLength(1)
+    expect(stored().some((r) => r.rating === 'none')).toBe(false)
+  })
+
+  it('the filled thumb of a rating that never landed takes it back without posting a none', async () => {
+    window.__mockFeedbackFail = true
+    const first = render(<Harness/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(screen.getByRole('button', {name: 'Good reply'}))
+    fireEvent.click(screen.getByTestId('Feedback-Send'))
+    expect(await screen.findByText(SEND_FAILED_TEXT)).toBeInTheDocument()
+    first.unmount()
+    window.__mockFeedbackFail = false
+    render(<Harness/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(screen.getByRole('button', {name: 'Good reply'}))
+    expect(screen.getByRole('button', {name: 'Good reply'})).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.queryByTestId('BotChat-FeedbackRetry')).toBeNull()
+    expect(screen.queryByText(SEND_FAILED_TEXT)).toBeNull()
+    expect(feedbackEvents().map((p) => p.rating)).toEqual(['up'])
+    expect(stored()).toEqual([])
+  })
+
   it('a newer rating drops a failed clear\'s retry, so the clear can\'t retract it later', async () => {
     render(<Harness/>, {wrapper: HelmetStoreRouteThemeCtx})
     fireEvent.click(screen.getByRole('button', {name: 'Good reply'}))
