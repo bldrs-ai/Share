@@ -22,7 +22,7 @@ For Project 1 in the UX doc: 2 engine workers (A, B), 3 sessions, and no session
 
 | Term | Means | In code today |
 |---|---|---|
-| **Project** | A named group of models and sessions | `WorkspaceProject` in `src/workspace/persistence.ts` (`{id, label, path}`), models only |
+| **Project** | A named group of models and sessions | `WorkspaceProject` in `src/workspace/persistence.ts` (`{id, name, models}`, each model a `WorkspaceModelRef` `{id, label, path}`), models only |
 | **Model** | A source file (IFC, STEP, GLB, …) the project lists, with its version history | A load route (GitHub path, Drive id, local OPFS name) |
 | **Session** | A conversation thread over some of the project's models: conversation, model refs, placements, op logs, view state | `WorkspaceSession`, not built |
 | **Model session** | One open model: its load, engine lease, scene root and per-model state | `ModelSession` in `src/Containers/modelSession.js`, moving to `src/session/` ([layering.md](../tracks/open-t200/layering.md) §4.5) |
@@ -82,7 +82,7 @@ A session is files, so it can be kept locally first and in a project repository 
 }
 ```
 
-- **`key`** is short and local to the session. It names the model in refs (§5) and in the op-log file name, and it never changes when the model is renamed. It is not `ModelSession.modelKey`, the model's identity in code (`modelIdentity`, a URL that stays internal; [layering.md](../tracks/open-t200/layering.md) §4.5a).
+- **`key`** is short and local to the session. It names the model in refs (§5) and in the op-log file name, and it never changes when the model is renamed. It is not `ModelSession.modelKey`, the model's identity in code (`modelIdentity`: a URL for every parsed route, a bare path for a `{filepath}` model, and internal either way; [layering.md](../tracks/open-t200/layering.md) §4.5a).
 - **`version`** pins what the session was made against. Its format is `share-200`'s version identity ([model-versioning.md](model-versioning.md)), not a new one. A model that moved on since is shown as such (UX: "Resume a session"); the session is never silently re-pointed.
 - **`placement`** is `null` when the model's own coordinates are used; set it only when the person moves a model. IFC georeferencing is applied first, as today (`stampAppliedCoordination`).
 - **`view`** reuses the permalink terms (`#c:`, `#cp:`, `#d:`), so a session's view and a shared link describe a view the same way.
