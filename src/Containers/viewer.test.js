@@ -1,5 +1,8 @@
 import {__getShareViewerMockSingleton} from '../../__mocks__/shareViewerTestHarness'
 import {disposeViewer, initViewer} from './viewer'
+import {MAX_INTERVAL_MS} from '../viewer/hoverPick'
+import {flags} from '../FeatureFlags'
+import ThreeContext from '../viewer/three/ThreeContext'
 
 
 /**
@@ -107,6 +110,7 @@ describe('Containers/viewer', () => {
     // Make sure no viewer state leaks between tests.
     disposeViewer()
     jest.restoreAllMocks()
+    jest.useRealTimers()
   })
 
 
@@ -123,6 +127,73 @@ describe('Containers/viewer', () => {
       initViewer('/share/v/p')
       const events = windowAddSpy.mock.calls.map(([eventName]) => eventName)
       expect(events).toEqual(expect.arrayContaining(['mousedown', 'mouseup', 'mousemove']))
+    })
+
+    it('hover-picks in the render loop\'s frame, not in the mousemove, nor while a button is down', () => {
+      // Two per-frame hooks: MotionAO's (registered as the viewer is built)
+      // and then the hover picker's, which is the last one.
+      let frameHook = null
+      const stopFrame = jest.fn()
+      const onFrame = jest.spyOn(ThreeContext.prototype, 'onFrame').mockImplementation((fn) => {
+        frameHook = fn
+        return stopFrame
+      })
+      const viewer = initViewer('/share/v/p')
+      expect(onFrame).toHaveBeenCalledTimes(2)
+      const pointer = {x: 0.1, y: 0.2}
+      viewer.context.getNormalizedMousePosition = () => pointer
+      viewer.highlightIfcItem = jest.fn()
+      const handler = (name) => windowAddSpy.mock.calls.filter(([n]) => n === name).pop()[1]
+      // The mousemove only marks the pointer; the frame picks.
+      handler('mousemove')()
+      expect(viewer.highlightIfcItem).not.toHaveBeenCalled()
+      frameHook()
+      expect(viewer.highlightIfcItem).toHaveBeenCalledTimes(1)
+      // A window mousemove that didn't move the canvas pointer picks nothing.
+      handler('mousemove')()
+      frameHook()
+      expect(viewer.highlightIfcItem).toHaveBeenCalledTimes(1)
+      // A drag: nothing while the button is down, one pick where it lets go,
+      // on the frame after the mouseup.
+      handler('mousedown')()
+      pointer.x = 0.5
+      handler('mousemove')()
+      frameHook()
+      expect(viewer.highlightIfcItem).toHaveBeenCalledTimes(1)
+      handler('mouseup')()
+      expect(viewer.highlightIfcItem).toHaveBeenCalledTimes(1)
+      frameHook()
+      expect(viewer.highlightIfcItem).toHaveBeenCalledTimes(2)
+      // Disposing the viewer leaves the frame loop, both hooks.
+      disposeViewer()
+      expect(stopFrame).toHaveBeenCalledTimes(2)
+    })
+
+    it('with disableFrameHover, hover-picks in the mousemove on the timer scheduler, as #2127 shipped', () => {
+      // Fake timers fake `performance.now` too, so the interval is the
+      // test's to step through.
+      jest.useFakeTimers()
+      const flag = flags.find((f) => f.name === 'disableFrameHover')
+      flag.isActive = true
+      try {
+        const viewer = initViewer('/share/v/p')
+        const pointer = {x: 0.1, y: 0.2}
+        viewer.context.getNormalizedMousePosition = () => pointer
+        viewer.highlightIfcItem = jest.fn()
+        const handler = (name) => windowAddSpy.mock.calls.filter(([n]) => n === name).pop()[1]
+        handler('mousemove')()
+        expect(viewer.highlightIfcItem).toHaveBeenCalledTimes(1)
+        handler('mousedown')()
+        pointer.x = 0.5
+        handler('mousemove')()
+        expect(viewer.highlightIfcItem).toHaveBeenCalledTimes(1)
+        handler('mouseup')()
+        // Inside the interval of the first pick, so it is the trailing pick.
+        jest.advanceTimersByTime(MAX_INTERVAL_MS)
+        expect(viewer.highlightIfcItem).toHaveBeenCalledTimes(2)
+      } finally {
+        flag.isActive = false
+      }
     })
 
     it('disposes the previous viewer before creating the new one', () => {

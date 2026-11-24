@@ -11,6 +11,8 @@ import {navigateToModel} from '../../utils/navigate'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../../connections/persistence'
 import {getGrantedGithubScope, saveGrantedGithubScope} from '../../Auth0/githubGrant'
 import useStore from '../../store/useStore'
+import {WARN, disableDebug, setDebugLevel} from '../../utils/debug'
+import {HTTP_AUTHORIZATION_REQUIRED} from '../../net/http'
 import GitHubFileBrowser from './GitHubFileBrowser'
 
 
@@ -183,6 +185,26 @@ describe('GitHubFileBrowser', () => {
   })
 
 
+  // SHARE-1X6: an expired or revoked GitHub token makes /user/orgs reject
+  // with a 401, which was an unhandled rejection. The user's own account is
+  // still browsable.
+  it('falls back to the user\'s own account when the org list fails', async () => {
+    getOrganizations.mockRejectedValue(Object.assign(new Error('Bad credentials'), {status: HTTP_AUTHORIZATION_REQUIRED}))
+    // setupTests disables debug output; raise it so the warning is observable.
+    setDebugLevel(WARN)
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await renderBrowser()
+      expect(warnSpy).toHaveBeenCalledWith('GitHubFileBrowser: could not list GitHub organizations', HTTP_AUTHORIZATION_REQUIRED)
+      await selectOption('openOrganization', '@cypresstester')
+      await waitFor(() => expect(getUserRepositories).toHaveBeenCalledWith('test-token', 'cypresstester'))
+    } finally {
+      warnSpy.mockRestore()
+      disableDebug()
+    }
+  })
+
+
   describe('private-repo opt-in', () => {
     it('always shows the opt-in once repos load — greyed with a (Pro only) label for a free user', async () => {
       await renderBrowser()
@@ -310,6 +332,13 @@ describe('GitHubFileBrowser', () => {
           {name: 'stage.usda'},
           {name: 'crate.usdc'},
           {name: 'layer.usd'},
+          // Every zip is listed: Loader opens the model inside by its
+          // content, so the name doesn't have to say what that is.
+          {name: 'CT1.zip'},
+          {name: 'tower.ifc.zip'},
+          // A type inside a longer suffix is no type: not listed, since it
+          // wouldn't route.
+          {name: 'bundle.zipx'},
           {name: 'readme.md'},
           {name: 'notes.txt'},
         ],
@@ -326,6 +355,9 @@ describe('GitHubFileBrowser', () => {
       for (const usdName of ['engine.usdz', 'stage.usda', 'crate.usdc', 'layer.usd']) {
         expect(screen.getByRole('option', {name: usdName})).toBeInTheDocument()
       }
+      expect(screen.getByRole('option', {name: 'CT1.zip'})).toBeInTheDocument()
+      expect(screen.getByRole('option', {name: 'tower.ifc.zip'})).toBeInTheDocument()
+      expect(screen.queryByRole('option', {name: 'bundle.zipx'})).not.toBeInTheDocument()
       expect(screen.queryByRole('option', {name: 'readme.md'})).not.toBeInTheDocument()
       expect(screen.queryByRole('option', {name: 'notes.txt'})).not.toBeInTheDocument()
     })

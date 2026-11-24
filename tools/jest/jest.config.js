@@ -1,4 +1,4 @@
-import {excludedNodeModules} from './common.js'
+import {transformIgnoreNodeModules} from './common.js'
 
 
 export default {
@@ -22,15 +22,15 @@ export default {
     '.*\\.spec\\.[jt]s$',
   ],
   transformIgnorePatterns: [
-    `/node_modules/(?!${excludedNodeModules}/)`,
+    transformIgnoreNodeModules,
     '.*\\.spec\\.[jt]s$',
   ],
   moduleNameMapper: {
     '^.+\\.css$': 'identity-obj-proxy',
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'json', 'node'],
-  // Coverage is opt-in via `yarn test-src --coverage` (or the dedicated
-  // `yarn test-coverage` script). When enabled, these settings control
+  // Coverage is opt-in via `bun run test-src --coverage` (or the dedicated
+  // `bun run test-coverage` script). When enabled, these settings control
   // what's measured and where reports are written.
   collectCoverageFrom: [
     'src/**/*.{js,jsx,ts,tsx}',

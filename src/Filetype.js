@@ -24,6 +24,10 @@ export const supportedTypes = [
   // Listed with the rest so routes, drag-drop and permalinks all pick
   // them up.
   'ksplat',
+  // Volumes (CT, MR), via three's NRRDLoader (src/loader/nrrd.js). A zip of
+  // DICOM slices becomes one of these at the upload seams
+  // (`loader/modelArchive.js`, `loader/dicom.js`).
+  'nrrd',
   'obj',
   'pdb',
   'ply',
@@ -38,6 +42,11 @@ export const supportedTypes = [
   'usdc',
   'usdz',
   'xyz',
+  // Any zip, from any source: what it holds is decided by its content
+  // (`loader/modelArchive.js`), at the upload seams and in `Loader#load` for
+  // a download. Listed so a `.zip` routes, shows in the GitHub browser and
+  // parses out of a permalink (`foo.ifc.zip/12` splits after `.zip`).
+  'zip',
 ]
 
 export const supportedTypesUsageStr = `${supportedTypes.join(',')}`
@@ -56,7 +65,7 @@ export const typeRegexStr = `(?:${[...supportedTypes].sort((a, b) => b.length - 
 export const filetypeRegex = new RegExp(typeRegexStr, 'i')
 
 
-/** Prepend it with a '.' to make a file suffix*/
+/** A ".<type>" anywhere: the fallback of {@link splitAroundExtension}. */
 const fileSuffixRegex = new RegExp(`\\.${typeRegexStr}`, 'i')
 
 
@@ -137,7 +146,7 @@ export function getValidExtension(pathOrExt) {
 
 
 // File header magic is clear by this offset
-const HEADER_LIMIT = 1024
+export const HEADER_LIMIT = 1024
 
 // GLB binary format magic ("glTF" in ASCII)
 const GLB_MAGIC = Array.from('glTF', (c) => c.charCodeAt(0))
@@ -151,6 +160,11 @@ const USDC_MAGIC = Array.from('PXR-USDC', (c) => c.charCodeAt(0))
 // otherwise hit bytes inside it. Only the `bin` flavour is matched, since
 // it is the only one `loader/adf/adf-parser.js` reads.
 const ADF_MAGIC = Array.from('AlignDataFile ( bin )', (c) => c.charCodeAt(0))
+
+// NRRD opens with its version line, `NRRD0001` to `NRRD0005`. Matched as
+// magic bytes: the header is text but the voxels after it are binary, and
+// a small volume's voxels fall inside the sniffed window.
+const NRRD_MAGIC = Array.from('NRRD000', (c) => c.charCodeAt(0))
 
 // Zip local-file-header signature "PK\x03\x04". A zip signature alone
 // is NOT enough to classify as usdz — docx/xlsx/plain .zip uploads are
@@ -193,7 +207,8 @@ export function looksLikeGzipBytes(bytes) {
 
 /**
  * @param {string} path
- * @return {Promise<string|null>} The result of the `analyzeHeader` function on the downloaded file.
+ * @return {Promise<string|null>} The result of the `analyzeHeader` function on the downloaded file,
+ *   or `'zip'` for an archive it doesn't otherwise recognize.
  */
 export async function guessType(path) {
   debug().log('Filetype#guessType, path:', path)
@@ -206,7 +221,12 @@ export async function guessType(path) {
   const headerBuffer = response.data
   const fileByteLength = fileByteLengthOfRangeResponse(
     response.status, response.headers?.['content-range'], headerBuffer)
-  return analyzeHeader(headerBuffer, {fileByteLength})
+  // A plain zip is no model `analyzeHeader` knows (it answers null, which
+  // `modelArchive.js` relies on to tell an archive from a zip-based model),
+  // but a URL that serves one — a Drive link, any extension-less path — is
+  // routed as the container it is: `Loader#load` opens the model inside.
+  return analyzeHeader(headerBuffer, {fileByteLength}) ??
+    (matchesMagic(headerBuffer, ZIP_MAGIC) ? 'zip' : null)
 }
 
 
@@ -321,6 +341,9 @@ export function analyzeHeader(headerBuffer, {isEnvelopeAllowed = true, fileByteL
   }
   if (matchesMagic(headerBuffer, ADF_MAGIC)) {
     return 'adf'
+  }
+  if (matchesMagic(headerBuffer, NRRD_MAGIC)) {
+    return 'nrrd'
   }
   if (looksLikeGzipBytes(headerBuffer)) {
     // The gzip signature is shared by SPZ splats, Share's own `.glb.gz`
@@ -612,7 +635,7 @@ export function classifyStepFamily(header) {
  *
  * Both of these answer a *naming* question and neither is a format oracle.
  * The one caller whose false-'ifc' was expensive — `canOpenFromStore`, gating
- * conway's IFC-only store open, where guessing 'ifc' burns a model handle and
+ * the main-thread engine's store open (IFC only there), where guessing 'ifc' burns a model handle and
  * caches a GLB with no NavTree (bldrs-ai/Share#1776) — no longer asks here.
  * It asks conway's own `ModelFormatDetector` instead; see
  * `src/loader/stepFormat.js` for why a scan like this one cannot agree with
@@ -632,7 +655,7 @@ export function stepSchemaName(header) {
   // answer from one entity and conway from the other — and on
   // `FILE_SCHEMA(('IFC4')); FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));` that is the
   // dangerous direction: we say IFC, conway says AP214, and a STEP file goes
-  // down the IFC-only store open (bldrs-ai/Share#1776).
+  // down the main-thread engine's IFC-only store open (bldrs-ai/Share#1776).
   const matches = [...section.matchAll(FILE_SCHEMA_VALUE)]
   return matches.length === 0 ? null : matches[matches.length - 1][1]
 }
@@ -690,7 +713,7 @@ function part21HeaderSection(masked) {
  *   - `/* FILE_SCHEMA(('IFC4')); *``/ FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));` is
  *     AP214 to conway. A raw-text scan finds the commented-out entity first
  *     and reports IFC — the dangerous direction, which sends a STEP file
- *     down conway's IFC-only store open and burns a model handle
+ *     down the main-thread engine's IFC-only store open and burns a model handle
  *     (bldrs-ai/Share#1776).
  *
  * The second is why this masks rather than making the gap pattern
@@ -761,11 +784,17 @@ function maskPart21Comments(text) {
  */
 export function splitAroundExtension(filepath) {
   assertDefined(filepath)
-  const match = fileSuffixRegex.exec(filepath)
+  // At a segment boundary first, so the suffix is the file's outermost: the
+  // `.zip` of `box.ifc.zip`, not the `.ifc` inside its name, which would
+  // route `box.ifc.zip` to a `box.ifc` that isn't there. Then anywhere, as
+  // before: a transport suffix that isn't a type (`x.glb.gz`) still routes
+  // by the type inside it.
+  const suffixRegex = fileSuffixBoundaryRegex.test(filepath) ? fileSuffixBoundaryRegex : fileSuffixRegex
+  const match = suffixRegex.exec(filepath)
   if (!match) {
     throw new FilenameParseError(`Filepath(${filepath}) must contain ".${typeRegexStr}" (case-insensitive)`)
   }
-  const parts = filepath.split(fileSuffixRegex)
+  const parts = filepath.split(suffixRegex)
   return {parts, extension: match[0]}
 }
 

@@ -7,9 +7,11 @@ import TitledLayout from '../layouts/TitledLayout'
 export default function Privacy() {
   return (
     <TitledLayout title='Privacy Policy'>
-      <Box sx={{display: 'grid'}}>
+      {/* A blank line's worth between paragraphs; headings keep their own
+          spacing. Same rule as the marketing copy (marketing/src/app/privacy). */}
+      <Box sx={{'display': 'grid', '& p.MuiTypography-body1': {mb: 2}}}>
         <Typography variant='body1'><strong>Effective Date:</strong> January 1, 2022</Typography>
-        <Typography variant='body1'><strong>Last Updated:</strong> November 2, 2026</Typography>
+        <Typography variant='body1'><strong>Last Updated:</strong> November 24, 2026</Typography>
 
         <Typography variant='body1'>
           Bldrs Share (“we,” “us,” “our”) provides open-source, browser-first tools for viewing and
@@ -19,8 +21,8 @@ export default function Privacy() {
 
         <Typography variant='h1'>1. Information We Collect</Typography>
         <Typography variant='body1'>
-          Bldrs Share is built to operate <strong>without centralized data storage</strong>. We do not host
-          user content or model data by default. Depending on your configuration:
+          Bldrs Share operates <strong>without centralized model data storage</strong>. We do not upload or
+          host user model data by default. What we do receive:
         </Typography>
         <Typography variant='body1'>
           <strong>Authentication data.</strong> When you sign in via Auth0/Google or another provider,
@@ -31,28 +33,43 @@ export default function Privacy() {
           If you connect third-party storage (e.g., Google Drive), we only request access to the specific files
           you select. We do not scan or store other files from your account.
         </Typography>
-        {/* Keep this section in step with marketing/src/app/privacy/page.tsx, which serves /privacy/.
-            What it describes is in src/connections/README.md §"Reporting login failures". */}
-        {/* Retention is Sentry's for bldrs-ai's Team plan (errors 90 days, spans/transactions 30), per
-            docs.sentry.io/security-legal-pii/security/data-retention-periods/, checked 2026-11-03.
-            Update both copies if the plan changes. */}
         <Typography variant='body1'>
-          <strong>Error and reliability monitoring (always on).</strong> To run and secure the service, the
-          hosted app reports errors and failures, including failed sign-ins, to Sentry, our error-monitoring
-          provider. A report includes the error details, the page address, your browser and its version, the app
-          release and page timing; for a failed sign-in, the Auth0 tracking id; and, if you are signed in, your
-          account identifier (an opaque id, not your name or email). Reports never include your email, name,
-          sign-in tokens or the contents of your files. Sentry processes this data on our behalf as our service
-          provider. We use it only to find and fix problems and keep the service secure, never for advertising,
-          and it is not shared for third-party purposes.
-          Sentry keeps error reports for 90 days and page-timing data for 30 days, then deletes them.
+          <strong>Telemetry is required by default.</strong> We collect pseudonymous usage metrics (e.g.,
+          performance, feature use) to improve reliability and user experience. Telemetry is of two kinds:
+        </Typography>
+        {/* Keep this section in step with marketing/src/app/privacy/page.tsx, which serves /privacy/.
+           What the error reports carry is in src/connections/README.md §"Reporting login failures".
+           Retention is Sentry's for bldrs-ai's Team plan (errors 90 days, spans/transactions 30), per
+           docs.sentry.io/security-legal-pii/security/data-retention-periods/, checked 2026-11-03.
+           Update both copies if the plan changes. */}
+        <Typography variant='body1'>
+          <strong>Error and reliability reports.</strong> When something fails, including a failed sign-in, the
+          app reports what failed, the app and browser versions and page timing to our error-monitoring service
+          (Sentry); for a failed sign-in, the Auth0 tracking ID; and, if you’re signed in, your account ID (an
+          opaque ID, not your name or email). Separately, it counts browsers that can’t run part of the app (for
+          example, with no WebGL, or with analytics blocked) by browser family and device type only, sent to
+          Google Analytics under one shared ID rather than yours. None of these reports set cookies or include
+          your email, name, sign-in tokens, or your models’ file names, paths or contents. Unless you allow
+          usage metrics, they carry no identifier that follows your browser between visits; if you do, error
+          reports also carry your Google Analytics ID, so we can connect a problem to a visit. Sentry processes
+          these reports on our behalf as our service provider, and keeps error reports for 90 days and
+          page-timing data for 30 days, then deletes them. We use them only to find and fix problems and keep
+          the service secure, never for advertising. They are part of operating the service and are always on,
+          on the basis of our legitimate interest in keeping Bldrs Share secure and working.
         </Typography>
         <Typography variant='body1'>
-          <strong>Analytics (optional).</strong> On bldrs.ai we use Google Analytics, a third-party service, to
-          understand how the product is used (e.g., page views, feature use). Your analytics choice applies to
-          Google Analytics only; it does not turn off the error monitoring above. If you allow analytics, error
-          reports may also carry your Google Analytics client id, so we can connect a problem to a visit; if you
-          decline, they do not.
+          <strong>Usage metrics.</strong> With your consent, we measure visits and feature use, including
+          which kinds of models are opened (format, size, source), with Google Analytics, which sets cookies
+          holding a pseudonymous ID. We do not use them for advertising. Nothing is collected for usage
+          metrics until you press OK in the welcome dialog.
+        </Typography>
+        <Typography variant='body1'>
+          <strong>You may refuse normal operation</strong> and Bldrs Share will operate in a reduced
+          local-only mode (“Test only mode”) to allow evaluation of basic viewer capabilities: you can open
+          files from your computer and the sample models, but not models from GitHub, Google Drive or a web
+          address, and you can’t save to GitHub or share. Press Cancel in the welcome dialog to choose it.
+          Error and reliability reports continue in this mode. You can change your choice at any time from the
+          About dialog.
         </Typography>
 
         <Typography variant='h1'>2. Open-Source and Self-Hosted Use</Typography>
@@ -93,6 +110,7 @@ export default function Privacy() {
           account metadata or error reports tied to your account (if applicable) by emailing{' '}
           <Link href='mailto:support@bldrs.ai'>support@bldrs.ai</Link>.
           You can also use open-source/self-hosted deployments without accounts, subject to your configuration.
+          You can change your telemetry choice at any time from the About dialog.
         </Typography>
 
         <Typography variant='h1'>7. Children’s Privacy</Typography>

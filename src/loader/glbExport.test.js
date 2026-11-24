@@ -55,7 +55,9 @@ import {Matrix4} from 'three'
 import {BLDRS_GLB_SCHEMA_VERSION, glbCacheKey} from './glbCacheKey'
 import useStore from '../store/useStore'
 import {beginGlbArtifactLoad, publishGlbArtifact} from './glbArtifactPublish'
-import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb, exportThreeModelAsGlb} from './glbExport'
+import {
+  BLDRS_SOURCE_BYTES_EXTRAS_KEY, BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb, exportThreeModelAsGlb, validSourceBytes,
+} from './glbExport'
 import {
   APPLIED_COORDINATION_KEY,
   COORDINATION_OFFSET_KEY,
@@ -578,6 +580,45 @@ describe('loader/glbExport', () => {
       expect(ifcManager.getSpatialStructure).toHaveBeenCalledWith(2, true)
     })
 
+    // A worker-engine load (engine-worker.md §7 step 5): no engine on the
+    // page holds the model, so its captures come back from the worker's
+    // `capture` op instead of being read through `ifcManager`.
+    it('embeds what a `capture` job returns, and never reads ifcManager', async () => {
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(fakeGlbBytes.buffer))
+      let injected = null
+      mockInjectGlbExtensions.mockImplementation((bytes, extensions) => {
+        injected = extensions
+        return {bytes, stats: {
+          addedExtensions: 0, addedBinBytes: 0, addedSceneExtras: 0,
+          addedSceneName: 0, skippedNames: [],
+        }}
+      })
+      const tree = {expressID: 9, type: 'IFCPROJECT'}
+      const container = new Uint8Array([1, 2, 3])
+      const capture = jest.fn(() => Promise.resolve(
+        {spatialTree: tree, elementProperties: container, geometryItemIdentities: null}))
+      const ifcManager = {getSpatialStructure: jest.fn(), getItemProperties: jest.fn(), getPropertySets: jest.fn()}
+
+      const ok = await exportAndCacheGlb({model: {fake: 'model'}, ...ctx, ifcManager: null, capture})
+
+      expect(ok).toBe(true)
+      expect(capture).toHaveBeenCalledWith({geometryExpressIds: null})
+      expect(ifcManager.getSpatialStructure).not.toHaveBeenCalled()
+      expect(injected.find((e) => e.name === 'BLDRS_spatial_tree').data).toBe(tree)
+      expect(injected.find((e) => e.name === 'BLDRS_element_properties').precompressed).toBe(container)
+    })
+
+    it('writes nothing when the capture job throws (an artifact without properties would be served on)', async () => {
+      // e.g. the worker session closed under the idle writer.
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(fakeGlbBytes.buffer))
+      const capture = () => Promise.reject(new Error('engine session closed'))
+
+      const ok = await exportAndCacheGlb({model: {fake: 'model'}, ...ctx, capture})
+
+      expect(ok).toBe(false)
+      expect(mockWriteGlbBytesToOPFS).not.toHaveBeenCalled()
+    })
+
     it('returns false (no throw) when the exporter produces no bytes', async () => {
       mockExporterParse.mockImplementation((_input, _onDone, onError) => onError(new Error('nope')))
       const ok = await exportAndCacheGlb({model: {}, ...ctx})
@@ -641,6 +682,40 @@ describe('loader/glbExport', () => {
       expect(sceneExtrasArg).toEqual({[BLDRS_TITLE_EXTRAS_KEY]: 'Momentum'})
       // Same pass also stamps the standard glTF scenes[0].name (#1595).
       expect(sceneNameArg).toBe('Momentum')
+    })
+
+    it('stamps the source size beside the title, so a cache hit can report it', async () => {
+      const SOURCE_BYTES = 24_200_000
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      const ok = await exportAndCacheGlb({model: {name: 'Momentum'}, ...ctx, sourceBytes: SOURCE_BYTES})
+      expect(ok).toBe(true)
+
+      const [, , sceneExtrasArg] = mockInjectGlbExtensions.mock.calls[0]
+      expect(sceneExtrasArg).toEqual({
+        [BLDRS_TITLE_EXTRAS_KEY]: 'Momentum',
+        [BLDRS_SOURCE_BYTES_EXTRAS_KEY]: SOURCE_BYTES,
+      })
+    })
+
+    it('stamps no source size when the one given is not a size', async () => {
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      await exportAndCacheGlb({model: {name: 'Momentum'}, ...ctx, sourceBytes: 0})
+
+      const [, , sceneExtrasArg] = mockInjectGlbExtensions.mock.calls[0]
+      expect(sceneExtrasArg).toEqual({[BLDRS_TITLE_EXTRAS_KEY]: 'Momentum'})
+    })
+
+    const SIZE = 24_200_000
+    const FRACTION = 1.5
+    it.each([
+      [SIZE, SIZE],
+      [0, null], [-1, null], [FRACTION, null], [String(SIZE), null], [null, null], [undefined, null], [NaN, null],
+    ])('validSourceBytes(%p) is %p: the stamp is read back from an untrusted file', (value, expected) => {
+      expect(validSourceBytes(value)).toBe(expected)
     })
 
     it('passes sceneExtras: null when model.name is absent (drag-dropped GLB / OBJ etc.)', async () => {

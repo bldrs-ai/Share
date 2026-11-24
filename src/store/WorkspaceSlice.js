@@ -15,7 +15,7 @@ export const WORKSPACE_DRAWER_WIDTH_INITIAL = 240
 
 /**
  * Zustand slice for the workspace shell (`?feature=workspace` — epic
- * assist-300, #1657): projects → models shown in the ProjectsDrawer,
+ * open-200, #1657): projects → models shown in the ProjectsDrawer,
  * plus the models the user has open but hasn't filed anywhere.
  *
  * Every mutation writes through to localStorage (Tier-1 persistence,

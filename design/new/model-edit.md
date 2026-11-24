@@ -1,4 +1,4 @@
-# Model edit — the create-300 substrate (Track T12)
+# Model edit — the create-300 substrate (Track `create-t300`)
 
 **Status:** L0 landing (#1915). L1–L3 planned.
 **Epics:** `create-300` (#1914), `create-310` (#1919), `create-320` (#1920).
@@ -44,10 +44,10 @@ A new verb group, **Create**, in the roadmap's 300 (Pro) band:
 | Epic | Issue | Scope |
 |---|---|---|
 | `create-300` | #1914 | Model edit substrate: L0–L3 below. |
-| `create-310` | #1919 | Agent write tools. Edit ops on the T11 tool surface; the agent writes ops, never scene code. |
+| `create-310` | #1919 | Agent write tools. Edit ops on the `apps-t300` tool surface; the agent writes ops, never scene code. |
 | `create-320` | #1920 | Generative model creation: engine selection. Research story #1921, summarised in §8. |
 
-All three belong to Track **T12 (Model edit substrate)** in roadmap §5.
+All three belong to Track **`create-t300` (Model edit substrate)** in roadmap §3.2.
 
 
 ## 3. Layers
@@ -195,6 +195,16 @@ The allowlist holds `batchedEdit.js`, the table owner, the load-time builders,
 decoration, and the two display-colour writers (colour is display state, not
 identity). Each entry is checked for still being used.
 
+The per-geometry BVHs are the one thing built into a loaded batch afterwards:
+`decorateBatchMeshes` hands them to `deferredBatchedBvh.js`, which builds them
+in idle time once the model is on screen (Share#2101). It builds them
+INDIRECT, keeping each tree's triangle order in a buffer of its own, so the
+build never changes what the batch holds. A direct build sorts the index in
+place, and done between the slices of a sliced reader (the GLB writer's
+`snapshotBatchedModel`) that would be a change no revision announces.
+`addBatchedGeometry` still builds its new id's tree directly, inside the op
+and its revision bump.
+
 `batchedInstanceTables.js` keeps the side tables: `isActive`,
 `forEachActiveInstance`, `ensureInstanceCapacity`, and the row writers.
 
@@ -287,6 +297,14 @@ layer).
   after one delete every pick and hover on that batch threw.
   `batchedRaycast.js#raycastActiveInstances`, installed by `ShareIfc.js`,
   answers "not visible" for inactive ids for the duration of the call.
+  The instance tree that picks now go through once it is built
+  (`batchedInstanceBvh.js`, built after load by `deferredBatchedBvh.js`) runs
+  the same per-instance raycast over just the ids a ray's box test names, and
+  asks `isActive` before `getVisibleAt`, so a deleted id is skipped there too.
+  It is an `onBatchEdit` listener: an id an edit adds, moves or reshapes is
+  walked on every ray besides the tree's own candidates, and a revision the
+  listener has not seen turns the tree off. `batchedInstanceBvh.test.js`
+  compares its hits with the full walk's after each kind of edit.
 - **The isolation mask grows.** IfcIsolator's `base`/`allow` masks are indexed
   by batch id and were sized once, so a paste past their end read as hidden.
   They now extend to the batch's id span.

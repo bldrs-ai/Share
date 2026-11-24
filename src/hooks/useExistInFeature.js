@@ -5,10 +5,13 @@ import {flags} from '../FeatureFlags'
 
 
 // Mirror of `FeatureFlags.js#FEATURE_IMPLICATIONS`. Kept in sync by
-// hand — the two-element map doesn't justify a shared module.
+// hand — the small map doesn't justify a shared module. (It had drifted:
+// `glbbatched` and `glbcollapse` were missing here, ai-workspace.md D12.)
 // Sub-flags whose presence in the URL also activates the parent.
 const FEATURE_IMPLICATIONS = {
-  glb: ['glbdraco', 'glbmeshopt', 'glbverbose'],
+  glb: ['glbdraco', 'glbmeshopt', 'glbverbose', 'glbbatched', 'glbcollapse'],
+  // `?feature=bot`, the assistant's old name, until #1672 renames the tray.
+  assist: ['bot'],
 }
 
 

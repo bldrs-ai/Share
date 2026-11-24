@@ -35,13 +35,13 @@ been passing it a dummy key that hid exactly that.
 
 | Layer | File(s) | Runs | Catches | Blind to |
 |---|---|---|---|---|
-| Unit, mocked | `netlify/functions/_tests/<fn>.test.js`, `_lib/auth0.test.js` | `yarn test-src` (hook, CI) | Branch logic, error mapping, what reaches Sentry and the log | Module format, packaging, real HTTP clients |
-| Source loads as ESM | `_tests/esmLoad.test.js` | `yarn test-src` | CommonJS under `"type": "module"`, module-scope crashes without secrets | Anything about the bundle |
-| **Replay, source** | `_tests/replaySource.test.js` + `_tests/replay/` | `yarn test-src` | Behaviour against recorded upstream traffic: real signatures, real axios/Stripe/fetch clients, exact outbound requests | Packaging |
-| Bundle config + load | `tools/netlify/functionBundler.test.js` | `yarn test-tools` (hook, CI) | Wrong bundler, a file missing from the zip at import time, `included_files` | Request-time failures |
-| **Replay, bundle** | same file, same scenarios | `yarn test-tools` | Everything replay-source catches, **against the zip a deploy ships**, including files first required at request time | Netlify's own bundler version and flags |
-| **Smoke, local HTTP** | same file + `tools/netlify/serveBundles.mjs` | `yarn test-tools` | The smoke contract holding, in strict mode, for the bundles | Same |
-| Smoke contract | `tools/netlify/smokeFunctions.test.js` | `yarn test-tools` | Probes drifting from tested behaviour; the smoke test failing to fail | — |
+| Unit, mocked | `netlify/functions/_tests/<fn>.test.js`, `_lib/auth0.test.js` | `bun run test-src` (hook, CI) | Branch logic, error mapping, what reaches Sentry and the log | Module format, packaging, real HTTP clients |
+| Source loads as ESM | `_tests/esmLoad.test.js` | `bun run test-src` | CommonJS under `"type": "module"`, module-scope crashes without secrets | Anything about the bundle |
+| **Replay, source** | `_tests/replaySource.test.js` + `_tests/replay/` | `bun run test-src` | Behaviour against recorded upstream traffic: real signatures, real axios/Stripe/fetch clients, exact outbound requests | Packaging |
+| Bundle config + load | `tools/netlify/functionBundler.test.js` | `bun run test-tools` (hook, CI) | Wrong bundler, a file missing from the zip at import time, `included_files` | Request-time failures |
+| **Replay, bundle** | same file, same scenarios | `bun run test-tools` | Everything replay-source catches, **against the zip a deploy ships**, including files first required at request time | Netlify's own bundler version and flags |
+| **Smoke, local HTTP** | same file + `tools/netlify/serveBundles.mjs` | `bun run test-tools` | The smoke contract holding, in strict mode, for the bundles | Same |
+| Smoke contract | `tools/netlify/smokeFunctions.test.js` | `bun run test-tools` | Probes drifting from tested behaviour; the smoke test failing to fail | — |
 | **Smoke, live** | `.github/workflows/functions-smoke.yml` | Each deploy preview, and hourly on production (`--strict`) | **Anything that stops a deployed function starting**: Netlify's buildbot bundler, server-side flags, missing env per context, runtime Node | Behaviour behind auth (that's the replays' job) |
 
 The layers in bold are new with ops#33. Two of them do the real work:
@@ -124,7 +124,9 @@ rather than a PR's code.
 
 Two tests enforce the last two steps; the first two are on you.
 1. Write it as ESM. Build clients inside the handler, not at module scope,
-   and answer 500 "not configured" when a secret is missing.
+   and answer 500 "not configured" when a secret is missing. The exception
+   is a best-effort sink such as `client-capabilities`, whose caller is a
+   beacon that can't act on an error: it answers 204 and logs the skip.
 2. Unit tests for its branches, with mocks.
 3. At least one replay scenario, including one for the unauthenticated
    request (`replaySource.test.js` fails otherwise).
@@ -310,6 +312,31 @@ timeout. The webhook still can't be strictly bounded under Netlify's 10 s
 sync limit when several calls are slow at once; a function timeout is a
 non-2xx, so Stripe redelivers, which is safe — it just arrives without a log
 line.
+
+## ai-chat: the streaming relay and its ledger
+
+`ai-chat` (the hosted assistant, design/new/ai-workspace.md §5) is the one
+v2 function with dependencies. Two things about it differ from the rest:
+
+- **It is bundled with nft, not esbuild.** zip-it-and-ship-it ignores
+  `node_bundler` for v2 functions. Because it imports from `src/quota/`, its
+  bundle keeps the repo layout (`netlify/functions/ai-chat.mjs`, not
+  `functions/ai-chat.mjs`), so the harness reads each v2 bundle's handler
+  path from its entry point (`bundleFunctions.mjs` `v2HandlerOf`) instead of
+  assuming one. Its replays pass against that nft bundle, `@netlify/blobs`,
+  axios and Sentry included.
+- **Its ledger writes go to Netlify Blobs** under compare-and-swap
+  (`_lib/aiLedger.js`). The replay scenarios point the Blobs client at a
+  recorded edge (`fixtures/env/ai-chat.json`'s `NETLIFY_BLOBS_CONTEXT`) and
+  list each GET and conditional PUT as an exchange. The client PUTs values
+  as `text/plain`, so they are matched with `bodyJson` (replay README). A
+  hold's id is random per request, so a replay can't carry one in a
+  recorded record; the unit suite (`_tests/ai-chat.test.js`, over
+  `_tests/fakeBlobs.js`) pins the hold-level behaviour.
+
+Its smoke probe sends `{}`, which it refuses with 400 `ai_bad_request`
+before anything upstream: anonymous callers are served, so there is no
+"missing bearer" answer to probe.
 
 ## Subscription reconciliation
 

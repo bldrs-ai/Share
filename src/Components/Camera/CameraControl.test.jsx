@@ -4,17 +4,15 @@ import {__getShareViewerMockSingleton} from '../../../__mocks__/shareViewerTestH
 import {act, render, renderHook, screen} from '@testing-library/react'
 import useStore from '../../store/useStore'
 import ShareMock from '../../ShareMock'
+import {HASH_DEBOUNCE_WAIT_MS} from '../../utils/debounce'
 import CameraControl, {
+  addCameraUrlParams,
   onHash,
+  onLocation,
   parseHashParams,
-  WHEEL_DEBOUNCE_WAIT_MS,
 } from './CameraControl'
 import {HASH_PREFIX_CAMERA, removeCameraUrlParams} from './hashState'
-
-
-jest.mock('./hashState', () => ({
-  removeCameraUrlParams: jest.fn(),
-}))
+import {noteUserCameraMove} from './liveCameraLink'
 
 
 describe('CameraControl', () => {
@@ -69,86 +67,261 @@ describe('CameraControl', () => {
     expect(cam).toStrictEqual(expectCam)
   })
 
-  describe('with fake timers', () => {
-    let addEventListenerSpy
-    // Use fake timers so we can fast-forward through the debounce delay
-    beforeAll(() => {
-      document.body.innerHTML = '<canvas></canvas>'
-      addEventListenerSpy = jest.spyOn(HTMLCanvasElement.prototype, 'addEventListener')
-      jest.useFakeTimers()
-    })
+  describe('the live camera link', () => {
+    const MODEL_PATH = '/share/v/p/index.ifc'
+    let controls
+    let pushSpy
+    let unmount
+
     beforeEach(() => {
-      jest.clearAllMocks()
+      jest.useFakeTimers()
+      window.history.replaceState(null, '', `${MODEL_PATH}#share:;n`)
+      controls = new LiveControls()
+      const viewer = __getShareViewerMockSingleton()
+      jest.spyOn(viewer.context, 'getCameraControls').mockReturnValue(controls)
+      useStore.setState({viewer, isCameraInUrl: true})
+      pushSpy = jest.spyOn(window.history, 'pushState')
+      ;({unmount} = render(<ShareMock><CameraControl/></ShareMock>))
     })
-    afterAll(() => {
-      addEventListenerSpy.mockRestore()
+
+    afterEach(() => {
+      unmount?.()
+      pushSpy.mockRestore()
+      jest.restoreAllMocks()
       jest.useRealTimers()
+      window.history.replaceState(null, '', '/')
     })
 
-    it('removes every canvas listener it added when the component unmounts', () => {
-      // Locking in the useEffect-cleanup contract: anonymous handlers
-      // were leaking before because removeEventListener was called
-      // with fresh fn refs that didn't match the ones added.
-      const removeEventListenerSpy = jest.spyOn(
-        HTMLCanvasElement.prototype, 'removeEventListener',
-      )
+    const update = () => act(() => controls.dispatchEvent({type: 'update'}))
+    const settle = () => act(() => jest.advanceTimersByTime(HASH_DEBOUNCE_WAIT_MS))
+    const cameraToken = () => window.location.hash.substring(1).split(';').find((set) => set.startsWith('c:'))
 
-      const {unmount} = render(<ShareMock><CameraControl/></ShareMock>)
+    it('writes no #c: for camera moves the page made (load framing)', () => {
+      controls.move(10, 20, 30, 1, 2, 3)
+      update()
+      settle()
+      expect(cameraToken()).toBeUndefined()
+      expect(window.location.hash).toBe('#share:;n')
+    })
 
-      // Capture the handler refs that were added per event name; we'll
-      // then assert removeEventListener was called with the same refs.
-      const tracked = ['mousemove', 'wheel', 'mouseup', 'touchend']
-      const addedByName = {}
-      tracked.forEach((name) => {
-        const call = addEventListenerSpy.mock.calls.find(([n]) => n === name)
-        expect(call).toBeDefined()
-        addedByName[name] = call[1]
-      })
+    it('after the user\'s own move, keeps #c: on the live camera: debounced, in place, other tokens untouched', () => {
+      const lengthBefore = window.history.length
+      act(() => controls.dispatchEvent({type: 'controlstart'}))
+      controls.move(10.12345, 20, 30, 1, 2, 3)
+      update()
+      controls.move(123.45678, 20, 30, 1, 2, 3)
+      update()
+      act(() => jest.advanceTimersByTime(HASH_DEBOUNCE_WAIT_MS - 1))
+      expect(cameraToken()).toBeUndefined()
+      act(() => jest.advanceTimersByTime(1))
+      expect(cameraToken()).toBe('c:123.457,20,30,1,2,3')
+      expect(window.location.hash).toBe('#share:;n;c:123.457,20,30,1,2,3')
+      expect(window.location.pathname).toBe(MODEL_PATH)
+      expect(pushSpy).not.toHaveBeenCalled()
+      expect(window.history.length).toBe(lengthBefore)
 
+      // It stays on, following later moves, whoever made them.
+      controls.move(-4, 5, 6, 0.5, 0.5, 0.5)
+      update()
+      settle()
+      expect(cameraToken()).toBe('c:-4,5,6,0.5,0.5,0.5')
+      expect(window.history.length).toBe(lengthBefore)
+    })
+
+    it('starts on a ViewCube move too', () => {
+      act(() => noteUserCameraMove(controls))
+      controls.move(1, 2, 3, 4, 5, 6)
+      update()
+      settle()
+      expect(cameraToken()).toBe('c:1,2,3,4,5,6')
+    })
+
+    it('stops while the Share dialog\'s camera switch is off and resumes when it\'s on', () => {
+      act(() => controls.dispatchEvent({type: 'controlstart'}))
+      controls.move(1, 2, 3, 4, 5, 6)
+      update()
+      act(() => useStore.getState().setIsCameraInUrl(false))
+      settle()
+      controls.move(7, 8, 9, 4, 5, 6)
+      update()
+      settle()
+      expect(cameraToken()).toBeUndefined()
+      act(() => useStore.getState().setIsCameraInUrl(true))
+      update()
+      settle()
+      expect(cameraToken()).toBe('c:7,8,9,4,5,6')
+    })
+
+    // open-205 #2021: the URL becomes the next model's (and Share.jsx sets
+    // its route result) a few renders before this viewer is disposed, and
+    // the camera can go on moving meanwhile.
+    it('writes nothing once the store has moved on to another model\'s open', () => {
+      act(() => controls.dispatchEvent({type: 'controlstart'}))
+      controls.move(1, 2, 3, 4, 5, 6)
+      update()
+      settle()
+      expect(cameraToken()).toBe('c:1,2,3,4,5,6')
+      act(() => useStore.setState({modelPath: {filepath: '/another.ifc'}}))
+      controls.move(7, 8, 9, 4, 5, 6)
+      update()
+      settle()
+      expect(cameraToken()).toBe('c:1,2,3,4,5,6')
+    })
+
+    it('unmounting drops a pending write and stops following', () => {
+      act(() => controls.dispatchEvent({type: 'controlstart'}))
+      update()
       unmount()
-
-      tracked.forEach((name) => {
-        const removeCall = removeEventListenerSpy.mock.calls.find(
-          ([n, fn]) => n === name && fn === addedByName[name],
-        )
-        expect(removeCall).toBeDefined()
-      })
-
-      removeEventListenerSpy.mockRestore()
+      unmount = null
+      settle()
+      controls.move(1, 2, 3, 4, 5, 6)
+      update()
+      settle()
+      expect(cameraToken()).toBeUndefined()
+      expect(controls._listeners.update).toHaveLength(0)
     })
 
-    it('calls removeCameraUrlParams only once after multiple wheel events', () => {
-      // 1) Render the component
-      render(<ShareMock><CameraControl/></ShareMock>)
+    it('a location change that carries the token we wrote doesn\'t re-apply it; a different one does', () => {
+      act(() => controls.dispatchEvent({type: 'controlstart'}))
+      controls.move(1, 2, 3, 4, 5, 6)
+      update()
+      settle()
+      // Selecting an element navigates with the current hash (navWith): the
+      // camera is already there, and may be mid-move to a newer pose.
+      controls.move(9, 9, 9, 4, 5, 6)
+      const setPosition = jest.spyOn(controls, 'setPosition')
+      expect(onLocation(window.location, controls)).toBe(false)
+      expect(setPosition).not.toHaveBeenCalled()
+      // Back to an entry left at another pose.
+      expect(onLocation({hash: '#c:7,7,7,4,5,6'}, controls)).toBe(true)
+      expect(setPosition).toHaveBeenCalledWith(7, 7, 7, true)
+    })
 
-      // 2) Verify that our component attached 'wheel' event
-      expect(addEventListenerSpy).toHaveBeenCalledWith('wheel', expect.any(Function))
+    it('a token another writer pushed is the camera\'s too', () => {
+      controls.move(1, 2, 3, 4, 5, 6)
+      act(() => addCameraUrlParams(controls))
+      const setPosition = jest.spyOn(controls, 'setPosition')
+      expect(onLocation(window.location, controls)).toBe(false)
+      expect(setPosition).not.toHaveBeenCalled()
+    })
 
-      // 3) Grab the actual onWheel handler from that spy
-      const wheelCall = addEventListenerSpy.mock.calls.find(
-        ([eventName]) => eventName === 'wheel',
-      )
-      expect(wheelCall).toBeDefined()
-      const onWheel = wheelCall[1]
-
-      // 4) Fire multiple "wheel" events by manually calling the handler
-      act(() => {
-        onWheel({ /* a mock wheel event object if needed */ })
-        onWheel({ /* a second mock wheel event */ })
-        onWheel({ /* a third mock wheel event */ })
-      })
-
-      // At this point, removeCameraUrlParams should NOT be called yet
-      expect(removeCameraUrlParams).not.toHaveBeenCalled()
-
-      // (5) Advance the timers by the debounce wait time
-      act(() => jest.advanceTimersByTime(WHEEL_DEBOUNCE_WAIT_MS))
-
-      // (6) Now the debounce interval has passed, so expect exactly one call
-      expect(removeCameraUrlParams).toHaveBeenCalledTimes(1)
+    // Sonnet review on #2175: the token left the URL, the camera moved with
+    // nothing written, and Back returned to the entry with the old token.
+    it.each([
+      ['the Share switch or a note removed it', () => act(() => removeCameraUrlParams())],
+      ['a location without it was seen', () => {
+        expect(onLocation({hash: '#share:;n'}, controls)).toBe(false)
+      }],
+    ])('a token seen again after it left the URL (%s) is applied', (_how, leave) => {
+      act(() => controls.dispatchEvent({type: 'controlstart'}))
+      controls.move(1, 2, 3, 4, 5, 6)
+      update()
+      settle()
+      const t1 = window.location.hash
+      expect(cameraToken()).toBe('c:1,2,3,4,5,6')
+      leave()
+      act(() => useStore.getState().setIsCameraInUrl(false))
+      controls.move(9, 9, 9, 4, 5, 6)
+      update()
+      settle()
+      const setPosition = jest.spyOn(controls, 'setPosition')
+      expect(onLocation({hash: t1}, controls)).toBe(true)
+      expect(setPosition).toHaveBeenCalledWith(1, 2, 3, true)
     })
   })
 })
+
+
+/**
+ * camera-controls' events and pose, as the live link uses them. Not three's
+ * EventDispatcher / Vector3: the viewer harness automocks three.
+ */
+class LiveControls {
+  /** */
+  constructor() {
+    this._listeners = {}
+    this.move(0, 0, 0, 0, 0, 0)
+  }
+
+  /**
+   * @param {string} type
+   * @param {Function} fn
+   */
+  addEventListener(type, fn) {
+    (this._listeners[type] ??= []).push(fn)
+  }
+
+  /**
+   * @param {string} type
+   * @param {Function} fn
+   */
+  removeEventListener(type, fn) {
+    this._listeners[type] = (this._listeners[type] ?? []).filter((f) => f !== fn)
+  }
+
+  /** @param {object} event */
+  dispatchEvent(event) {
+    [...(this._listeners[event.type] ?? [])].forEach((fn) => fn(event))
+  }
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   * @param {number} tx
+   * @param {number} ty
+   * @param {number} tz
+   */
+  move(x, y, z, tx, ty, tz) {
+    this.position = vec3(x, y, z)
+    this.target = vec3(tx, ty, tz)
+  }
+
+  /** @return {object} */
+  getPosition() {
+    return this.position
+  }
+
+  /** @return {object} */
+  getTarget() {
+    return this.target
+  }
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   */
+  setPosition(x, y, z) {
+    this.position = vec3(x, y, z)
+  }
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   */
+  setTarget(x, y, z) {
+    this.target = vec3(x, y, z)
+  }
+}
+
+
+/**
+ * A Vector3 as the camera code reads one: `.x/.y/.z`, and spreadable.
+ *
+ * @param {number} x
+ * @param {number} y
+ * @param {number} z
+ * @return {object}
+ */
+function vec3(x, y, z) {
+  return {x, y, z, * [Symbol.iterator]() {
+    yield x
+    yield y
+    yield z
+  }}
+}
 
 
 /** Mocks the IFCjs camera. */

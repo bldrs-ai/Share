@@ -1,4 +1,5 @@
 import React, {ReactElement, useEffect, useState} from 'react'
+import {dismissConsent} from '../../privacy/consentChoice'
 import {isFirst, setVisited} from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
@@ -48,6 +49,9 @@ export default function AboutControl() {
 
   // Ensure that the dialog can be closed by updating the state appropriately
   const handleDialogClose = () => {
+    // Before the visit is marked: a no-op unless consent is still undecided,
+    // in which case any close but OK is a decline (consentChoice.js).
+    dismissConsent()
     if (isFirst()) {
       setVisited() // Mark as visited to prevent the dialog from being forced open again
       // Improve first-time experience by showing Notes
@@ -68,7 +72,9 @@ export default function AboutControl() {
         title={`About Bldrs\n${PkgJson.version}`}
         icon={<LogoB/>}
         isDialogDisplayed={isAboutVisible}
-        setIsDialogDisplayed={setIsAboutVisible}
+        // Toggling About shut from the logo button must mark the visit too,
+        // same as AboutDialog's own close paths (see handleDialogClose).
+        setIsDialogDisplayed={(isDisplayed) => isDisplayed ? setIsAboutVisible(true) : handleDialogClose()}
         hashPrefix={HASH_PREFIX_ABOUT}
         placement='right'
         dataTestId={testId}

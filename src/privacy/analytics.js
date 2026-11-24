@@ -3,28 +3,32 @@ import {setTag} from '@sentry/react'
 import {assertDefined} from '../utils/assert'
 import {isFeatureEnabled} from '../FeatureFlags'
 import {TIERS, getTier} from '../quota/quota'
-import Expires from './Expires'
+import {CONSENT_LEVELS, allowsAnalytics, getConsentLevel, setConsentLevel} from './consent'
 import {encodeGaClientReference} from './gaClientReference'
 import {SUBSCRIPTION_EVENT_NAMES} from './subscriptionEventNames'
 
 
-const COOKIE_NAME = 'isAnalyticsAllowed'
-const DEFAULT_VALUE = true
-
-
-/** @return {boolean} */
+/**
+ * Whether the visitor has consented to Google Analytics. Fails closed: a
+ * visitor who hasn't chosen yet has not consented (privacy/consent.js).
+ *
+ * @return {boolean}
+ */
 export function isAllowed() {
-  const val = Cookies.get(COOKIE_NAME)
-  return val === undefined ? DEFAULT_VALUE : val === 'true'
+  return allowsAnalytics(getConsentLevel())
 }
 
 
 /**
- * @param {boolean} allowed
+ * Store the visitor's privacy level and bring the identifiers that follow
+ * consent into line with it. The GA tag itself (load, consent update,
+ * opt-out) is index/ga.js#updateGaConsent's job; privacy/consentChoice.js
+ * calls both, and is what UI should call.
+ *
+ * @param {string} level one of consent#CONSENT_LEVELS
  */
-export function setIsAllowed(allowed) {
-  assertDefined(allowed)
-  Cookies.set(COOKIE_NAME, allowed, {expires: Expires.DAYS})
+export function setConsent(level) {
+  setConsentLevel(level)
   // gtagEvent re-reads consent on every call, so withholding it is
   // enough to stop our own events. A user property is different: it is
   // sticky once set, and gtag/js keeps attaching it to the automatic
@@ -43,8 +47,27 @@ export function setIsAllowed(allowed) {
 
 
 /**
+ * Boolean shorthand for setConsent: true is Functional, anything else
+ * restricted (declined). Strictly `=== true`, so a merely truthy 'false' can't
+ * grant consent.
+ *
+ * @param {boolean} allowed
+ */
+export function setIsAllowed(allowed) {
+  assertDefined(allowed)
+  setConsent(allowed === true ? CONSENT_LEVELS.FUNCTIONAL : CONSENT_LEVELS.RESTRICTED)
+}
+
+
+/**
  * @param {string} eventName
  * @param {object} parameters
+ * @return {boolean} whether the event was handed to `window.gtag`. False when
+ *   consent is off, the case that matters in practice: index.html defines a
+ *   `window.gtag` stub that queues into `dataLayer` before gtag/js loads, so a
+ *   missing `window.gtag` only happens without that page (tests, an embed). A
+ *   once-per-session sender must mark itself sent only on true, or a call made
+ *   while consent is off uses up its one event.
  */
 export function gtagEvent(eventName, parameters) {
   if (window.location.hostname.startsWith('deploy-preview-') &&
@@ -57,7 +80,9 @@ export function gtagEvent(eventName, parameters) {
   }
   if (window.gtag && isAllowed()) {
     window.gtag('event', eventName, parameters)
+    return true
   }
+  return false
 }
 
 
@@ -345,9 +370,10 @@ export function getGaClientReference() {
  * constant.
  *
  * Params, and where each fires (design/new/quotas.md §"Funnel analytics"):
- *   REAL_MODEL_OPEN      {content_id, content_type, load_outcome, stats_*, …}
- *                        CadView, on success only
- *   LOAD_FAILED          {content_type, size_bucket, reason_class, last_phase}
+ *   REAL_MODEL_OPEN      {content_id, content_type, load_outcome, stats_*,
+ *                        open_kind, …}  CadView, on success only
+ *   LOAD_FAILED          {content_type, size_bucket, reason_class, last_phase,
+ *                        open_kind}
  *                        CadView's onViewerInternal catch, once per failed
  *                        attempt; closed-set values only (Share#1954)
  *   QUOTA_LIMIT_REACHED  {tier, feature}  QuotaLimitDialog, once per showing
@@ -450,6 +476,32 @@ export const GATE_EVENTS = Object.freeze({
   QUOTA_SOFT_LIMIT_EXCEEDED: 'quota_soft_limit_exceeded',
 })
 
+/*
+ * The "File not in this browser" outcome and what the visitor does next, for
+ * a `/v/local-only/` link whose upload this browser doesn't hold. The
+ * existing `alert` event (AlertDialog) keeps firing unchanged; these add the
+ * two things it can't say. Sent through gtagEventWithCid. Closed-set values
+ * only: never a file name, URL, path or storage id.
+ *
+ *   MISSING  {origin: 'this_browser'|'unknown', legacy_route, signed_in}
+ *            CadView, on the first UploadNotInBrowserError per route.
+ *            origin: 'this_browser' when the upload ledger
+ *            (OPFS/uploadLedger.js) shows this browser held the id and lost
+ *            it; 'unknown' otherwise (another machine, or site data fully
+ *            wiped, which clears the ledger too). legacy_route: the URL
+ *            arrived as the pre-#1959 `/v/new/` form.
+ *   ACTION   {action: 'open_file'|'dismiss', origin}  AlertDialog, once per
+ *            shown dialog: the "Open a file" button, or any other close.
+ *            origin repeats the paired MISSING event's value.
+ *
+ * Names are queried verbatim GA-side; GA4 has no rename. design/new/quotas.md
+ * §"Funnel analytics".
+ */
+export const LOCAL_LINK_EVENTS = Object.freeze({
+  MISSING: 'local_link_missing',
+  ACTION: 'local_link_missing_action',
+})
+
 
 /**
  * gtagEvent plus OPEN_CID_PARAM (getOpenCid()), omitted rather than blank
@@ -458,10 +510,11 @@ export const GATE_EVENTS = Object.freeze({
  *
  * @param {string} eventName
  * @param {object} [parameters]
+ * @return {boolean} as {@link gtagEvent}
  */
 export function gtagEventWithCid(eventName, parameters = {}) {
   const openCid = getOpenCid()
-  gtagEvent(eventName, openCid ? {...parameters, [OPEN_CID_PARAM]: openCid} : parameters)
+  return gtagEvent(eventName, openCid ? {...parameters, [OPEN_CID_PARAM]: openCid} : parameters)
 }
 
 
@@ -785,16 +838,14 @@ export function setUserCidProperty() {
  * Publish or retract the user property to match current consent.
  *
  * Reads isAllowed() rather than taking the decision as an argument, so
- * a caller passing something merely truthy — setIsAllowed('false')
- * writes a cookie that isAllowed() then reads as a denial — cannot
- * publish an identifier the cookie says is not allowed. Consent gates
- * should fail closed.
+ * the cookie stays the one source of truth and the gate fails closed.
  *
- * Retraction sets the property to null. Verify in GA4 DebugView that
- * this actually clears it, rather than storing null as a value, before
- * PrivacyControl is restored to the UI (AboutDialog has it commented
- * out today, so nothing in the app can currently withdraw consent). If
- * null does not clear, this is the one place to change.
+ * Retraction sets the property to null. Whether GA4 treats null as a
+ * clear, rather than storing it as a value, is unverified in DebugView;
+ * if it doesn't, this is the one place to change. It matters less than
+ * it did: a withdrawal also sets ga-disable and denies consent
+ * (index/ga.js#updateGaConsent), so the tag sends nothing more for the
+ * rest of the page either way.
  */
 function syncUserCidProperty() {
   if (!window.gtag) {

@@ -240,52 +240,15 @@ export default function NotesControl() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNoteId])
 
-  // TODO(pablo): hack, move into helper
-  // nickcastel50: this wasn't running if the hash changed - cleaned it up
-  useEffect(() => {
-    const updateIdsFromHash = () => {
-      // Retrieve the note ID from the URL hash
-      const noteHash = getHashParams(window.location, HASH_PREFIX_NOTES)
-      let noteId = null
-      if (noteHash) {
-        const noteParts = noteHash.split(':')
-        if (noteParts[0] === 'i' && noteParts[1]) {
-          noteId = parseInt(noteParts[1], 10)
-        }
-      }
-
-      // Retrieve the comment ID from the URL hash
-      const commentHash = getHashParams(window.location, HASH_PREFIX_COMMENT)
-      let commentId = null
-      if (commentHash) {
-        const commentParts = commentHash.split(':')
-        if (commentParts[0] === HASH_PREFIX_COMMENT && commentParts[1]) {
-          commentId = parseInt(commentParts[1], 10)
-        }
-      }
-
-      // Set selected note ID if a valid one is found
-      if (noteId) {
-        setSelectedNoteId(noteId)
-      }
-
-      // Set selected comment ID if a valid one is found
-      if (commentId) {
-        setSelectedCommentId(commentId)
-      } else {
-        setSelectedCommentId(-1)
-      }
-    }
-
-    // Run on initial mount
-    updateIdsFromHash()
-
-    // Listen for hash changes
-    window.addEventListener('hashchange', updateIdsFromHash)
-
-    // Cleanup listener on unmount
-    return () => window.removeEventListener('hashchange', updateIdsFromHash)
-  }, [setSelectedNoteId, setSelectedCommentId])
+  // Selects the note and comment the URL hash names, on mount and on every
+  // hashchange. The listener is made by listenForNoteIds, at module level:
+  // it stays on `window` for this component's life (its deps are stable
+  // setters), so made in this render it would keep this render's scope, and
+  // with it the `model` of the render NotesControl mounted in, across an
+  // in-app model switch (open-205, #2019).
+  useEffect(
+    () => listenForNoteIds(setSelectedNoteId, setSelectedCommentId),
+    [setSelectedNoteId, setSelectedCommentId])
 
 
   useEffect(() => {
@@ -304,4 +267,54 @@ export default function NotesControl() {
       placement='left'
     />
   )
+}
+
+
+/**
+ * Select the note and comment the URL hash names, now and on each
+ * `hashchange`, until the returned cleanup runs. See NotesControl for why
+ * this is at module level.
+ *
+ * @param {Function} setSelectedNoteId
+ * @param {Function} setSelectedCommentId
+ * @return {Function} removes the listener
+ */
+function listenForNoteIds(setSelectedNoteId, setSelectedCommentId) {
+  const updateIdsFromHash = () => {
+    // Retrieve the note ID from the URL hash
+    const noteHash = getHashParams(window.location, HASH_PREFIX_NOTES)
+    let noteId = null
+    if (noteHash) {
+      const noteParts = noteHash.split(':')
+      if (noteParts[0] === 'i' && noteParts[1]) {
+        noteId = parseInt(noteParts[1], 10)
+      }
+    }
+
+    // Retrieve the comment ID from the URL hash
+    const commentHash = getHashParams(window.location, HASH_PREFIX_COMMENT)
+    let commentId = null
+    if (commentHash) {
+      const commentParts = commentHash.split(':')
+      if (commentParts[0] === HASH_PREFIX_COMMENT && commentParts[1]) {
+        commentId = parseInt(commentParts[1], 10)
+      }
+    }
+
+    // Set selected note ID if a valid one is found
+    if (noteId) {
+      setSelectedNoteId(noteId)
+    }
+
+    // Set selected comment ID if a valid one is found
+    if (commentId) {
+      setSelectedCommentId(commentId)
+    } else {
+      setSelectedCommentId(-1)
+    }
+  }
+
+  updateIdsFromHash()
+  window.addEventListener('hashchange', updateIdsFromHash)
+  return () => window.removeEventListener('hashchange', updateIdsFromHash)
 }

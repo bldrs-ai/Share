@@ -1,0 +1,277 @@
+{
+  "description": "With the secret: the limits from env, which settings and secrets are set, a week of breaker spend read from the ledger, and reconciliation records counted from a key list.",
+  "env": {
+    "NODE_ENV": "test",
+    "ADMIN_STATS_SECRET": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+    "AI_BREAKER_ANONYMOUS_DAILY_USD": "0.40",
+    "OPENROUTER_API_KEY": "sk-or-replay-server-key",
+    "NETLIFY_BLOBS_CONTEXT": "eyJzaXRlSUQiOiJyZXBsYXktc2l0ZSIsInRva2VuIjoicmVwbGF5LWJsb2JzLXRva2VuIiwiZWRnZVVSTCI6Imh0dHBzOi8vYmxvYnMucmVwbGF5LnRlc3QiLCJ1bmNhY2hlZEVkZ2VVUkwiOiJodHRwczovL2Jsb2JzLXVuY2FjaGVkLnJlcGxheS50ZXN0In0="
+  },
+  "request": {
+    "method": "GET",
+    "path": "/.netlify/functions/ai-ledger-stats",
+    "headers": {
+      "authorization": "Bearer rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    }
+  },
+  "now": "2026-11-20T12:00:00.000Z",
+  "exchangeOrder": "any",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/anonymous/2026-11-14"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/anonymous/2026-11-15"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/anonymous/2026-11-16"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/anonymous/2026-11-17"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/anonymous/2026-11-18"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "v": 1,
+          "days": {
+            "2026-11-18": {
+              "spent": 310000,
+              "free": 0
+            }
+          },
+          "holds": {},
+          "estimates": {}
+        },
+        "headers": {
+          "etag": "\"e1\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/anonymous/2026-11-19"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/anonymous/2026-11-20"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "v": 1,
+          "days": {
+            "2026-11-20": {
+              "spent": 120000,
+              "free": 0
+            }
+          },
+          "holds": {
+            "h1": {
+              "micro": 9000,
+              "free": 0,
+              "at": 1795176000000
+            }
+          },
+          "estimates": {}
+        },
+        "headers": {
+          "etag": "\"e1\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/free/2026-11-14"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/free/2026-11-15"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/free/2026-11-16"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/free/2026-11-17"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/free/2026-11-18"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/free/2026-11-19"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/free/2026-11-20"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger?prefix=ai%2Freconcile%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [
+            {
+              "key": "ai/reconcile/2026-11-19/req-1",
+              "etag": "\"a\""
+            },
+            {
+              "key": "ai/reconcile/2026-10-02/req-0",
+              "etag": "\"b\""
+            }
+          ],
+          "directories": []
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "headers": {
+      "cache-control": "no-store"
+    },
+    "json": {
+      "v": 1,
+      "now": "2026-11-20T12:00:00.000Z",
+      "limits": {
+        "breakers": {
+          "anonymous": 400000,
+          "free": 0
+        },
+        "breakersConfigured": {
+          "anonymous": true,
+          "free": false
+        },
+        "budgets": {
+          "anonymous": 20000
+        }
+      },
+      "envSet": {
+        "AI_BREAKER_ANONYMOUS_DAILY_USD": true,
+        "AI_BREAKER_FREE_DAILY_USD": false
+      },
+      "secrets": {
+        "OPENROUTER_API_KEY": true,
+        "AI_TOKEN_SECRET": false
+      },
+      "breakers": {
+        "anonymous": [
+          {
+            "day": "2026-11-14",
+            "recorded": false
+          },
+          {
+            "day": "2026-11-15",
+            "recorded": false
+          },
+          {
+            "day": "2026-11-16",
+            "recorded": false
+          },
+          {
+            "day": "2026-11-17",
+            "recorded": false
+          },
+          {
+            "day": "2026-11-18",
+            "spent": 310000,
+            "held": 0,
+            "recorded": true
+          },
+          {
+            "day": "2026-11-19",
+            "recorded": false
+          },
+          {
+            "day": "2026-11-20",
+            "spent": 120000,
+            "held": 9000,
+            "recorded": true
+          }
+        ]
+      },
+      "reconcile": {
+        "total": 1,
+        "older": 1,
+        "days": {
+          "2026-11-19": 1
+        }
+      }
+    }
+  }
+}

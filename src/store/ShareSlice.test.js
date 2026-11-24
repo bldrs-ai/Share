@@ -32,4 +32,13 @@ describe('store/ShareSlice', () => {
     store.getState().setAppPrefix(null)
     expect(store.getState().appPrefix).toBeNull()
   })
+
+  it('isCameraInUrl is on by default and settable', () => {
+    const store = makeStore()
+    expect(store.getState().isCameraInUrl).toBe(true)
+    store.getState().setIsCameraInUrl(false)
+    expect(store.getState().isCameraInUrl).toBe(false)
+    store.getState().setIsCameraInUrl(true)
+    expect(store.getState().isCameraInUrl).toBe(true)
+  })
 })

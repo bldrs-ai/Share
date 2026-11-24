@@ -1,7 +1,13 @@
 import {parse, zipEnvWithConfig} from './defines.js'
+import prod from './vars.prod.js'
 
 
 describe('defines', () => {
+  it('leaves the measurement tools out of a build unless asked (offscreen-rendering.md §5b)', () => {
+    // vars.dev/cypress/playwright all spread prod's, so this is every build's default.
+    expect(prod.MEASUREMENT_TOOLS).toBe(false)
+  })
+
   it('parses env vars correctly', () => {
     expect(parse(undefined)).toBe(undefined)
     expect(parse('undefined')).toBe(undefined)

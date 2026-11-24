@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import * as path from 'node:path'
 import esbuild from 'esbuild'
 import {fileURLToPath} from 'url'
+import {ASSIST_RUNTIME_ENTRY, GFM_ENTRY, assertAiSdkNotInMain, assertGfmNotInMain} from './assistEntry.js'
 import config, {staticCopyPlugin} from './common.js'
 import {proModuleBuilds} from './proModules.js'
 
@@ -17,10 +18,19 @@ const subscribeFile = path.resolve(repoRoot, 'src', 'subscribe', 'index.jsx')
 // across them races and intermittently fails the whole build with
 // `EEXIST: mkdir docs`. The workers and pro modules emit single bundles and
 // never needed the asset tree. See `plugins.js#makeStaticCopyPlugin`.
+//
+// The Assist runtime (the AI SDK) is a third entry, emitted as
+// `docs/assist/runtime.js` and loaded only when the assistant first sends;
+// `assertAiSdkNotInMain` below fails the build if the SDK reaches the other
+// two. See `assistEntry.js`.
 const mainBuild = esbuild.build({
   ...config,
   plugins: [...config.plugins, staticCopyPlugin],
-  entryPoints: [indexFile, subscribeFile],
+  entryPoints: [indexFile, subscribeFile, ASSIST_RUNTIME_ENTRY, GFM_ENTRY],
+}).then((result) => {
+  assertAiSdkNotInMain(result.metafile)
+  assertGfmNotInMain(result.metafile)
+  return result
 })
 
 // Workers
@@ -67,6 +77,40 @@ const opfsBuilds = workerBuilds('OPFS/OPFS.worker.js', 'OPFS.worker')
 // hover-pick / camera-controls stay responsive during the post-IFC-
 // parse write. See `src/loader/GlbWriter.worker.js`.
 const glbWriterBuilds = workerBuilds('loader/GlbWriter.worker.js', 'GlbWriter.worker')
+// Per-model engine worker (design/new/engine-worker.md, `?feature=engineWorker`):
+// one Conway engine per model, terminated on eviction. ESM only, unlike the
+// two above: where module workers are missing the engine runs in process on
+// the main thread through the same protocol (`src/engine/transports.js`),
+// so a classic bundle would be a second engine build nobody loads.
+const engineWorkerBuild = esbuild.build({
+  ...config,
+  entryPoints: [path.resolve(repoRoot, 'src', 'engine', 'Engine.worker.js')],
+  outdir: undefined,
+  outfile: path.join(buildDir, 'Engine.worker.js'),
+  format: 'esm',
+  // Single-threaded engine, always (src/engine/engineThreading.js says why a
+  // define alone is not enough and sets the guarded global too).
+  define: {...config.define, 'process.env.FORCE_SINGLE_THREAD': '"true"'},
+})
+
+// Render-worker measurement page (open-205 §9.1; offscreen-rendering.md §5b,
+// tools/spikes/offscreen/README.md), served at /spike/offscreen/: its two
+// bundles and its static index.html. Only when MEASUREMENT_TOOLS is set
+// (vars.prod.js), so a normal build ships none of it. The page lives beside
+// its source rather than in public/, which every build copies whole.
+const withMeasurementTools = config.define['process.env.MEASUREMENT_TOOLS'] === 'true'
+const spikeDir = path.resolve(repoRoot, 'tools', 'spikes', 'offscreen')
+const spikeOutDir = path.join(buildDir, 'spike', 'offscreen')
+const spikeBuilds = !withMeasurementTools ? [] : ['main', 'renderWorker'].map((name) => esbuild.build({
+  ...config,
+  entryPoints: [path.join(spikeDir, `${name}.js`)],
+  outdir: undefined,
+  outfile: path.join(spikeOutDir, `${name}.js`),
+  format: 'esm',
+}).then((result) => {
+  fs.copyFileSync(path.join(spikeDir, 'index.html'), path.join(spikeOutDir, 'index.html'))
+  return result
+}))
 
 // Pro modules — premium export code, built OUTSIDE `docs/` so it is never
 // published; the authenticated `pro-module` Netlify Function is the only
@@ -76,7 +120,7 @@ const proBuilds = proModuleBuilds()
 
 
 // Wait for every build to complete
-Promise.all([mainBuild, ...opfsBuilds, ...glbWriterBuilds, ...proBuilds])
+Promise.all([mainBuild, ...opfsBuilds, ...glbWriterBuilds, engineWorkerBuild, ...proBuilds, ...spikeBuilds])
   .then(([result]) => {
     // Remove development resources from non-development builds
     if (config.define['process.env.MSW_IS_ENABLED'] !== 'true') {

@@ -18,6 +18,9 @@ import {getOrganizations} from '../../net/github/Organizations'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
 import {getBranches} from '../../net/github/Branches'
 import useStore from '../../store/useStore'
+import {isLocalOnlyLevel} from '../../privacy/localOnlyMode'
+import LocalOnlyNotice from './LocalOnlyNotice'
+import debug, {WARN} from '../../utils/debug'
 import {navigateBaseOnModelPath} from '../../utils/location'
 import {navigateToModel} from '../../utils/navigate'
 import {isFeatureEnabled} from '../../FeatureFlags'
@@ -60,17 +63,32 @@ export default function SaveModelControl() {
 
 
   useEffect(() => {
-    /** @return {Array<string>} organizations */
+    // A token change while the dialog is open starts a new fetch; the old
+    // one (its expired token likely rejecting late) must not overwrite it.
+    let cancelled = false
+    /** Fetch the user's orgs, falling back to their own account alone. */
     async function fetchOrganizations() {
-      const orgs = await getOrganizations(accessToken)
-      const orgNamesFetched = Object.keys(orgs).map((key) => orgs[key].login)
-      const orgNames = [...orgNamesFetched, user && user.nickname]
-      setOrgNamesArray(orgNames)
-      return orgs
+      let orgNamesFetched = []
+      try {
+        const orgs = await getOrganizations(accessToken)
+        orgNamesFetched = Object.keys(orgs).map((key) => orgs[key].login)
+      } catch (err) {
+        // An expired or revoked GitHub token rejects here with a 401 (SHARE-1X6).
+        // Uncaught, it was an unhandled rejection in Sentry and the dialog kept
+        // an empty owner list; the user's own account still works as an owner,
+        // and the later repo/commit calls surface the auth failure themselves.
+        debug(WARN).warn('SaveModelControl: could not list GitHub organizations', err?.status ?? err?.message)
+      }
+      if (!cancelled) {
+        setOrgNamesArray([...orgNamesFetched, user && user.nickname])
+      }
     }
 
     if (isSaveModelVisible && accessToken) {
       fetchOrganizations()
+    }
+    return () => {
+      cancelled = true
     }
   }, [isSaveModelVisible, accessToken, user])
 
@@ -155,6 +173,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
   // off this dialog has no tabs at all and looks exactly as it did before.
   const isExportEnabled = isFeatureEnabled('export')
   const isExportTab = isExportEnabled && currentTab === TAB_EXPORT
+  const isLocalOnly = isLocalOnlyLevel(useStore((state) => state.privacyLevel))
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
 
@@ -361,7 +380,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
       // isn't looking at.
       actionTitle={isExportTab ? undefined : MSG_SAVE_MODEL}
       actionCb={saveFile}
-      actionDisabled={cannotSave}
+      actionDisabled={cannotSave || isLocalOnly}
       // Blue/accent + sentence case, like the Open dialog's "Connect GitHub"
       // button — a grey, all-caps action read as disabled even when it
       // wasn't (product-owner feedback on #1837's deploy preview, #1838).
@@ -398,7 +417,11 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
         >
           {/* A signed-out user reaches this dialog (it opens on Export for
               them, Share#1964); on this tab, log in is all there is to do. */}
-          {!isAuthenticated ? (
+          {/* Local-only mode (privacy/localOnlyMode.js): saving to GitHub
+              is a remote write. The Export tab, a local download, stays. */}
+          {isLocalOnly ? (
+            <LocalOnlyNotice source='GitHub' action='save to'/>
+          ) : !isAuthenticated ? (
             <PleaseLogin/>
           ) : isSaveDisabled ? (
             <Stack

@@ -21,20 +21,34 @@
  *
  * Scene background is deliberately NOT a look property — it follows the
  * day/night theme (theme/Palette.js `sceneBackground`: white / black).
- * Ambient occlusion + contact shadow are NOT part of either look; they are
- * dev-only `?feature=look` GUI tools, default off.
+ * Ambient occlusion IS part of a look (`ao`: on for Neutral, off for Flat;
+ * the method and strength are tuned in the look panel). So is the contact
+ * shadow (`shadow`: on for Neutral, off for Flat).
  */
 export const LOOKS = {
   neutral: {
     label: 'Neutral',
+    // The owner's tuning on the deploy previews (real GPU). #2167 picked the
+    // look-GUI "Neutral CAD" preset with the gradient studio at 0.6 (the r184
+    // tuning, env 2.56, key 1.25, fill 2.3, overexposed once three r187's
+    // rewritten PMREMGenerator made the IBL contribute). The follow-up moved
+    // env 0.6 → 0.75, key 1.2 → 1, fill 0.6 → 3, ambient 0.2 → 0.1,
+    // metalness 0 → 0.5, and turned the contact shadow on.
     toneMapping: 'neutral',
     envType: 'gradient',
-    envIntensity: 2.56,
-    keyLight: 1.25,
-    fillLight: 2.3,
-    ambient: 0.25,
-    roughness: 0.68,
-    metalness: 0.16,
+    envIntensity: 0.75,
+    keyLight: 1,
+    fillLight: 3,
+    ambient: 0.1,
+    roughness: 0.7,
+    metalness: 0.5,
+    // N8AO (CustomPostProcessor), dropped while the camera moves
+    // (motionAO.js) so it costs nothing during an orbit.
+    ao: true,
+    // The contact shadow (ShareViewer#setShadowEnabled): the key light casts
+    // onto a ShadowMaterial ground fitted under the model. Its darkness is
+    // ShareViewer's DEFAULT_SHADOW_OPACITY, 0.35.
+    shadow: true,
   },
   flat: {
     label: 'Flat',
@@ -46,6 +60,8 @@ export const LOOKS = {
     ambient: 0.5,
     roughness: 1,
     metalness: 0,
+    ao: false,
+    shadow: false,
   },
 }
 

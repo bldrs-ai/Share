@@ -39,7 +39,7 @@ export default function VersionsPanel({filePath, currentRef}) {
   function navigateToCommit(index) {
     const sha = commits[index].sha
     if (modelPath) {
-      const commitPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, sha, modelPath.filepath)
+      const commitPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, sha, filePathWithSlash(modelPath))
       navigateToModel({pathname: commitPath}, navigate)
     }
   }
@@ -49,7 +49,7 @@ export default function VersionsPanel({filePath, currentRef}) {
   function navigateToMain() {
     if (modelPath) {
       // TODO(pablo): should not hardcode to 'main'
-      const mainPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, 'main', modelPath.filepath)
+      const mainPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, 'main', filePathWithSlash(modelPath))
       navigateToModel({pathname: mainPath}, navigate)
     }
   }
@@ -81,4 +81,19 @@ export default function VersionsPanel({filePath, currentRef}) {
       </>
     </Panel>
   )
+}
+
+
+/**
+ * The route's file path with the leading slash navigateBaseOnModelPath
+ * expects. A GitHub route result's `filepath` has none (routes/github.ts
+ * strips it), so a commit's link came out as `…/<sha>ifc/misc/box.ifc`, a
+ * route nothing could open (found by open-205's surface E2E, #2021).
+ *
+ * @param {object} modelPath the store's route result
+ * @return {string}
+ */
+function filePathWithSlash(modelPath) {
+  const filepath = modelPath.filepath ?? ''
+  return filepath.startsWith('/') ? filepath : `/${filepath}`
 }

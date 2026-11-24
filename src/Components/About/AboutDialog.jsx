@@ -1,14 +1,19 @@
 import React, {ReactElement} from 'react'
 import {Helmet} from 'react-helmet-async'
-import {Box, Link, Stack, SvgIcon, Typography} from '@mui/material'
-import {Email as EmailIcon, GitHub as GitHubIcon} from '@mui/icons-material'
+import {Box, Button, Link, Stack, SvgIcon, Typography} from '@mui/material'
+import {Email as EmailIcon, GitHub as GitHubIcon, X as XIcon} from '@mui/icons-material'
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
 import {LogoB} from '../Logo/Logo'
+import {CONSENT_LEVELS, getConsentLevel} from '../../privacy/consent'
+import chooseConsentLevel from '../../privacy/consentChoice'
 import {ABOUT_MISSION, ABOUT_PAGE_TITLE} from './component'
-// TODO(pablo): re-enable after prod freeze bug fixed
-// import PrivacyControl from './PrivacyControl'
+import ConsentNotice from './ConsentNotice'
 import DiscordIcon from './Discord.svg'
+
+
+/** First of the About dialog's socials (owner, 2026-11-24). */
+export const X_PROFILE_URL = 'https://x.com/bldrs_ai'
 
 
 /**
@@ -19,11 +24,39 @@ import DiscordIcon from './Discord.svg'
  */
 export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, onClose}) {
   const isMobile = useIsMobile()
+  // Dialog closes itself on backdrop click, Escape and the X button by
+  // calling setIsDialogDisplayed(false) directly, which skips actionCb. Every
+  // close has to go through onClose instead: that's where the first-time
+  // cookie is set and where an undecided visitor's dismissal is stored as a
+  // decline (AboutControl/LogoMenu, consentChoice#dismissConsent), and
+  // without it a first-timer who dismissed About by clicking the backdrop
+  // got About + the onboarding overlay replayed on the reload after their
+  // first drag-and-drop.
+  const setIsDisplayed = (isDisplayed) => {
+    if (isDisplayed) {
+      setIsDialogDisplayed(true)
+    } else {
+      onClose()
+    }
+  }
+  // The two answers to ConsentNotice's text. OK is the only path that can
+  // consent to anything. Cancel declines for anyone, so a visitor who
+  // allowed analytics can take it back here; X, backdrop and Escape decline
+  // only for a visitor who hasn't chosen (dismissConsent), so closing About
+  // to get back to a model doesn't undo a choice.
+  const answer = (level) => {
+    if (getConsentLevel() !== level) {
+      chooseConsentLevel(level)
+    }
+    onClose()
+  }
+  const onOk = () => answer(CONSENT_LEVELS.FUNCTIONAL)
+  const onCancel = () => answer(CONSENT_LEVELS.RESTRICTED)
   return (
     <Dialog
       headerText={ABOUT_MISSION}
       isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={setIsDialogDisplayed}
+      setIsDialogDisplayed={setIsDisplayed}
       headerIcon={
         <Link href='/'>
           <LogoB
@@ -37,8 +70,27 @@ export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, on
           />
         </Link>
       }
-      actionTitle='OK'
-      actionCb={onClose}
+      // Cancel and OK side by side at the same size, so declining is as
+      // easy as accepting. Both close through onClose like every other path.
+      actionTitle={
+        <>
+          <Button
+            variant='outlined'
+            onClick={onCancel}
+            data-testid='button-dialog-cancel'
+          >
+            Cancel
+          </Button>
+          <Button
+            variant='contained'
+            onClick={onOk}
+            aria-label='action-button'
+            data-testid='button-dialog-main-action'
+          >
+            OK
+          </Button>
+        </>
+      }
     >
       <AboutContent/>
     </Dialog>
@@ -136,8 +188,7 @@ function AboutContent() {
           </Typography>
         </li>
         <li>Drag &amp; Drop; no upload</li>
-        <li>Open: IFC 2&4, STL, OBJ, ...</li>
-        <li>STEP AP214 (<Link href='https://github.com/bldrs-ai/conway-viewer-demo'>early access</Link>)</li>
+        <li>Open: IFC 2&4, STEP, STL, OBJ, ...</li>
       </Box>
       <table style={{
         width: '100%',
@@ -155,7 +206,20 @@ function AboutContent() {
           <tr><td>Private</td><Tdc>X</Tdc><Tdc>X</Tdc><Tdc>✓</Tdc></tr>
         </tbody>
       </table>
+      <ConsentNotice/>
       <Stack direction='row' justifyContent='center' alignItems='center' spacing={1} sx={{fontSize: '0.9em', opacity: 0.5}}>
+        <Link
+          href={X_PROFILE_URL}
+          target='_blank'
+          rel='noopener'
+          aria-label='Bldrs on X: @bldrs_ai'
+          sx={{display: 'flex', alignItems: 'center', color: 'inherit'}}
+          data-testid='about-social-x'
+        >
+          <XIcon className='icon-share' sx={{marginRight: '0.25em'}}/>{
+            isMobile ? '' : '@bldrs_ai'
+          }
+        </Link>
         <Link
           href='https://discord.gg/9SxguBkFfQ'
           rel='noopener'

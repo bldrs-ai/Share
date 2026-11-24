@@ -226,4 +226,31 @@ describe('store/NotesSlice', () => {
       expect(store.getState()[key]).toEqual(value)
     })
   })
+
+
+  describe('forgetModelMarkers', () => {
+    it('drops the marker and note selection a page load would start without', () => {
+      const store = makeStore()
+      store.setState({
+        markers: [{id: 13}], selectedPlaceMarkId: 13, selectedPlaceMarkInNoteId: 13, cameraHash: 'c:1',
+        forceMarkerNoteSync: true, placeMarkId: 13, placeMarkMode: true, isPlaceMarkActivated: true,
+        selectedNoteId: 13, selectedNoteIndex: 0,
+      })
+      store.getState().forgetModelMarkers()
+      expect(store.getState()).toMatchObject({
+        markers: [], selectedPlaceMarkId: null, selectedPlaceMarkInNoteId: null, cameraHash: null,
+        forceMarkerNoteSync: false, placeMarkId: null, placeMarkMode: false, isPlaceMarkActivated: false,
+        selectedNoteId: null, selectedNoteIndex: null,
+      })
+    })
+
+    it('leaves the notes and the PlaceMark alone: they are the repository\'s and the viewer\'s', () => {
+      const store = makeStore()
+      const placeMark = {}
+      store.setState({notes: [{id: 13}], placeMark, isNotesVisible: true})
+      store.getState().forgetModelMarkers()
+      expect(store.getState()).toMatchObject({notes: [{id: 13}], isNotesVisible: true})
+      expect(store.getState().placeMark).toBe(placeMark)
+    })
+  })
 })

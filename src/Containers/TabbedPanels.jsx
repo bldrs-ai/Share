@@ -4,15 +4,14 @@ import {Close as CloseIcon} from '@mui/icons-material'
 import AppsPanel from '../Components/Apps/AppsPanel'
 import AppPanel from '../Components/Apps/AppPanel'
 import BotChat from '../Components/Bot/BotChat'
-import {HASH_PREFIX_BOT} from '../Components/Bot/hashState'
 import NavTreePanel from '../Components/NavTree/NavTreePanel'
 import NotesPanel from '../Components/Notes/NotesPanel'
 import PropertiesPanel from '../Components/Properties/PropertiesPanel'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import VersionsPanel from '../Components/Versions/VersionsPanel'
 import useStore from '../store/useStore'
+import {selectReadModel} from '../store/IFCSlice'
 import useExistInFeature from '../hooks/useExistInFeature'
-import {hasParams} from '../utils/location'
 
 
 /**
@@ -47,11 +46,11 @@ export default function TabbedPanels({
 
   const isBotVisible = useStore((state) => state.isBotVisible)
   const setIsBotVisible = useStore((state) => state.setIsBotVisible)
-  const isBotEnabled = useExistInFeature('bot')
+  const isBotEnabled = useExistInFeature('assist')
 
   // Next two are used by NavTree and Versions
-  // IFCSlice
-  const model = useStore((state) => state.model)
+  // IFCSlice. The indexed model while geometry still streams (open-205 #2029).
+  const model = useStore(selectReadModel)
   const rootElement = useStore((state) => state.rootElement)
 
   // RepositorySlice
@@ -77,7 +76,10 @@ export default function TabbedPanels({
     }
   }
 
-  const shouldShowBotPanel = isBotVisible && (isBotEnabled || hasParams(HASH_PREFIX_BOT))
+  // A `#bot:` permalink opens the panel (BotSlice reads the hash), but only
+  // where the assistant is on, as on desktop (NotesAndPropertiesDrawer.jsx):
+  // the hash alone must not switch on a feature behind a flag.
+  const shouldShowBotPanel = isBotVisible && isBotEnabled
 
   const isDrawerVisible =
         isAppsVisible ||

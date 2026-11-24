@@ -8,7 +8,7 @@ import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
 import {registerInMemoryUpload} from '../loader/inMemoryUploads'
 import {openUploadThroughArchive} from '../loader/modelArchive'
 import {unrecognizedFormatAlert} from '../loader/unrecognizedFormat'
-import debug from '../utils/debug'
+import debug, {WARN} from '../utils/debug'
 
 
 // The file input of the pick in flight, held until the pick settles.
@@ -183,9 +183,15 @@ export function loadLocalFile(
         if (workerEvent.data.error || workerEvent.data.requestFinished) {
           const message = workerEvent.data.error ??
             `OPFS worker finished ${requestId} without a reply`
-          debug().error('Error from worker:', message)
+          debug(WARN).warn('loader#loadLocalFile: could not store the pick in OPFS:', message)
           workerRef.removeEventListener('message', listener)
           URL.revokeObjectURL(tmpUrl)
+          // OPFS is where a pick is kept, not a requirement for viewing it.
+          // When storing fails (e.g. a write that comes up short in a
+          // private window past ~1 GB, #2042), the worker has removed the
+          // partial entry, so the pick opens from memory instead, the
+          // no-OPFS path. Before, it logged and opened nothing.
+          onLoad(registerInMemoryUpload(file, ext), lastModifiedUtc, displayName, {inMemory: true})
         } else if (workerEvent.data.completed) {
           if (workerEvent.data.event === 'write') {
             debug().log('Worker finished writing file')

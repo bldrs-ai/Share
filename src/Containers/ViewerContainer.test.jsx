@@ -4,6 +4,7 @@ import '@testing-library/jest-dom/extend-expect'
 import {act, render, screen, waitFor} from '@testing-library/react'
 import ViewerContainer from './ViewerContainer'
 import useStore from '../store/useStore'
+import {DROP_REFUSED} from '../utils/dragAndDrop'
 
 
 // We will mock out relevant modules (store, guessType, OPFS saving, fallback saving)
@@ -116,7 +117,7 @@ describe('ViewerContainer', () => {
 
     dropzone.dispatchEvent(mockEvent)
     await waitFor(() => {
-      expect(mockSetAlert).toHaveBeenCalledWith('File upload initiated but found no data')
+      expect(mockSetAlert).toHaveBeenCalledWith({type: DROP_REFUSED, message: 'File upload initiated but found no data'})
     })
   })
 
@@ -134,7 +135,7 @@ describe('ViewerContainer', () => {
 
     dropzone.dispatchEvent(mockEvent)
     await waitFor(() => {
-      expect(mockSetAlert).toHaveBeenCalledWith('File upload initiated for more than 1 file')
+      expect(mockSetAlert).toHaveBeenCalledWith({type: DROP_REFUSED, message: 'File upload initiated for more than 1 file'})
     })
   })
 

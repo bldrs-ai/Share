@@ -12,10 +12,11 @@ Read this when:
 - Investigating an auth-popup blocked / token-not-refreshing bug.
 - Adding an OAuth flow that lives across an external origin (COOP risk).
 
-Design context for the Auth0 primary-auth gate (PR2) and the original
-identity-decoupling decisions lives in `design/new/identity-decoupling.md`
-and `design/new/identity-decoupling-decisions.md`. This README is the
-hands-on companion: invariants you must preserve when writing code here.
+Design context for the Auth0 primary-auth gate (PR2) and the
+identity-decoupling decisions lives in
+`design/new/identity-decoupling-decisions.md`; the sharing methods are in
+`design/new/multi-user-sharing.md`. This README is the hands-on
+companion: invariants you must preserve when writing code here.
 
 
 ## Auth pre-flight: getAccessToken must run inside a user gesture
@@ -185,7 +186,9 @@ The React→non-React bridge for the access token lives in
 closure that providers can call from anywhere via `getAuth0AccessToken()`.
 
 Full design rationale: `design/new/identity-decoupling-decisions.md`
-under "PR2 scope" and "Quota implementation".
+(the Auth0 bearer gate on the broker functions). Quotas stay on the
+Auth0 user (`app_metadata.usageQuota`), not on a connection; see
+`design/new/quotas.md`.
 
 
 ## Auth0 custom error page

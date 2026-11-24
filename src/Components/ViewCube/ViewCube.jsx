@@ -31,12 +31,13 @@ import {
   RotateRight as RotateRightIcon,
 } from '@mui/icons-material'
 import useExistInFeature from '../../hooks/useExistInFeature'
-import {removeCameraUrlParams} from '../Camera/hashState'
+import {noteUserCameraMove} from '../Camera/liveCameraLink'
 import {useIsMobile} from '../Hooks'
 import useStore from '../../store/useStore'
 import useAppsRail from '../Apps/useAppsRail'
 import {ROW_PITCH} from '../../Containers/layoutConstants'
 import debug from '../../utils/debug'
+import {noteUserCamera} from '../../viewer/three/renderDemand'
 
 
 /**
@@ -69,7 +70,7 @@ export default function ViewCube() {
   const isNotesVisible = useStore((state) => state.isNotesVisible)
   const isPropertiesVisible = useStore((state) => state.isPropertiesVisible)
   const isBotVisible = useStore((state) => state.isBotVisible)
-  const isBotEnabled = useExistInFeature('bot')
+  const isBotEnabled = useExistInFeature('assist')
   const isAppsVisible = useStore((state) => state.isAppsVisible)
   const rightDrawerWidth = useStore((state) => state.rightDrawerWidth)
   const appsDrawerWidth = useStore((state) => state.appsDrawerWidth)
@@ -195,7 +196,7 @@ export default function ViewCube() {
         return
       }
       const direction = hit.object.userData.dir
-      removeCameraUrlParams()
+      noteUserCameraMove(cameraControls)
       snapToDirection(cameraControls, direction)
       fitModelToFrame()
       debug().log('ViewCube: snap to', hit.object.userData.kind, direction)
@@ -205,6 +206,9 @@ export default function ViewCube() {
       if (event.button !== 0) {
         return // Let right/middle click through to the context menu.
       }
+      // The user has the camera from here, before the drag or snap queues a
+      // move, so a load's camera follow can't refit in between (renderDemand.js).
+      noteUserCamera(cameraControls)
       isPointerDown = true
       isDragging = false
       lastX = event.clientX
@@ -223,8 +227,10 @@ export default function ViewCube() {
         return
       }
       if (!isDragging) {
-        // The pose is about to leave any `#c:` permalink behind.
-        removeCameraUrlParams()
+        // The user's own move: the `#c:` link follows the camera from here
+        // (Camera/liveCameraLink.js). Not at pointerdown, which may be a
+        // click that hits no face and moves nothing.
+        noteUserCameraMove(cameraControls)
       }
       isDragging = true
       setHover(null) // Clear the highlight while dragging.
@@ -296,7 +302,8 @@ export default function ViewCube() {
    */
   const orbit = (deltaAzimuthRad, deltaPolarRad) => {
     if (controlsRef.current) {
-      removeCameraUrlParams()
+      noteUserCamera(controlsRef.current)
+      noteUserCameraMove(controlsRef.current)
       controlsRef.current.rotate(deltaAzimuthRad, deltaPolarRad, true)
     }
   }
@@ -308,7 +315,8 @@ export default function ViewCube() {
    */
   const snapView = (direction) => {
     if (controlsRef.current) {
-      removeCameraUrlParams()
+      noteUserCamera(controlsRef.current)
+      noteUserCameraMove(controlsRef.current)
       snapToDirection(controlsRef.current, direction.clone())
       fitModelToFrame()
     }

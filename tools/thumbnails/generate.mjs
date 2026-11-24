@@ -18,7 +18,7 @@
  *   node tools/thumbnails/generate.mjs [--only Name,Name] [--size 512]
  *     [--margin 16] [--out public/static/thumbnails] [--port 8129]
  *
- * Requires a playwright-config build (`yarn test-flows-build`): that
+ * Requires a playwright-config build (`bun run test-flows-build`): that
  * build exposes `window.store` (so the scene background can be cleared
  * for transparency) and enables `preserveDrawingBuffer`. Models are
  * cached under tools/thumbnails/cache/ and re-used on later runs, so a
@@ -310,6 +310,8 @@ async function main() {
     // Skip the first-run splash so the viewer is the whole page.
     await context.addCookies([
       {name: 'isFirstTime', value: '1', domain: 'localhost', path: '/'},
+      // About also opens for a visitor with no privacy choice yet.
+      {name: 'consentLevel', value: '1.restricted', domain: 'localhost', path: '/'},
     ])
 
     const page = await context.newPage()

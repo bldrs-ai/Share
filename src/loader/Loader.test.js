@@ -2,11 +2,14 @@ import {DecompressionStream as NodeDecompressionStream} from 'node:stream/web'
 import {gzipSync} from 'node:zlib'
 import {Box3, Object3D, Mesh, BufferGeometry, Material, BufferAttribute, Raycaster, Vector3} from 'three'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
-import {zipSync} from 'three/examples/jsm/libs/fflate.module.js'
+import {unzipSync, zipSync} from 'three/examples/jsm/libs/fflate.module.js'
 import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
 import * as contentHash from '../utils/contentHash'
+import {dicomSeriesToNrrd, groupSeries, parseDicomSlice} from './dicom'
+import * as loadProgress from './loadProgress'
 import {load, readModel} from './Loader'
+import {ZipArchiveError} from './zipArchive'
 
 
 // Spark's real module boots a wasm sorter + workers that don't exist in
@@ -257,6 +260,33 @@ describe('Loader', () => {
     }
   })
 
+  it('loads an NRRD volume, as the one a zip of DICOM slices is stacked into', async () => {
+    // Built as the archive seam builds it, from pydicom's phantom series.
+    const zip = unzipSync(new Uint8Array(readTestDataFile('dicom/phantom-ct.zip', true)))
+    const slices = Object.entries(zip).filter(([p]) => !p.endsWith('.txt')).map(([, b]) => parseDicomSlice(b))
+    const nrrd = dicomSeriesToNrrd(groupSeries(slices)[0])
+    const restoreArrayBuffer = setupMockBlobWithContent(Buffer.from(nrrd))
+    try {
+      const model = await load(testPathToUrl('dicom/phantom-ct.nrrd'), mockViewer, jest.fn(), true, jest.fn(), '')
+      const volume = model.children.find((child) => child.userData.isVolume)
+      expect(volume.name).toBe('CT 40 × 48 × 32')
+      // The NavTree label and a pick id, which convertToShareModel gives it.
+      expect(volume.Name).toEqual({value: 'CT 40 × 48 × 32'})
+      expect(Number.isSafeInteger(volume.expressID)).toBe(true)
+      expect(volume.material.uniforms.map.value.image.depth).toBe(32) // eslint-disable-line no-magic-numbers
+      // A ray straight through the volume picks nothing: it has nothing to
+      // select. Bounds still see it (the camera fits to it).
+      model.updateMatrixWorld(true)
+      const bounds = new Box3().setFromObject(model)
+      expect(bounds.isEmpty()).toBe(false)
+      const center = bounds.getCenter(new Vector3())
+      const ray = new Raycaster(center.clone().add(new Vector3(0, 0, 1)), new Vector3(0, 0, -1))
+      expect(ray.intersectObject(model, true)).toEqual([])
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
   it('loads a SPLAT model', async () => {
     mockViewer.IFC.type = 'splat'
     const testPath = 'splat/cube.splat'
@@ -432,7 +462,7 @@ describe('Loader', () => {
       const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
       expect(model).toBeDefined()
       expect(model.loadStats).toMatchObject({
-        memoryUsed: 1024,
+        geometryMemory: 1024,
         openMs: 150,
         productCount: 42,
         errorCount: 2,
@@ -441,6 +471,9 @@ describe('Loader', () => {
       // Conway's total is a parse timer, not the wall clock; it must never
       // again ride under the name that GA reports as the load time.
       expect(model.loadStats).not.toHaveProperty('loadTime')
+      // Nor Conway's geometry memory under the name GA reports as the heap:
+      // stats_memoryUsed is the reporter's heap in bytes for every format.
+      expect(model.loadStats).not.toHaveProperty('memoryUsed')
       expect(model).toMatchSnapshot()
 
       // The `[conwayDirect] parsed …` summary is the integration-boundary
@@ -463,7 +496,7 @@ describe('Loader', () => {
     // Share#2006. Uploads arrive unwrapped; a `.ifczip` by URL (GitHub, a
     // locally hosted file, a pasted link) reaches `load` as the zip, takes
     // findLoader's IFC arm, and is unwrapped one line before `readModel`
-    // (`loader/modelArchive.js#unwrapIfcZip`). Conway must get the part-21
+    // (`loader/modelArchive.js#unwrapHostedArchive`). Conway must get the part-21
     // text, not the zip.
     mockViewer.IFC.type = 'ifc'
     const ifcText = readTestDataFile('ifc/index.ifc')
@@ -477,6 +510,77 @@ describe('Loader', () => {
       expect(opened).toBe(ifcText)
       // The model is an IFC from here on, whatever the URL said.
       expect(model.type).toBe('ifc')
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  // Share#2006 follow-up: a zip is a container wherever it comes from. The
+  // route's name doesn't pick the model — the one entry inside does, by its
+  // own name and header, so `.zip`, `.ifc.zip` and a zip under another
+  // model's name all open the model they hold.
+  it.each([['.zip', 'ifc/index.zip'], ['.ifc.zip', 'ifc/index.ifc.zip'], ['zip named as a .glb', 'ifc/index.glb']])(
+    'loads a hosted %s as the IFC inside it', async (_what, route) => {
+      mockViewer.IFC.type = 'ifc'
+      const ifcText = readTestDataFile('ifc/index.ifc')
+      const zip = zipSync({'index.ifc': new Uint8Array(Buffer.from(ifcText))})
+      const restoreArrayBuffer = setupMockBlobWithContent(Buffer.from(zip))
+      try {
+        const model = await load(testPathToUrl(route), mockViewer, jest.fn(), true, jest.fn(), '')
+        const {OpenModel} = mockViewer.IFC.loader.ifcManager.ifcAPI
+        expect(OpenModel).toHaveBeenCalledTimes(1)
+        expect(new TextDecoder().decode(OpenModel.mock.calls[0][0])).toBe(ifcText)
+        expect(model.type).toBe('ifc')
+      } finally {
+        restoreArrayBuffer()
+      }
+    })
+
+  it('names the model inside on the load report\'s model line, not the zip', async () => {
+    const spy = jest.spyOn(loadProgress, 'reportModelInfo')
+    const zip = readTestDataFile('dicom/phantom-ct.zip', true)
+    const restoreArrayBuffer = setupMockBlobWithContent(zip)
+    try {
+      await load(testPathToUrl('dicom/scan.zip'), mockViewer, jest.fn(), true, jest.fn(), '')
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining({schema: 'NRRD'}))
+    } finally {
+      restoreArrayBuffer()
+      spy.mockRestore()
+    }
+  })
+
+  it('refuses a hosted zip of several models, which a link can\'t choose between', async () => {
+    const ifc = new Uint8Array(Buffer.from(readTestDataFile('ifc/index.ifc')))
+    const restoreArrayBuffer = setupMockBlobWithContent(Buffer.from(zipSync({'a.ifc': ifc, 'b.ifc': ifc})))
+    try {
+      await expect(load(testPathToUrl('ifc/pair.zip'), mockViewer, jest.fn(), true, jest.fn(), ''))
+        .rejects.toThrow(ZipArchiveError)
+      expect(mockViewer.IFC.loader.ifcManager.ifcAPI.OpenModel).not.toHaveBeenCalled()
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  it('types a .zip that isn\'t one by its header', async () => {
+    mockViewer.IFC.type = 'ifc'
+    const ifcText = readTestDataFile('ifc/index.ifc')
+    const restoreArrayBuffer = setupMockBlobWithContent(Buffer.from(ifcText))
+    try {
+      const model = await load(testPathToUrl('ifc/index.zip'), mockViewer, jest.fn(), true, jest.fn(), '')
+      expect(model.type).toBe('ifc')
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  it('loads a hosted zip of DICOM slices as the volume they stack into', async () => {
+    const zip = readTestDataFile('dicom/phantom-ct.zip', true)
+    const restoreArrayBuffer = setupMockBlobWithContent(zip)
+    try {
+      const model = await load(testPathToUrl('dicom/scan.zip'), mockViewer, jest.fn(), true, jest.fn(), '')
+      expect(model.type).toBe('nrrd')
+      const volume = model.children.find((child) => child.userData.isVolume)
+      expect(volume.name).toBe('CT 40 × 48 × 32')
     } finally {
       restoreArrayBuffer()
     }
@@ -899,7 +1003,9 @@ describe('Loader', () => {
       const result = await readModel(mockIfcLoader, 'test-buffer', './', true, true, mockViewer, null, onProgress)
 
       expect(result).toBe(mockModel)
-      expect(mockIfcLoader.parse).toHaveBeenCalledWith('test-buffer', onProgress)
+      // The trailing options object carries `onIndexed` (open-205 #2029); none
+      // was passed to readModel here, so it is empty.
+      expect(mockIfcLoader.parse).toHaveBeenCalledWith('test-buffer', onProgress, undefined, {})
 
       // Verify that all expected progress messages were called
       expect(onProgress).toHaveBeenCalledWith('Configuring loader...')
@@ -947,6 +1053,43 @@ describe('Loader', () => {
       expect(onProgress).toHaveBeenCalledWith('Processing model data...')
       expect(onProgress).toHaveBeenCalledWith('Applying model fixups...')
       expect(fixupCb).toHaveBeenCalled()
+    })
+
+    // The fixups are synchronous, seconds of them on a large GLB hit, so the
+    // "Applying model fixups" line has to be painted before they start or
+    // the snackbar shows the previous stage throughout (Share#2101).
+    it('lets the fixups line paint before running the fixups', async () => {
+      const mockModel = {geometry: new BufferGeometry(), isObject3D: true}
+      const mockLoader = {parse: jest.fn().mockReturnValue(mockModel)}
+      const events = []
+      const onProgress = (line) => events.push(line)
+      const fixupCb = jest.fn(() => {
+        events.push('fixups')
+        return mockModel
+      })
+      const originalRaf = globalThis.requestAnimationFrame
+      const visibility = jest.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+      globalThis.requestAnimationFrame = (cb) => {
+        events.push('frame')
+        setTimeout(() => cb(0), 0)
+        return 1
+      }
+      try {
+        await readModel(mockLoader, 'test-data', './', false, false, mockViewer, fixupCb, onProgress)
+      } finally {
+        globalThis.requestAnimationFrame = originalRaf
+        visibility.mockRestore()
+      }
+      expect(events).toEqual(['Processing model data...', 'Applying model fixups...', 'frame', 'fixups'])
+    })
+
+    it('reports parsing a GLB as its own stage', async () => {
+      const loader = new GLTFLoader()
+      const mockModel = {geometry: new BufferGeometry(), material: new Material(), isObject3D: true}
+      loader.parse = jest.fn((data, path, onLoad) => onLoad(mockModel))
+      const onProgress = jest.fn()
+      await readModel(loader, 'test-data', './', false, false, null, null, onProgress)
+      expect(onProgress.mock.calls.map((call) => call[0])).toEqual(['Parsing model data...'])
     })
   })
 })

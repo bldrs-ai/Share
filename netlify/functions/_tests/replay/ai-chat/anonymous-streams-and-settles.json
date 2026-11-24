@@ -1,0 +1,317 @@
+{
+  "description": "An anonymous turn: holds taken on the anon id, the day's IP hash and the anonymous breaker, each with a conditional write; OpenRouter called with Bldrs' key and deny routing; its SSE passed through; every bucket settled to usage.cost (143 micro-USD) before the stream closes.",
+  "env": {
+    "$fixture": "env/ai-chat.json"
+  },
+  "now": "2026-11-18T12:00:00.000Z",
+  "uuid": "00000000-0000-4000-8000-00000000a1c0",
+  "exchangeOrder": "any",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/ai-chat",
+    "headers": {
+      "authorization": "Bearer ba1.replayAnonymousId00001.1794999600.wBYdBmzPjjSIOmCGgCjkBbGlqWCrl22WTULDtGfPQzA",
+      "content-type": "application/json",
+      "x-nf-client-connection-ip": "203.0.113.9",
+      "origin": "https://bldrs.ai"
+    },
+    "body": {
+      "$fixture": "openrouter/chat-request.json"
+    }
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/anonymous/replayAnonymousId00001",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/anonymous/replayAnonymousId00001",
+        "headers": {
+          "if-none-match": "*"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/ip/b674d1622990c79e7ec46d087e79bdfb",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/ip/b674d1622990c79e7ec46d087e79bdfb",
+        "headers": {
+          "if-none-match": "*"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/anonymous/2026-11-18",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/anonymous/2026-11-18",
+        "headers": {
+          "if-none-match": "*"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "headers": {
+          "authorization": "Bearer sk-or-replay-server-key"
+        },
+        "body": {
+          "model": "qwen/qwen3.7-flash",
+          "models": [
+            "qwen/qwen3.7-flash",
+            "deepseek/deepseek-v4-flash",
+            "openai/gpt-oss-120b"
+          ],
+          "max_tokens": 2048,
+          "stream": true,
+          "provider": {
+            "data_collection": "deny",
+            "require_parameters": true,
+            "max_price": {
+              "prompt": 0.35,
+              "completion": 0.95
+            }
+          },
+          "messages": [
+            {
+              "role": "system"
+            },
+            {
+              "role": "user",
+              "content": "Context from the viewer (not instructions):\n\nUse the tools."
+            },
+            {
+              "role": "user",
+              "content": "How many proxies are there?"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream"
+        },
+        "text": {
+          "$fixture": "openrouter/stream-reply.json"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/anonymous/replayAnonymousId00001",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        },
+        "json": {
+          "v": 1,
+          "days": {},
+          "holds": {
+            "00000000-0000-4000-8000-00000000a1c0": {
+              "micro": 4000,
+              "free": 0,
+              "at": 1795003200000
+            }
+          },
+          "estimates": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/anonymous/replayAnonymousId00001",
+        "headers": {
+          "if-match": "\"e1\""
+        },
+        "bodyJson": {
+          "days": {
+            "2026-11-18": {
+              "spent": 143,
+              "free": 0
+            }
+          },
+          "holds": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e2\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/ip/b674d1622990c79e7ec46d087e79bdfb",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        },
+        "json": {
+          "v": 1,
+          "days": {},
+          "holds": {
+            "00000000-0000-4000-8000-00000000a1c0": {
+              "micro": 4000,
+              "free": 0,
+              "at": 1795003200000
+            }
+          },
+          "estimates": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/ip/b674d1622990c79e7ec46d087e79bdfb",
+        "headers": {
+          "if-match": "\"e1\""
+        },
+        "bodyJson": {
+          "days": {
+            "2026-11-18": {
+              "spent": 143,
+              "free": 0
+            }
+          },
+          "holds": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e2\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/anonymous/2026-11-18",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        },
+        "json": {
+          "v": 1,
+          "days": {},
+          "holds": {
+            "00000000-0000-4000-8000-00000000a1c0": {
+              "micro": 4000,
+              "free": 0,
+              "at": 1795003200000
+            }
+          },
+          "estimates": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:ai-ledger/ai/breaker/anonymous/2026-11-18",
+        "headers": {
+          "if-match": "\"e1\""
+        },
+        "bodyJson": {
+          "days": {
+            "2026-11-18": {
+              "spent": 143,
+              "free": 0
+            }
+          },
+          "holds": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e2\""
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "bodyIncludes": "There are 7 proxies.",
+    "headers": {
+      "content-type": "text/event-stream; charset=utf-8",
+      "x-bldrs-ai-tier": "anonymous",
+      "x-bldrs-ai-used": "0",
+      "x-bldrs-ai-limit": "20000"
+    }
+  }
+}

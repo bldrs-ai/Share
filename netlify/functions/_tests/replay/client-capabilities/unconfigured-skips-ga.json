@@ -1,0 +1,12 @@
+{
+  "description": "Without GA4_MEASUREMENT_ID and GA4_API_SECRET (every context but production) a valid report is skipped, not an error.",
+  "env": {},
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/client-capabilities",
+    "headers": {"origin": "https://bldrs.ai", "content-type": "text/plain;charset=UTF-8"},
+    "body": "{\"condition\":\"ga_blocked\",\"browser\":\"brave\",\"blocker\":\"cosmetic\",\"form_factor\":\"mobile\",\"consent\":\"off\"}"
+  },
+  "exchanges": [],
+  "expect": {"statusCode": 204}
+}

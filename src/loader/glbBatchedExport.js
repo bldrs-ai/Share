@@ -1,14 +1,9 @@
-import {Color, Matrix4, Quaternion, Vector3} from 'three'
-import {
-  hasBatchedGeometry,
-  makeInstanceGeometryReader,
-} from '../viewer/ifc/batchedInstanceGeometry'
-import {forEachActiveInstance} from '../viewer/ifc/batchedInstanceTables'
-import {eachBatch} from '../viewer/ifc/batchedModel'
-import {makeContentCache, makeGeometryInterner} from './contentKey'
-import {bakeCollapsedBin, planCollapse} from './glbCollapse'
-import {glbVerbose} from './glbLog'
-import {slimGlbBytes} from './glbSlim'
+import {modelHasPostLoadEdits} from '../viewer/ifc/batchedEdit'
+import {yieldToBrowser} from '../utils/scheduling'
+import {buildBatchedGlbInWorker} from './GlbWriterService'
+import {buildInstancedGlbFromSnapshot} from './glbBatchedBuild'
+import {snapshotBatchedModel} from './glbBatchedSnapshot'
+import {glbInfo, glbVerbose} from './glbLog'
 
 
 /**
@@ -53,203 +48,25 @@ import {slimGlbBytes} from './glbSlim'
  * geometry missing position/normal/index, an interleaved attribute — and
  * the caller falls back to the merged writer. A wrong artifact is worse
  * than a bigger one.
- */
-
-
-/** Absolute tolerance for the decompose→recompose fidelity check. */
-const TRS_EPSILON = 1e-4
-
-const FLOATS_PER_VEC3 = 3
-const FLOATS_PER_QUAT = 4
-
-
-/**
- * Decompose one instance matrix to TRS, verifying the decomposition
- * actually reproduces the matrix (Matrix4.decompose silently drops shear).
  *
- * @param {Matrix4} matrix
- * @return {{position: Vector3, quaternion: Quaternion, scale: Vector3}|null}
+ * **Two halves, one result** (open-205 #2030 target 1). Walking the live
+ * batches is all that needs the main thread; it lives in
+ * `glbBatchedSnapshot.js` and only copies. Everything that costs —
+ * rebuilding and content-hashing every shape, decomposing every placement,
+ * the collapse bake, building and serialising the gltf-transform document,
+ * the slim pass — lives in `glbBatchedBuild.js`, which needs no scene and so
+ * runs in `GlbWriter.worker.js` for the cache writer
+ * ({@link exportBatchedModelOffThread}). On sp-231MB that was one 6.0 s
+ * main-thread task. {@link exportBatchedModelAsInstancedGlb} runs both halves
+ * in-process and is byte-for-byte the same writer; the off-thread path falls
+ * back to it when the worker can't be used.
  */
-function decomposeStrict(matrix) {
-  const position = new Vector3()
-  const quaternion = new Quaternion()
-  const scale = new Vector3()
-  matrix.decompose(position, quaternion, scale)
-  const recomposed = new Matrix4().compose(position, quaternion, scale)
-  const a = matrix.elements
-  const b = recomposed.elements
-  for (let i = 0; i < a.length; i++) {
-    if (Math.abs(a[i] - b[i]) > TRS_EPSILON) {
-      return null
-    }
-  }
-  return {position, quaternion, scale}
-}
-
-
-/**
- * Group every instance of the model by (geometry CONTENT × exact source
- * color), preserving batch iteration order within each group.
- *
- * Two shapes with the same bytes land in one group, so merging is just
- * appending to the group that is already there: every group's `entries` is
- * one list in global batch-iteration order, and the transforms AND the
- * `BLDRS_instance_tables` rows are both derived from that one list further
- * down. Nothing can reorder one without the other — which is the invariant
- * the whole join rests on (see `bldrsInstanceTables.js`, "Instance order is
- * the contract").
- *
- * @param {object} model BatchedMesh or Group of decorated batches
- * @param {boolean} keepMatrices also keep each entry's full `matrix`, which
- *   only the collapse needs (it bakes the placement rather than
- *   decomposing it) — so the default path allocates nothing new
- * @return {Array<object>|null} groups
- *   `{geometry, color, entries: [{trs, matrix?, parent, occurrenceId,
- *   geometryId, occurrencePath}]}`, or null when any instance can't be
- *   represented
- */
-function collectInstanceGroups(model, keepMatrices = false) {
-  const groups = new Map()
-  let failed = false
-  // Geometry is read back out of the batch buffers instead of from a
-  // retained per-instance table (Share#1810). ONE reader for the whole
-  // model, because the dedup this writer exists for — one accessor set per
-  // unique shape, `accessorsFor` keyed by geometry identity — needs a
-  // shape used by both batches to come back as the same object, which is
-  // what the retained table used to guarantee.
-  const geometryAt = makeInstanceGeometryReader()
-  // ...and one interner, for the same reason at the next level down: the
-  // reader hands back one object per conway `geometryExpressID`, and
-  // distinct ids routinely carry identical bytes.
-  const internGeometry = makeGeometryInterner()
-  eachBatch(model, (mesh) => {
-    if (failed || !mesh.instanceParents || !hasBatchedGeometry(mesh) ||
-        typeof mesh.getMatrixAt !== 'function') {
-      return
-    }
-    // Source colors are the bake target (§1.2b): the pre-palette snapshot
-    // when present, the live table otherwise (a model that never had a
-    // palette applied — colors identical by construction).
-    const colors = mesh.instanceSourceColors ?? mesh.instanceColors
-    if (!colors) {
-      failed = true
-      return
-    }
-    const scratch = new Matrix4()
-    // Live instances only (batchedInstanceTables). A deleted instance has no
-    // geometry to read and three throws on its matrix — and before
-    // create-300 L0 (#1915) the null read here failed the WHOLE batched
-    // export over to the merged slot for the sake of one deleted part. It is
-    // simply not in the artifact now, so an edited model round-trips batched
-    // and hydrates without it. Skipping changes nothing for a batch with no
-    // deletions: the visit order is the dense loop's, so an unedited model's
-    // groups, tables and bytes are what they were.
-    forEachActiveInstance(mesh, (batchId) => {
-      const geometry = internGeometry(geometryAt(mesh, batchId))
-      const color = colors[batchId]
-      if (!geometry || !color) {
-        failed = true
-        return false
-      }
-      mesh.getMatrixAt(batchId, scratch)
-      const trs = decomposeStrict(scratch)
-      if (!trs) {
-        glbVerbose('batched writer: non-TRS instance matrix; falling back to merged')
-        failed = true
-        return false
-      }
-      // `uuid` of the INTERNED object — content identity, since the
-      // interner returns the first object it saw with these bytes.
-      const key = `${geometry.uuid}|${colorKey(color)}`
-      let group = groups.get(key)
-      if (!group) {
-        group = {geometry, color, entries: []}
-        groups.set(key, group)
-      }
-      group.entries.push({
-        trs,
-        matrix: keepMatrices ? scratch.clone() : undefined,
-        parent: mesh.instanceParents[batchId],
-        occurrenceId: mesh.instanceOccurrenceIds ? mesh.instanceOccurrenceIds[batchId] : batchId,
-        geometryId: mesh.instanceGeometryIds ? mesh.instanceGeometryIds[batchId] : null,
-        occurrencePath: mesh.instanceOccurrencePaths ? mesh.instanceOccurrencePaths[batchId] : null,
-      })
-      return true
-    })
-  })
-  if (failed || groups.size === 0) {
-    return null
-  }
-  return [...groups.values()]
-}
-
-
-/**
- * The exact source color, as a map key. Used for both halves of the writer's
- * dedup — the group key's color component and the shared-material table — so
- * that two bins agreeing on color agree on material by construction.
- *
- * @param {object} color `{x, y, z, w}`
- * @return {string}
- */
-function colorKey(color) {
-  return `${color.x},${color.y},${color.z},${color.w}`
-}
-
-
-/**
- * True when every quaternion in the packed array is the identity rotation,
- * i.e. the ROTATION attribute would say exactly what its absence says.
- *
- * @param {Float32Array} rotation `n * 4` packed xyzw
- * @return {boolean}
- */
-function isIdentityRotation(rotation) {
-  for (let i = 0; i < rotation.length; i++) {
-    const identity = i % FLOATS_PER_QUAT === FLOATS_PER_QUAT - 1 ? 1 : 0
-    if (rotation[i] !== identity) {
-      return false
-    }
-  }
-  return true
-}
-
-
-/**
- * True when every instance is unit-scaled.
- *
- * @param {Float32Array} scale `n * 3` packed xyz
- * @return {boolean}
- */
-function isUnitScale(scale) {
-  return scale.every((component) => component === 1)
-}
-
-
-/**
- * A geometry is writable when it has non-interleaved float positions +
- * normals and an index — the shape Conway's assembler emits.
- *
- * @param {object} geometry BufferGeometry
- * @return {boolean}
- */
-function isWritableGeometry(geometry) {
-  const pos = geometry.getAttribute?.('position')
-  const norm = geometry.getAttribute?.('normal')
-  const index = geometry.index
-  return Boolean(
-    pos && norm && index &&
-    !pos.isInterleavedBufferAttribute && !norm.isInterleavedBufferAttribute &&
-    pos.array instanceof Float32Array && norm.array instanceof Float32Array)
-}
 
 
 /**
  * Serialize the batched model to instanced-GLB bytes plus the per-node
- * instance tables (in the same node order as the document's scene).
- *
- * gltf-transform is imported dynamically, matching `glbCompress` — the
- * library is only paid for on the writer path.
+ * instance tables (in the same node order as the document's scene), in
+ * this thread.
  *
  * @param {object} model BatchedMesh or Group of decorated batches
  * @param {object} [opts]
@@ -262,242 +79,81 @@ function isWritableGeometry(geometry) {
  *   the mode, which picks the table version and so the OPFS slot
  */
 export async function exportBatchedModelAsInstancedGlb(model, {collapse = false} = {}) {
-  const groups = collectInstanceGroups(model, collapse)
-  if (!groups) {
+  const taken = await snapshotBatchedModel(model)
+  if (!taken) {
     return null
   }
-  for (const group of groups) {
-    if (!isWritableGeometry(group.geometry)) {
-      glbVerbose('batched writer: unwritable geometry (interleaved/missing attrs); falling back')
-      return null
-    }
+  return await buildInstancedGlbFromSnapshot(taken.snapshot, {collapse}, glbVerbose)
+}
+
+
+/**
+ * How long one main-thread slice of the snapshot may run before it yields.
+ * Below the 50 ms long-task line, so the copy never shows up as one.
+ */
+const SNAPSHOT_SLICE_MS = 30
+
+
+/**
+ * The cache writer's form of {@link exportBatchedModelAsInstancedGlb}: the
+ * snapshot is taken here in yielding slices, and the build runs in the
+ * GlbWriter worker. Same bytes, same tables — the worker runs the very
+ * `buildInstancedGlbFromSnapshot` the in-process writer does.
+ *
+ * Falls back to the in-process writer when the worker can't take the job
+ * (it failed to start, or crashed). The snapshot's buffers were transferred
+ * by then, so the fallback snapshots again — unless the model was edited in
+ * the meantime, when the cache slot is no longer the source's to fill.
+ *
+ * @param {object} model BatchedMesh or Group of decorated batches
+ * @param {object} [opts]
+ * @param {boolean} [opts.collapse] as for the in-process writer
+ * @return {Promise<{bytes: Uint8Array, tableNodes: Array<object>,
+ *   collapsed: boolean}|{edited: true}|null>} as the in-process writer, plus
+ *   `{edited: true}` when the model was edited while the snapshot was
+ *   yielded, or before a decline that would send the caller to the merged
+ *   bake of the live model (nothing should be cached)
+ */
+export async function exportBatchedModelOffThread(model, {collapse = false} = {}) {
+  const taken = await snapshotBatchedModel(model, {
+    budgetMs: SNAPSHOT_SLICE_MS,
+    yieldFn: yieldToBrowser,
+  })
+  if (taken?.edited) {
+    return taken
   }
-  const {instanced, collapsed: bins} = collapse ?
-    planCollapse(groups, colorKey) :
-    {instanced: groups, collapsed: []}
-
-  const {Document} = await import('@gltf-transform/core')
-  const {EXTMeshGPUInstancing} = await import('@gltf-transform/extensions')
-
-  const doc = new Document()
-  const buffer = doc.createBuffer()
-  const scene = doc.createScene()
-  doc.getRoot().setDefaultScene(scene)
-  // Required, not optional: without the extension a viewer would render one
-  // instance at the node origin — a wrong picture, worse than refusing.
-  // Created only when some node is instanced: gltf-transform lists every
-  // created extension in `extensionsUsed`, so a fully-collapsed file would
-  // otherwise REQUIRE an extension it never uses, and a viewer that does not
-  // implement it (3dviewer.net) refuses the file outright.
-  const instancingExt = instanced.length > 0 ?
-    doc.createExtension(EXTMeshGPUInstancing).setRequired(true) :
-    null
-
-  // Accessors per UNIQUE geometry, shared across color-bin nodes — the
-  // dedup that makes this artifact smaller than the merged bake.
-  const geometryAccessors = new Map()
-  const accessorsFor = (geometry) => {
-    let acc = geometryAccessors.get(geometry)
-    if (!acc) {
-      acc = {
-        position: doc.createAccessor().setType('VEC3')
-          .setArray(geometry.getAttribute('position').array).setBuffer(buffer),
-        normal: doc.createAccessor().setType('VEC3')
-          .setArray(geometry.getAttribute('normal').array).setBuffer(buffer),
-        indices: doc.createAccessor().setType('SCALAR')
-          .setArray(geometry.index.array).setBuffer(buffer),
-      }
-      geometryAccessors.set(geometry, acc)
-    }
-    return acc
+  if (!taken) {
+    return declined(model)
   }
-
-  // Materials per distinct source color, shared across every geometry bin
-  // that color appears in. The writer used to mint one per (geometry ×
-  // color) bin: 12,251 declared for 90 distinct on Snowdon, 1,758,073 B of
-  // JSON for 12,970 B of content (Share#1854). A material here is a pure
-  // function of the color, so sharing is exact — and readers take colors
-  // from `BLDRS_instance_tables`, never from the material, so nothing
-  // downstream can tell the difference.
-  const materials = new Map()
-  const scratchColor = new Color()
-  const materialFor = (color) => {
-    const key = colorKey(color)
-    let material = materials.get(key)
-    if (material) {
-      return material
+  let result
+  try {
+    result = await buildBatchedGlbInWorker({snapshot: taken.snapshot, collapse}, taken.transfer)
+  } catch (workerErr) {
+    if (modelHasPostLoadEdits(model)) {
+      return {edited: true}
     }
-    // baseColorFactor is linear-space per spec, so convert like three's
-    // exporter would; the verbatim value goes in the table.
-    scratchColor.setRGB(color.x, color.y, color.z).convertSRGBToLinear()
-    material = doc.createMaterial()
-      .setBaseColorFactor([scratchColor.r, scratchColor.g, scratchColor.b, color.w])
-      .setMetallicFactor(0)
-      .setRoughnessFactor(1)
-      .setDoubleSided(true)
-    if (color.w < 1) {
-      material.setAlphaMode('BLEND')
-    }
-    materials.set(key, material)
-    return material
+    glbInfo('writer: batched build worker failed, running it on the main thread:', workerErr)
+    return await exportBatchedModelAsInstancedGlb(model, {collapse})
   }
-
-  // Instance transforms shared by CONTENT across nodes, the same dedup the
-  // geometry accessors get and legal for the same reason — an accessor is an
-  // index, and glTF puts no limit on how many properties resolve to one.
-  // Worth real bytes because IFC placements are overwhelmingly unit-scaled
-  // and repeat a small set of orientations: 7,220 Snowdon nodes carry 74
-  // distinct SCALE payloads and 357 distinct ROTATION ones, which is
-  // 1,801,935 B of accessor + bufferView JSON and 456,524 B of BIN
-  // (Share#1854). The `tag` keeps a count-4 VEC3 apart from a count-3 VEC4,
-  // which are the same twelve floats and not the same accessor.
-  const instanceAccessorCache = makeContentCache()
-  const instanceAccessor = (type, array) => instanceAccessorCache(
-    [array], type,
-    () => doc.createAccessor().setType(type).setArray(array).setBuffer(buffer))
-
-  const tableNodes = []
-  for (const group of instanced) {
-    const {geometry, color, entries} = group
-    const acc = accessorsFor(geometry)
-
-    // Material for generic viewers only — OUR reader takes colors from the
-    // tables.
-    const material = materialFor(color)
-
-    const prim = doc.createPrimitive()
-      .setAttribute('POSITION', acc.position)
-      .setAttribute('NORMAL', acc.normal)
-      .setIndices(acc.indices)
-      .setMaterial(material)
-    const mesh = doc.createMesh().addPrimitive(prim)
-
-    const n = entries.length
-    const translation = new Float32Array(n * FLOATS_PER_VEC3)
-    const rotation = new Float32Array(n * FLOATS_PER_QUAT)
-    const scale = new Float32Array(n * FLOATS_PER_VEC3)
-    entries.forEach(({trs}, i) => {
-      trs.position.toArray(translation, i * FLOATS_PER_VEC3)
-      trs.quaternion.toArray(rotation, i * FLOATS_PER_QUAT)
-      trs.scale.toArray(scale, i * FLOATS_PER_VEC3)
-    })
-    // TRANSLATION is written unconditionally even when every instance sits at
-    // the origin, for two reasons that are not style: `glbPortable.js` reads
-    // the node's instance COUNT off this one accessor, and would emit zero
-    // placements without it; and an `attributes` object that ends up EMPTY
-    // makes three's GLTFMeshGpuInstancing bail, so the node hydrates as a
-    // plain Mesh, `joinNodesToTables` finds an uncovered table row and the
-    // whole model — not just that node — loses picking and palette. The
-    // other two are dropped when they say nothing: readers default a missing
-    // instance attribute to identity (three's extension composes from
-    // `(0,0,0)`, identity quat, `(1,1,1)`; `glbPortable.js` has its own
-    // IDENTITY_* fallbacks), and IFC placements are overwhelmingly unrotated
-    // or unit-scaled, so this is one `"SCALE":N` key per node off the JSON
-    // chunk — 888,894 B on the DSA2 shape (Share#1862).
-    const batch = instancingExt.createInstancedMesh()
-      .setAttribute('TRANSLATION', instanceAccessor('VEC3', translation))
-    if (!isIdentityRotation(rotation)) {
-      batch.setAttribute('ROTATION', instanceAccessor('VEC4', rotation))
-    }
-    if (!isUnitScale(scale)) {
-      batch.setAttribute('SCALE', instanceAccessor('VEC3', scale))
-    }
-
-    const node = doc.createNode().setMesh(mesh)
-    node.setExtension('EXT_mesh_gpu_instancing', batch)
-    // Table-join identity: GLTFLoader promotes node extras to
-    // `object.userData`, so the reader matches each InstancedMesh to its
-    // table slice by this index instead of trusting traversal order — the
-    // same lesson face_ids' `firstExpressId` canary encodes.
-    node.setExtras({bldrsTableNode: tableNodes.length})
-    scene.addChild(node)
-
-    const anyGeometryId = entries.some((e) => e.geometryId !== null && e.geometryId !== undefined)
-    const anyPath = entries.some((e) => Array.isArray(e.occurrencePath))
-    tableNodes.push({
-      count: n,
-      color: {x: color.x, y: color.y, z: color.z, w: color.w},
-      parents: entries.map((e) => e.parent),
-      occurrenceIds: entries.map((e) => e.occurrenceId),
-      geometryIds: anyGeometryId ? entries.map((e) => e.geometryId ?? 0) : null,
-      occurrencePaths: anyPath ? entries.map((e) => e.occurrencePath ?? null) : null,
-    })
+  for (const line of result.logs) {
+    glbVerbose(line)
   }
+  return result.built ?? declined(model)
+}
 
-  let collapsedRows = 0
-  for (const bin of bins) {
-    const baked = bakeCollapsedBin(bin)
-    collapsedRows += baked.entries.length
-    // Accessors of their own, never shared: the baked arrays are unique to
-    // this bin by construction, and `accessorsFor` keys on a geometry OBJECT
-    // this bin does not have.
-    const prim = doc.createPrimitive()
-      .setAttribute('POSITION', doc.createAccessor().setType('VEC3')
-        .setArray(baked.positions).setBuffer(buffer))
-      .setAttribute('NORMAL', doc.createAccessor().setType('VEC3')
-        .setArray(baked.normals).setBuffer(buffer))
-      .setIndices(doc.createAccessor().setType('SCALAR')
-        .setArray(baked.indices).setBuffer(buffer))
-      .setMaterial(materialFor(baked.color))
-    // The bin's centre on the node — the offset the vertices are relative
-    // to, which is what keeps their float32 precision (glbCollapse.js, rule
-    // 1). The reader places every row at this node's matrix.
-    const node = doc.createNode()
-      .setMesh(doc.createMesh().addPrimitive(prim))
-      .setTranslation(baked.centre)
-    node.setExtras({bldrsTableNode: tableNodes.length})
-    scene.addChild(node)
 
-    const {entries} = baked
-    const anyGeometryId = entries.some((e) => e.geometryId !== null && e.geometryId !== undefined)
-    const anyPath = entries.some((e) => Array.isArray(e.occurrencePath))
-    const {color} = baked
-    tableNodes.push({
-      count: entries.length,
-      color: {x: color.x, y: color.y, z: color.z, w: color.w},
-      parents: entries.map((e) => e.parent),
-      occurrenceIds: entries.map((e) => e.occurrenceId),
-      geometryIds: anyGeometryId ? entries.map((e) => e.geometryId ?? 0) : null,
-      occurrencePaths: anyPath ? entries.map((e) => e.occurrencePath ?? null) : null,
-      ranges: baked.ranges,
-      canary: baked.canary,
-    })
-  }
-
-  const {VertexLayout, WebIO} = await import('@gltf-transform/core')
-  // SEPARATE, not the library's INTERLEAVED default: each attribute is
-  // written tightly packed (`byteStride` = its element size), and `glbSlim`
-  // below then merges every such view into ONE shared vertex view. Under
-  // INTERLEAVED the merge produced one `byteStride: 24` view holding every
-  // mesh's POSITION+NORMAL, which three's `GLTFLoader` reads as an
-  // `InterleavedBufferAttribute` per mesh over that whole view — and
-  // `InterleavedBuffer.toJSON` serialises the entire view once per geometry.
-  // The three.js editor autosaves by `toJSON` on every import, so a DSA-sized
-  // export (28,674 instanced meshes) hung it past a 3 GB heap. Same bytes,
-  // same view count either way; see design/new/glb-export-premium.md §1.1c.
-  // Artifacts already in OPFS stay interleaved (no schema bump — both are
-  // plain glTF to every reader); the portable rewrite de-interleaves them on
-  // the way out (`export/glbPortable.js#deinterleaveVertexAttributes`).
-  const io = new WebIO().registerExtensions([EXTMeshGPUInstancing])
-    .setVertexLayout(VertexLayout.SEPARATE)
-  // gltf-transform lays out one bufferView per accessor and spells every
-  // float bound at double precision; `slimGlbBytes` re-expresses both
-  // without moving a byte of geometry (Share#1862). It runs HERE and not in
-  // `glbExport.js` so that the pass only ever sees this writer's output —
-  // before `injectGlbExtensions` appends BLDRS_* payload views of its own.
-  const {bytes, stats} = slimGlbBytes(await io.writeBinary(doc))
-  const instanceCount = tableNodes.reduce((total, node) => total + node.count, 0)
-  glbVerbose(
-    `batched writer: ${tableNodes.length} node(s), ${geometryAccessors.size} unique ` +
-    `geometry(ies), ${materials.size} material(s), ${instanceCount} instance(s), ` +
-    `${bytes.byteLength}B`)
-  if (collapse) {
-    glbVerbose(
-      `batched writer: collapsed ${collapsedRows} single-placement element(s) into ` +
-      `${bins.length} merged primitive(s); ${instanced.length} instanced node(s) kept`)
-  }
-  glbVerbose(
-    `batched writer: slimmed ${stats.bytesBefore}B to ${stats.bytesAfter}B, ` +
-    `${stats.bufferViewsBefore} bufferView(s) to ${stats.bufferViewsAfter}`)
-  return {bytes, tableNodes, collapsed: collapse}
+/**
+ * The off-thread writer's "can't be written batched" answer. A null sends
+ * the caller to the merged bake, which reads the LIVE model — and the live
+ * model may have been edited while the build ran in the worker (seconds, on
+ * a large model), where the synchronous in-process writer gave an edit no
+ * such window. The snapshot's own check covers only the snapshot, so look
+ * again here: an edited model gets `{edited: true}`, which caches nothing,
+ * because the cache slot belongs to the unedited source (codex on #2035).
+ *
+ * @param {object} model the model being written
+ * @return {{edited: true}|null}
+ */
+function declined(model) {
+  return modelHasPostLoadEdits(model) ? {edited: true} : null
 }

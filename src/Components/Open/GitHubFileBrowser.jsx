@@ -5,12 +5,13 @@ import {navigateBaseOnModelPath} from '../../utils/location'
 import {navigateToModel} from '../../utils/navigate'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {openAuthPopup} from '../../Auth0/authPopup'
-import {pathSuffixSupported} from '../../Filetype'
+import {fileSuffixBoundaryRegex} from '../../Filetype'
 import {getFilesAndFolders} from '../../net/github/Files'
 import {getOrganizations} from '../../net/github/Organizations'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
 import {getBranches} from '../../net/github/Branches'
 import useStore from '../../store/useStore'
+import debug, {WARN} from '../../utils/debug'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../../connections/persistence'
 import {clearGrantedGithubScope, getGrantedGithubScope, saveGrantedGithubScope} from '../../Auth0/githubGrant'
 import {getOAuthScopes} from '../../net/github/OAuthScopes'
@@ -37,7 +38,7 @@ function resolveValue(value, list) {
 
 /**
  * Keep only the file names Share can open, matched by supported extension
- * (case-insensitive, via {@link pathSuffixSupported}). GitHub's contents API
+ * (case-insensitive, at the end of the name). GitHub's contents API
  * has no server-side extension filter, so this is the enforcement point for
  * the *listed* files; a name typed into the File field bypasses it on purpose
  * (see validateFile / navigateToFile).
@@ -46,7 +47,9 @@ function resolveValue(value, list) {
  * @return {Array<string>}
  */
 function supportedFileNames(files) {
-  return files.map((file) => file.name).filter((name) => pathSuffixSupported(name))
+  // At the name's end: the unanchored match would list `foo.zipx` or
+  // `foo.gzip` as a zip, then fail to route it.
+  return files.map((file) => file.name).filter((name) => fileSuffixBoundaryRegex.test(name))
 }
 
 
@@ -173,11 +176,18 @@ export default function GitHubFileBrowser({
     let cancelled = false
     /** Asynchronously fetch organizations */
     async function fetchOrganizations() {
-      const orgs = await getOrganizations(accessToken)
+      let orgNamesFetched = []
+      try {
+        const orgs = await getOrganizations(accessToken)
+        orgNamesFetched = Object.keys(orgs).map((key) => orgs[key].login)
+      } catch (err) {
+        // An expired or revoked GitHub token rejects here with a 401 (SHARE-1X6);
+        // see SaveModelControl. Browse the user's own account instead.
+        debug(WARN).warn('GitHubFileBrowser: could not list GitHub organizations', err?.status ?? err?.message)
+      }
       if (cancelled) {
         return
       }
-      const orgNamesFetched = Object.keys(orgs).map((key) => orgs[key].login)
       const orgNames = [...orgNamesFetched, user && user.nickname].filter(Boolean)
       setOrgNamesArr(orgNames.length > 0 ? orgNames : [''])
     }

@@ -1,6 +1,4 @@
-import {captureMessage} from '@sentry/react'
 import {EngineOpenFailureError} from './engineOpenFailure'
-import {loadFailureCaptureContext} from './loadProgress'
 import {
   UnsupportedSchemaError,
   beginOpenAttempt,
@@ -8,14 +6,8 @@ import {
   conwayRefusedSchema,
   modelSourceOf,
   openModelFailure,
-  reportUnsupportedSchema,
+  unsupportedSchemaAlert,
 } from './unsupportedSchema'
-
-
-jest.mock('@sentry/react', () => ({captureMessage: jest.fn()}))
-jest.mock('./loadProgress', () => ({
-  loadFailureCaptureContext: jest.fn(() => ({tags: {}, contexts: {}})),
-}))
 
 
 /**
@@ -228,40 +220,35 @@ describe('loader/unsupportedSchema — size of the refused file', () => {
 })
 
 
-describe('loader/unsupportedSchema — reportUnsupportedSchema (Share#1879)', () => {
-  beforeEach(() => jest.clearAllMocks())
+const MB = 1024 * 1024 // eslint-disable-line no-magic-numbers
+const TOO_LONG_SCHEMA = 33 // one past the 32-character token limit
 
-  // Demand, not a defect: an info message grouped per schema spelling, so
-  // the Sentry issue list reads as a ranking of the 4.3 flavours users hit.
-  it('counts a refusal as an info message, one issue per schema, with source and size tags', () => {
-    const KIB = 1024
-    const MB = KIB * KIB
-    const loadContext = {load: {phase: 'dataParse', report: 'Share v…'}}
-    loadFailureCaptureContext.mockReturnValueOnce({tags: {'load.phase': 'dataParse'}, contexts: loadContext})
-    reportUnsupportedSchema(
-      new UnsupportedSchemaError('IFC4X3_RC2', 3 * MB),
-      {kind: 'provider', provider: 'github'})
-    expect(captureMessage).toHaveBeenCalledTimes(1)
-    // The load context rides on this event's own capture context, not on
-    // the session scope (codex review of Share#1899).
-    expect(captureMessage).toHaveBeenCalledWith('Unsupported IFC schema: IFC4X3_RC2', {
-      level: 'info',
-      fingerprint: ['unsupported-schema', 'IFC4X3_RC2'],
-      tags: {'load.phase': 'dataParse', 'schema': 'IFC4X3_RC2', 'model_source': 'github', 'model_size_mb': 3},
-      contexts: loadContext,
+
+describe('loader/unsupportedSchema — unsupportedSchemaAlert (Share#1879)', () => {
+  // Demand, not a defect: counted in GA through the dialog's `alert` event
+  // (AlertDialog), with the schema, source and size class as params, so GA
+  // reads as a ranking of the 4.3 flavours users hit. Nothing goes to Sentry.
+  it('carries the dialog text and the schema, source and size class for GA', () => {
+    const err = new UnsupportedSchemaError('IFC4X3_RC2', 3 * MB)
+    expect(unsupportedSchemaAlert(err, {kind: 'provider', provider: 'github'})).toEqual({
+      type: 'unsupportedSchema',
+      message: err.message,
+      ga: {schema: 'IFC4X3_RC2', model_source: 'github', size_class: '<10MB'},
     })
   })
 
-  it('omits the size tag when the size is unknown', () => {
-    reportUnsupportedSchema(new UnsupportedSchemaError('IFC4X3_ADD2'), null)
-    expect(captureMessage.mock.calls[0][1].tags).toEqual({schema: 'IFC4X3_ADD2', model_source: 'unknown'})
+  it('omits the size class when the size is unknown', () => {
+    expect(unsupportedSchemaAlert(new UnsupportedSchemaError('IFC4X3_ADD2'), null).ga)
+      .toEqual({schema: 'IFC4X3_ADD2', model_source: 'unknown'})
   })
 
-  it('never throws into the load path, even if Sentry does', () => {
-    captureMessage.mockImplementationOnce(() => {
-      throw new Error('sentry down')
-    })
-    expect(() => reportUnsupportedSchema(new UnsupportedSchemaError('IFC4X3'), null)).not.toThrow()
+  // The schema comes from the file's header; only a short plain token is a
+  // GA param value.
+  it('reads anything but a short upper-case schema token as `other`', () => {
+    const ga = (schema) => unsupportedSchemaAlert(new UnsupportedSchemaError(schema), null).ga.schema
+    expect(ga('ifc4x3_add2')).toBe('IFC4X3_ADD2')
+    expect(ga('IFC4X3 \\\\server\\share')).toBe('other')
+    expect(ga('X'.repeat(TOO_LONG_SCHEMA))).toBe('other')
   })
 })
 

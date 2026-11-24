@@ -4,7 +4,10 @@
  * (design/new/model-display-controls.md §6.1, `scopeRef`):
  *
  *   e<expressID>        an element by id. IFC, and STEP product hides — ids
- *                       that are stable in the file.
+ *                       that are stable in the file. Also the row of a
+ *                       top-level STEP product with geometry of its own, for
+ *                       that geometry, which has no occurrence path to write
+ *                       (visibilityHash.js, #1924).
  *   o<id>.<id>…         a STEP occurrence: its NAUO occurrence path, plus the
  *                       solid's express id when a named body is meant (the
  *                       same ids, in the same order, the selection permalink

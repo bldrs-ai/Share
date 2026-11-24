@@ -303,6 +303,20 @@ describe('viewer/ifc/ShareIfcLoader degraded end-of-load builds (conway#638)', (
       .toBeLessThan(appendBatch.mock.invocationCallOrder[0])
   })
 
+  it('a failed load leaves no selection waiting on the scene for the next load', async () => {
+    // The review of 9d4c25eb on #2084: the waiting selection
+    // (streamingBatchPick.js#LOAD_SELECTION_KEY) was dropped only by a
+    // builder's finalize, which a failed load never reaches.
+    const scene = {add: jest.fn(), remove: jest.fn(), userData: {}}
+    ifc.context.getScene = () => scene
+    IncrementalBatchedBuilder.mockImplementation(() => {
+      throw new Error('builder construction failed')
+    })
+    recapture.mockRejectedValue(new Error('the re-walk resolved none of the model'))
+    expect(await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())).toBeNull()
+    expect('loadSelection' in scene.userData).toBe(false)
+  })
+
   it('fails the load loudly when the whole-model ask rejects', async () => {
     // conway#660/#672: on a windowed source `recapture()` drives
     // `StreamAllMeshesAsync`, which THROWS rather than serving an empty

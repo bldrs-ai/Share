@@ -10,6 +10,8 @@ import {
 } from 'three'
 import {isDevMode} from '../utils/common'
 import {floatStrTrim} from '../utils/strings'
+import {requestPaint} from '../viewer/three/renderDemand'
+import {visibleHits} from '../viewer/three/visibleHits'
 
 
 /**
@@ -27,8 +29,14 @@ export default class PlaceMark extends EventDispatcher {
    */
   constructor({context}) {
     super()
-    const _domElement = context.getDomElement()
-    const _camera = context.getCamera()
+    // The viewer this instance draws into. Bound once: a new viewer (theme
+    // change, model switch) gets a new PlaceMark, and this one is disposed
+    // (MarkerControl's init effect, #2017). `let` so `dispose` can drop
+    // them: a stale holder of a disposed PlaceMark then keeps no viewer
+    // reachable.
+    let _context = context
+    let _domElement = context.getDomElement()
+    let _camera = context.getCamera()
     // HACK(pablo): Assign the camera to the global window object for Cypress testing
     if (OAUTH_2_CLIENT_ID === 'cypresstestaudience') {
       if (!window.markerScene) {
@@ -38,21 +46,28 @@ export default class PlaceMark extends EventDispatcher {
       window.markerScene.camera = _camera
     }
 
-    const _scene = context.getScene()
+    let _scene = context.getScene()
     const _raycaster = new Raycaster()
     let _objects = []
     const _placeMarks = []
+    let _isDisposed = false
 
     this.activated = false
     _domElement.style.touchAction = 'none'
     const _pointer = new Vector2()
 
     this.activate = () => {
+      if (_isDisposed) {
+        return
+      }
       this.activated = true
       _domElement.style.cursor = 'alias'
     }
 
     this.deactivate = () => {
+      if (_isDisposed) {
+        return
+      }
       this.activated = false
       _domElement.style.cursor = 'default'
     }
@@ -73,9 +88,12 @@ export default class PlaceMark extends EventDispatcher {
 
       if (_objects && this.activated) {
         updatePointer(event)
-        const _intersections = []
         _raycaster.setFromCamera(_pointer, _camera)
-        _raycaster.intersectObjects(_objects, true, _intersections)
+        // The model, so through visibleHits like Picker#castRay: not at a
+        // NaN-distance hit three r187 reports for a NaN-vertex triangle, not
+        // on geometry a cut plane removed from view (#2131), and not on the
+        // model behind the cut-plane gizmo.
+        const _intersections = visibleHits(_raycaster.intersectObjects(_objects, true), _raycaster, _context)
 
         if (_intersections.length > 0) {
           const intersect = _intersections[0]
@@ -102,7 +120,7 @@ export default class PlaceMark extends EventDispatcher {
     this.onSceneDoubleClick = (event) => {
       let res = {}
 
-      if (event.button === 0) {
+      if (event.button === 0 && !_isDisposed) {
         res = dropPlaceMark(event)
       }
 
@@ -112,7 +130,7 @@ export default class PlaceMark extends EventDispatcher {
     this.onSceneClick = (event) => {
       let res = {}
 
-      if (event.button === 0) {
+      if (event.button === 0 && !_isDisposed) {
         if (event.shiftKey) {
           res = dropPlaceMark(event)
         } else {
@@ -128,8 +146,18 @@ export default class PlaceMark extends EventDispatcher {
       return res
     }
 
+    /**
+     * Resolves to the new marker, or to null once this PlaceMark is disposed
+     * (a placement that was in flight when its viewer went away).
+     *
+     * @return {Promise<object|null>}
+     */
     this.putDown = ({point, normal, fillColor = 0xA9A9A9/* 0xff0000*/}) => {
       return new Promise((resolve, reject) => {
+        if (_isDisposed) {
+          resolve(null)
+          return
+        }
         if (!normal) {
           reject(new Error('Normal vector is not defined.'))
           return
@@ -154,10 +182,12 @@ export default class PlaceMark extends EventDispatcher {
       }
     }
 
+    // A no-op once disposed: `dispose` has already taken every marker out
+    // of the scene, and none can land after it (createCirclePlacemark).
     this.disposePlaceMark = (_placeMark) => {
       const index = _placeMarks.indexOf(_placeMark)
 
-      if (index > -1) {
+      if (index > -1 && !_isDisposed) {
         _placeMarks.splice(index, 1)
         _scene.remove(_placeMark)
       }
@@ -199,6 +229,12 @@ export default class PlaceMark extends EventDispatcher {
     const createCirclePlacemark = (position, fillColor) => {
       return createCircleTexture(fillColor)
         .then((texture) => {
+          // The texture loads async, so the viewer can be gone by now; its
+          // scene must not get a marker after this PlaceMark let it go.
+          if (_isDisposed) {
+            texture.dispose()
+            return null
+          }
           const material = new SpriteMaterial({
             map: texture,
             transparent: true,
@@ -210,6 +246,9 @@ export default class PlaceMark extends EventDispatcher {
           // placemark.material.color.set(0xffffff)
           _scene.add(placemark)
           _placeMarks.push(placemark)
+          // Hooked through Object3D#add too (renderDemandHooks.js); the
+          // marker's texture arrived async, so ask for the frame that shows it.
+          requestPaint()
           return placemark
         })
         .catch((err) => {
@@ -287,8 +326,15 @@ export default class PlaceMark extends EventDispatcher {
     const baselineDistance = 20 // e.g., at 100 units from camera, scale = 1
     const baselineScale = 1
 
+    /**
+     * Keep each marker a fixed size on screen: scale it with its distance
+     * from the camera.
+     *
+     * @return {boolean} whether any marker's scale changed
+     */
     const updatePlacemarksVisibility = () => {
       const camPos = _camera.position
+      let isRescaled = false
       _placeMarks.forEach((placemark) => {
         // Normal size in screen
         // placemark.scale.set(PLACEMARK_SIZE, PLACEMARK_SIZE, PLACEMARK_SIZE)
@@ -297,18 +343,75 @@ export default class PlaceMark extends EventDispatcher {
         // const scale = getScaleForDistance(distance, minDist, maxDist, minScale, maxScale)
         // Fixed size
         const scale = baselineScale * (distance / baselineDistance)
-        placemark.scale.set(scale, scale, scale)
+        if (placemark.scale.x !== scale || placemark.scale.y !== scale || placemark.scale.z !== scale) {
+          placemark.scale.set(scale, scale, scale)
+          isRescaled = true
+        }
       })
+      return isRescaled
     }
 
-    this.onRender = () => {
-      updatePlacemarksVisibility()
+    /**
+     * One frame of upkeep, run by the viewer's own loop before its paint
+     * under `?feature=renderOnDemand` (ThreeContext#onFrame). It used to be a
+     * rAF loop of its own, started twice and never stopped, that ran after
+     * the viewer's paint: a marker restored from a note starts at scale 1,
+     * the loop then rescaled it, and a viewer painting on demand kept the
+     * scale-1 frame up until something else painted (codex on #2096). A
+     * transform is no change the render-on-demand hooks see, so a rescale
+     * asks for its paint.
+     */
+    this.update = () => {
+      if (_isDisposed) {
+        return
+      }
+      if (updatePlacemarksVisibility()) {
+        requestPaint()
+      }
       _placeMarks.sort((a, b) =>
         a.position.distanceTo(_camera.position) - b.position.distanceTo(_camera.position))
-      requestAnimationFrame(this.onRender)
     }
 
-    requestAnimationFrame(this.onRender)
+    // A context stand-in without the frame hook (unit tests) gets no upkeep.
+    // `let`: the unsubscribe closes over the context, so dispose drops it too.
+    let stopFrames = context.onFrame?.(this.update) ?? (() => undefined)
+
+    /** @return {boolean} whether `dispose` has run */
+    this.isDisposed = () => _isDisposed
+
+    /**
+     * Let the viewer go: stop the per-frame upkeep, take the markers out of
+     * the scene and free their materials and textures, and drop every
+     * reference to the context's scene, camera, canvas and model. Until
+     * #2017 nothing called this, so a re-created viewer (the theme toggle,
+     * CadView.jsx#onModelPath) left the store's PlaceMark drawing into the
+     * disposed scene, and that scene reachable from the store. Idempotent.
+     */
+    this.dispose = () => {
+      if (_isDisposed) {
+        return
+      }
+      stopFrames()
+      stopFrames = () => undefined
+      this.disposePlaceMarks()
+      _isDisposed = true
+      this.activated = false
+      // The Playwright build's test hook (top of the constructor) points at
+      // the newest PlaceMark's canvas and camera; drop them if they are ours.
+      if (window.markerScene) {
+        if (window.markerScene.camera === _camera) {
+          delete window.markerScene.camera
+        }
+        if (window.markerScene.domElement === _domElement) {
+          delete window.markerScene.domElement
+        }
+      }
+      _objects = []
+      _context = null
+      _scene = null
+      _camera = null
+      _domElement = null
+    }
   }
 }
 

@@ -73,12 +73,20 @@ either", below.
 
 ## An archive is not a format either: `.zip` and `.ifczip`
 
+*A zip is opened by what is inside it, from every source.* A drop, a pick, a
+GitHub file, a Drive link and a pasted URL all reach the same policy
+(`modelArchive.js`). The archive's own name never picks the model: a
+`.zip`, a `.ifc.zip`, a `.ifczip` and a zip renamed to `x.ifc` all open the
+one model inside, typed by that entry. The upload seams came first
+(Share#2006). Downloads followed (§"A downloaded archive", below).
+
 Half of the uploads the Open dialog rejected in the 2026-11-01 triage were
 archives (bldrs-ai/ops#26), mostly named as if a format Share opens was
 inside (`part.stp.zip`, `… ifc.zip`, download bundles). Share#2006 opens
-the model inside, on the gzip envelope's pattern: no `zip` entry in
-`supportedTypes`, no `findLoader` arm, nothing downstream that knows. The
-difference is that a zip is a **container**: it can hold no model, one, or
+the model inside, on the gzip envelope's pattern: nothing downstream of the
+unwrap knows there was a zip. (`zip` is now in `supportedTypes`, but only so
+that a hosted one routes. Its `findLoader` arm is a placeholder that a load
+never parses with.) The difference is that a zip is a **container**: it can hold no model, one, or
 several, so the upload seam can end in a refusal or a question as well as
 a file.
 
@@ -127,9 +135,9 @@ and its `onError` would open Help on top. The chooser names any `.ifc` with a sa
 sibling a Revit export writes (#1087). The `.txt` is not listed, and the
 note says why.
 
-**No model.** It stays an `unrecognizedFormat` alert, so it is one info
-event tagged `upload.ext` from the archive's own name (`zip` for a `.zip`)
-and never an entry name. It carries `archive: {exts}` — each tagged by
+**No model.** It stays an `unrecognizedFormat` alert, so it is one GA
+`alert` event with `upload_ext` from the archive's own name (`zip` for a
+`.zip`) and never an entry name. It carries `archive: {exts}` — each tagged by
 `unrecognizedFormat.js#extensionTag`, so a short alphanumeric or `other`,
 because the text after an entry's last dot can be a name fragment — from which
 `formatGuidance.js#archiveGuidance` says *"This archive has no model Share
@@ -191,29 +199,71 @@ bytes are ever read. The directory comes from the tail of the Blob, so a
 checked: the size check catches a lying header, and corruption inside a
 deflate stream almost always fails the inflate.
 
-**`.ifczip`** is the one archive that *is* in `supportedTypes`. It is the
-standard IFC transport, a zip of one `.ifc`, so it routes, lists in the
-GitHub browser and parses out of a permalink. Before it was listed, the
-unanchored suffix regex split `model.ifczip/12` into `model.ifc` plus an
-element path `zip/12`. An uploaded one is unwrapped at the seams like any
-zip. A hosted one shares `findLoader`'s IFC arm and is unwrapped in
-`Loader#load` by `unwrapIfcZip`, one line after the gzip net, so conway
-gets the `.ifc` and `loader.type` becomes `ifc` from there on (capabilities
-and analytics see an IFC). The arms before that line correctly see a zip:
-`canOpenFromStore` refuses it, and the truncated-part-21 check skips it. A
-hosted `.ifczip` is excluded from the GLB cache (`wantGlb`), because that
-path's source handle would be the zip, and `spillModelSource` would back
-conway's later reads of the IFC with zip bytes. It opens uncached. An
-uploaded one caches as the `.ifc` it was stored as. A hosted one that isn't
-exactly one readable IFC throws a `ZipArchiveError`. CadView raises it as an
-`archiveUnreadable` alert ("Can't open this archive", with the reason), which
-is counted in analytics only and kept out of `captureException`, like an
-unsupported schema. `load_failed` still fires for it, as it does for that
-schema refusal: it is a failed open.
+**A downloaded archive.** Both `zip` and `ifczip` are in `supportedTypes`,
+so they route, list in the GitHub browser and parse out of a permalink.
+The browser lists every `.zip`: the name doesn't have to say what is
+inside. A route is split at the file's *outermost* suffix
+(`Filetype.js#splitAroundExtension`, at a segment boundary), so
+`box.ifc.zip/12` is `box.ifc.zip` plus element `12`. A path with no type at
+a boundary falls back to the first type anywhere, so `x.glb.gz` still routes
+as before. The GitHub browser lists a name only by its final suffix, so
+`foo.zipx` isn't listed as a zip it couldn't route. It is not `box.ifc`
+plus `.zip/12`, which used to make the route ask GitHub for a `box.ifc`
+that isn't there. A URL with no extension, such as a Drive link, is typed
+by its header (`Filetype.js#guessType`). A plain zip there reads as `zip`,
+while `analyzeHeader` itself still answers null for one, because
+`modelArchive.js` relies on that null to tell an archive from a zip-based
+model.
 
-**Out of scope, and what happens.** A `.zip` from GitHub or Drive is not
-routed (`zip` is not a type), so it never reaches these seams. That is the
-follow-up, and `connections/loadFromSource.js` is untouched. `.rar` and
+The unwrap is in `Loader#load`, one step after the gzip net:
+`unwrapHostedArchive`, the same `resolveArchiveUpload` the seams use. It
+runs for a `.zip` or `.ifczip` route. It also runs for any download under a
+*binary* format's name whose bytes are a zip: a renamed `.ifczip` at
+`x.ifc`, or a zip at `x.glb`. USDZ and SOG are excluded, since they are
+zips themselves (`ZIP_MODEL_TYPES`), and so are GLB cache hits. A zip under
+a text format's name (`x.obj`, `x.gltf`) is not sniffed: that load is read
+as text before this point, as a `.gz` under one is. One model inside retypes the load: `findLoader` again for the
+entry's type, or a retag of the IFC arm for a part-21 inner model. From
+there, the parse, capabilities and analytics all see that model. A zip of
+DICOM slices becomes its NRRD, so **a scan in a GitHub repo is a link
+someone can share**, with its view terms (`#c:`, `#cp:`, `#d:`) like any
+model. Bytes under a `.zip` name that aren't a zip are typed by their
+header, as an upload is, and a `.ifczip` the sniff can't place still goes to
+conway as the IFC it was named. A plain `.zip` *inside* an archive is never a
+model (it's a bundle's attachments as often as not). A `.ifczip` inside one
+is, and is unwrapped once. The load report's model line names the model
+inside, not the zip.
+
+The arms before the unwrap saw the route's name. For an archive route that
+is correct: `canOpenFromStore` refuses it, the truncated-part-21 check
+skips it, and `wantGlb` excludes it. The GLB cache's handles are the
+source file, which here is the zip, and `spillModelSource` would back
+conway's later reads of the model with zip bytes. A zip under a model's
+*name* gets past `wantGlb`, so the unwrap drops the export context
+(`glbExportContext = null`). Every downloaded archive therefore opens
+uncached. An uploaded one caches as the entry it was stored as. Caching
+the inner model of a download is a follow-up. The OPFS source health check
+skips a zip too. A stored (uncompressed) entry would otherwise put a part-21
+head above the zip's directory, which reads as a truncated file: evicted
+and re-fetched on every load.
+
+**When a downloaded archive can't open.** It throws a `ZipArchiveError` if
+it holds several models (a link can't ask which one), holds none, or can't
+be read. CadView raises that as an `archiveUnreadable` alert ("Can't open
+this archive", with the reason). The alert is counted in analytics only and
+kept out of `captureException`, like an unsupported schema. `load_failed`
+still fires for it, as it does for that schema refusal, since it is a failed
+open. The several-models refusal names the first five entries by their path
+in the archive, "and N more" after that. The no-model refusal's list of what
+the archive holds ("it contains .dwg and .pdf") goes to the dialog alone in
+the same way. Its extensions are tags, but they are still the tails of the
+user's entry names. Both ride `ZipArchiveError#dialogText`, which only the
+dialog shows. The error's `message` is what `trackAlertEvent` counts, and it
+names nothing of the archive's.
+
+**Out of scope, and what happens.** A downloaded archive of several
+models has no chooser (above). The chooser waits for demand: doing it in
+general means pausing a load mid-flight on a dialog. `.rar` and
 `.7z` have no small browser decoder. They get `ARCHIVE` guidance (*"Unpack
 it first"*). A `.zip.gz` is not unwrapped: the gzip seam inflates only a
 member whose inside sniffs as a model, and a zip doesn't. A multi-file
@@ -228,16 +278,231 @@ sub-field that claims more than its record), both ceilings, a lying-low bomb
 (counting what the inflate produced, not only the refusal), allocation
 failure and the error mapping. `modelArchive.test.js` covers entry
 selection, the pass-throughs, nesting under one total, the seam outcomes
-and `unwrapIfcZip`, plus 0-byte entries, multi-file glTF, extension tags and
+and `unwrapHostedArchive` (any name, DICOM, not-an-archive, the refusals and
+what their message withholds), plus 0-byte entries, multi-file glTF, extension tags and
 a defect ending in the dialog. `formatGuidance.test.js` covers the no-model
 text. `AlertDialog.test.jsx` covers the chooser (its cap, repeated paths, a
 choice that fails) and `archiveUnreadable`, which `CadView.test.jsx` raises. Each seam has its own suite
 (`dragAndDrop.archive.test.js` and `loader.test.js`). `Loader.test.js`
-covers a hosted `.ifczip` through `load()`, and that it never reaches the
-GLB cache. `routes.test.ts` and
-`Filetype.test.js` cover `ifczip` ahead of its `ifc` prefix. E2E:
+covers a hosted `.ifczip`, `.zip`, `.ifc.zip`, a zip under a `.glb` name,
+a DICOM zip, a non-zip `.zip` and the several-models refusal through
+`load()`, and that a `.ifczip` never reaches the GLB cache. `routes.test.ts`
+and `Filetype.test.js` cover `ifczip` ahead of its `ifc` prefix, the
+outermost-suffix split, and `guessType`'s `zip`. `GitHubFileBrowser.test.jsx`
+lists every `.zip`. E2E:
 `loader/modelArchive.spec.ts`, desktop and mobile, covers a drop and a pick
 of one model, a drop and a pick of several, and a drop of none.
+`loader/hostedArchive.spec.ts`, desktop and mobile, opens GitHub-hosted
+links: a `.ifc.zip`, a DICOM zip (also reopened with a camera on the hash),
+a zip renamed `.ifc` (which opens uncached, while the plain IFC caches), and
+a zip of several models refused with their names.
+
+
+## A DICOM series becomes one NRRD
+
+CT and MR scans leave the scanner as a folder of DICOM files, one per
+slice, and reach users zipped. Share opens such a zip as a volume, in
+three steps, each a module:
+
+1. **Detect the slices** — `loader/modelArchive.js#dicomVolume`, at the
+   archive seam. It runs only for an archive with **no model in it** (an
+   `.ifc` beside the slices wins). Candidates are entries named `.dcm`,
+   `.dicom`, `.dic`, `.ima`, with no extension (`IM0001`, the most common
+   scanner export), or with an all-digit extension (files named by their
+   SOP Instance UID, `1.2.840.113619.2.55.3`). Each is kept only if it has
+   the Part 10 preamble and `DICM`. A DICOM file with no pixel data (a
+   DICOMDIR, a report) is skipped. A slice that can't be read is skipped
+   too, as long as some other slice can be.
+
+   Candidates are guesses (any extensionless file), so looking at one
+   mustn't change what an archive **without** DICOM is told. Each is
+   inflated against a scratch budget of the whole 512 MiB ceiling, and
+   charged to the upload's real budget only once it has proved to be DICOM,
+   so a `LICENSE` costs nothing and can't fail for room the slices used.
+   An entry that can't be extracted (encrypted, Deflate64, past the
+   ceiling) is skipped while it might be anything. It is raised once the
+   archive has proved to hold DICOM, since it may be a slice and a series
+   must not open as if whole, and also when it is named `.dcm`. An archive
+   with no DICOM falls through to "holds no model" exactly as before.
+2. **Stack them into one NRRD** — `loader/dicom.js`. A small reader for
+   the uncompressed transfer syntaxes (implicit and explicit VR little
+   endian, which scanners and PACS exports write by default) and the two
+   compressed ones it can decode with nothing new in the bundle: Deflated
+   Explicit VR (`.1.99`, fflate, already vendored with three; the dataset
+   inflates, counted, to at most 64 MiB a slice, so a deflate bomb stops
+   there; the input is fed 16 KiB at a time, since fflate inflates all it's
+   given before it calls back, and a deflated slice briefly holds its
+   inflated chunks and their join, about twice its size) and RLE Lossless (`.5`, PackBits per PS3.5 Annex G, a few lines
+   in `decodeRle`, which checks every segment could fill the image before
+   allocating it, and refuses a run that reads past its segment). It reads each
+   slice's geometry, pixel format and rescale, and skips everything else.
+   Skipping covers undefined-length sequences and items nested in each
+   other; a Pixel Data inside a sequence (an icon thumbnail) is stepped
+   over, since only the dataset's own is the image; and an undefined-length
+   `UN` is read as implicit VR, whatever the file's syntax (PS3.5 §6.2.2).
+   The transfer syntax is judged where the meta group ends, so a deflated
+   or big-endian file is refused as that, not as damage.
+
+   Slices are grouped by Series Instance UID, image size, orientation, echo
+   number and temporal position, and the **largest series** opens, because
+   a study export carries a few-slice scout beside the scan. (Echoes and
+   phases share a series and every position; mixed, ordering would pick
+   one image per position by zip order.) They're ordered by
+   `ImagePositionPatient` along the slice normal (row × column), not by
+   `InstanceNumber`. Without positions, `InstanceNumber` orders them, and
+   without either the series is refused.
+
+   The slice axis is the **position step**, first slice to last divided
+   evenly, not the normal scaled by the gap. On a CT taken with the gantry
+   tilted, each slice is offset along the table too, and the volume is a
+   sheared box, which NRRD and `nrrd.js#placement` both take. It is never
+   `SliceThickness`, the thickness of the cut, which differs from the gap
+   in overlapping reconstructions. A volume is a regular grid, so the gaps
+   along the normal must agree to within 10%. A missing slice, or a series
+   with variable spacing, is **refused** rather than stacked evenly with
+   every slice after the hole a gap out of place.
+
+   The output is an NRRD in real units: `short` for Hounsfield; `ushort`
+   for an integral unsigned range past 32767, at half the memory of
+   `float`; `float` when the rescale isn't integral or neither fits. It is
+   in `left-posterior-superior`, with the scanner's `space directions` and
+   `space origin`, and a `modality:=CT` key/value pair. The voxels are
+   written straight into the file buffer, after a header padded to their
+   alignment. The seam hands it on as a `File` named
+   for the archive (`CT1.zip` → `CT1.nrrd`), typed `nrrd`, so OPFS holds
+   `<uuid>.nrrd`, and recents and reloads see an NRRD. Unlike an entry's
+   resolution, it carries no `bytes` beside the `File`, which would keep a
+   second whole volume alive while the seam writes the file.
+3. **Render it** — `nrrd` is an ordinary format: a `supportedTypes` entry
+   (sniffed by its `NRRD000` version line), a `findLoader` arm with three's
+   `NRRDLoader`, and an `UNSTRUCTURED_MESH` capability set, so a `.nrrd`
+   file opens on its own the same way. The
+   fixup, `loader/nrrd.js`, windows the voxels to 8 bits (a normalized
+   8-bit 3D texture filters linearly on every WebGL2 device, while 16-bit
+   needs `EXT_texture_norm16`). A CT gets a fixed Hounsfield window with
+   opacity ramping from 150 to 900 HU (bone, with tissue faint). Any other
+   volume ramps from its histogram's Otsu threshold to its 99th
+   percentile. The voxels go into a `Data3DTexture`, resampled past 512 on
+   any edge, which a box ray-marches in its fragment shader. It composites
+   front to back, lit by the gradient, and stops when nearly opaque. The
+   box draws its back faces, so it still renders with the camera inside.
+   It is placed where the scanner put the volume: millimetres to metres,
+   and LPS to the scene's Y-up, superior up and anterior toward the
+   default camera. That is a rotation, so the patient is never mirrored.
+
+**A trap, commented where it bites.** The box's placement is **baked into
+its vertices** and the inverse handed to the shader (`sceneToBox`), not
+set on the Mesh's transform. `Loader#readModel` hoists the first child's
+geometry onto a geometry-less root, and a unit cube there would add a 1 m
+box at the origin to every bounds Share takes of the model, so
+fit-to-frame would be wrong. (Before three r187, `NRRDLoader` also cut the
+header one character short of its blank line. The header `dicom.js`
+writes still ends in a comment line, which now carries the alignment
+padding.)
+
+**Memory.** The 512 MiB budget bounds what the archive inflates, not the
+peak. The slices are held until stacked; the NRRD is about their size
+again (twice for `float`), and its `File` copy is written to OPFS. The
+load then reads it back, NRRDLoader copies it twice more, and the 8-bit
+texture follows. A 500-slice 512 × 512 CT (≈ 270 MB of pixels) opens on a
+desktop; on a phone, a series that size is near the device's limit.
+
+**Refused, with the reason in the archive dialog** (as a
+`ZipArchiveError`, so an `unrecognizedFormat` alert with
+`archive.problem`, the same path as any unreadable archive):
+
+- the compressed transfer syntaxes it has no codec for (JPEG baseline and
+  lossless, JPEG-LS, JPEG 2000): each needs a decoder Share doesn't ship,
+  to be added when a series in one is asked for; and big-endian explicit
+  VR;
+- color (`SamplesPerPixel` ≠ 1), multi-frame files, and bit depths other
+  than 8 and 16;
+- slices that differ in size, are unevenly spaced (a slice missing), or
+  have nothing to order them by; damaged or truncated files.
+
+**Out of scope, and what happens.** A DICOM zip on GitHub or Drive is not
+routed, like any `.zip` (§"An archive is not a format either"). A lone
+`.dcm` is not a format (`dcm` isn't in `supportedTypes`), so it's refused
+as an unknown type; zip it. ACR-NEMA files without the Part 10 preamble
+aren't recognized. `BitsStored`/`HighBit` masking and `MONOCHROME1`
+(inverted grayscale) aren't applied, and float Pixel Data (7FE0,0008)
+reads as no image. A `.nrrd` from elsewhere with a detached header
+(`data file:`) or more than three dimensions isn't read correctly by
+NRRDLoader. A series past the
+512 MiB inflate budget (about 1000 slices of 512 × 512 × 16-bit) is
+refused as too large. Several series in one zip don't put up the
+chooser: the largest opens. The window and opacity are set in the Display menu's Volume section (§"The
+volume in the Display menu", below); there is no full transfer-function
+editor. The display
+controls' wireframe mode just draws the box's edges.
+
+**No selection, no Properties.** A volume has no elements and no
+properties. The mesh's `raycast` is a no-op, so a click on it selects
+nothing and doesn't outline the box. CadView turns the Properties panel
+off when the loaded model is a volume (`nrrd.js#isVolumeModel`), and back
+on for the next model. One consequence: the Q shortcut (a cut plane at the
+cursor) raycasts the model, so it finds nothing on a volume. Use the
+cut-plane menu.
+
+**Cut planes cut the ray, not the box.** `MeshClipper` binds its
+world-space planes to every model material's `clippingPlanes`. three's own
+clipping would only discard the box's back faces, which isn't a cut
+through the volume. So the shader leaves three's clipping chunks out, and
+the mesh's `onBeforeRender` (`nrrd.js#syncClipPlanes`) moves up to six
+planes into box space, through the mesh's world matrix and the baked
+placement. The fragment shader then trims each ray's interval to the part
+every plane keeps (`distanceToPoint >= 0`, as three keeps). A cut opens
+the volume, and the cut face shows the tissue and bone inside it. A
+plane's drag mutates it in place and asks for a paint, and the hook runs
+before every draw, so dragging needs nothing more.
+
+**The volume in the Display menu.** A volume's window and opacity are an
+axis of the display-override stack, `volume` (`viewer/display/volumeMode.js`),
+like color and residency: the Display menu sets it, `DisplayController`
+applies it, and `#d:` carries it (`vw=<low>_<high>`, `vo=<percent>`; only
+non-default). The window is in the volume's own units (HU for a CT), not the
+texture's normalized range. A link then means the same thing whatever window
+the voxels were packed with, and a CT's numbers are the ones a radiologist
+would name. `nrrd.js` records the packing range, default ramp and unit on the
+mesh (`userData.volume`), which `volumeMode.js` converts through to the
+shader's `ramp` and `opacity` uniforms. The window slider keeps its thumbs a
+step apart, since equal ends aren't a window. For a volume the menu shows only
+this section: Shading would only draw the box's edges, and Color and
+Residency have nothing to act on.
+
+**Tests.** `dicom.test.js` reads pydicom-written series in both transfer
+syntaxes (`testdata/models/dicom/`, generated by
+`tools/models/makeDicomPhantom.py`). pydicom writes its sequences with
+defined lengths, so the walk's undefined-length paths are covered by
+files built in the test: nested undefined-length sequences and an icon's
+Pixel Data, each in both VRs, and an undefined-length `UN`. It also covers
+each refusal (big-endian and JPEG Lossless by name, a missing slice,
+nothing to order by), pydicom-written RLE and deflated series stacking to
+the uncompressed volume byte for byte, a damaged RLE frame, a deflated
+dataset that doesn't inflate, a deflate bomb stopped at its cap, ordering by position over instance number, a gantry tilt, a
+sagittal series, echoes split into stacks, the `short`/`ushort`/`float`
+choice, and voxel values checked through three's own `NRRDLoader`.
+`nrrd.test.js` covers placement in the scene, axis orientation (the
+phantom's off-centre sphere lands on the viewer's right), a tilted
+series placed voxel for voxel, windowing and resampling, the cut planes'
+box-space transform under a moved model, and that the volume can't be
+picked. `modelArchive.test.js` covers detection at the seam (UID-named and
+`.DCM` entries, a model beside the slices winning, an unreadable series
+ending in the dialog), that an unextractable non-DICOM entry leaves the
+"holds no model" alert alone, that one in a DICOM archive refuses it, and
+that only DICOM is charged to the budget. `Loader.test.js` covers a
+`.nrrd` through `load()`, including that a ray through the volume picks
+nothing while bounds still see it.
+
+E2E: `loader/dicom.spec.ts`, desktop and mobile, drops and picks the
+phantom zip and checks the volume changes a real WebGL2 frame. It checks
+that a click on the volume selects nothing and Properties stays off. It
+checks that a plan cut changes the frame (with the plane's arrow hidden)
+and leaves part of the volume drawn. Last, it checks which side the cut
+keeps: moved past the box with all of it on the kept side, the frame
+equals the uncut one; with none of it, the volume-hidden one. Each of the
+new walk, tilt and budget tests, and the E2E side check, was seen to fail
+with its fix reverted.
 
 
 ## 2. Wire the loader — `src/loader/Loader.js#findLoader`
@@ -306,8 +571,8 @@ will hand the loader UTF-8 mojibake.
 
 **E2E** (`src/Components/Open/Filetypes.spec.ts`): a fixture under
 `src/tests/fixtures/github/bldrs-ai/test-models/main/<fmt>/` plus a
-screen test. Fixtures must live there — `yarn test-flows` runs
-`yarn clean` before building, so anything hand-copied into
+screen test. Fixtures must live there — `bun run test-flows` runs
+`bun run clean` before building, so anything hand-copied into
 `docs/__test_fixtures__/` is deleted before the run. See
 [PLAYBOOK.md](../../PLAYBOOK.md) §"Screenshot goldens" for generating
 the golden.

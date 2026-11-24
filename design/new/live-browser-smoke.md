@@ -6,7 +6,7 @@ each tier, in every Playwright engine. It replaces most of the manual
 cross-browser checklist in [glb-export-premium.md](glb-export-premium.md) §8.
 Tracking issue: bldrs-ai/Share#1941.
 
-The mocked suite (`yarn test-flows`) cannot do this job. It runs against
+The mocked suite (`bun run test-flows`) cannot do this job. It runs against
 `http-server` plus MSW:
 
 - there are no Netlify Functions behind it;
@@ -92,9 +92,9 @@ These are final.
 Running it:
 
 ```sh
-yarn live-smoke-reset            # node tools/live-smoke/resetAccounts.mjs [--dry-run]
+bun run live-smoke-reset            # node tools/live-smoke/resetAccounts.mjs [--dry-run]
 LIVE_BASE_URL=https://deploy-preview-1939--bldrs-share-prod.netlify.app \
-  yarn test-flows-live [--project=chromium] [spec]
+  bun run test-flows-live [--project=chromium] [spec]
 ```
 
 
@@ -553,7 +553,7 @@ gets no secrets.
 1. Install, then `npx playwright install --with-deps chromium firefox webkit`.
 2. Mask every email and password in the account JSON with `::add-mask::`.
 3. Run the reset with `--if-configured`.
-4. Run `yarn test-flows-live`.
+4. Run `bun run test-flows-live`.
 5. Upload the HTML report for 7 days.
 
 ### Safeguards
@@ -572,7 +572,7 @@ A `workflow_dispatch` workflow must exist on the default branch before it can
 be dispatched. So until this PR merges, run against #1939 locally:
 
 ```sh
-LIVE_BASE_URL=https://deploy-preview-1939--bldrs-share-prod.netlify.app yarn test-flows-live
+LIVE_BASE_URL=https://deploy-preview-1939--bldrs-share-prod.netlify.app bun run test-flows-live
 ```
 
 After it merges, use the dispatch, or the `live-smoke` label on #1939. A
@@ -874,7 +874,7 @@ This sandbox's network policy blocked the browser download from
    `LIVE_SMOKE_AUTH0_CLIENT_SECRET`. Optionally, if Universal Login runs on
    a custom domain, the repository variable `LIVE_SMOKE_AUTH0_LOGIN_HOST`.
 6. **Label:** create `live-smoke`.
-7. **First run:** run `yarn live-smoke-reset --dry-run` locally with the
+7. **First run:** run `bun run live-smoke-reset --dry-run` locally with the
    secrets exported. It should print the seven accounts and no drift.
 
 

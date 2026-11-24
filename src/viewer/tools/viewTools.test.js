@@ -1,5 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {ToolError, findNonJson} from '../../assist'
+import {setDisplayTerm} from '../../Components/Share/viewLink'
 import useStore from '../../store/useStore'
 import {createShareAssistRegistry, installAssistDevHook} from './assistHost'
 import {registerSelectionFunnel} from './selectionFunnel'
@@ -54,6 +55,9 @@ describe('viewer/tools (model, view and share providers)', () => {
     expect(registry.list().map(({name, policy}) => [name, policy])).toEqual([
       ['model.query', 'run'],
       ['model.properties', 'run'],
+      ['model.quantities', 'run'],
+      ['model.measure', 'run'],
+      ['model.spatial', 'run'],
       ['view.select', 'runWithUndo'],
       ['view.isolate', 'runWithUndo'],
       ['view.hide', 'runWithUndo'],
@@ -73,7 +77,7 @@ describe('viewer/tools (model, view and share providers)', () => {
     expect(names).not.toContain('view.properties')
     expect(registry.has('view.query')).toBe(false)
     expect((await rejection(registry.call('view.query', {}))).code).toBe('unknown_tool')
-    for (const name of ['model.query', 'model.properties']) {
+    for (const name of ['model.query', 'model.properties', 'model.quantities', 'model.measure', 'model.spatial']) {
       expect(registry.list().find((tool) => tool.name === name)?.annotations).toEqual({readOnly: true})
     }
     const result = await registry.call('model.query', {ifcType: 'IfcDoor'})
@@ -90,6 +94,40 @@ describe('viewer/tools (model, view and share providers)', () => {
   })
 
 
+  // open-205 #2029: a Conway load hands the store the model at its index
+  // (`indexedModel`) while geometry still streams, before `model` is set. The
+  // document reads answer from it; the scene tools wait for the geometry.
+  describe('while the geometry streams (open-205 #2029)', () => {
+    /** Put the fixture's model where a load at its index would. */
+    function streamGeometry() {
+      const {model} = useStore.getState()
+      useStore.setState({indexedModel: model, model: null})
+    }
+
+    afterEach(() => useStore.setState({indexedModel: null}))
+
+    it('answers model.query and model.properties from the indexed model', async () => {
+      streamGeometry()
+      expect((await registry.call('model.query', {ifcType: 'IfcDoor'})).refs).toEqual(['e202'])
+      const {items} = (await registry.call('model.properties', {refs: ['e102']})).content
+      expect(items[0].attributes).toMatchObject({Name: 'Window 1'})
+    })
+
+    it('keeps the view.* tools waiting for the finished model', async () => {
+      streamGeometry()
+      expect((await rejection(registry.call('view.select', {refs: ['e100']}))).code).toBe('not_ready')
+    })
+
+    it('tells the agent the model is there and its geometry still coming', () => {
+      streamGeometry()
+      const [context] = registry.context()
+      expect(context.data.loaded).toBe(true)
+      expect(context.data.geometryLoading).toBe(true)
+      expect(context.text).toMatch(/Geometry: still loading/)
+    })
+  })
+
+
   // Every tool, on inputs that reach the attribute with a typed array in it
   // (Wall A, e100): a summarizer that passed raw values through would put a
   // Float32Array in `content`, and this would name it.
@@ -97,6 +135,9 @@ describe('viewer/tools (model, view and share providers)', () => {
     const calls = [
       ['model.query', {}],
       ['model.properties', {refs: ['e100', 'e102']}],
+      ['model.quantities', {}],
+      ['model.measure', {refs: ['e100'], metric: 'surfaceArea'}],
+      ['model.spatial', {}],
       ['view.select', {refs: ['e100']}],
       ['view.hide', {refs: ['e100']}],
       ['view.showAll', {}],
@@ -174,6 +215,17 @@ describe('viewer/tools (model, view and share providers)', () => {
   })
 
 
+  it('a view tool changes nothing when its call may no longer commit (stopped or undone)', async () => {
+    const before = useStore.getState().selectedAnchorIds
+    expect((before ?? []).map(Number)).not.toContain(102)
+    const error = await rejection(registry.call('view.select', {refs: ['e102']}, {shouldCommit: () => false}))
+    expect(error.code).toBe('rolled_back')
+    expect(useStore.getState().selectedAnchorIds).toEqual(before)
+    // And commits when it may.
+    await registry.call('view.select', {refs: ['e102']}, {shouldCommit: () => true})
+    expect(useStore.getState().selectedAnchorIds.map(Number)).toEqual([102])
+  })
+
   describe('model.properties', () => {
     it('summarizes attributes and property sets', async () => {
       const result = await registry.call('model.properties', {refs: ['e102']})
@@ -198,6 +250,24 @@ describe('viewer/tools (model, view and share providers)', () => {
       expect(attributes.Tag).toBe('Wé-A')
       expect(attributes).not.toHaveProperty('Position')
       expect(result.content.items[0].propertySets).toEqual([])
+    })
+
+    it('stops between reads once the call is aborted (a Stop in the assistant)', async () => {
+      const controller = new AbortController()
+      const {model} = useStore.getState()
+      const original = model.getItemProperties.bind(model)
+      const read = jest.spyOn(model, 'getItemProperties').mockImplementation((id) => {
+        controller.abort()
+        return original(id)
+      })
+      try {
+        const error = await rejection(registry.call('model.properties', {refs: ['e102', 'e100']},
+          {signal: controller.signal}))
+        expect(error.code).toBe('aborted')
+        expect(read).toHaveBeenCalledTimes(1)
+      } finally {
+        read.mockRestore()
+      }
     })
 
     it('accepts GlobalIds, prefixed or bare', async () => {
@@ -245,6 +315,19 @@ describe('viewer/tools (model, view and share providers)', () => {
       expect(useStore.getState().selectedElements).toEqual(['200'])
     })
 
+    it('undo brings back a scene pick\'s exact narrowing, which the funnel clears (codex round 4 on #2084)', async () => {
+      // A pick of one body: its instance is exact (CadView#selectFromInstancePick).
+      useStore.setState({
+        selectedElements: ['200'], selectedAnchorIds: ['200'], selectedInstanceIds: [7],
+        selectedInstancesExact: true,
+      })
+      const result = await registry.call('view.select', {refs: ['e102']})
+      expect(useStore.getState().selectedInstancesExact).toBe(false)
+      await result.undo()
+      expect(useStore.getState().selectedInstanceIds).toEqual([7])
+      expect(useStore.getState().selectedInstancesExact).toBe(true)
+    })
+
     it('clears with an empty list, and undo brings the selection back', async () => {
       await registry.call('view.select', {refs: ['e200']})
       const result = await registry.call('view.select', {refs: []})
@@ -277,6 +360,23 @@ describe('viewer/tools (model, view and share providers)', () => {
       await result.undo()
       expect(visibleProducts(fixture.batch)).toEqual(ALL_PRODUCTS)
       expect(useStore.getState().isTempIsolationModeOn).toBe(false)
+    })
+
+    // The user asked the assistant, so the link follows (Share/viewLink.js):
+    // each visibility tool starts the display term, as the toolbar does.
+    it('starts the live display link on isolate, hide and show all', async () => {
+      const term = {commit: jest.fn(), dispose: jest.fn()}
+      setDisplayTerm(term)
+      try {
+        await registry.call('view.isolate', {refs: ['e10']})
+        expect(term.commit).toHaveBeenCalledTimes(1)
+        await registry.call('view.showAll', {})
+        expect(term.commit).toHaveBeenCalledTimes(2)
+        await registry.call('view.hide', {refs: ['e102']})
+        expect(term.commit).toHaveBeenCalledTimes(3)
+      } finally {
+        setDisplayTerm(null)
+      }
     })
 
     it('re-isolating replaces the isolation, and undo returns to the first', async () => {

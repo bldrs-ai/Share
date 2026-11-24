@@ -11,9 +11,10 @@ import {MOCK_BRANCHES} from '../net/github/Branches.fixture'
 import {MOCK_COMMENTS, MOCK_COMMENTS_POST_DELETION} from '../net/github/Comments.fixture'
 import {MOCK_COMMITS} from '../net/github/Commits.fixture'
 import {MOCK_FILES} from '../net/github/Files.fixture'
-import {createMockIssues, sampleIssues} from '../net/github/Issues.fixture'
+import {createMockIssues, sampleIssues, testModelsIssues} from '../net/github/Issues.fixture'
 import {MOCK_ORGANIZATIONS} from '../net/github/Organizations.fixture'
 import {MOCK_REPOSITORY, MOCK_USER_REPOSITORIES} from '../net/github/Repositories.fixture'
+import {fixtureBlobSha} from './fixtureBlobSha'
 
 
 interface Defines {
@@ -37,7 +38,8 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
   return [
     http.get<{org: string, repo: string}>(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues`, ({params}) => {
       const {org, repo} = params
-      const createdIssues = createMockIssues(org, repo, sampleIssues)
+      const createdIssues = createMockIssues(org, repo,
+        org === 'bldrs-ai' && repo === 'test-models' ? testModelsIssues : sampleIssues)
       return new Response(
         JSON.stringify(createdIssues),
         {
@@ -117,7 +119,14 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
              ref === 'testsha1testsha1testsha1testsha1testsha1' ||
              ref === 'testsha2testsha2testsha2testsha2testsha2' ||
              ref === 'testsha3testsha3testsha3testsha3testsha3'))) {
-          const downloadUrl = (org === 'cypresstester' && path !== 'window.ifc') ? '/index.ifc' :
+          // Every cypresstester file downloads index.ifc from this origin.
+          // window.ifc used to point at raw.githubusercontent.com for a spec's
+          // page.route to serve, and in a 2026-11 run that route was never
+          // what answered: the load got bytes with no ISO-10303-21 header
+          // and failed, the opens of window.ifc in the GitHub specs being
+          // skipped meanwhile for flaking (#1269). open-205's surface E2E
+          // (#2021) opens it from the GitHub file browser.
+          const downloadUrl = org === 'cypresstester' ? '/index.ifc' :
             `https://raw.githubusercontent.com/${org}/${repo}/${ref}/${path}`
 
           return new Response(
@@ -148,7 +157,7 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
 
         if (org === 'bldrs-ai' && repo === 'test-models') {
           // E2e fixtures live under src/tests/fixtures/github/, copied
-          // into docs/__test_fixtures__/ by `yarn test-flows-build` and
+          // into docs/__test_fixtures__/ by `bun run test-flows-build` and
           // served by the playwright dev server. Returning a localhost
           // download_url here keeps the whole flow on one host with no
           // service-worker / page.route ordering games.
@@ -157,12 +166,12 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
             JSON.stringify({
               name: decodedPath.split('/').pop(),
               path: decodedPath,
-              sha: 'e2etestsha000000000000000000000000000000',
+              sha: fixtureBlobSha(decodedPath),
               size: 0,
               url: `${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/${org}/${repo}/contents/${decodedPath}?ref=${ref}`,
               html_url: `https://github.com/${org}/${repo}/blob/${ref}/${decodedPath}`,
               git_url: `${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}` +
-                `/repos/${org}/${repo}/git/blobs/e2etestsha000000000000000000000000000000`,
+                `/repos/${org}/${repo}/git/blobs/${fixtureBlobSha(decodedPath)}`,
               download_url: `/__test_fixtures__/${org}/${repo}/${ref}/${decodedPath}`,
               type: 'file',
             }),
