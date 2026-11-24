@@ -26,7 +26,8 @@ export interface Transport {
    * it is about to send, or undefined for no cap of its own. The loop asks
    * before every step and fits that step's request under it (loop.ts
    * `boundStepMessages`): the hosted relay refuses a body over its tier's cap
-   * (ai-chat.js `maxBodyBytesFor`) as `ai_bad_request`. May be async: the
+   * (ai-chat.js `maxBodyBytesFor`) as `ai_body_too_large`, which the loop retries once
+   * at the cap the refusal names (loop.ts `retryTooLarge`). May be async: the
    * hosted transport checks which credential the request will carry.
    */
   maxRequestBytes?(): number | undefined | Promise<number | undefined>

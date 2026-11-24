@@ -195,6 +195,39 @@ describe('BotChat', () => {
     await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
   })
 
+  // Share#2306: the turn's last reply offers a rating once the turn ends,
+  // and a rating carries the turn's own counts, read off the real loop.
+  it('offers a rating on the finished reply, and sends the turn\'s steps and tool calls with it', async () => {
+    const gtag = jest.fn()
+    Object.assign(window, {gtag, __mockFeedback: {}, __mockFeedbackFail: false})
+    try {
+      render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+      send(SCRIPT.selectPrompt)
+      expect(await screen.findByText(SCRIPT.selectedAnswer(2), {exact: false})).toBeInTheDocument()
+      await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
+      // One rating for the turn, though its text is split around the chip.
+      expect(screen.getAllByTestId('BotChat-Reply').length).toBeGreaterThan(1)
+      const groups = screen.getAllByTestId('BotChat-ReplyGroup')
+      expect(groups).toHaveLength(1)
+      expect(within(groups[0]).getByTestId('BotChat-Reply')).toHaveTextContent(SCRIPT.selectedAnswer(2))
+
+      fireEvent.click(within(groups[0]).getByRole('button', {name: 'Good reply'}))
+      fireEvent.change(screen.getByRole('textbox', {name: 'Feedback note'}), {target: {value: 'right'}})
+      fireEvent.click(screen.getByTestId('Feedback-Send'))
+      const stored = () => (window as unknown as {__mockFeedback: Record<string, {
+        context: {prompt: string, reply: string}}>}).__mockFeedback
+      await waitFor(() => expect(Object.keys(stored())).toHaveLength(1))
+      const events = gtag.mock.calls.filter(([, name]) => name === 'feedback_submitted').map(([, , params]) => params)
+      expect(events).toEqual([expect.objectContaining({feedback_source: 'assist_reply', rating: 'up', has_note: 'true',
+        model_choice: 'byok', steps: 3, tool_calls: 2})])
+      const [record] = Object.values(stored())
+      expect(record.context.prompt).toBe(SCRIPT.selectPrompt)
+      expect(record.context.reply).toContain(SCRIPT.selectedAnswer(2))
+    } finally {
+      Object.assign(window, {gtag: undefined})
+    }
+  })
+
   it('shows a turn\'s tool steps as one chip: the latest task compact, every task expanded, Undo reverses the select once', async () => {
     render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
     send(SCRIPT.selectPrompt)
@@ -351,6 +384,38 @@ describe('BotChat', () => {
       } finally {
         relay.stop()
       }
+    })
+
+    it('re-sends a step the relay refused as too large, re-sized, and counts it in GA with structured fields only', async () => {
+      const PAD = 12_000
+      render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+      // Earlier turns for the re-bound to cut.
+      for (let n = 1; n <= 3; n++) {
+        send(`earlier ${n} ${'q'.repeat(PAD)}`)
+        await waitFor(() => expect(screen.getAllByText('Test received.')).toHaveLength(n))
+        await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
+      }
+      const sizes: number[] = []
+      getServer().use(http.post(AI_RELAY_PATH, async ({request}) => {
+        sizes.push((await request.text()).length)
+        const meter = {'x-bldrs-ai-tier': 'free', 'x-bldrs-ai-used': '0', 'x-bldrs-ai-limit': '20000'}
+        if (sizes.length === 1) {
+          return new Response(JSON.stringify({error: {code: 'ai_body_too_large'}, tier: 'free'}),
+            {status: HTTP_BAD_REQUEST, headers: {'Content-Type': 'application/json', ...meter,
+              'x-bldrs-ai-max-body-bytes': '24000'}})
+        }
+        return new Response(sseText(textReply('Resized reply.')), {status: 200, headers: {...SSE_HEADERS, ...meter}})
+      }))
+      send('and now?')
+      expect(await screen.findByText('Resized reply.')).toBeInTheDocument()
+      expect(screen.queryByTestId('BotChat-Error')).toBeNull()
+      expect(sizes).toHaveLength(2)
+      expect(sizes[1]).toBeLessThan(sizes[0])
+      const resized = (window.gtag as jest.Mock).mock.calls.filter(([kind, name]) => kind === 'event' && name === 'assist_request_resized')
+      expect(resized).toHaveLength(1)
+      expect(resized[0][2]).toEqual({tier: 'free', from_bytes: expect.any(Number), to_bytes: expect.any(Number)})
+      expect(resized[0][2].to_bytes).toBeLessThan(resized[0][2].from_bytes)
+      expect(JSON.stringify(resized)).not.toContain('earlier')
     })
 
     it('a signed-in user\'s turns carry their Auth0 token, not an anonymous one', async () => {

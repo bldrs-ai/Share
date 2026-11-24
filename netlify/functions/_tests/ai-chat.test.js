@@ -585,7 +585,8 @@ describe('ai-chat', () => {
     it('refuses an anonymous body past its cap as "too long", before the ledger or the upstream', async () => {
       const res = await call({body: bigBody()})
       expect(res.status).toBe(400)
-      expect(await res.json()).toMatchObject({error: {code: 'ai_bad_request'}, tier: 'anonymous'})
+      // Its own code, apart from a malformed body's `ai_bad_request`: the client retries this one, re-sized.
+      expect(await res.json()).toMatchObject({error: {code: 'ai_body_too_large'}, tier: 'anonymous'})
       expect(res.headers.get('x-bldrs-ai-tier')).toBe('anonymous')
       // The refusal says the cap, so the client's next request can fit it.
       expect(res.headers.get('x-bldrs-ai-max-body-bytes')).toBe('65536')
@@ -616,7 +617,8 @@ describe('ai-chat', () => {
         {data: {app_metadata: url.includes('github%7Cp') ? {subscriptionStatus: 'sharePro'} : {}}}))
       const free = await call({bearer: 'auth0-token-free', body: bigBody()})
       expect(free.status).toBe(400)
-      expect((await free.json()).tier).toBe('free')
+      expect(await free.json()).toMatchObject({error: {code: 'ai_body_too_large'}, tier: 'free'})
+      expect(free.headers.get('x-bldrs-ai-max-body-bytes')).toBe('65536')
       const pro = await call({bearer: 'auth0-token-pro', body: bigBody()})
       expect(pro.headers.get('x-bldrs-ai-tier')).toBe('pro')
       expect(pro.headers.get('x-bldrs-ai-max-body-bytes')).toBe(String(MAX_BODY_BYTES))

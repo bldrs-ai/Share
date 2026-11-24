@@ -1,5 +1,5 @@
-import {jsonSchema, stepCountIs, streamText, tool} from 'ai'
-import type {JSONSchema7, ModelMessage, ToolSet} from 'ai'
+import {jsonSchema, stepCountIs, streamText, tool, wrapLanguageModel} from 'ai'
+import type {JSONSchema7, LanguageModel, ModelMessage, ToolSet} from 'ai'
 import {AssistError, classifyError} from './assistError'
 import type {ConversationStore} from './conversation'
 import type {Registry} from './registry'
@@ -276,6 +276,17 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
     // the relay's technical one), so the smaller of the two holds.
     const stepBudget = (instructions: string, requestCap: number | undefined) => (requestCap === undefined ? MAX_STEP_BYTES :
       Math.min(MAX_STEP_BYTES, Math.max(0, requestCap - toolsBytes - jsonBytes(instructions) - REQUEST_SLACK_BYTES)))
+
+    if (typeof model !== 'string' && opts.transport.maxRequestBytes) {
+      model = retryTooLarge(model, {
+        transport: opts.transport,
+        signal: controller.signal,
+        budgetFor: stepBudget,
+        onResized: (fromBytes, toBytes, tier) => events.push({
+          type: 'recovered', condition: 'body_resized', fromBytes, toBytes, ...(tier === undefined ? {} : {tier}),
+        }),
+      })
+    }
 
     // One error event per turn: an abort, say, can surface both as the
     // stream's 'abort' part and as a rejection of what follows it.
@@ -554,6 +565,81 @@ export function wireHistory(history: ModelMessage[]): ModelMessage[] {
  */
 function jsonBytes(value: unknown): number {
   return new TextEncoder().encode(JSON.stringify(value)).length
+}
+
+
+/**
+ * Re-run a step the relay refused as over its body cap, once, at the smaller
+ * cap the refusal named (Share#2307). The sizing in `prepareStep` goes by the
+ * cap the transport last heard, which a tier drop between two requests
+ * (Pro → Free, or the relay briefly serving Free) leaves stale; the refusal
+ * itself carries the new cap, and the relay refuses before any ledger write,
+ * so a retry costs nothing.
+ *
+ * Why a model wrapper (`wrapStream`) rather than the SDK's own retries: the
+ * SDK retries only an `APICallError` marked retryable, and re-sends the same
+ * messages (its retry closes over the step's messages; `prepareStep` is not
+ * asked again), so it can't re-size. `streamText` called afresh for the rest
+ * of the turn could, but would restart step numbering, usage totals, the
+ * stored response messages and the undo records. Inside one `doStream` call
+ * the SDK sees a single call that succeeded: no second step, no second
+ * `start-step`, nothing for undo, ids or history to double-count. The prompt
+ * is the provider-level one here (a leading system message, then the same
+ * user/assistant/tool shapes), and {@link boundStepMessages} runs on it
+ * unchanged once the system messages are set aside.
+ *
+ * Only a `body_too_large` refusal, and only when re-bounding to the cap the
+ * transport now names actually changes the request: a malformed body
+ * (`bad_request`) is final, and a request that already fits the cap by our
+ * count (a refusal naming no smaller cap than the step was sized to) would be
+ * refused again. One retry per `doStream` call, so one per step; the SDK
+ * doesn't retry an `AssistError` itself.
+ *
+ * @param model the transport's model
+ * @param hooks the transport (for its cap now), the turn's signal, the
+ *   budget for a cap and system text, and what to tell the host on success
+ * @return the model, retrying a too-large refusal once
+ */
+function retryTooLarge(model: Exclude<LanguageModel, string>, hooks: {
+  transport: Transport
+  signal: AbortSignal
+  budgetFor: (instructions: string, requestCap: number | undefined) => number
+  /** Called once the retry was accepted, never when it failed (a failed one is the turn's error). */
+  onResized: (fromBytes: number, toBytes: number, tier: string | undefined) => void
+}): LanguageModel {
+  return wrapLanguageModel({
+    model,
+    middleware: {
+      wrapStream: async ({doStream, params, model: inner}) => {
+        try {
+          return await doStream()
+        } catch (refusal) {
+          if (hooks.signal.aborted || classifyError(refusal).code !== 'body_too_large') {
+            throw refusal
+          }
+          const cap = await hooks.transport.maxRequestBytes?.()
+          if (cap === undefined) {
+            throw refusal
+          }
+          const system = params.prompt.filter((message) => message.role === 'system')
+          const rest = params.prompt.filter((message) => message.role !== 'system')
+          const budget = hooks.budgetFor(system.map((message) => message.content).join('\n'), cap)
+          const bounded = boundStepMessages(rest as unknown as ModelMessage[], budget)
+          // undefined: it already fits by our count. Same size: over budget but
+          // nothing left to cut (one huge message, the newest result), which
+          // `boundStepMessages` returns as a copy. Either way the same request
+          // would be refused again.
+          if (!bounded || jsonBytes(bounded) >= jsonBytes(rest)) {
+            throw refusal
+          }
+          const retried = await inner.doStream({...params, prompt: [...system, ...bounded] as unknown as typeof params.prompt})
+          // Reported only now that the retry was accepted: one failure, one event.
+          hooks.onResized(jsonBytes(rest), jsonBytes(bounded), classifyError(refusal).tier)
+          return retried
+        }
+      },
+    },
+  })
 }
 
 

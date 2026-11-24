@@ -1,6 +1,6 @@
 /** @jest-environment node */ // eslint-disable-line jsdoc/check-tag-names
 /* eslint-disable no-magic-numbers */
-import {SCRIPT, SSE_HEADERS, scriptedReply, sseStream} from './openrouterSse.fixture'
+import {SCRIPT, SSE_HEADERS, scriptedReply, sseStream, textReply, toolCalls} from './openrouterSse.fixture'
 import {assistErrorMessage, classifyError} from './assistError'
 import {createMemoryConversationStore} from './conversation'
 import {HOSTED_TRANSPORT_ID, HOSTED_TRANSPORT_LABEL, hostedMetaOf} from './hosted'
@@ -89,7 +89,7 @@ function setup({answer, getAuthToken = () => Promise.resolve(null), model = 'qwe
   }])
   const store = createMemoryConversationStore()
   const assist = createAssist({transport, registry, store, instructions: 'Use the tools.', maxRetries: 0})
-  return {session: assist.open('c1'), requests, metas, anonToken: () => anonToken, transport, store}
+  return {session: assist.open('c1'), requests, metas, anonToken: () => anonToken, transport, store, assist}
 }
 
 
@@ -224,6 +224,7 @@ describe('assist/hostedTransport', () => {
     [503, {error: {code: 'ai_unavailable'}}, 'service_unavailable', undefined],
     [400, {error: {code: 'ai_model_not_allowed'}, tier: 'free'}, 'unavailable', 'free'],
     [400, {error: {code: 'ai_request_rejected'}, tier: 'free'}, 'bad_request', 'free'],
+    [400, {error: {code: 'ai_body_too_large'}, tier: 'free'}, 'body_too_large', 'free'],
     [401, {error: 'invalid_auth0_token'}, 'session_expired', undefined],
   ])('a relay %i %j is %s, with its tier, and isn\'t retried', async (status, body, code, tier) => {
     const {session, requests} = setup({answer: () => refusal(status, body)})
@@ -326,5 +327,124 @@ describe('assist/selectTransport', () => {
     key = 'sk-or-user'
     transport.model()
     expect(await transport.maxRequestBytes()).toBeUndefined()
+  })
+  // Share#2307: a tier can drop between two requests (Pro to Free, or the
+  // relay briefly serving Free), which leaves the cached Pro cap stale. The
+  // refusal names the new cap; the loop re-sizes the step to it and retries it
+  // once (loop.ts retryTooLarge).
+  describe('a step the relay refuses as too large', () => {
+    const FREE_CAP = 65536
+    const bytesOf = (body) => new TextEncoder().encode(JSON.stringify(body)).length
+    const tooLarge = (code = 'ai_body_too_large', cap = FREE_CAP) => new Response(
+      JSON.stringify({error: {code}, tier: 'free'}),
+      {status: 400, headers: {'Content-Type': 'application/json', 'x-bldrs-ai-tier': 'free',
+        'x-bldrs-ai-max-body-bytes': String(cap)}})
+
+    /**
+     * A signed-in session whose first turn the relay serves as Pro, with a
+     * long history behind it, then `refuseWith` decides what a later request
+     * over FREE_CAP gets.
+     *
+     * @param {Function} refuseWith `(body, index) => Response | undefined` for requests after the first turn
+     * @return {Promise<object>} setup's, with `afterFirst` (requests seen once the first turn is done)
+     */
+    async function afterTierDrop(refuseWith) {
+      let first = true
+      const made = setup({
+        getAuthToken: () => Promise.resolve('auth0-token'),
+        answer: (body, _request, index) => (first ? undefined : refuseWith(body, index)),
+      })
+      await made.store.append('c1', Array.from({length: 8}, (_, n) => [
+        {role: 'user', content: `question ${n} ${'q'.repeat(12_000)}`},
+        {role: 'assistant', content: [{type: 'text', text: `answer ${n} ${'a'.repeat(12_000)}`}]},
+      ]).flat())
+      await collect(made.session.send('warm up'))
+      first = false
+      return {...made, afterFirst: made.requests.length}
+    }
+
+    it('completes the turn on one retry sized to the cap the refusal named', async () => {
+      const {session, requests, afterFirst, store} = await afterTierDrop((body) =>
+        (bytesOf(body) > FREE_CAP ? tooLarge() : undefined))
+      const before = (await store.load('c1')).length
+      const events = await collect(session.send('go on'))
+      const turn = requests.slice(afterFirst)
+      expect(events.filter((e) => e.type === 'error')).toEqual([])
+      expect(events.find((e) => e.type === 'done')).toEqual({type: 'done', finishReason: 'stop'})
+      expect(events.filter((e) => e.type === 'text-delta').map((e) => e.text).join('')).toBe(SCRIPT.fallback)
+      expect(turn).toHaveLength(2)
+      expect(bytesOf(turn[0].body)).toBeGreaterThan(FREE_CAP)
+      expect(bytesOf(turn[1].body)).toBeLessThanOrEqual(FREE_CAP)
+      // The refused attempt leaves nothing behind: one usage report, and the
+      // turn stored once, as the user's message and one reply.
+      expect(events.filter((e) => e.type === 'usage')).toHaveLength(1)
+      // Told to the host once, after the retry was accepted.
+      const recovered = events.filter((e) => e.type === 'recovered')
+      expect(recovered).toEqual([{type: 'recovered', condition: 'body_resized', tier: 'free',
+        fromBytes: expect.any(Number), toBytes: expect.any(Number)}])
+      expect(recovered[0].toBytes).toBeLessThan(recovered[0].fromBytes)
+      expect((await store.load('c1')).slice(before).map((m) => m.role)).toEqual(['user', 'assistant'])
+    })
+
+    it('retries only the step that was refused, and numbers the steps as if it had not been', async () => {
+      let calls = 0
+      const {session, requests, afterFirst} = await afterTierDrop((body) => {
+        // The turn's first model call is refused; later ones are small enough.
+        const refuse = bytesOf(body) > FREE_CAP
+        if (refuse) {
+          return tooLarge()
+        }
+        const chunks = body.messages.at(-1).role === 'tool' ? textReply('Found them.') :
+          toolCalls([{id: `q${calls++}`, name: 'model_query', args: {}}])
+        return new Response(sseStream(chunks, 0), {status: 200, headers: SSE_HEADERS})
+      })
+      const events = await collect(session.send('find proxies'))
+      expect(events.filter((e) => e.type === 'error')).toEqual([])
+      expect(events.filter((e) => e.type === 'tool-call')).toHaveLength(1)
+      expect(events.filter((e) => e.type === 'tool-result')).toHaveLength(1)
+      // refused + retried first step, then the step after the tool result
+      expect(requests.length - afterFirst).toBe(3)
+      const stepIds = new Set(events.filter((e) => e.stepId).map((e) => e.stepId))
+      expect(stepIds.size).toBe(2)
+    })
+
+    it('never retries a malformed body\'s ai_bad_request', async () => {
+      const {session, requests, afterFirst} = await afterTierDrop(() => tooLarge('ai_bad_request'))
+      const events = await collect(session.send('go on'))
+      expect(events.find((e) => e.type === 'error')).toMatchObject({code: 'bad_request', status: 400})
+      expect(events.filter((e) => e.type === 'recovered')).toEqual([])
+      expect(requests.length - afterFirst).toBe(1)
+    })
+
+    it('retries a step at most once', async () => {
+      // The retry is refused too (here, a cap the relay keeps lowering): the turn ends.
+      let cap = FREE_CAP
+      const {session, requests, afterFirst} = await afterTierDrop(() => {
+        cap /= 2
+        return tooLarge('ai_body_too_large', cap)
+      })
+      const events = await collect(session.send('go on'))
+      expect(events.find((e) => e.type === 'error')).toMatchObject({code: 'body_too_large', status: 400})
+      expect(events.filter((e) => e.type === 'recovered')).toEqual([])
+      expect(requests.length - afterFirst).toBe(2)
+    })
+
+    it('does not retry when nothing can be cut to fit the new cap', async () => {
+      // One huge current message and no earlier turns or results: re-bounding
+      // returns the same request, which the relay would refuse again.
+      const {session, requests} = setup({answer: (body) => (bytesOf(body) > FREE_CAP ? tooLarge() : undefined)})
+      const events = await collect(session.send('x'.repeat(100_000)))
+      expect(events.find((e) => e.type === 'error')).toMatchObject({code: 'body_too_large', status: 400})
+      expect(events.filter((e) => e.type === 'recovered')).toEqual([])
+      expect(requests).toHaveLength(1)
+    })
+
+    it('does not retry when the refusal names no smaller cap than the step was sized to', async () => {
+      const {session, requests, afterFirst} = await afterTierDrop(() => tooLarge('ai_body_too_large', 4 * 1048576))
+      const events = await collect(session.send('go on'))
+      expect(events.find((e) => e.type === 'error')).toMatchObject({code: 'body_too_large'})
+      expect(events.filter((e) => e.type === 'recovered')).toEqual([])
+      expect(requests.length - afterFirst).toBe(1)
+    })
   })
 })

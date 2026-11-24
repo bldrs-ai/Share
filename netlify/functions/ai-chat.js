@@ -25,7 +25,9 @@
  *     within their caps (§5 step 3). The deployed smoke probe sends `{}` and
  *     gets 400 `ai_bad_request` here, before anything touches an upstream.
  *     Once the tier is known (3), a signed-out or free body is held to its
- *     tier's smaller cap too (maxBodyBytesFor), refused the same way.
+ *     tier's smaller cap too (maxBodyBytesFor), refused 400 `ai_body_too_large`
+     with the cap in `x-bldrs-ai-max-body-bytes`. A body past MAX_BODY_BYTES
+     (read before the tier is known, so it names no cap) stays `ai_bad_request`.
  *  3. Identity and tier (D5): an Auth0 Bearer → `free` or `pro` from
  *     app_metadata through the Management API (`src/quota/proStatus.js`, the
  *     one Pro definition); anything else is `anonymous`, under a relay-minted
@@ -211,6 +213,10 @@ const ERRORS = Object.freeze({
   ai_forbidden_origin: [HTTP.FORBIDDEN, 'This assistant can only be called from Bldrs\' own site'],
   ai_not_configured: [HTTP.INTERNAL_ERROR, 'The hosted assistant is not configured on this deploy'],
   ai_bad_request: [HTTP.BAD_REQUEST, 'Expected a streaming chat completion request within the relay\'s caps'],
+  // A well-formed body over this tier's cap. Its own code, because the client
+  // may retry it smaller (the response names the cap) and must not retry a
+  // malformed one (src/assist/loop.ts `retryTooLarge`).
+  ai_body_too_large: [HTTP.BAD_REQUEST, 'The request body is over this tier\'s size cap; x-bldrs-ai-max-body-bytes names it'],
   ai_model_not_allowed: [HTTP.BAD_REQUEST, 'That model is not available on this tier'],
   ai_credits_exhausted: [HTTP.PAYMENT_REQUIRED, 'This tier\'s assistant credits are used up for now'],
   ai_free_requests_exhausted: [HTTP.TOO_MANY_REQUESTS, 'Today\'s free-model requests are used up'],
@@ -279,11 +285,14 @@ export default async function handler(req, context = {}) {
   // (src/assist/loop.ts boundStepMessages; Codex on #2305).
   const meta = {tier, token: identity.mintedToken, maxBodyBytes: maxBodyBytesFor(tier, limits)}
   if (bytes > meta.maxBodyBytes) {
-    // The same refusal as a body past MAX_BODY_BYTES, so the panel says the
-    // same thing: the conversation may be too long, start a new chat
-    // (src/assist/hosted.ts maps it to 'bad_request'). Expected, not reported.
+    // Its own code, apart from a malformed body's `ai_bad_request`: the
+    // refusal carries the cap, and the loop re-sizes and retries the step
+    // once (src/assist/loop.ts `retryTooLarge`; a tier can drop between two
+    // requests, Share#2307). The panel words it as before (hosted.ts maps it
+    // to 'body_too_large'): the conversation may be too long. Expected, not
+    // reported.
     logOutcome({outcome: 'too_large', tier})
-    return errorResponse('ai_bad_request', meta)
+    return errorResponse('ai_body_too_large', meta)
   }
 
   const requested = body.model ?? DEFAULT_MODEL
