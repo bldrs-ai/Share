@@ -1,4 +1,4 @@
-import React, {ReactElement, useState} from 'react'
+import React, {ReactElement, useState, useSyncExternalStore} from 'react'
 import {Box, Button, IconButton, Typography} from '@mui/material'
 import {
   ThumbDown as ThumbDownIcon,
@@ -9,7 +9,15 @@ import {
 import FeedbackNote from '../../feedback/FeedbackNote'
 import {FEEDBACK_SOURCES} from '../../feedback/feedbackRecord'
 import {postFeedback} from '../../feedback/submitFeedback'
-import {RATINGS, rateReply} from './assistFeedback'
+import {
+  RATINGS,
+  clearRetryOf,
+  isReplyPosting,
+  rateReply,
+  replyFeedbackPosts,
+  runReplyPost,
+  setClearRetry,
+} from './assistFeedback'
 
 
 export const NOTE_PLACEHOLDER = 'Add a note (optional): what was right or wrong?'
@@ -20,6 +28,9 @@ export const SENT_TEXT = 'Thanks for the feedback'
 
 /** The class the reply group reveals on hover or focus (BotChat.jsx `REPLY_GROUP_SX`). */
 export const FEEDBACK_CLASS = 'BotChat-Feedback'
+
+// Each note area a thumb opens is its own draft, by id.
+let draftSeq = 0
 
 const THUMBS = [
   {rating: RATINGS.UP, label: 'Good reply', On: ThumbUpIcon, Off: ThumbUpOutlinedIcon, testId: 'BotChat-ThumbUp'},
@@ -61,25 +72,26 @@ export default function ReplyFeedback({message, alwaysShown = false}) {
   // failed post.
   const [draft, setDraft] = useState(null)
   const [hint, setHint] = useState(null)
+  // Every post for a reply runs alone, and the thumbs are disabled while one
+  // is in flight: a rating, a clear, or a clear's retry. That state, and a
+  // failed clear's record, live in assistFeedback.js#replyFeedbackPosts, not
+  // here, so a panel closed and reopened mid-post still holds them.
+  const posts = useSyncExternalStore(replyFeedbackPosts.subscribe, replyFeedbackPosts.get)
+  const isPosting = isReplyPosting(posts, message.id)
   // A clear whose post failed: the rating is already cleared on the reply
   // and counted in GA, so "Try again" posts this same record rather than
-  // making the user re-rate and clear again (two more events; Codex on #2313).
-  const [clearRetry, setClearRetry] = useState(null)
-  const [isRetryingClear, setIsRetryingClear] = useState(false)
-  // A clear in flight. The rating is already cleared on the reply, but its
-  // post hasn't landed: a new rating sent now could reach the store first,
-  // and the slower clear would then stand as the latest record while the
-  // reply shows the new rating (Codex on #2313). So every post for a reply
-  // runs alone: the thumbs are disabled while a clear, a retry of one, or a
-  // rating is in flight.
-  const [isClearing, setIsClearing] = useState(false)
+  // making the user re-rate and clear again (two more events).
+  const clearRetry = clearRetryOf(posts, message.id)
   const shown = draft?.rating ?? sent
   const isSending = draft?.status === 'sending'
-  const isPosting = isSending || isClearing || isRetryingClear
+  // A failed clear says so wherever the panel is reopened.
+  const shownHint = hint ?? (clearRetry ? SEND_FAILED_TEXT : null)
 
   const choose = (rating) => {
     setHint(null)
-    setClearRetry(null)
+    // A newer rating supersedes a failed clear: retrying it later would
+    // retract the rating the reply then shows.
+    setClearRetry(message.id, null)
     if (draft) {
       // A thumb while the note is open: the same one cancels, the other switches.
       setDraft(rating === draft.rating || draft.record ? null : {...draft, rating})
@@ -89,33 +101,24 @@ export default function ReplyFeedback({message, alwaysShown = false}) {
       void clear()
       return
     }
-    setDraft({rating, note: '', screenshot: null, status: 'editing', record: null})
+    setDraft({id: ++draftSeq, rating, note: '', screenshot: null, status: 'editing', record: null})
   }
 
   const clear = async () => {
-    setIsClearing(true)
-    try {
-      const {ok, record} = await rateReply({replyId: message.id, rating: RATINGS.NONE})
-      setHint(ok ? null : SEND_FAILED_TEXT)
-      setClearRetry(ok ? null : record)
-    } finally {
-      setIsClearing(false)
-    }
+    const replyId = message.id
+    const {ok, record} = await runReplyPost(replyId, () => rateReply({replyId, rating: RATINGS.NONE}))
+    setClearRetry(replyId, ok ? null : record)
+    setHint(null)
   }
 
   const retryClear = async () => {
-    if (!clearRetry || isRetryingClear) {
+    const replyId = message.id
+    if (!clearRetry || isPosting) {
       return
     }
-    setIsRetryingClear(true)
-    let ok = false
-    try {
-      ok = await postFeedback(clearRetry)
-    } finally {
-      setIsRetryingClear(false)
-    }
-    setHint(ok ? SENT_TEXT : SEND_FAILED_TEXT)
-    setClearRetry(ok ? null : clearRetry)
+    const ok = await runReplyPost(replyId, () => postFeedback(clearRetry))
+    setClearRetry(replyId, ok ? null : clearRetry)
+    setHint(ok ? SENT_TEXT : null)
   }
 
   const send = async () => {
@@ -126,10 +129,10 @@ export default function ReplyFeedback({message, alwaysShown = false}) {
     let ok
     let record = draft.record
     if (record) {
-      ok = await postFeedback(record)
+      ok = await runReplyPost(message.id, () => postFeedback(record))
     } else {
-      ({ok, record} = await rateReply({replyId: message.id, rating: draft.rating, note: draft.note,
-        screenshot: draft.screenshot}))
+      ({ok, record} = await runReplyPost(message.id, () => rateReply({replyId: message.id, rating: draft.rating,
+        note: draft.note, screenshot: draft.screenshot})))
     }
     if (ok || !record) {
       setDraft(null)
@@ -140,7 +143,7 @@ export default function ReplyFeedback({message, alwaysShown = false}) {
     }
   }
 
-  const isActive = draft !== null || sent !== null || hint !== null
+  const isActive = draft !== null || sent !== null || shownHint !== null
   return (
     <Box
       className={FEEDBACK_CLASS}
@@ -157,15 +160,15 @@ export default function ReplyFeedback({message, alwaysShown = false}) {
             title={label}
             aria-pressed={shown === rating}
             onClick={() => choose(rating)}
-            disabled={isPosting || Boolean(draft?.record && rating !== shown)}
+            disabled={isPosting || isSending || Boolean(draft?.record && rating !== shown)}
             data-testid={testId}
           >
             {shown === rating ? <On fontSize='inherit'/> : <Off fontSize='inherit'/>}
           </IconButton>
         ))}
-        {hint && !draft && (
+        {shownHint && !draft && (
           <Typography variant='caption' color='text.secondary' role='status' data-testid='BotChat-FeedbackHint'>
-            {hint}
+            {shownHint}
           </Typography>
         )}
         {clearRetry && !draft && (
@@ -186,7 +189,9 @@ export default function ReplyFeedback({message, alwaysShown = false}) {
           note={draft.note}
           onNoteChange={(note) => setDraft((d) => ({...d, note}))}
           screenshot={draft.screenshot}
-          onScreenshotChange={(screenshot) => setDraft((d) => (d ? {...d, screenshot} : d))}
+          // Only into the draft that asked for it: a capture that outlives
+          // its draft (cancelled, then a new one opened) changes nothing.
+          onScreenshotChange={((draftId) => (screenshot) => setDraft((d) => (d?.id === draftId ? {...d, screenshot} : d)))(draft.id)}
           onSend={() => void send()}
           onCancel={() => {
             setDraft(null)

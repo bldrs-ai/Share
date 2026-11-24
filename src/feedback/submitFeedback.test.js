@@ -89,8 +89,27 @@ describe('feedback/submitFeedback', () => {
       }
     })
 
-    it('keeps a hosted sample\'s text as written', () => {
+    // Codex round 3 on #2313: the structural backstop runs for every model
+    // that isn't Share-hosted, after the exact names.
+    it('scrubs any URL, path or file name from a non-hosted model\'s text, after the exact names', () => {
+      setFeedbackStore({modelPath: PRIVATE_ROUTE})
+      const record = buildFeedbackRecord({...ASSIST, note: 'Compare with /private/Other Plan.glb and C:\\Jobs\\acme\\x.ifc',
+        context: {...ASSIST_CONTEXT, prompt: 'look in s3://acme-bucket/m/ and /private/', reply: 'Tower B.ifc has [Wall 3](ref:e12).'}})
+      expect(record.note).toBe('Compare with (path withheld) (file name withheld) and (path withheld)')
+      expect(record.context.prompt).toBe('look in (link withheld) and (path withheld)')
+      // The exact layer named the model; the ref link survives both layers.
+      expect(record.context.reply).toBe(`${WITHHELD_MODEL_NAME} has [Wall 3](ref:e12).`)
+    })
+
+    it('scrubs with no model loaded too: there is nothing to say it is public', () => {
+      setFeedbackStore({modelPath: null})
+      expect(buildFeedbackRecord({...GENERAL, note: 'my file /home/jane/Secret.glb'}).note)
+        .toBe('my file (path withheld)')
+    })
+
+    it('keeps a hosted sample\'s text as written, paths and file names included', () => {
       expect(buildFeedbackRecord(ASSIST).context.prompt).toBe('select the walls in Tower B.ifc')
+      expect(buildFeedbackRecord({...GENERAL, note: 'see /share/v/p/index.ifc'}).note).toBe('see /share/v/p/index.ifc')
     })
 
     it('a clear carries no note or screenshot, and the tier is the sign-in tier', () => {

@@ -112,6 +112,37 @@ Tests:
 
 ## Privacy
 
+Free text (the note, and a source's text context such as the assistant's
+reply and prompt) passes two layers for any model that isn't one of Share's
+hosted files (route kind other than `project`), and for no model at all. A
+hosted model's text is public and is kept as written.
+
+1. **The precise layer** withholds the names and paths Share knows for the
+   model on screen (`privacy/sentryRedaction.js#withholdModelNames`, below).
+2. **The structural backstop** (`privacy/textScrub.js#scrubLocations`) then
+   withholds whatever looks like a location, whatever it names. Three
+   review rounds on #2313 each found a form the precise layer didn't list
+   (a decoded URL, a query-free one, a standalone pathname), so the
+   backstop answers the class rather than the next variant:
+   - any URL (`scheme://…`: http, https, s3, file, …) and `www.` host, as
+     `(link withheld)`;
+   - Windows paths (`C:\…`, `\\server\…`) and any token with two or more
+     `/` (`/a/b`, `/private/`, `a/b/c.ext`) or starting `~/`, `./`, `../`,
+     as `(path withheld)`;
+   - any token ending in a model or archive extension (`supportedTypes` in
+     `Filetype.js`, plus `zip` and `gz`), with up to three capitalised words
+     before it so a spaced name goes whole, and any quoted span ending in
+     one, as `(file name withheld)`.
+
+   It leaves prose alone: words, numbers, dates (`11/24/2026`), a single
+   `and/or`, a bare `.ifc`, element refs (`e123`, `o1.2.3`) and the
+   assistant's `ref:` links, scene-graph name paths included
+   (`ref:nScene/Door`), since `ref:` is the element-link scheme, not a URL.
+   It over-redacts rather than leaks: a capitalised word just before a file
+   name can go with it.
+
+The precise layer's names:
+
 - **Model names.** For any model that isn't one of Share's hosted files,
   the page withholds the model's names and paths from every text field.
   These are:
@@ -237,9 +268,16 @@ analytics" keeps the list.
   its task chip's tasks.
 - **One post at a time.** The thumbs are disabled while a rating, a clear
   or a clear's retry is posting, so the latest record in the store is the
-  one the reply shows. A newer rating drops a failed clear's retry. In the
-  note area, Enter and Send share one condition, so neither sends while a
-  screenshot the user asked for is still being captured.
+  one the reply shows. A newer rating drops a failed clear's retry. The
+  posts in flight and a failed clear's record are held at module scope
+  (`assistFeedback.js#replyFeedbackPosts`), not in the component, because
+  closing the panel or switching phone tabs unmounts it while the post
+  runs on.
+- **Captures belong to their draft.** In the note area, Enter and Send
+  share one condition, so neither sends while a screenshot the user asked
+  for is still being captured. A capture that lands after its note area
+  closed (Cancel), or after a newer capture started, is dropped, and the
+  thumbs bind each screenshot to the draft that asked for it.
 - **Remembering.** The rating is kept on the bubble in `assistChat`, so the
   filled thumb survives the panel unmounting. It does not survive a reload:
   the session log snapshots a turn's bubbles when the turn ends.

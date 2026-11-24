@@ -1,6 +1,7 @@
 import {v4 as uuid} from 'uuid'
 import {gtagEvent, modelActionTier} from '../privacy/analytics'
 import {withholdModelNames} from '../privacy/sentryRedaction'
+import {scrubLocations} from '../privacy/textScrub'
 import useStore from '../store/useStore'
 import {
   FEEDBACK_RECORD_VERSION,
@@ -23,8 +24,9 @@ import {feedbackView} from './feedbackView'
  * - Bldrs' own store gets the record (feedbackRecord.js): the note, the
  *   screenshot when the user attached one, the view, and the source's
  *   context, posted to the same-origin `feedback` function under the same
- *   `feedback_id`. A private model's names and paths are withheld from the
- *   text first.
+ *   `feedback_id`. For a model that isn't Share-hosted, its names and paths
+ *   are withheld from the text first, and anything shaped like a URL, path
+ *   or model file name after that (privacy/textScrub.js).
  *
  * A failed post is the user's to retry (postFeedback, same record), and is
  * counted in GA as `feedback_failed` with `stage: 'send'`. Nothing reaches
@@ -120,11 +122,18 @@ export function buildFeedbackRecord({source, rating = null, note = '', screensho
   if (!spec) {
     throw new Error(`unknown feedback source: ${source}`)
   }
-  const {view, names} = feedbackView(state)
+  const {view, names, isPublic} = feedbackView(state)
   const isClear = rating === RATINGS.NONE
-  // Withheld, then capped: the placeholder is longer than most names, so a
-  // cap first could push a withheld text back over it.
-  const safe = (text, max) => withholdModelNames(String(text ?? ''), names).slice(0, max)
+  // Two layers for any model that isn't Share-hosted (feedback.md
+  // §"Privacy"): the precise one withholds the names Share knows for it, then
+  // the structural backstop withholds anything shaped like a URL, a path or
+  // a model file name, whatever it names. A Share-hosted model's text is
+  // public and kept as written. Withheld, then capped: a placeholder is
+  // longer than most names, so a cap first could push the text back over.
+  const safe = (text, max) => {
+    const named = withholdModelNames(String(text ?? ''), names)
+    return (isPublic ? named : scrubLocations(named)).slice(0, max)
+  }
   const safeContext = {...context}
   for (const [field, max] of Object.entries(spec.text)) {
     safeContext[field] = safe(context[field], max)

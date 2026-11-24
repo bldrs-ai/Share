@@ -141,3 +141,115 @@ function noteRating(replyId, rating) {
     messages: chat.messages.map((message) => (message.id === replyId ? {...message, rating} : message)),
   }))
 }
+
+
+/**
+ * The posts in flight for each reply, and a failed clear's record, held at
+ * module scope rather than in ReplyFeedback: the panel unmounts when it is
+ * closed and on a phone whenever another drawer tab is shown (BotChat.jsx),
+ * while a post it started keeps running. A remounted ReplyFeedback reads its
+ * reply's state from here, so its thumbs stay disabled until the post lands
+ * and a failed clear still offers its retry (Codex rounds 2 and 3 on #2313).
+ *
+ * Why one post at a time: a reply's latest stored record is the one that
+ * counts (feedback.md §"Record"). If a new rating could be sent while a slow
+ * clear is still posting, the clear could land last and retract the rating
+ * the reply shows.
+ *
+ * An external store for `useSyncExternalStore`: `get()` is a snapshot,
+ * replaced on every change.
+ */
+let postsState = {pending: new Map(), clearRetries: new Map()}
+const postsListeners = new Set()
+
+
+/**
+ * @param {Function} change `(state) => state`
+ */
+function updatePosts(change) {
+  postsState = change(postsState)
+  for (const listener of postsListeners) {
+    listener()
+  }
+}
+
+
+export const replyFeedbackPosts = {
+  get: () => postsState,
+  subscribe: (listener) => {
+    postsListeners.add(listener)
+    return () => postsListeners.delete(listener)
+  },
+}
+
+
+/**
+ * @param {object} state replyFeedbackPosts.get()
+ * @param {string} replyId
+ * @return {boolean} whether a post for this reply is in flight
+ */
+export function isReplyPosting(state, replyId) {
+  return (state.pending.get(replyId) ?? 0) > 0
+}
+
+
+/**
+ * @param {object} state replyFeedbackPosts.get()
+ * @param {string} replyId
+ * @return {?object} the record of this reply's failed clear, to post again
+ */
+export function clearRetryOf(state, replyId) {
+  return state.clearRetries.get(replyId) ?? null
+}
+
+
+/**
+ * Run one post for a reply, marked pending while it runs, however the
+ * component that started it fares meanwhile.
+ *
+ * @param {string} replyId
+ * @param {Function} post `() => Promise`, the post
+ * @return {Promise<*>} what the post resolves to
+ */
+export async function runReplyPost(replyId, post) {
+  const step = (by) => updatePosts((state) => {
+    const pending = new Map(state.pending)
+    const count = (pending.get(replyId) ?? 0) + by
+    if (count > 0) {
+      pending.set(replyId, count)
+    } else {
+      pending.delete(replyId)
+    }
+    return {...state, pending}
+  })
+  step(1)
+  try {
+    return await post()
+  } finally {
+    step(-1)
+  }
+}
+
+
+/**
+ * @param {string} replyId
+ * @param {?object} record a failed clear's record to keep for a retry, or
+ *   null to drop it (it landed, or a newer rating superseded it)
+ */
+export function setClearRetry(replyId, record) {
+  updatePosts((state) => {
+    const clearRetries = new Map(state.clearRetries)
+    if (record) {
+      clearRetries.set(replyId, record)
+    } else {
+      clearRetries.delete(replyId)
+    }
+    return {...state, clearRetries}
+  })
+}
+
+
+/** For tests: forget every reply's posts and retries. */
+export function resetReplyFeedbackPosts() {
+  updatePosts(() => ({pending: new Map(), clearRetries: new Map()}))
+}

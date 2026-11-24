@@ -41,16 +41,30 @@ export default function FeedbackNote({
   const noteRef = useRef(null)
   const [isCapturing, setIsCapturing] = useState(false)
   const [captureHint, setCaptureHint] = useState(null)
+  // Each capture is this note area's, and only while it is open: a capture
+  // still running when the user cancels must not land in the next note area
+  // opened (Codex on #2313). The area unmounts on Cancel, so a result that
+  // arrives after that, or after a newer capture started, is dropped.
+  const isOpenRef = useRef(true)
+  const captureSeqRef = useRef(0)
   // The note takes focus when the area opens, so the user can type, or
   // press Enter to send without a note.
   useEffect(() => {
+    isOpenRef.current = true
     noteRef.current?.focus()
+    return () => {
+      isOpenRef.current = false
+    }
   }, [])
 
   const attach = async () => {
+    const seq = ++captureSeqRef.current
     setIsCapturing(true)
     setCaptureHint(null)
     const shot = await captureViewerScreenshot({source})
+    if (!isOpenRef.current || seq !== captureSeqRef.current) {
+      return
+    }
     setIsCapturing(false)
     if (shot) {
       onScreenshotChange(shot)

@@ -104,6 +104,25 @@ describe('feedback/FeedbackNote', () => {
     expect(onSend).toHaveBeenCalledWith({note: '', screenshot: SCREENSHOT})
   })
 
+  // Codex round 3 on #2313: a capture that outlives its note area is dropped.
+  it('drops a capture that lands after the note area closed', async () => {
+    let finish = () => undefined
+    jest.mocked(captureViewerScreenshot).mockReturnValue(new Promise((resolve) => {
+      finish = () => resolve(SCREENSHOT)
+    }))
+    const onScreenshotChange = jest.fn()
+    const {unmount} = render(
+      <FeedbackNote source='general' note='' onNoteChange={() => undefined} screenshot={null}
+        onScreenshotChange={onScreenshotChange} onSend={() => undefined} onCancel={() => undefined}
+        placeholder='Say something' helperText='Shared with Bldrs.'
+      />,
+      {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(screen.getByRole('button', {name: 'Attach screenshot'}))
+    unmount()
+    await act(() => Promise.resolve(finish()))
+    expect(onScreenshotChange).not.toHaveBeenCalled()
+  })
+
   it('a failed capture is a quiet hint, and the user can try again', async () => {
     jest.mocked(captureViewerScreenshot).mockResolvedValueOnce(null).mockResolvedValueOnce(SCREENSHOT)
     render(<Harness/>, {wrapper: HelmetStoreRouteThemeCtx})

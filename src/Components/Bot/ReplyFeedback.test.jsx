@@ -6,6 +6,7 @@ import ReplyFeedback, {NOTE_HELPER_TEXT, NOTE_PLACEHOLDER, SEND_FAILED_TEXT, SEN
 import {captureViewerScreenshot} from '../../feedback/captureScreenshot'
 import {SCREENSHOT} from '../../feedback/feedback.fixture'
 import {FEEDBACK_FAILED_EVENT, FEEDBACK_SUBMITTED_EVENT} from '../../feedback/submitFeedback'
+import {resetReplyFeedbackPosts} from './assistFeedback'
 import {assistAuth, assistChat, resetAssistChat} from './assistState'
 
 
@@ -50,6 +51,7 @@ describe('Bot/ReplyFeedback', () => {
     window.__mockFeedbackFail = false
     assistAuth.current = {isAuthenticated: false}
     act(() => {
+      resetReplyFeedbackPosts()
       useStore.setState({modelPath: null, rootElement: null, selectedAnchorIds: [], cameraControls: null})
       resetAssistChat()
       assistChat.update((chat) => ({...chat, messages: MESSAGES}))
@@ -109,6 +111,26 @@ describe('Bot/ReplyFeedback', () => {
     expect(stored()[0].screenshot).toBe(SCREENSHOT)
     expect(feedbackEvents()).toEqual([expect.objectContaining({has_screenshot: 'true'})])
     expect(JSON.stringify(window.gtag.mock.calls)).not.toContain('base64')
+  })
+
+  // Codex round 3 on #2313: a capture started in a cancelled draft must not
+  // attach to the next one.
+  it('a capture from a cancelled draft does not attach to the next draft', async () => {
+    let finish = () => undefined
+    jest.mocked(captureViewerScreenshot).mockReturnValueOnce(new Promise((resolve) => {
+      finish = () => resolve(SCREENSHOT)
+    }))
+    render(<Harness/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(screen.getByRole('button', {name: 'Good reply'}))
+    fireEvent.click(screen.getByRole('button', {name: 'Attach screenshot'}))
+    fireEvent.click(screen.getByTestId('Feedback-Cancel'))
+    fireEvent.click(screen.getByRole('button', {name: 'Bad reply'}))
+    await act(() => Promise.resolve(finish()))
+    expect(screen.queryByTestId('Feedback-Screenshot')).toBeNull()
+    fireEvent.click(screen.getByTestId('Feedback-Send'))
+    await waitFor(() => expect(stored()).toHaveLength(1))
+    expect(stored()[0]).toMatchObject({rating: 'down', screenshot: null})
+    expect(feedbackEvents()).toEqual([expect.objectContaining({has_screenshot: 'false'})])
   })
 
   it('Enter in the note sends without a note', async () => {
@@ -230,6 +252,36 @@ describe('Bot/ReplyFeedback', () => {
     fireEvent.click(screen.getByRole('button', {name: 'Bad reply'}))
     fireEvent.click(screen.getByTestId('Feedback-Send'))
     await waitFor(() => expect(feedbackEvents().map((p) => p.rating)).toEqual(['up', 'none', 'down']))
+  })
+
+  // Codex round 3 on #2313: the panel unmounts when closed or on a phone tab
+  // switch, while the clear it started keeps running.
+  it('keeps the thumbs held across an unmount while a clear posts, and keeps a failed clear\'s retry', async () => {
+    const first = render(<Harness/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(screen.getByRole('button', {name: 'Good reply'}))
+    fireEvent.click(screen.getByTestId('Feedback-Send'))
+    await screen.findByText(SENT_TEXT)
+
+    const held = holdNextFeedbackPost()
+    try {
+      fireEvent.click(screen.getByRole('button', {name: 'Good reply'}))
+      await waitFor(() => expect(screen.getByRole('button', {name: 'Bad reply'})).toBeDisabled())
+      first.unmount()
+      render(<Harness/>, {wrapper: HelmetStoreRouteThemeCtx})
+      // A fresh instance, the clear still in flight: still held.
+      expect(screen.getByRole('button', {name: 'Bad reply'})).toBeDisabled()
+      expect(screen.getByRole('button', {name: 'Good reply'})).toBeDisabled()
+      await held.fail()
+    } finally {
+      held.spy.mockRestore()
+    }
+    // The clear failed after the remount: this instance offers its retry.
+    await waitFor(() => expect(screen.getByRole('button', {name: 'Bad reply'})).toBeEnabled())
+    expect(screen.getByText(SEND_FAILED_TEXT)).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('BotChat-FeedbackRetry'))
+    expect(await screen.findByText(SENT_TEXT)).toBeInTheDocument()
+    expect(stored().map((r) => r.rating)).toEqual(['up', 'none'])
+    expect(feedbackEvents()).toHaveLength(2)
   })
 
   it('a newer rating drops a failed clear\'s retry, so the clear can\'t retract it later', async () => {
