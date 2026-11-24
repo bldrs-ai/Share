@@ -7,7 +7,11 @@ decision into a layer map, the seams between the layers, a lint rule that
 holds them, and a slice plan. On 2026-11-24 the owner answered this
 doc's six questions (decisions 9 and 10, §9). The last of them named the
 engine: one format-neutral `Engine` interface on the lease, implemented
-by `WorkerEngine` and `ConwayEngine` (§4.1).
+by `WorkerEngine` and `ConwayEngine` (§4.1). Later that day the owner
+named the session classes (decision 11, §4.1 "Session names") and put
+`src/workspace/` in the session layer (§2.2), and this track agreed the
+model key (§4.5a) and the edit log's place (§4.5) with the create-t300
+and Conversational CAD sessions.
 **Track:** `open-t200` (#2315): in-app model lifecycle. Its snapshot is
 [README.md](README.md), and each slice of §7 is a sub-issue of #2315.
 **Epic:** `open-205` (#2011). Stories #2021 (done) and #2265. This is the
@@ -19,6 +23,10 @@ the engine layer's internals (the cap, what an engine costs, the estimate,
 admission, eviction, rehydrate, Reported Conditions) and §5.2a (one viewer
 for the page). This doc is the source for the layers, the seams and the
 slice plan; engine-worker.md points here for them.
+[workspace-sessions.md](../../new/workspace-sessions.md) is the source
+for the user's document, the `WorkspaceSession` (§4.1 "Session names"),
+and [model-edit.md](../../new/model-edit.md) for the edit layers whose
+files §2.2 places.
 
 Read on code at `origin/main` `7cbc995d`, which has #2247's per-model
 sessions. §10 says what was read, what was run and what was not checked.
@@ -36,7 +44,8 @@ Six layers. Each may import only from the layers below it.
 3. **loader**: fetch, sniff, cache and convert into a model, given a load
    context instead of `(viewer, useStore)`.
 4. **session**: `ModelSession`. It holds an engine *lease* from the host,
-   and can have none.
+   and can have none. The workspace's model list and, later, the
+   `WorkspaceSession` sit here too (§2.2).
 5. **viewer**: one per page, `attach(root)` / `detach(root)`. It owns no
    engines.
 6. **UI**: React and the store. The store is a projection of the active
@@ -100,9 +109,10 @@ the UI touches the DOM, with how far to go left open (§6).
 
 ```
 6  ui        Components, Containers, pages, hooks, store, tools, export, connections,
-             quota, WidgetApi, Auth0, Infrastructure, theme, layouts, index, workspace, …
+             quota, WidgetApi, Auth0, Infrastructure, theme, layouts, index, …
 5  viewer    src/viewer/     one per page: canvas, renderer, camera, picking, look, clipping
-4  session   src/session/    ModelSession, LoadJob, ModelSessionHost, per-model state
+4  session   src/session/    ModelSession, LoadJob, ModelSessionHost, per-model state, the edit log
+             src/workspace/  the workspace's projects and models, and their persistence
 3  loader    src/loader/     fetch, sniff, cache, parse into a model; the GLB artifact
 2  model     src/model/      ShareModel, batched meshes, instance tables, subsets, refs
 1  engine    src/engine/     Engine (WorkerEngine, ConwayEngine), protocol, sources, sidecars, EngineHost
@@ -118,7 +128,7 @@ A file may import its own layer, any layer below it, and npm packages.
 | 1 engine | every engine: its worker, its client, its budget, its OPFS entry lock, the capture job that runs beside it. The only place Conway's `IfcAPI` is named | `getEngineHost()`, `EngineLease`, the `Engine` interface, the part-21 format list, failure classes | know what a session, a scene or a store is |
 | 2 model | the `Object3D` tree a model is, and everything that mutates it (`batchedEdit.js`), picks in it, or disposes it | builders, `decorateShareModel`, refs (`e`/`o`/`n`), `disposeModelRoot`, the load events a root emits | import a renderer, a camera rig or a canvas. A camera it needs is handed in (`ResidencyController`'s `getCamera`) |
 | 3 loader | one load: download, OPFS staging, format sniff, parse, cache hit, the idle GLB writer, the load report | `load(source, ctx)`, `LoadReporter`, the artifact codecs | see a viewer or a store |
-| 4 session | one open model for the life of its tab entry: its load job, its leases, its root, its per-model state, its selection, its reporter | `ModelSession`, `ModelSessionHost`, the per-model state fields | see a viewer or a store; touch the DOM |
+| 4 session | one open model for the life of its tab entry: its load job, its leases, its root, its per-model state, its selection, its reporter, its edit log (§4.5). The workspace's projects and model refs and their local persistence (`src/workspace/`) | `ModelSession`, `ModelSessionHost`, the per-model state fields, the edit log's ops; `workspace/persistence.ts`, `workspace/modelPath.ts` | see a viewer or a store; touch the DOM (`workspace/persistence.ts` reads `localStorage` at call time, inside `try`, so it answers its empty defaults under Node) |
 | 5 viewer | the page's canvas and WebGL context, camera, render loop, look, picking machinery, clip planes | `ShareViewer#attach(root)` / `#detach(root)`, view state | own an engine, a model's lifetime, or per-model state |
 | 6 ui | React, the zustand store, routing, the binder, analytics wiring, the assistant's tools | — | — |
 
@@ -215,6 +225,36 @@ Two splits, both cut and paste:
   session module that patched three's prototypes when imported would
   change what every later test in that Jest file exercises.
 
+**`src/workspace/` (2 files today) and `src/viewer/edit/` (5, from #2346)**
+
+| From | To | Files |
+|---|---|---|
+| `src/workspace/` | session, where it is (2) | `modelPath.ts`, `persistence.ts`. Not moved: a directory of its own in layer 4, beside `src/session/` (§5). Decided by the owner on 2026-11-24 |
+| `src/viewer/edit/` | `src/session/edit/` (5) | `globalId.js`, `editRefs.js`, `editOps.js`, `editLog.js`, `editApply.js`, with their tests and the two fixtures (`edit.fixture.js`, `editBackend.fixture.js`). From #2346, merged 2026-11-24 (`87625ffb`); not in §3's counts, which are on `7cbc995d` |
+
+**The edit layers** (agreed with the create-t300 session, 2026-11-24;
+[model-edit.md](../../new/model-edit.md) §3):
+
+- *model:* `batchedEdit.js` and `batchedInstanceTables.js`, with the
+  other `batched*.js` (the viewer table above), and the L2 `EditBackend`
+  adapter over `batchedEdit.js` (#1917) when it is written. They mutate a
+  loaded batch, which is the model's.
+- *session:* the op log and its applier, `session/edit/`: the log, its
+  cursor, the refs it records, and the pure apply over an `EditBackend`.
+  The session drives the backend; the model never sees the log.
+- *UI:* `store/EditSlice.js` (#2346) becomes a projection of the bound
+  session's log at 3a (§4.5).
+
+**Their imports.** Read with `git grep` on `d8542e42`:
+`workspace/persistence.ts` imports `./modelPath` and nothing else, and
+`modelPath.ts` imports nothing. The importers are
+`Containers/ProjectsDrawer.jsx`, `Containers/TopBar.jsx` and
+`store/WorkspaceSlice.js`, all UI. Zoned in the session layer,
+`src/workspace/` makes no upward import, so §3's counts and the
+allowlist do not change. In `session/edit/`, read on main at
+`87625ffb`, `editRefs.js` imports `viewer/visibilityRefs.js`, which M1
+moves to the model, so downward; the other files import only each other.
+
 **`viewer/tools/` is a UI surface.** Its 16 files are the assistant's
 tool providers. Eight of them import the UI (the store, the
 selection-hash writer, `Components/Camera`, `Components/Residency`,
@@ -288,7 +328,9 @@ sign-out. It is called by Clear cache only
 (`ProfileControl.jsx:416`, `clearLocalCacheReleasingEngines`).
 
 **After the mechanical move** (§7): **55 in 31 files** after M1, **19 in
-15 files** after M2. The 19 are the allowlist the plan works off. The
+15 files** after M2. The 19 are the allowlist the plan works off.
+`src/workspace/` and #2346's `session/edit/` add nothing to either
+count (§2.2). The
 last column is the slice that deletes the entry. Entries 15 and 16 are
 not among today's 79: moving `modelSession.js` into its layer is what
 makes its store imports upward.
@@ -392,6 +434,36 @@ engine.capabilities                 // {openStream, openFromIndex, asyncPump, pr
   sites move onto `Engine`.
 - **A caller never branches on kind.** `lease.kind` is the host's
   bookkeeping, for the budget and the tiers.
+- **The engine is read-only** (agreed with the create-t300 session,
+  2026-11-24). No `Engine` call writes during a session: every read
+  answers for the file as written (workspace-sessions.md §3). An edit
+  mutates only the model, through `model/batchedEdit.js`
+  ([model-edit.md](../../new/model-edit.md) §6.2), and the session keeps
+  the log of it (§4.5). Exporting an edited model, through Conway's
+  splice writer ([create-engine.md](../../new/create-engine.md) Part B),
+  is a separate writer module beside the engine in `src/engine/`, not an
+  `Engine` method. That keeps the read interface to what every
+  implementation, `MeshEngine` included, can answer (§8, "`Engine` could
+  grow").
+- **A GlobalId lookup is a read, and not `SearchIndex`'s.** Since #2346
+  (merged 2026-11-24, `87625ffb`), `g<GlobalId>` is the only IFC ref an
+  op may carry, for a source element and for one the log created, and
+  `e<expressID>` is refused in an op because a re-export renumbers it
+  (model-edit.md §5; `viewer/edit/editRefs.js`, the module doc). A
+  *source* `g` ref resolves GlobalId → expressID → instances on each
+  load, so the model and engine read surface gains that lookup; its name
+  is chosen when it is built. A *created* element's GlobalId is minted
+  into its op (`viewer/edit/globalId.js#mintGlobalId`) and resolved from
+  the log's own applied ops, not from the source, so the lookup and
+  #2347 are for source refs only. `SearchIndex` is not exact: it
+  lower-cases keys, puts description tokens into `eltsByGlobalId`, and
+  returns the first element of a set (#2347). On a cache hit there is no
+  engine, and today the artifact's spatial tree drops `GlobalId`
+  (`loader/bldrsSpatialTree.js#serializeNode`), so the lookup finds
+  nothing there. **Depends on #2347**, decided by the owner on
+  2026-11-24: write `GlobalId` into the cached artifact's spatial tree
+  and bump the artifact schema, so the lookup answers on a cache hit
+  too. The create-t300 session implements #2347.
 
 **The implementations.**
 
@@ -404,13 +476,34 @@ engine.capabilities                 // {openStream, openFromIndex, asyncPump, pr
 
 **The rename.** `EngineSession` → **`WorkerEngine`**
 (`engine/WorkerEngine.js`). The owner's reason: "bc it's on a Worker
-thread". After it, "session" in code means `ModelSession` only.
+thread". It supersedes the `ModelEngine` that
+[workspace-sessions.md](../../new/workspace-sessions.md) §2 proposed.
 
 - It touches 14 production files, 21 test files and 7 docs, 178 mentions.
   `spawnEngineSession` → `spawnWorkerEngine`; `SESSION_CLOSED` →
   `ENGINE_CLOSED`; the model handle's `ifcAPI.engineSession` becomes
   `model.engine`. The protocol's `epoch` and every message are unchanged,
   so a cached `Engine.worker.js` from before the rename still works.
+
+**Session names** (owner, 2026-11-24, decision 11 of
+in-app-model-switch.md §0). No class is a bare `Session`. Every session
+class is qualified:
+
+- **`ModelSession`**: one open model's load, lease, scene root and
+  per-model state (§4.5). This doc's subject.
+- **`WorkspaceSession`**: the user's document: its conversation, the
+  model versions it pins, their placements, one op log per model, and
+  its view ([workspace-sessions.md](../../new/workspace-sessions.md) §4).
+  The owner's reason: "to highlight that it comes from a workspace with
+  multiple projects". Not built. When it is, it sits in layer 4 with
+  `src/workspace/` (§2.2).
+
+In prose and in UI copy, a bare "session" means the user's document, the
+`WorkspaceSession`, as workspace-sessions.md uses it. This doc was
+written before that rule and says "session" for `ModelSession`
+throughout, because the `WorkspaceSession` is outside its scope; read it
+that way. New code comments, docs and UI copy follow the rule. The
+"session layer" is layer 4, which holds both.
 
 **The in-process fallback stays a `WorkerEngine`.** It is a worker engine
 without the thread, and `kind: 'inProcess'` is what records where it
@@ -858,7 +951,7 @@ class ModelState {
 }
 
 // session/ModelSession.js
-session.id, session.modelKey, session.loadState
+session.id, session.modelKey, session.path, session.loadState
 session.state                       // ModelState: the truth for this model's fields
 session.root                        // Group
 session.viewState                   // {camera, planes} or null; written at detach
@@ -868,14 +961,23 @@ session.load(source) → Promise      // one run: makes the LoadJob, the reporte
 session.ensureEngine() → Promise<EngineLease>     // rehydrate, engine-worker.md §5.3
 session.on(event, cb)               // 'indexed' | 'firstMesh' | 'ready' | 'failed' | 'engineEvicted' | 'engineRehydrated' | 'closing' | 'closed'
 session.dropScene()                 // dormant: emit 'closing'; abort; release every lease; dispose the root; keep the state
+session.reload({keepState}) → Promise   // dropScene() then load(source) on the same session (§4.6)
+session.edits                       // the edit log: appliedOps, cursor, inconsistent (below; from 3a)
 session.close()                     // emit 'closing'; abort; release every lease; dispose the root; drop everything
 
 // session/ModelSessionHost.js: one for the page
 getModelSessionHost()
-host.open(modelKey) → ModelSession  // the same model → the active session; else leave the active one,
-                                    //   then hold the scene count (below) before the new load starts
+host.open(modelKey, {path}) → ModelSession   // the same model → the active session; else leave the active one,
+                                    //   then hold the scene count (below) before the new load starts.
+                                    //   path: the in-app route it was opened from, recorded on a new
+                                    //   session as session.path (§4.5a); null for a headless open
 host.active
 host.leave(session)                 // close, or keep in the background (EngineHost#mayKeepInBackground)
+
+// What the ProjectsDrawer consumes (3b; slice 4 adds the dormant and paused states)
+host.sessions() → [{modelKey, path, loadState}]   // read-only; path is session.path, given to open()
+host.subscribe(cb) → unsubscribe                  // cb() when the list or a loadState changes
+host.open(modelKey, {path}) / host.close(modelKey) / host.foreground(modelKey)
 ```
 
 - **The session's state is the truth.** A `LoadJob`'s `set(partial)`
@@ -942,6 +1044,41 @@ host.leave(session)                 // close, or keep in the background (EngineH
   way, which is the selection restore #2019 still owes. #2247's static
   test widens: outside `modelProjection.js` nothing calls
   `useStore.setState` with a per-model key from a load path.
+- **One op log per `ModelSession`** (agreed with the create-t300
+  session, 2026-11-24). From slice 3a the session owns its model's edit
+  log, in `session/edit/` (§2.2): `appliedOps`, the cursor and the
+  inconsistent flag that the applier's fail-stop sets
+  ([model-edit.md](../../new/model-edit.md) L1). `store/EditSlice.js`
+  becomes a projection of `session.edits`, the way the per-model fields
+  are projected above, so a background session keeps its log. The
+  `WorkspaceSession` persists that log as `ops/<model-key>.jsonl`
+  (workspace-sessions.md §4); the engine never sees it (§4.1).
+- **The drawer's surface** (agreed with the Conversational CAD session,
+  2026-11-24; it owns the drawer UI). The API block above: a read-only
+  list of the model sessions with their key, the in-app path each was
+  opened from, and its load state, a subscription to that list, and
+  `open`, `close` and `foreground` by key.
+  - The label is the drawer's: `labelForModelPath(path)`
+    (`utils/modelDisplayName.js`, `src/app/` after M2), which is UI, so
+    the list carries the path and not a label. The path is the one the
+    session was opened with, never rebuilt from the key (§4.5a).
+  - **The path comes in at creation.** Since nothing maps a key back to
+    a path, `open` takes both: `host.open(modelKey, {path})`. CadView
+    passes the route it is opening,
+    `modelPathFromPathname(location.pathname)`, the value the drawer
+    and the TopBar already compute (`ProjectsDrawer.jsx:159–161`,
+    `TopBar.jsx:75`). A new session records it as `session.path`. An
+    `open` that finds the session already held keeps the path it has:
+    the element segments are stripped, so a selection does not change
+    it.
+  - `open(modelKey, {path})` is `ModelSessionHost#open`: it finds a
+    session the host holds, or makes one. A model the drawer has only
+    as a stored path opens by route, as today, and the route gives the
+    key and the path.
+  - Once background sessions land (3b), the drawer's `workspaceCapture`
+    workaround (`workspace/persistence.ts#loadWorkspaceCapture`, a
+    localStorage entry with a 10-minute TTL, kept there so that an armed
+    capture survives a page reload) can retire.
 - **The session host is the page's, not CadView's.** #2247 keeps a
   `ModelSessionHost` per CadView and closes its session at unmount. A
   background session has to outlive a CadView: an in-app open across
@@ -1010,6 +1147,76 @@ host.leave(session)                 // close, or keep in the background (EngineH
   `limits()` is `engine/engineBudget.js`'s, where the two numbers sit
   side by side; the engine host does nothing with `maxScenes`.
 
+### 4.5a The model key
+
+How a model is named in code. Agreed with the Conversational CAD session
+on 2026-11-24; its verified call sites are on #2315
+([comment](https://github.com/bldrs-ai/Share/issues/2315#issuecomment-7146446811),
+and the owner's resolution in
+[the next](https://github.com/bldrs-ai/Share/issues/2315#issuecomment-7146780137)).
+Where that comment and this section differ, this section was checked
+against the code on `d8542e42`.
+
+- **The key.** `ModelSession.modelKey` is
+  `routes/modelIdentity.ts#modelIdentity(modelPath, installPrefix)`.
+  CadView opens a session with it: `sessionHost.open(modelIdentity(modelPath,
+  installPrefix))` (`CadView.jsx:2598`). From 3a the call also passes the
+  in-app path, `open(modelKey, {path})` (§4.5), because the key cannot
+  give it back. A top-level load passes the same string to
+  `EngineHost#acquire` as its `modelKey` (§4.2).
+- **One way only.** The in-app path is parsed (`routes/routes.ts#handleRoute`,
+  `routes/github.ts`), then `modelIdentity` gives the key. **Nothing goes
+  from a key back to a path.** The drawer keeps its in-app
+  `WorkspaceModelRef.path` (`workspace/persistence.ts:15`) as the record
+  and derives the key from it when it needs one.
+- **Which field gives the key:** the first that is set of `downloadUrl`,
+  `srcUrl`, `gitpath`, and `${installPrefix}${filepath}`
+  (`modelIdentity.ts:21–24`). Every parsed route sets `downloadUrl`, so the
+  last three serve a bare `{filepath}` model path. Run on `d8542e42`:
+  - *GitHub:* `https://github.com/<org>/<repo>/<branch>/<file>`
+    (`github.ts:24`), not a `raw.githubusercontent.com` URL. It names the
+    ref, so one file on two branches is two keys, on purpose: the two
+    refs can hold two different files.
+  - *Hosted file and local upload:* `processFile` resolves the file
+    against the page's origin (`routes.ts:103`). For an upload,
+    `/share/v/local-only/<uuid>.ifc`, the key is
+    `<origin>/<uuid>.ifc`: the upload's OPFS storage id. It comes from
+    `downloadUrl`, not from the `filepath` fallback.
+  - *Drive:* built from the file id. *A generic `/u` URL:* the URL.
+  - *Bare `{filepath}`:* `${installPrefix}${filepath}`, with nothing
+    stripped. It is the one branch that keeps element segments if a
+    caller leaves them on: `{filepath: '/index.ifc/81/621'}` keys as
+    `/share/index.ifc/81/621`. The parsed branches split them off into
+    `eltPath` at the extension.
+- **The key is internal.** It is never a label: the drawer and the
+  TopBar label a model with `utils/modelDisplayName.js#labelForModelPath`.
+  It is never sent to telemetry unless the model is public, because a
+  GitHub key names the org, repo, branch and path, and an upload's names
+  the device's storage id (CLAUDE.md's privacy rule). The precedent is
+  `feedback/feedbackView.js:67`, which sends `modelIdentity(route)` as
+  `ref` only when `isPublic`.
+- **Not the document's key.** workspace-sessions.md §4's `key` is short
+  and local to one `WorkspaceSession` (`A`, `B`). It names a model in
+  that document's refs and op-log file names, and maps to a model and a
+  pinned version, never to this URL.
+- **The tripwire** lands with 3a (#2326), which keys the page-level
+  session host by it, and 3b's drawer surface (#2327) relies on it.
+  `routes/modelIdentity.test.ts` gains:
+
+  ```js
+  modelIdentity(parse('/share/v/gh/o/r/main/file.ifc'))
+    === modelIdentity(parse(modelPathFromPathname('/share/v/gh/o/r/main/file.ifc/88/111/199961')))
+  ```
+
+  and the same for `/share/v/local-only/<uuid>.ifc` and for a bare
+  `{filepath}`. `parse` is the app's route parse (`processGithubParams`
+  and `processFile`, as the file's existing tests call them). It stops a
+  selection's element segments from minting a phantom model, the
+  drawer bug that `workspace/modelPath.ts`'s comment describes. The three
+  legs pass today. Break-it: the bare-`filepath` leg goes red with
+  `modelPathFromPathname` left out; the two parsed legs go red with the
+  `eltPath` split removed from `processFile` or `processGithubParams`.
+
 ### 4.6 Session ↔ viewer
 
 The viewer takes a root, not a session. The binder (UI) makes the calls.
@@ -1066,6 +1273,19 @@ disposeModelRoot(root)                   // geometries (their BVHs, a deferred b
   in a scene. A load that cannot be stopped (a mesh parse) and returns
   after the close finds its run not current, adds nothing, and disposes
   what it built (§4.3).
+- **`session.reload({keepState})` rebuilds a scene without a page
+  reload** (agreed with the create-t300 session, 2026-11-24). It is
+  `dropScene()` followed by `load(source)` on the same session: emit
+  `closing` (the binder detaches), abort, release every lease, dispose
+  the root's content; then acquire a new lease and load again from the
+  same immutable source into the same root, and the binder attaches it
+  on `ready`. The session, its key and, with `keepState`, its `state`
+  and `viewState` stay; without it the state goes back to its defaults.
+  Its first user is create's replay (model-edit.md L3, #1918): when the
+  edit log fail-stops, the scene is rebuilt from the source and
+  `appliedOps` replayed over it. Without `reload` that recovery is a full
+  page reload. 2b builds the viewer half (detach, `disposeModelRoot`,
+  attach of a refilled root); slice 4 builds the method, on `dropScene()`.
 
 ### 4.7 `whenEntryFree`: the OPFS ordering contract
 
@@ -1172,6 +1392,7 @@ headless tool surface as the first thing that would want it.
 | CadView unmount, none follows | `host.leave(active)`: closed at cap 1, kept at cap N | as the row for that cap | as that row | disposed |
 | StrictMode's effect replay | untouched | not detached: the unbind is deferred a microtask and cancelled by the rebind | untouched | not rebuilt (ref-counted the same way) |
 | WebGL context lost and restored | untouched | kept; three re-uploads on the next paint | untouched | the context's own things rebuilt (§8) |
+| Reload (`session.reload`, from slice 4) | every lease released, then a new one for the same source | detached, content disposed, refilled, re-attached | kept with `keepState`; else defaults | untouched |
 | Out-of-memory retry | the failed lease released, then a new one | cleared by the loader, kept | kept | untouched |
 | Load aborted | the loader releases what it acquired; `session.close()` releases the rest | what the run added is removed | the run's writes stop | untouched |
 | Clear cache | `host.closeAll()`, then the page reloads | — | — | — |
@@ -1193,7 +1414,7 @@ const LAYERS = [
   ['engine', ['engine']],
   ['model', ['model']],
   ['loader', ['loader']],
-  ['session', ['session']],
+  ['session', ['session', 'workspace']],
   ['viewer', ['viewer']],
 ]
 ```
@@ -1207,6 +1428,16 @@ const LAYERS = [
     './FeatureFlags.js', './Filetype.js', './engine'],
   message: 'layering (design/tracks/open-t200/layering.md): engine may import only base, engine'}
 ```
+
+**`src/workspace/` is a second session directory** (§2.2). Listing it
+under `session` gives it the session zone, and lets `src/session/` and
+`src/workspace/` import each other. It needs no allowlist entry: its one
+import is its own `./modelPath`, and its importers are UI. Without it in
+the table, `src/workspace/` would count as UI, and the first
+`src/session/` file to import it (the `WorkspaceSession`, or the drawer's
+surface reading a stored path) would be an upward import with an entry
+it should not need. `session/edit/` is under `src/session/` and needs no
+line of its own.
 
 The UI is never listed. It is whatever is left, so a directory nobody
 thought of (`src/app/`, a new feature folder, a root `.jsx`) is banned
@@ -1262,7 +1493,9 @@ fails.
    through the repo's real config, as `src/assist/importBoundary.test.js`
    does for the Assist fence: an engine file importing the loader is one
    error with the layering message; a model file importing the viewer is
-   one; a loader file importing the model is none; an allowlisted pair is
+   one; a `src/workspace/` file importing the store is one; a
+   `src/session/` file importing `src/workspace/` is none; a loader file
+   importing the model is none; an allowlisted pair is
    none; the same file importing a second upward module is one. A rule
    that silently stopped firing would otherwise look like a codebase that
    obeys it.
@@ -1379,7 +1612,7 @@ table.
 
 | Slice | What | Allowlist | Neutral or flag | Size |
 |---|---|---|---|---|
-| M1 | move the model, the engine helpers and the Conway loader; the lint rule | 79 → 55 | neutral | 63 files moved, no logic lines |
+| M1 | move the model, the engine helpers and the Conway loader; `viewer/edit/` to the session; the lint rule | 79 → 55 | neutral | 63 files moved (68 with #2346's `viewer/edit/`), no logic lines |
 | M2 | `viewer/tools/` → `src/tools/`; the eight app-level leaf files | 55 → 19 | neutral | 26 files moved |
 | V | delete the `?view=` rules stack | 19 → 17 | **no flag; three stated changes** (below) | about −500 lines, tests included |
 | 1a | the `Engine` interface; `EngineSession` → `WorkerEngine`; `ConwayEngine`; one parse path; the Conway import rule | 17 → 16 | **no flag; the kill-switch path changes** (below) | ~1,200 + the rename |
@@ -1409,7 +1642,8 @@ slices around it shift by six if it lands earlier.
   `viewer/`, and `Components/Properties/propertyTable.js`); the three
   Conway load files and `export/glbGzip.js` into `src/loader/`;
   `loader/glbLog.js` to `utils/`; `Containers/modelSession.js` to
-  `src/session/`; the two splits of §2.2 and `sizeClass` to `utils/`;
+  `src/session/`; `viewer/edit/` (#2346's op log and applier, on main) to
+  `src/session/edit/`; the two splits of §2.2 and `sizeClass` to `utils/`;
   `tools/lint/layers.cjs`, the allowlist, `checkLayerAllowlist.mjs`,
   `src/layerBoundary.test.js`; the headless static guard (§6).
 - **Removes:** 26 of today's 79, and exposes 2 (`modelSession.js`'s
@@ -1428,6 +1662,19 @@ slices around it shift by six if it lands earlier.
   the lines cut and the lines pasted. Every test passes with only its
   paths changed; no assertion changes. `bun run build-prod` and the
   Playwright suite run before the flip to ready, as for any PR.
+- **`batchedEditGuard.test.js` names files by path** (model-edit.md
+  §6.2). Its `ALLOWED` map lists `src/viewer/ifc/batchedEdit.js`,
+  `batchedInstanceTables.js`, `batchedGeometryCapacity.js`, the builders
+  and `buildBatchedConwayModel.js`, which M1 moves to `src/model/`; a
+  path left behind makes the guard flag the moved file as a mutator
+  outside the API. `viewer/display/colorMode.js` and
+  `viewer/three/renderDemandHooks.js` stay where they are.
+  `decorateBatchMeshes` (`buildBatchedConwayModel.js`) moves whole and
+  unchanged: the guard allowlists its file as the one place that installs
+  the side tables, and `batchedEdit.test.js` imports it.
+- **One docstring:** `modelSession.js:221` calls the key "routes/modelIdentity.js's
+  key"; the module is `modelIdentity.ts`. M1 moves the file and fixes
+  the line, which this docs PR left alone so as not to start the full CI.
 - **Tests:** `layerBoundary.test.js` (§5). Break-it: empty the allowlist
   and `bun run lint` reports the 55; add an import of the viewer to a
   model file and it reports one.
@@ -1733,13 +1980,19 @@ rename what Share calls the thing.
   onto it); the isolator's `statePort`; `ShareIfc`'s registry filled at
   attach; window handlers bound by the caller at attach. A switch still
   builds a new viewer, then attaches the new session's root.
+- **For `ModelSession#reload`** (§4.6), which slice 4 builds: detach,
+  `disposeModelRoot` of the root's content, and an attach of the same
+  root once it is refilled, with no viewer rebuilt between them.
 - **Removes:** entry 10.
 - **Neutral.**
 - **Tests:**
   - *Unit:* `disposeModelRoot` disposes every geometry, material and
     texture under a root and nothing outside it (a second root's stay);
     detach then attach restores the camera, planes, hidden and selected
-    sets exactly; a splat root's `view.attach` runs once per attach.
+    sets exactly; a splat root's `view.attach` runs once per attach;
+    detaching a root, disposing its content, refilling it and attaching
+    it again leaves one root in the scene and the camera where it was
+    (the viewer half of `reload`).
   - *E2E, unchanged:* the memory, marker, cut-plane, isolation and
     splat specs.
 - **Rollback:** revert.
@@ -1775,8 +2028,29 @@ A → B equals a fresh page's B.
   current writes nothing) and `bldrsElementProperties.js` (its alert
   becomes a `report` call the UI shows); `cacheWriteOwner`,
   `loadingUiOwner` and `pageHost` go; the signature flip; the headless
-  run un-skipped.
+  run un-skipped; `session.edits`, the session's edit log (`appliedOps`,
+  the cursor, the inconsistent flag; §4.5), with `store/EditSlice.js` as
+  its projection.
 - **Removes:** entries 11–16. The allowlist is then entry 19 alone.
+- **Notes, agreed with the Conversational CAD session (2026-11-24):**
+  - *The per-model guard is opt-in.* Slices declare their per-model
+    fields (`store/modelState.js` composes `ifcModelState()`,
+    `navTreeModelState()` and `browserModelState()`), and only declared
+    fields are projected and reset. `WorkspaceSlice`'s fields (the
+    projects, the ungrouped models, the drawer's width and expanded
+    rows, `workspaceCapture`) are per workspace, not per model: they stay
+    out of `modelStateDefaults()` and survive a switch.
+  - *#1704 deletes fields.* It removes `selectedAnchorIds` and
+    `setSelectedAnchorIds` from `NavTreeSlice`, folding the anchor set
+    back into `selectedElements`
+    ([#1704 comment](https://github.com/bldrs-ai/Share/issues/1704#issuecomment-7146454729)).
+    3a does not migrate them into per-model state. If #1704 has not
+    landed when 3a starts, 3a leaves them where they are.
+  - *The key* is `modelIdentity` (§4.5a), and 3a adds its tripwire.
+  - *The path* comes in with the key: `ModelSessionHost#open(modelKey,
+    {path})`, and CadView's call (`CadView.jsx:2598`) passes
+    `modelPathFromPathname(location.pathname)`. 3b's drawer list reads
+    it as `session.path`.
 - **Neutral at cap 1.** The store holds what it held, written through
   one more function.
 - **Tests:**
@@ -1798,6 +2072,15 @@ A → B equals a fresh page's B.
   - *Static:* no file under `src/loader`, `src/session`, `src/model` or
     `src/engine` imports `src/store` (that is the lint rule with the
     entries gone).
+  - *Unit, the key (§4.5a):* the tripwire in
+    `routes/modelIdentity.test.ts`, three legs (GitHub, `local-only`
+    upload, bare `filepath`).
+  - *Unit, the path:* `open(key, {path})` records `session.path`; a
+    second `open` of the same key from the same route with element
+    segments keeps it (red with `path` not passed through: `null`).
+  - *Unit, the edit log:* an op applied in A, then a bind of B, then a
+    bind of A again shows A's `appliedOps` and cursor in `EditSlice`,
+    and B's log is empty (red with the log left in the store).
   - *Headless:* §6's run.
   - *E2E, unchanged:* everything. The remount legs of
     `modelSwitchMemory.spec.ts` (`/v/u` ↔ `/v/p`) are the ones that
@@ -1835,6 +2118,13 @@ background one before the new load acquires. Without it a mesh model,
 which holds no lease, is closed by nothing, and ten switches between
 GLBs keep ten scenes.
 
+A third: the drawer's surface (§4.5, "The drawer's surface"):
+`ModelSessionHost#sessions()` and `#subscribe`, and `open`, `close` and
+`foreground` by key, which the Conversational CAD session's drawer
+stories consume. It is built here because before cap N the list holds
+one session; the drawer UI is theirs. With it, the drawer's
+`workspaceCapture` workaround can retire.
+
 - **Tests,** beside that slice's:
   - with A in the background and held at its pump, releasing it
     assembles its batches and the foreground `RenderDemand` records no
@@ -1853,6 +2143,10 @@ GLBs keep ten scenes.
     lease is never evicted); a ready session with an artifact is chosen
     before one still loading, whichever was foregrounded last; the
     active session is never chosen;
+  - *Unit, the drawer's surface:* opening A then B lists both with the
+    paths they were opened with and their load states, and a subscriber
+    is called once per change; `close(A)` removes A and releases its
+    leases; `foreground(A)` makes A active without a new load;
   - *E2E, scenes stay at N:* with the test override at 2, four models
     opened in turn, a GLB among them: after each open the dev hook's
     session snapshot lists at most two sessions with a scene, and the
@@ -1894,6 +2188,18 @@ the tests hold them apart:
 
 With `?feature=disableSessionEviction` the over-count step is 3b's
 close again.
+
+Two more things land here:
+
+- **`ModelSession#reload({keepState})`** (§4.6), on `dropScene()` and
+  `load(source)`. Its first user is create's replay (L3, #1918). *Unit:*
+  a reload of a ready IFC session leaves one lease, a refilled root and,
+  with `keepState`, `state.all()` equal to a copy taken before (red with
+  `close()` in place of `dropScene()`: the session is gone); the binder
+  detaches before the dispose and attaches after `ready`.
+- **The drawer's list gains `dormant` and `paused`** as load states, so
+  the drawer can show a model that reopens from its cache hit and a
+  background load that will resume.
 
 
 ## 8. Risks and hard parts
@@ -2042,6 +2348,12 @@ All six are settled.
    console cleanup soon; that work closes it, and this redesign does not
    tag log lines by session.
 
+**Later the same day.** Decision 11 named the session classes (§4.1,
+"Session names"): no bare `Session` class, `ModelSession` and
+`WorkspaceSession`, and a bare "session" in prose and UI copy is the
+user's document. The owner also put `src/workspace/` in the session
+layer (§2.2, §5) and decided #2347 for the GlobalId lookup (§4.1).
+
 
 ## 10. Evidence status
 
@@ -2076,6 +2388,17 @@ loader's import of Conway's logger are none; a dynamic `import()` outside
 `ShareIfcManager.js`'s empty `parser`, three 0.187's `dispose` and
 context-restore paths, `FeatureFlags.js:529`, `utils/location.js:9`,
 `privacy/analytics.js:56`.
+
+**Read from code, at `d8542e42`, for §2.2, §4.5a and M1:**
+`src/workspace/`'s imports and importers (`git grep`); `modelIdentity.ts`,
+`routes.ts#processFile`, `github.ts`; `CadView.jsx:2598`;
+`feedback/feedbackView.js:67`; `store/modelState.js`;
+`batchedEditGuard.test.js`'s allowlist. And `src/viewer/edit/`'s imports
+and model-edit.md §5's ref contract on main at `87625ffb`, after #2346.
+
+**Run:** `modelIdentity` on a GitHub route, a `local-only` upload and a
+bare `filepath`, each with and without element segments (§4.5a's
+values). The tripwire itself is not written; 3a writes it.
 
 **Not run, and a slice has to:**
 

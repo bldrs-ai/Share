@@ -41,6 +41,8 @@ The sub-issues of #2315, in order: the slices of [layering.md](layering.md) §7,
 | [#2327](https://github.com/bldrs-ai/Share/issues/2327) 3b: cap N under `?feature=workspace` | Leave a model loading and come back to it finished. | Background finish and selection restore, desktop and mobile. |
 | [#2328](https://github.com/bldrs-ai/Share/issues/2328) 4: eviction that keeps the session, and rehydrate | Under memory pressure a background model loses its engine and keeps its scene. | The eviction E2E. |
 
+**Sequencing (2026-11-24).** Create's #2346 merged first, the same day. Then M1 and M2, which the owner holds until the other sessions' work settles. Then the Conversational CAD work (`search-320` slice 2, #1704, the TopBar and drawer stories) starts on the new paths.
+
 Planned, with no issue yet (lines on #2315 until picked up):
 
 - the ProjectsDrawer showing each session's state and closing one (`open-205` Phase 1b step 3);
@@ -55,7 +57,8 @@ Planned, with no issue yet (lines on #2315 until picked up):
 
 - [layering.md](layering.md): the layer map and where every file goes, the import graph and its allowlist, the seams, the lint rule, the headless test, the slices, the risks, and the owner's answers.
 - [engine-worker.md](../../new/engine-worker.md): §5.2–§5.5, what `EngineHost` does inside (cap, cost, admission, eviction, rehydrate, Reported Conditions); §5.2a, one viewer for the page; §7 step 8, the engine side of slices 3b and 4.
-- [in-app-model-switch.md](../../new/in-app-model-switch.md): §0, the owner's decision log (decisions 6–10 are this track's); §4.9, sessions as built; §4.10, the CadView split plan.
+- [in-app-model-switch.md](../../new/in-app-model-switch.md): §0, the owner's decision log (decisions 6–11 are this track's); §4.9, sessions as built; §4.10, the CadView split plan.
+- [workspace-sessions.md](../../new/workspace-sessions.md): the user's document, the `WorkspaceSession`, which sits in the session layer with `src/workspace/`; what a bare "session" means (§2).
 - Code at [`3b623a3f`](https://github.com/bldrs-ai/Share/tree/3b623a3fc7140cdf0aa15907ccc6700c88fc6741):
   - [`src/engine/`](https://github.com/bldrs-ai/Share/tree/3b623a3fc7140cdf0aa15907ccc6700c88fc6741/src/engine): the worker, its client (`EngineSession.js`, to be `WorkerEngine`), sources and sidecars;
   - [`src/Containers/modelSession.js`](https://github.com/bldrs-ai/Share/blob/3b623a3fc7140cdf0aa15907ccc6700c88fc6741/src/Containers/modelSession.js): `ModelSession`, `LoadJob`, `ModelSessionHost`;

@@ -4,6 +4,7 @@
 **Date:** 2026-11-18
 **UX requirements:** [design/reqs/workspace.md](../reqs/workspace.md) (what the person sees; this doc is how it is built).
 **Follows:** [reviews/2026-11-18-mvc-core-review-followup.md](reviews/2026-11-18-mvc-core-review-followup.md) §4, which this settles.
+**Reads with:** [layering.md](../tracks/open-t200/layering.md) (Track `open-t200`): the code layers this document lives in, `ModelSession`, `WorkerEngine` and `EngineHost`, and the model key (§4.5a).
 **Epics:** `open-200` (#1657), `assist-310` (#1659), `open-210` (#2192, story #1251); depends on `open-205` (#2011), `create-300` (#1914), `share-200` (#2144).
 
 
@@ -21,12 +22,18 @@ For Project 1 in the UX doc: 2 engine workers (A, B), 3 sessions, and no session
 
 | Term | Means | In code today |
 |---|---|---|
-| **Project** | A named group of models and sessions | `WorkspaceProject` in `src/workspace/persistence.ts` (`{id, label, path}`), models only |
+| **Project** | A named group of models and sessions | `WorkspaceProject` in `src/workspace/persistence.ts` (`{id, name, models}`, each model a `WorkspaceModelRef` `{id, label, path}`), models only |
 | **Model** | A source file (IFC, STEP, GLB, …) the project lists, with its version history | A load route (GitHub path, Drive id, local OPFS name) |
-| **Session** | A conversation thread over some of the project's models: conversation, model refs, placements, op logs, view state | Not built |
-| **Model engine** | The Conway worker for one model | `EngineSession` and `EngineHost` in `src/engine/` ([engine-worker.md](engine-worker.md) §5) |
+| **Session** | A conversation thread over some of the project's models: conversation, model refs, placements, op logs, view state | `WorkspaceSession`, not built |
+| **Model session** | One open model: its load, engine lease, scene root and per-model state | `ModelSession` in `src/Containers/modelSession.js`, moving to `src/session/` ([layering.md](../tracks/open-t200/layering.md) §4.5) |
+| **Model engine** | The Conway worker for one model | `EngineSession` today, to be `WorkerEngine`, leased from `EngineHost` ([layering.md](../tracks/open-t200/layering.md) §4.1, [engine-worker.md](engine-worker.md) §5) |
 
-**A naming collision.** [engine-worker.md](engine-worker.md) calls one model's engine a "session" (`EngineSession`, "budget per session"). In this doc and in the UI, "session" means the user's session. This doc calls the per-model worker the **model engine**. Rename `EngineSession` to `ModelEngine` in the PR that first adds user-session code, so the two never share a word in one file. That rename touches only code and the engine-worker doc's wording, not the protocol.
+**Names (owner, 2026-11-24).** "Session" used to mean three things in nearby docs. Now:
+- **No class is a bare `Session`.** `ModelSession` is one open model. **`WorkspaceSession`** is this doc's session, the user's document. The owner's reason for the name: "to highlight that it comes from a workspace with multiple projects".
+- **A bare "session" in prose and UI copy** means the user's document, the `WorkspaceSession`, as this doc uses it.
+- **`EngineSession` becomes `WorkerEngine`** ([layering.md](../tracks/open-t200/layering.md) §4.1), not `ModelEngine` as this doc first proposed. The rename touches code and docs, not the protocol. This doc keeps "model engine" in prose for one model's engine.
+
+Recorded as decision 11 in [in-app-model-switch.md](in-app-model-switch.md) §0.
 
 
 ## 3. Who owns what
@@ -42,7 +49,7 @@ Project
 
 - **One engine per model identity.** The host keys engines by the model's source and version (the same identity `share-200` pins, §4), and hands out holds. A tab showing A directly is a holder; so is each open session that uses A. Two sessions that pinned different versions of A get two engines.
 - **Holds, then the cap.** An engine with holders is live. [engine-worker.md](engine-worker.md) §5.2's rules then apply unchanged: at most 3 live engines on desktop, a memory budget, pausing background pumps before evicting anything, and LRU eviction among the rest. An engine whose holders are all in the background can be evicted, and reopens from its index sidecar without a re-parse (§5.3, #2085). The engine of the active view is never evicted.
-- **Engines are read-only.** No op reaches the engine. Every engine read (`tree`, `props`, `propertyTables`, …) answers for the file as written. A session's edits are applied over those answers on the page (§6).
+- **Engines are read-only.** No op reaches the engine ([layering.md](../tracks/open-t200/layering.md) §4.1). Every engine read (`tree`, `props`, `propertyTables`, …) answers for the file as written. A session's edits are applied over those answers on the page (§6).
 - **The scene is per view.** Each tab or session view builds its own scene from its engines' geometry. A composite session (S1) builds one scene from two engines. This is where `open-205`'s Phase 2 (#2024) starts: one `IfcAPI` per model (decided 2026-11-01), and the `modelID = 0` hard-coding removed.
 
 
@@ -75,11 +82,11 @@ A session is files, so it can be kept locally first and in a project repository 
 }
 ```
 
-- **`key`** is short and local to the session. It names the model in refs (§5) and in the op-log file name, and it never changes when the model is renamed.
+- **`key`** is short and local to the session. It names the model in refs (§5) and in the op-log file name, and it never changes when the model is renamed. It is not `ModelSession.modelKey`, the model's identity in code (`modelIdentity`: a URL for every parsed route, a bare path for a `{filepath}` model, and internal either way; [layering.md](../tracks/open-t200/layering.md) §4.5a).
 - **`version`** pins what the session was made against. Its format is `share-200`'s version identity ([model-versioning.md](model-versioning.md)), not a new one. A model that moved on since is shown as such (UX: "Resume a session"); the session is never silently re-pointed.
 - **`placement`** is `null` when the model's own coordinates are used; set it only when the person moves a model. IFC georeferencing is applied first, as today (`stampAppliedCoordination`).
 - **`view`** reuses the permalink terms (`#c:`, `#cp:`, `#d:`), so a session's view and a shared link describe a view the same way.
-- **Where it is kept.** Locally first, beside the Tier-1 project list (`workspace/persistence.ts`, #1662). The account-level sync (#1662's Auth0 tier) carries the project and session list only. A conversation is too large for it, so it stays on the device until the conversation store (`assist-t300`) exists. This replaces D10's "per model" key with "per session".
+- **Where it is kept.** Locally first, beside the Tier-1 project list (`workspace/persistence.ts`, #1662). `src/workspace/` is in the session layer of the code, beside `src/session/` ([layering.md](../tracks/open-t200/layering.md) §2.2), and the `WorkspaceSession` goes there too. The account-level sync (#1662's Auth0 tier) carries the project and session list only. A conversation is too large for it, so it stays on the device until the conversation store (`assist-t300`) exists. This replaces D10's "per model" key with "per session".
 - **The manifest.** The MVC-core review's §7.3 `manifest.json` is this file: which models, which versions, which op logs. Its model and version fields are `share-200`'s; this doc only adds the session-level fields.
 
 
@@ -94,7 +101,7 @@ The owner's first sketch gave each session a worker. Decided on 2026-11-18 (§8,
 Give a session a worker when it runs a job that would block the page:
 - comparing or clash-checking two models;
 - folding a long op log;
-- the future writer that turns a session's edits into a new model file (`create-engine.md` §B2). That writer runs next to Conway, so it is more likely a job on the model engine than in a session worker.
+- the future writer that turns a session's edits into a new model file (`create-engine.md` §B2). That writer runs next to Conway, so it is more likely a job beside the model engine than in a session worker. It is a writer module of its own, not one of the engine's read methods ([layering.md](../tracks/open-t200/layering.md) §4.1).
 
 **Decided (§8, 1):** sessions on the page, workers on demand.
 
@@ -125,7 +132,7 @@ Each step is useful on its own and has one owner.
 1. **Op log, keyed by session and model** (`create-300`, #1916). The pure module the follow-up review asked for, with the model key in every op from the start. Unit tests only.
 2. **Session document and local persistence** (`open-200`, extending #1662). `session.json` plus `conversation.jsonl` on the device; no UI yet.
 3. **Sessions in the left nav** (`open-200`; UX "Browse a project's models and sessions"). Start, rename and reopen a session over one model.
-4. **Engines held and shared** (`open-205`, #2031 steps 7–8). Host keyed by model identity; holds from tabs and sessions; the existing cap and eviction.
+4. **Engines held and shared** (`open-205`, #2031 steps 7–8; now the slices of Track `open-t200`, [layering.md](../tracks/open-t200/layering.md) §7). Host keyed by model identity; holds from tabs and sessions; the existing cap and eviction.
 5. **Model-qualified refs** (this doc §6, with model-display-controls.md §6.3). Refs, `refs.js` resolution and the `model.*` tools.
 6. **Several models in one view** (`open-205` Phase 2, #2024, then `open-210`, #1251). Per-model store, `modelID = 0` removed, layers.
 7. **The conversation in the session** (`assist-310`, #1672 and the agent loop #1675). The tray opens on the active session; its messages persist with it.
