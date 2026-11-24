@@ -1,7 +1,7 @@
 import React, {ReactElement} from 'react'
 import {Helmet} from 'react-helmet-async'
 import {Box, Button, Link, Stack, SvgIcon, Typography} from '@mui/material'
-import {Email as EmailIcon, GitHub as GitHubIcon} from '@mui/icons-material'
+import {Email as EmailIcon, GitHub as GitHubIcon, X as XIcon} from '@mui/icons-material'
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
 import {LogoB} from '../Logo/Logo'
@@ -10,6 +10,10 @@ import chooseConsentLevel from '../../privacy/consentChoice'
 import {ABOUT_MISSION, ABOUT_PAGE_TITLE} from './component'
 import ConsentNotice from './ConsentNotice'
 import DiscordIcon from './Discord.svg'
+
+
+/** First of the About dialog's socials (owner, 2026-11-24). */
+export const X_PROFILE_URL = 'https://x.com/bldrs_ai'
 
 
 /**
@@ -204,6 +208,18 @@ function AboutContent() {
       </table>
       <ConsentNotice/>
       <Stack direction='row' justifyContent='center' alignItems='center' spacing={1} sx={{fontSize: '0.9em', opacity: 0.5}}>
+        <Link
+          href={X_PROFILE_URL}
+          target='_blank'
+          rel='noopener'
+          aria-label='Bldrs on X: @bldrs_ai'
+          sx={{display: 'flex', alignItems: 'center', color: 'inherit'}}
+          data-testid='about-social-x'
+        >
+          <XIcon className='icon-share' sx={{marginRight: '0.25em'}}/>{
+            isMobile ? '' : '@bldrs_ai'
+          }
+        </Link>
         <Link
           href='https://discord.gg/9SxguBkFfQ'
           rel='noopener'
