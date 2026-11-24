@@ -7,6 +7,8 @@ import {clearState, homepageSetup, visitHomepageWaitForModel} from '../../tests/
 // A model open that counts as real, so a consenting visitor queues a
 // real_model_open event and a declining one must not (realModelOpen.spec.ts).
 const REAL_MODEL = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc'
+// Also real, and a sample, so Browse only (local-only mode) still opens it.
+const SAMPLE_MODEL = '/share/v/gh/bldrs-ai/test-models/main/pdb/caffeine.pdb'
 
 
 /**
@@ -52,10 +54,11 @@ function wasGranted(commands: unknown[][]): boolean {
  * Open a GitHub-hosted model, which counts as a real model open.
  *
  * @param page Playwright page
+ * @param path the model's route; REAL_MODEL by default
  */
-async function openRealModel(page: Page) {
-  await setupVirtualPathIntercept(page, REAL_MODEL, 'box.ifc')
-  await page.goto(REAL_MODEL, {waitUntil: 'domcontentloaded'})
+async function openRealModel(page: Page, path = REAL_MODEL) {
+  await setupVirtualPathIntercept(page, path, path.split('/').pop() ?? '')
+  await page.goto(path, {waitUntil: 'domcontentloaded'})
   await waitForModelReady(page)
 }
 
@@ -132,7 +135,9 @@ describeMobileAndDesktop('Analytics consent', () => {
     expect(await consentCookie(page)).toBe('1.restricted')
     expect(wasGranted(await gtagCommands(page))).toBe(false)
 
-    await openRealModel(page)
+    // A sample: Browse only refuses other GitHub models (local-only mode,
+    // Open/localOnlyMode.spec.ts), and a sample still counts as a real open.
+    await openRealModel(page, SAMPLE_MODEL)
     await expect(page.getByRole('dialog')).toHaveCount(0)
     const afterReload = await gtagCommands(page)
     expect(wasGranted(afterReload)).toBe(false)

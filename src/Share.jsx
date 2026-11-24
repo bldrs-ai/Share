@@ -2,6 +2,7 @@ import React, {ReactElement, useEffect, useRef} from 'react'
 import {Helmet} from 'react-helmet-async'
 import {useNavigate, useParams} from 'react-router-dom'
 import CadView from './Containers/CadView'
+import LocalOnlyDialog from './Components/Open/LocalOnlyDialog'
 import useConnectionsInit from './connections/useConnectionsInit'
 import useGithubLastModified from './connections/useGithubLastModified'
 import useSignedOutDriveCleanup from './connections/useSignedOutDriveCleanup'
@@ -12,7 +13,8 @@ import debug from './utils/debug'
 import {pageTitleForModel} from './utils/modelDisplayName'
 import {navToDefault} from './utils/navigate'
 import {FilenameParseError} from './Filetype'
-import {isLocalOnlyPath} from './routes/localOnly'
+import {isLocalOnlyLevel, isRemoteModel} from './privacy/localOnlyMode'
+import {isLocalOnlyPath, viewRouteKind} from './routes/localOnly'
 import modelIdentity from './routes/modelIdentity'
 import {UNSUPPORTED_FILE_ALERT, handleRoute} from './routes/routes'
 
@@ -94,6 +96,29 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       if (mp === null) {
         navToDefault(navigate, appPrefix)
         return true
+      }
+      // Local-only mode (privacy/localOnlyMode.js): a visitor who chose
+      // Browse only opens local files and the samples, not models from
+      // GitHub, Drive or a link. This is the backstop for every way such a
+      // route is reached (a shared link, recents, search, the widget API);
+      // the Open dialog and Share gate their own controls too. The refused
+      // link is kept so Open/LocalOnlyDialog can explain and open it if the
+      // visitor raises their level. Returns false like a failed parse: no
+      // repository or share setup for a model that isn't opening.
+      if (isLocalOnlyLevel(useStore.getState().privacyLevel) && isRemoteModel(mp)) {
+        // Recorded only while the address bar still shows the remote route:
+        // the effect runs again with these (stale) params after navToDefault
+        // has moved it to the home model, and that run must not overwrite
+        // the link with the home model's address.
+        const {pathname, search, hash} = window.location
+        if (REMOTE_ROUTE_KINDS.includes(viewRouteKind(pathname))) {
+          useStore.getState().setBlockedRemoteModel({
+            path: `${pathname}${search}${hash}`,
+            source: mp.kind === 'url' ? 'url' : mp.provider,
+          })
+        }
+        navToDefault(navigate, appPrefix)
+        return false
       }
       // "Same model" is `modelIdentity`, the key CadView already uses for
       // per-model state; it reads `downloadUrl`, which every route carries
@@ -204,6 +229,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
         appPrefix={appPrefix}
         pathPrefix={pathPrefix}
       />
+      <LocalOnlyDialog/>
     </>
   )
 }
@@ -222,3 +248,8 @@ function PageTitle({modelPath, modelName, isUploadedFile}) {
     </Helmet>
   )
 }
+
+
+// The view routes that address a model elsewhere (routes/README.md):
+// GitHub, Google Drive, and a web address.
+const REMOTE_ROUTE_KINDS = ['gh', 'g', 'u']

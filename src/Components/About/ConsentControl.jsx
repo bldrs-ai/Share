@@ -6,14 +6,17 @@ import {CONSENT_LEVEL_ORDER, CONSENT_LEVELS} from '../../privacy/consent'
 /*
  * What each level says to the visitor. This is the "informed" part of the
  * consent, so it has to stay true to what the code does at that level
- * (privacy/consent.js, index/ga.js), and to the privacy policy's
- * "Analytics (optional)" section (src/pages/Privacy.jsx and its marketing
- * copy). Change all three together.
+ * (privacy/consent.js, index/ga.js, privacy/localOnlyMode.js), and to the
+ * privacy policy's §1 telemetry paragraphs (src/pages/Privacy.jsx and its
+ * marketing copy). Change all of them together.
  */
 export const CONSENT_COPY = Object.freeze({
   [CONSENT_LEVELS.RESTRICTED]: {
     label: 'Browse only',
-    summary: 'No Google Analytics and no analytics cookies. Error reports still go to our error monitoring.',
+    // What Browse only costs is local-only mode (privacy/localOnlyMode.js).
+    summary:
+      'Files from your computer and the sample models only: no GitHub, Google Drive or links, and no ' +
+      'sharing. No Google Analytics. Error reports still go to our error monitoring.',
   },
   [CONSENT_LEVELS.FUNCTIONAL]: {
     label: 'Functional',

@@ -17,7 +17,7 @@ by side at the same size.
 
 | Level (cookie value) | Label | What runs |
 |---|---|---|
-| `restricted` | Browse only | No GA: gtag/js is never requested, no `_ga` cookie, none of our GA events. |
+| `restricted` | Browse only | No GA: gtag/js is never requested, no `_ga` cookie, none of our GA events. **Local-only mode** (below): local files and the samples only. |
 | `functional` | Functional | GA with its pseudonymous client id (`_ga`) and our model events (`real_model_open`, …). Analytics only: no ad signal, no Google signals. |
 | `public` | Public sharing | Functional, plus consent to analyzing the content of public models the visitor opens. **Nothing analyzes content yet**; the level exists so the choice is collected before that ships. |
 
@@ -33,10 +33,71 @@ by side at the same size.
 - The visitor changes their choice later by reopening About (logo button,
   or the workspace LogoMenu's About).
 
-Not yet decided, so not built: whether Browse only also gives up features
-(the free quota, public model access). Today it gives up only GA. When that
-changes, the summary copy and the privacy policy change with it, and
-`CONSENT_VERSION` is bumped so everyone is asked again.
+## Local-only mode: what Browse only costs
+
+Owner's call, 2026-11-23, written into the privacy policy: telemetry is
+required for normal operation, and a visitor who refuses gets "a reduced
+local-only mode to allow evaluation of basic viewer capabilities"
+(`src/privacy/localOnlyMode.js`).
+
+| In Browse only | Allowed? |
+|---|---|
+| Files from the visitor's computer (`/v/local-only`) | yes |
+| The hosted demo model (`/v/p/index.ifc`) | yes |
+| The sample models (Open › Samples) | yes: they're GitHub routes, allowed by repo path from `sampleModelRoster.js` (`isSampleModel`) |
+| Any other GitHub model, a Google Drive model, a web-address model (`/v/gh`, `/v/g`, `/v/u`) | no |
+| Save to GitHub | no; the Save dialog's Export tab (a local download) stays |
+| Share | no |
+
+- **Only an explicit Browse only restricts.** An undecided visitor is being
+  asked by the About dialog right then and isn't blocked from the link that
+  brought them; the choice applies to opens after it. A remote model that
+  is already open stays open when the visitor then picks Browse only.
+- **The backstop is the route** (`Share.jsx`'s route effect): a remote
+  route under Browse only falls back to the home model and records the link
+  in the store (`blockedRemoteModel`). That catches every way such a route
+  is reached: a shared link, recents, search, the widget API, the
+  workspace drawer. `Open/LocalOnlyDialog.jsx` says where the model is and
+  offers Privacy settings (About); if the visitor raises their level there,
+  the recorded link opens, and if not, the dialog comes back.
+  - The link is recorded only while the address bar still shows the remote
+    route. The effect runs again with the stale params after the fallback
+    has moved the address bar, and that run would otherwise record the home
+    model as the link to open.
+- **The visible gates:** the Open dialog's GitHub and Google Drive tabs
+  show `Open/LocalOnlyNotice.jsx` instead of their controls, the Save
+  dialog's GitHub tab too (and its Save button is disabled), and Share
+  renders through `GatedAction` (`gated-share-local-only`). All of them
+  point at Privacy settings, and all read the store's `privacyLevel`, which
+  `consentChoice.js` keeps in step with the cookie, so raising the level
+  brings the controls back without a reload.
+- Not gated, because the route catches them: search's paste-a-link, the
+  widget API, Versions, the workspace drawer's stored models.
+
+## Telemetry: where the line is
+
+The policy calls Sentry and GA one "telemetry" (owner's call: events move
+between them during routine refactoring), and draws the line that matters
+by what the data is, not which tool carries it:
+
+- **Always on** (error and reliability reports, legitimate interest): what
+  failed, app and browser versions, the account id if signed in. No
+  cookie, no identifier that follows the browser between visits, never a
+  model's file name, path or contents. Sentry's reports and the
+  client-capability counts (`privacy/clientCapabilities.js`, sent to GA
+  under one shared id) are both on this side.
+- **Consent** (usage metrics): anything that sets a cookie or keeps an id
+  across visits, or measures use: GA proper, `open_cid`, engagement
+  tracking.
+
+So moving an event from Sentry to GA's consented side needs no policy
+change. Moving one the other way must drop anything that identifies the
+browser across visits (`getOpenCidForSentry` already gates the GA client
+id), and must not add storage.
+
+Changing what Browse only allows changes the dialog's summary
+(`ConsentControl.jsx`), the policy's §1 "You may refuse normal operation",
+and `CONSENT_VERSION`, all together.
 
 ## How it's wired
 
@@ -120,7 +181,6 @@ Cancel, then reload, makes no Google request and leaves no `_ga`.
 
 ## Open questions (owner)
 
-- **What Browse only costs.** See above; the copy must say so once it does.
 - **Region split.** The law that requires opt-in is EU/UK/Swiss. Elsewhere
   a notice with the slider preset and always reachable would be enough. A
   Netlify edge function knows the country (`context.geo.country`) without
@@ -134,9 +194,8 @@ Cancel, then reload, makes no Google request and leaves no `_ga`.
   on (model opens by format/source, exports, quota hits), to a Netlify
   function, no identifiers. Would keep the dashboard's core counts whatever
   visitors choose.
-- **Privacy policy text.** Share#2034 rewrites §1 ("Analytics (optional)")
-  in `src/pages/Privacy.jsx` and its marketing twin. Once it merges, the
-  section should say: GA loads only after the visitor picks Functional or
-  Public sharing and presses OK; Browse only (and any other close) loads
-  nothing and is remembered; the choice can be changed from About; GPC is
-  honored as a Browse only default; the client id is pseudonymous.
+- **Privacy policy vs Share#2034.** §1's telemetry text is rewritten here
+  (both copies, 2026-11-23, from the owner's draft). Share#2034 rewrites the
+  same paragraph into "monitoring (always on)" and "Analytics (optional)";
+  whichever merges second reconciles to this one, keeping 2034's §6
+  deletion-request line and its Sentry retention TODO.

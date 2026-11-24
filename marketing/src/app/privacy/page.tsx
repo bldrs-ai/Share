@@ -24,7 +24,7 @@ export default function PrivacyPage() {
         <strong>Effective Date:</strong> January 1, 2022
       </Typography>
       <Typography variant="body2" sx={{opacity: 0.75, mb: 3}}>
-        <strong>Last Updated:</strong> October 23, 2025
+        <strong>Last Updated:</strong> November 23, 2026
       </Typography>
 
       <Typography variant="body1">
@@ -36,9 +36,8 @@ export default function PrivacyPage() {
 
       <Typography variant="h3" component="h2" sx={{mt: 4}}>1. Information We Collect</Typography>
       <Typography variant="body1">
-        Bldrs Share is built to operate <strong>without centralized data storage</strong>.
-        We do not host user content or model data by default. Depending on your
-        configuration:
+        Bldrs Share operates <strong>without centralized model data storage</strong>. We
+        do not upload or host user model data by default. What we do receive:
       </Typography>
       <Typography variant="body1">
         <strong>Authentication data.</strong> When you sign in via Auth0/Google or
@@ -52,9 +51,38 @@ export default function PrivacyPage() {
         We do not scan or store other files from your account.
       </Typography>
       <Typography variant="body1">
-        <strong>Telemetry (optional).</strong> If enabled in a hosted deployment, we
-        may collect anonymized usage metrics (e.g., performance, feature use) to
-        improve reliability and UX.
+        <strong>Telemetry is required by default.</strong> We collect pseudonymous usage
+        metrics (e.g., performance, feature use) to improve reliability and user
+        experience. Telemetry is of two kinds:
+      </Typography>
+      <Typography variant="body1">
+        <strong>Error and reliability reports.</strong> When something fails, the app
+        reports what failed, the app and browser versions and, if you’re signed in, your
+        account ID, to our error-monitoring service (Sentry). Separately, it counts
+        browsers that can’t run part of the app (for example, with no WebGL, or with
+        analytics blocked) by browser family and device type only, sent to Google
+        Analytics under one shared ID rather than yours. None of these reports set
+        cookies, carry an identifier that follows your browser between visits, or
+        include your models’ file names, paths or contents. They are part of operating
+        the service and are always on, on the basis of our legitimate interest in
+        keeping Bldrs Share secure and working.
+      </Typography>
+      <Typography variant="body1">
+        <strong>Usage metrics.</strong> With your consent, we measure visits and feature
+        use, including which kinds of models are opened (format, size, source), with
+        Google Analytics, which sets cookies holding a pseudonymous ID. We do not use
+        them for advertising. Nothing is collected for usage metrics until you choose in
+        the welcome dialog.
+      </Typography>
+      <Typography variant="body1">
+        <strong>You may refuse normal operation</strong> and Bldrs Share will operate in
+        a reduced local-only mode (“Browse only”) to allow evaluation of basic viewer
+        capabilities: you can open files from your computer and the sample models, but
+        not models from GitHub, Google Drive or a web address, and you can’t save to
+        GitHub or share. Error and reliability reports continue in this mode. Browsers
+        that send a Global Privacy Control signal start at Browse only. You can change
+        your choice at any time from the About dialog. If you choose “Public sharing,”
+        we may also analyze the content of public models you open.
       </Typography>
 
       <Typography variant="h3" component="h2" sx={{mt: 4}}>2. Open-Source and Self-Hosted Use</Typography>
@@ -99,7 +127,8 @@ export default function PrivacyPage() {
         request deletion of any stored account metadata (if applicable) by emailing{' '}
         <MuiLink href="mailto:support@bldrs.ai">support@bldrs.ai</MuiLink>. You can
         also use open-source/self-hosted deployments without accounts, subject to
-        your configuration.
+        your configuration. You can change your telemetry choice at any time from
+        the About dialog.
       </Typography>
 
       <Typography variant="h3" component="h2" sx={{mt: 4}}>7. Children&apos;s Privacy</Typography>

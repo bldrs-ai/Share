@@ -1,4 +1,5 @@
 import {updateGaConsent} from '../index/ga'
+import useStore from '../store/useStore'
 import {setConsent} from './analytics'
 import {CONSENT_LEVELS, isConsentDecided} from './consent'
 
@@ -16,6 +17,8 @@ import {CONSENT_LEVELS, isConsentDecided} from './consent'
 export default function chooseConsentLevel(level) {
   setConsent(level)
   updateGaConsent()
+  // The store's mirror, which the local-only gates read (UISlice).
+  useStore.getState().setPrivacyLevel(level)
 }
 
 
