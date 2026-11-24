@@ -378,6 +378,11 @@ describe('assist/selectTransport', () => {
       // The refused attempt leaves nothing behind: one usage report, and the
       // turn stored once, as the user's message and one reply.
       expect(events.filter((e) => e.type === 'usage')).toHaveLength(1)
+      // Told to the host once, after the retry was accepted.
+      const recovered = events.filter((e) => e.type === 'recovered')
+      expect(recovered).toEqual([{type: 'recovered', condition: 'body_resized', tier: 'free',
+        fromBytes: expect.any(Number), toBytes: expect.any(Number)}])
+      expect(recovered[0].toBytes).toBeLessThan(recovered[0].fromBytes)
       expect((await store.load('c1')).slice(before).map((m) => m.role)).toEqual(['user', 'assistant'])
     })
 
@@ -407,6 +412,7 @@ describe('assist/selectTransport', () => {
       const {session, requests, afterFirst} = await afterTierDrop(() => tooLarge('ai_bad_request'))
       const events = await collect(session.send('go on'))
       expect(events.find((e) => e.type === 'error')).toMatchObject({code: 'bad_request', status: 400})
+      expect(events.filter((e) => e.type === 'recovered')).toEqual([])
       expect(requests.length - afterFirst).toBe(1)
     })
 
@@ -419,6 +425,7 @@ describe('assist/selectTransport', () => {
       })
       const events = await collect(session.send('go on'))
       expect(events.find((e) => e.type === 'error')).toMatchObject({code: 'body_too_large', status: 400})
+      expect(events.filter((e) => e.type === 'recovered')).toEqual([])
       expect(requests.length - afterFirst).toBe(2)
     })
 
@@ -428,6 +435,7 @@ describe('assist/selectTransport', () => {
       const {session, requests} = setup({answer: (body) => (bytesOf(body) > FREE_CAP ? tooLarge() : undefined)})
       const events = await collect(session.send('x'.repeat(100_000)))
       expect(events.find((e) => e.type === 'error')).toMatchObject({code: 'body_too_large', status: 400})
+      expect(events.filter((e) => e.type === 'recovered')).toEqual([])
       expect(requests).toHaveLength(1)
     })
 
@@ -435,6 +443,7 @@ describe('assist/selectTransport', () => {
       const {session, requests, afterFirst} = await afterTierDrop(() => tooLarge('ai_body_too_large', 4 * 1048576))
       const events = await collect(session.send('go on'))
       expect(events.find((e) => e.type === 'error')).toMatchObject({code: 'body_too_large'})
+      expect(events.filter((e) => e.type === 'recovered')).toEqual([])
       expect(requests.length - afterFirst).toBe(1)
     })
   })

@@ -282,6 +282,9 @@ function openSession(conversationId: string, opts: AssistOptions): AssistSession
         transport: opts.transport,
         signal: controller.signal,
         budgetFor: stepBudget,
+        onResized: (fromBytes, toBytes, tier) => events.push({
+          type: 'recovered', condition: 'body_resized', fromBytes, toBytes, ...(tier === undefined ? {} : {tier}),
+        }),
       })
     }
 
@@ -593,14 +596,16 @@ function jsonBytes(value: unknown): number {
  * doesn't retry an `AssistError` itself.
  *
  * @param model the transport's model
- * @param hooks the transport (for its cap now), the turn's signal, and the
- *   budget for a cap and system text
+ * @param hooks the transport (for its cap now), the turn's signal, the
+ *   budget for a cap and system text, and what to tell the host on success
  * @return the model, retrying a too-large refusal once
  */
 function retryTooLarge(model: Exclude<LanguageModel, string>, hooks: {
   transport: Transport
   signal: AbortSignal
   budgetFor: (instructions: string, requestCap: number | undefined) => number
+  /** Called once the retry was accepted, never when it failed (a failed one is the turn's error). */
+  onResized: (fromBytes: number, toBytes: number, tier: string | undefined) => void
 }): LanguageModel {
   return wrapLanguageModel({
     model,
@@ -627,7 +632,10 @@ function retryTooLarge(model: Exclude<LanguageModel, string>, hooks: {
           if (!bounded || jsonBytes(bounded) >= jsonBytes(rest)) {
             throw refusal
           }
-          return await inner.doStream({...params, prompt: [...system, ...bounded] as unknown as typeof params.prompt})
+          const retried = await inner.doStream({...params, prompt: [...system, ...bounded] as unknown as typeof params.prompt})
+          // Reported only now that the retry was accepted: one failure, one event.
+          hooks.onResized(jsonBytes(rest), jsonBytes(bounded), classifyError(refusal).tier)
+          return retried
         }
       },
     },

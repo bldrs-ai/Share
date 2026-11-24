@@ -62,6 +62,7 @@ import {
 } from './assistState'
 import {pausedNoticeText} from './pausedNotice'
 import {reportAssistCondition} from './reportAssistCondition'
+import {reportAssistRecovery} from './reportAssistRecovery'
 import {runningLabel} from './taskLabels'
 import 'react-chat-elements/dist/main.css'
 import './chat-bubbles.css'
@@ -570,6 +571,11 @@ async function runTurn({text, turn, conversationId}) {
           // (`model_unavailable`). Theirs to change, not ours to fix, so no
           // report; the bubble says where.
           setMessages((prev) => [...prev, textMessage('error', PICKED_MODEL_UNAVAILABLE_MESSAGE)])
+          continue
+        }
+        if (event.type === 'recovered') {
+          // A fallback that worked: counted in GA, nothing for the user to see.
+          reportAssistRecovery(event)
           continue
         }
         if (event.type === 'error' && event.code === 'unavailable') {

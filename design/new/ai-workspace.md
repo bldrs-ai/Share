@@ -836,7 +836,9 @@ Per-message metering would multiply that write rate by roughly 100.
     (`loop.ts` `retryTooLarge`, Share#2307): a tier can drop between two requests
     (Pro to Free, or the relay briefly serving Free), leaving the cached cap
     stale. It is a model wrapper, so the SDK sees one call: no second step, usage
-    report, undo record or stored message. A malformed `ai_bad_request` is never
+    report, undo record or stored message. Once the retry is accepted the loop emits a `recovered` event
+    (`body_resized`), which the panel sends to GA as `assist_request_resized`
+    (`Bot/reportAssistRecovery.js`; tier and the two sizes only, no Sentry). A malformed `ai_bad_request` is never
     retried; the relay refuses before any ledger write, so a retry costs nothing. A soft bucket settling past its
     budget is the designed overshoot, not `settle_exceeded_reservation`.
   - **`resumeAt`.** A credits refusal carries when the budget admits again:
