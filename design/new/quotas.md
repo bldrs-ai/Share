@@ -804,12 +804,11 @@ The parts that aren't obvious:
 
 - **`engaged_use` and `return_visit` are browser-side counters (Share#1960,
   bizdev#339).** GA4 cannot express "3rd model open in a rolling 7 days" as
-  a key event, and Google Ads can only import events GA4 sends, so
-  `trackEngagementOnOpen` (`src/privacy/engagementTracking.js`) keeps a
+  a key event, so `trackEngagementOnOpen` (`src/privacy/engagementTracking.js`) keeps a
   capped list of open timestamps, the last `engaged_use` time and the last
   `return_visit` day under localStorage key `bldrs.ga.engagement`, and sends
-  the event when the open earns it. They are meant to be imported as
-  **secondary, observe-only** conversions.
+  the event when the open earns it. They are retention steps on the bizdev
+  funnel (§"Funnel analytics").
   - **What counts as an open** is `real_model_open`: `CadView` calls it from
     inside the `isRealModelOpen` branch, right after that event. The hosted
     demos (`index.ifc` and `index.step`, the latter the `/viewer/step`
@@ -825,16 +824,18 @@ The parts that aren't obvious:
     previous counted open's. Opening the same model again counts, on a later
     page load or in-app (A → B → A, and A → demo → A, which the model-keyed
     guard before open-205 #2022 skipped).
-  - **Consent:** analytics is opt-out (`isAllowed()` defaults to true).
-    Nothing is read, written or sent while the user has opted out, and opens
-    made while opted out are never counted retroactively. The check repeats
+  - **Consent:** analytics is opt-in since Share#2051. `isAllowed()` is
+    `allowsAnalytics(getConsentLevel())`, which is false until the visitor
+    presses OK in About (`design/new/analytics-consent.md`). Nothing is read,
+    written or sent without that consent, and opens made before it are never
+    counted retroactively. The check repeats
     inside the lock, because consent can be withdrawn while an open waits
     behind another tab's hold.
   - **Fails closed.** If localStorage cannot be read or written the open is
     not counted: a per-page fallback would fire `engaged_use` for anyone who
     opens three models in one session and again on every reload. Under-count
-    is the safe error for a conversion Ads may learn from. It is also per
-    browser, so one person on two browsers counts twice.
+    is the safe error for a retention metric, because over-counting inflates
+    it. It is also per browser, so one person on two browsers counts twice.
   - **Windows:** the 7-day window excludes its edge (an open exactly 7 days
     old is outside it); `return_visit` is measured in local calendar days, so
     DST cannot make a day 23 or 25 hours, and sends once per day. Stored times
@@ -1085,8 +1086,7 @@ has a backfill, so these only start accruing data once registered:
 - For `engaged_use` / `return_visit`: register **event-scoped custom
   dimensions/metrics** for `window_days`, `opens_in_window`, `threshold` and
   `days_since_last_open` (numeric, so metrics), mark both events as **key
-  events**, then import them into Google Ads as **secondary** conversions
-  (bizdev#339).
+  events** (bizdev#339).
 - For the normalized events (§"Analytics: normalized tier events"):
   register **event-scoped custom dimensions** for `source` and `gate`.
   `tier`, `route_kind` and `open_cid` are already registered.
@@ -1180,9 +1180,8 @@ CadView's `isRealModelOpen` branch, so it inherits the demo and
 `*.netlify.app` exclusions of `real_model_open`.
 
 **The grid, and the legacy event each cell shadows.** The legacy events stay,
-unrenamed, for continuity: GA4 has no rename, Google Ads imports
-`real_model_open` as its conversion, and the bizdev dashboard queries the old
-names verbatim. Each new event fires at the same point as the legacy one, in
+unrenamed, for continuity: GA4 has no rename, and the bizdev
+dashboard queries the old names verbatim. Each new event fires at the same point as the legacy one, in
 the same handler.
 
 | New event | `gate` | Shadows | Fires | `source` |

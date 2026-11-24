@@ -62,9 +62,11 @@ describe('ShareRoutes Forward', () => {
   })
 
   // Regression guard. A bare `navigate(dest)` here dropped location.search,
-  // so an ad click landing on the homepage lost its gclid before gtag.js
-  // read window.location — GA4 then filed the paid session as
-  // google/organic and Google Ads recorded no conversion.
+  // so a campaign link landing on the homepage lost its query (utm_*,
+  // gclid, any param) before gtag.js read window.location, and GA4 filed
+  // the session under the wrong source. The landing query must survive
+  // the redirect chain so GA attributes the visit to its campaign.
+  // History: found through Ads attribution (#1784).
   it('carries the query string through the forward', async () => {
     const location = renderAt('/share?gclid=TEST123')
     await waitFor(() => expect(location().pathname).toBe('/share/v/p'))
