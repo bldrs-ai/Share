@@ -1,5 +1,4 @@
 import {hasParams} from '../../utils/location'
-import {isConsentDecided} from '../../privacy/consent'
 import {isFirst} from '../../privacy/firstTime'
 
 
@@ -8,13 +7,14 @@ export const HASH_PREFIX_ABOUT = 'about'
 
 
 /**
- * About opens on its own for a first-time visitor and for anyone who hasn't
- * made a privacy choice under the current consent version: it carries the
- * privacy slider, and GA stays off until that choice is made
- * (privacy/consent.js).
+ * About opens on its own for a first-time visitor, and from its link form
+ * (`#about:`). It no longer asks for the privacy choice, so it doesn't open
+ * for a returning visitor who hasn't made one: the banner asks them
+ * (ConsentBanner.jsx; #2051 opened About for every such visitor, a blocking
+ * dialog on every load until answered).
  *
  * @return {boolean}
  */
 export function isVisibleInitially() {
-  return isFirst() || !isConsentDecided() || hasParams(HASH_PREFIX_ABOUT)
+  return isFirst() || hasParams(HASH_PREFIX_ABOUT)
 }

@@ -1,5 +1,5 @@
 import {isVisibleInitially as aboutIsVisibleInitially} from '../Components/About/hashState'
-import {getConsentLevel} from '../privacy/consent'
+import {getConsentLevel, isConsentDecided} from '../privacy/consent'
 import {isVisibleInitially as helpIsVisibleInitially} from '../Components/Help/hashState'
 import {isVisibleInitially as loginIsVisibleInitially} from '../Components/Profile/hashState'
 import {isVisibleInitially as shareIsVisibleInitially} from '../Components/Share/hashState'
@@ -31,6 +31,12 @@ export default function createUISlice(set, get) {
     // writer after this initial read.
     privacyLevel: getConsentLevel(),
     setPrivacyLevel: (level) => set(() => ({privacyLevel: level})),
+
+    // The privacy banner (About/ConsentBanner.jsx): up on every load until
+    // the visitor answers under the current consent version, and on demand
+    // from Privacy settings (About, Open/LocalOnlyDialog).
+    isConsentBannerVisible: !isConsentDecided(),
+    setIsConsentBannerVisible: (is) => set(() => ({isConsentBannerVisible: is})),
 
     // A remote model link local-only mode refused: `{path, source}`, the
     // refused URL's path+search+hash and 'github' | 'google' | 'url', or

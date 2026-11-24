@@ -2,6 +2,7 @@ import React, {ReactElement, useEffect, useRef} from 'react'
 import {Helmet} from 'react-helmet-async'
 import {useNavigate, useParams} from 'react-router-dom'
 import CadView from './Containers/CadView'
+import ConsentBanner from './Components/About/ConsentBanner'
 import LocalOnlyDialog from './Components/Open/LocalOnlyDialog'
 import useConnectionsInit from './connections/useConnectionsInit'
 import useGithubLastModified from './connections/useGithubLastModified'
@@ -237,6 +238,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
         pathPrefix={pathPrefix}
       />
       <LocalOnlyDialog/>
+      <ConsentBanner/>
     </>
   )
 }

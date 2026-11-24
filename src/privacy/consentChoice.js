@@ -1,7 +1,6 @@
 import {updateGaConsent} from '../index/ga'
 import useStore from '../store/useStore'
 import {setConsent} from './analytics'
-import {CONSENT_LEVELS, isConsentDecided} from './consent'
 
 
 /**
@@ -21,16 +20,3 @@ export default function chooseConsentLevel(level) {
   useStore.getState().setPrivacyLevel(level)
 }
 
-
-/**
- * The About dialog closed without OK (Cancel, X, backdrop, Escape, or the
- * logo button toggling it shut). For a visitor who hasn't chosen yet that
- * is a decline: store restricted (local-only mode), so nothing is collected and the dialog
- * doesn't re-open on every load. A visitor who already chose keeps their
- * choice; closing just discards the slider's unconfirmed position.
- */
-export function dismissConsent() {
-  if (!isConsentDecided()) {
-    chooseConsentLevel(CONSENT_LEVELS.RESTRICTED)
-  }
-}

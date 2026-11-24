@@ -23,7 +23,7 @@ describe('LocalOnlyDialog', () => {
       useStore.setState({
         privacyLevel: CONSENT_LEVELS.RESTRICTED,
         blockedRemoteModel: BLOCKED,
-        isAboutVisible: false,
+        isConsentBannerVisible: false,
       })
     })
   })
@@ -41,30 +41,30 @@ describe('LocalOnlyDialog', () => {
     expect(navigateToModel).not.toHaveBeenCalled()
   })
 
-  test('Privacy settings opens About and steps aside for it', async () => {
+  test('Privacy settings brings the consent banner up and steps aside for it', async () => {
     render(<LocalOnlyDialog/>, {wrapper: HelmetStoreRouteThemeCtx})
     fireEvent.click(screen.getByTestId('local-only-privacy-settings'))
-    expect(useStore.getState().isAboutVisible).toBe(true)
+    expect(useStore.getState().isConsentBannerVisible).toBe(true)
     await waitFor(() => expect(screen.queryByTestId('local-only-message')).toBeNull())
     // Still refused until the visitor chooses.
     expect(useStore.getState().blockedRemoteModel).toEqual(BLOCKED)
   })
 
-  test('opens the refused link once About closes with a higher level', async () => {
+  test('opens the refused link once the visitor accepts', async () => {
     render(<LocalOnlyDialog/>, {wrapper: HelmetStoreRouteThemeCtx})
     fireEvent.click(screen.getByTestId('local-only-privacy-settings'))
     act(() => {
-      useStore.setState({privacyLevel: CONSENT_LEVELS.FUNCTIONAL, isAboutVisible: false})
+      useStore.setState({privacyLevel: CONSENT_LEVELS.FUNCTIONAL, isConsentBannerVisible: false})
     })
     await waitFor(() => expect(navigateToModel).toHaveBeenCalledWith(BLOCKED.path, expect.any(Function)))
     expect(useStore.getState().blockedRemoteModel).toBeNull()
   })
 
-  test('comes back, without opening anything, when About closes still declined', async () => {
+  test('comes back, without opening anything, when the visitor declines', async () => {
     render(<LocalOnlyDialog/>, {wrapper: HelmetStoreRouteThemeCtx})
     fireEvent.click(screen.getByTestId('local-only-privacy-settings'))
     act(() => {
-      useStore.setState({isAboutVisible: false})
+      useStore.setState({isConsentBannerVisible: false})
     })
     expect(await screen.findByTestId('local-only-message')).toBeInTheDocument()
     expect(navigateToModel).not.toHaveBeenCalled()

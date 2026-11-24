@@ -73,9 +73,10 @@ function realModelOpens(commands: unknown[][]): unknown[][] {
 
 
 /**
- * design/new/analytics-consent.md: Google Analytics is opt-in. The About
- * (welcome) dialog asks; nothing is collected until OK, and Cancel (or any
- * other close by a visitor who hasn't chosen) declines, remembered.
+ * design/new/analytics-consent.md: Google Analytics is opt-in. A banner at
+ * the foot of the page asks (§"The banner"); nothing is collected until
+ * Accept, Decline is remembered, and closing the About dialog answers
+ * nothing.
  */
 describeMobileAndDesktop('Analytics consent', () => {
   let googleRequests: string[]
@@ -92,11 +93,13 @@ describeMobileAndDesktop('Analytics consent', () => {
     await visitHomepageWaitForModel(page, {pauseRenderer: true})
   })
 
-  test('a fresh visitor is asked, and nothing is collected before they answer', async ({page}) => {
-    const dialog = page.getByRole('dialog')
-    await expect(dialog).toBeVisible()
-    await expect(page.getByTestId('consent-summary')).toContainText('Press Cancel for')
-    await expect(page.getByRole('slider')).toHaveCount(0)
+  test('a fresh visitor is asked in a banner, and nothing is collected before they answer', async ({page}) => {
+    const banner = page.getByTestId('consent-banner')
+    // First-timers get the About welcome too; the banner waits under it.
+    await page.getByTestId('button-dialog-main-action').click()
+    await expect(banner).toBeVisible()
+    await expect(page.getByTestId('consent-summary')).toContainText('Your models stay on your device.')
+    await expect(page.getByTestId('consent-summary')).toContainText('If you decline, Bldrs runs in')
 
     const commands = await gtagCommands(page)
     expect(commands).toContainEqual(['consent', 'default', {
@@ -109,9 +112,33 @@ describeMobileAndDesktop('Analytics consent', () => {
     expect(googleRequests).toEqual([])
   })
 
-  test('OK allows analytics, which starts collection and survives a reload', async ({page}) => {
-    await page.getByTestId('button-dialog-main-action').click()
+  // The regression #2051 caused: About's X was a decline, so a returning
+  // visitor who closed it to reach a GitHub link found the link refused.
+  test('closing About answers nothing, and an unanswered visitor can open a GitHub model', async ({page}) => {
+    await page.getByTestId(/^button-close-dialog-/).first().click()
     await expect(page.getByRole('dialog')).toHaveCount(0)
+    expect(await consentCookie(page)).toBeUndefined()
+    await expect(page.getByTestId('consent-banner')).toBeVisible()
+
+    await openRealModel(page)
+    expect(page.url()).toContain('/ifc/misc/box.ifc')
+    await expect(page.getByTestId('local-only-message')).toHaveCount(0)
+    // Still unanswered, so still nothing for GA.
+    expect(wasGranted(await gtagCommands(page))).toBe(false)
+    await expect(page.getByTestId('consent-banner')).toBeVisible()
+  })
+
+  test('the banner leaves the page usable: the Open control works while it is up', async ({page}) => {
+    await page.getByTestId('button-dialog-main-action').click()
+    await expect(page.getByTestId('consent-banner')).toBeVisible()
+    await page.getByTestId('control-button-open').click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+  })
+
+  test('Accept allows analytics, which starts collection and survives a reload', async ({page}) => {
+    await page.getByTestId('button-dialog-main-action').click()
+    await page.getByTestId('consent-accept').click()
+    await expect(page.getByTestId('consent-banner')).toHaveCount(0)
     expect(await consentCookie(page)).toBe('1.functional')
 
     // Collection starts on this page: consent granted, then config.
@@ -123,23 +150,24 @@ describeMobileAndDesktop('Analytics consent', () => {
 
     // And a later visit is configured from the stub, without asking again.
     await openRealModel(page)
-    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(page.getByTestId('consent-banner')).toHaveCount(0)
     const afterReload = await gtagCommands(page)
     expect(wasGranted(afterReload)).toBe(true)
     expect(afterReload.filter(([cmd]) => cmd === 'config')).toHaveLength(1)
     expect(realModelOpens(afterReload)).toHaveLength(1)
   })
 
-  test('Cancel declines, collects nothing, and stays declined after a reload', async ({page}) => {
-    await page.getByTestId('button-dialog-cancel').click()
-    await expect(page.getByRole('dialog')).toHaveCount(0)
+  test('Decline collects nothing, and stays declined after a reload', async ({page}) => {
+    await page.getByTestId('button-dialog-main-action').click()
+    await page.getByTestId('consent-decline').click()
+    await expect(page.getByTestId('consent-banner')).toHaveCount(0)
     expect(await consentCookie(page)).toBe('1.restricted')
     expect(wasGranted(await gtagCommands(page))).toBe(false)
 
     // A sample: local-only mode refuses other GitHub models (
     // Open/localOnlyMode.spec.ts), and a sample still counts as a real open.
     await openRealModel(page, SAMPLE_MODEL)
-    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(page.getByTestId('consent-banner')).toHaveCount(0)
     const afterReload = await gtagCommands(page)
     expect(wasGranted(afterReload)).toBe(false)
     expect(afterReload.filter(([cmd]) => cmd === 'config')).toHaveLength(0)
@@ -149,35 +177,32 @@ describeMobileAndDesktop('Analytics consent', () => {
     expect(googleRequests).toEqual([])
   })
 
-  // The link pointed at /share/privacy, which no route serves. It now opens
-  // the policy in a new tab and leaves the dialog where it was.
   test('the privacy policy link opens the policy in a new tab', async ({page}) => {
+    await page.getByTestId('button-dialog-main-action').click()
     const [policy] = await Promise.all([
       page.context().waitForEvent('page'),
       page.getByTestId('consent-privacy-link').click(),
     ])
     await policy.waitForLoadState('domcontentloaded')
     await expect(policy.getByRole('heading', {name: /Privacy Policy/i}).first()).toBeVisible()
-    await expect(page.getByRole('dialog')).toBeVisible()
+    await expect(page.getByTestId('consent-banner')).toBeVisible()
     expect(await consentCookie(page)).toBeUndefined()
   })
 
-  // Cancel and OK are the consent itself, so nothing may sit over them. The
-  // status bar renders above dialogs (Theme.jsx zIndex.snackbar), and at
-  // 1280×800 the tall About dialog ran under it; Dialog.jsx now keeps its
-  // band clear on every form factor. A hit test at each button's centre
-  // finds whatever is on top there.
-  test('Cancel and OK are clear of the status bar', async ({page}) => {
+  // Accept and Decline are the consent itself, so nothing may sit over
+  // them. The status bar renders above everything (Theme.jsx
+  // zIndex.snackbar); the banner sits above its band. A hit test at each
+  // button's centre finds whatever is on top there.
+  test('Accept and Decline are clear of the status bar', async ({page}) => {
+    await page.getByTestId('button-dialog-main-action').click()
     await page.evaluate(() => {
       // A string stays up (an object message must auto-dismiss).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window as any).store.getState().setSnackMessage('Loaded Bldrs')
     })
     await expect(page.getByTestId('snackbar')).toBeVisible()
-    for (const testId of ['button-dialog-cancel', 'button-dialog-main-action']) {
-      const button = page.getByTestId(testId)
-      await button.scrollIntoViewIfNeeded()
-      const box = await button.boundingBox()
+    for (const testId of ['consent-decline', 'consent-accept']) {
+      const box = await page.getByTestId(testId).boundingBox()
       if (!box) {
         throw new Error(`${testId} has no box`)
       }
@@ -188,19 +213,18 @@ describeMobileAndDesktop('Analytics consent', () => {
     }
   })
 
-  // Cancel is an answer, so a visitor who allowed analytics can take it back
-  // from About later; the decline then stops collection on that page.
-  test('a visitor who allowed analytics can take it back with Cancel', async ({page}) => {
+  // Changing the choice is as easy as making it: About's Privacy settings
+  // brings the same banner back.
+  test('a visitor who accepted can take it back from About\'s Privacy settings', async ({page}) => {
     await page.getByTestId('button-dialog-main-action').click()
+    await page.getByTestId('consent-accept').click()
     expect(await consentCookie(page)).toBe('1.functional')
 
-    // About again, through its link form (About/hashState.js). Same path,
-    // so the goto is only a hash change; the reload makes it a page load.
     await page.goto('/share/v/p/index.ifc#about:', {waitUntil: 'domcontentloaded'})
     await page.reload({waitUntil: 'domcontentloaded'})
-    await expect(page.getByRole('dialog')).toBeVisible()
-    await page.getByTestId('button-dialog-cancel').click()
-    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await page.getByTestId('about-privacy-settings').click()
+    await expect(page.getByTestId('consent-summary')).toContainText('You accepted.')
+    await page.getByTestId('consent-decline').click()
     expect(await consentCookie(page)).toBe('1.restricted')
     const commands = await gtagCommands(page)
     expect(commands.filter(([cmd, arg]) => cmd === 'consent' && arg === 'update').pop())

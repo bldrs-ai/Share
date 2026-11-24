@@ -1,44 +1,66 @@
 # Analytics consent
 
 Status: shipped behind no flag, 2026-11. Owner decision (Pablo, 2026-11-03):
-Google Analytics needs the visitor's consent, given in the About (welcome)
-dialog before anything is collected. The bar is GDPR's "prior, freely
-given, specific, informed, and unambiguous". Sentry error monitoring is
-first-party functional processing and stays on regardless.
+Google Analytics needs the visitor's consent before anything is collected.
+The bar is GDPR's "prior, freely given, specific, informed, and
+unambiguous". Sentry error monitoring is first-party functional processing
+and stays on regardless. Since 2026-11-24 (evening) the choice is asked in a
+banner, not the About dialog (§"The banner").
 
 ## What the visitor sees
 
-The About dialog opens on its own for a first-time visitor **and** for any
-visitor who hasn't made a privacy choice under the current
-`CONSENT_VERSION` (`About/hashState.js#isVisibleInitially`). Under the
-mission it asks, in the owner's words (`About/ConsentNotice.jsx`,
-2026-11-24):
+### The banner
 
-> We collect analytics with a pseudonymous ID: visits, and which kinds of
-> models are opened (format, size, source). No advertising. Press Cancel
-> for Test only mode.
+A banner at the foot of the page (`About/ConsentBanner.jsx`), mounted by
+`Share.jsx`, shown on every load to any visitor who hasn't answered under
+the current `CONSENT_VERSION` (store `isConsentBannerVisible`, seeded from
+`consent.js#isConsentDecided`). It leads with what never leaves the device:
 
-with the privacy policy link closing the paragraph (no heading: the dialog
-is tight on space and the text says what it's about), and Cancel and OK
-side by side at the same size. Nothing may cover those two buttons: the status bar ("Loaded …")
-renders above dialogs, so `Dialog.jsx` keeps a band at the bottom clear of
-it on every form factor (it was mobile-only until the tall About dialog
-ran under it at 1280×800); `consent.spec.ts` hit-tests both buttons.
+> **Your models stay on your device.** Bldrs opens files in your browser;
+> they're never uploaded to our servers. To improve Bldrs, we'd like to
+> measure usage, like file format and size, with a pseudonymous ID. No
+> advertising. If you decline, Bldrs runs in Test only mode: files from your
+> computer and the sample models. [Privacy policy]
+
+with **Decline** and **Accept** side by side at the same size, and **no
+close button**: only an answer takes it down.
+
+- **It never blocks.** It isn't a modal: the canvas, drag-and-drop and every
+  control stay usable while it's up. It sits above the status bar's band
+  (`Dialog.jsx#SNACKBAR_BAND`, which renders above everything) and under any
+  dialog; `consent.spec.ts` hit-tests both buttons with the status bar up.
+- **Unanswered is neither.** Until Accept, nothing is collected (gtag/js is
+  never requested). Until Decline, nothing is refused: local-only mode reads
+  only a stored `restricted`, so a visitor who ignores the banner can still
+  open the GitHub or Drive link they came for.
+- **Changing the choice** is the same banner, from **Privacy settings**: a
+  link in the About dialog (logo button, the workspace LogoMenu's About, or
+  a `#about:` link), and the button in `Open/LocalOnlyDialog.jsx`. Reopened,
+  it also says what the visitor chose ("You accepted." / "You declined.").
+- **The About dialog is a welcome again**, opened on its own only for a
+  first-time visitor or a `#about:` link (`About/hashState.js`), with one
+  OK. No close of it touches the choice. The banner waits under it and
+  shows once it closes.
+
+**Why it moved (2026-11-24).** #2051 asked in About, opened About for every
+undecided visitor (after the deploy, every visitor), and stored any close
+but OK (X, backdrop, Escape, the logo button) as a decline. Model opens
+roughly halved on the dashboard within the day. Part of that is only
+visibility, since GA now sees consenting visitors alone (first-party counts
+are the fix for that). But part was real: a blocking dialog before the first
+file could be dropped, a "Cancel" that read as "leave", and a dismissal that
+put returning visitors into local-only mode and refused their GitHub and
+Drive links. The owner's feedback round asked for a non-blocking banner,
+local-first copy, Decline/Accept instead of Cancel/OK, and the consent
+taken out of the welcome. `CONSENT_VERSION` was not bumped: what each
+answer does is unchanged, so a choice made under #2051's wording still
+stands.
 
 | Answer (cookie value) | What runs |
 |---|---|
-| OK (`functional`) | GA with its pseudonymous client id (`_ga`) and our model events (`real_model_open`, …). Analytics only: no ad signal, no Google signals. |
-| Cancel (`restricted`) | No GA: gtag/js is never requested, no `_ga` cookie, none of our GA events. **Local-only mode** (below): local files and the samples only. |
+| Accept (`functional`) | GA with its pseudonymous client id (`_ga`) and our model events (`real_model_open`, …). Analytics only: no ad signal, no Google signals. |
+| Decline (`restricted`) | No GA: gtag/js is never requested, no `_ga` cookie, none of our GA events. **Local-only mode** (below): local files and the samples only. |
 
-- **OK** allows analytics; **Cancel** declines (`AboutDialog#answer`,
-  `consentChoice.js#chooseConsentLevel`). Both work for any visitor, so a
-  returning visitor changes their mind the same way, by reopening About
-  (logo button, the workspace LogoMenu's About, or a `#about:` link).
-- **Closing without answering** (X, backdrop, Escape, the logo button)
-  declines for a visitor who hasn't chosen (`consentChoice.js#dismissConsent`),
-  so declining persists and the dialog doesn't nag on every load. A visitor
-  who already chose keeps their choice: closing About to get back to a
-  model is not an answer.
 - **The mode's name** is one constant, `localOnlyMode.js#LOCAL_ONLY_MODE_NAME`
   ("Test only mode"; the owner is still settling it, "Restricted mode" is
   the other candidate). Every UI string reads it; the privacy policy's two
@@ -68,16 +90,16 @@ local-only mode to allow evaluation of basic viewer capabilities"
 | Save to GitHub | no; the Save dialog's Export tab (a local download) stays |
 | Share | no |
 
-- **Only an explicit decline restricts.** An undecided visitor is being
-  asked by the About dialog right then and isn't blocked from the link that
-  brought them; the choice applies to opens after it. A remote model that
+- **Only an explicit decline restricts.** An undecided visitor sees the
+  banner and isn't blocked from the link that brought them, however long
+  they leave it unanswered; the choice applies to opens after it. A remote model that
   is already open stays open when the visitor then declines.
 - **The backstop is the route** (`Share.jsx`'s route effect): a remote
   route in local-only mode falls back to the home model and records the link
   in the store (`blockedRemoteModel`). That catches every way such a route
   is reached: a shared link, recents, search, the widget API, the
   workspace drawer. `Open/LocalOnlyDialog.jsx` says where the model is and
-  offers Privacy settings (About); if the visitor raises their level there,
+  offers Privacy settings (the banner); if the visitor accepts there,
   the recorded link opens, and if not, the dialog comes back.
   - The link is recorded only while the address bar still shows the remote
     route. The effect runs again with the stale params after the fallback
@@ -114,8 +136,8 @@ change. Moving one the other way must drop anything that identifies the
 browser across visits (`getOpenCidForSentry` already gates the GA client
 id), and must not add storage.
 
-Changing what local-only mode allows changes the dialog's text
-(`ConsentNotice.jsx`), the policy's §1 "You may refuse normal operation",
+Changing what local-only mode allows changes the banner's text
+(`ConsentBanner.jsx`), the policy's §1 "You may refuse normal operation",
 and `CONSENT_VERSION`, all together.
 
 ## How it's wired
@@ -178,18 +200,23 @@ and `CONSENT_VERSION`, all together.
   allow-mid-page ordering (grant before config, one config, one loader),
   the off-prod path, decline-after-load (kill switch, denied, cookies
   deleted), the signal objects.
-- `src/Components/About/AboutConsent.test.jsx`: the dialog's paths (the
-  text, OK, each non-OK close, a consenting visitor's Cancel taking it
-  back and X leaving it alone, a declined visitor's OK, the policy link).
+- `src/Components/About/ConsentBanner.test.jsx`: the banner's text and
+  answers (Accept grants, Decline stores restricted, a consenting visitor
+  takes it back, it steps aside for About, the policy link), and About no
+  longer asking: no close of it (OK, X, Escape, the logo button) stores a
+  choice, and Privacy settings brings the banner up.
 - `src/privacy/localOnlyMode.test.js`, `src/Components/Open/LocalOnlyDialog.test.jsx`,
   `ShareControl.test.jsx` §local-only: what local-only mode refuses and the
   ways out of it.
 - `src/Components/About/consent.spec.ts` (desktop + mobile): a fresh visitor
-  is asked with nothing queued but the denied default and no Google
-  request; OK grants then configs, and a later page is configured from the
-  stub with `real_model_open` sent; Cancel declines and, after a reload,
-  there's no grant, no config and no `real_model_open`; a consenting
-  visitor's later Cancel denies consent. `src/Components/Open/localOnlyMode.spec.ts`
+  is asked in the banner with nothing queued but the denied default and no
+  Google request; closing About answers nothing and an unanswered visitor
+  opens a GitHub model (the #2051 regression); the page stays usable under
+  the banner; Accept grants then configs, and a later page is configured
+  from the stub with `real_model_open` sent; Decline and, after a reload,
+  there's no grant, no config and no `real_model_open`; the buttons are
+  clear of the status bar; a consenting visitor takes it back from About's
+  Privacy settings. `src/Components/Open/localOnlyMode.spec.ts`
   (desktop + mobile): a GitHub link falls back and explains, allowing
   analytics opens it, a sample opens, the GitHub tab and Share are gated.
 - Jest's `tools/jest/setupTests.js` starts every test as a Functional
@@ -201,8 +228,8 @@ On localhost gtag/js never loads, so E2E proves what GA would be told (the
 dataLayer), not what Google receives. The network half is checked on a
 deploy preview with `?feature=gaEnableInPreview` in a browser that isn't
 automation-flagged: a fresh visitor makes no request to
-googletagmanager.com and gets no `_ga`; OK loads gtag/js and sets `_ga`;
-Cancel, then reload, makes no Google request and leaves no `_ga`.
+googletagmanager.com and gets no `_ga`; Accept loads gtag/js and sets `_ga`;
+Decline, then reload, makes no Google request and leaves no `_ga`.
 
 ## Open questions (owner)
 

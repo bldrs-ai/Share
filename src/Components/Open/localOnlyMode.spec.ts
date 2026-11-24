@@ -3,7 +3,6 @@ import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 import {clickGate} from '../../tests/e2e/export'
 import {setupVirtualPathIntercept, waitForModelReady} from '../../tests/e2e/models'
 import {clearState, homepageSetup} from '../../tests/e2e/utils'
-import {ABOUT_MISSION} from '../About/component'
 
 
 // Not a sample: local-only mode must refuse it.
@@ -50,10 +49,7 @@ describeMobileAndDesktop('Local-only mode (analytics declined)', () => {
     await page.goto(GITHUB_MODEL, {waitUntil: 'domcontentloaded'})
     await page.waitForURL(HOME_MODEL)
     await page.getByTestId('local-only-privacy-settings').click()
-
-    const about = page.getByRole('dialog').filter({hasText: ABOUT_MISSION})
-    await expect(about).toBeVisible()
-    await about.getByTestId('button-dialog-main-action').click()
+    await page.getByTestId('consent-accept').click()
 
     await page.waitForURL(/\/ifc\/misc\/box\.ifc/)
     await waitForModelReady(page)

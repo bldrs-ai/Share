@@ -48,17 +48,17 @@ export default function Privacy() {
           interest in keeping Bldrs Share secure and working.
         </Typography>
         <Typography variant='body1'>
-          <strong>Usage metrics.</strong> With your consent, we measure visits and feature use, including
-          which kinds of models are opened (format, size, source), with Google Analytics, which sets cookies
-          holding a pseudonymous ID. We do not use them for advertising. Nothing is collected for usage
-          metrics until you press OK in the welcome dialog.
+          <strong>Usage metrics.</strong> With your consent, we measure visits and feature use, including which
+          kinds of models are opened (format, size, source), with Google Analytics, which sets cookies holding a
+          pseudonymous ID. We do not use them for advertising. Nothing is collected for usage metrics until you
+          press Accept in the privacy banner.
         </Typography>
         <Typography variant='body1'>
-          <strong>You may refuse normal operation</strong> and Bldrs Share will operate in a reduced
-          local-only mode (“Test only mode”) to allow evaluation of basic viewer capabilities: you can open
-          files from your computer and the sample models, but not models from GitHub, Google Drive or a web
-          address, and you can’t save to GitHub or share. Press Cancel in the welcome dialog to choose it.
-          Error and reliability reports continue in this mode. You can change your choice at any time from the
+          <strong>You may refuse normal operation</strong> and Bldrs Share will operate in a reduced local-only
+          mode (“Test only mode”) to allow evaluation of basic viewer capabilities: you can open files from your
+          computer and the sample models, but not models from GitHub, Google Drive or a web address, and you
+          can’t save to GitHub or share. Press Decline in the privacy banner to choose it. Error and reliability
+          reports continue in this mode. You can change your choice at any time from Privacy settings in the
           About dialog.
         </Typography>
 
@@ -99,7 +99,7 @@ export default function Privacy() {
           You can disconnect Google access in your Google Account settings. You may request deletion of any stored
           account metadata (if applicable) by emailing <Link href='mailto:support@bldrs.ai'>support@bldrs.ai</Link>.
           You can also use open-source/self-hosted deployments without accounts, subject to your configuration.
-          You can change your telemetry choice at any time from the About dialog.
+          You can change your telemetry choice at any time from Privacy settings in the About dialog.
         </Typography>
 
         <Typography variant='h1'>7. Children’s Privacy</Typography>
