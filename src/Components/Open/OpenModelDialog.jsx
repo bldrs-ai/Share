@@ -34,6 +34,8 @@ import GitHubTab from '../Connections/GitHubTab'
 import GoogleDrivePickerDialog from '../Connections/GoogleDrivePickerDialog'
 import RecentFilesBrowseSection from '../Connections/RecentFilesBrowseSection'
 import QuotaLimitDialog from './QuotaLimitDialog'
+import LocalOnlyNotice from './LocalOnlyNotice'
+import {isLocalOnlyLevel} from '../../privacy/localOnlyMode'
 import {LABEL_LOCAL, LABEL_GITHUB, LABEL_GOOGLE, LABEL_SAMPLES} from './component'
 import {FolderOpen as FolderOpenIcon, GitHub as GitHubIcon} from '@mui/icons-material'
 
@@ -65,6 +67,7 @@ export default function OpenModelDialog({
   // in `openFile` instead would put a hop before `fileInput.click()`, which
   // Safari can refuse once the click's user activation is spent.
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
+  const isLocalOnly = isLocalOnlyLevel(useStore((state) => state.privacyLevel))
   const isMobile = useIsMobile()
   const {tier, record, check} = useQuota()
 
@@ -473,13 +476,19 @@ export default function OpenModelDialog({
             }
           </Stack>
           }
-          { tabLabels[currentTab] === LABEL_GOOGLE &&
+          {/* Local-only mode (privacy/localOnlyMode.js): the remote tabs stay
+              in place, so a visitor who declined can see what that gives up, but show a
+              notice instead of their controls. Samples stay open. */}
+          { isLocalOnly && (tabLabels[currentTab] === LABEL_GOOGLE || tabLabels[currentTab] === LABEL_GITHUB) &&
+          <LocalOnlyNotice source={tabLabels[currentTab] === LABEL_GOOGLE ? 'Google Drive' : 'GitHub'}/>
+          }
+          { !isLocalOnly && tabLabels[currentTab] === LABEL_GOOGLE &&
           <GoogleDriveTab
             onPickerReady={handlePickerReady}
             onOpenById={handleOpenById}
           />
           }
-          { tabLabels[currentTab] === LABEL_GITHUB && isGithubAsSourceOn && (
+          { !isLocalOnly && tabLabels[currentTab] === LABEL_GITHUB && isGithubAsSourceOn && (
             showGithubBrowser ? (
               <Slide direction='left' in={showGithubBrowser} mountOnEnter>
                 <Stack
@@ -508,7 +517,7 @@ export default function OpenModelDialog({
               />
             )
           )}
-          { tabLabels[currentTab] === LABEL_GITHUB && !isGithubAsSourceOn && (
+          { !isLocalOnly && tabLabels[currentTab] === LABEL_GITHUB && !isGithubAsSourceOn && (
             showGithubBrowser ? (
               <Slide direction='left' in={showGithubBrowser} mountOnEnter>
                 <Stack

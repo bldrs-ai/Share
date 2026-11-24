@@ -30,7 +30,7 @@ exports[`Privacy renders 1`] = `
         Privacy Policy
       </h1>
       <div
-        class="MuiBox-root css-lgj0h8"
+        class="MuiBox-root css-av31co"
       >
         <p
           class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
@@ -46,7 +46,7 @@ exports[`Privacy renders 1`] = `
           <strong>
             Last Updated:
           </strong>
-           October 23, 2025
+           November 24, 2026
         </p>
         <p
           class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
@@ -61,11 +61,11 @@ exports[`Privacy renders 1`] = `
         <p
           class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
         >
-          Bldrs Share is built to operate 
+          Bldrs Share operates 
           <strong>
-            without centralized data storage
+            without centralized model data storage
           </strong>
-          . We do not host user content or model data by default. Depending on your configuration:
+          . We do not upload or host user model data by default. What we do receive:
         </p>
         <p
           class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
@@ -87,9 +87,33 @@ exports[`Privacy renders 1`] = `
           class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
         >
           <strong>
-            Telemetry (optional).
+            Telemetry is required by default.
           </strong>
-           If enabled in a hosted deployment, we may collect anonymized usage metrics (e.g., performance, feature use) to improve reliability and UX.
+           We collect pseudonymous usage metrics (e.g., performance, feature use) to improve reliability and user experience. Telemetry is of two kinds:
+        </p>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
+        >
+          <strong>
+            Error and reliability reports.
+          </strong>
+           When something fails, the app reports what failed, the app and browser versions and, if you’re signed in, your account ID, to our error-monitoring service (Sentry). Separately, it counts browsers that can’t run part of the app (for example, with no WebGL, or with analytics blocked) by browser family and device type only, sent to Google Analytics under one shared ID rather than yours. None of these reports set cookies, carry an identifier that follows your browser between visits, or include your models’ file names, paths or contents. They are part of operating the service and are always on, on the basis of our legitimate interest in keeping Bldrs Share secure and working.
+        </p>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
+        >
+          <strong>
+            Usage metrics.
+          </strong>
+           With your consent, we measure visits and feature use, including which kinds of models are opened (format, size, source), with Google Analytics, which sets cookies holding a pseudonymous ID. We do not use them for advertising. Nothing is collected for usage metrics until you press OK in the welcome dialog.
+        </p>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
+        >
+          <strong>
+            You may refuse normal operation
+          </strong>
+           and Bldrs Share will operate in a reduced local-only mode (“Test only mode”) to allow evaluation of basic viewer capabilities: you can open files from your computer and the sample models, but not models from GitHub, Google Drive or a web address, and you can’t save to GitHub or share. Press Cancel in the welcome dialog to choose it. Error and reliability reports continue in this mode. You can change your choice at any time from the About dialog.
         </p>
         <h1
           class="MuiTypography-root MuiTypography-h1 css-1kqtlju-MuiTypography-root"
@@ -163,7 +187,7 @@ exports[`Privacy renders 1`] = `
           >
             support@bldrs.ai
           </a>
-          . You can also use open-source/self-hosted deployments without accounts, subject to your configuration.
+          . You can also use open-source/self-hosted deployments without accounts, subject to your configuration. You can change your telemetry choice at any time from the About dialog.
         </p>
         <h1
           class="MuiTypography-root MuiTypography-h1 css-1kqtlju-MuiTypography-root"
