@@ -1,4 +1,4 @@
-import {EditLayer} from './editOps'
+import {EditLayer, EditOpError, validateEditOp} from './editOps'
 
 
 /**
@@ -39,16 +39,29 @@ const UNREACHABLE = -1
 /**
  * Add an applied op to the log, if it is a document op.
  *
+ * The op is validated again here, and a copy is recorded. This is the one
+ * door into what {@link appliedOps} hands persistence, and it does not trust
+ * its caller: an op literal that skipped `makeEditOp`, or one mutated after
+ * it was applied, cannot put a per-load id into the log (editOps.js). The
+ * copy is a JSON round trip, which is what persistence does to it anyway
+ * (and `structuredClone` postdates the build targets in
+ * tools/esbuild/common.js).
+ *
  * @param {object} log
  * @param {object} op an op that has just been applied
  * @param {object|null} undo what reverts it (editApply.js#applyEditOp)
  * @return {object} the new log; `log` itself for a view op
+ * @throws {EditOpError} when `op` is not a valid op
  */
 export function recordApplied(log, op, undo) {
+  const invalid = validateEditOp(op)
+  if (invalid) {
+    throw new EditOpError(invalid)
+  }
   if (op.layer !== EditLayer.DOCUMENT) {
     return log
   }
-  const entries = [...log.entries.slice(0, log.cursor), {op, undo}]
+  const entries = [...log.entries.slice(0, log.cursor), {op: JSON.parse(JSON.stringify(op)), undo}]
   const cleanCursor = log.cleanCursor > log.cursor ? UNREACHABLE : log.cleanCursor
   return {entries, cursor: entries.length, cleanCursor}
 }

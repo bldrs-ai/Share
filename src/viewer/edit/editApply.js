@@ -325,12 +325,65 @@ function rollBack(op, undo, count, {backend, resolver}) {
 
 
 /**
- * Revert an applied op: the undo half of a log entry.
+ * @param {string} ref
+ * @param {EditRefResolver} resolver
+ * @return {*} its target
+ * @throws {Error} when it names nothing. Used only for an element a step
+ *   that has just returned made or kept, so this is a backend breaking its
+ *   contract, and it is said so rather than half rolled back.
+ */
+function targetAfterStep(ref, resolver) {
+  const result = resolver.resolve(ref)
+  if (!result || !('target' in result)) {
+    throw new Error(`editApply: backend contract broken; ${ref} does not resolve after its step`)
+  }
+  return result.target
+}
+
+
+/**
+ * What re-applies each of a revert's steps, per target, captured before the
+ * revert runs: the compensation for a revert that throws part way.
  *
- * Every ref the revert needs is resolved first; if one does not resolve,
- * nothing is changed and it is reported. That is a state a session can
- * reach: a view op is not in undo history, so an eviction made after a
- * document edit can remove the element that edit's undo has to touch (§4).
+ * - A create's or duplicate's revert deletes what it made, so each is
+ *   captured first and comes back by `restore`.
+ * - A delete's revert restores, so a restored element is deleted again.
+ * - The rest write prior values back, so the current ones are captured, the
+ *   same way {@link applyEditOp} captures its undo.
+ *
+ * @param {object} op
+ * @param {Array<*>} targets resolved {@link revertRefs}
+ * @param {object} context `{backend, resolver}`
+ * @return {Array<Function>} one step per target, in target order
+ */
+function reapplySteps(op, targets, {backend, resolver}) {
+  switch (op.kind) {
+    case EditOpKind.CREATE:
+    case EditOpKind.DUPLICATE: {
+      const snapshots = targets.map((target) => backend.capture(target))
+      return revertRefs(op).map((ref, i) => () => backend.restore(ref, snapshots[i]))
+    }
+    case EditOpKind.DELETE:
+      return op.targets.map((ref) => () => backend.delete(targetAfterStep(ref, resolver)))
+    default:
+      return revertSteps(op, captureUndo(op, targets, backend), targets, backend)
+  }
+}
+
+
+/**
+ * Revert an applied op: the undo half of a log entry. All or nothing, like
+ * {@link applyEditOp}.
+ *
+ * - Every ref the revert needs is resolved first; if one does not resolve,
+ *   nothing is changed and it is reported. That is a state a session can
+ *   reach: a view op is not in undo history, so an eviction made after a
+ *   document edit can remove the element that edit's undo has to touch (§4).
+ * - If the backend throws part way through — a multi-delete's undo restores
+ *   one element and then fails to allocate for the next — the steps already
+ *   done are re-applied, newest first, and the error is rethrown. Without
+ *   that the backend would be half reverted while the log's cursor had not
+ *   moved, and a retry would trip over the element already restored.
  *
  * @param {object} op
  * @param {object|null} undo the record {@link applyEditOp} returned
@@ -343,8 +396,20 @@ export function revertEditOp(op, undo, {backend, resolver}) {
     return {ok: false, reason: 'unresolved refs; nothing was reverted', unresolved}
   }
   const steps = revertSteps(op, undo, targets, backend)
-  for (let i = steps.length - 1; i >= 0; i--) {
-    steps[i]()
+  const reapply = reapplySteps(op, targets, {backend, resolver})
+  // Reverts run newest target first, so the steps done are the top `done`
+  // indices; they are re-applied in the opposite order to the one they ran.
+  let done = 0
+  try {
+    for (let i = steps.length - 1; i >= 0; i--) {
+      steps[i]()
+      done++
+    }
+  } catch (error) {
+    for (let i = steps.length - done; i < steps.length; i++) {
+      reapply[i]()
+    }
+    throw error
   }
   return {ok: true}
 }

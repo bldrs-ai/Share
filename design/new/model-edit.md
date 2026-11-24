@@ -90,7 +90,7 @@ validates it.
 
 | Ref | Names | In an op? | Stable because |
 |---|---|---|---|
-| `g<GlobalId>` | an IFC element, **from the source or created by the log** | yes; the only IFC ref | `IfcRoot.GlobalId` is what the file carries, and authoring tools keep it across re-exports. A created element's is minted when the op is created. |
+| `g<GlobalId>` | an IFC element, **from the source or created by the log** | yes; the only IFC ref. Canonical form only: 22 characters, the first `0`–`3` | `IfcRoot.GlobalId` is what the file carries, and authoring tools keep it across re-exports. A created element's is minted when the op is created. |
 | `o<id>.<id>…` | a STEP occurrence: NAUO path, plus the solid when a named body is meant | yes, **source-pinned** (§5.2) | only over the exact source bytes it was recorded against |
 | `n<seg>/<seg>…` | a scene-graph node (ADF, OBJ, GLB, …) by NavTree names | yes | names are what the file carries |
 | `e<expressID>` | an IFC element, or a STEP product row | **no**: permalinks and per-load resolution only | it is not: see below |
@@ -102,6 +102,13 @@ the base is re-authored and re-uploaded. It stays correct in a permalink, which
 names one file, and as a **per-load resolution cache**: a source `g` ref
 resolves GlobalId → expressID → instances on each load, and only the GlobalId
 is stored.
+
+**A `g` ref must be a canonical compressed GlobalId.** Its first character
+carries the GUID's top 2 bits, so it is `0`–`3`; anything past `3` encodes more
+than 128 bits and is not a GlobalId (review of #2346). Some exporters write
+such ids anyway. That element cannot be named by a `g` ref: the ref is
+reported invalid rather than resolved. Assist's `viewer/tools/refs.js` keeps
+its own looser grammar for reads.
 
 Created elements get a **22-character IFC GlobalId** minted when the `create`
 op is created (128 random bits, compressed to the IFC base64 alphabet;
@@ -494,7 +501,9 @@ backend in `editBackend.fixture.js`.
 
 `{id, kind, targets, payload, layer}`, plain JSON. `validateEditOp` checks the
 same rules whether an op was just made or came out of someone else's link
-(L3's untrusted-log check, §7, starts from it).
+(L3's untrusted-log check, §7, starts from it). **Every schema is exact**: an
+envelope or payload key it does not list is refused, so no per-load id
+(§5) can ride an op into the persisted log.
 
 - **`targets`** is a non-empty list of distinct edit refs (§5).
 - **`layer`** is required, either `'view'` or `'document'`, and never
@@ -506,12 +515,25 @@ The payload by kind:
 
 | Kind | Targets | Payload |
 |---|---|---|
-| `create` | one `g` ref, minted by `makeEditOp` | what to build; opaque to L1 (L2; create-320's generators, §8) |
+| `create` | one `g` ref, minted by `makeEditOp` | what to build: **opaque** to L1 (L2; create-320's generators, §8), scanned for per-load keys |
 | `delete` | the elements | `{}` |
 | `transform` | the elements | `{matrix}`: 16 finite numbers, column-major, a delta pre-multiplied onto each target's placement |
-| `duplicate` | the sources | `{copies, …}`: one minted `g` ref per target, in order, disjoint from the targets; the rest is opaque |
-| `setProperty` | the elements | `{key, value}`; `value: null` removes. `undefined` is refused because JSON drops it, and a persisted op would come back without a value. |
-| `setGeometry` | the elements | `{geometry}`, an object; opaque to L1 |
+| `duplicate` | the sources | `{copies, matrix?}`: one minted `g` ref per target, in order, disjoint from the targets; `matrix` places each copy, as a transform would |
+| `setProperty` | the elements | `{key, value}`: `value` a string, finite number, boolean, or `null` to remove. `undefined` and `NaN` are refused because JSON drops or nulls them, and a persisted op would come back different. |
+| `setGeometry` | the elements | `{geometry}`, an object: **opaque** to L1, scanned for per-load keys |
+
+The two opaque values are what a generator builds from (an extrusion's
+profile and psets, OpenSCAD's code and params; §8), and L1 cannot enumerate
+them before L2 and create-320 fix their shapes. Until each gets an exact
+schema, `editOps.js#PER_LOAD_KEYS` is refused at any depth inside them:
+`batchId`, `instanceId`, `expressId`, `modelId`, `occurrenceId`,
+`occurrencePath`, `geometryId`, `sourceGeometryId`. The match ignores case and
+a plural `s`. `parent` is left out: it is the L0 row's expressID column, but
+also an ordinary word a payload may use for a ref.
+
+`editLog.js#recordApplied` validates again and records a JSON copy, so an op
+literal that skipped `makeEditOp`, or one its caller mutates after applying,
+cannot put anything else in the log either.
 
 L1 does not restrict which kinds a `view` op may be. Eviction is a view-layer
 `delete`. Whether any other pairing is meaningful is for the code that makes
@@ -586,10 +608,24 @@ into targets through a resolver. L2 implements both.
     reverted, newest first, and the error is rethrown. The L0 ops throw on
     real states: `BatchEditIdError`, `BatchEditReentryError`, and a failed
     allocation in `batchedGeometryCapacity.js`.
-- **Revert resolves first and reports.** If a ref the revert needs doesn't
-  resolve, nothing is reverted and the cursor stays put. A session can reach
-  this state: a view-layer eviction is not in history, so it can remove an
-  element that an earlier document op's undo has to touch.
+- **Revert is all or nothing too.**
+  - It resolves first and reports. If a ref the revert needs doesn't
+    resolve, nothing is reverted and the cursor stays put. A session can
+    reach this state: a view-layer eviction is not in history, so it can
+    remove an element that an earlier document op's undo has to touch.
+  - If the backend throws part way through (a multi-delete's undo restores
+    one element, then fails to allocate the next), the revert steps already
+    done are re-applied, newest first, and the error is rethrown. The
+    cursor has not moved and the backend is as it was, so a retry starts
+    clean (review of #2346). What re-applies each step is captured before
+    the revert runs:
+
+    | Kind | Revert | Re-applied by |
+    |---|---|---|
+    | `create`, `duplicate` | `delete` what it made | `restore` from a `capture` taken first |
+    | `delete` | `restore` | `delete` the restored element |
+    | `transform`, `setProperty`, `setGeometry` | write the prior value | write the current value, captured first |
+  - Redo is `applyEditOp` again, so it has apply's rollback.
 
 ### EditSlice
 

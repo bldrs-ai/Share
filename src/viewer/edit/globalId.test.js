@@ -5,7 +5,6 @@ import {
   IFC_BASE64_ALPHABET,
   compressGlobalId,
   decompressGlobalId,
-  isCanonicalGlobalId,
   isGlobalId,
   mintGlobalId,
 } from './globalId'
@@ -58,28 +57,37 @@ describe('viewer/edit/globalId', () => {
   it('mints 22-character canonical IFC base64, deterministic under an injected RNG', () => {
     const a = mintGlobalId({randomBytes: seededRandomBytes(1)})
     expect(a).toHaveLength(22)
-    expect(isCanonicalGlobalId(a)).toBe(true)
+    expect(isGlobalId(a)).toBe(true)
     expect(mintGlobalId({randomBytes: seededRandomBytes(1)})).toBe(a)
     expect(mintGlobalId({randomBytes: seededRandomBytes(2)})).not.toBe(a)
+  })
+
+  it('never mints a non-canonical id, over many seeded mints and the all-ones input', () => {
+    const randomBytes = seededRandomBytes(11)
+    for (let i = 0; i < 10000; i++) {
+      expect(isGlobalId(mintGlobalId({randomBytes}))).toBe(true)
+    }
+    expect(isGlobalId(mintGlobalId({randomBytes: (n) => new Uint8Array(n).fill(0xFF)}))).toBe(true)
   })
 
   it('mints from crypto by default, and every mint is distinct', () => {
     const ids = new Set()
     for (let i = 0; i < 1000; i++) {
       const id = mintGlobalId()
-      expect(isCanonicalGlobalId(id)).toBe(true)
+      expect(isGlobalId(id)).toBe(true)
       ids.add(id)
     }
     expect(ids.size).toBe(1000)
   })
 
-  it('tells the permissive grammar from the canonical one', () => {
-    // A first character past '3' would encode more than 128 bits. A file
-    // can still carry one, so a ref accepts it; decompress does not.
-    const outOfSpec = `Z${'0'.repeat(21)}`
-    expect(isGlobalId(outOfSpec)).toBe(true)
-    expect(isCanonicalGlobalId(outOfSpec)).toBe(false)
-    expect(decompressGlobalId(outOfSpec)).toBeNull()
+  it('accepts only the 128-bit form: a first character past 3 is not a GlobalId', () => {
+    for (const lead of ['0', '1', '2', '3']) {
+      expect(isGlobalId(`${lead}${'0'.repeat(21)}`)).toBe(true)
+    }
+    for (const lead of ['4', 'Z', '$']) {
+      expect(isGlobalId(`${lead}${'0'.repeat(21)}`)).toBe(false)
+      expect(decompressGlobalId(`${lead}${'0'.repeat(21)}`)).toBeNull()
+    }
     for (const bad of ['', '0'.repeat(21), '0'.repeat(23), `${'0'.repeat(21)}+`, null, 22]) {
       expect(isGlobalId(bad)).toBe(false)
     }

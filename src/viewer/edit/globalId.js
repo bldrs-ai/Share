@@ -30,34 +30,23 @@ const CHAR_BITS = 6
 const BYTE_BITS = 8
 
 /**
- * 22 characters of the alphabet. The same grammar `viewer/tools/refs.js`
- * accepts for a source element's GlobalId: a file is untrusted and some
- * authoring tools write a first character past `3`, and an element whose
- * GlobalId is out of spec is still an element the user may want to edit.
- * {@link isCanonicalGlobalId} is the strict 128-bit form, which every id
- * {@link mintGlobalId} makes satisfies.
+ * A compressed GlobalId: 22 characters of the alphabet, the first `0`–`3`.
+ * A first character past `3` would encode more than 128 bits, so it is not a
+ * GlobalId at all. Some exporters still write one; such an element cannot be
+ * named by a `g` ref (editRefs.js) and is reported as an invalid ref rather
+ * than resolved, since an id outside the spec is not one an IFC writer would
+ * round-trip either. `viewer/tools/refs.js` (Assist) keeps its own looser
+ * grammar for reads.
  */
-export const GLOBAL_ID_PATTERN = /^[0-9A-Za-z_$]{22}$/
-
-const CANONICAL_GLOBAL_ID_PATTERN = /^[0-3][0-9A-Za-z_$]{21}$/
+export const GLOBAL_ID_PATTERN = /^[0-3][0-9A-Za-z_$]{21}$/
 
 
 /**
  * @param {*} text
- * @return {boolean} whether `text` is 22 characters of the IFC alphabet
+ * @return {boolean} whether `text` is a canonical compressed GlobalId
  */
 export function isGlobalId(text) {
   return typeof text === 'string' && GLOBAL_ID_PATTERN.test(text)
-}
-
-
-/**
- * @param {*} text
- * @return {boolean} whether `text` encodes exactly 128 bits (first character
- *   `0`–`3`)
- */
-export function isCanonicalGlobalId(text) {
-  return typeof text === 'string' && CANONICAL_GLOBAL_ID_PATTERN.test(text)
 }
 
 
@@ -95,10 +84,10 @@ export function compressGlobalId(bytes) {
  *
  * @param {string} text
  * @return {Uint8Array|null} the 16 bytes, or null when `text` is not a
- *   canonical GlobalId
+ *   GlobalId
  */
 export function decompressGlobalId(text) {
-  if (!isCanonicalGlobalId(text)) {
+  if (!isGlobalId(text)) {
     return null
   }
   const bytes = new Uint8Array(GLOBAL_ID_BYTES)

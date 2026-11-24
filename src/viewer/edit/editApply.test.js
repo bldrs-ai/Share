@@ -41,6 +41,7 @@ const EVERY_KIND = [
   ['delete', {kind: 'delete', targets: [WALL, DOOR]}],
   ['transform', {kind: 'transform', targets: [WALL, DOOR], payload: {matrix: translation([0, 3, 0])}}],
   ['duplicate', {kind: 'duplicate', targets: [WALL, DOOR]}],
+  ['duplicate (placed)', {kind: 'duplicate', targets: [DOOR], payload: {matrix: translation([0, 0, 4])}}],
   ['setProperty (replace)', {kind: 'setProperty', targets: [WALL, DOOR], payload: {key: 'Name', value: 'Renamed'}}],
   ['setProperty (add)', {kind: 'setProperty', targets: [WALL], payload: {key: 'FireRating', value: 'EI60'}}],
   ['setProperty (remove)', {kind: 'setProperty', targets: [WALL], payload: {key: 'Name', value: null}}],
@@ -157,6 +158,50 @@ describe('viewer/edit/editApply', () => {
     }
     expect(() => applyEditOp(opOf({kind: 'duplicate', targets: [WALL, DOOR]}), {backend, resolver}))
       .toThrow('no headroom')
+    expect(state()).toEqual(before)
+  })
+
+  /**
+   * Make one backend method throw on its `n`th call from now, once.
+   *
+   * @param {object} backend
+   * @param {string} method
+   * @param {number} n
+   * @return {Function} restores the original method
+   */
+  function failNth(backend, method, n) {
+    const original = backend[method]
+    let count = 0
+    backend[method] = (...args) => {
+      if (++count === n) {
+        throw new Error(`${method} failed`)
+      }
+      return original(...args)
+    }
+    return () => {
+      backend[method] = original
+    }
+  }
+
+  it.each([
+    // [kind, spec, the revert method that fails on its 2nd call]
+    ['delete', {kind: 'delete', targets: [WALL, DOOR]}, 'restore'],
+    ['transform', {kind: 'transform', targets: [WALL, DOOR], payload: {matrix: translation([0, 3, 0])}}, 'setMatrix'],
+    ['duplicate', {kind: 'duplicate', targets: [WALL, DOOR]}, 'delete'],
+    ['setProperty', {kind: 'setProperty', targets: [WALL, DOOR], payload: {key: 'Name', value: 'X'}}, 'setProperty'],
+    ['setGeometry', {kind: 'setGeometry', targets: [WALL, DOOR], payload: {geometry: {box: [2, 2, 2]}}}, 'setGeometry'],
+  ])('rolls a partly reverted %s back when the backend throws, so a retry succeeds', (kind, spec, method) => {
+    const {backend, resolver, state} = model()
+    const before = state()
+    const op = opOf(spec)
+    const applied = applyEditOp(op, {backend, resolver})
+    const after = state()
+    const heal = failNth(backend, method, 2)
+    expect(() => revertEditOp(op, applied.undo, {backend, resolver})).toThrow(`${method} failed`)
+    // The first target's revert ran and was re-applied: nothing moved.
+    expect(state()).toEqual(after)
+    heal()
+    expect(revertEditOp(op, applied.undo, {backend, resolver})).toEqual({ok: true})
     expect(state()).toEqual(before)
   })
 

@@ -1,6 +1,7 @@
+/* eslint-disable no-magic-numbers */
 import {seededRandomBytes} from './edit.fixture'
 import {EditOpError, makeEditOp, validateEditOp} from './editOps'
-import {isCanonicalGlobalId} from './globalId'
+import {isGlobalId} from './globalId'
 
 
 const WALL = 'g3hm2qpxcLC2QR6PjoCX$Ma'
@@ -24,17 +25,17 @@ describe('viewer/edit/editOps', () => {
         {randomBytes: seededRandomBytes(3)})
       expect(created.targets).toHaveLength(1)
       expect(created.targets[0][0]).toBe('g')
-      expect(isCanonicalGlobalId(created.targets[0].substring(1))).toBe(true)
+      expect(isGlobalId(created.targets[0].substring(1))).toBe(true)
       // Same seed, same op: minting is in the op, not left to apply.
       expect(makeEditOp({kind: 'create', layer: 'document', payload: {ifcClass: 'IfcWall'}},
         {randomBytes: seededRandomBytes(3)})).toEqual(created)
     })
 
     it('mints one copy ref per duplicated target, all distinct', () => {
-      const dup = makeEditOp({kind: 'duplicate', layer: 'document', targets: [WALL, DOOR], payload: {offset: [1, 0, 0]}})
+      const dup = makeEditOp({kind: 'duplicate', layer: 'document', targets: [WALL, DOOR], payload: {matrix: IDENTITY}})
       expect(dup.payload.copies).toHaveLength(2)
       expect(new Set([...dup.payload.copies, WALL, DOOR]).size).toBe(4)
-      expect(dup.payload.offset).toEqual([1, 0, 0])
+      expect(dup.payload.matrix).toEqual(IDENTITY)
     })
 
     it('makes plain JSON', () => {
@@ -61,6 +62,9 @@ describe('viewer/edit/editOps', () => {
       expect(validateEditOp(op({kind: 'create', targets: [DOOR], payload: {}}))).toBeNull()
       expect(validateEditOp(op({kind: 'transform', payload: {matrix: IDENTITY}}))).toBeNull()
       expect(validateEditOp(op({kind: 'duplicate', payload: {copies: [DOOR]}}))).toBeNull()
+      expect(validateEditOp(op({kind: 'duplicate', payload: {copies: [DOOR], matrix: IDENTITY}}))).toBeNull()
+      expect(validateEditOp(op({kind: 'create', targets: [DOOR], payload: {ifcClass: 'IfcWall', psets: {
+        Pset_WallCommon: {FireRating: 'EI60'}}, geometry: {profile: [[0, 0], [1, 0], [1, 1]], depth: 3}}}))).toBeNull()
       expect(validateEditOp(op({kind: 'setProperty', payload: {key: 'Name', value: null}}))).toBeNull()
       expect(validateEditOp(op({kind: 'setGeometry', payload: {geometry: {box: [1, 1, 1]}}}))).toBeNull()
       // A set of targets, as a scope will carry.
@@ -88,6 +92,25 @@ describe('viewer/edit/editOps', () => {
       ['a setProperty without a key', {kind: 'setProperty', payload: {value: 1}}, /key/],
       ['a setProperty value JSON would drop', {kind: 'setProperty', payload: {key: 'Name', value: undefined}}, /null removes/],
       ['a setGeometry without geometry', {kind: 'setGeometry', payload: {}}, /geometry must be an object/],
+      ['a GlobalId past the 128-bit range', {targets: [`gZ${'0'.repeat(21)}`]}, /not an edit ref/],
+      ['a duplicate with a bad matrix', {kind: 'duplicate', payload: {copies: [DOOR], matrix: [1]}}, /16 finite/],
+      ['a setProperty with a structured value', {kind: 'setProperty', payload: {key: 'Name', value: {v: 1}}},
+        /string, number, boolean or null/],
+      ['a setProperty with a NaN', {kind: 'setProperty', payload: {key: 'Height', value: NaN}}, /string, number/],
+      // Per-load ids (model-edit.md §5) must never reach the persisted log.
+      ['an envelope key it does not define', {batchId: 7}, /op has unknown key "batchId"/],
+      ['a delete carrying a batchId', {payload: {batchId: 7}}, /delete payload has unknown key "batchId"/],
+      ['a transform carrying an expressID', {kind: 'transform', payload: {matrix: IDENTITY, expressID: 771}}, /unknown key "expressID"/],
+      ['a duplicate carrying an instanceId', {kind: 'duplicate', payload: {copies: [DOOR], instanceId: 3}}, /unknown key "instanceId"/],
+      ['a setProperty carrying an occurrenceId', {kind: 'setProperty', payload: {key: 'Name', value: 'x', occurrenceId: 1}},
+        /unknown key "occurrenceId"/],
+      ['a setGeometry nesting a geometryId', {kind: 'setGeometry', payload: {geometry: {box: [1, 1, 1], geometryId: 2}}},
+        /per-load id "geometryId" at payload.geometry.geometryId/],
+      ['a create nesting a batchId in an array', {kind: 'create', targets: [DOOR], payload: {parts: [{ok: 1}, {batchId: 1}]}},
+        /per-load id "batchId" at payload.parts.1.batchId/],
+      ['a create carrying an expressId', {kind: 'create', targets: [DOOR], payload: {expressId: 9}}, /per-load id "expressId"/],
+      ['a create carrying an occurrence path', {kind: 'create', targets: [DOOR], payload: {occurrencePath: [1, 2]}},
+        /per-load id "occurrencePath"/],
     ])('rejects %s', (name, fields, reason) => {
       expect(validateEditOp(fields === null ? null : op(fields))).toMatch(reason)
     })

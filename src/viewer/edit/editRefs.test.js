@@ -45,6 +45,16 @@ describe('viewer/edit/editRefs', () => {
     expect(editRefError(ref)).toMatch(reason)
   })
 
+  it.each(['0', '1', '2', '3'])('accepts a GlobalId leading with %s (the top 2 bits)', (lead) => {
+    expect(parseEditRef(`g${lead}${'0'.repeat(21)}`)).toEqual({kind: 'g', globalId: `${lead}${'0'.repeat(21)}`})
+  })
+
+  it.each(['4', 'Z', '$'])('rejects a GlobalId leading with %s, which encodes more than 128 bits', (lead) => {
+    const ref = `g${lead}${'0'.repeat(21)}`
+    expect(parseEditRef(ref)).toBeNull()
+    expect(editRefError(ref)).toMatch(/not an edit ref/)
+  })
+
   it('reports no error for a valid ref', () => {
     expect(editRefError('o1.2')).toBeNull()
   })

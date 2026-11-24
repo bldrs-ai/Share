@@ -100,6 +100,18 @@ describe('viewer/edit/editLog', () => {
     expect(isDirty(stepBack(log))).toBe(true)
   })
 
+  it('refuses to record an op that does not validate, whoever made it', () => {
+    const bad = {...op('a'), payload: {batchId: 7}}
+    expect(() => recordApplied(EMPTY_EDIT_LOG, bad, null)).toThrow(/batchId/)
+  })
+
+  it('records a copy, so a caller mutating its op afterwards cannot change the log', () => {
+    const mine = op('a')
+    const log = recordApplied(EMPTY_EDIT_LOG, mine, null)
+    mine.payload.batchId = 7
+    expect(appliedOps(log)).toEqual([op('a')])
+  })
+
   it('hands persistence the applied ops only: no undo records, no redo tail', () => {
     const log = stepBack(logOf([op('a'), op('b')]))
     expect(appliedOps(log)).toEqual([op('a')])

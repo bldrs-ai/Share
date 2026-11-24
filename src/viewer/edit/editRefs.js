@@ -9,7 +9,8 @@ import {namePathRef, occurrenceRef, parseRef} from '../visibilityRefs'
  * hold:
  *
  *   g<GlobalId>     an IFC element — from the source file or created by the
- *                   log — by its 22-character `IfcRoot.GlobalId`
+ *                   log — by its 22-character `IfcRoot.GlobalId`, canonical
+ *                   form only (first character `0`–`3`; globalId.js)
  *   o<id>.<id>…     a STEP occurrence (NAUO path, plus the solid). Valid only
  *                   over the exact source bytes it was recorded against: see
  *                   {@link isPortableEditRef} and model-edit.md §5.2

@@ -144,11 +144,12 @@ export function makeFakeEditModel({elements = [], namePaths = {}, occurrences = 
       // batch id is a per-load id the restore must not resurrect.
       place(key, snapshot)
     },
-    duplicate(target, copyRef) {
+    duplicate(target, copyRef, {matrix}) {
       calls.push(['duplicate', target, copyRef])
       const source = get(target)
       created.add(copyRef)
-      place(copyRef, {ref: copyRef, matrix: source.matrix, props: source.props, geometry: source.geometry})
+      const placed = matrix ? multiplyMatrices(matrix, source.matrix) : source.matrix
+      place(copyRef, {ref: copyRef, matrix: placed, props: source.props, geometry: source.geometry})
     },
     transform(target, matrix) {
       calls.push(['transform', target])

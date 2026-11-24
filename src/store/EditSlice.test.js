@@ -1,11 +1,14 @@
 import {makeFakeEditModel, translation} from '../viewer/edit/editBackend.fixture'
 import {seededRandomBytes} from '../viewer/edit/edit.fixture'
+import {appliedOps} from '../viewer/edit/editLog'
 import {makeEditOp} from '../viewer/edit/editOps'
 import useStore from './useStore'
 
 
 const WALL_GID = '3hm2qpxcLC2QR6PjoCX$Ma'
 const WALL = `g${WALL_GID}`
+const DOOR_GID = '1Bd8Kc$Pr2ExS0vV8q9Zz0'
+const DOOR = `g${DOOR_GID}`
 const NOWHERE = 'g0000000000000000000000'
 
 
@@ -107,6 +110,57 @@ describe('EditSlice', () => {
     expect(fake.state()).toEqual(atRedo)
   })
 
+  it('leaves backend and cursor as they were when an undo throws part way, and a retry succeeds', () => {
+    const fake = makeFakeEditModel({elements: [
+      {expressID: 771, globalId: WALL_GID},
+      {expressID: 812, globalId: DOOR_GID},
+    ]})
+    useStore.getState().setEditContext({backend: fake.backend, resolver: fake.resolver})
+    const before = fake.state()
+    useStore.getState().applyEdit(makeEditOp({kind: 'delete', layer: 'document', targets: [WALL, DOOR]}))
+    const afterDelete = fake.state()
+    const restore = fake.backend.restore
+    let calls = 0
+    fake.backend.restore = (...args) => {
+      if (++calls === 2) {
+        throw new Error('no headroom')
+      }
+      return restore(...args)
+    }
+    expect(() => useStore.getState().undoEdit()).toThrow('no headroom')
+    expect(fake.state()).toEqual(afterDelete)
+    expect(flags().editCursor).toBe(1)
+    fake.backend.restore = restore
+    expect(useStore.getState().undoEdit()).toEqual({ok: true})
+    expect(fake.state()).toEqual(before)
+  })
+
+  it('leaves backend and cursor as they were when a redo throws part way, and a retry succeeds', () => {
+    const fake = makeFakeEditModel({elements: [
+      {expressID: 771, globalId: WALL_GID},
+      {expressID: 812, globalId: DOOR_GID},
+    ]})
+    useStore.getState().setEditContext({backend: fake.backend, resolver: fake.resolver})
+    useStore.getState().applyEdit(move('document', [0, 2, 0], [WALL, DOOR]))
+    const moved = fake.state()
+    useStore.getState().undoEdit()
+    const undone = fake.state()
+    const transform = fake.backend.transform
+    let calls = 0
+    fake.backend.transform = (...args) => {
+      if (++calls === 2) {
+        throw new Error('no headroom')
+      }
+      return transform(...args)
+    }
+    expect(() => useStore.getState().redoEdit()).toThrow('no headroom')
+    expect(fake.state()).toEqual(undone)
+    expect(flags().editCursor).toBe(0)
+    fake.backend.transform = transform
+    expect(useStore.getState().redoEdit()).toEqual({ok: true})
+    expect(fake.state()).toEqual(moved)
+  })
+
   it('truncates redo when a new document op follows an undo', () => {
     installFake()
     const first = move('document', [1, 0, 0])
@@ -138,6 +192,15 @@ describe('EditSlice', () => {
     expect(result.unresolved).toEqual([{ref: WALL, reason: 'element is deleted'}])
     expect(flags().editCursor).toBe(1)
     expect(fake.state()).toEqual({})
+  })
+
+  it('keeps per-load ids out of the log when a caller builds an op literal', () => {
+    installFake()
+    const literal = {id: 'op1', kind: 'delete', targets: [WALL], payload: {batchId: 7}, layer: 'document'}
+    const result = useStore.getState().applyEdit(literal)
+    expect(result.ok).toBe(false)
+    expect(result.reason).toMatch(/batchId/)
+    expect(appliedOps(useStore.getState().editLog)).toEqual([])
   })
 
   it('is clean after a save, and a new context starts a new log', () => {
