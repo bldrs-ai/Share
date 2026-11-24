@@ -550,7 +550,9 @@ load's first parse (§5.3, "Rehydrate"), not at eviction.
 
 `EngineSession` is the client half of one worker. It is renamed
 **`WorkerEngine`** in slice 1a (owner, 2026-11-24: "bc it's on a Worker
-thread"), after which "session" in code means `ModelSession` only. The
+thread"). After it no class is a bare session: `ModelSession` is one
+open model and `WorkspaceSession` the user's document (owner, 2026-11-24;
+[layering.md](../tracks/open-t200/layering.md) §4.1 "Session names"). The
 block below is today's surface, as built. The format-neutral
 **`Engine`** interface is [layering.md](../tracks/open-t200/layering.md) §4.1's: this surface with
 `open`, `pump`, `abort` and `stats`, the events, the geometry source and
@@ -638,11 +640,13 @@ tiers, the sidecar written after the first load rather than at eviction
 over a worker or, as the fallback, the same handler in process); the
 *model session* is #2019's per-model session (load, leases, state,
 selection); the user's *workspace session* is
-[workspace-sessions.md](workspace-sessions.md)'s. That doc proposed
-`ModelEngine` for the first, and layering.md first proposed
-`EngineConnection`; the owner chose `WorkerEngine` on 2026-11-24, with
-`Engine` as the interface it and `ConwayEngine` implement
-(layering.md §4.1).
+[workspace-sessions.md](workspace-sessions.md)'s, named `WorkspaceSession`
+in code. That doc proposed `ModelEngine` for the first, and layering.md
+first proposed `EngineConnection`; the owner chose `WorkerEngine` on
+2026-11-24, with `Engine` as the interface it and `ConwayEngine`
+implement, and the same day `WorkspaceSession` for the third, so no
+class is a bare `Session` (layering.md §4.1). A bare "session" in prose
+and UI copy is the user's document.
 
 #### The cap: one predicate
 
