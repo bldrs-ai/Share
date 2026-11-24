@@ -19,7 +19,7 @@ import {
 
 /**
  * What the user was looking at when they gave feedback: the model, the
- * camera and the selection, as structured fields (design/new/feedback.md
+ * camera and the selection, as structured fields (design/tracks/community-t100/feedback.md
  * §"Record"). Every source sends it; a screenshot, when the user attaches
  * one, is separate (captureScreenshot.js).
  *

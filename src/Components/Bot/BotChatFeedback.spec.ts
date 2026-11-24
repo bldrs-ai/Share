@@ -7,7 +7,7 @@ import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
 
 /**
  * Rating an assistant reply (Share#2306), the first client of the feedback
- * module (design/new/feedback.md). The reply comes from MSW's stand-in for
+ * module (design/tracks/community-t100/feedback.md). The reply comes from MSW's stand-in for
  * Bldrs' hosted relay (as in BotChat.spec.ts), and the store is MSW's
  * stand-in for `netlify/functions/feedback.js`, which keeps what it is sent
  * on `window.__mockFeedback`. GA events land in `window.dataLayer`, the GA

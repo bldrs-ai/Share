@@ -1101,7 +1101,7 @@ has a backfill, so these only start accruing data once registered:
 Feedback to Bldrs (the assistant's thumbs under a reply now, the general
 feedback item #2312 next) sends two GA events, structured fields only. The
 text, the note and any screenshot go to Bldrs' own store, never to GA; the
-two share only `feedback_id`. [feedback.md](feedback.md) is the source for
+two share only `feedback_id`. [feedback.md](../tracks/community-t100/feedback.md) is the source for
 the module, the record and the privacy rules.
 
 | Event | Params | Fires |

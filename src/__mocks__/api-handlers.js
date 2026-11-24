@@ -218,7 +218,7 @@ function jsonMockResponse(status, body, headers = {}) {
  */
 function netlifyHandlers() {
   return [
-    // User feedback (design/new/feedback.md): stands in for
+    // User feedback (design/tracks/community-t100/feedback.md): stands in for
     // `netlify/functions/feedback.js` in dev, Playwright and Jest. Same
     // shape check (the record module both share) and answers; the stored
     // records go on `window.__mockFeedback`, keyed by feedback_id like the
