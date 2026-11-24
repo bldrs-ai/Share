@@ -16,7 +16,7 @@
  *                                               (src/feedback/feedbackRecord.js)
  *   → 403 {error: 'feedback_forbidden_origin'}  a browser on another site
  *   → 405 {error: 'method_not_allowed'}
- *   → 413 {error: 'feedback_too_large'}         a declared length over MAX_FEEDBACK_BYTES
+ *   → 413 {error: 'feedback_too_large'}         a body over MAX_FEEDBACK_BYTES, declared or as read
  *   → 500 {error: 'feedback_not_configured'}    the blob store couldn't be opened
  *   → 502 {error: 'feedback_store_failed'}      the write failed; the page offers a retry
  *
@@ -45,6 +45,7 @@
 import {getStore} from '@netlify/blobs'
 import {MAX_FEEDBACK_BYTES, parseFeedbackRecord} from '../../src/feedback/feedbackRecord.js'
 import {isAllowedOrigin, originHostForLog} from './_lib/aiOrigin.js'
+import {readCappedText} from './_lib/readCappedBody.js'
 
 
 export const FEEDBACK_STORE = 'feedback'
@@ -71,12 +72,14 @@ export default async function handler(req) {
   if (Number(req.headers.get('content-length')) > MAX_FEEDBACK_BYTES) {
     return json(HTTP_PAYLOAD_TOO_LARGE, {error: 'feedback_too_large'})
   }
-  let text = ''
-  try {
-    text = await req.text()
-  } catch (_) {
-    // An unreadable body is an invalid record, below.
+  // Counted in bytes as it streams, so a chunked body (no length to refuse
+  // above) or one of multibyte text is stopped at the cap, not buffered whole.
+  const read = await readCappedText(req, MAX_FEEDBACK_BYTES)
+  if (read.tooLarge) {
+    return json(HTTP_PAYLOAD_TOO_LARGE, {error: 'feedback_too_large'})
   }
+  // An unreadable body is an invalid record, below.
+  const text = read.text ?? ''
   // Shape first, as client-capabilities does: the deployed smoke probe posts
   // `{}` with the deploy's own Origin, and is answered without the store.
   const record = parseFeedbackRecord(text)

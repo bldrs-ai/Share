@@ -83,7 +83,7 @@ follows:
 - `403 feedback_forbidden_origin`: the request came from a browser on
   another site.
 - `405`: anything but `POST`.
-- `413 feedback_too_large`: the declared length is over 512 KiB.
+- `413 feedback_too_large`: the body is over 512 KiB, either as declared in `Content-Length` or as counted in bytes while it streams (`_lib/readCappedBody.js`). A chunked or multibyte body is stopped at the cap, never buffered whole.
 - `500 feedback_not_configured`: the store wouldn't open.
 - `502 feedback_store_failed`: the write failed. The page offers a retry.
 
@@ -115,7 +115,11 @@ Tests:
 - **Model names.** For any model that isn't one of Share's hosted files,
   the page withholds the model's names and paths from every text field.
   These are the route's paths, the file name, its stem when it has at
-  least 4 characters, and the tree root's name. The helper is
+  least 4 characters, and the tree root's name. A root label Loader
+  composes as `<scene> (<file>)` is also withheld in parts, and for a local
+  upload, whose route holds only a storage UUID, the original file name is
+  looked up (`loader/uploadedFileName.js`, as Loader does for the label), so
+  a bare `Secret.glb` or `Secret` in the text is caught. The helper is
   `privacy/sentryRedaction.js#withholdModelNames`, and the page keeps the
   real names. The page can't tell a private GitHub repo or a signed URL
   from a public one, so the model `ref` is withheld for everything but

@@ -1,3 +1,4 @@
+import {registerInMemoryUpload, resetInMemoryUploadsForTest} from '../loader/inMemoryUploads'
 import {WITHHELD_MODEL_NAME} from '../privacy/sentryRedaction'
 import {PRIVATE_ROUTE, SCREENSHOT, setFeedbackStore} from './feedback.fixture'
 import {FEEDBACK_SOURCES, isFeedbackRecord} from './feedbackRecord'
@@ -59,6 +60,33 @@ describe('feedback/submitFeedback', () => {
       expect(record.context.prompt).toBe(`select the walls in ${WITHHELD_MODEL_NAME}`)
       expect(record.note).toBe(`${WITHHELD_MODEL_NAME} is wrong`)
       expect(JSON.stringify(record)).not.toMatch(/Tower|acme/i)
+    })
+
+    // Codex on #2313: an upload's route holds only its storage UUID, and its
+    // root label is composed, `Scene (Secret.glb)`; the bare file name and
+    // its stem must be withheld too.
+    it.each([
+      ['a composed root label', 'Scene (Secret.glb)'],
+      // So the upload's own name is checked on its own, not through the label.
+      ['a root label without it', 'Model'],
+    ])('withholds a local upload\'s original file name and stem, which its route does not carry, under %s', (_, label) => {
+      const storageId = registerInMemoryUpload(new File(['glb'], 'Secret.glb'), 'glb')
+      try {
+        setFeedbackStore({
+          modelPath: {kind: 'file', isUploadedFile: true, filepath: `/${storageId}`,
+            downloadUrl: new URL(`https://bldrs.ai/${storageId}`)},
+          rootElement: {expressID: 1, Name: {value: label}, children: []},
+        })
+        const record = buildFeedbackRecord({...ASSIST, note: 'Secret.glb looks off', context: {...ASSIST_CONTEXT,
+          prompt: 'how big is Secret?', reply: 'Secret.glb has 3 meshes. secret is 2 m tall.'}})
+        expect(record.note).toBe(`${WITHHELD_MODEL_NAME} looks off`)
+        expect(record.context.prompt).toBe(`how big is ${WITHHELD_MODEL_NAME}?`)
+        expect(record.context.reply).toBe(`${WITHHELD_MODEL_NAME} has 3 meshes. ${WITHHELD_MODEL_NAME} is 2 m tall.`)
+        expect(record.view.model).toMatchObject({route_kind: 'local', ref: null})
+        expect(JSON.stringify(record)).not.toMatch(/secret/i)
+      } finally {
+        resetInMemoryUploadsForTest()
+      }
     })
 
     it('keeps a hosted sample\'s text as written', () => {

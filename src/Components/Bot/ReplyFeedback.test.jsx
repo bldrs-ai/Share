@@ -157,6 +157,30 @@ describe('Bot/ReplyFeedback', () => {
     await waitFor(() => expect(stored().map((r) => r.rating)).toEqual(['up', 'down', 'none']))
   })
 
+  // Codex on #2313: a clear's record is kept for a retry, as a rating's is.
+  it('a failed clear offers Try again, which posts the same clear record and tells GA nothing new', async () => {
+    render(<Harness/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(screen.getByRole('button', {name: 'Good reply'}))
+    fireEvent.click(screen.getByTestId('Feedback-Send'))
+    await screen.findByText(SENT_TEXT)
+
+    window.__mockFeedbackFail = true
+    fireEvent.click(screen.getByRole('button', {name: 'Good reply'}))
+    expect(await screen.findByText(SEND_FAILED_TEXT)).toBeInTheDocument()
+    expect(screen.getByRole('button', {name: 'Good reply'})).toHaveAttribute('aria-pressed', 'false')
+    expect(feedbackEvents().map((p) => p.rating)).toEqual(['up', 'none'])
+    const clearId = feedbackEvents()[1].feedback_id
+    expect(stored().map((r) => r.rating)).toEqual(['up'])
+
+    window.__mockFeedbackFail = false
+    fireEvent.click(screen.getByTestId('BotChat-FeedbackRetry'))
+    expect(await screen.findByText(SENT_TEXT)).toBeInTheDocument()
+    expect(screen.queryByTestId('BotChat-FeedbackRetry')).toBeNull()
+    // The same record, landed; GA counted the clear once.
+    expect(stored().map((r) => [r.rating, r.feedback_id])).toEqual([['up', expect.any(String)], ['none', clearId]])
+    expect(feedbackEvents()).toHaveLength(2)
+  })
+
   it('a failed post shows the quiet hint and counts it; Send tries the same record again', async () => {
     window.__mockFeedbackFail = true
     render(<Harness/>, {wrapper: HelmetStoreRouteThemeCtx})

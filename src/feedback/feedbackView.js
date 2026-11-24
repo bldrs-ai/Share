@@ -1,3 +1,4 @@
+import {uploadedDisplayFileName} from '../loader/uploadedFileName'
 import {MODEL_ROUTE_KINDS, modelRouteSource} from '../privacy/analytics'
 import {modelNamesOf} from '../privacy/sentryRedaction'
 import modelIdentity from '../routes/modelIdentity'
@@ -52,7 +53,12 @@ export function feedbackView(state = useStore.getState()) {
       types[type] = (types[type] ?? 0) + 1
     }
   }
-  const names = isPublic || !route ? [] : modelNamesOf(route, rootElement ? [nodeName(rootElement)] : [])
+  const names = isPublic || !route ? [] : modelNamesOf(route, [
+    rootElement ? nodeName(rootElement) : null,
+    // An upload's route holds only its storage UUID: its real name is looked
+    // up the way Loader looks it up for the root label.
+    routeKind === MODEL_ROUTE_KINDS.LOCAL ? uploadedDisplayFileName(String(route.filepath ?? '')) : null,
+  ].filter(Boolean))
   return {
     isPublic,
     names,

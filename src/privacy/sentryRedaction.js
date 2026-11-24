@@ -294,13 +294,22 @@ export const WITHHELD_MODEL_NAME = '(model name withheld)'
 // A bare stem shorter than this ("a", "v2") is too likely to be an ordinary
 // word in the text to withhold on sight; the full file name still is.
 const MIN_STEM_CHARS = 4
+// Loader.js's composed root label, `<scene name> (<file name>)`.
+const COMPOSED_LABEL = /^(.*) \(([^()]+)\)$/s
 
 
 /**
  * The strings that name a private model, for {@link withholdModelNames}: each
  * path the route carries (`filepath`, `gitpath`, `downloadUrl`, `srcUrl`), its
- * last segment (the file name), that name without its extension, and any
- * further names given (the tree root's name, which an IFC project carries).
+ * last segment (the file name), that name without its extension, and the
+ * further names given, each treated the same way.
+ *
+ * Further names are the tree root's label and, for an upload, its original
+ * file name (the route holds only a storage UUID; loader/uploadedFileName.js).
+ * A root label can be composed, `<scene name> (<file name>)` (Loader.js,
+ * #1595, for glTF, OBJ and the other mesh formats), so its parts are withheld
+ * on their own too: a reply that says just `Secret.glb` or `Secret` must not
+ * get past a label that says `Scene (Secret.glb)` (Codex on #2313).
  * Longest first, so a path is withheld whole before its file name is.
  *
  * @param {object|null} routeResult routes.ts#handleRoute, the store's `modelPath`
@@ -319,6 +328,15 @@ export function modelNamesOf(routeResult, extraNames = []) {
     .map((key) => routeResult?.[key])
     .filter((value) => value !== undefined && value !== null)
     .map(String)
+  // A file name, and its stem when that is long enough to not be an
+  // ordinary word.
+  const addFileName = (name) => {
+    add(name)
+    const stem = name.trim().replace(/\.[^.]+$/, '')
+    if (stem.length >= MIN_STEM_CHARS) {
+      add(stem)
+    }
+  }
   for (const path of paths) {
     add(path)
     let segment = path.split(/[?#]/)[0].split('/').filter(Boolean).pop() ?? ''
@@ -327,15 +345,19 @@ export function modelNamesOf(routeResult, extraNames = []) {
     } catch {
       // Keep it as written: a stray % shouldn't cost the redaction.
     }
-    add(segment)
-    const stem = segment.replace(/\.[^.]+$/, '')
-    if (stem.length >= MIN_STEM_CHARS) {
-      add(stem)
-    }
+    addFileName(segment)
   }
   for (const name of extraNames) {
-    if (typeof name === 'string' && name.trim().length >= MIN_STEM_CHARS) {
-      add(name)
+    if (typeof name !== 'string' || name.trim().length < MIN_STEM_CHARS) {
+      continue
+    }
+    addFileName(name)
+    const composed = COMPOSED_LABEL.exec(name.trim())
+    if (composed) {
+      if (composed[1].trim().length >= MIN_STEM_CHARS) {
+        add(composed[1])
+      }
+      addFileName(composed[2])
     }
   }
   return [...names].sort((a, b) => b.length - a.length)

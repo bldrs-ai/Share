@@ -235,6 +235,19 @@ describe('privacy/sentryRedaction withholdModelNames', () => {
     expect(out).not.toContain('secret-repo')
   })
 
+  // Codex on #2313: a composed root label must withhold its file name, and
+  // that name's stem, on their own.
+  it('withholds the parts of a composed root label, `<scene> (<file>)`', () => {
+    const names = modelNamesOf({filepath: '/0b9e8d7c-6a5b-4c3d-9e2f-1a0b9c8d7e6f.glb'}, ['Scene (Secret.glb)'])
+    expect(names).toEqual(expect.arrayContaining(['Scene (Secret.glb)', 'Secret.glb', 'Secret', 'Scene']))
+    expect(withholdModelNames('Secret.glb has 3 meshes; Secret is big', names))
+      .toBe(`${WITHHELD_MODEL_NAME} has 3 meshes; ${WITHHELD_MODEL_NAME} is big`)
+  })
+
+  it('treats a further name that is a file name like a route\'s, stem included', () => {
+    expect(modelNamesOf(null, ['Secret.glb'])).toEqual(['Secret.glb', 'Secret'])
+  })
+
   it('leaves short stems and root names alone, as ordinary words', () => {
     const names = modelNamesOf({filepath: '/a.ifc'}, ['HQ'])
     expect(names).toEqual(['/a.ifc', 'a.ifc'])

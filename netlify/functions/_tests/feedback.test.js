@@ -191,10 +191,71 @@ describe('feedback function', () => {
     expect(fake.requests).toEqual([])
   })
 
-  it('refuses a body over the cap that declared no length', async () => {
-    const res = await handler(request({body: variant(ASSIST, {pad: 'x'.repeat(MAX_FEEDBACK_BYTES)})}))
-    expect(res.status).toBe(400)
+  // Codex on #2313: the cap is enforced while the body streams, in bytes.
+  it('refuses a chunked body over the cap as it crosses it, without reading the rest', async () => {
+    const chunk = new TextEncoder().encode('x'.repeat(64 * 1024))
+    const total = 64
+    let pulled = 0
+    let cancelled = false
+    const body = new ReadableStream({
+      pull(controller) {
+        if (pulled === total) {
+          controller.close()
+          return
+        }
+        pulled++
+        controller.enqueue(chunk)
+      },
+      cancel() {
+        cancelled = true
+      },
+    })
+    const req = new Request('https://bldrs.ai/.netlify/functions/feedback',
+      {method: 'POST', headers: {origin: 'https://bldrs.ai'}, body, duplex: 'half'})
+    expect(req.headers.get('content-length')).toBeNull()
+    const textSpy = jest.spyOn(req, 'text')
+    const res = await handler(req)
+    expect(res.status).toBe(413)
+    expect(await res.json()).toEqual({error: 'feedback_too_large'})
+    expect(textSpy).not.toHaveBeenCalled()
+    // 512 KiB is 8 chunks: it stopped at the ninth, and told the sender.
+    expect(pulled).toBeLessThan(total / 2)
+    expect(cancelled).toBe(true)
     expect(fake.requests).toEqual([])
+  })
+
+  it('counts the cap in bytes: multibyte text under it in characters but over it in bytes is refused', async () => {
+    const pad = '\u00e9'.repeat(Math.ceil(MAX_FEEDBACK_BYTES * 0.6))
+    const text = variant(ASSIST, {pad})
+    expect(text.length).toBeLessThan(MAX_FEEDBACK_BYTES)
+    expect(new TextEncoder().encode(text).byteLength).toBeGreaterThan(MAX_FEEDBACK_BYTES)
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(text))
+        controller.close()
+      },
+    })
+    const req = new Request('https://bldrs.ai/.netlify/functions/feedback',
+      {method: 'POST', headers: {origin: 'https://bldrs.ai'}, body: stream, duplex: 'half'})
+    expect((await handler(req)).status).toBe(413)
+    expect(fake.requests).toEqual([])
+  })
+
+  it('reads a chunked body under the cap whole, multibyte text split across chunks included', async () => {
+    const bytes = new TextEncoder().encode(variant(ASSIST, {note: 'caf\u00e9 \u2014 na\u00efve'}))
+    const stream = new ReadableStream({
+      start(controller) {
+        // Split inside a multibyte character, as a network may.
+        const cut = bytes.indexOf(0xc3) + 1
+        controller.enqueue(bytes.slice(0, cut))
+        controller.enqueue(bytes.slice(cut))
+        controller.close()
+      },
+    })
+    const req = new Request('https://bldrs.ai/.netlify/functions/feedback',
+      {method: 'POST', headers: {origin: 'https://bldrs.ai'}, body: stream, duplex: 'half'})
+    expect((await handler(req)).status).toBe(204)
+    expect(storedRecord(fake, FEEDBACK_ID).note).toBe('caf\u00e9 \u2014 na\u00efve')
   })
 
   it('refuses a browser on another site with 403, and stores nothing', async () => {
