@@ -21,13 +21,19 @@ import useStore from '../../store/useStore'
  * privacy/localOnlyMode.js) and to the privacy policy's §1 (src/pages/
  * Privacy.jsx and its marketing copy). Change them together. Local-first
  * framing, what never leaves the device first, per the owner's 2026-11-24
- * feedback round; design/new/analytics-consent.md §"The banner".
+ * feedback round; design/new/analytics-consent.md §"The banner". Short, but
+ * it names everything Accept turns on (GA, its cookies, what is measured)
+ * and what Decline leaves on (error reports), as the policy does: a shorter
+ * first cut left those to the policy link, which made the choice less than
+ * informed (codex on #2354).
  */
 export const CONSENT_HEADLINE = 'Your models stay on your device.'
 export const CONSENT_TEXT =
   'Bldrs opens files in your browser; they’re never uploaded to our servers. To improve Bldrs, we’d ' +
-  'like to measure usage, like file format and size, with a pseudonymous ID. No advertising. If you ' +
-  `decline, Bldrs runs in ${LOCAL_ONLY_MODE_NAME}: files from your computer and the sample models.`
+  'like to measure visits and feature use, like which kinds of models are opened (format, size, source), ' +
+  'with Google Analytics, which sets cookies holding a pseudonymous ID. No advertising. If you decline, ' +
+  `Bldrs runs in ${LOCAL_ONLY_MODE_NAME}: files from your computer and the sample models. Error reports ` +
+  'stay on either way.'
 
 
 /** Served by the marketing build (netlify.toml: /privacy/ is a file match). */

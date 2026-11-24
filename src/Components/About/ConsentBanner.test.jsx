@@ -55,7 +55,13 @@ describe('ConsentBanner', () => {
     expect(summary).toHaveTextContent(CONSENT_HEADLINE)
     expect(summary).toHaveTextContent(CONSENT_TEXT)
     expect(CONSENT_TEXT).toContain('never uploaded to our servers')
-    expect(CONSENT_TEXT).toContain('pseudonymous ID')
+    // Everything Accept turns on, and what Decline leaves on, as the policy
+    // says (src/pages/Privacy.jsx §1).
+    expect(CONSENT_TEXT).toContain('Google Analytics, which sets cookies holding a pseudonymous ID')
+    expect(CONSENT_TEXT).toContain('visits and feature use')
+    expect(CONSENT_TEXT).toContain('(format, size, source)')
+    expect(CONSENT_TEXT).toContain('No advertising.')
+    expect(CONSENT_TEXT).toContain('Error reports stay on either way.')
     expect(CONSENT_TEXT).toContain(`If you decline, Bldrs runs in ${LOCAL_ONLY_MODE_NAME}`)
     // Not a modal, and nothing to close it with but an answer.
     expect(screen.queryByRole('dialog')).toBeNull()

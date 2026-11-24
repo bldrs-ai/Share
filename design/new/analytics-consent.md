@@ -18,9 +18,15 @@ the current `CONSENT_VERSION` (store `isConsentBannerVisible`, seeded from
 
 > **Your models stay on your device.** Bldrs opens files in your browser;
 > they're never uploaded to our servers. To improve Bldrs, we'd like to
-> measure usage, like file format and size, with a pseudonymous ID. No
-> advertising. If you decline, Bldrs runs in Test only mode: files from your
-> computer and the sample models. [Privacy policy]
+> measure visits and feature use, like which kinds of models are opened
+> (format, size, source), with Google Analytics, which sets cookies holding
+> a pseudonymous ID. No advertising. If you decline, Bldrs runs in Test only
+> mode: files from your computer and the sample models. Error reports stay
+> on either way. [Privacy policy]
+
+It names everything Accept turns on and what Decline leaves on, as the
+policy's §1 does; a shorter first cut left those to the policy link (codex
+on #2354, an uninformed choice otherwise).
 
 with **Decline** and **Accept** side by side at the same size, and **no
 close button**: only an answer takes it down.
