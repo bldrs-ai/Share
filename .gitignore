@@ -10,6 +10,7 @@
 # Build output, so never committed — and keeping it untracked is also what
 # guarantees no copy of it is ever public.
 /netlify/functions/_pro-modules
+/netlify/functions/_build
 
 cypress/downloads
 cypress/e2e/logs

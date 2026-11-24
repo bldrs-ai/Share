@@ -12,8 +12,10 @@ import {
   Chip,
   Divider,
 } from '@mui/material'
-import {captureException} from '@sentry/react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {AUTH_STEPS} from '../../Auth0/authFailureCodes'
+import {openAuthPopup} from '../../Auth0/authPopup'
+import {reportAuthFailure} from '../../Auth0/reportAuthFailure'
 import Dialog from '../Dialog'
 import {useMock} from './ProfileControl'
 import {
@@ -46,8 +48,7 @@ export default function ManageProfile({isDialogDisplayed, setIsDialogDisplayed})
       cacheMode: 'off', useRefreshTokens: true})
     } catch (err) {
       console.error('Error refreshing user after link/unlink', err)
-      // report in sentry
-      captureException(err)
+      reportAuthFailure(AUTH_STEPS.LINK_REFRESH, err)
     }
   }, [getAccessTokenSilently])
 
@@ -84,12 +85,15 @@ export default function ManageProfile({isDialogDisplayed, setIsDialogDisplayed})
           useRefreshTokens: true,
         })
       localStorage.setItem('linkStatus', 'inProgress')
-      window.open(`/popup-auth?connection=${connection}&linkToken=${encodeURIComponent(primaryToken)}`,
-        'authPopup', 'width=600,height=600')
+      const popup = openAuthPopup(`/popup-auth?connection=${connection}&linkToken=${encodeURIComponent(primaryToken)}`,
+        {connection, flow: 'link'})
+      if (!popup) {
+        // Blocked (reported by openAuthPopup): no callback will ever clear it.
+        localStorage.removeItem('linkStatus')
+      }
     } catch (err) {
       console.error('Linking failed', err)
-      // report in sentry
-      captureException(err)
+      reportAuthFailure(AUTH_STEPS.LINK_START, err, {connection})
     }
   }
 
@@ -118,13 +122,17 @@ export default function ManageProfile({isDialogDisplayed, setIsDialogDisplayed})
           body: JSON.stringify({secondaryProvider: connection, secondaryUserId}),
         })
       if (!res.ok) {
-        throw new Error(await res.text())
+        // A code for the auth.error tag; the body goes to the report only
+        // as a cleaned description.
+        const unlinkErr = new Error('unlink-identity failed')
+        unlinkErr.error = `unlink_http_${res.status}`
+        unlinkErr.error_description = await res.text()
+        throw unlinkErr
       }
       await refreshUser()
     } catch (err) {
       console.error('Unlink failed', err)
-      // report in sentry
-      captureException(err)
+      reportAuthFailure(AUTH_STEPS.UNLINK, err, {connection})
     }
   }
 

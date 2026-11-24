@@ -50,7 +50,11 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   `notes/` — but only from a branch's *second* push onward, since it
   bails to build when `CACHED_COMMIT_REF` is unset and a new branch has
   no prior deploy, so the push that opens a docs-only PR still builds
-  (#1766). Marketing posts are `.mdx`, so they always build.) Before editing those
+  (#1766). Marketing posts are `.mdx`, so they always build.) Only a PR
+  based on `main` gets a preview: one stacked on another PR's branch gets
+  none, and retargeting it to `main` or closing and reopening it doesn't
+  start one either. Only a push to the branch after it's based on `main`
+  does (#2034). Before editing those
   workflows: the gate is a job-level `if:` (a skipped-by-if job
   satisfies a required check; a workflow that never triggers leaves the
   PR waiting forever); `ready_for_review` and `converted_to_draft` must
@@ -145,7 +149,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Route schemas, URL parsing | [src/routes/README.md](src/routes/README.md) |
 | Keeping the test console clean — fix `act()` warnings, divert+assert expected `[glb]` output, narrow `suppressActWarnings()`, back a global mute with a static test (`singleThreeInstance.test.js`), jsdom canvas stubs | [PLAYBOOK.md](PLAYBOOK.md) §"Keep the test console clean" (+ [STYLE.md](STYLE.md) §"Console hygiene") |
 | Dev HTTPS certificate setup | [tools/esbuild/certificates/README.md](tools/esbuild/certificates/README.md) |
-| Cloud sources, OAuth flows, token storage, Auth0 gate, the Auth0 custom error page (`public/auth/error/`, the URL set in the Auth0 tenant, why `error_description` is never rendered) | [src/connections/README.md](src/connections/README.md) |
+| Cloud sources, OAuth flows, token storage, Auth0 gate, the Auth0 custom error page (`public/auth/error/`, the URL set in the Auth0 tenant, why `error_description` is never rendered), reporting login failures to Sentry (the `auth.*` tags, every failure path and its level, the `report-auth-error` relay, what is never sent) | [src/connections/README.md](src/connections/README.md) |
 | Sharing a model with people on Drive and GitHub (Track `share-t100`, #2203): the sharing methods on `ConnectionProvider`, the Drive and GitHub adapter mappings, what `Visibility` means and why Drive's feeds quota counting, folder-scoped routes and their caveat; which epic owns each surface (chip `share-130`, people `share-201`, folders `share-400`) and why Share's own links come from `share-200`, not provider link-sharing | [design/new/multi-user-sharing.md](design/new/multi-user-sharing.md) |
 | GitHub as a per-account connection (Track `identity-t100`, #2202): why the OAuth broker is Netlify Functions and not the SOAP proxy, token lifetime and refresh, scopes, commit attribution, the Auth0 gate on the broker, the migration rule, and which decisions aren't built yet | [design/new/identity-decoupling-decisions.md](design/new/identity-decoupling-decisions.md) |
 | The GLB artifact a model becomes (Track `share-t101`, #2201): its extension catalogue, the schema-version rule, why the originator's browser builds it, and the validation and trust rules other docs cite (the cache container itself is `glb-export-premium.md` §1.1) | [design/new/glb-model-sharing.md](design/new/glb-model-sharing.md) |

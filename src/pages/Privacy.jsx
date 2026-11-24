@@ -37,15 +37,25 @@ export default function Privacy() {
           <strong>Telemetry is required by default.</strong> We collect pseudonymous usage metrics (e.g.,
           performance, feature use) to improve reliability and user experience. Telemetry is of two kinds:
         </Typography>
+        {/* Keep this section in step with marketing/src/app/privacy/page.tsx, which serves /privacy/.
+           What the error reports carry is in src/connections/README.md §"Reporting login failures".
+           Retention is Sentry's for bldrs-ai's Team plan (errors 90 days, spans/transactions 30), per
+           docs.sentry.io/security-legal-pii/security/data-retention-periods/, checked 2026-11-03.
+           Update both copies if the plan changes. */}
         <Typography variant='body1'>
-          <strong>Error and reliability reports.</strong> When something fails, the app reports what failed,
-          the app and browser versions and, if you’re signed in, your account ID, to our error-monitoring
-          service (Sentry). Separately, it counts browsers that can’t run part of the app (for example, with
-          no WebGL, or with analytics blocked) by browser family and device type only, sent to Google
-          Analytics under one shared ID rather than yours. None of these reports set cookies, carry an
-          identifier that follows your browser between visits, or include your models’ file names, paths or
-          contents. They are part of operating the service and are always on, on the basis of our legitimate
-          interest in keeping Bldrs Share secure and working.
+          <strong>Error and reliability reports.</strong> When something fails, including a failed sign-in, the
+          app reports what failed, the app and browser versions and page timing to our error-monitoring service
+          (Sentry); for a failed sign-in, the Auth0 tracking ID; and, if you’re signed in, your account ID (an
+          opaque ID, not your name or email). Separately, it counts browsers that can’t run part of the app (for
+          example, with no WebGL, or with analytics blocked) by browser family and device type only, sent to
+          Google Analytics under one shared ID rather than yours. None of these reports set cookies or include
+          your email, name, sign-in tokens, or your models’ file names, paths or contents. Unless you allow
+          usage metrics, they carry no identifier that follows your browser between visits; if you do, error
+          reports also carry your Google Analytics ID, so we can connect a problem to a visit. Sentry processes
+          these reports on our behalf as our service provider, and keeps error reports for 90 days and
+          page-timing data for 30 days, then deletes them. We use them only to find and fix problems and keep
+          the service secure, never for advertising. They are part of operating the service and are always on,
+          on the basis of our legitimate interest in keeping Bldrs Share secure and working.
         </Typography>
         <Typography variant='body1'>
           <strong>Usage metrics.</strong> With your consent, we measure visits and feature use, including
@@ -97,7 +107,8 @@ export default function Privacy() {
         <Typography variant='h1'>6. Your Choices</Typography>
         <Typography variant='body1'>
           You can disconnect Google access in your Google Account settings. You may request deletion of any stored
-          account metadata (if applicable) by emailing <Link href='mailto:support@bldrs.ai'>support@bldrs.ai</Link>.
+          account metadata or error reports tied to your account (if applicable) by emailing{' '}
+          <Link href='mailto:support@bldrs.ai'>support@bldrs.ai</Link>.
           You can also use open-source/self-hosted deployments without accounts, subject to your configuration.
           You can change your telemetry choice at any time from the About dialog.
         </Typography>

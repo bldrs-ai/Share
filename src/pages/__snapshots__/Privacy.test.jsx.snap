@@ -97,7 +97,7 @@ exports[`Privacy renders 1`] = `
           <strong>
             Error and reliability reports.
           </strong>
-           When something fails, the app reports what failed, the app and browser versions and, if you’re signed in, your account ID, to our error-monitoring service (Sentry). Separately, it counts browsers that can’t run part of the app (for example, with no WebGL, or with analytics blocked) by browser family and device type only, sent to Google Analytics under one shared ID rather than yours. None of these reports set cookies, carry an identifier that follows your browser between visits, or include your models’ file names, paths or contents. They are part of operating the service and are always on, on the basis of our legitimate interest in keeping Bldrs Share secure and working.
+           When something fails, including a failed sign-in, the app reports what failed, the app and browser versions and page timing to our error-monitoring service (Sentry); for a failed sign-in, the Auth0 tracking ID; and, if you’re signed in, your account ID (an opaque ID, not your name or email). Separately, it counts browsers that can’t run part of the app (for example, with no WebGL, or with analytics blocked) by browser family and device type only, sent to Google Analytics under one shared ID rather than yours. None of these reports set cookies or include your email, name, sign-in tokens, or your models’ file names, paths or contents. Unless you allow usage metrics, they carry no identifier that follows your browser between visits; if you do, error reports also carry your Google Analytics ID, so we can connect a problem to a visit. Sentry processes these reports on our behalf as our service provider, and keeps error reports for 90 days and page-timing data for 30 days, then deletes them. We use them only to find and fix problems and keep the service secure, never for advertising. They are part of operating the service and are always on, on the basis of our legitimate interest in keeping Bldrs Share secure and working.
         </p>
         <p
           class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
@@ -180,7 +180,8 @@ exports[`Privacy renders 1`] = `
         <p
           class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
         >
-          You can disconnect Google access in your Google Account settings. You may request deletion of any stored account metadata (if applicable) by emailing 
+          You can disconnect Google access in your Google Account settings. You may request deletion of any stored account metadata or error reports tied to your account (if applicable) by emailing
+           
           <a
             class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1onfuse-MuiTypography-root-MuiLink-root"
             href="mailto:support@bldrs.ai"

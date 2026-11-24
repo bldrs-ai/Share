@@ -116,3 +116,15 @@ rewriteVersion(
   /^(?<indent>\s*)"version"\s*:\s*"(?<major>\d+)\.\d+\.[A-Za-z0-9]+"\s*(?<trailingComma>,)?$/m,
   `$<indent>"version": "$<major>.${prNumber}.${commitHash}"$<trailingComma>`,
 )
+
+// The same version for Netlify Functions, which get no build step of their
+// own and can't read package.json once deployed: shipped beside its bundle
+// it would sit at the task root, where its "type": "module" makes Node load
+// the CommonJS bundle as ESM and the function crash on cold start. The
+// report-auth-error function ships this file instead (netlify.toml
+// `included_files`) so its Sentry events carry the app's release. Netlify
+// runs the build command before it bundles functions, so this is in place in
+// time. Gitignored: a build output, like `_pro-modules/`.
+const {version} = JSON.parse(fs.readFileSync('package.json', 'utf8'))
+fs.mkdirSync('netlify/functions/_build', {recursive: true})
+fs.writeFileSync('netlify/functions/_build/release.json', `${JSON.stringify({version})}\n`)
