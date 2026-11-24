@@ -89,6 +89,12 @@ describe('viewer/edit/editOps', () => {
       ['an expressID target', {targets: ['e771']}, /g<GlobalId>/],
       ['a malformed target', {targets: ['gshort']}, /not an edit ref/],
       ['a repeated target', {targets: [WALL, WALL]}, /repeats/],
+      // One element twice under two spellings: refused as non-canonical, so
+      // the uniqueness check on strings is uniqueness of elements.
+      ['a name path repeated in a non-canonical spelling', {targets: ['nMesh', 'nMesh~1']},
+        /target "nMesh~1": not in canonical form: write "nMesh"/],
+      ['an occurrence repeated in a non-canonical spelling', {targets: ['o1', 'o01']},
+        /target "o01": not in canonical form: write "o1"/],
       ['no payload', {payload: null}, /payload must be an object/],
       ['a create with two targets', {kind: 'create', targets: [WALL, DOOR]}, /exactly one/],
       ['a create named by a non-g ref', {kind: 'create', targets: ['o1']}, /g<GlobalId>/],

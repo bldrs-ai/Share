@@ -193,7 +193,7 @@ function isMatrix(m) {
 /**
  * Check an op: that it is plain JSON, then its schema, both on its canonical
  * copy ({@link canonicalEditOp}). Ref RESOLUTION is not checked here — that
- * needs a loaded model (editApply.js#resolveEditRefs).
+ * needs a loaded model (editApply.js#checkPreconditions).
  *
  * @param {*} op
  * @return {string|null} why the op is invalid, or null when it is valid

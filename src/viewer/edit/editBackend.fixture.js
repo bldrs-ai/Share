@@ -1,4 +1,4 @@
-import {ifcGlobalIdIndex, makeEditRefResolver} from './editApply'
+import {RefStatus, ifcGlobalIdIndex, makeEditRefResolver} from './editApply'
 import {formatEditRef, globalIdRef} from './editRefs'
 
 
@@ -64,9 +64,12 @@ export function translation([x, y, z]) {
  *   globalId, props?, matrix?}`
  * @param {object} [options.namePaths] `{[nRef]: expressID}`, for `n` refs
  * @param {object} [options.occurrences] `{[oRef]: expressID}`, for `o` refs
+ * @param {boolean} [options.cacheHit] index a spatial tree without GlobalIds,
+ *   as `BLDRS_spatial_tree` is on a cache-hit load (model-edit.md §5.1): the
+ *   source's `g` lookups are then unknown, neither live nor absent
  * @return {object} `{backend, resolver, state, calls}`
  */
-export function makeFakeEditModel({elements = [], namePaths = {}, occurrences = {}} = {}) {
+export function makeFakeEditModel({elements = [], namePaths = {}, occurrences = {}, cacheHit = false} = {}) {
   const live = new Map()
   let nextBatchId = 0
   const calls = []
@@ -78,40 +81,45 @@ export function makeFakeEditModel({elements = [], namePaths = {}, occurrences = 
     place(expressID, {ref: globalIdRef(globalId), props, matrix})
   }
 
-  const tree = {expressID: 0, children: elements.map(({expressID, globalId}) =>
-    ({expressID, GlobalId: {value: globalId}, children: []}))}
+  // No root expressID: the fake has no project element, and every node the
+  // index counts carries a GlobalId unless this is a cache hit.
+  const tree = {children: elements.map(({expressID, globalId}) =>
+    ({expressID, ...(!cacheHit && {GlobalId: {value: globalId}}), children: []}))}
   const sourceByGlobalId = ifcGlobalIdIndex(tree)
   // Every ref the log has minted, live or deleted: like a source GlobalId,
   // a created ref keeps naming its element while it is deleted, so a
   // restore can find it.
   const created = new Set()
 
-  // A ref → its element's key, live or not: restore needs the key a ref
-  // named before the delete, and the resolver adds liveness on top.
+  // A ref → its element's key, live or not (as `status: 'live'`): restore
+  // needs the key a ref named before the delete, and the resolver adds
+  // liveness on top. The name-path and occurrence tables are complete, so a
+  // miss there is proven absent.
+  const known = (target) => ({status: RefStatus.LIVE, target})
   const keyFor = makeEditRefResolver({
     g: ({globalId}, ref) => {
       if (created.has(ref)) {
-        return {target: ref}
+        return known(ref)
       }
       const found = sourceByGlobalId(globalId)
-      return 'expressID' in found ? {target: found.expressID} : found
+      return found.status === RefStatus.LIVE ? known(found.expressID) : found
     },
     n: (parsed) => {
       const id = namePaths[formatEditRef(parsed)]
-      return id === undefined ? {reason: 'no node at this name path'} : {target: id}
+      return id === undefined ? {status: RefStatus.ABSENT, reason: 'no node at this name path'} : known(id)
     },
     o: (parsed) => {
       const id = occurrences[formatEditRef(parsed)]
-      return id === undefined ? {reason: 'no occurrence at this path'} : {target: id}
+      return id === undefined ? {status: RefStatus.ABSENT, reason: 'no occurrence at this path'} : known(id)
     },
   })
   const resolver = {
     resolve(ref) {
       const found = keyFor.resolve(ref)
-      if (!('target' in found)) {
+      if (found.status !== RefStatus.LIVE) {
         return found
       }
-      return live.has(found.target) ? found : {reason: 'element is deleted'}
+      return live.has(found.target) ? found : {status: RefStatus.ABSENT, reason: 'element is deleted'}
     },
   }
 

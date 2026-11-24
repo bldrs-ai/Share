@@ -55,6 +55,17 @@ describe('viewer/edit/editRefs', () => {
     expect(editRefError(ref)).toMatch(/not an edit ref/)
   })
 
+  it.each([
+    ['nMesh~1', 'nMesh'],
+    ['o01', 'o1'],
+    ['o1.02', 'o1.2'],
+    ['nA%2Fb', 'nA%2Fb'],
+  ])('accepts only the canonical spelling: %s', (ref, canonical) => {
+    // Both parse, and to the same element as the canonical one.
+    expect(parseEditRef(ref)).toEqual(parseEditRef(canonical))
+    expect(editRefError(ref)).toBe(ref === canonical ? null : `not in canonical form: write "${canonical}"`)
+  })
+
   it('reports no error for a valid ref', () => {
     expect(editRefError('o1.2')).toBeNull()
   })

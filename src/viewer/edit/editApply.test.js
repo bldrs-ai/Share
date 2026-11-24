@@ -7,12 +7,12 @@ import {
   EditInconsistentError,
   applyEditOp,
   ifcGlobalIdIndex,
+  EDIT_PRECONDITIONS,
   makeEditRefResolver,
-  resolveEditRefs,
   revertEditOp,
 } from './editApply'
 import {EMPTY_EDIT_LOG, appliedOps, recordApplied} from './editLog'
-import {makeEditOp} from './editOps'
+import {EditOpKind, makeEditOp} from './editOps'
 
 
 const WALL_GID = '3hm2qpxcLC2QR6PjoCX$Ma'
@@ -86,7 +86,7 @@ describe('viewer/edit/editApply', () => {
     const move = opOf({kind: 'transform', targets: [box], payload: {matrix: translation([1, 2, 3])}}, 6)
 
     // Before the create is applied, nothing is named by its ref.
-    expect(resolver.resolve(box)).toEqual({reason: 'no element with this GlobalId in the loaded model'})
+    expect(resolver.resolve(box)).toEqual({status: 'absent', reason: 'no element with this GlobalId in the loaded model'})
 
     const created = applyEditOp(create, {backend, resolver})
     const moved = applyEditOp(move, {backend, resolver})
@@ -285,7 +285,7 @@ describe('viewer/edit/editApply', () => {
       const {spy, seen} = spyOn(fake.backend)
       expect(applyEditOp(build(box), {backend: spy, resolver: fake.resolver})).toEqual({
         ok: false,
-        reason: 'output refs already name live elements; nothing was changed',
+        reason: 'refs that must be absent name live elements; nothing was changed',
         live: liveRefs(box).map((ref) => ({ref, reason: 'already names a live element'})),
       })
       expect(seen).toEqual([])
@@ -303,6 +303,50 @@ describe('viewer/edit/editApply', () => {
       expect(revertEditOp(op, applied.undo, {backend, resolver})).toEqual({ok: true})
       expect(applyEditOp(op, {backend, resolver}, EditDirection.REDO).ok).toBe(true)
       expect(state()).toEqual(after)
+    })
+
+    it('refuses to undo a delete whose ref a view-layer create has taken since, with zero calls', () => {
+      const {backend, resolver, state} = model()
+      const del = opOf({kind: 'delete', targets: [WALL, DOOR]})
+      const deleted = applyEditOp(del, {backend, resolver})
+      // A view op, so not in history: it makes an element under the door's ref.
+      const viewCreate = {id: 'v1', kind: 'create', targets: [DOOR], payload: {geometry: {box: [1, 1, 1]}}, layer: 'view'}
+      expect(applyEditOp(viewCreate, {backend, resolver}).ok).toBe(true)
+      const before = state()
+      const {spy, seen} = spyOn(backend)
+      expect(revertEditOp(del, deleted.undo, {backend: spy, resolver})).toEqual({
+        ok: false,
+        reason: 'refs that must be absent name live elements; nothing was reverted',
+        live: [{ref: DOOR, reason: 'already names a live element'}],
+      })
+      expect(seen).toEqual([])
+      expect(state()).toEqual(before)
+    })
+
+    it.each([
+      ['a cache-hit load, whose index cannot see the source', () => makeFakeEditModel({cacheHit: true,
+        elements: [{expressID: 771, globalId: WALL_GID}]}), WALL,
+      'this model\'s spatial tree carries no GlobalIds (a cache-hit load?)'],
+      ['a GlobalId two source elements share', () => {
+        const fake = makeFakeEditModel({elements: [{expressID: 771, globalId: WALL_GID}]})
+        const shared = ifcGlobalIdIndex({children: [
+          {expressID: 771, GlobalId: {value: WALL_GID}, children: []},
+          {expressID: 772, GlobalId: {value: WALL_GID}, children: []},
+        ]})
+        return {...fake, resolver: makeEditRefResolver({g: ({globalId}) => shared(globalId)})}
+      }, WALL, 'GlobalId is not unique in this model (expressIDs 772, 771)'],
+    ])('refuses a create whose target cannot be proven absent: %s', (name, build, ref, reason) => {
+      const fake = build()
+      const before = fake.state()
+      const {spy, seen} = spyOn(fake.backend)
+      const create = {id: 'op1', kind: 'create', targets: [ref], payload: {geometry: {box: [1, 1, 1]}}, layer: 'document'}
+      expect(applyEditOp(create, {backend: spy, resolver: fake.resolver})).toEqual({
+        ok: false,
+        reason: 'cannot tell whether refs that must be absent are; nothing was changed',
+        unknown: [{ref, reason}],
+      })
+      expect(seen).toEqual([])
+      expect(fake.state()).toEqual(before)
     })
 
     it('makes zero backend calls, reads included, when only the last of several targets is unresolved', () => {
@@ -381,16 +425,59 @@ describe('viewer/edit/editApply', () => {
     expect(state()).toEqual(afterEvict)
   })
 
+  describe('EDIT_PRECONDITIONS', () => {
+    const directions = Object.values(EditDirection)
+
+    it('has a row for every kind in every direction, and redo is apply', () => {
+      expect(Object.keys(EDIT_PRECONDITIONS).sort()).toEqual(Object.values(EditOpKind).sort())
+      for (const kind of Object.values(EditOpKind)) {
+        expect(Object.keys(EDIT_PRECONDITIONS[kind]).sort()).toEqual([...directions].sort())
+        expect(EDIT_PRECONDITIONS[kind][EditDirection.REDO]).toBe(EDIT_PRECONDITIONS[kind][EditDirection.APPLY])
+      }
+    })
+
+    it.each([
+      // [kind, spec, apply {live, absent}, undo {live, absent}], by field name
+      ['create', EVERY_KIND[0][1], {live: [], absent: ['targets']}, {live: ['targets'], absent: []}],
+      ['delete', EVERY_KIND[1][1], {live: ['targets'], absent: []}, {live: [], absent: ['targets']}],
+      ['transform', EVERY_KIND[2][1], {live: ['targets'], absent: []}, {live: ['targets'], absent: []}],
+      ['duplicate', EVERY_KIND[3][1], {live: ['targets'], absent: ['copies']}, {live: ['copies'], absent: []}],
+      ['setProperty', EVERY_KIND[5][1], {live: ['targets'], absent: []}, {live: ['targets'], absent: []}],
+      ['setGeometry', EVERY_KIND[8][1], {live: ['targets'], absent: []}, {live: ['targets'], absent: []}],
+    ])('%s: the declared rows', (kind, spec, applyRow, undoRow) => {
+      const op = opOf(spec)
+      const refsOf = (fields) => fields.flatMap((field) => field === 'copies' ? op.payload.copies : op.targets)
+      for (const [direction, row] of [[EditDirection.APPLY, applyRow], [EditDirection.UNDO, undoRow]]) {
+        expect(EDIT_PRECONDITIONS[kind][direction](op)).toEqual({live: refsOf(row.live), absent: refsOf(row.absent)})
+      }
+    })
+
+    const unknownEverything = {resolve: () => ({status: 'unknown', reason: 'index unavailable'})}
+    // The pre-tri-state answer shape: read as unknown, never as live.
+    const oldShape = {resolve: () => ({target: 771})}
+
+    describe.each([['unknown', unknownEverything], ['a malformed answer', oldShape]])('%s', (name, resolver) => {
+      it.each(EVERY_KIND)('always refuses %s in every direction, with zero backend calls', (kindName, spec) => {
+        const {backend} = model()
+        const op = opOf(spec)
+        const {spy, seen} = spyOn(backend)
+        for (const direction of [EditDirection.APPLY, EditDirection.REDO]) {
+          expect(applyEditOp(op, {backend: spy, resolver}, direction).ok).toBe(false)
+        }
+        expect(revertEditOp(op, null, {backend: spy, resolver}).ok).toBe(false)
+        expect(seen).toEqual([])
+      })
+    })
+  })
+
+
   describe('makeEditRefResolver', () => {
     it('reports a ref of a kind the model has no lookup for', () => {
-      const resolver = makeEditRefResolver({g: () => ({target: 1})})
-      expect(resolveEditRefs([WALL, 'o1.2', 'bogus'], resolver)).toEqual({
-        targets: [1],
-        unresolved: [
-          {ref: 'o1.2', reason: 'this model has no o refs'},
-          {ref: 'bogus', reason: 'not an edit ref'},
-        ],
-      })
+      const resolver = makeEditRefResolver({g: () => ({status: 'live', target: 1})})
+      expect(resolver.resolve(WALL)).toEqual({status: 'live', target: 1})
+      // Neither can be proven absent: unknown, so neither satisfies an output.
+      expect(resolver.resolve('o1.2')).toEqual({status: 'unknown', reason: 'this model has no o refs'})
+      expect(resolver.resolve('bogus')).toEqual({status: 'unknown', reason: 'not an edit ref'})
     })
   })
 
@@ -408,17 +495,25 @@ describe('viewer/edit/editApply', () => {
 
     it('maps a GlobalId to its expressID, exactly', () => {
       const lookup = ifcGlobalIdIndex(tree)
-      expect(lookup(WALL_GID)).toEqual({expressID: 771})
-      expect(lookup('0aaaaaaaaaaaaaaaaaaaaa')).toEqual({expressID: 1})
+      expect(lookup(WALL_GID)).toEqual({status: 'live', expressID: 771})
+      expect(lookup('0aaaaaaaaaaaaaaaaaaaaa')).toEqual({status: 'live', expressID: 1})
       // GlobalIds are case-sensitive: SearchIndex also indexes the
       // lower-cased form, which here would name the wall.
-      expect(lookup(WALL_GID.toLowerCase())).toEqual({reason: 'no element with this GlobalId in the loaded model'})
+      expect(lookup(WALL_GID.toLowerCase()))
+        .toEqual({status: 'absent', reason: 'no element with this GlobalId in the loaded model'})
     })
 
-    it('reports a GlobalId two elements share instead of picking one', () => {
+    it('answers unknown for a GlobalId two elements share instead of picking one', () => {
       expect(ifcGlobalIdIndex(tree)(DOOR_GID)).toEqual({
+        status: 'unknown',
         reason: 'GlobalId is not unique in this model (expressIDs 812, 900)',
       })
+    })
+
+    it('answers unknown, not absent, for a miss when a node carries no GlobalId', () => {
+      const partial = {expressID: 1, GlobalId: {value: WALL_GID}, children: [{expressID: 2, children: []}]}
+      expect(ifcGlobalIdIndex(partial)(DOOR_GID).status).toBe('unknown')
+      expect(ifcGlobalIdIndex(partial)(WALL_GID)).toEqual({status: 'live', expressID: 1})
     })
 
     it('finds nothing in the tree a cache-hit load reads (BLDRS_spatial_tree drops GlobalId)', async () => {
@@ -429,7 +524,10 @@ describe('viewer/edit/editApply', () => {
       // gains GlobalId this test flips, and L2 can rely on it.
       const cached = await captureBldrsSpatialTree({getSpatialStructure: () => Promise.resolve(tree)}, 0)
       expect(cached.children.map((n) => n.expressID)).toEqual([771, 812])
-      expect(ifcGlobalIdIndex(cached)(WALL_GID)).toEqual({reason: 'no element with this GlobalId in the loaded model'})
+      // Unknown, not absent: the index cannot see the source, so a miss
+      // proves nothing and a create under this ref must be refused.
+      expect(ifcGlobalIdIndex(cached)(WALL_GID))
+        .toEqual({status: 'unknown', reason: 'this model\'s spatial tree carries no GlobalIds (a cache-hit load?)'})
     })
   })
 })

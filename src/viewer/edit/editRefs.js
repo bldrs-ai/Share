@@ -94,12 +94,21 @@ export function formatEditRef(parsed) {
  * Why `text` is not a valid edit ref, for a report a person or an agent can
  * act on.
  *
+ * Only the canonical spelling is valid in an op: `nMesh~1` and `nMesh` name
+ * the same node, as do `o01` and `o1`, so accepting both would let one op
+ * name one element twice under refs that look distinct. The second step of
+ * a multi-target delete would then find it already gone and fail-stop
+ * (review of #2346, round 5). With one spelling per element, the op
+ * schema's uniqueness check on the strings is uniqueness of elements.
+ *
  * @param {*} text
  * @return {string|null} the reason, or null when it is valid
  */
 export function editRefError(text) {
-  if (parseEditRef(text) !== null) {
-    return null
+  const parsed = parseEditRef(text)
+  if (parsed !== null) {
+    const canonical = formatEditRef(parsed)
+    return canonical === text ? null : `not in canonical form: write ${JSON.stringify(canonical)}`
   }
   if (typeof text === 'string' && /^e\d+$/.test(text)) {
     return 'e<expressID> is not stable across re-exports of the source; name an IFC element by g<GlobalId>'

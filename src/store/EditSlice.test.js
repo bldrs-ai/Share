@@ -305,10 +305,36 @@ describe('EditSlice', () => {
     const before = fake.state()
     const result = useStore.getState().applyEdit(
       {id: 'op1', kind: 'create', targets: [DOOR], payload: {geometry: {box: [1, 1, 1]}}, layer: 'document'})
-    expect(result).toEqual({ok: false, reason: expect.stringMatching(/already name live/),
+    expect(result).toEqual({ok: false, reason: expect.stringMatching(/must be absent name live/),
       live: [{ref: DOOR, reason: 'already names a live element'}]})
     expect(fake.state()).toEqual(before)
     expect(useStore.getState().editLog).toBe(log)
+    expect(useStore.getState().isEditInconsistent).toBe(false)
+  })
+
+
+  it('refuses one element named twice under two spellings, before any backend call', () => {
+    const fake = makeFakeEditModel({elements: [{expressID: 771, globalId: WALL_GID}], namePaths: {'nSite/Wall': 771}})
+    useStore.getState().setEditContext({backend: fake.backend, resolver: fake.resolver})
+    const before = fake.state()
+    const twice = {id: 'op1', kind: 'delete', targets: ['nSite/Wall', 'nSite/Wall~1'], payload: {}, layer: 'document'}
+    expect(useStore.getState().applyEdit(twice)).toEqual({ok: false, reason: expect.stringMatching(/canonical form/)})
+    expect(fake.calls).toEqual([])
+    expect(fake.state()).toEqual(before)
+    expect(useStore.getState().isEditInconsistent).toBe(false)
+  })
+
+
+  it('refuses to undo a delete whose ref a view op re-made, and stays consistent', () => {
+    const fake = installPair()
+    useStore.getState().applyEdit(makeEditOp({kind: 'delete', layer: 'document', targets: [WALL]}))
+    useStore.getState().applyEdit(
+      {id: 'v1', kind: 'create', targets: [WALL], payload: {geometry: {box: [1, 1, 1]}}, layer: 'view'})
+    const before = fake.state()
+    expect(useStore.getState().undoEdit()).toEqual({ok: false, reason: expect.stringMatching(/must be absent/),
+      live: [{ref: WALL, reason: 'already names a live element'}]})
+    expect(fake.state()).toEqual(before)
+    expect(flags().editCursor).toBe(1)
     expect(useStore.getState().isEditInconsistent).toBe(false)
   })
 

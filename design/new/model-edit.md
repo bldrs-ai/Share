@@ -167,7 +167,9 @@ own capture, `loader/glbEngineCapture.js#captureEngineExtensions`):
 - **Consequence.** On a cache hit, which is the default reload path, every
   source `g` ref is unresolved. L1's resolver reports it rather than failing
   silently (`editApply.test.js` pins this: the test flips when the artifact
-  carries GlobalId). Assist's `viewer/tools/refs.js` resolves `g` refs through
+  carries GlobalId). The index answers **unknown** there, not absent (§6b):
+  it cannot see the source, so a miss proves nothing, and a `create` under a
+  source element's GlobalId is refused rather than allowed to overwrite it. Assist's `viewer/tools/refs.js` resolves `g` refs through
   `SearchIndex` too, and has the same gap today.
 - **Proposed fix, for L2 (not done here, because it changes the artifact
   payload).** Keep `GlobalId` in `serializeNode`. The live tree already has
@@ -620,31 +622,70 @@ into targets through a resolver. L2 implements both.
   the ref they were given. `restore` takes the ref, not a target, because a
   deleted element may no longer resolve.
 - **The resolver** is `makeEditRefResolver({g, o, n})`, one lookup per ref
-  kind the model can answer. A ref of a kind the model has no lookup for is
-  reported with that reason.
+  kind the model can answer. It gives one of three answers per ref
+  (`editApply.js#RefStatus`):
+
+  | Answer | Means |
+  |---|---|
+  | `{status: 'live', target}` | It names a live element; `target` is the backend's per-load handle |
+  | `{status: 'absent', reason}` | **Proven** to name nothing live: the lookup covers every element the ref could name and found none, or found it deleted |
+  | `{status: 'unknown', reason}` | The lookup cannot tell: unavailable, ambiguous, or not covering the elements |
+
+  - Any other answer, including the pre-tri-state `{target}`, is read as
+    unknown.
+  - A ref of a kind the model has no lookup for is unknown.
   - For IFC, the `g` lookup starts from `ifcGlobalIdIndex(spatialTree)`
-    (GlobalId → expressID, exact; §5.1). L2 adds expressID → live instances,
-    plus its registry of created refs.
-- **Refusals change nothing, and come before the first backend call.**
-  - An invalid op, or one with any unresolved target, changes nothing and
-    returns `{ok: false, reason, unresolved: [{ref, reason}]}`.
-  - **Output refs must be absent.** A `create`'s target and a `duplicate`'s
-    copies are refs the op brings into being. If any of them already names
-    a live element, the op is refused the same way, with `live: [{ref,
-    reason}]`. `makeEditOp` mints fresh ones, so only an untrusted or
-    hand-built log can carry such a ref; without the check it would
-    overwrite a live element or fail-stop (review of #2346, round 4). An
-    undone create's or duplicate's outputs are deleted, so they resolve to
-    nothing again and redo proceeds.
-  - Every target is resolved before the backend is called at all, the undo
-    capture's reads included. A refusal therefore never follows a partial
-    mutation.
-  - Revert does the same over the refs it needs. If one does not resolve,
-    nothing is reverted and the cursor stays put. A session can reach this
-    state: a view-layer eviction is not in history, so it can remove an
-    element that an earlier document op's undo has to touch.
-  - An unresolved ref is a report, not a failure: the resolver answers
-    `{reason}`, the log stays consistent, and the next op is accepted.
+    (GlobalId → expressID, exact; §5.1). A GlobalId two elements share is
+    unknown. A miss is absent only when every node in the tree carries a
+    GlobalId; on a cache hit none does, so a miss there is unknown. The
+    index covers the spatial tree only, so an element outside it (an
+    opening, a type) is not seen; L2's lookup has to close that gap. L2
+    adds expressID → live instances, plus its registry of created refs.
+- **Refs are canonical.** `editRefs.js#editRefError` accepts only the
+  spelling `formatEditRef` gives back. `nMesh~1` and `nMesh` name one node,
+  as do `o01` and `o1`. Accepting both would let one op name one element
+  twice: the uniqueness check would pass on the strings, and the second step
+  of a multi-target delete would fail-stop (review of #2346, round 5). With
+  one spelling per element, uniqueness of strings is uniqueness of elements.
+- **One precondition table, checked before the first backend call, in
+  every direction.** `editApply.js#EDIT_PRECONDITIONS[kind][direction](op)`
+  gives `{live, absent}`: the refs that must be live and the refs that must
+  be proven absent. `checkPreconditions` resolves them all before anything
+  runs, the undo capture's reads included.
+
+  | Kind | Apply (and redo) | Undo |
+  |---|---|---|
+  | `create` | target absent | target live |
+  | `delete` | targets live | targets absent (`restore` brings them back) |
+  | `duplicate` | sources live, copies absent | copies live |
+  | `transform`, `setProperty`, `setGeometry` | targets live | targets live |
+
+  - The `live` refs, resolved in order, are the targets the steps act on.
+  - Everything is derived from the op. An undo record adds no refs, since a
+    delete's snapshots are restored under the op's own targets.
+  - Only `live` satisfies a must-be-live ref, and only `absent` satisfies a
+    must-be-absent one. **`unknown` never does, either way.**
+  - The table is the one mechanism. It replaced the per-kind special cases,
+    each of which was found in turn by review of #2346: in round 4, a
+    create's target and a duplicate's copies were never checked; in round 5,
+    a delete's undo restored refs without checking them, and a failed lookup
+    was read as absent. The next edge case is a row, not a branch.
+- **A refusal changes nothing.** An invalid op, or one whose preconditions
+  fail, returns `{ok: false, reason, unresolved?, live?, unknown?}`. Each
+  list holds `{ref, reason}`:
+  - `unresolved`: refs that had to be live and aren't;
+  - `live`: refs that had to be absent and name a live element;
+  - `unknown`: refs that had to be absent and can't be proven so.
+
+  Every failing ref is reported, never just the first. The log stays
+  consistent and the next op is accepted. Sessions reach these states,
+  because view ops are not in history:
+  - an eviction can remove an element an earlier document op's undo has to
+    touch;
+  - a view-layer `create` can take the ref a delete's undo would restore.
+
+  An undone create's or duplicate's outputs are deleted, so they are absent
+  again and redo proceeds.
 - **Revert runs newest target first**, the mirror of apply. Redo is
   `applyEditOp` again, capturing a fresh undo record.
 
@@ -744,7 +785,8 @@ were captured against.
   inconsistent state and its exit (above).
 - With no context, every action reports `no edit backend` and changes nothing.
 - `applyEdit`, `undoEdit` and `redoEdit` return the applier's
-  `{ok, reason?, unresolved?}`, or throw `EditInconsistentError`.
+  `{ok, reason?, unresolved?, live?, unknown?}`, or throw
+  `EditInconsistentError`.
 
 ### Left to L2 and L3
 
