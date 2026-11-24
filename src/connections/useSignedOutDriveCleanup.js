@@ -59,12 +59,11 @@ export async function clearDriveConnections() {
  *
  * Keyed on the settled state, not on a logout call, so every way of signing
  * out is covered: ProfileControl, BaseRoutes' invalid_grant logout, the Open
- * dialog's GitHub Remove, UserProfile's menu, and a session that simply ended
- * between visits. Connecting Drive needs a sign-in
- * (ConnectProviderButton), so a signed-out user has no Drive connection to
- * lose. Nothing is cleared while Auth0 is still loading. CadView separately
- * refuses to use a Drive connection while signed out, for a load that starts
- * before this effect runs.
+ * dialog's GitHub Remove, and a session that simply ended between visits.
+ * Connecting Drive needs a sign-in (ConnectProviderButton), so a signed-out
+ * user has no Drive connection to lose. Nothing is cleared while Auth0 is
+ * still loading. CadView separately refuses to use a Drive connection while
+ * signed out, for a load that starts before this effect runs.
  */
 export default function useSignedOutDriveCleanup() {
   const {isLoading, isAuthenticated} = useAuth0()

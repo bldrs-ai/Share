@@ -106,9 +106,9 @@ otherwise keep opening restricted files, unmetered. Two parts:
   every Drive connection, its token and its sources whenever Auth0 settles
   signed out. Keyed on the settled state rather than one `logout()` call, so
   ProfileControl, BaseRoutes' `invalid_grant` logout, the Open dialog's
-  GitHub Remove, UserProfile's menu and a session that ended between visits
-  are all covered. Connecting Drive needs a sign-in, so nothing a signed-out
-  user legitimately holds is lost.
+  GitHub Remove and a session that ended between visits are all covered.
+  Connecting Drive needs a sign-in, so nothing a signed-out user legitimately
+  holds is lost.
 - `CadView#loadModel` never downloads through a Drive connection while signed
   out; it takes the API-key path, which serves link-shared files only, so a
   restricted file fails with the usual alert. A Drive route with a connection
