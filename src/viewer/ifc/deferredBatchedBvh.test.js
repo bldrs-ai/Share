@@ -232,7 +232,10 @@ describe('viewer/ifc/deferredBatchedBvh', () => {
         const queue = []
         scheduleBatchedBoundsTrees([mesh], {schedule: (run) => queue.push(run)})
         queue.shift()({didTimeout: true, timeRemaining: () => 0})
-        expect(mesh.boundsTrees.every(Boolean)).toBe(false)
+        // Exactly one tree, not just "not all": the slice must still make
+        // progress before it yields, or a page that never goes idle would
+        // never get its trees.
+        expect(mesh.boundsTrees.filter(Boolean)).toHaveLength(1)
         expect(queue).toHaveLength(1)
       })
     } finally {
