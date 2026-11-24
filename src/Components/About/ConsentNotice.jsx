@@ -45,6 +45,8 @@ export default function ConsentNotice() {
         target='_blank'
         rel='noopener noreferrer'
         color='inherit'
+        // One unit at the end of the paragraph, never split across lines.
+        sx={{whiteSpace: 'nowrap'}}
         data-testid='consent-privacy-link'
       >
         Privacy policy
