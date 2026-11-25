@@ -3,7 +3,7 @@ import Markdown from 'react-markdown'
 import {Box, Link} from '@mui/material'
 import {REF_SCHEME, refOfLinkUri, splitMultiRefLinks} from '../../tools/refLinks'
 import RefChip from './RefChip'
-import {loadMarkdownGfm} from './markdownGfm'
+import {loadMarkdownGfm, loadedMarkdownGfm} from './markdownGfm'
 
 
 /**
@@ -64,12 +64,14 @@ function ScrollTable({node, ...props}) {
 /**
  * The GFM plugin, once loaded; null until then, and if it can't be fetched.
  * Until it is, replies render as plain Markdown (a table shows as its pipes),
- * and re-render with it when it arrives.
+ * and re-render with it when it arrives. State is seeded from the module-level
+ * cache, so a remount after the first load (BotChat re-parents a reply's bubble
+ * when it becomes ratable, #2313) has it from its first commit.
  *
  * @return {?Function} the plugin
  */
 function useGfm() {
-  const [plugin, setPlugin] = useState(null)
+  const [plugin, setPlugin] = useState(() => loadedMarkdownGfm())
   useEffect(() => {
     let isCurrent = true
     loadMarkdownGfm().then((loaded) => isCurrent && setPlugin(() => loaded), () => undefined)
