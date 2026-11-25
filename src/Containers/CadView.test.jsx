@@ -16,7 +16,7 @@ import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
 // bodies below read its singleton.
 import '../../__mocks__/shareViewerTestHarness'
 import {ShareViewer} from '../viewer/ShareViewer'
-import {getSelectionFunnel} from '../viewer/tools/selectionFunnel'
+import {getSelectionFunnel} from '../tools/selectionFunnel'
 import Clipper from '../viewer/three/Clipper'
 import IfcIsolator from '../viewer/three/IfcIsolator'
 import Picker from '../viewer/three/Picker'
@@ -483,7 +483,7 @@ describe('CadView', () => {
 
 
   // The funnel is reachable outside React for the Assist view tools
-  // (viewer/tools/selectionFunnel.js, #1674). What's registered must BE the
+  // (tools/selectionFunnel.js, #1674). What's registered must BE the
   // funnel — the same store contract a NavTree click gets, including the
   // per-instance reset above — and must go away with the CadView that
   // registered it, or a tool would select into an unmounted viewer.
@@ -1008,7 +1008,7 @@ describe('CadView', () => {
   })
 
   // local_link_missing: what GA could not say about the alert above. The
-  // ledger (OPFS/uploadLedger.js) decides origin; the event is first-sighting
+  // ledger (connections/uploadLedger.js) decides origin; the event is first-sighting
   // only, like the `alert` event it sits beside.
   describe('local_link_missing analytics', () => {
     const ID = '12345678-1234-4abc-9def-123456789abc.ifc'

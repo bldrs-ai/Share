@@ -35,7 +35,7 @@ const BYTE_BITS = 8
  * GlobalId at all. Some exporters still write one; such an element cannot be
  * named by a `g` ref (editRefs.js) and is reported as an invalid ref rather
  * than resolved, since an id outside the spec is not one an IFC writer would
- * round-trip either. `viewer/tools/refs.js` (Assist) keeps its own looser
+ * round-trip either. `tools/refs.js` (Assist) keeps its own looser
  * grammar for reads.
  */
 export const GLOBAL_ID_PATTERN = /^[0-3][0-9A-Za-z_$]{21}$/

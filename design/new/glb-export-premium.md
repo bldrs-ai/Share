@@ -2651,8 +2651,8 @@ There is still no `supportedTypes` entry and no `findLoader` arm.
 
 `loader/gzipEnvelope.js` owns it, at two seams:
 
-- **Upload** — `inflateIfGzipEnvelope(file)`, called by `utils/dragAndDrop.js`
-  and `utils/loader.js#loadLocalFile` **before** the file reaches OPFS. What
+- **Upload** — `inflateIfGzipEnvelope(file)`, called by `app/dragAndDrop.js`
+  and `app/loader.js#loadLocalFile` **before** the file reaches OPFS. What
   gets cached and named `<blob-uuid>.glb` is then really a GLB, so every later
   reader of that entry — a re-open from Recents, a save, a size report — sees
   what its name says, and no `.gz` ever enters the app's URL space.

@@ -28,7 +28,7 @@ open — the first in-app switch), #91 (the `modelID = 0` hack), #1776 (burned
 model handles).
 
 Opening a model has always been a full page load: `navigateToModel`
-(`src/utils/navigate.js:158`) ends in `window.location.assign`, "to free
+(`src/app/navigate.js:158`) ends in `window.location.assign`, "to free
 memory". That kept the page and model lifecycles identical, so per-model
 state never had to be reset — the page was. The workspace shell switches
 models from the ProjectsDrawer and multi-model sessions keep several open;

@@ -737,7 +737,7 @@ describe('binary STL, recognized by its structure', () => {
   })
 
   it('detects a dropped binary STL, which is sniffed without its name', async () => {
-    // The drag-and-drop seam (`utils/dragAndDrop.js`) goes by the bytes
+    // The drag-and-drop seam (`app/dragAndDrop.js`) goes by the bytes
     // alone, so this is the path test-models#69's files failed on.
     const file = Object.assign(new Blob([binaryStl(ZERO_HEADER, TRIANGLES)]), {name: 'part.stl'})
     expect(await guessTypeFromFile(file)).toBe('stl')

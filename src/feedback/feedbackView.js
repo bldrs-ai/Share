@@ -5,7 +5,7 @@ import modelIdentity from '../routes/modelIdentity'
 import {selectReadModel} from '../store/IFCSlice'
 import useStore from '../store/useStore'
 import {roundCoord} from '../utils/math'
-import {nodeName, nodeType, nodesById, refMaker} from '../viewer/tools/refs'
+import {nodeName, nodeType, nodesById, refMaker} from '../tools/refs'
 import {elementRef} from '../model/visibilityRefs'
 import {
   FEEDBACK_FORMAT,

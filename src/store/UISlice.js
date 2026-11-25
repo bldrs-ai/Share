@@ -26,7 +26,7 @@ export default function createUISlice(set, get) {
     setIsAboutVisible: (is) => set(() => ({isAboutVisible: is})),
 
     // The visitor's privacy level (privacy/consent.js), mirrored from its
-    // cookie so the UI that local-only mode gates (privacy/localOnlyMode.js)
+    // cookie so the UI that local-only mode gates (app/localOnlyMode.js)
     // re-renders the moment the choice changes. consentChoice.js is the only
     // writer after this initial read.
     privacyLevel: getConsentLevel(),

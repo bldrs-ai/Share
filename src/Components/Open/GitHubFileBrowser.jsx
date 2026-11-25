@@ -2,7 +2,7 @@
 import React, {ReactElement, useEffect, useRef, useState} from 'react'
 import {Button, Checkbox, FormControlLabel, Stack, Typography} from '@mui/material'
 import {navigateBaseOnModelPath} from '../../utils/location'
-import {navigateToModel} from '../../utils/navigate'
+import {navigateToModel} from '../../app/navigate'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {fileSuffixBoundaryRegex} from '../../Filetype'
 import {getFilesAndFolders} from '../../net/github/Files'

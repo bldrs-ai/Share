@@ -9,7 +9,7 @@ import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
  * chooser is up.
  *
  * The loader creates its `<input type=file>`, clicks it and detaches it in one
- * synchronous turn (`utils/loader.js`), so unless something holds the element
+ * synchronous turn (`app/loader.js`), so unless something holds the element
  * it is collectable the moment the click handler returns — while the chooser
  * it opened is still waiting on the user. Under Playwright the loss is
  * visible: the `filechooser` event is emitted only after the chooser's DOM

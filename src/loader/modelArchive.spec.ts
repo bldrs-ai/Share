@@ -15,8 +15,8 @@ import {homepageSetup, returningUserVisitsHomepageWaitForModel} from '../tests/e
  * rendering are unit-tested (`zipArchive.test.js`, `modelArchive.test.js`,
  * `AlertDialog.test.jsx`, and each seam's suite); this is the user's own
  * action through both ways a local file reaches Share — a drop on the viewer
- * (`utils/dragAndDrop.js`) and Open › Local › Browse
- * (`utils/loader.js#loadLocalFile`) — each through the real sniff, the real
+ * (`app/dragAndDrop.js`) and Open › Local › Browse
+ * (`app/loader.js#loadLocalFile`) — each through the real sniff, the real
  * unzip and the real load.
  *
  * The archives are built here, with Node's own deflate, from small fixtures

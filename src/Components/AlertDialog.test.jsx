@@ -18,7 +18,7 @@ import {ARCHIVE_ENTRY_CHOICE, ARCHIVE_UNREADABLE, noModelInArchiveAlert} from '.
 import {gtagEventWithCid} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
-import {DROP_REFUSED} from '../utils/dragAndDrop'
+import {DROP_REFUSED} from '../app/dragAndDrop'
 import {GITHUB_NOT_FOUND_MESSAGE, NotFoundError} from '../loader/notFoundError'
 import AlertDialog from './AlertDialog'
 

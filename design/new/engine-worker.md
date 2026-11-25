@@ -127,7 +127,7 @@ Classes:
 | 40 | `viewer/three/IfcIsolator.js:340, 342` | `getSpatialStructure(0, false)` | async |
 | 41 | `Components/Properties/Properties.jsx:81, 221` | `getItemProperties`, `getPropertySets` | async |
 | 42 | `utils/geometryLabels.js:83` | `getItemProperties` | async |
-| 43 | `viewer/tools/viewTools.js:460, 492, 503` | assistant `model.*` reads | async |
+| 43 | `tools/viewTools.js:460, 492, 503` | assistant `model.*` reads | async |
 | 44 | `Components/Bot/BotChat.jsx:162, 328–330` | legacy `?feature=bot` evals model-written code against `viewer.IFC.loader.ifcManager` | async (`idsByType`, `getItemProperties`); retiring with the bot port (ai-workspace.md §13) |
 | 45 | `Infrastructure/IfcElementsStyleManager.js:84–90`, `ViewRulesCompiler.js:31–34` | `?view=` rules: `GetLineIDsWithType`, `GetLine`, GUID mapping | design, or delete (viewer-replacement.md §8.1 already drops `IfcViewsManager`) |
 | 46 | `loader/ProgressiveLoadSession.js:298` | `abort()` has no caller outside the loader's error path | design: `abort` message + terminate (§5.4) |
@@ -136,7 +136,7 @@ Classes:
 the stream): picking through `IfcInstanceMap` (`CadView.jsx:1535, 1539`),
 the BVH, `batchedEdit.js` (every mutator acts on the main-side
 `BatchedMesh`; model-edit.md §6), `#d:` / `#sel:` / element-path permalinks
-(`viewer/tools/refs.js:157`, `Components/Residency/visibilityHash.js:168,
+(`tools/refs.js:157`, `Components/Residency/visibilityHash.js:168,
 270`, `Containers/selectionHash.js`), `SearchIndex`, NavTree (renders
 `rootElement`), and every `selectReadModel` consumer (`TabbedPanels`,
 `NavTreeAndVersionsDrawer`, `TopBar`, `viewContext.js`), which already go
@@ -1614,7 +1614,7 @@ step 9, shipped: #2083 merged on 2026-11-07, and #2053 closed on
 now tracked on #2031, and they come with in-app model switching (#2011):
 
 - **#2011 Phase 1a** switches models in-app, on by default since step F
-  (`utils/navigate.js#navigateToModel`; kill switch
+  (`app/navigate.js#navigateToModel`; kill switch
   `?feature=disableSpaModelNav`, prod rollback `disableSpaModelNav`,
   in-app-model-switch.md §4.8). A switch is a close, one model at a time:
   a load the user leaves is aborted and its worker terminated (step A,
@@ -2548,7 +2548,7 @@ and the other lacks.
 | Index | `onIndexed` → `makeIndexedModelHandle` (`indexedModel`, #2037), started beside the pump | the deferred index | the AP214 assembly tree, built at open | shared |
 | Reopen without a re-parse | `engine/engineSidecars.js`: a worker load from an OPFS entry saves conway's sidecar (`ExportIndexSidecar`, v3, schema-stamped) after its first load's pump, through `createWritable` or, where that is missing (Safari before 26, Share#2093), a read-write sync access handle, under `engine-index-sidecars/`, one per entry path (an envelope records which version of the entry it describes; sidecars of entries that are gone are swept after each save), and the next open of the entry tries `OpenModelFromIndex` with the full source check (`VERIFY_INDEX_SOURCE_HASH: true`, one hashing pass over the file) before parsing; the load report's `Engine index:` line says which (`engineModelLoad.js#indexLine`); kill switch `?feature=disableEngineSidecar` | conway#756 | conway#757 | shared |
 | Tree | `properties.getSpatialStructure(id, 'names', {includeSolids: true})`, through the indexed handle and `EngineSession#propertiesApi` | `includeSolids` ignored | multibody sub-solids as ephemeral `solid` nodes | shared call; data |
-| Ids and refs | `e` / `o` / `n` refs (`viewer/tools/refs.js`); selection joins on whichever key both sides carry | express IDs; tree id = geometry parent | tree id = the NAUO, geometry parent = the shared `product_definition_shape`; the join key is the occurrence path (step-occurrence-selection.md) | **data**: an assembly's reuse has no IFC equivalent, so the key differs, not the code |
+| Ids and refs | `e` / `o` / `n` refs (`tools/refs.js`); selection joins on whichever key both sides carry | express IDs; tree id = geometry parent | tree id = the NAUO, geometry parent = the shared `product_definition_shape`; the join key is the occurrence path (step-occurrence-selection.md) | **data**: an assembly's reuse has no IFC equivalent, so the key differs, not the code |
 | Properties | `getItemProperties` / `getPropertySets`; the panel's tables through `propertyTable.js`, behind the worker's `propertyTables` op or on the page (§7.1, #2070) | IFC entities and psets | AP214 records | shared |
 | Preview | `ON_PREVIEW_MESH` → `payloadToPreviewMesh` → `ProgressiveLoadSession`; picking via `previewSelection.js` (#2052) | `StreamedPreviewChannel` with the IFC adapter on the buffered open and `windowedIfcPreviewAdapter` on the windowed one (conway#777 retired `StorePreviewChannel`) | `StreamedPreviewChannel` with `ap214PreviewAdapter`, on the buffered and the windowed open (conway#772) | shared, one channel for all four opens. Every open caps at 4096 units, and the channel's parse-time work is bounded at a share of the parse's wall clock (`PREVIEW_PARSE_SHARE`, 0.2, 100 ms floor), while the windowed open's parse-end flush keeps its own 100 ms clock (conway#778: bounded by the share too, Momentum.ifc showed 7–9 preview meshes at the index instead of 31); the windowed IFC open used to stop at 512, which froze PSB's build-up at 484 meshes by 75 % of the parse (conway#777's measurements). `windowedPreview.spec.ts` checks the windowed IFC open's preview on both form factors. The worker re-posts each payload field by field (`engineStream.js#previewMessage`), so a new payload field has to be copied there too, as `occurrencePath` and `solid` are. A STEP payload carries its durable placement's `occurrencePath` (`[]` at the root), and a pick on it selects the occurrence (`previewOccurrencePickOf`), painted by that path alone. At the root, where the path names no shell and every root shell shares the owner, the pick carries the mesh's geometry (`selectedRootGeometryId`): the preview and the streaming rows paint that shell alone, and it narrows to the shell's durable instance once that has streamed in, at the latest at the end-of-load repaint (#2089). `stepPreviewPick.spec.ts` checks it on both engines and form factors, with the parked tick turned on by a test-only seam (`__bldrsTestStepPreviewFinishParse`, `pumpTestSeams.js`). **No STEP model on the corpus shows a parse-time preview**: the parse-end tick that would put one on screen is off (`PREVIEW_FINISH_PARSE`), because its first unit pays the throwaway generation's prep before the index (+0.5 s on Arty_Z7, +0.3 s on DSA2), and under the share bound the parse-time units don't run on DSA2, Arty or pinball. conway#775 stage 2 replaces the tick with the durable pump in priority order. Picking during the pump (the next row) covers early interactivity meanwhile |
 | Geometry pump | `ExtractGeometryBatchAsync` → `IncrementalBatchedBuilder` (main) / the batch columns → `decodePlacements` → the same builder (worker) | — | `PlacedGeometry.occurrencePath`, the batch's path columns, where a present-but-empty path (a root-level instance) stays `[]` (#2067) | shared; data |

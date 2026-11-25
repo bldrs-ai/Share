@@ -109,7 +109,7 @@ describe('useExport', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     // Auth settled, as after BaseRoutes' token pass: model_export waits for
-    // it (privacy/modelActionTracking.js). The restore-race case unsets it.
+    // it (app/modelActionTracking.js). The restore-race case unsets it.
     useStore.setState({modelPath: null, isAuthResolved: true, authResolvedFor: true})
     getAccessTokenSilently = jest.fn().mockResolvedValue('test-token')
     mockedUseAuth0.mockReturnValue({...mockedUserLoggedIn, getAccessTokenSilently})
@@ -1056,7 +1056,7 @@ describe('useExport', () => {
       expect(action).toBe('export')
       // An explicit tier, which trackModelActionWhenAuthSettled sends as is,
       // never re-derived from the (Pro) claim in the store
-      // (privacy/modelActionTracking.test.js pins that half).
+      // (app/modelActionTracking.test.js pins that half).
       expect(details).toMatchObject({gate: 'blocked', tier: 'free'})
       expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'sharePro'})
       expect(jest.requireActual('../privacy/analytics').modelActionTier({

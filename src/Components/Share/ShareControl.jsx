@@ -3,7 +3,7 @@ import {Link, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {useStartGateLogin} from '../../Auth0/gateLogin'
 import useStore from '../../store/useStore'
-import {LOCAL_ONLY_MODE_NAME, isLocalOnlyLevel} from '../../privacy/localOnlyMode'
+import {LOCAL_ONLY_MODE_NAME, isLocalOnlyLevel} from '../../app/localOnlyMode'
 import {
   GATE_EVENTS,
   MODEL_ACTIONS,
@@ -13,7 +13,7 @@ import {
   gtagEventWithCid,
   modelContentId,
 } from '../../privacy/analytics'
-import {trackModelActionWhenAuthSettled} from '../../privacy/modelActionTracking'
+import {trackModelActionWhenAuthSettled} from '../../app/modelActionTracking'
 import {ControlButtonWithHashState, TooltipIconButton} from '../Buttons'
 import GatedAction from '../GatedAction'
 import {HASH_PREFIX_SHARE} from './hashState'
@@ -58,7 +58,7 @@ export default function ShareControl() {
   const setIsAboutVisible = useStore((state) => state.setIsAboutVisible)
   const {isAuthenticated} = useAuth0()
   // The latest auth state, for model_share's tier, which is read once auth
-  // settles rather than at the click (privacy/modelActionTracking.js).
+  // settles rather than at the click (app/modelActionTracking.js).
   const isAuthenticatedRef = useRef(isAuthenticated)
   isAuthenticatedRef.current = isAuthenticated
   const startGateLogin = useStartGateLogin()
@@ -66,7 +66,7 @@ export default function ShareControl() {
   // clicked, so one opening counts at most one `share_interest`.
   const [isInterestNoted, setIsInterestNoted] = useState(false)
 
-  // Local-only mode (privacy/localOnlyMode.js) comes first: whatever the
+  // Local-only mode (app/localOnlyMode.js) comes first: whatever the
   // model, a visitor who declined analytics doesn't share, and the way out
   // is the privacy settings, not a different file. No analytics: this mode
   // sends none.

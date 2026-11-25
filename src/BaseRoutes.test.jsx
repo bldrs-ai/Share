@@ -8,8 +8,8 @@ import {
   mockedUserLoggedOut,
 } from './__mocks__/authentication'
 import {MODEL_ACTIONS, MODEL_GATES, _resetGaClientIdForTests, setGaClientId, setIsAllowed} from './privacy/analytics'
-import {trackModelActionWhenAuthSettled} from './privacy/modelActionTracking'
-import * as subscriptionTracking from './privacy/subscriptionTracking'
+import {trackModelActionWhenAuthSettled} from './app/modelActionTracking'
+import * as subscriptionTracking from './app/subscriptionTracking'
 import {HelmetThemeCtx} from './Share.fixture'
 import BaseRoutes from './BaseRoutes'
 import {TIERS, getTier} from './quota/quota'
@@ -396,7 +396,7 @@ describe('BaseRoutes - auth resolution', () => {
 // still holds the signed-out pass's settlement and no claims. A normalized
 // event sent in that window read `isAuthenticated: true` with empty claims,
 // so a Pro user's action was counted as free. It must wait for the new
-// session's claims instead (privacy/modelActionTracking.js).
+// session's claims instead (app/modelActionTracking.js).
 describe('BaseRoutes - in-page sign-in and model-action tiers', () => {
   beforeEach(() => {
     for (const k of Object.keys(tokenClaims)) {

@@ -10,10 +10,10 @@ import {consumePendingModelNameUpdate, updateRecentFileModelTitle} from './conne
 import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
 import debug from './utils/debug'
-import {pageTitleForModel} from './utils/modelDisplayName'
-import {navToDefault} from './utils/navigate'
+import {pageTitleForModel} from './app/modelDisplayName'
+import {navToDefault} from './app/navigate'
 import {FilenameParseError} from './Filetype'
-import {isLocalOnlyLevel, isRemoteModel} from './privacy/localOnlyMode'
+import {isLocalOnlyLevel, isRemoteModel} from './app/localOnlyMode'
 import {isLocalOnlyPath, viewRouteKind} from './routes/localOnly'
 import modelIdentity from './routes/modelIdentity'
 import {UNSUPPORTED_FILE_ALERT, handleRoute} from './routes/routes'
@@ -120,7 +120,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
           modelPath.kind !== mp.kind ||
           modelPath.provider !== mp.provider ||
           Boolean(modelPath.isUploadedFile) !== Boolean(mp.isUploadedFile)
-      // Local-only mode (privacy/localOnlyMode.js): a visitor who declined
+      // Local-only mode (app/localOnlyMode.js): a visitor who declined
       // analytics opens local files and the samples, not models from
       // GitHub, Drive or a link. This is the backstop for every way such a
       // route is reached (a shared link, recents, search, the widget API);

@@ -6,7 +6,7 @@ import {homepageSetup, returningUserVisitsHomepageWaitForModel} from '../tests/e
 /**
  * Dropping a binary STL onto the viewer opens it (bldrs-ai/test-models#69).
  *
- * The drop seam (`utils/dragAndDrop.js`) types a file by its bytes alone, and
+ * The drop seam (`app/dragAndDrop.js`) types a file by its bytes alone, and
  * binary STL has no magic number — its 80-byte header is free text, all
  * zeros in the Printables export that was reported. Until the sniffer learned
  * binary STL's structure (`Filetype.js#looksLikeBinaryStl`) such a drop was

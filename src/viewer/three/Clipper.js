@@ -178,7 +178,7 @@ export default class Clipper {
 
   /**
    * "Create a plane at the current cursor" — the Q keyboard shortcut
-   * (`utils/shortcutKeys.js`). Raycasts the model under the pointer and
+   * (`app/shortcutKeys.js`). Raycasts the model under the pointer and
    * drops a plane on the hit face. No-op before a model is bound.
    */
   createPlane() {
@@ -188,7 +188,7 @@ export default class Clipper {
 
   /**
    * "Delete the plane at the current cursor" — the W keyboard shortcut
-   * (`utils/shortcutKeys.js`). Raycasts the plane arrows under the pointer
+   * (`app/shortcutKeys.js`). Raycasts the plane arrows under the pointer
    * and removes the matching plane. No-op before a model is bound.
    */
   deletePlane() {

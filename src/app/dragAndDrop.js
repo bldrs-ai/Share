@@ -1,0 +1,255 @@
+import {guessTypeFromFile} from '../Filetype'
+import {checkOPFSAvailability, deleteUploadFromOPFS, saveDnDFileToOpfs} from '../OPFS/utils'
+import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
+import {inflateIfGzipEnvelope} from '../loader/gzipEnvelope'
+import {forgetInMemoryUpload, registerInMemoryUpload} from '../loader/inMemoryUploads'
+import {openUploadThroughArchive} from '../loader/modelArchive'
+import {unrecognizedFormatAlert} from '../loader/unrecognizedFormat'
+import {consoleFileName} from '../privacy/sentryRedaction'
+import {localOnlyPath} from '../routes/localOnly'
+import {disablePageReloadApprovalCheck} from '../utils/event'
+import {navigateToInMemoryModel, navigateToModel} from './navigate'
+import debug, {WARN} from '../utils/debug'
+
+
+/** Alert type for a drop with no file in it, or more than one. */
+export const DROP_REFUSED = 'dropRefused'
+
+
+/**
+ * Handles drag and drop file upload with validation and processing
+ *
+ * @param {DragEvent} event The drop event
+ * @param {Function} navigate React Router navigate function
+ * @param {string} appPrefix App prefix for navigation
+ * @param {boolean|null} isOpfsAvailable Whether OPFS is available; `null`
+ *   while the startup probe is still running, in which case it is asked here
+ * @param {Function} setAlert Function to set alert messages
+ * @param {Function} [onSuccess] Optional callback when file is successfully
+ *   processed, with its storage id. Also called with `null` when a zip with
+ *   several models hands the drop to the entry chooser
+ *   (`loader/modelArchive.js`): nothing has failed, but the caller has to get
+ *   out of the chooser's way (the onboarding overlay sits above MUI's modal
+ *   layer) without treating it as an error, which would open Help over it.
+ *   A choice made later finishes the drop from the chooser, through
+ *   `onSuccess` with the id or `onError`.
+ * @param {Function} [onError] Optional callback when an error occurs, a zip
+ *   that can't be opened included: every such drop ends in a dialog and here.
+ * @param {{record: Function, onExceeded: Function}} [quotaOptions]
+ *   Optional quota integration: records the load key via record() once the
+ *   file is stored, and calls onExceeded instead of navigating if refused.
+ *   There is deliberately no capacity check before the drop is read: local
+ *   files are free and unmetered (Share#1966), so record() passes their key,
+ *   and a pre-gate on the user's private-model count would refuse a local
+ *   file for being at a limit that doesn't apply to it. With
+ *   `meterLocalFiles` switched on, record() is still the gate; the file is
+ *   stored first, as for an allowed drop, and deleted again on a refusal.
+ */
+export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable, setAlert, onSuccess, onError, quotaOptions) {
+  event.preventDefault()
+  const files = event.dataTransfer.files
+
+  // None of the alerts below is reported to Sentry from here. Each goes to
+  // setAlert, and AlertDialog's effect is the one place an alert is
+  // captured; this function used to call trackAlert too, so every rejected
+  // drop landed in Sentry twice in the same second (one event from this
+  // stack, one from AlertDialog's) and the drop families' counts read double.
+
+  // These two refuse what the user dropped (text or a link rather than a
+  // file, or several files at once): an expected outcome, so AlertDialog
+  // counts the `dropRefused` type in GA only (SHARE-1PH, SHARE-1PS). The
+  // messages are constants and name no file.
+  if (files.length === 0) {
+    const message = 'File upload initiated but found no data'
+    setAlert({type: DROP_REFUSED, message})
+    if (onError) {
+      onError(message)
+    }
+    return
+  }
+  if (files.length > 1) {
+    const message = 'File upload initiated for more than 1 file'
+    setAlert({type: DROP_REFUSED, message})
+    if (onError) {
+      onError(message)
+    }
+    return
+  }
+
+  // `null` is the store's "probe not resolved yet" (BaseRoutes sets it at
+  // startup), not "unavailable". A drop has no user-activation constraint,
+  // so ask directly rather than guess. Without OPFS the file is held in
+  // memory instead (#1906, `onHeldInMemory` below).
+  const hasOpfs = isOpfsAvailable === null ? await checkOPFSAvailability() : isOpfsAvailable
+
+  const dropped = files[0]
+
+  debug().log('handleFileDrop: uploadedFile', dropped)
+  // A `.glb.gz` — Share's own compressed export (#1854) — is unwrapped
+  // before anything else looks at it, so the type sniffed below, the
+  // extension OPFS stores it under and the bytes the loader later parses all
+  // describe the model rather than its transport encoding
+  // (`loader/gzipEnvelope.js`). Anything that isn't a gzip envelope around a
+  // model comes back as-is, `.spz` included.
+  let unwrapped
+  try {
+    unwrapped = await inflateIfGzipEnvelope(dropped)
+  } catch (e) {
+    const message = e.message
+    setAlert(message)
+    if (onError) {
+      onError(message)
+    }
+    return
+  }
+  // A zip is opened from inside: its one model straight away, a choice of
+  // several through the chooser, or a refusal that says what it holds
+  // (`loader/modelArchive.js`). Anything else goes on to `openDropped`
+  // exactly as it did before, typed by its header alone.
+  const outcome = await openUploadThroughArchive(unwrapped, {
+    entry: 'drop',
+    alert: setAlert,
+    open: openDropped,
+  })
+  if (outcome === 'choosing' && onSuccess) {
+    onSuccess(null)
+  } else if (outcome === 'refused' && onError) {
+    onError('The dropped archive could not be opened')
+  }
+
+  /**
+   * The drop's own open of one model file: the dropped file itself, or the
+   * entry taken out of the archive it was.
+   *
+   * @param {File} uploadedFile
+   * @param {string} [entryType] An archive entry's extension, which IS its
+   *   type: the entry was chosen by it. Unset for a file that was dropped as
+   *   itself, which is typed by its bytes alone, as every drop always was.
+   */
+  async function openDropped(uploadedFile, entryType) {
+    const type = entryType ?? await guessTypeFromFile(uploadedFile)
+    if (type === null) {
+      const message = `File upload of unknown type: type(${uploadedFile.type}) size(${uploadedFile.size})`
+      // The alert is the user's signal; this is the console's, which had none —
+      // a rejected drop left nothing to go on when reported (test-models#69).
+      // It names the file, which the alert deliberately does not: the alert
+      // keeps only the extension (`loader/unrecognizedFormat.js`). The name is
+      // written through consoleFileName, so the breadcrumb Sentry records from
+      // this line has it withheld (`privacy/sentryRedaction.js`). At WARN, the
+      // level prod logs at; a bare `debug()` is INFO and prints nothing there.
+      debug(WARN).warn(
+        `handleFileDrop: ${consoleFileName(uploadedFile.name)} (${uploadedFile.size} bytes) ` +
+        'is not a recognized model format')
+      setAlert(unrecognizedFormatAlert(message, uploadedFile.name, 'drop'))
+      if (onError) {
+        onError(message)
+      }
+      return
+    }
+
+    /**
+     * @param {string} fileName The OPFS storage id the upload was written
+     *   under (`<blob-uuid>.<ext>`) — the `/v/local-only/` segment the Loader
+     *   resolves, distinct from the user's `uploadedFile.name`.
+     */
+    async function onWritten(fileName) {
+      const key = localOnlyPath(appPrefix, fileName)
+      if (quotaOptions) {
+        const result = await quotaOptions.record(key)
+        if (result && result.allowed === false) {
+          // Written before the quota could answer, so delete it, as
+          // onHeldInMemory below forgets its copy: left in OPFS, the refused
+          // file still opened from its /v/local-only/ URL (bldrs-ai/ops#39).
+          // Not awaited: the refusal is already decided, and a failed delete
+          // must not swallow the dialog that explains it.
+          deleteUploadFromOPFS(fileName).catch((err) =>
+            debug(WARN).warn('handleFileDrop: could not delete the refused upload', fileName, err))
+          quotaOptions.onExceeded()
+          return
+        }
+      }
+      disablePageReloadApprovalCheck()
+      debug().log('handleFileDrop: navigate to:', fileName)
+      navigateToModel(key, navigate)
+      addRecentFileEntry({
+        id: fileName,
+        source: 'local',
+        name: uploadedFile.name,
+        // Epoch ms, matching RecentFileEntry and RecentFilesList's
+        // `Date.now() - utcMs` arithmetic — an ISO string here rendered
+        // as "NaNm ago" in the Last-modified column (#1682).
+        lastModifiedUtc: uploadedFile.lastModified || null,
+        sharePath: key,
+      })
+      setPendingModelNameUpdate(fileName)
+      if (onSuccess) {
+        onSuccess(fileName)
+      }
+    }
+
+    /**
+     * The no-OPFS path: hold the file in this page's memory and navigate
+     * in-app, since a page load would drop it (`loader/inMemoryUploads.js`).
+     * No local recent: nothing is stored to reopen it from.
+     *
+     * @param {string} storageId `<uuid>.<ext>`, the in-memory id
+     */
+    async function onHeldInMemory(storageId) {
+      const key = localOnlyPath(appPrefix, storageId)
+      if (quotaOptions) {
+        const result = await quotaOptions.record(key)
+        if (result && result.allowed === false) {
+          // Registered before the quota could answer (the key names the id),
+          // so drop it: nothing else would (codex review on #1957).
+          forgetInMemoryUpload(storageId)
+          quotaOptions.onExceeded()
+          return
+        }
+      }
+      debug().log('handleFileDrop: navigate in-app to in-memory upload:', storageId)
+      navigateToInMemoryModel(key, navigate)
+      if (onSuccess) {
+        onSuccess(storageId)
+      }
+    }
+
+    if (hasOpfs) {
+      // OPFS is where an upload is kept, not a requirement for viewing it: a
+      // store that fails (e.g. a write that comes up short in a private
+      // window past ~1 GB, #2042) opens the file from memory instead, just
+      // as Loader falls back to a direct fetch when its OPFS cache fails.
+      saveDnDFileToOpfs(uploadedFile, type, onWritten,
+        () => onHeldInMemory(registerInMemoryUpload(uploadedFile, type)))
+    } else {
+      await onHeldInMemory(registerInMemoryUpload(uploadedFile, type))
+    }
+  }
+}
+
+
+/**
+ * Standard drag over/enter handler to enable drop zone
+ *
+ * @param {DragEvent} event The drag event
+ * @param {Function} [setIsDragActive] Optional function to set drag active state
+ */
+export function handleDragOverOrEnter(event, setIsDragActive) {
+  event.preventDefault()
+  if (setIsDragActive) {
+    setIsDragActive(true)
+  }
+}
+
+
+/**
+ * Standard drag leave handler to disable drop zone visual feedback
+ *
+ * @param {DragEvent} event The drag event
+ * @param {Function} [setIsDragActive] Optional function to set drag active state
+ */
+export function handleDragLeave(event, setIsDragActive) {
+  event.preventDefault()
+  if (setIsDragActive) {
+    setIsDragActive(false)
+  }
+}

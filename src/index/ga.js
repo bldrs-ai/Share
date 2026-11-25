@@ -157,7 +157,7 @@ export default function setupGa(env = undefined) {
 
 /**
  * Bring the GA tag into line with the stored consent, after the visitor
- * chooses in the About dialog (privacy/consentChoice.js).
+ * chooses in the About dialog (app/consentChoice.js).
  *
  * Allowed: clear the kill switch, update consent to granted, queue the
  * `config` the stub withheld (it only queues one for a visitor who had

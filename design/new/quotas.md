@@ -328,7 +328,7 @@ overlay's own state went with it, and the refusal showed nothing. The
 overlay closes with `onClose(true)`, as a successful drop does, so Help
 doesn't open over the dialog.
 
-Covered by `utils/dragAndDrop.test.js` and `Open/OpenModelDialog.test.jsx`
+Covered by `app/dragAndDrop.test.js` and `Open/OpenModelDialog.test.jsx`
 (a refused drop or pick is deleted, an allowed one and a refused Recents
 reopen are not), `OnboardingOverlayQuota.test.jsx` (the dialog shows after
 the overlay unmounts, and Help doesn't), and
@@ -680,7 +680,7 @@ so one registration covers these events too, and the same goes for
 section.
 
 `origin` on `local_link_missing` comes from the upload ledger
-(`OPFS/uploadLedger.js`), a never-pruned localStorage list of the local-only
+(`connections/uploadLedger.js`), a never-pruned localStorage list of the local-only
 storage ids this browser has held. It is written when an upload loads
 successfully (CadView) and seeded from local recents at app start, before
 `pruneLocalRecents` deletes the recents of lost uploads. Profile -> Clear Local
@@ -755,7 +755,7 @@ The parts that aren't obvious:
   names (§"Server-side subscription events"); the dedupe below is unchanged.
   One pending token is
   processed on the cached and fresh-claims passes, again on every reload
-  until the reauth, and in every tab. `src/privacy/subscriptionTracking.js`
+  until the reauth, and in every tab. `src/app/subscriptionTracking.js`
   keeps the last pending status it reported for each user (Auth0 `sub`) in
   localStorage, with an in-memory fallback when storage throws, and a repeat
   of it doesn't report again. A *different* pending status always does,
@@ -1202,7 +1202,7 @@ Three timing rules keep the cells honest (codex review on Share#1976):
 - **Every normalized event waits for auth to settle** (`isAuthResolved`,
   capped at `AUTH_SETTLE_RETRY_MS`) and reads the tier then. All of them go
   through `trackModelActionWhenAuthSettled`
-  (`src/privacy/modelActionTracking.js`); a static test keeps
+  (`src/app/modelActionTracking.js`); a static test keeps
   `trackModelAction` from being called anywhere else. Share loads models and
   opens dialogs without waiting for Auth0 to restore a returning user's
   session: a local, Drive, `/v/p/` or URL model can finish loading, the

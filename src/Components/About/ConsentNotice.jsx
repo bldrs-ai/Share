@@ -1,13 +1,13 @@
 import React, {ReactElement} from 'react'
 import {Link, Typography} from '@mui/material'
-import {LOCAL_ONLY_MODE_NAME} from '../../privacy/localOnlyMode'
+import {LOCAL_ONLY_MODE_NAME} from '../../app/localOnlyMode'
 
 
 /*
  * What the About (welcome) dialog asks. OK consents, Cancel declines
  * (AboutDialog). This is the "informed" part of that consent, so it has to
  * stay true to what the code does on each answer (privacy/consent.js,
- * index/ga.js, privacy/localOnlyMode.js) and to the privacy policy's §1
+ * index/ga.js, app/localOnlyMode.js) and to the privacy policy's §1
  * telemetry paragraphs (src/pages/Privacy.jsx and its marketing copy).
  * Change them together. Owner's wording, 2026-11-24.
  */

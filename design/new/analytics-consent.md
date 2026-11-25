@@ -57,7 +57,7 @@ ran under it at 1280×800); `consent.spec.ts` hit-tests both buttons.
 Owner's call, 2026-11-23, written into the privacy policy: telemetry is
 required for normal operation, and a visitor who refuses gets "a reduced
 local-only mode to allow evaluation of basic viewer capabilities"
-(`src/privacy/localOnlyMode.js`).
+(`src/app/localOnlyMode.js`).
 
 | In local-only mode | Allowed? |
 |---|---|
@@ -181,7 +181,7 @@ and `CONSENT_VERSION`, all together.
 - `src/Components/About/AboutConsent.test.jsx`: the dialog's paths (the
   text, OK, each non-OK close, a consenting visitor's Cancel taking it
   back and X leaving it alone, a declined visitor's OK, the policy link).
-- `src/privacy/localOnlyMode.test.js`, `src/Components/Open/LocalOnlyDialog.test.jsx`,
+- `src/app/localOnlyMode.test.js`, `src/Components/Open/LocalOnlyDialog.test.jsx`,
   `ShareControl.test.jsx` §local-only: what local-only mode refuses and the
   ways out of it.
 - `src/Components/About/consent.spec.ts` (desktop + mobile): a fresh visitor

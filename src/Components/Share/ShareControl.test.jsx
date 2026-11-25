@@ -36,7 +36,7 @@ jest.mock('../../privacy/analytics', () => ({
 // signed-in user set it themselves.
 //
 // Auth starts SETTLED: the normalized model_share waits for isAuthResolved
-// (privacy/modelActionTracking.js), and only the restore-race case below
+// (app/modelActionTracking.js), and only the restore-race case below
 // wants it unsettled.
 beforeEach(() => {
   mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
@@ -409,7 +409,7 @@ describe('ShareControl for a local upload (#705)', () => {
 })
 
 
-// Local-only mode (privacy/localOnlyMode.js): Browse only doesn't share,
+// Local-only mode (app/localOnlyMode.js): Browse only doesn't share,
 // whatever the model, and the help points at the privacy settings.
 describe('ShareControl in Browse only', () => {
   afterEach(() => {

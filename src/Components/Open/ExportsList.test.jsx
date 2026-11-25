@@ -5,7 +5,7 @@ import {RouteThemeCtx} from '../../Share.fixture'
 import {mockedUseAuth0, mockedUserLoggedIn} from '../../__mocks__/authentication'
 import {hydrateExports, loadExports} from '../../export/exportHistory'
 import useStore from '../../store/useStore'
-import {navigateToModel} from '../../utils/navigate'
+import {navigateToModel} from '../../app/navigate'
 import ExportsList from './ExportsList'
 
 
@@ -14,8 +14,8 @@ const mockUseStore = useStore
 
 
 jest.mock('../../OPFS/utils', () => ({doesFileExistInOPFS: jest.fn()}))
-jest.mock('../../utils/navigate', () => ({
-  ...jest.requireActual('../../utils/navigate'),
+jest.mock('../../app/navigate', () => ({
+  ...jest.requireActual('../../app/navigate'),
   navigateToModel: jest.fn(),
 }))
 jest.mock('../../export/exportHistory', () => ({

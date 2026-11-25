@@ -2,7 +2,7 @@ import React, {ChangeEvent, ReactElement, useEffect, useState} from 'react'
 import {
   Box, Button, FormControlLabel, InputBase, ListItemText, MenuItem, Switch, TextField, Typography,
 } from '@mui/material'
-import {DEFAULT_MODEL_LABEL} from '../../viewer/tools/assistModels'
+import {DEFAULT_MODEL_LABEL} from '../../tools/assistModels'
 import {DEFAULT_MODEL_CHOICE, loadAssistCatalogue} from './assistModelChoice'
 
 

@@ -93,7 +93,7 @@ import {getStore} from '@netlify/blobs'
 import * as Sentry from '@sentry/serverless'
 import {AI_TIERS, AI_WINDOW_DAYS, aiCreditLimits} from '../../src/quota/aiCredits.js'
 import {isProSubscriptionStatus} from '../../src/quota/proStatus.js'
-import {shareAssistInstructions} from '../../src/viewer/tools/assistInstructions.js'
+import {shareAssistInstructions} from '../../src/tools/assistInstructions.js'
 import {getUserAppMetadata, verifyAuth0Bearer} from './_lib/auth0.js'
 import {
   LedgerUnavailableError,
@@ -599,7 +599,7 @@ function validToolChoice(choice) {
  * That first `system` message is NOT trusted as instructions. The relay's one
  * system message is server-owned only: its preamble and Share's fixed
  * assistant instructions, imported from the module the client builds them
- * from (`src/viewer/tools/assistInstructions.js`). What the client's system
+ * from (`src/tools/assistInstructions.js`). What the client's system
  * text adds past those instructions is the loop's per-step context (the
  * "Current view" block, `src/assist/loop.ts#withContext`), and it goes to the
  * model as a `user`-role message labelled as viewer context, right after the

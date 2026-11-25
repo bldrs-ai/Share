@@ -1,6 +1,6 @@
 import React, {ReactElement, useState} from 'react'
 import {Divider, Menu, MenuItem, Typography} from '@mui/material'
-import {dismissConsent} from '../../privacy/consentChoice'
+import {dismissConsent} from '../../app/consentChoice'
 import {isFirst, setVisited} from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
 import AboutDialog from '../About/AboutDialog'

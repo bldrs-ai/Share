@@ -5,7 +5,7 @@ import {useTheme} from '@mui/material/styles'
 import {FileUpload as FileUploadIcon} from '@mui/icons-material'
 import useStore from '../../store/useStore'
 import useQuota from '../../hooks/useQuota'
-import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from '../../utils/dragAndDrop'
+import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from '../../app/dragAndDrop'
 
 
 /**

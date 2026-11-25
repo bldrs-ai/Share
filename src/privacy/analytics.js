@@ -22,7 +22,7 @@ export function isAllowed() {
 /**
  * Store the visitor's privacy level and bring the identifiers that follow
  * consent into line with it. The GA tag itself (load, consent update,
- * opt-out) is index/ga.js#updateGaConsent's job; privacy/consentChoice.js
+ * opt-out) is index/ga.js#updateGaConsent's job; app/consentChoice.js
  * calls both, and is what UI should call.
  *
  * @param {string} level one of consent#CONSENT_LEVELS
@@ -487,7 +487,7 @@ export const GATE_EVENTS = Object.freeze({
  *   MISSING  {origin: 'this_browser'|'unknown', legacy_route, signed_in}
  *            CadView, on the first UploadNotInBrowserError per route.
  *            origin: 'this_browser' when the upload ledger
- *            (OPFS/uploadLedger.js) shows this browser held the id and lost
+ *            (connections/uploadLedger.js) shows this browser held the id and lost
  *            it; 'unknown' otherwise (another machine, or site data fully
  *            wiped, which clears the ledger too). legacy_route: the URL
  *            arrived as the pre-#1959 `/v/new/` form.

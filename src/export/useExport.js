@@ -13,7 +13,7 @@ import {
   modelContentId,
   modelRouteSource,
 } from '../privacy/analytics'
-import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
+import {trackModelActionWhenAuthSettled} from '../app/modelActionTracking'
 import {isDriveModelPublic} from '../quota/driveExportVisibility'
 import {modelSlotKey} from '../quota/modelSlotKey'
 import {TIERS, getTier} from '../quota/quota'
@@ -181,7 +181,7 @@ export default function useExport() {
       return {...modelRouteSource(modelPath), contentId: modelContentId(modelPath)}
     })()
     // The tier, unless the caller fixes it, is read when auth has settled
-    // (privacy/modelActionTracking.js): Auth0 says signed in before
+    // (app/modelActionTracking.js): Auth0 says signed in before
     // BaseRoutes has written the claims, so an export delivered in that
     // window would read a Pro user's still-empty claims as free. A fixed
     // tier (no_slot) sends at once.

@@ -201,7 +201,7 @@
  *         the cache key identifies the engine, so without this bump a user
  *         holding a pre-1.501 artifact keeps rendering the model at its old
  *         position while the app's cameras — the homepage default in
- *         `utils/navigate.js`, and every `#c:` permalink captured after the
+ *         `app/navigate.js`, and every `#c:` permalink captured after the
  *         bump — point at the new one. Reported as an offset homepage logo
  *         that a cache clear fixed, which is exactly the shape of this bug:
  *         cache-hit users see it, cache-miss users don't, so it survives
