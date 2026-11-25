@@ -1,7 +1,8 @@
 import {shouldInitGa} from '../index/ga'
 import {formFactor} from '../privacy/clientCapabilities'
-import {PAGE_VISIT_FIELDS, UTM_MEDIUMS, UTM_SOURCES} from '../privacy/pageVisitReport'
+import {UTM_MEDIUMS, UTM_SOURCES, parsePageVisitReport} from '../privacy/pageVisitReport'
 import {viewRouteKind} from '../routes/localOnly'
+import {processExternalUrl} from '../routes/routes'
 import {pageSession} from './modelOpenCount'
 
 
@@ -48,8 +49,7 @@ export function visitRouteKind(pathname) {
     case 'g':
       return 'viewer-gdrive'
     case 'u':
-      // routes.ts#processExternalUrl opens a Drive URL as a Drive file.
-      return /drive\.google\.com|docs\.google\.com/i.test(path) ? 'viewer-gdrive' : 'viewer-url'
+      return externalUrlKind(path.slice(path.indexOf('/v/u/') + '/v/u/'.length))
     case null:
       return HOME_PATH.test(path) ? 'home' : 'other'
     default:
@@ -58,12 +58,38 @@ export function visitRouteKind(pathname) {
 }
 
 
+/**
+ * The kind of a `/v/u/<url>` route, decided by the router itself
+ * (routes.ts#processExternalUrl, which opens a Google URL as a Drive file),
+ * so the count and the open can't disagree. A substring test over the path
+ * would call `https://example.com/drive.google.com/x.ifc` Drive, and miss
+ * `www.googleapis.com` (review on #2371).
+ *
+ * @param {string} splat what follows `/v/u/`
+ * @return {string} `viewer-gdrive`, `viewer-url`, or `other` for no URL
+ */
+function externalUrlKind(splat) {
+  let result = null
+  try {
+    result = processExternalUrl(new URL('https://bldrs.ai/'), splat)
+  } catch (_) {
+    result = null
+  }
+  if (!result) {
+    return 'other'
+  }
+  return result.kind === 'url' ? 'viewer-url' : 'viewer-gdrive'
+}
+
+
 // Hosts by class. A host matches an entry when it is that host or a subdomain
-// of it (`www.google.com`, `l.facebook.com`). Search engines' country domains
-// (`google.de`, `google.com.br`) match by their first label, below.
+// of it (`www.google.com`, `l.facebook.com`). Google's and Yandex's country
+// domains (`google.de`, `google.co.uk`, `google.com.br`) match the pattern
+// below, pinned to the end of the host so a look-alike (`google.evil.com`,
+// `google.com.evil.example`) is `other` (review on #2371).
 const SEARCH_HOSTS = ['bing.com', 'duckduckgo.com', 'search.yahoo.com', 'baidu.com', 'yandex.ru', 'yandex.com',
   'ecosia.org', 'search.brave.com', 'startpage.com', 'qwant.com', 'kagi.com']
-const SEARCH_LABELS = /^(www\.)?(google|yandex)\.[a-z.]+$/
+const SEARCH_LABELS = /^(www\.)?(google|yandex)\.(com|[a-z]{2}|co\.[a-z]{2}|com\.[a-z]{2})$/
 const SOCIAL_HOSTS = ['linkedin.com', 'lnkd.in', 'twitter.com', 'x.com', 't.co', 'facebook.com', 'fb.com',
   'instagram.com', 'reddit.com', 'youtube.com', 'youtu.be', 'mastodon.social', 'threads.net', 'bsky.app',
   'news.ycombinator.com', 'discord.com', 'whatsapp.com', 'telegram.org', 't.me']
@@ -207,11 +233,12 @@ export function reportPageVisit(env = {}) {
       return false
     }
     sentThisPage = true
-    const report = pageVisitReport(env)
-    if (!PAGE_VISIT_FIELDS.route_kind.includes(report.route_kind)) {
+    const body = JSON.stringify(pageVisitReport(env))
+    // The function's own check, run here too: a report it would refuse is
+    // never sent, whatever a later change to the builders does.
+    if (!parsePageVisitReport(body)) {
       return false
     }
-    const body = JSON.stringify(report)
     const nav = env.nav ?? globalThis.navigator
     if (typeof nav?.sendBeacon === 'function' && nav.sendBeacon(PAGE_VISIT_PATH, body)) {
       return true

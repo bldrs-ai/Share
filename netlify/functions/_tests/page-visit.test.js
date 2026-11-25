@@ -93,7 +93,8 @@ describe('page-visit', () => {
     ['the referrer', JSON.stringify({...REPORT, referrer: 'https://example.com/private'})],
     ['a path', JSON.stringify({...REPORT, path: '/share/v/gh/o/r/main/secret.ifc'})],
     ['a free-text campaign', JSON.stringify({...REPORT, utm_source: 'spring-promo'})],
-    ['an oversized body', JSON.stringify({...REPORT, pad: 'x'.repeat(2000)})],
+    // Valid but for its length: only the post-read length check refuses it.
+    ['an oversized body', JSON.stringify(REPORT).replace('}', `${' '.repeat(2000)}}`)],
   ])('refuses %s with 400 and sends nothing', async (_, body) => {
     const res = await handler(request({body}), BR)
     expect(res.status).toBe(400)
@@ -107,6 +108,25 @@ describe('page-visit', () => {
     const textSpy = jest.spyOn(req, 'text')
     expect((await handler(req, BR)).status).toBe(400)
     expect(textSpy).not.toHaveBeenCalled()
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  // A chunked body declares no length, so only the check after the read can
+  // refuse it: a valid report padded with whitespace past the cap.
+  it('refuses an oversized body that declares no length, after reading it', async () => {
+    const padded = JSON.stringify(REPORT).replace('}', `${' '.repeat(2000)}}`)
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(padded))
+        controller.close()
+      },
+    })
+    const req = new Request('https://bldrs.ai/.netlify/functions/page-visit', {
+      method: 'POST', body: stream, duplex: 'half', headers: {origin: 'https://bldrs.ai'},
+    })
+    expect(req.headers.get('content-length')).toBeNull()
+    const res = await handler(req, BR)
+    expect(res.status).toBe(400)
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 

@@ -24,7 +24,7 @@ One directory per function, named exactly like the function, with one
     "body": {"key": "…"},                                   // object → JSON; string → sent as-is
     "sign": "stripe"                                        // optional: add a fresh Stripe-Signature
   },
-  "context": {"geo": {"country": {"code": "BR"}}},          // optional, v2 only: Netlify's context argument ({} without)
+  "context": {"geo": {"country": {"code": "BR"}}},          // optional, v2 only (a v1 handler ignores it): Netlify's context ({} without)
   "now": "2026-10-06T12:00:00.000Z",                        // optional: freeze the clock (below)
   "uuid": "00000000-0000-4000-8000-000000000001",           // optional: fix crypto.randomUUID (below)
   "exchangeOrder": "any",                                   // optional; default "strict"

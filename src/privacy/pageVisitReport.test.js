@@ -40,6 +40,8 @@ describe('privacy/pageVisitReport', () => {
 
   it('accepts a report of exactly its fields', () => {
     expect(parsePageVisitReport(JSON.stringify(REPORT))).toEqual(REPORT)
+    // A duplicate key collapses to its last value, which must still be in the enum.
+    expect(parsePageVisitReport(JSON.stringify(REPORT).replace('}', ',"route_kind":"home"}'))).toEqual({...REPORT, route_kind: 'home'})
     expect(JSON.stringify(REPORT).length).toBeLessThan(MAX_VISIT_BYTES)
   })
 
@@ -59,7 +61,11 @@ describe('privacy/pageVisitReport', () => {
     ['a route kind outside the enum', JSON.stringify({...REPORT, route_kind: '/share/v/gh/o/r'})],
     ['a referrer class outside the enum', JSON.stringify({...REPORT, referrer_class: 'example.com'})],
     ['a free-text campaign', JSON.stringify({...REPORT, utm_source: 'spring-promo-2026'})],
-    ['an oversized body', JSON.stringify({...REPORT, pad: 'x'.repeat(MAX_VISIT_BYTES)})],
+    // A valid six-key body made long with whitespace, so only the length
+    // check can refuse it (an extra key would be refused anyway).
+    ['an oversized body', JSON.stringify(REPORT).replace('}', `${' '.repeat(MAX_VISIT_BYTES)}}`)],
+    ['a __proto__ key', JSON.stringify(REPORT).replace('{', '{"__proto__":{"x":1},')],
+    ['a duplicate key whose last value is free text', JSON.stringify(REPORT).replace('}', ',"route_kind":"/share/v/gh/o"}')],
   ])('refuses %s', (_, text) => {
     expect(parsePageVisitReport(text)).toBeNull()
   })

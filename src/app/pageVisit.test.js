@@ -42,8 +42,13 @@ describe('app/pageVisit', () => {
     ['/share/v/gh/someone/private/main/secret.ifc', 'viewer-github'],
     ['/Share/share/v/gh/o/r/main/x.ifc', 'viewer-github'],
     ['/share/v/g/1sWR7x4BZ-a8tIDZ0ICo0woR2KJ_rHCSO', 'viewer-gdrive'],
-    ['/share/v/u/https://drive.google.com/file/d/abc/view', 'viewer-gdrive'],
+    ['/share/v/u/https://drive.google.com/file/d/1sWR7x4BZ-a8tIDZ0ICo0woR2KJ_rHCSO/view', 'viewer-gdrive'],
     ['/share/v/u/https://example.com/secret.ifc', 'viewer-url'],
+    // The router's own decision (routes.ts#processExternalUrl), not a substring.
+    ['/share/v/u/https://example.com/drive.google.com/x.ifc', 'viewer-url'],
+    ['/share/v/u/https://docs.google.com.evil.io/x.ifc', 'viewer-url'],
+    ['/share/v/u/https://www.googleapis.com/drive/v3/files/0B1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'viewer-gdrive'],
+    ['/share/v/u/not-a-url', 'other'],
     ['/privacy', 'other'],
     ['/share/v/zz/x', 'other'],
   ])('reads %p as route kind %p', (path, kind) => {
@@ -68,6 +73,11 @@ describe('app/pageVisit', () => {
     [`https://${PREVIEW_HOST}/`, 'bldrs'],
     ['https://example.com/private/page', 'other'],
     ['https://notgoogle.com/', 'other'],
+    ['https://www.google.co.uk/', 'search'],
+    ['https://google.evil.com/', 'other'],
+    ['https://google.com.evil.example/', 'other'],
+    ['https://www.google.co.uk.attacker.io/', 'other'],
+    ['https://yandex.attacker.net/', 'other'],
     ['https://evil-bing.com/', 'other'],
     ['not a url', 'other'],
   ])('classes the referrer %p as %p', (referrer, klass) => {
