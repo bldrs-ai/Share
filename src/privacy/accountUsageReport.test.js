@@ -1,3 +1,4 @@
+/* eslint-disable no-magic-numbers */
 import {
   LOAD_REPORT_FIELDS,
   MAX_ACCOUNT_USAGE_BYTES,
@@ -5,6 +6,7 @@ import {
   parseAccountUsageBody,
   parseFunnelParams,
   parseLoadReport,
+  roundSignificant,
 } from './accountUsageReport'
 import {MODEL_OPEN_COUNT_FIELDS} from './modelOpenCountReport'
 
@@ -41,6 +43,18 @@ describe('privacy/accountUsageReport', () => {
   ])('refuses a load report carrying %s', (_, extra) => {
     expect(parseLoadReport({...REPORT, ...extra})).toBeNull()
     expect(parseAccountUsageBody(body({kind: 'load', report: {...REPORT, ...extra}}))).toBeNull()
+  })
+
+  // Exact model-size counts would identify a model as a byte count does.
+  it('keeps the model-size counts to two significant figures, and the timings exact', () => {
+    const parsed = parseLoadReport({...REPORT, vertexCount: 123456, triangleCount: 99, productCount: 1049, loadTime: 2311})
+    expect(parsed).toMatchObject({vertexCount: 120000, triangleCount: 99, productCount: 1000, loadTime: 2311})
+    expect([0, 7, 95, 999, 12345].map((v) => roundSignificant(v, 2))).toEqual([0, 7, 95, 1000, 12000])
+  })
+
+  it('refuses a report key named after an Object.prototype member', () => {
+    expect(parseLoadReport({...REPORT, toString: 'tower.ifc'})).toBeNull()
+    expect(parseLoadReport(JSON.parse(`{${JSON.stringify(REPORT).slice(1, -1)},"__proto__":"x"}`))).toBeNull()
   })
 
   it('refuses a load report missing any enum field', () => {

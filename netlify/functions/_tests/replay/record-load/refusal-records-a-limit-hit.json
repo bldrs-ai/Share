@@ -54,7 +54,7 @@
     {
       "request": {
         "method": "PUT",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/limit/2026-11/0ca58fd54559723f9824c91ae7edb95c/2026-11-25T12:00:00.000Z-00000000-0000-4000-8000-000000000001",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/limit/2026-11/84a40528eaa5146ae8b4b4089614b29a/2026-11-25T12:00:00.000Z-00000000-0000-4000-8000-000000000001",
         "bodyJson": {
           "limit": "private_model",
           "gate": "soft",
@@ -74,7 +74,7 @@
     {
       "request": {
         "method": "PUT",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/first/2026-11/0ca58fd54559723f9824c91ae7edb95c/private_model",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/first/2026-11/84a40528eaa5146ae8b4b4089614b29a/private_model",
         "headers": {
           "if-none-match": "*"
         }

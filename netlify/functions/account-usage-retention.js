@@ -8,6 +8,12 @@
  * account attached, written as `rollup/<YYYY-MM>`, and its raw records are
  * deleted.
  *
+ * One expired period per run, oldest first, so a run's work is bounded by
+ * one month's records rather than by everything that has piled up; a backlog
+ * clears a month a day. Periods are found from the store's directory listing
+ * (`load/`, `limit/`, `first/` with `directories: true`), and a period's
+ * records are listed under its own prefix.
+ *
  * Idempotent and safe to cut short: a period's rollup is written
  * `onlyIfNew` BEFORE any of its records is deleted, so a run that dies
  * part-way leaves either nothing changed or a complete rollup and some raw
@@ -23,9 +29,11 @@
  */
 import {getStore} from '@netlify/blobs'
 import {ACCOUNT_USAGE_STORE, listKeys, logInfo, oldestKeptPeriod, parseEventKey} from './_lib/accountUsage.js'
+import {readAll} from './account-usage-stats.js'
 
 
 const SUMMARY_VERSION = 1
+const DELETE_CONCURRENCY = 25
 const HTTP_OK = 200
 const HTTP_INTERNAL_ERROR = 500
 
@@ -48,7 +56,7 @@ export default async function handler() {
 
 
 /**
- * Reduce every period older than the retention window.
+ * Reduce the oldest period older than the retention window, if any.
  *
  * @param {object} store
  * @param {number} nowMs
@@ -56,19 +64,25 @@ export default async function handler() {
  */
 export async function sweep(store, nowMs) {
   const oldestKept = oldestKeptPeriod(nowMs)
-  const lists = await Promise.all(['load/', 'limit/', 'first/'].map((prefix) => listKeys(store, prefix)))
-  const expired = {}
-  for (const key of lists.flat()) {
-    const parts = parseEventKey(key)
-    if (parts && parts.period < oldestKept) {
-      (expired[parts.period] ??= []).push({key, parts})
+  const periods = new Set()
+  await Promise.all(['load', 'limit', 'first'].map(async (type) => {
+    const {directories} = await store.list({prefix: `${type}/`, directories: true})
+    for (const dir of directories || []) {
+      const match = /^(?:load|limit|first)\/(\d{4}-\d{2})\/?$/.exec(dir)
+      if (match) {
+        periods.add(match[1])
+      }
     }
-  }
+  }))
+  const expired = [...periods].filter((p) => p < oldestKept).sort()
   const reduced = []
-  for (const period of Object.keys(expired).sort()) {
-    reduced.push(await reducePeriod(store, period, expired[period], nowMs))
+  if (expired.length > 0) {
+    const period = expired[0]
+    const keys = (await Promise.all(['load', 'limit', 'first'].map((type) => listKeys(store, `${type}/${period}/`)))).flat()
+    const entries = keys.map((key) => ({key, parts: parseEventKey(key)})).filter(({parts}) => parts?.period === period)
+    reduced.push(await reducePeriod(store, period, entries, nowMs))
   }
-  return {v: SUMMARY_VERSION, now: new Date(nowMs).toISOString(), oldestKept, reduced}
+  return {v: SUMMARY_VERSION, now: new Date(nowMs).toISOString(), oldestKept, reduced, pending: Math.max(0, expired.length - 1)}
 }
 
 
@@ -87,7 +101,9 @@ async function reducePeriod(store, period, entries, nowMs) {
     const written = await store.set(rollupKey, JSON.stringify(rollup), {onlyIfNew: true})
     rollupState = written?.modified === false ? 'kept' : 'written'
   }
-  await Promise.all(entries.map(({key}) => store.delete(key)))
+  for (let i = 0; i < entries.length; i += DELETE_CONCURRENCY) {
+    await Promise.all(entries.slice(i, i + DELETE_CONCURRENCY).map(({key}) => store.delete(key)))
+  }
   return {period, rollup: rollupState, deleted: entries.length}
 }
 
@@ -110,14 +126,15 @@ export async function buildRollup(store, period, entries, nowMs) {
     limits[kind] ??= {hits: 0, blocked: 0, soft: 0, accounts: 0}
     return limits[kind]
   }
-  await Promise.all(entries.map(async ({key, parts}) => {
-    if (parts.type === 'first') {
-      limitEntry(parts.rest).accounts++
-      return
-    }
-    const record = await store.get(key, {type: 'json'})
+  for (const {parts} of entries.filter((e) => e.parts.type === 'first')) {
+    limitEntry(parts.rest).accounts++
+  }
+  const rows = entries.filter((e) => e.parts.type !== 'first')
+  const records = await readAll(store, rows.map((e) => e.key), {keepMissing: true})
+  for (const [i, {parts}] of rows.entries()) {
+    const record = records[i]
     if (!record) {
-      return
+      continue
     }
     if (parts.type === 'load') {
       loadAccounts.add(parts.account)
@@ -131,7 +148,7 @@ export async function buildRollup(store, period, entries, nowMs) {
       e.hits++
       e[record.gate === 'soft' ? 'soft' : 'blocked']++
     }
-  }))
+  }
   loads.accounts = loadAccounts.size
   return {v: SUMMARY_VERSION, period, reducedAt: new Date(nowMs).toISOString(), loads, limits}
 }

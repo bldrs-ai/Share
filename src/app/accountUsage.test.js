@@ -117,12 +117,13 @@ describe('app/accountUsage', () => {
     ])
   })
 
-  it('forwards a funnel step with only its known params, and none with the opt-out on', async () => {
+  // A funnel step is a count with no account in it, so it goes whatever the
+  // opt-out says (design doc §"Opt-out").
+  it('forwards a funnel step with only its known params, opt-out or not', async () => {
     await reportFunnelStep('login', {method: 'github', from: undefined})
-    await reportFunnelStep('begin_checkout', {from: 'quota', destination: 'portal'})
     expect(await reportFunnelStep('begin_checkout', {from: 'quota', destination: 'portal', email: 'x'})).toBe(false)
     useStore.setState({appMetadata: {usageReports: false}})
-    expect(await reportFunnelStep('login', {method: 'github'})).toBe(false)
+    await reportFunnelStep('begin_checkout', {from: 'quota', destination: 'portal'})
     expect(postedBodies()).toEqual([
       {kind: 'funnel', event: 'login', params: {method: 'github'}},
       {kind: 'funnel', event: 'begin_checkout', params: {from: 'quota', destination: 'portal'}},
@@ -138,5 +139,15 @@ describe('app/accountUsage', () => {
     expect(await setUsageReportsPreference(false)).toBe(true)
     expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'free', usageReports: false})
     expect(postedBodies()).toEqual([{kind: 'preference', usage_reports: false}])
+  })
+
+  // BaseRoutes re-applies the cached token's claim, which would flip the
+  // toggle back; a fresh token carries the new value.
+  it('takes a fresh token after a save, keeping the new value if the claim lags', async () => {
+    const claim = (metadata) => `h.${Buffer.from(JSON.stringify({'https://bldrs.ai/app_metadata': metadata})).toString('base64url')}.s`
+    const refreshToken = jest.fn(() => Promise.resolve(claim({subscriptionStatus: 'sharePro'})))
+    expect(await setUsageReportsPreference(false, {refreshToken})).toBe(true)
+    expect(refreshToken).toHaveBeenCalledTimes(1)
+    expect(useStore.getState().appMetadata).toEqual({subscriptionStatus: 'sharePro', usageReports: false})
   })
 })

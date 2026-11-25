@@ -366,6 +366,7 @@ describe('useQuota — Drive visibility (signed in)', () => {
   // reports it; a refusal record-load answered (403) it does not, since
   // record-load records that one itself.
   it('reports a refusal it decided offline, and not one record-load answered', async () => {
+    reportClientLimitHit.mockClear()
     global.fetch = fakeRecordLoad(seeded).fetch
     expect((await recordOnce(DRIVE_KEY, {resolveDriveVisibility: visibility(DRIVE_VISIBILITY.PRIVATE)})).allowed).toBe(false)
     expect(reportClientLimitHit).not.toHaveBeenCalled()

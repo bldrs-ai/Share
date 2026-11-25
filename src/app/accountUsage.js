@@ -1,3 +1,4 @@
+import {appMetadataFromToken} from '../Auth0/appMetadata'
 import {getAuth0AccessToken} from '../connections/auth0Bridge'
 import {AUTH_SETTLE_RETRY_MS} from '../Containers/authLoadGate'
 import {formFactor} from '../privacy/clientCapabilities'
@@ -146,8 +147,10 @@ export function reportClientLimitHit({gate = LIMIT_GATES.BLOCKED, routeKind} = {
 
 /**
  * Forward a funnel step (login, begin_checkout) for the server to send to GA
- * under its fixed client id. Signed in only (it rides the token), and not
- * with the opt-out on. Params outside the step's enums are dropped, not sent.
+ * under its fixed client id. Signed in only (it rides the token). Sent with
+ * the opt-out on too: nothing of it is stored and GA gets no account, so it
+ * is a count, like #2355's (design doc §"Opt-out"). Params outside the
+ * step's enums are dropped, not sent.
  *
  * @param {string} event FUNNEL_REPORT_EVENTS
  * @param {object} params
@@ -159,9 +162,6 @@ export async function reportFunnelStep(event, params) {
     // new session's token and claims: wait for that settlement, so the token
     // is there to send and the opt-out read is this account's.
     await waitForSettledFor(() => true, AUTH_SETTLE_RETRY_MS)
-    if (!usageReportsEnabled(useStore.getState().appMetadata)) {
-      return false
-    }
     const known = Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined))
     const valid = parseFunnelParams(event, known)
     if (!valid) {
@@ -176,13 +176,18 @@ export async function reportFunnelStep(event, params) {
 
 /**
  * Turn the account's usage reports on or off (the Profile toggle). On
- * success the store's appMetadata is updated in place, so the toggle shows
- * the new state before the next token refresh brings the claim.
+ * success the token is fetched fresh, so the cached one's stale claim can't
+ * flip the toggle back when BaseRoutes next applies it, and the store's
+ * appMetadata takes the fresh claim with the new value on top (in case the
+ * claim lags the write).
  *
  * @param {boolean} on
+ * @param {object} [options]
+ * @param {Function} [options.refreshToken] () => Promise<string>, a
+ *   cacheMode 'off' getAccessTokenSilently; without it, only the store is updated
  * @return {Promise<boolean>} whether the server stored it
  */
-export async function setUsageReportsPreference(on) {
+export async function setUsageReportsPreference(on, {refreshToken} = {}) {
   const token = await getAuth0AccessToken()
   if (!token) {
     return false
@@ -196,8 +201,18 @@ export async function setUsageReportsPreference(on) {
     if (!response.ok) {
       return false
     }
+    let fresh = null
+    if (refreshToken) {
+      try {
+        const freshToken = await refreshToken()
+        useStore.getState().setAccessToken(freshToken)
+        fresh = appMetadataFromToken(freshToken)
+      } catch (_) {
+        // Saved all the same; the toggle shows the store's value below.
+      }
+    }
     const {appMetadata, setAppMetadata} = useStore.getState()
-    setAppMetadata({...appMetadata, usageReports: on})
+    setAppMetadata({...(fresh ?? appMetadata), usageReports: on})
     return true
   } catch (_) {
     return false

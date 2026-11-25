@@ -247,8 +247,8 @@ function netlifyHandlers() {
     // `netlify/functions/account-usage.js` in dev, Playwright and Jest. Same
     // shape check (the module both share), same bearer requirement and
     // answers. Every accepted body goes on `window.__mockAccountUsage`, in
-    // order, for a spec to read back; a load or funnel body after an
-    // opt-out is dropped there as the function drops it. A spec sets
+    // order, for a spec to read back; a load body after an opt-out is dropped
+    // there as the function drops it (limit and funnel bodies are kept). A spec sets
     // `window.__mockAccountUsageFail` to make it answer 502.
     http.post('/.netlify/functions/account-usage', async ({request}) => {
       const body = parseAccountUsageBody(await request.text())
@@ -271,8 +271,7 @@ function netlifyHandlers() {
         received.push(body)
         return jsonMockResponse(HTTP_OK, {usage_reports: body.usage_reports})
       }
-      const isAnalytics = body.kind === ACCOUNT_USAGE_KINDS.LOAD || body.kind === ACCOUNT_USAGE_KINDS.FUNNEL
-      if (!(isAnalytics && window.__mockUsageReportsOff)) {
+      if (!(body.kind === ACCOUNT_USAGE_KINDS.LOAD && window.__mockUsageReportsOff)) {
         received.push(body)
       }
       return new Response(null, {status: HTTP_NO_CONTENT_MOCK})

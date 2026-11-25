@@ -38,10 +38,11 @@ jest.mock('../_lib/measurementProtocol.js', () => ({
 
 /* eslint-disable no-magic-numbers, max-len */
 const SUB = 'google-oauth2|103547991597142817347'
-const ACCOUNT = '0ca58fd54559723f9824c91ae7edb95c'
+const KEY_SECRET = 'k'.repeat(40)
+const ACCOUNT = '84a40528eaa5146ae8b4b4089614b29a'
 const OTHER = 'ffffffffffffffffffffffffffffffff'
 const NOW = Date.parse('2026-11-25T12:00:00.000Z')
-const GA_ENV = {GA4_MEASUREMENT_ID: 'G-TEST', GA4_API_SECRET: 'secret'}
+const GA_ENV = {GA4_MEASUREMENT_ID: 'G-TEST', GA4_API_SECRET: 'secret', ACCOUNT_USAGE_KEY_SECRET: KEY_SECRET}
 const REPORT = {
   content_type: 'ifc', size_bucket: '1-10mb', source: 'github', open_kind: 'page', form_factor: 'desktop',
   load_outcome: 'displayed', cache_hit: 'false', tier: 'free', loadTime: 2000,
@@ -67,10 +68,13 @@ describe('_lib/accountUsage', () => {
     sendMeasurementProtocolEvent.mockClear()
   })
 
-  it('names an account by a hash of its sub, never the sub', () => {
-    expect(accountKey(SUB)).toBe(ACCOUNT)
-    expect(accountKey(SUB)).not.toContain('103547991597142817347')
-    expect(accountKey('github|1')).not.toBe(ACCOUNT)
+  it('names an account by an HMAC of its sub under the key secret, never the sub', () => {
+    expect(accountKey(SUB, KEY_SECRET)).toBe(ACCOUNT)
+    expect(accountKey(SUB, KEY_SECRET)).not.toContain('103547991597142817347')
+    expect(accountKey('github|1', KEY_SECRET)).not.toBe(ACCOUNT)
+    // Keyed: without the secret, hashing candidate subs finds nothing.
+    expect(accountKey(SUB, 'x'.repeat(40))).not.toBe(ACCOUNT)
+    expect(() => accountKey(SUB, null)).toThrow()
   })
 
   it('reports by UTC calendar month, and keeps 13 whole months raw', () => {
@@ -80,9 +84,11 @@ describe('_lib/accountUsage', () => {
     expect(oldestKeptPeriod(Date.parse('2027-01-01T00:00:00.000Z'))).toBe('2025-12')
   })
 
-  it('records only where ACCOUNT_USAGE_RECORDING is on', () => {
-    expect(isRecordingEnabled({ACCOUNT_USAGE_RECORDING: 'on'})).toBe(true)
-    expect(isRecordingEnabled({ACCOUNT_USAGE_RECORDING: 'true'})).toBe(false)
+  it('records only where ACCOUNT_USAGE_RECORDING is on and the key secret is set', () => {
+    expect(isRecordingEnabled({ACCOUNT_USAGE_RECORDING: 'on', ACCOUNT_USAGE_KEY_SECRET: KEY_SECRET})).toBe(true)
+    expect(isRecordingEnabled({ACCOUNT_USAGE_RECORDING: 'on'})).toBe(false)
+    expect(isRecordingEnabled({ACCOUNT_USAGE_RECORDING: 'on', ACCOUNT_USAGE_KEY_SECRET: 'short'})).toBe(false)
+    expect(isRecordingEnabled({ACCOUNT_USAGE_RECORDING: 'true', ACCOUNT_USAGE_KEY_SECRET: KEY_SECRET})).toBe(false)
     expect(isRecordingEnabled({})).toBe(false)
   })
 
@@ -159,6 +165,7 @@ describe('_lib/accountUsage', () => {
     getStore.mockReturnValue(store)
     const saved = process.env.ACCOUNT_USAGE_RECORDING
     delete process.env.ACCOUNT_USAGE_RECORDING
+    process.env.ACCOUNT_USAGE_KEY_SECRET = KEY_SECRET
     await recordServerLimitHit({}, {sub: SUB, limit: 'private_model', key: '/share/v/g/x'})
     expect(store.set).not.toHaveBeenCalled()
     process.env.ACCOUNT_USAGE_RECORDING = 'on'
@@ -173,9 +180,10 @@ describe('_lib/accountUsage', () => {
     if (saved === undefined) {
       delete process.env.ACCOUNT_USAGE_RECORDING
     }
+    delete process.env.ACCOUNT_USAGE_KEY_SECRET
   })
 
-  it('an opt-out deletes only that account\'s load reports; an account deletion takes everything of its own', async () => {
+  it('an opt-out deletes only that account\'s load reports; an account deletion takes everything of its own but the opt-out', async () => {
     const store = createMemoryBlobs({
       [`load/2026-11/${ACCOUNT}/a`]: REPORT,
       [`load/2026-10/${ACCOUNT}/b`]: REPORT,
@@ -185,10 +193,13 @@ describe('_lib/accountUsage', () => {
       [`pref/${ACCOUNT}`]: {usage_reports: false},
       'rollup/2025-01': {loads: {total: 1}},
     })
-    expect(await deleteLoadReports(store, ACCOUNT)).toBe(2)
+    expect(await deleteLoadReports(store, ACCOUNT, NOW)).toBe(2)
     expect(store.data.has(`limit/2026-11/${ACCOUNT}/d`)).toBe(true)
-    expect(await deleteAccountRecords(store, ACCOUNT)).toBe(2)
-    expect([...store.data.keys()].sort()).toEqual([`load/2026-11/${OTHER}/c`, 'rollup/2025-01'])
+    expect(await deleteAccountRecords(store, ACCOUNT, NOW)).toBe(2)
+    // The opt-out stays: deleting the records must not resume recording.
+    expect([...store.data.keys()].sort()).toEqual([`load/2026-11/${OTHER}/c`, `pref/${ACCOUNT}`, 'rollup/2025-01'])
+    // Listed per period and account, never the whole store.
+    expect(store.list.mock.calls.every(([{prefix}]) => prefix.includes(ACCOUNT))).toBe(true)
   })
 })
 
@@ -202,10 +213,12 @@ describe('account-usage', () => {
     verifyAuth0Bearer.mockResolvedValue({ok: true, sub: SUB})
     patchUserAppMetadata.mockResolvedValue(undefined)
     process.env.ACCOUNT_USAGE_RECORDING = 'on'
+    process.env.ACCOUNT_USAGE_KEY_SECRET = KEY_SECRET
     jest.spyOn(console, 'log').mockImplementation(() => null)
   })
   afterEach(() => {
     delete process.env.ACCOUNT_USAGE_RECORDING
+    delete process.env.ACCOUNT_USAGE_KEY_SECRET
     jest.restoreAllMocks()
   })
 
@@ -243,17 +256,50 @@ describe('account-usage', () => {
     expect(await res.json()).toEqual({error: 'account_usage_store_failed'})
   })
 
-  it('a preference that Auth0 refuses changes nothing in the store: 502', async () => {
+  // A failure part-way errs towards not recording (setPreference).
+  it('an opt-out Auth0 refuses still stops recording: the mirror and the deletion go first', async () => {
     patchUserAppMetadata.mockRejectedValue(new Error('mgmt'))
     jest.spyOn(console, 'warn').mockImplementation(() => null)
-    store.data.set(`load/2026-11/${ACCOUNT}/a`, JSON.stringify(REPORT))
+    store.data.set(`load/${usagePeriod(Date.now())}/${ACCOUNT}/a`, JSON.stringify(REPORT))
     const res = await accountUsage(post({kind: 'preference', usage_reports: false}))
     expect(res.status).toBe(502)
-    expect(store.data.has(`load/2026-11/${ACCOUNT}/a`)).toBe(true)
-    expect(store.data.has(`pref/${ACCOUNT}`)).toBe(false)
+    expect(await res.json()).toEqual({error: 'preference_write_failed'})
+    expect(store.data.has(`pref/${ACCOUNT}`)).toBe(true)
+    expect([...store.data.keys()].filter((k) => k.startsWith('load/'))).toEqual([])
   })
 
-  it('opting out stops load reports and funnel forwards, but a limit hit is still recorded', async () => {
+  it('an opt-out whose mirror can\'t be written is refused before Auth0 is touched', async () => {
+    store.set.mockRejectedValue(new Error('down'))
+    jest.spyOn(console, 'warn').mockImplementation(() => null)
+    expect((await accountUsage(post({kind: 'preference', usage_reports: false}))).status).toBe(502)
+    expect(patchUserAppMetadata).not.toHaveBeenCalled()
+  })
+
+  it('an opt-in Auth0 refuses leaves the account unrecorded', async () => {
+    store.data.set(`pref/${ACCOUNT}`, JSON.stringify({usage_reports: false}))
+    patchUserAppMetadata.mockRejectedValue(new Error('mgmt'))
+    jest.spyOn(console, 'warn').mockImplementation(() => null)
+    expect((await accountUsage(post({kind: 'preference', usage_reports: true}))).status).toBe(502)
+    expect(store.data.has(`pref/${ACCOUNT}`)).toBe(true)
+  })
+
+  it('a load report racing an opt-out is withdrawn once the opt-out is seen', async () => {
+    // The first read of the mirror finds nothing; the opt-out lands before
+    // the second.
+    const realGet = store.get.getMockImplementation()
+    let reads = 0
+    store.get.mockImplementation((key, opts) => {
+      if (key === `pref/${ACCOUNT}` && ++reads === 2) {
+        store.data.set(key, JSON.stringify({usage_reports: false}))
+      }
+      return realGet(key, opts)
+    })
+    expect((await accountUsage(post({kind: 'load', report: REPORT}))).status).toBe(204)
+    expect([...store.data.keys()].filter((k) => k.startsWith('load/'))).toEqual([])
+  })
+
+  it('opting out stops load reports; a limit hit is still recorded and a funnel step still counted', async () => {
+    Object.assign(process.env, {GA4_MEASUREMENT_ID: 'G-TEST', GA4_API_SECRET: 'secret'})
     await accountUsage(post({kind: 'preference', usage_reports: false}))
     expect(patchUserAppMetadata).toHaveBeenCalledWith(SUB, {usageReports: false})
     await accountUsage(post({kind: 'load', report: REPORT}))
@@ -262,7 +308,10 @@ describe('account-usage', () => {
     const keys = [...store.data.keys()]
     expect(keys.filter((k) => k.startsWith('load/'))).toEqual([])
     expect(keys.filter((k) => k.startsWith('limit/'))).toHaveLength(1)
-    expect(sendMeasurementProtocolEvent.mock.calls.map(([a]) => a.name)).not.toContain('begin_checkout')
+    // Nothing of a funnel step is stored, and GA gets no account.
+    expect(sendMeasurementProtocolEvent.mock.calls.map(([a]) => a.name)).toContain('begin_checkout')
+    delete process.env.GA4_MEASUREMENT_ID
+    delete process.env.GA4_API_SECRET
   })
 
   it('opting back in writes true to Auth0 and removes the mirror', async () => {
@@ -325,7 +374,7 @@ describe('account-usage-stats', () => {
     const aggregate = JSON.stringify(await aggregateStats(store, '2026-11', NOW))
     expect(aggregate).not.toContain(ACCOUNT)
     expect(aggregate).not.toContain(OTHER)
-    const mine = await accountStats(store, SUB, NOW)
+    const mine = await accountStats(store, SUB, KEY_SECRET, NOW)
     expect(mine.account).toBe(ACCOUNT)
     expect(mine.optedOut).toBe(false)
     expect(mine.periods['2026-11'].opens).toBe(1)
@@ -336,23 +385,28 @@ describe('account-usage-stats', () => {
 
 
 describe('account-usage-retention', () => {
-  it('reduces only periods older than 13 whole months, to counts without accounts', async () => {
+  it('reduces the oldest period older than 13 whole months per run, to counts without accounts', async () => {
     const store = createMemoryBlobs({
+      [`load/2025-08/${OTHER}/z`]: REPORT,
       [`load/2025-09/${ACCOUNT}/a`]: REPORT,
       [`load/2025-09/${OTHER}/b`]: {...REPORT, load_outcome: 'unusable'},
       [`first/2025-09/${ACCOUNT}/export_slot`]: {},
       [`limit/2025-09/${ACCOUNT}/c`]: {limit: 'export_slot', gate: 'blocked'},
       [`load/2025-10/${ACCOUNT}/d`]: REPORT,
     })
-    const summary = await sweep(store, NOW)
-    expect(summary.reduced).toEqual([{period: '2025-09', rollup: 'written', deleted: 4}])
+    const first = await sweep(store, NOW)
+    expect(first.reduced).toEqual([{period: '2025-08', rollup: 'written', deleted: 1}])
+    expect(first.pending).toBe(1)
+    const second = await sweep(store, NOW)
+    expect(second.reduced).toEqual([{period: '2025-09', rollup: 'written', deleted: 4}])
+    expect(second.pending).toBe(0)
     const rollup = store.data.get('rollup/2025-09')
     expect(JSON.parse(rollup)).toMatchObject({
       loads: {total: 2, accounts: 2, byOutcome: {displayed: 1, unusable: 1}},
       limits: {export_slot: {hits: 1, blocked: 1, accounts: 1}},
     })
     expect(rollup).not.toContain(ACCOUNT)
-    expect([...store.data.keys()].sort()).toEqual([`load/2025-10/${ACCOUNT}/d`, 'rollup/2025-09'])
+    expect([...store.data.keys()].sort()).toEqual([`load/2025-10/${ACCOUNT}/d`, 'rollup/2025-08', 'rollup/2025-09'])
   })
 
   it('is a no-op with nothing expired', async () => {

@@ -26,7 +26,7 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/pref/0ca58fd54559723f9824c91ae7edb95c"
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/pref/84a40528eaa5146ae8b4b4089614b29a"
       },
       "response": {
         "status": 200,

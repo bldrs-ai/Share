@@ -1,5 +1,5 @@
 {
-  "description": "On 2026-11-25 the oldest period kept is 2025-10: 2025-09's records become a rollup (written onlyIfNew, before any delete) with no account in it, then are deleted; 2025-10 is left alone.",
+  "description": "On 2026-11-25 the oldest period kept is 2025-10. Two periods are expired (2025-08 and 2025-09); one run reduces only the oldest, 2025-08: its rollup is written onlyIfNew, with no account in it, before its records are deleted, and 2025-09 is left for the next run (pending: 1). Periods are found from a directory listing, records listed under the period's own prefix.",
   "env": {
     "NODE_ENV": "test",
     "ADMIN_STATS_SECRET": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
@@ -21,18 +21,61 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F"
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F&directories=true"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": [
+            "load/2025-08",
+            "load/2025-09",
+            "load/2025-10"
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=limit%2F&directories=true"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": [
+            "limit/2025-09"
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=first%2F&directories=true"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": [
+            "first/2025-09"
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2025-08%2F"
       },
       "response": {
         "status": 200,
         "json": {
           "blobs": [
             {
-              "key": "load/2025-09/0ca58fd54559723f9824c91ae7edb95c/2025-09-03T10:00:00.000Z-a",
-              "etag": "\"x\""
-            },
-            {
-              "key": "load/2025-10/0ca58fd54559723f9824c91ae7edb95c/2025-10-01T10:00:00.000Z-c",
+              "key": "load/2025-08/84a40528eaa5146ae8b4b4089614b29a/2025-08-03T10:00:00.000Z-z",
               "etag": "\"x\""
             }
           ],
@@ -43,17 +86,12 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=limit%2F"
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=limit%2F2025-08%2F"
       },
       "response": {
         "status": 200,
         "json": {
-          "blobs": [
-            {
-              "key": "limit/2025-09/0ca58fd54559723f9824c91ae7edb95c/2025-09-04T10:00:00.000Z-b",
-              "etag": "\"x\""
-            }
-          ],
+          "blobs": [],
           "directories": []
         }
       }
@@ -61,17 +99,12 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=first%2F"
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=first%2F2025-08%2F"
       },
       "response": {
         "status": 200,
         "json": {
-          "blobs": [
-            {
-              "key": "first/2025-09/0ca58fd54559723f9824c91ae7edb95c/private_model",
-              "etag": "\"x\""
-            }
-          ],
+          "blobs": [],
           "directories": []
         }
       }
@@ -79,7 +112,7 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup/2025-09"
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup/2025-08"
       },
       "response": {
         "status": 404
@@ -88,50 +121,27 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2025-09/0ca58fd54559723f9824c91ae7edb95c/2025-09-03T10:00:00.000Z-a"
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2025-08/84a40528eaa5146ae8b4b4089614b29a/2025-08-03T10:00:00.000Z-z"
       },
       "response": {
         "status": 200,
         "json": {
           "content_type": "ifc",
-          "size_bucket": "1-10mb",
-          "source": "github",
-          "open_kind": "page",
-          "form_factor": "desktop",
           "load_outcome": "displayed",
-          "cache_hit": "false",
-          "tier": "free",
-          "loadTime": 1000,
-          "firstMeshMs": 400,
-          "at": "x"
-        }
-      }
-    },
-    {
-      "request": {
-        "method": "GET",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/limit/2025-09/0ca58fd54559723f9824c91ae7edb95c/2025-09-04T10:00:00.000Z-b"
-      },
-      "response": {
-        "status": 200,
-        "json": {
-          "limit": "private_model",
-          "gate": "soft",
-          "tier": "free",
-          "decided_by": "server",
-          "at": "x"
+          "source": "github",
+          "tier": "free"
         }
       }
     },
     {
       "request": {
         "method": "PUT",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup/2025-09",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup/2025-08",
         "headers": {
           "if-none-match": "*"
         },
         "bodyJson": {
-          "period": "2025-09",
+          "period": "2025-08",
           "loads": {
             "total": 1,
             "accounts": 1,
@@ -139,14 +149,7 @@
               "ifc": 1
             }
           },
-          "limits": {
-            "private_model": {
-              "hits": 1,
-              "soft": 1,
-              "blocked": 0,
-              "accounts": 1
-            }
-          }
+          "limits": {}
         }
       },
       "response": {
@@ -159,25 +162,7 @@
     {
       "request": {
         "method": "DELETE",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2025-09/0ca58fd54559723f9824c91ae7edb95c/2025-09-03T10:00:00.000Z-a"
-      },
-      "response": {
-        "status": 204
-      }
-    },
-    {
-      "request": {
-        "method": "DELETE",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/limit/2025-09/0ca58fd54559723f9824c91ae7edb95c/2025-09-04T10:00:00.000Z-b"
-      },
-      "response": {
-        "status": 204
-      }
-    },
-    {
-      "request": {
-        "method": "DELETE",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/first/2025-09/0ca58fd54559723f9824c91ae7edb95c/private_model"
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2025-08/84a40528eaa5146ae8b4b4089614b29a/2025-08-03T10:00:00.000Z-z"
       },
       "response": {
         "status": 204
@@ -190,11 +175,12 @@
       "oldestKept": "2025-10",
       "reduced": [
         {
-          "period": "2025-09",
+          "period": "2025-08",
           "rollup": "written",
-          "deleted": 3
+          "deleted": 1
         }
-      ]
+      ],
+      "pending": 1
     }
   }
 }

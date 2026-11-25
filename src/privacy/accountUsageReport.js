@@ -91,6 +91,16 @@ export const LOAD_REPORT_METRICS = Object.freeze([
   'pageWarnCount',
 ])
 
+/**
+ * The model-size counts. Exact, together they identify a model about as well
+ * as its byte count does, which is why `fileSize` is left out; so they are
+ * kept to COUNT_SIGNIFICANT_DIGITS significant figures (12,345 vertices is
+ * stored as 12,000), which keeps what the reader needs (performance by model
+ * size) and loses what would name a file.
+ */
+export const COUNT_METRICS = Object.freeze(['vertexCount', 'triangleCount', 'productCount', 'productsWithGeometryCount'])
+export const COUNT_SIGNIFICANT_DIGITS = 2
+
 /** Ten billion: above any real count or millisecond timing, so a typo can't pass as data. */
 export const MAX_METRIC = 1e10
 
@@ -218,15 +228,29 @@ export function parseLoadReport(value) {
     report[field] = value[field]
   }
   for (const key of Object.keys(value)) {
-    if (key in LOAD_REPORT_FIELDS) {
+    if (hasOwn(LOAD_REPORT_FIELDS, key)) {
       continue
     }
     if (!LOAD_REPORT_METRICS.includes(key) || !isMetric(value[key])) {
       return null
     }
-    report[key] = value[key]
+    report[key] = COUNT_METRICS.includes(key) ? roundSignificant(value[key], COUNT_SIGNIFICANT_DIGITS) : value[key]
   }
   return report
+}
+
+
+/**
+ * @param {number} value a non-negative integer
+ * @param {number} digits significant figures to keep
+ * @return {number} value rounded to that many significant figures
+ */
+export function roundSignificant(value, digits) {
+  if (value === 0) {
+    return 0
+  }
+  const scale = 10 ** Math.max(0, Math.floor(Math.log10(value)) + 1 - digits)
+  return Math.round(value / scale) * scale
 }
 
 

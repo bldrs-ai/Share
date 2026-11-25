@@ -445,7 +445,7 @@ describe('ProfileControl', () => {
       const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
       fireEvent.click(await findByTestId('control-button-profile'))
       fireEvent.click(await findByTestId('menu-usage-reports'))
-      await waitFor(() => expect(setUsageReportsPreference).toHaveBeenCalledWith(false))
+      await waitFor(() => expect(setUsageReportsPreference).toHaveBeenCalledWith(false, {refreshToken: expect.any(Function)}))
       await waitFor(() => expect(useStore.getState().appMetadata.usageReports).toBe(false))
       expect(await findByTestId('menu-usage-reports')).toHaveAttribute('aria-checked', 'false')
     })

@@ -18,6 +18,8 @@
  *   → 400 {error: {code: 'invalid_period'}}
  *   → 401 {error: {code: 'admin_stats_unauthorized'}}
  *   → 500 {error: {code: 'admin_stats_not_configured'}}
+ *   → 500 {error: {code: 'account_usage_not_configured'}} no ACCOUNT_USAGE_KEY_SECRET
+ *                                                         (a lookup or DELETE can't name the account)
  *   → 503 {error: {code: 'account_usage_unavailable'}}   the store couldn't be read
  *
  * What it returns: counts, distributions and, for one account looked up by
@@ -35,7 +37,9 @@ import {getStore} from '@netlify/blobs'
 import {
   ACCOUNT_USAGE_STORE,
   accountKey,
+  accountKeySecret,
   deleteAccountRecords,
+  listAccountKeys,
   isUsagePeriod,
   listKeys,
   parseEventKey,
@@ -93,14 +97,18 @@ export default async function handler(req) {
   if (!isUsagePeriod(period)) {
     return json(HTTP_BAD_REQUEST, {error: {code: 'invalid_period'}})
   }
+  const keySecret = accountKeySecret(process.env)
+  if (validSub && !keySecret) {
+    return json(HTTP_INTERNAL_ERROR, {error: {code: 'account_usage_not_configured'}})
+  }
   try {
     const store = getStore({name: ACCOUNT_USAGE_STORE, consistency: 'strong'})
     if (req.method === 'DELETE') {
-      const account = accountKey(sub)
-      return json(HTTP_OK, {v: STATS_VERSION, account, deleted: await deleteAccountRecords(store, account)})
+      const account = accountKey(sub, keySecret)
+      return json(HTTP_OK, {v: STATS_VERSION, account, deleted: await deleteAccountRecords(store, account, nowMs)})
     }
     if (validSub) {
-      return json(HTTP_OK, await accountStats(store, sub, nowMs))
+      return json(HTTP_OK, await accountStats(store, sub, keySecret, nowMs))
     }
     return json(HTTP_OK, await aggregateStats(store, period, nowMs))
   } catch (err) {
@@ -119,14 +127,16 @@ export default async function handler(req) {
  * @return {Promise<object>}
  */
 export async function aggregateStats(store, period, nowMs) {
-  const [loadKeys, limitKeys, firstKeys, rollupKeys] = await Promise.all(
-    ['load/', 'limit/', 'first/', 'rollup/'].map((prefix) => listKeys(store, prefix)))
+  // The trend lists every load key (keys only, no reads); the period's own
+  // reports and hits are listed under the period's prefix and read with
+  // bounded concurrency.
+  const [loadKeys, periodLimitKeys, firstKeys, rollupKeys] = await Promise.all(
+    ['load/', `limit/${period}/`, `first/${period}/`, 'rollup/'].map((prefix) => listKeys(store, prefix)))
   const loads = loadKeys.map(parseEventKey).filter(Boolean)
   const periodLoadKeys = loadKeys.filter((key) => parseEventKey(key)?.period === period)
-  const reports = (await Promise.all(periodLoadKeys.map((key) => store.get(key, {type: 'json'})))).filter(Boolean)
-  const periodLimitKeys = limitKeys.filter((key) => parseEventKey(key)?.period === period)
-  const hits = (await Promise.all(periodLimitKeys.map((key) => store.get(key, {type: 'json'})))).filter(Boolean)
-  const rollups = (await Promise.all(rollupKeys.map((key) => store.get(key, {type: 'json'})))).filter(Boolean)
+  const reports = await readAll(store, periodLoadKeys)
+  const hits = await readAll(store, periodLimitKeys)
+  const rollups = await readAll(store, rollupKeys)
   return {
     v: STATS_VERSION,
     now: new Date(nowMs).toISOString(),
@@ -135,7 +145,7 @@ export async function aggregateStats(store, period, nowMs) {
     opens: opensPerAccount(loads.filter((parts) => parts.period === period)),
     performance: performanceStats(reports),
     outcomes: countBy(reports, ['load_outcome', 'content_type', 'source', 'tier', 'cache_hit', 'form_factor']),
-    limits: limitStats(hits, firstKeys.map(parseEventKey).filter((parts) => parts?.period === period)),
+    limits: limitStats(hits, firstKeys.map(parseEventKey).filter(Boolean)),
     rollups: rollups.sort((a, b) => String(a.period).localeCompare(String(b.period))),
   }
 }
@@ -294,13 +304,14 @@ export function limitStats(hits, firsts) {
  *
  * @param {object} store
  * @param {string} sub
+ * @param {string} keySecret ACCOUNT_USAGE_KEY_SECRET
  * @param {number} nowMs
  * @return {Promise<object>}
  */
-export async function accountStats(store, sub, nowMs) {
-  const account = accountKey(sub)
-  const lists = await Promise.all(['load/', 'limit/', 'first/'].map((prefix) => listKeys(store, prefix)))
-  const mine = lists.flat().map((key) => ({key, parts: parseEventKey(key)})).filter(({parts}) => parts?.account === account)
+export async function accountStats(store, sub, keySecret, nowMs) {
+  const account = accountKey(sub, keySecret)
+  const keys = await listAccountKeys(store, account, ['load', 'limit', 'first'], nowMs)
+  const mine = keys.map((key) => ({key, parts: parseEventKey(key)})).filter(({parts}) => parts?.account === account)
   const periods = {}
   await Promise.all(mine.map(async ({key, parts}) => {
     periods[parts.period] ??= {loads: [], limits: [], first: []}
@@ -327,6 +338,30 @@ export async function accountStats(store, sub, nowMs) {
     optedOut: !await usageReportsAllowed(store, account),
     periods: Object.fromEntries(Object.keys(periods).sort().map((p) => [p, periods[p]])),
   }
+}
+
+
+/** How many blobs a reader fetches at once. */
+export const READ_CONCURRENCY = 25
+
+
+/**
+ * Read blobs as JSON, READ_CONCURRENCY at a time.
+ *
+ * @param {object} store
+ * @param {Array<string>} keys
+ * @param {object} [options]
+ * @param {boolean} [options.keepMissing] keep a missing blob as null, so the
+ *   answer lines up with `keys`; by default it is skipped
+ * @return {Promise<Array>} in key order
+ */
+export async function readAll(store, keys, {keepMissing = false} = {}) {
+  const out = []
+  for (let i = 0; i < keys.length; i += READ_CONCURRENCY) {
+    const batch = await Promise.all(keys.slice(i, i + READ_CONCURRENCY).map((key) => store.get(key, {type: 'json'})))
+    out.push(...(keepMissing ? batch : batch.filter(Boolean)))
+  }
+  return out
 }
 
 

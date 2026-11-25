@@ -1,5 +1,5 @@
 {
-  "description": "The Profile toggle turned off: app_metadata.usageReports=false is written to Auth0, the store's mirror is written, and the account's stored load reports (and only its own) are deleted: 200 {usage_reports: false}.",
+  "description": "The Profile toggle turned off: the store's mirror is written first, the account's stored load reports are deleted (listed per period under its own prefix, never the whole store), then app_metadata.usageReports=false is written to Auth0: 200 {usage_reports: false}.",
   "env": {
     "$fixture": "env/account-usage.json"
   },
@@ -23,6 +23,231 @@
       "$fixture": "exchanges/auth0-userinfo.json"
     },
     {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/pref/84a40528eaa5146ae8b4b4089614b29a",
+        "bodyJson": {
+          "usage_reports": false,
+          "at": "2026-11-25T12:00:00.000Z"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"p1\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2025-09%2F84a40528eaa5146ae8b4b4089614b29a%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2025-10%2F84a40528eaa5146ae8b4b4089614b29a%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2025-11%2F84a40528eaa5146ae8b4b4089614b29a%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2025-12%2F84a40528eaa5146ae8b4b4089614b29a%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2026-01%2F84a40528eaa5146ae8b4b4089614b29a%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2026-02%2F84a40528eaa5146ae8b4b4089614b29a%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2026-03%2F84a40528eaa5146ae8b4b4089614b29a%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2026-04%2F84a40528eaa5146ae8b4b4089614b29a%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2026-05%2F84a40528eaa5146ae8b4b4089614b29a%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2026-06%2F84a40528eaa5146ae8b4b4089614b29a%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2026-07%2F84a40528eaa5146ae8b4b4089614b29a%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2026-08%2F84a40528eaa5146ae8b4b4089614b29a%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2026-09%2F84a40528eaa5146ae8b4b4089614b29a%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2026-10%2F84a40528eaa5146ae8b4b4089614b29a%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2026-11%2F84a40528eaa5146ae8b4b4089614b29a%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [
+            {
+              "key": "load/2026-11/84a40528eaa5146ae8b4b4089614b29a/2026-11-20T10:00:00.000Z-x",
+              "etag": "\"x\""
+            }
+          ],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2026-11/84a40528eaa5146ae8b4b4089614b29a/2026-11-20T10:00:00.000Z-x"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
       "$fixture": "exchanges/auth0-mgmt-token.json"
     },
     {
@@ -43,53 +268,6 @@
         "json": {
           "$fixture": "auth0/user.json"
         }
-      }
-    },
-    {
-      "request": {
-        "method": "PUT",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/pref/0ca58fd54559723f9824c91ae7edb95c",
-        "bodyJson": {
-          "usage_reports": false,
-          "at": "2026-11-25T12:00:00.000Z"
-        }
-      },
-      "response": {
-        "status": 200,
-        "headers": {
-          "etag": "\"p1\""
-        }
-      }
-    },
-    {
-      "request": {
-        "method": "GET",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F"
-      },
-      "response": {
-        "status": 200,
-        "json": {
-          "blobs": [
-            {
-              "key": "load/2026-11/0ca58fd54559723f9824c91ae7edb95c/2026-11-20T10:00:00.000Z-x",
-              "etag": "\"a\""
-            },
-            {
-              "key": "load/2026-11/ffffffffffffffffffffffffffffffff/2026-11-20T10:00:00.000Z-y",
-              "etag": "\"b\""
-            }
-          ],
-          "directories": []
-        }
-      }
-    },
-    {
-      "request": {
-        "method": "DELETE",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2026-11/0ca58fd54559723f9824c91ae7edb95c/2026-11-20T10:00:00.000Z-x"
-      },
-      "response": {
-        "status": 204
       }
     }
   ],

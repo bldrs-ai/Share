@@ -1,5 +1,5 @@
 {
-  "description": "A signed-in user's load report: the token is checked, the account's opt-out mirror is read (none), and the report is stored under load/<period>/<hashed sub>/<time>-<uuid> with the server's time: 204.",
+  "description": "A signed-in user's load report: the token is checked, the account's opt-out mirror is read (none), the report is stored under load/<period>/<HMAC of sub>/<time>-<uuid> with the server's time, and the mirror is read again in case an opt-out landed meanwhile: 204.",
   "env": {
     "$fixture": "env/account-usage.json"
   },
@@ -27,7 +27,7 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/pref/0ca58fd54559723f9824c91ae7edb95c"
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/pref/84a40528eaa5146ae8b4b4089614b29a"
       },
       "response": {
         "status": 404
@@ -36,7 +36,7 @@
     {
       "request": {
         "method": "PUT",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2026-11/0ca58fd54559723f9824c91ae7edb95c/2026-11-25T12:00:00.000Z-00000000-0000-4000-8000-000000000001",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2026-11/84a40528eaa5146ae8b4b4089614b29a/2026-11-25T12:00:00.000Z-00000000-0000-4000-8000-000000000001",
         "headers": {
           "authorization": "Bearer replay-blobs-token"
         },
@@ -52,6 +52,15 @@
         "headers": {
           "etag": "\"e1\""
         }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/pref/84a40528eaa5146ae8b4b4089614b29a"
+      },
+      "response": {
+        "status": 404
       }
     }
   ],

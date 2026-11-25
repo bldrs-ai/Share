@@ -1,5 +1,5 @@
 {
-  "description": "A login started from a gate is forwarded to GA under the fixed client id with source: server, and nothing is stored.",
+  "description": "A login started from a gate is forwarded to GA under the fixed client id with source: server, whatever the opt-out says (nothing is stored, and GA gets no account): no store read at all.",
   "env": {
     "$fixture": "env/account-usage.json"
   },
@@ -24,15 +24,6 @@
   "exchanges": [
     {
       "$fixture": "exchanges/auth0-userinfo.json"
-    },
-    {
-      "request": {
-        "method": "GET",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/pref/0ca58fd54559723f9824c91ae7edb95c"
-      },
-      "response": {
-        "status": 404
-      }
     },
     {
       "request": {

@@ -12,9 +12,12 @@
  *
  * ## Keys
  *
- * Every per-account key names the account by `accountKey(sub)`, a SHA-256 of
- * the Auth0 sub, never the sub itself, so a listing of the store names no
- * identity. The reader's per-account lookup hashes the sub it is given.
+ * Every per-account key names the account by `accountKey(sub, secret)`, an
+ * HMAC-SHA-256 of the Auth0 sub under ACCOUNT_USAGE_KEY_SECRET, never the sub
+ * itself. A plain hash would not do: Auth0 subs are enumerable
+ * (`github|<small integer>`), so anyone holding a listing could hash
+ * candidates until one matched. The reader's per-account lookup computes the
+ * same HMAC of the sub it is given.
  *
  *   load/<YYYY-MM>/<account>/<iso time>-<uuid>   one load report
  *   limit/<YYYY-MM>/<account>/<iso time>-<uuid>  one limit hit
@@ -38,7 +41,7 @@
  * account, limit kind and period (the `first/` marker is written
  * `onlyIfNew`, and only the write that created it sends).
  */
-import {createHash, randomUUID} from 'node:crypto'
+import {createHmac, randomUUID} from 'node:crypto'
 import {connectLambda, getStore} from '@netlify/blobs'
 import {LIMIT_DECIDERS, LIMIT_GATES, LIMIT_KINDS, limitRouteKindOfKey} from '../../../src/privacy/accountUsageReport.js'
 import {gaMeasurementConfig, sendMeasurementProtocolEvent} from './measurementProtocol.js'
@@ -97,16 +100,37 @@ const PERIOD_PATTERN = /^\d{4}-\d{2}$/
  * @return {boolean}
  */
 export function isRecordingEnabled(env) {
-  return env.ACCOUNT_USAGE_RECORDING === 'on'
+  return env.ACCOUNT_USAGE_RECORDING === 'on' && accountKeySecret(env) !== null
+}
+
+
+/** A shorter key secret counts as unset, as the admin secret does. */
+export const MIN_KEY_SECRET_LENGTH = 32
+
+
+/**
+ * @param {object} env process.env
+ * @return {?string} ACCOUNT_USAGE_KEY_SECRET, or null when unset or too short
+ */
+export function accountKeySecret(env) {
+  const secret = env.ACCOUNT_USAGE_KEY_SECRET
+  return typeof secret === 'string' && secret.length >= MIN_KEY_SECRET_LENGTH ? secret : null
 }
 
 
 /**
+ * The account's name in every key. Changing the secret orphans every record
+ * stored under the old one, so it is set once and kept.
+ *
  * @param {string} sub the Auth0 user id
- * @return {string} 32 hex characters naming the account in every key
+ * @param {string} secret accountKeySecret's
+ * @return {string} 32 hex characters
  */
-export function accountKey(sub) {
-  return createHash('sha256').update(`bldrs-share:account-usage:${sub}`).digest('hex').slice(0, ACCOUNT_KEY_HEX)
+export function accountKey(sub, secret) {
+  if (!secret) {
+    throw new Error('accountKey needs ACCOUNT_USAGE_KEY_SECRET')
+  }
+  return createHmac('sha256', secret).update(`account-usage:${sub}`).digest('hex').slice(0, ACCOUNT_KEY_HEX)
 }
 
 
@@ -237,6 +261,7 @@ export async function recordLoadReport(store, account, report, {tier = null, now
  *
  * @param {object} args
  * @param {?object} args.store openAccountUsageStore's; null records nothing but still sends GA
+ *   (so does a missing ACCOUNT_USAGE_KEY_SECRET)
  * @param {string} args.sub
  * @param {string} args.limit LIMIT_KINDS
  * @param {string} args.gate LIMIT_GATES
@@ -253,24 +278,31 @@ export async function recordLimitHit({
 }) {
   const outcome = {recorded: false, first: false}
   const work = (async () => {
-    const account = accountKey(sub)
+    const secret = accountKeySecret(env)
     const period = usagePeriod(nowMs)
-    if (store) {
-      try {
-        const record = {limit, gate, tier, decided_by: decidedBy, at: new Date(nowMs).toISOString()}
-        if (routeKind) {
-          record.route_kind = routeKind
-        }
-        await store.set(`limit/${period}/${account}/${eventSuffix(nowMs)}`, JSON.stringify(record))
-        outcome.recorded = true
+    const at = new Date(nowMs).toISOString()
+    if (store && secret) {
+      const account = accountKey(sub, secret)
+      const record = {limit, gate, tier, decided_by: decidedBy, at}
+      if (routeKind) {
+        record.route_kind = routeKind
+      }
+      // The two writes side by side, and then the two sends side by side:
+      // under one short budget, limit_first_reached must never queue behind
+      // the other send, or a deadline between the marker and its event would
+      // lose the event for good (the marker stops any retry).
+      const [hit, marker] = await Promise.allSettled([
+        store.set(`limit/${period}/${account}/${eventSuffix(nowMs)}`, JSON.stringify(record)),
         // onlyIfNew: of all the hits this period, only the write that creates
-        // the marker sees `modified: true`, so limit_first_reached goes out
-        // once per account, kind and period, however the hits race.
-        const marker = await store.set(`first/${period}/${account}/${limit}`,
-          JSON.stringify({gate, tier, at: record.at}), {onlyIfNew: true})
-        outcome.first = marker?.modified === true
-      } catch (err) {
-        console.warn(`account-usage: limit hit not stored: ${err?.name ?? 'error'}`)
+        // the marker sees `modified: true` (@netlify/blobs answers a 412 so),
+        // so limit_first_reached goes out once per account, kind and period,
+        // however the hits race.
+        store.set(`first/${period}/${account}/${limit}`, JSON.stringify({gate, tier, at}), {onlyIfNew: true}),
+      ])
+      outcome.recorded = hit.status === 'fulfilled'
+      outcome.first = marker.status === 'fulfilled' && marker.value?.modified === true
+      for (const failed of [hit, marker].filter((r) => r.status === 'rejected')) {
+        console.warn(`account-usage: limit hit not stored: ${failed.reason?.name ?? 'error'}`)
       }
     }
     const params = {tier, feature: LIMIT_FEATURE[limit], source: 'server'}
@@ -280,11 +312,15 @@ export async function recordLimitHit({
     const name = gate === LIMIT_GATES.SOFT ?
       ACCOUNT_USAGE_GA_EVENTS.QUOTA_SOFT_LIMIT_EXCEEDED :
       ACCOUNT_USAGE_GA_EVENTS.QUOTA_LIMIT_REACHED
-    await sendAccountUsageEvent(env, name, params)
+    const sends = [sendAccountUsageEvent(env, name, params)]
     if (outcome.first) {
-      await sendAccountUsageEvent(env, ACCOUNT_USAGE_GA_EVENTS.LIMIT_FIRST_REACHED, {limit, gate, tier, period})
+      sends.push(sendAccountUsageEvent(env, ACCOUNT_USAGE_GA_EVENTS.LIMIT_FIRST_REACHED, {limit, gate, tier, period}))
     }
+    await Promise.all(sends)
   })()
+  // Nothing inside rejects (every step is caught), but a rejection after the
+  // deadline has won must never go unhandled.
+  work.catch(() => null)
   let timer = null
   const deadline = new Promise((resolve) => {
     timer = setTimeout(resolve, budgetMs)
@@ -380,33 +416,67 @@ export function parseEventKey(key) {
 
 
 /**
+ * The periods an account's records can be filed under: the kept window
+ * (oldestKeptPeriod) plus the one before it, which a retention run may not
+ * have reached yet, through the current month.
+ *
+ * @param {number} nowMs
+ * @return {Array<string>} `YYYY-MM`, oldest first
+ */
+export function liveUsagePeriods(nowMs) {
+  const now = new Date(nowMs)
+  return Array.from({length: RETENTION_MONTHS + 2}, (_, i) =>
+    usagePeriod(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (RETENTION_MONTHS + 1) + i, 1)))
+}
+
+
+/**
+ * One account's keys of some types, listed per period and account prefix,
+ * never the whole store: an opt-out or a lookup costs as many small listings
+ * as there are periods, not a listing of every account.
+ *
+ * @param {object} store
+ * @param {string} account
+ * @param {Array<string>} types of 'load' | 'limit' | 'first'
+ * @param {number} nowMs
+ * @return {Promise<Array<string>>}
+ */
+export async function listAccountKeys(store, account, types, nowMs) {
+  const prefixes = types.flatMap((type) => liveUsagePeriods(nowMs).map((period) => `${type}/${period}/${account}/`))
+  return (await Promise.all(prefixes.map((prefix) => listKeys(store, prefix)))).flat()
+}
+
+
+/**
  * Delete the account's load reports, every period. What an opt-out removes.
  *
  * @param {object} store
  * @param {string} account
+ * @param {number} nowMs
  * @return {Promise<number>} how many were deleted
  */
-export async function deleteLoadReports(store, account) {
-  const keys = (await listKeys(store, 'load/')).filter((key) => parseEventKey(key)?.account === account)
+export async function deleteLoadReports(store, account, nowMs) {
+  const keys = await listAccountKeys(store, account, ['load'], nowMs)
   await Promise.all(keys.map((key) => store.delete(key)))
   return keys.length
 }
 
 
 /**
- * Delete everything held against the account: load reports, limit hits,
- * first-hit markers and the preference. For an account deletion request
- * (account-usage-stats' DELETE); the counts already rolled up hold no
- * account and stay.
+ * Delete everything held against the account: load reports, limit hits and
+ * first-hit markers. For an account deletion request (account-usage-stats'
+ * DELETE); the counts already rolled up hold no account and stay. An opt-out
+ * outlives it: deleting the records must not turn recording back on for an
+ * account that still exists and said no.
  *
  * @param {object} store
  * @param {string} account
- * @return {Promise<number>} how many event records were deleted (the preference not counted)
+ * @param {number} nowMs
+ * @return {Promise<number>} how many event records were deleted
  */
-export async function deleteAccountRecords(store, account) {
-  const lists = await Promise.all(['load/', 'limit/', 'first/'].map((prefix) => listKeys(store, prefix)))
-  const keys = lists.flat().filter((key) => parseEventKey(key)?.account === account)
-  await Promise.all([...keys, `pref/${account}`].map((key) => store.delete(key)))
+export async function deleteAccountRecords(store, account, nowMs) {
+  const keys = await listAccountKeys(store, account, ['load', 'limit', 'first'], nowMs)
+  await Promise.all(keys.map((key) => store.delete(key)))
   return keys.length
 }
 

@@ -53,7 +53,12 @@ a new open).
 | `at` | ISO time | the function's clock, not the page's |
 
 The exact file size (`stats_fileSize`) is deliberately left out: a byte count
-can identify a file. Only its bucket is kept.
+can identify a file. Only its bucket is kept. For the same reason the
+model-size counts (`vertexCount`, `triangleCount`, `productCount`,
+`productsWithGeometryCount`) are kept to two significant figures: exact,
+together they would identify a model about as well as its byte count. The
+function rounds them as it parses (`COUNT_METRICS`, `roundSignificant`), so a
+page can't store an exact count. Timings and error counts are kept exact.
 
 ### A limit hit, per refusal, where the refusal is decided
 
@@ -87,11 +92,18 @@ not the metering window in `quota/limits.js`. The per-user 30-day periods
 
 ### Funnel steps, forwarded and not stored
 
-`login` (with `from: 'gate'` and `feature` when a gate started it) and
-`begin_checkout` (`from`, `destination`) are sent by the page to
-`account-usage`, which forwards them to GA with `source: 'server'`. Nothing is
-stored for them. They are sent beside the page's own `gtagFunnelEvent` while
-that still exists (see §"GA", the overlap).
+The page sends `login` and `begin_checkout` to `account-usage`, which forwards
+them to GA with `source: 'server'`:
+- `login` carries `from: 'gate'` and `feature` when a gate started the
+  sign-in;
+- `begin_checkout` carries `from` and `destination`.
+
+Nothing is stored for them, and the opt-out doesn't stop them: they carry no
+account (§"Opt-out").
+
+`begin_checkout` is awaited for at most 300 ms (`FUNNEL_REPORT_WAIT_MS`) before
+the checkout navigation. `keepalive` protects a fetch already issued, and this
+one first waits for a token.
 
 ## Where it lands
 
@@ -106,13 +118,24 @@ pref/<account>                               {usage_reports: false} once opted o
 rollup/<YYYY-MM>                             counts left after retention, no account
 ```
 
-- **`<account>` is `accountKey(sub)`**, the first 32 hex digits of
-  SHA-256(`bldrs-share:account-usage:<sub>`). A listing of the store names no
-  identity. The reader's per-account lookup hashes the sub it is given.
+- **`<account>` is `accountKey(sub, secret)`**, the first 32 hex digits of
+  HMAC-SHA-256 of the sub under **`ACCOUNT_USAGE_KEY_SECRET`**. A plain hash
+  wouldn't hide anything: Auth0 subs are enumerable (`github|<small
+  integer>`), so anyone holding a listing could hash candidates until one
+  matched. The reader's per-account lookup computes the same HMAC.
+  Changing the secret orphans every record, so it is set once and kept.
+- **Listed per period and account, never the whole store.** An opt-out, a
+  lookup or a deletion lists `<type>/<period>/<account>/` for each live period
+  (`liveUsagePeriods`: the 13 kept months, the current one and the one the
+  sweep may not have reached yet). Reads go 25 at a time.
 - **One blob per event**, so two concurrent writes from one account can't
   lose each other. record-load's `app_metadata` ledger has no compare-and-set
   and can lose a write (quotas.md §"Out of scope").
-- **The period is the UTC calendar month** the event happened in.
+- **The period is the UTC calendar month** the event happened in. That is a
+  reporting granularity (accepted by the coordinator, 2026-11-25), not the
+  metering window. The metering window becomes a per-user 30-day period with
+  `claude/metering-periods`. Aligning the `first/` markers to that period,
+  once it lands, is preferred if it is cheap, but is not a blocker.
 
 ## GA
 
@@ -135,14 +158,20 @@ user, and no per-account id ever reaches it.
 answered by counting `limit_first_reached`, so no per-user id is needed.
 Per-user questions go to our own reader (§"The reader"), never to GA.
 
-**The overlap with the page's events.** `quota_limit_reached`,
+**The page's own copies are dormant.** `quota_limit_reached`,
 `quota_soft_limit_exceeded`, `login` and `begin_checkout` keep their names, so
 the bizdev dashboard's funnel card reads the server's events without a query
-change. The page still sends its own `gtag` copies, for consenting visitors,
-until #2354 removes GA from the page. Until then both copies arrive, and
-`source: 'server'` tells them apart. Two differences remain after #2354:
-- the server's `quota_limit_reached` counts refusals, where the page's counted
-  dialog showings;
+change. The page's `gtagFunnelEvent` / `gtagEventWithCid` calls are still in
+the code. Since #2354, browser GA is off for everyone
+(`index/ga.js#IS_BROWSER_GA_ON = false`), so gtag/js never loads and those
+calls only buffer in the inline stub. They are never sent, and nothing is
+double-counted. The server's events are the source of truth. Removing the
+dormant client calls, or routing them through the server, is a follow-up
+(coordinator, 2026-11-25).
+
+Two differences from the old page events:
+- the server's `quota_limit_reached` counts refusals, where the page's
+  counted dialog showings;
 - the server's copy carries no `open_cid`, so it can't be joined to a browser.
 
 GA admin: register `limit` and `period` as event-scoped dimensions.
@@ -164,23 +193,48 @@ leaves it as it was and says so.
   After a save the page updates `store.appMetadata` at once, so the item shows
   the new value before the next token refresh brings the claim.
 - **Mirrored to `pref/<account>`**, which `account-usage` checks before
-  recording a load report or forwarding a funnel step. A stale page, or a
-  modified client, can't record past an opt-out. The page skipping the call is
-  an optimisation, not the enforcement.
-- **Auth0 first, then the mirror.** A failure at Auth0 leaves nothing changed
-  (502 `preference_write_failed`).
+  storing a load report. A stale page, or a modified client, can't record
+  past an opt-out. The page skipping the call is an optimisation, not the
+  enforcement.
+- **A report in flight can't outlive an opt-out.** After writing a load
+  report, the function reads the mirror again, and deletes what it just wrote
+  if the account has opted out meanwhile. The opt-out writes the mirror before
+  it lists the reports to delete, and the store is strongly consistent. So
+  either the deletion sees the report, or the report's second read sees the
+  opt-out.
+- **Writes are ordered so a failure part-way errs towards not recording.**
+  - *Off:* the mirror and the deletion first, then Auth0. If Auth0 then
+    fails, the page says the save failed and still shows on, but nothing is
+    recorded; a retry writes Auth0.
+  - *On:* Auth0 first, then the mirror is removed. If the removal fails, the
+    account stays unrecorded until a retry.
+- **After a save the page fetches a fresh token** (`cacheMode: 'off'`) and
+  takes its claim, with the new value on top in case the claim lags. Without
+  that, BaseRoutes re-applies the cached token's stale claim, and the toggle
+  flips back. This assumes the Auth0 Action stamps all of `app_metadata` into
+  the claim, as it does for `subscriptionStatus`; if it lists keys, add
+  `usageReports` there.
 - **Turning it off deletes the account's stored load reports**, across every
   period. An objection to processing should stop it, not just pause it.
-- **What it doesn't cover:** limit hits, and their GA counts, which are the
-  service's records (above). The anonymous `model_open_count` has no account
-  to opt out of.
+- **What it doesn't cover:**
+  - limit hits and their GA counts, which are the service's records (above);
+  - funnel steps, which are forwarded but never stored and carry no account,
+    so like #2355's count they are only counts. Gating them would also skew
+    the funnel: an opted-out user's limit hits would count, but not their
+    checkouts;
+  - the anonymous `model_open_count`, which has no account to opt out of.
 
 ## Retention and deletion
 
 - **13 whole months raw.** `account-usage-retention`, scheduled daily at
-  03:41 UTC (`netlify.toml`), reduces any period older than
+  03:41 UTC (`netlify.toml`), reduces periods older than
   `oldestKeptPeriod(now)`, 13 months before the current one, so a record is
-  kept at least 13 months and at most 14. For each such period it:
+  kept at least 13 months and at most 14.
+
+  **One period per run**, the oldest expired one, so a run's work is bounded
+  by one month's records, and a backlog clears a month a day (`pending` in the
+  summary). Periods are found from a directory listing, and a period's records
+  are listed under its own prefix. For that period the run:
   1. writes `rollup/<period>`: totals, distinct-account counts, counts by
      outcome, format, source and tier, and limit hits by kind and gate, with
      no account in it;
@@ -192,8 +246,10 @@ leaves it as it was and says so.
 - **Account deletion.** Share has no account-deletion path (nothing in
   `netlify/functions` deletes an Auth0 user). A deletion request is honoured
   by hand: `DELETE /.netlify/functions/account-usage-stats?sub=<sub>` removes
-  every record held against that account (loads, limits, markers,
-  preference). Rollups hold no account and stay. When a deletion path is
+  every record held against that account (loads, limits, markers). Rollups
+  hold no account and stay. **An opt-out outlives the deletion**: removing
+  the records must not turn recording back on for an account that still
+  exists and said no. When a deletion path is
   built, it calls `deleteAccountRecords`.
 
 ## The reader
@@ -219,8 +275,8 @@ replaces it.
 
 | Function | Answers |
 |---|---|
-| `account-usage` (POST, the user's Auth0 bearer) | 204 recorded, forwarded or skipped; 200 `{usage_reports}` for a preference; 400 `invalid_account_usage`; 401 (`verifyAuth0Bearer`'s); 403 `account_usage_forbidden_origin`; 413; 500 `account_usage_not_configured`; 502 `account_usage_store_failed` / `preference_write_failed` |
-| `account-usage-stats` (GET/DELETE, `ADMIN_STATS_SECRET`) | 200; 400 `invalid_period` / `missing_sub`; 401 `admin_stats_unauthorized`; 500 `admin_stats_not_configured`; 503 `account_usage_unavailable` |
+| `account-usage` (POST, the user's Auth0 bearer) | 204 recorded, forwarded or skipped; 200 `{usage_reports}` for a preference; 400 `invalid_account_usage`; 401 (`verifyAuth0Bearer`'s); 403 `account_usage_forbidden_origin`; 413; 500 `account_usage_not_configured` (no Auth0, store or key secret); 502 `account_usage_store_failed` / `preference_write_failed` |
+| `account-usage-stats` (GET/DELETE, `ADMIN_STATS_SECRET`) | 200; 400 `invalid_period` / `missing_sub`; 401 `admin_stats_unauthorized`; 500 `admin_stats_not_configured`, or `account_usage_not_configured` for a lookup without the key secret; 503 `account_usage_unavailable` |
 | `account-usage-retention` (scheduled) | 200 summary; 500 when the store can't be opened |
 
 `account-usage` checks the shape before the token, so a junk body costs no
@@ -233,7 +289,9 @@ feedback's rule.
 A Blobs store is shared by every deploy of the site. Without a switch, a
 deploy preview's test traffic (the live smoke's test accounts, a reviewer's
 clicks) would land in production's records. So nothing is recorded, and no GA
-event is sent, unless **`ACCOUNT_USAGE_RECORDING=on`**. Set it in Netlify for
+event is sent, unless **`ACCOUNT_USAGE_RECORDING=on`** and
+**`ACCOUNT_USAGE_KEY_SECRET`** (at least 32 characters, §"Where it lands") are
+both set. Set it in Netlify for
 the **Production** context only, beside `GA4_MEASUREMENT_ID` and
 `GA4_API_SECRET` (quotas.md §"Server-side subscription events", setup).
 Elsewhere `account-usage` answers 204 before the token check, and
@@ -243,8 +301,11 @@ The opt-out is not behind the switch: a user's choice is real wherever they
 make it, and it writes the same Auth0 user and store.
 
 **Owner setup:**
-1. Set `ACCOUNT_USAGE_RECORDING=on` for Functions, Production context, on
-   `bldrs-share-prod`.
+1. On `bldrs-share-prod`, for Functions, set:
+   - `ACCOUNT_USAGE_RECORDING=on`, in the Production context only;
+   - `ACCOUNT_USAGE_KEY_SECRET` = a random string of at least 32 characters
+     (e.g. `openssl rand -hex 32`), in every context, so the opt-out works on
+     previews too. Keep it: changing it orphans every record.
 2. Redeploy production.
 
 `ADMIN_STATS_SECRET` is already set for `ai-ledger-stats`.
@@ -264,6 +325,23 @@ existing behaviour, shared with every function that uses it.
 
 ## Known gaps
 
+- **Client-reported limit hits aren't verified.** Any signed-in account can
+  post `{kind: 'limit'}` bodies, each stored as `tier: 'free'` and counted as
+  `quota_limit_reached`. Only `limit_first_reached` is capped, at once per
+  account and month. That inflates analytics only; a per-account rate cap is a
+  follow-up.
+- **A deadline can delay a limit hit's GA event.** The record-load and
+  pro-module hooks give a hit 1.5 s. The two writes run side by side, then the
+  two sends, so `limit_first_reached` never queues behind the other send.
+  Still, if the marker lands and the deadline passes before its send
+  completes, Lambda may freeze before it goes out, and the marker stops any
+  retry. That is a rare undercount; page-reported hits get 5 s.
+- **Attribution during the auth wait.** A load report waits up to 60 s for
+  auth to settle and then uses the current token. A sign-out and a sign-in as
+  another account inside that window would file the open under the second
+  account. Share has no in-place account switch, so this needs a sign-out in
+  between.
+
 - **`/userinfo` per report.** Each load report is a `/userinfo` round trip,
   as each `record-load` call already is. Auth0 rate-limits `/userinfo` per
   user. A burst of opens can get a 429, which drops that report (a 401) and,
@@ -282,6 +360,11 @@ existing behaviour, shared with every function that uses it.
 - A daily precomputed aggregate, once a period's reports reach the tens of
   thousands and the reader's per-request read becomes slow.
 - Local JWT verification (above).
+- A per-account rate cap on client-reported limit hits (above).
+- Remove the dormant client `gtag` calls for the events the server now sends,
+  or route them through the server (§"GA").
+- Align the `first/` markers to the per-user metering period once
+  `claude/metering-periods` lands.
 - An account-deletion path that calls `deleteAccountRecords`.
 
 ## Tests
@@ -296,8 +379,9 @@ existing behaviour, shared with every function that uses it.
     `useDirectLinkQuota.test.js`, `OpenModelDialog.test.jsx`,
     `subscriptionNav.test.js`, `useLoginTracking.test.jsx` and
     `ProfileControl.test.jsx`.
-- **Replays:** `_tests/replay/account-usage/` (9),
-  `account-usage-stats/` (4), `account-usage-retention/` (2), and
+- **Replays:** `_tests/replay/account-usage/` (11, including an opt-out
+  racing a load and an opt-out whose Auth0 write fails), `account-usage-stats/`
+  (5), `account-usage-retention/` (2), and
   `record-load/refusal-records-a-limit-hit.json`, run against the source and
   the bundle.
 - **Smoke:** probes for `account-usage` (`{}` → 400 `invalid_account_usage`)

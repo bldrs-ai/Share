@@ -92,7 +92,13 @@ export default function ProfileControl() {
   const [isSavingUsageReports, setIsSavingUsageReports] = useState(false)
   const onUsageReportsClick = async () => {
     setIsSavingUsageReports(true)
-    const saved = await setUsageReportsPreference(!isUsageReportsOn)
+    const saved = await setUsageReportsPreference(!isUsageReportsOn, {
+      refreshToken: () => getAccessTokenSilently({
+        authorizationParams: {audience: 'https://api.github.com/', scope: 'openid profile email offline_access'},
+        cacheMode: 'off',
+        useRefreshTokens: true,
+      }),
+    })
     setIsSavingUsageReports(false)
     if (!saved) {
       setAlert('Couldn\'t save your usage setting. Please try again.')

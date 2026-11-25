@@ -34,9 +34,26 @@ export function createMemoryBlobs(initial = {}) {
       data.delete(key)
       return Promise.resolve()
     }),
-    list: jest.fn(({prefix = ''} = {}) => Promise.resolve({
-      blobs: [...data.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({key, etag: '"m"'})),
-      directories: [],
-    })),
+    // `directories: true` answers as the service does: the keys directly
+    // under the prefix as blobs, and each deeper level's first segment, once,
+    // as a directory (without a trailing slash).
+    list: jest.fn(({prefix = '', directories = false} = {}) => {
+      const keys = [...data.keys()].filter((k) => k.startsWith(prefix))
+      if (!directories) {
+        return Promise.resolve({blobs: keys.map((key) => ({key, etag: '"m"'})), directories: []})
+      }
+      const dirs = new Set()
+      const blobs = []
+      for (const key of keys) {
+        const rest = key.slice(prefix.length)
+        const slash = rest.indexOf('/')
+        if (slash === -1) {
+          blobs.push({key, etag: '"m"'})
+        } else {
+          dirs.add(prefix + rest.slice(0, slash))
+        }
+      }
+      return Promise.resolve({blobs, directories: [...dirs]})
+    }),
   }
 }
