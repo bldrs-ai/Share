@@ -37,7 +37,7 @@ import {
 import {trackModelActionWhenAuthSettled} from '../../app/modelActionTracking'
 import {isDriveModelPublic} from '../../quota/driveExportVisibility'
 import {modelSlotKey} from '../../quota/modelSlotKey'
-import {ROLLING_WINDOW_DAYS, TIERS, getTier} from '../../quota/quota'
+import {SLOT_PERIOD_DAYS, TIERS, getTier} from '../../quota/quota'
 import useStore from '../../store/useStore'
 import GatedAction from '../GatedAction'
 import Toggle from '../Toggle'
@@ -917,13 +917,13 @@ export function slotCaption({limit, remaining}, isModelInSlot, nextFreeSlot, isM
     return `This model holds one of your ${limit} free model slots: unlimited export`
   }
   if (remaining > 0) {
-    return `Exporting takes one of your ${limit} free model slots (${remaining} left this week),` +
+    return `Exporting takes one of your ${limit} free model slots (${remaining} left this period),` +
       ' then unlimited export'
   }
   // Full: the line also says when that changes; the help that explains it is
   // one click away on the gated button.
-  const full = `Your ${limit} free model slots this week hold other models`
-  return nextFreeSlot ? `${full} · next one frees up ${nextFreeSlot}` : full
+  const full = `Your ${limit} free model slots this period hold other models`
+  return nextFreeSlot ? `${full} · they free up ${nextFreeSlot}` : full
 }
 
 
@@ -935,9 +935,9 @@ export function slotCaption({limit, remaining}, isModelInSlot, nextFreeSlot, isM
  * @return {string}
  */
 export function slotsFullHelp(limit, nextFreeSlot) {
-  const full = `Your ${limit} free model slots for the last ${ROLLING_WINDOW_DAYS} days hold other models.` +
+  const full = `Your ${limit} free model slots for this ${SLOT_PERIOD_DAYS}-day period hold other models.` +
     ' A model with a slot, or a public one: unlimited export. This one needs a free slot.'
-  const next = nextFreeSlot ? ` Your next slot frees up ${nextFreeSlot}.` : ''
+  const next = nextFreeSlot ? ` Your slots free up ${nextFreeSlot}, when the period ends.` : ''
   return `${full}${next} Pro: unlimited export.`
 }
 

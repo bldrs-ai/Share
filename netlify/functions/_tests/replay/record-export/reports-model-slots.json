@@ -1,5 +1,5 @@
 {
-  "description": "GET reports a free user's model slots from usageQuota.loads — only rows inside the 7-day window, and none of the retired free-export rows — and writes nothing.",
+  "description": "GET reports a free user's model slots from usageQuota.loads — only rows in the current 30-day period, and none of the retired free-export rows — and writes nothing.",
   "env": {
     "$fixture": "env/auth0.json"
   },
@@ -57,7 +57,7 @@
                   },
                   {
                     "key": "/share/v/g/1AbCdEfGhIjKlMnOpQrStUvWxYz",
-                    "loadedAt": "2026-10-19T10:00:00.000Z"
+                    "loadedAt": "2026-09-19T10:00:00.000Z"
                   }
                 ]
               }
@@ -75,7 +75,7 @@
         "limit": 2,
         "used": 1,
         "remaining": 1,
-        "nextFreeAt": "2026-10-31T10:00:00.000Z",
+        "nextFreeAt": "2026-11-23T10:00:00.000Z",
         "keys": [
           "/share/v/gh/acme/private/main/tower.ifc"
         ]

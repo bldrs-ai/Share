@@ -23,14 +23,15 @@ const GA_CLIENT_ID = '1871520000.1754700000'
 // own copy is asserted against this too: if the limit moves, this fails.
 const FREE_LIMIT = 2
 
-// ROLLING_WINDOW_DAYS in src/quota/limits.js (owner, 2026-10-26; was 30),
-// restated for the same reason. The mock prunes its ledger to it, as the
-// real record-load does.
-const WINDOW_DAYS = 7
+// SLOT_PERIOD_DAYS in src/quota/limits.js (owner, 2026-11-25: a per-user
+// 30-day period; a rolling 7 days before), restated for the same reason. The
+// mock prunes its ledger to it, as the real record-load does.
+const WINDOW_DAYS = 30
 const DAY_MS = 86_400_000
 // SIGNED_OUT_FEATURES in src/quota/tierCopy.js, restated for the same reason.
 const SIGNED_OUT_LINE_COUNT = 4
 const HTTP_OK = 200
+const HTTP_FORBIDDEN = 403
 
 // Same fakes GoogleDriveConnect.spec.ts uses: GIS OAuth and the Picker,
 // replaced so no popup or Google request happens.
@@ -75,7 +76,7 @@ async function setFreeUserMetadata(page: Page) {
 
 /**
  * Give the record-load mock (the server's stand-in) `count` distinct private
- * models this user already opened inside the 7-day window — Drive keys,
+ * models this user already opened in the current 30-day period — Drive keys,
  * which count whatever `meterLocalFiles` says. `daysAgo` dates them, one
  * entry per model (default: all just now).
  *
@@ -197,7 +198,7 @@ describeMobileAndDesktop('QuotaLimitDialog', () => {
     await pickDriveFile(page, 'third-private-model')
 
     await expect(page.getByTestId('button-quota-subscribe')).toBeVisible()
-    await expect(page.getByText(`limit of ${FREE_LIMIT} private models in any rolling ${WINDOW_DAYS}-day window`))
+    await expect(page.getByText(`limit of ${FREE_LIMIT} private models per ${WINDOW_DAYS}-day period`))
       .toBeVisible()
     // Refused, so the model never opened.
     expect(new URL(page.url()).pathname).not.toMatch(/\/v\/g\//)
@@ -209,15 +210,28 @@ describeMobileAndDesktop('QuotaLimitDialog', () => {
     expect(limitEvent.params).toMatchObject({tier: 'free', feature: 'private_load'})
   })
 
-  // The window's edge from the user's side: one of the two seeded models was
-  // opened 8 days ago, outside the 7-day window, so the 3rd pick is the 2nd
-  // that counts. record-load (its mock prunes to the window, as the real
-  // function does) allows it and the model opens, with no dialog. Same as a
-  // ledger written under the old 30-day window at rollout. The allowed pick
+  // Per period, not rolling (owner, 2026-11-25): a slot taken 8 days ago,
+  // which the retired 7-day window would have freed, still holds while its
+  // period runs, so a 3rd private model is refused.
+  test('a private model opened 8 days ago still holds its slot: the 3rd is refused', async ({page}) => {
+    await seedServerLoads(page, FREE_LIMIT, [0, 8])
+    const recordLoad = page.waitForResponse((r) => new URL(r.url()).pathname === '/.netlify/functions/record-load')
+
+    await pickDriveFile(page, 'third-in-the-period')
+
+    expect((await recordLoad).status()).toBe(HTTP_FORBIDDEN)
+    await expect(page.getByTestId('button-quota-subscribe')).toBeVisible()
+    expect(new URL(page.url()).pathname).not.toMatch(/\/v\/g\//)
+  })
+
+  // The period's edge from the user's side: one of the two seeded models was
+  // opened 31 days ago, so its period has ended and the 3rd pick is the 2nd
+  // that counts. record-load (its mock prunes to the period, as the real
+  // function does) allows it and the model opens, with no dialog. The allowed pick
   // navigates to the model, a full page load, so the mock's in-page ledger
   // and the response body are gone by then; the status and the navigation
   // are the evidence (record-load.test.js checks the pruned write-back).
-  test('a private model opened 8 days ago doesn\'t count: the next one opens', async ({page}) => {
+  test('a private model from an ended period (31 days ago) doesn\'t count: the next one opens', async ({page}) => {
     await seedServerLoads(page, FREE_LIMIT, [0, WINDOW_DAYS + 1])
     const recordLoad = page.waitForResponse((r) => new URL(r.url()).pathname === '/.netlify/functions/record-load')
 
@@ -231,8 +245,8 @@ describeMobileAndDesktop('QuotaLimitDialog', () => {
     expect(await funnelEvents(page, 'quota_limit_reached')).toHaveLength(0)
   })
 
-  // The dialog's "What counts?" link: /share/quotas quotes the same window.
-  test('the limit dialog links to the quotas page, which says rolling 7 days', async ({page}) => {
+  // The dialog's "What counts?" link: /share/quotas quotes the same period.
+  test('the limit dialog links to the quotas page, which says 30 days', async ({page}) => {
     await pickDriveFile(page, 'third-private-model')
     await expect(page.getByTestId('button-quota-subscribe')).toBeVisible()
 
@@ -240,7 +254,7 @@ describeMobileAndDesktop('QuotaLimitDialog', () => {
 
     await expect(page).toHaveURL(/\/share\/quotas$/)
     const freeRow = page.getByRole('row', {name: /Free \(signed in\)/})
-    await expect(freeRow).toContainText(`Rolling ${WINDOW_DAYS} days`)
+    await expect(freeRow).toContainText(`${WINDOW_DAYS} days`)
     await expect(freeRow).toContainText(String(FREE_LIMIT))
     // The signed-out tier's lines (src/quota/tierCopy.js), which the pricing
     // page lists too: the benchmark link is a site path, so it has to resolve

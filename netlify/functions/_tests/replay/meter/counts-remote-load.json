@@ -1,0 +1,118 @@
+{
+  "description": "A signed-out visitor's first remote load this period, with the metering token they hold: the token's record is read, the network's day bucket is counted (onlyIfNew), then the token's count and the model's keyed digest are written (onlyIfNew). 200 allowed, used 1, no notice, and no token re-sent.",
+  "env": {
+    "$fixture": "env/meter.json"
+  },
+  "now": "2026-11-25T12:00:00.000Z",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/meter",
+    "headers": {
+      "content-type": "application/json",
+      "origin": "https://bldrs.ai",
+      "x-bldrs-meter-token": "bm1.replayMeterTokenId0001.1795176000.jwPxUbVjHdDrDJ3i-TI4mUW-cZr3aSbWDCgQBUNpGjI",
+      "x-nf-client-connection-ip": "203.0.113.9"
+    },
+    "body": {
+      "action": "remote_load",
+      "key": "/share/v/gh/someone/public-models/main/a.ifc"
+    }
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:metering/meter/anon/2026-11-20/replayMeterTokenId0001",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:metering/meter/ip/2026-11-25/740949d7af9e7f11de7a1436d448157f",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:metering/meter/ip/2026-11-25/740949d7af9e7f11de7a1436d448157f",
+        "headers": {
+          "if-none-match": "*"
+        },
+        "bodyJson": {
+          "v": 1,
+          "count": 1
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"i1\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:metering/meter/anon/2026-11-20/replayMeterTokenId0001",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:metering/meter/anon/2026-11-20/replayMeterTokenId0001",
+        "headers": {
+          "if-none-match": "*"
+        },
+        "bodyJson": {
+          "v": 1,
+          "features": {
+            "remote_load": {
+              "count": 1,
+              "models": [
+                "308c1937009ff664ec348c2a"
+              ],
+              "stage": null
+            }
+          },
+          "reported": [],
+          "mergedAt": null
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"a1\""
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "json": {
+      "allowed": true,
+      "alreadyCounted": false,
+      "used": 1,
+      "limit": 2,
+      "notice": null,
+      "periodEnd": "2026-12-20T12:00:00.000Z"
+    }
+  }
+}

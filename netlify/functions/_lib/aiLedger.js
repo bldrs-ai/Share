@@ -66,12 +66,9 @@
  * ## The @netlify/blobs 10.7.4 trap this file avoids
  *
  * `store.setJSON(key, value, {onlyIfMatch})` does NOT send the condition in
- * 10.7.4: it spreads the conditions into the request options instead of
- * passing them as `conditions`, so no `If-Match` goes out, the write lands
- * unconditionally, and the result still says `modified: true`. Only
- * `store.set()` passes them through. So every write here is
- * `set(key, JSON.stringify(record), {onlyIfMatch | onlyIfNew})`, and a test
- * pins that the header reaches the wire.
+ * 10.7.4, so every conditional write goes through `set()`. The loop that
+ * does it lives in `blobCas.js` (shared with the metering ledger), which
+ * says why; a test pins that the header reaches the wire.
  *
  * ## Record shape
  *
@@ -103,19 +100,19 @@
  */
 
 
+import {CAS_ATTEMPTS, compareAndSwap as sharedCompareAndSwap} from './blobCas.js'
+
+
 const MILLIS_PER_MINUTE = 60000
 const HOLD_TTL_MINUTES = 15
 export const HOLD_TTL_MS = HOLD_TTL_MINUTES * MILLIS_PER_MINUTE
 const DAY_MS = 86400000
 const RECORD_VERSION = 1
 
-// Compare-and-swap retries before giving up with 'contention'. With jitter,
-// six attempts span roughly a second, under any one request's patience; a
-// bucket that loses six in a row is a hot key (the global breaker under real
-// load), which is a sharding problem to fix, not to wait out.
-export const CAS_ATTEMPTS = 6
-const CAS_BACKOFF_BASE_MS = 15
-const CAS_BACKOFF_JITTER_MS = 60
+// Compare-and-swap retries before giving up with 'contention' (`blobCas.js`;
+// a bucket that loses them all is a hot key, the global breaker under real
+// load). Re-exported for the tests that count attempts.
+export {CAS_ATTEMPTS}
 
 
 /** A ledger the relay could not read or write: fail closed. */
@@ -289,46 +286,22 @@ export function resumeAtOf(record, bucket, micro, nowMs) {
 
 
 /**
- * Read-modify-write one key under compare-and-swap.
+ * Read-modify-write one key under compare-and-swap (`blobCas.js`, shared
+ * with the metering ledger), failing as {@link LedgerUnavailableError}.
  *
- * @param {object} store a @netlify/blobs Store (or anything with the same
- *   `getWithMetadata` / `set` contract)
+ * @param {object} store
  * @param {string} key
  * @param {Function} change `(record) => result`; mutates the record to write
  *   it, or returns `{write: false, ...}` to leave the store alone
  * @return {Promise<*>} what `change` returned on the attempt that stuck
  * @throws {LedgerUnavailableError}
  */
-async function compareAndSwap(store, key, change) {
-  for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt++) {
-    let current
-    try {
-      current = await store.getWithMetadata(key, {type: 'json', consistency: 'strong'})
-    } catch (err) {
-      throw new LedgerUnavailableError('store', {cause: err})
-    }
-    const record = normalize(current?.data)
-    const result = change(record)
-    if (result && result.write === false) {
-      return result
-    }
-    let written
-    try {
-      // set(), never setJSON(): see the header. `current.etag` can be
-      // undefined only for a record that doesn't exist.
-      written = await store.set(key, JSON.stringify(record),
-        current && current.etag ? {onlyIfMatch: current.etag} : {onlyIfNew: true})
-    } catch (err) {
-      throw new LedgerUnavailableError('store', {cause: err})
-    }
-    if (written.modified) {
-      return result
-    }
-    await new Promise((resolve) => {
-      setTimeout(resolve, (CAS_BACKOFF_BASE_MS * (attempt + 1)) + Math.floor(Math.random() * CAS_BACKOFF_JITTER_MS))
-    })
-  }
-  throw new LedgerUnavailableError('contention')
+function compareAndSwap(store, key, change) {
+  return sharedCompareAndSwap(store, key, {
+    normalize,
+    change,
+    fail: (reason, cause) => new LedgerUnavailableError(reason, cause ? {cause} : {}),
+  })
 }
 
 

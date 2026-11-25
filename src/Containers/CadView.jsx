@@ -28,6 +28,7 @@ import useLegacyViewRulesNotice from '../hooks/useLegacyViewRulesNotice'
 import modelIdentity from '../routes/modelIdentity'
 import useExistInFeature from '../hooks/useExistInFeature'
 import useDirectLinkQuota from '../quota/useDirectLinkQuota'
+import {gateAnonRemoteLoad, isAnonMeteringEnabled, mayBeAnonRemoteLoad} from '../quota/anonMeter'
 import useStore from '../store/useStore'
 import {forgetIndexedTreeInStore, forgetModelState} from '../store/modelState'
 import {selectReadModel} from '../store/IFCSlice'
@@ -651,8 +652,14 @@ export default function CadView({
     // there is nothing to decide; the API-key path is public files only.
     const needsDriveAuth = modelPath.kind === 'provider' && modelPath.provider === 'google' &&
       connections.some((c) => c.providerId === 'google-drive')
+    // A remote model (GitHub, Drive, a URL) is metered for a signed-out
+    // visitor (quota/anonMeter.js, design/new/quotas.md §"Anonymous
+    // metering"), so it waits for sign-in to settle too: a signed-in user
+    // read as signed out in Auth0's first moment must not be metered, or
+    // gated, as anonymous.
+    const needsAnonMeter = isAnonMeteringEnabled() && mayBeAnonRemoteLoad(modelPath)
     let isAuthSettledBeforeLoad = true
-    if (needsGithubAuth || needsDriveAuth) {
+    if (needsGithubAuth || needsDriveAuth || needsAnonMeter) {
       try {
         isAuthSettledBeforeLoad = await raceLoadAbort(waitForAuthSettled(AUTH_SETTLE_GRACE_MS), loadSignal)
       } catch (e) {
@@ -660,6 +667,29 @@ export default function CadView({
         endAbortedLoad(job)
         return
       }
+    }
+
+    // The anonymous remote-load gate, before anything is downloaded: a
+    // refused model doesn't open, and the sign-in gate shows over the empty
+    // viewer. Only once sign-in has settled signed out; an unsettled one
+    // (past the grace) loads unmetered, as every meter here fails open.
+    let lastFreeNotice = null
+    if (needsAnonMeter && isAuthSettledBeforeLoad && !isAuthenticatedRef.current) {
+      let decision
+      try {
+        decision = await raceLoadAbort(gateAnonRemoteLoad(modelPath, appPrefix), loadSignal)
+      } catch (e) {
+        // Only the abort rejects here (gateAnonRemoteLoad never does).
+        endAbortedLoad(job)
+        return
+      }
+      if (!decision.open) {
+        job.endLoading()
+        useStore.getState().setAnonMeterGate(decision.gate)
+        return
+      }
+      // Shown once the model is on screen (below), not over the loading view.
+      lastFreeNotice = decision.notice ? {periodEnd: decision.periodEnd ?? null} : null
     }
 
     // Hidden state belongs to one model: a different path drops it, a viewer
@@ -878,6 +908,13 @@ export default function CadView({
     setIsViewerLoaded(true)
     job.set({isModelReady: true})
     job.markReady()
+    if (lastFreeNotice && job.isCurrent()) {
+      // The anonymous meter's non-blocking notice: this open was the
+      // period's last free remote model (quota/anonMeter.js). Its own
+      // snackbar (AnonLastFreeNotice), since the shared one is the load
+      // report's for the next few seconds.
+      useStore.getState().setAnonMeterNotice(lastFreeNotice)
+    }
     // After the model is on screen, never before: a direct link is metered
     // but not gated (quota/useDirectLinkQuota.js). The Open dialog already
     // recorded what it opened, which the hook sees as alreadyCounted. For

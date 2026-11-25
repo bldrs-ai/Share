@@ -20,12 +20,18 @@ import {
   slotsHeaderValue,
 } from '../export/exportSlots'
 import {parseFeedbackRecord} from '../feedback/feedbackRecord'
-import {FREE_PRIVATE_MODEL_LIMIT, isCountedByRouteKind} from '../quota/limits'
+import {ANONYMOUS_REMOTE_LOAD_LIMIT, FREE_PRIVATE_MODEL_LIMIT, isCountedByRouteKind} from '../quota/limits'
+import {isAnonMeteredKey} from '../quota/anonMeterKeys'
+import {PERIOD_MS} from '../quota/period'
 import {isProSubscriptionStatus} from '../quota/proStatus'
 import {isLocalFileMeteringEnabled, pruneLoads} from '../quota/quota'
 import apiHandlersGithub from './api-handlers-github'
 import {mockIsPublicGhRepo, mockIsPublicModel} from './mockModelVisibility'
 import apiHandlersOpenrouter from './api-handlers-openrouter'
+
+
+const MILLIS_PER_SECOND_MOCK = 1000
+let mockMeterSerial = 0
 
 
 /**
@@ -216,8 +222,104 @@ function jsonMockResponse(status, body, headers = {}) {
  *
  * @return {Array<object>} handlers
  */
+/**
+ * @param {string} name
+ * @return {*} a JSON localStorage value, or null
+ */
+function mockStorageJson(name) {
+  try {
+    return JSON.parse(window.localStorage.getItem(name) ?? 'null')
+  } catch {
+    return null
+  }
+}
+
+
+/**
+ * The meter function's mock (see netlifyHandlers).
+ *
+ * @param {Request} request
+ * @return {Promise<Response>}
+ */
+async function meterMockResponse(request) {
+  const body = await request.json().catch(() => null)
+  const action = body?.action
+  if (!(action === 'remote_load' && typeof body.key === 'string') && action !== 'link') {
+    return jsonMockResponse(HTTP_BAD_REQUEST, {error: 'invalid_meter_request'})
+  }
+  const ledger = mockStorageJson('__mockMeterLedger') ?? {}
+  const save = () => window.localStorage.setItem('__mockMeterLedger', JSON.stringify(ledger))
+  const given = request.headers.get('x-bldrs-meter-token')
+  const periodEnd = new Date(Date.now() + PERIOD_MS).toISOString()
+  if (action === 'link') {
+    if (!request.headers.get('authorization')) {
+      return jsonMockResponse(HTTP_AUTHORIZATION_REQUIRED, {error: 'missing_auth0_token'})
+    }
+    const entry = given ? ledger[given] : null
+    if (!entry) {
+      return jsonMockResponse(HTTP_OK, {merged: false, reason: 'no_token'})
+    }
+    if (entry.merged) {
+      return jsonMockResponse(HTTP_OK, {merged: false, reason: 'already_merged'})
+    }
+    entry.merged = true
+    save()
+    const carried = {remote_load: {count: entry.count, stage: entry.stage}}
+    window.localStorage.setItem('__mockMeterCarry', JSON.stringify(carried))
+    return jsonMockResponse(HTTP_OK, {merged: true, carried})
+  }
+  if (!isAnonMeteredKey(body.key)) {
+    return jsonMockResponse(HTTP_OK, {allowed: true, metered: false})
+  }
+  let token = given && ledger[given] ? given : null
+  let minted = null
+  if (!token) {
+    token = `bm1.mock${Date.now()}x${++mockMeterSerial}.${Math.floor(Date.now() / MILLIS_PER_SECOND_MOCK)}.sig`
+    minted = token
+    ledger[token] = {count: 0, models: [], stage: null, merged: false}
+  }
+  const entry = ledger[token]
+  const enforce = window.localStorage.getItem('bldrs.mock.meterEnforce') === '1'
+  const limit = ANONYMOUS_REMOTE_LOAD_LIMIT
+  const common = {limit, periodEnd, ...(minted ? {token: minted} : {})}
+  if (entry.models.includes(body.key)) {
+    save()
+    return jsonMockResponse(HTTP_OK, {allowed: true, alreadyCounted: true, used: entry.count, notice: null, ...common})
+  }
+  if (enforce && entry.count >= limit) {
+    entry.stage = 'gated'
+    save()
+    return jsonMockResponse(HTTP_FORBIDDEN, {allowed: false, gate: 'sign_in', gatedBy: 'token', used: entry.count,
+      ...common})
+  }
+  entry.count += 1
+  entry.models.push(body.key)
+  const lastFree = enforce && entry.count >= limit
+  if (lastFree) {
+    entry.stage = 'last_free'
+  }
+  save()
+  return jsonMockResponse(HTTP_OK, {allowed: true, alreadyCounted: false, used: entry.count,
+    notice: lastFree ? 'last_free' : null, ...common})
+}
+
+
+/** @return {Array<object>} the Netlify Functions' mocks */
 function netlifyHandlers() {
   return [
+    // The anonymous remote-load meter (netlify/functions/meter.js,
+    // design/new/quotas.md §"Anonymous metering"), in dev, Playwright and
+    // Jest. Same key rule (quota/anonMeterKeys.js), limit and answers; the
+    // ledger lives in localStorage (`__mockMeterLedger`, by token), so it
+    // survives the page loads a remote link is, as the server's does.
+    //
+    // It ENFORCES only when a spec opts in with localStorage
+    // `bldrs.mock.meterEnforce` = '1'; otherwise it counts and always
+    // allows, with no notice, so the many specs that open several GitHub
+    // models signed out keep their behaviour. A spec reads a link's carry
+    // from `__mockMeterCarry` (localStorage), the stand-in for the account's
+    // `usageQuota.anonymous`.
+    http.post('/.netlify/functions/meter', ({request}) => meterMockResponse(request)),
     // User feedback (design/tracks/community-t100/feedback.md): stands in for
     // `netlify/functions/feedback.js` in dev, Playwright and Jest. Same
     // shape check (the record module both share) and answers; the stored
@@ -316,9 +418,9 @@ function netlifyHandlers() {
       if (typeof window !== 'undefined') {
         window.__mockQuotaLoads = window.__mockQuotaLoads || []
       }
-      // Pruned to the rolling window before counting, as the real function
-      // does (limits.js#loadsInsideRollingWindow, which pruneLoads wraps): a
-      // spec can seed a row older than ROLLING_WINDOW_DAYS and watch it stop
+      // Pruned to the current metering period before counting, as the real
+      // function does (limits.js#loadsInCurrentPeriod, which pruneLoads
+      // wraps): a spec can seed a row from an ended period and watch it stop
       // counting. The ledger is written back pruned only when a new load is
       // recorded, also as the real function does.
       const loads = pruneLoads((typeof window !== 'undefined' && window.__mockQuotaLoads) || [])

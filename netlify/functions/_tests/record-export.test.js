@@ -264,8 +264,8 @@ describe('record-export function', () => {
       expect(axios.patch).not.toHaveBeenCalled()
     })
 
-    it('refuses an export of a model whose slot has rolled off', async () => {
-      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slot(KEY, 8)]}})
+    it('refuses an export of a model whose slot\'s period has ended', async () => {
+      mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slot(KEY, 31)]}})
 
       const res = await handler(getEvent())
 
@@ -312,16 +312,16 @@ describe('record-export function', () => {
   describe('GET: the caller\'s model slots', () => {
     const getSlots = () => handler({httpMethod: 'GET', headers: {authorization: 'Bearer user-token'}})
 
-    it('reports a free user\'s slots in the window, and writes nothing', async () => {
-      mockAuth0({usageQuota: {loads: [slot(KEY, 2), slot(OTHER, 9)]}, exports: [chargeRow(CHARGE_ID, 1)]})
+    it('reports a free user\'s slots in the current period, and writes nothing', async () => {
+      mockAuth0({usageQuota: {loads: [slot(KEY, 2), slot(OTHER, 40)]}, exports: [chargeRow(CHARGE_ID, 1)]})
 
       const res = await getSlots()
 
       expect(res.statusCode).toBe(200)
       const body = JSON.parse(res.body)
       expect(body.tier).toBe('free')
-      // The 9-day-old slot has left the 7-day window, and the old charge row
-      // counts for nothing.
+      // The 40-day-old slot's period has ended, and the old charge row counts
+      // for nothing.
       expect(body.modelSlots).toMatchObject({limit: 2, used: 1, remaining: 1, keys: [KEY]})
       expect(Date.parse(body.modelSlots.nextFreeAt)).toBeGreaterThan(Date.now())
       // No model named: nothing to say about one.

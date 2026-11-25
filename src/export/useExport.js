@@ -438,9 +438,9 @@ export function noFreeSlotMessage(modelSlots) {
   const limit = modelSlots?.limit
   const next = formatNextFreeSlot(modelSlots?.nextFreeAt)
   const full = limit ?
-    `Your ${limit} free model slots for this week are taken by other models.` :
+    `Your ${limit} free model slots for this period are taken by other models.` :
     'Your free model slots are taken by other models for now.'
-  return next ? `${full} The next one frees up ${next}.` : full
+  return next ? `${full} They free up ${next}, when the period ends.` : full
 }
 
 

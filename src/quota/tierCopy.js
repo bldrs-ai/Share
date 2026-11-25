@@ -7,9 +7,18 @@
  * Export is deliberately absent: it starts at a free account (sign-in), and
  * is listed there.
  *
- * Dependency-free and imported with its `.js` extension by the marketing
- * build, which loads it under plain Node ESM, like `limits.js`.
+ * The last line's count is built from the enforced constants
+ * (`limits.js#ANONYMOUS_REMOTE_LOAD_LIMIT`, `period.js#PERIOD_DAYS`), as the
+ * Free account's is in pricingPlans.mjs: since 2026-11-25 a signed-out
+ * visitor's remote loads are metered (design/new/quotas.md §"Anonymous
+ * metering"), so "unlimited" stopped being true of them.
+ *
+ * Imported with its `.js` extension by the marketing build, which loads it
+ * under plain Node ESM, like `limits.js`; its only imports are those two
+ * dependency-free files.
  */
+import {ANONYMOUS_REMOTE_LOAD_LIMIT} from './limits.js'
+import {PERIOD_DAYS} from './period.js'
 
 
 /**
@@ -36,8 +45,32 @@ export const SIGNED_OUT_FEATURES = Object.freeze([
     link: {label: 'see the benchmark', href: BENCHMARK_PATH},
   },
   'USD, GLB, STL, OBJ and many others also supported',
-  'Public Google Drive and GitHub models — unlimited open and share',
+  anonymousRemoteModelsLine(ANONYMOUS_REMOTE_LOAD_LIMIT, PERIOD_DAYS),
 ])
+
+
+/**
+ * The signed-out remote-load allowance as the pages word it. A function so
+ * the pricing tripwire can show the wording following the constants.
+ *
+ * @param {number} limit remote loads per period
+ * @param {number} days the period's length
+ * @return {string}
+ */
+export function anonymousRemoteModelsLine(limit, days) {
+  return `${anonymousRemoteModelsClaim(limit, days)} from public GitHub, Google Drive or a URL,` +
+    ' plus every sample — sign in free for unlimited'
+}
+
+
+/**
+ * @param {number} limit
+ * @param {number} days
+ * @return {string} the counted phrase alone, e.g. "2 remote models every 30 days"
+ */
+export function anonymousRemoteModelsClaim(limit, days) {
+  return `${limit} remote models every ${days} days`
+}
 
 
 /**

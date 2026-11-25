@@ -24,6 +24,18 @@ export default function createOpenSlice(set, get) {
     isDropQuotaDialogVisible: false,
     setIsDropQuotaDialogVisible: (is) => set(() => ({isDropQuotaDialogVisible: is})),
 
+    // The anonymous remote-load meter's sign-in gate (quota/anonMeter.js):
+    // `{gatedBy, used, limit, periodEnd}` while a signed-out visitor's remote
+    // model is refused, null otherwise. Set by CadView's load, which then
+    // doesn't open the model; rendered by ViewerContainer as AnonLimitDialog.
+    anonMeterGate: null,
+    setAnonMeterGate: (gate) => set(() => ({anonMeterGate: gate})),
+    // Its non-blocking notice, `{periodEnd}` after a signed-out visitor's
+    // last free remote model this period opened; rendered by ViewerContainer
+    // as AnonLastFreeNotice.
+    anonMeterNotice: null,
+    setAnonMeterNotice: (notice) => set(() => ({anonMeterNotice: notice})),
+
     currentTab: 1,
     setCurrentTab: (currentTab) => set(() => ({currentTab: currentTab})),
   }

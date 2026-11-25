@@ -366,7 +366,7 @@ describe('useQuota — Drive visibility (signed in)', () => {
  * free immediately, not at the next record() or remount.
  */
 describe('useQuota — check() re-prunes at call time', () => {
-  const WINDOW_MS = 604_800_000 // 7 days
+  const WINDOW_MS = 2_592_000_000 // the 30-day metering period (quota/period.js)
   const SECOND_MS = 1000
   const NOW = Date.parse('2026-10-26T12:00:00.000Z')
 
@@ -379,13 +379,14 @@ describe('useQuota — check() re-prunes at call time', () => {
   // own. A Drive key passes check() at the limit (its visibility takes a
   // lookup, which record() makes), so it can't show a slot freeing.
   // `meterLocalFiles` goes through the URL, as in the signed-out suite above.
-  it('frees a slot that rolls off after mount, without a remount', async () => {
+  it('frees the slots when their period ends after mount, without a remount', async () => {
     isFeatureEnabled.mockImplementation((name) => name === 'quotas')
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     window.history.pushState({}, '', '/share/v/p/index.ifc?feature=meterLocalFiles')
     const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(NOW)
     const localKey = (name) => `/share/v/local-only/${name}.ifc`
-    // Two models: one now, one a second short of rolling off.
+    // Two models: one now, and one that started the period, a second short of
+    // its end. They share the period, so both come back at that end.
     mockOpfs({tier: 'free', loads: [
       {key: localKey('recent'), loadedAt: new Date(NOW).toISOString()},
       {key: localKey('rolling-off'), loadedAt: new Date(NOW - WINDOW_MS + SECOND_MS).toISOString()},
@@ -397,7 +398,7 @@ describe('useQuota — check() re-prunes at call time', () => {
       expect(result.current.check(localKey('third'))).toMatchObject({allowed: false, used: 2})
 
       nowSpy.mockReturnValue(NOW + SECOND_MS)
-      expect(result.current.check(localKey('third'))).toMatchObject({allowed: true, used: 1})
+      expect(result.current.check(localKey('third'))).toMatchObject({allowed: true, used: 0})
     } finally {
       window.history.pushState({}, '', '/')
     }

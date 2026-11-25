@@ -338,6 +338,30 @@ Its smoke probe sends `{}`, which it refuses with 400 `ai_bad_request`
 before anything upstream: anonymous callers are served, so there is no
 "missing bearer" answer to probe.
 
+## meter and meter-sweep: the anonymous metering ledger
+
+`meter` (design/new/quotas.md §"Anonymous metering") is a v2 function on its
+own Blobs store, `metering`, under the same compare-and-swap as the AI ledger
+(`_lib/blobCas.js`, extracted from `_lib/aiLedger.js` so the two share it).
+Its layers:
+
+- **Unit** (`_tests/meter.test.js`, `_tests/meteringToken.test.js`, over
+  `_tests/fakeBlobs.js`, which now also answers DELETE and `list`): the
+  notice, the gate, the IP cap, reopens, token rotation, the link at sign-in,
+  the one GA event per stage under the fixed client id, and that no key,
+  path, URL, IP or token reaches the ledger.
+- **Replay** (`replay/meter/`): the smoke probe's `{}`, a foreign origin, a
+  sample (no exchanges at all), a counted load and a gated one. A token's id
+  is random per mint, so the counted and gated scenarios send a token signed
+  with the scenario's secret, at a frozen `now` inside its period, and the
+  blob keys, the IP hash and the model digests are fixed by it.
+- **Smoke**: `{}` is refused 400 `invalid_meter_request` before a secret is
+  read or the store opened, so the probe mints and counts nothing.
+
+`meter-sweep` is scheduled (netlify.toml) and so unprobed; its replay lists an
+empty ledger, and `_tests/meter-sweep.test.js` deletes and aggregates over the
+fake store.
+
 ## Subscription reconciliation
 
 `netlify/functions/reconcile-subscriptions.js` runs daily at 04:17 UTC, as

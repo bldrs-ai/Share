@@ -95,9 +95,9 @@ describe('QuotaLimitDialog', () => {
   // The free window is 7 days (owner, 2026-10-26; was 30). Only a signed-in
   // free user can be refused now (signed-out users are never metered), so
   // the anonymous tier's Sign up offer is gone.
-  it('quotes the free limit as 2 private models in a rolling 7 days and offers no sign-up', () => {
+  it('quotes the free limit as 2 private models per 30-day period and offers no sign-up', () => {
     const {getByText, queryByTestId} = renderDialog({tier: TIERS.FREE, isOpen: true})
-    expect(getByText(/limit of 2 private models in any rolling 7-day window/)).toBeInTheDocument()
+    expect(getByText(/limit of 2 private models per 30-day period/)).toBeInTheDocument()
     expect(queryByTestId('button-quota-signup')).toBeNull()
   })
 

@@ -72,11 +72,19 @@ export const flags = [
   // reports unlimited capacity and record() is a no-op, so no load is
   // ever counted or blocked and the QuotaBadge stays hidden. ON since
   // Share#1970, which made the pricing page's limits the enforced ones
-  // (local files unmetered, free accounts 2 private models per rolling 7
-  // days since 2026-10-26, 30 before). `?feature=` can only turn flags ON, so flipping this back to
-  // false is the prod-wide off switch.
+  // (local files unmetered, free accounts 2 private models per 30-day
+  // metering period since 2026-11-25; a rolling 7 days before, 30 before
+  // that). `?feature=` can only turn flags ON, so flipping this back to
+  // false is the prod-wide off switch. It turns the anonymous remote-load
+  // meter off too.
   // See design/new/quotas.md.
   {name: 'quotas', isActive: true},
+  // Kill switch for the anonymous remote-load meter alone (2026-11-25,
+  // design/new/quotas.md §"Anonymous metering"): a signed-out visitor's 2
+  // remote models per period, the last-free notice and the sign-in gate.
+  // `?feature=disableAnonymousMetering` turns it off for one session;
+  // `isActive: true` is the prod rollback, leaving account quotas as they are.
+  {name: 'disableAnonymousMetering', isActive: false},
   // Puts local files (`/v/local-only/`, legacy `/v/new/`) back in the quota
   // meter. Off: viewing a local file is free and unmetered (Share#1966, the
   // owner's 2026-10-22 decision, and what the pricing page promises). This

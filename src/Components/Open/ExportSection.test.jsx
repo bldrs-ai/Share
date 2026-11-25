@@ -759,7 +759,7 @@ describe('ExportSection', () => {
       const {getByTestId, queryByTestId, findByTestId} = render(<ExportSection/>, {wrapper: HelmetStoreRouteThemeCtx})
 
       expect(await findByTestId('export-model-slots')).toHaveTextContent(
-        'Exporting takes one of your 2 free model slots (1 left this week), then unlimited export')
+        'Exporting takes one of your 2 free model slots (1 left this period), then unlimited export')
       expect(getByTestId('export-model-slots')).toHaveAttribute('data-held', 'false')
       expect(queryByTestId('gated-export-pro')).toBeNull()
       fireEvent.click(getByTestId('export-glb-button'))
@@ -774,7 +774,7 @@ describe('ExportSection', () => {
 
       const next = formatNextFreeSlot(NEXT_FREE_AT)
       expect(await findByTestId('export-model-slots'))
-        .toHaveTextContent(`Your 2 free model slots this week hold other models · next one frees up ${next}`)
+        .toHaveTextContent(`Your 2 free model slots this period hold other models · they free up ${next}`)
       // The gated look is not the DOM `disabled` attribute: the click has to
       // reach the wrapper, or the help never opens (#1838).
       const gate = getByTestId('gated-export-pro')
@@ -783,9 +783,9 @@ describe('ExportSection', () => {
 
       expect(getByTestId('gated-help')).toHaveTextContent('Free model slots full')
       expect(getByTestId('gated-help')).toHaveTextContent(
-        'Your 2 free model slots for the last 7 days hold other models.')
+        'Your 2 free model slots for this 30-day period hold other models.')
       expect(getByTestId('gated-help')).toHaveTextContent('Pro: unlimited export.')
-      expect(getByTestId('gated-help')).toHaveTextContent(`Your next slot frees up ${next}.`)
+      expect(getByTestId('gated-help')).toHaveTextContent(`Your slots free up ${next}, when the period ends.`)
       // The funnel's series carries on under the same reason.
       expect(gtagEventWithCid).toHaveBeenCalledWith('export_gated', {reason: 'free'})
       await waitFor(() => expect(trackModelAction)

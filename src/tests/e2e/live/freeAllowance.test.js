@@ -21,12 +21,12 @@ describe('live/freeAllowance', () => {
     expect(PUBLIC_CAPTION).toBe('Public model: unlimited export')
     expect(HELD_CAPTION).toBe('This model holds one of your 2 free model slots: unlimited export')
     expect(takeCaption(2)).toBe(
-      'Exporting takes one of your 2 free model slots (2 left this week), then unlimited export')
+      'Exporting takes one of your 2 free model slots (2 left this period), then unlimited export')
     expect(fullCaption('Fri, Oct 31, 9:00 AM'))
-      .toBe('Your 2 free model slots this week hold other models · next one frees up Fri, Oct 31, 9:00 AM')
+      .toBe('Your 2 free model slots this period hold other models · they free up Fri, Oct 31, 9:00 AM')
     expect(slotsFullHelpText('Fri, Oct 31, 9:00 AM')).toBe(
-      'Your 2 free model slots for the last 7 days hold other models. A model with a slot, or a public one: ' +
-      'unlimited export. This one needs a free slot. Your next slot frees up Fri, Oct 31, 9:00 AM.')
+      'Your 2 free model slots for this 30-day period hold other models. A model with a slot, or a public one: ' +
+      'unlimited export. This one needs a free slot. Your slots free up Fri, Oct 31, 9:00 AM, when the period ends.')
   })
 
   describe('parseSlotsHeader', () => {
@@ -52,19 +52,24 @@ describe('live/freeAllowance', () => {
     const second = '2026-10-27T10:05:00.000Z'
     const now = Date.parse(second) + 60_000
 
-    it('is the OLDEST held slot plus seven days, not the latest', () => {
+    it('is the OLDEST held slot plus 30 days (the period\'s end), not the latest', () => {
       const rows = [{key: '/b', loadedAt: second}, {key: '/a', loadedAt: first}]
-      expect(expectedNextFreeSlot(rows, now)).toBe('2026-11-03T10:00:00.000Z')
+      expect(expectedNextFreeSlot(rows, now)).toBe('2026-11-26T10:00:00.000Z')
       expect(Date.parse(expectedNextFreeSlot(rows, now)) - Date.parse(first)).toBe(SLOT_WINDOW_MS)
-      expect(SLOT_WINDOW_MS).toBe(7 * DAY_MS)
+      expect(SLOT_WINDOW_MS).toBe(30 * DAY_MS)
     })
 
-    it('counts only keyed rows inside the window', () => {
-      const old = new Date(Date.parse(first) - (8 * DAY_MS)).toISOString()
+    it('counts only keyed rows in the current period', () => {
+      const old = new Date(Date.parse(first) - (31 * DAY_MS)).toISOString()
       const rows = [{loadedAt: first}, {key: '/stale', loadedAt: old}, {key: '/b', loadedAt: second}]
       expect(heldSlots(rows, now).map((row) => row.key)).toEqual(['/b'])
-      expect(expectedNextFreeSlot(rows, now)).toBe('2026-11-03T10:05:00.000Z')
+      expect(expectedNextFreeSlot(rows, now)).toBe('2026-11-26T10:05:00.000Z')
       expect(expectedNextFreeSlot([{key: '/stale', loadedAt: old}], now)).toBeNull()
+    })
+
+    it('holds an 8-day-old slot, which the retired 7-day window freed', () => {
+      const eightDays = new Date(now - (8 * DAY_MS)).toISOString()
+      expect(heldSlots([{key: '/a', loadedAt: eightDays}], now).map((row) => row.key)).toEqual(['/a'])
     })
   })
 

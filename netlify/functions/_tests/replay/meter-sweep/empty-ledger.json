@@ -1,0 +1,52 @@
+{
+  "description": "The daily retention sweep over an empty ledger: it lists the token records and the network buckets, finds nothing past its retention, deletes nothing and writes no aggregate.",
+  "env": {
+    "$fixture": "env/meter.json"
+  },
+  "now": "2026-11-25T03:41:00.000Z",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/meter-sweep",
+    "headers": {},
+    "body": {}
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:metering?prefix=meter%2Fanon%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:metering?prefix=meter%2Fip%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "json": {
+      "deleted": {
+        "tokens": 0,
+        "ipBuckets": 0
+      },
+      "aggregated": [],
+      "failed": 0
+    }
+  }
+}

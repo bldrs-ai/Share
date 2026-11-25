@@ -9,7 +9,8 @@
  * the server's `netlify/functions/_lib/modelVisibility.js#isPublicModel`.
  *
  * The slots ARE the private-model allowance: `FREE_PRIVATE_MODEL_LIMIT` per
- * `ROLLING_WINDOW_DAYS` in `quota/limits.js`, kept in Auth0
+ * metering period (`quota/period.js`, a per-user 30 days) in
+ * `quota/limits.js`, kept in Auth0
  * `app_metadata.usageQuota.loads` — the ledger `record-load` writes when a
  * free user opens a private model. There is no second counter. A model opened
  * privately already holds a slot, so its exports cost nothing more. A public
@@ -32,13 +33,14 @@
  *
  * Imported with its `.js` extension by the functions, which load under plain
  * Node ESM — same constraint as `quota/proStatus.js`. Its one import,
- * `quota/limits.js`, is dependency-free under the same constraint.
+ * `quota/limits.js` (and through it `quota/period.js`), is dependency-free
+ * under the same constraint.
  */
 
-import {FREE_PRIVATE_MODEL_LIMIT, ROLLING_WINDOW_MS, loadsInsideRollingWindow} from '../quota/limits.js'
+import {FREE_PRIVATE_MODEL_LIMIT, slotPeriod} from '../quota/limits.js'
 
 
-/** Model slots a signed-in, non-Pro user has per window: the private-model limit. */
+/** Model slots a signed-in, non-Pro user has per metering period: the private-model limit. */
 export const FREE_MODEL_SLOTS = FREE_PRIVATE_MODEL_LIMIT
 
 /**
@@ -116,10 +118,10 @@ const MODEL_KEY_PATTERN = /\/v\/[^/?#]+\/[^?#]+/
  *
  * @typedef {object} ModelSlots
  * @property {number} limit FREE_MODEL_SLOTS
- * @property {number} used Slots held inside the window
+ * @property {number} used Slots held in the current metering period
  * @property {number} remaining Slots free, never negative
- * @property {?string} nextFreeAt When the oldest held slot rolls off; null
- *   when none is held
+ * @property {?string} nextFreeAt When the current period ends and every slot
+ *   comes back together; null when none is held
  * @property {Array<string>} keys The models holding them
  */
 
@@ -159,21 +161,18 @@ export function decodeModelKeyHeader(value) {
 /**
  * The slots held at `now`, from the ledger.
  *
- * A row holds its slot while `now < loadedAt + window`
- * (`limits.js#loadsInsideRollingWindow`, the edge `record-load` uses), so a
- * slot comes back exactly one window after it was taken. `nextFreeAt` is when
- * the OLDEST held slot rolls off.
+ * A row holds its slot while it is in the current metering period
+ * (`limits.js#slotPeriod`, the rule `record-load` uses), so every slot comes
+ * back at once, when the period ends. `nextFreeAt` is that end.
  *
  * @param {Array<SlotRow>|undefined|null} loads `app_metadata.usageQuota.loads`
  * @param {number} [now] millis since epoch — injectable for tests
  * @return {ModelSlots}
  */
 export function modelSlots(loads, now = Date.now()) {
-  const held = heldRows(loads, now)
+  const {period, rows: held} = heldPeriod(loads, now)
   const used = held.length
-  const nextFreeAt = used > 0 ?
-    new Date(Math.min(...held.map((row) => Date.parse(row.loadedAt))) + ROLLING_WINDOW_MS).toISOString() :
-    null
+  const nextFreeAt = used > 0 && period ? new Date(period.end).toISOString() : null
   return {
     limit: FREE_MODEL_SLOTS,
     used,
@@ -253,17 +252,27 @@ export function formatNextFreeSlot(iso, locales = undefined) {
 
 
 /**
- * The ledger's rows that hold a slot at `now`: inside the window, with a
- * string key and a readable timestamp. Anything else in the list is ignored
- * rather than trusted, as `record-load` ignores it.
+ * The ledger's rows that hold a slot at `now`: in the current metering
+ * period, with a string key and a readable timestamp. Anything else in the
+ * list is ignored rather than trusted, as `record-load` ignores it.
  *
  * @param {Array<SlotRow>|undefined|null} loads
  * @param {number} now
  * @return {Array<SlotRow>}
  */
 function heldRows(loads, now) {
+  return heldPeriod(loads, now).rows
+}
+
+
+/**
+ * @param {Array<SlotRow>|undefined|null} loads
+ * @param {number} now
+ * @return {{period: ?{start: number, end: number}, rows: Array<SlotRow>}}
+ */
+function heldPeriod(loads, now) {
   const wellFormed = Array.isArray(loads) ?
     loads.filter((row) => row && typeof row.key === 'string' && Number.isFinite(Date.parse(row.loadedAt))) :
     []
-  return loadsInsideRollingWindow(wellFormed, now)
+  return slotPeriod(wellFormed, now)
 }

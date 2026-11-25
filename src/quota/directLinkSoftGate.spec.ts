@@ -21,8 +21,9 @@ const FREE_LIMIT = 2
 // (driveLinkVisibility.spec.ts).
 const DIRECT_LINK = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc'
 
-// Age of the oldest seeded load: inside ROLLING_WINDOW_DAYS (7).
-const OLDEST_SEEDED_DAYS = 6
+// Age of the oldest seeded load: in the current 30-day period (SLOT_PERIOD_DAYS),
+// and older than the retired 7-day window, which would have freed it.
+const OLDEST_SEEDED_DAYS = 8
 const DAY_MS = 86_400_000
 
 const TEST_TIMEOUT_MS = 90_000
@@ -81,9 +82,9 @@ async function gaEvents(page: Page, name: string): Promise<GaEvent[]> {
 describeMobileAndDesktop('Quota: direct links are a soft gate', () => {
   test.beforeEach(async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS)
-    // The oldest seeded model is 6 days old: still inside the 7-day window
-    // (ROLLING_WINDOW_DAYS, which the mock prunes to as record-load does),
-    // so this link is the 3rd within 7 days.
+    // The oldest seeded model is 8 days old and started the period
+    // (SLOT_PERIOD_DAYS, which the mock prunes to as record-load does), so
+    // this link is the 3rd in it.
     await page.addInitScript(({limit, dayMs, oldestDays}) => {
       const w = window as unknown as QuotaWindow
       w.__mockQuotaLoads = Array.from({length: limit}, (_, i) => ({
