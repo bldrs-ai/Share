@@ -8,6 +8,20 @@ import {encodeGaClientReference} from './gaClientReference'
 import {SUBSCRIPTION_EVENT_NAMES} from './subscriptionEventNames'
 
 
+/*
+ * Google Analytics in the browser is OFF (owner, 2026-11-25): gtag/js is
+ * never loaded, for anyone, and nothing asks for consent. Everything that
+ * would collect for GA in the browser checks this as well as consent:
+ * index/ga.js#setupGa (the tag) and privacy/engagementTracking.js (its
+ * localStorage history). Usage is measured instead by cookieless, ID-free
+ * reports to our own server (app/modelOpenCount.js,
+ * netlify/functions/model-open-count.js). design/new/analytics-consent.md
+ * says why and what a later opt-in would turn back on. Here, in a base
+ * leaf, so privacy/ modules can read it without importing index/.
+ */
+export const IS_BROWSER_GA_ON = false
+
+
 /**
  * Whether the visitor has consented to Google Analytics. Fails closed: a
  * visitor who hasn't chosen yet has not consented (privacy/consent.js).
@@ -21,9 +35,10 @@ export function isAllowed() {
 
 /**
  * Store the visitor's privacy level and bring the identifiers that follow
- * consent into line with it. The GA tag itself (load, consent update,
- * opt-out) is index/ga.js#updateGaConsent's job; app/consentChoice.js
- * calls both, and is what UI should call.
+ * consent into line with it. Nothing in the UI asks for consent while
+ * browser GA is off (index/ga.js#IS_BROWSER_GA_ON); kept for the later
+ * opt-in (design/new/analytics-consent.md), which would also have to bring
+ * the GA tag in line (load it, update its consent, or silence it).
  *
  * @param {string} level one of consent#CONSENT_LEVELS
  */
@@ -487,7 +502,7 @@ export const GATE_EVENTS = Object.freeze({
  *   MISSING  {origin: 'this_browser'|'unknown', legacy_route, signed_in}
  *            CadView, on the first UploadNotInBrowserError per route.
  *            origin: 'this_browser' when the upload ledger
- *            (connections/uploadLedger.js) shows this browser held the id and lost
+ *            (OPFS/uploadLedger.js) shows this browser held the id and lost
  *            it; 'unknown' otherwise (another machine, or site data fully
  *            wiped, which clears the ledger too). legacy_route: the URL
  *            arrived as the pre-#1959 `/v/new/` form.
@@ -843,9 +858,9 @@ export function setUserCidProperty() {
  * Retraction sets the property to null. Whether GA4 treats null as a
  * clear, rather than storing it as a value, is unverified in DebugView;
  * if it doesn't, this is the one place to change. It matters less than
- * it did: a withdrawal also sets ga-disable and denies consent
- * (index/ga.js#updateGaConsent), so the tag sends nothing more for the
- * rest of the page either way.
+ * it did while GA could load: a withdrawal also set ga-disable and denied
+ * consent, so the tag sent nothing more for the rest of the page. Browser
+ * GA is off now (index/ga.js#IS_BROWSER_GA_ON).
  */
 function syncUserCidProperty() {
   if (!window.gtag) {
@@ -890,6 +905,23 @@ export function _resetGaClientIdForTests() {
  * model.
  */
 const HOSTED_DEMO_FILEPATHS = ['index.ifc', 'index.step']
+
+
+/**
+ * Whether a route is one of the hosted demo models (HOSTED_DEMO_FILEPATHS),
+ * matched as routes.ts#processFile outputs a hosted project file:
+ * {kind: 'file', isUploadedFile: false, filepath}. Shared by
+ * isRealModelOpen (GA) and the load status bar, which stays quiet for the
+ * homepage model (AlertDialogAndSnackbar.jsx).
+ *
+ * @param {object} routeResult from routes.ts#handleRoute
+ * @return {boolean}
+ */
+export function isHostedDemoModel(routeResult) {
+  return routeResult?.kind === 'file' &&
+    !routeResult.isUploadedFile &&
+    HOSTED_DEMO_FILEPATHS.includes(routeResult.filepath)
+}
 
 
 /**
@@ -938,8 +970,5 @@ export function isRealModelOpen(
   if (hostname.endsWith('.netlify.app') && !(isDeployPreview && enableInPreview)) {
     return false
   }
-  const isBundledDemo = routeResult?.kind === 'file' &&
-    !routeResult.isUploadedFile &&
-    HOSTED_DEMO_FILEPATHS.includes(routeResult.filepath)
-  return !isBundledDemo
+  return !isHostedDemoModel(routeResult)
 }

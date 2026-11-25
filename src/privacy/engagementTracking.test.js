@@ -5,6 +5,7 @@ import * as Analytics from './analytics'
 import {
   ENGAGEMENT_STORAGE_KEY,
   MAX_STORED_OPENS,
+  _setBrowserGaOnForTests,
   resetEngagementPageState,
   trackEngagementOnOpen,
 } from './engagementTracking'
@@ -43,10 +44,24 @@ describe('trackEngagementOnOpen', () => {
   beforeEach(() => {
     localStorage.clear()
     resetEngagementPageState()
+    // The tracker is dormant while browser GA is off (the shipped default,
+    // tested below); these cases exercise it as a later opt-in would run it.
+    _setBrowserGaOnForTests(true)
     Cookies.set('consentLevel', '1.functional')
     Analytics.setIsAllowed(true)
     Analytics._resetGaClientIdForTests()
     window.gtag = jest.fn()
+  })
+
+  // Owner, 2026-11-25: no Google Analytics in the browser. The open history
+  // is device storage kept for an analytics purpose, so with the switch off
+  // even a visitor who accepted under #2051 gets nothing written or sent.
+  it('writes and sends nothing while browser GA is off, consent or not', async () => {
+    _setBrowserGaOnForTests(false)
+    expect(Analytics.IS_BROWSER_GA_ON).toBe(false)
+    expect(await trackEngagementOnOpen(Date.now())).toEqual([])
+    expect(localStorage.getItem(ENGAGEMENT_STORAGE_KEY)).toBeNull()
+    expect(window.gtag).not.toHaveBeenCalled()
   })
 
   afterEach(() => {

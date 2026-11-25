@@ -170,11 +170,12 @@ export async function homepageSetup(page: Page, allowHosts: string[] = []) {
 
 /**
  * Set the cookies of a returning visitor: seen the first-visit About
- * dialog, and chosen the Functional privacy level in it. Without the
- * consent cookie About re-opens for every visitor who hasn't chosen
- * (About/hashState.js), and the GA events many specs read from dataLayer
- * aren't queued at all (privacy/consent.js). Specs about the choice itself
- * start from clearState instead (About/consent.spec.ts).
+ * dialog (About/hashState.js), so it doesn't cover the toolbar. The
+ * `consentLevel` cookie is no longer set by any UI (browser GA is off since
+ * #2354, design/new/analytics-consent.md); it is kept here because the
+ * events many specs read from the inert dataLayer stub are only buffered
+ * for a visitor whose cookie allows analytics (privacy/consent.js,
+ * analytics#isAllowed).
  *
  * @param context - Playwright browser context
  */
