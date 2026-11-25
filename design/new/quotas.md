@@ -627,7 +627,7 @@ behind the same analytics consent check as every other `gtagEvent`, except
 |---|---|---|---|
 | Visit | `session_start` / `page_view` | — | GA4 sends these itself |
 | Model open | `real_model_open` | `content_id`, `content_type`, `load_outcome`, `stats_*` (below), `local_hour`, `open_kind` (`page` \| `in_app`: the page's first open, or one switched to in-app; `utils/reportModelOpen.js`, open-205 step F), `open_cid` | `CadView` after a real (non-demo) load, once per open: not again for a theme toggle or a view-settings change, which reload the same open (`routes/modelOpen.ts`; open-205 #2022). See `analytics#isRealModelOpen` |
-| Model open (all visitors) | `model_open_count` | `content_type`, `size_bucket`, `source` (`local` \| `sample` \| `github` \| `gdrive` \| `url`), `open_kind`, `form_factor`, `consent` (`on` \| `off`); enums only, no `open_cid` | **Server:** the `model-open-count` function, through the Measurement Protocol under one fixed client id, from a first-party beacon `modelOpenEvents.js` sends beside `real_model_open` (same opens). Sent **whatever the consent choice**, the one row here that is: no identifier, nothing stored, the visitor's IP not forwarded ([model-open-counts.md](model-open-counts.md)). The dashboard's open total since #2051 |
+| Model load (all visitors) | `model_open_count` | `content_type`, `size_bucket`, `source` (`local` \| `sample` \| `github` \| `gdrive` \| `url`), `sample_id` (roster samples only, else `none`), `open_kind`, `form_factor`, `load_outcome` (`displayed` \| `no_geometry` \| `unusable` \| `failed`), `reason_class` and `last_phase` (`none` unless failed), `session_id` (GA's own session param: random, per page load, in memory only); integers when measured: `load_ms`, `first_mesh_ms`, `open_ms`, `parse_ms`, `geometry_ms`, `triangle_count`, `vertex_count`, `error_count`, `warning_count`. No `open_cid` or content id | **Server:** the `model-open-count` function, through the Measurement Protocol under one fixed client id, from a first-party beacon sent beside `real_model_open` (`modelOpenEvents.js`, same opens) and beside `load_failed` (`loadFailure.js`, same failures). Needs no consent: no identifier of the browser, nothing stored, the visitor's IP not forwarded ([model-open-counts.md](model-open-counts.md)). The main usage signal since browser GA went (#2354) |
 | (failed open) | `load_failed` | `content_type`, `size_bucket`, `reason_class`, `last_phase`, `open_kind`, `open_cid` | `CadView#onViewerInternal`'s catch, once per failed attempt, real (non-demo) models only |
 | Hit a limit | `quota_limit_reached` | `tier` (`free`; `anonymous` before that tier was removed), `feature` (`QUOTA_FEATURES`: `private_load`) | `QuotaLimitDialog`, once each time the dialog opens, whatever made it show |
 | Signed in | `login` (GA4 recommended) | `method`: `google` \| `github` \| `email` \| `unknown`; plus `from: 'gate'` and `feature` (`export` \| `share`) when a visible gate started the sign-in (§"Gate events") | `src/Auth0/useLoginTracking.js`, once per completed sign-in (below) |
@@ -1093,10 +1093,15 @@ has a backfill, so these only start accruing data once registered:
   register **event-scoped custom dimensions** for `source` and `gate`.
   `tier`, `route_kind` and `open_cid` are already registered.
 - For `model_open_count` ([model-open-counts.md](model-open-counts.md)):
-  register **event-scoped custom dimensions** for `open_kind`, `form_factor`
-  and `consent` (the last two also serve `client_capability`;
-  client-capabilities.md). `content_type`, `size_bucket` and `source` are
-  already registered.
+  register **event-scoped custom dimensions** for `sample_id`, `open_kind`,
+  `form_factor` and `load_outcome`, and **metrics** (numeric) for `load_ms`,
+  `first_mesh_ms`, `open_ms`, `parse_ms` and `geometry_ms` (unit:
+  milliseconds), `triangle_count`, `vertex_count`, `error_count` and
+  `warning_count`. `content_type`, `size_bucket`, `source`, `reason_class`
+  and `last_phase` are already registered. `session_id` is GA's own session
+  parameter and needs no registration for session grouping; try registering
+  it as an event-scoped dimension for per-session rows, and if GA refuses
+  the reserved name, group by GA's sessions.
 - For the feedback events (§"Feedback events"): register **event-scoped
   custom dimensions** for `feedback_source`, `rating`, `has_note`,
   `has_screenshot`, `model_choice` and `stage`, and **metrics** for `steps`

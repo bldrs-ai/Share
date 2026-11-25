@@ -1,23 +1,23 @@
 /*
  * netlify/functions/model-open-count.js
  * -------------------------------------
- * Receives a cookieless count of one real model open from the page
- * (src/app/modelOpenCount.js) and passes it to GA4 through the
+ * Receives a cookieless report of one real model load, displayed or failed,
+ * from the page (src/app/modelOpenCount.js) and passes it to GA4 through the
  * Measurement Protocol. Modeled on client-capabilities.js, which it mirrors
  * line for line where it can.
  *
- * Why: since #2051 GA is opt-in, so `real_model_open` and `model_view` count
- * only the visitors who consent. This count is sent whatever the visitor
- * chose, and needs no consent because nothing in it is about the visitor:
- * no identifier, nothing stored on the device, and the request to GA comes
- * from this function, so the visitor's IP never reaches Google
+ * Why: GA no longer runs in the browser (owner, 2026-11-25; #2354), and these
+ * reports are the main usage signal. They need no consent because nothing in
+ * them identifies the visitor: no cookie or storage, one fixed client id, a
+ * page session id held only in page memory, and the request to GA comes from
+ * this function, so the visitor's IP never reaches Google
  * (design/new/model-open-counts.md).
  *
- * What reaches GA: the `model_open_count` event with exactly the enum fields
- * in src/privacy/modelOpenCountReport.js. A body that isn't exactly those
- * keys with those values is refused (400), so no file name, URL, path or id
- * can be passed through. Every report goes under one fixed client id, so GA
- * counts events, never a browser, and adds no "users".
+ * What reaches GA: the `model_open_count` event with exactly the fields
+ * src/privacy/modelOpenCountReport.js allows: closed enums, bounded integers
+ * and GA's own `session_id`. A body with any other key or value is refused
+ * (400), so no file name, URL, path or content id can be passed through.
+ * Every report goes under one fixed client id, so GA adds no "users".
  *
  * Answers: 405 for anything but POST; 400 `invalid_model_open_count` for a
  * body that doesn't parse as a report (the deployed smoke probe sends `{}`)

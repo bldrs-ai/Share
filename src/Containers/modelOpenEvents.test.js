@@ -6,7 +6,7 @@ import {reportModelOpened} from './modelOpenEvents'
 // The count's own module is tested in app/modelOpenCount.test.js; here,
 // only that reportModelOpened calls it for exactly the opens real_model_open
 // counts. Its siblings in sendOpenEvents are stubbed, being tested elsewhere.
-jest.mock('../app/modelOpenCount', () => ({reportModelOpenCount: jest.fn(() => true)}))
+jest.mock('../app/modelOpenCount', () => ({reportModelOpenCount: jest.fn(() => true), reportModelOpenFailure: jest.fn()}))
 jest.mock('../app/modelActionTracking', () => ({trackModelActionWhenAuthSettled: jest.fn()}))
 jest.mock('../privacy/engagementTracking', () => ({trackEngagementOnOpen: jest.fn()}))
 jest.mock('../connections/uploadLedger', () => ({recordLocalUpload: jest.fn()}))
@@ -51,7 +51,10 @@ describe('Containers/modelOpenEvents model_open_count', () => {
     const model = {type: 'ifc'}
     reportModelOpened(route, model, context())
     expect(reportModelOpenCount).toHaveBeenCalledTimes(1)
-    expect(reportModelOpenCount).toHaveBeenCalledWith(route, model, {fileSize: FILE_SIZE, openKind: 'page'})
+    expect(reportModelOpenCount).toHaveBeenCalledWith(route, model, {
+      outcomeParams: expect.objectContaining({load_outcome: 'displayed', stats_fileSize: FILE_SIZE, stats_loadTime: 10}),
+      openKind: 'page',
+    })
     expect(gtagEvent).toHaveBeenCalledWith('real_model_open', expect.anything())
   })
 

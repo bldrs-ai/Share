@@ -125,13 +125,12 @@ export function reportModelOpened(routeResult, loadedModel, {installPrefix, refs
     eventParams[LOCAL_HOUR_PARAM] = getLocalHour()
     if (isNewOpen) {
       sendOpenEvents(routeResult, eventParams, getIsAuthenticated)
-      // The cookieless first-party count of the same open
-      // (app/modelOpenCount.js, design/new/model-open-counts.md): sent
-      // whatever the consent choice, so it counts the opens real_model_open
-      // stopped seeing when GA became opt-in (#2051). Same gate as
-      // real_model_open, so the two count the same opens; the size is the
-      // one real_model_open reports.
-      reportModelOpenCount(routeResult, loadedModel, {fileSize: eventParams.stats_fileSize, openKind})
+      // The cookieless first-party report of the same open
+      // (app/modelOpenCount.js, design/new/model-open-counts.md), the main
+      // usage signal now that GA no longer runs in the browser. Same gate as
+      // real_model_open, so the two count the same opens; its outcome,
+      // size, timings and counts are read from the very params above.
+      reportModelOpenCount(routeResult, loadedModel, {outcomeParams: eventParams, openKind})
     }
     // The engagement window restarts on every load, a theme rebuild's
     // too: the stop above ended the last one, and the user is still on
