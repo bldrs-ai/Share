@@ -33,16 +33,15 @@ const REPORT = {
   load_outcome: 'displayed',
   reason_class: 'none',
   last_phase: 'none',
+  triangle_bucket: '1m-10m',
+  error_bucket: '0',
+  warning_bucket: '10-99',
   session_id: '4503599627370497',
   load_ms: 8123,
   first_mesh_ms: 2100,
   open_ms: 5000,
   parse_ms: 3000,
   geometry_ms: 1800,
-  triangle_count: 1234567,
-  vertex_count: 2345678,
-  error_count: 0,
-  warning_count: 12,
 }
 const MB = 1024 * 1024
 
@@ -85,7 +84,10 @@ describe('privacy/modelOpenCountReport', () => {
     expect(JSON.stringify(REPORT).length).toBeLessThan(MAX_REPORT_BYTES)
     const bare = Object.fromEntries(Object.entries(REPORT).filter(([key]) => !MODEL_OPEN_COUNT_MEASURES.includes(key)))
     expect(parseModelOpenCountReport(JSON.stringify(bare))).toEqual(bare)
-    const failed = {...bare, load_outcome: 'failed', reason_class: 'parse', last_phase: 'dataparse'}
+    const failed = {
+      ...bare, load_outcome: 'failed', reason_class: 'parse', last_phase: 'dataparse',
+      triangle_bucket: 'unknown', error_bucket: 'unknown', warning_bucket: 'unknown',
+    }
     expect(parseModelOpenCountReport(JSON.stringify(failed))).toEqual(failed)
   })
 
@@ -111,7 +113,12 @@ describe('privacy/modelOpenCountReport', () => {
     ['a raw size', JSON.stringify({...REPORT, size_bucket: 12345})],
     ['a negative measure', JSON.stringify({...REPORT, load_ms: -1})],
     ['a fractional measure', JSON.stringify({...REPORT, load_ms: 1.5})],
-    ['a text measure', JSON.stringify({...REPORT, triangle_count: '12'})],
+    ['a text measure', JSON.stringify({...REPORT, load_ms: '12'})],
+    // Exact counts would fingerprint a private model across visits.
+    ['an exact triangle count', JSON.stringify({...REPORT, triangle_count: 1234567})],
+    ['an exact vertex count', JSON.stringify({...REPORT, vertex_count: 2345678})],
+    ['an exact error count', JSON.stringify({...REPORT, error_count: 3})],
+    ['a triangle bucket outside the set', JSON.stringify({...REPORT, triangle_bucket: '1234567'})],
     ['an oversized body', JSON.stringify({...REPORT, pad: 'x'.repeat(MAX_REPORT_BYTES)})],
   ])('refuses %s', (_, text) => {
     expect(parseModelOpenCountReport(text)).toBeNull()

@@ -23,7 +23,7 @@
 /** The GA event the function sends for a report. */
 export const MODEL_OPEN_COUNT_EVENT = 'model_open_count'
 
-/** Longest body the function reads; a real report is under 500 bytes. */
+/** Longest body the function reads; a real report is under 600 bytes. */
 export const MAX_REPORT_BYTES = 1024
 
 /**
@@ -73,6 +73,13 @@ export const LAST_PHASES = Object.freeze([
  *   finished, `failed` for one that threw.
  * - `reason_class`, `last_phase`: `load_failed`'s pair for a failed load;
  *   `none` for any other.
+ * - `triangle_bucket`, `error_bucket`, `warning_bucket`: the geometry the
+ *   load produced and the engine's (else the console tee's) error and warning
+ *   counts, bucketed (app/modelOpenCount.js#triangleBucket, #countBucket);
+ *   `unknown` when not measured, which a failed load always is. Buckets, not
+ *   counts: an exact triangle count, or an engine's exact error tally, is the
+ *   same on every open of a model, so it would fingerprint a private model
+ *   across visits (codex on #2355).
  */
 export const MODEL_OPEN_COUNT_FIELDS = Object.freeze({
   content_type: Object.freeze([...MODEL_OPEN_FORMATS, 'other']),
@@ -84,6 +91,9 @@ export const MODEL_OPEN_COUNT_FIELDS = Object.freeze({
   load_outcome: Object.freeze(['displayed', 'no_geometry', 'unusable', 'failed']),
   reason_class: REASON_CLASSES,
   last_phase: LAST_PHASES,
+  triangle_bucket: Object.freeze(['<10k', '10k-100k', '100k-1m', '1m-10m', '10m+', 'unknown']),
+  error_bucket: Object.freeze(['0', '1-9', '10-99', '100-999', '1000+', 'unknown']),
+  warning_bucket: Object.freeze(['0', '1-9', '10-99', '100-999', '1000+', 'unknown']),
 })
 
 /**
@@ -97,22 +107,20 @@ export const MODEL_OPEN_COUNT_FIELDS = Object.freeze({
 export const SESSION_ID_PATTERN = /^[1-9]\d{0,15}$/
 
 /**
- * Optional measurements, each a non-negative safe integer when present. Absent
- * when the load didn't produce it (a failed load has none; a mesh format has
- * no engine timings), so GA tells "not measured" from 0.
+ * Optional timings in ms, each a non-negative safe integer when present.
+ * Absent when the load didn't produce it (a failed load has none; a mesh
+ * format has no engine timings), so GA tells "not measured" from 0. Raw
+ * numbers, unlike the counts above: a timing moves with the network, the
+ * device and what else the page is doing, so it doesn't repeat across visits.
  *
  * - `load_ms`: the reporter's wall clock, load start to end, the same
  *   definition for every format (`stats_loadTime` on real_model_open).
  * - `first_mesh_ms`: load start to the first mesh on screen.
  * - `open_ms`, `parse_ms`, `geometry_ms`: the engine's own stage timers, for
  *   IFC/STEP (ShareIfcLoader#loadStats).
- * - `triangle_count`, `vertex_count`: the geometry the load produced.
- * - `error_count`, `warning_count`: the engine's counts when it supplies them,
- *   else the page-wide console tee's (as captureLoadDiagnostics reads them).
  */
 export const MODEL_OPEN_COUNT_MEASURES = Object.freeze([
   'load_ms', 'first_mesh_ms', 'open_ms', 'parse_ms', 'geometry_ms',
-  'triangle_count', 'vertex_count', 'error_count', 'warning_count',
 ])
 
 

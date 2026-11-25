@@ -54,6 +54,15 @@ Each written-out list there is held equal to its source by a test.
 | `load_outcome` | `displayed`, `no_geometry`, `unusable`, `failed` | `loadProgress.js#LOAD_OUTCOMES` for a finished load; `failed` for one that threw |
 | `reason_class` | `load_failed`'s (`oom`, `parse`, `unsupported_schema`, `unrecognized_format`, `other`), plus `none` | `loadAnalytics.js#loadFailureParams`; `none` unless failed |
 | `last_phase` | `load_failed`'s phases (`loadAnalytics.js#KNOWN_LOAD_PHASES`, `none`, `other`) | the same; `none` unless failed |
+| `triangle_bucket` | `<10k`, `10k-100k`, `100k-1m`, `1m-10m`, `10m+`, `unknown` | `stats_triangleCount`, bucketed by decade (`app/modelOpenCount.js#triangleBucket`); `unknown` when not measured, as on every failed load |
+| `error_bucket`, `warning_bucket` | `0`, `1-9`, `10-99`, `100-999`, `1000+`, `unknown` | the engine's counts when it supplies them (`stats_errorCount`, `stats_warningCount`), else the page-wide console tee's (`stats_pageErrorCount`, `stats_pageWarnCount`), as `captureLoadDiagnostics` reads them; bucketed (`#countBucket`) |
+
+**Counts are buckets, never exact.** An exact triangle count, or an exact
+vertex count or engine error tally, is the same on every open of a model. Next
+to another copy or record of that model, it would identify a private model
+across visits, which is exactly what this report promises not to do (codex on
+#2355). Decade buckets say how heavy a model is without telling one model from
+another. The vertex count isn't sent at all: next to triangles it adds little.
 
 **Required, the page session id:**
 
@@ -69,21 +78,22 @@ on `document.cookie`, and a break-it check that writes it to either goes
 red). An in-app model switch keeps it; a reload or a new tab draws another,
 so nothing ties one visit to the next.
 
-**Optional, non-negative integers.** Each is present only when the load
-produced it, so GA tells "not measured" from 0. A failed load carries none.
-They are read from the `stats_*` params `real_model_open` already assembles
-(`loadAnalytics.js#buildOutcomeParams`), rounded:
+**Optional timings, non-negative integers in ms.** Each is present only when
+the load produced it, so GA tells "not measured" from 0. A failed load carries
+none. They are read from the `stats_*` params `real_model_open` already
+assembles (`loadAnalytics.js#buildOutcomeParams`), rounded. Raw numbers,
+unlike the counts: a timing moves with the network, the device and what else
+the page is doing, so it doesn't repeat across visits.
 
 | Field | From |
 | --- | --- |
 | `load_ms` | `stats_loadTime`: the reporter's wall clock, load start to end, the same definition for every format |
 | `first_mesh_ms` | `stats_firstMeshMs` |
 | `open_ms`, `parse_ms`, `geometry_ms` | the engine's own stage timers for IFC/STEP (`stats_openMs`, `stats_parseTime`, `stats_geometryTime`; `ShareIfcLoader#loadStats`) |
-| `triangle_count`, `vertex_count` | `stats_triangleCount`, `stats_vertexCount` |
-| `error_count`, `warning_count` | the engine's counts when it supplies them (`stats_errorCount`, `stats_warningCount`), else the page-wide console tee's (`stats_pageErrorCount`, `stats_pageWarnCount`), as `captureLoadDiagnostics` reads them |
 
 **Not sent, and not to be added:** a content id, a file name, URL or path,
-any client id, the local hour, a raw size, the consent setting (dropped: with
+any client id, the local hour, a raw size, an exact triangle, vertex, error
+or warning count, the consent setting (dropped: with
 browser GA off it would be `off` for everyone). A field that can't be a closed
 enum or a bounded number doesn't belong here, apart from `session_id`.
 
@@ -128,7 +138,8 @@ leaves the policy alone.
 
 - **GA4 registrations** (design/new/quotas.md §"Funnel analytics", GA4-admin
   follow-ups): event-scoped dimensions for `sample_id`, `open_kind`,
-  `form_factor` and `load_outcome`; event-scoped metrics for the measures.
+  `form_factor`, `load_outcome`, `triangle_bucket`, `error_bucket` and
+  `warning_bucket`; event-scoped metrics for the five timings.
   `content_type`, `size_bucket`, `source`, `reason_class` and `last_phase`
   are already registered. `session_id` is GA's own session parameter, so
   sessions come from it without a registration. Whether GA also lets it be

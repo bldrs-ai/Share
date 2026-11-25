@@ -135,6 +135,9 @@ function baseReport(routeResult, fields, {openKind = modelOpenKind(routeResult),
     load_outcome: fields.load_outcome,
     reason_class: fields.reason_class ?? 'none',
     last_phase: fields.last_phase ?? 'none',
+    triangle_bucket: fields.triangle_bucket ?? 'unknown',
+    error_bucket: fields.error_bucket ?? 'unknown',
+    warning_bucket: fields.warning_bucket ?? 'unknown',
     session_id: pageSession(),
   }
 }
@@ -150,39 +153,99 @@ function contentType(type) {
 }
 
 
-// real_model_open's `stats_*` params (loadAnalytics#buildOutcomeParams) that
-// the report carries, by the report's own name. Each falls back in order: the
-// engine's error and warning counts when it supplies them, else the console
-// tee's, as captureLoadDiagnostics reads them.
+// real_model_open's `stats_*` timers (loadAnalytics#buildOutcomeParams) that
+// the report carries, by the report's own name.
 const MEASURE_SOURCES = Object.freeze({
-  load_ms: ['stats_loadTime'],
-  first_mesh_ms: ['stats_firstMeshMs'],
-  open_ms: ['stats_openMs'],
-  parse_ms: ['stats_parseTime'],
-  geometry_ms: ['stats_geometryTime'],
-  triangle_count: ['stats_triangleCount'],
-  vertex_count: ['stats_vertexCount'],
-  error_count: ['stats_errorCount', 'stats_pageErrorCount'],
-  warning_count: ['stats_warningCount', 'stats_pageWarnCount'],
+  load_ms: 'stats_loadTime',
+  first_mesh_ms: 'stats_firstMeshMs',
+  open_ms: 'stats_openMs',
+  parse_ms: 'stats_parseTime',
+  geometry_ms: 'stats_geometryTime',
 })
 
 
 /**
+ * @param {*} value
+ * @return {number|undefined} the value as a finite number, or undefined.
+ *   Number(undefined) is NaN but Number(null) is 0, so null is caught first.
+ */
+function finite(value) {
+  const n = value === null ? NaN : Number(value)
+  return Number.isFinite(n) ? n : undefined
+}
+
+
+/**
  * @param {object} outcomeParams buildOutcomeParams' result
- * @return {object} the measures that are present and finite, rounded to
+ * @return {object} the timings that are present and finite, rounded to
  *   integers (engine timers can be fractional) and clamped at 0
  */
 function measuresOf(outcomeParams = {}) {
   const measures = {}
   for (const name of MODEL_OPEN_COUNT_MEASURES) {
-    const value = MEASURE_SOURCES[name]
-      .map((param) => Number(outcomeParams[param]))
-      .find((n) => Number.isFinite(n))
+    const value = finite(outcomeParams[MEASURE_SOURCES[name]])
     if (value !== undefined) {
       measures[name] = Math.max(0, Math.round(value))
     }
   }
   return measures
+}
+
+
+// Upper bounds (exclusive) and labels. Decades: coarse enough that a bucket
+// says how heavy a model is without telling one model from another.
+/* eslint-disable no-magic-numbers */
+const TRIANGLE_BUCKETS = [[1e4, '<10k'], [1e5, '10k-100k'], [1e6, '100k-1m'], [1e7, '1m-10m']]
+const COUNT_BUCKETS = [[1, '0'], [10, '1-9'], [100, '10-99'], [1000, '100-999']]
+/* eslint-enable no-magic-numbers */
+
+
+/**
+ * @param {Array<Array>} buckets [exclusive upper bound, label], ascending
+ * @param {string} top the label above the last bound
+ * @param {number|undefined} n
+ * @return {string} the bucket, or `unknown` with no count
+ */
+function bucketOf(buckets, top, n) {
+  if (n === undefined || n < 0) {
+    return 'unknown'
+  }
+  return buckets.find(([limit]) => n < limit)?.[1] ?? top
+}
+
+
+/**
+ * @param {number} [triangles]
+ * @return {string} one of MODEL_OPEN_COUNT_FIELDS.triangle_bucket
+ */
+export function triangleBucket(triangles) {
+  return bucketOf(TRIANGLE_BUCKETS, '10m+', finite(triangles))
+}
+
+
+/**
+ * @param {number} [count]
+ * @return {string} one of MODEL_OPEN_COUNT_FIELDS.error_bucket / warning_bucket
+ */
+export function countBucket(count) {
+  return bucketOf(COUNT_BUCKETS, '1000+', finite(count))
+}
+
+
+/**
+ * The bucketed counts of a finished load. Errors and warnings are the
+ * engine's own counts when it supplies them, else the page-wide console
+ * tee's, as captureLoadDiagnostics reads them.
+ *
+ * @param {object} outcomeParams buildOutcomeParams' result
+ * @return {object} triangle_bucket, error_bucket, warning_bucket
+ */
+function countBucketsOf(outcomeParams = {}) {
+  return {
+    triangle_bucket: triangleBucket(outcomeParams.stats_triangleCount),
+    error_bucket: countBucket(finite(outcomeParams.stats_errorCount) ?? outcomeParams.stats_pageErrorCount),
+    warning_bucket: countBucket(finite(outcomeParams.stats_warningCount) ?? outcomeParams.stats_pageWarnCount),
+  }
 }
 
 
@@ -203,8 +266,9 @@ export function modelOpenCountReport(routeResult, loadedModel, {outcomeParams = 
     outcomeParams.load_outcome !== 'failed' ? outcomeParams.load_outcome : 'displayed'
   const report = baseReport(routeResult, {
     content_type: contentType(loadedModel?.type),
-    size_bucket: bucketFileSize(Number(outcomeParams.stats_fileSize)),
+    size_bucket: bucketFileSize(finite(outcomeParams.stats_fileSize)),
     load_outcome: outcome,
+    ...countBucketsOf(outcomeParams),
   }, env)
   return report && {...report, ...measuresOf(outcomeParams)}
 }
@@ -212,7 +276,8 @@ export function modelOpenCountReport(routeResult, loadedModel, {outcomeParams = 
 
 /**
  * The report for a load that threw: `load_failed`'s closed-set params
- * (loadAnalytics#loadFailureParams) in the report's fields, and no measures.
+ * (loadAnalytics#loadFailureParams) in the report's fields, no timings, and
+ * every count bucket `unknown`.
  *
  * @param {object} routeResult the route loaded
  * @param {object} failure

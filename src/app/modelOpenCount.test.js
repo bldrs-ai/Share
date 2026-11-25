@@ -6,9 +6,11 @@ import {
   modelOpenFailureReport,
   modelOpenSampleId,
   modelOpenSource,
+  countBucket,
   pageSession,
   reportModelOpenCount,
   reportModelOpenFailure,
+  triangleBucket,
 } from './modelOpenCount'
 import {SESSION_ID_PATTERN, parseModelOpenCountReport} from '../privacy/modelOpenCountReport'
 
@@ -109,21 +111,21 @@ describe('app/modelOpenCount', () => {
       load_outcome: 'displayed',
       reason_class: 'none',
       last_phase: 'none',
+      // Bucketed, never exact: an exact count repeats on every open of a model.
+      triangle_bucket: '1m-10m',
+      // The engine's count when it has one, else the console tee's.
+      error_bucket: '1-9',
+      warning_bucket: '1-9',
       session_id: pageSession(),
       load_ms: 8123,
       first_mesh_ms: 2100,
       open_ms: 5001,
       parse_ms: 3000,
       geometry_ms: 1800,
-      triangle_count: 1234567,
-      vertex_count: 2345678,
-      // The engine's count when it has one, else the console tee's.
-      error_count: 3,
-      warning_count: 2,
     })
     // What the function accepts, and nothing of the route in it.
     expect(parseModelOpenCountReport(JSON.stringify(report))).toEqual(report)
-    expect(JSON.stringify(report)).not.toMatch(/secret|example|0a1b2c3d|haus|cid\.|h14|IFC4/)
+    expect(JSON.stringify(report)).not.toMatch(/secret|example|0a1b2c3d|haus|cid\.|h14|IFC4|1234567|2345678/)
   })
 
   it('carries the no-geometry outcome, and leaves out what the load didn\'t measure', () => {
@@ -133,8 +135,23 @@ describe('app/modelOpenCount', () => {
     expect(report.content_type).toBe('other')
     expect(report.size_bucket).toBe('unknown')
     expect(report.load_ms).toBe(900)
-    expect(report).not.toHaveProperty('triangle_count')
+    expect(report.triangle_bucket).toBe('unknown')
+    expect(report.error_bucket).toBe('unknown')
     expect(report).not.toHaveProperty('open_ms')
+  })
+
+  it.each([
+    [0, '<10k'], [9999, '<10k'], [10000, '10k-100k'], [999999, '100k-1m'], [1e6, '1m-10m'], [1e7, '10m+'],
+    [undefined, 'unknown'], [null, 'unknown'], [NaN, 'unknown'], [-1, 'unknown'],
+  ])('buckets %s triangles as %s', (n, bucket) => {
+    expect(triangleBucket(n)).toBe(bucket)
+  })
+
+  it.each([
+    [0, '0'], [1, '1-9'], [9, '1-9'], [10, '10-99'], [100, '100-999'], [999, '100-999'], [1000, '1000+'],
+    [undefined, 'unknown'], [null, 'unknown'],
+  ])('buckets a count of %s as %s', (n, bucket) => {
+    expect(countBucket(n)).toBe(bucket)
   })
 
   it('builds a failed load\'s report with load_failed\'s reason and phase, and no measures', () => {
@@ -151,6 +168,9 @@ describe('app/modelOpenCount', () => {
       load_outcome: 'failed',
       reason_class: 'parse',
       last_phase: 'dataparse',
+      triangle_bucket: 'unknown',
+      error_bucket: 'unknown',
+      warning_bucket: 'unknown',
       session_id: pageSession(),
     })
     expect(parseModelOpenCountReport(JSON.stringify(report))).toEqual(report)

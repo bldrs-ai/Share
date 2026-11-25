@@ -11,7 +11,7 @@
       "origin": "https://bldrs.ai",
       "content-type": "text/plain;charset=UTF-8"
     },
-    "body": "{\"content_type\":\"step\",\"size_bucket\":\"1-10mb\",\"source\":\"sample\",\"sample_id\":\"gear\",\"open_kind\":\"in_app\",\"form_factor\":\"mobile\",\"load_outcome\":\"failed\",\"reason_class\":\"parse\",\"last_phase\":\"dataparse\",\"session_id\":\"77\"}"
+    "body": "{\"content_type\":\"step\",\"size_bucket\":\"1-10mb\",\"source\":\"sample\",\"sample_id\":\"gear\",\"open_kind\":\"in_app\",\"form_factor\":\"mobile\",\"load_outcome\":\"failed\",\"reason_class\":\"parse\",\"last_phase\":\"dataparse\",\"triangle_bucket\":\"unknown\",\"error_bucket\":\"unknown\",\"warning_bucket\":\"unknown\",\"session_id\":\"77\"}"
   },
   "exchanges": [
     {
@@ -33,6 +33,9 @@
                 "load_outcome": "failed",
                 "reason_class": "parse",
                 "last_phase": "dataparse",
+                "triangle_bucket": "unknown",
+                "error_bucket": "unknown",
+                "warning_bucket": "unknown",
                 "session_id": "77"
               }
             }
