@@ -4,19 +4,20 @@ import Expires from './Expires'
 
 
 /*
- * The visitor's privacy level, chosen in the About (welcome) dialog: OK or
- * Cancel. Design: design/new/analytics-consent.md.
+ * The visitor's analytics consent, as a versioned cookie. Design:
+ * design/new/analytics-consent.md.
  *
- *   functional  OK. GA with a pseudonymous client id, and our own model
- *               events. Analytics only: no ad signal is granted (index/ga.js).
- *   restricted  Cancel. Google Analytics never loads and sets no cookie, and
- *               the app runs in local-only mode (app/localOnlyMode.js,
- *               named to the visitor as LOCAL_ONLY_MODE_NAME).
+ * Nothing asks for it at the moment: Google Analytics is off in the
+ * browser for everyone (index/ga.js#IS_BROWSER_GA_ON, 2026-11-25), and the
+ * consent dialog, then banner, that set it are gone. It is kept for a later
+ * opt-in, and still read by analytics#isAllowed, so a visitor who accepted
+ * under #2051 buffers our events in the inline gtag stub, where they stay:
+ * gtag/js never loads to send them.
  *
- * A third, "public" (consent to analyzing public models' content), was
- * offered on a slider until 2026-11-24 and dropped with it: nothing analyzes
- * content yet. Bringing it back means a new choice in the dialog, a level
- * here and in public/index.html's stub, and a CONSENT_VERSION bump.
+ *   functional  Analytics allowed: GA with a pseudonymous client id, and our
+ *               own model events. No ad signal is ever granted (index/ga.js).
+ *   restricted  Declined. Under #2051/#2354's dialog and banner this also
+ *               meant a local-only mode; that mode is gone.
  *
  * Sentry error monitoring is NOT governed by this. It's first-party
  * functional processing and stays on at every level; only the GA client id

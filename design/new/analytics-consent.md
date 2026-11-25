@@ -1,226 +1,136 @@
-# Analytics consent
+# Analytics and consent
 
-Status: shipped behind no flag, 2026-11. Owner decision (Pablo, 2026-11-03):
-Google Analytics needs the visitor's consent, given in the About (welcome)
-dialog before anything is collected. The bar is GDPR's "prior, freely
-given, specific, informed, and unambiguous". Sentry error monitoring is
-first-party functional processing and stays on regardless.
+Status: owner decision, 2026-11-25 (bldrs-ai/Share#2354). **No Google
+Analytics in the browser, and nothing asks for consent.** Usage and
+performance are measured without anything that needs consent:
 
-## What the visitor sees
+- data that carries no identifier following a browser between visits;
+- data stored on the device only where a feature the user asked for needs it.
 
-The About dialog opens on its own for a first-time visitor **and** for any
-visitor who hasn't made a privacy choice under the current
-`CONSENT_VERSION` (`About/hashState.js#isVisibleInitially`). Under the
-mission it asks, in the owner's words (`About/ConsentNotice.jsx`,
-2026-11-24):
+Sentry error monitoring stays on.
 
-> We collect analytics with a pseudonymous ID: visits, and which kinds of
-> models are opened (format, size, source). No advertising. Press Cancel
-> for Test only mode.
+## Where the line is
 
-with the privacy policy link closing the paragraph (no heading: the dialog
-is tight on space and the text says what it's about), and Cancel and OK
-side by side at the same size. Nothing may cover those two buttons: the status bar ("Loaded …")
-renders above dialogs, so `Dialog.jsx` keeps a band at the bottom clear of
-it on every form factor (it was mobile-only until the tall About dialog
-ran under it at 1280×800); `consent.spec.ts` hit-tests both buttons.
+Under the EU cookie rule (ePrivacy Art. 5(3)) and GDPR, what triggers consent
+is not the purpose of the data, nor who receives it, nor whether it is
+aggregated later. Two things trigger it:
 
-| Answer (cookie value) | What runs |
-|---|---|
-| OK (`functional`) | GA with its pseudonymous client id (`_ga`) and our model events (`real_model_open`, …). Analytics only: no ad signal, no Google signals. |
-| Cancel (`restricted`) | No GA: gtag/js is never requested, no `_ga` cookie, none of our GA events. **Local-only mode** (below): local files and the samples only. |
+1. **Storing or reading something on the device** (a cookie, a localStorage
+   ID) that isn't strictly necessary for a feature the user asked for.
+2. **An identifier that follows a person or browser across visits.** A
+   pseudonymous ID such as GA's `_ga` is still personal data, and using it
+   for analytics generally needs consent in the EU.
 
-- **OK** allows analytics; **Cancel** declines (`AboutDialog#answer`,
-  `consentChoice.js#chooseConsentLevel`). Both work for any visitor, so a
-  returning visitor changes their mind the same way, by reopening About
-  (logo button, the workspace LogoMenu's About, or a `#about:` link).
-- **Closing without answering** (X, backdrop, Escape, the logo button)
-  declines for a visitor who hasn't chosen (`consentChoice.js#dismissConsent`),
-  so declining persists and the dialog doesn't nag on every load. A visitor
-  who already chose keeps their choice: closing About to get back to a
-  model is not an answer.
-- **The mode's name** is one constant, `localOnlyMode.js#LOCAL_ONLY_MODE_NAME`
-  ("Test only mode"; the owner is still settling it, "Restricted mode" is
-  the other candidate). Every UI string reads it; the privacy policy's two
-  copies spell it out and change with it.
-- **Dropped with the slider (2026-11-24).** It had three levels and a Global
-  Privacy Control preset. The third level, "Public sharing" (consent to
-  analyzing public models' content), went because nothing analyzes content
-  yet; bringing it back means a new choice in the dialog, a level in
-  `consent.js` and the inline stub, and a `CONSENT_VERSION` bump. The GPC
-  preset only chose where the slider started; GPC is an opt-out of selling
-  or sharing data, which GA with every ad signal off isn't, and every
-  visitor now makes the same explicit choice.
+So the dividing question is whether a report carries a cross-visit
+identifier or depends on device storage:
 
-## Local-only mode: what declining costs
+| Data | Cross-visit ID or device storage? | Footing |
+|---|---|---|
+| Each model load: kind of file, size range, source kind, timings, complexity, outcome | No. One random ID kept in page memory only, reset on reload | Always on, legitimate interest |
+| Errors and failures (Sentry); browsers that can't run part of the app (`client-capabilities`) | No | Always on, legitimate interest |
+| Signed-in usage, keyed by account (in progress, `claude/account-usage`) | The account, not the device; sign-in storage is already strictly necessary | Legitimate interest, disclosed, with a Profile opt-out |
+| Free-use limits: account quotas, and the anonymous metering token (AI chat today; `claude/metering-periods` widens it) | Storage strictly necessary for the free allowance the user is using, kept only for the metering period | Necessary for the service. **Limit data is used for limits only**, plus statistics about the limits themselves |
+| Anonymous retention, per-visitor funnels across visits, `engaged_use` / `return_visit` | Yes | Needs opt-in consent. Not built; see "Later" |
 
-Owner's call, 2026-11-23, written into the privacy policy: telemetry is
-required for normal operation, and a visitor who refuses gets "a reduced
-local-only mode to allow evaluation of basic viewer capabilities"
-(`src/app/localOnlyMode.js`).
+Google is not the line, but it adds two things:
+- France's CNIL exempts first-party, aggregate audience measurement from
+  consent, and GA generally doesn't qualify.
+- Consent Mode's cookieless pings send the IP and user agent to Google, and
+  some regulators say that needs consent too.
 
-| In local-only mode | Allowed? |
-|---|---|
-| Files from the visitor's computer (`/v/local-only`) | yes |
-| The hosted demo model (`/v/p/index.ifc`) | yes |
-| The sample models (Open › Samples) | yes: they're GitHub routes, allowed by repo path from `sampleModelRoster.js` (`isSampleModel`) |
-| Any other GitHub model, a Google Drive model, a web-address model (`/v/gh`, `/v/g`, `/v/u`) | no |
-| Save to GitHub | no; the Save dialog's Export tab (a local download) stays |
-| Share | no |
+That's why the always-on reports go to our own server, which forwards them
+to GA4 under one fixed client id, so the bizdev dashboard keeps working.
 
-- **Only an explicit decline restricts.** An undecided visitor is being
-  asked by the About dialog right then and isn't blocked from the link that
-  brought them; the choice applies to opens after it. A remote model that
-  is already open stays open when the visitor then declines.
-- **The backstop is the route** (`Share.jsx`'s route effect): a remote
-  route in local-only mode falls back to the home model and records the link
-  in the store (`blockedRemoteModel`). That catches every way such a route
-  is reached: a shared link, recents, search, the widget API, the
-  workspace drawer. `Open/LocalOnlyDialog.jsx` says where the model is and
-  offers Privacy settings (About); if the visitor raises their level there,
-  the recorded link opens, and if not, the dialog comes back.
-  - The link is recorded only while the address bar still shows the remote
-    route. The effect runs again with the stale params after the fallback
-    has moved the address bar, and that run would otherwise record the home
-    model as the link to open.
-- **The visible gates:** the Open dialog's GitHub and Google Drive tabs
-  show `Open/LocalOnlyNotice.jsx` instead of their controls, the Save
-  dialog's GitHub tab too (and its Save button is disabled), and Share
-  renders through `GatedAction` (`gated-share-local-only`). All of them
-  point at Privacy settings, and all read the store's `privacyLevel`, which
-  `consentChoice.js` keeps in step with the cookie, so raising the level
-  brings the controls back without a reload.
-- Not gated, because the route catches them: search's paste-a-link, the
-  widget API, Versions, the workspace drawer's stored models.
+## What runs
 
-## Telemetry: where the line is
+- **No GA tag.** `privacy/analytics.js#IS_BROWSER_GA_ON` (re-exported by
+  `index/ga.js`) is `false`: `setupGa` never
+  injects gtag/js, for anyone. On our own GA hosts (`isOwnGaHost`: prod and
+  bldrs' deploy previews) it deletes any leftover `_ga`, `_ga_*` or `_gcl_*`
+  on every load, along with the `bldrs.ga.engagement` open history that
+  `privacy/engagementTracking.js` kept (it now records nothing while the
+  switch is off). GA ran for everyone until 2026-11, and for consenting
+  visitors until 2026-11-25. The loader and its tests are kept behind the
+  switch for a later opt-in.
+- **The inline stub** in `public/index.html` still defines `dataLayer` and
+  `gtag`, and still queues a Consent Mode default (all denied). For a
+  visitor who accepted under #2051 it still queues a grant and a `config`.
+  All of it is inert, since gtag/js never loads. It stays because:
+  - `gtagEvent` buffers there;
+  - the E2E suite reads that buffer on localhost;
+  - a later opt-in would reuse it.
+- **`privacy/consent.js`** (the versioned `consentLevel` cookie) and
+  `analytics#isAllowed` are kept, but nothing in the UI sets the cookie
+  now. A visitor who accepted under #2051 still buffers our events in the
+  stub, which is harmless.
+- **Always-on load reports:** `model_open_count` (#2355,
+  [model-open-counts.md](model-open-counts.md)) sends one report
+  per real model open, failed ones included, to `/.netlify/functions/model-open-count`:
+  - the fields: kind of file, size bucket, source kind, open kind, outcome,
+    timings, complexity, error counts, and a page-memory `session_id`;
+  - no file name, path, URL or content id; only our own samples may carry
+    a sample id;
+  - the function forwards it to GA4 by Measurement Protocol under a fixed
+    client id.
+- **Sentry** is always on, as before.
 
-The policy calls Sentry and GA one "telemetry" (owner's call: events move
-between them during routine refactoring), and draws the line that matters
-by what the data is, not which tool carries it:
+## The About dialog
 
-- **Always on** (error and reliability reports, legitimate interest): what
-  failed, app and browser versions, the account id if signed in. No
-  cookie, no identifier that follows the browser between visits, never a
-  model's file name, path or contents. Sentry's reports and the
-  client-capability counts (`privacy/clientCapabilities.js`, sent to GA
-  under one shared id) are both on this side.
-- **Consent** (usage metrics): anything that sets a cookie or keeps an id
-  across visits, or measures use: GA proper, `open_cid`, engagement
-  tracking.
+About opens on its own for a first-time visitor and from `#about:` links
+(`About/hashState.js`), with one OK. Under the format list it says "Your
+models stay on your device." and links the privacy policy
+(`AboutDialog#PRIVACY_POLICY_HREF`, `/privacy/`, in a new tab). No choice
+is offered, because there is nothing to choose.
 
-So moving an event from Sentry to GA's consented side needs no policy
-change. Moving one the other way must drop anything that identifies the
-browser across visits (`getOpenCidForSentry` already gates the GA client
-id), and must not add storage.
+## History: what was tried, and why it went
 
-Changing what local-only mode allows changes the dialog's text
-(`ConsentNotice.jsx`), the policy's §1 "You may refuse normal operation",
-and `CONSENT_VERSION`, all together.
+- **#2051 (merged 2026-11-24): consent in the About dialog,** OK or Cancel.
+  - Cancel meant "Test only mode": local files and samples only, with
+    GitHub, Drive and link models refused.
+  - About opened for every visitor without a choice. Right after the
+    deploy that was everyone, and any close but OK counted as a decline.
+  - Model opens on the dashboard roughly halved within the day. Part of
+    that was visibility, since GA saw only consenting visitors. Part was
+    real: a blocking dialog came before the first file, and a dismissal
+    refused returning visitors' shared links.
+- **#2354, first form: a non-blocking banner** with Decline and Accept,
+  layered copy, and no close button. Built and reviewed, then dropped:
+  - the owner judged that the metrics needed no consent;
+  - the restriction on Decline ("tying the service to consent") was the
+    weak spot under GDPR's "freely given".
+- **What replaced both:** this design. No browser GA; ID-free reports for
+  everyone; account-keyed usage for signed-in users; metering kept to
+  metering.
 
-## How it's wired
+The three-level slider and Global Privacy Control preset that came before
+#2051's OK/Cancel are in #2051's history.
 
-- **Storage:** cookie `consentLevel`, value `<version>.<level>`, 365 days
-  (`src/privacy/consent.js`). Missing, malformed, or an older version reads
-  as `null`, which is **not consented**. The pre-2026-11 boolean cookie
-  `isAnalyticsAllowed` (default "allowed", unsettable from the UI since
-  #857 hid the toggle in 2023) is ignored and deleted on the next choice.
-- **`analytics#isAllowed()`** is `allowsAnalytics(getConsentLevel())`.
-  Everything that already gated on it — `gtagEvent`, the `open_cid` user
-  property and Sentry tag, engagement tracking, the checkout
-  `client-reference-id` — now fails closed for an undecided visitor.
-- **`public/index.html` stub**, before the bundle: always queues
-  `gtag('consent', 'default', <all four denied>)`. Only for a visitor whose
-  cookie already consents does it also queue `consent update` (granted) and
-  `config`. It duplicates the cookie rule on purpose (config has to be
-  decided before the bundle loads); `consent.test.js` runs the real stub
-  from the real file against cookies `consent.js` wrote.
-- **`index/ga.js#setupGa`** injects gtag/js only when `shouldInitGa` (prod
-  host, or an opted-in bldrs preview, never under webdriver) **and**
-  `isAllowed()`. Without consent it deletes any leftover `_ga` / `_gcl_*`
-  on every load: GA was default-on until this change, and a
-  `CONSENT_VERSION` bump un-decides everyone, so an undecided visitor who
-  never closes the dialog must not keep identifiers from before.
-- **Cookie deletion, at setup and on decline, only happens on our own GA
-  hosts** (`isOwnGaHost`: prod and bldrs' deploy previews). The gate is
-  inside `deleteGoogleCookies`, so no caller can skip it: a self-hosted
-  Share under another site never ran our tag, and the `_ga` there is that
-  site's. Jest covers this (`ga.test.js`); E2E can't, since
-  it runs on localhost, which isn't one of those hosts. The deploy-preview
-  check below covers it end to end.
-- **`index/ga.js#updateGaConsent`**, after a choice:
-  - allowed: clears `ga-disable-<ID>`, queues consent granted, queues the
-    `config` the stub withheld (after the grant, so page_view goes out
-    granted), loads gtag/js. Collection starts without a reload.
-  - not allowed: sets `window['ga-disable-<ID>'] = true` (GA's documented
-    kill switch, the only way to silence a tag that already loaded), queues
-    consent denied, and deletes `_ga`, `_ga_*` and `_gcl_*` on every parent
-    domain. After a reload gtag/js isn't loaded at all.
-- **Consent Mode signals** (`ga.js#CONSENT_DEFAULT` / `CONSENT_GRANTED`):
-  consent grants `analytics_storage` only. `ad_storage`, `ad_user_data`
-  and `ad_personalization` stay denied at every level, because Google Ads
-  is switched off (owner, 2026-11-07) and no level's wording asks for any
-  ad use. Every `config`, the stub's included, also carries
-  `ga.js#GA_CONFIG`: `allow_google_signals: false` (no GA data to
-  doubleclick.net for cross-device or demographics reporting) and
-  `allow_ad_personalization_signals: false`. Granting any ad signal again
-  means new dialog copy and a `CONSENT_VERSION` bump. This is Consent Mode
-  "basic": nothing reaches Google before consent, so there are no
-  cookieless pings and no GA4 modeling of declined visitors.
-- **Sentry** is unchanged: always on. Only the `open_cid` tag follows
-  consent (`analytics#getOpenCidForSentry`).
+## Later (owner's call, when the question matters)
+
+- **Anonymous retention** (does a visitor who never signs in come back?)
+  needs a cross-visit ID, which needs one of:
+  - **an opt-in:** a "Help improve Bldrs" toggle in About, perhaps a
+    one-time inline prompt after a few model opens, off by default, with
+    no cost to saying no;
+  - **a CNIL-style first-party ID:** first-party, statistics only, never
+    shared, at most 13 months; exempt in France, and needs counsel for
+    elsewhere.
+
+  Either would turn `IS_BROWSER_GA_ON` back on, or feed a first-party store.
+- **A region split** (ask only in the EU, UK and Switzerland) would apply
+  to that opt-in, if it comes.
 
 ## Tests
 
-- `src/privacy/consent.test.js`: cookie parsing and versions, the legacy
-  cookie, and the inline stub run from `public/index.html`.
-- `src/index/ga.test.js` §consent: no loader for undecided or declined,
-  allow-mid-page ordering (grant before config, one config, one loader),
-  the off-prod path, decline-after-load (kill switch, denied, cookies
-  deleted), the signal objects.
-- `src/Components/About/AboutConsent.test.jsx`: the dialog's paths (the
-  text, OK, each non-OK close, a consenting visitor's Cancel taking it
-  back and X leaving it alone, a declined visitor's OK, the policy link).
-- `src/app/localOnlyMode.test.js`, `src/Components/Open/LocalOnlyDialog.test.jsx`,
-  `ShareControl.test.jsx` §local-only: what local-only mode refuses and the
-  ways out of it.
-- `src/Components/About/consent.spec.ts` (desktop + mobile): a fresh visitor
-  is asked with nothing queued but the denied default and no Google
-  request; OK grants then configs, and a later page is configured from the
-  stub with `real_model_open` sent; Cancel declines and, after a reload,
-  there's no grant, no config and no `real_model_open`; a consenting
-  visitor's later Cancel denies consent. `src/Components/Open/localOnlyMode.spec.ts`
-  (desktop + mobile): a GitHub link falls back and explains, allowing
-  analytics opens it, a sample opens, the GitHub tab and Share are gated.
-- Jest's `tools/jest/setupTests.js` starts every test as a Functional
-  visitor, because most suites predate opt-in and assert on GA events; the
-  E2E `setIsReturningUser` does the same. Specs about the choice itself
-  clear that cookie.
-
-On localhost gtag/js never loads, so E2E proves what GA would be told (the
-dataLayer), not what Google receives. The network half is checked on a
-deploy preview with `?feature=gaEnableInPreview` in a browser that isn't
-automation-flagged: a fresh visitor makes no request to
-googletagmanager.com and gets no `_ga`; OK loads gtag/js and sets `_ga`;
-Cancel, then reload, makes no Google request and leaves no `_ga`.
-
-## Open questions (owner)
-
-- **Region split.** The law that requires opt-in is EU/UK/Swiss. Elsewhere
-  a notice with consent preset and always reachable would be enough. A
-  Netlify edge function knows the country (`context.geo.country`) without
-  storing anything, and could tell the stub which mode to use. Not built:
-  one behavior everywhere is the conservative choice until the GA country
-  split shows how much the EU share matters.
-- **Consent Mode "advanced"** (load gtag/js denied, cookieless pings, GA4
-  models the gap). Recovers modeled numbers; some EU regulators argue the
-  pings need consent too.
-- **First-party, cookie-free counts** of the numbers the business depends
-  on (model opens by format/source, exports, quota hits), to a Netlify
-  function, no identifiers. Would keep the dashboard's core counts whatever
-  visitors choose.
-- **Privacy policy vs Share#2034.** §1's telemetry text is rewritten here
-  (both copies, 2026-11-23, from the owner's draft). Share#2034 rewrites the
-  same paragraph into "monitoring (always on)" and "Analytics (optional)";
-  whichever merges second reconciles to this one, keeping 2034's §6
-  deletion-request line and its Sentry retention TODO.
+- `src/index/ga.test.js`:
+  - with the switch off, even a consenting visitor on prod gets no loader,
+    and leftover cookies go;
+  - cookie cleanup happens only on our own hosts;
+  - the loader paths, run with the switch on.
+- `src/privacy/consent.test.js`: the cookie and the real inline stub.
+- `src/pages/Privacy.test.jsx`:
+  - the policy says there's no in-app tracking, and what each always-on
+    report carries;
+  - the two policy copies say the same about telemetry.
+- `Containers/homepageQuietLoad.spec.ts` (desktop + mobile): the homepage
+  model loads with no status-bar line.

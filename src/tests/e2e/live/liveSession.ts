@@ -186,9 +186,10 @@ export function noteUnverified(testInfo: TestInfo, description: string) {
  * @param target the deploy
  */
 export async function setReturningVisitor(context: BrowserContext, target: LiveTarget) {
-  // Browse only: a live run is automation (no GA either way, ga.js
-  // #shouldInitGa), and nothing should consent on a real host's behalf.
-  // Without a choice, About re-opens for an undecided visitor.
+  // A live run is automation, and browser GA is off anyway (#2354). The
+  // restricted level keeps even the inert dataLayer stub from buffering
+  // events; nothing in the UI reads the cookie any more, so it no longer
+  // decides whether About re-opens (isFirstTime does).
   await context.addCookies([
     {name: 'isFirstTime', value: '1', domain: target.hostname, path: '/'},
     {name: 'consentLevel', value: '1.restricted', domain: target.hostname, path: '/'},

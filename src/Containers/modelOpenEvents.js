@@ -23,6 +23,7 @@ import {
 } from '../privacy/analytics'
 import {trackEngagementOnOpen} from '../privacy/engagementTracking'
 import {trackModelActionWhenAuthSettled} from '../app/modelActionTracking'
+import {reportModelOpenCount} from '../app/modelOpenCount'
 import modelIdentity from '../routes/modelIdentity'
 import {modelOpenId} from '../routes/modelOpen'
 import {modelOpenKind} from '../utils/reportModelOpen'
@@ -124,6 +125,12 @@ export function reportModelOpened(routeResult, loadedModel, {installPrefix, refs
     eventParams[LOCAL_HOUR_PARAM] = getLocalHour()
     if (isNewOpen) {
       sendOpenEvents(routeResult, eventParams, getIsAuthenticated)
+      // The cookieless first-party report of the same open
+      // (app/modelOpenCount.js, design/new/model-open-counts.md), the main
+      // usage signal now that GA no longer runs in the browser. Same gate as
+      // real_model_open, so the two count the same opens; its outcome,
+      // size, timings and counts are read from the very params above.
+      reportModelOpenCount(routeResult, loadedModel, {outcomeParams: eventParams, openKind})
     }
     // The engagement window restarts on every load, a theme rebuild's
     // too: the stop above ended the last one, and the user is still on

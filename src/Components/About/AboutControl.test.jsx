@@ -5,7 +5,7 @@ import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import * as FirstTime from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
 import AboutControl, {testId} from './AboutControl'
-import {X_PROFILE_URL} from './AboutDialog'
+import {PRIVACY_POLICY_HREF, X_PROFILE_URL} from './AboutDialog'
 import {ABOUT_MISSION, ABOUT_PAGE_TITLE} from './component'
 
 
@@ -43,6 +43,34 @@ describe('AboutControl', () => {
     // First: the Discord link comes after it in the same row.
     const discord = screen.getByRole('link', {name: /Discord/})
     expect(x.compareDocumentPosition(discord) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    act(() => useStore.setState({isAboutVisible: false}))
+  })
+
+  // Named for the org, not the site (owner, 2026-11-25).
+  it('labels the GitHub link with the bldrs-ai org, and lists IFC without versions', () => {
+    act(() => useStore.setState({isAboutVisible: false}))
+    render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(screen.getByTestId(testId))
+    const github = screen.getByTestId('about-social-github')
+    expect(github).toHaveAttribute('href', 'https://github.com/bldrs-ai/Share')
+    expect(github).toHaveTextContent('bldrs-ai')
+    expect(github).not.toHaveTextContent('GitHub')
+    expect(screen.getByText('Open: IFC, STEP, STL, OBJ, ...')).toBeInTheDocument()
+    act(() => useStore.setState({isAboutVisible: false}))
+  })
+
+  // No choice is offered (design/new/analytics-consent.md §"The About
+  // dialog"): a plain line and the policy link, opening in a new tab.
+  it('says models stay on the device and links the privacy policy', () => {
+    act(() => useStore.setState({isAboutVisible: false}))
+    render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(screen.getByTestId(testId))
+    expect(screen.getByTestId('about-privacy')).toHaveTextContent('Your models stay on your device.')
+    const policy = screen.getByTestId('about-privacy-policy')
+    expect(policy).toHaveAttribute('href', PRIVACY_POLICY_HREF)
+    expect(PRIVACY_POLICY_HREF).toBe('/privacy/')
+    expect(policy).toHaveAttribute('target', '_blank')
+    expect(screen.queryByRole('button', {name: /Cancel|Decline/})).not.toBeInTheDocument()
     act(() => useStore.setState({isAboutVisible: false}))
   })
 

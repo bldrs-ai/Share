@@ -612,6 +612,19 @@ tab) read the constants directly.
 
 ## Funnel analytics
 
+> **Status since #2354 (2026-11-25): browser GA is off**
+> (`privacy/analytics.js#IS_BROWSER_GA_ON`), so every event below that the
+> browser sends (`real_model_open`, `load_failed`, `model_view` and the rest
+> of the normalized events, `quota_limit_reached`, `login`,
+> `begin_checkout`, the gate events, `subscription_*_client`,
+> `engaged_use` / `return_visit`) is dormant: it only buffers in the inert
+> inline stub. What still reaches GA4 is sent from servers:
+> `subscription_started` / `_ended` (stripe-webhook) and the cookieless
+> per-load `model_open_count` (#2355, `design/new/model-open-counts.md`).
+> Server-side limit, gate, login and checkout counts follow in
+> `claude/account-usage`. The tables below describe the events as built,
+> for when they move server-side or a later opt-in turns browser GA back on.
+
 GA4 events that let the bizdev GA dashboard's funnel card (`bldrs-ai/bizdev`,
 `ga/static/index.html`) show **Visit → Model open → Hit a limit → Signed in →
 Upgrade click → Subscribed**, so there is a baseline before `quotas` flips on.
@@ -620,12 +633,14 @@ the dashboard queries them verbatim, so rename both ends together or neither.
 Everything except `real_model_open` is sent through `gtagFunnelEvent`, which
 adds `open_cid` (the `cid.`-prefixed GA client id; left out when GA hasn't
 resolved one) so one client can be followed down the funnel. All of it sits
-behind the same analytics consent check as every other `gtagEvent`.
+behind the same analytics consent check as every other `gtagEvent`, except
+`model_open_count`, which is not a `gtagEvent` (below).
 
 | Step | Event | Params | Fires |
 |---|---|---|---|
 | Visit | `session_start` / `page_view` | — | GA4 sends these itself |
 | Model open | `real_model_open` | `content_id`, `content_type`, `load_outcome`, `stats_*` (below), `local_hour`, `open_kind` (`page` \| `in_app`: the page's first open, or one switched to in-app; `utils/reportModelOpen.js`, open-205 step F), `open_cid` | `CadView` after a real (non-demo) load, once per open: not again for a theme toggle or a view-settings change, which reload the same open (`routes/modelOpen.ts`; open-205 #2022). See `analytics#isRealModelOpen` |
+| Model load (all visitors) | `model_open_count` | `content_type`, `size_bucket`, `source` (`local` \| `sample` \| `github` \| `gdrive` \| `url`), `sample_id` (roster samples only, else `none`), `open_kind`, `form_factor`, `load_outcome` (`displayed` \| `no_geometry` \| `unusable` \| `failed`), `reason_class` and `last_phase` (`none` unless failed), `triangle_bucket`, `error_bucket` and `warning_bucket` (decade buckets, never exact counts), `session_id` (GA's own session param: random, per page load, in memory only); timings in ms when measured: `load_ms`, `first_mesh_ms`, `open_ms`, `parse_ms`, `geometry_ms`. No `open_cid` or content id | **Server:** the `model-open-count` function, through the Measurement Protocol under one fixed client id, from a first-party beacon sent beside `real_model_open` (`modelOpenEvents.js`, same opens) and beside `load_failed` (`loadFailure.js`, same failures). Needs no consent: no identifier of the browser, nothing stored, the visitor's IP not forwarded ([model-open-counts.md](model-open-counts.md)). The main usage signal since browser GA went (#2354) |
 | (failed open) | `load_failed` | `content_type`, `size_bucket`, `reason_class`, `last_phase`, `open_kind`, `open_cid` | `CadView#onViewerInternal`'s catch, once per failed attempt, real (non-demo) models only |
 | Hit a limit | `quota_limit_reached` | `tier` (`free`; `anonymous` before that tier was removed), `feature` (`QUOTA_FEATURES`: `private_load`) | `QuotaLimitDialog`, once each time the dialog opens, whatever made it show |
 | Signed in | `login` (GA4 recommended) | `method`: `google` \| `github` \| `email` \| `unknown`; plus `from: 'gate'` and `feature` (`export` \| `share`) when a visible gate started the sign-in (§"Gate events") | `src/Auth0/useLoginTracking.js`, once per completed sign-in (below) |
@@ -824,11 +839,14 @@ The parts that aren't obvious:
     previous counted open's. Opening the same model again counts, on a later
     page load or in-app (A → B → A, and A → demo → A, which the model-keyed
     guard before open-205 #2022 skipped).
-  - **Consent:** analytics is opt-in since Share#2051. `isAllowed()` is
-    `allowsAnalytics(getConsentLevel())`, which is false until the visitor
-    presses OK in About (`design/new/analytics-consent.md`). Nothing is read,
-    written or sent without that consent, and opens made before it are never
-    counted retroactively. The check repeats
+  - **Consent:** analytics is opt-in since Share#2051, and since #2354 Google
+    Analytics is off in the browser for everyone, with nothing that asks
+    (`design/new/analytics-consent.md`). So these two events are dormant:
+    `isAllowed()` (`allowsAnalytics(getConsentLevel())`) is true only for a
+    visitor who accepted under #2051, and even then gtag/js never loads to
+    send them. They come back with a later opt-in. Nothing is read, written
+    or sent without consent, and opens made before it are never counted
+    retroactively. The check repeats
     inside the lock, because consent can be withdrawn while an open waits
     behind another tab's hold.
   - **Fails closed.** If localStorage cannot be read or written the open is
@@ -1090,6 +1108,15 @@ has a backfill, so these only start accruing data once registered:
 - For the normalized events (§"Analytics: normalized tier events"):
   register **event-scoped custom dimensions** for `source` and `gate`.
   `tier`, `route_kind` and `open_cid` are already registered.
+- For `model_open_count` ([model-open-counts.md](model-open-counts.md)):
+  register **event-scoped custom dimensions** for `sample_id`, `open_kind`,
+  `form_factor`, `load_outcome`, `triangle_bucket`, `error_bucket` and
+  `warning_bucket`, and **metrics** (numeric, unit: milliseconds) for
+  `load_ms`, `first_mesh_ms`, `open_ms`, `parse_ms` and `geometry_ms`. `content_type`, `size_bucket`, `source`, `reason_class`
+  and `last_phase` are already registered. `session_id` is GA's own session
+  parameter and needs no registration for session grouping; try registering
+  it as an event-scoped dimension for per-session rows, and if GA refuses
+  the reserved name, group by GA's sessions.
 - For the feedback events (§"Feedback events"): register **event-scoped
   custom dimensions** for `feedback_source`, `rating`, `has_note`,
   `has_screenshot`, `model_choice` and `stage`, and **metrics** for `steps`
