@@ -187,7 +187,8 @@ function relayKnob(): MockAiRelay {
 
 
 /** What the mock relay's minted anonymous tokens start with; a counter follows. */
-export const MOCK_ANON_TOKEN_PREFIX = 'ba1.mockAnonymousToken.'
+// The shared anonymous metering token's shape (quota/meterToken.js), as the relay mints it.
+export const MOCK_ANON_TOKEN_PREFIX = 'bm1.mockAnonymousToken.'
 let mintedTokens = 0
 
 

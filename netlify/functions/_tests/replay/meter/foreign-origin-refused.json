@@ -1,0 +1,25 @@
+{
+  "description": "A remote load posted from another site's page is refused 403 before the ledger is touched, so a foreign site can't spend or probe a visitor's allowance.",
+  "env": {
+    "$fixture": "env/meter.json"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/meter",
+    "headers": {
+      "content-type": "application/json",
+      "origin": "https://evil.example"
+    },
+    "body": {
+      "action": "remote_load",
+      "key": "/share/v/gh/someone/public-models/main/a.ifc"
+    }
+  },
+  "exchanges": [],
+  "expect": {
+    "statusCode": 403,
+    "json": {
+      "error": "meter_forbidden_origin"
+    }
+  }
+}

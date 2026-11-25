@@ -95,9 +95,9 @@ describe('QuotaLimitDialog', () => {
   // The free window is 7 days (owner, 2026-10-26; was 30). Only a signed-in
   // free user can be refused now (signed-out users are never metered), so
   // the anonymous tier's Sign up offer is gone.
-  it('quotes the free limit as 2 private models in a rolling 7 days and offers no sign-up', () => {
+  it('quotes the free limit as 2 private models per 30-day period and offers no sign-up', () => {
     const {getByText, queryByTestId} = renderDialog({tier: TIERS.FREE, isOpen: true})
-    expect(getByText(/limit of 2 private models in any rolling 7-day window/)).toBeInTheDocument()
+    expect(getByText(/limit of 2 private models per 30-day period/)).toBeInTheDocument()
     expect(queryByTestId('button-quota-signup')).toBeNull()
   })
 
@@ -158,7 +158,7 @@ describe('QuotaLimitDialog', () => {
       act(() => useStore.setState({isLoginVisible: false}))
       const onClose = jest.fn()
       const {getByTestId, getByText, queryByTestId} = renderDialog({tier: 'anonymous', isOpen: true, feature: AI, onClose})
-      expect(getByText('Out of assistant credits for today')).toBeInTheDocument()
+      expect(getByText('Out of assistant credits for now')).toBeInTheDocument()
       expect(queryByTestId('button-quota-subscribe')).toBeNull()
       expect(queryByTestId('button-quota-sign-in')).toHaveTextContent('Sign in')
       fireEvent.click(getByTestId('button-quota-sign-in'))
@@ -177,7 +177,7 @@ describe('QuotaLimitDialog', () => {
 
     it('Pro: only a wait, with Close and no call to action', () => {
       const {getByRole, queryByTestId, getByText} = renderDialog({tier: 'pro', isOpen: true, feature: AI})
-      expect(getByText(/They come back as the days roll on/)).toBeInTheDocument()
+      expect(getByText(/They come back as the days, the week and your 30-day period roll on/)).toBeInTheDocument()
       expect(queryByTestId('button-quota-subscribe')).toBeNull()
       expect(queryByTestId('button-quota-sign-in')).toBeNull()
       expect(getByRole('button', {name: 'Close'})).toBeInTheDocument()

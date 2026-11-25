@@ -1,12 +1,14 @@
 # Usage quotas
 
-Server-enforced metering of *private* model loads — tier-aware, with a 7-day
-rolling window, GitHub public/private
-detection and Drive visibility. Nudges free-tier users toward upgrade without
-ever blocking public or sample content, and never meters a signed-out user.
+Server-enforced metering of *private* model loads — tier-aware, counted per
+user in a 30-day metering period (§"Metering periods"), with GitHub
+public/private detection and Drive visibility. Nudges free-tier users toward
+upgrade without ever blocking public or sample content for a signed-in user.
 Enforcement is the `quotas` feature flag, on in production since
 Share#1970. Since 2026-10-27 the same model slots also decide a free user's
-GLB exports (§"Exports use the same slots").
+GLB exports (§"Exports use the same slots"). Since 2026-11-25 a signed-out
+visitor's *remote* loads are metered too, 2 per period on a server-issued
+anonymous token (§"Anonymous metering").
 
 This is the design of record for the feature. The Open-dialog UI wiring is in
 [src/Components/Open/README.md](../../src/Components/Open/README.md) §Usage Quotas.
@@ -20,11 +22,14 @@ This is the design of record for the feature. The Open-dialog UI wiring is in
   flag on). When off, `useQuota` reports unlimited capacity and `record()` is
   a no-op, so nothing is counted, blocked, or badged.
 - **What turning it on changes in production:** signed-in free users get 2
-  private models (Drive, private GitHub) per rolling 7 days (30 until
-  2026-10-26, §"Rolling window") and see
+  private models (Drive, private GitHub) per 30-day metering period (a
+  rolling 7 days 2026-10-26 → 2026-11-25, a rolling 30 before;
+  §"Metering periods") and see
   `QuotaLimitDialog` on the 3rd opened from the Open dialog (a pasted link
   to a 3rd still opens, and is counted in GA: §"Direct links: soft gate");
-  signed-out users are never metered; local files, public GitHub and Drive
+  signed-out visitors get 2 remote models a period (since 2026-11-25,
+  §"Anonymous metering"; its own kill switch is `disableAnonymousMetering`,
+  and `quotas` off turns it off too); local files, public GitHub and Drive
   files shared "Anyone with the link" stay unlimited. `quota_limit_reached`
   starts firing in production GA (§"Funnel analytics"), and every Drive or
   `/v/gh/` open by a signed-in user now calls `record-load`.
@@ -60,14 +65,24 @@ Enforcement ships dark behind the `quotas` flag.
 
 ## Tiers & limits
 
-| Tier | Limit | Window | Determined by |
+| Tier | Limit | Period | Determined by |
 |---|---|---|---|
-| — (signed out) | not metered | — | `getTier` returns `null` |
-| Free (signed in) | 2 | 7-day rolling (was 30 until 2026-10-26) | `subscriptionStatus` not a Pro status |
+| — (signed out) | 2 *remote* loads (GitHub, Drive, URL); no private models | the token's 30-day period | no Auth0 session; the `meter` function (§"Anonymous metering") |
+| Free (signed in) | 2 private-model slots | per-user 30-day period (rolling 7 days 2026-10-26 → 2026-11-25; rolling 30 before) | `subscriptionStatus` not a Pro status |
 | Paid (`sharePro`, `shareProPendingReauth`) | Unlimited | — | `isProSubscriptionStatus(subscriptionStatus)` |
 
+**What Pro is limited on (checked 2026-11-25).** Nothing in this ledger:
+private models and exports are unlimited, and `record-load` never writes a
+Pro row. Pro's one metered limit anywhere is the hosted assistant's USD
+budget (`src/quota/aiCredits.js`, a 30-day window of its own on the AI
+ledger, design/new/ai-workspace.md §6–§7). Moving that budget onto Pro's
+Stripe billing period, which the owner allowed, is a follow-up for the AI
+ledger, not for model slots: §"Out of scope".
+
 The numbers live in one place, `src/quota/limits.js` (`LIMITS`,
-`FREE_PRIVATE_MODEL_LIMIT`, `ROLLING_WINDOW_DAYS`), imported by the client,
+`FREE_PRIVATE_MODEL_LIMIT`, `SLOT_PERIOD_DAYS`, `ANONYMOUS_REMOTE_LOAD_LIMIT`,
+`ANONYMOUS_IP_DAILY_REMOTE_LOADS`), with the period in `src/quota/period.js`,
+imported by the client,
 `record-load`, its MSW mock and the marketing pricing plans (§"Pricing copy"
 below). Until Share#1966's PR the function hand-copied `FREE_LIMIT = 4`. The
 free limit went from 4 to 2 private models per window in that PR, with the
@@ -82,7 +97,10 @@ has counted as Pro since the GLB-export S4 decision
 ([glb-export-premium.md](glb-export-premium.md) §7.2), so a pending-reauth
 user gets unlimited loads; that is intended.
 
-**Signed out is not a tier, and is never metered.** There used to be an
+**Signed out has no private-model tier.** Its remote loads are metered
+since 2026-11-25, on a ledger of their own (§"Anonymous metering"); what
+follows is about the private-model ledger, which a signed-out user still
+never touches. There used to be an
 anonymous tier: a *lifetime* cap of 2, kept only in an OPFS ledger that never
 pruned. It was removed because a signed-out user can't reach a private model
 at all (§"What counts"): private GitHub needs a token, and a restricted Drive
@@ -100,7 +118,10 @@ different thing (sign-in state) and is unchanged.
 **Signing out forgets Drive, so "never metered" can't become a bypass**
 (codex P1 on Share#1977). Drive's access token lives in localStorage and
 outlives the Auth0 session; a user who signed out with Drive connected could
-otherwise keep opening restricted files, unmetered. Two parts:
+otherwise keep opening restricted files without a private-model slot. Two
+parts (both still hold with the anonymous meter: it counts the signed-out
+visitor's *public* remote loads, and this keeps restricted Drive files out of
+their reach altogether, so the two don't meet):
 
 - `connections/useSignedOutDriveCleanup.js` (mounted in `Share.jsx`) clears
   every Drive connection, its token and its sources whenever Auth0 settles
@@ -160,8 +181,8 @@ Two consequences for this ledger:
 
 The retired export rule — 2 exports per rolling 7 days, counted as `free:
 true` rows in `app_metadata.exports` — gates nothing any more; those rows are
-export history. The window is still `ROLLING_WINDOW_DAYS` (§"Rolling window"),
-now because it is the same slots, not just the same timing.
+export history. The window is the slot period (§"Metering periods"), because
+it is the same slots, not just the same timing.
 
 ## What counts
 
@@ -444,6 +465,168 @@ Drive link with no connection until that became public) and
 Drive link opened signed out, over an old full anonymous ledger, and by a
 free user at the limit, loads with no `record-load` call and no event).
 
+## Anonymous metering
+
+*Owner decisions 2026-11-25.* A signed-out visitor may open
+**`ANONYMOUS_REMOTE_LOAD_LIMIT` (2) remote models per 30-day period**. A
+remote load is a model from GitHub (`/v/gh/`), Google Drive (`/v/g/`) or a URL
+(`/v/u/`). Local files, the hosted demo and other `/v/p/` models, and the
+sample models (GitHub routes, but the first thing a visitor is offered) are
+never metered. The rule is `src/quota/anonMeterKeys.js#isAnonMeteredKey`,
+which the page, the function and its mock share.
+
+| Stage | When | What the visitor sees | What is recorded |
+|---|---|---|---|
+| — | 1st remote model | it opens | the token's count, the model's keyed digest, the network's day count |
+| `last_free` | 2nd remote model | it opens, with a non-blocking notice (`AnonLastFreeNotice`): "This was your last free model from GitHub, Google Drive or a link until …", with Sign in | the stage, and its one GA event |
+| `gated` | 3rd remote model (or any, from a network past its day cap) | it does **not** open: `AnonLimitDialog`, "Sign in to open more models" | the stage (`gatedBy: token \| ip`), and its one GA event |
+
+A model the token has already counted reopens freely, at the limit too (the
+ledger keeps a keyed digest per counted model), so a reload, a theme toggle or
+an in-app return costs nothing. The gate blocks pasted links as well as the
+Open dialog: it runs in `CadView`'s load, before the download, for every
+remote route, once sign-in has settled signed out. This differs from the
+signed-in direct-link soft gate below, which still only measures. A signed-in
+user is never anonymously metered: the load waits for Auth0 to settle
+(`AUTH_SETTLE_GRACE_MS`), and past that grace it loads unmetered.
+
+**A load is counted when it is admitted, before the download.** That is
+what lets the gate refuse before anything is fetched, and it means a load
+that then fails (a mistyped link's 404, a parse error) or that the visitor
+leaves mid-way has still used one of the period's remote loads. Opening the
+same model again is free (the reopen dedupe), so a retry costs nothing.
+Counting only on success would need a second, commit call after the load;
+it is a follow-up if failed loads turn out to matter (review on Share#2368).
+
+**Fails open.** The page loads the model unmetered when the meter can't be
+reached, answers 5xx, or isn't configured, as `useQuota` does for
+`record-load`. And whether the page asks at all is the client's choice: the
+known gap of every client-side gate (§"Drive visibility"). What is enforced
+against a page that does ask is the per-token count and the IP cap.
+
+### The metering token
+
+One server-issued, HMAC-signed anonymous identity for every metered
+anonymous feature (`netlify/functions/_lib/meteringToken.js`), generalized
+from the AI relay's token (`_lib/anonToken.js` is the shared scheme;
+design/new/ai-workspace.md §7 D5). `bm1.<anonId>.<issuedAt>.<sig>`:
+
+- **It lives exactly one period.** `issuedAt` is the period's start; it
+  expires 30 days later. It is **never renewed in place**: the next metered
+  use after it expires is answered with a new token with a new random id,
+  unrelated to the old one, which starts the next period. Nothing links the
+  two.
+- **Stored only once used.** The page writes it to localStorage
+  (`bldrs.meter.token`) only when the meter's answer carries one, which is
+  only on a metered remote load. A visitor who opens only local files, the
+  demo or the samples never gets one.
+- **Signing out keeps it**, until its period ends.
+- Signed with `METERING_TOKEN_SECRET`, or `AI_TOKEN_SECRET` when that is
+  unset, so production needs no new secret to start. The schemes differ in
+  prefix and key namespace, so neither's token or IP hash is ever accepted as
+  the other's (`_tests/meteringToken.test.js`).
+- **AI chat is keyed to it too** (owner, 2026-11-25): the hosted
+  assistant's anonymous budget is the token's, with nested day, 7-day and
+  period caps (design/new/ai-workspace.md §6), and the page keeps one token
+  for both (`src/quota/meterToken.js`). The relay's old 24-hour `ba1` token
+  is retired.
+
+### The IP cap
+
+What bounds a visitor who clears storage to mint a fresh token is a
+**day-salted IP-hash cap: `ANONYMOUS_IP_DAILY_REMOTE_LOADS` (20) remote loads
+per network per UTC day**, across every token, env-tunable as
+`METER_ANON_IP_DAILY_REMOTE_LOADS`. Twenty is ten visitors' allowance from one
+network a day: a shared office or classroom NAT gets well past one person's,
+and a script churning tokens is held to twenty. The hash is
+HMAC(key, `<UTC day>|<ip>`), so no IP is stored and hashes don't link across
+days, as the AI relay's (§7 D5). A network at its cap gates with the same
+sign-in prompt (`gatedBy: 'ip'`, worded "This network has opened its free
+models … for today"); it doesn't count the load.
+
+### Link at sign-in
+
+When a visitor holding a token signs in, `useAnonMeterLink` (mounted in
+`Share.jsx`, keyed on Auth0's settled state like
+`useSignedOutDriveCleanup`) asks the meter to **carry the token's
+current-period counts and stage into the account**, so signing in or out
+can't reset a budget:
+
+- `app_metadata.usageQuota.anonymous = {periodStart, periodEnd, features:
+  {remote_load: {count, stage}}, mergedAt}`, in the account's running slot
+  period if there is one, else the token's own. A repeat (or a second
+  browser's token) takes the larger count and the further stage, so the write
+  is idempotent and two tokens count as the larger, not the sum.
+- **It does not use up private-model slots.** A signed-in free user's public
+  remote loads are unlimited; the remote-load carry records how far the
+  visitor got signed out, for the funnel.
+- **AI spend is the carry that limits something.** The token's AI spend is
+  added to the account's AI ledger record (`aiLedger.js#carryAnonymousSpend`,
+  once per token, remembered by a keyed digest), so it counts toward the free
+  account's day, 7-day and period caps (ai-workspace.md §6).
+- **Only the current token is linked**, once; the ledger marks it merged. No
+  older period is backfilled. The token keeps metering after a sign-out, so
+  the visitor who signs out is where they were (`anonMeter.spec.ts`).
+- The account write comes first and the merge mark second, so a failure
+  between them is retried at the next sign-in and writes the same thing.
+- **A known race:** the link's Auth0 write and a `record-load` (or
+  `pro-module`) write at the same sign-in are both read-modify-writes of
+  `usageQuota` with no compare-and-swap (§"Out of scope": the Auth0 store
+  has none), so one can lose the other's addition: a `loads` row (a free
+  extra slot, the user's favour) or the `anonymous` carry (funnel data
+  only; the AI carry is in the AI ledger, under compare-and-swap).
+
+**One-time resets at deploy (2026-11-25), each forgiving spend once:**
+anonymous AI budgets on the retired `ba1` token start afresh on a new
+metering token; free and Pro AI ledger records, which have no
+`periodStart` yet, start their first period at their next booked spend,
+dropping what the 30 rolling days held; and a browser whose first meter
+and AI calls race can be minted two tokens, the last one stored winning.
+
+### Anonymous ledger: retention and purpose
+
+Netlify Blobs store `metering` (`_lib/meterLedger.js`, compare-and-swap
+through `_lib/blobCas.js`, which the AI ledger shares):
+
+- `meter/anon/<UTC day the period began>/<anonId>`: per token, only the
+  current period's data. **Counts per feature, the limit stage reached**
+  (`null`, `last_free`, `gated`, and `gatedBy`), the stages already reported,
+  the merge time, and a keyed digest per counted model (HMAC of the token's
+  id and the model key, to tell a reopen from a new model; never a key, path
+  or URL).
+- `meter/ip/<UTC day>/<hash>`: one count per network per day.
+- `meter/aggregate/<YYYY-MM>`: ID-free monthly totals (tokens, remote loads
+  counted, how many reached each stage, how many were gated by the IP cap,
+  how many were carried into an account).
+
+**Retention.** A token's record is **deleted 30 days after its period ends**;
+a network's bucket the day after its day. The daily `meter-sweep` scheduled
+function does both, finding expired records by their key's day alone, and
+folds each deleted token record into that month's aggregate first. Beyond
+that only the ID-free aggregates remain. The 30 days are for the link at
+sign-in to find a token whose period has only just ended, and for abuse to
+be looked into.
+
+**Purpose: limit data stays limit data.** This ledger exists to apply
+free-use limits and must never feed general analytics: no per-visitor
+reports, no feature-usage profiles, no join to GA or Sentry. The only
+statistics allowed out of it are about the limits themselves: how many
+visitors reached each stage, how many signed in from a gate. They leave as
+ID-free counts:
+
+| Event (GA4, Measurement Protocol) | Params | Sent |
+|---|---|---|
+| `anon_limit_stage` | `stage` (`last_free` \| `gated`), `feature` (`remote_load`), `gated_by` (`token` \| `ip`, gated only) | by `meter`, the first time a token reaches each stage |
+| `anon_limit_signin` | `from_stage`, `feature` | by `meter`, when a token that reached a stage is carried into an account |
+
+All of them under **one fixed client id** (`METER_CLIENT_ID`, the
+`client-capabilities` construction), so GA counts each anonymous visitor
+once per stage, adds no "users", and can never follow one. The browser sends
+nothing for the meter, so it doesn't depend on GA in the page (blocked,
+declined, or removed in Share#2354). The rule is written into
+`_lib/meterLedger.js`'s header and `meter.js`'s, where it binds. A change
+that reads the ledger for anything else is a privacy-policy change first.
+
 ## The server is authoritative
 
 `netlify/functions/record-load.js` is the source of truth for signed-in users.
@@ -515,44 +698,62 @@ fallback. It is *not* the authority.
 > this design replaced it with a rolling window (30 days, then 7). `loadQuota` silently
 > drops a legacy `resetDate` field if present, so older clients upgrade cleanly.
 
-## Rolling window
+## Metering periods
 
-*Was "30-day rolling window" until 2026-10-26.*
+*Owner decision 2026-11-25. Was a rolling 7 days from 2026-10-26, and a
+rolling 30 before that.*
 
-`pruneLoads(loads, now)` drops loads whose `loadedAt` is older than
-`ROLLING_WINDOW_DAYS` (7); it is a thin wrapper over
-`limits.js#loadsInsideRollingWindow`, the one implementation the client, the
-MSW `record-load` mock and `record-load` itself all use. Pruning runs on
-both the client (`useQuota`) and the server (before counting) so the two agree.
-A free user who opened 2 private models gets a slot back exactly 7 days after
-each load, rather than all at once on a calendar reset. The edge is exclusive:
-a row counts while `now < loadedAt + window`, so a load exactly 7 days old has
-rolled off. That is the comparison export slots (`exportSlots.js#modelSlots`,
-which calls it) and engagement tracking use too, and the one that makes "the slot frees at
-`loadedAt + window`" true at that instant. Quotas used the inclusive edge
-until Share#1974 unified them. It is implemented once,
-`limits.js#loadsInsideRollingWindow`, which `quota.js#pruneLoads` (and through
-it the MSW mock) and `record-load` both call, so the client and server can't
-drift apart on it. `useQuota#check()` re-prunes at call time, so an open tab
-stops counting a slot the moment it rolls off rather than at the next
-`record()` or remount.
+Every metered limit is counted in a **per-user 30-day period**, the same for
+an anonymous visitor, a signed-in free user and Pro (whose model limits are
+unlimited, so it has none to count). A period starts at the user's first
+metered use after their previous period ended, and lasts `PERIOD_DAYS` (30).
+It is **not** a calendar month and **not** a sliding window: resets are
+staggered per user, and everything a period counted comes back together at
+its end. The definition is `src/quota/period.js`, the one module the client,
+`record-load`, `pro-module`/`record-export` (through
+`export/exportSlots.js`), the MSW mock, the anonymous meter and the pricing
+copy all use.
 
-**One window for private models and exports.** The owner's decision
-(2026-10-26): "month is a long time … weekly will help keep us more
-top-of-mind, and private shares and exports should be on the same timing to
-keep it simple." So the window went from 30 days to 7, and the export window
-became `ROLLING_WINDOW_DAYS` rather than a second literal 7. On 2026-10-27
-the export count went altogether: exports use these slots
-(§"Exports use the same slots"), and the pricing page reads "2 private models
-a week — unlimited open, share and export" (§"Pricing copy").
+**An account's period is not stored; it is chained from the ledger.**
+`period.js#currentPeriod(uses, now)` walks the metered uses' timestamps
+oldest first: the first starts a period, a use inside the running period
+joins it, the first use at or after its end starts the next. So
+`usageQuota.loads[].loadedAt` is all it needs, and `limits.js#slotPeriod` /
+`#loadsInCurrentPeriod` are the rows that hold a slot. A writer keeps the
+running period's rows and drops the rest; the row that started the period is
+always kept, so the chain finds the same start on the next read. No new
+field, no migration, and no conflict with how `record-load` stores loads.
 
-**Existing ledgers at the switch.** Nothing is migrated: the ledgers store
-`loadedAt`, not an expiry, so the new window applies to old rows on the next
-check. A row 8–30 days old that counted under the 30-day window is pruned the
-next time `record-load` (server) or `useQuota` (OPFS mirror) looks, so some
-free users get capacity back immediately at rollout — at most the full 2 —
-and nobody loses any. The server writes the pruned list back only when it
-records a new load; until then the old rows sit in `app_metadata` uncounted.
+**An anonymous visitor's period is its token's life.** The metering token
+carries its own start (`issuedAt`) and expires exactly one period later
+(§"Anonymous metering"), so the server needs no store to know when a
+visitor's period ends.
+
+The edge is exclusive, as every window here has been since Share#1974: a use
+exactly 30 days after a period's start is the first of the next period.
+`useQuota#check()` re-prunes at call time, so an open tab frees the slots at
+the period's end rather than at the next `record()`.
+
+**Existing ledgers at the switch (2026-11-25).** Nothing is migrated. Every
+row in `usageQuota.loads` younger than 30 days chains into a period: a free
+user who used both slots this week keeps them held to that period's end, up
+to 30 days, where the rolling window would have freed each 7 days after it
+was taken. That is the owner's tightening. **It also takes back slots that
+had already come back:** the old writer pruned to 7 days only when it wrote,
+so a user who opened two private models 20–29 days ago and none since still
+has those rows, and they chain into a period that hasn't ended (review on
+Share#2368: up to 22 days without slots they had back). Avoiding that needs
+either a one-time prune of Auth0 rows older than 7 days at deploy, or a
+marker on rows written after the switch; it is the coordinator's call, open
+on Share#2368. Rows older than 30 days chain into periods that have ended
+and stay uncounted. `exportSlots.js#modelSlots`' `nextFreeAt` is now the period's
+end, so the Export tab and the slot header say when *all* the slots come
+back ("they free up …"), not when the oldest rolls off.
+
+**One period for private models and exports.** As the rolling window was
+(owner, 2026-10-26: "private shares and exports should be on the same timing
+to keep it simple"), and since 2026-10-27 they are the same slots
+(§"Exports use the same slots").
 
 ## UI surfaces
 
@@ -561,8 +762,9 @@ Summary only; the wiring lives in
 
 - **`QuotaBadge`** on the Open toolbar button: hidden < 50% used, shown 50–75%,
   amber ≥ 75%; hidden entirely when `limit === Infinity` (paid or flag-off).
-- **`QuotaLimitDialog`** on `403`: states the numeric limit + rolling-window
-  phrasing, links to `/share/quotas`. Only a signed-in free user can see it,
+- **`QuotaLimitDialog`** on `403`: states the numeric limit per 30-day
+  period, says the slots all come back when the period ends, links to
+  `/share/quotas`. Only a signed-in free user can see it,
   so it offers Subscribe only (the anonymous tier's "Sign up free" is gone).
 - Gated load sites: Drive picker + recents, GitHub recents + browser, sample
   chips (public, so they pass), and local file + recents + drag-and-drop, which
@@ -574,16 +776,22 @@ The marketing pricing page is a static Next.js build, and its quota copy can't
 drift from what is enforced, by construction. `PLANS`
 (`marketing/src/lib/pricingPlans.mjs`) is the only place that copy lives, and it
 **builds** the Free account allowance from the enforced constants:
-`FREE_PRIVATE_MODEL_LIMIT` / `ROLLING_WINDOW_DAYS` from `limits.js` ("2 private
-models a week — unlimited open, share and export"; the
+`FREE_PRIVATE_MODEL_LIMIT` / `SLOT_PERIOD_DAYS` from `limits.js` ("2 private
+models every 30 days — unlimited open, share and export"; "every 30 days",
+not "a month", because the period is the user's own 30 days, not a calendar
+month; it read "a week" until 2026-11-25; the
 separate "2 GLB exports a week" line went with the export count on
 2026-10-27). Share Pro reads "Unlimited private models and exports". The signed-out tier ("Bldrs Share", no login) has
 the owner's four lines (2026-10-28) from `src/quota/tierCopy.js`, which
 `/share/quotas` renders too: local models in the browser with no upload; IFC
 and STEP by Conway, "fastest in the industry", with "see the benchmark"
 linking `/share/about/conway`; USD, GLB, STL, OBJ and more; public Drive and
-GitHub models with unlimited open and share. No export: it starts at a free
-account.
+GitHub models with unlimited open and share — the last line, since the
+anonymous meter (2026-11-25), reads "2 remote models every 30 days from
+public GitHub, Google Drive or a URL, plus every sample — sign in free for
+unlimited", its count built from `ANONYMOUS_REMOTE_LOAD_LIMIT` and
+`PERIOD_DAYS` (`tierCopy.js#anonymousRemoteModelsLine`). No export: it starts
+at a free account.
 `PricingTiers.tsx`
 renders `PLANS` and states no limit of its own; the monthly/yearly toggle only
 changes the price. (`.mjs` because `marketing/package.json` has no `"type":
@@ -592,6 +800,7 @@ changes the price. (`.mjs` because `marketing/package.json` has no `"type":
 `tools/marketing/pricingTiers.test.js` is a drift tripwire over that data, not
 a proof against a hostile author. It checks that the Free account plan states
 the claim as worded from the constants and says its models export freely,
+that the signed-out tier's remote-model count is the enforced one,
 that Pro says unlimited for both, that no plan entry (CTA included) puts a
 limit on local files, and that every count of models/files/exports/loads
 equals the generated claim exactly, window included — so an export count of
@@ -648,6 +857,8 @@ behind the same analytics consent check as every other `gtagEvent`, except
 | Subscribed | `subscription_started` | `tier: 'pro'`, `source: 'server'`, `cid_source` (`checkout` \| `fallback`), `open_cid` (checkout only), `interval`, `plan` (when the price says) | **Server:** `stripe-webhook`, through the GA4 Measurement Protocol, on the FREE→PRO Auth0 write (§"Server-side subscription events") |
 | (lapsed) | `subscription_ended` | same | same, on the PRO→FREE write |
 | (seen in app) | `subscription_started_client` / `subscription_ended_client` | `open_cid` | `BaseRoutes#processAccessToken` on `shareProPendingReauth` / `freePendingReauth` (below); the browser *seeing* the transition, not the funnel step |
+| (anonymous limit stage) | `anon_limit_stage` | `stage`, `feature`, `gated_by` | **Server:** `meter`, once per metering token per stage, under one fixed client id (§"Anonymous ledger: retention and purpose") |
+| (signed in from an anonymous limit) | `anon_limit_signin` | `from_stage`, `feature` | **Server:** `meter`, at the link at sign-in |
 | Engaged | `engaged_use` | `window_days` (7), `opens_in_window`, `threshold` (3), `open_cid` | `src/privacy/engagementTracking.js`, on the 3rd real open in a rolling 7 days; at most once per browser per 30 days (below) |
 | Returned | `return_visit` | `days_since_last_open` (1-14), `open_cid` | same, on an open 1-14 calendar days after the previous one; once per return day |
 
@@ -1323,10 +1534,21 @@ new events too.
 | Client hook + UI + flag | `src/hooks/useQuota.js`, `QuotaBadge.jsx`, `QuotaLimitDialog.jsx`, `src/FeatureFlags.js` | [#1552](https://github.com/bldrs-ai/Share/pull/1552) (`quota/3-client-hook-ui`) |
 | Load-site wiring + docs page | Open dialog + containers, `src/pages/share/Quotas.jsx`, `Quota.spec.ts` | [#1553](https://github.com/bldrs-ai/Share/pull/1553) (`quota/4-wire-load-sites`) |
 
+| Metering periods + anonymous meter (2026-11-25) | `src/quota/period.js`, `limits.js`, `anonMeterKeys.js`, `anonMeter.js`, `useAnonMeterLink.js`, `Open/AnonLimitDialog.jsx`, `CadView.jsx`; `netlify/functions/meter.js`, `meter-sweep.js`, `_lib/{anonToken,meteringToken,meterLedger,blobCas}.js`; `anonMeter.spec.ts` | `claude/metering-periods` |
+
 The per-layer PRs carry the review history; layers 2–4 reached `main` via the
 [#1740](https://github.com/bldrs-ai/Share/pull/1740) re-land (see §Status).
 
 ## Out of scope / follow-ups
+
+- **Pay-as-you-go above an AI cap** (cost +50%): a billing feature; its seam
+  is `ai-chat.js#capReachedDecision` (ai-workspace.md §6).
+- **Pro's AI budget on its Stripe billing period**: the one metered Pro
+  limit (§"Tiers & limits"). Needs the period start from the subscription
+  (`current_period_start`), which stripe-webhook could stamp into
+  `app_metadata`.
+- **Showing the period's end** in the QuotaBadge and on `/share/quotas` for a
+  signed-in user (`quota.js#slotPeriodEnd` is there for it).
 
 - `WidgetApi` / `LoadModelEventHandler` programmatic loads bypass the Open
   dialog; any that end in a CadView load of a Drive or GitHub route are

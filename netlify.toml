@@ -104,6 +104,14 @@
 [functions."reconcile-subscriptions"]
   schedule = "17 4 * * *"
 
+# Daily retention sweep of the anonymous metering ledger
+# (design/new/quotas.md §"Anonymous ledger: retention and purpose"): deletes
+# a metering token's record 30 days after its period ends, keeping only an
+# ID-free monthly aggregate, and each network's day bucket the day after.
+# 03:41 UTC: off the hour, away from the reconcile run.
+[functions."meter-sweep"]
+  schedule = "41 3 * * *"
+
 # COOP same-origin-allow-popups lets Google Identity Services deliver OAuth
 # tokens via postMessage without nulling window.opener in the cross-origin
 # popup. COEP is intentionally omitted (docs.google.com/picker sends

@@ -18,7 +18,10 @@
 
 
 export const FREE_MODEL_SLOTS = 2
-export const SLOT_WINDOW_DAYS = 7
+// The per-user 30-day metering period (owner, 2026-11-25; a rolling 7 days
+// before): a period starts at the first slot taken after the last one ended,
+// and every slot in it frees up at its end.
+export const SLOT_WINDOW_DAYS = 30
 const HOURS_PER_DAY = 24
 const MS_PER_HOUR = 3_600_000
 export const SLOT_WINDOW_MS = SLOT_WINDOW_DAYS * HOURS_PER_DAY * MS_PER_HOUR
@@ -56,7 +59,7 @@ export const HELD_CAPTION =
  * @return the slot line for a model holding no slot while one is free
  */
 export function takeCaption(remaining: number): string {
-  return `Exporting takes one of your ${FREE_MODEL_SLOTS} free model slots (${remaining} left this week),` +
+  return `Exporting takes one of your ${FREE_MODEL_SLOTS} free model slots (${remaining} left this period),` +
     ' then unlimited export'
 }
 
@@ -66,7 +69,7 @@ export function takeCaption(remaining: number): string {
  * @return the slot line when every slot holds another model
  */
 export function fullCaption(formattedDate: string): string {
-  return `Your ${FREE_MODEL_SLOTS} free model slots this week hold other models · next one frees up ${formattedDate}`
+  return `Your ${FREE_MODEL_SLOTS} free model slots this period hold other models · they free up ${formattedDate}`
 }
 
 
@@ -75,9 +78,9 @@ export function fullCaption(formattedDate: string): string {
  * @return the slots-full gate's help, as `ExportSection#slotsFullHelp` writes it
  */
 export function slotsFullHelpText(formattedDate: string): string {
-  return `Your ${FREE_MODEL_SLOTS} free model slots for the last ${SLOT_WINDOW_DAYS} days hold other models.` +
+  return `Your ${FREE_MODEL_SLOTS} free model slots for this ${SLOT_WINDOW_DAYS}-day period hold other models.` +
     ' A model with a slot, or a public one: unlimited export. This one needs a free slot.' +
-    ` Your next slot frees up ${formattedDate}.`
+    ` Your slots free up ${formattedDate}, when the period ends.`
 }
 
 
@@ -109,22 +112,52 @@ export function parseSlotsHeader(value: string | null | undefined): SlotsHeader 
 
 
 /**
- * The slots held at `now`, worked out independently from the ledger: rows
- * with a key and a stamp inside the window.
+ * The slots held at `now`, worked out independently from the ledger: keyed,
+ * stamped rows in the period `now` is in, chained oldest first (the first row
+ * starts a period, the first at or after its end starts the next).
  *
  * @param rows `app_metadata.usageQuota.loads`, read from Auth0
  * @param now millis since epoch
  * @return the held rows
  */
 export function heldSlots(rows: SlotRow[], now: number): SlotRow[] {
-  return rows.filter((row) => typeof row.key === 'string' &&
-    Number.isFinite(Date.parse(row.loadedAt ?? '')) && Date.parse(row.loadedAt as string) + SLOT_WINDOW_MS > now)
+  const start = currentPeriodStart(rows, now)
+  return start === null ? [] : stampedRows(rows).filter((row) => {
+    const at = Date.parse(row.loadedAt as string)
+    return at >= start && at < start + SLOT_WINDOW_MS
+  })
 }
 
 
 /**
- * When the next slot frees up: the OLDEST held slot plus the window — what
- * the header, the slot line and the gate's help must all say.
+ * @param rows
+ * @return the keyed rows with a readable stamp
+ */
+function stampedRows(rows: SlotRow[]): SlotRow[] {
+  return rows.filter((row) => typeof row.key === 'string' && Number.isFinite(Date.parse(row.loadedAt ?? '')))
+}
+
+
+/**
+ * @param rows
+ * @param now millis since epoch
+ * @return the start of the period `now` is in, or null when none is running
+ */
+function currentPeriodStart(rows: SlotRow[], now: number): number | null {
+  let start: number | null = null
+  for (const at of stampedRows(rows).map((row) => Date.parse(row.loadedAt as string)).sort((a, b) => a - b)) {
+    if (start === null || at >= start + SLOT_WINDOW_MS) {
+      start = at
+    }
+  }
+  return start !== null && now >= start && now < start + SLOT_WINDOW_MS ? start : null
+}
+
+
+/**
+ * When the slots free up: the end of the period they are held in, the
+ * oldest held slot plus 30 days — what the header, the slot line and the
+ * gate's help must all say.
  *
  * @param rows `app_metadata.usageQuota.loads`
  * @param now millis since epoch

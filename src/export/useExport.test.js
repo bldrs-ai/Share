@@ -981,7 +981,7 @@ describe('useExport', () => {
 
       expect(useStore.getState().snackMessage.text).toBe(noFreeSlotMessage(full))
       expect(useStore.getState().snackMessage.text)
-        .toMatch(/^Your 2 free model slots for this week are taken by other models\. The next one frees up /)
+        .toMatch(/^Your 2 free model slots for this period are taken by other models\. They free up .*, when the period ends\.$/)
       expect(useStore.getState().modelSlots).toEqual({sub: 'github|1234567', ...full, publicKeys: []})
       expect(gtagEventWithCid).toHaveBeenCalledWith('export_failed', {format: 'glb', reason: 'no_slot'})
       // The tier was right; there is no stale badge to refresh.

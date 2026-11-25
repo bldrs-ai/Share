@@ -569,14 +569,27 @@ expect the Pro-model rows to fall, by up to the measured 90% on that share.
 The allowlist rows are already cheap, so caching matters least there.
 Eval #1929 ran uncached, so #1932 should measure the cached figure.
 
-**Tiers, with strawman numbers.** These are **placeholders for Pablo to
-set**. The windows mirror quotas.md: 30-day rolling for signed-in tiers.
+**Tiers: nested caps (owner, 2026-11-25; PROVISIONAL).** Every tier is
+held to three caps at once, all enforced: a **day**, **7 days**, and the
+user's **30-day metering period** (quotas.md §"Metering periods"). Each is
+multiplied out from the tier's **daily rate**, the one setting per tier
+(`AI_BUDGET_<TIER>_DAILY_USD`), and each window can be overridden on its own
+(`AI_BUDGET_<TIER>_7D_USD`, `_30D_USD`), all in `src/quota/aiCredits.js`. The
+day and 7-day caps are rolling UTC-day sub-windows inside the period. An
+anonymous identity's period is its **metering token's**, the one token every
+metered anonymous feature shares (quotas.md §"The metering token"); a
+signed-in identity's starts at its first booked spend after the last one
+ended (`_lib/aiLedger.js#applyPeriod`). Replaced: anonymous $0.02 / 24 h,
+free $0.50 and Pro $5.00 per 30 rolling days (their env vars
+`AI_BUDGET_ANONYMOUS_USD`, `AI_BUDGET_FREE_USD`, `AI_BUDGET_PRO_USD` are
+retired). The owner is still deciding the free numbers, which sit just above
+anonymous; every number is a setting.
 
-| Tier | Models | Budget (placeholder) | ≈ turns | Window | Identity |
-|---|---|---|---|---|---|
-| Anonymous | allowlist (default), or free models | $0.02 | 35–65 | 24 h per anon id; also $0.10 / 24 h per IP hash | HMAC anon token (D5) |
-| Free (signed in) | allowlist (default), or free models | $0.50 | 800–1,700 | 30-day rolling | Auth0 `sub` |
-| Pro (`sharePro`) | allowlist + priced picker, or free models | $5.00 | ~135–270 Sonnet 5.5, ~70–135 Opus 5.5, ~25–55 Fable 5.1, ~10,000 on allowlist | 30-day rolling | Auth0 `sub` |
+| Tier | Models | Day / 7 days / period (provisional) | Window | Identity |
+|---|---|---|---|---|
+| Anonymous | allowlist (default), or free models | $0.01 / $0.07 / $0.30; also $0.10 / 24 h per IP hash | the metering token's period | metering token (D5) |
+| Free (signed in) | allowlist (default), or free models | $0.02 / $0.14 / $0.60 (the anonymous rate + $0.01 a day) | the account's period | Auth0 `sub` |
+| Pro (`sharePro`) | allowlist + priced picker, or free models | $1.00 / $7.00 / $30.00 | the account's period (its Stripe billing period: a follow-up) | Auth0 `sub` |
 | Free models (any tier, opt-in) | `openrouter/free` or curated `:free` | $0 (no credits) | ≈300 a day (≈1,000 requests) **in total**, shared by every user | UTC day (OpenRouter's) | caller's tier identity |
 | BYOK | anything the user's key allows | none from Bldrs | — | — | none needed |
 | Global breaker | — | *B* per day for all anonymous paid-model traffic (3–7× expected spend, never above the daily ad budget; method below, values in the private bizdev doc); past it, anonymous traffic overflows to free models | — | UTC day | relay-wide |
@@ -613,10 +626,29 @@ What follows from that:
   user who has worked with the assistant on their own model is also a
   stronger conversion signal than a visit. Re-check it with the real *V*
   and *A* in the bizdev doc.
-- **Per-user budgets cover a trial with headroom.** The anonymous $0.02 is
-  35–65 cheap turns, against an assumed trial of about 10. A signed-in
-  free user's $0.50 a month is ~800–1,700 turns. Ten fully active free
-  users would cost ~$5 a month. None of this depends on traffic.
+- **Per-user budgets cover a trial with headroom.** The anonymous $0.01 a
+  day is 17–33 cheap turns, against an assumed trial of about 10, and its
+  period cap ($0.30) bounds a returning visitor. A signed-in free user's
+  $0.60 a period is ~1,000–2,000 turns. None of this depends on traffic.
+- **How the nested caps bind with the multiplied-out defaults.** With the
+  7-day cap 7× and the period cap 30× the daily one, a user held to the
+  daily cap can't reach either except through the soft rule's overshoot
+  (a hold past the limit, at most one per day). So by default the day cap
+  is the one that binds, and the 7-day and period caps bind only when an
+  override sets them below the multiple (`AI_BUDGET_<TIER>_7D_USD`,
+  `_30D_USD`), which is what they are for (review on Share#2368).
+- **Cap reached: the one decision point.** `ai-chat.js#capReachedDecision`
+  is where an identity whose day, 7-day or period cap refuses a turn is
+  decided. Today it always refuses (a 402 with `resumeAt`, the last of the
+  refusing windows to admit again). **Pay-as-you-go above the cap**, at cost
+  +50%, is a later billing feature and out of scope; it hooks in there, by
+  answering a top-up instead of a refusal. The breakers and the IP bucket
+  never reach it.
+- **Carried at sign-in.** A visitor who signs in brings the token's AI spend
+  with them: the link at sign-in (quotas.md §"Link at sign-in") adds the
+  token's days into the account's record, once per token
+  (`aiLedger.js#carryAnonymousSpend`), so it counts toward the free
+  account's day, 7-day and period caps.
 - **The breaker *B* is a multiple of expected spend, capped by the ad budget.**
   - Set the anonymous breaker *B* at about 3–7× *E*, and never above *A*,
     so the worst anonymous day, viral or abusive, costs no more than one
@@ -888,13 +920,18 @@ Per-message metering would multiply that write rate by roughly 100.
   - `begin_checkout {from: 'assist'}`
   - No content, model ids from BYOK, or keys ever go to GA.
 
-**D5: Anonymous identity.** Today an anonymous user has no server identity:
-`useQuota` is OPFS-only for them. The relay adds a minimal one:
+**D5: Anonymous identity.** The relay keys an anonymous user's budget to
+the **shared anonymous metering token** (since 2026-11-25; quotas.md §"The
+metering token"):
 
-- **Token.** On the first hosted call without a token, the relay issues
-  `anonId.issuedAt.HMAC(secret, anonId|issuedAt)`. The client keeps it in
-  localStorage and sends it as a Bearer. The relay verifies it statelessly
-  and keys the ledger by `anonId`.
+- **Token.** `bm1.anonId.issuedAt.HMAC(...)`, issued by the relay or by the
+  remote-load meter, whichever a visitor uses first, and kept in
+  localStorage under `bldrs.meter.token` (`src/quota/meterToken.js`). It
+  lives exactly one 30-day period and is never renewed: an expired one is
+  answered with a new, unrelated token. The relay verifies it statelessly
+  and keys the ledger by `anonId`. The relay's own `ba1` token
+  (`_lib/aiToken.js`, 24 h) is retired: a page still sending one gets a
+  metering token back, and its old day's budget is not carried.
 - **IP-hash limit.** `HMAC(dailySalt, clientIp)` gets its own ledger bucket
   (placeholder $0.10 / 24 h). This catches token churn: clearing storage
   mints a new anonId, but not a new IP. No raw IP is stored. The salt

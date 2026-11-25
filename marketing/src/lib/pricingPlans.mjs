@@ -1,4 +1,4 @@
-import {FREE_PRIVATE_MODEL_LIMIT, ROLLING_WINDOW_DAYS} from '../../../src/quota/limits.js'
+import {FREE_PRIVATE_MODEL_LIMIT, SLOT_PERIOD_DAYS} from '../../../src/quota/limits.js'
 import {SIGNED_OUT_FEATURES} from '../../../src/quota/tierCopy.js'
 
 
@@ -6,8 +6,9 @@ import {SIGNED_OUT_FEATURES} from '../../../src/quota/tierCopy.js'
  * The pricing page's plans: THE ONLY place its quota copy lives.
  *
  * The allowance is built from the constants the viewer enforces, not typed
- * as literals: the free private-model limit and its rolling window from
- * src/quota/limits.js. That one allowance governs opening AND exporting
+ * as literals: the free private-model limit and its metering period from
+ * src/quota/limits.js (a per-user 30 days since 2026-11-25, which is why the
+ * page says "every 30 days" and not "a month": it is not a calendar month). That one allowance governs opening AND exporting
  * since 2026-10-27: `record-load` meters private opens against it, and
  * `pro-module` lets a free user export any model holding one of those slots
  * as often as they like (src/export/exportSlots.js), so there is no
@@ -25,13 +26,17 @@ import {SIGNED_OUT_FEATURES} from '../../../src/quota/tierCopy.js'
  */
 
 
-/** How the page words a rolling window of N days. */
-const WINDOW_WORDS = {7: 'week', 30: 'month'}
+/**
+ * How the page words a period of N days. 7 was the rolling week until
+ * 2026-11-25; 30 is the per-user metering period, worded "every 30 days"
+ * because it is the user's own 30 days, not a calendar month.
+ */
+const WINDOW_WORDS = {7: 'a week', 30: 'every 30 days'}
 
 
 /**
  * @param {number} days
- * @return {string} 'week' for 7, 'month' for 30
+ * @return {string} 'a week' for 7, 'every 30 days' for 30
  */
 export function windowWord(days) {
   const word = WINDOW_WORDS[days]
@@ -104,7 +109,7 @@ export function buildPlans({freePrivateModels, privateModelWindowDays}) {
             'Connect Google Drive and GitHub',
             // Owner's wording, 2026-10-28: one allowance, and what the user
             // may do with a model inside it, in the "unlimited X" style.
-            `${freePrivateModels} private models a ${windowWord(privateModelWindowDays)}` +
+            `${freePrivateModels} private models ${windowWord(privateModelWindowDays)}` +
               ' — unlimited open, share and export',
           ],
         },
@@ -144,5 +149,5 @@ export function buildPlans({freePrivateModels, privateModelWindowDays}) {
 /** The plans the page shows: the enforced allowances. */
 export const PLANS = buildPlans({
   freePrivateModels: FREE_PRIVATE_MODEL_LIMIT,
-  privateModelWindowDays: ROLLING_WINDOW_DAYS,
+  privateModelWindowDays: SLOT_PERIOD_DAYS,
 })

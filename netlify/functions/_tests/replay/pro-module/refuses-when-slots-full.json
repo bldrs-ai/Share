@@ -1,5 +1,5 @@
 {
-  "description": "A free user asking to export a third model while both slots hold other models is refused, per the Management API rather than their token, whatever the client did to reach the endpoint; told which models hold the slots and when the next frees up. Nothing is written and the module is not read.",
+  "description": "A free user asking to export a third model while both slots hold other models is refused, per the Management API rather than their token, whatever the client did to reach the endpoint; told which models hold the slots and when they free up (the end of the 30-day period the first one started). Nothing is written and the module is not read.",
   "env": {
     "$fixture": "env/auth0.json"
   },
@@ -59,7 +59,7 @@
         "limit": 2,
         "used": 2,
         "remaining": 0,
-        "nextFreeAt": "2026-10-31T10:00:00.000Z",
+        "nextFreeAt": "2026-11-23T10:00:00.000Z",
         "keys": [
           "/share/v/gh/acme/private/main/tower.ifc",
           "/share/v/g/1AbCdEfGhIjKlMnOpQrStUvWxYz"

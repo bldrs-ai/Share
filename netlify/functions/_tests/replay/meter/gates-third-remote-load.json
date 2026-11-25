@@ -1,0 +1,135 @@
+{
+  "description": "A third remote model in the period, from a token that has had its two: refused 403 with the sign-in gate, the token's stage moved to gated under If-Match, and the network not counted. GA isn't configured here, so the stage's one event is skipped with a log line.",
+  "env": {
+    "$fixture": "env/meter.json"
+  },
+  "now": "2026-11-25T12:00:00.000Z",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/meter",
+    "headers": {
+      "content-type": "application/json",
+      "origin": "https://bldrs.ai",
+      "x-bldrs-meter-token": "bm1.replayMeterTokenId0001.1795176000.jwPxUbVjHdDrDJ3i-TI4mUW-cZr3aSbWDCgQBUNpGjI",
+      "x-nf-client-connection-ip": "203.0.113.9"
+    },
+    "body": {
+      "action": "remote_load",
+      "key": "/share/v/g/drive-file-c"
+    }
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:metering/meter/anon/2026-11-20/replayMeterTokenId0001",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"a2\""
+        },
+        "json": {
+          "v": 1,
+          "period": {
+            "start": 1795176000000,
+            "end": 1797768000000
+          },
+          "features": {
+            "remote_load": {
+              "count": 2,
+              "models": [
+                "308c1937009ff664ec348c2a",
+                "99abbade02c1bbe891f2252f"
+              ],
+              "stage": "last_free",
+              "gatedBy": null
+            }
+          },
+          "reported": [
+            "last_free"
+          ],
+          "mergedAt": null
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:metering/meter/anon/2026-11-20/replayMeterTokenId0001",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"a2\""
+        },
+        "json": {
+          "v": 1,
+          "period": {
+            "start": 1795176000000,
+            "end": 1797768000000
+          },
+          "features": {
+            "remote_load": {
+              "count": 2,
+              "models": [
+                "308c1937009ff664ec348c2a",
+                "99abbade02c1bbe891f2252f"
+              ],
+              "stage": "last_free",
+              "gatedBy": null
+            }
+          },
+          "reported": [
+            "last_free"
+          ],
+          "mergedAt": null
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:metering/meter/anon/2026-11-20/replayMeterTokenId0001",
+        "headers": {
+          "if-match": "\"a2\""
+        },
+        "bodyJson": {
+          "features": {
+            "remote_load": {
+              "count": 2,
+              "stage": "gated",
+              "gatedBy": "token"
+            }
+          },
+          "reported": [
+            "last_free",
+            "gated"
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"a3\""
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 403,
+    "json": {
+      "allowed": false,
+      "gate": "sign_in",
+      "gatedBy": "token",
+      "used": 2,
+      "limit": 2
+    }
+  }
+}

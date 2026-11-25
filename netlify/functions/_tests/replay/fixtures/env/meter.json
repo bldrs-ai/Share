@@ -1,0 +1,5 @@
+{
+  "NODE_ENV": "test",
+  "METERING_TOKEN_SECRET": "replay-metering-secret",
+  "NETLIFY_BLOBS_CONTEXT": "eyJzaXRlSUQiOiJyZXBsYXktc2l0ZSIsInRva2VuIjoicmVwbGF5LWJsb2JzLXRva2VuIiwiZWRnZVVSTCI6Imh0dHBzOi8vYmxvYnMucmVwbGF5LnRlc3QiLCJ1bmNhY2hlZEVkZ2VVUkwiOiJodHRwczovL2Jsb2JzLXVuY2FjaGVkLnJlcGxheS50ZXN0In0="
+}

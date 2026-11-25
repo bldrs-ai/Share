@@ -10,7 +10,8 @@ import {
   modelSlots,
   slotsHeaderValue,
 } from './exportSlots'
-import {FREE_PRIVATE_MODEL_LIMIT, ROLLING_WINDOW_MS} from '../quota/limits'
+import {FREE_PRIVATE_MODEL_LIMIT} from '../quota/limits'
+import {PERIOD_MS} from '../quota/period'
 
 
 /* eslint-disable no-magic-numbers */
@@ -36,19 +37,20 @@ describe('export/exportSlots', () => {
     expect(modelSlots([], NOW)).toEqual({limit: 2, used: 0, remaining: 2, nextFreeAt: null, keys: []})
   })
 
-  it('counts the slots inside the window, and says when the oldest frees up', () => {
+  it('counts the slots in the current period, and says when the period ends and they all free up', () => {
     expect(modelSlots([slot(A, daysAgo(1)), slot(B, daysAgo(3))], NOW)).toEqual({
       limit: 2,
       used: 2,
       remaining: 0,
-      nextFreeAt: new Date(NOW + (4 * DAY_MS)).toISOString(),
+      // The period began at B, 3 days ago: 27 days to go, for both.
+      nextFreeAt: new Date(NOW + (27 * DAY_MS)).toISOString(),
       keys: [A, B],
     })
   })
 
-  it('frees a slot exactly one window after it was taken, the edge record-load uses', () => {
-    const edge = new Date(NOW - ROLLING_WINDOW_MS).toISOString()
-    const justInside = new Date(NOW - ROLLING_WINDOW_MS + 1).toISOString()
+  it('frees the slots exactly one period after the first was taken, the edge record-load uses', () => {
+    const edge = new Date(NOW - PERIOD_MS).toISOString()
+    const justInside = new Date(NOW - PERIOD_MS + 1).toISOString()
     expect(modelSlots([slot(A, edge)], NOW).used).toBe(0)
     expect(modelSlots([slot(A, justInside)], NOW).used).toBe(1)
   })
@@ -73,7 +75,7 @@ describe('export/exportSlots', () => {
         {key: LOCAL, loadedAt: new Date(NOW).toISOString(), via: 'export'},
       ])
       expect(decision.slots).toEqual({
-        limit: 2, used: 2, remaining: 0, nextFreeAt: new Date(NOW + (6 * DAY_MS)).toISOString(), keys: [A, LOCAL],
+        limit: 2, used: 2, remaining: 0, nextFreeAt: new Date(NOW + (29 * DAY_MS)).toISOString(), keys: [A, LOCAL],
       })
     })
 
@@ -85,7 +87,7 @@ describe('export/exportSlots', () => {
     })
 
     it('drops rolled-off rows from what it writes, as record-load does', () => {
-      const decision = exportSlotDecision([slot(A, daysAgo(8)), slot(B, daysAgo(9))], LOCAL, NOW)
+      const decision = exportSlotDecision([slot(A, daysAgo(31)), slot(B, daysAgo(32))], LOCAL, NOW)
       expect(decision.verdict).toBe('take')
       expect(decision.loads.map((row) => row.key)).toEqual([LOCAL])
     })
@@ -119,7 +121,7 @@ describe('export/exportSlots', () => {
   it('puts counts in the header, never keys, so the value stays ASCII', () => {
     const value = slotsHeaderValue(modelSlots([slot('/share/v/p/Gebäude.ifc', daysAgo(1))], NOW), true)
     expect(JSON.parse(value)).toEqual({
-      limit: 2, used: 1, remaining: 1, nextFreeAt: new Date(NOW + (6 * DAY_MS)).toISOString(), taken: true, public: false,
+      limit: 2, used: 1, remaining: 1, nextFreeAt: new Date(NOW + (29 * DAY_MS)).toISOString(), taken: true, public: false,
     })
     expect(JSON.parse(slotsHeaderValue(modelSlots([], NOW), false, true))).toMatchObject({taken: false, public: true})
     expect(value).not.toMatch(/Gebäude/)

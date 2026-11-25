@@ -186,7 +186,7 @@ describe('pro-module function', () => {
     expect(res.headers['X-Bldrs-Model-Slots']).toBeUndefined()
   })
 
-  describe('a free user (exports governed by 2 model slots per rolling 7 days)', () => {
+  describe('a free user (exports governed by 2 model slots per 30-day period)', () => {
     it('exports a model holding a slot again and again, writing nothing — even with every slot taken', async () => {
       mockAuth0({subscriptionStatus: 'free', usageQuota: {loads: [slotDaysAgo(MODEL, 1), slotDaysAgo(OTHER, 2)]}})
 
@@ -320,15 +320,15 @@ describe('pro-module function', () => {
       const body = JSON.parse(res.body)
       expect(body.error).toBe('no_free_model_slot')
       expect(body.modelSlots).toMatchObject({limit: 2, used: 2, remaining: 0, keys: [MODEL, OTHER]})
-      // The 3-day-old slot is the first to leave the 7-day window.
-      const expectedNext = Date.parse(slotDaysAgo(OTHER, 3).loadedAt) + (7 * DAY_MS)
+      // The 3-day-old slot started the period; both come back at its end.
+      const expectedNext = Date.parse(slotDaysAgo(OTHER, 3).loadedAt) + (30 * DAY_MS)
       expect(Math.abs(Date.parse(body.modelSlots.nextFreeAt) - expectedNext)).toBeLessThan(1000)
       expect(fs.readFile).not.toHaveBeenCalled()
       expect(axios.patch).not.toHaveBeenCalled()
     })
 
-    it('gets a slot back once one leaves the rolling window', async () => {
-      mockAuth0({usageQuota: {loads: [slotDaysAgo(MODEL, 1), slotDaysAgo(OTHER, 8)]}})
+    it('gets the slots back once the period they were taken in has ended', async () => {
+      mockAuth0({usageQuota: {loads: [slotDaysAgo(MODEL, 1), slotDaysAgo(OTHER, 31)]}})
       axios.patch.mockResolvedValue({data: {}})
 
       const res = await handler(getEvent({}, LOCAL))

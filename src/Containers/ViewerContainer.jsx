@@ -6,6 +6,7 @@ import {PlacemarkHandlers as placemarkHandlers} from '../Components/Markers/Mark
 import useStore from '../store/useStore'
 import useQuota from '../hooks/useQuota'
 import QuotaLimitDialog from '../Components/Open/QuotaLimitDialog'
+import AnonLimitDialog, {AnonLastFreeNotice} from '../Components/Open/AnonLimitDialog'
 import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from '../app/dragAndDrop'
 
 
@@ -70,6 +71,8 @@ export default function ViewerContainer() {
         isOpen={isDropQuotaDialogVisible}
         onClose={() => setIsDropQuotaDialogVisible(false)}
       />
+      <AnonLimitDialog/>
+      <AnonLastFreeNotice/>
     </>
   )
 }

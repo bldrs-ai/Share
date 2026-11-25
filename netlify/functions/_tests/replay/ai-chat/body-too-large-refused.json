@@ -9,7 +9,7 @@
     "method": "POST",
     "path": "/.netlify/functions/ai-chat",
     "headers": {
-      "authorization": "Bearer ba1.replayAnonymousId00001.1794999600.wBYdBmzPjjSIOmCGgCjkBbGlqWCrl22WTULDtGfPQzA",
+      "authorization": "Bearer bm1.replayAnonymousId00001.1794999600.-B3_dsXWuBNY7RHQ_FSIPQOa2F6ESazV_aJFX4v8keA",
       "content-type": "application/json",
       "x-nf-client-connection-ip": "203.0.113.9",
       "origin": "https://bldrs.ai"

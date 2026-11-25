@@ -1,5 +1,5 @@
 {
-  "description": "A free user's first export of a local file (free to view, holding no slot) takes one of the two model slots: the key is appended to app_metadata.usageQuota.loads — record-load's ledger, rolled-off rows dropped — BEFORE the module goes out, and the slots after the delivery ride in X-Bldrs-Model-Slots. The retired free-export rows are neither read nor written. Fields beside `loads` in usageQuota are written back, since Auth0 replaces a top-level key whole.",
+  "description": "A free user's first export of a local file (free to view, holding no slot) takes one of the two model slots: the key is appended to app_metadata.usageQuota.loads — record-load's ledger, rows from an ended 30-day period dropped — BEFORE the module goes out, and the slots after the delivery ride in X-Bldrs-Model-Slots. The retired free-export rows are neither read nor written. Fields beside `loads` in usageQuota are written back, since Auth0 replaces a top-level key whole.",
   "env": {
     "$fixture": "env/auth0.json",
     "$merge": {
@@ -66,7 +66,7 @@
                   },
                   {
                     "key": "/share/v/gh/acme/private/main/tower.ifc",
-                    "loadedAt": "2026-10-18T10:00:00.000Z"
+                    "loadedAt": "2026-09-20T10:00:00.000Z"
                   }
                 ],
                 "note": "kept"
@@ -113,7 +113,7 @@
     "headers": {
       "content-type": "text/javascript; charset=utf-8",
       "cache-control": "private, no-store",
-      "x-bldrs-model-slots": "{\"limit\":2,\"used\":2,\"remaining\":0,\"nextFreeAt\":\"2026-11-01T10:00:00.000Z\",\"taken\":true,\"public\":false}"
+      "x-bldrs-model-slots": "{\"limit\":2,\"used\":2,\"remaining\":0,\"nextFreeAt\":\"2026-11-24T10:00:00.000Z\",\"taken\":true,\"public\":false}"
     }
   }
 }

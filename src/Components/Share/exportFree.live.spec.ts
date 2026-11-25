@@ -190,7 +190,7 @@ test.describe('Live smoke: free', () => {
     }
     const startHistory = await history(admin, userId)
     // Both slots hold OTHER models from the start. The dates are ours, so the
-    // "next one" date is known three ways: these stamps + 7 days, what the
+    // "they free up" date is known three ways: these stamps + 30 days, what the
     // server reports, and the page's text.
     const older = {key: '/share/v/local-only/live-smoke-a.ifc', loadedAt: new Date(Date.now() - (2 * MS_PER_HOUR)).toISOString()}
     const newer = {key: '/share/v/local-only/live-smoke-b.ifc', loadedAt: new Date(Date.now() - MS_PER_HOUR).toISOString()}

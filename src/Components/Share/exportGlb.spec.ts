@@ -1864,7 +1864,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await auth0Login(page)
     const exportButton = page.getByTestId('export-glb-button')
     const slotLine = page.getByTestId('export-model-slots')
-    // Two private models opened earlier this week hold both slots.
+    // Two private models opened earlier this period hold both slots.
     const now = Date.now()
     const fullSlots = [
       {key: '/share/v/gh/acme/private-a/main/a.ifc', loadedAt: new Date(now - (2 * DAY_MS)).toISOString()},
@@ -1903,7 +1903,7 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     await openExportTab(page)
     await dismissLoadSnackbar(page)
     await expect(slotLine).toHaveText(
-      'Exporting takes one of your 2 free model slots (2 left this week), then unlimited export')
+      'Exporting takes one of your 2 free model slots (2 left this period), then unlimited export')
     await expect(slotLine).toHaveAttribute('data-held', 'false')
     await expect(page.getByTestId('export-pro-chip')).toBeVisible()
     await expect(page.getByTestId('gated-export-pro')).toHaveCount(0)
@@ -1935,20 +1935,20 @@ describeMobileAndDesktop('Share 140: Export GLB', () => {
     // delivery.
     expect(deliveries()).toHaveLength(1 + EXPORTS)
 
-    // 3. A week on, say: this file's slot has rolled off and two other private
+    // 3. A period on, say: this file's slot has freed up and two other private
     // models hold both slots. Reopening the tab asks the server afresh.
     await setSlotLedger(page, fullSlots)
     await closeExportDialog(page)
     await openExportTab(page)
     await expect(slotLine).toHaveAttribute('data-remaining', '0')
     await expect(slotLine).toHaveAttribute('data-held', 'false')
-    await expect(slotLine).toContainText('Your 2 free model slots this week hold other models · next one frees up ')
+    await expect(slotLine).toContainText('Your 2 free model slots this period hold other models · they free up ')
 
     // The export takes the Pro upsell gate, saying when a slot frees up.
     await clickGate(page, 'gated-export-pro')
     const help = page.getByTestId('gated-help')
-    await expect(help).toContainText('Your 2 free model slots for the last 7 days hold other models.')
-    await expect(help).toContainText('Your next slot frees up ')
+    await expect(help).toContainText('Your 2 free model slots for this 30-day period hold other models.')
+    await expect(help).toContainText('Your slots free up ')
     await expect(help).toContainText('Pro: unlimited export.')
     // The slots-full row (caption + gate + chip) must still fit at 390px.
     await expectNoHorizontalScroll(page)

@@ -21,7 +21,9 @@
  *      is sent, and the client sends only the files it found private — never
  *      a link-shared one (src/quota/limits.js#isCountedByRouteKind,
  *      design/new/quotas.md §"Drive visibility": a known gap).
- *   5. Prune loads outside the rolling window (ROLLING_WINDOW_DAYS, 7).
+ *   5. Prune loads from ended metering periods (src/quota/period.js: a
+ *      per-user 30-day period, chained from the rows' own loadedAt, so
+ *      nothing new is stored; design/new/quotas.md §"Metering periods").
  *      Local files (`/v/local-only/`, legacy `/v/new/`) are not quotable:
  *      they're free and unmetered (Share#1966) unless local metering is
  *      switched on (isLocalFileMeteringEnabled below).
@@ -42,7 +44,7 @@ import {flags} from '../../src/FeatureFlags.js'
 import {
   FREE_PRIVATE_MODEL_LIMIT,
   TIERS,
-  loadsInsideRollingWindow,
+  loadsInCurrentPeriod,
   usageQuotaWithLoads,
 } from '../../src/quota/limits.js'
 import {isProSubscriptionStatus} from '../../src/quota/proStatus.js'
@@ -63,7 +65,7 @@ const HTTP_FORBIDDEN = 403
 const HTTP_METHOD_NOT_ALLOWED = 405
 const HTTP_BAD_GATEWAY = 502
 
-// Tiers, the free limit and the rolling window come from src/quota/limits.js,
+// Tiers, the free limit and the metering period come from src/quota/limits.js,
 // the definition the client, the MSW mock and the pricing-page guard share.
 const TIER_FREE = TIERS.FREE
 const TIER_PAID = TIERS.PAID
@@ -268,9 +270,10 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   const appMetadata = userRecord.app_metadata || {}
   const tier = getTier(appMetadata)
   const now = Date.now()
-  // The client's pruning too (limits.js#loadsInsideRollingWindow), so the
-  // server, the OPFS mirror and the MSW mock share one edge.
-  const existingLoads = loadsInsideRollingWindow((appMetadata.usageQuota && appMetadata.usageQuota.loads) || [], now)
+  // The client's pruning too (limits.js#loadsInCurrentPeriod), so the
+  // server, the OPFS mirror and the MSW mock share one period. With no
+  // period running this is empty, and the row written below starts one.
+  const existingLoads = loadsInCurrentPeriod((appMetadata.usageQuota && appMetadata.usageQuota.loads) || [], now)
 
   // Paid: never gated, never recorded (no point burning Mgmt API writes).
   if (tier === TIER_PAID) {
