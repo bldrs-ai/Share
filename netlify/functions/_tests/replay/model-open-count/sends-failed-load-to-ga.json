@@ -1,0 +1,54 @@
+{
+  "description": "A failed load's report (load_outcome failed, with load_failed's reason and phase, and a roster sample's id) goes to GA the same way.",
+  "env": {
+    "GA4_MEASUREMENT_ID": "G-REPLAY0001",
+    "GA4_API_SECRET": "mp-secret-replay"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/model-open-count",
+    "headers": {
+      "origin": "https://bldrs.ai",
+      "content-type": "text/plain;charset=UTF-8"
+    },
+    "body": "{\"content_type\":\"step\",\"size_bucket\":\"1-10mb\",\"source\":\"sample\",\"sample_id\":\"gear\",\"open_kind\":\"in_app\",\"form_factor\":\"mobile\",\"load_outcome\":\"failed\",\"reason_class\":\"parse\",\"last_phase\":\"dataparse\",\"triangle_bucket\":\"unknown\",\"error_bucket\":\"unknown\",\"warning_bucket\":\"unknown\",\"session_id\":\"77\"}"
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://www.google-analytics.com/mp/collect?measurement_id=G-REPLAY0001&api_secret=mp-secret-replay",
+        "body": {
+          "client_id": "3587090903.711617492",
+          "events": [
+            {
+              "name": "model_open_count",
+              "params": {
+                "content_type": "step",
+                "size_bucket": "1-10mb",
+                "source": "sample",
+                "sample_id": "gear",
+                "open_kind": "in_app",
+                "form_factor": "mobile",
+                "load_outcome": "failed",
+                "reason_class": "parse",
+                "last_phase": "dataparse",
+                "triangle_bucket": "unknown",
+                "error_bucket": "unknown",
+                "warning_bucket": "unknown",
+                "session_id": "77"
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 204,
+        "text": ""
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 204
+  }
+}

@@ -53,7 +53,7 @@ const PARSE_FAILURE_PATTERN =
 
 /** `load_failed` `last_phase` when no progress event was seen. */
 export const PHASE_NONE = 'none'
-const PHASE_OTHER = 'other'
+export const PHASE_OTHER = 'other'
 
 /**
  * The phase vocabulary GA may carry, as slugs. Engine phases are conway's
@@ -61,13 +61,14 @@ const PHASE_OTHER = 'other'
  * legacy strings Loader#load passes to onProgress, slugged by
  * normalizeLoadPhase. Anything else becomes `other`.
  */
-const KNOWN_PHASES = new Set([
+export const KNOWN_LOAD_PHASES = Object.freeze([
   'download', 'headerparse', 'dataparse', 'geometry', 'scenebuild', 'serialize', 'convert',
   'applying-model-fixups', 'buffering-model-bytes', 'converting-model-format',
   'decoding-model-data', 'downloading-model-data', 'hashing-model',
   'parsing-model-data', 'preparing-file-download', 'processing-model-data',
   'reading-model-data',
 ])
+const KNOWN_PHASES = new Set(KNOWN_LOAD_PHASES)
 
 // Loader#load reports download progress as the bare string `12 MB`, which
 // reaches the reporter as a phase of its own.
