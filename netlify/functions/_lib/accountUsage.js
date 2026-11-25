@@ -431,9 +431,37 @@ export function liveUsagePeriods(nowMs) {
 
 
 /**
+ * Every period the store holds records under, from a directory listing of
+ * each type (`load/`, `limit/`, `first/` with `directories: true`; the
+ * service answers each period as `<type>/<YYYY-MM>`, a trailing slash
+ * tolerated).
+ *
+ * @param {object} store
+ * @param {Array<string>} [types]
+ * @return {Promise<Array<string>>} `YYYY-MM`, oldest first
+ */
+export async function usagePeriodsInStore(store, types = ['load', 'limit', 'first']) {
+  const periods = new Set()
+  await Promise.all(types.map(async (type) => {
+    const {directories} = await store.list({prefix: `${type}/`, directories: true})
+    for (const dir of directories || []) {
+      const match = /^(?:load|limit|first)\/(\d{4}-\d{2})\/?$/.exec(dir)
+      if (match) {
+        periods.add(match[1])
+      }
+    }
+  }))
+  return [...periods].sort()
+}
+
+
+/**
  * One account's keys of some types, listed per period and account prefix,
  * never the whole store: an opt-out or a lookup costs as many small listings
- * as there are periods, not a listing of every account.
+ * as there are periods, not a listing of every account. The periods are the
+ * live window plus every period the store still holds, so a retention
+ * backlog (expired months not yet swept) is covered too: an opt-out or a
+ * deletion request must reach every record, not only the kept ones.
  *
  * @param {object} store
  * @param {string} account
@@ -442,8 +470,33 @@ export function liveUsagePeriods(nowMs) {
  * @return {Promise<Array<string>>}
  */
 export async function listAccountKeys(store, account, types, nowMs) {
-  const prefixes = types.flatMap((type) => liveUsagePeriods(nowMs).map((period) => `${type}/${period}/${account}/`))
+  const periods = new Set([...liveUsagePeriods(nowMs), ...await usagePeriodsInStore(store, types)])
+  const prefixes = types.flatMap((type) => [...periods].sort().map((period) => `${type}/${period}/${account}/`))
   return (await Promise.all(prefixes.map((prefix) => listKeys(store, prefix)))).flat()
+}
+
+
+/** How many blobs a reader fetches at once. */
+export const READ_CONCURRENCY = 25
+
+
+/**
+ * Read blobs as JSON, READ_CONCURRENCY at a time.
+ *
+ * @param {object} store
+ * @param {Array<string>} keys
+ * @param {object} [options]
+ * @param {boolean} [options.keepMissing] keep a missing blob as null, so the
+ *   answer lines up with `keys`; by default it is skipped
+ * @return {Promise<Array>} in key order
+ */
+export async function readAll(store, keys, {keepMissing = false} = {}) {
+  const out = []
+  for (let i = 0; i < keys.length; i += READ_CONCURRENCY) {
+    const batch = await Promise.all(keys.slice(i, i + READ_CONCURRENCY).map((key) => store.get(key, {type: 'json'})))
+    out.push(...(keepMissing ? batch : batch.filter(Boolean)))
+  }
+  return out
 }
 
 

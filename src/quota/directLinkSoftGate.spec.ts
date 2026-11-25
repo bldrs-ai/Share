@@ -107,7 +107,9 @@ describeMobileAndDesktop('Quota: direct links are a soft gate', () => {
     // The server's answer was the refusal the Open dialog would have shown.
     const response = await recordLoad
     expect(response.status()).toBe(HTTP_FORBIDDEN)
-    expect(JSON.parse(response.request().postData() ?? '{}')).toEqual({key: DIRECT_LINK})
+    // The hook says it is the soft gate, so record-load labels the refusal
+    // it records against the account as soft (design/new/account-usage.md).
+    expect(JSON.parse(response.request().postData() ?? '{}')).toEqual({key: DIRECT_LINK, gate: 'soft'})
 
     await expect.poll(() => gaEvents(page, 'quota_soft_limit_exceeded')).toHaveLength(1)
     const [softLimit] = await gaEvents(page, 'quota_soft_limit_exceeded')

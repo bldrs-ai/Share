@@ -1,5 +1,5 @@
 {
-  "description": "A run cut short after writing 2025-09's rollup: the rollup is there, so it is kept, not rebuilt from the records left, and those are deleted.",
+  "description": "A run that died after writing its checkpoint: the next run first deletes the checkpoint's pendingDelete (counted, maybe not deleted), so that record is never counted twice, then counts what is left and finishes the rollup from the checkpoint's counts.",
   "env": {
     "NODE_ENV": "test",
     "ADMIN_STATS_SECRET": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
@@ -62,6 +62,59 @@
     {
       "request": {
         "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup/2025-09"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup-partial/2025-09"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "v": 1,
+          "period": "2025-09",
+          "loads": {
+            "total": 1,
+            "byOutcome": {
+              "displayed": 1
+            },
+            "byFormat": {
+              "ifc": 1
+            },
+            "bySource": {
+              "github": 1
+            },
+            "byTier": {
+              "free": 1
+            }
+          },
+          "limits": {},
+          "accounts": [
+            "84a40528eaa5146ae8b4b4089614b29a"
+          ],
+          "pendingDelete": [
+            "load/2025-09/84a40528eaa5146ae8b4b4089614b29a/2025-09-03T10:00:00.000Z-a"
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2025-09/84a40528eaa5146ae8b4b4089614b29a/2025-09-03T10:00:00.000Z-a"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
         "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2025-09%2F"
       },
       "response": {
@@ -69,7 +122,7 @@
         "json": {
           "blobs": [
             {
-              "key": "load/2025-09/84a40528eaa5146ae8b4b4089614b29a/2025-09-03T10:00:00.000Z-a",
+              "key": "load/2025-09/84a40528eaa5146ae8b4b4089614b29a/2025-09-04T10:00:00.000Z-b",
               "etag": "\"x\""
             }
           ],
@@ -106,22 +159,76 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup/2025-09"
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2025-09/84a40528eaa5146ae8b4b4089614b29a/2025-09-04T10:00:00.000Z-b"
       },
       "response": {
         "status": 200,
         "json": {
-          "period": "2025-09",
+          "content_type": "step",
+          "load_outcome": "displayed",
+          "source": "github",
+          "tier": "free"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup-partial/2025-09",
+        "bodyJson": {
           "loads": {
-            "total": 5
-          }
+            "total": 2
+          },
+          "pendingDelete": [
+            "load/2025-09/84a40528eaa5146ae8b4b4089614b29a/2025-09-04T10:00:00.000Z-b"
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"p\""
         }
       }
     },
     {
       "request": {
         "method": "DELETE",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2025-09/84a40528eaa5146ae8b4b4089614b29a/2025-09-03T10:00:00.000Z-a"
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2025-09/84a40528eaa5146ae8b4b4089614b29a/2025-09-04T10:00:00.000Z-b"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup/2025-09",
+        "headers": {
+          "if-none-match": "*"
+        },
+        "bodyJson": {
+          "loads": {
+            "total": 2,
+            "accounts": 1,
+            "byFormat": {
+              "ifc": 1,
+              "step": 1
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"r\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup-partial/2025-09"
       },
       "response": {
         "status": 204
@@ -134,8 +241,8 @@
       "reduced": [
         {
           "period": "2025-09",
-          "rollup": "kept",
-          "deleted": 1
+          "rollup": "written",
+          "deleted": 2
         }
       ],
       "pending": 0

@@ -173,8 +173,17 @@ export default async function handler(req) {
     // the preference again after the write closes that: the opt-out writes
     // the preference before it lists, and the store is strongly consistent,
     // so either it sees this report or this sees its preference.
-    if (!await usageReportsAllowed(store, account)) {
-      await store.delete(key)
+    let stillAllowed = false
+    try {
+      stillAllowed = await usageReportsAllowed(store, account)
+    } finally {
+      // Also when the read failed: a report that couldn't be checked against
+      // an opt-out is withdrawn rather than kept.
+      if (!stillAllowed) {
+        await store.delete(key)
+      }
+    }
+    if (!stillAllowed) {
       logInfo('account-usage: load withdrawn, account opted out meanwhile')
       return new Response(null, {status: HTTP_NO_CONTENT})
     }

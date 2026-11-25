@@ -1,5 +1,5 @@
 {
-  "description": "The Profile toggle turned off: the store's mirror is written first, the account's stored load reports are deleted (listed per period under its own prefix, never the whole store), then app_metadata.usageReports=false is written to Auth0: 200 {usage_reports: false}.",
+  "description": "The Profile toggle turned off: the store's mirror is written first, the account's stored load reports are deleted (listed per period under its own prefix, never the whole store, including a period the retention sweep hasn't reached yet), then app_metadata.usageReports=false is written to Auth0: 200 {usage_reports: false}.",
   "env": {
     "$fixture": "env/account-usage.json"
   },
@@ -35,6 +35,40 @@
         "status": 200,
         "headers": {
           "etag": "\"p1\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F&directories=true"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": [
+            "load/2024-01",
+            "load/2026-11"
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2024-01%2F84a40528eaa5146ae8b4b4089614b29a%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [
+            {
+              "key": "load/2024-01/84a40528eaa5146ae8b4b4089614b29a/2024-01-05T10:00:00.000Z-o",
+              "etag": "\"x\""
+            }
+          ],
+          "directories": []
         }
       }
     },
@@ -236,6 +270,15 @@
           ],
           "directories": []
         }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2024-01/84a40528eaa5146ae8b4b4089614b29a/2024-01-05T10:00:00.000Z-o"
+      },
+      "response": {
+        "status": 204
       }
     },
     {

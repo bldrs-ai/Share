@@ -1,5 +1,5 @@
 {
-  "description": "On 2026-11-25 the oldest period kept is 2025-10. Two periods are expired (2025-08 and 2025-09); one run reduces only the oldest, 2025-08: its rollup is written onlyIfNew, with no account in it, before its records are deleted, and 2025-09 is left for the next run (pending: 1). Periods are found from a directory listing, records listed under the period's own prefix.",
+  "description": "On 2026-11-25 the oldest period kept is 2025-10, and two are expired (2025-08, 2025-09); a run takes the oldest. It counts the period's records into a checkpoint (rollup-partial/2025-08, holding the counted keys as pendingDelete) before deleting them, then writes the final rollup onlyIfNew, with no account in it, and drops the checkpoint. 2025-09 is left for the next run (pending: 1).",
   "env": {
     "NODE_ENV": "test",
     "ADMIN_STATS_SECRET": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
@@ -68,6 +68,24 @@
     {
       "request": {
         "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup/2025-08"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup-partial/2025-08"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
         "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2025-08%2F"
       },
       "response": {
@@ -112,15 +130,6 @@
     {
       "request": {
         "method": "GET",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup/2025-08"
-      },
-      "response": {
-        "status": 404
-      }
-    },
-    {
-      "request": {
-        "method": "GET",
         "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2025-08/84a40528eaa5146ae8b4b4089614b29a/2025-08-03T10:00:00.000Z-z"
       },
       "response": {
@@ -131,6 +140,36 @@
           "source": "github",
           "tier": "free"
         }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup-partial/2025-08",
+        "bodyJson": {
+          "period": "2025-08",
+          "loads": {
+            "total": 1
+          },
+          "pendingDelete": [
+            "load/2025-08/84a40528eaa5146ae8b4b4089614b29a/2025-08-03T10:00:00.000Z-z"
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"p\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2025-08/84a40528eaa5146ae8b4b4089614b29a/2025-08-03T10:00:00.000Z-z"
+      },
+      "response": {
+        "status": 204
       }
     },
     {
@@ -162,7 +201,7 @@
     {
       "request": {
         "method": "DELETE",
-        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2025-08/84a40528eaa5146ae8b4b4089614b29a/2025-08-03T10:00:00.000Z-z"
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup-partial/2025-08"
       },
       "response": {
         "status": 204

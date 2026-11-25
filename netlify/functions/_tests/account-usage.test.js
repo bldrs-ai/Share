@@ -24,7 +24,7 @@ import {
 } from '../_lib/accountUsage.js'
 import accountUsage from '../account-usage.js'
 import {aggregateStats, accountStats, limitStats, opensPerAccount, percentiles} from '../account-usage-stats.js'
-import {sweep} from '../account-usage-retention.js'
+import {BATCH_SIZE, sweep} from '../account-usage-retention.js'
 import {createMemoryBlobs} from './memoryBlobs.js'
 
 
@@ -198,8 +198,21 @@ describe('_lib/accountUsage', () => {
     expect(await deleteAccountRecords(store, ACCOUNT, NOW)).toBe(2)
     // The opt-out stays: deleting the records must not resume recording.
     expect([...store.data.keys()].sort()).toEqual([`load/2026-11/${OTHER}/c`, `pref/${ACCOUNT}`, 'rollup/2025-01'])
-    // Listed per period and account, never the whole store.
-    expect(store.list.mock.calls.every(([{prefix}]) => prefix.includes(ACCOUNT))).toBe(true)
+    // Listed per period and account (plus each type's period directories),
+    // never the whole store.
+    expect(store.list.mock.calls.every(([{prefix, directories}]) => directories === true || prefix.includes(ACCOUNT))).toBe(true)
+  })
+
+  // A retention backlog (an expired month the sweep hasn't reached) is still
+  // the account's: an opt-out and a deletion request must reach it.
+  it('reaches records in a period older than the live window', async () => {
+    const store = createMemoryBlobs({
+      [`load/2024-01/${ACCOUNT}/old`]: REPORT,
+      [`limit/2024-02/${ACCOUNT}/old`]: {limit: 'private_model'},
+    })
+    expect(await deleteLoadReports(store, ACCOUNT, NOW)).toBe(1)
+    expect(await deleteAccountRecords(store, ACCOUNT, NOW)).toBe(1)
+    expect(store.data.size).toBe(0)
   })
 })
 
@@ -385,7 +398,7 @@ describe('account-usage-stats', () => {
 
 
 describe('account-usage-retention', () => {
-  it('reduces the oldest period older than 13 whole months per run, to counts without accounts', async () => {
+  it('reduces the oldest period older than 13 whole months, to counts without accounts', async () => {
     const store = createMemoryBlobs({
       [`load/2025-08/${OTHER}/z`]: REPORT,
       [`load/2025-09/${ACCOUNT}/a`]: REPORT,
@@ -407,6 +420,43 @@ describe('account-usage-retention', () => {
     })
     expect(rollup).not.toContain(ACCOUNT)
     expect([...store.data.keys()].sort()).toEqual([`load/2025-10/${ACCOUNT}/d`, 'rollup/2025-08', 'rollup/2025-09'])
+  })
+
+  // A month too big for one run: each run stops at a batch boundary when its
+  // budget is spent, and the next resumes from the checkpoint.
+  it('resumes a period across runs, counting every record exactly once', async () => {
+    const total = (2 * BATCH_SIZE) + 7
+    const initial = {}
+    for (let i = 0; i < total; i++) {
+      initial[`load/2025-09/${i % 2 ? ACCOUNT : OTHER}/${String(i).padStart(4, '0')}`] = REPORT
+    }
+    const store = createMemoryBlobs(initial)
+    // Out of time after every batch.
+    let t = 0
+    const options = {clock: () => t++, budgetMs: 1}
+    const runs = []
+    for (let i = 0; i < 6 && !store.data.has('rollup/2025-09'); i++) {
+      runs.push((await sweep(store, NOW, options)).reduced[0].rollup)
+    }
+    expect(runs.slice(0, -1).every((r) => r === 'partial')).toBe(true)
+    expect(runs.at(-1)).toBe('written')
+    expect(JSON.parse(store.data.get('rollup/2025-09')).loads).toMatchObject({total, accounts: 2})
+    expect([...store.data.keys()]).toEqual(['rollup/2025-09'])
+  })
+
+  it('a run that dies after its checkpoint never counts that batch twice', async () => {
+    const initial = {}
+    for (let i = 0; i < BATCH_SIZE + 3; i++) {
+      initial[`load/2025-09/${ACCOUNT}/${String(i).padStart(4, '0')}`] = REPORT
+    }
+    const store = createMemoryBlobs(initial)
+    // The first batch's deletes fail: the run dies after the checkpoint.
+    store.delete.mockImplementationOnce(() => Promise.reject(new Error('killed')))
+    await expect(sweep(store, NOW)).rejects.toThrow('killed')
+    expect(store.data.has('rollup-partial/2025-09')).toBe(true)
+    await sweep(store, NOW)
+    expect(JSON.parse(store.data.get('rollup/2025-09')).loads.total).toBe(BATCH_SIZE + 3)
+    expect([...store.data.keys()]).toEqual(['rollup/2025-09'])
   })
 
   it('is a no-op with nothing expired', async () => {

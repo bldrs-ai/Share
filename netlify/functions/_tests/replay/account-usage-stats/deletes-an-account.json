@@ -21,6 +21,51 @@
     {
       "request": {
         "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F&directories=true"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": [
+            "load/2026-11"
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=limit%2F&directories=true"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": [
+            "limit/2026-11"
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=first%2F&directories=true"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": [
+            "first/2026-11"
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
         "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2025-09%2F84a40528eaa5146ae8b4b4089614b29a%2F"
       },
       "response": {

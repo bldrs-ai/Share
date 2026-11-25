@@ -40,6 +40,7 @@ import {
   accountKeySecret,
   deleteAccountRecords,
   listAccountKeys,
+  readAll,
   isUsagePeriod,
   listKeys,
   parseEventKey,
@@ -338,30 +339,6 @@ export async function accountStats(store, sub, keySecret, nowMs) {
     optedOut: !await usageReportsAllowed(store, account),
     periods: Object.fromEntries(Object.keys(periods).sort().map((p) => [p, periods[p]])),
   }
-}
-
-
-/** How many blobs a reader fetches at once. */
-export const READ_CONCURRENCY = 25
-
-
-/**
- * Read blobs as JSON, READ_CONCURRENCY at a time.
- *
- * @param {object} store
- * @param {Array<string>} keys
- * @param {object} [options]
- * @param {boolean} [options.keepMissing] keep a missing blob as null, so the
- *   answer lines up with `keys`; by default it is skipped
- * @return {Promise<Array>} in key order
- */
-export async function readAll(store, keys, {keepMissing = false} = {}) {
-  const out = []
-  for (let i = 0; i < keys.length; i += READ_CONCURRENCY) {
-    const batch = await Promise.all(keys.slice(i, i + READ_CONCURRENCY).map((key) => store.get(key, {type: 'json'})))
-    out.push(...(keepMissing ? batch : batch.filter(Boolean)))
-  }
-  return out
 }
 
 

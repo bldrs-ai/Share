@@ -125,9 +125,14 @@ rollup/<YYYY-MM>                             counts left after retention, no acc
   matched. The reader's per-account lookup computes the same HMAC.
   Changing the secret orphans every record, so it is set once and kept.
 - **Listed per period and account, never the whole store.** An opt-out, a
-  lookup or a deletion lists `<type>/<period>/<account>/` for each live period
-  (`liveUsagePeriods`: the 13 kept months, the current one and the one the
-  sweep may not have reached yet). Reads go 25 at a time.
+  lookup or a deletion lists `<type>/<period>/<account>/` for every period
+  that can hold the account's records:
+  - the live window (`liveUsagePeriods`);
+  - every period the store still holds (`usagePeriodsInStore`, a
+    `directories: true` listing per type).
+
+  So a retention backlog (expired months not yet swept) is reached too, and a
+  deletion request leaves nothing behind. Reads go 25 at a time.
 - **One blob per event**, so two concurrent writes from one account can't
   lose each other. record-load's `app_metadata` ledger has no compare-and-set
   and can lose a write (quotas.md §"Out of scope").
@@ -231,18 +236,27 @@ leaves it as it was and says so.
   `oldestKeptPeriod(now)`, 13 months before the current one, so a record is
   kept at least 13 months and at most 14.
 
-  **One period per run**, the oldest expired one, so a run's work is bounded
-  by one month's records, and a backlog clears a month a day (`pending` in the
-  summary). Periods are found from a directory listing, and a period's records
-  are listed under its own prefix. For that period the run:
-  1. writes `rollup/<period>`: totals, distinct-account counts, counts by
-     outcome, format, source and tier, and limit hits by kind and gate, with
-     no account in it;
-  2. then deletes the period's raw records.
+  **One period at a time, resumable.** Each run works on the oldest expired
+  period, for at most 20 s (`RUN_BUDGET_MS`), and always at least one batch.
+  It counts the period's records into a checkpoint, `rollup-partial/<period>`,
+  200 at a time:
+  1. delete the checkpoint's `pendingDelete` keys, which were counted last
+     time and maybe not deleted;
+  2. count the next batch and write the checkpoint with that batch as
+     `pendingDelete`;
+  3. delete the batch.
 
-  The rollup is written `onlyIfNew` and before any delete. A run cut short
-  leaves either nothing changed, or a complete rollup plus raw records, which
-  the next run deletes without rebuilding the rollup from what's left.
+  When nothing is left, it writes `rollup/<period>` (`onlyIfNew`) and deletes
+  the checkpoint. The rollup holds totals, the distinct-account count, counts
+  by outcome, format, source and tier, and limit hits by kind and gate, with
+  no account in it.
+
+  A record is never counted twice, since a resumed run deletes what the
+  checkpoint already counted before it lists again. It is never deleted
+  uncounted. A month too large for one run finishes over several, and the
+  summary's `pending` counts the expired periods still to go. The checkpoint
+  holds the period's account hashes while it exists, to count distinct
+  accounts across batches.
 - **Account deletion.** Share has no account-deletion path (nothing in
   `netlify/functions` deletes an Auth0 user). A deletion request is honoured
   by hand: `DELETE /.netlify/functions/account-usage-stats?sub=<sub>` removes
@@ -325,6 +339,11 @@ existing behaviour, shared with every function that uses it.
 
 ## Known gaps
 
+- **Two tabs toggling at once.** The Profile item is disabled only in its own
+  tab. An opt-out and an opt-in racing from two tabs can interleave so that
+  Auth0 ends at off with no mirror, and the server records. Closing that
+  needs a conditional (etag) write on the mirror. It is rare, and either
+  tab's retry settles it.
 - **Client-reported limit hits aren't verified.** Any signed-in account can
   post `{kind: 'limit'}` bodies, each stored as `tier: 'free'` and counted as
   `quota_limit_reached`. Only `limit_first_reached` is capped, at once per
@@ -381,7 +400,8 @@ existing behaviour, shared with every function that uses it.
     `ProfileControl.test.jsx`.
 - **Replays:** `_tests/replay/account-usage/` (11, including an opt-out
   racing a load and an opt-out whose Auth0 write fails), `account-usage-stats/`
-  (5), `account-usage-retention/` (2), and
+  (5), `account-usage-retention/` (2: a full reduction, and a resume from a
+  checkpoint), and
   `record-load/refusal-records-a-limit-hit.json`, run against the source and
   the bundle.
 - **Smoke:** probes for `account-usage` (`{}` → 400 `invalid_account_usage`)
