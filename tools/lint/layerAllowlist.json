@@ -44,10 +44,6 @@
     "src/store/IFCSlice.js",
     "src/store/useStore.js"
   ],
-  "src/viewer/ShareViewer.js": [
-    "src/Infrastructure/IfcCustomViewSettings.js",
-    "src/Infrastructure/IfcElementsStyleManager.js"
-  ],
   "src/viewer/three/IfcIsolator.js": [
     "src/store/useStore.js"
   ]

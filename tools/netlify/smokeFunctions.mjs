@@ -171,6 +171,14 @@ export const PROBES = [
     strict: [MISSING_AUTH0_TOKEN],
   },
   {
+    name: 'model-open-count',
+    scenario: 'model-open-count/invalid-report',
+    method: 'POST',
+    body: {},
+    accept: [{status: HTTP_BAD_REQUEST, body: 'invalid_model_open_count'}],
+    strict: [{status: HTTP_BAD_REQUEST, body: 'invalid_model_open_count'}],
+  },
+  {
     name: 'pro-module',
     scenario: 'pro-module/unauthenticated',
     method: 'GET',

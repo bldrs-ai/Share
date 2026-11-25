@@ -117,15 +117,15 @@ describe('navigateToModel', () => {
       expect(assignCalls).toEqual(['/share/v/p/index.ifc?feature=workspace'])
     })
 
-    // ShareViewer reads `?view=` once, at module load (open-205, #2022).
-    it('loads the page for a link that asks for another ?view=, and stays in-app for the same one', () => {
+    // ShareViewer read `?view=` once, at module load, so a link asking for
+    // another view used to load the page (open-205, #2022). Nothing reads
+    // `view` since the rules were deleted (layering.md §7, slice V), so such
+    // a link opens in-app like any other.
+    it('opens a link that asks for another ?view= in-app', () => {
       const navigate = jest.fn()
-      navigateToModel('/share/v/p/index.ifc?feature=spaModelNav&view=ifc#c:1', navigate)
-      expect(navigate).not.toHaveBeenCalled()
-      expect(assignCalls).toEqual(['/share/v/p/index.ifc?feature=spaModelNav&view=ifc#c:1'])
-      navigateToModel('/share/v/p/index.ifc?feature=spaModelNav', navigate)
-      expect(navigate).toHaveBeenCalledWith('/share/v/p/index.ifc?feature=spaModelNav')
-      expect(assignCalls).toHaveLength(1)
+      navigateToModel('/share/v/p/index.ifc?feature=spaModelNav&view=ch.sia380-1.heatmap#c:1', navigate)
+      expect(navigate).toHaveBeenCalledWith('/share/v/p/index.ifc?feature=spaModelNav&view=ch.sia380-1.heatmap#c:1')
+      expect(assignCalls).toHaveLength(0)
     })
 
     it('disarms the upload guard before navigating', () => {

@@ -14,13 +14,6 @@
 //                           IFCManager kept loaded models here; some
 //                           call-sites still push to it. Maintained
 //                           for source-compat; not consulted internally.
-//   - `parser`            — `null`. The fork held a web-ifc-three
-//                           `IFCParser` here that `IfcViewsManager`
-//                           reaches for `_overrideStyles`. We've moved
-//                           past the views-manager codepath (§8.1) so
-//                           it's safe to null; `IfcViewsManager` is
-//                           the only consumer and tolerates a no-op
-//                           parser stub.
 //   - `getExpressId(geometry, faceIndex)` — read the per-vertex
 //                           `expressID` `BufferAttribute` for a
 //                           triangle hit. Used by
@@ -67,15 +60,6 @@ export default class ShareIfcManager {
     // `viewer.context.items.ifcModels` (the canonical scene-graph
     // registry) instead.
     this.state = {models: []}
-    // `IfcViewsManager` (`src/Infrastructure/IfcElementsStyleManager.js`)
-    // mutates `parser._rules`, `_overrideStyles`, `initializeLoadingState`,
-    // and `streamMesh` at construction. Pre-5d.1 this was web-ifc-three's
-    // `IFCParser`; with the Conway-direct path there is no IFCParser, so
-    // we hand viewsManager an empty object it can mutate harmlessly. The
-    // mutations don't affect parse behaviour (Conway-direct doesn't read
-    // them) and the whole views-manager codepath is scheduled for removal
-    // (§8.1 of design/new/viewer-replacement.md).
-    this.parser = {}
   }
 
 

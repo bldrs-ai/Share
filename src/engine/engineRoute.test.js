@@ -1,7 +1,6 @@
 import {flags} from '../FeatureFlags'
 import {
   MainThreadReason,
-  hasLegacyViewRules,
   mainThreadEngineNote,
   mainThreadEngineReason,
 } from './engineRoute'
@@ -33,15 +32,13 @@ describe('engine/engineRoute', () => {
     expect(mainThreadEngineReason()).toBe(MainThreadReason.KILL_SWITCH)
   })
 
-  it('a known ?view= rule set loads on the main-thread engine, which applies it', () => {
-    setSearch('?view=ch.sia380-1.heatmap')
-    expect(mainThreadEngineReason()).toBe(MainThreadReason.VIEW_RULES)
-    // The default view and a name ShareViewer does not know do nothing on
-    // either engine, so they leave the load in the worker.
-    setSearch('?view=default')
-    expect(mainThreadEngineReason()).toBeNull()
-    setSearch('?view=made-up')
-    expect(mainThreadEngineReason()).toBeNull()
+  // The `?view=` rules styled nothing on either engine and were deleted
+  // (layering.md §7, slice V): no `?view=` moves a load any more.
+  it('a ?view= link loads in the worker', () => {
+    for (const search of ['?view=ch.sia380-1.heatmap', '?view=default', '?view=made-up']) {
+      setSearch(search)
+      expect(mainThreadEngineReason()).toBeNull()
+    }
   })
 
   // The bot chat's eval read the main-thread engine; the Assist port (#1675)
@@ -52,11 +49,6 @@ describe('engine/engineRoute', () => {
       setSearch(search, hash)
       expect(mainThreadEngineReason()).toBeNull()
     }
-  })
-
-  it('names the switch the user set before a legacy consumer that is on too', () => {
-    setSearch('?feature=disableEngineWorker&view=ch.sia380-1.heatmap')
-    expect(mainThreadEngineReason()).toBe(MainThreadReason.KILL_SWITCH)
   })
 
   it('with the flag off in FeatureFlags.js (the prod kill switch), nothing runs in a worker', () => {
@@ -91,16 +83,8 @@ describe('engine/engineRoute', () => {
   })
 
   it('says why in one line', () => {
-    expect(mainThreadEngineNote(MainThreadReason.VIEW_RULES)).toBe(
-      'Engine: main thread (?view= rules need the main-thread engine)')
+    expect(Object.values(MainThreadReason)).toEqual(['rollback', 'flagOff', 'disableEngineWorker'])
     expect(mainThreadEngineNote(MainThreadReason.KILL_SWITCH)).toBe(
       'Engine: main thread (?feature=disableEngineWorker)')
-  })
-
-  it('hasLegacyViewRules names a non-default view rule set, and nothing else', () => {
-    expect(hasLegacyViewRules('?view=ch.sia380-1.heatmap')).toBe(true)
-    expect(hasLegacyViewRules('?view=default')).toBe(false)
-    expect(hasLegacyViewRules('?feature=engineWorker')).toBe(false)
-    expect(hasLegacyViewRules('?view=made-up')).toBe(false)
   })
 })

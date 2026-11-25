@@ -10,10 +10,9 @@ function makeStore() {
 
 describe('store/IFCSlice', () => {
   describe('default state', () => {
-    it('starts with null refs for camera, model, viewSettings, root element', () => {
+    it('starts with null refs for camera, model, root element', () => {
       const state = makeStore().getState()
       expect(state.cameraControls).toBeNull()
-      expect(state.customViewSettings).toBeNull()
       expect(state.model).toBeNull()
       expect(state.loadedFileInfo).toBeNull()
       expect(state.preselectedElementIds).toBeNull()
@@ -62,12 +61,6 @@ describe('store/IFCSlice', () => {
       const controls = {type: 'orbit'}
       store.getState().setCameraControls(controls)
       expect(store.getState().cameraControls).toBe(controls)
-    })
-
-    it('setCustomViewSettings stores the settings', () => {
-      const store = makeStore()
-      store.getState().setCustomViewSettings({foo: 'bar'})
-      expect(store.getState().customViewSettings).toEqual({foo: 'bar'})
     })
 
     it('setIsModelLoading flips loading flag', () => {

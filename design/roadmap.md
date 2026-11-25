@@ -277,7 +277,7 @@ Demoted out of the MVP band (not load-bearing for the trickle): `share-201`, `gr
 
 ### Phase A: Stabilise the rebuilt viewer
 **Goal:** launch can't ship if the viewer regresses on real models.
-- `view-t100` public-launch gate (screenshot harness + GLB diff in CI); `IfcViewsManager` deletion.
+- `view-t100` public-launch gate (screenshot harness + GLB diff in CI); `IfcViewsManager` deletion (done, open-t200 slice V, #2318).
 - Flag-flip decisions: `batchedMesh` always-on, `?feature=look` default-on.
 - <a href="https://github.com/bldrs-ai/Share/issues/1249" target="_blank" rel="noopener noreferrer">#1249</a> (critical: element-permalink hydration on private models); STEP verification <a href="https://github.com/bldrs-ai/Share/issues/1569" target="_blank" rel="noopener noreferrer">#1569</a>.
 - The engine worker, render on demand and motion residency are on by default (as of 2026-11-10); on-demand rendering is shipped (<a href="https://github.com/bldrs-ai/Share/pull/2104" target="_blank" rel="noopener noreferrer">#2104</a>; as of 2026-11-10); <a href="https://github.com/bldrs-ai/Share/issues/1561" target="_blank" rel="noopener noreferrer">#1561</a> and <a href="https://github.com/bldrs-ai/Share/issues/1545" target="_blank" rel="noopener noreferrer">#1545</a> are closed.
