@@ -97,6 +97,21 @@ export default function PrivacyPage() {
           service.
         </Typography>
         <Typography variant="body1">
+          <strong>Your account’s usage.</strong> If you’re signed in, the report of each
+          model you open is also kept with your account, so we can see how much each
+          account uses Bldrs Share and how it performs for them: the same kind of file,
+          size range, where it came from, whether it loaded and how long it took, with how
+          complex it was rounded and your plan. Like every report, it never includes a
+          model’s name, path, web address or contents. We use it to run and improve the
+          service, on the basis of our legitimate interest in doing so. Your account’s
+          records are kept for 13 months, then reduced to totals that name no account. To
+          turn this off, use “Use my usage to improve Bldrs” in the Profile menu; turning
+          it off also deletes the records already kept. Records of when your account
+          reaches a free-use limit are kept either way, for the same 13 months, because
+          they are part of applying the limits. Sign-ins and upgrade clicks are counted in
+          Google Analytics from our server under one shared ID, never yours.
+        </Typography>
+        <Typography variant="body1">
           <strong>Free-use limits.</strong> Some features have a free allowance. If you’re
           signed in, your account keeps a record of the private models you’ve opened
           (which model, and when) for as long as the current limit window needs it, to

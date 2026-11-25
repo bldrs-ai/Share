@@ -9,6 +9,10 @@ import useStore from '../store/useStore'
 import useDirectLinkQuota, {DIRECT_LINK_ROUTE_KINDS, directLinkQuotaKey} from './useDirectLinkQuota'
 
 
+// Every direct-link record() call says it is the soft gate (account-usage.md).
+const SOFT = {gate: 'soft'}
+
+
 // The quota hook is the seam under test's collaborator: its own suite
 // (hooks/useQuota.test.js) and record-load's cover what record() does with a
 // key. In the first suite it is a spy, so those tests pin WHEN the
@@ -126,7 +130,7 @@ describe('quota/useDirectLinkQuota', () => {
     await meter(driveRoute())
     expect(check).not.toHaveBeenCalled()
     expect(record).toHaveBeenCalledTimes(1)
-    expect(record).toHaveBeenCalledWith(DRIVE_KEY)
+    expect(record).toHaveBeenCalledWith(DRIVE_KEY, {gate: 'soft'})
     expect(gtagEventWithCid).not.toHaveBeenCalled()
     expect(trackModelAction).not.toHaveBeenCalled()
   })
@@ -219,7 +223,7 @@ describe('quota/useDirectLinkQuota', () => {
   it('reports GitHub as route_kind github, keyed like GitHubFileBrowser (no element path)', async () => {
     const {record} = mockQuota({recordOutcome: {allowed: false, used: 2, limit: 2, tier: 'free', alreadyCounted: false}})
     await meter(githubRoute())
-    expect(record).toHaveBeenCalledWith('/share/v/gh/acme/private-repo/main/models/tower.ifc')
+    expect(record).toHaveBeenCalledWith('/share/v/gh/acme/private-repo/main/models/tower.ifc', {gate: 'soft'})
     expect(gtagEventWithCid).toHaveBeenCalledWith('quota_soft_limit_exceeded',
       expect.objectContaining({route_kind: 'github'}))
   })
@@ -240,7 +244,7 @@ describe('quota/useDirectLinkQuota', () => {
     await withLocalFilesMetered(async () => {
       const {record} = mockQuota({recordOutcome: {allowed: false, used: 2, limit: 2, tier: 'free', alreadyCounted: false}})
       await meter(localRoute())
-      expect(record.mock.calls).toEqual([[LOCAL_KEY]])
+      expect(record.mock.calls).toEqual([[LOCAL_KEY, SOFT]])
       expect(gtagEventWithCid.mock.calls).toEqual([['quota_soft_limit_exceeded',
         {tier: 'free', used: 2, limit: 2, route_kind: 'local'}]])
       expect(trackModelAction.mock.calls).toEqual([['share', {
@@ -267,7 +271,7 @@ describe('quota/useDirectLinkQuota', () => {
     const {record} = mockQuota({recordOutcome: {allowed: false, used: 2, limit: 2, tier: 'free', alreadyCounted: false}})
     const open = driveRoute()
     await meter(open, open, open)
-    expect(record.mock.calls).toEqual([[DRIVE_KEY]])
+    expect(record.mock.calls).toEqual([[DRIVE_KEY, SOFT]])
     expect(gtagEventWithCid).toHaveBeenCalledTimes(1)
   })
 
@@ -275,7 +279,7 @@ describe('quota/useDirectLinkQuota', () => {
     const {record} = mockQuota({recordOutcome: {allowed: false, used: 2, limit: 2, tier: 'free', alreadyCounted: true}})
     const a = driveRoute()
     await meter(a, githubRoute(), a, driveRoute())
-    expect(record.mock.calls).toEqual([[DRIVE_KEY], ['/share/v/gh/acme/private-repo/main/models/tower.ifc'], [DRIVE_KEY]])
+    expect(record.mock.calls).toEqual([[DRIVE_KEY, SOFT], ['/share/v/gh/acme/private-repo/main/models/tower.ifc', SOFT], [DRIVE_KEY, SOFT]])
     // Still over the limit on the return, so the soft gate says so again.
     expect(gtagEventWithCid).toHaveBeenCalledTimes(3)
   })
@@ -284,7 +288,7 @@ describe('quota/useDirectLinkQuota', () => {
     const {record} = mockQuota()
     const hosted = routeFor('/share/v/p', {'*': 'index.ifc'})
     await meter(driveRoute(), hosted, driveRoute())
-    expect(record.mock.calls).toEqual([[DRIVE_KEY], [DRIVE_KEY]])
+    expect(record.mock.calls).toEqual([[DRIVE_KEY, SOFT], [DRIVE_KEY, SOFT]])
   })
 
   it('with every open a page load (the disableSpaModelNav kill switch), per open is per page: one count per page', async () => {
@@ -296,7 +300,7 @@ describe('quota/useDirectLinkQuota', () => {
       const hook = await meter(open, open)
       hook.unmount()
     }
-    expect(record.mock.calls).toEqual([[DRIVE_KEY], [DRIVE_KEY]])
+    expect(record.mock.calls).toEqual([[DRIVE_KEY, SOFT], [DRIVE_KEY, SOFT]])
   })
 
   it('waits for Auth0 to settle before recording', async () => {
@@ -314,7 +318,7 @@ describe('quota/useDirectLinkQuota', () => {
       await Promise.resolve()
     })
     expect(record).toHaveBeenCalledTimes(1)
-    expect(record).toHaveBeenCalledWith(DRIVE_KEY)
+    expect(record).toHaveBeenCalledWith(DRIVE_KEY, {gate: 'soft'})
   })
 })
 
@@ -520,7 +524,7 @@ describe('quota/useDirectLinkQuota with the real useQuota', () => {
       await act(async () => {})
 
       expect(global.fetch).toHaveBeenCalledTimes(1)
-      expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toEqual({key: LOCAL_KEY})
+      expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toEqual({key: LOCAL_KEY, gate: 'soft'})
       expect(gtagEventWithCid).toHaveBeenCalledWith('quota_soft_limit_exceeded',
         {tier: 'free', used: 2, limit: 2, route_kind: 'local'})
     })
@@ -571,7 +575,7 @@ describe('quota/useDirectLinkQuota with the real useQuota', () => {
     expect(global.fetch).toHaveBeenCalledTimes(1)
     const [url, init] = global.fetch.mock.calls[0]
     expect(url).toBe('/.netlify/functions/record-load')
-    expect(JSON.parse(init.body)).toEqual({key: DRIVE_KEY})
+    expect(JSON.parse(init.body)).toEqual({key: DRIVE_KEY, gate: 'soft'})
     expect(gtagEventWithCid).toHaveBeenCalledWith('quota_soft_limit_exceeded',
       {tier: 'free', used: 2, limit: 2, route_kind: 'gdrive'})
   })

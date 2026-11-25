@@ -1,5 +1,11 @@
 import {captureException} from '@sentry/react'
 import {FUNNEL_EVENTS, getGaClientReference, gtagFunnelEvent} from '../../privacy/analytics'
+import {reportFunnelStep} from '../../app/accountUsage'
+import {FUNNEL_REPORT_EVENTS} from '../../privacy/accountUsageReport'
+
+
+/** How long an upgrade click waits for its server-side begin_checkout to be sent. */
+export const FUNNEL_REPORT_WAIT_MS = 300
 
 
 /**
@@ -55,6 +61,16 @@ export async function goToSubscription({
     destination: stripeCustomerId ? 'portal' : 'checkout',
     transport_type: 'beacon',
   })
+  // The same step, counted server-side under a fixed GA client id
+  // (design/new/account-usage.md §"Funnel"), the funnel's source of truth now
+  // that browser GA is off. Awaited, but for at most FUNNEL_REPORT_WAIT_MS:
+  // keepalive protects a fetch already issued, and this one first waits for
+  // a token, so navigating at once (the checkout branch below) would cancel
+  // it before it is sent.
+  await Promise.race([
+    reportFunnelStep(FUNNEL_REPORT_EVENTS.BEGIN_CHECKOUT, {from, destination: stripeCustomerId ? 'portal' : 'checkout'}),
+    new Promise((resolve) => setTimeout(resolve, FUNNEL_REPORT_WAIT_MS)),
+  ])
   if (stripeCustomerId) {
     try {
       const token = await getAccessTokenSilently({
