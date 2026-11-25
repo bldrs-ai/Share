@@ -11,7 +11,7 @@ export default function Privacy() {
           spacing. Same rule as the marketing copy (marketing/src/app/privacy). */}
       <Box sx={{'display': 'grid', '& p.MuiTypography-body1': {mb: 2}}}>
         <Typography variant='body1'><strong>Effective Date:</strong> January 1, 2022</Typography>
-        <Typography variant='body1'><strong>Last Updated:</strong> November 24, 2026</Typography>
+        <Typography variant='body1'><strong>Last Updated:</strong> November 25, 2026</Typography>
 
         <Typography variant='body1'>
           Bldrs Share (“we,” “us,” “our”) provides open-source, browser-first tools for viewing and
@@ -33,33 +33,43 @@ export default function Privacy() {
           If you connect third-party storage (e.g., Google Drive), we only request access to the specific files
           you select. We do not scan or store other files from your account.
         </Typography>
+        {/* Keep these paragraphs word for word in step with
+           marketing/src/app/privacy/page.tsx, which serves /privacy/ (Privacy.test.jsx checks).
+           What they describe: design/new/analytics-consent.md. */}
         <Typography variant='body1'>
-          <strong>Telemetry is required by default.</strong> We collect pseudonymous usage metrics (e.g.,
-          performance, feature use) to improve reliability and user experience. Telemetry is of two kinds:
+          <strong>Error and reliability reports.</strong> When something fails, the app reports what failed, the
+          app and browser versions and the address of the page you were on to our error-monitoring service
+          (Sentry). For a model opened from GitHub, Google Drive or a web address, that page address includes
+          where the model is. Reports from our servers also carry your account ID when you’re signed in.
+          Separately, the app counts browsers that can’t run part of it (for example, with no WebGL) by browser
+          family and device type only, sent to Google Analytics from our server under one shared ID rather than
+          yours. None of these reports set cookies, carry an identifier that follows your browser between
+          visits, or include your models’ contents. Sentry keeps them for at most 90 days. They are part of
+          operating the service and are always on, on the basis of our legitimate interest in keeping Bldrs
+          Share secure and working.
         </Typography>
         <Typography variant='body1'>
-          <strong>Error and reliability reports.</strong> When something fails, the app reports what failed,
-          the app and browser versions and, if you’re signed in, your account ID, to our error-monitoring
-          service (Sentry). Separately, it counts browsers that can’t run part of the app (for example, with
-          no WebGL, or with analytics blocked) by browser family and device type only, sent to Google
-          Analytics under one shared ID rather than yours. None of these reports set cookies, carry an
-          identifier that follows your browser between visits, or include your models’ file names, paths or
-          contents. They are part of operating the service and are always on, on the basis of our legitimate
-          interest in keeping Bldrs Share secure and working.
+          <strong>How models load.</strong> There is no Google Analytics or other tracking code in the app: no
+          analytics cookies, and no identifier that follows your browser between visits. To learn how Bldrs
+          Share is used and how it performs, the app reports each model you open to our server: the kind of
+          file, its size range, where it came from (your computer, GitHub, Google Drive or a web address),
+          whether it was the first model on the page, how long it took to load, how complex it was, roughly how
+          many errors and warnings it raised, whether it loaded or failed and at what stage, and whether you’re
+          on a phone or a computer. A report never includes a model’s name, path, web address or contents; the
+          only model it names is one of our own sample models, if that’s what you opened. It carries one random
+          ID that lives only while the page is open, so the models opened in one visit can be counted together;
+          it is never stored, and a reload starts a new one. Our server passes these reports on to Google
+          Analytics under one shared ID, so Google never sees your browser or network address. They are always
+          on, on the basis of our legitimate interest in running and improving the service.
         </Typography>
         <Typography variant='body1'>
-          <strong>Usage metrics.</strong> With your consent, we measure visits and feature use, including
-          which kinds of models are opened (format, size, source), with Google Analytics, which sets cookies
-          holding a pseudonymous ID. We do not use them for advertising. Nothing is collected for usage
-          metrics until you press OK in the welcome dialog.
-        </Typography>
-        <Typography variant='body1'>
-          <strong>You may refuse normal operation</strong> and Bldrs Share will operate in a reduced
-          local-only mode (“Test only mode”) to allow evaluation of basic viewer capabilities: you can open
-          files from your computer and the sample models, but not models from GitHub, Google Drive or a web
-          address, and you can’t save to GitHub or share. Press Cancel in the welcome dialog to choose it.
-          Error and reliability reports continue in this mode. You can change your choice at any time from the
-          About dialog.
+          <strong>Free-use limits.</strong> Some features have a free allowance. If you’re signed in, your
+          account keeps a record of the private models you’ve opened (which model, and when) for as long as the
+          current limit window needs it, to apply your plan’s limits; if you subscribe, it also lists the models
+          you’ve exported so you can find them again. If you use the AI assistant without signing in, your
+          browser keeps a random ID our server issued, which expires after 24 hours, and our server keeps a
+          keyed hash of your network address for the day, never the address itself. Both are used only to apply
+          the free allowance and to stop abuse.
         </Typography>
 
         <Typography variant='h1'>2. Open-Source and Self-Hosted Use</Typography>
@@ -99,7 +109,6 @@ export default function Privacy() {
           You can disconnect Google access in your Google Account settings. You may request deletion of any stored
           account metadata (if applicable) by emailing <Link href='mailto:support@bldrs.ai'>support@bldrs.ai</Link>.
           You can also use open-source/self-hosted deployments without accounts, subject to your configuration.
-          You can change your telemetry choice at any time from the About dialog.
         </Typography>
 
         <Typography variant='h1'>7. Children’s Privacy</Typography>

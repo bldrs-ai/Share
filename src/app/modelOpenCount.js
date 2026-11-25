@@ -8,7 +8,6 @@ import {
   MODEL_OPEN_COUNT_MEASURES,
   MODEL_OPEN_FORMATS,
 } from '../privacy/modelOpenCountReport'
-import {isSampleModel} from './localOnlyMode'
 
 
 /**
@@ -23,9 +22,8 @@ export const MODEL_OPEN_COUNT_PATH = '/.netlify/functions/model-open-count'
 
 
 // The sample roster's GitHub routes by repo path, the shape a GitHub route
-// result's getRepoPath() gives (`/org/repo/branch/file`), the same derivation
-// as app/localOnlyMode.js#SAMPLE_REPO_PATHS. The camera fragment is not part
-// of the model.
+// result's getRepoPath() gives (`/org/repo/branch/file`). The camera fragment
+// is not part of the model.
 const GH_ROUTE_PREFIX = '/share/v/gh'
 const SAMPLE_ID_BY_REPO_PATH = new Map(
   SAMPLE_MODELS
@@ -69,9 +67,21 @@ export function pageSession(cryptoApi = globalThis.crypto) {
 
 
 /**
+ * @param {object} modelPath a routes#handleRoute result
+ * @return {boolean} whether it's one of the hosted sample models
+ */
+function isSampleModel(modelPath) {
+  if (modelPath?.kind !== 'provider' || modelPath?.provider !== 'github' ||
+      typeof modelPath.getRepoPath !== 'function') {
+    return false
+  }
+  return SAMPLE_ID_BY_REPO_PATH.has(modelPath.getRepoPath())
+}
+
+/**
  * The `source` of a route, one of MODEL_OPEN_COUNT_FIELDS.source. The same
  * split as privacy/analytics.js#modelRouteSource, with the samples (GitHub
- * routes, app/localOnlyMode.js#isSampleModel) told apart from the user's own
+ * routes, isSampleModel below) told apart from the user's own
  * GitHub models. A `file` route that isn't an upload is a Bldrs-hosted
  * project file; the bundled demo, the only one the homepage opens, never gets
  * here (isRealModelOpen), so the rest count as samples.

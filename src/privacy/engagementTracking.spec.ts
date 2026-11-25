@@ -1,7 +1,7 @@
 /* eslint-disable no-magic-numbers */
 import {Page, expect, test} from '@playwright/test'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
-import {homepageSetup, setIsReturningUser, visitHomepageWaitForModel} from '../tests/e2e/utils'
+import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
 import {setupVirtualPathIntercept, waitForModelReady} from '../tests/e2e/models'
 
 
@@ -50,37 +50,35 @@ async function seedEarlierOpens(page: Page, agesInDays: number[]) {
 }
 
 
-describeMobileAndDesktop('engaged-use GA events', () => {
+/**
+ * Browser GA is off (privacy/analytics.js#IS_BROWSER_GA_ON, 2026-11-25), so
+ * the engaged-use tracker is dormant: even a visitor who accepted analytics
+ * under #2051 (setIsReturningUser sets that cookie) gets no events and no
+ * stored open history, and a history left from before is deleted on load.
+ * The tracker's behavior with the switch on is engagementTracking.test.js's.
+ */
+describeMobileAndDesktop('engaged-use tracking while browser GA is off', () => {
   test.beforeEach(async ({page}) => {
     await homepageSetup(page)
     await setIsReturningUser(page.context())
   })
 
-  test('a first real open sends neither event and records the open', async ({page}) => {
+  test('a real open records no history and sends neither event', async ({page}) => {
     await setupVirtualPathIntercept(page, REAL_MODEL, 'box.ifc')
     await page.goto(REAL_MODEL, {waitUntil: 'domcontentloaded'})
     await waitForModelReady(page)
+    // Guards the absences below against a model that never opened.
+    await expect(page.getByTestId('cadview-dropzone')).toBeAttached()
     expect(await engagementEvents(page)).toEqual([])
-    const opens = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? '{}').opens, STORAGE_KEY)
-    expect(opens).toHaveLength(1)
+    expect(await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY)).toBeNull()
   })
 
-  test('the third real open inside a week sends engaged_use, and a day-old open a return_visit', async ({page}) => {
+  test('a history left from before is deleted, and a third open in a week sends nothing', async ({page}) => {
     await seedEarlierOpens(page, [2, 1])
     await setupVirtualPathIntercept(page, REAL_MODEL, 'box.ifc')
     await page.goto(REAL_MODEL, {waitUntil: 'domcontentloaded'})
     await waitForModelReady(page)
-    const events = await engagementEvents(page)
-    expect(events.map(([name]) => name).sort()).toEqual(['engaged_use', 'return_visit'])
-    const engaged = events.find(([name]) => name === 'engaged_use')?.[1]
-    expect(engaged).toMatchObject({window_days: 7, opens_in_window: 3, threshold: 3})
-  })
-
-  test('the homepage demo is never an open', async ({page}) => {
-    await seedEarlierOpens(page, [2, 1])
-    await visitHomepageWaitForModel(page, {pauseRenderer: true})
     expect(await engagementEvents(page)).toEqual([])
-    const opens = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? '{}').opens, STORAGE_KEY)
-    expect(opens).toHaveLength(2)
+    expect(await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY)).toBeNull()
   })
 })
