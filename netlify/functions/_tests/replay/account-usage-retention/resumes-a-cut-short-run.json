@@ -62,6 +62,24 @@
     {
       "request": {
         "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=rollup-partial%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [
+            {
+              "key": "rollup-partial/2025-09",
+              "etag": "\"x\""
+            }
+          ],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
         "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup/2025-09"
       },
       "response": {
@@ -198,6 +216,19 @@
       },
       "response": {
         "status": 204
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2025-09%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
       }
     },
     {

@@ -11,9 +11,11 @@
 
 /**
  * @param {object} [initial] key → value (objects are stored as JSON)
+ * @param {object} [options]
+ * @param {number} [options.pageSize] maximum entries per paginated response
  * @return {object} a store with get/set/delete/list, and `data` to inspect
  */
-export function createMemoryBlobs(initial = {}) {
+export function createMemoryBlobs(initial = {}, {pageSize = Infinity} = {}) {
   const data = new Map(Object.entries(initial).map(([k, v]) => [k, typeof v === 'string' ? v : JSON.stringify(v)]))
   return {
     data,
@@ -37,10 +39,18 @@ export function createMemoryBlobs(initial = {}) {
     // `directories: true` answers as the service does: the keys directly
     // under the prefix as blobs, and each deeper level's first segment, once,
     // as a directory (without a trailing slash).
-    list: jest.fn(({prefix = '', directories = false} = {}) => {
+    list: jest.fn(({prefix = '', directories = false, paginate = false} = {}) => {
       const keys = [...data.keys()].filter((k) => k.startsWith(prefix))
       if (!directories) {
-        return Promise.resolve({blobs: keys.map((key) => ({key, etag: '"m"'})), directories: []})
+        const blobs = keys.map((key) => ({key, etag: '"m"'}))
+        if (!paginate) {
+          return Promise.resolve({blobs, directories: []})
+        }
+        return (async function* () {
+          for (let i = 0; i < blobs.length; i += pageSize) {
+            yield {blobs: blobs.slice(i, i + pageSize), directories: []}
+          }
+        })()
       }
       const dirs = new Set()
       const blobs = []

@@ -239,7 +239,8 @@ leaves it as it was and says so.
   kept at least 13 months and at most 14.
 
   **One period at a time, resumable.** Each run works on the oldest expired
-  period, for at most 20 s (`RUN_BUDGET_MS`), and always at least one batch.
+  period, checking the 20 s budget (`RUN_BUDGET_MS`) after each batch.
+  It lists one page of raw records at a time by event type.
   It counts the period's records into a checkpoint, `rollup-partial/<period>`,
   200 at a time:
   1. delete the checkpoint's `pendingDelete` keys, which were counted last
@@ -249,9 +250,10 @@ leaves it as it was and says so.
   3. delete the batch.
 
   When nothing is left, it writes `rollup/<period>` (`onlyIfNew`) and deletes
-  the checkpoint. The rollup holds totals, the distinct-account count, counts
-  by outcome, format, source and tier, and limit hits by kind and gate, with
-  no account in it.
+  the checkpoint. An unfinished checkpoint remains visible to the next sweep
+  even if the last raw record has been deleted. The rollup holds totals, the
+  distinct-account count, counts by outcome, format, source and tier, and
+  limit hits by kind and gate, with no account in it.
 
   A record is never counted twice, since a resumed run deletes what the
   checkpoint already counted before it lists again. It is never deleted

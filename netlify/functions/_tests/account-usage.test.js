@@ -430,18 +430,46 @@ describe('account-usage-retention', () => {
     for (let i = 0; i < total; i++) {
       initial[`load/2025-09/${i % 2 ? ACCOUNT : OTHER}/${String(i).padStart(4, '0')}`] = REPORT
     }
-    const store = createMemoryBlobs(initial)
+    const store = createMemoryBlobs(initial, {pageSize: BATCH_SIZE})
+    const list = store.list.getMockImplementation()
+    const listPage = jest.fn()
+    store.list.mockImplementation((options) => {
+      const result = list(options)
+      if (!options.paginate) {
+        return result
+      }
+      return (async function* () {
+        for await (const page of result) {
+          listPage()
+          yield page
+        }
+      })()
+    })
     // Out of time after every batch.
     let t = 0
     const options = {clock: () => t++, budgetMs: 1}
-    const runs = []
-    for (let i = 0; i < 6 && !store.data.has('rollup/2025-09'); i++) {
-      runs.push((await sweep(store, NOW, options)).reduced[0].rollup)
-    }
-    expect(runs.slice(0, -1).every((r) => r === 'partial')).toBe(true)
-    expect(runs.at(-1)).toBe('written')
+    const first = await sweep(store, NOW, options)
+    expect(first.reduced).toEqual([{period: '2025-09', rollup: 'partial', deleted: BATCH_SIZE}])
+    expect(listPage).toHaveBeenCalledTimes(1)
+    expect((await sweep(store, NOW, options)).reduced[0].rollup).toBe('partial')
+    expect((await sweep(store, NOW, options)).reduced[0].rollup).toBe('partial')
+    expect([...store.data.keys()]).toEqual(['rollup-partial/2025-09'])
+    expect((await sweep(store, NOW, options)).reduced[0].rollup).toBe('written')
     expect(JSON.parse(store.data.get('rollup/2025-09')).loads).toMatchObject({total, accounts: 2})
     expect([...store.data.keys()]).toEqual(['rollup/2025-09'])
+  })
+
+  it('applies the batch budget to leftovers of a period with a finished rollup', async () => {
+    const rollupKey = 'rollup/2025-09'
+    const first = `load/2025-09/${ACCOUNT}/a`
+    const second = `load/2025-09/${ACCOUNT}/b`
+    const store = createMemoryBlobs({[rollupKey]: {loads: {total: 2}}, [first]: REPORT, [second]: REPORT}, {pageSize: 1})
+    const summary = await sweep(store, NOW, {budgetMs: 0})
+    expect(summary.reduced).toEqual([{period: '2025-09', rollup: 'partial', deleted: 1}])
+    expect([...store.data.keys()]).toEqual([rollupKey, second])
+    expect((await sweep(store, NOW)).reduced).toEqual([{period: '2025-09', rollup: 'kept', deleted: 1}])
+    expect([...store.data.keys()]).toEqual([rollupKey])
+    expect(store.set).not.toHaveBeenCalled()
   })
 
   it('a run that dies after its checkpoint never counts that batch twice', async () => {
