@@ -37,6 +37,12 @@ report control with a short grace period, driven by the store's `loadResult`
 - **Error** shows the failure summary (`Load failed: …`, red) with an OK
   action and **no timer and no animation** — it waits for an explicit OK,
   which clears it instantly.
+- **The homepage model is quiet** (owner, 2026-11-25). `index.ifc` and
+  `index.step` load on every visit, so their live line and `Loaded <name>`
+  read as noise to a visitor who opened nothing: the snackbar shows no load
+  view for them (`privacy/analytics.js#isHostedDemoModel`, the same check
+  that keeps them out of `real_model_open`). A failed demo load still shows
+  its error line, and the report stays on the "i" control either way.
 - **Expanding during the grace period** cancels the auto-dismiss + its
   animation (the user is now reading); the snackbar stays until OK, and that
   OK dismiss is instant. Any manual dismiss is instant — animation is
