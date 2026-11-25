@@ -10,6 +10,20 @@ import {isFeatureEnabled} from '../FeatureFlags'
 // fetches the loader. A property migration has to update both.
 export const GA_MEASUREMENT_ID = 'G-GRLNVMZRGW'
 
+/*
+ * Google Analytics in the browser is OFF (owner, 2026-11-25): gtag/js is
+ * never loaded, for anyone, and no consent is asked. Usage is measured
+ * without it: cookieless, ID-free reports to our own server
+ * (privacy/modelOpenCount.js and netlify/functions/model-open-count.js,
+ * #2355), which passes them to GA4 under one fixed id, plus server-side
+ * per-account and metering records. design/new/analytics-consent.md says
+ * why and what a later opt-in would turn back on. This one switch, and the
+ * loader below it, are kept for that opt-in; setupGa's tests run the
+ * loader with it on.
+ */
+export const IS_BROWSER_GA_ON = false
+
+
 // Apex is canonical; www is included in case a client renders before
 // any redirect settles. Everything else — localhost, *.netlify.app
 // previews/dev, GitHub Pages installs — must not feed prod analytics.
@@ -70,9 +84,8 @@ export function isOwnGaHost(hostname) {
  *
  * Consent grants analytics_storage only. Every ad signal stays denied at
  * every level: Google Ads is switched off (2026-11), so nothing may store
- * ad cookies, send user data to Ads, or personalize ads, and no level's
- * wording in the dialog asks for any of it. Granting one here again needs
- * the dialog copy (About/ConsentControl.jsx) and a CONSENT_VERSION bump.
+ * ad cookies, send user data to Ads, or personalize ads. Used only while
+ * browser GA is on (IS_BROWSER_GA_ON).
  */
 export const CONSENT_DEFAULT = Object.freeze({
   analytics_storage: 'denied',
@@ -101,12 +114,6 @@ export const GA_CONFIG = Object.freeze({
 })
 
 
-// GA's documented per-property kill switch. gtag/js checks it before
-// sending, which is the only way to silence a tag that has already loaded
-// (it can't be unloaded) when a visitor withdraws mid-page.
-const GA_DISABLE_KEY = `ga-disable-${GA_MEASUREMENT_ID}`
-
-
 // First-party cookies the GA tag writes, `_ga` and `_ga_<container>`, plus
 // the Ads conversion linker's `_gcl_*`. Ads is off and nothing grants
 // ad_storage, so no new `_gcl_*` is written; it's here for leftovers from
@@ -114,37 +121,24 @@ const GA_DISABLE_KEY = `ga-disable-${GA_MEASUREMENT_ID}`
 const GOOGLE_COOKIE_PATTERN = /^(_ga(_|$)|_gcl_)/
 
 
-let isGtagLoaded = false
-// setupGa's env, kept so a later updateGaConsent (the dialog's OK) makes
-// the same host decision setupGa did.
-let gaEnv
-
-
 /**
- * Called once at bundle start. Loads Google Analytics only when this host
- * may (shouldInitGa) AND the visitor has already consented. A visitor who
- * hasn't chosen yet gets nothing from Google: no gtag/js request, no
- * collect, and on our own GA hosts any GA cookie left from before is
- * deleted. If they then allow analytics in the About dialog,
- * updateGaConsent loads it on the spot. Design:
- * design/new/analytics-consent.md.
+ * Called once at bundle start. While browser GA is off (IS_BROWSER_GA_ON)
+ * it only clears leftovers: GA ran for every visitor until 2026-11, and
+ * for consenting ones until 2026-11-25, so a returning browser may still
+ * hold `_ga` / `_ga_*` / `_gcl_*`. deleteGoogleCookies only touches our own
+ * GA hosts. With the switch on (a later opt-in), it loads Google Analytics
+ * only when this host may (shouldInitGa) AND the visitor has consented.
  *
  * index.html keeps the inline dataLayer/gtag stub unconditionally
  * (gtagEvent calls buffer there, and the E2E suite asserts against that
  * buffer on localhost); the stub only queues, it never sends anything.
  *
  * @param {object} [env] overrides for tests, forwarded to shouldInitGa
+ * @param {boolean} [env.isBrowserGaOn] overrides IS_BROWSER_GA_ON
  */
 export default function setupGa(env = undefined) {
-  gaEnv = env
-  if (!isAllowed()) {
-    // A visitor without consent may still carry `_ga` / `_gcl_*` from
-    // before: GA was default-on until 2026-11, and a CONSENT_VERSION bump
-    // un-decides everyone. Waiting for an explicit decline to clear them
-    // would leave an undecided visitor who never closes the dialog holding
-    // analytics identifiers, so clear them on every load without consent.
-    // deleteGoogleCookies only touches our own GA hosts. Nothing here
-    // writes them back: gtag/js isn't loaded.
+  const isOn = env?.isBrowserGaOn ?? IS_BROWSER_GA_ON
+  if (!isOn || !isAllowed()) {
     deleteGoogleCookies(env?.hostname)
     return
   }
@@ -156,55 +150,16 @@ export default function setupGa(env = undefined) {
 
 
 /**
- * Bring the GA tag into line with the stored consent, after the visitor
- * chooses in the About dialog (privacy/consentChoice.js).
- *
- * Allowed: clear the kill switch, update consent to granted, queue the
- * `config` the stub withheld (it only queues one for a visitor who had
- * already consented), and load gtag/js if this host may. Collection
- * starts without a reload.
- *
- * Not allowed: set the kill switch, update consent to denied, and delete
- * the GA cookies. A tag loaded earlier in this page can't be unloaded,
- * but with ga-disable set it sends nothing more; after a reload it isn't
- * loaded at all.
- *
- * @param {object} [env] overrides for tests, forwarded to shouldInitGa
- */
-export function updateGaConsent(env = gaEnv) {
-  if (typeof window.gtag !== 'function') {
-    return
-  }
-  if (!isAllowed()) {
-    window[GA_DISABLE_KEY] = true
-    window.gtag('consent', 'update', {...CONSENT_DEFAULT})
-    deleteGoogleCookies(env?.hostname)
-    return
-  }
-  window[GA_DISABLE_KEY] = false
-  window.gtag('consent', 'update', {...CONSENT_GRANTED})
-  const isConfigQueued = Array.isArray(window.dataLayer) &&
-    window.dataLayer.some((entry) => entry?.[0] === 'config' && entry?.[1] === GA_MEASUREMENT_ID)
-  if (!isConfigQueued) {
-    window.gtag('config', GA_MEASUREMENT_ID, {...GA_CONFIG})
-  }
-  if (!isGtagLoaded && shouldInitGa(env)) {
-    loadGtag(env)
-  }
-}
-
-
-/**
- * Delete the GA/Ads first-party cookies. gtag writes them on the widest
+ * Delete the GA/Ads first-party cookies. gtag wrote them on the widest
  * domain it can (`cookie_domain: 'auto'`, so `.bldrs.ai` for a page on
  * bldrs.ai), and a cookie only goes away when removed with the domain it
  * was set with, so every parent domain is tried; removing with a domain
  * that doesn't apply is a no-op.
  *
  * A no-op off our own GA hosts (isOwnGaHost). The gate lives here rather
- * than at the callers so that no path, setup or decline, can reach a host
- * site's cookies: on a self-hosted share.example.com, the `_ga` on
- * example.com is that site's analytics, which our consent doesn't govern.
+ * than at the callers so that no path can reach a host site's cookies: on a
+ * self-hosted share.example.com, the `_ga` on example.com is that site's
+ * analytics, which isn't ours to clear.
  *
  * @param {string} [hostname]
  */
@@ -227,9 +182,9 @@ export function deleteGoogleCookies(hostname = window.location.hostname) {
 
 
 /**
- * Inject the gtag/js loader. Only ever reached with consent (setupGa,
- * updateGaConsent), so the `ga_blocked` count below covers consenting
- * visitors only.
+ * Inject the gtag/js loader. Only ever reached with browser GA on and
+ * consent (setupGa), so the `ga_blocked` count below covers consenting
+ * visitors only, and none while the switch is off.
  *
  * A script that fails to load is the expected state of a blocked client
  * (an ad blocker, a privacy browser, a DNS filter), not something to fix,
@@ -270,7 +225,6 @@ function loadGtag(env) {
       reportClientCapability('ga_blocked')
     }
     document.head.appendChild(script)
-    isGtagLoaded = true
     // Second of three places the user property is published, each for a
     // distinct reason. index.html's inline stub sets it before `config`
     // — the only point early enough to reach page_view/session_start.
@@ -302,12 +256,4 @@ function loadGtag(env) {
   } catch (err) {
     captureException(err, {tags: {subsystem: 'ga_init'}, fingerprint: ['ga_init', String(err?.message ?? err)]})
   }
-}
-
-
-/** Test-only reset of the module's load state. */
-export function _resetGaForTests() {
-  isGtagLoaded = false
-  gaEnv = undefined
-  delete window[GA_DISABLE_KEY]
 }

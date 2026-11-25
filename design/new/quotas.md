@@ -824,11 +824,14 @@ The parts that aren't obvious:
     previous counted open's. Opening the same model again counts, on a later
     page load or in-app (A → B → A, and A → demo → A, which the model-keyed
     guard before open-205 #2022 skipped).
-  - **Consent:** analytics is opt-in since Share#2051. `isAllowed()` is
-    `allowsAnalytics(getConsentLevel())`, which is false until the visitor
-    presses Accept in the privacy banner (`design/new/analytics-consent.md`). Nothing is read,
-    written or sent without that consent, and opens made before it are never
-    counted retroactively. The check repeats
+  - **Consent:** analytics is opt-in since Share#2051, and since #2354 Google
+    Analytics is off in the browser for everyone, with nothing that asks
+    (`design/new/analytics-consent.md`). So these two events are dormant:
+    `isAllowed()` (`allowsAnalytics(getConsentLevel())`) is true only for a
+    visitor who accepted under #2051, and even then gtag/js never loads to
+    send them. They come back with a later opt-in. Nothing is read, written
+    or sent without consent, and opens made before it are never counted
+    retroactively. The check repeats
     inside the lock, because consent can be withdrawn while an open waits
     behind another tab's hold.
   - **Fails closed.** If localStorage cannot be read or written the open is

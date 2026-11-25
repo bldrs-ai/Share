@@ -7,10 +7,9 @@ import setupGa, {
   CONSENT_GRANTED,
   GA_CONFIG,
   GA_MEASUREMENT_ID,
-  _resetGaForTests,
   deleteGoogleCookies,
+  IS_BROWSER_GA_ON,
   shouldInitGa,
-  updateGaConsent,
 } from './ga'
 
 
@@ -27,7 +26,6 @@ function findGtagScript() {
 beforeEach(() => {
   jest.clearAllMocks()
   _resetGaClientIdForTests()
-  _resetGaForTests()
   // getGaClientId falls back to this cookie; clear it so the assertions
   // below see only what setupGa's callback provides.
   Cookies.remove('_ga')
@@ -43,9 +41,9 @@ beforeEach(() => {
 
 describe('shouldInitGa', () => {
   test('true only on prod hosts', () => {
-    expect(shouldInitGa({hostname: 'bldrs.ai', isWebdriver: false})).toBe(true)
+    expect(shouldInitGa({hostname: 'bldrs.ai', isWebdriver: false, isBrowserGaOn: true})).toBe(true)
     expect(shouldInitGa({hostname: 'www.bldrs.ai', isWebdriver: false})).toBe(true)
-    expect(shouldInitGa({hostname: 'localhost', isWebdriver: false})).toBe(false)
+    expect(shouldInitGa({hostname: 'localhost', isWebdriver: false, isBrowserGaOn: true})).toBe(false)
     expect(shouldInitGa({hostname: 'bldrs-share-prod.netlify.app', isWebdriver: false})).toBe(false)
     expect(shouldInitGa({hostname: 'deploy-preview-1741--bldrs-share-prod.netlify.app', isWebdriver: false})).toBe(false)
     expect(shouldInitGa({hostname: 'bldrs-ai.github.io', isWebdriver: false})).toBe(false)
@@ -102,13 +100,13 @@ describe('shouldInitGa', () => {
 
 describe('setupGa', () => {
   test('does not inject the loader off-prod', () => {
-    setupGa({hostname: 'localhost', isWebdriver: false})
+    setupGa({hostname: 'localhost', isWebdriver: false, isBrowserGaOn: true})
     expect(findGtagScript()).toBeNull()
     expect(captureException).not.toHaveBeenCalled()
   })
 
   test('injects the async gtag/js loader on prod', () => {
-    setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+    setupGa({hostname: 'bldrs.ai', isWebdriver: false, isBrowserGaOn: true})
     const script = findGtagScript()
     expect(script).not.toBeNull()
     expect(script.async).toBe(true)
@@ -123,6 +121,7 @@ describe('setupGa', () => {
       hostname: 'deploy-preview-1757--bldrs-share-prod.netlify.app',
       isWebdriver: false,
       enableInPreview: true,
+      isBrowserGaOn: true,
     })
     expect(findGtagScript()).not.toBeNull()
     expect(consoleInfo).toHaveBeenCalledWith(
@@ -137,7 +136,7 @@ describe('setupGa', () => {
   // A blocked client is expected, not a defect (AGENTS.md, Reported
   // Conditions): counted as a client-capability report, not a Sentry event.
   test('reports a load failure as a ga_blocked capability report, not to Sentry', () => {
-    setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+    setupGa({hostname: 'bldrs.ai', isWebdriver: false, isBrowserGaOn: true})
     expect(reportClientCapability).not.toHaveBeenCalled()
     findGtagScript().onerror()
     expect(reportClientCapability).toHaveBeenCalledWith('ga_blocked')
@@ -147,7 +146,7 @@ describe('setupGa', () => {
   // GA4 has no user-id dimension, so the client id ships as an event
   // param; the callback only resolves once gtag/js actually loads.
   test('requests the GA client id and records it for model-open events', () => {
-    setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+    setupGa({hostname: 'bldrs.ai', isWebdriver: false, isBrowserGaOn: true})
     const getCall = window.dataLayer.find((entry) => entry?.[0] === 'get')
     expect(getCall).toBeDefined()
     expect(getCall[1]).toBe(GA_MEASUREMENT_ID)
@@ -162,7 +161,7 @@ describe('setupGa', () => {
   // including their first model open — would otherwise miss it.
   test('publishes the client id as a user property before and after the callback', () => {
     Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
-    setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+    setupGa({hostname: 'bldrs.ai', isWebdriver: false, isBrowserGaOn: true})
     const setCalls = window.dataLayer.filter((entry) => entry?.[0] === 'set')
     expect(setCalls).toHaveLength(1)
     expect(setCalls[0][1]).toBe('user_properties')
@@ -176,7 +175,7 @@ describe('setupGa', () => {
   // A first-ever visitor has no cookie, so the setup-time call finds
   // nothing; the callback is the only path that publishes for them.
   test('publishes the user property for a first visit, once the callback lands', () => {
-    setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+    setupGa({hostname: 'bldrs.ai', isWebdriver: false, isBrowserGaOn: true})
     expect(window.dataLayer.filter((entry) => entry?.[0] === 'set')).toHaveLength(0)
 
     const getCall = window.dataLayer.find((entry) => entry?.[0] === 'get')
@@ -191,13 +190,13 @@ describe('setupGa', () => {
   // the queued entry has nowhere to go.
   test('setupGa does not publish the user property off-prod', () => {
     Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
-    setupGa({hostname: 'localhost', isWebdriver: false})
+    setupGa({hostname: 'localhost', isWebdriver: false, isBrowserGaOn: true})
     expect(window.dataLayer.filter((entry) => entry?.[0] === 'set')).toHaveLength(0)
   })
 
 
   test('does not request a client id off-prod', () => {
-    setupGa({hostname: 'localhost', isWebdriver: false})
+    setupGa({hostname: 'localhost', isWebdriver: false, isBrowserGaOn: true})
     expect(window.dataLayer.find((entry) => entry?.[0] === 'get')).toBeUndefined()
   })
 
@@ -212,7 +211,7 @@ describe('setupGa', () => {
     // before gtag/js resolves still carries the tag.
     test('tags from the _ga cookie at setup, for a returning visitor', () => {
       Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
-      setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+      setupGa({hostname: 'bldrs.ai', isWebdriver: false, isBrowserGaOn: true})
       expect(setTag).toHaveBeenCalledWith('open_cid', '1234567890.0987654321')
     })
 
@@ -220,7 +219,7 @@ describe('setupGa', () => {
     // float, and the dashboard strips it before building the query.
     test('sends the bare id, without the GA cid. prefix', () => {
       Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
-      setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+      setupGa({hostname: 'bldrs.ai', isWebdriver: false, isBrowserGaOn: true})
       const values = setTag.mock.calls.map(([, value]) => value)
       expect(values).not.toContain('cid.1234567890.0987654321')
     })
@@ -229,7 +228,7 @@ describe('setupGa', () => {
     // path. The setup-time sync still runs — it just has no id to
     // publish, which is the same undefined a retraction writes.
     test('tags from the gtag callback for a first visit', () => {
-      setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+      setupGa({hostname: 'bldrs.ai', isWebdriver: false, isBrowserGaOn: true})
       expect(setTag).toHaveBeenLastCalledWith('open_cid', undefined)
 
       window.dataLayer.find((entry) => entry?.[0] === 'get')[3]('1234567890.0987654321')
@@ -238,7 +237,7 @@ describe('setupGa', () => {
 
     test('does not tag off-prod, where GA never initializes', () => {
       Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
-      setupGa({hostname: 'localhost', isWebdriver: false})
+      setupGa({hostname: 'localhost', isWebdriver: false, isBrowserGaOn: true})
       expect(setTag).not.toHaveBeenCalled()
     })
 
@@ -248,7 +247,7 @@ describe('setupGa', () => {
     test('sends no id when analytics consent is withheld', () => {
       Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
       setIsAllowed(false)
-      setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+      setupGa({hostname: 'bldrs.ai', isWebdriver: false, isBrowserGaOn: true})
       expect(window.dataLayer.find((entry) => entry?.[0] === 'get')).toBeUndefined()
       const values = setTag.mock.calls.filter(([key]) => key === 'open_cid').map(([, value]) => value)
       expect(values.every((value) => value === undefined)).toBe(true)
@@ -261,31 +260,17 @@ describe('setupGa', () => {
     // diagnostics event would have inherited the stale one.
     test('retracts an already-published tag when consent is withdrawn', () => {
       Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
-      setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+      setupGa({hostname: 'bldrs.ai', isWebdriver: false, isBrowserGaOn: true})
       expect(setTag).toHaveBeenCalledWith('open_cid', '1234567890.0987654321')
 
       setIsAllowed(false)
       expect(setTag).toHaveBeenLastCalledWith('open_cid', undefined)
     })
-
-    // A declined visitor's _ga is deleted at setup, so the id has to come
-    // back from gtag/js itself once the re-grant loads it.
-    test('republishes the tag when consent is granted again', () => {
-      Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
-      setIsAllowed(false)
-      setupGa({hostname: 'bldrs.ai', isWebdriver: false})
-      expect(Cookies.get('_ga')).toBeUndefined()
-
-      setIsAllowed(true)
-      updateGaConsent()
-      window.dataLayer.find((entry) => entry?.[0] === 'get')[3]('1234567890.0987654321')
-      expect(setTag).toHaveBeenLastCalledWith('open_cid', '1234567890.0987654321')
-    })
   })
 
   test('reports a missing inline bootstrap to Sentry without throwing', () => {
     delete window.gtag
-    expect(() => setupGa({hostname: 'bldrs.ai', isWebdriver: false})).not.toThrow()
+    expect(() => setupGa({hostname: 'bldrs.ai', isWebdriver: false, isBrowserGaOn: true})).not.toThrow()
     expect(findGtagScript()).toBeNull()
     // Fingerprinted, so one defect is one issue whatever the build's stack.
     expect(captureException).toHaveBeenCalledWith(
@@ -297,15 +282,20 @@ describe('setupGa', () => {
 })
 
 
-/** @return {Array} the dataLayer as [command, arg, params] triples */
-function queued() {
-  return window.dataLayer.map((entry) => [entry?.[0], entry?.[1], entry?.[2]])
-}
-
-
-// design/new/analytics-consent.md: GA loads only once the visitor allows it.
+// design/new/analytics-consent.md: browser GA is off for everyone; a later
+// opt-in would turn it back on, loading only once the visitor allows it.
 describe('consent', () => {
-  const PROD = {hostname: 'bldrs.ai', isWebdriver: false}
+  const PROD = {hostname: 'bldrs.ai', isWebdriver: false, isBrowserGaOn: true}
+
+  // Owner, 2026-11-25: no Google Analytics in the browser, consent or not.
+  test('browser GA is off: even a consenting visitor on prod gets no loader, and leftovers go', () => {
+    expect(IS_BROWSER_GA_ON).toBe(false)
+    Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+    setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+    expect(findGtagScript()).toBeNull()
+    expect(window.dataLayer).toHaveLength(0)
+    expect(Cookies.get('_ga')).toBeUndefined()
+  })
 
   test('a visitor who has not chosen gets no loader on prod', () => {
     Cookies.remove('consentLevel')
@@ -327,7 +317,7 @@ describe('consent', () => {
     }
     Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
     Cookies.set('_gcl_au', '1.1.x')
-    setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+    setupGa({hostname: 'bldrs.ai', isWebdriver: false, isBrowserGaOn: true})
     expect(Cookies.get('_ga')).toBeUndefined()
     expect(Cookies.get('_gcl_au')).toBeUndefined()
   })
@@ -354,7 +344,7 @@ describe('consent', () => {
 
   test('keeps the GA cookie at setup for a consenting visitor', () => {
     Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
-    setupGa({hostname: 'localhost', isWebdriver: false})
+    setupGa({hostname: 'localhost', isWebdriver: false, isBrowserGaOn: true})
     expect(Cookies.get('_ga')).toBe('GA1.1.1234567890.0987654321')
   })
 
@@ -362,71 +352,6 @@ describe('consent', () => {
     Cookies.set('consentLevel', '1.restricted')
     setupGa(PROD)
     expect(findGtagScript()).toBeNull()
-  })
-
-  test('allowing mid-page loads gtag/js, with consent granted before config', () => {
-    Cookies.remove('consentLevel')
-    setupGa(PROD)
-    expect(findGtagScript()).toBeNull()
-
-    setIsAllowed(true)
-    updateGaConsent()
-    expect(findGtagScript()).not.toBeNull()
-    const commands = queued()
-    const updateAt = commands.findIndex(([cmd, arg]) => cmd === 'consent' && arg === 'update')
-    const configAt = commands.findIndex(([cmd, arg]) => cmd === 'config' && arg === GA_MEASUREMENT_ID)
-    expect(commands[updateAt][2]).toEqual(CONSENT_GRANTED)
-    expect(configAt).toBeGreaterThan(updateAt)
-    expect(window[`ga-disable-${GA_MEASUREMENT_ID}`]).toBe(false)
-  })
-
-  test('allowing does not queue a second config when the stub already queued one', () => {
-    window.gtag('config', GA_MEASUREMENT_ID, {})
-    setupGa(PROD)
-    updateGaConsent()
-    expect(queued().filter(([cmd]) => cmd === 'config')).toHaveLength(1)
-    // and does not inject the loader twice
-    expect(document.head.querySelectorAll(`script[src*="${GA_MEASUREMENT_ID}"]`)).toHaveLength(1)
-  })
-
-  test('allowing off-prod updates consent but never loads gtag/js', () => {
-    Cookies.remove('consentLevel')
-    setupGa({hostname: 'localhost', isWebdriver: false})
-    setIsAllowed(true)
-    updateGaConsent()
-    expect(findGtagScript()).toBeNull()
-    expect(queued()).toContainEqual(['consent', 'update', CONSENT_GRANTED])
-  })
-
-  test('declining after GA loaded sets the kill switch, denies consent and deletes the cookies', () => {
-    setupGa(PROD)
-    Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
-    Cookies.set('_ga_GRLNVMZRGW', 'GS1.1.x')
-    Cookies.set('_gcl_au', '1.1.x')
-    Cookies.set('theme', 'night')
-
-    setIsAllowed(false)
-    updateGaConsent()
-    expect(window[`ga-disable-${GA_MEASUREMENT_ID}`]).toBe(true)
-    expect(queued()).toContainEqual(['consent', 'update', CONSENT_DEFAULT])
-    expect(Cookies.get('_ga')).toBeUndefined()
-    expect(Cookies.get('_ga_GRLNVMZRGW')).toBeUndefined()
-    expect(Cookies.get('_gcl_au')).toBeUndefined()
-    expect(Cookies.get('theme')).toBe('night')
-    Cookies.remove('theme')
-  })
-
-  // Codex on #2051: the decline path must not reach a host site's cookies
-  // either, on a self-hosted Share where our tag never ran.
-  test('declining on a self-hosted Share leaves the host site\'s GA cookies alone', () => {
-    const env = {hostname: 'share.example.com', isWebdriver: false}
-    setupGa(env)
-    Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
-    setIsAllowed(false)
-    updateGaConsent(env)
-    expect(window[`ga-disable-${GA_MEASUREMENT_ID}`]).toBe(true)
-    expect(Cookies.get('_ga')).toBe('GA1.1.1234567890.0987654321')
-    Cookies.remove('_ga')
   })
 
   // Google Ads is switched off: consent is for analytics and nothing else.
@@ -438,15 +363,6 @@ describe('consent', () => {
       analytics_storage: 'granted', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied',
     })
     expect(GA_CONFIG).toEqual({allow_google_signals: false, allow_ad_personalization_signals: false})
-  })
-
-  test('the config queued on a mid-page allow turns ad signals off', () => {
-    Cookies.remove('consentLevel')
-    setupGa(PROD)
-    setIsAllowed(true)
-    updateGaConsent()
-    const config = queued().find(([cmd]) => cmd === 'config')
-    expect(config[2]).toEqual(GA_CONFIG)
   })
 
   test('deleteGoogleCookies tries every parent domain', () => {

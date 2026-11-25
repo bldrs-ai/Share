@@ -21,9 +21,10 @@ export function isAllowed() {
 
 /**
  * Store the visitor's privacy level and bring the identifiers that follow
- * consent into line with it. The GA tag itself (load, consent update,
- * opt-out) is index/ga.js#updateGaConsent's job; privacy/consentChoice.js
- * calls both, and is what UI should call.
+ * consent into line with it. Nothing in the UI asks for consent while
+ * browser GA is off (index/ga.js#IS_BROWSER_GA_ON); kept for the later
+ * opt-in (design/new/analytics-consent.md), which would also have to bring
+ * the GA tag in line (load it, update its consent, or silence it).
  *
  * @param {string} level one of consent#CONSENT_LEVELS
  */
@@ -843,9 +844,9 @@ export function setUserCidProperty() {
  * Retraction sets the property to null. Whether GA4 treats null as a
  * clear, rather than storing it as a value, is unverified in DebugView;
  * if it doesn't, this is the one place to change. It matters less than
- * it did: a withdrawal also sets ga-disable and denies consent
- * (index/ga.js#updateGaConsent), so the tag sends nothing more for the
- * rest of the page either way.
+ * it did while GA could load: a withdrawal also set ga-disable and denied
+ * consent, so the tag sent nothing more for the rest of the page. Browser
+ * GA is off now (index/ga.js#IS_BROWSER_GA_ON).
  */
 function syncUserCidProperty() {
   if (!window.gtag) {

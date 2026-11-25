@@ -27,7 +27,7 @@ export default function PrivacyPage() {
           <strong>Effective Date:</strong> January 1, 2022
         </Typography>
         <Typography variant="body2" sx={{opacity: 0.75, mb: 3}}>
-          <strong>Last Updated:</strong> November 24, 2026
+          <strong>Last Updated:</strong> November 25, 2026
         </Typography>
 
         <Typography variant="body1">
@@ -53,38 +53,44 @@ export default function PrivacyPage() {
           Google Drive), we only request access to the specific files you select.
           We do not scan or store other files from your account.
         </Typography>
-        <Typography variant="body1">
-          <strong>Telemetry is required by default.</strong> We collect pseudonymous
-          usage metrics (e.g., performance, feature use) to improve reliability and user
-          experience. Telemetry is of two kinds:
-        </Typography>
+        {/* Keep these paragraphs word for word in step with
+           src/pages/Privacy.jsx, the in-app copy at /share/privacy (Privacy.test.jsx checks).
+           What they describe: design/new/analytics-consent.md. */}
         <Typography variant="body1">
           <strong>Error and reliability reports.</strong> When something fails, the app
-          reports what failed, the app and browser versions and, if you’re signed in,
-          your account ID, to our error-monitoring service (Sentry). Separately, it
-          counts browsers that can’t run part of the app (for example, with no WebGL, or
-          with analytics blocked) by browser family and device type only, sent to Google
-          Analytics under one shared ID rather than yours. None of these reports set
-          cookies, carry an identifier that follows your browser between visits, or
-          include your models’ file names, paths or contents. They are part of operating
-          the service and are always on, on the basis of our legitimate interest in
-          keeping Bldrs Share secure and working.
+          reports what failed, the app and browser versions and, if you’re signed in, your
+          account ID, to our error-monitoring service (Sentry). Separately, it counts
+          browsers that can’t run part of the app (for example, with no WebGL) by browser
+          family and device type only, sent to Google Analytics from our server under one
+          shared ID rather than yours. None of these reports set cookies, carry an
+          identifier that follows your browser between visits, or include your models’
+          file names, paths or contents. They are part of operating the service and are
+          always on, on the basis of our legitimate interest in keeping Bldrs Share secure
+          and working.
         </Typography>
         <Typography variant="body1">
-          <strong>Usage metrics.</strong> With your consent, we measure visits and feature
-          use, including which kinds of models are opened (format, size, source), with
-          Google Analytics, which sets cookies holding a pseudonymous ID. We do not use
-          them for advertising. Nothing is collected for usage metrics until you press
-          Accept in the privacy banner.
+          <strong>How models load.</strong> We don’t use Google Analytics or any other
+          tracking in the app: no analytics cookies, and no identifier that follows your
+          browser between visits. To learn how Bldrs Share is used and how it performs,
+          the app reports each model you open to our server: the kind of file, its size
+          range, where it came from (your computer, GitHub, Google Drive or a web
+          address), how long it took to load, how complex it was, and whether it loaded or
+          failed. A report never includes a model’s name, path, web address or contents.
+          It carries one random ID that lives only while the page is open, so the models
+          opened in one visit can be counted together; it is never stored, and a reload
+          starts a new one. Our server passes these reports on to Google Analytics under
+          one shared ID, so Google never sees your browser or network address. They are
+          always on, on the basis of our legitimate interest in running and improving the
+          service.
         </Typography>
         <Typography variant="body1">
-          <strong>You may refuse normal operation</strong> and Bldrs Share will operate in
-          a reduced local-only mode (“Test only mode”) to allow evaluation of basic viewer
-          capabilities: you can open files from your computer and the sample models, but
-          not models from GitHub, Google Drive or a web address, and you can’t save to
-          GitHub or share. Press Decline in the privacy banner to choose it. Error and
-          reliability reports continue in this mode. You can change your choice at any
-          time from Privacy settings in the About dialog.
+          <strong>Free-use limits.</strong> Some features have a free allowance. If you’re
+          signed in, we count the private models you open and the models you export
+          against your account, to apply your plan’s limits. If you use the AI assistant
+          without signing in, your browser keeps a random ID our server issued, which
+          expires after 24 hours, and our server keeps a daily hash of your network
+          address, which can’t be linked from one day to the next. Both are used only to
+          apply the free allowance and to stop abuse.
         </Typography>
 
         <Typography variant="h3" component="h2" sx={{mt: 4}}>2. Open-Source and Self-Hosted Use</Typography>
@@ -129,8 +135,7 @@ export default function PrivacyPage() {
           request deletion of any stored account metadata (if applicable) by emailing{' '}
           <MuiLink href="mailto:support@bldrs.ai">support@bldrs.ai</MuiLink>. You can
           also use open-source/self-hosted deployments without accounts, subject to
-          your configuration. You can change your telemetry choice at any time from
-          Privacy settings in the About dialog.
+          your configuration.
         </Typography>
 
         <Typography variant="h3" component="h2" sx={{mt: 4}}>7. Children&apos;s Privacy</Typography>

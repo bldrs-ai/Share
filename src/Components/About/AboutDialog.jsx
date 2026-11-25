@@ -5,10 +5,15 @@ import {Email as EmailIcon, GitHub as GitHubIcon, X as XIcon} from '@mui/icons-m
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
 import {LogoB} from '../Logo/Logo'
-import useStore from '../../store/useStore'
 import {ABOUT_MISSION, ABOUT_PAGE_TITLE} from './component'
-import {PRIVACY_POLICY_HREF} from './ConsentBanner'
 import DiscordIcon from './Discord.svg'
+
+
+/**
+ * The privacy policy, served by the marketing build (netlify.toml: /privacy/
+ * is a file match). The app has no /share/privacy route.
+ */
+export const PRIVACY_POLICY_HREF = '/privacy/'
 
 
 /** First of the About dialog's socials (owner, 2026-11-24). */
@@ -28,8 +33,7 @@ export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, on
   // close has to go through onClose instead: that's where the first-time
   // cookie is set (AboutControl/LogoMenu), and without it a first-timer who
   // dismissed About by clicking the backdrop got About + the onboarding
-  // overlay replayed on the reload after their first drag-and-drop. No close
-  // touches the privacy choice: the banner asks for it (ConsentBanner.jsx).
+  // overlay replayed on the reload after their first drag-and-drop.
   const setIsDisplayed = (isDisplayed) => {
     if (isDisplayed) {
       setIsDialogDisplayed(true)
@@ -58,7 +62,7 @@ export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, on
       actionTitle='OK'
       actionCb={onClose}
     >
-      <AboutContent onClose={onClose}/>
+      <AboutContent/>
     </Dialog>
   )
 }
@@ -129,20 +133,9 @@ function Tdc({children}) {
 }
 
 
-/**
- * @param {object} props
- * @param {Function} props.onClose closes About the way every other path does
- * @return {ReactElement}
- */
-function AboutContent({onClose}) {
+/** @return {ReactElement} */
+function AboutContent() {
   const isMobile = useIsMobile()
-  const setIsConsentBannerVisible = useStore((state) => state.setIsConsentBannerVisible)
-  // Changing the choice is as easy as making it: the same banner, on demand.
-  const openPrivacySettings = (event) => {
-    event.preventDefault()
-    onClose()
-    setIsConsentBannerVisible(true)
-  }
   return (
     <Stack align='center' justifyContent='center' spacing={2} sx={{width: '100%', paddingTop: '1em'}}>
       <Helmet>
@@ -185,6 +178,7 @@ function AboutContent({onClose}) {
       </table>
       <Typography variant='body2' color='text.secondary' data-testid='about-privacy'>
         Your models stay on your device.{' '}
+        {/* A new tab, so reading the policy doesn't leave the loaded model. */}
         <Link
           href={PRIVACY_POLICY_HREF}
           target='_blank'
@@ -193,16 +187,6 @@ function AboutContent({onClose}) {
           data-testid='about-privacy-policy'
         >
           Privacy policy
-        </Link>
-        {' · '}
-        <Link
-          component='button'
-          onClick={openPrivacySettings}
-          color='inherit'
-          sx={{verticalAlign: 'baseline'}}
-          data-testid='about-privacy-settings'
-        >
-          Privacy settings
         </Link>
       </Typography>
       <Stack direction='row' justifyContent='center' alignItems='center' spacing={1} sx={{fontSize: '0.9em', opacity: 0.5}}>

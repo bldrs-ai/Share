@@ -18,10 +18,6 @@ describe('OnboardingOverlay', () => {
   describe('First time user visits homepage', () => {
     beforeEach(async ({page}) => {
       await homepageSetup(page)
-      // First visit, but with the privacy choice already made, so the
-      // consent banner (which shows over the tour; About/ConsentBanner.jsx)
-      // stays out of this spec's screenshots of the tour itself.
-      await page.context().addCookies([{name: 'consentLevel', value: '1.functional', domain: 'localhost', path: '/'}])
       await visitHomepageWaitForModel(page)
     })
 

@@ -1,5 +1,4 @@
 import {isVisibleInitially as aboutIsVisibleInitially} from '../Components/About/hashState'
-import {getConsentLevel, isConsentDecided} from '../privacy/consent'
 import {isVisibleInitially as helpIsVisibleInitially} from '../Components/Help/hashState'
 import {isVisibleInitially as loginIsVisibleInitially} from '../Components/Profile/hashState'
 import {isVisibleInitially as shareIsVisibleInitially} from '../Components/Share/hashState'
@@ -24,27 +23,6 @@ export default function createUISlice(set, get) {
     // NOTE: Nav, Notes, Search and Versions have been moved to their Slices
     isAboutVisible: aboutIsVisibleInitially(),
     setIsAboutVisible: (is) => set(() => ({isAboutVisible: is})),
-
-    // The visitor's privacy level (privacy/consent.js), mirrored from its
-    // cookie so the UI that local-only mode gates (privacy/localOnlyMode.js)
-    // re-renders the moment the choice changes. consentChoice.js is the only
-    // writer after this initial read.
-    privacyLevel: getConsentLevel(),
-    setPrivacyLevel: (level) => set(() => ({privacyLevel: level})),
-
-    // The privacy banner (About/ConsentBanner.jsx): up on every load until
-    // the visitor answers under the current consent version, and on demand
-    // from Privacy settings (About, Open/LocalOnlyDialog).
-    isConsentBannerVisible: !isConsentDecided(),
-    setIsConsentBannerVisible: (is) => set(() => ({isConsentBannerVisible: is})),
-
-    // A remote model link local-only mode refused: `{path, source}`, the
-    // refused URL's path+search+hash and 'github' | 'google' | 'url', or
-    // null. Share.jsx sets it and falls back to the home model;
-    // Open/LocalOnlyDialog.jsx explains, and opens the path once the visitor
-    // raises their level.
-    blockedRemoteModel: null,
-    setBlockedRemoteModel: (blocked) => set(() => ({blockedRemoteModel: blocked})),
 
     // True while an export is running (`src/export/useExport.js`). Shared
     // state rather than the hook's own, because two components call

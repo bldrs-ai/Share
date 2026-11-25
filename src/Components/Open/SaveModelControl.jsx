@@ -18,8 +18,6 @@ import {getOrganizations} from '../../net/github/Organizations'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
 import {getBranches} from '../../net/github/Branches'
 import useStore from '../../store/useStore'
-import {isLocalOnlyLevel} from '../../privacy/localOnlyMode'
-import LocalOnlyNotice from './LocalOnlyNotice'
 import debug, {WARN} from '../../utils/debug'
 import {navigateBaseOnModelPath} from '../../utils/location'
 import {navigateToModel} from '../../utils/navigate'
@@ -173,7 +171,6 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
   // off this dialog has no tabs at all and looks exactly as it did before.
   const isExportEnabled = isFeatureEnabled('export')
   const isExportTab = isExportEnabled && currentTab === TAB_EXPORT
-  const isLocalOnly = isLocalOnlyLevel(useStore((state) => state.privacyLevel))
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
 
@@ -380,7 +377,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
       // isn't looking at.
       actionTitle={isExportTab ? undefined : MSG_SAVE_MODEL}
       actionCb={saveFile}
-      actionDisabled={cannotSave || isLocalOnly}
+      actionDisabled={cannotSave}
       // Blue/accent + sentence case, like the Open dialog's "Connect GitHub"
       // button — a grey, all-caps action read as disabled even when it
       // wasn't (product-owner feedback on #1837's deploy preview, #1838).
@@ -417,11 +414,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
         >
           {/* A signed-out user reaches this dialog (it opens on Export for
               them, Share#1964); on this tab, log in is all there is to do. */}
-          {/* Local-only mode (privacy/localOnlyMode.js): saving to GitHub
-              is a remote write. The Export tab, a local download, stays. */}
-          {isLocalOnly ? (
-            <LocalOnlyNotice source='GitHub' action='save to'/>
-          ) : !isAuthenticated ? (
+          {!isAuthenticated ? (
             <PleaseLogin/>
           ) : isSaveDisabled ? (
             <Stack
