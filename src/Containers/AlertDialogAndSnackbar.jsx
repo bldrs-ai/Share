@@ -6,6 +6,7 @@ import {
   ExpandLess as ExpandLessIcon,
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material'
+import {isHostedDemoModel} from '../privacy/analytics'
 import AlertDialog from '../Components/AlertDialog'
 import useStore from '../store/useStore'
 import {assert} from '../utils/assert'
@@ -115,8 +116,17 @@ export default function AlertAndSnackbar() {
   // grace line over the reporter's filename fallback, since a STEP header's
   // fileName is often junk.
   const model = useStore((state) => state.model)
-  const isLoadActive = currentLoadLine !== null
-  const isGrace = loadResult !== null
+  const modelPath = useStore((state) => state.modelPath)
+  // The homepage model (index.ifc, index.step) loads on every visit; its
+  // progress and "Loaded …" line read as noise to a visitor who opened
+  // nothing (owner, 2026-11-25). Its report stays a click away on the "i"
+  // control (LoadReportControl), and a failed load still shows here. A
+  // quiet load counts as no load at all below, so an ordinary snackMessage
+  // shown meanwhile keeps its own close button and never inherits the load
+  // view's OK, timer or shrink-to-"i" (codex on #2354).
+  const isQuietDemoLoad = isHostedDemoModel(modelPath) && loadResult?.status !== 'error'
+  const isLoadActive = currentLoadLine !== null && !isQuietDemoLoad
+  const isGrace = loadResult !== null && !isQuietDemoLoad
   const showLoadView = isLoadActive || isGrace
 
   const [isSnackOpen, setIsSnackOpen] = useState(false)
@@ -251,6 +261,12 @@ export default function AlertAndSnackbar() {
     clearTimeout(graceTimerRef.current)
     graceTimerRef.current = null
     setAnimStyle(NO_ANIM_STYLE)
+    // A quiet demo load's success has no grace view to run: drop it now,
+    // rather than leave a hidden 5s timer and animation behind it.
+    if (loadResult?.status === 'success' && isHostedDemoModel(modelPath)) {
+      setLoadResult(null)
+      return undefined
+    }
     if (loadResult?.status === 'success' && !isLoadExpanded) {
       graceTimerRef.current = setTimeout(startDismissAnimation, GRACE_MS)
     }
@@ -366,6 +382,7 @@ export default function AlertAndSnackbar() {
   const closeAction = (
     <IconButton
       onClick={() => setIsSnackOpen(false)}
+      aria-label='Close'
       size='small'
       sx={{marginRight: '-.5em'}}
     >
