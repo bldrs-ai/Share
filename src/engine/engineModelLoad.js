@@ -593,7 +593,13 @@ export function withEngineSource(error, sourceMode) {
  */
 function engineLoadError(msg) {
   if (msg.error instanceof Error) {
-    msg.error.engineFailureKind = msg.kind
+    try {
+      msg.error.engineFailureKind = msg.kind
+    } catch {
+      // A frozen or non-extensible Error: it fails the load untagged. This
+      // runs inside the page engine's FAILED emit, so a throw from here would
+      // escape the listener and leave the load's `finished` unsettled.
+    }
     return msg.error
   }
   // A string, whatever the worker sent: a stale worker beside a new page can

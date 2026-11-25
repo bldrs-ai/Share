@@ -474,10 +474,11 @@ export default class ShareIfcLoader {
     // to feed (`demandGeometry` off, no scene). Its own, on either route,
     // because a failed or given-up load closes its engine, and the viewer's
     // must survive that for the next parse into it (an auth retry, CadView's
-    // re-run after a failure; ConwayEngine.js says why close is terminal). Everything below is the same code for both: `ifcAPI` is the
-    // load's web-ifc-shaped alias of the engine (engine/engineModelLoad.js),
-    // and IFC and STEP alike, STEP's occurrence paths arriving on the same
-    // placements the builder reads.
+    // re-run after a failure; ConwayEngine.js says why close is terminal).
+    // Everything below is the same code for both: `ifcAPI` is the load's
+    // web-ifc-shaped alias of the engine (engine/engineModelLoad.js), and IFC
+    // and STEP alike, STEP's occurrence paths arriving on the same placements
+    // the builder reads.
     const onWorker = isEngineWorkerLoad(this.type, scene)
     const viewerEngine = this.engine
     const engineLoad = createEngineModelLoad({

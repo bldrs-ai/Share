@@ -1556,10 +1556,14 @@ describe('engine/ConwayEngine', () => {
       }
       const ended = new Promise((resolve) => engine.on('failed', resolve))
       await engine.open({file: new Blob([new Uint8Array(8)])}, {stream: {}})
+      const pumping = engine.pumping
       await waitUntil(() => typeof finishAsk === 'function')
       engine.abort()
       finishAsk()
       await ended
+      // To the pump's end, not only the first `failed`: a `done` would come
+      // later, after the summary's awaits (review of #2373, round 2).
+      await pumping
       expect(events).toEqual(['failed aborted'])
     })
 
@@ -1573,6 +1577,17 @@ describe('engine/ConwayEngine', () => {
       const load = createEngineModelLoad({spawn: () => Promise.resolve(engine)})
       await expect(load.parse(new Uint8Array(4), {onMeshBatch: () => null})).rejects.toBe(fault)
       expect(fault.engineFailureKind).toBe('pump')
+    })
+
+    it('fails the load with a frozen Error too, rather than hang it (round 2)', async () => {
+      const api = makeApi(3)
+      const fault = Object.freeze(new Error('conway: frozen fault'))
+      api.ExtractGeometryBatch = jest.fn(() => {
+        throw fault
+      })
+      const engine = new ConwayEngine({ifcAPI: api})
+      const load = createEngineModelLoad({spawn: () => Promise.resolve(engine)})
+      await expect(load.parse(new Uint8Array(4), {onMeshBatch: () => null})).rejects.toBe(fault)
     })
 
     it('lets the retained stream go with the native geometry', async () => {
