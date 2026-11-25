@@ -58,7 +58,13 @@ export default function Privacy() {
           on a phone or a computer. A report never includes a model’s name, path, web address or contents; the
           only model it names is one of our own sample models, if that’s what you opened. It carries one random
           ID that lives only while the page is open, so the models opened in one visit can be counted together;
-          it is never stored, and a reload starts a new one. Our server passes these reports on to Google
+          it is never stored, and a reload starts a new one. The app also reports each time you open a page:
+          what kind of page it was (the home page, or the viewer and where its model comes from), what kind of
+          site you came from (a search engine, a social network, our own site, another site, or none), a
+          campaign name only if it is one we know, and whether you’re on a phone or a computer. It never
+          includes the page’s address or the site you came from, and it carries the same random ID, so a visit
+          can be counted with the models opened in it. Our server adds your country, as its hosting provider
+          locates the request, and keeps it nowhere. Our server passes these reports on to Google
           Analytics under one shared ID, so Google never sees your browser or network address. They are always
           on, on the basis of our legitimate interest in running and improving the service.
         </Typography>

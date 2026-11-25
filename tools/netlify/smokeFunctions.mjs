@@ -189,6 +189,14 @@ export const PROBES = [
     strict: [{status: HTTP_BAD_REQUEST, body: 'invalid_model_open_count'}],
   },
   {
+    name: 'page-visit',
+    scenario: 'page-visit/invalid-report',
+    method: 'POST',
+    body: {},
+    accept: [{status: HTTP_BAD_REQUEST, body: 'invalid_page_visit'}],
+    strict: [{status: HTTP_BAD_REQUEST, body: 'invalid_page_visit'}],
+  },
+  {
     name: 'pro-module',
     scenario: 'pro-module/unauthenticated',
     method: 'GET',
