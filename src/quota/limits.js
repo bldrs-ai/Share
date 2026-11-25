@@ -89,7 +89,13 @@ export function loadsInCurrentPeriod(loads, now) {
  * @return {{period: ?{start: number, end: number}, rows: Array<{key: string, loadedAt: string}>}}
  */
 export function slotPeriod(loads, now) {
-  return usesInCurrentPeriod(loads, now, (row) => Date.parse(row?.loadedAt))
+  // Well-formed rows only (a string key, a readable stamp): the one filter
+  // record-load and export slots both chain through, so a malformed row
+  // can't start a period for one and not the other (review on Share#2368).
+  const rows = Array.isArray(loads) ?
+    loads.filter((row) => row && typeof row.key === 'string' && Number.isFinite(Date.parse(row.loadedAt))) :
+    []
+  return usesInCurrentPeriod(rows, now, (row) => Date.parse(row.loadedAt))
 }
 
 

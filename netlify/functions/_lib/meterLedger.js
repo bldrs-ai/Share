@@ -39,10 +39,10 @@
  *
  * A token's record is deleted 30 days after its period ends
  * (RETENTION_AFTER_PERIOD_MS), an IP bucket the day after its own, both by
- * the daily sweep (`meter-sweep.js`). The 30 days are for the link at
- * sign-in to find a token whose period has just ended, and for the abuse
- * that matters to be investigated; after them only the sweep's ID-free
- * aggregates (`meter/aggregate/<YYYY-MM>`) remain.
+ * the daily sweep (`meter-sweep.js`). The 30 days are for abuse to be
+ * looked into (the link at sign-in carries only a token whose period is
+ * still running); after them only the sweep's ID-free aggregates
+ * (`meter/aggregate/<YYYY-MM>`) remain.
  */
 import {createHmac} from 'node:crypto'
 import {compareAndSwap} from './blobCas.js'
@@ -312,6 +312,13 @@ export async function recordUse(store, {anonId, period, feature, digest, limit, 
       }
       entry.count += 1
       entry.models.push(digest)
+      if (entry.stage === STAGES.GATED && entry.gatedBy === 'ip') {
+        // Gated by the network's day cap, not its own count: a later day
+        // admits it again, and its stage is what its count says (review on
+        // Share#2368), so the carry and the aggregates don't overstate it.
+        entry.stage = record.reported.includes(STAGES.LAST_FREE) ? STAGES.LAST_FREE : null
+        entry.gatedBy = null
+      }
       let firstReached = null
       if (entry.count >= limit && reachStage(record, entry, STAGES.LAST_FREE)) {
         firstReached = STAGES.LAST_FREE

@@ -630,6 +630,13 @@ What follows from that:
   day is 17–33 cheap turns, against an assumed trial of about 10, and its
   period cap ($0.30) bounds a returning visitor. A signed-in free user's
   $0.60 a period is ~1,000–2,000 turns. None of this depends on traffic.
+- **How the nested caps bind with the multiplied-out defaults.** With the
+  7-day cap 7× and the period cap 30× the daily one, a user held to the
+  daily cap can't reach either except through the soft rule's overshoot
+  (a hold past the limit, at most one per day). So by default the day cap
+  is the one that binds, and the 7-day and period caps bind only when an
+  override sets them below the multiple (`AI_BUDGET_<TIER>_7D_USD`,
+  `_30D_USD`), which is what they are for (review on Share#2368).
 - **Cap reached: the one decision point.** `ai-chat.js#capReachedDecision`
   is where an identity whose day, 7-day or period cap refuses a turn is
   decided. Today it always refuses (a 402 with `resumeAt`, the last of the

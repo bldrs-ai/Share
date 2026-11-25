@@ -61,6 +61,11 @@ describe('quota/limits', () => {
         rows: [row('b', 35)]})
     })
 
+    it('chains only well-formed rows, as export slots do', () => {
+      expect(slotPeriod([{key: 42, loadedAt: row('x', 0).loadedAt}, row('a', 20)], T0 + (21 * DAY)).period)
+        .toEqual({start: T0 + (20 * DAY), end: T0 + (50 * DAY)})
+    })
+
     it('ignores rows it cannot read', () => {
       expect(loadsInCurrentPeriod([{key: 'x', loadedAt: 'not a date'}, row('a', 0)], T0)).toEqual([row('a', 0)])
       expect(loadsInCurrentPeriod(null, T0)).toEqual([])

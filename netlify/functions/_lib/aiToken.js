@@ -37,14 +37,13 @@ const SECONDS_PER_HOUR = 3600
 const HOURS_PER_DAY = 24
 export const TOKEN_TTL_SECONDS = HOURS_PER_DAY * SECONDS_PER_HOUR
 
-// The AI relay's scheme of the shared anonymous token (`anonToken.js`). Its
-// namespace and prefix are what they were before the token was shared, so
-// every token and IP hash already issued still verifies. Moving the relay to
-// the 30-day metering token (`meteringToken.js`) is the owner's open choice
-// of a 30-day anonymous AI budget (design/new/quotas.md §"Anonymous
-// metering": AI chat stays on this 24-hour window for now); it is a change of
-// which scheme `ai-chat.js#identify` verifies, and of `aiCredits.js`'s
-// anonymous window, not of the token.
+// The AI relay's original scheme of the shared anonymous token
+// (`anonToken.js`). Since 2026-11-25 the relay keys anonymous budgets to the
+// 30-day metering token (`meteringToken.js`) and no longer mints these; it
+// still RECOGNISES one, so a page sending an old token is served anonymously
+// (and handed a metering token) rather than sent to Auth0. What it keeps
+// using here is the IP hash, under this scheme's namespace, so the IP
+// buckets already in the ledger carry on.
 const SCHEME = anonTokenScheme({prefix: TOKEN_PREFIX, ttlSeconds: TOKEN_TTL_SECONDS, namespace: 'bldrs-ai'})
 
 

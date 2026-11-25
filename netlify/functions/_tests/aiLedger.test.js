@@ -542,6 +542,23 @@ describe('aiLedger', () => {
       expect((await reserve(fake.store, b, {id: 'r1', micro: 1, free: false, nowMs: NOW})).ok).toBe(false)
     })
 
+    // Review on Share#2368: the period's first day must still count on the
+    // 31st calendar day, until the period's own end.
+    it('still counts the period\'s first day on its last calendar day', async () => {
+      const fake = createFakeBlobs({delayMs: 1})
+      const dayStart = Date.parse(`${TODAY}T00:00:00.000Z`)
+      const start = dayStart - (30 * DAY_MS) + (12 * 60 * 60 * 1000)
+      const now = dayStart + (6 * 60 * 60 * 1000)
+      const b = nested({windows: [{days: 1, limit: 1000}, {days: 7, limit: 1000}, {days: PERIOD_DAYS, limit: 300}],
+        period: {start}})
+      await seed(fake, b.key, {days: {[utcDay(start)]: {spent: 300, free: 0}}})
+      const r = await reserve(fake.store, b, {id: 'r1', micro: 1, free: false, nowMs: now})
+      expect(r).toMatchObject({ok: false, windowDays: [PERIOD_DAYS], resumeAt: start + (PERIOD_DAYS * DAY_MS)})
+      // ...and once the period has ended, it is all gone.
+      expect((await reserve(fake.store, {...b, period: {start: start + (PERIOD_DAYS * DAY_MS)}},
+        {id: 'r2', micro: 1, free: false, nowMs: start + (PERIOD_DAYS * DAY_MS)})).ok).toBe(true)
+    })
+
     it('leaves a bucket with no windows and no period exactly as before', async () => {
       const fake = createFakeBlobs({delayMs: 1})
       const b = bucket({limit: 100})

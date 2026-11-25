@@ -257,6 +257,21 @@ describe('meter', () => {
         {stage: 'gated', feature: 'remote_load', gated_by: 'ip'})
     })
 
+    it('clears an IP gate from the token\'s stage once a later day counts it', async () => {
+      process.env.METER_ANON_IP_DAILY_REMOTE_LOADS = '1'
+      await load(GH_A, {ip: '198.51.100.1'})
+      const {body: {token}} = await load(GH_B)
+      expect((await load(DRIVE_C, {token})).body).toMatchObject({gatedBy: 'ip'})
+      // Another network (as a new day would be): counted, and no longer gated.
+      const counted = await load(DRIVE_C, {token, ip: '198.51.100.9'})
+      expect(counted.status).toBe(200)
+      const records = [...fake.data.entries()].filter(([path]) => path.includes('meter/anon/'))
+        .map(([, v]) => JSON.parse(v.body))
+      const record = records.find((r) => r.features.remote_load.count === 2)
+      expect(record.features.remote_load).toMatchObject({count: 2, gatedBy: null})
+      expect(record.features.remote_load.stage).not.toBe('gated')
+    })
+
     it('does not count a reopen against the network', async () => {
       process.env.METER_ANON_IP_DAILY_REMOTE_LOADS = '1'
       const {body: {token}} = await load(GH_A)

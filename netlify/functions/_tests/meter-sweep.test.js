@@ -68,6 +68,17 @@ describe('meter-sweep', () => {
     expect(JSON.stringify(aggregate)).not.toContain('AAAA')
   })
 
+  it('aggregates a record only once it is deleted, so a failed delete is not counted twice', async () => {
+    const expiredStart = NOW - PERIOD_MS - (32 * DAY)
+    await seedToken(fake.store, 'C'.repeat(22), expiredStart, ['d1'])
+    const failing = {...fake.store, list: (o) => fake.store.list(o), get: (k, o) => fake.store.get(k, o),
+      getWithMetadata: (k, o) => fake.store.getWithMetadata(k, o), set: (k, v, o) => fake.store.set(k, v, o),
+      delete: () => Promise.reject(new Error('blobs down'))}
+    const result = await sweep(failing, NOW)
+    expect(result).toMatchObject({deleted: {tokens: 0}, aggregated: [], failed: 1})
+    expect(keys().filter((k) => k.startsWith('meter/aggregate/'))).toEqual([])
+  })
+
   it('deletes network buckets once their day is over, the day after', async () => {
     for (const day of ['2026-11-22', '2026-11-24', '2026-11-25']) {
       await fake.store.set(ipBucketKey(day, 'h'), JSON.stringify({v: 1, count: 3}))

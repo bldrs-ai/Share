@@ -490,6 +490,14 @@ signed-in direct-link soft gate below, which still only measures. A signed-in
 user is never anonymously metered: the load waits for Auth0 to settle
 (`AUTH_SETTLE_GRACE_MS`), and past that grace it loads unmetered.
 
+**A load is counted when it is admitted, before the download.** That is
+what lets the gate refuse before anything is fetched, and it means a load
+that then fails (a mistyped link's 404, a parse error) or that the visitor
+leaves mid-way has still used one of the period's remote loads. Opening the
+same model again is free (the reopen dedupe), so a retry costs nothing.
+Counting only on success would need a second, commit call after the load;
+it is a follow-up if failed loads turn out to matter (review on Share#2368).
+
 **Fails open.** The page loads the model unmetered when the meter can't be
 reached, answers 5xx, or isn't configured, as `useQuota` does for
 `record-load`. And whether the page asks at all is the client's choice: the
@@ -561,6 +569,19 @@ can't reset a budget:
   the visitor who signs out is where they were (`anonMeter.spec.ts`).
 - The account write comes first and the merge mark second, so a failure
   between them is retried at the next sign-in and writes the same thing.
+- **A known race:** the link's Auth0 write and a `record-load` (or
+  `pro-module`) write at the same sign-in are both read-modify-writes of
+  `usageQuota` with no compare-and-swap (§"Out of scope": the Auth0 store
+  has none), so one can lose the other's addition: a `loads` row (a free
+  extra slot, the user's favour) or the `anonymous` carry (funnel data
+  only; the AI carry is in the AI ledger, under compare-and-swap).
+
+**One-time resets at deploy (2026-11-25), each forgiving spend once:**
+anonymous AI budgets on the retired `ba1` token start afresh on a new
+metering token; free and Pro AI ledger records, which have no
+`periodStart` yet, start their first period at their next booked spend,
+dropping what the 30 rolling days held; and a browser whose first meter
+and AI calls race can be minted two tokens, the last one stored winning.
 
 ### Anonymous ledger: retention and purpose
 
@@ -713,13 +734,19 @@ exactly 30 days after a period's start is the first of the next period.
 `useQuota#check()` re-prunes at call time, so an open tab frees the slots at
 the period's end rather than at the next `record()`.
 
-**Existing ledgers at the switch (2026-11-25).** Nothing is migrated. The 7-day
-rows chain into a period that started at the oldest live row, so a free user
-who had used both slots this week keeps them held to that period's end, up
+**Existing ledgers at the switch (2026-11-25).** Nothing is migrated. Every
+row in `usageQuota.loads` younger than 30 days chains into a period: a free
+user who used both slots this week keeps them held to that period's end, up
 to 30 days, where the rolling window would have freed each 7 days after it
-was taken. That is the owner's tightening. Rows older than 30 days, left
-uncounted under the 7-day window, chain into periods that have ended and
-stay uncounted. `exportSlots.js#modelSlots`' `nextFreeAt` is now the period's
+was taken. That is the owner's tightening. **It also takes back slots that
+had already come back:** the old writer pruned to 7 days only when it wrote,
+so a user who opened two private models 20–29 days ago and none since still
+has those rows, and they chain into a period that hasn't ended (review on
+Share#2368: up to 22 days without slots they had back). Avoiding that needs
+either a one-time prune of Auth0 rows older than 7 days at deploy, or a
+marker on rows written after the switch; it is the coordinator's call, open
+on Share#2368. Rows older than 30 days chain into periods that have ended
+and stay uncounted. `exportSlots.js#modelSlots`' `nextFreeAt` is now the period's
 end, so the Export tab and the slot header say when *all* the slots come
 back ("they free up …"), not when the oldest rolls off.
 

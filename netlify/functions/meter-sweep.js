@@ -86,9 +86,11 @@ export async function sweep(store, nowMs) {
       const start = Date.parse(`${day}T00:00:00.000Z`)
       const record = normalizeAnon(await store.get(key, {type: 'json', consistency: 'strong'}),
         {start, end: start + PERIOD_MS})
+      // Counted only once it is gone: a delete that fails leaves the record
+      // for the next run, which would count it again (review on Share#2368).
+      await store.delete(key)
       const month = day.slice(0, 7)
       byMonth.set(month, addToAggregate(byMonth.get(month) ?? emptyAggregate(), record))
-      await store.delete(key)
       result.deleted.tokens++
     } catch {
       result.failed++

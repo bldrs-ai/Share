@@ -345,7 +345,7 @@ function compareAndSwap(store, key, change) {
  */
 export function reserve(store, bucket, {id, micro, free, nowMs}) {
   return compareAndSwap(store, bucket.key, (record) => {
-    prune(record, nowMs, bucket.windowDays)
+    prune(record, nowMs, keptDays(bucket))
     const period = applyPeriod(record, bucket, nowMs)
     const {freeToday, inFlight} = usageOf(record, nowMs)
     const standing = windowStanding(record, bucket, nowMs, period)
@@ -369,6 +369,20 @@ export function reserve(store, bucket, {id, micro, free, nowMs}) {
     record.holds[id] = {micro, free: free ? 1 : 0, at: nowMs}
     return {ok: true, used: standing.used, limit: standing.limit}
   })
+}
+
+
+/**
+ * How many UTC days a bucket's record keeps. A bucket with a period keeps
+ * one more than its window: a period that began at noon on its first day is
+ * still running on the calendar's 31st day until noon, and its first day's
+ * spend must count until then (review on Share#2368).
+ *
+ * @param {Bucket} bucket
+ * @return {number}
+ */
+function keptDays(bucket) {
+  return bucket.period ? bucket.windowDays + 1 : bucket.windowDays
 }
 
 
@@ -453,7 +467,9 @@ function windowUsage(record, nowMs, w, period) {
  * @return {{record: object, used: number}} the record with only the window's days, and its usage
  */
 function windowView(record, nowMs, days, period) {
-  let oldest = utcDay(nowMs - ((days - 1) * DAY_MS))
+  // The period's own window is the whole period, from its first day, which
+  // can be 31 calendar days back on its last day.
+  let oldest = period && days * DAY_MS >= PERIOD_MS ? utcDay(period.start) : utcDay(nowMs - ((days - 1) * DAY_MS))
   if (period) {
     const periodDay = utcDay(period.start)
     oldest = periodDay > oldest ? periodDay : oldest
@@ -618,7 +634,7 @@ export function settle(store, bucket, {id, micro, nowMs, release = false, estima
       return {write: false, settled: false}
     }
     delete record.holds[id]
-    prune(record, nowMs, bucket.windowDays)
+    prune(record, nowMs, keptDays(bucket))
     if (release) {
       return {settled: true}
     }
@@ -746,7 +762,7 @@ export async function latestResumeAt(store, buckets, {micro, nowMs, resumeAt}) {
       continue
     }
     const record = normalize(current?.data)
-    prune(record, nowMs, bucket.windowDays)
+    prune(record, nowMs, keptDays(bucket))
     const at = bucketResumeAt(record, bucket, micro, nowMs)
     if (at !== null && (latest === null || at > latest)) {
       latest = at
