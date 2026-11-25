@@ -12,8 +12,8 @@ import {
 import {ColorMode} from './colorMode'
 import {RESIDENCY_DEFAULT} from './residencyMode'
 import {ShadingMode} from './shadingMode'
-import {DEFAULT_COLOR} from '../ifc/flatMeshToBatchedModel'
-import {ResidencyMetric} from '../residency/ResidencyController'
+import {DEFAULT_COLOR} from '../../model/flatMeshToBatchedModel'
+import {ResidencyMetric} from '../../model/ResidencyController'
 import nrrdToThree from '../../loader/nrrd'
 
 

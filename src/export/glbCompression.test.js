@@ -19,7 +19,7 @@ import {Document, Logger, WebIO} from '@gltf-transform/core'
 import {EXTMeshGPUInstancing, EXTMeshoptCompression, KHRDracoMeshCompression, KHRMeshQuantization} from '@gltf-transform/extensions'
 import {validateBytes} from 'gltf-validator'
 import {BatchedMesh, Matrix4} from 'three'
-import {ROW_TAG_SEMANTIC} from '../loader/bldrsInstanceTables'
+import {ROW_TAG_SEMANTIC} from '../model/bldrsInstanceTables'
 import {batchedArtifactBytes, triangleGeometry} from '../loader/glbArtifact.fixture'
 import {isBldrsExtension} from '../loader/glbArtifactSize'
 import {compressGlb, loadDracoDecoder} from '../loader/glbCompress'
@@ -75,7 +75,7 @@ const MOMENTUM_RANGE_M = 22.0
  * @param {boolean} [options.withPerVertexIds] Add `_EXPRESSID` as a
  *   `Uint32Array`, the attribute that means triangle order is load-bearing —
  *   and typed the way Share's own writers type it
- *   (`viewer/ifc/batchedToMergedMesh.js`), because that typing is what keeps
+ *   (`model/batchedToMergedMesh.js`), because that typing is what keeps
  *   Draco's GENERIC quantization off it
  * @param {boolean} [options.areIdsFloat] Type `_EXPRESSID` `Float32Array`
  *   instead: the shape the guard above is a guard AGAINST, used only to show
@@ -640,7 +640,7 @@ describe('export/glbCompression', () => {
       // every rung inherits its pinned `GENERIC: 12`. Twelve bits cannot hold
       // a six-digit express id, and the only reason that is harmless is the
       // attribute's TYPE: Share writes ids as `Uint32Array`
-      // (`viewer/ifc/batchedToMergedMesh.js`, `flatMeshToBufferGeometry.js`,
+      // (`model/batchedToMergedMesh.js`, `flatMeshToBufferGeometry.js`,
       // `batchedSubset.js`) and three's `GLTFExporter` exempts `_`-prefixed
       // attributes from its Uint32→FLOAT coercion, so they take Draco's
       // integer path where quantization bits are ignored.

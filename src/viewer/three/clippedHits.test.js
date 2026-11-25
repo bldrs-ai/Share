@@ -11,12 +11,12 @@ import {
 import Picker from './Picker'
 import {isClippedAway, unclippedHits} from './clippedHits'
 import {IfcRaycaster} from './context/raycaster'
-import {disposeInstanceBoundsTree, hasInstanceBoundsTree} from '../ifc/batchedInstanceBvh'
-import {SHAPE_ID, unitTriangleApi, withBvhPrototypes} from '../ifc/batchedModel.fixture'
-import {raycastActiveInstances} from '../ifc/batchedRaycast'
-import {decorateBatchMeshes} from '../ifc/buildBatchedConwayModel'
-import {finishBatchedBoundsTrees} from '../ifc/deferredBatchedBvh'
-import {flatMeshToBatchedModel} from '../ifc/flatMeshToBatchedModel'
+import {disposeInstanceBoundsTree, hasInstanceBoundsTree} from '../../model/batchedInstanceBvh'
+import {SHAPE_ID, unitTriangleApi, withBvhPrototypes} from '../../model/batchedModel.fixture'
+import {raycastActiveInstances} from '../../model/batchedRaycast'
+import {decorateBatchMeshes} from '../../model/buildBatchedConwayModel'
+import {finishBatchedBoundsTrees} from '../../model/deferredBatchedBvh'
+import {flatMeshToBatchedModel} from '../../model/flatMeshToBatchedModel'
 
 
 // The scene every pick below is made in, looking down -z from z = 10: an

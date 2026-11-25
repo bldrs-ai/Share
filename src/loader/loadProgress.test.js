@@ -192,7 +192,7 @@ describe('loadProgress', () => {
 
     // A BVH that hit three-mesh-bvh's depth cap becomes one Health line,
     // summed over the load's builds, instead of the console warning that
-    // titled its diagnostics event (viewer/ifc/bvhBuild.js).
+    // titled its diagnostics event (model/bvhBuild.js).
     it('adds one Health line for BVH trees that hit the depth cap', () => {
       beginLoadProgress({fileInfo: 'big.stp'})
       reportBvhDepthCap({trees: 1, maxLeafTriangles: 120, maxDepth: 40})

@@ -25,14 +25,14 @@
 // `capture`, which runs the writer's engine captures here as one job, and
 // `spill`, which then releases a resident source to windows over its OPFS
 // File.
-import {resolvePropertyTables, schemaTypeName} from '../Components/Properties/propertyTable'
-import {captureEngineExtensions, ifcManagerOver} from '../loader/glbEngineCapture'
-import {classifyOpenFailure, openDeferred} from '../loader/conwayOpen'
+import {resolvePropertyTables, schemaTypeName} from './propertyTable'
+import {captureEngineExtensions, ifcManagerOver} from './glbEngineCapture'
+import {classifyOpenFailure, openDeferred} from './conwayOpen'
 import {ENGINE_PROTOCOL_VERSION, Ev, Op, errorMessageOf, serializeError} from './protocol'
 import {openSourceStore, opfsRoot} from './engineSources'
 import {readSidecar, sidecarHashName, sweepSidecars, writeSidecar} from './engineSidecars'
 import {makeBatchEncoder, previewMessage, snapshotStatistics} from './engineStream'
-import {enableStepPreviewFinishParse} from '../viewer/ifc/pumpTestSeams'
+import {enableStepPreviewFinishParse} from './pumpTestSeams'
 import {isOutOfMemoryError} from '../utils/oom'
 import {SourceModeReason, StoreKind, chooseSourceMode} from './sourcePolicy'
 
@@ -483,7 +483,7 @@ export function createEngineHandler({
     const blob = source?.file
     const windowable = Boolean(blob && typeof blob.slice === 'function') &&
       !flags.disableStreamOpen && typeof api.OpenModelStream === 'function'
-    // The same sequence the main-thread path runs (loader/conwayOpen.js):
+    // The same sequence the main-thread path runs (engine/conwayOpen.js):
     // windowed from the Blob/File when it can be (a File structured-clones
     // by reference, so nothing was copied to get it here, §2.2); else, or
     // when that open fails other than by a schema refusal, buffered. IFC and

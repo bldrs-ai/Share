@@ -44,7 +44,7 @@ export default {
   OPFS_IS_ENABLED: true,
   THEME_IS_ENABLED: true,
   // The §6e look off unless a spec opts in (`withLook`,
-  // src/tests/e2e/look.ts; src/viewer/lookMode.js has the check). On #2167
+  // src/tests/e2e/look.ts; src/model/lookMode.js has the check). On #2167
   // the look made every model load in the suite pay for PBR + N8AO under CI's
   // SwiftShader: shards went from 9-12 min to past their 15-min limit. The
   // owner chose to test the look in the specs that are about it

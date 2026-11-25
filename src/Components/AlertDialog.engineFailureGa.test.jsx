@@ -1,7 +1,7 @@
 import React from 'react'
 import {act, render} from '@testing-library/react'
 import {StoreRouteThemeCtx} from '../Share.fixture'
-import {EngineOpenFailureError} from '../loader/engineOpenFailure'
+import {EngineOpenFailureError} from '../engine/engineOpenFailure'
 import {gtagEvent} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import AlertDialog from './AlertDialog'

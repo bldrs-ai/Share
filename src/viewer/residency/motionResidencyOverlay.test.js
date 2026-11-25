@@ -3,7 +3,7 @@ import {BatchedMesh, BoxGeometry, Group, Matrix4, PerspectiveCamera, Scene, Vect
 import RenderDemand, {PaintKind, requestOverlayPaint} from '../three/renderDemand'
 import {createSceneProbe} from '../three/renderDemandHooks'
 import {MotionResidency, MotionResidencyMode, REST_FRAMES, REST_MS} from './MotionResidency'
-import {ResidencyController, ResidencyMetric} from './ResidencyController'
+import {ResidencyController, ResidencyMetric} from '../../model/ResidencyController'
 
 
 /**

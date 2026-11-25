@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import {BoxGeometry, Matrix4, Mesh, MeshBasicMaterial, PerspectiveCamera, Scene} from 'three'
 import CameraControls from 'camera-controls'
 import {snapToDirection} from '../Components/ViewCube/ViewCube'
-import ProgressiveLoadSession from './ProgressiveLoadSession'
+import ProgressiveLoadSession from '../loader/ProgressiveLoadSession'
 import RenderDemand, {noteUserCamera} from './three/renderDemand'
 
 

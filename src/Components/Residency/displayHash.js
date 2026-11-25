@@ -21,7 +21,7 @@ import {
 } from '../../viewer/display/motionResidencyMode'
 import {VOLUME_DEFAULT, volumeOrDefault} from '../../viewer/display/volumeMode'
 import {MotionResidencyMode} from '../../viewer/residency/MotionResidency'
-import {ResidencyMetric} from '../../viewer/residency/ResidencyController'
+import {ResidencyMetric} from '../../model/ResidencyController'
 
 
 /**

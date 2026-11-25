@@ -236,14 +236,14 @@ export const flags = [
   // on-demand painting (DESIGN.md §"Render loop & perf monitor", "Rolling
   // back").
   {name: 'disableRenderOnDemand', isActive: false},
-  // OFF-switch for the §6e render look (viewer/lookMode.js), on by default
+  // OFF-switch for the §6e render look (model/lookMode.js), on by default
   // since #2167. `?feature=disableLook` puts one session back on the pre-§6e
   // pipeline (Lambert materials, linear output, no IBL, no AO); setting this
   // `isActive: true` is the PROD ROLLBACK, which no URL can override. Not
   // `look: false`: `?feature=look` now only opens the tuning panels.
   {name: 'disableLook', isActive: false},
   // OFF-switch for the instance tree hover and click picks go through on a
-  // batched model (viewer/ifc/batchedInstanceBvh.js): with it on, no tree is
+  // batched model (model/batchedInstanceBvh.js): with it on, no tree is
   // built and every pick walks every instance, as before the tree. Same
   // inverted shape as the two above: `?feature=disableInstanceBvh` is the
   // per-session A/B (the before/after in that module's PR was measured with
@@ -321,7 +321,7 @@ export const flags = [
   // legible instead of a grey blob. Strictly no-op the moment any real
   // color is present, so IFC and colored STEP are untouched. Default-on; it
   // only changes models that had zero color to begin with.
-  // See src/viewer/ifc/productPalette.js.
+  // See src/model/productPalette.js.
   {name: 'autoColorParts', isActive: true},
   // Model display controls (view-140): additive Display-popover sections
   // beyond the always-on color toggle — shading (Shaded/Wireframe, S4) today,

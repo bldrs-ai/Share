@@ -536,9 +536,9 @@ the diagnostic becomes a *tested signal* instead of spam:
   returns `{emit, setSink}`: `emit` writes `<prefix> <args>` to the console
   until a sink is installed. The sink lives on `globalThis` (under `sinkKey`)
   so it survives `jest.resetModules()`.
-- `src/loader/glbLog.js` — the `[glb]` emit side. `glbInfo/glbWarn/glbVerbose`
+- `src/utils/glbLog.js` — the `[glb]` emit side. `glbInfo/glbWarn/glbVerbose`
   emit on that channel; tests swap the sink via `setGlbLogSink`.
-  `src/viewer/ifc/conwayDirectLog.js` is the same for the `[conwayDirect]` IFC
+  `src/engine/conwayDirectLog.js` is the same for the `[conwayDirect]` IFC
   parse summary and parse-failure error.
 - `tools/jest/logCapture.js` + its per-channel wrappers
   (`glbLogCapture.js`, `conwayDirectLogCapture.js`) — the test side.

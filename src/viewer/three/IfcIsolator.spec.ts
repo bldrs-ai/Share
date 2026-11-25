@@ -367,7 +367,7 @@ function readBatchedSnapshot(page: Page): Promise<BatchedSnapshot> {
     if (!model || !iso) {
       throw new Error('readBatchedSnapshot: no model/isolator on window — is the page in test mode?')
     }
-    // Same "mesh-or-Group" walk as `eachBatch` (src/viewer/ifc/batchedModel.js),
+    // Same "mesh-or-Group" walk as `eachBatch` (src/model/batchedModel.js),
     // which is what the isolator itself uses to decide the path — the batches
     // can sit anywhere under the model root, not just as direct children.
     const meshes: any[] = []

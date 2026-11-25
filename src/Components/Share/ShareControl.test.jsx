@@ -16,7 +16,7 @@ import ShareControl, {
 } from './ShareControl'
 import {ColorMode} from '../../viewer/display/colorMode'
 import {ShadingMode} from '../../viewer/display/shadingMode'
-import {DEFAULT_COLOR} from '../../viewer/ifc/flatMeshToBatchedModel'
+import {DEFAULT_COLOR} from '../../model/flatMeshToBatchedModel'
 
 
 // Only the senders are stubbed, for the same reason as ExportSection.test.jsx:

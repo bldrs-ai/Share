@@ -97,7 +97,7 @@
 // `tools/glb/byteBudget.mjs` imports this module under plain Node, which
 // resolves ESM specifiers literally. Everything else in `src` is bundled by
 // esbuild or jest, both of which are happy either way.
-import {gunzipBytes, gzipBytes, isGunzipAvailable, isGzipAvailable} from '../export/glbGzip.js'
+import {gunzipBytes, gzipBytes, isGunzipAvailable, isGzipAvailable} from './glbGzip.js'
 
 
 const MAGIC_B = 0x42

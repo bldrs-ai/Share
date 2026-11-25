@@ -28,12 +28,12 @@ import {
   markLossyTables,
   parseInstanceTablesExtensionData,
   rowOfTag,
-} from '../loader/bldrsInstanceTables'
-import {BLDRS_SPATIAL_TREE_EXTENSION_NAME} from '../loader/bldrsSpatialTree'
+} from '../model/bldrsInstanceTables'
+import {BLDRS_SPATIAL_TREE_EXTENSION_NAME} from '../engine/bldrsSpatialTree'
 import {batchedArtifactBytes, interleavedLegacyArtifact} from '../loader/glbArtifact.fixture'
 import {loadDracoDecoder} from '../loader/glbCompress'
 import {injectGlbExtensions, parseGlb, serializeGlb} from '../loader/injectGlbExtensions'
-import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
+import {hydrateBatchedModelFromInstancedGlb} from '../model/instancedGlbToBatchedModel'
 import {QUALITY_BALANCED, QUALITY_SMALLEST} from './exportQuality'
 import {COMPRESSION_DRACO, COMPRESSION_MESHOPT, COMPRESSION_NONE, compressExportGlb} from './glbCompression'
 import {rewriteGlbPortable} from './glbPortable'

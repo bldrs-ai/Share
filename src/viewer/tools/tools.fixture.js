@@ -13,9 +13,9 @@ import {Group, Matrix4, Quaternion, Vector3} from 'three'
 import SearchIndex from '../../search/SearchIndex'
 import useStore from '../../store/useStore'
 import {groupElementsByTypes} from '../../utils/ifc'
-import {decorateBatchMeshes} from '../ifc/buildBatchedConwayModel'
-import {SHAPE_ID, SPACING, unitTriangleApi} from '../ifc/batchedModel.fixture'
-import {flatMeshToBatchedModel} from '../ifc/flatMeshToBatchedModel'
+import {decorateBatchMeshes} from '../../model/buildBatchedConwayModel'
+import {SHAPE_ID, SPACING, unitTriangleApi} from '../../model/batchedModel.fixture'
+import {flatMeshToBatchedModel} from '../../model/flatMeshToBatchedModel'
 import IfcIsolator from '../three/IfcIsolator'
 
 

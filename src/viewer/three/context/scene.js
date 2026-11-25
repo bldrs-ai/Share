@@ -7,13 +7,13 @@
 
 import {AmbientLight, Color, DirectionalLight, Scene} from 'three'
 import {IfcComponent} from './base-types'
-import {LOOKS} from '../../looks'
-import {isLookOn} from '../../lookMode'
+import {LOOKS} from '../../../model/looks'
+import {isLookOn} from '../../../model/lookMode'
 
 
 // Direct-light intensities. With the §6e look on (`isLookOn()`, lookMode.js;
 // the default), the Neutral look's values (single source of
-// truth: src/viewer/looks.js LOOKS.neutral) — the gradient studio IBL (scaled
+// truth: src/model/looks.js LOOKS.neutral) — the gradient studio IBL (scaled
 // by `scene.environmentIntensity` in ShareViewer) carries most of the ambient
 // + fill, so these direct lights are a key + fill pair plus an ambient lift.
 // With it off (`?feature=disableLook`), the legacy `× Math.PI` intensities

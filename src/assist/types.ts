@@ -60,7 +60,7 @@ export interface ToolAnnotations {
 
 /**
  * An element reference, opaque to Assist. Hosts define the grammar; Share's
- * is `src/viewer/visibilityRefs.js` (`e<expressID>`, `o1.2.3` STEP
+ * is `src/model/visibilityRefs.js` (`e<expressID>`, `o1.2.3` STEP
  * occurrences, `n<seg>/…` scene-graph name paths) plus `g<GlobalId>`
  * (design/new/model-edit.md §5). Assist only passes refs through, so a chip
  * the AI shows and a row the user clicks are the same navigation.

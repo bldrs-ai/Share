@@ -27,27 +27,27 @@
 import {GLTFExporter} from 'three/examples/jsm/exporters/GLTFExporter.js'
 import {writeGlbBytesToOPFS} from '../OPFS/utils'
 import {yieldToBrowser} from '../utils/scheduling'
-import {BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME} from './bldrsElementPropertiesCapture'
+import {BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME} from '../engine/bldrsElementPropertiesCapture'
 import {
   BLDRS_FACE_IDS_EXTENSION_NAME,
   buildFaceIdsExtensionData,
   capturePerTriangleIds,
-} from './bldrsFaceIds'
-import {BLDRS_SPATIAL_TREE_EXTENSION_NAME} from './bldrsSpatialTree'
-import {captureEngineExtensions} from './glbEngineCapture'
+} from '../engine/bldrsFaceIds'
+import {BLDRS_SPATIAL_TREE_EXTENSION_NAME} from '../engine/bldrsSpatialTree'
+import {captureEngineExtensions} from '../engine/glbEngineCapture'
 import {
   APPLIED_COORDINATION_KEY,
   COORDINATION_OFFSET_KEY,
   validAppliedCoordination,
   validCoordinationOffset,
-} from '../viewer/ifc/appliedCoordination'
-import {modelHasPostLoadEdits} from '../viewer/ifc/batchedEdit'
-import {eachBatch} from '../viewer/ifc/batchedModel'
+} from '../model/appliedCoordination'
+import {modelHasPostLoadEdits} from '../model/batchedEdit'
+import {eachBatch} from '../model/batchedModel'
 import {
   batchedModelOccurrenceTables,
   batchedModelToMergedMesh,
   disposeMergedMesh,
-} from '../viewer/ifc/batchedToMergedMesh'
+} from '../model/batchedToMergedMesh'
 import {
   BLDRS_GLB_BATCHED_SCHEMA_VERSION,
   BLDRS_GLB_COLLAPSED_SCHEMA_VERSION,
@@ -63,12 +63,12 @@ import {
 import {
   BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
   buildInstanceTablesExtensionData,
-} from './bldrsInstanceTables'
+} from '../model/bldrsInstanceTables'
 import {exportBatchedModelOffThread} from './glbBatchedExport'
 import {sceneHasRenderableGeometry} from './glbArtifactHealth'
 import {packGlbChunks} from './glbContainer'
 import {currentGlbArtifactGeneration, publishGlbArtifact} from './glbArtifactPublish'
-import {glbInfo, glbVerbose, glbWarn} from './glbLog'
+import {glbInfo, glbVerbose, glbWarn} from '../utils/glbLog'
 import {injectAndPackInWorker} from './GlbWriterService'
 import {injectGlbExtensions, parseGlb} from './injectGlbExtensions'
 
@@ -390,7 +390,7 @@ export async function exportAndCacheGlb({
     // generally have no `.name`; the inject step no-ops on nullish.
     const titleForExtras = (typeof model?.name === 'string' && model.name) ? model.name : null
     // The engine's applied coordination frame, carried across the cache
-    // round-trip beside the title (see ../viewer/ifc/appliedCoordination for
+    // round-trip beside the title (see ../model/appliedCoordination for
     // the contract). It rides in `scenes[0].extras`, NOT in the model's own
     // userData, and that is what makes it survive: BOTH writers below drop
     // userData — the batched-native writer builds a fresh gltf-transform

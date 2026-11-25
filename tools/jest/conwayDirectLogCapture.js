@@ -1,7 +1,7 @@
 // Test capture for the `[conwayDirect]` IFC pipeline logs.
 //
 // `ShareIfcLoader#parse` emits a per-load parse summary and, on failure, the
-// error — both by design (see `src/viewer/ifc/conwayDirectLog.js`). In the
+// error — both by design (see `src/engine/conwayDirectLog.js`). In the
 // app they reach the console; under jest they land in this buffer instead, so
 // `Loader.test.js` asserts the summary's element counts and `Loader.cover.test.js`
 // asserts each induced failure, rather than either scrolling past.
@@ -11,7 +11,7 @@
 //
 //   import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 //   expect(getConwayDirectLogs().map((l) => l.text)).toContain('parsed modelID=0 …')
-import {setConwayDirectLogSink} from '../../src/viewer/ifc/conwayDirectLog'
+import {setConwayDirectLogSink} from '../../src/engine/conwayDirectLog'
 import {createLogCapture} from './logCapture'
 
 

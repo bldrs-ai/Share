@@ -10,10 +10,10 @@ import {
   resolvePropertyTables,
   resolveValue,
   typeNameOf,
-} from './propertyTable'
+} from '../../engine/propertyTable'
 
 
-export {MAX_ARRAY_MEMBERS, MAX_NESTED_TABLE_DEPTH} from './propertyTable'
+export {MAX_ARRAY_MEMBERS, MAX_NESTED_TABLE_DEPTH} from '../../engine/propertyTable'
 
 
 /**

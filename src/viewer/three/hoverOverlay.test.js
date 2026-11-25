@@ -11,7 +11,7 @@ import RenderDemand, {
   PaintKind, SETTLE_MS, requestBackgroundPaint, requestOverlayPaint, requestPaint, runPaint,
 } from './renderDemand'
 import {createSceneProbe, installSceneHooks} from './renderDemandHooks'
-import {setBatchedInstanceMatrix} from '../ifc/batchedEdit'
+import {setBatchedInstanceMatrix} from '../../model/batchedEdit'
 
 
 /* eslint-disable no-magic-numbers */

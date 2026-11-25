@@ -4,7 +4,7 @@ import {BoxGeometry, Group, Mesh, MeshBasicMaterial, Vector3} from 'three'
 import RenderDemand from './renderDemand'
 import CutPlaneArrowHelper from './CutPlaneArrowHelper'
 import IfcHighlighter from './IfcHighlighter'
-import {applySceneGraphVisibility} from './sceneGraphVisibility'
+import {applySceneGraphVisibility} from '../../model/sceneGraphVisibility'
 import {setShadingMode, ShadingMode} from '../display/shadingMode'
 
 
@@ -63,13 +63,13 @@ const AUDITED = {
   'viewer/ShareViewer.js': ASKS_FOR_PAINT,
   'viewer/three/IfcHighlighter.js': ASKS_FOR_PAINT,
   'viewer/three/IfcIsolator.js': ASKS_FOR_PAINT,
-  'viewer/three/sceneGraphVisibility.js': ASKS_FOR_PAINT,
+  'model/sceneGraphVisibility.js': ASKS_FOR_PAINT,
   'viewer/three/MeshClipper.js': ASKS_FOR_PAINT,
   'viewer/three/CutPlaneArrowHelper.ts': ASKS_FOR_PAINT,
   'viewer/three/arrowFade.js': 'ArrowFade\'s own `opacity` state, not a material\'s: MeshClipper applies it and asks',
   'viewer/three/LightingGui.js': ASKS_FOR_PAINT,
   'viewer/display/shadingMode.js': ASKS_FOR_PAINT,
-  'viewer/residency/ResidencyController.js': ASKS_FOR_PAINT,
+  'model/ResidencyController.js': ASKS_FOR_PAINT,
   'Components/Markers/MarkerControl.jsx': ASKS_FOR_PAINT,
   'Infrastructure/PlaceMark.js': ASKS_FOR_PAINT,
   'Containers/CadView.jsx': 'calls ShareViewer#setSelection, which paints through IfcHighlighter',
@@ -80,9 +80,9 @@ const AUDITED = {
     'layers, background and the controls\' `visible` changed for its own draw, inside a paint, and put back before it returns',
   'viewer/three/context/context.js': 'the clipping-plane array at construction; the probe reads it each frame',
   'viewer/three/context/renderer/postproduction.js': 'never activated (offscreen-rendering.md inventory #10)',
-  'viewer/ifc/parsePreviewMesh.js': 'materials set up before the mesh is added, which the hooked add covers',
-  'viewer/ifc/flatMeshToBufferGeometry.js': 'materials set up before the mesh is added, which the hooked add covers',
-  'viewer/ifc/batchedToMergedMesh.js': 'materials set up before the mesh is added, which the hooked add covers',
+  'model/parsePreviewMesh.js': 'materials set up before the mesh is added, which the hooked add covers',
+  'model/flatMeshToBufferGeometry.js': 'materials set up before the mesh is added, which the hooked add covers',
+  'model/batchedToMergedMesh.js': 'materials set up before the mesh is added, which the hooked add covers',
   'loader/stl.js': 'material options before the mesh exists',
   'loader/adf.js': 'overlays hidden while the model is built, before it enters the scene',
 }
@@ -126,7 +126,7 @@ const OVERLAY_ONLY_ASKS = {
     'a control\'s look (MeshClipper\'s arrow colour and fade); both drawn by the overlay alone, never cached',
 }
 // The definition and its one route into RenderDemand, which aren't callers.
-const OVERLAY_ASK_DEFINITION = 'viewer/three/renderDemand.js'
+const OVERLAY_ASK_DEFINITION = 'utils/paintRequest.js'
 const OVERLAY_ASK = /requestOverlayPaint\(|\.invalidateOverlay\(/
 
 
@@ -156,7 +156,7 @@ describe('render-on-demand sources: static guard', () => {
     UNHOOKED_MUTATION.test(fs.readFileSync(path.join(SRC, file), 'utf8')))
 
   it('finds the mutations it is guarding (the scan itself works)', () => {
-    expect(mutating).toContain('viewer/three/sceneGraphVisibility.js')
+    expect(mutating).toContain('model/sceneGraphVisibility.js')
   })
 
   it('knows every file that makes a mutation three gives no signal for', () => {

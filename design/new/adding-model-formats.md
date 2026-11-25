@@ -536,7 +536,7 @@ Add a `case` returning the tuple
   wraps so the basePath string never reaches it.
 
 
-## 3. Declare capabilities — `src/viewer/ShareModel.js`
+## 3. Declare capabilities — `src/model/ShareModel.js`
 
 Add the extension to `UNSTRUCTURED_MESH` (or `IFC_LIKE` if it carries
 real spatial structure and typed properties), and to the

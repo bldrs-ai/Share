@@ -6,7 +6,7 @@ import {stripGlbBldrs} from '../loader/glbStrip'
 import {readModelByPathFromOPFS} from '../OPFS/utils'
 import {QUALITY_DEFAULT} from './exportQuality'
 import {COMPRESSION_NONE, compressExportGlb, isCompressionMode} from './glbCompression'
-import {gzipBytes, gzippedLength} from './glbGzip'
+import {gzipBytes, gzippedLength} from '../loader/glbGzip'
 import {rewriteGlbPortable} from './glbPortable'
 
 

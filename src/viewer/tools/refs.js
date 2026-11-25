@@ -1,7 +1,7 @@
 import {decodeIFCString} from '@bldrs-ai/ifclib'
 import {ToolError} from '../../assist'
 import {resolveOccurrence} from '../../Components/Residency/visibilityHash'
-import {elementRef, parseRef, sceneGraphNamePaths} from '../visibilityRefs'
+import {elementRef, parseRef, sceneGraphNamePaths} from '../../model/visibilityRefs'
 
 
 /**

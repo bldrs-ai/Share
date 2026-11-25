@@ -87,7 +87,7 @@ Classes:
 |---|---|---|---|
 | 1 | `viewer/ifc/ShareIfc.js:141` | `new IfcAPI()` per viewer, even for GLB cache hits (Init is lazy) | trivial: the worker owns construction; a cache hit spawns nothing |
 | 2 | `viewer/ShareViewer.js:259, 268` | `ShareIfc` + `ShareIfcLoader({ifcAPI})` share one engine per viewer | design: the engine belongs to the session (#2019), not the viewer |
-| 3 | `viewer/ifc/conwayDirectIfcLoader.js:134` | lazy `ifcAPI.Init()` on first parse | trivial (worker `init`) |
+| 3 | `loader/conwayDirectIfcLoader.js:134` | lazy `ifcAPI.Init()` on first parse | trivial (worker `init`) |
 | 4 | `conwayDirectIfcLoader.js:140, 903` | `getConwayVersion`, `SetLogLevel` | trivial (reply field / init arg) |
 | 5 | `conwayDirectIfcLoader.js:218, 230, 235` | `OpenModelStream` / `OpenModelStreamed` (deferred path) | async; moves into worker |
 | 6 | `conwayDirectIfcLoader.js:549–568` | classic opens incl. sync `OpenModel` | trivial: worker-side; the flag path keeps only the deferred open |
@@ -104,15 +104,15 @@ Classes:
 | 17 | `ShareIfcLoader.js:720` | `GetLinearScalingFactor` | trivial: `done` field |
 | 18 | `buildBatchedConwayModel.js:188, 216`; `conwayDirectIfcLoader.js:872–880, 1083–1154` | `makeConwayDirectIfcManager`, `attachConwayDirectModelMethods`, `makeIndexedModelHandle` bind closures over `ifcAPI` | trivial: same surface, closures over the session client |
 | 19 | `conwayDirectIfcLoader.js:1153` | `getIfcType` identity | trivial |
-| 20 | `loader/unsupportedSchema.js:166, 194, 223, 263` | **G3** `beginOpenAttempt` / `conwayRefusedSchema` / `conwayOpenFailure` read the engine's per-attempt statistics synchronously after a failed open | **design**: the worker classifies and returns `failed{kind, …}` |
+| 20 | `engine/unsupportedSchema.js:166, 194, 223, 263` | **G3** `beginOpenAttempt` / `conwayRefusedSchema` / `conwayOpenFailure` read the engine's per-attempt statistics synchronously after a failed open | **design**: the worker classifies and returns `failed{kind, …}` |
 | 21 | `loader/loadProgress.js:14, 23, 195` | **G3** `LoadLogAccumulator` and conway's static `Logger`, tallied through `installDefectProxy`; the report's heap column is main-thread `performance.memory` | **design**: the worker's Logger is a different module instance; it forwards severity deltas and its wasm/heap bytes as events |
 | 22 | `loader/Loader.js:159` | `canOpenFromStore` feature-detects `ifcAPI.OpenModelStream` | trivial: capability from `init` |
 | 23 | `Loader.js:881` | `viewer.IFC.loader.ifcManager.state.models.push(model)` | trivial |
 | 24 | `Loader.js:994–1001` → `glbExport.js:482, 494, 499` | GLB writer reads `ifcManager` at run time for capture | design: bound to the session (#2019 already asks this) |
 | 25 | `loader/bldrsElementProperties.js:550` | **G2** sync `RootExpressIDs(modelID)` iterator | **design** (§2.4) |
 | 26 | `bldrsElementProperties.js:838, 878` | **G2** `getPropertySets` / `getItemProperties` per root record | **design**: one worker-side capture job, not one RPC per record |
-| 27 | `loader/bldrsFaceIds.js:422` | **G2** `getItemProperties` per face id | design (same job) |
-| 28 | `loader/bldrsSpatialTree.js:220, 222` | one `getSpatialStructure` | async |
+| 27 | `engine/bldrsFaceIds.js:422` | **G2** `getItemProperties` per face id | design (same job) |
+| 28 | `engine/bldrsSpatialTree.js:220, 222` | one `getSpatialStructure` | async |
 | 29 | `Loader.js:1020` → `opfsSourceByteStore.js:94, 99` | `IsModelOpen` + `SpillModelSource(makeBlobByteStore(file))` | trivial: worker-side, after the capture job; ordering is load-bearing (a sync read of a non-resident range throws) |
 | 30 | `Loader.js:1032` | `ReleaseModelGeometry` | trivial: worker-side, same point |
 | 31 | `Containers/CadView.jsx:1209–1213` | `ReleaseEntityCache(0)` gated on `IsModelOpen(0)` | trivial: fire-and-forget message |
@@ -120,7 +120,7 @@ Classes:
 | 33 | `CadView.jsx:1334, 2421, 2424, 2441` | root and selected element properties | async |
 | 34 | `viewer/ifc/ShareIfc.js:204–213` | `getProperties` (+ psets) | async |
 | 35 | `ShareIfc.js:225–241` | `dispose` → `CloseModel` every model | trivial: `terminate()` replaces it |
-| 36 | `viewer/ifc/ShareIfcManager.js:118–177` | manager methods over `ifcAPI.properties` | async, except `getIfcType` (37) |
+| 36 | `engine/ShareIfcManager.js:118–177` | manager methods over `ifcAPI.properties` | async, except `getIfcType` (37) |
 | 37 | `ShareIfcManager.js:160`, `ShareViewer.js:741`, `Components/Properties/itemProperties.jsx:81–82` | sync `getIfcType(code)` | trivial: it is conway's static `IfcTypesMap` (`compat/web-ifc/properties.js:6`); import the table main-side |
 | 38 | `itemProperties.jsx:118` (`webIfcFor`) | entity-ref `deref` calls `model.ifcManager.ifcAPI.properties.getItemProperties` | async, but needs the facade to expose a `properties` proxy, not the raw `IfcAPI` |
 | 39 | `ShareViewer.js:729, 756, 837` | `getSelectedElementsProps`, `getByFloor`, `getProperties` | async |
@@ -130,7 +130,7 @@ Classes:
 | 43 | `viewer/tools/viewTools.js:460, 492, 503` | assistant `model.*` reads | async |
 | 44 | `Components/Bot/BotChat.jsx:162, 328–330` | legacy `?feature=bot` evals model-written code against `viewer.IFC.loader.ifcManager` | async (`idsByType`, `getItemProperties`); retiring with the bot port (ai-workspace.md §13) |
 | 45 | `Infrastructure/IfcElementsStyleManager.js:84–90`, `ViewRulesCompiler.js:31–34` | `?view=` rules: `GetLineIDsWithType`, `GetLine`, GUID mapping | design, or delete (viewer-replacement.md §8.1 already drops `IfcViewsManager`) |
-| 46 | `viewer/ProgressiveLoadSession.js:298` | `abort()` has no caller outside the loader's error path | design: `abort` message + terminate (§5.4) |
+| 46 | `loader/ProgressiveLoadSession.js:298` | `abort()` has no caller outside the loader's error path | design: `abort` message + terminate (§5.4) |
 
 **Not engine calls, and unaffected** (they read main-side tables built from
 the stream): picking through `IfcInstanceMap` (`CadView.jsx:1535, 1539`),
@@ -181,7 +181,7 @@ through async reads.
   channel uses `setTimeout`. All exist in workers. Inside a worker the
   yields are no longer needed for responsiveness; they only cost a little.
 - **How the windowed source gets its bytes today.** Share wraps the OPFS
-  `File` as a `StepExternalByteStore` (`loader/opfsSourceByteStore.js:40`):
+  `File` as a `StepExternalByteStore` (`engine/opfsSourceByteStore.js:40`):
   each `read(offset, length)` is `blob.slice().arrayBuffer()`, an async
   round-trip through the browser's blob machinery. Conway's
   `WindowedStepBufferProvider` pages 4 MiB windows through it and serves
@@ -914,7 +914,7 @@ source for it: `host.acquire(meta) → lease`,
 
 #### What the host needs, and where it comes from
 
-The model session is built (`src/Containers/modelSession.js`, #2247): a
+The model session is built (`src/session/modelSession.js`, #2247): a
 `ModelSessionHost` per CadView whose active `ModelSession` is `{id,
 modelKey, loadState, job, engine, windowHandlers}`, with a `LoadJob` that
 owns the run's `AbortController` and gates every store write on
@@ -955,7 +955,7 @@ What a session needs that is not the host's:
   1. the load reporter: `loader/loadProgress.js`'s `activeReporter` and
      `loadSerial` (`:80, 83`), the report lines, and the stall watchdog;
   2. the artifact generation: `loader/glbArtifactPublish.js`'s `generation`;
-  3. the streaming selection: `viewer/streamingBatchPick.js`, one per scene,
+  3. the streaming selection: `model/streamingBatchPick.js`, one per scene,
      kept on the viewer's `scene.userData`;
   4. the GLB writer's in-flight owner: `Loader.js#cacheWriteOwner`;
   5. the loading UI's owner and the page's host: `modelSession.js`'s
@@ -1624,7 +1624,7 @@ now tracked on #2031, and they come with in-app model switching (#2011):
   What comes next is Phase 1b (switch is not close: sessions, `EngineHost`,
   eviction); #2011's body has the step list.
 - **Phase 1b step 1, per-model sessions (#2019), is built** with one live
-  session (in-app-model-switch.md §4.9, `Containers/modelSession.js`); it
+  session (in-app-model-switch.md §4.9, `session/modelSession.js`); it
   lists where it differs from §5.2's assumed session interface and the
   module-level per-load state that must move before cap N.
 - **Next is #2031, and its plan is [layering.md](../tracks/open-t200/layering.md) §7**
@@ -1649,7 +1649,7 @@ now tracked on #2031, and they come with in-app model switching (#2011):
   client (#2057), IFC load in the worker (#2058), the sync-access-handle
   source (#2072).
 - Step 6, STEP in the worker (#2067), with the one part-21 list
-  (`loader/part21Formats.js`).
+  (`engine/part21Formats.js`).
 - #2065, the Properties panel crash fix (not a worker bug).
 - #2074: one worker request per Properties table, and cache-hit refs.
   Closes #2070 and #2066.
@@ -1768,7 +1768,7 @@ How each step landed is in §7.1 and in the steps below.
    - **One capture job, one copy of the code.** The writer's engine
      captures — the spatial tree with its names, the element-properties
      container, and STEP's geometry-identity table — are
-     `loader/glbEngineCapture.js#captureEngineExtensions`. A main-thread
+     `engine/glbEngineCapture.js#captureEngineExtensions`. A main-thread
      load runs it over `viewer.IFC.loader.ifcManager`, as before. A worker
      load runs it inside the worker, as the `capture` op, over the worker's
      own engine (`ifcManagerOver(api)`), and gets the result back in one
@@ -1840,7 +1840,7 @@ How each step landed is in §7.1 and in the steps below.
    (`createEngineModelLoad({format})`), and `ShareIfcLoader#isEngineWorkerLoad`
    takes every loader type `engineFormatOf` maps (`ifc`, `ifczip`, `step`,
    `stp`). That list is now the ONE part-21 list
-   (`loader/part21Formats.js`), which `Loader.js`, `modelArchive.js` and
+   (`engine/part21Formats.js`), which `Loader.js`, `modelArchive.js` and
    `ShareModel.js` also read instead of three copies of their own. No STEP
    branch was needed: step 3 had already put the occurrence-path column in
    the batch encoding and forwarded `includeSolids` through
@@ -2134,7 +2134,7 @@ change is made here.
   frame-bound, and the Properties panel made one per top-level reference
   (ifclib's `deref`) and one per property of each property set.
   - *The fix.* The panel's tables are resolved next to the engine:
-    `Components/Properties/propertyTable.js`, behind the `propertyTables`
+    `engine/propertyTable.js`, behind the `propertyTables`
     op (§4), one request per table, and one for all of an element's
     property sets. The reply holds only what renders: past
     `MAX_NESTED_TABLE_DEPTH` an entity is its `#id TYPE`, past
@@ -2539,10 +2539,10 @@ and the other lacks.
 
 | Stage | Shared seam | IFC | STEP / AP214 | Status |
 |---|---|---|---|---|
-| Route | `Loader.js#findLoader`: one arm for `ifc`/`ifczip`/`step`/`stp` → `ShareIfcLoader`; one list of the part-21 types, `loader/part21Formats.js` (#2067), read by the Loader, `modelArchive.js`, `ShareModel.js` and the engine-worker routing | `.ifczip` unwrapped first (`Loader#load`) | — | shared |
+| Route | `Loader.js#findLoader`: one arm for `ifc`/`ifczip`/`step`/`stp` → `ShareIfcLoader`; one list of the part-21 types, `engine/part21Formats.js` (#2067), read by the Loader, `modelArchive.js`, `ShareModel.js` and the engine-worker routing | `.ifczip` unwrapped first (`Loader#load`) | — | shared |
 | Engine | conway's compat `IfcAPI` (`@bldrs-ai/conway/web-ifc`); it routes AP214 to `IfcApiProxyAP214` behind the same calls | `IfcApiProxyIfc` | `IfcApiProxyAP214` | shared surface; conway owns the split |
 | Source kind | `Loader.js#canOpenFromStore`: conway's own detector over the 64 KiB prefix, never the suffix, and conway's table of what the store open needs of the store (`storeOpenRequirementOf`, conway#757): IFC any store, STEP one that reads synchronously | a `File`, opened windowed from a `StepExternalByteStore` (in the worker, over a read-only sync access handle: `engineSources.js`, #2072) | the same `File` and the same stores in the worker (both offer `readSync`); on the main-thread engine, whose Blob store cannot read synchronously, an `ArrayBuffer`, buffered | **data**: one predicate; AP214's extraction reads synchronously, so conway faults its windows in and needs `readSync` (conway `streaming-federated-loader.md` §"STEP windowed: synchronous fault-in") |
-| Open | `loader/conwayOpen.js#openDeferred`, in both engines (main thread and worker): from the index sidecar when the worker has one, else windowed, else buffered; a schema refusal is final. In the worker the source policy (§5.6, `engine/sourcePolicy.js`) decides first, one rule for both formats: buffered under the device cap or over the Blob store's held copy, windowed over the cap, on a sidecar reopen and under `disableBufferedSource` | `OpenModelFromIndex`, then `OpenModelStream`, then `OpenModelStreamed` | the same calls (`IfcApiProxyAP214.createFromIndex` / `createFromStore`, conway#757); `OpenModelStreamed` on the main-thread engine | shared |
+| Open | `engine/conwayOpen.js#openDeferred`, in both engines (main thread and worker): from the index sidecar when the worker has one, else windowed, else buffered; a schema refusal is final. In the worker the source policy (§5.6, `engine/sourcePolicy.js`) decides first, one rule for both formats: buffered under the device cap or over the Blob store's held copy, windowed over the cap, on a sidecar reopen and under `disableBufferedSource` | `OpenModelFromIndex`, then `OpenModelStream`, then `OpenModelStreamed` | the same calls (`IfcApiProxyAP214.createFromIndex` / `createFromStore`, conway#757); `OpenModelStreamed` on the main-thread engine | shared |
 | Open failure | `classifyOpenFailure` → `unsupportedSchema.js#openModelFailure`, classified where the statistics are (§2.4 G3) | — | — | shared |
 | Engine worker | `engine/engineModelLoad.js` + `engineHandler.js` + `EngineSession` + the remembered in-process fallback (`spawnEngine.js`); `format` is a label | — | — | shared (§7 steps 3, 6) |
 | Index | `onIndexed` → `makeIndexedModelHandle` (`indexedModel`, #2037), started beside the pump | the deferred index | the AP214 assembly tree, built at open | shared |

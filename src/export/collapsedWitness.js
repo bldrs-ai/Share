@@ -1,7 +1,7 @@
 // Writing the lossy witness into a Draco export of a collapsed artifact, and
 // planning the row tag that lets that export use EDGEBREAKER (share-140 #1871
 // follow-ups). The witness itself, the tag, and why each exists are
-// documented in `loader/bldrsInstanceTables.js` ("THE LOSSY WITNESS",
+// documented in `model/bldrsInstanceTables.js` ("THE LOSSY WITNESS",
 // `ROW_TAG_SEMANTIC`); this module is the export-time half that computes both
 // from the file's own bytes. `glbCompression.js#transformGlb` applies the
 // planned tags to the document it encodes.
@@ -35,8 +35,8 @@ import {
   rowTagItemSize,
   rowWitnessStats,
   tableRowIdentity,
-} from '../loader/bldrsInstanceTables'
-import {glbInfo} from '../loader/glbLog'
+} from '../model/bldrsInstanceTables'
+import {glbInfo} from '../utils/glbLog'
 
 
 const GLTF_FLOAT = 5126

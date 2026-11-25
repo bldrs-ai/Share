@@ -25,7 +25,7 @@ import {QUALITY_DEFAULT, isQualityLevel} from './exportQuality'
 import {getExportFormat} from './exportRegistry'
 import {EXPORT_SLOT_MISSING_REASON, NO_FREE_SLOT_REASON, formatNextFreeSlot} from './exportSlots'
 import {COMPRESSION_NONE, isCompressionMode} from './glbCompression'
-import {isGzipAvailable} from './glbGzip'
+import {isGzipAvailable} from '../loader/glbGzip'
 import {ProModuleDeniedError, forgetProModule, loadProModule} from './proModuleLoader'
 
 

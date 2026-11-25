@@ -398,7 +398,7 @@ helps with or without the page reload, so it can land before sessions.
 Mid-stream property reads worked in the Node harness. Concurrent reads against Share's own batch pump in the browser still need a test as part of this work.
 
 **How it's built.**
-- **The seam is the deferred open's return,** inside `parseIfcWithConway` (`viewer/ifc/conwayDirectIfcLoader.js`), between the open and the first pump batch. IFC and STEP both take it, since both go through `ShareIfcLoader#parse`. Its `onIndexed(modelID)` is started there and **not awaited**: the pump starts at once and the tree walk runs beside it, and a throw there only costs the early tree. It was awaited at first. PSB (860 MB, windowed) showed why that fails: conway's `getSpatialStructure(modelID, 'names')` awaits `ensureLine` for every relationship and every node, one at a time, and each miss pages in a source window. That was ~86 s of serial I/O, which held the pump back and showed up as Parsing (89.7 s against prod's 15.4 s). Prod pays the same walk after the load resolves, outside Total. conway#753 (pinned from 1.1632) walks the tree once, in file order, which takes it from 81 s to 4 s in Node. The walk still awaits window reads, so it stays started-not-awaited. Classic opens, GLB cache hits and non-Conway formats don't call it; they bring the tree up at the end, as before.
+- **The seam is the deferred open's return,** inside `parseIfcWithConway` (`loader/conwayDirectIfcLoader.js`), between the open and the first pump batch. IFC and STEP both take it, since both go through `ShareIfcLoader#parse`. Its `onIndexed(modelID)` is started there and **not awaited**: the pump starts at once and the tree walk runs beside it, and a throw there only costs the early tree. It was awaited at first. PSB (860 MB, windowed) showed why that fails: conway's `getSpatialStructure(modelID, 'names')` awaits `ensureLine` for every relationship and every node, one at a time, and each miss pages in a source window. That was ~86 s of serial I/O, which held the pump back and showed up as Parsing (89.7 s against prod's 15.4 s). Prod pays the same walk after the load resolves, outside Total. conway#753 (pinned from 1.1632) walks the tree once, in file order, which takes it from 81 s to 4 s in Node. The walk still awaits window reads, so it stays started-not-awaited. Classic opens, GLB cache hits and non-Conway formats don't call it; they bring the tree up at the end, as before.
 - **What CadView gets is the model at its index** (`makeIndexedModelHandle`): the finished model's property and spatial surface, with no geometry. It goes in the store as `indexedModel`, not `model`, because scene consumers (clipper, isolator, ViewCube) take `model` to be the object in the scene. The tree, Properties, TopBar, search and the assistant's read-only `model.*` tools and context read through `selectReadModel`, which prefers it; `view.*` still waits for the finished model. Three things clear it:
   - the load's own `setModel`, which only clears the handle that load set;
   - a failure, which also takes the tree down;
@@ -434,7 +434,7 @@ selects an element. Tree, properties and search still need the index
 - **The pick** (`CadView#canvasDoubleClickHandler`, installed when the load
   starts, not at its end) raycasts only the preview while one is in the
   scene, and takes the nearest hit that names an element
-  (`viewer/previewSelection.js`). The durable batches streaming beside it get
+  (`model/previewSelection.js`). The durable batches streaming beside it get
   their pick tables only at the load's end
   (`incrementalBatchedBuilder#finalize`), so they are not raycast: a spot
   only they cover selects nothing until the model is in. That is the main gap
@@ -612,8 +612,8 @@ The suspect was a long synchronous initial parse, and P1.0 cleared it: Conway al
    - It already blocks every large cold load today, and it would land in the middle of the foreground model's interaction when a background load finishes.
    - Fix: chunk it, or move the preparation into the existing GLB writer worker.
 2. **End-of-load assembly: 2.2–2.4 s.**
-   - Path: `assembleBatchedModel` (`src/viewer/ifc/buildBatchedConwayModel.js:165`) → `decorateBatchMeshes` `:81` → `computeBoundsTree` per batch (`:140`, three-mesh-bvh `computeBatchedBoundsTree`).
-   - `robustBoundsFor` (`src/viewer/three/robustBounds.js:204`) shows up in the same task.
+   - Path: `assembleBatchedModel` (`src/model/buildBatchedConwayModel.js:165`) → `decorateBatchMeshes` `:81` → `computeBoundsTree` per batch (`:140`, three-mesh-bvh `computeBatchedBoundsTree`).
+   - `robustBoundsFor` (`src/model/robustBounds.js:204`) shows up in the same task.
    - Fix: slice it across batches, or build the BVH lazily.
 3. **Conway's `prepareDemandExtraction` → `populateStyledItemsMap`: about 1 s on 231 MB in Node, 0.6–0.7 s in the browser.** It needs a Conway issue asking for it to be sliced.
 4. **A worker for the engine: deferred.**
@@ -637,7 +637,7 @@ exceeded (phones first).
 
 1. abort the download and the parse — an `AbortSignal` through
    `Loader.load` to `ProgressiveLoadSession.abort()`
-   (`src/viewer/ProgressiveLoadSession.js:298`) and the batch pump;
+   (`src/loader/ProgressiveLoadSession.js:298`) and the batch pump;
 2. drop or cancel the session's idle GLB writer;
 3. release every reference to the session's `IfcAPI` so the whole
    instance is collectable (§2.4), then `CloseModel` — never before the
@@ -861,7 +861,7 @@ behaviour**: a switch still closes the old model, as in Phase 1a. Background
 sessions (a left load runs on and a return restores it) are step 2's, under
 `?feature=workspace`.
 
-**The shape** (`Containers/modelSession.js`):
+**The shape** (`session/modelSession.js`):
 
 ```
 ModelSessionHost            one per CadView (a ref, like previousThemeChangeCbRef)
@@ -969,7 +969,7 @@ an indexed tree), as §4.5a decided.
   the load reporter (`loader/loadProgress.js`: the report lines, the stall
   watchdog, `currentLoadSerial`), the artifact generation
   (`loader/glbArtifactPublish.js`'s `generation`), the streaming selection
-  (`viewer/streamingBatchPick.js`, one per scene, on the viewer's
+  (`model/streamingBatchPick.js`, one per scene, on the viewer's
   `scene.userData`), and the GLB writer's in-flight owner
   added here (`Loader.js#cacheWriteOwner`). Cap N (slice 3b of
   [layering.md](../tracks/open-t200/layering.md) §7) needs each per session. The reporter has ownership already (below),

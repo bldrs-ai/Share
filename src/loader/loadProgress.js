@@ -2047,7 +2047,7 @@ export function loadReportToken() {
 
 /**
  * Record BVH trees that reached three-mesh-bvh's depth cap
- * (`viewer/ifc/bvhBuild.js`). Accumulates across the load's builds, a batched
+ * (`model/bvhBuild.js`). Accumulates across the load's builds, a batched
  * model building one tree per geometry, and becomes one `Health:` line after
  * Total and, on a successful load, one GA `bvh_depth_cap` event
  * (reportBvhDepthCapOnce). Safe no-op with no active load.

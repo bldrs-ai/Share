@@ -1,9 +1,9 @@
 import {useEffect, useRef} from 'react'
-import {ModelSessionHost} from './modelSession'
+import {ModelSessionHost} from '../session/modelSession'
 
 
 /**
- * The model sessions one view binds to (Containers/modelSession.js; open-205
+ * The model sessions one view binds to (session/modelSession.js; open-205
  * #2019, design/new/in-app-model-switch.md §4.9), for the life of the
  * component, and closed when it unmounts. Per component, not module state,
  * so two mounts in one process (tests, a remount across route families)

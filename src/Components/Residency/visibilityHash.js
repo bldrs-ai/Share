@@ -7,7 +7,7 @@ import {
   occurrenceRef,
   parseRef,
   sceneGraphNamePaths,
-} from '../../viewer/visibilityRefs'
+} from '../../model/visibilityRefs'
 import {HASH_PREFIX_DISPLAY, mergeDisplayTerms} from './displayHash'
 
 

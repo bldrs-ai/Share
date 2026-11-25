@@ -1,0 +1,129 @@
+{
+  "src/OPFS/reportOpfsSourceCondition.js": [
+    "src/loader/loadCaptureContext.js",
+    "src/loader/loadProgress.js"
+  ],
+  "src/OPFS/uploadLedger.js": [
+    "src/connections/persistence.ts"
+  ],
+  "src/engine/engineModelLoad.js": [
+    "src/loader/loadProgress.js"
+  ],
+  "src/loader/Loader.js": [
+    "src/connections/persistence.ts",
+    "src/store/useStore.js"
+  ],
+  "src/loader/ProgressiveLoadSession.js": [
+    "src/viewer/three/cameraLimits.js"
+  ],
+  "src/loader/ShareIfcLoader.js": [
+    "src/Components/Camera/hashState.js"
+  ],
+  "src/loader/bldrsElementProperties.js": [
+    "src/store/useStore.js"
+  ],
+  "src/loader/glbArtifactPublish.js": [
+    "src/store/useStore.js"
+  ],
+  "src/loader/loadProgress.js": [
+    "src/store/useStore.js"
+  ],
+  "src/loader/uploadedFileName.js": [
+    "src/connections/persistence.ts"
+  ],
+  "src/model/buildBatchedConwayModel.js": [
+    "src/loader/conwayDirectIfcLoader.js"
+  ],
+  "src/model/bvhBuild.js": [
+    "src/loader/loadProgress.js"
+  ],
+  "src/model/deferredBatchedBvh.js": [
+    "src/loader/loadProgress.js"
+  ],
+  "src/privacy/analytics.js": [
+    "src/quota/quota.js"
+  ],
+  "src/privacy/consentChoice.js": [
+    "src/index/ga.js",
+    "src/store/useStore.js"
+  ],
+  "src/privacy/localOnlyMode.js": [
+    "src/Components/Open/sampleModelRoster.js"
+  ],
+  "src/privacy/modelActionTracking.js": [
+    "src/Containers/authLoadGate.js",
+    "src/store/useStore.js"
+  ],
+  "src/privacy/subscriptionTracking.js": [
+    "src/Auth0/appMetadata.js"
+  ],
+  "src/session/modelSession.js": [
+    "src/store/IFCSlice.js",
+    "src/store/useStore.js"
+  ],
+  "src/utils/dragAndDrop.js": [
+    "src/connections/persistence.ts",
+    "src/loader/gzipEnvelope.js",
+    "src/loader/inMemoryUploads.js",
+    "src/loader/modelArchive.js",
+    "src/loader/unrecognizedFormat.js"
+  ],
+  "src/utils/loader.js": [
+    "src/loader/gzipEnvelope.js",
+    "src/loader/inMemoryUploads.js",
+    "src/loader/modelArchive.js",
+    "src/loader/unrecognizedFormat.js"
+  ],
+  "src/utils/modelDisplayName.js": [
+    "src/connections/persistence.ts"
+  ],
+  "src/utils/navigate.js": [
+    "src/Components/Camera/hashState.js"
+  ],
+  "src/utils/shortcutKeys.js": [
+    "src/Components/Share/viewLink.js"
+  ],
+  "src/viewer/ShareViewer.js": [
+    "src/Infrastructure/IfcCustomViewSettings.js",
+    "src/Infrastructure/IfcElementsStyleManager.js"
+  ],
+  "src/viewer/three/IfcIsolator.js": [
+    "src/store/useStore.js"
+  ],
+  "src/viewer/tools/analysisTools.js": [
+    "src/assist/index.ts"
+  ],
+  "src/viewer/tools/assistHost.js": [
+    "src/assist/index.ts",
+    "src/quota/aiCredits.js",
+    "src/store/useStore.js"
+  ],
+  "src/viewer/tools/assistRuntime.js": [
+    "src/export/importModuleFromUrl.js"
+  ],
+  "src/viewer/tools/refLinks.js": [
+    "src/Containers/SelectionHashWriter.jsx",
+    "src/Containers/selectionHash.js",
+    "src/store/useStore.js"
+  ],
+  "src/viewer/tools/refs.js": [
+    "src/Components/Residency/visibilityHash.js",
+    "src/assist/index.ts"
+  ],
+  "src/viewer/tools/shareTools.js": [
+    "src/Components/Camera/CameraControl.jsx",
+    "src/Components/Residency/displayHash.js",
+    "src/Components/Residency/visibilityHash.js",
+    "src/store/useStore.js"
+  ],
+  "src/viewer/tools/viewContext.js": [
+    "src/store/IFCSlice.js",
+    "src/store/useStore.js"
+  ],
+  "src/viewer/tools/viewTools.js": [
+    "src/Components/Share/viewLink.js",
+    "src/assist/index.ts",
+    "src/store/IFCSlice.js",
+    "src/store/useStore.js"
+  ]
+}

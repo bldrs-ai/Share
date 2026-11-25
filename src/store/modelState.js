@@ -38,7 +38,7 @@ export function modelStateDefaults() {
 /**
  * Reset the store's per-model state to its defaults, as a page load would
  * start it. The one writer of these fields outside a model session's load
- * job (Containers/modelSession.js), and called only when the active session
+ * job (session/modelSession.js), and called only when the active session
  * changes or its load was given up.
  *
  * @param {object} [store] the zustand store, for tests

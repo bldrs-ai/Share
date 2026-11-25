@@ -75,7 +75,7 @@ describe('store/modelState', () => {
   })
 
   // The static half of #2019's session scoping: a load writes the model's
-  // state only through its session's job (Containers/modelSession.js), so
+  // state only through its session's job (session/modelSession.js), so
   // CadView must not call these fields' setters itself. A new field declared
   // by the IFC or Browser slice is covered here by construction. The
   // NavTree's expansion is left out: the user's selection and search write

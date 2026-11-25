@@ -1,6 +1,6 @@
 import GUI from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import {ToneMappingMode} from 'postprocessing'
-import {LOOKS, DEFAULT_LOOK, forEachLookManagedMaterial} from '../looks'
+import {LOOKS, DEFAULT_LOOK, forEachLookManagedMaterial} from '../../model/looks'
 import {requestPaint} from './renderDemand'
 
 

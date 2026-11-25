@@ -543,7 +543,7 @@ describe('Filetype', () => {
       // folds both into 'ifc'. Kept for callers that want to report what a
       // file declared rather than pick a name for it; the format decision
       // that used to depend on it now goes through conway's detector
-      // (`src/loader/stepFormat.js`).
+      // (`src/engine/stepFormat.js`).
       expect(stepSchemaName('HEADER;\nENDSEC;')).toBeNull()
       expect(stepSchemaName(hdr(`FILE_SCHEMA(());`))).toBeNull()
       expect(stepSchemaName(hdr(`FILE_SCHEMA((''));`))).toBeNull()

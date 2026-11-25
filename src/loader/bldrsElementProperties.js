@@ -25,8 +25,8 @@
 // as a product in `itemProperties`).
 import * as pako from 'pako'
 import useStore from '../store/useStore'
-import {BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, parseContainerHeader} from './bldrsElementPropertiesCapture'
-import {glbInfo} from './glbLog'
+import {BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, parseContainerHeader} from '../engine/bldrsElementPropertiesCapture'
+import {glbInfo} from '../utils/glbLog'
 
 
 // The pre-0.13.0 payload format's leading bytes (one monolithic gzip),

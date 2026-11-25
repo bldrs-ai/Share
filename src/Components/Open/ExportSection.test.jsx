@@ -202,7 +202,7 @@ describe('ExportSection', () => {
     // jsdom has no `CompressionStream`, and the gzip row is hidden without
     // one — so without this the control under test would simply not be in the
     // DOM and every assertion about it would fail for the wrong reason
-    // (`export/glbGzip.js#isGzipAvailable`). The test for the missing case
+    // (`loader/glbGzip.js#isGzipAvailable`). The test for the missing case
     // deletes it again.
     global.CompressionStream = NodeCompressionStream
   })

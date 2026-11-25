@@ -1,0 +1,237 @@
+import useStore from '../store/useStore'
+import {LoadAbortedError} from '../utils/loadAbort'
+import {LoadState, ModelSessionHost} from './modelSession'
+
+
+// open-205 #2019 (Phase 1b step 1): a model session owns its load job, and
+// only the active session's current job writes the model's state. These pin
+// the structural half: a write from a session the view is no longer bound to
+// never reaches the store, whatever the load does (CadView.test.jsx drives
+// the same through a real load).
+describe('session/modelSession', () => {
+  let forget
+  let host
+
+  beforeEach(() => {
+    forget = jest.fn()
+    host = new ModelSessionHost({onForget: forget})
+    useStore.setState({model: null, rootElement: null, isModelReady: false})
+  })
+
+  afterEach(() => {
+    window.ondblclick = null
+    window.onkeydown = null
+  })
+
+  it('writes the active session\'s current job into the store', () => {
+    const job = host.open('A').beginLoad({isAbortable: true})
+    const modelOfA = {name: 'A'}
+
+    expect(job.isCurrent()).toBe(true)
+    expect(job.set({model: modelOfA, isModelReady: true})).toBe(true)
+    expect(useStore.getState().model).toBe(modelOfA)
+    expect(useStore.getState().isModelReady).toBe(true)
+  })
+
+  it('drops every write of a session the user has left, and aborts its load', () => {
+    const sessionA = host.open('A')
+    const jobOfA = sessionA.beginLoad({isAbortable: true})
+    host.open('B').beginLoad({isAbortable: true})
+
+    expect(sessionA.isClosed).toBe(true)
+    expect(jobOfA.signal.aborted, 'leaving A aborts its load').toBe(true)
+    expect(jobOfA.isCurrent()).toBe(false)
+    // A's load finishing anyway (a mesh parse cannot be stopped) writes
+    // nothing over B.
+    expect(jobOfA.set({model: {name: 'A'}, isModelReady: true})).toBe(false)
+    expect(useStore.getState().model).toBeNull()
+    expect(useStore.getState().isModelReady).toBe(false)
+    const sideEffect = jest.fn()
+    expect(jobOfA.ifCurrent(sideEffect)).toBe(false)
+    expect(sideEffect).not.toHaveBeenCalled()
+    expect(() => jobOfA.throwIfLeft()).toThrow(LoadAbortedError)
+  })
+
+  it('drops the writes of a left session that has no abort signal (the kill switch)', () => {
+    const jobOfA = host.open('A').beginLoad({isAbortable: false})
+    expect(jobOfA.signal).toBeUndefined()
+    host.open('B')
+
+    expect(jobOfA.set({model: {name: 'A'}})).toBe(false)
+    expect(useStore.getState().model).toBeNull()
+  })
+
+  it('a return to A is a new session: the first A\'s load stays left', () => {
+    const jobOfFirstA = host.open('A').beginLoad({isAbortable: false})
+    host.open('B')
+    const secondA = host.open('A')
+
+    expect(secondA.isActive()).toBe(true)
+    expect(jobOfFirstA.isCurrent()).toBe(false)
+    expect(jobOfFirstA.set({model: {name: 'first A'}})).toBe(false)
+    expect(useStore.getState().model).toBeNull()
+  })
+
+  it('forgets the model\'s state on every switch, the first open included', () => {
+    host.open('A')
+    expect(forget).toHaveBeenLastCalledWith({isSwitch: true})
+    host.open('B')
+    expect(forget).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the session for the same model (a theme or view-settings rebuild)', () => {
+    const session = host.open('A')
+    expect(host.open('A')).toBe(session)
+    expect(forget).toHaveBeenCalledTimes(1)
+  })
+
+  it('a new run supersedes the previous one of the same session', () => {
+    const session = host.open('A')
+    const first = session.beginLoad({isAbortable: true})
+    const second = session.beginLoad({isAbortable: true})
+
+    expect(first.signal.aborted).toBe(true)
+    expect(first.isCurrent()).toBe(false)
+    expect(second.isCurrent()).toBe(true)
+    expect(first.set({model: {name: 'first run'}})).toBe(false)
+    expect(useStore.getState().model).toBeNull()
+  })
+
+  it('forgets what a run given up mid-load brought up before the next run starts', () => {
+    const session = host.open('A')
+    session.beginLoad({isAbortable: true})
+    forget.mockClear()
+    // The viewer is re-created mid-load (a theme change): the run is given
+    // up, and the replay starts from scratch.
+    session.abortLoad()
+    session.beginLoad({isAbortable: true})
+    expect(forget).toHaveBeenCalledWith({isSwitch: false})
+  })
+
+  it('keeps a finished run\'s state when the next run of the session starts', () => {
+    const session = host.open('A')
+    const first = session.beginLoad({isAbortable: true})
+    first.markReady()
+    expect(session.loadState).toBe(LoadState.READY)
+    forget.mockClear()
+    session.abortLoad()
+    session.beginLoad({isAbortable: true})
+    expect(forget).not.toHaveBeenCalled()
+  })
+
+  it('closing a session unbinds its window handlers, closes its engine and drops it', () => {
+    const sessionA = host.open('A')
+    const close = jest.fn()
+    sessionA.bindEngine({ifcManager: {ifcAPI: {engineSession: {close}}}})
+    const ondblclick = () => null
+    sessionA.bindWindowHandler('ondblclick', ondblclick)
+    expect(window.ondblclick).toBe(ondblclick)
+
+    host.open('B')
+
+    expect(window.ondblclick).toBeNull()
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(sessionA.engine).toBeNull()
+    expect(sessionA.loadState).toBe(LoadState.CLOSED)
+  })
+
+  it('tells sessions apart by id, and tracks a run\'s state (engine-worker.md §5.2)', () => {
+    const sessionA = host.open('A')
+    const job = sessionA.beginLoad({isAbortable: true})
+    expect(sessionA.loadState).toBe(LoadState.LOADING)
+    job.markFailed()
+    expect(sessionA.loadState).toBe(LoadState.FAILED)
+    const sessionB = host.open('B')
+    expect(sessionB.id).not.toBe(sessionA.id)
+    // A left run's verdict is not the session's any more.
+    job.markReady()
+    expect(sessionA.loadState).toBe(LoadState.CLOSED)
+  })
+
+  it('runs what was bound to close with the session, once', () => {
+    const sessionA = host.open('A')
+    const closer = jest.fn()
+    sessionA.bindCloser(closer)
+    host.open('B')
+    sessionA.close()
+    expect(closer).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves a handler alone once the next session has bound its own', () => {
+    const sessionA = host.open('A')
+    sessionA.bindWindowHandler('onkeydown', () => 'A')
+    const ofB = () => 'B'
+    window.onkeydown = ofB
+    sessionA.close()
+    expect(window.onkeydown).toBe(ofB)
+  })
+
+  describe('the loading UI belongs to the run that put it up (codex on #2247)', () => {
+    beforeEach(() => {
+      useStore.setState({isModelLoading: false, snackMessage: null})
+    })
+
+    it('a left run unwinding after the next view\'s run began leaves that run\'s overlay and snackbar', () => {
+      // Two views, as after a remount across route families: each its own host.
+      const jobOfA = host.open('A').beginLoad({isAbortable: true})
+      jobOfA.showLoading('Loading A')
+      host.closeActive()
+      const nextView = new ModelSessionHost({onForget: () => null})
+      const jobOfB = nextView.open('B').beginLoad({isAbortable: true})
+      jobOfB.showLoading('Loading B')
+
+      jobOfA.hideLoading()
+      jobOfA.updateLoadingMessage('Loading A: still working')
+      jobOfA.endLoading()
+
+      expect(useStore.getState().isModelLoading).toBe(true)
+      expect(useStore.getState().snackMessage).toBe('Loading B')
+      jobOfB.endLoading()
+      expect(useStore.getState().isModelLoading).toBe(false)
+      expect(useStore.getState().snackMessage).toBeNull()
+    })
+
+    it('the left view\'s run stops being current as soon as the next view opens its session', () => {
+      const jobOfA = host.open('A').beginLoad({isAbortable: true})
+      // The next view mounts and opens B before the left view's unmount close
+      // (a microtask later) has run.
+      const nextView = new ModelSessionHost({onForget: () => null})
+      nextView.open('B').beginLoad({isAbortable: true})
+
+      expect(jobOfA.isCurrent()).toBe(false)
+      expect(jobOfA.set({model: {name: 'A'}})).toBe(false)
+      expect(useStore.getState().model).toBeNull()
+    })
+
+    it('a run given up with no run after it still takes its own down', () => {
+      const jobOfA = host.open('A').beginLoad({isAbortable: true})
+      jobOfA.showLoading('Loading A')
+      host.closeActive()
+      expect(jobOfA.isCurrent()).toBe(false)
+
+      jobOfA.endLoading()
+
+      expect(useStore.getState().isModelLoading).toBe(false)
+      expect(useStore.getState().snackMessage).toBeNull()
+    })
+
+    it('a run the user has already left never puts it up', () => {
+      const jobOfA = host.open('A').beginLoad({isAbortable: true})
+      host.open('B')
+      jobOfA.showLoading('Loading A')
+      expect(useStore.getState().isModelLoading).toBe(false)
+      expect(useStore.getState().snackMessage).toBeNull()
+    })
+  })
+
+  it('closeActive (an unmount) closes the session without forgetting the store', () => {
+    const job = host.open('A').beginLoad({isAbortable: true})
+    forget.mockClear()
+    host.closeActive()
+
+    expect(host.active).toBeNull()
+    expect(job.signal.aborted).toBe(true)
+    expect(job.isCurrent()).toBe(false)
+    expect(forget).not.toHaveBeenCalled()
+  })
+})

@@ -24,8 +24,8 @@ import ThreeContext from '../viewer/three/ThreeContext'
 import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
 import * as Loader from '../loader/Loader'
-import {EngineOpenFailureError} from '../loader/engineOpenFailure'
-import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
+import {EngineOpenFailureError} from '../engine/engineOpenFailure'
+import {UnsupportedSchemaError} from '../engine/unsupportedSchema'
 import {ZipArchiveError} from '../loader/zipArchive'
 import {registerInMemoryUpload, resetInMemoryUploadsForTest} from '../loader/inMemoryUploads'
 import {LoadAbortedError} from '../utils/loadAbort'
@@ -86,12 +86,12 @@ jest.mock('../search/SearchIndex')
 // `ShareIfcLoader.degraded.test.js`, whose builder doubles assert on the
 // meshes they receive. This double is here to stop a fixture from
 // contradicting the contract it stands in for, not to catch a regression.
-jest.mock('../viewer/ifc/conwayDirectIfcLoader', () => ({
+jest.mock('../loader/conwayDirectIfcLoader', () => ({
   // eslint-disable-next-line require-await
   parseIfcWithConway: () => ({modelID: 0, captured: [], recapture: async () => []}),
   decorateConwayDirectIfcModel: () => {},
 }))
-jest.mock('../viewer/ifc/buildConwayIfcModel', () => ({
+jest.mock('../model/buildConwayIfcModel', () => ({
   buildConwayIfcModel: () => {
     const {__getShareViewerMockSingleton} = require('../../__mocks__/shareViewerTestHarness')
     return {
@@ -2793,7 +2793,7 @@ describe('CadView', () => {
       })
 
       it('a durable batch still streaming in answers the pick with its row, resolved at the index', async () => {
-        // viewer/streamingBatchPick.js: the builder's root offers the rows it
+        // model/streamingBatchPick.js: the builder's root offers the rows it
         // has written; the ray hits a BatchedMesh under it, nearer than any
         // preview mesh.
         const {result} = renderHook(() => useStore((state) => state))

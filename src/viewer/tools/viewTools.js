@@ -14,7 +14,7 @@ import {
   selectedOccurrences,
 } from '../../utils/occurrencePaths'
 import {FRAMING_MARGIN} from '../three/cameraLimits'
-import {occurrenceRef} from '../visibilityRefs'
+import {occurrenceRef} from '../../model/visibilityRefs'
 import {createAnalysisTools} from './analysisTools'
 import {elementBounds} from './elementBounds'
 import {assertResolved, nodeName, nodeType, nodesById, refMaker, resolveRefs, walkTree} from './refs'

@@ -8,11 +8,11 @@ import {
   uploadNotInBrowserAlert,
 } from '../OPFS/messages'
 import {getProvider} from '../connections/registry'
-import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
+import {ENGINE_FAILURE_ALERT_EVENT} from '../engine/engineOpenFailure'
 import {NO_GEOMETRY_ALERT, noGeometryAlert} from '../loader/loadProgress'
 import {cacheClearSkippedAlert} from '../OPFS/messages'
 import {UNRECOGNIZED_FORMAT_ALERT_EVENT, unrecognizedFormatAlert} from '../loader/unrecognizedFormat'
-import {UNSUPPORTED_SCHEMA_ALERT_EVENT, UnsupportedSchemaError, unsupportedSchemaAlert} from '../loader/unsupportedSchema'
+import {UNSUPPORTED_SCHEMA_ALERT_EVENT, UnsupportedSchemaError, unsupportedSchemaAlert} from '../engine/unsupportedSchema'
 import {REVIT} from '../loader/formatGuidance'
 import {ARCHIVE_ENTRY_CHOICE, ARCHIVE_UNREADABLE, noModelInArchiveAlert} from '../loader/modelArchive'
 import {gtagEventWithCid} from '../privacy/analytics'

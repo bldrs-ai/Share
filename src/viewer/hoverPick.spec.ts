@@ -8,7 +8,7 @@ import {clearOpfs, homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
 const {beforeEach} = test
 
 // A real IFC of a few hundred instances, loaded as a batched model, so the
-// pick runs through the instance tree (ifc/batchedInstanceBvh.js) once it is
+// pick runs through the instance tree (model/batchedInstanceBvh.js) once it is
 // built. Copied to `__test_fixtures__/` by `bun run test-flows-build`.
 const MODEL_PATH = '/share/v/p/__test_fixtures__/Momentum.ifc'
 // `disableInstanceBvh` (FeatureFlags.js) builds no instance tree, so every
@@ -176,7 +176,7 @@ async function doubleClickSelects(page: Page, point: {x: number, y: number}): Pr
 
 /**
  * Hover picking on a batched IFC through the instance tree
- * (ifc/batchedInstanceBvh.js) and the hover scheduler (hoverPick.js). The
+ * (model/batchedInstanceBvh.js) and the hover scheduler (hoverPick.js). The
  * user's own action — moving the pointer over the model, then
  * double-clicking — must highlight and select exactly what it did when every
  * pick walked every instance. The same page is loaded twice, once with the

@@ -22,7 +22,7 @@ import {
   COMPRESSION_NONE,
   compressionFidelityCaption,
 } from '../../export/glbCompression'
-import {isGzipAvailable} from '../../export/glbGzip'
+import {isGzipAvailable} from '../../loader/glbGzip'
 import useCodecSizes from '../../export/useCodecSizes'
 import useExport, {formatBytes} from '../../export/useExport'
 import useExportSlots from '../../export/useExportSlots'
