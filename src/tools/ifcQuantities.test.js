@@ -26,7 +26,7 @@ function modelWith(units) {
 
 // The IFC line each layout comes from, and what the property API returns for
 // it. Conway shifts the fields one slot early (the leading `*` takes none).
-describe('viewer/tools ifcQuantities#readProjectUnits', () => {
+describe('tools ifcQuantities#readProjectUnits', () => {
   // IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.), IFCSIUNIT(*,.AREAUNIT.,.MILLI.,.SQUARE_METRE.),
   // IFCSIUNIT(*,.VOLUMEUNIT.,.MILLI.,.CUBIC_METRE.)
   const shifted = [

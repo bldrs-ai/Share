@@ -43,7 +43,7 @@ function cubePiece(scale, move = (corner) => corner) {
 }
 
 
-describe('viewer/tools meshMeasure#localSolid weld', () => {
+describe('tools meshMeasure#localSolid weld', () => {
   // Batched positions are in source units and the unit scale lives in the
   // placement matrix, so the same box is 1 wide in a metre model and 1000 in a
   // millimetre one. A fixed weld distance would be 1000x tighter in one.
@@ -105,7 +105,7 @@ describe('viewer/tools meshMeasure#localSolid weld', () => {
 // a 3M-triangle piece would otherwise cost ~20M promises. Observable as the
 // number of microtask turns the call takes: an `await` per corner/triangle/edge
 // is one turn each (tens of thousands here), a comparison is none.
-describe('viewer/tools meshMeasure hot path', () => {
+describe('tools meshMeasure hot path', () => {
   it.each([['no pause', null], ['a pause that is never due', () => Promise.resolve()]])(
     'does not await per step (%s)', async (_, pause) => {
       const triangles = 4000

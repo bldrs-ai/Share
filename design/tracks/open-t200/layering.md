@@ -194,6 +194,9 @@ were, since they are the record of what moved.
 `src/app/` and `src/connections/uploadLedger.js`; `engineDevHook.js` is
 `src/app/engineDevHook.js` and `useLegacyViewRulesNotice.js` is
 `src/hooks/useLegacyViewRulesNotice.js`, beside the other React hooks.
+`src/tools/` is not the repo-root `tools/` (build, lint and Jest tooling):
+from a file under `src/`, `../tools/` is the assistant's tools and
+`../../tools/` the root's.
 
 **`src/engine/` (15 files today)**
 
@@ -364,7 +367,7 @@ are app-level leaves like the eight (§2.1). `uploadedFileName.js` stays: it
 is the loader's, and makes the import `Loader.js` does, so it is entry 20
 below, and 3a's with entry 14.
 
-**Measured after M2, on `d2a63568`: 20 in 16 files**: the 19 below and
+**Measured after M2, on its branch (#2358): 20 in 16 files**: the 19 below and
 entry 20. The slice table's counts (§7) run one above its column from M2
 until 3a removes entry 20.
 
@@ -1231,7 +1234,7 @@ against the code on `d8542e42`.
     `/share/index.ifc/81/621`. The parsed branches split them off into
     `eltPath` at the extension.
 - **The key is internal.** It is never a label: the drawer and the
-  TopBar label a model with `utils/modelDisplayName.js#labelForModelPath`.
+  TopBar label a model with `app/modelDisplayName.js#labelForModelPath`.
   It is never sent to telemetry unless the model is public, because a
   GitHub key names the org, repo, branch and path, and an upload's names
   the device's storage id (CLAUDE.md's privacy rule). The precedent is
@@ -1669,7 +1672,7 @@ table.
 | Slice | What | Allowlist | Neutral or flag | Size |
 |---|---|---|---|---|
 | M1 | move the model, the engine helpers and the Conway loader; `viewer/edit/` to the session; the lint rule | 79 → 55 | neutral | 63 files moved (68 with #2346's `viewer/edit/`), no logic lines |
-| M2 | `viewer/tools/` → `src/tools/`; the eight app-level leaf files | 55 → 19 | neutral | 26 files moved |
+| M2 | `viewer/tools/` → `src/tools/`; the eight app-level leaf files | 55 → 19 (measured 59 → 20, §3) | neutral | 28 production files moved (51 with tests) |
 | V | delete the `?view=` rules stack | 19 → 17 | **no flag; three stated changes** (below) | about −500 lines, tests included |
 | 1a | the `Engine` interface; `EngineSession` → `WorkerEngine`; `ConwayEngine`; one parse path; the Conway import rule | 17 → 16 | **no flag; the kill-switch path changes** (below) | ~1,200 + the rename |
 | 1b | `EngineHost` at cap 1; the lease; the load-context adapter | — (three ownership guards) | neutral | ~900 |

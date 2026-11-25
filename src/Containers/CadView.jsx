@@ -2850,7 +2850,7 @@ export default function CadView({
   useEffect(() => () => stopModelEngagementRef.current?.(), [])
 
   // Expose the selection funnel to non-React callers — the Assist view tools
-  // (src/viewer/tools/, ai-workspace.md §9). `selectItemsInScene` is a fresh
+  // (src/tools/, ai-workspace.md §9). `selectItemsInScene` is a fresh
   // closure every render, so the registered wrapper reads the ref, refreshed
   // each render: a tool call reaches the same funnel a NavTree click does,
   // with this render's viewer, element table and router. Registered once per

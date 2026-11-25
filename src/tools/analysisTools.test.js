@@ -45,7 +45,7 @@ function itemOf(items, ref) {
 //   Wall B  cube scaled 2 (mirrored) area 6·4 = 24                  volume 8
 //   Window 1 cube without its top    area 5, open                   no volume
 //   Wall C  two unit cubes           area 12                        volume 2
-describe('viewer/tools analysis: model.measure', () => {
+describe('tools analysis: model.measure', () => {
   let registry
 
   beforeEach(async () => {
@@ -267,7 +267,7 @@ describe('viewer/tools analysis: model.measure', () => {
 })
 
 
-describe('viewer/tools analysis: model.quantities', () => {
+describe('tools analysis: model.quantities', () => {
   let registry
 
   afterEach(() => registry.dispose())
@@ -414,7 +414,7 @@ describe('viewer/tools analysis: model.quantities', () => {
 })
 
 
-describe('viewer/tools analysis: model.spatial', () => {
+describe('tools analysis: model.spatial', () => {
   let registry
 
   afterEach(() => registry.dispose())

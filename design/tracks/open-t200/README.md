@@ -28,7 +28,7 @@ The sub-issues of #2315, in order: the slices of [layering.md](layering.md) §7,
 | Work item | What becomes possible | Evidence |
 |---|---|---|
 | [#2316](https://github.com/bldrs-ai/Share/issues/2316) M1: move the model, the engine helpers and the Conway loader; the lint rule | A new upward import fails `bun run lint`. | The boundary test; the move changes only import and path lines. |
-| [#2317](https://github.com/bldrs-ai/Share/issues/2317) M2: `viewer/tools/` and the app-level leaves up to the UI | The allowlist is 19 entries, each with a slice that removes it. | As M1. |
+| [#2317](https://github.com/bldrs-ai/Share/issues/2317) M2: `viewer/tools/` and the app-level leaves up to the UI | The allowlist is 19 entries, each with a slice that removes it (20 as measured: `uploadedFileName.js`, added since, is 3a's; layering.md §3). | As M1. |
 | [#2318](https://github.com/bldrs-ai/Share/issues/2318) V: delete the `?view=` rules stack | No viewer is built over an `IfcAPI`'s parser. | A `?view=` link loads in a worker. |
 | [#2319](https://github.com/bldrs-ai/Share/issues/2319) 1a: one `Engine` interface, `WorkerEngine`, `ConwayEngine` | One interface on either engine; `IfcAPI` named only in `src/engine`. | A contract test against both engines and both formats. |
 | [#2320](https://github.com/bldrs-ai/Share/issues/2320) 1b: `EngineHost` at cap 1, and the lease | One owner for every engine; the viewer owns none. | A → B → C and a theme toggle each leave one worker and one lease. |

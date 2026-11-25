@@ -11,7 +11,7 @@ import {createShareAssistRegistry} from './assistHost'
 import {loadFixture, makeReusedStepModel, makeStepModel} from './tools.fixture'
 
 
-describe('viewer/tools analysis on a STEP assembly', () => {
+describe('tools analysis on a STEP assembly', () => {
   let registry
 
   beforeEach(async () => {
@@ -51,7 +51,7 @@ describe('viewer/tools analysis on a STEP assembly', () => {
 // A reused sub-assembly's copies share row ids (Sub 10, Bolt 11 under both A and
 // B), and nodesById keeps the first. A ref to the second copy must answer for
 // the second copy.
-describe('viewer/tools analysis on a reused STEP sub-assembly', () => {
+describe('tools analysis on a reused STEP sub-assembly', () => {
   let registry
 
   beforeEach(async () => {

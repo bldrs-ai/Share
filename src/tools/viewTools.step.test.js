@@ -49,7 +49,7 @@ function loc() {
  * STEP is where an element ref is a NavTree row that owns no geometry, so a
  * tool that treats it as an element id acts on nothing.
  */
-describe('viewer/tools on a STEP assembly', () => {
+describe('tools on a STEP assembly', () => {
   const ALL = [100, 100, 200, 500]
   let fixture
   let registry
@@ -211,7 +211,7 @@ describe('viewer/tools on a STEP assembly', () => {
 // Codex review round 2 on #1946: in a root-only multi-root file no row has a
 // pathful key, which the first fix took to mean "not STEP" — so a part's ref
 // fell back to row ids, isolate blanked the model and focus rejected.
-describe('viewer/tools on a root-only multi-root STEP file (twoRootShells.step)', () => {
+describe('tools on a root-only multi-root STEP file (twoRootShells.step)', () => {
   let fixture
   let registry
   let unregister
@@ -264,7 +264,7 @@ describe('viewer/tools on a root-only multi-root STEP file (twoRootShells.step)'
 // wrapper splits into its parts, and each part into rows (#2001), so its
 // child is written by path rather than folded into the part's `e<row>`, which
 // reads back as the part's own geometry alone.
-describe('viewer/tools on a multi-root STEP file whose part has a child', () => {
+describe('tools on a multi-root STEP file whose part has a child', () => {
   let fixture
   let registry
   let unregister
@@ -297,7 +297,7 @@ describe('viewer/tools on a multi-root STEP file whose part has a child', () => 
 // Codex review round 4 on #1946: a single occurrence selection reported its
 // row as `e<row>`, which every copy of a reused sub-assembly shares, so
 // hiding by the returned chip hid every copy.
-describe('viewer/tools on a reused STEP sub-assembly', () => {
+describe('tools on a reused STEP sub-assembly', () => {
   let fixture
   let registry
   let unregister

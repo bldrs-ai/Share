@@ -30,7 +30,7 @@ async function rejection(promise) {
 }
 
 
-describe('viewer/tools (model, view and share providers)', () => {
+describe('tools (model, view and share providers)', () => {
   let fixture
   let registry
   let funnel

@@ -34,7 +34,7 @@ const BIG = [0, 0, 0, 3, 0, 0, 0, 4, 0]
 const SMALL = [0, 0, 5, 1, 0, 5, 0, 1, 5]
 
 
-describe('viewer/tools elementPieces (the render backends model.measure reads)', () => {
+describe('tools elementPieces (the render backends model.measure reads)', () => {
   it('splits a merged mesh by the element each triangle belongs to, in world space', async () => {
     const mesh = new Mesh(trianglesGeometry([BIG, SMALL], [7, 7, 7, 8, 8, 8]))
     mesh.scale.set(2, 2, 2)
@@ -102,7 +102,7 @@ describe('viewer/tools elementPieces (the render backends model.measure reads)',
 })
 
 
-describe('viewer/tools meshMeasure', () => {
+describe('tools meshMeasure', () => {
   it('finds a tetrahedron closed with volume 1/6, and one flipped face open', async () => {
     // Corners 0, e1, e2, e3; faces wound outward.
     const o = [0, 0, 0]
@@ -137,7 +137,7 @@ describe('viewer/tools meshMeasure', () => {
 
 // Indexing walks every placement and allocates a piece and a matrix each, so
 // a large instance set must yield inside it (it runs before any measuring).
-describe('viewer/tools elementPieces indexing yields', () => {
+describe('tools elementPieces indexing yields', () => {
   /**
    * @param {number} count placements
    * @return {{root: Group, mesh: InstancedMesh}} a node holding an InstancedMesh
@@ -193,7 +193,7 @@ describe('viewer/tools elementPieces indexing yields', () => {
 // An element with tens of millions of triangles must not be accumulated into a
 // JS array and copied, only to be refused afterwards: indexing stops at the cap
 // and leaves a marker that model.measure reports as tooLarge.
-describe('viewer/tools elementPieces refuses oversize elements while indexing', () => {
+describe('tools elementPieces refuses oversize elements while indexing', () => {
   const want = (ids) => ({ids: new Set(ids), instanceIds: new Set()})
 
   it('stops accumulating a merged-mesh element at the cap and returns a marker', async () => {
