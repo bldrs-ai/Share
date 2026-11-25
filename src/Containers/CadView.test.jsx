@@ -4,6 +4,7 @@ import * as reactRouting from 'react-router-dom'
 import * as Ifc from '@bldrs-ai/ifclib'
 import {render, renderHook, act, fireEvent, screen, waitFor, within} from '@testing-library/react'
 import * as Filetype from '../Filetype'
+import {useTheme} from '@mui/material/styles'
 import ShareMock from '../ShareMock'
 import {testId as aboutControlTestId} from '../Components/About/AboutControl'
 import {HASH_PREFIX_CUT_PLANE} from '../Components/CutPlane/hashState'
@@ -23,6 +24,7 @@ import Picker from '../viewer/three/Picker'
 import ThreeContext from '../viewer/three/ThreeContext'
 import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
+import {Themes} from '../theme/Theme'
 import * as Loader from '../loader/Loader'
 import {EngineOpenFailureError} from '../engine/engineOpenFailure'
 import {UnsupportedSchemaError} from '../engine/unsupportedSchema'
@@ -1431,31 +1433,6 @@ describe('CadView', () => {
     expect(result.current.alert).toEqual(expect.objectContaining({type: 'unsupportedSchema', repeat: true}))
   })
 
-  // Same dedupe, for the other rerun trigger: view settings from the Widget
-  // API re-run the load for the same model.
-  it('counts a refused model once, even when view settings reload it', async () => {
-    const schemaErr = new UnsupportedSchemaError('IFC4X3_RC2')
-    const loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
-      throw schemaErr
-    })
-    jest.spyOn(console, 'error').mockImplementation(() => {})
-    const Sentry = require('@sentry/react')
-    jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
-    const {result} = renderHook(() => useStore((state) => state))
-    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
-    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
-    await actAsyncFlush()
-    await waitFor(() => expect(result.current.alert?.type).toBe('unsupportedSchema'))
-    const first = result.current.alert
-    expect(first.repeat).toBe(false)
-    const loadsBefore = loadSpy.mock.calls.length
-    await act(() => result.current.setCustomViewSettings({foo: 'bar'}))
-    await actAsyncFlush()
-    await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
-    // Shown again, as a repeat: AlertDialog counts only the first.
-    await waitFor(() => expect(result.current.alert).not.toBe(first))
-    expect(result.current.alert).toEqual(expect.objectContaining({type: 'unsupportedSchema', repeat: true}))
-  })
 
   // Share#1954: GA must see loads that fail and loads that display nothing,
   // not only the ones that succeed.
@@ -1544,23 +1521,6 @@ describe('CadView', () => {
       expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(1)
     })
 
-    // The [modelPath, customViewSettings] effect re-runs the load for the
-    // same model when the Widget API changes view settings.
-    it('sends one load_failed for a model, even when view settings reload it', async () => {
-      loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
-        throw new Error('OpenModel returned -1')
-      })
-      const {result} = renderHook(() => useStore((state) => state))
-      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
-      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
-      await actAsyncFlush()
-      await waitFor(() => expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(1))
-      const loadsBefore = loadSpy.mock.calls.length
-      await act(() => result.current.setCustomViewSettings({foo: 'bar'}))
-      await actAsyncFlush()
-      await waitFor(() => expect(loadSpy.mock.calls.length).toBeGreaterThan(loadsBefore))
-      expect(gaEvents().filter(([name]) => name === 'load_failed')).toHaveLength(1)
-    })
 
     it('sends load_failed again for a different model', async () => {
       loadSpy = jest.spyOn(Loader, 'load').mockImplementation(() => {
@@ -1675,7 +1635,7 @@ describe('CadView', () => {
       // Earlier tests in this file leave view settings and auth state behind;
       // either one re-runs a load on its own and muddies the counts below.
       useStore.setState({
-        alert: null, customViewSettings: null, isAuthResolved: false, isModelReady: false,
+        alert: null, isAuthResolved: false, isModelReady: false,
         expandedElements: [], selectedElements: [], selectedAnchorIds: [], selectedOccurrencePath: null,
       })
     })
@@ -1887,7 +1847,7 @@ describe('CadView', () => {
       // this mount builds its own, which under the switch is (rightly) aborted
       // and reloaded, and would muddy the load counts below.
       useStore.setState({
-        alert: null, customViewSettings: null, isAuthResolved: false, isModelReady: false, viewer: null,
+        alert: null, isAuthResolved: false, isModelReady: false, viewer: null,
         expandedElements: [], selectedElements: [], selectedAnchorIds: [], selectedOccurrencePath: null,
       })
     })
@@ -2089,13 +2049,18 @@ describe('CadView', () => {
       loadSpy = jest.spyOn(Loader, 'load').mockImplementation(impl)
       await act(() => result.current.setIsOpfsAvailable(false))
       await act(() => result.current.setModelPath({filepath: '/index.ifc'}))
-      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      let theme = null
+      const ThemeHandle = () => {
+        theme = useTheme()
+        return null
+      }
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/><ThemeHandle/></ShareMock>)
       await actAsyncFlush()
       await waitFor(() => expect(calls.length).toBe(1))
 
-      // A view-settings change re-creates the viewer for the same model, as
-      // a theme change does (both through onModelPath's initViewerCb).
-      await act(() => result.current.setCustomViewSettings({}))
+      // A theme change re-creates the viewer for the same model, through
+      // onModelPath's initViewerCb.
+      await act(() => theme.setTheme(theme.palette.mode === 'dark' ? Themes.Day : Themes.Night))
       await actAsyncFlush()
 
       expect(calls[0].signal.aborted).toBe(true)
@@ -2264,7 +2229,7 @@ describe('CadView', () => {
       // while the load is held, and the load's tail then fails on it.
       useStore.setState({
         viewer: null,
-        alert: null, customViewSettings: null, isAuthResolved: false, isModelReady: false,
+        alert: null, isAuthResolved: false, isModelReady: false,
         model: null, indexedModel: null, rootElement: null,
         expandedElements: [], selectedElements: [], selectedAnchorIds: [], selectedOccurrencePath: null,
       })

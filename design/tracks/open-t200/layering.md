@@ -397,8 +397,8 @@ makes its store imports upward.
 | 14 | loader → ui | `Loader.js` → `connections/persistence.ts` | 3a |
 | 15 | session → ui | `modelSession.js` → `store/useStore.js` | 3a |
 | 16 | session → ui | `modelSession.js` → `store/IFCSlice.js` | 3a |
-| 17 | viewer → ui | `ShareViewer.js` → `Infrastructure/IfcElementsStyleManager.js` | V |
-| 18 | viewer → ui | `ShareViewer.js` → `Infrastructure/IfcCustomViewSettings.js` | V |
+| 17 | viewer → ui | `ShareViewer.js` → `Infrastructure/IfcElementsStyleManager.js` | V (removed, #2318) |
+| 18 | viewer → ui | `ShareViewer.js` → `Infrastructure/IfcCustomViewSettings.js` | V (removed, #2318) |
 | 19 | base → ui | `privacy/analytics.js` → `quota/quota.js` | not this redesign: `getTier` for the GA `tier` param. Follow-up: pass the tier in |
 | 20 | loader → ui | `uploadedFileName.js` → `connections/persistence.ts` (added after the count, #2313) | 3a |
 
@@ -1761,6 +1761,17 @@ slices around it shift by six if it lands earlier.
   `navigate.js` has many importers.
 
 ### V. Delete the `?view=` rules stack
+
+**Status: done (#2318).** The allowlist went 20 → 18 (entries 17 and 18).
+Beyond the list below, the slice also took what the stack left dead:
+`ShareIfcManager#parser` (an empty object only the views manager wrote),
+`engineModelLoad.js#isWorkerEngineModel` and `LEGACY_VIEW_RULES_MESSAGE`
+(the notice's), `hasLegacyViewRules`, `mainThreadEngineReason`'s `search`
+argument, ShareViewer's module-scope `viewParameter`, and the store's
+`customViewSettings` and its setter. `navigate.js#isViewChange`, which
+reloads the page for a link with another `?view=`, stays: nothing reads
+`view` now, but dropping it is a fourth visible change, left for a
+follow-up.
 
 Decided on 2026-11-03 (engine-worker.md §8 item 7) and not done.
 Confirmed on 2026-11-24 (§9, item 3): delete it, with no replacement and

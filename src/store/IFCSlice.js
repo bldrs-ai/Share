@@ -58,9 +58,6 @@ export default function createIFCSlice(set, get) {
     cameraControls: null,
     setCameraControls: (controls) => set(() => ({cameraControls: controls})),
 
-    customViewSettings: null,
-    setCustomViewSettings: (settings) => set(() => ({customViewSettings: settings})),
-
     // Not per-model state (ifcModelState): the overlay belongs to the load
     // job that put it up, which alone takes it down
     // (session/modelSession.js#LoadJob#showLoading), so a switch leaves

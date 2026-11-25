@@ -1,6 +1,5 @@
 import {expect, test} from '@playwright/test'
 import {homepageSetup} from '../../tests/e2e/utils'
-import {expectScreen} from '../../tests/screens'
 import {readFile} from 'fs/promises'
 import path from 'path'
 import {writeFile} from 'fs/promises'
@@ -335,39 +334,5 @@ describe.skip('bldrs inside iframe', () => {
     expect(msg.data).toBeDefined()
     expect(msg.action).toBe('ai.bldrs-share.HiddenElements')
     expect(msg.data.current.length).toBe(0)
-  })
-
-  test('should set defaultColor to gray, and color one element blue by view settings', async ({page}) => {
-    const iframe = page.frameLocator('iframe')
-    await iframe.locator('body').press('Escape')
-    await expect(page.locator('#lastMessageReceivedAction')).toContainText(/ModelLoaded/i)
-
-    const defaultGrayColor = {
-      x: 0.85,
-      y: 0.85,
-      z: 0.85,
-      w: 1,
-    }
-    const colorBlue = {
-      x: 0.2,
-      y: 0.3,
-      z: 0.9,
-      w: 1,
-    }
-
-    // Send ChangeViewSettings message
-    await page.locator('#txtSendMessageType').fill('ai.bldrs-share.ChangeViewSettings')
-    const msg = {
-      customViewSettings: {
-        defaultColor: defaultGrayColor,
-        globalIdsToColorMap: {
-          '3qoAS2W2r7m9vxQ0sGR5Rc': colorBlue,
-        },
-      },
-    }
-    await page.locator('#txtSendMessagePayload').fill(JSON.stringify(msg))
-    await page.locator('#btnSendMessage').click()
-
-    await expectScreen(page, 'IframeIntegration-view-settings.png')
   })
 })

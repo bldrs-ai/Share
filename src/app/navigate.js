@@ -214,9 +214,12 @@ export function navigateToModel(target, navigate) {
 
 /**
  * Whether `path` asks for another `?view=` than the page has. ShareViewer
- * reads `view` once, at module load (`viewParameter`), so an in-app open
- * would keep the page's view whatever the link says (open-205, #2022): such
- * an open loads the page instead, as it always did. A path with no query of
+ * read `view` once, at module load, so an in-app open would have kept the
+ * page's view whatever the link said (open-205, #2022): such an open loads
+ * the page instead, as it always did. Nothing reads `view` since slice V
+ * deleted the `?view=` rules (design/tracks/open-t200/layering.md §7), so
+ * this reload is no longer needed; it is kept so that slice changes only
+ * what #2318 lists, and dropping it is a follow-up. A path with no query of
  * its own has the page's by now (`withCurrentSearch`), so this is only a link
  * that carries its own query.
  *

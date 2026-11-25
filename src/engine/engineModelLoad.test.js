@@ -4,7 +4,6 @@ import {createEngineHandler} from './engineHandler'
 import {
   createEngineModelLoad,
   decodePlacements,
-  isWorkerEngineModel,
   makeEngineIfcApi,
   makeGeometryStore,
   statisticsView,
@@ -219,7 +218,6 @@ describe('engine/engineModelLoad streamed IFC load', () => {
     expect(load.ifcAPI.GetAppliedCoordinationMatrix(0)).toEqual(IDENTITY)
     expect(load.ifcAPI.GetLinearScalingFactor(0)).toBe(0.001)
     expect(load.ifcAPI.getConwayVersion()).toBe('Conway v-test')
-    expect(isWorkerEngineModel({ifcManager: {ifcAPI: load.ifcAPI}})).toBe(true)
   })
 
   it('forwards preview payloads, with their buffers', async () => {

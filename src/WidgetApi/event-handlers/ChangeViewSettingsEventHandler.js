@@ -1,9 +1,11 @@
-import IfcCustomViewSettings from '../../Infrastructure/IfcCustomViewSettings'
-import useStore from '../../store/useStore'
 import ApiEventHandler from './ApiEventHandler'
 
 /**
- * Select Elements API event handler
+ * Change View Settings API event handler. Kept so an embedder that sends it
+ * still gets a success: the `?view=` rules stack it fed styled nothing on
+ * either engine and was deleted (design/tracks/open-t200/layering.md §7,
+ * slice V), so the settings are accepted and not applied, and the model is
+ * no longer reloaded for them.
  */
 class ChangeViewSettingsEventHandler extends ApiEventHandler {
   apiConnection = null
@@ -29,13 +31,6 @@ class ChangeViewSettingsEventHandler extends ApiEventHandler {
     if (!('customViewSettings' in data)) {
       return this.apiConnection.missingArgumentResponse('customViewSettings')
     }
-    const customViewSettings = data.customViewSettings
-    const customViewSettingsObject = new IfcCustomViewSettings(
-      customViewSettings.defaultColor,
-      customViewSettings.expressIdsToColorMap,
-      customViewSettings.globalIdsToColorMap,
-    )
-    useStore.setState({customViewSettings: customViewSettingsObject})
     return this.apiConnection.successfulResponse({})
   }
 }

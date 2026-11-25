@@ -685,7 +685,7 @@ export function backgroundSessionsMode()  // 'on' | 'off:<reason>', for a Sentry
   it makes agree.
 - **Per engine, not per page: an in-process engine is never kept in the
   background** (decided, owner, 2026-11-19). On the main-thread engine (`?feature=disableEngineWorker`,
-  a `?view=` rule set, the in-process fallback after a worker failed to
+  the rollback, the in-process fallback after a worker failed to
   start) memory comes back only when the whole `IfcAPI` is collected
   (in-app-model-switch.md §4.5), which nothing on the page can force. So a
   switch away from an owner any of whose leases is of kind `inProcess` or
@@ -997,8 +997,10 @@ session and owns no engines. Three things here changed with that, and
 - `Containers/viewer.js#initViewer` calls `disposeViewer()` and then builds
   a `ShareViewer`. CadView calls it from `onModelPath`'s `initViewerCb`, on
   every model change and on every theme change (it is the theme's change
-  listener). The `[modelPath, customViewSettings]` effect reloads the same
-  route into a fresh viewer for a Widget API view-settings change.
+  listener). The `[modelPath, customViewSettings]` effect reloaded the same
+  route into a fresh viewer for a Widget API view-settings change, until
+  slice V (#2318) deleted the `?view=` stack; the effect is `[modelPath]`
+  now.
 - `disposeViewer` traverses the whole scene, disposes every geometry,
   material and texture, disposes the renderer and forces context loss,
   then `ShareViewer#dispose`, whose `ShareIfc#dispose` closes the
@@ -1060,10 +1062,10 @@ and exactly one root.
   the live viewer). No viewer is built, no load is aborted, no model is
   reloaded. in-app-model-switch.md §5.2's "a theme rebuild is not an open"
   becomes true by construction.
-- **A view-settings change** (Widget API `customViewSettings`) reloads
-  the route today, to apply settings that colour nothing. Once the
-  `?view=` stack is deleted (layering.md §7, slice V) there is no
-  `viewer.setCustomViewSettings` and nothing to apply or reload.
+- **A view-settings change** (Widget API `customViewSettings`) reloaded
+  the route, to apply settings that colour nothing. Slice V (#2318)
+  deleted the `?view=` stack: there is no `viewer.setCustomViewSettings`
+  and nothing to apply or reload, and the handler answers success.
 - **What close disposes, and when.** `session.close()` (synchronous, as
   #2247 built it) first emits `closing`, on which the binder detaches the
   root if it is attached: the session is below the viewer and does not
@@ -2239,7 +2241,7 @@ Every item needs either a merged PR or a measurement in a PR body.
    nothing; the routing only made it load on the slower engine. With the
    stack gone, `MainThreadReason.VIEW_RULES` goes, a `?view=` link loads
    in the worker, and the Widget API's `ChangeViewSettings` answers
-   success and does nothing.
+   success and does nothing. **Done in slice V (#2318).**
 3. **#2061 explained. Met:** a measurement artifact, 56.5 MB live after
    GC (§7.1).
 4. **#2070 fixed. Met, by #2074.** One round trip per Properties table: a
@@ -2291,9 +2293,10 @@ decision, `engine/engineRoute.js#mainThreadEngineReason`.
   the URL, so that would leave every `?feature=engineWorker` link in the
   worker (Codex review on #2083).
 - *One session:* `?feature=disableEngineWorker`.
-- `?view=` rule sets route to the main-thread engine on their own, since
-  they read it directly. The legacy bot chat did too, until the Assist port
-  (#1675) replaced its eval with the tool registry, which reads either engine.
+- Nothing else routes to the main-thread engine. `?view=` rule sets did,
+  until slice V (#2318) deleted them, and the legacy bot chat did, until the
+  Assist port (#1675) replaced its eval with the tool registry, which reads
+  either engine.
 
 ## 8. Decisions (2026-11-03)
 
