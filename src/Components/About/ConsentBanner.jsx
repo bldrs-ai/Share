@@ -84,6 +84,9 @@ export default function ConsentBanner() {
   const setIsVisible = useStore((state) => state.setIsConsentBannerVisible)
   const isAboutVisible = useStore((state) => state.isAboutVisible)
   const isOnboardingVisible = useStore((state) => state.isOnboardingOverlayVisible)
+  // An alert (a failed load, say; CadView sets it while the tour may still
+  // be up) is a dialog the banner must stay under (codex on #2354).
+  const isAlertUp = useStore((state) => Boolean(state.alert))
   const privacyLevel = useStore((state) => state.privacyLevel)
   const isMobile = useIsMobile()
   const [isDetailed, setIsDetailed] = useState(false)
@@ -114,9 +117,9 @@ export default function ConsentBanner() {
         // Above the canvas, the controls and the drawers, under any dialog
         // (Theme.jsx raises modal to 2000), and it's not a modal: the page
         // behind it stays usable, drag-and-drop included. Above the
-        // onboarding tour (9999) only while the tour is up, so it is never
-        // hidden behind it and never covers a dialog the rest of the time.
-        zIndex: isOnboardingVisible ? ONBOARDING_OVERLAY_Z + 1 : BANNER_Z,
+        // onboarding tour (9999) only while the tour is up and no alert is,
+        // so it is never hidden behind the tour and never covers a dialog.
+        zIndex: (isOnboardingVisible && !isAlertUp) ? ONBOARDING_OVERLAY_Z + 1 : BANNER_Z,
         pointerEvents: 'none',
       }}
     >

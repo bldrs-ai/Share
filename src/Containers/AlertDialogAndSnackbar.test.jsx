@@ -176,6 +176,33 @@ describe('AlertAndSnackbar grace period', () => {
       expect(screen.queryByTestId('LoadStatusLine')).toBeNull()
     })
 
+    // codex on #2354: a quiet demo load must not take over an ordinary
+    // message's controls or lifecycle.
+    it('leaves an ordinary message its own close button during a quiet demo load', () => {
+      render(<ShareMock><AlertAndSnackbar/></ShareMock>)
+      act(() => {
+        useStore.getState().setModelPath(DEMO)
+        useStore.getState().setCurrentLoadLine('Parse [=====     ] 50%')
+        useStore.getState().setSnackMessage('Copied link')
+      })
+      expect(screen.getByText('Copied link')).toBeInTheDocument()
+      expect(screen.queryByTestId('LoadStatusOk')).toBeNull()
+      expect(screen.getByRole('button', {name: /close/i})).toBeInTheDocument()
+      act(() => {
+        useStore.getState().setCurrentLoadLine(null)
+        useStore.getState().setSnackMessage(null)
+      })
+    })
+
+    it('drops a quiet demo success at once, with no grace timer behind it', () => {
+      render(<ShareMock><AlertAndSnackbar/></ShareMock>)
+      act(() => {
+        useStore.getState().setModelPath(DEMO)
+        useStore.getState().setLoadResult({status: 'success', summaryLine: 'Loaded index.ifc'})
+      })
+      expect(useStore.getState().loadResult).toBe(null)
+    })
+
     it('still shows a failed load', () => {
       render(<ShareMock><AlertAndSnackbar/></ShareMock>)
       act(() => {

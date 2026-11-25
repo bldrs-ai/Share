@@ -33,6 +33,7 @@ function renderBanner(state = {}) {
       isConsentBannerVisible: true,
       isAboutVisible: false,
       isOnboardingOverlayVisible: false,
+      alert: null,
       privacyLevel: getConsentLevel(),
       ...state,
     })
@@ -141,6 +142,15 @@ describe('ConsentBanner', () => {
       useStore.setState({isOnboardingOverlayVisible: false})
     })
     expect(zOf()).toBe(BANNER_Z)
+  })
+
+  // A failed load can raise an alert while the tour is still up.
+  test('stays under an alert dialog even while the tour is up', () => {
+    renderBanner({isOnboardingOverlayVisible: true, alert: {title: 'Load failed'}})
+    expect(Number(getComputedStyle(screen.getByTestId('consent-banner').parentElement).zIndex)).toBe(BANNER_Z)
+    act(() => {
+      useStore.setState({alert: null})
+    })
   })
 
   test('links to the privacy policy page, in a new tab', () => {
