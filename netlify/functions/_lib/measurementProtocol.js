@@ -2,7 +2,8 @@
  * netlify/functions/_lib/measurementProtocol.js
  * ---------------------------------------------
  * Sending one event to GA4 from a function, through the Measurement Protocol.
- * Shared by stripe-webhook (subscriptionAnalytics.js) and client-capabilities.
+ * Shared by stripe-webhook (subscriptionAnalytics.js), client-capabilities and
+ * model-open-count.
  * Needs GA4_MEASUREMENT_ID and GA4_API_SECRET; callers skip with a log line
  * when either is missing, which is every deploy context but production.
  */

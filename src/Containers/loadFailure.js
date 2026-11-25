@@ -1,4 +1,5 @@
 import {captureException} from '@sentry/react'
+import {reportModelOpenFailure} from '../app/modelOpenCount'
 import {NeedsReconnectError} from '../connections/errors'
 import {EngineOpenFailureError, engineFailureCaptureContext, engineSourceTags} from '../engine/engineOpenFailure'
 import {loadFailureParams, omitUndefined} from '../loader/loadAnalytics'
@@ -77,6 +78,11 @@ export function reportLoadFailure(e, {
       ...loadFailureParams({error: e, format, fileSize, phase}),
       open_kind: modelOpenKind(modelPath),
     }))
+    // The cookieless first-party report of the same failure
+    // (app/modelOpenCount.js, design/new/model-open-counts.md), as
+    // `load_outcome: failed`: the dashboard's view of failures now that GA
+    // no longer runs in the browser. Same guard and dedupe as load_failed.
+    reportModelOpenFailure(modelPath, {error: e, format, fileSize, phase})
   }
   if (isOOM) {
     // Provide actionable OOM alert object; AlertDialog will render a Refresh button.
