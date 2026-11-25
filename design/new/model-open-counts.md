@@ -187,6 +187,12 @@ anything else):
 **Never sent:** the path, the query, the referrer (not even its host), a
 campaign string, the IP.
 
+**The privacy policy** describes these fields in its "How models load"
+paragraph, in both copies (`src/pages/Privacy.jsx`,
+`marketing/src/app/privacy/page.tsx`; `Privacy.test.jsx` holds them equal):
+the kind of page, the kind of referring site, a known campaign, the device
+type, the shared page ID, and the country the server adds and keeps nowhere.
+
 **The function** is `netlify/functions/page-visit.js`, model-open-count's
 twin. Both send under `_lib/firstPartyClientId.js#FIRST_PARTY_CLIENT_ID`,
 which is model-open-count's id, unchanged. Replays may give a v2 function's
