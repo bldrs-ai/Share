@@ -198,8 +198,7 @@ export function navigateToModel(target, navigate) {
   // the destination's readers (CadView, ShareIfc) take the mode from ITS
   // URL, so an in-app open there would run as the kill switch's page-load
   // path (no abort, no store reset) without the page load (codex on #2222).
-  if (typeof navigate === 'function' && isSpaModelNavOn() && !isViewChange(path) &&
-      !namesKillSwitch(path)) {
+  if (typeof navigate === 'function' && isSpaModelNavOn() && !namesKillSwitch(path)) {
     navigate(path)
     return
   }
@@ -209,30 +208,6 @@ export function navigateToModel(target, navigate) {
     // Using assign to preserve back button history
     window.location.assign(path)
   }
-}
-
-
-/**
- * Whether `path` asks for another `?view=` than the page has. ShareViewer
- * read `view` once, at module load, so an in-app open would have kept the
- * page's view whatever the link said (open-205, #2022): such an open loads
- * the page instead, as it always did. Nothing reads `view` since slice V
- * deleted the `?view=` rules (design/tracks/open-t200/layering.md §7), so
- * this reload is no longer needed; it is kept so that slice changes only
- * what #2318 lists, and dropping it is #2360. A path with no query of
- * its own has the page's by now (`withCurrentSearch`), so this is only a link
- * that carries its own query.
- *
- * @param {string} path
- * @return {boolean}
- */
-function isViewChange(path) {
-  const viewOf = (search) => new URLSearchParams(search).get('view')?.toLowerCase() ?? null
-  const search = searchOf(path)
-  if (search === null) {
-    return false
-  }
-  return viewOf(search) !== viewOf(window.location.search)
 }
 
 
