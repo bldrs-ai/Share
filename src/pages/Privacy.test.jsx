@@ -50,6 +50,7 @@ describe('Privacy', () => {
     const loads = paragraph(getByText, 'How models load.')
     expect(loads).toMatch(/We don’t use Google Analytics or any other tracking in the app/)
     expect(loads).toMatch(/never includes a model’s name, path, web address or contents/)
+    expect(loads).toMatch(/the only model it names is one of our own sample models/)
     expect(loads).toMatch(/lives only while the page is open/)
     const limits = paragraph(getByText, 'Free-use limits.')
     expect(limits).toMatch(/used only to apply the free allowance/)

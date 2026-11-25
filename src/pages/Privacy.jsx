@@ -51,12 +51,13 @@ export default function Privacy() {
           analytics cookies, and no identifier that follows your browser between visits. To learn how Bldrs
           Share is used and how it performs, the app reports each model you open to our server: the kind of
           file, its size range, where it came from (your computer, GitHub, Google Drive or a web address), how
-          long it took to load, how complex it was, and whether it loaded or failed. A report never includes a
-          model’s name, path, web address or contents. It carries one random ID that lives only while the page
-          is open, so the models opened in one visit can be counted together; it is never stored, and a reload
-          starts a new one. Our server passes these reports on to Google Analytics under one shared ID, so
-          Google never sees your browser or network address. They are always on, on the basis of our legitimate
-          interest in running and improving the service.
+          long it took to load, how complex it was, whether it loaded or failed, and whether you’re on a phone
+          or a computer. A report never includes a model’s name, path, web address or contents; the only model
+          it names is one of our own sample models, if that’s what you opened. It carries one random ID that
+          lives only while the page is open, so the models opened in one visit can be counted together; it is
+          never stored, and a reload starts a new one. Our server passes these reports on to Google Analytics
+          under one shared ID, so Google never sees your browser or network address. They are always on, on the
+          basis of our legitimate interest in running and improving the service.
         </Typography>
         <Typography variant='body1'>
           <strong>Free-use limits.</strong> Some features have a free allowance. If you’re signed in, we count
