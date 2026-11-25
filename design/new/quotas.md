@@ -457,6 +457,15 @@ free user at the limit, loads with no `record-load` call and no event).
   can see Drive sharing (§"Drive visibility", server trust).
 - **Returns** `{allowed, used, limit, tier, alreadyCounted}`; `limit` is `null`
   for paid (unlimited). HTTP `403` means over quota.
+- **Each 403 is recorded against the account** (`_lib/accountUsage.js#recordServerLimitHit`,
+  best-effort, at most 1.5 s, production only): a `private_model` limit hit,
+  `soft` when the body says `gate: 'soft'` (the direct-link caller), else
+  `blocked`. The key is reduced to its route kind and never stored. pro-module
+  records its `no_free_model_slot` 403 the same way, as `export_slot`. The
+  refusals the page decides itself (the Open dialog's `check()`, the offline
+  fallback) are reported through `account-usage`
+  ([account-usage.md](account-usage.md) §"A limit hit").
+- **Optional body field `gate: 'soft'`** labels that record and nothing else.
 
 > **Why Auth0 `app_metadata` and not a KV store?** Expedient for launch scale.
 > Migrating to Netlify Blobs (or similar) is a flagged follow-up for when the
@@ -629,9 +638,9 @@ behind the same analytics consent check as every other `gtagEvent`, except
 | Model open | `real_model_open` | `content_id`, `content_type`, `load_outcome`, `stats_*` (below), `local_hour`, `open_kind` (`page` \| `in_app`: the page's first open, or one switched to in-app; `utils/reportModelOpen.js`, open-205 step F), `open_cid` | `CadView` after a real (non-demo) load, once per open: not again for a theme toggle or a view-settings change, which reload the same open (`routes/modelOpen.ts`; open-205 #2022). See `analytics#isRealModelOpen` |
 | Model open (all visitors) | `model_open_count` | `content_type`, `size_bucket`, `source` (`local` \| `sample` \| `github` \| `gdrive` \| `url`), `open_kind`, `form_factor`, `consent` (`on` \| `off`); enums only, no `open_cid` | **Server:** the `model-open-count` function, through the Measurement Protocol under one fixed client id, from a first-party beacon `modelOpenEvents.js` sends beside `real_model_open` (same opens). Sent **whatever the consent choice**, the one row here that is: no identifier, nothing stored, the visitor's IP not forwarded ([model-open-counts.md](model-open-counts.md)). The dashboard's open total since #2051 |
 | (failed open) | `load_failed` | `content_type`, `size_bucket`, `reason_class`, `last_phase`, `open_kind`, `open_cid` | `CadView#onViewerInternal`'s catch, once per failed attempt, real (non-demo) models only |
-| Hit a limit | `quota_limit_reached` | `tier` (`free`; `anonymous` before that tier was removed), `feature` (`QUOTA_FEATURES`: `private_load`) | `QuotaLimitDialog`, once each time the dialog opens, whatever made it show |
-| Signed in | `login` (GA4 recommended) | `method`: `google` \| `github` \| `email` \| `unknown`; plus `from: 'gate'` and `feature` (`export` \| `share`) when a visible gate started the sign-in (§"Gate events") | `src/Auth0/useLoginTracking.js`, once per completed sign-in (below) |
-| Upgrade click | `begin_checkout` (GA4 recommended) | `from`: `profile` \| `export` \| `quota`; `destination`: `checkout` \| `portal` | `goToSubscription` (`Profile/subscriptionNav.js`), which every upgrade CTA goes through |
+| Hit a limit | `quota_limit_reached` | `tier` (`free`; `anonymous` before that tier was removed), `feature` (`QUOTA_FEATURES`: `private_load`) | `QuotaLimitDialog`, once each time the dialog opens, whatever made it show. **Server copy** (`source: 'server'`, `feature` `private_load` \| `export`): once per refusal, where it is decided, under one fixed client id ([account-usage.md](account-usage.md) §"GA"), with `limit_first_reached` once per account, limit and month for the distinct-account count |
+| Signed in | `login` (GA4 recommended) | `method`: `google` \| `github` \| `email` \| `unknown`; plus `from: 'gate'` and `feature` (`export` \| `share`) when a visible gate started the sign-in (§"Gate events") | `src/Auth0/useLoginTracking.js`, once per completed sign-in (below); the same claim also forwards it through `account-usage`, which sends it from the server with `source: 'server'` ([account-usage.md](account-usage.md)) |
+| Upgrade click | `begin_checkout` (GA4 recommended) | `from`: `profile` \| `export` \| `quota`; `destination`: `checkout` \| `portal` | `goToSubscription` (`Profile/subscriptionNav.js`), which every upgrade CTA goes through; also forwarded through `account-usage` and sent from the server with `source: 'server'` |
 | Subscribed | `subscription_started` | `tier: 'pro'`, `source: 'server'`, `cid_source` (`checkout` \| `fallback`), `open_cid` (checkout only), `interval`, `plan` (when the price says) | **Server:** `stripe-webhook`, through the GA4 Measurement Protocol, on the FREE→PRO Auth0 write (§"Server-side subscription events") |
 | (lapsed) | `subscription_ended` | same | same, on the PRO→FREE write |
 | (seen in app) | `subscription_started_client` / `subscription_ended_client` | `open_cid` | `BaseRoutes#processAccessToken` on `shareProPendingReauth` / `freePendingReauth` (below); the browser *seeing* the transition, not the funnel step |
@@ -656,7 +665,7 @@ events, so a gate hit joins the same client's `real_model_open`, `login` and
 | `share_interest` | `feature`: `save_to_cloud`; `signed_in` | `ShareControl`, the "Save to Google Drive or GitHub to share — coming soon" line; at most once per opening of the help |
 | `local_link_missing` | `origin`: `this_browser` \| `unknown`; `legacy_route`; `signed_in` | `CadView`, the first `UploadNotInBrowserError` per route, beside (never instead of) AlertDialog's `alert` event. `legacy_route`: the URL arrived as the pre-#1959 `/v/new/` form (`ShareRoutes#LegacyUploadRedirect` marks the redirect in router state). Same `isRealModelOpen` guard as `load_failed` |
 | `local_link_missing_action` | `action`: `open_file` \| `dismiss`; `origin` (the paired `local_link_missing`'s) | `AlertDialog`, once per shown "File not in this browser" dialog: the "Open a file" button, or any other close. Skipped for a repeat alert, like `alert` |
-| `quota_soft_limit_exceeded` | `tier`, `used`, `limit`, `route_kind`: `gdrive` \| `github` | `quota/useDirectLinkQuota.js`, when a model opened from its URL is over the limit; the load is not blocked (§"Direct links: soft gate") |
+| `quota_soft_limit_exceeded` | `tier`, `used`, `limit`, `route_kind`: `gdrive` \| `github` | `quota/useDirectLinkQuota.js`, when a model opened from its URL is over the limit; the load is not blocked (§"Direct links: soft gate"). Server copy from record-load's 403, labelled soft by the `gate: 'soft'` the hook now sends ([account-usage.md](account-usage.md)) |
 
 A sign-in started from a gate (`Auth0/gateLogin.js`) adds `from: 'gate'` and
 `feature` to `login`. The gate writes one attempt record to localStorage,
@@ -1096,6 +1105,10 @@ has a backfill, so these only start accruing data once registered:
   register **event-scoped custom dimensions** for `open_kind`, `form_factor`
   and `consent` (the last two also serve `client_capability`;
   client-capabilities.md). `content_type`, `size_bucket` and `source` are
+  already registered.
+- For the per-account usage events ([account-usage.md](account-usage.md)
+  §"GA"): register **event-scoped custom dimensions** for `limit` and
+  `period` (on `limit_first_reached`); the rest, `gate` included, are
   already registered.
 - For the feedback events (§"Feedback events"): register **event-scoped
   custom dimensions** for `feedback_source`, `rating`, `has_note`,
