@@ -51,7 +51,7 @@ export async function createPropertyTables(model, entries) {
 
 /**
  * Resolve tables where the model's reads are. A model whose engine is an
- * engine session (`?feature=engineWorker`, EngineSession.js#propertiesApi)
+ * engine session (`?feature=engineWorker`, WorkerEngine.js#propertiesApi)
  * offers `properties.resolvePropertyTables`, which runs propertyTable.js next
  * to the engine: one round trip, instead of one per reference (Share#2070).
  * Every other model is resolved here, by the same code over the model's own

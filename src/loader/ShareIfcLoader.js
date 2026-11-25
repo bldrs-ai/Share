@@ -939,7 +939,7 @@ export default class ShareIfcLoader {
     } catch (err) {
       session.abort()
       // A failed worker load's engine has nothing left to serve: free it now
-      // rather than when the viewer goes (engine/EngineSession.js#close).
+      // rather than when the viewer goes (engine/WorkerEngine.js#close).
       engineLoad?.ifcAPI.engineSession?.close()
       // A partially assembled incremental group must not survive a
       // failed load — remove it (its wasm-side twin is released by the

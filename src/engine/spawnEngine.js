@@ -5,7 +5,7 @@
 // asks for it.
 import {flags, isFeatureEnabled} from '../FeatureFlags'
 import {MOBILE_WIDTH} from '../utils/constants'
-import {EngineSession} from './EngineSession'
+import {WorkerEngine} from './WorkerEngine'
 import {createEngineHandler} from './engineHandler'
 import {Ev} from './protocol'
 import {makeInProcessTransport, makeWorkerTransport} from './transports'
@@ -14,7 +14,7 @@ import {makeInProcessTransport, makeWorkerTransport} from './transports'
 let nextEpoch = 1
 let moduleWorkersSupported = null
 // Set once a worker engine has failed to start on this page (see
-// spawnEngineSession); later opens go straight to the in-process engine.
+// spawnWorkerEngine); later opens go straight to the in-process engine.
 let workerFailedThisPage = false
 
 
@@ -115,10 +115,10 @@ const IN_PROCESS_INIT_TIMEOUT = null
  * @param {function(): Promise<Function>} [options.loadIfcAPI] in-process
  *   engine loader, for tests
  * @param {number} [options.initTimeoutMs] the worker's init clock
- *   (EngineSession ENGINE_INIT_TIMEOUT_MS), for tests
- * @return {Promise<EngineSession>} initialised
+ *   (WorkerEngine ENGINE_INIT_TIMEOUT_MS), for tests
+ * @return {Promise<WorkerEngine>} initialised
  */
-export async function spawnEngineSession({
+export async function spawnWorkerEngine({
   inProcess = false,
   makeWorker = defaultMakeWorker,
   loadIfcAPI = () => import('@bldrs-ai/conway/web-ifc').then((m) => m.IfcAPI),
@@ -154,10 +154,10 @@ export async function spawnEngineSession({
 /**
  * @param {object} transport
  * @param {number} [timeoutMs] init's clock; undefined for the default
- * @return {Promise<EngineSession>} initialised, or closed and rejected
+ * @return {Promise<WorkerEngine>} initialised, or closed and rejected
  */
 async function initSession(transport, timeoutMs = undefined) {
-  const session = new EngineSession(transport, {epoch: nextEpoch++})
+  const session = new WorkerEngine(transport, {epoch: nextEpoch++})
   // Registered before init, not after: a session still initialising can
   // already be on its way to an open, and must be closable by a page-wide
   // close too.
@@ -190,7 +190,7 @@ const liveSessions = new Set()
  * closing the models on screen.
  *
  * Only a session whose open or spill has replied is known to hold a handle,
- * and only it is closed politely (EngineSession#close), after any spill still
+ * and only it is closed politely (WorkerEngine#close), after any spill still
  * in flight has replied; one still opening is terminated, and its lock goes
  * shortly AFTER this resolves. A caller that
  * must see the entry free (ProfileControl's clear) retries what it skipped.

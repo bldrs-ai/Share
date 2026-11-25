@@ -1,5 +1,5 @@
 /* eslint-disable no-magic-numbers, require-await, new-cap */
-import {EngineSession} from './EngineSession'
+import {WorkerEngine} from './WorkerEngine'
 import {createEngineHandler} from './engineHandler'
 import {
   createEngineModelLoad,
@@ -156,7 +156,7 @@ function spawnOver(api) {
         post,
         yieldToLoop: () => Promise.resolve(),
       }))
-    const session = new EngineSession(transport, {epoch: 9})
+    const session = new WorkerEngine(transport, {epoch: 9})
     await session.init()
     return session
   }

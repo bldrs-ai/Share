@@ -974,7 +974,7 @@ export function createEngineHandler({
    * cleanup, because the wasm heap is only returned once nothing references
    * the `IfcAPI` (in-app-model-switch.md §4.5). In a worker `terminate()`
    * follows and frees the heap regardless, but a session reading through a
-   * sync access handle asks for this first (EngineSession#close): the
+   * sync access handle asks for this first (WorkerEngine#close): the
    * handle's OPFS lock is then let go here, after CloseModel, at a known
    * point, rather than whenever the browser gets round to it after
    * termination.
@@ -1031,7 +1031,7 @@ export function createEngineHandler({
       // Echo the REQUEST's version and epoch, not ours: the client drops any
       // message whose version or epoch is not its own, and a refusal it
       // drops leaves its `init` waiting forever. `engineVersion` says what
-      // this side speaks, for EngineSession's ProtocolMismatchError.
+      // this side speaks, for WorkerEngine's ProtocolMismatchError.
       post({
         v: msg.v,
         epoch: msg.epoch,

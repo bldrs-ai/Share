@@ -18,9 +18,9 @@ jest.mock('../loader/loadProgress', () => ({
 
 
 /**
- * The EngineSession surface `createEngineModelLoad#parse` uses. `open`
+ * The WorkerEngine surface `createEngineModelLoad#parse` uses. `open`
  * waits for `resolveOpen`; `close` rejects what is pending and ends the
- * stream with `failed {kind: 'closed'}`, as EngineSession#fail does.
+ * stream with `failed {kind: 'closed'}`, as WorkerEngine#fail does.
  */
 class StandInSession {
   /** */

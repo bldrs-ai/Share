@@ -14,7 +14,7 @@ import {ENGINE_PROTOCOL_VERSION, Ev, Op, ProtocolMismatchError, deserializeError
 
 
 /** Why a pending request was refused once the session can no longer answer. */
-export const SESSION_CLOSED = 'engine session closed'
+export const ENGINE_CLOSED = 'engine session closed'
 
 /**
  * How long `init` waits for a working engine: the worker's `hello` and then
@@ -24,7 +24,7 @@ export const SESSION_CLOSED = 'engine session closed'
  * What the clock covers on a worker: fetching and evaluating the worker
  * script (6.3 MB minified), then `Init()` (decoding and compiling the inline
  * wasm, 94–148 ms per instance in §3). 30 s leaves room for a slow phone on
- * a cold cache. When it runs out the load is not lost: spawnEngineSession
+ * a cold cache. When it runs out the load is not lost: spawnWorkerEngine
  * falls back to the in-process engine, so a stalled worker costs at most
  * this long, and never hangs the load. A version mismatch does not wait it
  * out: every v1+ engine announces its version in `hello` and echoes a
@@ -45,7 +45,7 @@ export const ENGINE_CLOSE_TIMEOUT_MS = 1_000
 /**
  * One engine, seen from the page. See the file header.
  */
-export class EngineSession {
+export class WorkerEngine {
   /**
    * @param {object} transport from `transports.js`
    * @param {object} [options]
@@ -105,7 +105,7 @@ export class EngineSession {
    */
   request(op, args = {}, transfer = []) {
     if (this.closed) {
-      return Promise.reject(new Error(SESSION_CLOSED))
+      return Promise.reject(new Error(ENGINE_CLOSED))
     }
     const id = this.nextId++
     return new Promise((resolve, reject) => {
@@ -434,7 +434,7 @@ export class EngineSession {
     if (this.closing) {
       // A spill sent after close() began could take a sync handle that the
       // close already decided it need not release.
-      return Promise.reject(new Error(SESSION_CLOSED))
+      return Promise.reject(new Error(ENGINE_CLOSED))
     }
     // Until the reply lands, close() cannot know whether the engine now holds
     // a sync handle, so it waits for `settled` first (review on #2081).
@@ -532,7 +532,7 @@ export class EngineSession {
       return this.closing
     }
     if (this.closed || (this.sourceKind !== 'syncHandle' && !this.spilling)) {
-      this.fail(new Error(SESSION_CLOSED), 'closed')
+      this.fail(new Error(ENGINE_CLOSED), 'closed')
       this.closing = Promise.resolve()
       return this.closing
     }
@@ -567,7 +567,7 @@ export class EngineSession {
         await bounded(this.request(Op.CLOSE).catch(() => null))
       }
     } finally {
-      this.fail(new Error(SESSION_CLOSED), 'closed')
+      this.fail(new Error(ENGINE_CLOSED), 'closed')
     }
   }
 }
@@ -601,7 +601,7 @@ function transferableSource(source) {
  * The `ifcAPI.properties` shape over a session. The leading `modelID`
  * argument every method takes is ignored: a session holds one model.
  *
- * @param {EngineSession} session
+ * @param {WorkerEngine} session
  * @return {object}
  */
 function makePropertiesApi(session) {

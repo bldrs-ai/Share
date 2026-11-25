@@ -1,5 +1,5 @@
 /* eslint-disable no-magic-numbers, require-await, new-cap */
-import {EngineSession, SESSION_CLOSED} from './EngineSession'
+import {WorkerEngine, ENGINE_CLOSED} from './WorkerEngine'
 import {createEngineHandler, plainProgress, wasmBytesOf} from './engineHandler'
 import {ENGINE_PROTOCOL_VERSION, Op} from './protocol'
 import {makeInProcessTransport, makeWorkerTransport} from './transports'
@@ -67,7 +67,7 @@ function makeStubApi(overrides = {}) {
 /**
  * @param {object} [api]
  * @param {number} [epoch]
- * @return {{session: EngineSession, api: object, posted: Array}}
+ * @return {{session: WorkerEngine, api: object, posted: Array}}
  */
 function inProcessSession(api = makeStubApi(), epoch = 7) {
   const posted = []
@@ -84,11 +84,11 @@ function inProcessSession(api = makeStubApi(), epoch = 7) {
     sentRequests.push(msg)
     realPost(msg, transfer)
   }
-  return {session: new EngineSession(transport, {epoch}), api, posted, sentRequests}
+  return {session: new WorkerEngine(transport, {epoch}), api, posted, sentRequests}
 }
 
 
-describe('engine/EngineSession over the in-process transport', () => {
+describe('engine/WorkerEngine over the in-process transport', () => {
   it('init stands the engine up and reports its capabilities and wasm bytes', async () => {
     const {session, api} = inProcessSession()
     const info = await session.init({flags: {}})
@@ -226,14 +226,14 @@ describe('engine/EngineSession over the in-process transport', () => {
     await session.open({file: new Blob(['x'])})
     const pending = session.tree()
     session.close()
-    await expect(pending).rejects.toThrow(SESSION_CLOSED)
-    await expect(session.properties(1)).rejects.toThrow(SESSION_CLOSED)
+    await expect(pending).rejects.toThrow(ENGINE_CLOSED)
+    await expect(session.properties(1)).rejects.toThrow(ENGINE_CLOSED)
     expect(api.calls).toContainEqual(['CloseModel', 0])
   })
 })
 
 
-describe('engine/EngineSession epochs and protocol', () => {
+describe('engine/WorkerEngine epochs and protocol', () => {
   it('drops replies and events from another epoch', async () => {
     const listeners = []
     const transport = {
@@ -243,7 +243,7 @@ describe('engine/EngineSession epochs and protocol', () => {
       onCrash: () => null,
       terminate: jest.fn(),
     }
-    const session = new EngineSession(transport, {epoch: 2})
+    const session = new WorkerEngine(transport, {epoch: 2})
     const reply = session.request(Op.STATS)
     const {id} = transport.post.mock.calls[0][0]
     const progress = jest.fn()
@@ -285,19 +285,19 @@ describe('engine/transports worker transport', () => {
 
   it('a worker that dies rejects every pending request and reports `failed: crash`', async () => {
     const worker = makeFakeWorker()
-    const session = new EngineSession(makeWorkerTransport(worker), {epoch: 1})
+    const session = new WorkerEngine(makeWorkerTransport(worker), {epoch: 1})
     const failed = []
     session.on('failed', (msg) => failed.push(msg))
     const pending = session.request(Op.STATS)
     worker.dispatchEvent(Object.assign(new Event('error'), {message: 'wasm trap'}))
     await expect(pending).rejects.toThrow('wasm trap')
     expect(failed).toEqual([{ev: 'failed', kind: 'crash', message: 'wasm trap'}])
-    await expect(session.request(Op.STATS)).rejects.toThrow(SESSION_CLOSED)
+    await expect(session.request(Op.STATS)).rejects.toThrow(ENGINE_CLOSED)
   })
 
   it('routes replies from the worker, and close terminates it', async () => {
     const worker = makeFakeWorker()
-    const session = new EngineSession(makeWorkerTransport(worker), {epoch: 4})
+    const session = new WorkerEngine(makeWorkerTransport(worker), {epoch: 4})
     const reply = session.stats()
     const {msg} = worker.posted[0]
     expect(msg).toMatchObject({v: ENGINE_PROTOCOL_VERSION, epoch: 4, op: Op.STATS})
@@ -314,7 +314,7 @@ describe('engine/transports worker transport', () => {
     // spill opens one (engine-worker.md §7 step 5); from then on close()
     // must send `close` and wait, as after a windowed open (step 4).
     const worker = makeFakeWorker()
-    const session = new EngineSession(makeWorkerTransport(worker), {epoch: 2})
+    const session = new WorkerEngine(makeWorkerTransport(worker), {epoch: 2})
     const reply = (posted, result) => worker.dispatchEvent(new MessageEvent('message', {
       data: {v: ENGINE_PROTOCOL_VERSION, epoch: 2, re: posted.msg.id, ok: true, result},
     }))
@@ -336,14 +336,14 @@ describe('engine/transports worker transport', () => {
     // reply. Terminating then leaves the handle the spill just opened locked
     // past closeAllEngineSessions().
     const worker = makeFakeWorker()
-    const session = new EngineSession(makeWorkerTransport(worker), {epoch: 2})
+    const session = new WorkerEngine(makeWorkerTransport(worker), {epoch: 2})
     const reply = (posted, result) => worker.dispatchEvent(new MessageEvent('message', {
       data: {v: ENGINE_PROTOCOL_VERSION, epoch: 2, re: posted.msg.id, ok: true, result},
     }))
     const spilled = session.spill(new Blob([new Uint8Array(4)]))
     const closing = session.close()
     expect(worker.terminate).not.toHaveBeenCalled()
-    await expect(session.spill(new Blob([]))).rejects.toThrow(SESSION_CLOSED)
+    await expect(session.spill(new Blob([]))).rejects.toThrow(ENGINE_CLOSED)
     expect(worker.posted).toHaveLength(1)
     reply(worker.posted[0], {spilled: true, reason: null, source: {kind: 'syncHandle'}})
     await spilled
@@ -357,7 +357,7 @@ describe('engine/transports worker transport', () => {
 
   it('a close while a spill is in flight that took no handle just terminates once it replies', async () => {
     const worker = makeFakeWorker()
-    const session = new EngineSession(makeWorkerTransport(worker), {epoch: 2})
+    const session = new WorkerEngine(makeWorkerTransport(worker), {epoch: 2})
     const spilled = session.spill(new Blob([new Uint8Array(4)]))
     const closing = session.close()
     worker.dispatchEvent(new MessageEvent('message', {
@@ -372,7 +372,7 @@ describe('engine/transports worker transport', () => {
 
   it('a spill that settled long ago leaves close() synchronous', async () => {
     const worker = makeFakeWorker()
-    const session = new EngineSession(makeWorkerTransport(worker), {epoch: 2})
+    const session = new WorkerEngine(makeWorkerTransport(worker), {epoch: 2})
     const spilled = session.spill(new Blob([new Uint8Array(4)]))
     worker.dispatchEvent(new MessageEvent('message', {
       data: {v: ENGINE_PROTOCOL_VERSION, epoch: 2, re: worker.posted[0].msg.id, ok: true,
@@ -400,7 +400,7 @@ describe('engine/engineHandler helpers', () => {
 })
 
 
-describe('engine/EngineSession teardown on a crash (review on #2057)', () => {
+describe('engine/WorkerEngine teardown on a crash (review on #2057)', () => {
   /** @return {object} a Worker-shaped EventTarget */
   function makeFakeWorker() {
     const worker = new EventTarget()
@@ -411,7 +411,7 @@ describe('engine/EngineSession teardown on a crash (review on #2057)', () => {
 
   it('a messageerror terminates the worker, so its heap is freed', () => {
     const worker = makeFakeWorker()
-    const session = new EngineSession(makeWorkerTransport(worker), {epoch: 1})
+    const session = new WorkerEngine(makeWorkerTransport(worker), {epoch: 1})
     worker.dispatchEvent(new Event('messageerror'))
     expect(worker.terminate).toHaveBeenCalledTimes(1)
     expect(session.closed).toBe(true)
@@ -419,7 +419,7 @@ describe('engine/EngineSession teardown on a crash (review on #2057)', () => {
 
   it('an error terminates the worker, and a later close() is a no-op', () => {
     const worker = makeFakeWorker()
-    const session = new EngineSession(makeWorkerTransport(worker), {epoch: 1})
+    const session = new WorkerEngine(makeWorkerTransport(worker), {epoch: 1})
     worker.dispatchEvent(Object.assign(new Event('error'), {message: 'boom'}))
     expect(worker.terminate).toHaveBeenCalledTimes(1)
     session.close()
@@ -474,7 +474,7 @@ describe('engine protocol version mismatch (review on #2057)', () => {
     })
     const transport = makeInProcessTransport((post) =>
       createForeignHandler({loadIfcAPI: async () => null, post}))
-    const session = new EngineSession(transport, {epoch: 3})
+    const session = new WorkerEngine(transport, {epoch: 3})
     // A long backstop, so only the echoed refusal can make this settle in
     // time: without it the reply is dropped and the test times out.
     const init = session.init({timeoutMs: 60_000})
@@ -496,13 +496,13 @@ describe('engine protocol version mismatch (review on #2057)', () => {
       onCrash: () => null,
       terminate: jest.fn(),
     }
-    const session = new EngineSession(transport, {epoch: 1})
+    const session = new WorkerEngine(transport, {epoch: 1})
     await expect(session.init({timeoutMs: 20})).rejects.toMatchObject({name: 'ProtocolMismatchError'})
   })
 
   it('init times out plainly when the engine never answers at all', async () => {
     const transport = {kind: 'test', post: () => null, onMessage: () => null, onCrash: () => null, terminate: jest.fn()}
-    const session = new EngineSession(transport, {epoch: 1})
+    const session = new WorkerEngine(transport, {epoch: 1})
     await expect(session.init({timeoutMs: 20})).rejects
       .toThrow('engine did not answer init within 20 ms (no init reply after hello)')
   })
@@ -523,7 +523,7 @@ describe('engine protocol version mismatch (review on #2057)', () => {
       onCrash: () => null,
       terminate: jest.fn(),
     }
-    const session = new EngineSession(transport, {epoch: 1})
+    const session = new WorkerEngine(transport, {epoch: 1})
     await expect(session.init({timeoutMs: null})).resolves.toMatchObject({conwayVersion: 'x'})
   })
 })
@@ -619,7 +619,7 @@ describe('engine round-3 review fixes (#2057)', () => {
         post(m, t)
       },
     }))
-    const session = new EngineSession(transport, {epoch: 7})
+    const session = new WorkerEngine(transport, {epoch: 7})
     const init = session.init()
     await new Promise((resolve) => setTimeout(resolve, 0))
     session.close()
@@ -661,7 +661,7 @@ describe('engine round-3 review fixes (#2057)', () => {
         throw new Error('DataCloneError')
       },
     }
-    const session = new EngineSession(transport, {epoch: 1})
+    const session = new WorkerEngine(transport, {epoch: 1})
     await expect(session.stats()).rejects.toThrow('DataCloneError')
     expect(session.pending.size).toBe(0)
   })
@@ -698,7 +698,7 @@ describe('engine round-3 review fixes (#2057)', () => {
   it('a closed session ignores late messages and drops its listeners', async () => {
     const listeners = []
     const transport = {kind: 'test', post: () => null, onMessage: (cb) => listeners.push(cb), onCrash: () => null, terminate: () => null}
-    const session = new EngineSession(transport, {epoch: 1})
+    const session = new WorkerEngine(transport, {epoch: 1})
     const progress = jest.fn()
     session.on('progress', progress)
     session.close()
@@ -714,7 +714,7 @@ describe('engine round-3 review fixes (#2057)', () => {
     worker.posted = []
     worker.postMessage = (msg) => worker.posted.push(msg)
     worker.terminate = jest.fn()
-    const session = new EngineSession(makeWorkerTransport(worker), {epoch: 2})
+    const session = new WorkerEngine(makeWorkerTransport(worker), {epoch: 2})
     const init = session.init({timeoutMs: 60_000})
     await new Promise((resolve) => setTimeout(resolve, 10))
     // No hello yet: the init request has not been sent.
@@ -728,7 +728,7 @@ describe('engine round-3 review fixes (#2057)', () => {
     const worker = new EventTarget()
     worker.postMessage = jest.fn()
     worker.terminate = jest.fn()
-    const session = new EngineSession(makeWorkerTransport(worker), {epoch: 2})
+    const session = new WorkerEngine(makeWorkerTransport(worker), {epoch: 2})
     await expect(session.init({timeoutMs: 20})).rejects
       .toThrow('engine did not answer init within 20 ms (no hello from the worker)')
   })

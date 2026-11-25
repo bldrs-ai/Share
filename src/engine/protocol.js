@@ -19,7 +19,7 @@
 
 
 // Bumped when the page starts to NEED something an older engine cannot do;
-// the hello check (EngineSession#init) then refuses a stale cached
+// the hello check (WorkerEngine#init) then refuses a stale cached
 // Engine.worker.js before it instantiates its wasm, and spawnEngine.js runs
 // the load in process. An op the page can do without goes by an `init`
 // capability instead (`propertyTables`: the page resolves its own tables).
@@ -66,7 +66,7 @@ export const Op = Object.freeze({
 /** Unsolicited engine → main messages. */
 export const Ev = Object.freeze({
   // Posted once by a worker when its module has evaluated, before any
-  // request, with the version it speaks (EngineSession#init waits for it).
+  // request, with the version it speaks (WorkerEngine#init waits for it).
   HELLO: 'hello',
   PROGRESS: 'progress',
   MODEL_INFO: 'modelInfo',

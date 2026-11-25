@@ -1,11 +1,11 @@
 /* eslint-disable require-await */
 import {ENGINE_PROTOCOL_VERSION} from './protocol'
-import {EngineSession} from './EngineSession'
-import {closeAllEngineSessions, resetEngineWorkerFailureForTests, spawnEngineSession} from './spawnEngine'
+import {WorkerEngine} from './WorkerEngine'
+import {closeAllEngineSessions, resetEngineWorkerFailureForTests, spawnWorkerEngine} from './spawnEngine'
 
 
 // Review on #2058: a worker engine that cannot start must not fail the load.
-// spawnEngineSession retries once on the in-process engine.
+// spawnWorkerEngine retries once on the in-process engine.
 
 jest.mock('../FeatureFlags', () => ({isFeatureEnabled: jest.fn(() => false)}))
 
@@ -41,7 +41,7 @@ function staleWorker() {
 }
 
 
-describe('engine/spawnEngineSession fallback', () => {
+describe('engine/spawnWorkerEngine fallback', () => {
   let warnSpy
   let savedWorker
 
@@ -64,7 +64,7 @@ describe('engine/spawnEngineSession fallback', () => {
 
   it('a mismatched worker falls back to the in-process engine, and says so', async () => {
     let worker
-    const session = await spawnEngineSession({
+    const session = await spawnWorkerEngine({
       makeWorker: () => {
         worker = staleWorker()
         return worker
@@ -84,7 +84,7 @@ describe('engine/spawnEngineSession fallback', () => {
     // `unknown op capture`. This one answers hello AND init, as such a
     // worker would; only the version can turn it away.
     let worker
-    const session = await spawnEngineSession({
+    const session = await spawnWorkerEngine({
       makeWorker: () => {
         worker = new EventTarget()
         worker.terminate = jest.fn()
@@ -106,7 +106,7 @@ describe('engine/spawnEngineSession fallback', () => {
   })
 
   it('a worker that cannot even be constructed falls back too', async () => {
-    const session = await spawnEngineSession({
+    const session = await spawnWorkerEngine({
       makeWorker: () => {
         throw new Error('blocked by CSP')
       },
@@ -117,7 +117,7 @@ describe('engine/spawnEngineSession fallback', () => {
 
   it('a worker that never says hello falls back once the init clock runs out', async () => {
     let worker
-    const session = await spawnEngineSession({
+    const session = await spawnWorkerEngine({
       makeWorker: () => {
         worker = new EventTarget()
         worker.postMessage = jest.fn()
@@ -133,14 +133,14 @@ describe('engine/spawnEngineSession fallback', () => {
   })
 
   it('after a worker fails once, later opens on the page go straight to in-process', async () => {
-    await spawnEngineSession({
+    await spawnWorkerEngine({
       makeWorker: () => {
         throw new Error('blocked by CSP')
       },
       loadIfcAPI: async () => stubIfcAPI(),
     })
     const makeWorker = jest.fn(() => staleWorker())
-    const second = await spawnEngineSession({makeWorker, loadIfcAPI: async () => stubIfcAPI()})
+    const second = await spawnWorkerEngine({makeWorker, loadIfcAPI: async () => stubIfcAPI()})
     expect(second.kind).toBe('inProcess')
     // No second worker, and so no second wait on the init clock.
     expect(makeWorker).not.toHaveBeenCalled()
@@ -151,16 +151,16 @@ describe('engine/spawnEngineSession fallback', () => {
   // took over 30 s to fetch and start its wasm, and its own init clock failed
   // the load. As the last resort it has no clock.
   it('gives the in-process engine no init clock, after a worker failed or by choice', async () => {
-    const init = jest.spyOn(EngineSession.prototype, 'init')
+    const init = jest.spyOn(WorkerEngine.prototype, 'init')
     try {
-      await spawnEngineSession({inProcess: true, loadIfcAPI: async () => stubIfcAPI()})
-      await spawnEngineSession({
+      await spawnWorkerEngine({inProcess: true, loadIfcAPI: async () => stubIfcAPI()})
+      await spawnWorkerEngine({
         makeWorker: () => {
           throw new Error('blocked by CSP')
         },
         loadIfcAPI: async () => stubIfcAPI(),
       })
-      // EngineSession.init reads null as no clock (EngineSession.test.js).
+      // WorkerEngine.init reads null as no clock (WorkerEngine.test.js).
       expect(init.mock.calls.map(([options]) => options.timeoutMs)).toEqual([null, null])
     } finally {
       init.mockRestore()
@@ -168,7 +168,7 @@ describe('engine/spawnEngineSession fallback', () => {
   })
 
   it('an in-process failure is not retried: there is nowhere left to go', async () => {
-    await expect(spawnEngineSession({
+    await expect(spawnWorkerEngine({
       inProcess: true,
       loadIfcAPI: async () => function IfcAPI() {
         return {Init: () => Promise.resolve()}
@@ -184,9 +184,9 @@ describe('engine/closeAllEngineSessions', () => {
   it('closes every live session once, and forgets one that already closed', async () => {
     // Sessions earlier tests left open.
     await closeAllEngineSessions()
-    const a = await spawnEngineSession({inProcess: true, loadIfcAPI: async () => stubIfcAPI()})
-    const b = await spawnEngineSession({inProcess: true, loadIfcAPI: async () => stubIfcAPI()})
-    const c = await spawnEngineSession({inProcess: true, loadIfcAPI: async () => stubIfcAPI()})
+    const a = await spawnWorkerEngine({inProcess: true, loadIfcAPI: async () => stubIfcAPI()})
+    const b = await spawnWorkerEngine({inProcess: true, loadIfcAPI: async () => stubIfcAPI()})
+    const c = await spawnWorkerEngine({inProcess: true, loadIfcAPI: async () => stubIfcAPI()})
     await c.close()
     expect(await closeAllEngineSessions()).toBe(2)
     expect([a.closed, b.closed]).toEqual([true, true])
@@ -198,7 +198,7 @@ describe('engine/closeAllEngineSessions', () => {
     const hung = function IfcAPI() {
       return {wasmModule: undefined, Init: () => new Promise(() => null), properties: {}}
     }
-    const spawning = spawnEngineSession({inProcess: true, loadIfcAPI: async () => hung})
+    const spawning = spawnWorkerEngine({inProcess: true, loadIfcAPI: async () => hung})
     // Let the session be created and its init request go out.
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(await closeAllEngineSessions()).toBe(1)

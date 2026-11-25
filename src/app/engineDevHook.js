@@ -1,4 +1,4 @@
-import {spawnEngineSession} from '../engine/spawnEngine'
+import {spawnWorkerEngine} from '../engine/spawnEngine'
 
 
 /**
@@ -35,7 +35,7 @@ export function installEngineDevHook(target = window) {
   }
   target.__bldrsEngine = {
     async spawn({inProcess = false} = {}) {
-      const session = await spawnEngineSession({inProcess})
+      const session = await spawnWorkerEngine({inProcess})
       const handle = nextHandle++
       sessions.set(handle, session)
       const stats = await session.stats()

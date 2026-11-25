@@ -1,5 +1,5 @@
-// The two ways an EngineSession reaches its engine (design/new/engine-worker.md
-// §4, §8 item 6). Both present the same four-method shape, so EngineSession
+// The two ways an WorkerEngine reaches its engine (design/new/engine-worker.md
+// §4, §8 item 6). Both present the same four-method shape, so WorkerEngine
 // never branches on which one it holds:
 //
 //   post(msg, transfer?)   send one request

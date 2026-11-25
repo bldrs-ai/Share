@@ -1,7 +1,7 @@
 // A Conway model load whose engine runs in its own worker
 // (design/new/engine-worker.md §7 steps 3 and 6, `?feature=engineWorker`).
 // The page side of a streamed open: what `parseIfcWithConway` does for a
-// main-thread engine, re-expressed over an EngineSession so
+// main-thread engine, re-expressed over an WorkerEngine so
 // `ShareIfcLoader#parse` keeps one assembly path.
 //
 // ONE load for both Conway formats, IFC and STEP/AP214 (AGENTS.md "IFC and
@@ -21,7 +21,7 @@
 //     decoded back onto each placement below;
 //   - the tree's `includeSolids`, which the caller already passes
 //     (conwayDirectIfcLoader.js#attachConwayDirectModelMethods) and the
-//     session forwards (EngineSession.js#makePropertiesApi).
+//     session forwards (WorkerEngine.js#makePropertiesApi).
 // `format` itself only travels as a label (the `open` request, the `done`
 // packet, the pump line): what the file's suffix names
 // (engine/part21Formats.js), which is not evidence of the schema, so it
@@ -34,7 +34,7 @@
 // — reads an `ifcAPI`, and is handed this instead:
 //   - the builder's four geometry calls are served from the geometry the
 //     worker copied out and transferred (`makeGeometryStore`, §2.4 G1);
-//   - `properties.*` are requests to the worker (EngineSession#propertiesApi);
+//   - `properties.*` are requests to the worker (WorkerEngine#propertiesApi);
 //   - the engine values read after the build (statistics, the coordination
 //     and applied matrices, the unit scale) come from the `done` packet.
 // There is no other engine on the page for this model, so no sync engine
@@ -47,7 +47,7 @@ import {testPumpBatchSize, testStepPreviewFinishParse} from './pumpTestSeams'
 import {Ev, Op} from './protocol'
 import {POLICY_BUFFERED_REASONS, SourceModeReason} from './sourcePolicy'
 import {isOutOfMemoryError} from '../utils/oom'
-import {spawnEngineSession} from './spawnEngine'
+import {spawnWorkerEngine} from './spawnEngine'
 import {LoadAbortedError} from '../utils/loadAbort'
 
 
@@ -253,14 +253,14 @@ export function makeEngineIfcApi(store) {
  * @param {function(): Promise<object>} [options.spawn] for tests
  * @return {{ifcAPI: object, parse: Function, abort: Function, aborted: boolean}}
  */
-export function createEngineModelLoad({format = null, spawn = spawnEngineSession} = {}) {
+export function createEngineModelLoad({format = null, spawn = spawnWorkerEngine} = {}) {
   const store = makeGeometryStore()
   const ifcAPI = makeEngineIfcApi(store)
   // open-205 #2011 step A: the load can be given up before its parse ends —
   // the user switched to another model in-app (CadView's load signal, through
   // ShareIfcLoader#parse), or the viewer it streams into was disposed
   // (ShareIfc#dispose). `abort()` terminates the worker at once: the open,
-  // the pump and every request still pending reject (EngineSession#fail), so
+  // the pump and every request still pending reject (WorkerEngine#fail), so
   // the parse below unwinds at its next await. `aborted` rejects too, for the
   // awaits that are not on the session (a spawn still starting, the test
   // holds), so none of them can keep a given-up load suspended.
@@ -518,7 +518,7 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
  * opens windowed, whatever its suffix says; anything else (not staged in
  * OPFS, not a format the store open takes) arrives as bytes.
  *
- * Bytes are TRANSFERRED as they are, not copied first (EngineSession.js
+ * Bytes are TRANSFERRED as they are, not copied first (WorkerEngine.js
  * #transferableSource copies only a view onto part of a larger buffer): the
  * caller's buffer is detached, which is the point. A copy would hold a
  * buffered source twice on the page for the length of the open, while nothing reads the

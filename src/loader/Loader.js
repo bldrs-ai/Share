@@ -1369,7 +1369,7 @@ export async function load(
           // over the OPFS File. Its geometry went at load end (above).
           // Returned, so the writer settles only once the spill has; a close
           // meanwhile waits for the spill's reply itself
-          // (EngineSession#closePolitely).
+          // (WorkerEngine#closePolitely).
           return spillEngineSource(engineSession, glbExportContext.sourceFile)
         }
         // The writer's property/tree captures were the LAST load-time
