@@ -187,7 +187,7 @@ describe('engine/engineModelLoad: a buffered open that runs out of memory (Share
     expect(sessions[0].closed).toBe(true)
     // Closed BEFORE the second engine was spawned, not after.
     expect(closedBeforeSpawn).toEqual([true, true])
-    expect(load.ifcAPI.engineSession).toBe(sessions[1])
+    expect(load.ifcAPI.engine).toBe(sessions[1])
     // The first engine buffered and failed; the second never tried buffered.
     expect(log).toEqual(['buffered open', 'windowed open'])
     expect(result.summary.sourceMode).toMatchObject({

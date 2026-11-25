@@ -8,14 +8,19 @@ import {assembleBatchedModel} from '../model/buildBatchedConwayModel'
 import {buildConwayIfcModel} from '../model/buildConwayIfcModel'
 import {flatMeshToBufferGeometry} from '../model/flatMeshToBufferGeometry'
 import {IncrementalBatchedBuilder} from '../model/incrementalBatchedBuilder'
-import {parseIfcWithConway} from './conwayDirectIfcLoader'
+import {createEngineModelLoad} from '../engine/engineModelLoad'
+import {makeFakeEngine, makeFakeEngineLoad} from './engineLoad.fixture'
 import {payloadToPreviewMesh} from '../model/parsePreviewMesh'
 import {isFeatureEnabled} from '../FeatureFlags'
 
 
-jest.mock('./conwayDirectIfcLoader', () => ({
-  parseIfcWithConway: jest.fn(),
+jest.mock('../engine/engineModelLoad', () => ({
+  createEngineModelLoad: jest.fn(),
+  engineFormatOf: jest.requireActual('../engine/engineModelLoad').engineFormatOf,
+}))
+jest.mock('../model/engineModelReads', () => ({
   decorateConwayDirectIfcModel: jest.fn(),
+  makeIndexedModelHandle: jest.requireActual('../model/engineModelReads').makeIndexedModelHandle,
 }))
 jest.mock('../model/buildBatchedConwayModel', () => ({
   buildBatchedConwayModel: jest.fn(),
@@ -76,13 +81,11 @@ describe('loader/ShareIfcLoader skipped preview units', () => {
    * @return {Promise<object>} the parsed model
    */
   async function parseDriving(drive) {
-    parseIfcWithConway.mockImplementation(
+    const play = ({onMeshBatch, onPreviewMesh}) => {
+      drive({onMeshBatch, onPreviewMesh})
       // eslint-disable-next-line require-await
-      async (buffer, api, settings, onProgress, onMeshBatch, onPreviewMesh) => {
-        drive({onMeshBatch, onPreviewMesh})
-        // eslint-disable-next-line require-await
-        return {modelID: 7, captured: [], recapture: async () => PUMPED}
-      })
+      return {modelID: 7, recapture: async () => PUMPED}
+    }
     const ifcAPI = {
       GetCoordinationMatrix: jest.fn().mockResolvedValue(IDENTITY),
       OpenModel: jest.fn(),
@@ -98,7 +101,8 @@ describe('loader/ShareIfcLoader skipped preview units', () => {
         ifcCamera: {cameraControls: null, perspectiveCamera: null},
       },
     }
-    return await new ShareIfcLoader({ifcAPI, ifc}).parse(new ArrayBuffer(4), jest.fn(), jest.fn())
+    createEngineModelLoad.mockImplementation(() => makeFakeEngineLoad({ifcAPI, play}))
+    return await new ShareIfcLoader({engine: makeFakeEngine(), ifc}).parse(new ArrayBuffer(4), jest.fn(), jest.fn())
   }
 
   it('counts a skipped parse preview mesh', async () => {

@@ -95,7 +95,9 @@ describe('engine/WorkerEngine over the in-process transport', () => {
     expect(info.conwayVersion).toBe('Conway v-test')
     expect(info.capabilities).toEqual({openStream: true, openFromIndex: false, asyncPump: true, propertyTables: true})
     expect(info.wasmBytes).toBe(16 * MB)
-    expect(session.capabilities).toEqual(info.capabilities)
+    // The engine's own, plus the one only a page engine has: a worker keeps
+    // no copy of the stream to rebuild from (Engine.js `recapture`).
+    expect(session.capabilities).toEqual({...info.capabilities, sourcePolicy: true, recapture: false})
     expect(api.calls[0]).toEqual(['Init'])
     expect(session.kind).toBe('inProcess')
   })

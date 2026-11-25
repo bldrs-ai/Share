@@ -18,6 +18,7 @@ import {
 } from '../OPFS/utils'
 import {UploadNotInBrowserError} from '../OPFS/messages'
 import ShareIfcLoader from './ShareIfcLoader'
+import {ConwayEngine} from '../engine/ConwayEngine'
 import useStore from '../store/useStore'
 import {constructUploadedBlobPath, load, NotFoundError} from './Loader'
 import {dereferenceAndProxyDownloadContents} from './urls'
@@ -129,7 +130,7 @@ function makeIfcViewer({streamOpen = false} = {}) {
   }
   return {
     IFC: ifc,
-    ifcLoader: new ShareIfcLoader({ifcAPI, ifc}),
+    ifcLoader: new ShareIfcLoader(withViewerEngine(ifc, ifcAPI)),
   }
 }
 
@@ -203,6 +204,20 @@ class MockFile {
   }
 }
 
+
+/**
+ * The loader's arguments over a real ConwayEngine wrapping `ifcAPI` (a stub),
+ * installed on the viewer's IFC namespace as ShareIfc installs its own, so
+ * the parse and Loader.js#canOpenFromStore both see it.
+ *
+ * @param {object} ifc the `viewer.IFC` stub
+ * @param {object} ifcAPI the Conway IfcAPI stub
+ * @return {object} `{engine, ifc}`
+ */
+function withViewerEngine(ifc, ifcAPI) {
+  ifc.engine = new ConwayEngine({ifcAPI})
+  return {engine: ifc.engine, ifc}
+}
 
 describe('Loader exported helpers', () => {
   describe('NotFoundError', () => {
@@ -1173,10 +1188,7 @@ describe('load() error/edge paths with OPFS enabled', () => {
     // `ifcViewer.IFC.loader.ifcManager.ifcAPI` (set above);
     // ShareIfcLoader.parse calls into it and surfaces the OOM the
     // same way `newIfcLoader.parse` did pre-5d.1.
-    ifcViewer.ifcLoader = new ShareIfcLoader({
-      ifcAPI: ifcViewer.IFC.loader.ifcManager.ifcAPI,
-      ifc: ifcViewer.IFC,
-    })
+    ifcViewer.ifcLoader = new ShareIfcLoader(withViewerEngine(ifcViewer.IFC, ifcViewer.IFC.loader.ifcManager.ifcAPI))
 
     dereferenceAndProxyDownloadContents.mockResolvedValue([
       'https://example.com/model.ifc',
@@ -1242,10 +1254,7 @@ describe('load() error/edge paths with OPFS enabled', () => {
     // ShareIfcLoader.parse — it inspects
     // `context.items.ifcModels.length`, which we've pre-populated
     // above so the guard fires immediately.
-    primedViewer.ifcLoader = new ShareIfcLoader({
-      ifcAPI: primedViewer.IFC.loader.ifcManager.ifcAPI,
-      ifc: primedViewer.IFC,
-    })
+    primedViewer.ifcLoader = new ShareIfcLoader(withViewerEngine(primedViewer.IFC, primedViewer.IFC.loader.ifcManager.ifcAPI))
 
     dereferenceAndProxyDownloadContents.mockResolvedValue([
       'https://example.com/model.ifc',

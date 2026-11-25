@@ -79,6 +79,7 @@ function makeViewer(modelExtras, parseError, viewerIfcAPI = {}) {
       ifcLastError: null,
       addIfcModel: jest.fn(),
       loader: {ifcManager: {state: {models: []}, ifcAPI: viewerIfcAPI}},
+      engine: {capabilities: {openStream: typeof viewerIfcAPI?.OpenModelStream === 'function'}},
       context: {items: {ifcModels: []}, fitToFrame: jest.fn()},
     },
   }
@@ -105,7 +106,9 @@ function makeViewer(modelExtras, parseError, viewerIfcAPI = {}) {
  */
 function workerModel(summary) {
   return {
-    ifcManager: {ifcAPI: {engineSession: {kind: 'worker', spill: jest.fn(async () => ({spilled: false})), capture: jest.fn()}, summary}},
+    engine: {kind: 'worker', capabilities: {sourcePolicy: true},
+      spill: jest.fn(async () => ({spilled: false})), capture: jest.fn()},
+    ifcManager: {ifcAPI: {summary}},
   }
 }
 

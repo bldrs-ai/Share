@@ -94,8 +94,8 @@ function makeEngineSession() {
 
 
 /**
- * A viewer whose IFC loader returns a parsed model carrying `engineSession`,
- * the shape engineModelLoad.js gives a worker load (`ifcAPI.engineSession`).
+ * A viewer whose IFC loader returns a parsed model carrying its engine
+ * (`model.engine`, model/engineModelReads.js).
  *
  * @param {object} engineSession
  * @return {object}
@@ -118,7 +118,8 @@ function makeViewer(engineSession) {
       const model = new Group()
       model.add(new Mesh(new BufferGeometry()))
       model.modelID = 0
-      model.ifcManager = {ifcAPI: {engineSession}}
+      model.engine = engineSession
+      model.ifcManager = {ifcAPI: {}}
       return model
     }),
   }

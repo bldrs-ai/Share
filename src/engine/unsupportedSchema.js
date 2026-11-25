@@ -178,7 +178,7 @@ async function headerText(source) {
   // Duck-typed rather than `instanceof`: a buffer can come from another realm
   // (a worker, or jsdom vs. Node in tests) where `instanceof Uint8Array` is
   // false for a real Uint8Array. Same reasoning as `isBlobSource` in
-  // conwayDirectIfcLoader.js, which checks `ArrayBuffer.isView` for this.
+  // ConwayEngine.js#bytesOf, which checks `ArrayBuffer.isView` for this.
   let bytes
   if (ArrayBuffer.isView(source)) {
     bytes = new Uint8Array(source.buffer, source.byteOffset,

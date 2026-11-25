@@ -94,7 +94,7 @@ describeMobileAndDesktop('Engine route: worker by default, main thread where ask
     await waitForModelReady(page)
     const kind = await page.evaluate(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).store.getState().model?.ifcManager?.ifcAPI?.engineSession?.kind ?? null)
+      (window as any).store.getState().model?.engine?.kind ?? null)
     expect(kind).toBe('inProcess')
     expect(fallbackLines.length).toBe(1)
     expect(fallbackLines[0]).toContain('test: engine worker blocked')

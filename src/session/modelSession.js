@@ -228,11 +228,11 @@ export class ModelSession {
     this.job = null
     this.isClosed = false
     this.loadState = LoadState.LOADING
-    // The `WorkerEngine` (engine/WorkerEngine.js) the session's model was
-    // parsed into, or null: a mesh format, a GLB cache hit, or the
-    // main-thread engine (`?feature=disableEngineWorker`), which has nothing
-    // to close (dropping it is what frees it, in-app-model-switch.md §2.3).
-    // Set once a load has put its model in the store; null again once
+    // The `Engine` (engine/Engine.js) the session's model was parsed into,
+    // `model.engine`, or null: a mesh format or a GLB cache hit. On the
+    // main-thread route (`?feature=disableEngineWorker`) it is the viewer's
+    // ConwayEngine, which the viewer closes too; closing it twice closes it
+    // once. Set once a load has put its model in the store; null again once
     // closed.
     this.engine = null
     // The window handlers bound for this session, so closing it unbinds them
@@ -292,7 +292,7 @@ export class ModelSession {
    * @param {object} model the loaded model
    */
   bindEngine(model) {
-    this.engine = model?.ifcManager?.ifcAPI?.engineSession ?? null
+    this.engine = model?.engine ?? null
   }
 
   /**
@@ -345,8 +345,8 @@ export class ModelSession {
       }
     }
     this.closers = []
-    // The worker is terminated here; the viewer the model was loaded into
-    // closes it too when disposed, and `WorkerEngine#close` is idempotent.
+    // The engine is closed here (a worker terminated); the viewer the model
+    // was loaded into closes it too when disposed, and `close` is idempotent.
     try {
       this.engine?.close?.()
     } catch (e) {

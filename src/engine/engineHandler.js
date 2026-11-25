@@ -38,13 +38,12 @@ import {SourceModeReason, StoreKind, chooseSourceMode} from './sourcePolicy'
 
 
 /**
- * Conway open settings for an index-only open. Mirrors the deferred path in
- * `conwayDirectIfcLoader.js#parseIfcWithConway` so a worker open indexes
- * exactly what a main-thread one does; the two must not drift (§8 item 6:
- * one path, not two).
+ * Conway open settings for a deferred open. ConwayEngine.js opens with the
+ * same settings, so a worker open indexes exactly what a main-thread one
+ * does; the two must not drift (§8 item 6: one path, not two).
  */
 export const GEOMETRY_BUDGET_MB = 64
-const BASE_OPEN_SETTINGS = Object.freeze({
+export const BASE_OPEN_SETTINGS = Object.freeze({
   COORDINATE_TO_ORIGIN: true,
   USE_FAST_BOOLS: true,
   DEFER_GEOMETRY: true,
@@ -54,7 +53,7 @@ const BASE_OPEN_SETTINGS = Object.freeze({
 
 /**
  * Products per pump call. The same as the main-thread path's async pump
- * (`conwayDirectIfcLoader.js` ASYNC_DEMAND_EXTRACT_BATCH_SIZE): a windowed
+ * (ConwayEngine.js uses it for its async pump too): a windowed
  * extract pages each product's #ref closure before extracting it, and 8
  * keeps file-order streaming while still amortising the page-side append.
  */
@@ -68,7 +67,7 @@ export const PUMP_BATCH_SIZE = 8
  */
 const ONE_SHOT_CHUNK = 256
 
-/** Conway log levels; see `conwayDirectIfcLoader.js#applyEngineLogLevel`. */
+/** Conway log levels; ConwayEngine.js#init sets the same ones. */
 const ENGINE_LOG_LEVEL_DEBUG = 1
 const ENGINE_LOG_LEVEL_WARN = 3
 
@@ -769,7 +768,7 @@ export function createEngineHandler({
   /**
    * The geometry pump, worker-side (§2.4 G1): extract, copy each new
    * geometry out once, post the batch as transferable columns, repeat; then
-   * the `done` packet. Mirrors `conwayDirectIfcLoader.js#parseIfcWithConway`'s
+   * the `done` packet. Mirrors `ConwayEngine.js#runPump_`'s
    * deferred loop, including its geometry progress and its one-shot fallback
    * when the pump produced nothing. Any throw ends the load as `failed`.
    *
@@ -856,7 +855,7 @@ export function createEngineHandler({
    * internally, or a deferred model with nothing to pump): serve the
    * one-shot whole-model ask and re-emit it as batches, so the page has one
    * delivery path and keeps no `recapture` (§2.4 G1). The same entry-point
-   * choice as `parseIfcWithConway`'s: the async ask only where the sync one
+   * choice as ConwayEngine.js#wholeModel_'s: the async ask only where the sync one
    * cannot page a windowed source.
    *
    * @param {boolean} windowed

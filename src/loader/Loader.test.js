@@ -5,6 +5,7 @@ import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
 import {unzipSync, zipSync} from 'three/examples/jsm/libs/fflate.module.js'
 import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 import ShareIfcLoader from './ShareIfcLoader'
+import {ConwayEngine} from '../engine/ConwayEngine'
 import * as contentHash from '../utils/contentHash'
 import {dicomSeriesToNrrd, groupSeries, parseDicomSlice} from './dicom'
 import * as loadProgress from './loadProgress'
@@ -43,6 +44,21 @@ jest.mock('@sparkjsdev/spark', () => {
 
 let mathRandomSpy
 let mockViewer
+
+/**
+ * The loader's arguments over a real ConwayEngine wrapping `ifcAPI` (a stub),
+ * installed on the viewer's IFC namespace as ShareIfc installs its own, so
+ * the parse and Loader.js#canOpenFromStore both see it.
+ *
+ * @param {object} ifc the `viewer.IFC` stub
+ * @param {object} ifcAPI the Conway IfcAPI stub
+ * @return {object} `{engine, ifc}`
+ */
+function withViewerEngine(ifc, ifcAPI) {
+  ifc.engine = new ConwayEngine({ifcAPI})
+  return {engine: ifc.engine, ifc}
+}
+
 describe('Loader', () => {
   // three.js generates random UUIDs for loaded geometry and material
   // and also references them later, so it's not trivial to freeze or
@@ -125,10 +141,7 @@ describe('Loader', () => {
     // so we install a real ShareIfcLoader here so the IFC `case`
     // arm in `findLoader` finds it and `loader.parse` runs the
     // Conway-direct flow against the mock ifcAPI.
-    mockViewer.ifcLoader = new ShareIfcLoader({
-      ifcAPI: mockViewer.IFC.loader.ifcManager.ifcAPI,
-      ifc: mockViewer.IFC,
-    })
+    mockViewer.ifcLoader = new ShareIfcLoader(withViewerEngine(mockViewer.IFC, mockViewer.IFC.loader.ifcManager.ifcAPI))
   })
   afterEach(() => mathRandomSpy.mockRestore())
 
@@ -605,6 +618,9 @@ describe('Loader', () => {
     }
     hashSpy.mockClear()
     blobHashSpy.mockClear()
+    // A viewer is built per open (until slice 2d of layering.md), and its
+    // engine holds one model, so the second open gets a fresh one.
+    mockViewer.ifcLoader = new ShareIfcLoader(withViewerEngine(mockViewer.IFC, mockViewer.IFC.loader.ifcManager.ifcAPI))
     const ifczip = zipSync({'index.ifc': new Uint8Array(Buffer.from(ifcText))})
     restoreArrayBuffer = setupMockBlobWithContent(Buffer.from(ifczip))
     try {

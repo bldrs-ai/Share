@@ -12,10 +12,16 @@
 // instead of `this.context` / `this.addIfcModel` (which were
 // previously fork.IFC properties).
 //
-// Why a class instead of more hot-patching: the parse method needs
-// `ifcAPI`, the scene, `addIfcModel`, and `items.ifcModels`. Pre-5d.1
+// Why a class instead of more hot-patching: the parse method needs the
+// viewer's engine, the scene, `addIfcModel`, and `items.ifcModels`. Pre-5d.1
 // those were fields on the fork's IFCManager because parse was
 // attached to it. Now we own the loader so we hold direct refs.
+//
+// One parse path for every engine (design/tracks/open-t200/layering.md §7
+// "1a"): the load runs over an `Engine` (engine/Engine.js), a WorkerEngine by
+// default or the viewer's ConwayEngine on the kill-switch route
+// (engine/engineRoute.js), and the parse never asks which. Where the two can
+// do different things it asks `engine.capabilities`.
 
 import {Mesh} from 'three'
 import {APPLIED_COORDINATION_KEY, validAppliedCoordination} from '../model/appliedCoordination'
@@ -23,7 +29,7 @@ import {assembleBatchedModel, buildBatchedConwayModel} from '../model/buildBatch
 import {IncrementalBatchedBuilder} from '../model/incrementalBatchedBuilder'
 import {buildConwayIfcModel} from '../model/buildConwayIfcModel'
 import {conwayDirectError, conwayDirectInfo, conwayDirectWarn} from '../engine/conwayDirectLog'
-import {decorateConwayDirectIfcModel, makeIndexedModelHandle, parseIfcWithConway} from './conwayDirectIfcLoader'
+import {decorateConwayDirectIfcModel, makeIndexedModelHandle} from '../model/engineModelReads'
 import {flatMeshToBufferGeometry} from '../model/flatMeshToBufferGeometry'
 import {flatMeshToInstancedModel} from '../model/flatMeshToInstancedModel'
 import {payloadToPreviewMesh} from '../model/parsePreviewMesh'
@@ -35,10 +41,10 @@ import {isFeatureEnabled} from '../FeatureFlags'
 import {createEngineModelLoad, engineFormatOf} from '../engine/engineModelLoad'
 import {reportGeometryStats, reportSourceInfo} from './loadProgress'
 import {MainThreadReason, mainThreadEngineNote, mainThreadEngineReason} from '../engine/engineRoute'
+import {spawnWorkerEngine} from '../engine/spawnEngine'
 import {runIfcItemsMapParityCheck} from '../model/ifcItemsMapParity'
 import ProgressiveLoadSession from './ProgressiveLoadSession'
 import {beginLoadSelection, endLoadSelection} from '../model/streamingBatchPick'
-import ShareIfcManager from '../engine/ShareIfcManager'
 import debug, {DEBUG, WARN, isLogEnabled} from '../utils/debug'
 
 
@@ -59,14 +65,14 @@ import debug, {DEBUG, WARN, isLogEnabled} from '../utils/debug'
  * level. Never throws into the load path: a probe failure must not
  * discard a successful parse.
  *
- * @param {object} ifcAPI Conway IfcAPI bound to the model
+ * @param {object} ifcAPI the load's web-ifc-shaped alias of its engine
  * @param {number} modelID
  * @param {Function} getCaptured async thunk returning the parse's whole
  *   FlatMesh stream. A thunk rather than the array because on the streaming
  *   path (conway#638) producing it costs a whole-model re-extraction, and
  *   that must not be paid by the loads this gate turns away; async because
  *   on a windowed source that re-extraction pages the window through
- *   conway#660's `StreamAllMeshesAsync` (see `makeRecapture`).
+ *   conway#660's `StreamAllMeshesAsync` (ConwayEngine#recapture).
  * @param {boolean} [force] log at info level regardless of verbosity
  * @return {Promise<void>} resolves once the probe has logged or been gated
  *   away — awaited by the caller only to keep the load log's line order
@@ -98,24 +104,6 @@ async function logInstancedModelStats(ifcAPI, modelID, getCaptured, force = fals
     console.warn('[instancedMeshes] probe failed (non-fatal):', err)
   }
 }
-
-
-/**
- * @typedef {object} ConwayIfcAPI Conway-compatible IfcAPI handle.
- * @property {Function} OpenModel Open an IFC model from a Uint8Array.
- * @property {Function} StreamAllMeshes Stream FlatMeshes for a modelID.
- * @property {Function} [StreamAllMeshesAsync] conway#660: the async twin,
- *   and the only whole-model ask a windowed deferred model can answer.
- *   Absent on pins predating it — feature-detect, never assume.
- * @property {Function} GetCoordinationMatrix Get the coord matrix.
- * @property {Function} [GetAppliedCoordinationMatrix] conway#702: the frame
- *   the engine ACTUALLY composed into the placements it emitted. Absent on
- *   pins predating it — feature-detect, never assume
- *   (conway's own doc comment says so).
- * @property {Function} getStatistics Per-load load statistics.
- * @property {Function} getConwayVersion Conway engine version string.
- * @property {object} properties Conway properties namespace.
- */
 
 
 /**
@@ -289,7 +277,7 @@ export function clearAabbImposters(ring, session) {
  * @param {object} ifcModel the assembled model root (`ifcModel.userData` is
  *   created if the object does not already have one — mocked three.js Mesh
  *   stand-ins in unit tests do not)
- * @param {ConwayIfcAPI} ifcAPI
+ * @param {object} ifcAPI the load's alias of its engine
  * @param {number} modelID
  * @return {?Array<number>} the stamped column-major mat4, or null when the
  *   engine could not answer
@@ -363,28 +351,29 @@ function isEngineWorkerCandidate(loaderType, scene) {
 
 /**
  * IFC loader for ShareViewer. Single entry point: `parse(buffer)`.
- *
- * Holds a `ShareIfcManager` (`this.ifcManager`) — consumer code
- * reads `viewer.IFC.loader.ifcManager.X` to reach IFC accessors.
  */
 export default class ShareIfcLoader {
   /**
    * @param {object} args
-   * @param {ConwayIfcAPI} args.ifcAPI Conway IfcAPI.
+   * @param {object} args.engine the viewer's ConwayEngine (`viewer.IFC.engine`):
+   *   the engine a load runs on when the route keeps it off a worker
    * @param {object} args.ifc The IFC namespace (`viewer.IFC`) — used
    *   to reach `context.items.ifcModels` (model registry) +
    *   `addIfcModel(model)` (scene-graph install) + the context's
    *   `getScene()` / `fitToFrame()` from inside `parse(...)`.
+   * @param {function(): Promise<object>} [args.spawnWorker] spawns a
+   *   WorkerEngine for a load the route sends to a worker; for tests
    */
-  constructor({ifcAPI, ifc}) {
-    if (!ifcAPI) {
-      throw new Error('ShareIfcLoader: ifcAPI is required')
+  constructor({engine, ifc, spawnWorker = spawnWorkerEngine}) {
+    if (!engine) {
+      throw new Error('ShareIfcLoader: engine is required')
     }
     if (!ifc) {
       throw new Error('ShareIfcLoader: ifc namespace is required')
     }
     this._ifc = ifc
-    this.ifcManager = new ShareIfcManager(ifcAPI)
+    this.engine = engine
+    this.spawnWorker = spawnWorker
     // The canonical `ifcLastError` slot lives on the IFC namespace
     // (`viewer.IFC.ifcLastError`) — pre-5d.1 callers read it from
     // there (`Loader.js:404`). We mirror via `_ifc.ifcLastError`
@@ -398,10 +387,10 @@ export default class ShareIfcLoader {
 
 
   /**
-   * Conway-direct IFC parse. The whole flow — OpenModel +
-   * StreamAllMeshes via `parseIfcWithConway`, geometry assembly via
-   * `buildConwayIfcModel`, model decoration via
-   * `decorateConwayDirectIfcModel`, coord matrix + stats — lives here.
+   * Conway-direct IFC/STEP parse: the engine's open and pump
+   * (engine/engineModelLoad.js), geometry assembly as the batches stream
+   * (`IncrementalBatchedBuilder`) or at the end (`buildBatchedConwayModel`,
+   * `buildConwayIfcModel`), model decoration, coord matrix + stats.
    *
    * Called by `Loader.js#readModel` as `loader.parse(buffer, onProgress)`
    * when the file extension is `.ifc` / `.ifczip` / `.stp`.
@@ -416,16 +405,16 @@ export default class ShareIfcLoader {
    *   caller lifts its loading overlay on it, if the load is still current.
    * @param {Function} [options.onIndexed] open-205 #2029: `async (handle)
    *   => void`, given the model at its index (`makeIndexedModelHandle`)
-   *   once the deferred open returns and before geometry streams, so the
-   *   caller can bring up the tree, properties and search while the pump
-   *   runs. Started beside the pump, not awaited; see `parseIfcWithConway`.
+   *   once the open returns and before geometry streams, so the caller can
+   *   bring up the tree, properties and search while the pump runs. Started
+   *   beside the pump, not awaited (engineModelLoad.js#parse).
    * @param {AbortSignal} [options.signal] open-205 #2011 step A: the load's
    *   owner gave it up (an in-app switch under `?feature=spaModelNav`,
-   *   utils/loadAbort.js). A worker load's engine is terminated at once; a
-   *   main-thread one stops at its pump's next batch (its open is one call
-   *   into the wasm on this thread and cannot be interrupted). Either way
-   *   nothing reaches the scene registry after it, and the parse rejects with
-   *   a LoadAbortedError instead of returning null.
+   *   utils/loadAbort.js). The load's engine is closed at once: a worker is
+   *   terminated, and the page's engine stops at its pump's next batch (its
+   *   open is one call into the wasm on this thread and cannot be
+   *   interrupted). Either way nothing reaches the scene registry after it,
+   *   and the parse rejects with a LoadAbortedError instead of returning null.
    * @return {Promise<object|null>} the loaded IfcModel, or null on
    *   handled error (re-throws on OOM so the caller can show a
    *   tailored UX message).
@@ -476,30 +465,35 @@ export default class ShareIfcLoader {
     let builder = null
     // The first error the incremental builder hit on a batch, if any.
     let batchError = null
-    // `?feature=engineWorker` (engine-worker.md §7 steps 3 and 6): this
-    // model's engine runs in its own worker, and `ifcAPI` below is the
-    // IfcAPI-shaped facade over it (engine/engineModelLoad.js), so everything
-    // after the parse assembles exactly as it does for the main-thread
-    // engine. IFC and STEP alike: STEP's occurrence paths cross as a batch
-    // column and land on the same placements the builder reads, and its
-    // `includeSolids` tree is the same request the main-thread handle makes.
-    // The streamed path only: with `demandGeometry` off, or no scene to
-    // stream into, there is no incremental builder for the worker's batches
-    // to feed.
-    const engineLoad = isEngineWorkerLoad(this.type, scene) ?
-      createEngineModelLoad({format: engineFormatOf(this.type)}) : null
+    // The load runs over one Engine, and which is the route's decision: a
+    // WorkerEngine of its own (engine-worker.md §7 steps 3, 6 and 9: the
+    // default), or the viewer's ConwayEngine when the route keeps the load on
+    // the main thread (the kill switch, the rollback), or when there is no
+    // streamed build for a worker's batches to feed (`demandGeometry` off, no
+    // scene). Everything below is the same code for both: `ifcAPI` is the
+    // load's web-ifc-shaped alias of the engine (engine/engineModelLoad.js),
+    // and IFC and STEP alike, STEP's occurrence paths arriving on the same
+    // placements the builder reads.
+    const onWorker = isEngineWorkerLoad(this.type, scene)
+    const viewerEngine = this.engine
+    const engineLoad = createEngineModelLoad({
+      format: engineFormatOf(this.type),
+      spawn: onWorker ? this.spawnWorker : async () => {
+        await viewerEngine.init()
+        return viewerEngine
+      },
+    })
     // open-205 #2011 step A, the engine's close path for a load that never
     // registers: a model joins `ifcModels` (which ShareIfc#dispose closes)
     // only at the end of this parse, so an engine given up mid-parse was
     // never closed (#2031). Tracked on the viewer until the parse settles,
-    // and terminated on the owner's abort.
-    const untrackEngineLoad = engineLoad !== null && typeof ifc.trackEngineLoad === 'function' ?
-      ifc.trackEngineLoad(engineLoad) : null
-    const abortEngineLoad = engineLoad !== null && signal ? () => engineLoad.abort() : null
+    // and closed on the owner's abort.
+    const untrackEngineLoad = typeof ifc.trackEngineLoad === 'function' ? ifc.trackEngineLoad(engineLoad) : null
+    const abortEngineLoad = signal ? () => engineLoad.abort() : null
     if (abortEngineLoad !== null) {
       signal.addEventListener('abort', abortEngineLoad, {once: true})
     }
-    if (engineLoad === null && isEngineWorkerCandidate(this.type, scene)) {
+    if (!onWorker && isEngineWorkerCandidate(this.type, scene)) {
       // Say in the report and the console why this load runs on the slower
       // main-thread engine, so a kill-switched or rolled-back session reads
       // as deliberate rather than as a lost worker.
@@ -517,7 +511,7 @@ export default class ShareIfcLoader {
     beginLoadSelection(scene)
     try {
       session.report('Opening model...')
-      const ifcAPI = engineLoad !== null ? engineLoad.ifcAPI : this.ifcManager.ifcAPI
+      const ifcAPI = engineLoad.ifcAPI
       // onProgress is threaded into conway's ON_PROGRESS extension so the
       // opaque gap between 'Parsing model geometry...' and 'Building
       // model...' carries real per-phase counts (headerParse / dataParse /
@@ -551,7 +545,7 @@ export default class ShareIfcLoader {
       const aabbRing = {meshes: [], byExpressID: new Map(), cap: AABB_IMPOSTER_CAP}
 
       const onPreviewMesh = !usePreview ? undefined : (payload) => {
-        // A main-thread parse keeps delivering until its pump sees the abort.
+        // A page engine's parse keeps delivering until its pump sees the abort.
         if (isAborted(signal)) {
           return
         }
@@ -623,27 +617,26 @@ export default class ShareIfcLoader {
         }
       }
 
-      // `recapture()`, not `captured`, is what the degraded builds below
-      // read. On the streaming path the parse keeps no copy of the FlatMesh
-      // stream — `onMeshBatch` above already assembled each batch into the
-      // durable model — so the fallbacks re-extract at the moment of
-      // failure rather than the parse holding 475 MB against the chance of
-      // one (conway#638). It is the identity where the stream was retained,
-      // which after conway#660 is only "no onMeshBatch" plus a windowed open
-      // on an engine pin without `StreamAllMeshesAsync`.
+      // `recapture()` is what the degraded builds below read. On the
+      // streaming path no engine keeps a copy of the FlatMesh stream —
+      // `onMeshBatch` above already assembled each batch into the durable
+      // model — so the page's engine re-extracts at the moment of failure
+      // rather than the load holding 475 MB against the chance of one
+      // (conway#638), and a worker, which cannot, refuses
+      // (engineModelLoad.js#parse). `canRecapture` says which this load has.
       //
       // ALWAYS AWAIT IT. The accessor returns a Promise on every path
-      // (`makeRecapture` explains why it is uniform rather than a union):
-      // on a windowed source the re-extraction pages the byte window, so it
-      // cannot be synchronous, and a missed `await` would feed a Promise to
-      // a builder that iterates placements — an empty model, silently.
+      // (ConwayEngine#recapture explains why it is uniform rather than a
+      // union): on a windowed source the re-extraction pages the byte window,
+      // so it cannot be synchronous, and a missed `await` would feed a Promise
+      // to a builder that iterates placements — an empty model, silently.
       const onModelIndexed = onIndexed ?
-        (openedModelID) => onIndexed(makeIndexedModelHandle(ifcAPI, openedModelID)) :
+        () => onIndexed(makeIndexedModelHandle(engineLoad.engine, ifcAPI)) :
         undefined
-      const {modelID, recapture} = engineLoad !== null ?
-        await engineLoad.parse(buffer, {onProgress, onMeshBatch, onPreviewMesh, onIndexed: onModelIndexed}) :
-        await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress, onMeshBatch, onPreviewMesh,
-          onModelIndexed, {signal})
+      const {modelID, recapture} =
+        await engineLoad.parse(buffer, {onProgress, onMeshBatch, onPreviewMesh, onIndexed: onModelIndexed})
+      const engine = engineLoad.engine
+      const canRecapture = engine.capabilities?.recapture === true
       // A parse that resolved after its abort (the abort landed on its last
       // await) is dropped here, before anything is assembled or registered.
       throwIfLoadAborted(signal)
@@ -661,7 +654,7 @@ export default class ShareIfcLoader {
         try {
           const incremental = builder.finalize()
           ifcModel = assembleBatchedModel(
-            incremental.batches, ifcAPI, modelID, {scene, root: builder.root})
+            incremental.batches, ifcAPI, modelID, {scene, root: builder.root, engine})
           buildStats = incremental.stats
         } catch (e) {
           debug(WARN).warn('incremental assembly failed; end-of-load fallback:', e)
@@ -671,22 +664,21 @@ export default class ShareIfcLoader {
             // best-effort
           }
           ifcModel = undefined
-          if (engineLoad !== null) {
-            // A worker load keeps no copy of the stream to rebuild from (the
-            // worker sent each shape once and the builder held the only
-            // copy), so the fallbacks below have nothing to build: fail the
-            // load with THIS error, which says what broke, rather than with
-            // recapture()'s (review on #2058).
+          if (!canRecapture) {
+            // An engine that cannot recapture (a worker: it sent each shape
+            // once and the builder held the only copy) leaves the fallbacks
+            // below nothing to build: fail the load with THIS error, which
+            // says what broke, rather than with recapture()'s (review on #2058).
             throw new Error(`engine worker load: incremental assembly failed: ${e?.message ?? e}`, {cause: e})
           }
         }
       }
 
-      if (ifcModel === undefined && engineLoad !== null && batchError !== null) {
-        // A worker load whose builder never got a batch in (its constructor,
-        // scene.add or appendBatch failed every time) has nothing to rebuild
-        // from either: fail with that error, not recapture()'s (review on
-        // #2058).
+      if (ifcModel === undefined && !canRecapture && batchError !== null) {
+        // A load whose builder never got a batch in (its constructor,
+        // scene.add or appendBatch failed every time) and whose engine cannot
+        // recapture has nothing to rebuild from either: fail with that error,
+        // not recapture()'s (review on #2058).
         throw new Error(`engine worker load: incremental build failed: ${batchError?.message ?? batchError}`,
           {cause: batchError})
       }
@@ -697,7 +689,7 @@ export default class ShareIfcLoader {
       if (ifcModel === undefined && isFeatureEnabled('batchedMesh')) {
         try {
           const batched =
-            buildBatchedConwayModel(await recapture(), ifcAPI, modelID, {scene, coordination})
+            buildBatchedConwayModel(await recapture(), ifcAPI, modelID, {scene, coordination, engine})
           ifcModel = batched.model
           buildStats = batched.stats
         } catch (e) {
@@ -709,7 +701,7 @@ export default class ShareIfcLoader {
           buildConwayIfcModel(await recapture(), ifcAPI, modelID, {coordination})
         ifcModel = merged.mesh
         buildStats = merged.stats
-        decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
+        decorateConwayDirectIfcModel(ifcModel, engine, ifcAPI, modelID, {scene})
       }
 
       // Drop parse-time imposters before the durable model installs.
@@ -867,11 +859,12 @@ export default class ShareIfcLoader {
             metresPerUnit === MM ? 'mm' : `${metresPerUnit} m`
           parts.push(`units=${unitLabel}`)
         }
-        if (engineLoad !== null && typeof engineLoad.ifcAPI.summary?.wasmBytes === 'number') {
-          // The engine's wasm heap lives in its worker now, where the report's
-          // heap column (this page's performance.memory) cannot see it
-          // (engine-worker.md §2.4 G3), so say it on the Total line.
-          parts.push(`engineWasmMb=${Math.round(engineLoad.ifcAPI.summary.wasmBytes / BYTES_PER_MIB)}`)
+        if (typeof ifcAPI.summary?.wasmBytes === 'number') {
+          // The report's heap column is this page's JS heap
+          // (performance.memory), which does not count the engine's wasm
+          // heap, in a worker (engine-worker.md §2.4 G3) or on this page, so
+          // say it on the Total line.
+          parts.push(`engineWasmMb=${Math.round(ifcAPI.summary.wasmBytes / BYTES_PER_MIB)}`)
         }
         session.setSummary(parts)
       } catch (e) {
@@ -894,11 +887,10 @@ export default class ShareIfcLoader {
       // finding. Note that on a live model this second read is exactly the
       // conway-side double-count `IfcItemsMap.js` documents, so treat a
       // parity diff taken this way with that caveat.
-      // Neither diagnostic runs on a worker load: both re-read the whole
-      // stream, which the page does not retain there (the worker sends each
-      // geometry once and the builder keeps the only copy), and both are
-      // opt-in or verbose-only (engine-worker.md §2.1 rows 11, 12).
-      if (isFeatureEnabled('ifcItemsMapParity') && engineLoad === null) {
+      // Neither diagnostic runs on an engine that cannot recapture (a worker
+      // sends each geometry once and the builder keeps the only copy), and
+      // both are opt-in or verbose-only (engine-worker.md §2.1 rows 11, 12).
+      if (isFeatureEnabled('ifcItemsMapParity') && canRecapture) {
         runIfcItemsMapParityCheck(ifcAPI, ifcModel, await recapture())
       }
       // Instanced-rendering analysis: groups the captured stream by shared
@@ -908,7 +900,7 @@ export default class ShareIfcLoader {
       // numbers alongside what just rendered as a BatchedMesh. Passed as a
       // thunk so the recapture happens only if the gate inside actually
       // opens.
-      if (engineLoad === null) {
+      if (canRecapture) {
         await logInstancedModelStats(ifcAPI, modelID, recapture, isFeatureEnabled('batchedMesh'))
       }
       // Always-on integration-boundary log. `conwayDirect.spec.ts`
@@ -938,9 +930,9 @@ export default class ShareIfcLoader {
       return ifcModel
     } catch (err) {
       session.abort()
-      // A failed worker load's engine has nothing left to serve: free it now
-      // rather than when the viewer goes (engine/WorkerEngine.js#close).
-      engineLoad?.ifcAPI.engineSession?.close()
+      // A failed load's engine has nothing left to serve: free it now rather
+      // than when the viewer goes (Engine.js `close`).
+      engineLoad.engine?.close()
       // A partially assembled incremental group must not survive a
       // failed load — remove it (its wasm-side twin is released by the
       // engine's own error paths).
@@ -951,7 +943,7 @@ export default class ShareIfcLoader {
       } catch {
         // best-effort
       }
-      if (isAborted(signal) || engineLoad?.aborted === true) {
+      if (isAborted(signal) || engineLoad.aborted) {
         // Given up, not failed: whatever the abort made the parse throw (a
         // closed session's rejection, most often) is its consequence, not a
         // fault. No ifcLastError and no error line, which the caller would

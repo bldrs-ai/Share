@@ -25,9 +25,10 @@
 // property fetch surfaces an error — a per-fetch failure, never wrong
 // bytes. Reloading re-parses and re-stages as usual.
 //
-// See design/new/lazy-properties-memory.md (step 3) and the conway
-// companion design/new/memory-residency.md.
-import {glbInfo} from '../utils/glbLog'
+// The page's engine spills through it (ConwayEngine#spill), as the windowed
+// open reads through it (ConwayEngine#open); a worker has its own stores
+// (engineSources.js). See design/new/lazy-properties-memory.md (step 3) and
+// the conway companion design/new/memory-residency.md.
 
 
 /**
@@ -53,61 +54,5 @@ export function makeBlobByteStore(blob) {
       const buf = await blob.slice(offset, offset + length).arrayBuffer()
       return new Uint8Array(buf)
     },
-  }
-}
-
-
-/**
- * Release Conway's resident source buffer for `modelID`, serving later
- * record reads through windows paged from `sourceBlob`.
- *
- * MUST only be called after every synchronous load-time sweep is done
- * (geometry extraction, 'names' spatial tree, GLB property capture) —
- * a sync record read of a non-resident range throws by design. The
- * Loader calls this from the GLB writer's `.finally`, which is the
- * single point where all of those have completed; cache-hit GLB loads
- * never schedule the writer and so never spill (they have no parsed
- * model to spill).
- *
- * Fail-soft: every guard falls through to "keep the resident buffer"
- * (the pre-spill status quo). Conway's own byteLength check throws
- * before mutating any state, so a failed spill never corrupts reads.
- *
- * @param {object|null|undefined} ifcAPI Conway shim IfcAPI (from
- *   `viewer.IFC.loader.ifcManager.ifcAPI`)
- * @param {number} modelID
- * @param {Blob|null|undefined} sourceBlob the OPFS-backed source File
- *   the model was parsed from
- * @return {boolean} true when the spill happened
- */
-export function spillModelSource(ifcAPI, modelID, sourceBlob) {
-  if (!sourceBlob || typeof sourceBlob.slice !== 'function') {
-    return false
-  }
-  // Conway extensions — optional-chain style guards so older conway
-  // versions (< 1.374) and non-Conway loaders are silent no-ops.
-  if (typeof ifcAPI?.SpillModelSource !== 'function' ||
-      typeof ifcAPI?.IsModelOpen !== 'function') {
-    return false
-  }
-  // eslint-disable-next-line new-cap
-  if (!ifcAPI.IsModelOpen(modelID)) {
-    return false
-  }
-  try {
-    // eslint-disable-next-line new-cap
-    const spilled = ifcAPI.SpillModelSource(modelID, makeBlobByteStore(sourceBlob))
-    if (spilled) {
-      glbInfo(
-        `source spill: released resident source buffer (${sourceBlob.size}B); ` +
-        'property reads now page 4MiB windows from OPFS on demand')
-    }
-    return spilled
-  } catch (e) {
-    // e.g. byteLength mismatch (store ≠ parsed source). Conway throws
-    // before swapping providers, so the model keeps its resident
-    // buffer and behaves exactly as before this feature.
-    glbInfo('source spill: skipped (model keeps resident source):', e.message ?? e)
-    return false
   }
 }

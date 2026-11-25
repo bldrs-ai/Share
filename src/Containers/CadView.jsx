@@ -668,8 +668,8 @@ export default function CadView({
     // open-205 #2029: bring the tree, properties and search up from the
     // model's index, while geometry still streams, instead of after the last
     // mesh. The loader calls onIndexed between the deferred open and the
-    // geometry pump and does NOT wait for it (conwayDirectIfcLoader.js
-    // #parseIfcWithConway says why): the tree walk runs beside the pump and
+    // geometry pump and does NOT wait for it (engine/engineModelLoad.js
+    // #parse says why): the tree walk runs beside the pump and
     // its tree installs whenever the walk finishes, which on a small or
     // resident model can be after the geometry. Only for Conway (IFC/STEP)
     // cache misses on the streaming path; every other load brings the tree up

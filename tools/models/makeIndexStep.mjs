@@ -71,7 +71,7 @@ const MM_PER_M = 1000
  * derives one coordination matrix from the first placement × that
  * geometry's first vertex and reuses it for the whole model
  * (`compat/web-ifc/coordination_f64.deriveCoordinationF64`, gated on
- * `COORDINATE_TO_ORIGIN`, which Share passes — `conwayDirectIfcLoader`).
+ * `COORDINATE_TO_ORIGIN`, which Share passes — engine/engineHandler.js#BASE_OPEN_SETTINGS).
  * So a model's world position depends on which element its file happens
  * to declare first, and two files of the same object only land on top of
  * each other when they agree on that. Listing the blocks in the IFC's

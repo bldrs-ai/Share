@@ -38,7 +38,7 @@ END-ISO-10303-21;
 function viewer() {
   return {
     IFC: {
-      loader: {ifcManager: {ifcAPI: {OpenModelStream: jest.fn()}}},
+      engine: {capabilities: {openStream: true}},
       context: {getScene: () => ({})},
     },
   }

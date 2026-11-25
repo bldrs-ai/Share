@@ -28,9 +28,6 @@
   "src/loader/uploadedFileName.js": [
     "src/connections/persistence.ts"
   ],
-  "src/model/buildBatchedConwayModel.js": [
-    "src/loader/conwayDirectIfcLoader.js"
-  ],
   "src/model/bvhBuild.js": [
     "src/loader/loadProgress.js"
   ],

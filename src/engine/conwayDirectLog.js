@@ -17,7 +17,7 @@
 // is the same pattern for the `[glb]` pipeline; both are built on
 // `createLogChannel`, which documents why the sink lives on `globalThis`.
 //
-// Sibling `[conwayDirect]` lines in `conwayDirectIfcLoader.js` (demand-pump
+// Sibling `[conwayDirect]` lines in `ConwayEngine.js` (demand-pump
 // summary, occurrence-path mismatch) still call the console directly; move
 // them here when a test needs to assert them.
 import {createLogChannel} from '../utils/logSink'

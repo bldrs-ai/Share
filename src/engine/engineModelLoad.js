@@ -1,50 +1,48 @@
-// A Conway model load whose engine runs in its own worker
-// (design/new/engine-worker.md §7 steps 3 and 6, `?feature=engineWorker`).
-// The page side of a streamed open: what `parseIfcWithConway` does for a
-// main-thread engine, re-expressed over an WorkerEngine so
-// `ShareIfcLoader#parse` keeps one assembly path.
+// One Conway model load over an `Engine` (Engine.js), whichever engine is
+// behind it: a `WorkerEngine` (engine-worker.md §7 steps 3 and 6, the default)
+// or the page's `ConwayEngine` (the kill switch, engineRoute.js; and a load
+// with no scene to stream into). `ShareIfcLoader#parse` runs it on one path
+// (design/tracks/open-t200/layering.md §7 "1a"): which engine it gets is the
+// route's decision, passed in as `spawn`, and nothing here asks what kind it
+// got. Where the engines differ in what they can do, a caller asks
+// `engine.capabilities` (`recapture` is the page engine's alone).
 //
 // ONE load for both Conway formats, IFC and STEP/AP214 (AGENTS.md "IFC and
 // STEP converge"; engine-worker.md §11 maps the two pipelines stage by
 // stage). Conway's web-ifc compat `IfcAPI` serves both (it routes AP214 to
-// its own proxy behind the same surface), so the worker, the protocol, the
-// session and this facade are format-neutral code. What differs between the
-// formats is data, and none of it needs a branch here:
+// its own proxy behind the same surface), so the engines, the protocol and
+// this load are format-neutral code. What differs between the formats is
+// data, and none of it needs a branch here:
 //   - the SOURCE kind is the same for both since conway#757: a part-21
 //     file staged in OPFS crosses as a File (`{file}`) and opens windowed.
 //     What differs is what the windowed open needs of its store — IFC any,
 //     STEP one that reads synchronously — and the worker's stores both do
 //     (engineSources.js). The Loader asks conway which (Loader.js
 //     #canOpenFromStore); only the main-thread engine still buffers a STEP;
-//   - the ID scheme: STEP placements carry an occurrence path, which rides
-//     the batch's path column (engineStream.js#makeBatchEncoder) and is
-//     decoded back onto each placement below;
-//   - the tree's `includeSolids`, which the caller already passes
-//     (conwayDirectIfcLoader.js#attachConwayDirectModelMethods) and the
-//     session forwards (WorkerEngine.js#makePropertiesApi).
+//   - the ID scheme: STEP placements carry an occurrence path, which every
+//     engine's `batch` carries on each placement (Engine.js#EngineEvent);
+//   - the tree's `includeSolids`, which the model's reads ask for
+//     (model/engineModelReads.js#attachEngineReads).
 // `format` itself only travels as a label (the `open` request, the `done`
 // packet, the pump line): what the file's suffix names
 // (engine/part21Formats.js), which is not evidence of the schema, so it
 // decides nothing.
 //
-// The seam is an IfcAPI-shaped facade (`makeEngineIfcApi`). Everything that
-// assembles and decorates the model — `IncrementalBatchedBuilder`,
-// `assembleBatchedModel`, `decorateConwayDirectIfcModel`,
-// `makeIndexedModelHandle`, `stampAppliedCoordination`, the load-stats block
-// — reads an `ifcAPI`, and is handed this instead:
-//   - the builder's four geometry calls are served from the geometry the
-//     worker copied out and transferred (`makeGeometryStore`, §2.4 G1);
-//   - `properties.*` are requests to the worker (WorkerEngine#propertiesApi);
+// The model keeps an IfcAPI-shaped alias of its engine (`makeEngineIfcApi`,
+// at `model.ifcManager.ifcAPI`) until slice N renames its readers onto
+// `model.engine`. Through it:
+//   - the builder's three geometry calls are the engine's `geometry`: the
+//     shapes a worker copied out and transferred (§2.4 G1), or the wasm heap;
+//   - `properties.*` are the engine's reads (Engine.js#makePropertiesApi);
 //   - the engine values read after the build (statistics, the coordination
-//     and applied matrices, the unit scale) come from the `done` packet.
-// There is no other engine on the page for this model, so no sync engine
-// method can be reached by accident: the facade has none to offer.
+//     and applied matrices, the unit scale) come from the `done` summary.
+// It offers no other engine method, so none can be reached synchronously
+// by accident.
 import {reportEngineLog, reportEngineVersion, reportSourceInfo} from '../loader/loadProgress'
 import {HEADER_SNIFF_BYTES, openModelFailure} from './unsupportedSchema'
 import {engineFormatOf} from './part21Formats'
-import {conwayDirectInfo, conwayDirectWarn} from './conwayDirectLog'
 import {testPumpBatchSize, testStepPreviewFinishParse} from './pumpTestSeams'
-import {Ev, Op} from './protocol'
+import {EngineEvent} from './Engine'
 import {POLICY_BUFFERED_REASONS, SourceModeReason} from './sourcePolicy'
 import {isOutOfMemoryError} from '../utils/oom'
 import {spawnWorkerEngine} from './spawnEngine'
@@ -54,117 +52,6 @@ import {LoadAbortedError} from '../utils/loadAbort'
 // Re-exported: callers that pick an engine load ask the same list the
 // Loader does (engine/part21Formats.js).
 export {engineFormatOf}
-
-
-/* Column-major mat4 elements per placement. */
-const MATRIX_ELEMENTS = 16
-/* RGBA per placement. */
-const COLOR_COMPONENTS = 4
-
-
-/**
- * The geometry the worker copied out, served through the slice of conway's
- * IfcAPI that `incrementalBatchedBuilder` uses. Adapted from #1756's
- * `workerGeometryApi.js` (the geometry worker pool, draft): adapting the
- * input rather than teaching the builder a second shape keeps its geometry
- * cache, coincidence dedup, capacity growth and bounds accounting on one
- * code path for both engines.
- *
- * Unlike #1756's, entries are DROPPED once their batch has been appended
- * (`drop`): the builder copies every payload at delivery (the Share#1640
- * invariant) and caches by geometry id, so keeping the worker's copy too
- * would hold each shape twice — 337 MB extra on PSB (§3).
- *
- * The "pointer" the builder round-trips (`GetVertexData()` →
- * `GetVertexArray(ptr, size)`) is the geometry's express ID here.
- *
- * @return {object} `{api, put, drop, size}`
- */
-export function makeGeometryStore() {
-  const geometries = new Map()
-  return {
-    /** @param {object} geometry `{id, vertices, indices}` */
-    put(geometry) {
-      if (geometry?.id !== undefined && !geometries.has(geometry.id)) {
-        geometries.set(geometry.id, geometry)
-      }
-    },
-    /** @param {Array<object>} list the batch's geometries, once appended */
-    drop(list) {
-      for (const geometry of list) {
-        geometries.delete(geometry.id)
-      }
-    },
-    get size() {
-      return geometries.size
-    },
-    api: {
-      GetGeometry(_modelID, geometryExpressID) {
-        const entry = geometries.get(geometryExpressID)
-        if (entry === undefined) {
-          // Never sent (the worker found it degenerate by the builder's own
-          // rules), or already appended and cached by the builder.
-          return null
-        }
-        return {
-          GetVertexDataSize: () => entry.vertices.length,
-          GetIndexDataSize: () => entry.indices.length,
-          GetVertexData: () => geometryExpressID,
-          GetIndexData: () => geometryExpressID,
-        }
-      },
-      GetVertexArray: (token) => geometries.get(token).vertices,
-      GetIndexArray: (token) => geometries.get(token).indices,
-    },
-  }
-}
-
-
-/**
- * Rebuild FlatMesh-shaped deltas from a batch's columns
- * (`engineStream.js#makeBatchEncoder`). Consecutive placements sharing a
- * parent are grouped into one entry, which changes nothing the builder
- * computes (it only sees `(parent, placement)` pairs). Adapted from #1756's
- * `decodePlacements`, plus the occurrence-path columns.
- *
- * @param {object} placements `{parents, geometryIds, transforms, colors,
- *   pathOffsets?, pathIds?, pathPresent?}`
- * @return {Array<object>}
- */
-export function decodePlacements(placements) {
-  const {parents, geometryIds, transforms, colors, pathOffsets, pathIds, pathPresent} = placements
-  const flatMeshes = []
-  let current = null
-  for (let i = 0; i < parents.length; i++) {
-    const parent = parents[i]
-    if (current === null || current.expressID !== parent) {
-      current = {expressID: parent, geometries: []}
-      flatMeshes.push(current)
-    }
-    const m = i * MATRIX_ELEMENTS
-    const c = i * COLOR_COMPONENTS
-    const placed = {
-      geometryExpressID: geometryIds[i],
-      // A plain Array, not a subarray: the builder reads it positionally
-      // (`Matrix4.fromArray`, its coincidence key), and a copy keeps the
-      // placement independent of the transferred buffer.
-      flatTransformation: Array.from(transforms.subarray(m, m + MATRIX_ELEMENTS)),
-    }
-    if (!Number.isNaN(colors[c])) {
-      // NaN is the encoder's "no colour" (engineStream.js); left unset, the
-      // builder applies its DEFAULT_COLOR.
-      placed.color = {x: colors[c], y: colors[c + 1], z: colors[c + 2], w: colors[c + 3]}
-    }
-    if (pathPresent && pathPresent[i] === 1) {
-      // Present, and possibly EMPTY: `[]` is a STEP root-level instance, not
-      // a missing path (engineStream.js#makeBatchEncoder says why it must
-      // survive). A plain Array, as the builder and its consumers expect.
-      placed.occurrencePath = Array.from(pathIds.subarray(pathOffsets[i], pathOffsets[i + 1]))
-    }
-    current.geometries.push(placed)
-  }
-  return flatMeshes
-}
 
 
 /**
@@ -193,76 +80,85 @@ export function statisticsView(snapshot) {
 
 
 /**
- * The IfcAPI-shaped facade a worker load assembles against (see the file
- * header). `summary` is filled by the `done` packet; nothing reads it
- * before then, because the reads it serves all come after the build.
+ * The IfcAPI-shaped alias of a load's engine (see the file header).
+ * `engine` is set when the load's engine is up (a windowed retry replaces
+ * it), and `summary` by the `done` packet; nothing reads either before then,
+ * because the reads they serve all come after the build.
  *
- * @param {object} store from {@link makeGeometryStore}
  * @return {object}
  */
-export function makeEngineIfcApi(store) {
+export function makeEngineIfcApi() {
   const facade = {
-    // The session this model's engine lives in. `Loader.js` and
-    // `ShareIfc#dispose` key off it (no GLB write in this step; close on
-    // teardown).
-    engineSession: null,
+    engine: null,
     summary: null,
     get properties() {
-      return facade.engineSession?.propertiesApi
+      return facade.engine?.propertiesApi
     },
-    ...store.api,
+    /* eslint-disable new-cap */
+    GetGeometry: (modelID, id) => facade.engine.geometry.GetGeometry(modelID, id),
+    GetVertexArray: (ptr, size) => facade.engine.geometry.GetVertexArray(ptr, size),
+    GetIndexArray: (ptr, size) => facade.engine.geometry.GetIndexArray(ptr, size),
+    /* eslint-enable new-cap */
     // Async on the engine, so callers already await it.
     GetCoordinationMatrix: () => Promise.resolve(facade.summary?.coordinationMatrix),
-    // The two load-end releases (§2.1 rows 30, 31), as fire-and-forget
-    // messages: CadView drops the entity cache after its load-time reads,
-    // and Loader.js the native geometry once the scene is built. Without
-    // them the worker kept both for the life of the session (review on
-    // #2058).
-    IsModelOpen: () => facade.engineSession !== null && !facade.engineSession.closed,
+    // The two load-end releases, as fire-and-forget calls: CadView drops the
+    // entity cache after its load-time reads, and Loader.js the native
+    // geometry once the scene is built (Engine.js `release`).
+    IsModelOpen: () => facade.engine !== null && !facade.engine.closed,
     ReleaseEntityCache: () => {
-      facade.engineSession?.request(Op.RELEASE, {entityCache: true}).catch(() => null)
+      facade.engine?.release({entityCache: true}).catch(() => null)
     },
     ReleaseModelGeometry: () => {
-      facade.engineSession?.request(Op.RELEASE, {geometry: true}).catch(() => null)
+      facade.engine?.release({geometry: true}).catch(() => null)
       return true
     },
-    GetAppliedCoordinationMatrix: () => facade.summary?.appliedCoordination,
     getStatistics: () => statisticsView(facade.summary?.statistics),
-    getConwayVersion: () => facade.engineSession?.info?.conwayVersion,
+    getConwayVersion: () => facade.engine?.info?.conwayVersion,
   }
-  // Present only when the engine reported one, as the method is on an
-  // engine that has it: `ShareIfcLoader#parse` feature-detects it with
-  // `typeof`, and an always-present one would print `units=undefined m`.
+  // These two are present only when the engine reported a value, as the
+  // method is on an engine that has it: `ShareIfcLoader#parse` feature-detects
+  // both with `typeof`, and an always-present one would print
+  // `units=undefined m`, or warn of a non-frame where the engine had none to
+  // give (stampAppliedCoordination).
   Object.defineProperty(facade, 'GetLinearScalingFactor', {
     get: () => (typeof facade.summary?.linearScalingFactor === 'number' ?
       () => facade.summary.linearScalingFactor : undefined),
+  })
+  Object.defineProperty(facade, 'GetAppliedCoordinationMatrix', {
+    get: () => (facade.summary?.appliedCoordination !== undefined ?
+      () => facade.summary.appliedCoordination : undefined),
   })
   return facade
 }
 
 
 /**
- * Prepare a worker-engine load. Returns the facade at once, so the caller
- * can close its builder callbacks over it before the parse starts, the way
- * `ShareIfcLoader#parse` closes over `this.ifcManager.ifcAPI` today.
+ * Prepare a model load. Returns the alias at once, so the caller can close
+ * its builder callbacks over it before the parse starts.
  *
  * @param {object} [options]
  * @param {'ifc'|'step'|null} [options.format] from {@link engineFormatOf}:
  *   what the file's SUFFIX names, so a label only (see the file header);
  *   null when the caller did not say
- * @param {function(): Promise<object>} [options.spawn] for tests
- * @return {{ifcAPI: object, parse: Function, abort: Function, aborted: boolean}}
+ * @param {function(): Promise<object>} [options.spawn] resolves to an
+ *   initialised Engine: `spawnWorkerEngine` by default, or the route's
+ *   ConwayEngine (ShareIfcLoader#parse). Called again only for the windowed
+ *   retry after a buffered open ran out of memory, which only an engine that
+ *   reports a source mode can ask for (retryableBufferedFailure)
+ * @return {{ifcAPI: object, parse: Function, abort: Function, aborted: boolean, engine: (object|null)}}
  */
 export function createEngineModelLoad({format = null, spawn = spawnWorkerEngine} = {}) {
-  const store = makeGeometryStore()
-  const ifcAPI = makeEngineIfcApi(store)
+  const ifcAPI = makeEngineIfcApi()
   // open-205 #2011 step A: the load can be given up before its parse ends —
   // the user switched to another model in-app (CadView's load signal, through
   // ShareIfcLoader#parse), or the viewer it streams into was disposed
-  // (ShareIfc#dispose). `abort()` terminates the worker at once: the open,
-  // the pump and every request still pending reject (WorkerEngine#fail), so
-  // the parse below unwinds at its next await. `aborted` rejects too, for the
-  // awaits that are not on the session (a spawn still starting, the test
+  // (ShareIfc#dispose). `abort()` closes the engine at once: a worker is
+  // terminated, and the open, the pump and every request still pending
+  // reject (WorkerEngine#fail); the page's engine stops its pump at the next
+  // batch, its open runs to its end (one call into the wasm on this thread).
+  // Either way the stream ends `failed {kind: 'closed'}` and the parse below
+  // unwinds at its next await. `aborted` rejects too, for the
+  // awaits that are not on the engine (a spawn still starting, the test
   // holds), so none of them can keep a given-up load suspended.
   let isAbortedLoad = false
   let rejectAborted
@@ -278,12 +174,12 @@ export function createEngineModelLoad({format = null, spawn = spawnWorkerEngine}
     }
     isAbortedLoad = true
     rejectAborted(new LoadAbortedError())
-    ifcAPI.engineSession?.close()
+    ifcAPI.engine?.close()
   }
 
   /**
-   * The worker-engine twin of `parseIfcWithConway`, with the same callback
-   * shapes.
+   * Open and stream the model, delivering what the engine sends to the
+   * callbacks.
    *
    * @param {Blob|ArrayBuffer|Uint8Array} buffer the source
    * @param {object} callbacks
@@ -296,24 +192,28 @@ export function createEngineModelLoad({format = null, spawn = spawnWorkerEngine}
    * @return {Promise<{modelID: number, recapture: function(): Promise<Array>, summary: object}>}
    */
   async function parse(buffer, {onProgress, onMeshBatch, onPreviewMesh, onIndexed} = {}) {
+    // Shapes delivered so far: what a `recapture` with nothing to re-extract
+    // from decides by (below). A worker sends each shape once and never a
+    // degenerate one, so this counts drawable shapes, not placements.
     let deliveredGeometries = 0
-    // `window.__bldrsTestHoldMidPump` (conwayDirectIfcLoader.js
-    // #holdMidPumpForTest): awaited after every batch, with durable geometry
-    // on screen and the load not finished (streamingBatchPick.spec.ts). The
-    // engine is stepped one batch at a time while the hook is installed.
+    // `window.__bldrsTestHoldMidPump`: awaited after every batch, with durable
+    // geometry on screen and the load not finished (streamingBatchPick.spec.ts).
+    // The engine is stepped one batch at a time while the hook is installed.
     const holdMidPump = typeof globalThis.__bldrsTestHoldMidPump === 'function' ?
       globalThis.__bldrsTestHoldMidPump : null
-    // The same two test seams as conwayDirectIfcLoader.js, absent in
-    // production (property reads):
-    //   - `window.__bldrsTestHoldIndex` (#holdIndexForTest): hold between the
-    //     parse and the index being published, with only previews on screen
+    // The other two test seams, absent in production (property reads); each
+    // installed by a spec with `addInitScript`, and a function returning a
+    // Promise the spec resolves to let the load go on. Every one of them
+    // holds a state a large model's load is in for seconds, which on a
+    // fixture small enough to ship lasts well under a second:
+    //   - `window.__bldrsTestHoldIndex`: hold between the parse and the index
+    //     being published, with only previews on screen
     //     (previewInteraction.spec.ts);
-    //   - `window.__bldrsTestHoldGeometryPump` (#holdGeometryPumpForTest):
-    //     hold between the index and the first batch (navTreeAtIndex.spec.ts);
+    //   - `window.__bldrsTestHoldGeometryPump`: hold between the index and the
+    //     first batch (navTreeAtIndex.spec.ts);
     //   - `window.__bldrsTestHoldMidPump` (above): hold after each batch.
-    // Here the engine starts PAUSED when any is set, and is let go once
-    // both have resolved: pausing after the index would race the worker's
-    // first batch.
+    // The engine starts PAUSED when any is set, and is let go once both have
+    // resolved: pausing after the index would race a worker's first batch.
     const holdIndex = typeof globalThis.__bldrsTestHoldIndex === 'function' ?
       globalThis.__bldrsTestHoldIndex : null
     const holdPump = typeof globalThis.__bldrsTestHoldGeometryPump === 'function' ?
@@ -328,46 +228,51 @@ export function createEngineModelLoad({format = null, spawn = spawnWorkerEngine}
       // The worker's conway is its own; the page's seam reaches it here
       // (pumpTestSeams.js#testStepPreviewFinishParse).
       previewFinishParse: testStepPreviewFinishParse(),
+      // A load with no builder: the stream itself is the delivery, which only
+      // an engine that can keep it can serve (ConwayEngine; ShareIfcLoader
+      // builds from `recapture` then). Said only when true, so a worker's
+      // `open` request is the one it always was.
+      ...(onMeshBatch ? {} : {retain: true}),
     }
 
     /**
-     * Subscribe the load's callbacks to one session. Once per session: a
-     * windowed retry (below) wires its fresh session the same way.
+     * Subscribe the load's callbacks to one engine. Once per engine: a
+     * windowed retry (below) wires its fresh engine the same way.
      *
-     * @param {object} session
+     * @param {object} engine
      * @return {Promise<object>} the `done` summary, or the stream's failure
      */
-    const wire = (session) => {
-      ifcAPI.engineSession = session
-      session.on(Ev.PROGRESS, (msg) => onProgress?.(msg.event))
-      session.on(Ev.MODEL_INFO, (msg) => onProgress?.({modelInfo: msg.info}))
-      session.on(Ev.LOG, (msg) => reportEngineLog(msg))
-      session.on(Ev.PREVIEW, (msg) => onPreviewMesh?.(msg.payload))
-      session.on(Ev.BATCH, (msg) => {
-        for (const geometry of msg.geometries) {
-          store.put(geometry)
-        }
-        deliveredGeometries += msg.geometries.length
-        try {
-          // `session.modelID`, set by the `indexed` event, which the engine
-          // posts before its first batch; the `open` reply can arrive after the
-          // first batches (the pump starts before the reply is sent).
-          onMeshBatch?.(decodePlacements(msg.placements), session.modelID, msg.progress ?? {})
-        } finally {
-          store.drop(msg.geometries)
-        }
-        // The mid-pump test hold: the engine was stepped to this one batch and
-        // has paused itself; it steps on to the next when the test lets it.
-        if (holdMidPump !== null) {
-          Promise.resolve(holdMidPump()).then(() => session.pump('step')).catch(() => null)
-        }
-      })
+    const wire = (engine) => {
+      ifcAPI.engine = engine
+      engine.on(EngineEvent.PROGRESS, (msg) => onProgress?.(msg.event))
+      engine.on(EngineEvent.MODEL_INFO, (msg) => onProgress?.({modelInfo: msg.info}))
+      engine.on(EngineEvent.LOG, (msg) => reportEngineLog(msg))
+      if (onPreviewMesh) {
+        engine.on(EngineEvent.PREVIEW, (msg) => onPreviewMesh(msg.payload))
+      }
+      if (onMeshBatch || holdMidPump !== null) {
+        engine.on(EngineEvent.BATCH, (msg) => {
+          // A worker's batch says which shapes crossed with it; a page engine's
+          // shapes never cross, and it can recapture, so its count is moot.
+          deliveredGeometries += msg.geometries?.length ?? 0
+          // `engine.modelID`, set at the index, which every engine reaches
+          // before its first batch; a worker's `open` reply can arrive after
+          // its first batches (the pump starts before the reply is sent).
+          onMeshBatch?.(msg.flatMeshes, engine.modelID, msg.progress ?? {})
+          // The mid-pump test hold: the engine was stepped to this one batch
+          // and has paused itself; it steps on to the next when the test lets
+          // it.
+          if (holdMidPump !== null) {
+            Promise.resolve(holdMidPump()).then(() => engine.pump('step')).catch(() => null)
+          }
+        })
+      }
       // `done` or `failed`, whichever ends the stream. Open failures are
       // answered by `open` itself (below), so only what comes after the index
       // ends up here.
       const finishedLoad = new Promise((resolve, reject) => {
-        session.on(Ev.DONE, (msg) => resolve(msg.summary))
-        session.on(Ev.FAILED, (msg) => {
+        engine.on(EngineEvent.DONE, (msg) => resolve(msg.summary))
+        engine.on(EngineEvent.FAILED, (msg) => {
           if (msg.kind !== 'openFailure' && msg.kind !== 'refusedSchema') {
             reject(engineLoadError(msg))
           }
@@ -379,7 +284,7 @@ export function createEngineModelLoad({format = null, spawn = spawnWorkerEngine}
       return finishedLoad
     }
 
-    // A spawn is not cancellable: a session that comes up after the abort is
+    // A spawn is not cancellable: an engine that comes up after the abort is
     // closed here, before it is wired or opened.
     const spawnLive = async () => {
       const spawning = spawn()
@@ -392,19 +297,19 @@ export function createEngineModelLoad({format = null, spawn = spawnWorkerEngine}
         throw e
       }
     }
-    let session = await spawnLive()
-    reportEngineVersion(session.info?.conwayVersion)
-    let finished = wire(session)
+    let engine = await spawnLive()
+    reportEngineVersion(engine.info?.conwayVersion)
+    let finished = wire(engine)
     let opened
     let sourceOverride = null
     for (;;) {
       try {
-        opened = await session.open(source, {format, stream, sourceOverride})
+        opened = await engine.open(source, {format, stream, sourceOverride})
         break
       } catch (e) {
-        session.close()
+        engine.close()
         if (isAbortedLoad) {
-          // The open failed because the session was closed under it.
+          // The open failed because the engine was closed under it.
           throw new LoadAbortedError()
         }
         const failure = e.engineFailure
@@ -417,7 +322,8 @@ export function createEngineModelLoad({format = null, spawn = spawnWorkerEngine}
           // retry is windowed on a NEW engine, once (`sourceOverride` is set
           // from here on, so the retry's own failure is final). The failed
           // worker is terminated above, BEFORE the respawn, so the two heaps
-          // never coexist. If this open fails too, its failure is the load's,
+          // never coexist. Only an engine that runs the source policy reports
+          // the source mode this needs, so the page's engine never retries. If this open fails too, its failure is the load's,
           // reported once like any other.
           sourceOverride = {windowed: true, failure: retryFailure}
           // Said in the report before the retry's lines, so the failed
@@ -425,8 +331,8 @@ export function createEngineModelLoad({format = null, spawn = spawnWorkerEngine}
           // that attempt's (loadProgress.js#reportEngineLog counts both).
           reportSourceInfo(`Engine retry: buffered open failed (${FAILURE_TEXT[retryFailure]}); ` +
             'retrying windowed on a fresh engine')
-          session = await spawnLive()
-          finished = wire(session)
+          engine = await spawnLive()
+          finished = wire(engine)
           continue
         }
         if (failure) {
@@ -444,8 +350,14 @@ export function createEngineModelLoad({format = null, spawn = spawnWorkerEngine}
     if (holdIndex !== null) {
       await untilAborted(holdIndex())
     }
-    if (onIndexed) {
-      // Started, not awaited, as in parseIfcWithConway (#2037).
+    // Not after a classic open (`deferred: false`, ConwayEngine#open), which
+    // parsed the whole model and streams it at once: there is no window
+    // between the index and the geometry for an early tree to fill.
+    if (onIndexed && opened.deferred !== false) {
+      // Started, not awaited (codex/PSB review on #2037): the caller's tree
+      // walk pages the same source window the pump does, and awaited here it
+      // held the whole pump back for its length (~86 s on PSB before
+      // conway#753). The finished model re-reads the tree when this fails.
       try {
         Promise.resolve(onIndexed(modelID)).catch(warnIndexFailure)
       } catch (e) {
@@ -458,44 +370,35 @@ export function createEngineModelLoad({format = null, spawn = spawnWorkerEngine}
     if (startPaused) {
       // Held mid-pump: one batch, then the engine pauses itself and the
       // BATCH handler above waits on the hold.
-      await session.pump(holdMidPump !== null ? 'step' : 'run')
+      await engine.pump(holdMidPump !== null ? 'step' : 'run')
     }
     try {
       ifcAPI.summary = await finished
     } catch (e) {
-      session.close()
-      // A closed session ends the stream with `failed {kind: 'closed'}`,
+      engine.close()
+      // A closed engine ends the stream with `failed {kind: 'closed'}`,
       // which says nothing of why: say it was given up.
       throw isAbortedLoad ? new LoadAbortedError() : e
     }
     reportSourceInfo(sourceModeLine(ifcAPI.summary.sourceMode))
     reportSourceInfo(sourceIoLine(ifcAPI.summary.source))
     reportSourceInfo(indexLine(ifcAPI.summary.index))
-    // The integration-boundary line conwayDirectIfcLoader prints for the
-    // main-thread pump (Share#1744), for a worker load. Named differently on
-    // purpose: E2E specs tell the two engines apart by which line appears.
-    const done = ifcAPI.summary
-    // `format` is what the suffix named (part21Formats.js), said as such: the
-    // bytes may be the other schema, and conway opened whatever they are.
-    conwayDirectInfo(`engine worker pump: format=${done.format ?? format ?? 'unknown'} (by suffix) ` +
-      `batches=${done.batches} meshes=${done.meshes} ` +
-      `geometries=${done.geometries} windowed=${done.windowed ? 'yes' : 'no'}`)
-    if (done.meshes === 0) {
-      conwayDirectWarn('engine worker pump produced no meshes; the model has nothing to draw')
-    }
     // The degraded end-of-load builds in ShareIfcLoader#parse read the whole
-    // stream back through `recapture`. Here the engine re-emits a one-shot
+    // stream back through `recapture`. The page's engine can re-extract it
+    // (`capabilities.recapture`). A worker cannot, and re-emits a one-shot
     // stream as batches itself (engineHandler.js#oneShotFallback), so every
     // mesh it had has already gone to `onMeshBatch`. When no drawable shape
     // was delivered (no products, or every one degenerate) empty IS the
     // stream, and the model opens empty with the "nothing to draw" verdict,
-    // as it does on the main thread. When shapes were delivered and a
+    // as it does on the page's engine. When shapes were delivered and a
     // fallback still asks, building from nothing would hide the failure, so
     // it refuses (ShareIfcLoader#parse throws the builder's own error first).
-    const recapture = () => (deliveredGeometries > 0 ?
-      Promise.reject(new Error('engine worker load: the stream is not retained; ' +
-        'the incremental build is the only build')) :
-      Promise.resolve([]))
+    const recapture = engine.capabilities?.recapture === true ?
+      () => engine.recapture() :
+      () => (deliveredGeometries > 0 ?
+        Promise.reject(new Error('engine worker load: the stream is not retained; ' +
+          'the incremental build is the only build')) :
+        Promise.resolve([]))
     return {modelID, recapture, summary: ifcAPI.summary}
   }
 
@@ -506,6 +409,10 @@ export function createEngineModelLoad({format = null, spawn = spawnWorkerEngine}
     /** @return {boolean} whether {@link abort} has run */
     get aborted() {
       return isAbortedLoad
+    },
+    /** @return {object|null} the load's engine, once spawned */
+    get engine() {
+      return ifcAPI.engine
     },
   }
 }

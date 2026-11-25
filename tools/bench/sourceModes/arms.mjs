@@ -48,6 +48,14 @@ export const ARMS = {
     features: ['disableEngineSyncHandle'],
     expect: {open: 'buffered', store: null, sidecar: true, sourceMode: 'buffered'},
   },
+  // The kill-switch path (open-t200 slice 1a measures it before and after
+  // ConwayEngine): the main-thread engine, which the source policy does not
+  // govern, so the arm check asks only that the load said it ran there.
+  mainThread: {
+    label: 'main-thread engine (disableEngineWorker)',
+    features: ['disableEngineWorker'],
+    expect: {mainThread: true},
+  },
   noSidecar: {
     label: 'windowed, sync handle, no source hash (disableEngineSidecar, disableBufferedSource)',
     features: ['disableEngineSidecar', 'disableBufferedSource'],

@@ -1,24 +1,28 @@
 /* eslint-disable require-await */
 // ShareIfcLoader#parse given up by its owner (open-205 #2011 step A): an
-// in-app switch (`spaModelNav`, on by default) aborts the load's signal. A
-// worker load's engine is terminated, a main-thread one is handed the signal
-// for its pump, and either way the parse rejects as aborted with nothing
-// registered and no failure recorded. IFC and STEP take the same parse; the
-// engine load and the main-thread parse are mocked (their own abort is
-// engine/engineModelLoad.abort.test.js's and the pump's).
+// in-app switch (`spaModelNav`, on by default) aborts the load's signal. The
+// load's engine is closed (a worker terminated; the page's engine stops its
+// pump at the next batch), and either way the parse rejects as aborted with
+// nothing registered and no failure recorded. IFC and STEP, and both
+// engines, take the same parse; the engine load is mocked (its own abort is
+// engine/engineModelLoad.abort.test.js's, and each engine's the contract
+// test's and ConwayEngine.test.js's).
 import ShareIfcLoader from './ShareIfcLoader'
 import {assembleBatchedModel} from '../model/buildBatchedConwayModel'
 import {IncrementalBatchedBuilder} from '../model/incrementalBatchedBuilder'
-import {parseIfcWithConway} from './conwayDirectIfcLoader'
-import {isFeatureEnabled} from '../FeatureFlags'
 import {createEngineModelLoad} from '../engine/engineModelLoad'
+import {makeFakeEngine, makeFakeEngineLoad} from './engineLoad.fixture'
+import {isFeatureEnabled} from '../FeatureFlags'
 import {LoadAbortedError} from '../utils/loadAbort'
 
 
-jest.mock('./conwayDirectIfcLoader', () => ({
-  parseIfcWithConway: jest.fn(),
+jest.mock('../engine/engineModelLoad', () => ({
+  createEngineModelLoad: jest.fn(),
+  engineFormatOf: jest.requireActual('../engine/engineModelLoad').engineFormatOf,
+}))
+jest.mock('../model/engineModelReads', () => ({
   decorateConwayDirectIfcModel: jest.fn(),
-  makeIndexedModelHandle: jest.fn(),
+  makeIndexedModelHandle: jest.requireActual('../model/engineModelReads').makeIndexedModelHandle,
 }))
 jest.mock('../model/buildBatchedConwayModel', () => ({
   buildBatchedConwayModel: jest.fn(),
@@ -33,10 +37,6 @@ jest.mock('../model/ifcItemsMapParity', () => ({runIfcItemsMapParityCheck: jest.
 jest.mock('../FeatureFlags', () => ({
   isFeatureEnabled: jest.fn(),
   flags: [{name: 'disableEngineWorker', isActive: false}],
-}))
-jest.mock('../engine/engineModelLoad', () => ({
-  createEngineModelLoad: jest.fn(),
-  engineFormatOf: jest.requireActual('../engine/engineModelLoad').engineFormatOf,
 }))
 jest.mock('../utils/location', () => ({hasParams: jest.fn(() => false)}))
 jest.mock('./ProgressiveLoadSession', () => jest.fn().mockImplementation(() => ({
@@ -79,9 +79,9 @@ function makeIfcNamespace() {
 }
 
 
-/** @return {object} a main-thread IfcAPI stub */
+/** @return {object} the load's alias stub, for the tail of `parse` */
 function makeIfcAPI() {
-  return {GetCoordinationMatrix: jest.fn().mockResolvedValue(IDENTITY), OpenModel: jest.fn(), StreamAllMeshes: jest.fn()}
+  return {GetCoordinationMatrix: jest.fn().mockResolvedValue(IDENTITY)}
 }
 
 
@@ -115,7 +115,8 @@ describe.each(['ifc', 'step'])('loader/ShareIfcLoader abort, %s', (type) => {
     beforeEach(() => {
       isFeatureEnabled.mockImplementation((name) => name === 'demandGeometry' || name === 'engineWorker')
       engineLoad = {
-        ifcAPI: {engineSession: {close: jest.fn()}, GetCoordinationMatrix: jest.fn().mockResolvedValue(IDENTITY)},
+        ifcAPI: makeIfcAPI(),
+        engine: makeFakeEngine({kind: 'worker'}),
         parse: jest.fn(() => new Promise((resolve, reject) => {
           rejectParse = reject
         })),
@@ -130,7 +131,7 @@ describe.each(['ifc', 'step'])('loader/ShareIfcLoader abort, %s', (type) => {
 
     it('terminates the engine and rejects as aborted, registering nothing', async () => {
       const ifc = makeIfcNamespace()
-      const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc})
+      const loader = new ShareIfcLoader({engine: makeFakeEngine(), ifc})
       loader.type = type
       const onError = jest.fn()
       const controller = new AbortController()
@@ -153,7 +154,7 @@ describe.each(['ifc', 'step'])('loader/ShareIfcLoader abort, %s', (type) => {
 
     it('rejects as aborted when the viewer\'s dispose gave the engine up, with no signal', async () => {
       const ifc = makeIfcNamespace()
-      const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc})
+      const loader = new ShareIfcLoader({engine: makeFakeEngine(), ifc})
       loader.type = type
       const parsing = loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
       await Promise.resolve()
@@ -174,7 +175,7 @@ describe.each(['ifc', 'step'])('loader/ShareIfcLoader abort, %s', (type) => {
         return {modelID: 0, recapture: async () => [], summary: {}}
       })
       const ifc = makeIfcNamespace()
-      const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc})
+      const loader = new ShareIfcLoader({engine: makeFakeEngine(), ifc})
       loader.type = type
       const controller = new AbortController()
       const model = await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn(), {signal: controller.signal})
@@ -187,7 +188,7 @@ describe.each(['ifc', 'step'])('loader/ShareIfcLoader abort, %s', (type) => {
 
     it('never starts for a signal aborted before the parse', async () => {
       const ifc = makeIfcNamespace()
-      const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc})
+      const loader = new ShareIfcLoader({engine: makeFakeEngine(), ifc})
       loader.type = type
       const controller = new AbortController()
       controller.abort()
@@ -202,7 +203,7 @@ describe.each(['ifc', 'step'])('loader/ShareIfcLoader abort, %s', (type) => {
       isFeatureEnabled.mockImplementation((name) => name === 'demandGeometry' || name === 'disableEngineWorker')
     })
 
-    it('hands the pump the signal, and drops a parse that returns after the abort', async () => {
+    it('runs on the viewer\'s engine, closes it on the abort, and drops a parse that returns after it', async () => {
       const controller = new AbortController()
       const finalize = jest.fn(() => ({batches: [], stats: {vertexCount: 3, triangleCount: 1}}))
       IncrementalBatchedBuilder.mockImplementation(() => ({
@@ -212,21 +213,32 @@ describe.each(['ifc', 'step'])('loader/ShareIfcLoader abort, %s', (type) => {
         hasContent: () => true,
         finalize,
       }))
-      parseIfcWithConway.mockImplementation(async (buffer, ifcAPI, settings, onProgress, onMeshBatch) => {
-        onMeshBatch([{expressID: 101, geometries: {size: () => 1}}], 0, {done: 1, total: 1})
-        // The open cannot be interrupted; it returns after the user left.
-        controller.abort()
-        return {modelID: 0, recapture: async () => []}
+      const viewerEngine = makeFakeEngine()
+      let load
+      createEngineModelLoad.mockImplementation(() => {
+        load = makeFakeEngineLoad({
+          ifcAPI: makeIfcAPI(),
+          engine: viewerEngine,
+          play: ({onMeshBatch}) => {
+            onMeshBatch([{expressID: 101, geometries: {size: () => 1}}], 0, {done: 1, total: 1})
+            // The open cannot be interrupted; it returns after the user left.
+            controller.abort()
+            return {modelID: 0}
+          },
+        })
+        return load
       })
       const ifc = makeIfcNamespace()
-      const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc})
+      const loader = new ShareIfcLoader({engine: viewerEngine, ifc})
       loader.type = type
 
       await expect(loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn(), {signal: controller.signal}))
         .rejects.toBeInstanceOf(LoadAbortedError)
 
-      expect(createEngineModelLoad).not.toHaveBeenCalled()
-      expect(parseIfcWithConway.mock.calls[0][7]).toEqual({signal: controller.signal})
+      // The route gave the load the viewer's engine, not a worker of its own.
+      await expect(createEngineModelLoad.mock.calls[0][0].spawn()).resolves.toBe(viewerEngine)
+      expect(load.abort).toHaveBeenCalledTimes(1)
+      expect(viewerEngine.close).toHaveBeenCalled()
       // Dropped straight after the parse, before the streamed batches are
       // even assembled into a model.
       expect(finalize).not.toHaveBeenCalled()

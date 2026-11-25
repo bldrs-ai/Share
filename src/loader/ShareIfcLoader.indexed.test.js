@@ -4,23 +4,28 @@
 // pinned here is ShareIfcLoader's part: that `onIndexed` reaches the engine
 // parse as its index callback, and that what the caller then receives is the
 // handle for the model the engine opened. The engine-side ordering (index
-// before the first batch, awaited, best-effort) is conwayDirectIfcLoader's and
-// is tested there; CadView's use of the handle is tested in CadView.test.jsx.
+// before the first batch, best-effort) is engine/engineModelLoad.js's and the
+// engines', tested there and in engine/engineContract.test.js; CadView's use
+// of the handle is tested in CadView.test.jsx.
 //
-// Over a mocked IfcAPI, as the sibling ShareIfcLoader tests are: no jest test
-// here instantiates the conway wasm engine.
+// Over a fake engine load (engineLoad.fixture.js), as the sibling
+// ShareIfcLoader tests are.
 
 import ShareIfcLoader from './ShareIfcLoader'
 import {assembleBatchedModel} from '../model/buildBatchedConwayModel'
 import {IncrementalBatchedBuilder} from '../model/incrementalBatchedBuilder'
-import {parseIfcWithConway} from './conwayDirectIfcLoader'
+import {createEngineModelLoad} from '../engine/engineModelLoad'
+import {makeFakeEngine, makeFakeEngineLoad} from './engineLoad.fixture'
 import {isFeatureEnabled} from '../FeatureFlags'
 
 
-jest.mock('./conwayDirectIfcLoader', () => ({
-  parseIfcWithConway: jest.fn(),
+jest.mock('../engine/engineModelLoad', () => ({
+  createEngineModelLoad: jest.fn(),
+  engineFormatOf: jest.requireActual('../engine/engineModelLoad').engineFormatOf,
+}))
+jest.mock('../model/engineModelReads', () => ({
   decorateConwayDirectIfcModel: jest.fn(),
-  makeIndexedModelHandle: jest.requireActual('./conwayDirectIfcLoader').makeIndexedModelHandle,
+  makeIndexedModelHandle: jest.requireActual('../model/engineModelReads').makeIndexedModelHandle,
 }))
 jest.mock('../model/buildBatchedConwayModel', () => ({
   buildBatchedConwayModel: jest.fn(),
@@ -83,20 +88,28 @@ function makeIfcNamespace() {
 
 describe('loader/ShareIfcLoader at the model\'s index (open-205 #2029)', () => {
   let infoSpy
+  let engine
+  let load
 
   beforeEach(() => {
     jest.clearAllMocks()
     infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {})
     isFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
-    // The engine parse, reduced to its contract: report the index with the
+    // The engine's part, reduced to its contract: report the index with the
     // opened model's handle, then stream one batch.
-    parseIfcWithConway.mockImplementation(
-      async (buffer, api, settings, onProgress, onMeshBatch, onPreviewMesh, onIndexed) => {
-        await onIndexed?.(OPENED_MODEL_ID)
-        onMeshBatch?.([{expressID: 101, geometries: {size: () => 1}}], OPENED_MODEL_ID, {done: 1, total: 1})
-        // eslint-disable-next-line require-await
-        return {modelID: OPENED_MODEL_ID, captured: [], recapture: async () => []}
+    engine = makeFakeEngine({modelID: OPENED_MODEL_ID})
+    createEngineModelLoad.mockImplementation(() => {
+      load = makeFakeEngineLoad({
+        ifcAPI: makeIfcAPI(),
+        engine,
+        play: async ({onMeshBatch, onIndexed}) => {
+          await onIndexed?.(OPENED_MODEL_ID)
+          onMeshBatch?.([{expressID: 101, geometries: {size: () => 1}}], OPENED_MODEL_ID, {done: 1, total: 1})
+          return {modelID: OPENED_MODEL_ID}
+        },
       })
+      return load
+    })
     IncrementalBatchedBuilder.mockImplementation(() => ({
       root: {parent: null},
       appendBatch: jest.fn(),
@@ -110,8 +123,7 @@ describe('loader/ShareIfcLoader at the model\'s index (open-205 #2029)', () => {
   afterEach(() => infoSpy.mockRestore())
 
   it('hands onIndexed the opened model before its geometry streams', async () => {
-    const ifcAPI = makeIfcAPI()
-    const loader = new ShareIfcLoader({ifcAPI, ifc: makeIfcNamespace()})
+    const loader = new ShareIfcLoader({engine: makeFakeEngine(), ifc: makeIfcNamespace()})
     const order = []
     IncrementalBatchedBuilder.mockImplementation(() => ({
       root: {parent: null},
@@ -130,14 +142,17 @@ describe('loader/ShareIfcLoader at the model\'s index (open-205 #2029)', () => {
     expect(order).toEqual(['indexed', 'batch'])
     expect(handle.isIndexedModel).toBe(true)
     expect(handle.modelID).toBe(OPENED_MODEL_ID)
-    // Its reads go to the model the engine opened.
+    // Its reads go to the engine that opened the model, and its alias is the
+    // load's.
+    expect(handle.engine).toBe(engine)
+    expect(handle.ifcManager.ifcAPI).toBe(load.ifcAPI)
     await handle.getSpatialStructure(0, 'names')
-    expect(ifcAPI.properties.getSpatialStructure).toHaveBeenCalledWith(OPENED_MODEL_ID, 'names', {includeSolids: true})
+    expect(engine.tree).toHaveBeenCalledWith({mode: 'names', includeSolids: true})
   })
 
   it('asks the engine for no index callback when the caller passes none', async () => {
-    const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
+    const loader = new ShareIfcLoader({engine: makeFakeEngine(), ifc: makeIfcNamespace()})
     await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
-    expect(parseIfcWithConway.mock.calls[0][6]).toBeUndefined()
+    expect(load.parse.mock.calls[0][1].onIndexed).toBeUndefined()
   })
 })

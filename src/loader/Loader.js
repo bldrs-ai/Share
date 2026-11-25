@@ -71,7 +71,6 @@ import {
   validCoordinationOffset,
 } from '../model/appliedCoordination'
 import {hydrateBatchedModelFromInstancedGlb} from '../model/instancedGlbToBatchedModel'
-import {spillModelSource} from '../engine/opfsSourceByteStore'
 import {EvictedOpfsSourceError, isUnusableOpfsSource} from './opfsSourceHealth'
 import {PART21_LOADER_TYPES, engineFormatOf} from '../engine/part21Formats'
 import {reportEngineSourceBuffered, reportEngineSourceFallback, reportPreviewUnitsSkipped} from './reportLoadDiagnostics'
@@ -211,8 +210,10 @@ export async function canOpenFromStore(viewer, loaderType, file) {
   if (!PART21_LOADER_TYPES.has(loaderType) || isFeatureEnabled('disableStreamOpen')) {
     return false
   }
-  const ifcAPI = viewer?.IFC?.loader?.ifcManager?.ifcAPI
-  if (typeof ifcAPI?.OpenModelStream !== 'function') {
+  // The viewer's engine answers for the engine the load will get: the
+  // windowed store open is a Conway call both engines have or lack together,
+  // since a worker runs the page's own conway build.
+  if (viewer?.IFC?.engine?.capabilities?.openStream !== true) {
     return false
   }
   if (file === null || file === undefined || typeof file.slice !== 'function') {
@@ -286,9 +287,12 @@ function fallbackSourceKind(path, isInMemory, isLocallyHosted) {
  */
 function reportLoadDiagnostics(model, {format, kind, bufferedReason, sourceBytes}) {
   reportPreviewUnitsSkipped({format, kind, skipped: model?.previewUnitsSkipped})
-  const ifcAPI = model?.ifcManager?.ifcAPI
-  if (ifcAPI?.engineSession && ifcAPI.summary) {
-    const {source, sourceMode} = ifcAPI.summary
+  // Only for an engine that runs the source policy (engine/sourcePolicy.js):
+  // the page's engine has none, so it has nothing to report a fallback from,
+  // and its loads report as they always did (nothing).
+  const summary = model?.ifcManager?.ifcAPI?.summary
+  if (model?.engine?.capabilities?.sourcePolicy === true && summary) {
+    const {source, sourceMode} = summary
     if (sourceMode?.reason === SourceModeReason.BUFFERED_FAILED) {
       reportEngineSourceFallback({
         format: sourceMode.format, storeKind: sourceMode.storeKind, failure: sourceMode.failure,
@@ -1029,7 +1033,7 @@ export async function load(
   // The engine of a model parsed after the load was given up; nothing else
   // would close it if the viewer outlived the abort.
   const closeEngineOf = (parsed) => {
-    parsed?.ifcManager?.ifcAPI?.engineSession?.close?.()
+    parsed?.engine?.close?.()
   }
   try {
     // Before the parse: the stretch since the last raced await (hashing, the
@@ -1082,20 +1086,18 @@ export async function load(
     bufferedReason,
     sourceBytes,
   })
-  // The session of the worker engine that parsed this model
-  // (`?feature=engineWorker`), or null for a main-thread parse. No engine on
-  // the page holds a worker load's model, so the GLB writer below reaches the
-  // worker instead of `viewer.IFC.loader.ifcManager`: its engine captures run
-  // there as one `capture` job, and its source spill as a `spill` request
-  // (engine-worker.md §7 step 5).
-  const engineSession = model?.ifcManager?.ifcAPI?.engineSession ?? null
-  if (engineSession) {
-    // Free the worker's native geometry now, once the scene is built: the
+  // The engine that parsed this model (engine/Engine.js: a worker's, or the
+  // page's on the kill-switch route), or null for a mesh format or a GLB
+  // cache hit. The GLB writer below reaches the model's engine through it,
+  // whichever it is: its engine captures run there as one `capture` job, and
+  // its source spill as a `spill` (engine-worker.md §7 step 5).
+  const engine = model?.engine ?? null
+  if (engine) {
+    // Free the engine's native geometry now, once the scene is built: the
     // writer reads the SCENE for geometry and the engine only for
-    // properties, so nothing reads it again (§2.1 row 30). A main-thread load
-    // frees it in the writer's `finally` (below), later than it needs to;
-    // here it would otherwise sit in the worker's heap through the idle wait
-    // before the writer runs.
+    // properties, so nothing reads it again (§2.1 row 30). Otherwise it
+    // would sit in the engine's heap through the idle wait before the writer
+    // runs. Burn-in gated with the demand path, as it always was.
     if (isFeatureEnabled('demandGeometry')) {
       // eslint-disable-next-line new-cap
       model.ifcManager.ifcAPI.ReleaseModelGeometry?.(model.modelID)
@@ -1322,14 +1324,10 @@ export async function load(
   // is the source of truth.
   if (glbExportContext) {
     glbVerbose('writer: scheduling export, kind =', glbExportContext.kindLabel)
-    // The engine THIS load parsed into, bound now, at the load's end, not
-    // read off the viewer when the writer finally runs (open-205 #2019): by
-    // then the user may have left the model, and a viewer re-created
-    // meanwhile (a theme change) carries the next load's engine. A worker
-    // load's engine is its `engineSession` (above); a main-thread load's is
-    // the viewer's shared IFC manager as it stands now.
-    const writerIfcManager = engineSession ? null : (viewer?.IFC?.loader?.ifcManager ?? null)
-    const writerIfcAPI = writerIfcManager?.ifcAPI
+    // The engine THIS load parsed into (`engine`, above), bound at the load's
+    // end, never read off the viewer when the writer finally runs (open-205
+    // #2019): by then the user may have left the model, and a viewer
+    // re-created meanwhile (a theme change) carries the next load's engine.
     const writer = {}
     beginCacheWrite(writer)
     const runWriter = () => {
@@ -1344,11 +1342,10 @@ export async function load(
         model,
         kindLabel: glbExportContext.kindLabel,
         cacheKeyArgs: glbExportContext.cacheKeyArgs,
-        ifcManager: writerIfcManager,
-        capture: engineSession ? (opts) => engineSession.capture(opts).then((captured) => {
+        capture: engine ? (opts) => engine.capture(opts).then((captured) => {
           // Page-side, so a spec can tell where the captures ran: the
           // worker's own `[glb]` lines print in the worker's console.
-          glbVerbose(`writer: engine captures ran in the ${engineSession.kind} engine ` +
+          glbVerbose(`writer: engine captures ran in the ${engine.kind} engine ` +
             `in ${Math.round(captured.captureMs)}ms`)
           return captured
         }) : null,
@@ -1362,48 +1359,25 @@ export async function load(
         sourceBytes,
       }).finally(() => {
         endCacheWrite(writer)
-        if (engineSession) {
-          // The same safe point as below, in the worker: the capture is done.
-          // A windowed open already reads through its store and answers
-          // `windowed`; a buffered one (every STEP) is released to windows
-          // over the OPFS File. Its geometry went at load end (above).
-          // Returned, so the writer settles only once the spill has; a close
-          // meanwhile waits for the spill's reply itself
-          // (WorkerEngine#closePolitely).
-          return spillEngineSource(engineSession, glbExportContext.sourceFile)
+        if (engine) {
+          // The writer's property/tree captures were the LAST load-time
+          // sweeps that read the parsed source synchronously — from here on,
+          // everything (Properties panel, psets, on-demand subtree props)
+          // goes through Conway's async APIs, which page ranges in on demand.
+          // So this is the one safe point to release a resident copy of the
+          // raw source (100s of MB on large models) to windows over the OPFS
+          // File the model was parsed from. A windowed open already reads
+          // through its store; a buffered one (every STEP) is released.
+          // Its geometry went at load end (above). Returned, so the writer
+          // settles only once the spill has; a worker's close meanwhile waits
+          // for the spill's reply itself (WorkerEngine#closePolitely).
+          return spillEngineSource(engine, glbExportContext.sourceFile)
         }
-        // The writer's property/tree captures were the LAST load-time
-        // sweeps that read the parsed source synchronously — from here
-        // on, everything (Properties panel, psets, on-demand subtree
-        // props) goes through Conway's async APIs, which page ranges
-        // in on demand. So this is the one safe point to release
-        // Conway's resident copy of the raw source (100s of MB on
-        // large models) and back later reads with the OPFS File the
-        // model was parsed from. Cache-hit GLB loads never get here
-        // (no writer is scheduled) — nothing to spill. Fail-soft: any
-        // guard failure keeps the resident buffer (pre-spill behavior).
-        spillModelSource(writerIfcAPI, engineModelID, glbExportContext.sourceFile)
-        // Same safe point, wasm-side twin of the source spill: the
-        // scene is built and the GLB written, so nothing reads conway's
-        // native geometry again — free it (per-model) so repeated loads
-        // in one tab reuse the wasm pages instead of stacking whole
-        // model scenes until the tab crashes. Feature-detected;
-        // burn-in gated with the demand path.
-        try {
-          const releaseAPI = writerIfcAPI
-          if (isFeatureEnabled('demandGeometry') &&
-              typeof releaseAPI?.ReleaseModelGeometry === 'function') {
-            // eslint-disable-next-line new-cap
-            const released = releaseAPI.ReleaseModelGeometry(engineModelID)
-            glbVerbose('writer: native geometry released =', released)
-          }
-        } catch (e) {
-          glbVerbose('writer: native geometry release failed (kept):', e)
-        }
+        return undefined
       })
     }
     scheduleIdleWork(runWriter)
-  } else if (engineSession) {
+  } else if (engine) {
     // No writer follows, so the writer's spill (above) never comes: a GLB
     // cache lookup that failed (a hash or OPFS error, which leaves no cache
     // key), a GitHub source with no upstream sha, the `glb` flag off. On a
@@ -1416,7 +1390,7 @@ export async function load(
     // since no writer was scheduled. The same request as the writer's, with
     // no file: a windowed store answers `released`, a buffered open
     // `unsupported` (kept resident, as it was).
-    spillEngineSource(engineSession, null)
+    spillEngineSource(engine, null)
   }
 
   return model
@@ -1424,28 +1398,27 @@ export async function load(
 
 
 /**
- * The worker-engine twin of `opfsSourceByteStore.js#spillModelSource`: ask
- * the session's engine to release its resident source to windows over the
- * OPFS File the model was parsed from. Fire-and-forget and fail-soft, like
- * the main-thread spill: a refusal or a closed session keeps the source
- * resident, which is the pre-spill behaviour.
+ * Ask the model's engine to release its resident source to windows over the
+ * OPFS File the model was parsed from (Engine.js `spill`). Fire-and-forget
+ * and fail-soft: a refusal or a closed engine keeps the source resident,
+ * which is the pre-spill behaviour.
  *
- * The one release path for a worker load's source, called once per load:
+ * The one release path for a load's source, called once per load:
  * by the GLB writer once its capture is done, or straight after the parse
  * when no writer was scheduled (`load`, below the writer). With no
  * `sourceFile` it still asks: a windowed Blob-store open lets its whole-file
  * copy go (`released`) without one, and a buffered open answers
  * `unsupported`, keeping its source resident.
  *
- * @param {object} engineSession
+ * @param {object} engine
  * @param {Blob|null|undefined} sourceFile
  * @return {Promise<void>} settles with the spill, never rejects
  */
-function spillEngineSource(engineSession, sourceFile) {
-  return engineSession.spill(sourceFile ?? null).then((result) => {
+function spillEngineSource(engine, sourceFile) {
+  return engine.spill(sourceFile ?? null).then((result) => {
     if (result?.spilled) {
       glbInfo(
-        `source spill (engine worker): released resident source buffer (${sourceFile?.size}B); ` +
+        `source spill (${engine.kind} engine): released resident source buffer (${sourceFile?.size}B); ` +
         `property reads now page windows through ${result.source?.kind ?? 'a store'}`)
     } else if (result?.released) {
       // A windowed open on the Blob store, which held the whole file for the
@@ -1453,13 +1426,13 @@ function spillEngineSource(engineSession, sourceFile) {
       // is the store's own count, there being no File on the no-writer path.
       const bytes = result.source?.residentBytes ?? sourceFile?.size
       glbInfo(
-        `source spill (engine worker): released the Blob store's whole-file copy (${bytes}B); ` +
+        `source spill (${engine.kind} engine): released the Blob store's whole-file copy (${bytes}B); ` +
         'property reads now page windows from the File')
     } else {
-      glbVerbose(`source spill (engine worker): kept resident (${result?.reason ?? 'no reason given'})`)
+      glbVerbose(`source spill (${engine.kind} engine): kept resident (${result?.reason ?? 'no reason given'})`)
     }
   }).catch((e) => {
-    glbVerbose('source spill (engine worker): failed (kept resident):', e?.message ?? e)
+    glbVerbose(`source spill (${engine.kind} engine): failed (kept resident):`, e?.message ?? e)
   })
 }
 

@@ -60,8 +60,9 @@ jest.mock('@bldrs-ai/ifclib')
 jest.mock('../Filetype')
 jest.mock('../search/SearchIndex')
 // Slice 5b of design/new/viewer-replacement.md: the IFC parse path
-// goes through `parseIfcWithConway` + `buildConwayIfcModel` instead
-// of wit-three's `IFCLoader.parse`. The ShareViewer test harness
+// goes through the viewer's engine (a real ConwayEngine over the harness's
+// IfcAPI stub, which opens model 0 and streams nothing) + `buildConwayIfcModel`
+// instead of wit-three's `IFCLoader.parse`. The ShareViewer test harness
 // auto-mocks `three`, which leaves `BufferGeometry` + `Mesh` without
 // their real methods — production `buildConwayIfcModel` produces a
 // broken Mesh under that mock. We short-circuit the Conway-direct
@@ -87,11 +88,9 @@ jest.mock('../search/SearchIndex')
 // double below ignores its argument entirely and hands back the harness
 // singleton. What guards that call site is
 // `ShareIfcLoader.degraded.test.js`, whose builder doubles assert on the
-// meshes they receive. This double is here to stop a fixture from
-// contradicting the contract it stands in for, not to catch a regression.
-jest.mock('../loader/conwayDirectIfcLoader', () => ({
-  // eslint-disable-next-line require-await
-  parseIfcWithConway: () => ({modelID: 0, captured: [], recapture: async () => []}),
+// meshes they receive.
+jest.mock('../model/engineModelReads', () => ({
+  ...jest.requireActual('../model/engineModelReads'),
   decorateConwayDirectIfcModel: () => {},
 }))
 jest.mock('../model/buildConwayIfcModel', () => ({
@@ -643,7 +642,10 @@ describe('CadView', () => {
     expect(setCameraPosMock).toHaveBeenLastCalledWith(1, 2, 3, true)
     const setCameraTargetMock = viewer.IFC.context.ifcCamera.cameraControls.setTarget
     expect(setCameraTargetMock).toHaveBeenLastCalledWith(4, 5, 6, true)
-    expect(createPlaneSpy).toHaveBeenCalled()
+    // The plane is cut once the model is in, which takes a task, not only
+    // microtasks: the engine starts its pump on the next task
+    // (ConwayEngine#runPump_), so the open's caller is at the index first.
+    await waitFor(() => expect(createPlaneSpy).toHaveBeenCalled())
     await actAsyncFlush()
   })
 

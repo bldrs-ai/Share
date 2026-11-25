@@ -187,6 +187,36 @@ module.exports = {
     // override per allowlisted file (tools/lint/layerAllowlist.json), adding
     // exactly that file's upward imports. tools/lint/layers.cjs has the table.
     ...layerOverrides(FENCE_ZONES),
+    // Conway's web-ifc compat surface is named only inside the engine
+    // (design/tracks/open-t200/layering.md §4.1, slice 1a): `IfcAPI` and its
+    // type codes are the engine's adapters' (ConwayEngine, the worker's
+    // handler), and every reader and the loader talk to `Engine`
+    // (src/engine/Engine.js) instead. No exception: UI code that needs an IFC
+    // type code gets it from a re-export in src/engine, never an entry here,
+    // because a second place naming Conway's package is what this prevents.
+    // Tests are left out (a test may drive the real engine), and so is
+    // Conway's logger and progress log, which are not this surface. The rule
+    // does not see a dynamic `import()`: src/engine/conwayImportBoundary.test.js
+    // greps for one, and proves this rule fires.
+    {
+      files: ['src/**/*.js', 'src/**/*.jsx', 'src/**/*.ts', 'src/**/*.tsx'],
+      excludedFiles: ['src/engine/**', '**/*.test.*', '**/*.spec.*', '**/*.fixture.*',
+        '**/__mocks__/**', 'src/tests/**'],
+      rules: {
+        'no-restricted-imports': ['error', {
+          paths: [{
+            name: '@bldrs-ai/conway/web-ifc',
+            message: 'Conway\'s IfcAPI is named only in src/engine: read through the model\'s Engine ' +
+              '(src/engine/Engine.js; design/tracks/open-t200/layering.md §4.1)',
+          }],
+          patterns: [{
+            group: ['@bldrs-ai/conway/src/compat/web-ifc/*', '@bldrs-ai/conway/compiled/src/compat/web-ifc/*'],
+            message: 'Conway\'s web-ifc compat surface is named only in src/engine ' +
+              '(design/tracks/open-t200/layering.md §4.1)',
+          }],
+        }],
+      },
+    },
     // --- TS / TSX
     {
       files: ['*.ts', '*.tsx'],

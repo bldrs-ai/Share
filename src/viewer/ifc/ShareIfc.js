@@ -23,24 +23,23 @@
 //     closures `decorateConwayDirectIfcModel` attaches.
 //
 // So this class is a thin Conway-backed surface exposing exactly what
-// live code reads off `viewer.IFC`: `loader.ifcManager` (Conway IfcAPI +
-// accessors), a material-slot `selector`, `getProperties`,
-// `addIfcModel`, `setWasmPath`, `dispose`, `context`, `type`,
-// `ifcLastError`.
+// live code reads off `viewer.IFC`: `engine` (the viewer's ConwayEngine),
+// `loader.ifcManager` (accessors over that engine's Conway object, for the
+// GLB cache hits and mesh models that share it), a material-slot `selector`,
+// `getProperties`, `addIfcModel`, `setWasmPath`, `dispose`, `context`,
+// `type`, `ifcLastError`.
 //
-// Conway construction: `new IfcAPI()` from `@bldrs-ai/conway/web-ifc`,
-// Conway's web-ifc-shaped compat surface (its `exports` map points that
-// subpath at `compiled/src/compat/web-ifc/index.js`). Share imports it
-// directly; the real `web-ifc` engine and its comparison build were
-// removed (design/new/adapter-removal.md, 2026-11-01 status). ShareIfc
-// is mocked in the ShareViewer test harness (`__mocks__/ShareViewer.js`)
-// so `IfcAPI` is never constructed under Jest. The wasm `Init` is lazy —
-// `parseIfcWithConway` runs `if (ifcAPI.wasmModule === undefined) await
-// ifcAPI.Init()` on the first parse — so `setWasmPath` only records the
-// path; it deliberately does not await an Init that hasn't been kicked
-// off yet.
+// The engine: one `ConwayEngine` (engine/ConwayEngine.js) per viewer build,
+// constructed where this class constructed Conway's `IfcAPI` before slice 1a
+// of design/tracks/open-t200/layering.md, with the same lifetime: idle on
+// the worker route, and the engine a load parses into on the main-thread
+// route (the kill switch). Slice 1b makes it a `mainThread` lease the engine
+// host owns. ShareIfc is mocked in the ShareViewer test harness
+// (`__mocks__/ShareViewer.js`), so no engine is constructed under Jest. The
+// wasm `Init` is lazy (ConwayEngine#init, on the first open), so
+// `setWasmPath` only records the path.
 
-import {IfcAPI} from '@bldrs-ai/conway/web-ifc'
+import {ConwayEngine} from '../../engine/ConwayEngine'
 import ShareIfcManager from '../../engine/ShareIfcManager'
 import {isSpaModelNavOn} from '../../utils/spaModelNavMode'
 import {installBvhPatches} from '../../model/bvhPatch'
@@ -103,16 +102,15 @@ export default class ShareIfc {
       throw new Error('ShareIfc: context is required')
     }
     this.context = context
-    // Conway IfcAPI. Was constructed inside the fork's web-ifc-three
-    // IFCLoader; we own it directly now. Lazy-init'd by
-    // `parseIfcWithConway` (see file header).
-    const ifcAPI = new IfcAPI()
+    // See the file header. Lazy-initialised by its first open.
+    this.engine = new ConwayEngine()
     // `loader.ifcManager` is the shape consumers read:
-    //   viewer.IFC.loader.ifcManager.{ifcAPI, parser, state.models,
+    //   viewer.IFC.loader.ifcManager.{ifcAPI, state.models,
     //     getSpatialStructure, getIfcType, getItemProperties, ...}
-    // `ShareIfcManager` (slice 5d.1) already provides exactly this
-    // Conway-backed surface; reuse it rather than duplicate.
-    this.loader = {ifcManager: new ShareIfcManager(ifcAPI)}
+    // `ShareIfcManager` (slice 5d.1) provides exactly this surface over
+    // the engine's Conway object. A live IFC/STEP model reads through its own
+    // `model.engine`; a GLB cache hit and a mesh model read through this.
+    this.loader = {ifcManager: new ShareIfcManager(this.engine.ifcAPI)}
     this.selector = makeMaterialSlotSelector()
     // Canonical parse-error slot — `Loader.js` reads `viewer.IFC.ifcLastError`
     // and `ShareIfcLoader.parse` mirrors its writes here.
@@ -121,17 +119,17 @@ export default class ShareIfc {
     // (`'glb'`, `'obj'`, …). Capability flags on `ShareModel` (§8.2) are
     // the real source of truth; this stays a writable slot for compat.
     this.type = undefined
-    // Engine-worker loads still parsing into this viewer
-    // (`ShareIfcLoader#parse`, `trackEngineLoad`). A model joins
-    // `context.items.ifcModels` only once its parse returns, so these are the
-    // engines `dispose` would otherwise miss (open-205 #2011 step A, #2031).
+    // Loads still parsing into this viewer (`ShareIfcLoader#parse`,
+    // `trackEngineLoad`). A model joins `context.items.ifcModels` only once
+    // its parse returns, so these are the engines `dispose` would otherwise
+    // miss (open-205 #2011 step A, #2031).
     this.engineLoads = new Set()
   }
 
 
   /**
-   * Note an engine-worker load that is parsing into this viewer, so
-   * `dispose` can terminate its engine if the viewer goes first.
+   * Note a load that is parsing into this viewer, so `dispose` can close its
+   * engine if the viewer goes first.
    *
    * @param {{abort: Function}} engineLoad from engine/engineModelLoad.js
    *   #createEngineModelLoad
@@ -147,16 +145,15 @@ export default class ShareIfc {
 
   /**
    * Record the directory the Conway wasm is served from. The actual
-   * `Init()` is lazy (first `parseIfcWithConway`), so this only stores
-   * the path on the IfcAPI — matching wit-three's `setWasmPath`, which
-   * also deferred `Init` to first parse. Not awaited at the single call
-   * site (`Containers/viewer.js`).
+   * `Init()` is lazy (ConwayEngine#init, on the first open), so this only
+   * stores the path — matching wit-three's `setWasmPath`, which also
+   * deferred `Init` to first parse. Not awaited at the single call site
+   * (`Containers/viewer.js`).
    *
    * @param {string} path relative wasm directory (e.g. `'./static/js/'`)
    */
   setWasmPath(path) {
-    // eslint-disable-next-line new-cap -- Conway IfcAPI methods are PascalCase, not constructors
-    this.loader?.ifcManager?.ifcAPI?.SetWasmPath?.(path)
+    this.engine?.setWasmPath(path)
   }
 
 
@@ -204,28 +201,27 @@ export default class ShareIfc {
 
 
   /**
-   * Tear down: close any open Conway models and drop refs. The fork
-   * delegated to web-ifc-three's `ifcManager.dispose()`; Conway exposes
-   * per-model `CloseModel(modelID)`. Best-effort + guarded — the next
-   * `initViewer` builds a fresh ShareIfc (and IfcAPI) regardless.
+   * Tear down: close every engine this viewer holds and drop refs.
+   * Best-effort + guarded — the next `initViewer` builds a fresh ShareIfc
+   * (and engine) regardless.
    *
    * @return {void}
    */
   dispose() {
-    // A model whose engine runs in a worker (`?feature=engineWorker`,
-    // engine-worker.md) holds its session on its IfcAPI facade. Closing it
-    // terminates the worker, which frees the whole engine at once (§3) —
-    // the one thing `CloseModel` on a main-thread engine cannot do.
+    // Each registered model's engine (`model.engine`). A worker is
+    // terminated, which frees the whole engine at once (§3), the one thing
+    // `CloseModel` on the page's engine cannot do. The page's engine is this
+    // viewer's own, closed below, and closing it twice closes it once.
     for (const model of this.context?.items?.ifcModels ?? []) {
       try {
-        model?.ifcManager?.ifcAPI?.engineSession?.close()
+        model?.engine?.close()
       } catch (e) {
-        console.warn('ShareIfc.dispose: engine session close failed:', e)
+        console.warn('ShareIfc.dispose: engine close failed:', e)
       }
     }
     // An engine still parsing into this viewer has no model registered yet.
     // Under the in-app switch (on by default, utils/spaModelNavMode.js) its
-    // load is given up with the viewer: `abort` terminates the worker and the
+    // load is given up with the viewer: `abort` closes its engine and the
     // parse rejects as aborted, which CadView, having aborted the load itself
     // first, takes as the switch it is (Containers/CadView.jsx#abortLoadInFlight).
     // With the kill switch (`?feature=disableSpaModelNav`) or the rollback on,
@@ -242,18 +238,11 @@ export default class ShareIfc {
       }
     }
     this.engineLoads.clear()
-    const ifcAPI = this.loader?.ifcManager?.ifcAPI
-    const models = ifcAPI?.models
-    if (models && typeof models.keys === 'function' && typeof ifcAPI.CloseModel === 'function') {
-      try {
-        for (const modelID of Array.from(models.keys())) {
-          // eslint-disable-next-line new-cap -- Conway IfcAPI methods are PascalCase, not constructors
-          ifcAPI.CloseModel(modelID)
-        }
-      } catch (e) {
-        console.warn('ShareIfc.dispose: CloseModel failed:', e)
-      }
-    }
+    // The viewer's own engine: CloseModel on the model it holds, if any, and
+    // its Conway object dropped, which is what lets the wasm heap be
+    // collected once this viewer is (in-app-model-switch.md §4.5).
+    this.engine?.close().catch((e) => console.warn('ShareIfc.dispose: engine close failed:', e))
+    this.engine = null
     this.selector = null
     this.loader = null
     this.context = null
