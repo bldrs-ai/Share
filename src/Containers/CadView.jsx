@@ -23,8 +23,8 @@ import {hasInMemoryUpload} from '../loader/inMemoryUploads'
 import {isVolumeModel} from '../loader/nrrd'
 import {InMemoryUploadGoneError} from '../OPFS/messages'
 import {getBrowser} from '../connections/registry'
-import {installEngineDevHook} from '../engine/engineDevHook'
-import useLegacyViewRulesNotice from '../engine/useLegacyViewRulesNotice'
+import {installEngineDevHook} from '../app/engineDevHook'
+import useLegacyViewRulesNotice from '../hooks/useLegacyViewRulesNotice'
 import modelIdentity from '../routes/modelIdentity'
 import useExistInFeature from '../hooks/useExistInFeature'
 import useDirectLinkQuota from '../quota/useDirectLinkQuota'
@@ -41,7 +41,7 @@ import {areDefinedAndNotNull, assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 import {disablePageReloadApprovalCheck} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
-import {navWith} from '../utils/navigate'
+import {navWith} from '../app/navigate'
 import {labelForGeometryId} from '../utils/geometryLabels'
 import {
   findRootLevelOwnerNode,
@@ -64,15 +64,15 @@ import {isOutOfMemoryError} from '../utils/oom'
 import {isAborted, raceLoadAbort} from '../utils/loadAbort'
 import {modelOpenKind, tagModelOpen} from '../utils/reportModelOpen'
 import {isSpaModelNavOn} from '../utils/spaModelNavMode'
-import {setKeydownListeners} from '../utils/shortcutKeys'
+import {setKeydownListeners} from '../app/shortcutKeys'
 import Picker from '../viewer/three/Picker'
 import {isOnControl} from '../viewer/three/pickControls'
 import {loadPreviewGroups, pickPreviewExpressId, previewOccurrencePickOf} from '../model/previewSelection'
 import {streamingBatchRoots, streamingPickOf} from '../model/streamingBatchPick'
 import {USER_CAMERA_EVENT} from '../viewer/three/renderDemand'
 import {DEFAULT_LOOK} from '../model/looks'
-import {installAssistDevHook} from '../viewer/tools/assistHost'
-import {registerSelectionFunnel} from '../viewer/tools/selectionFunnel'
+import {installAssistDevHook} from '../tools/assistHost'
+import {registerSelectionFunnel} from '../tools/selectionFunnel'
 import ViewCube from '../Components/ViewCube/ViewCube'
 import {applyVisibilityHash} from '../Components/Residency/visibilityHash'
 import LiveDisplayLink from '../Components/Residency/LiveDisplayLink'
@@ -223,7 +223,7 @@ export default function CadView({
   // alert (#1962), which is shown once per model rather than counted.
   const reportedRefusalRef = useRef(null)
   // This render's `selectItemsInScene`, for the funnel registered with
-  // `viewer/tools/selectionFunnel.js` (see the effect near the end).
+  // `tools/selectionFunnel.js` (see the effect near the end).
   const selectItemsInSceneRef = useRef(null)
   // open-205 #2043: a double-click during the load, made before the model's
   // index — on a parse-time preview mesh (selectFromPreviewPick: the element

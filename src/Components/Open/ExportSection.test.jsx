@@ -29,7 +29,7 @@ const mockUseStore = useStore
 
 
 // Only the senders are stubbed; the rest stays real because modules this one
-// pulls in (ProfileControl → privacy/subscriptionTracking) read
+// pulls in (ProfileControl → app/subscriptionTracking) read
 // FUNNEL_EVENTS at import time. gtagEventWithCid is the sender that attaches
 // open_cid (Share#1964; its own test is in privacy/analytics.test.js).
 jest.mock('../../privacy/analytics', () => ({
@@ -138,7 +138,7 @@ async function setStore(artifact, appMetadata, isExportInFlight = false) {
     result.current.setIsLoginVisible(false)
     result.current.setIsExportInFlight(isExportInFlight)
     // Settled, as after BaseRoutes' token pass: model_export {upsell} waits
-    // for it (privacy/modelActionTracking.js). The restore-race case unsets it.
+    // for it (app/modelActionTracking.js). The restore-race case unsets it.
     // Settled FOR the sign-in state the case's mocked Auth0 already reports
     // (every case sets it before calling this), as BaseRoutes records it:
     // the helper waits until the two agree.

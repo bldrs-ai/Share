@@ -87,7 +87,7 @@ function noteSyncedToken(cameraControls, location) {
  *
  * The effect calling this runs on EVERY location change, and with the live
  * camera link the token is in the URL for the whole session: selecting an
- * element navigates (utils/navigate.js#navWith carries the current hash), so
+ * element navigates (app/navigate.js#navWith carries the current hash), so
  * an unconditional onHash would re-apply the camera on each selection —
  * from rounded coords, animated (a small snap), or, if the live link's write
  * was still pending, from the PREVIOUS settle's token, yanking the camera
@@ -226,7 +226,7 @@ export function hasValidUrlParams() {
  * @param {object} cameraControls obtained from the viewer
  * @param {object} [location] where to write the `#c:` token; a location-shaped
  *   `{hash}` double lets a caller compose a link without touching the page's
- *   URL (the Assist `share.permalink` tool, viewer/tools/shareTools.js)
+ *   URL (the Assist `share.permalink` tool, tools/shareTools.js)
  */
 export function addCameraUrlParams(cameraControls, location = window.location) {
   // addCameraUrlParams is accessed from the issue card and it is undefined on the first render

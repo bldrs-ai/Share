@@ -34,7 +34,7 @@ import {
   modelContentId,
   modelRouteSource,
 } from '../../privacy/analytics'
-import {trackModelActionWhenAuthSettled} from '../../privacy/modelActionTracking'
+import {trackModelActionWhenAuthSettled} from '../../app/modelActionTracking'
 import {isDriveModelPublic} from '../../quota/driveExportVisibility'
 import {modelSlotKey} from '../../quota/modelSlotKey'
 import {ROLLING_WINDOW_DAYS, TIERS, getTier} from '../../quota/quota'
@@ -501,7 +501,7 @@ export default function ExportSection() {
   // normalized tier events"), for the model on screen. The tier is read
   // once auth settles: while Auth0 restores a returning user's session this
   // tab shows the anonymous gate, and its help can be opened before the
-  // session lands (privacy/modelActionTracking.js).
+  // session lands (app/modelActionTracking.js).
   const reportGated = (reason) => {
     gtagEventWithCid(GATE_EVENTS.EXPORT_GATED, {reason})
     const {modelPath: gatedModelPath} = useStore.getState()

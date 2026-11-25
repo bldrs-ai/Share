@@ -164,7 +164,12 @@ them. They import nothing above.
   `privacy/modelActionTracking.js`, `privacy/subscriptionTracking.js` and
   `OPFS/uploadLedger.js` (16 upward imports between them). They move to
   the UI layer in the second mechanical PR (§7, M2). No lower layer
-  imports any of them.
+  imports any of them. **Moved in M2 (#2317)**, the seven to `src/app/` and
+  `uploadLedger.js` to `src/connections/`, with two more of the same kind
+  that landed after this count: `privacy/consentChoice.js` (the About
+  dialog's consent writes, over the store and `index/ga.js`) and
+  `privacy/localOnlyMode.js` (which models "Test only mode" allows, over the
+  sample roster), both imported only by the UI (#2051).
 
 ### 2.2 Where every file goes
 
@@ -182,8 +187,13 @@ tests named after no one file went where their subject went
 (`batchedEditGuard.test.js` to the model, `bldrsCaptureWindowed.test.js` to
 the engine). `src/session/index.js` is new: the session layer's surface,
 which §6's static guard bundles. The tables below keep the paths as they
-were, since they are the record of what moved; the `viewer/tools/` row and
-the eight app-level leaves are M2's.
+were, since they are the record of what moved.
+
+**Status: M2 landed the rest (#2317).** `viewer/tools/` is `src/tools/`
+(all 29 files, `assistTools.spec.ts` included); the leaves of §2.1 are in
+`src/app/` and `src/connections/uploadLedger.js`; `engineDevHook.js` is
+`src/app/engineDevHook.js` and `useLegacyViewRulesNotice.js` is
+`src/hooks/useLegacyViewRulesNotice.js`, beside the other React hooks.
 
 **`src/engine/` (15 files today)**
 
@@ -349,9 +359,14 @@ after `7cbc995d`: `privacy/consentChoice.js` → `index/ga.js` and
 `store/useStore.js`, `privacy/localOnlyMode.js` →
 `Components/Open/sampleModelRoster.js` (all #2051), and
 `loader/uploadedFileName.js` → `connections/persistence.ts` (#2313). None
-of them is in M2's list, so after M2 the count is 23 unless a slice takes
-them: the two privacy files are app-level leaves like M2's, and
-`uploadedFileName.js` makes the import `Loader.js` does (entry 14, 3a).
+of them is in M2's list as written. M2 took the two privacy files, which
+are app-level leaves like the eight (§2.1). `uploadedFileName.js` stays: it
+is the loader's, and makes the import `Loader.js` does, so it is entry 20
+below, and 3a's with entry 14.
+
+**Measured after M2, on `d2a63568`: 20 in 16 files**: the 19 below and
+entry 20. The slice table's counts (§7) run one above its column from M2
+until 3a removes entry 20.
 
 **After the mechanical move** (§7): **55 in 31 files** after M1, **19 in
 15 files** after M2. The 19 are the allowlist the plan works off.
@@ -382,6 +397,7 @@ makes its store imports upward.
 | 17 | viewer → ui | `ShareViewer.js` → `Infrastructure/IfcElementsStyleManager.js` | V |
 | 18 | viewer → ui | `ShareViewer.js` → `Infrastructure/IfcCustomViewSettings.js` | V |
 | 19 | base → ui | `privacy/analytics.js` → `quota/quota.js` | not this redesign: `getTier` for the GA `tier` param. Follow-up: pass the tier in |
+| 20 | loader → ui | `uploadedFileName.js` → `connections/persistence.ts` (added after the count, #2313) | 3a |
 
 Without M1's two splits (§2.2) and one moved helper (`sizeClass`, a pure
 function `unsupportedSchema.js` takes from `reportLoadDiagnostics.js`)
@@ -1736,6 +1752,8 @@ slices around it shift by six if it lands earlier.
   → `src/connections/`; `engine/engineDevHook.js` and
   `useLegacyViewRulesNotice.js` to the UI.
 - **Removes:** viewer → ui 20, base → loader 8, base → ui 8: 55 → 19.
+  Measured: 59 → 20, with the two privacy leaves of §2.1 (3 more) moved
+  too, and `uploadedFileName.js` left for 3a (§3, entry 20).
 - **Proof, tests, rollback:** as M1. Split from M1 only for size:
   `navigate.js` has many importers.
 

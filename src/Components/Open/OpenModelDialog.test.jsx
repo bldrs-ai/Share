@@ -10,11 +10,11 @@ import {
 } from '../../connections/persistence'
 import pruneMissingLocalRecents from '../../connections/pruneLocalRecents'
 import {getProvider} from '../../connections/registry'
-import {loadLocalFile} from '../../utils/loader'
+import {loadLocalFile} from '../../app/loader'
 import useQuota from '../../hooks/useQuota'
 import {getInMemoryUpload, registerInMemoryUpload} from '../../loader/inMemoryUploads'
 import {deleteUploadFromOPFS} from '../../OPFS/utils'
-import {navigateToInMemoryModel, navigateToModel} from '../../utils/navigate'
+import {navigateToInMemoryModel, navigateToModel} from '../../app/navigate'
 import useStore from '../../store/useStore'
 import {GATE_RETURN_EXPORT, noteGateLogin, takeGateLoginReturn, takeGateLoginSource} from '../../Auth0/gateLogin'
 import OpenModelDialog from './OpenModelDialog'
@@ -58,8 +58,8 @@ jest.mock('../Connections/GoogleDriveTab', () => function MockGoogleDriveTab({on
 jest.mock('../Connections/GitHubTab', () => function MockGitHubTab() {
   return <div data-testid='mock-github-tab'/>
 })
-jest.mock('../../utils/navigate', () => ({navigateToInMemoryModel: jest.fn(), navigateToModel: jest.fn()}))
-jest.mock('../../utils/loader', () => ({loadLocalFile: jest.fn()}))
+jest.mock('../../app/navigate', () => ({navigateToInMemoryModel: jest.fn(), navigateToModel: jest.fn()}))
+jest.mock('../../app/loader', () => ({loadLocalFile: jest.fn()}))
 // The refused-pick delete only (bldrs-ai/ops#39); jsdom has no OPFS to delete from.
 jest.mock('../../OPFS/utils', () => ({
   ...jest.requireActual('../../OPFS/utils'),

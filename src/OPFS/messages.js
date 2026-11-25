@@ -7,7 +7,7 @@
  * Without OPFS a local file is held only in the memory of the page that
  * opened it (`loader/inMemoryUploads.js`), so nothing can load it now.
  *
- * Its own module, not `OPFS/utils.js` or `utils/loader.js`, because tests of
+ * Its own module, not `OPFS/utils.js` or `app/loader.js`, because tests of
  * the call sites mock those wholesale.
  */
 export const IN_MEMORY_UPLOAD_GONE_ALERT =

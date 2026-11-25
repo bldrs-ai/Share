@@ -430,7 +430,7 @@ function forwardSteps(op, targets, backend) {
  *   refusal can never follow a partial mutation. An undone create's or
  *   duplicate's outputs are deleted, so they are absent again and redo
  *   proceeds. A partial edit that looked like success is worse than a report
- *   (the same rule as `viewer/tools/refs.js#assertResolved`).
+ *   (the same rule as `tools/refs.js#assertResolved`).
  * - **A throw fail-stops.** If the backend or the resolver throws, nothing is
  *   put back: an {@link EditInconsistentError} is thrown with the original
  *   error as its `cause`. The L0 ops throw on real states

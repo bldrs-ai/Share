@@ -6,7 +6,7 @@ import {clearState, homepageSetup, visitHomepageWaitForModel, waitForModel} from
 
 const DROPPED_FILE = 'public/index.ifc'
 // handleFileDrop's OPFS path stores the upload under a fresh uuid and
-// navigates there (utils/navigate.js#navigateToModel), a full page load.
+// navigates there (app/navigate.js#navigateToModel), a full page load.
 const UPLOAD_ROUTE = /\/share\/v\/local-only\/[0-9a-f-]{36}\.ifc/
 
 

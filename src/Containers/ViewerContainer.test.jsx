@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/extend-expect'
 import {act, render, screen, waitFor} from '@testing-library/react'
 import ViewerContainer from './ViewerContainer'
 import useStore from '../store/useStore'
-import {DROP_REFUSED} from '../utils/dragAndDrop'
+import {DROP_REFUSED} from '../app/dragAndDrop'
 
 
 // We will mock out relevant modules (store, guessType, OPFS saving, fallback saving)

@@ -14,7 +14,7 @@ import {fileURLToPath} from 'node:url'
 // change the main bundle's whole shape — `src/assist/runtime.ts` is one more
 // entry of the main build. It lands at `docs/assist/runtime.js` (outbase is
 // `src/`), beside `index.js`, and the app imports it by a URL built at run
-// time (`src/viewer/tools/assistRuntime.js`), which esbuild leaves alone.
+// time (`src/tools/assistRuntime.js`), which esbuild leaves alone.
 //
 // Each entry is bundled whole, so the runtime carries its own copy of the
 // small Assist modules it uses; it shares no module instances with the main
@@ -76,7 +76,7 @@ export function assertAiSdkNotInMain(metafile) {
     throw new Error(
       `The AI SDK is in a main bundle (${offenders.length} inputs). It must load lazily, from ` +
       `docs/assist/runtime.js only: import src/assist/runtime.ts through ` +
-      `src/viewer/tools/assistRuntime.js, never directly (tools/esbuild/assistEntry.js).\n${shown}`)
+      `src/tools/assistRuntime.js, never directly (tools/esbuild/assistEntry.js).\n${shown}`)
   }
 }
 

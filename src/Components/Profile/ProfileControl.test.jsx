@@ -7,9 +7,9 @@ import {clearOPFSCache} from '../../OPFS/utils'
 import {closeAllEngineSessions} from '../../engine/spawnEngine'
 import {RouteThemeCtx} from '../../Share.fixture'
 import {addRecentFileEntry, loadAllRecentFiles} from '../../connections/persistence'
-import {_resetSubscriptionTrackingForTests, trackSubscriptionFromToken} from '../../privacy/subscriptionTracking'
+import {_resetSubscriptionTrackingForTests, trackSubscriptionFromToken} from '../../app/subscriptionTracking'
 import useStore from '../../store/useStore'
-import {reloadAfterCacheClear} from '../../utils/navigate'
+import {reloadAfterCacheClear} from '../../app/navigate'
 import LoginMenu from './ProfileControl'
 import {goToSubscription} from './subscriptionNav'
 
@@ -19,8 +19,8 @@ jest.mock('../../engine/spawnEngine', () => ({closeAllEngineSessions: jest.fn(()
 // The upgrade door itself (and its begin_checkout event) is pinned in
 // subscriptionNav.test.js; here only that the menu goes through it.
 jest.mock('./subscriptionNav', () => ({goToSubscription: jest.fn()}))
-jest.mock('../../utils/navigate', () => ({
-  ...jest.requireActual('../../utils/navigate'),
+jest.mock('../../app/navigate', () => ({
+  ...jest.requireActual('../../app/navigate'),
   reloadAfterCacheClear: jest.fn(),
 }))
 

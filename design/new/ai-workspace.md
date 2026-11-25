@@ -1235,13 +1235,13 @@ Results render as element chips through #1673 (the model links a ref as
 **v0 tools (read/annotate; #1674),** in the namespaced form. Annotation
 column: R = `readOnly`, V = `viewState`, P = `sendsPixels`.
 
-The v0 slice is implemented in #1946 (`src/viewer/tools/`, `src/assist/`). The names below are the ones it ships.
+The v0 slice is implemented in #1946 (`src/viewer/tools/`, now `src/tools/`; `src/assist/`). The names below are the ones it ships.
 
 | Tool | Ann. | Does | Backing seam |
 |---|---|---|---|
 | `model.query` | R | Optional `ifcType`, `level`, `name` and `text` filters, to refs + names. ≤200 refs, with `total` and `truncated`. Every filter is optional (below) | `SearchIndex.search:138` |
 | `model.properties` | R | Attributes and psets for ≤20 refs | `getItemProperties:129`, `getPropertySets:140`, `ShareViewer.getProperties:836` |
-| `model.quantities` | R | Quantities the file carries (IFC `IfcElementQuantity`), per element and totalled by name, in SI; `available:false` when none, so the model falls back to `model.measure`. STEP has none. Async property API only, so it works over the engine worker (#1674 slice 2; `viewer/tools/ifcQuantities.js`, `analysisTools.js`) | `getPropertySets`, `getItemProperties` over the project's `IfcUnitAssignment` |
+| `model.quantities` | R | Quantities the file carries (IFC `IfcElementQuantity`), per element and totalled by name, in SI; `available:false` when none, so the model falls back to `model.measure`. STEP has none. Async property API only, so it works over the engine worker (#1674 slice 2; `tools/ifcQuantities.js`, `analysisTools.js`) | `getPropertySets`, `getItemProperties` over the project's `IfcUnitAssignment` |
 | `model.measure` | R | `surfaceArea`, closed-mesh `volume` or world `extents` of refs, from the triangles with instance transforms applied, in metres; labelled a mesh measurement; bounded by a triangle cap and `ctx.signal` | batched instance ranges (`batchedInstanceGeometry.js`), merged-mesh and scene-graph meshes (`elementPieces.js`, `meshMeasure.js`) |
 | `model.spatial` | R | Project > site > building > storey > space with element counts; an element ref returns its container path and storey. STEP and scene graphs return their top hierarchy levels and say it is not spatial | NavTree (`rootElement`) |
 | `view.select` | V | Select refs (replace, add, or clear) | exposed `selectItemsInScene` |

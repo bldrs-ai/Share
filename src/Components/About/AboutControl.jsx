@@ -1,5 +1,5 @@
 import React, {ReactElement, useEffect, useState} from 'react'
-import {dismissConsent} from '../../privacy/consentChoice'
+import {dismissConsent} from '../../app/consentChoice'
 import {isFirst, setVisited} from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'

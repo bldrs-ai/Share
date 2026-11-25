@@ -115,7 +115,7 @@ Give a session a worker when it runs a job that would block the page:
 
 Because a path can contain almost any character, the key is placed first and restricted, rather than reserving a character everywhere (§8, 4).
 
-**Resolution moves next to the engine.** Today `src/viewer/tools/refs.js` resolves refs on the page against the store's `rootElement`. For several models, and for a CLI later, resolution becomes a session function: split off the model key, then resolve within that model's tree from its engine. This is gap 1 of the follow-up review's §4.
+**Resolution moves next to the engine.** Today `src/tools/refs.js` resolves refs on the page against the store's `rootElement`. For several models, and for a CLI later, resolution becomes a session function: split off the model key, then resolve within that model's tree from its engine. This is gap 1 of the follow-up review's §4.
 
 **Tools take the session.** The Assist tools (#1946) work inside the active session:
 - `model.query` and `model.properties` gain an optional `model` key (all models when omitted), and return model-qualified refs.

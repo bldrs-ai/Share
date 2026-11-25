@@ -1,13 +1,13 @@
 import React, {ReactElement} from 'react'
 import {Button, Stack, Typography} from '@mui/material'
-import {LOCAL_ONLY_MODE_NAME} from '../../privacy/localOnlyMode'
+import {LOCAL_ONLY_MODE_NAME} from '../../app/localOnlyMode'
 import useStore from '../../store/useStore'
 
 
 /**
  * What a remote source's tab (GitHub, Google Drive; Open and Save dialogs)
  * shows in local-only mode instead of its controls
- * (privacy/localOnlyMode.js). The button opens the privacy settings, which
+ * (app/localOnlyMode.js). The button opens the privacy settings, which
  * live in the About dialog; About stacks over this dialog, and raising the
  * level there brings the tab's own controls back at once (the store's
  * `privacyLevel` drives it).

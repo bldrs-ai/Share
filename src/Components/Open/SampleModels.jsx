@@ -11,7 +11,7 @@ import {SAMPLE_MODELS, sampleFormat, thumbnailUrl} from './sampleModelRoster'
  */
 export default function SampleModels({navigate, setIsDialogDisplayed}) {
   // Lazy import to avoid circulars in tests
-  const {navigateToModel} = require('../../utils/navigate')
+  const {navigateToModel} = require('../../app/navigate')
   const [, setSelected] = useState('')
   const {record} = useQuota()
 

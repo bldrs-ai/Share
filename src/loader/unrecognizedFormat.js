@@ -13,8 +13,8 @@ const MAX_EXT_LENGTH = 12
 /**
  * The alert for a file whose name and header between them name no format
  * `findLoader` knows, raised from both ways a user hands Share a local file:
- * drag-and-drop (`utils/dragAndDrop.js`) and the Open dialog's picker
- * (`utils/loader.js#loadLocalFile`).
+ * drag-and-drop (`app/dragAndDrop.js`) and the Open dialog's picker
+ * (`app/loader.js#loadLocalFile`).
  *
  * An object rather than the bare message string, so AlertDialog can tell it
  * apart from a defect. As a string it went through `trackAlert`, whose

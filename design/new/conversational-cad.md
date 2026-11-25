@@ -273,7 +273,7 @@ Epic 4.
   high-leverage slice: the whole anchor system already exists, the epic
   wires it into message rendering.
   **Built for elements (#1673):** the model writes `[Wall 3](ref:e123)` with a
-  ref exactly as a tool returned it (`src/viewer/tools/refLinks.js`); the
+  ref exactly as a tool returned it (`src/tools/refLinks.js`); the
   reply's Markdown renders it as a chip (`Components/Bot/RefChip.jsx`) that
   is a real link to a `#sel:<ref>` permalink (an `o` ref to its element
   path). A plain click selects and frames in place (`view.select` +

@@ -6,7 +6,7 @@ import {
   noGeometryAlert,
 } from '../loader/loadProgress'
 import {buildOutcomeParams} from '../loader/loadAnalytics'
-import {recordLocalUpload} from '../OPFS/uploadLedger'
+import {recordLocalUpload} from '../connections/uploadLedger'
 import {
   FUNNEL_EVENTS,
   LOCAL_HOUR_PARAM,
@@ -22,7 +22,7 @@ import {
   startModelEngagement,
 } from '../privacy/analytics'
 import {trackEngagementOnOpen} from '../privacy/engagementTracking'
-import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
+import {trackModelActionWhenAuthSettled} from '../app/modelActionTracking'
 import modelIdentity from '../routes/modelIdentity'
 import {modelOpenId} from '../routes/modelOpen'
 import {modelOpenKind} from '../utils/reportModelOpen'
@@ -149,7 +149,7 @@ function sendOpenEvents(routeResult, eventParams, getIsAuthenticated) {
   gtagEvent(FUNNEL_EVENTS.REAL_MODEL_OPEN, eventParams)
   // The normalized twin, beside — never instead of — real_model_open,
   // which the bizdev dashboard keys on. Sent once auth settles, with the
-  // auth state of then (privacy/modelActionTracking.js says why: a
+  // auth state of then (app/modelActionTracking.js says why: a
   // non-GitHub load doesn't wait for auth, and the auth-change reload is
   // deduped). The route is read now, so a later navigation can't
   // relabel it. Always `gate: 'none'`: a view a soft gate let through

@@ -659,7 +659,7 @@ export async function openLocalFile(page: Page, path: string, urlPattern: RegExp
   // reproduce is the app's, not the click's: the loader detached its file
   // input in the same turn it clicked it, so a GC before Playwright resolved
   // the chooser's node dropped the event — every time, with a GC forced
-  // after the click (`utils/loader.js#holdUntilPicked`, pinned by
+  // after the click (`app/loader.js#holdUntilPicked`, pinned by
   // `Open/browseFileChooser.spec.ts`). Were it to miss again anyway, a second
   // click is no remedy: Browse closes the dialog, so there is no button left
   // to click, and the retry this replaced sat out the test budget waiting for

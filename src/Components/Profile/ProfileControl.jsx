@@ -12,7 +12,7 @@ import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {abandonGateLogin, startLogin} from '../../Auth0/gateLogin'
 import {endSessionLogoutOptions} from '../../Auth0/logoutOptions'
 import {getRenderMode, setRenderMode as saveRenderMode} from '../../privacy/preferences'
-import {trackSubscriptionFromToken} from '../../privacy/subscriptionTracking'
+import {trackSubscriptionFromToken} from '../../app/subscriptionTracking'
 import useStore from '../../store/useStore'
 import {Themes} from '../../theme/Theme'
 import {assertDefinedBoolean} from '../../utils/assert'
@@ -42,7 +42,7 @@ import {cacheClearSkippedAlert} from '../../OPFS/messages'
 import {clearOPFSCache} from '../../OPFS/utils'
 import {closeAllEngineSessions} from '../../engine/spawnEngine'
 import {clearRecentFilesBySource} from '../../connections/persistence'
-import {reloadAfterCacheClear} from '../../utils/navigate'
+import {reloadAfterCacheClear} from '../../app/navigate'
 
 
 /**

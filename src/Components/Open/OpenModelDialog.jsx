@@ -9,7 +9,7 @@ import {localOnlyPath, toLocalOnlyPath} from '../../routes/localOnly'
 import useStore from '../../store/useStore'
 import useQuota from '../../hooks/useQuota'
 import {driveFileQuotaVisibility} from '../../quota/driveVisibility'
-import {loadLocalFile} from '../../utils/loader'
+import {loadLocalFile} from '../../app/loader'
 import {NeedsReconnectError} from '../../connections/errors'
 import {
   addRecentFileEntry,
@@ -20,7 +20,7 @@ import pruneMissingLocalRecents from '../../connections/pruneLocalRecents'
 import {getProvider} from '../../connections/registry'
 import debug, {WARN} from '../../utils/debug'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
-import {navigateToInMemoryModel, navigateToModel} from '../../utils/navigate'
+import {navigateToInMemoryModel, navigateToModel} from '../../app/navigate'
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
 import useExistInFeature from '../../hooks/useExistInFeature'
@@ -35,7 +35,7 @@ import GoogleDrivePickerDialog from '../Connections/GoogleDrivePickerDialog'
 import RecentFilesBrowseSection from '../Connections/RecentFilesBrowseSection'
 import QuotaLimitDialog from './QuotaLimitDialog'
 import LocalOnlyNotice from './LocalOnlyNotice'
-import {isLocalOnlyLevel} from '../../privacy/localOnlyMode'
+import {isLocalOnlyLevel} from '../../app/localOnlyMode'
 import {LABEL_LOCAL, LABEL_GITHUB, LABEL_GOOGLE, LABEL_SAMPLES} from './component'
 import {FolderOpen as FolderOpenIcon, GitHub as GitHubIcon} from '@mui/icons-material'
 
@@ -476,7 +476,7 @@ export default function OpenModelDialog({
             }
           </Stack>
           }
-          {/* Local-only mode (privacy/localOnlyMode.js): the remote tabs stay
+          {/* Local-only mode (app/localOnlyMode.js): the remote tabs stay
               in place, so a visitor who declined can see what that gives up, but show a
               notice instead of their controls. Samples stay open. */}
           { isLocalOnly && (tabLabels[currentTab] === LABEL_GOOGLE || tabLabels[currentTab] === LABEL_GITHUB) &&

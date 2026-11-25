@@ -29,7 +29,7 @@ export default function createRepositorySlice(set, get) {
     // if any, is in"). So for that window isAuthResolved is true while the
     // claims are still the signed-out pass's. A reader that combines the
     // LIVE isAuthenticated with the store's claims compares the two first:
-    // privacy/modelActionTracking.js. Set in the same write as
+    // app/modelActionTracking.js. Set in the same write as
     // isAuthResolved so no subscriber sees one without the other.
     authResolvedFor: null,
     setIsAuthResolved: (resolved, forIsAuthenticated = null) => set(() => ({

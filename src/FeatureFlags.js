@@ -35,7 +35,7 @@ export const flags = [
   // See design/new/conversational-cad.md §2.
   {name: 'workspace', isActive: false},
   // Open a model in-app instead of with a page load (open-205 Phase 1a, #2011,
-  // #2021): `navigateToModel` (utils/navigate.js) routes through react-router's
+  // #2021): `navigateToModel` (app/navigate.js) routes through react-router's
   // `navigate()` rather than `window.location.assign`, and the load the user
   // leaves is aborted and its state dropped (CadView step A). Its own flag,
   // not `workspace`, so the switch burns in and rolls back without the shell
@@ -59,7 +59,7 @@ export const flags = [
   // The AI assistant (epic assist-310, #1659; design/new/ai-workspace.md §13,
   // D12). It shows the assistant panel (Components/Bot/, whose agent loop is
   // #1675) and installs the dev hook `window.__bldrsAssistTools` that drives
-  // the viewer tool registry (src/viewer/tools/assistHost.js, #1674). The old
+  // the viewer tool registry (src/tools/assistHost.js, #1674). The old
   // `?feature=bot` turns it on too (FEATURE_IMPLICATIONS below), until the
   // tray's rename in #1672. A `#bot:` permalink opens the panel only where
   // this flag is on (TabbedPanels.jsx, NotesAndPropertiesDrawer.jsx). The registry and tool providers ship

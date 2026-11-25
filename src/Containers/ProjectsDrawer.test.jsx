@@ -3,7 +3,7 @@ import {act, fireEvent, render, screen, waitForElementToBeRemoved, within} from 
 import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
 import {ID_RESIZE_HANDLE_X} from '../Components/SideDrawer/HorizonResizerButton'
-import {navigateToModel} from '../utils/navigate'
+import {navigateToModel} from '../app/navigate'
 import {useIsMobile} from '../Components/Hooks'
 import ProjectsDrawer from './ProjectsDrawer'
 import {CONTROL_MARGIN, CONTROL_SIZE, TOP_BAR_HEIGHT} from './layoutConstants'
@@ -11,7 +11,7 @@ import {CONTROL_MARGIN, CONTROL_SIZE, TOP_BAR_HEIGHT} from './layoutConstants'
 
 // navigateToModel does a full page load; the real one would tear down
 // jsdom's location. Its own suite covers the query-preserving behaviour.
-jest.mock('../utils/navigate', () => ({navigateToModel: jest.fn()}))
+jest.mock('../app/navigate', () => ({navigateToModel: jest.fn()}))
 jest.mock('../Components/Hooks', () => ({useIsMobile: jest.fn(() => false)}))
 
 

@@ -15,7 +15,7 @@ import BotChat, {
   TURN_FAILED_MESSAGE,
   stepLimitMessage,
 } from './BotChat'
-import {ASSIST_FREE_MODELS} from '../../viewer/tools/assistModels'
+import {ASSIST_FREE_MODELS} from '../../tools/assistModels'
 import {
   ASSIST_MODEL_CHOICE_KEY,
   PICKED_MODEL_UNAVAILABLE_MESSAGE,
@@ -54,7 +54,7 @@ const mockControl = {runtimeFails: false, runtimeDelayMs: 0, startThrows: false,
 // The lazy runtime is a URL import in the app (assistRuntime.js); Jest loads
 // the module directly. Everything under it is real: the AI SDK, the
 // OpenRouter provider, and MSW's scripted SSE (api-handlers-openrouter.ts).
-jest.mock('../../viewer/tools/assistRuntime', () => ({
+jest.mock('../../tools/assistRuntime', () => ({
   loadAssistRuntime: () => {
     if (mockControl.runtimeFails) {
       return Promise.reject(new Error('404 assist/runtime.js'))
@@ -70,8 +70,8 @@ jest.mock('../../viewer/tools/assistRuntime', () => ({
 // and keep everything else of createShareAssist.
 const mockView: {selected: string[], undos: number, holdUndo: Promise<void> | null, holdQuery: Promise<void> | null} =
   {selected: ['e9'], undos: 0, holdUndo: null, holdQuery: null}
-jest.mock('../../viewer/tools/assistHost', () => {
-  const actual = jest.requireActual('../../viewer/tools/assistHost')
+jest.mock('../../tools/assistHost', () => {
+  const actual = jest.requireActual('../../tools/assistHost')
   return {
     ...actual,
     createShareAssist: (runtime: {

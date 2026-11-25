@@ -2,9 +2,9 @@ import React, {ReactElement, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import {Button, Typography} from '@mui/material'
 import {CloudOffOutlined as CloudOffIcon} from '@mui/icons-material'
-import {LOCAL_ONLY_MODE_NAME, isLocalOnlyLevel} from '../../privacy/localOnlyMode'
+import {LOCAL_ONLY_MODE_NAME, isLocalOnlyLevel} from '../../app/localOnlyMode'
 import useStore from '../../store/useStore'
-import {navigateToModel} from '../../utils/navigate'
+import {navigateToModel} from '../../app/navigate'
 import Dialog from '../Dialog'
 
 
@@ -21,7 +21,7 @@ export const LOCAL_ONLY_TITLE = LOCAL_ONLY_MODE_NAME
 
 /**
  * Shown when local-only mode refused a remote model link (Share.jsx sets
- * `blockedRemoteModel`; privacy/localOnlyMode.js). It says why, and offers
+ * `blockedRemoteModel`; app/localOnlyMode.js). It says why, and offers
  * the privacy settings, which live in the About dialog. If the visitor
  * raises their level there, the refused link opens; if they don't, it
  * stays refused and this dialog comes back so they know nothing happened.

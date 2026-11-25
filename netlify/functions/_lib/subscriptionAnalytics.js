@@ -4,7 +4,7 @@
  * The funnel's "Subscribed" step, sent from the server: `subscription_started`
  * and `subscription_ended` go to GA4 through the Measurement Protocol from
  * stripe-webhook. Before this, only the browser sent them (on the
- * pendingReauth token, src/privacy/subscriptionTracking.js), so a subscription
+ * pendingReauth token, src/app/subscriptionTracking.js), so a subscription
  * that started or ended while the app wasn't open — or by a user who never
  * came back — was never counted. design/new/quotas.md §"Server-side
  * subscription events" is the design.

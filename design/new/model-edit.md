@@ -107,7 +107,7 @@ is stored.
 carries the GUID's top 2 bits, so it is `0`–`3`; anything past `3` encodes more
 than 128 bits and is not a GlobalId (review of #2346). Some exporters write
 such ids anyway. That element cannot be named by a `g` ref: the ref is
-reported invalid rather than resolved. Assist's `viewer/tools/refs.js` keeps
+reported invalid rather than resolved. Assist's `tools/refs.js` keeps
 its own looser grammar for reads.
 
 Created elements get a **22-character IFC GlobalId** minted when the `create`
@@ -169,7 +169,7 @@ own capture, `engine/glbEngineCapture.js#captureEngineExtensions`):
   silently (`editApply.test.js` pins this: the test flips when the artifact
   carries GlobalId). The index answers **unknown** there, not absent (§6b):
   it cannot see the source, so a miss proves nothing, and a `create` under a
-  source element's GlobalId is refused rather than allowed to overwrite it. Assist's `viewer/tools/refs.js` resolves `g` refs through
+  source element's GlobalId is refused rather than allowed to overwrite it. Assist's `tools/refs.js` resolves `g` refs through
   `SearchIndex` too, and has the same gap today.
 - **Proposed fix, for L2 (not done here, because it changes the artifact
   payload).** Keep `GlobalId` in `serializeNode`. The live tree already has
