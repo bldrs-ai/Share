@@ -51,21 +51,24 @@ describe('AssistantMarkdown', () => {
   })
 
   it('renders a GFM table, inside a scrolling wrapper, once the plugin has loaded', async () => {
-    let load = () => undefined
-    // An earlier test has loaded the plugin; this one is the first load.
-    mockGfm.loaded = null
-    mockGfm.load = () => new Promise((resolve) => {
-      load = () => resolve(jest.requireActual('remark-gfm').default)
-    })
-    await renderMarkdown('| a | b |\n|---|---|\n| 1 | 2 |')
-    // Until it loads, the reply is plain Markdown: the table is its pipes.
-    expect(screen.queryByRole('table')).toBeNull()
-    expect(screen.getByText(/\| a \| b \|/)).toBeInTheDocument()
-    await act(() => Promise.resolve(load()))
-    const table = screen.getByRole('table')
-    expect(within(table).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['a', 'b'])
-    expect(getComputedStyle(table.parentElement).overflowX).toBe('auto')
-    mockGfm.load = () => Promise.resolve(jest.requireActual('remark-gfm').default)
+    try {
+      let load = () => undefined
+      // An earlier test has loaded the plugin; this one is the first load.
+      mockGfm.loaded = null
+      mockGfm.load = () => new Promise((resolve) => {
+        load = () => resolve(jest.requireActual('remark-gfm').default)
+      })
+      await renderMarkdown('| a | b |\n|---|---|\n| 1 | 2 |')
+      // Until it loads, the reply is plain Markdown: the table is its pipes.
+      expect(screen.queryByRole('table')).toBeNull()
+      expect(screen.getByText(/\| a \| b \|/)).toBeInTheDocument()
+      await act(() => Promise.resolve(load()))
+      const table = screen.getByRole('table')
+      expect(within(table).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['a', 'b'])
+      expect(getComputedStyle(table.parentElement).overflowX).toBe('auto')
+    } finally {
+      mockGfm.load = () => Promise.resolve(jest.requireActual('remark-gfm').default)
+    }
   })
 
   it('renders a table on the first commit of a remount after the plugin has loaded (#2313)', async () => {

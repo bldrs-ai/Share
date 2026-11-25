@@ -124,6 +124,24 @@ describeMobileAndDesktop('Assistant', (ff) => {
   // a marker is split across chunks mid-turn.
   test('renders the reply as Markdown, not as raw characters', async ({page}) => {
     await openAssistant(page)
+    // The reply's bubble remounts when it becomes ratable (#2313). A remount
+    // that rendered without GFM would show the table as raw pipes for one
+    // commit, which a single innerText read can miss. Watch every DOM change
+    // instead: once a reply has had a <table>, no reply may show pipe-table text.
+    await page.evaluate(() => {
+      const w = window as unknown as {__rawPipes: string[]}
+      w.__rawPipes = []
+      let sawTable = false
+      new MutationObserver(() => {
+        for (const el of Array.from(document.querySelectorAll('[data-testid="BotChat-Reply"]'))) {
+          if (el.querySelector('table')) {
+            sawTable = true
+          } else if (sawTable && /\|\s*-{3}|\|\s*Tool\s*\|/.test(el.textContent || '')) {
+            w.__rawPipes.push(el.textContent || '')
+          }
+        }
+      }).observe(document.body, {childList: true, subtree: true, characterData: true})
+    })
     await page.getByRole('textbox', {name: 'Message the assistant'}).fill(SCRIPT.markdownPrompt)
     await page.keyboard.press('Enter')
 
@@ -139,6 +157,10 @@ describeMobileAndDesktop('Assistant', (ff) => {
     expect(shown).not.toContain('`')
     expect(shown).not.toContain('- first')
     expect(shown).not.toContain('|---')
+    // The reply gets its feedback row once it is done, which remounts it; wait
+    // for that, then check the observer saw no raw-pipe commit before or after.
+    await expect(page.getByTestId('BotChat-ReplyGroup')).toBeVisible()
+    expect(await page.evaluate(() => (window as unknown as {__rawPipes: string[]}).__rawPipes)).toEqual([])
     // The user's own words stay plain.
     await expect(page.getByText(SCRIPT.markdownPrompt)).toBeVisible()
   })

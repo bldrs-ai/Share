@@ -74,6 +74,8 @@ function useGfm() {
   const [plugin, setPlugin] = useState(() => loadedMarkdownGfm())
   useEffect(() => {
     let isCurrent = true
+    // On a seeded mount this resolves to the same reference, so setPlugin bails
+    // out: a deliberate no-op, kept so the unseeded first load needs no branch.
     loadMarkdownGfm().then((loaded) => isCurrent && setPlugin(() => loaded), () => undefined)
     return () => {
       isCurrent = false
