@@ -390,7 +390,7 @@ export async function exportAndCacheGlb({
     // generally have no `.name`; the inject step no-ops on nullish.
     const titleForExtras = (typeof model?.name === 'string' && model.name) ? model.name : null
     // The engine's applied coordination frame, carried across the cache
-    // round-trip beside the title (see ../viewer/ifc/appliedCoordination for
+    // round-trip beside the title (see ../model/appliedCoordination for
     // the contract). It rides in `scenes[0].extras`, NOT in the model's own
     // userData, and that is what makes it survive: BOTH writers below drop
     // userData — the batched-native writer builds a fresh gltf-transform

@@ -2,8 +2,9 @@
 // (design/tracks/open-t200/layering.md §2.2). The model's builders call
 // `geometry.computeBoundsTree()`, so they need the patch, but nothing in
 // the model installs it on import: whoever composes the app does, which is
-// ShareIfc.js at its module load on the page. Jest mocks ShareIfc, so tests
-// run on unpatched three on purpose; a module that patched three's
+// ShareIfc.js at its module load on the page. Most Jest suites mock ShareIfc
+// (ShareIfc.dispose.test.js imports it for real), so they run on unpatched
+// three on purpose; a module that patched three's
 // prototypes on import would change what every later test in its Jest file
 // exercises. A test that wants the patch installs it and calls the function
 // this returns to put the originals back.

@@ -49,8 +49,8 @@ import {installBvhPatches} from '../../model/bvhPatch'
 // three-mesh-bvh's accelerated raycasting, installed globally at module load
 // as before the cut (model/bvhPatch.js says what each patch is for, and why
 // nothing in the model installs it on import). Runs in production only:
-// ShareIfc is mocked in the Jest harness, so tests keep running against
-// unpatched three.
+// most Jest suites mock ShareIfc (ShareIfc.dispose.test.js imports it for
+// real), so they keep running against unpatched three.
 installBvhPatches()
 
 

@@ -71,6 +71,23 @@ function importsOf(repoRel) {
 }
 
 
+describe('layerBoundary: the layer table', () => {
+  it('is the table layering.md §5 specifies', () => {
+    // Widening a layer silences violations without touching the allowlist,
+    // which the ratchet would not see; so changing the table is a test edit
+    // too, made in the doc's slice that decides it.
+    expect(LAYERS).toEqual([
+      ['base', ['utils', 'privacy', 'routes', 'net', 'OPFS', 'search', 'FeatureFlags.js', 'Filetype.js']],
+      ['engine', ['engine']],
+      ['model', ['model']],
+      ['loader', ['loader']],
+      ['session', ['session', 'workspace']],
+      ['viewer', ['viewer']],
+    ])
+  })
+})
+
+
 describe('layerBoundary: the allowlist', () => {
   const pairs = Object.entries(allowlist).flatMap(([file, imports]) => imports.map((imp) => [file, imp]))
 

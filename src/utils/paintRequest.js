@@ -18,6 +18,8 @@ export const USER_CAMERA_EVENT = 'bldrsusercamera'
 
 // Every live RenderDemand, so `requestPaint` reaches the viewer without the
 // caller holding it. One viewer at a time today; a disposed one leaves.
+// Exported for RenderDemand alone, which joins it when constructed and leaves
+// it on dispose; nothing else adds to it or clears it.
 export const liveDemands = new Set()
 // Above zero while a paint runs (`runPaint`): the hooks don't count what
 // three mutates inside its own render as a change to paint.

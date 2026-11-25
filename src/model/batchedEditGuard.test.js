@@ -192,7 +192,7 @@ function sourceFiles(dir, out = []) {
 }
 
 
-describe('viewer/ifc/batchedEditGuard', () => {
+describe('model/batchedEditGuard', () => {
   const repoRoot = path.resolve(__dirname, '../..')
   const found = new Map()
   for (const file of sourceFiles(path.join(repoRoot, 'src'))) {

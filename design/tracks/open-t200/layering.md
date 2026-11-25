@@ -1512,7 +1512,11 @@ fails.
 2. **A new entry fails CI.** `tools/lint/checkLayerAllowlist.mjs`, a step
    of `main.yml`'s `build` job on pull requests (decided 2026-11-24, §9
    item 5: in `build`, though drafts skip that job), compares the file with
-   the merge base's and fails on any pair that was not there. It prints
+   the base branch tip's (on a PR, Actions checks out the merge into the
+   base, so the tip is the PR's own change) and fails on any pair that
+   was not there. Pairs are keyed by path, so moving an allowlisted file
+   or its target without removing the import also fails: a move fixes the
+   import or keeps the path. It prints
    the pair and this doc's section. A new upward import therefore fails
    `bun run lint` locally, and cannot be bought with an allowlist edit.
 3. **The rule is proven to fire.** The same test lints virtual files
