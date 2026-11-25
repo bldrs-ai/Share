@@ -1,12 +1,12 @@
 import {Matrix4} from 'three'
-import {batchEditRevision} from '../viewer/ifc/batchedEdit'
+import {batchEditRevision} from '../model/batchedEdit'
 import {
   hasBatchedGeometry,
   instanceGeometryRangeAt,
   instanceSourceKey,
-} from '../viewer/ifc/batchedInstanceGeometry'
-import {forEachActiveInstance} from '../viewer/ifc/batchedInstanceTables'
-import {eachBatch} from '../viewer/ifc/batchedModel'
+} from '../model/batchedInstanceGeometry'
+import {forEachActiveInstance} from '../model/batchedInstanceTables'
+import {eachBatch} from '../model/batchedModel'
 
 
 /**

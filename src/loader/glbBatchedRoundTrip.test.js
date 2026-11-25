@@ -2,8 +2,8 @@
 import {BatchedMesh, Matrix4} from 'three'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
 import {MeshoptDecoder} from 'meshoptimizer/decoder'
-import {BLDRS_SPATIAL_TREE_EXTENSION_NAME} from './bldrsSpatialTree'
-import {BldrsInstanceTablesReader} from './bldrsInstanceTables'
+import {BLDRS_SPATIAL_TREE_EXTENSION_NAME} from '../engine/bldrsSpatialTree'
+import {BldrsInstanceTablesReader} from '../model/bldrsInstanceTables'
 import {batchedArtifactBytes, liveBatchedModel, triangleGeometry} from './glbArtifact.fixture'
 import {injectGlbExtensions, parseGlb, serializeGlb} from './injectGlbExtensions'
 import {COMPRESSION_MESHOPT, compressExportGlb} from '../export/glbCompression'
@@ -14,12 +14,12 @@ import {
   deleteBatchedInstance,
   mintGeometryId,
   mintOccurrenceId,
-} from '../viewer/ifc/batchedEdit'
-import {BATCHED_GEOMETRY_RANGES_FLAG} from '../viewer/ifc/batchedGeometryRanges'
-import {instanceGeometryAt} from '../viewer/ifc/batchedInstanceGeometry'
-import {forEachActiveInstance} from '../viewer/ifc/batchedInstanceTables'
-import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
-import {isDefaultColor} from '../viewer/ifc/productPalette'
+} from '../model/batchedEdit'
+import {BATCHED_GEOMETRY_RANGES_FLAG} from '../model/batchedGeometryRanges'
+import {instanceGeometryAt} from '../model/batchedInstanceGeometry'
+import {forEachActiveInstance} from '../model/batchedInstanceTables'
+import {hydrateBatchedModelFromInstancedGlb} from '../model/instancedGlbToBatchedModel'
+import {isDefaultColor} from '../model/productPalette'
 
 
 jest.mock('@sentry/react', () => ({captureException: jest.fn()}))

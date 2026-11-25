@@ -4,7 +4,7 @@
 // and the engine's log forwarded to the page's load report.
 //
 // Worker-safe, like engineHandler.js: no DOM, no store, no three.
-import {forEachVectorItem} from '../viewer/ifc/conwayVector'
+import {forEachVectorItem} from './conwayVector'
 
 
 /* Column-major mat4 elements per placement. */

@@ -40,51 +40,18 @@
 // path; it deliberately does not await an Init that hasn't been kicked
 // off yet.
 
-import {BatchedMesh, BufferGeometry, Mesh} from 'three'
-import {acceleratedRaycast, disposeBoundsTree} from 'three-mesh-bvh'
 import {IfcAPI} from '@bldrs-ai/conway/web-ifc'
-import ShareIfcManager from './ShareIfcManager'
+import ShareIfcManager from '../../engine/ShareIfcManager'
 import {isSpaModelNavOn} from '../../utils/spaModelNavMode'
-import {raycastActiveInstances} from './batchedRaycast'
-import {computeQuietBatchedBoundsTree, computeQuietBoundsTree} from './bvhBuild'
-import {disposeDeferredBatchedBoundsTree} from './deferredBatchedBvh'
+import {installBvhPatches} from '../../model/bvhPatch'
 
 
-// Install three-mesh-bvh's accelerated raycasting globally. The fork's
-// `IfcManager.setupThreeMeshBVH` did this (via web-ifc-three) at viewer
-// construction; with the fork gone, ShareIfc owns it. The prototype patch
-// is what makes `geometry.computeBoundsTree()` (Conway-direct parse +
-// cache-hit GLB decoration in Loader.js) and BVH-accelerated
-// `mesh.raycast` work, and `geometry.disposeBoundsTree()` (IfcContext
-// teardown) defined — without it, picking on multi-million-triangle
-// models falls back to O(triangles) brute force. Module-level +
-// idempotent (re-assigning the same functions is harmless). Runs in
-// production only: ShareIfc is mocked in the Jest harness (mirroring the
-// fork's manager, which was also mocked), so tests keep running against
-// unpatched three exactly as before. The build is three-mesh-bvh's without
-// its depth-cap console warning, which became the title of SHARE-1MT's load
-// diagnostics; the cap is recorded on the load report instead (bvhBuild.js).
-// Every format's BVH goes through these two patches.
-BufferGeometry.prototype.computeBoundsTree = computeQuietBoundsTree
-BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree
-Mesh.prototype.raycast = acceleratedRaycast
-
-// Same accelerated raycast for the Conway-direct BatchedMesh path. The
-// shared `acceleratedRaycast` dispatches on `this.isBatchedMesh` to
-// `acceleratedBatchedMeshRaycast`, which walks each instance's per-geometry
-// bounds tree (populated by `computeBatchedBoundsTree`) and still sets
-// `intersection.batchId` — the per-occurrence handle CadView reads to
-// resolve a pick. When a batch has no bounds trees built it falls back to
-// three's native BatchedMesh raycast (also batchId-bearing), so the patch
-// is safe even on batches we never call `computeBoundsTree()` on.
-// `raycastActiveInstances` is that same call, made safe for a batch with a
-// deleted instance, which the library's walk would otherwise throw on
-// (create-300 L0, #1915 — see batchedRaycast.js). A model's trees are
-// built after it is on screen (deferredBatchedBvh.js), so the dispose also
-// stops a build still running for a model being torn down.
-BatchedMesh.prototype.computeBoundsTree = computeQuietBatchedBoundsTree
-BatchedMesh.prototype.disposeBoundsTree = disposeDeferredBatchedBoundsTree
-BatchedMesh.prototype.raycast = raycastActiveInstances
+// three-mesh-bvh's accelerated raycasting, installed globally at module load
+// as before the cut (model/bvhPatch.js says what each patch is for, and why
+// nothing in the model installs it on import). Runs in production only:
+// ShareIfc is mocked in the Jest harness, so tests keep running against
+// unpatched three.
+installBvhPatches()
 
 
 /**

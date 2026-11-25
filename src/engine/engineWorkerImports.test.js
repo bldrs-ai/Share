@@ -8,7 +8,7 @@ import {buildSync} from 'esbuild'
  *
  * The worker has no DOM, no store and no three, and the modules it runs —
  * the engine handler, and since engine-worker.md §7 step 5 the GLB writer's
- * engine captures (`loader/glbEngineCapture.js`) — are written to need none
+ * engine captures (`engine/glbEngineCapture.js`) — are written to need none
  * of them. Nothing at runtime says so when one creeps back in: the GLB
  * capture's old home, `bldrsElementProperties.js`, imports the store for its
  * reader's alert, and the store's module touches `window` at import time, so
@@ -42,9 +42,9 @@ describe('engine worker import graph', () => {
     // Without this the guard below could pass on a graph that no longer
     // contains the code it exists to protect.
     expect(workerInputs()).toEqual(expect.arrayContaining([
-      'src/loader/glbEngineCapture.js',
-      'src/loader/bldrsElementPropertiesCapture.js',
-      'src/loader/bldrsSpatialTree.js',
+      'src/engine/glbEngineCapture.js',
+      'src/engine/bldrsElementPropertiesCapture.js',
+      'src/engine/bldrsSpatialTree.js',
     ]))
   })
 

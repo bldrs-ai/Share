@@ -173,7 +173,7 @@ Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 trian
      M triangles, tested one by one per pick` (`reportBvhDepthCap`).
      three-mesh-bvh stops splitting at `maxDepth` and makes one leaf of whatever is left, so a ray reaching
      that leaf tests its triangles linearly; picks stay correct. Share builds
-     BVHs with `verbose: false` (`viewer/ifc/bvhBuild.js`) because the
+     BVHs with `verbose: false` (`model/bvhBuild.js`) because the
      library's console warning said only that the cap was hit, and as a
      load-time warn it became the title of the diagnostics event
      (SHARE-1MT). The line records the number the warning left out, the
@@ -188,7 +188,7 @@ Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 trian
      Health line, since that is the load log.
      A batched model (Conway-direct IFC and STEP, and their GLB cache hits)
      builds its trees after it is on screen, in idle time
-     (`viewer/ifc/deferredBatchedBvh.js`), so its cap usually arrives after
+     (`model/deferredBatchedBvh.js`), so its cap usually arrives after
      Total. The build reports once, when its last tree is built, with the
      token of the load that scheduled it (`loadReportToken`): the line is
      added after Total, as the framing line is, or replaces the one the load

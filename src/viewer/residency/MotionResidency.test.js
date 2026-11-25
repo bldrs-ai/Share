@@ -1,13 +1,13 @@
 /* eslint-disable no-magic-numbers */
 import {BatchedMesh, BoxGeometry, EventDispatcher, Group, Matrix4, Vector3} from 'three'
-import {requestPaint} from '../three/renderDemand'
+import {requestPaint} from '../../utils/paintRequest'
 import {BUDGET_SHARE, MIN_FRACTION} from './autoResidency'
 import {MotionResidency, MotionResidencyMode, REST_FRAMES, REST_MS} from './MotionResidency'
-import {ResidencyController, ResidencyMetric} from './ResidencyController'
+import {ResidencyController, ResidencyMetric} from '../../model/ResidencyController'
 
 
-jest.mock('../three/renderDemand', () => ({
-  ...jest.requireActual('../three/renderDemand'),
+jest.mock('../../utils/paintRequest', () => ({
+  ...jest.requireActual('../../utils/paintRequest'),
   requestPaint: jest.fn(),
 }))
 

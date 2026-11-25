@@ -1,8 +1,8 @@
-import {makeFakeEditModel, translation} from '../viewer/edit/editBackend.fixture'
-import {seededRandomBytes} from '../viewer/edit/edit.fixture'
-import {applyEditOp, EditInconsistentError} from '../viewer/edit/editApply'
-import {EMPTY_EDIT_LOG, appliedOps, recordApplied} from '../viewer/edit/editLog'
-import {makeEditOp} from '../viewer/edit/editOps'
+import {makeFakeEditModel, translation} from '../session/edit/editBackend.fixture'
+import {seededRandomBytes} from '../session/edit/edit.fixture'
+import {applyEditOp, EditInconsistentError} from '../session/edit/editApply'
+import {EMPTY_EDIT_LOG, appliedOps, recordApplied} from '../session/edit/editLog'
+import {makeEditOp} from '../session/edit/editOps'
 import useStore from './useStore'
 
 

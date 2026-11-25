@@ -35,7 +35,7 @@
  *
  * **Cost.** The raycast already returns every hit along the ray: nothing
  * sets `firstHitOnly`, and the batched instance tree names every instance
- * whose box the ray crosses (ifc/batchedInstanceBvh.js). So this is a pass
+ * whose box the ray crosses (model/batchedInstanceBvh.js). So this is a pass
  * over a list of tens of hits, one material read each and, with planes
  * active, a dot product per plane — no extra raycast work. With no hit
  * clipped (no cut plane: every material's planes are null) it allocates

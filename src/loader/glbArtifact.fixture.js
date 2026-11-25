@@ -18,11 +18,11 @@ import {
   BLDRS_FACE_IDS_EXTENSION_NAME,
   buildFaceIdsExtensionData,
   capturePerTriangleIds,
-} from './bldrsFaceIds'
+} from '../engine/bldrsFaceIds'
 import {
   BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
   buildInstanceTablesExtensionData,
-} from './bldrsInstanceTables'
+} from '../model/bldrsInstanceTables'
 import {dropBufferViews, referencedBufferViews} from './glbArtifactSize'
 import {exportBatchedModelAsInstancedGlb} from './glbBatchedExport'
 import {injectGlbExtensions, parseGlb, repackGlbBin, serializeGlb} from './injectGlbExtensions'

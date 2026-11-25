@@ -1,16 +1,16 @@
 import {ShareViewer} from '../ShareViewer'
 import {unsortedArraysAreEqual, arrayRemove} from '../../utils/arrays'
-import {clearBatchedSelection} from '../ifc/batchedHighlight'
+import {clearBatchedSelection} from '../../model/batchedHighlight'
 import {requestPaint} from './renderDemand'
-import {BatchEditKind, onBatchEdit} from '../ifc/batchedEdit'
-import {forEachActiveInstance, instanceIdSpan, isActive} from '../ifc/batchedInstanceTables'
-import {eachBatch, isBatchedModel} from '../ifc/batchedModel'
+import {BatchEditKind, onBatchEdit} from '../../model/batchedEdit'
+import {forEachActiveInstance, instanceIdSpan, isActive} from '../../model/batchedInstanceTables'
+import {eachBatch, isBatchedModel} from '../../model/batchedModel'
 import {
   applySceneGraphVisibility,
   initiallyHiddenIds,
   isSceneGraphModel,
   sceneGraphElementIds,
-} from './sceneGraphVisibility'
+} from '../../model/sceneGraphVisibility'
 import {
   coverInstancesByOccurrences,
   findRootLevelProductNode,
@@ -673,7 +673,7 @@ export default class IfcIsolator {
    * batch returns to whatever visibility its other owner (residency) had set.
    *
    * Ownership handshake with `ResidencyController`. Residency
-   * (`src/viewer/residency/ResidencyController.js`) also drives `setVisibleAt`
+   * (`src/model/ResidencyController.js`) also drives `setVisibleAt`
    * — it evicts instances for the residency slider / LOD, and it tracks its own
    * `instance.visible` belief. Two owners of one bit needs an arbiter, so while
    * a mask is installed the isolator wraps the batch's `setVisibleAt`

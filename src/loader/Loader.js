@@ -35,19 +35,19 @@ import {navigateBaseOnModelPath, parseGitHubPath} from '../utils/location'
 import {yieldForPaint} from '../utils/scheduling'
 import {updateRecentFileLastModified} from '../connections/persistence'
 import {testUuid} from '../utils/strings'
-import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
-import {attachElementSubsets, attachInstanceMapSubsets, summariseElementIdAttribute} from '../viewer/three/elementSubsets'
+import {decorateShareModel, inferModelCapabilities} from '../model/ShareModel'
+import {attachElementSubsets, attachInstanceMapSubsets, summariseElementIdAttribute} from '../model/elementSubsets'
 import {
   attachGeometryExpressIds,
   attachOccurrencePaths,
   instanceMapFromGeometry,
   instanceMapFromTriangleIds,
-} from '../viewer/ifc/IfcInstanceMap'
+} from '../model/IfcInstanceMap'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
 import {BldrsElementPropertiesReader} from './bldrsElementProperties'
-import {BldrsFaceIdsReader} from './bldrsFaceIds'
-import {BldrsSpatialTreeReader} from './bldrsSpatialTree'
+import {BldrsFaceIdsReader} from '../engine/bldrsFaceIds'
+import {BldrsSpatialTreeReader} from '../engine/bldrsSpatialTree'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
 import {glbChunksHaveRenderableGeometry} from './glbArtifactHealth'
 import {parseGlbJsonChunk} from './glbArtifactSize'
@@ -58,28 +58,28 @@ import {isBldrsGlbContainer, readGlbContainerHeader, readGlbContainerJsonPrefixe
 import {
   BLDRS_SOURCE_BYTES_EXTRAS_KEY, BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb, validSourceBytes,
 } from './glbExport'
-import {glbInfo, glbVerbose, glbWarn} from './glbLog'
+import {glbInfo, glbVerbose, glbWarn} from '../utils/glbLog'
 import glbToThree from './glb'
 import {decodeGzipEnvelope} from './gzipEnvelope'
 import {ZIP_MODEL_TYPES, unwrapHostedArchive} from './modelArchive'
 import {ZipArchiveError, looksLikeZipBytes} from './zipArchive'
-import {BldrsInstanceTablesReader} from './bldrsInstanceTables'
+import {BldrsInstanceTablesReader} from '../model/bldrsInstanceTables'
 import {
   APPLIED_COORDINATION_KEY,
   COORDINATION_OFFSET_KEY,
   validAppliedCoordination,
   validCoordinationOffset,
-} from '../viewer/ifc/appliedCoordination'
-import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
-import {spillModelSource} from './opfsSourceByteStore'
+} from '../model/appliedCoordination'
+import {hydrateBatchedModelFromInstancedGlb} from '../model/instancedGlbToBatchedModel'
+import {spillModelSource} from '../engine/opfsSourceByteStore'
 import {EvictedOpfsSourceError, isUnusableOpfsSource} from './opfsSourceHealth'
-import {PART21_LOADER_TYPES, engineFormatOf} from './part21Formats'
+import {PART21_LOADER_TYPES, engineFormatOf} from '../engine/part21Formats'
 import {reportEngineSourceBuffered, reportEngineSourceFallback, reportPreviewUnitsSkipped} from './reportLoadDiagnostics'
 import {POLICY_BUFFERED_REASONS, SourceModeReason} from '../engine/sourcePolicy'
 import {reportRendererLimits} from './reportRendererLimits'
 import {reportOpfsDownloadFailed, reportOpfsNotCached, reportOpfsSourceEvicted} from '../OPFS/reportOpfsSourceCondition'
-import {STORE_DETECT_PREFIX_BYTES, conwayStoreOpenRequirement} from './stepFormat'
-import {isEngineWorkerLoad} from '../viewer/ifc/ShareIfcLoader'
+import {STORE_DETECT_PREFIX_BYTES, conwayStoreOpenRequirement} from '../engine/stepFormat'
+import {isEngineWorkerLoad} from './ShareIfcLoader'
 import {
   externalCacheKey,
   gitHubCacheKey,
@@ -1220,7 +1220,7 @@ export async function load(
   // instance: say so in the report (Share#2094).
   reportRendererLimits(model, () => viewer?.context?.getRenderer?.(), loader.type)
 
-  // ShareModel decoration (see src/viewer/ShareModel.js): adds
+  // ShareModel decoration (see src/model/ShareModel.js): adds
   // `format` + `capabilities` so call-sites can branch on intrinsic
   // model capability instead of guessing from `viewer.IFC.type`.
   decorateShareModel(model, loader.type)
@@ -2551,7 +2551,7 @@ async function findLoader(pathname, viewer) {
     case 'ifczip': {
       // A `.ifczip` shares this arm and is unwrapped to the model inside it
       // before `readModel` (`load`, beside the gzip net; `modelArchive.js`).
-      // ShareIfcLoader (`src/viewer/ifc/ShareIfcLoader.js`) is wired
+      // ShareIfcLoader (`src/loader/ShareIfcLoader.js`) is wired
       // up as `viewer.ifcLoader` at viewer construction (see
       // `src/viewer/ShareViewer.js`). It owns the Conway-direct parse
       // entry point that `readModel` invokes below. The fork's

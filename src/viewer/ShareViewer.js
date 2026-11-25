@@ -19,7 +19,7 @@ import {
   SRGBColorSpace,
   Vector3,
 } from 'three'
-import {LOOKS, DEFAULT_LOOK, forEachLookManagedMaterial} from './looks'
+import {LOOKS, DEFAULT_LOOK, forEachLookManagedMaterial} from '../model/looks'
 import {RoomEnvironment} from 'three/examples/jsm/environments/RoomEnvironment.js'
 import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
 import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'
@@ -28,23 +28,23 @@ import IfcHighlighter from './three/IfcHighlighter'
 import IfcIsolator from './three/IfcIsolator'
 import CustomPostProcessor from './three/CustomPostProcessor'
 import Selector from './three/Selector'
-import ShareIfcLoader from './ifc/ShareIfcLoader'
-import {robustBoundsFor} from './three/robustBounds'
+import ShareIfcLoader from '../loader/ShareIfcLoader'
+import {robustBoundsFor} from '../model/robustBounds'
 import ShareIfc from './ifc/ShareIfc'
 import {IfcContext} from './three/context'
 import ThreeContext from './three/ThreeContext'
 import debug from '../utils/debug'
 import {occurrencePathKey} from '../utils/occurrencePaths'
-import {modelHasCapability} from './ShareModel'
-import {paintPreviewSelection} from './previewSelection'
-import {paintStreamingSelection, streamingTablesModel} from './streamingBatchPick'
-import {isLookOn} from './lookMode'
+import {modelHasCapability} from '../model/ShareModel'
+import {paintPreviewSelection} from '../model/previewSelection'
+import {paintStreamingSelection, streamingTablesModel} from '../model/streamingBatchPick'
+import {isLookOn} from '../model/lookMode'
 import {isSoftwareRenderer} from './three/softwareRenderer'
 import {gtagEvent} from '../privacy/analytics'
 import {MotionAO} from './motionAO'
 import LightingGui from './three/LightingGui'
 import {requestPaint} from './three/renderDemand'
-import {viewRules} from './legacyViewRules'
+import {viewRules} from '../engine/legacyViewRules'
 import {
   applyBatchedInstancePreselection,
   applyBatchedInstanceSelection,
@@ -53,7 +53,7 @@ import {
   clearBatchedPreselection,
   clearBatchedSelection,
   resolveBatchedHighlight,
-} from './ifc/batchedHighlight'
+} from '../model/batchedHighlight'
 
 
 // Minimum index-buffer capacity for the preselection pool. 256 u32
@@ -69,7 +69,7 @@ const ENV_MAP_BLUR = 0.04
 
 
 // Default env-map intensity (§6e) — derived from the Neutral look (single
-// source of truth: src/viewer/looks.js LOOKS.neutral). Scales the gradient
+// source of truth: src/model/looks.js LOOKS.neutral). Scales the gradient
 // studio IBL contribution (`scene.environmentIntensity`); `applyLook`
 // overrides it on a render-mode toggle. Also live-tunable via `?feature=look`.
 const ENV_MAP_INTENSITY = LOOKS.neutral.envIntensity

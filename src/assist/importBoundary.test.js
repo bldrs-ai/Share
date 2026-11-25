@@ -61,7 +61,7 @@ describe('assist/importBoundary', () => {
     const messages = await fenceMessages(
       `import {flags} from '../FeatureFlags'\n` +
       `export const f = flags\n` +
-      `export const lazy = () => import('../viewer/visibilityRefs')\n`,
+      `export const lazy = () => import('../model/visibilityRefs')\n`,
       'src/assist/boundaryFixture.js')
     expect(messages.map((m) => m.line)).toEqual([1, 3])
   }, LINT_TIMEOUT_MS)
@@ -81,7 +81,7 @@ describe('assist/importBoundary', () => {
   it('allows a host to import Assist', async () => {
     const messages = await fenceMessages(
       `import {createRegistry} from '../../assist'\nexport const r = createRegistry\n`,
-      'src/viewer/tools/boundaryFixture.js')
+      'src/Components/Bot/boundaryFixture.js')
     expect(messages).toEqual([])
   }, LINT_TIMEOUT_MS)
 })

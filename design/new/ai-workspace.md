@@ -1219,7 +1219,7 @@ instance ids. The tool layer needs it lifted to a module or store action
 first. It is a task inside #1674.
 
 **Element refs.** Tools take and return the permalink ref vocabulary
-(`src/viewer/visibilityRefs.js`, [model-edit.md](model-edit.md) §5):
+(`src/model/visibilityRefs.js`, [model-edit.md](model-edit.md) §5):
 
 - `e<expressID>` for IFC and STEP products;
 - `o1.2.3` for STEP occurrences;

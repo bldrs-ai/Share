@@ -88,8 +88,8 @@ import {
   makeRangeCanary,
   parseInstanceTablesExtensionData,
   tableRowIdentity,
-} from '../loader/bldrsInstanceTables'
-import {BLDRS_SPATIAL_TREE_EXTENSION_NAME, validateDecodedTree} from '../loader/bldrsSpatialTree'
+} from '../model/bldrsInstanceTables'
+import {BLDRS_SPATIAL_TREE_EXTENSION_NAME, validateDecodedTree} from '../engine/bldrsSpatialTree'
 import {occurrenceOwnerIndex, occurrenceOwnerKey} from '../utils/occurrencePaths'
 import {dropBufferViews, referencedBufferViews} from '../loader/glbArtifactSize'
 import {shortestFloat32} from '../loader/glbSlim'
@@ -409,10 +409,10 @@ function pad4(n) {
  * on.
  *
  * The join key is `parents[j]` — the parent IFC product's expressID
- * (`viewer/ifc/batchedSubset.js`) — refined by `occurrencePaths[j]` for STEP,
+ * (`model/batchedSubset.js`) — refined by `occurrencePaths[j]` for STEP,
  * where one part type is reused at many occurrences and the scalar expressID
  * collides across all of them. NOT `occurrenceIds`, which is a global
- * emission-order index (`viewer/ifc/batchedHighlight.js`) and joins to
+ * emission-order index (`model/batchedHighlight.js`) and joins to
  * nothing in the tree.
  *
  * A table that cannot be read at all leaves every instance unkeyed rather
@@ -1038,7 +1038,7 @@ function pushNode(nodes, node) {
  * expressID is appended to it — the `<Kind> #<id>` convention
  * `utils/geometryLabels.js` already uses for anonymous geometry. There is no
  * GlobalId to use instead: `BLDRS_spatial_tree` does not carry one
- * (`loader/bldrsSpatialTree.js#serializeNode`), and the only place it lives
+ * (`engine/bldrsSpatialTree.js#serializeNode`), and the only place it lives
  * is `BLDRS_element_properties`, whose whole design is to inflate lazily per
  * block rather than open the entire pset closure.
  *

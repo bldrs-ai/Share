@@ -476,7 +476,7 @@ const SPZ_MAGIC = Array.from('NGSP', (c) => c.charCodeAt(0))
  * three's vendored copy, already shipped, and this stays SYNCHRONOUS, which
  * is what lets `analyzeHeader` keep its signature; the real inflate of a
  * whole upload is `DecompressionStream` through
- * `export/glbGzip.js#gunzipBytes`.
+ * `loader/glbGzip.js#gunzipBytes`.
  *
  * @param {ArrayBuffer} headerBuffer
  * @return {Uint8Array|null} null when nothing decodes
@@ -638,7 +638,7 @@ export function classifyStepFamily(header) {
  * the main-thread engine's store open (IFC only there), where guessing 'ifc' burns a model handle and
  * caches a GLB with no NavTree (bldrs-ai/Share#1776) — no longer asks here.
  * It asks conway's own `ModelFormatDetector` instead; see
- * `src/loader/stepFormat.js` for why a scan like this one cannot agree with
+ * `src/engine/stepFormat.js` for why a scan like this one cannot agree with
  * that parser, and please don't route a format decision back through it.
  *
  * @param {string} header

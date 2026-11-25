@@ -12,7 +12,7 @@ import {
 import {makeBatchEncoder, makeLogForwarder, previewMessage, snapshotStatistics} from './engineStream'
 import {ENGINE_PROTOCOL_VERSION} from './protocol'
 import {makeInProcessTransport} from './transports'
-import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
+import {UnsupportedSchemaError} from './unsupportedSchema'
 import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 
 
@@ -613,7 +613,7 @@ describe('engine/engineModelLoad with the real IncrementalBatchedBuilder', () =>
     // facade's store has DROPPED it (after batch 1's append), so batch 2's
     // placement must come from the builder's own cache: the invariant the
     // store's drop rests on (review on #2058).
-    const {IncrementalBatchedBuilder} = jest.requireActual('../viewer/ifc/incrementalBatchedBuilder')
+    const {IncrementalBatchedBuilder} = jest.requireActual('../model/incrementalBatchedBuilder')
     const directApi = makeStreamingApi()
     const direct = new IncrementalBatchedBuilder(directApi, 0)
     for (;;) {
@@ -779,7 +779,7 @@ describe('engine/engineModelLoad streamed STEP load', () => {
   })
 
   it('assembles the same per-occurrence tables through the facade as from the engine directly', async () => {
-    const {IncrementalBatchedBuilder} = jest.requireActual('../viewer/ifc/incrementalBatchedBuilder')
+    const {IncrementalBatchedBuilder} = jest.requireActual('../model/incrementalBatchedBuilder')
     const directApi = makeStepApi()
     const direct = new IncrementalBatchedBuilder(directApi, 0)
     for (;;) {

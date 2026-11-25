@@ -170,6 +170,21 @@ them. They import nothing above.
 
 Production files only. Tests move with their subject.
 
+**Status: M1 landed these moves (#2316).** Every file in the `model`,
+`engine`, `loader` and `base` rows below, `Containers/modelSession.js` and
+`src/viewer/edit/` are at their new paths, flat in each directory
+(`src/model/bvhBuild.js`, `src/engine/ShareIfcManager.js`,
+`src/loader/ShareIfcLoader.js`, `src/utils/glbLog.js`,
+`src/session/modelSession.js`, `src/session/edit/`), with the two splits and
+`utils/sizeClass.js`. A test or fixture named after its subject moved with
+it, the E2E `streamingBatchPick.spec.ts` included (to `src/model/`); the two
+tests named after no one file went where their subject went
+(`batchedEditGuard.test.js` to the model, `bldrsCaptureWindowed.test.js` to
+the engine). `src/session/index.js` is new: the session layer's surface,
+which §6's static guard bundles. The tables below keep the paths as they
+were, since they are the record of what moved; the `viewer/tools/` row and
+the eight app-level leaves are M2's.
+
 **`src/engine/` (15 files today)**
 
 | To | Files |
@@ -326,6 +341,17 @@ are the Conway loader reaching its own siblings.
 The survey this started from said `closeAllEngineSessions()` is called at
 sign-out. It is called by Clear cache only
 (`ProfileControl.jsx:416`, `clearLocalCacheReleasingEngines`).
+
+**Measured after M1, on `afe16dd0`: 59 in 34 files**, the allowlist
+`tools/lint/layerAllowlist.json` holds, and `bun run lint` with it emptied
+reports the same 59. Four more than the 55 below, each from a file added
+after `7cbc995d`: `privacy/consentChoice.js` → `index/ga.js` and
+`store/useStore.js`, `privacy/localOnlyMode.js` →
+`Components/Open/sampleModelRoster.js` (all #2051), and
+`loader/uploadedFileName.js` → `connections/persistence.ts` (#2313). None
+of them is in M2's list, so after M2 the count is 23 unless a slice takes
+them: the two privacy files are app-level leaves like M2's, and
+`uploadedFileName.js` makes the import `Loader.js` does (entry 14, 3a).
 
 **After the mechanical move** (§7): **55 in 31 files** after M1, **19 in
 15 files** after M2. The 19 are the allowlist the plan works off.
@@ -1571,6 +1597,16 @@ it, and so does an entry that has gone, so the slice that removes one
 must delete it from the list. A guard that only printed the list could
 not fail.
 
+**As built in M1** (`src/session/sessionImports.test.js`): it walks the
+metafile out from `session/index.js` and names each edge that crosses into
+the UI, the viewer, React, MUI, zustand or a DOM-at-import module, so the
+exact set is of edges, not files. On M1 it is the two store imports of
+`modelSession.js`; `utils/location.js` is reached only through the store, so
+it is not its own entry until something below the UI imports it. The run
+itself (`headless.test.js`) is not committed: `session.load(source)` and
+`getModelSessionHost()` do not exist until 3a, so a skipped test would name
+an API nobody has written.
+
 **When.** The guard lands with M1. The run goes green with 3a, the slice
 that takes the store and `utils/location.js` out of the loader. Until
 then it is committed skipped, naming #2031 on the line above (STYLE.md
@@ -1647,7 +1683,8 @@ slices around it shift by six if it lands earlier.
   `tools/lint/layers.cjs`, the allowlist, `checkLayerAllowlist.mjs`,
   `src/layerBoundary.test.js`; the headless static guard (§6).
 - **Removes:** 26 of today's 79, and exposes 2 (`modelSession.js`'s
-  store imports, upward once it is in its layer): 79 → 55.
+  store imports, upward once it is in its layer): 79 → 55. On `afe16dd0`
+  the allowlist is 59, the four more coming from files added since (§3).
 - **API changes:** none. Import paths only.
 - **Proof it is neutral:** a script in the PR body: for every file that
   is not a pure rename, each changed line matches an import, an

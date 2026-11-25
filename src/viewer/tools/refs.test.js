@@ -1,6 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {Group} from 'three'
-import * as visibilityRefs from '../visibilityRefs'
+import * as visibilityRefs from '../../model/visibilityRefs'
 import {refMaker, resolveRefs} from './refs'
 
 

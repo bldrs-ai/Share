@@ -2,7 +2,7 @@ import {modelFileInPath} from '../../Containers/SelectionHashWriter'
 import {HASH_PREFIX_SELECTION} from '../../Containers/selectionHash'
 import useStore from '../../store/useStore'
 import {setParamsToHash} from '../../utils/location'
-import {parseRef} from '../visibilityRefs'
+import {parseRef} from '../../model/visibilityRefs'
 import {refMaker, resolveRefs} from './refs'
 import {selectAndFrame} from './viewTools'
 

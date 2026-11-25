@@ -1,5 +1,5 @@
 import {Vector3, Plane, Raycaster, Vector2, Box3, Sphere, Matrix3} from 'three'
-import {getMeshMaterials} from '../ShareModel'
+import {getMeshMaterials} from '../../model/ShareModel'
 import debug from '../../utils/debug'
 import CutPlaneArrowHelper from './CutPlaneArrowHelper'
 import {ArrowFade, NEAR_PX, TOUCH_FADE_FLOOR, TOUCH_GRAB_PX, distanceWithin, screenAxis} from './arrowFade'

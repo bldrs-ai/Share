@@ -5,7 +5,7 @@
 // container — which is exactly the Safari-before-16.4 path, and is why the
 // v2 expectations below are assertions about shipping behaviour rather than
 // about history. The `v3` block plants Node's real streams, the same way
-// `export/glbGzip.test.js` does, and is the only place v3 bytes exist.
+// `loader/glbGzip.test.js` does, and is the only place v3 bytes exist.
 /* eslint-disable no-magic-numbers */
 import {
   CompressionStream as NodeCompressionStream,

@@ -25,7 +25,7 @@ For Project 1 in the UX doc: 2 engine workers (A, B), 3 sessions, and no session
 | **Project** | A named group of models and sessions | `WorkspaceProject` in `src/workspace/persistence.ts` (`{id, name, models}`, each model a `WorkspaceModelRef` `{id, label, path}`), models only |
 | **Model** | A source file (IFC, STEP, GLB, …) the project lists, with its version history | A load route (GitHub path, Drive id, local OPFS name) |
 | **Session** | A conversation thread over some of the project's models: conversation, model refs, placements, op logs, view state | `WorkspaceSession`, not built |
-| **Model session** | One open model: its load, engine lease, scene root and per-model state | `ModelSession` in `src/Containers/modelSession.js`, moving to `src/session/` ([layering.md](../tracks/open-t200/layering.md) §4.5) |
+| **Model session** | One open model: its load, engine lease, scene root and per-model state | `ModelSession` in `src/session/modelSession.js`, moving to `src/session/` ([layering.md](../tracks/open-t200/layering.md) §4.5) |
 | **Model engine** | The Conway worker for one model | `EngineSession` today, to be `WorkerEngine`, leased from `EngineHost` ([layering.md](../tracks/open-t200/layering.md) §4.1, [engine-worker.md](engine-worker.md) §5) |
 
 **Names (owner, 2026-11-24).** "Session" used to mean three things in nearby docs. Now:

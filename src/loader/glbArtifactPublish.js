@@ -1,5 +1,5 @@
 import useStore from '../store/useStore'
-import {glbInfo} from './glbLog'
+import {glbInfo} from '../utils/glbLog'
 
 
 /**

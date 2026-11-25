@@ -21,7 +21,7 @@ jest.mock('./glbCompress', () => ({
 }))
 
 import {liveBatchedModel} from './glbArtifact.fixture'
-import {setGlbLogSink} from './glbLog'
+import {setGlbLogSink} from '../utils/glbLog'
 import {gitHubCacheKey} from './sourceCacheKey'
 
 

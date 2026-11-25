@@ -34,7 +34,7 @@ import {modelOpenKind} from '../utils/reportModelOpen'
  * no-geometry alert, the local-upload ledger, and the open's analytics
  * (real_model_open, model_view, the engagement count, the load
  * diagnostics), once per open. Called only by a load job that is still
- * current (open-205 #2019, Containers/modelSession.js), so all of it is
+ * current (open-205 #2019, session/modelSession.js), so all of it is
  * about the model shown.
  *
  * @param {object} routeResult the route loaded, the store's modelPath

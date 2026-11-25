@@ -93,7 +93,7 @@ async function exportWith(page: Page, mode: string, name: string): Promise<strin
 /** A Draco bitstream's method byte: 'DRACO', major, minor, encoder type, METHOD. */
 const DRACO_METHOD_BYTE = 8
 const DRACO_EDGEBREAKER = 1
-/** The row tag's glTF semantic (`loader/bldrsInstanceTables.js#ROW_TAG_SEMANTIC`). */
+/** The row tag's glTF semantic (`model/bldrsInstanceTables.js#ROW_TAG_SEMANTIC`). */
 const ROW_TAG_SEMANTIC = '_BLDRS_ROW'
 const GLB_HEADER_BYTES = 12
 const GLB_CHUNK_HEADER_BYTES = 8
@@ -163,7 +163,7 @@ describeMobileAndDesktop('Share 140: a collapsed model stays selectable (#1871)'
   // merge into one primitive while one shape placed twice stays an instanced
   // node. Every primitive of the Draco file is EDGEBREAKER, the collapsed one
   // carrying the per-vertex row tag its reader regroups triangles by
-  // (`loader/bldrsInstanceTables.js#ROW_TAG_SEMANTIC`), so this is the browser
+  // (`model/bldrsInstanceTables.js#ROW_TAG_SEMANTIC`), so this is the browser
   // test of the tag through three's own DRACOLoader: the method bytes and the
   // attribute prove the file is the tagged layout, the `regrouped` log proves
   // the reader took the tag path rather than the untagged one, and a

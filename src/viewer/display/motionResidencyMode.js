@@ -1,5 +1,5 @@
 import {isFeatureEnabled} from '../../FeatureFlags'
-import {ResidencyMetric} from '../residency/ResidencyController'
+import {ResidencyMetric} from '../../model/ResidencyController'
 import {MotionResidencyMode} from '../residency/MotionResidency'
 import {RESIDENCY_FULL} from './residencyMode'
 

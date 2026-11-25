@@ -39,7 +39,7 @@ const DEFAULT_BASENAME = 'model'
 const NO_COMPRESSION = 'none'
 // What a gzipped export is called and served as. Their canonical home, since
 // this bundle may not import from the host's and a host-side copy would have
-// no caller (`export/glbGzip.js` module doc). Both extensions, not a swap —
+// no caller (`loader/glbGzip.js` module doc). Both extensions, not a swap —
 // `.glb.gz` is what a web server would serve and what an unarchiver expects,
 // and keeping `.glb` in the middle is what says what is inside.
 const GZIP_EXTENSION = 'gz'

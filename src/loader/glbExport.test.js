@@ -61,11 +61,11 @@ import {
 import {
   APPLIED_COORDINATION_KEY,
   COORDINATION_OFFSET_KEY,
-} from '../viewer/ifc/appliedCoordination'
+} from '../model/appliedCoordination'
 import {parseGlb, serializeGlb} from './injectGlbExtensions'
 import {gitHubCacheKey} from './sourceCacheKey'
-import {deleteBatchedInstance, setBatchedInstanceMatrix} from '../viewer/ifc/batchedEdit'
-import {flatMeshToBatchedModel} from '../viewer/ifc/flatMeshToBatchedModel'
+import {deleteBatchedInstance, setBatchedInstanceMatrix} from '../model/batchedEdit'
+import {flatMeshToBatchedModel} from '../model/flatMeshToBatchedModel'
 
 
 /**

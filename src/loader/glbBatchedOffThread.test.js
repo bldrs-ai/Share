@@ -9,12 +9,12 @@ import {
   Quaternion,
   Vector3,
 } from 'three'
-import {deleteBatchedInstance} from '../viewer/ifc/batchedEdit'
+import {deleteBatchedInstance} from '../model/batchedEdit'
 import {liveBatchedModel, triangleGeometry} from './glbArtifact.fixture'
 import {buildInstancedGlbFromSnapshot} from './glbBatchedBuild'
 import {exportBatchedModelAsInstancedGlb, exportBatchedModelOffThread} from './glbBatchedExport'
 import {snapshotBatchedModel} from './glbBatchedSnapshot'
-import {setGlbLogSink} from './glbLog'
+import {setGlbLogSink} from '../utils/glbLog'
 
 
 // The batched-native cache writer split into a main-thread snapshot and a

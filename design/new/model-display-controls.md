@@ -45,8 +45,8 @@ throw away.
 
 | Piece | Where | Shape |
 |---|---|---|
-| Auto-color | `src/viewer/ifc/productPalette.js` | `applyProductPalette(batches)` at assemble time, gated on `autoColorParts` (default on) |
-| Residency slider + priority metric | `src/Components/Residency/ResidencyControl.jsx`, `src/viewer/residency/ResidencyController.js` | Popover on the "eyeball" button in `ElementsControl`; BatchedMesh-only |
+| Auto-color | `src/model/productPalette.js` | `applyProductPalette(batches)` at assemble time, gated on `autoColorParts` (default on) |
+| Residency slider + priority metric | `src/Components/Residency/ResidencyControl.jsx`, `src/model/ResidencyController.js` | Popover on the "eyeball" button in `ElementsControl`; BatchedMesh-only |
 | Hide / Isolate / Show-all | `src/Components/ElementsControl.jsx` + `IfcIsolator` | Store: `hiddenElements`, `isTempIsolationModeOn`; URL-persisted in `#d:` as `hide=`/`show=`/`iso=` (§6.3, #1250) |
 | Selection scopes | `NavTreeSlice` | `selectedElement`, `selectedElements` (expressIDs), `selectedInstanceIds` (synthetic per-`PlacedGeometry`), occurrence paths for STEP |
 | Subset construction | `batchedSubset.js`, `IfcInstanceMap`, `elementSubsets` | Three routes to "a `Mesh` covering these elements", one per model shape |
@@ -247,7 +247,7 @@ Three implementations:
 | `MergedResidencyBackend` | **Cache-hit GLB from our IFC/STEP export** — one merged `Mesh` | index-buffer compaction over `IfcInstanceMap.instanceIdToTriangleIndices` | O(triangles) per apply — needs care |
 
 NavTree hide / isolate on scene-graph models already uses this primitive:
-`src/viewer/three/sceneGraphVisibility.js`, driven by `IfcIsolator` when a
+`src/model/sceneGraphVisibility.js`, driven by `IfcIsolator` when a
 model has no batches, no `createSubset` and no per-vertex element IDs (ADF,
 OBJ, FBX, STL, third-party GLB). It sets each element's own `visible`, keeps
 the containers of an isolated element shown, and turns a hidden object's
@@ -331,7 +331,7 @@ view-200's remaining slice was URL-encoding `hiddenExpressIDs[]`. Hidden is an
 appearance axis on a scope, so it rides the same token with the same scope
 vocabulary, rather than a parser of its own that would drift from this one the
 first time STEP occurrence paths needed encoding. Implemented in
-`src/viewer/visibilityRefs.js` (refs and the hidden-set diff) and
+`src/model/visibilityRefs.js` (refs and the hidden-set diff) and
 `src/Components/Residency/visibilityHash.js` (the terms):
 
 ```

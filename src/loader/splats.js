@@ -1,6 +1,6 @@
 import {BoxGeometry, Group} from 'three'
 import debug from '../utils/debug'
-import {requestPaint} from '../viewer/three/renderDemand'
+import {requestPaint} from '../utils/paintRequest'
 
 
 // Share extension → Spark SplatFileType enum value (see

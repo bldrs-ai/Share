@@ -10,8 +10,8 @@ import {
 import {N8AOPostPass} from 'n8ao'
 import {WebGLRenderer, Scene, Camera, UnsignedShortType} from 'three'
 import {gtagEvent} from '../../privacy/analytics'
-import {isLookOn} from '../lookMode'
-import {LOOKS, DEFAULT_LOOK} from '../looks'
+import {isLookOn} from '../../model/lookMode'
+import {LOOKS, DEFAULT_LOOK} from '../../model/looks'
 import {SceneToneMappingEffect} from './backgroundEffect'
 import {InPlacePass} from './inPlacePass'
 import {patchOutlineForBatchedMeshes} from './outlineBatching'
@@ -42,7 +42,7 @@ const N8AO_INTENSITY = 3
 const N8AO_QUALITY = 'Medium'
 
 
-// Maps a look's `toneMapping` key (src/viewer/looks.js) to a postprocessing
+// Maps a look's `toneMapping` key (src/model/looks.js) to a postprocessing
 // ToneMappingMode. Lives here so looks.js stays free of the postprocessing
 // dependency; unknown keys fall back to NEUTRAL.
 const TONE_MODE_BY_LOOK_KEY = {
@@ -186,7 +186,7 @@ export default class CustomPostProcessor {
 
   /**
    * Set the tone-mapping operator from a look's `toneMapping` key
-   * (src/viewer/looks.js). Resolves the key → ToneMappingMode here so looks.js
+   * (src/model/looks.js). Resolves the key → ToneMappingMode here so looks.js
    * needn't import postprocessing. Used by `ShareViewer.applyLook`.
    *
    * @param {string} lookKey 'neutral' | 'linear'

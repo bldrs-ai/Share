@@ -9,7 +9,7 @@ import {
 import {ColorMode} from '../../viewer/display/colorMode'
 import {RESIDENCY_DEFAULT} from '../../viewer/display/residencyMode'
 import {ShadingMode} from '../../viewer/display/shadingMode'
-import {ResidencyMetric} from '../../viewer/residency/ResidencyController'
+import {ResidencyMetric} from '../../model/ResidencyController'
 
 
 const {AUTO, SOURCE} = ColorMode

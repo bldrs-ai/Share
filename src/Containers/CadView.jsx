@@ -67,10 +67,10 @@ import {isSpaModelNavOn} from '../utils/spaModelNavMode'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../viewer/three/Picker'
 import {isOnControl} from '../viewer/three/pickControls'
-import {loadPreviewGroups, pickPreviewExpressId, previewOccurrencePickOf} from '../viewer/previewSelection'
-import {streamingBatchRoots, streamingPickOf} from '../viewer/streamingBatchPick'
+import {loadPreviewGroups, pickPreviewExpressId, previewOccurrencePickOf} from '../model/previewSelection'
+import {streamingBatchRoots, streamingPickOf} from '../model/streamingBatchPick'
 import {USER_CAMERA_EVENT} from '../viewer/three/renderDemand'
-import {DEFAULT_LOOK} from '../viewer/looks'
+import {DEFAULT_LOOK} from '../model/looks'
 import {installAssistDevHook} from '../viewer/tools/assistHost'
 import {registerSelectionFunnel} from '../viewer/tools/selectionFunnel'
 import ViewCube from '../Components/ViewCube/ViewCube'
@@ -198,7 +198,7 @@ export default function CadView({
   // too, and onViewer reloads the model into the new one.
   const inFlightViewerRef = useRef(null)
   // open-205 #2019 (Phase 1b step 1): the model sessions this view binds to
-  // (Containers/modelSession.js; design/new/in-app-model-switch.md §4.9).
+  // (session/modelSession.js; design/new/in-app-model-switch.md §4.9).
   // The active session owns the model shown: its load job (the run's abort
   // controller, under the in-app switch), its engine and its window
   // handlers, and only its current job writes the model's state. A load the
@@ -1665,7 +1665,7 @@ export default function CadView({
       // raycast: a pick in a spot only they cover selects nothing yet.
       //
       // Beside it, the durable batches themselves, which are pickable from the
-      // row they are written (viewer/streamingBatchPick.js): the builder keeps
+      // row they are written (model/streamingBatchPick.js): the builder keeps
       // the very tables finalize stamps. The nearest hit on either wins; where
       // they overlap (IFC: the preview and the durable instance of one element)
       // both name the same element.
@@ -2819,7 +2819,7 @@ export default function CadView({
       // Captured here, as a handled event, rather than left to reach Sentry
       // as an unhandled rejection: a property read from a spilled source can
       // throw NotReadableError when another tab replaced its OPFS entry
-      // (loader/opfsSourceByteStore.js), and index/sentry.js drops unhandled
+      // (engine/opfsSourceByteStore.js), and index/sentry.js drops unhandled
       // NotReadableErrors as a picked file gone unreadable (SHARE-1PZ). This
       // one may be Share's fault, so it stays in Sentry (codex on #2242).
       if (!isStale) {

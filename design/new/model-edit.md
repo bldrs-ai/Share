@@ -83,9 +83,9 @@ document, or a pasted part gets silently evicted and looks like data loss.
 
 An op names its targets with refs that survive a reload and, where the format
 allows it, a re-export of the source. The vocabulary is the one the
-hide/isolate permalink uses (`src/viewer/visibilityRefs.js`,
+hide/isolate permalink uses (`src/model/visibilityRefs.js`,
 [model-display-controls.md](model-display-controls.md) §6.3), narrowed for a
-log that is persisted. `src/viewer/edit/editRefs.js` parses, formats and
+log that is persisted. `src/session/edit/editRefs.js` parses, formats and
 validates it.
 
 | Ref | Names | In an op? | Stable because |
@@ -112,7 +112,7 @@ its own looser grammar for reads.
 
 Created elements get a **22-character IFC GlobalId** minted when the `create`
 op is created (128 random bits, compressed to the IFC base64 alphabet;
-[create-engine.md](create-engine.md) §B3; `src/viewer/edit/globalId.js`). A
+[create-engine.md](create-engine.md) §B3; `src/session/edit/globalId.js`). A
 `duplicate` mints one per copy the same way. The GlobalId is stored in the op,
 so replay is deterministic and a later op can refer to an element an earlier op
 created. It is also what an eventual IFC export writes as the element's
@@ -145,7 +145,7 @@ not resolve" (§6b).
 ### 5.1 GlobalId on a cache-hit load: missing today
 
 Checked against `public/index.ifc` (Conway parse in Jest, then the GLB writer's
-own capture, `loader/glbEngineCapture.js#captureEngineExtensions`):
+own capture, `engine/glbEngineCapture.js#captureEngineExtensions`):
 
 | | fresh parse | cache hit |
 |---|---|---|
@@ -157,7 +157,7 @@ own capture, `loader/glbEngineCapture.js#captureEngineExtensions`):
 - **Why.** `CadView.jsx#installModelTree` builds the search index from the
   spatial tree (`initSearch`). On a fresh parse that tree is Conway's `'names'`
   mode, which carries Name, LongName and GlobalId. On a cache hit it is
-  `BLDRS_spatial_tree`, and `loader/bldrsSpatialTree.js#serializeNode` keeps
+  `BLDRS_spatial_tree`, and `engine/bldrsSpatialTree.js#serializeNode` keeps
   `expressID`, `type`, `Name`, `LongName`, the STEP fields and `children`,
   but not `GlobalId`. `export/glbPortable.js#nodeNameOf` already notes this.
 - **The GlobalId is still in the artifact,** in `BLDRS_element_properties`:
@@ -254,7 +254,7 @@ layers, then the same layers again when a paste kept its membership. Each
 round fixed one consumer with its own lazy check. The fifth version replaces
 those per-consumer checks with one mechanism, described here.
 
-#### One mutation API: `src/viewer/ifc/batchedEdit.js`
+#### One mutation API: `src/model/batchedEdit.js`
 
 Nothing in src changes what a loaded batch holds except through it:
 
@@ -419,7 +419,7 @@ layer).
 - **The isolation mask grows.** IfcIsolator's `base`/`allow` masks are indexed
   by batch id and were sized once, so a paste past their end read as hidden.
   They now extend to the batch's id span.
-- **`addGeometry` after load:** `src/viewer/ifc/batchedGeometryCapacity.js`.
+- **`addGeometry` after load:** `src/model/batchedGeometryCapacity.js`.
   - No headroom is reserved at load. An unedited model keeps its exact-size
     buffers and its memory, and every byte of its output is unchanged.
   - The first edit that adds geometry grows the buffers by ×1.25, with a
@@ -493,11 +493,11 @@ backend in `editBackend.fixture.js`.
 
 | File | Holds |
 |---|---|
-| `src/viewer/edit/globalId.js` | The IFC compressed-GUID codec and `mintGlobalId` (128 random bits; an injectable byte source for tests) |
-| `src/viewer/edit/editRefs.js` | `g` / `o` / `n` parse, format, validate; `e` refused; `isPortableEditRef` (§5, §5.2) |
-| `src/viewer/edit/editOps.js` | The op shape, `validateEditOp`, `makeEditOp` (mints) |
-| `src/viewer/edit/editLog.js` | The log and its cursor: record, undo/redo steps, dirty, `appliedOps` |
-| `src/viewer/edit/editApply.js` | `applyEditOp` / `revertEditOp`, the `EditBackend` and resolver contracts, `EditInconsistentError` (fail-stop), `ifcGlobalIdIndex` |
+| `src/session/edit/globalId.js` | The IFC compressed-GUID codec and `mintGlobalId` (128 random bits; an injectable byte source for tests) |
+| `src/session/edit/editRefs.js` | `g` / `o` / `n` parse, format, validate; `e` refused; `isPortableEditRef` (§5, §5.2) |
+| `src/session/edit/editOps.js` | The op shape, `validateEditOp`, `makeEditOp` (mints) |
+| `src/session/edit/editLog.js` | The log and its cursor: record, undo/redo steps, dirty, `appliedOps` |
+| `src/session/edit/editApply.js` | `applyEditOp` / `revertEditOp`, the `EditBackend` and resolver contracts, `EditInconsistentError` (fail-stop), `ifcGlobalIdIndex` |
 | `src/store/EditSlice.js` | The store's log, cursor, `isEditDirty`, `canUndoEdit` / `canRedoEdit`, `applyEdit` / `undoEdit` / `redoEdit` |
 
 ### The op

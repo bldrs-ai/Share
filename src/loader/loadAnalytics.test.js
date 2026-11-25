@@ -11,8 +11,8 @@ import {
   normalizeLoadPhase,
   omitUndefined,
 } from './loadAnalytics'
-import {EngineOpenFailureError} from './engineOpenFailure'
-import {UnsupportedSchemaError} from './unsupportedSchema'
+import {EngineOpenFailureError} from '../engine/engineOpenFailure'
+import {UnsupportedSchemaError} from '../engine/unsupportedSchema'
 
 
 const MB = 1024 * 1024

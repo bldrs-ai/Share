@@ -70,7 +70,7 @@ live #2144 / #1914 discussions on 2026-11-11.
 | `src/connections/github/GitHubProvider.ts` | Reuse the selected GitHub connection and reconnect flow. Display the acting account and repository; do not introduce a second token store. |
 | `src/loader/sourceCacheKey.js`, `glbCacheKey.js`, `src/OPFS/OPFS.worker.js` | Source/cache keys mix provider paths and commit/content hashes. This is not a BLAKE3 content-addressed store. Add an explicit adapter and independent digest verification; do not reinterpret old cache keys. |
 | `src/OPFS/OPFS.worker.js#clearCache` | Currently walks the OPFS root. Protect local repositories, unpublished bases and recovery records from cache clearing/eviction before V0. |
-| `src/viewer/ifc/batchedEdit.js`, [model-edit.md](model-edit.md) | L0 exists; L1–L3 op log, application and persistence remain prerequisites for semantic editing. V0/S1 do not wait for them. |
+| `src/model/batchedEdit.js`, [model-edit.md](model-edit.md) | L0 exists; L1–L3 op log, application and persistence remain prerequisites for semantic editing. V0/S1 do not wait for them. |
 | [workspace-store.md §2](workspace-store.md#2-engine-question-wasm-git-vs-isomorphic-git-open--needs-investigation) | GitHub Git Data API avoids the smart-HTTP CORS problem. Browser git engine, OPFS adapter and generic remote transport still need measurement. |
 
 The live [#1914 correction](https://github.com/bldrs-ai/Share/issues/1914#issuecomment-6004277478)

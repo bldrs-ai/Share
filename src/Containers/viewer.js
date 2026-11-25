@@ -1,5 +1,5 @@
 import {Color} from 'three'
-import {getMeshMaterials} from '../viewer/ShareModel'
+import {getMeshMaterials} from '../model/ShareModel'
 import {ShareViewer} from '../viewer/ShareViewer'
 import {isFeatureEnabled} from '../FeatureFlags'
 import {createFrameHoverPicker, createTimerHoverPicker} from '../viewer/hoverPick'

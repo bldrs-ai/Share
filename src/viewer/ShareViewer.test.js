@@ -32,15 +32,15 @@ jest.mock('three', () => jest.requireActual('three'))
 import '../../__mocks__/shareViewerTestHarness'
 import {BufferAttribute, BufferGeometry, Color, Group, Mesh, MeshBasicMaterial, Scene} from 'three'
 import {ShareViewer} from './ShareViewer'
-import {flatMeshToBatchedModel} from './ifc/flatMeshToBatchedModel'
-import {instanceMapFromGeometry, instanceMapFromOrderedPlacedRanges} from './ifc/IfcInstanceMap'
+import {flatMeshToBatchedModel} from '../model/flatMeshToBatchedModel'
+import {instanceMapFromGeometry, instanceMapFromOrderedPlacedRanges} from '../model/IfcInstanceMap'
 import Selector from './three/Selector'
 import ThreeContext from './three/ThreeContext'
 import {occurrencePathKey} from '../utils/occurrencePaths'
 import {isCollected} from '../utils/gc.fixture'
 import {
   LOAD_PREVIEW_GROUP_KEY, PREVIEW_EXPRESS_ID_KEY, PREVIEW_GEOMETRY_ID_KEY, PREVIEW_OCCURRENCE_PATH_KEY,
-} from './previewSelection'
+} from '../model/previewSelection'
 
 
 const TEST_MODEL_ID = 7

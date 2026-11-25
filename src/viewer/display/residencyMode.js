@@ -1,4 +1,4 @@
-import {ResidencyMetric} from '../residency/ResidencyController'
+import {ResidencyMetric} from '../../model/ResidencyController'
 
 
 /**

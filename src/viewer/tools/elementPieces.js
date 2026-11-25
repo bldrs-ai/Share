@@ -1,5 +1,5 @@
 import {Matrix4} from 'three'
-import {instanceGeometryRangeAt} from '../ifc/batchedInstanceGeometry'
+import {instanceGeometryRangeAt} from '../../model/batchedInstanceGeometry'
 import {DEFAULT_CHUNK} from './meshMeasure'
 
 

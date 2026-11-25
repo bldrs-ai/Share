@@ -17,7 +17,7 @@ import {
   getModelFromOPFS,
 } from '../OPFS/utils'
 import {UploadNotInBrowserError} from '../OPFS/messages'
-import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
+import ShareIfcLoader from './ShareIfcLoader'
 import useStore from '../store/useStore'
 import {constructUploadedBlobPath, load, NotFoundError} from './Loader'
 import {dereferenceAndProxyDownloadContents} from './urls'

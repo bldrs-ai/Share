@@ -8,10 +8,10 @@ import nrrdToThree from '../../loader/nrrd'
 import LiveDisplayLink from './LiveDisplayLink'
 import ResidencyControl from './ResidencyControl'
 import {HASH_DEBOUNCE_WAIT_MS} from '../../utils/debounce'
-import {DEFAULT_COLOR} from '../../viewer/ifc/flatMeshToBatchedModel'
+import {DEFAULT_COLOR} from '../../model/flatMeshToBatchedModel'
 import {activeColorMode} from '../../viewer/display/colorMode'
 import {activeShadingMode} from '../../viewer/display/shadingMode'
-import {ResidencyMetric} from '../../viewer/residency/ResidencyController'
+import {ResidencyMetric} from '../../model/ResidencyController'
 
 
 // ShareMock pulls in BaseRoutesMock, whose module-top `jest.mock('three')`

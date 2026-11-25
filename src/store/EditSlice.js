@@ -1,4 +1,4 @@
-import {EditDirection, applyEditOp, revertEditOp} from '../viewer/edit/editApply'
+import {EditDirection, applyEditOp, revertEditOp} from '../session/edit/editApply'
 import {
   EMPTY_EDIT_LOG,
   canRedo,
@@ -10,19 +10,19 @@ import {
   recordApplied,
   stepBack,
   stepForward,
-} from '../viewer/edit/editLog'
+} from '../session/edit/editLog'
 
 
 /**
  * EditSlice — the create-300 op log, its undo cursor and `dirty`
  * (L1, #1916; design/new/model-edit.md §6b).
  *
- * State is the log (`viewer/edit/editLog.js`, immutable) plus the booleans
+ * State is the log (`session/edit/editLog.js`, immutable) plus the booleans
  * derived from it, kept in step on every change so a component can select
  * one without re-deriving it. Application goes through `editContext`, the
  * `{backend, resolver}` pair L2 (#1917) installs for the loaded model; the
  * slice holds no THREE and no model, so it is testable with the fake in
- * `viewer/edit/editBackend.fixture.js`.
+ * `session/edit/editBackend.fixture.js`.
  *
  * Nothing calls this until L2's UI, which ships behind `?feature=edit`
  * (FeatureFlags.js). With no context installed every action reports

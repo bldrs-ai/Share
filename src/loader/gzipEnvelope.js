@@ -32,7 +32,7 @@
 //
 // Design: design/new/glb-export-premium.md §4.7.
 import {analyzeHeader, looksLikeGzipBytes} from '../Filetype'
-import {GzipExpansionError, gunzipBytes, isGunzipAvailable} from '../export/glbGzip'
+import {GzipExpansionError, gunzipBytes, isGunzipAvailable} from './glbGzip'
 import debug from '../utils/debug'
 
 
@@ -42,7 +42,7 @@ import debug from '../utils/debug'
 // GB: without a ceiling the drop handler is a one-click way to end the tab,
 // and "it never finished" is the worst way to fail. 512 MiB is ~8× the
 // largest GLB this feature has measured (63.7 MB for Autodesk's Snowdon
-// demo, `export/glbGzip.js`) and at the far end of what a browser hands out
+// demo, `loader/glbGzip.js`) and at the far end of what a browser hands out
 // as a single ArrayBuffer — past it the GLTF parse was not going to succeed
 // anyway, so refusing early turns a hang into a sentence.
 const BYTES_PER_KIB = 1024
