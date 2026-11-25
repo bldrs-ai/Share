@@ -7,6 +7,7 @@ import {ErrorBoundary} from '@sentry/react'
 import Auth0ProviderWithHistory from './Auth0/Auth0ProviderWithHistory'
 import BaseRoutes from './BaseRoutes'
 import ApplicationError from './Components/ApplicationError'
+import {reportPageVisit} from './app/pageVisit'
 import {forgetLegacyKey} from './Components/Bot/legacyKey'
 import Auth0BridgeRegistrar from './connections/Auth0BridgeRegistrar'
 import {flags, isFeatureEnabled} from './FeatureFlags'
@@ -38,6 +39,11 @@ if (process.env.MEASUREMENT_TOOLS && isFeatureEnabled('mainThreadTrace')) {
 setupSentry()
 // After setupSentry: ga.js reports init failures via captureException.
 setupGa()
+// One cookieless report of this page load (app/pageVisit.js,
+// design/new/model-open-counts.md §"Page visits"): GA's visit count, now that
+// there is no GA tag in the browser. Under GA's own host rule, so dev and E2E
+// send nothing.
+reportPageVisit()
 setupMSW()
 setupEsbuildWatch()
 // The old bot chat's plaintext OpenRouter key, deleted on every start

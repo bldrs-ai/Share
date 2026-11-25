@@ -1,0 +1,48 @@
+{
+  "description": "Without Netlify geolocation in the context, the visit still goes to GA, with country unknown.",
+  "env": {
+    "GA4_MEASUREMENT_ID": "G-REPLAY0001",
+    "GA4_API_SECRET": "mp-secret-replay"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/page-visit",
+    "headers": {
+      "origin": "https://bldrs.ai",
+      "content-type": "text/plain;charset=UTF-8"
+    },
+    "body": "{\"route_kind\":\"viewer-github\",\"referrer_class\":\"search\",\"utm_source\":\"google\",\"utm_medium\":\"cpc\",\"form_factor\":\"desktop\",\"session_id\":\"4503599627370497\"}"
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://www.google-analytics.com/mp/collect?measurement_id=G-REPLAY0001&api_secret=mp-secret-replay",
+        "body": {
+          "client_id": "3587090903.711617492",
+          "events": [
+            {
+              "name": "page_visit",
+              "params": {
+                "route_kind": "viewer-github",
+                "referrer_class": "search",
+                "utm_source": "google",
+                "utm_medium": "cpc",
+                "form_factor": "desktop",
+                "session_id": "4503599627370497",
+                "country": "unknown"
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 204,
+        "text": ""
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 204
+  }
+}

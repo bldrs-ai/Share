@@ -123,7 +123,9 @@ try {
   const handler = await loadHandler(entry, loadMode)
   response = handler.apiVersion === 1 ?
     await handler.fn(toLambdaEvent(scenario.request, await signatureHeaders(scenario)), lambdaContext(scenario)) :
-    await fromWebResponse(await handler.fn(toWebRequest(scenario.request), {}))
+    // A v2 function's second argument is Netlify's context. A scenario may
+    // give the parts a function reads (page-visit's `geo`); none is `{}`.
+    await fromWebResponse(await handler.fn(toWebRequest(scenario.request), scenario.context ?? {}))
 } catch (err) {
   failures.push(`handler threw: ${err && err.stack ? err.stack : err}`)
 }
