@@ -63,7 +63,8 @@ to GA4 under one fixed client id, so the bizdev dashboard keeps working.
   `analytics#isAllowed` are kept, but nothing in the UI sets the cookie
   now. A visitor who accepted under #2051 still buffers our events in the
   stub, which is harmless.
-- **Always-on load reports:** `model_open_count` (`#2355`) sends one report
+- **Always-on load reports:** `model_open_count` (#2355,
+  [model-open-counts.md](model-open-counts.md)) sends one report
   per real model open, failed ones included, to `/.netlify/functions/model-open-count`:
   - the fields: kind of file, size bucket, source kind, open kind, outcome,
     timings, complexity, error counts, and a page-memory `session_id`;

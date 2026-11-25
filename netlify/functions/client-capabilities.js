@@ -29,6 +29,7 @@
 
 import {CAPABILITY_REPORT_EVENT, MAX_REPORT_BYTES, parseCapabilityReport} from '../../src/privacy/clientCapabilityReport.js'
 import {gaMeasurementConfig, sendMeasurementProtocolEvent} from './_lib/measurementProtocol.js'
+import {isShareOrigin} from './_lib/shareOrigin.js'
 
 
 /**
@@ -48,10 +49,6 @@ export const CAPABILITY_CLIENT_ID = '1766230857.3831044998'
 const HTTP_NO_CONTENT = 204
 const HTTP_BAD_REQUEST = 400
 const HTTP_METHOD_NOT_ALLOWED = 405
-
-// The hosts index/ga.js#PROD_HOSTNAMES loads GA on, plus local dev.
-const ALLOWED_ORIGINS = new Set(['https://bldrs.ai', 'https://www.bldrs.ai', 'http://localhost:8080', 'http://localhost:8888'])
-const DEPLOY_PREVIEW_ORIGIN = /^https:\/\/deploy-preview-\d+--bldrs-share(-prod)?\.netlify\.app$/
 
 
 /**
@@ -102,11 +99,14 @@ export default async (req) => {
 
 
 /**
+ * Kept for this function's tests; the check is _lib/shareOrigin.js's, shared
+ * with model-open-count.
+ *
  * @param {?string} origin
  * @return {boolean}
  */
 export function isAllowedOrigin(origin) {
-  return typeof origin === 'string' && (ALLOWED_ORIGINS.has(origin) || DEPLOY_PREVIEW_ORIGIN.test(origin))
+  return isShareOrigin(origin)
 }
 
 
