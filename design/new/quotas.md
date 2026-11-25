@@ -627,6 +627,7 @@ behind the same analytics consent check as every other `gtagEvent`, except
 |---|---|---|---|
 | Visit | `session_start` / `page_view` | — | GA4 sends these itself |
 | Model open | `real_model_open` | `content_id`, `content_type`, `load_outcome`, `stats_*` (below), `local_hour`, `open_kind` (`page` \| `in_app`: the page's first open, or one switched to in-app; `utils/reportModelOpen.js`, open-205 step F), `open_cid` | `CadView` after a real (non-demo) load, once per open: not again for a theme toggle or a view-settings change, which reload the same open (`routes/modelOpen.ts`; open-205 #2022). See `analytics#isRealModelOpen` |
+| Visit (all visitors) | `page_visit` | `route_kind` (`home` \| `viewer-demo` \| `viewer-local` \| `viewer-github` \| `viewer-gdrive` \| `viewer-url` \| `marketing` \| `other`), `referrer_class` (`direct` \| `search` \| `social` \| `bldrs` \| `other`), `utm_source` and `utm_medium` (allowlists, plus `other` and `none`), `form_factor`, `session_id` (model_open_count's, so a visit joins its loads), `country` (ISO alpha-2 or `unknown`, added by the function from Netlify's geolocation). No path, referrer or campaign text | **Server:** the `page-visit` function, under the same fixed client id, from a first-party beacon sent once per page load (`index.jsx`). GA's visit count since browser GA went (#2354) ([model-open-counts.md](model-open-counts.md) §"Page visits") |
 | Model load (all visitors) | `model_open_count` | `content_type`, `size_bucket`, `source` (`local` \| `sample` \| `github` \| `gdrive` \| `url`), `sample_id` (roster samples only, else `none`), `open_kind`, `form_factor`, `load_outcome` (`displayed` \| `no_geometry` \| `unusable` \| `failed`), `reason_class` and `last_phase` (`none` unless failed), `triangle_bucket`, `error_bucket` and `warning_bucket` (decade buckets, never exact counts), `session_id` (GA's own session param: random, per page load, in memory only); timings in ms when measured: `load_ms`, `first_mesh_ms`, `open_ms`, `parse_ms`, `geometry_ms`. No `open_cid` or content id | **Server:** the `model-open-count` function, through the Measurement Protocol under one fixed client id, from a first-party beacon sent beside `real_model_open` (`modelOpenEvents.js`, same opens) and beside `load_failed` (`loadFailure.js`, same failures). Needs no consent: no identifier of the browser, nothing stored, the visitor's IP not forwarded ([model-open-counts.md](model-open-counts.md)). The main usage signal since browser GA went (#2354) |
 | (failed open) | `load_failed` | `content_type`, `size_bucket`, `reason_class`, `last_phase`, `open_kind`, `open_cid` | `CadView#onViewerInternal`'s catch, once per failed attempt, real (non-demo) models only |
 | Hit a limit | `quota_limit_reached` | `tier` (`free`; `anonymous` before that tier was removed), `feature` (`QUOTA_FEATURES`: `private_load`) | `QuotaLimitDialog`, once each time the dialog opens, whatever made it show |
@@ -1092,6 +1093,11 @@ has a backfill, so these only start accruing data once registered:
 - For the normalized events (§"Analytics: normalized tier events"):
   register **event-scoped custom dimensions** for `source` and `gate`.
   `tier`, `route_kind` and `open_cid` are already registered.
+- For `page_visit` ([model-open-counts.md](model-open-counts.md) §"Page
+  visits"): register **event-scoped custom dimensions** for `referrer_class`,
+  `utm_source`, `utm_medium` and `country`. `route_kind` and `form_factor`
+  are already registered (`form_factor` with `model_open_count`); `session_id`
+  needs none.
 - For `model_open_count` ([model-open-counts.md](model-open-counts.md)):
   register **event-scoped custom dimensions** for `sample_id`, `open_kind`,
   `form_factor`, `load_outcome`, `triangle_bucket`, `error_bucket` and

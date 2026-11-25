@@ -1,4 +1,4 @@
-# Model-open reports (`model_open_count`)
+# Model-open reports and page visits (`model_open_count`, `page_visit`)
 
 A cookieless, first-party report of every real model load, displayed or
 failed: what was opened (format, size range, source), how the load went
@@ -157,6 +157,62 @@ leaves the policy alone.
   Measurement Protocol events. It isn't sent, so these reports show in the
   standard reports and explorations, not Realtime.
 
+## Page visits (`page_visit`)
+
+With no GA tag in the browser (#2354), GA counts no visits: no users,
+sessions, page views, sources or countries. `page_visit` gives that count
+back, one report per page load, with the same rules as `model_open_count`:
+enums only, nothing stored on the device, one fixed client id, sent from our
+server. The owner approved it on 2026-11-25.
+
+**When.** Once per page load, at startup (`index.jsx`, beside `setupGa`),
+under the same host rule (`index/ga.js#shouldInitGa`). An in-app model switch
+is not a new visit. A module flag in page memory keeps a second call from
+sending.
+
+**What it carries** (`src/privacy/pageVisitReport.js`; the function refuses
+anything else):
+
+| Field | Values | From |
+| --- | --- | --- |
+| `route_kind` | `home`, `viewer-demo`, `viewer-local`, `viewer-github`, `viewer-gdrive`, `viewer-url`, `marketing`, `other` | the path's shape only (`app/pageVisit.js#visitRouteKind`, over `routes/localOnly.ts#viewRouteKind`). The samples are GitHub routes, so they read `viewer-github`. `marketing` is reserved for the marketing site, a separate build that doesn't send this yet; the app never does |
+| `referrer_class` | `direct`, `search`, `social`, `bldrs`, `other` | `document.referrer`'s host against small allowlists (`#referrerClass`): a host or a subdomain of one, and Google's and Yandex's country domains by their label. An empty referrer is `direct`; our own hosts and previews are `bldrs` |
+| `utm_source`, `utm_medium` | an allowlist each (`UTM_SOURCES`, `UTM_MEDIUMS`), plus `other` and `none` | the query, lowercased. A value off the list is `other`, an absent one `none`, so no campaign string reaches GA as free text. The owner extends the lists |
+| `form_factor` | `mobile`, `desktop` | `clientCapabilities.js#formFactor` |
+| `session_id` | model_open_count's | `app/modelOpenCount.js#pageSession`, the same in-memory value, so GA joins a visit to its loads in one session |
+| `country` | ISO 3166-1 alpha-2, or `unknown` | **added by the function**, from Netlify's own geolocation of the request (`context.geo.country.code`, Functions v2). The page never works one out, and a body that sends a `country` is refused. It is a parameter of the one GA event and is stored nowhere |
+
+**Never sent:** the path, the query, the referrer (not even its host), a
+campaign string, the IP.
+
+**The function** is `netlify/functions/page-visit.js`, model-open-count's
+twin. Both send under `_lib/firstPartyClientId.js#FIRST_PARTY_CLIENT_ID`,
+which is model-open-count's id, unchanged. Replays may give a v2 function's
+context (`"context": {"geo": …}`; `_tests/replay/README.md`), which the
+country scenarios use.
+
+**Reading it:**
+- Visits are the event count of `page_visit`.
+- Sessions come from GA itself, as `session_id` is its own session
+  parameter.
+- Model loads per visit come from joining `model_open_count` on
+  `session_id`.
+- Split visits by `route_kind`, `referrer_class`, `utm_source` and
+  `utm_medium`, `form_factor` and `country`.
+- Not a user count: users is 1. Returning visitors can't be told from new
+  ones, by design.
+- GA's own Country dimension comes from the request's IP, which for a
+  Measurement Protocol event is our server's. Read `country`, the custom
+  dimension, instead.
+
+**Not covered:**
+- the marketing site's pages (`route_kind: marketing` is reserved for when
+  that build sends the same report);
+- a visit whose tab closes before the beacon is handed over;
+- a blocker that blocks first-party function paths.
+
+All three undercount, never overcount.
+
 ## Configuration and limits
 
 - Needs `GA4_MEASUREMENT_ID` and `GA4_API_SECRET`, set for production only.
@@ -168,6 +224,11 @@ leaves the policy alone.
 - A tab closed before the beacon is handed over sends nothing, and a blocker
   that blocks first-party function paths drops it. Both undercount, never
   overcount.
+- Page visits' tests: `src/privacy/pageVisitReport.test.js`,
+  `src/app/pageVisit.test.js` (route kinds, referrer classes, campaigns,
+  once per load, nothing stored), `netlify/functions/_tests/page-visit.test.js`,
+  six replays (`replay/page-visit/`, the country ones with a `context`), and
+  the live-smoke probe, which sends `{}` and expects `invalid_page_visit`.
 - Tests: `src/privacy/modelOpenCountReport.test.js`,
   `src/app/modelOpenCount.test.js` (incl. the session id never stored),
   `src/Containers/modelOpenEvents.test.js` (once per new real open, not the
