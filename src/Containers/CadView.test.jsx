@@ -1,4 +1,5 @@
 import axios from 'axios'
+import Cookies from 'js-cookie'
 import React from 'react'
 import * as reactRouting from 'react-router-dom'
 import * as Ifc from '@bldrs-ai/ifclib'
@@ -1632,8 +1633,8 @@ describe('CadView', () => {
       // it: these tests are about what happens after A has loaded.
       cameraControlsSpy = jest.spyOn(ThreeContext.prototype, 'getCameraControls')
         .mockImplementation(() => getHarness().IFC.context.ifcCamera.cameraControls)
-      // Earlier tests in this file leave view settings and auth state behind;
-      // either one re-runs a load on its own and muddies the counts below.
+      // Earlier tests in this file leave auth state behind, which re-runs a
+      // load on its own and muddies the counts below.
       useStore.setState({
         alert: null, isAuthResolved: false, isModelReady: false,
         expandedElements: [], selectedElements: [], selectedAnchorIds: [], selectedOccurrencePath: null,
@@ -2063,6 +2064,9 @@ describe('CadView', () => {
       await act(() => theme.setTheme(theme.palette.mode === 'dark' ? Themes.Day : Themes.Night))
       await actAsyncFlush()
 
+      // setTheme persists the choice; later tests must mount under the
+      // default theme, not this one.
+      Cookies.remove('preferences.theme')
       expect(calls[0].signal.aborted).toBe(true)
       await waitFor(() => expect(calls.length).toBe(2))
       expect(calls[1].path).toContain('index.ifc')

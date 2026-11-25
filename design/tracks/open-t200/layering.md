@@ -1673,7 +1673,7 @@ table.
 |---|---|---|---|---|
 | M1 | move the model, the engine helpers and the Conway loader; `viewer/edit/` to the session; the lint rule | 79 → 55 | neutral | 63 files moved (68 with #2346's `viewer/edit/`), no logic lines |
 | M2 | `viewer/tools/` → `src/tools/`; the eight app-level leaf files | 55 → 19 (measured 59 → 20, §3) | neutral | 28 production files moved (51 with tests) |
-| V | delete the `?view=` rules stack | 19 → 17 | **no flag; three stated changes** (below) | about −500 lines, tests included |
+| V | delete the `?view=` rules stack | 19 → 17 (measured 20 → 18, #2318) | **no flag; three stated changes** (below) | about −500 lines, tests included |
 | 1a | the `Engine` interface; `EngineSession` → `WorkerEngine`; `ConwayEngine`; one parse path; the Conway import rule | 17 → 16 | **no flag; the kill-switch path changes** (below) | ~1,200 + the rename |
 | 1b | `EngineHost` at cap 1; the lease; the load-context adapter | — (three ownership guards) | neutral | ~900 |
 | N | the `ifcAPI` identifier out of everything but `src/engine` | — | neutral | 250 lines in 21 files, mechanical |
@@ -1770,10 +1770,9 @@ Beyond the list below, the slice also took what the stack left dead:
 argument, ShareViewer's module-scope `viewParameter`, and the store's
 `customViewSettings` and its setter. `navigate.js#isViewChange`, which
 reloads the page for a link with another `?view=`, stays: nothing reads
-`view` now, but dropping it is a fourth visible change, left for a
-follow-up.
+`view` now, but dropping it is a fourth visible change, left for #2360.
 
-Decided on 2026-11-03 (engine-worker.md §8 item 7) and not done.
+Decided on 2026-11-03 (engine-worker.md §8 item 7), and done in this slice.
 Confirmed on 2026-11-24 (§9, item 3): delete it, with no replacement and
 no flag. The owner: "it was old client work that never went anywhere".
 The Widget API's `ChangeViewSettings` keeps answering success.

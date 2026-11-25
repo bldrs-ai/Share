@@ -219,7 +219,7 @@ export function navigateToModel(target, navigate) {
  * the page instead, as it always did. Nothing reads `view` since slice V
  * deleted the `?view=` rules (design/tracks/open-t200/layering.md §7), so
  * this reload is no longer needed; it is kept so that slice changes only
- * what #2318 lists, and dropping it is a follow-up. A path with no query of
+ * what #2318 lists, and dropping it is #2360. A path with no query of
  * its own has the page's by now (`withCurrentSearch`), so this is only a link
  * that carries its own query.
  *

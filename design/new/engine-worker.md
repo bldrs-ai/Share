@@ -129,7 +129,7 @@ Classes:
 | 42 | `utils/geometryLabels.js:83` | `getItemProperties` | async |
 | 43 | `tools/viewTools.js:460, 492, 503` | assistant `model.*` reads | async |
 | 44 | `Components/Bot/BotChat.jsx:162, 328–330` | legacy `?feature=bot` evals model-written code against `viewer.IFC.loader.ifcManager` | async (`idsByType`, `getItemProperties`); retiring with the bot port (ai-workspace.md §13) |
-| 45 | `Infrastructure/IfcElementsStyleManager.js:84–90`, `ViewRulesCompiler.js:31–34` | `?view=` rules: `GetLineIDsWithType`, `GetLine`, GUID mapping | design, or delete (viewer-replacement.md §8.1 already drops `IfcViewsManager`) |
+| 45 | `Infrastructure/IfcElementsStyleManager.js:84–90`, `ViewRulesCompiler.js:31–34` | `?view=` rules: `GetLineIDsWithType`, `GetLine`, GUID mapping | design, or delete (viewer-replacement.md §8.1 already drops `IfcViewsManager`). **Deleted, open-t200 slice V (#2318)** |
 | 46 | `loader/ProgressiveLoadSession.js:298` | `abort()` has no caller outside the loader's error path | design: `abort` message + terminate (§5.4) |
 
 **Not engine calls, and unaffected** (they read main-side tables built from
@@ -2223,7 +2223,7 @@ Every item needs either a merged PR or a measurement in a PR body.
    mobile E2E. Met: step 5 merged last (#2081). Steps 7–8 are deferred (they serve
    in-app switching, not the flip), so the memory-after-evict check in
    item 5 waits with them.
-2. **The `?view=` rules stack: settled by routing, not deleted (#2083).**
+2. **The `?view=` rules stack: settled by routing, not deleted (#2083); since deleted, slice V (#2318).**
    A load whose URL names a known `?view=` rule set runs on the
    main-thread engine (`engine/engineRoute.js`), where IfcViewsManager
    reads it, and the report says so (`Engine: main thread (?view= rules
