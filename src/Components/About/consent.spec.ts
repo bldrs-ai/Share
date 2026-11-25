@@ -116,7 +116,8 @@ describeMobileAndDesktop('Analytics consent', () => {
     await closeWelcome(page)
     await expect(banner).toBeVisible()
     await expect(page.getByTestId('consent-summary')).toContainText('Your models stay on your device.')
-    await expect(page.getByTestId('consent-summary')).toContainText('Google Analytics cookies? No ads. If you decline')
+    await expect(page.getByTestId('consent-summary'))
+      .toContainText('Google Analytics cookies? No ads. Declining limits Bldrs to local files and samples')
 
     const commands = await gtagCommands(page)
     expect(commands).toContainEqual(['consent', 'default', {

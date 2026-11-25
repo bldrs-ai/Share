@@ -57,7 +57,9 @@ describe('ConsentBanner', () => {
     expect(summary).toHaveTextContent(CONSENT_SHORT_TEXT)
     expect(CONSENT_SHORT_TEXT).toContain('Google Analytics cookies')
     expect(CONSENT_SHORT_TEXT).toContain('No ads.')
-    expect(CONSENT_SHORT_TEXT).toContain(`If you decline, Bldrs runs in ${LOCAL_ONLY_MODE_NAME}.`)
+    // What Decline costs, concretely, before either button (codex on #2354).
+    expect(CONSENT_SHORT_TEXT).toContain('Declining limits Bldrs to local files and samples')
+    expect(CONSENT_SHORT_TEXT).toContain('no GitHub, Drive or link models, saving or sharing')
     // Not a modal, and nothing to close it with but an answer.
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.queryByTestId(/^button-close/)).toBeNull()

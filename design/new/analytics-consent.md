@@ -18,8 +18,8 @@ the current `CONSENT_VERSION` (store `isConsentBannerVisible`, seeded from
 lines in a compact card (bottom-right on desktop, full width on a phone):
 
 > **Your models stay on your device.** May we measure usage with Google
-> Analytics cookies? No ads. If you decline, Bldrs runs in Test only mode.
-> [Details]
+> Analytics cookies? No ads. Declining limits Bldrs to local files and
+> samples: no GitHub, Drive or link models, saving or sharing. [Details]
 
 and **Details** expands it to everything the policy's §1 says:
 
@@ -32,7 +32,8 @@ and **Details** expands it to everything the policy's §1 says:
 > on either way. [Privacy policy]
 
 The first layer names the tool, the cookies, the purpose and what Decline
-costs; the second, everything else (codex on #2354 asked that the banner
+costs, concretely (the mode's name alone left that undefined; codex on
+#2354); the second, everything else (codex on #2354 asked that the banner
 describe the same outcomes as the policy; the owner found that paragraph
 imposing as a first look, so it moved behind Details).
 

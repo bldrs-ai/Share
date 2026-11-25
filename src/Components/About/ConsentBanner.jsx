@@ -31,13 +31,15 @@ import {useIsMobile} from '../Hooks'
 export const CONSENT_HEADLINE = 'Your models stay on your device.'
 /**
  * The first layer: what Accept turns on (Google Analytics, its cookies, for
- * measuring use, no ads) and what Decline costs, in two short lines. The
+ * measuring use, no ads) and what Decline costs, concretely: the mode's
+ * name alone ("Test only mode") left the cost undefined (codex on #2354). The
  * owner found the full paragraph imposing (2026-11-24), and layered notice
  * is the accepted shape: the essentials up front, the rest one click away
  * (CONSENT_TEXT, behind Details) and in the policy.
  */
 export const CONSENT_SHORT_TEXT =
-  `May we measure usage with Google Analytics cookies? No ads. If you decline, Bldrs runs in ${LOCAL_ONLY_MODE_NAME}.`
+  'May we measure usage with Google Analytics cookies? No ads. Declining limits Bldrs to local files and ' +
+  'samples: no GitHub, Drive or link models, saving or sharing.'
 /** The second layer, behind Details: everything, as the policy's §1 says it. */
 export const CONSENT_TEXT =
   'Bldrs opens files in your browser; they’re never uploaded to our servers. To improve Bldrs, we’d ' +
