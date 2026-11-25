@@ -2123,6 +2123,32 @@ describe('loadProgress', () => {
       background.end()
     })
 
+    // A deferred build that finishes after the user left the model (or after
+    // a theme change reloaded it) is not that open's. Red with the late cap
+    // going to GA whatever the sink said: the open had armed GA, and the cap
+    // would be counted for a model the user is no longer on.
+    it('a late depth cap of a run the user has left reaches neither the report nor GA', () => {
+      let isCurrent = true
+      beginReport({
+        fileInfo: 'index.stp',
+        sink: {set: (partial) => isCurrent && storeSink.set(partial), get: storeSink.get},
+      })
+      report.end()
+      // A successful open: GA is armed for a cap that lands later.
+      report.captureDiagnostics({})
+      const linesWhenLeft = reportLines()
+      isCurrent = false
+
+      report.onLateDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
+
+      expect(reportBvhDepthCapToGa).not.toHaveBeenCalled()
+      expect(reportLines()).toEqual(linesWhenLeft)
+      // Non-vacuity: the same cap while the run is current is counted.
+      isCurrent = true
+      report.onLateDepthCap({trees: 1, maxLeafTriangles: 10, maxDepth: 40})
+      expect(reportBvhDepthCapToGa).toHaveBeenCalledTimes(1)
+    })
+
     it('a background reporter does not take the page\'s console', () => {
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
       try {

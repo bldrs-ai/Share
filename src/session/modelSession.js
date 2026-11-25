@@ -425,12 +425,12 @@ export class ModelSessionHost {
    *   changes (the view is about to show another model, or its first), false
    *   when the active session's run was given up mid-load and is restarted.
    *   CadView's `forgetLoadedModel`.
-   * @param {Function} [options.makeReport] `(options) => LoadReporter`, how a
+   * @param {Function} options.makeReport `(options) => LoadReporter`, how a
    *   run makes its reporter (LoadJob#beginReport):
    *   `new loader/loadProgress.js#LoadReporter(options)`, passed in by the
    *   view (useModelSessionHost.js) so this layer imports no Sentry SDK
    */
-  constructor({onForget, makeReport = undefined}) {
+  constructor({onForget, makeReport}) {
     this.onForget = onForget
     this.makeReport = makeReport
     /** @type {ModelSession|null} the session the view is bound to */

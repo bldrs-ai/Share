@@ -491,6 +491,7 @@ export class LoadReporter {
    *   the post-Total diagnostics, which were already on the console
    * @param {string} [sentryLine] this line as the Sentry copy of the report
    *   carries it, when that must differ (a model line: sentryModelLine)
+   * @return {boolean} whether the sink took it (publishReport)
    */
   addReportLine(line, echo = true, sentryLine = line) {
     this.lines.push(line)
@@ -499,12 +500,17 @@ export class LoadReporter {
       // eslint-disable-next-line no-console
       console.info(line)
     }
-    this.publishReport()
+    return this.publishReport()
   }
 
-  /** Push the full report + live line through the sink. */
+  /**
+   * Push the full report + live line through the sink.
+   *
+   * @return {boolean} whether the sink took it: false once the run is not
+   *   current (LoadJob#set)
+   */
   publishReport() {
-    this.sink.set({loadReportLines: [...this.lines], currentLoadLine: this.log.currentLine() ?? null})
+    return this.sink.set({loadReportLines: [...this.lines], currentLoadLine: this.log.currentLine() ?? null})
   }
 
   /**
@@ -1243,6 +1249,7 @@ export class LoadReporter {
    *
    * @param {boolean} echo whether to echo it to the console (only while the
    *   console tee is still ours, during finishReport)
+   * @return {boolean} whether the sink took it
    */
   writeBvhDepthCapLine(echo) {
     const {trees, maxLeafTriangles, maxDepth} = this.depthCapped
@@ -1252,11 +1259,10 @@ export class LoadReporter {
     if (this.bvhDepthCapLineIndex >= 0) {
       this.lines[this.bvhDepthCapLineIndex] = line
       this.sentryLines[this.bvhDepthCapLineIndex] = line
-      this.publishReport()
-      return
+      return this.publishReport()
     }
     this.bvhDepthCapLineIndex = this.lines.length
-    this.addReportLine(line, echo)
+    return this.addReportLine(line, echo)
   }
 
   /**
@@ -1265,6 +1271,11 @@ export class LoadReporter {
    * after Total like framingExclusion's, and the same one GA event once
    * the load is known to have succeeded. A cap already counted in GA during
    * the load is not counted again; the line still shows the sum.
+   *
+   * Nothing reaches GA once the run is not current (the sink refused the
+   * line): a deferred build that finishes after the user left the model, or
+   * after a theme change reloaded it, is not that open's. Before slice R the
+   * load's token did this, dropping a cap once another load had begun.
    *
    * @param {{trees: number, maxLeafTriangles: number, maxDepth: number}} capped
    */
@@ -1275,8 +1286,8 @@ export class LoadReporter {
       maxLeafTriangles: Math.max(previous?.maxLeafTriangles ?? 0, maxLeafTriangles),
       maxDepth,
     }
-    this.writeBvhDepthCapLine(false)
-    if (this.bvhDepthCapGaArmed) {
+    const isCurrent = this.writeBvhDepthCapLine(false)
+    if (isCurrent && this.bvhDepthCapGaArmed) {
       this.reportBvhDepthCapOnce(this.bvhDepthCapContentType)
     }
   }
@@ -1632,6 +1643,10 @@ export class LoadReporter {
     }
     if (isAborted) {
       this.dispose()
+      // Through a LoadJob this write is always dropped, an aborted run being
+      // no longer current; the view's forget (ModelSessionHost#onForget) has
+      // cleared or will clear the report instead: at the switch, or as the
+      // next run of the session begins. Kept for a sink that is not gated.
       this.sink.set({loadReportLines: [], currentLoadLine: null, loadResult: null})
       return
     }
