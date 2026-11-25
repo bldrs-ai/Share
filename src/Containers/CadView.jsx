@@ -6,7 +6,7 @@ import {useTheme} from '@mui/material/styles'
 import {captureException} from '@sentry/react'
 import {fileSuffixBoundaryRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
-import {gtagEvent, isRealModelOpen} from '../privacy/analytics'
+import {gtagEvent, isHostedDemoModel, isRealModelOpen} from '../privacy/analytics'
 import {getRenderMode} from '../privacy/preferences'
 import {resetPlanes as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
@@ -627,7 +627,10 @@ export default function CadView({
     // overlay only appeared once loadModel ran, and loadModel sat behind
     // full auth resolution — a slow Auth0 exchange meant ~10s of frozen
     // screen with no feedback. loadModel refines the message once it runs.
-    job.showLoading('Loading model...')
+    // The homepage model gets the overlay but no snackbar line: its load is
+    // quiet (owner, 2026-11-25; AlertDialogAndSnackbar.jsx hides its live and
+    // "Loaded" lines, and this is the plain line before them).
+    job.showLoading(isHostedDemoModel(modelPath) ? undefined : 'Loading model...')
 
     // Only GitHub-hosted models use the Auth0-brokered token; local files,
     // other external URLs, and Drive (its own connection tokens) shouldn't
@@ -999,7 +1002,9 @@ export default function CadView({
       }
     }
     const loadingMessageBase = `Loading ${isGoogleResult ? routeResult.fileId : filepath}`
-    job.showLoading(`${loadingMessageBase}`)
+    // Quiet for the homepage model, as above. The stall watchdog below still
+    // speaks for it: a homepage load that stalls is a problem worth seeing.
+    job.showLoading(isHostedDemoModel(routeResult) ? undefined : loadingMessageBase)
 
     // Call this before loader, as IFCLoader needs it.
     viewer.setCustomViewSettings(customViewSettings)
