@@ -1,0 +1,61 @@
+{
+  "description": "A signed-in user's load report: the token is checked, the account's opt-out mirror is read (none), and the report is stored under load/<period>/<hashed sub>/<time>-<uuid> with the server's time: 204.",
+  "env": {
+    "$fixture": "env/account-usage.json"
+  },
+  "now": "2026-11-25T12:00:00.000Z",
+  "uuid": "00000000-0000-4000-8000-000000000001",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/account-usage",
+    "headers": {
+      "authorization": "Bearer user-access-token",
+      "content-type": "application/json",
+      "origin": "https://bldrs.ai"
+    },
+    "body": {
+      "kind": "load",
+      "report": {
+        "$fixture": "account-usage/load-report.json"
+      }
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-userinfo.json"
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/pref/0ca58fd54559723f9824c91ae7edb95c"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2026-11/0ca58fd54559723f9824c91ae7edb95c/2026-11-25T12:00:00.000Z-00000000-0000-4000-8000-000000000001",
+        "headers": {
+          "authorization": "Bearer replay-blobs-token"
+        },
+        "bodyJson": {
+          "$fixture": "account-usage/load-report.json",
+          "$merge": {
+            "at": "2026-11-25T12:00:00.000Z"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 204
+  }
+}

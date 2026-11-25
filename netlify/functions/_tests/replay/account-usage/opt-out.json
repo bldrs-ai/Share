@@ -1,0 +1,102 @@
+{
+  "description": "The Profile toggle turned off: app_metadata.usageReports=false is written to Auth0, the store's mirror is written, and the account's stored load reports (and only its own) are deleted: 200 {usage_reports: false}.",
+  "env": {
+    "$fixture": "env/account-usage.json"
+  },
+  "now": "2026-11-25T12:00:00.000Z",
+  "exchangeOrder": "any",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/account-usage",
+    "headers": {
+      "authorization": "Bearer user-access-token",
+      "content-type": "application/json",
+      "origin": "https://bldrs.ai"
+    },
+    "body": {
+      "kind": "preference",
+      "usage_reports": false
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-userinfo.json"
+    },
+    {
+      "$fixture": "exchanges/auth0-mgmt-token.json"
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://bldrs-replay.us.auth0.com/api/v2/users/google-oauth2%7C103547991597142817347",
+        "headers": {
+          "authorization": "Bearer mgmt-token-replay"
+        },
+        "body": {
+          "app_metadata": {
+            "usageReports": false
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "$fixture": "auth0/user.json"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/pref/0ca58fd54559723f9824c91ae7edb95c",
+        "bodyJson": {
+          "usage_reports": false,
+          "at": "2026-11-25T12:00:00.000Z"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"p1\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [
+            {
+              "key": "load/2026-11/0ca58fd54559723f9824c91ae7edb95c/2026-11-20T10:00:00.000Z-x",
+              "etag": "\"a\""
+            },
+            {
+              "key": "load/2026-11/ffffffffffffffffffffffffffffffff/2026-11-20T10:00:00.000Z-y",
+              "etag": "\"b\""
+            }
+          ],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2026-11/0ca58fd54559723f9824c91ae7edb95c/2026-11-20T10:00:00.000Z-x"
+      },
+      "response": {
+        "status": 204
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "json": {
+      "usage_reports": false
+    }
+  }
+}

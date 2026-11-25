@@ -1,0 +1,223 @@
+{
+  "description": "The aggregate for one period: opens per account from the keys, timings' percentiles from the period's reports, limit hits and the accounts that reached each limit; no account is named in the answer.",
+  "env": {
+    "NODE_ENV": "test",
+    "ADMIN_STATS_SECRET": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+    "NETLIFY_BLOBS_CONTEXT": "eyJzaXRlSUQiOiJyZXBsYXktc2l0ZSIsInRva2VuIjoicmVwbGF5LWJsb2JzLXRva2VuIiwiZWRnZVVSTCI6Imh0dHBzOi8vYmxvYnMucmVwbGF5LnRlc3QiLCJ1bmNhY2hlZEVkZ2VVUkwiOiJodHRwczovL2Jsb2JzLXVuY2FjaGVkLnJlcGxheS50ZXN0In0="
+  },
+  "now": "2026-11-25T12:00:00.000Z",
+  "exchangeOrder": "any",
+  "request": {
+    "method": "GET",
+    "path": "/.netlify/functions/account-usage-stats",
+    "headers": {
+      "authorization": "Bearer rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    "query": {
+      "period": "2026-11"
+    }
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [
+            {
+              "key": "load/2026-10/ffffffffffffffffffffffffffffffff/2026-10-02T10:00:00.000Z-d",
+              "etag": "\"x\""
+            },
+            {
+              "key": "load/2026-11/0ca58fd54559723f9824c91ae7edb95c/2026-11-20T10:00:00.000Z-a",
+              "etag": "\"x\""
+            },
+            {
+              "key": "load/2026-11/0ca58fd54559723f9824c91ae7edb95c/2026-11-21T10:00:00.000Z-b",
+              "etag": "\"x\""
+            },
+            {
+              "key": "load/2026-11/ffffffffffffffffffffffffffffffff/2026-11-22T10:00:00.000Z-c",
+              "etag": "\"x\""
+            }
+          ],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=limit%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [
+            {
+              "key": "limit/2026-11/0ca58fd54559723f9824c91ae7edb95c/2026-11-22T11:00:00.000Z-e",
+              "etag": "\"x\""
+            }
+          ],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=first%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [
+            {
+              "key": "first/2026-11/0ca58fd54559723f9824c91ae7edb95c/private_model",
+              "etag": "\"x\""
+            }
+          ],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=rollup%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2026-11/0ca58fd54559723f9824c91ae7edb95c/2026-11-20T10:00:00.000Z-a"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "content_type": "ifc",
+          "size_bucket": "1-10mb",
+          "source": "github",
+          "open_kind": "page",
+          "form_factor": "desktop",
+          "load_outcome": "displayed",
+          "cache_hit": "false",
+          "tier": "free",
+          "loadTime": 1000,
+          "firstMeshMs": 400,
+          "at": "x"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2026-11/0ca58fd54559723f9824c91ae7edb95c/2026-11-21T10:00:00.000Z-b"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "content_type": "ifc",
+          "size_bucket": "1-10mb",
+          "source": "github",
+          "open_kind": "page",
+          "form_factor": "desktop",
+          "load_outcome": "displayed",
+          "cache_hit": "false",
+          "tier": "free",
+          "loadTime": 3000,
+          "firstMeshMs": 900,
+          "at": "x"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2026-11/ffffffffffffffffffffffffffffffff/2026-11-22T10:00:00.000Z-c"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "content_type": "step",
+          "size_bucket": "1-10mb",
+          "source": "github",
+          "open_kind": "page",
+          "form_factor": "desktop",
+          "load_outcome": "displayed",
+          "cache_hit": "false",
+          "tier": "free",
+          "loadTime": 2000,
+          "firstMeshMs": 700,
+          "at": "x"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/limit/2026-11/0ca58fd54559723f9824c91ae7edb95c/2026-11-22T11:00:00.000Z-e"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "limit": "private_model",
+          "gate": "blocked",
+          "tier": "free",
+          "decided_by": "server",
+          "at": "x"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "json": {
+      "period": "2026-11",
+      "periods": {
+        "2026-10": {
+          "opens": 1,
+          "accounts": 1
+        },
+        "2026-11": {
+          "opens": 3,
+          "accounts": 2
+        }
+      },
+      "opens": {
+        "accounts": 2,
+        "total": 3,
+        "p50": 1,
+        "max": 2
+      },
+      "performance": {
+        "loads": 3,
+        "overall": {
+          "loadTime": {
+            "n": 3,
+            "p50": 2000,
+            "p90": 3000
+          }
+        }
+      },
+      "limits": {
+        "private_model": {
+          "hits": 1,
+          "blocked": 1,
+          "soft": 0,
+          "accounts": 1
+        }
+      }
+    }
+  }
+}

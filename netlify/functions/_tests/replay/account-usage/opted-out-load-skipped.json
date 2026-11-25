@@ -1,0 +1,43 @@
+{
+  "description": "An account that opted out: its mirror says so, and the load report is not stored (no PUT): 204.",
+  "env": {
+    "$fixture": "env/account-usage.json"
+  },
+  "now": "2026-11-25T12:00:00.000Z",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/account-usage",
+    "headers": {
+      "authorization": "Bearer user-access-token",
+      "content-type": "application/json",
+      "origin": "https://bldrs.ai"
+    },
+    "body": {
+      "kind": "load",
+      "report": {
+        "$fixture": "account-usage/load-report.json"
+      }
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-userinfo.json"
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/pref/0ca58fd54559723f9824c91ae7edb95c"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "usage_reports": false,
+          "at": "2026-11-01T00:00:00.000Z"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 204
+  }
+}

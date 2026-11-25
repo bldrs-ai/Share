@@ -12,6 +12,7 @@ import useStore from '../../store/useStore'
 import {reloadAfterCacheClear} from '../../app/navigate'
 import LoginMenu from './ProfileControl'
 import {goToSubscription} from './subscriptionNav'
+import {setUsageReportsPreference} from '../../app/accountUsage'
 
 
 jest.mock('../../OPFS/utils', () => ({clearOPFSCache: jest.fn()}))
@@ -19,6 +20,11 @@ jest.mock('../../engine/spawnEngine', () => ({closeAllEngineSessions: jest.fn(()
 // The upgrade door itself (and its begin_checkout event) is pinned in
 // subscriptionNav.test.js; here only that the menu goes through it.
 jest.mock('./subscriptionNav', () => ({goToSubscription: jest.fn()}))
+// The save itself is pinned in app/accountUsage.test.js; here, the toggle.
+jest.mock('../../app/accountUsage', () => ({
+  ...jest.requireActual('../../app/accountUsage'),
+  setUsageReportsPreference: jest.fn(),
+}))
 jest.mock('../../app/navigate', () => ({
   ...jest.requireActual('../../app/navigate'),
   reloadAfterCacheClear: jest.fn(),
@@ -408,6 +414,59 @@ describe('ProfileControl', () => {
 
     expect(await findByTestId('upgrade-to-pro')).toBeInTheDocument()
     expect(queryByTestId('manage-subscription')).toBeNull()
+  })
+
+
+  // design/new/account-usage.md §"Opt-out": on by default, read from the
+  // token's app_metadata, flipped through the account-usage function.
+  describe('"Use my usage to improve Bldrs"', () => {
+    beforeEach(() => {
+      setUsageReportsPreference.mockReset()
+      mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+      act(() => useStore.getState().setAppMetadata({subscriptionStatus: 'free'}))
+    })
+
+    it('is on by default, and off once the account turned it off', async () => {
+      const {findByTestId, unmount} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
+      fireEvent.click(await findByTestId('control-button-profile'))
+      expect(await findByTestId('menu-usage-reports')).toHaveAttribute('aria-checked', 'true')
+      unmount()
+      act(() => useStore.getState().setAppMetadata({subscriptionStatus: 'free', usageReports: false}))
+      const second = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
+      fireEvent.click(await second.findByTestId('control-button-profile'))
+      expect(await second.findByTestId('menu-usage-reports')).toHaveAttribute('aria-checked', 'false')
+    })
+
+    it('turns it off through the account-usage function', async () => {
+      setUsageReportsPreference.mockImplementation((on) => {
+        useStore.getState().setAppMetadata({...useStore.getState().appMetadata, usageReports: on})
+        return Promise.resolve(true)
+      })
+      const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
+      fireEvent.click(await findByTestId('control-button-profile'))
+      fireEvent.click(await findByTestId('menu-usage-reports'))
+      await waitFor(() => expect(setUsageReportsPreference).toHaveBeenCalledWith(false))
+      await waitFor(() => expect(useStore.getState().appMetadata.usageReports).toBe(false))
+      expect(await findByTestId('menu-usage-reports')).toHaveAttribute('aria-checked', 'false')
+    })
+
+    it('says so when the save fails, and leaves it as it was', async () => {
+      setUsageReportsPreference.mockResolvedValue(false)
+      const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
+      fireEvent.click(await findByTestId('control-button-profile'))
+      fireEvent.click(await findByTestId('menu-usage-reports'))
+      await waitFor(() => expect(useStore.getState().alert).toMatch(/Couldn't save your usage setting/))
+      expect(await findByTestId('menu-usage-reports')).toHaveAttribute('aria-checked', 'true')
+      act(() => useStore.getState().setAlert(null))
+    })
+
+    it('is not offered signed out', async () => {
+      mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+      const {findByTestId, queryByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
+      fireEvent.click(await findByTestId('control-button-profile'))
+      await findByTestId('menu-open-login-dialog')
+      expect(queryByTestId('menu-usage-reports')).toBeNull()
+    })
   })
 
 

@@ -1,0 +1,200 @@
+{
+  "description": "On 2026-11-25 the oldest period kept is 2025-10: 2025-09's records become a rollup (written onlyIfNew, before any delete) with no account in it, then are deleted; 2025-10 is left alone.",
+  "env": {
+    "NODE_ENV": "test",
+    "ADMIN_STATS_SECRET": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+    "NETLIFY_BLOBS_CONTEXT": "eyJzaXRlSUQiOiJyZXBsYXktc2l0ZSIsInRva2VuIjoicmVwbGF5LWJsb2JzLXRva2VuIiwiZWRnZVVSTCI6Imh0dHBzOi8vYmxvYnMucmVwbGF5LnRlc3QiLCJ1bmNhY2hlZEVkZ2VVUkwiOiJodHRwczovL2Jsb2JzLXVuY2FjaGVkLnJlcGxheS50ZXN0In0="
+  },
+  "now": "2026-11-25T03:41:00.000Z",
+  "exchangeOrder": "any",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/account-usage-retention",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "next_run": "2026-11-26T03:41:00.000Z"
+    }
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [
+            {
+              "key": "load/2025-09/0ca58fd54559723f9824c91ae7edb95c/2025-09-03T10:00:00.000Z-a",
+              "etag": "\"x\""
+            },
+            {
+              "key": "load/2025-10/0ca58fd54559723f9824c91ae7edb95c/2025-10-01T10:00:00.000Z-c",
+              "etag": "\"x\""
+            }
+          ],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=limit%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [
+            {
+              "key": "limit/2025-09/0ca58fd54559723f9824c91ae7edb95c/2025-09-04T10:00:00.000Z-b",
+              "etag": "\"x\""
+            }
+          ],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=first%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [
+            {
+              "key": "first/2025-09/0ca58fd54559723f9824c91ae7edb95c/private_model",
+              "etag": "\"x\""
+            }
+          ],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup/2025-09"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2025-09/0ca58fd54559723f9824c91ae7edb95c/2025-09-03T10:00:00.000Z-a"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "content_type": "ifc",
+          "size_bucket": "1-10mb",
+          "source": "github",
+          "open_kind": "page",
+          "form_factor": "desktop",
+          "load_outcome": "displayed",
+          "cache_hit": "false",
+          "tier": "free",
+          "loadTime": 1000,
+          "firstMeshMs": 400,
+          "at": "x"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/limit/2025-09/0ca58fd54559723f9824c91ae7edb95c/2025-09-04T10:00:00.000Z-b"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "limit": "private_model",
+          "gate": "soft",
+          "tier": "free",
+          "decided_by": "server",
+          "at": "x"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup/2025-09",
+        "headers": {
+          "if-none-match": "*"
+        },
+        "bodyJson": {
+          "period": "2025-09",
+          "loads": {
+            "total": 1,
+            "accounts": 1,
+            "byFormat": {
+              "ifc": 1
+            }
+          },
+          "limits": {
+            "private_model": {
+              "hits": 1,
+              "soft": 1,
+              "blocked": 0,
+              "accounts": 1
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"r\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2025-09/0ca58fd54559723f9824c91ae7edb95c/2025-09-03T10:00:00.000Z-a"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/limit/2025-09/0ca58fd54559723f9824c91ae7edb95c/2025-09-04T10:00:00.000Z-b"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/first/2025-09/0ca58fd54559723f9824c91ae7edb95c/private_model"
+      },
+      "response": {
+        "status": 204
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "json": {
+      "oldestKept": "2025-10",
+      "reduced": [
+        {
+          "period": "2025-09",
+          "rollup": "written",
+          "deleted": 3
+        }
+      ]
+    }
+  }
+}

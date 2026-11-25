@@ -1,0 +1,122 @@
+{
+  "description": "An account deletion request, by hand: DELETE ?sub= removes every record held against that account's hash, and the preference, and nobody else's.",
+  "env": {
+    "NODE_ENV": "test",
+    "ADMIN_STATS_SECRET": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+    "NETLIFY_BLOBS_CONTEXT": "eyJzaXRlSUQiOiJyZXBsYXktc2l0ZSIsInRva2VuIjoicmVwbGF5LWJsb2JzLXRva2VuIiwiZWRnZVVSTCI6Imh0dHBzOi8vYmxvYnMucmVwbGF5LnRlc3QiLCJ1bmNhY2hlZEVkZ2VVUkwiOiJodHRwczovL2Jsb2JzLXVuY2FjaGVkLnJlcGxheS50ZXN0In0="
+  },
+  "exchangeOrder": "any",
+  "request": {
+    "method": "DELETE",
+    "path": "/.netlify/functions/account-usage-stats",
+    "headers": {
+      "authorization": "Bearer rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    "query": {
+      "sub": "google-oauth2|103547991597142817347"
+    }
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [
+            {
+              "key": "load/2026-11/0ca58fd54559723f9824c91ae7edb95c/2026-11-20T10:00:00.000Z-a",
+              "etag": "\"x\""
+            },
+            {
+              "key": "load/2026-11/ffffffffffffffffffffffffffffffff/2026-11-22T10:00:00.000Z-c",
+              "etag": "\"x\""
+            }
+          ],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=limit%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [
+            {
+              "key": "limit/2026-11/0ca58fd54559723f9824c91ae7edb95c/2026-11-22T11:00:00.000Z-e",
+              "etag": "\"x\""
+            }
+          ],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=first%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [
+            {
+              "key": "first/2026-11/0ca58fd54559723f9824c91ae7edb95c/private_model",
+              "etag": "\"x\""
+            }
+          ],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2026-11/0ca58fd54559723f9824c91ae7edb95c/2026-11-20T10:00:00.000Z-a"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/limit/2026-11/0ca58fd54559723f9824c91ae7edb95c/2026-11-22T11:00:00.000Z-e"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/first/2026-11/0ca58fd54559723f9824c91ae7edb95c/private_model"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/pref/0ca58fd54559723f9824c91ae7edb95c"
+      },
+      "response": {
+        "status": 204
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "json": {
+      "account": "0ca58fd54559723f9824c91ae7edb95c",
+      "deleted": 3
+    }
+  }
+}

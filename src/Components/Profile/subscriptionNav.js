@@ -1,5 +1,7 @@
 import {captureException} from '@sentry/react'
 import {FUNNEL_EVENTS, getGaClientReference, gtagFunnelEvent} from '../../privacy/analytics'
+import {reportFunnelStep} from '../../app/accountUsage'
+import {FUNNEL_REPORT_EVENTS} from '../../privacy/accountUsageReport'
 
 
 /**
@@ -55,6 +57,11 @@ export async function goToSubscription({
     destination: stripeCustomerId ? 'portal' : 'checkout',
     transport_type: 'beacon',
   })
+  // The same step, counted server-side under a fixed GA client id
+  // (design/new/account-usage.md §"Funnel"), for the dashboard once the
+  // browser sends GA nothing. Not awaited: the POST is keepalive, so the
+  // navigation below doesn't cancel it.
+  reportFunnelStep(FUNNEL_REPORT_EVENTS.BEGIN_CHECKOUT, {from, destination: stripeCustomerId ? 'portal' : 'checkout'})
   if (stripeCustomerId) {
     try {
       const token = await getAccessTokenSilently({

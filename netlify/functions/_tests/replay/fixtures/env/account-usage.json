@@ -1,0 +1,9 @@
+{
+  "$fixture": "env/auth0.json",
+  "$merge": {
+    "NETLIFY_BLOBS_CONTEXT": "eyJzaXRlSUQiOiJyZXBsYXktc2l0ZSIsInRva2VuIjoicmVwbGF5LWJsb2JzLXRva2VuIiwiZWRnZVVSTCI6Imh0dHBzOi8vYmxvYnMucmVwbGF5LnRlc3QiLCJ1bmNhY2hlZEVkZ2VVUkwiOiJodHRwczovL2Jsb2JzLXVuY2FjaGVkLnJlcGxheS50ZXN0In0=",
+    "ACCOUNT_USAGE_RECORDING": "on",
+    "GA4_MEASUREMENT_ID": "G-REPLAY0001",
+    "GA4_API_SECRET": "mp-secret-replay"
+  }
+}

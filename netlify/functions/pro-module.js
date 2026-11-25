@@ -72,6 +72,8 @@ import {
 } from '../../src/export/exportSlots.js'
 import {usageQuotaWithLoads} from '../../src/quota/limits.js'
 import {isPublicModel} from './_lib/modelVisibility.js'
+import {recordServerLimitHit} from './_lib/accountUsage.js'
+import {LIMIT_KINDS} from '../../src/privacy/accountUsageReport.js'
 import {isProSubscriptionStatus} from '../../src/quota/proStatus.js'
 import {
   getUserAppMetadata,
@@ -233,6 +235,8 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
         `pro-module: no free model slot for ${auth.sub} (${name}; used ${decision.slots.used}/${decision.slots.limit})`,
         'warning',
       )
+      // Per-account limit record + GA count (design/new/account-usage.md); best-effort.
+      await recordServerLimitHit(event, {sub: auth.sub, limit: LIMIT_KINDS.EXPORT_SLOT})
       return errorResponse(HTTP_FORBIDDEN, NO_FREE_SLOT_REASON, {modelSlots: decision.slots})
     }
   }

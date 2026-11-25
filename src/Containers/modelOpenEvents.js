@@ -24,6 +24,7 @@ import {
 import {trackEngagementOnOpen} from '../privacy/engagementTracking'
 import {trackModelActionWhenAuthSettled} from '../app/modelActionTracking'
 import {reportModelOpenCount} from '../app/modelOpenCount'
+import {reportAccountLoad} from '../app/accountUsage'
 import modelIdentity from '../routes/modelIdentity'
 import {modelOpenId} from '../routes/modelOpen'
 import {modelOpenKind} from '../utils/reportModelOpen'
@@ -132,6 +133,11 @@ export function reportModelOpened(routeResult, loadedModel, {installPrefix, refs
       // real_model_open, so the two count the same opens; the size is the
       // one real_model_open reports.
       reportModelOpenCount(routeResult, loadedModel, {fileSize: eventParams.stats_fileSize, openKind})
+      // The signed-in user's own record of the same open, with its timings
+      // and counts (app/accountUsage.js, design/new/account-usage.md):
+      // stored against the account unless they opted out in Profile. Waits
+      // for auth to settle; not awaited, never rejects.
+      reportAccountLoad(routeResult, loadedModel, eventParams, {openKind, getIsAuthenticated})
     }
     // The engagement window restarts on every load, a theme rebuild's
     // too: the stop above ended the last one, and the user is still on

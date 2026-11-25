@@ -36,6 +36,8 @@ import RecentFilesBrowseSection from '../Connections/RecentFilesBrowseSection'
 import QuotaLimitDialog from './QuotaLimitDialog'
 import LocalOnlyNotice from './LocalOnlyNotice'
 import {isLocalOnlyLevel} from '../../app/localOnlyMode'
+import {reportClientLimitHit} from '../../app/accountUsage'
+import {limitRouteKindOfKey} from '../../privacy/accountUsageReport'
 import {LABEL_LOCAL, LABEL_GITHUB, LABEL_GOOGLE, LABEL_SAMPLES} from './component'
 import {FolderOpen as FolderOpenIcon, GitHub as GitHubIcon} from '@mui/icons-material'
 
@@ -138,6 +140,14 @@ export default function OpenModelDialog({
     setShowGithubBrowser(true)
   }
 
+  // A refusal the page decided from its ledger, before any record-load call:
+  // record-load can't record it, so it is reported to account-usage here
+  // (design/new/account-usage.md §"Limit hits"). Not awaited.
+  const refuseLocally = (key) => {
+    reportClientLimitHit({routeKind: limitRouteKindOfKey(key) ?? undefined})
+    setShowQuotaDialog(true)
+  }
+
   const handleOpenById = async (connection, fileId, fileName) => {
     // Cheap client-side gate first. check(key), not hasCapacity: an
     // already-counted key stays openable at limit (server idempotency;
@@ -147,7 +157,7 @@ export default function OpenModelDialog({
     // opens at the limit.
     const key = `${appPrefix}/v/g/${fileId}`
     if (!check(key).allowed) {
-      setShowQuotaDialog(true)
+      refuseLocally(key)
       return
     }
     // Pre-flight token acquisition INSIDE this user-gesture click handler so
@@ -212,7 +222,7 @@ export default function OpenModelDialog({
     // check(fileId), not hasCapacity — see handleOpenById; fileId is the
     // recent's share path, so an already-counted repo file reopens at limit.
     if (!check(fileId).allowed) {
-      setShowQuotaDialog(true)
+      refuseLocally(fileId)
       return
     }
     const provider = getProvider(connection.providerId)

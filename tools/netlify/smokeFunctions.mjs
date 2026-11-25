@@ -60,6 +60,7 @@ const RETRY_DELAY_MS = 5000
 // really scheduled in netlify.toml, so a plain function can't hide here; the
 // replay scenarios cover these against the source and the bundle instead.
 export const UNPROBED_FUNCTIONS = {
+  'account-usage-retention': 'scheduled (netlify.toml); not reachable over HTTP in production',
   'reconcile-subscriptions': 'scheduled (netlify.toml); not reachable over HTTP in production',
 }
 
@@ -74,6 +75,27 @@ const MISSING_AUTH0_TOKEN = {status: HTTP_UNAUTHORIZED, body: 'missing_auth0_tok
 const GH_OAUTH_NOT_CONFIGURED = {status: HTTP_INTERNAL_ERROR, body: 'GH_OAUTH_CLIENT_ID/SECRET not configured'}
 
 export const PROBES = [
+  {
+    name: 'account-usage',
+    scenario: 'account-usage/invalid-body',
+    method: 'POST',
+    body: {},
+    // The shape is checked before the token, so `{}` is refused without an
+    // Auth0 round trip or the store, and needs no secret.
+    accept: [{status: HTTP_BAD_REQUEST, body: 'invalid_account_usage'}],
+    strict: [{status: HTTP_BAD_REQUEST, body: 'invalid_account_usage'}],
+  },
+  {
+    name: 'account-usage-stats',
+    scenario: 'account-usage-stats/unauthenticated',
+    method: 'GET',
+    // Server-to-server only, behind ADMIN_STATS_SECRET, as ai-ledger-stats.
+    accept: [
+      {status: HTTP_UNAUTHORIZED, body: 'admin_stats_unauthorized'},
+      {status: HTTP_INTERNAL_ERROR, body: 'admin_stats_not_configured'},
+    ],
+    strict: [{status: HTTP_UNAUTHORIZED, body: 'admin_stats_unauthorized'}],
+  },
   {
     name: 'ai-chat',
     scenario: 'ai-chat/empty-request',

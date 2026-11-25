@@ -1,0 +1,64 @@
+{
+  "description": "A login started from a gate is forwarded to GA under the fixed client id with source: server, and nothing is stored.",
+  "env": {
+    "$fixture": "env/account-usage.json"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/account-usage",
+    "headers": {
+      "authorization": "Bearer user-access-token",
+      "content-type": "application/json",
+      "origin": "https://bldrs.ai"
+    },
+    "body": {
+      "kind": "funnel",
+      "event": "login",
+      "params": {
+        "method": "google",
+        "from": "gate",
+        "feature": "export"
+      }
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-userinfo.json"
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/pref/0ca58fd54559723f9824c91ae7edb95c"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://www.google-analytics.com/mp/collect?measurement_id=G-REPLAY0001&api_secret=mp-secret-replay",
+        "bodyJson": {
+          "client_id": "188986569.3581900407",
+          "events": [
+            {
+              "name": "login",
+              "params": {
+                "method": "google",
+                "from": "gate",
+                "feature": "export",
+                "source": "server"
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 204
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 204
+  }
+}

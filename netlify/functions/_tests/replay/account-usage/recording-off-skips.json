@@ -1,0 +1,25 @@
+{
+  "description": "Every context but production (ACCOUNT_USAGE_RECORDING unset): a report is answered 204 without the token check or the store, so a preview's test traffic can't land in production's shared store.",
+  "env": {
+    "$fixture": "env/auth0.json"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/account-usage",
+    "headers": {
+      "authorization": "Bearer user-access-token",
+      "content-type": "application/json",
+      "origin": "https://bldrs.ai"
+    },
+    "body": {
+      "kind": "load",
+      "report": {
+        "$fixture": "account-usage/load-report.json"
+      }
+    }
+  },
+  "exchanges": [],
+  "expect": {
+    "statusCode": 204
+  }
+}

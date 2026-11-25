@@ -5,7 +5,9 @@
  *
  *   POST /.netlify/functions/record-load
  *   Headers: Authorization: Bearer <user access token>
- *   Body:    { key: string }   // share path, e.g. /share/v/g/<id>
+ *   Body:    { key: string,     // share path, e.g. /share/v/g/<id>
+ *             gate?: 'soft' }  // a direct link, loaded over the limit anyway;
+ *                              // only labels the limit record (account-usage.md)
  *
  * Flow:
  *   1. Validate the access token via Auth0 /userinfo → sub.
@@ -47,6 +49,8 @@ import {
 } from '../../src/quota/limits.js'
 import {isProSubscriptionStatus} from '../../src/quota/proStatus.js'
 import {isQuotableModel} from './_lib/modelVisibility.js'
+import {recordServerLimitHit} from './_lib/accountUsage.js'
+import {LIMIT_KINDS} from '../../src/privacy/accountUsageReport.js'
 
 
 Sentry.AWSLambda.init({
@@ -293,6 +297,10 @@ export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   }
 
   if (existingLoads.length >= FREE_LIMIT) {
+    // Per-account limit record + GA count (design/new/account-usage.md).
+    // `gate: 'soft'` is the direct-link caller (quota/useDirectLinkQuota.js),
+    // which loads the model anyway; best-effort and time-bounded.
+    await recordServerLimitHit(event, {sub: auth0UserId, limit: LIMIT_KINDS.PRIVATE_MODEL, gate: body.gate, key})
     return jsonResponse(HTTP_FORBIDDEN, buildResponse(false, existingLoads.length, tier, false, existingLoads))
   }
 

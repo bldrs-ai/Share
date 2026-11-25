@@ -13,6 +13,7 @@ import {abandonGateLogin, startLogin} from '../../Auth0/gateLogin'
 import {endSessionLogoutOptions} from '../../Auth0/logoutOptions'
 import {getRenderMode, setRenderMode as saveRenderMode} from '../../privacy/preferences'
 import {trackSubscriptionFromToken} from '../../app/subscriptionTracking'
+import {setUsageReportsPreference, usageReportsEnabled} from '../../app/accountUsage'
 import useStore from '../../store/useStore'
 import {Themes} from '../../theme/Theme'
 import {assertDefinedBoolean} from '../../utils/assert'
@@ -37,6 +38,7 @@ import {
   FlareOutlined as FlareOutlinedIcon,
   PaymentOutlined,
   CleaningServicesOutlined as CleaningServicesOutlinedIcon,
+  InsightsOutlined as InsightsOutlinedIcon,
 } from '@mui/icons-material'
 import {cacheClearSkippedAlert} from '../../OPFS/messages'
 import {clearOPFSCache} from '../../OPFS/utils'
@@ -82,6 +84,20 @@ export default function ProfileControl() {
   const stripeCustomerId = appMetadata?.stripeCustomerId || null
 
   const onManageProfileClick = () => setIsManageProfileOpen(true)
+
+  // "Use my usage to improve Bldrs" (design/new/account-usage.md §"Opt-out"):
+  // on unless turned off, stored on the Auth0 user. While the save is in
+  // flight the item is disabled, so a double click can't race two writes.
+  const isUsageReportsOn = usageReportsEnabled(appMetadata)
+  const [isSavingUsageReports, setIsSavingUsageReports] = useState(false)
+  const onUsageReportsClick = async () => {
+    setIsSavingUsageReports(true)
+    const saved = await setUsageReportsPreference(!isUsageReportsOn)
+    setIsSavingUsageReports(false)
+    if (!saved) {
+      setAlert('Couldn\'t save your usage setting. Please try again.')
+    }
+  }
 
 
   useEffect(() => {
@@ -243,6 +259,20 @@ export default function ProfileControl() {
             <Typography>
               {stripeCustomerId ? 'Manage Subscription' : 'Upgrade to Pro'}
             </Typography>
+          </MenuItem>
+        )}
+
+        {isAuthenticated && (
+          <MenuItem
+            onClick={onUsageReportsClick}
+            disabled={isSavingUsageReports}
+            role='menuitemcheckbox'
+            aria-checked={isUsageReportsOn}
+            data-testid='menu-usage-reports'
+          >
+            <InsightsOutlinedIcon/>
+            <Typography>Use my usage to improve Bldrs</Typography>
+            {isUsageReportsOn && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
           </MenuItem>
         )}
 

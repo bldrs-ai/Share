@@ -5,6 +5,8 @@ import useStore from '../store/useStore'
 import {isFeatureEnabled} from '../FeatureFlags'
 import {HTTP_FORBIDDEN} from '../net/http'
 import {DRIVE_VISIBILITY} from '../quota/driveVisibility'
+import {reportClientLimitHit} from '../app/accountUsage'
+import {LIMIT_GATES, limitRouteKindOfKey} from '../privacy/accountUsageReport'
 import {
   TIERS,
   LIMITS,
@@ -145,11 +147,16 @@ export default function useQuota() {
    * Drive key counts as private: the behaviour before Drive visibility was
    * looked at, and the safe default for a caller that can't tell.
    *
+   * `gate: 'soft'` says the caller loads the model whatever the answer (a
+   * direct link, quota/useDirectLinkQuota.js): it changes nothing about the
+   * decision, only how a refusal is recorded against the account
+   * (design/new/account-usage.md).
+   *
    * @param {string} key Share path being loaded
-   * @param {{resolveDriveVisibility?: Function}} [options]
+   * @param {{resolveDriveVisibility?: Function, gate?: string}} [options]
    * @return {Promise<{allowed:boolean,used:number,limit:number,tier:string,alreadyCounted:boolean}>}
    */
-  const record = useCallback(async (key, {resolveDriveVisibility} = {}) => {
+  const record = useCallback(async (key, {resolveDriveVisibility, gate} = {}) => {
     if (!isQuotablePath(key)) {
       return {allowed: true, used, limit, tier, alreadyCounted: false}
     }
@@ -172,7 +179,7 @@ export default function useQuota() {
       })
     } catch (err) {
       captureException(err)
-      return recordLocally(key, tier, limit, setQuota)
+      return recordLocallyAndReport(key, tier, limit, setQuota, gate)
     }
 
     let response
@@ -183,11 +190,11 @@ export default function useQuota() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({key}),
+        body: JSON.stringify(gate === LIMIT_GATES.SOFT ? {key, gate} : {key}),
       })
     } catch (err) {
       captureException(err)
-      return recordLocally(key, tier, limit, setQuota)
+      return recordLocallyAndReport(key, tier, limit, setQuota, gate)
     }
 
     let data
@@ -219,7 +226,7 @@ export default function useQuota() {
 
     if (!response.ok) {
       captureException(new Error(`record-load returned ${response.status}`))
-      return recordLocally(key, tier, limit, setQuota)
+      return recordLocallyAndReport(key, tier, limit, setQuota, gate)
     }
 
     // A new load was persisted server-side (loads present and not a dedup
@@ -276,6 +283,27 @@ export default function useQuota() {
     check,
     record,
   }
+}
+
+
+/**
+ * recordLocally, and a refusal it makes reported to account-usage: with
+ * record-load unreachable the page decided the refusal, so record-load
+ * couldn't record it (design/new/account-usage.md §"Limit hits").
+ *
+ * @param {string} key
+ * @param {string} tier
+ * @param {number} limit
+ * @param {Function} setQuota
+ * @param {string} [gate] LIMIT_GATES
+ * @return {Promise<object>} recordLocally's answer
+ */
+async function recordLocallyAndReport(key, tier, limit, setQuota, gate) {
+  const outcome = await recordLocally(key, tier, limit, setQuota)
+  if (!outcome.allowed) {
+    reportClientLimitHit({gate, routeKind: limitRouteKindOfKey(key) ?? undefined})
+  }
+  return outcome
 }
 
 
