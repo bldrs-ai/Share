@@ -6,7 +6,14 @@ import {CONSENT_COOKIE_NAME, CONSENT_LEVELS, getConsentLevel, setConsentLevel} f
 import {LOCAL_ONLY_MODE_NAME} from '../../privacy/localOnlyMode'
 import useStore from '../../store/useStore'
 import AboutControl, {testId as aboutTestId} from './AboutControl'
-import ConsentBanner, {CONSENT_HEADLINE, CONSENT_SHORT_TEXT, CONSENT_TEXT, PRIVACY_POLICY_HREF} from './ConsentBanner'
+import ConsentBanner, {
+  BANNER_Z,
+  CONSENT_HEADLINE,
+  CONSENT_SHORT_TEXT,
+  CONSENT_TEXT,
+  ONBOARDING_OVERLAY_Z,
+  PRIVACY_POLICY_HREF,
+} from './ConsentBanner'
 
 
 /** @return {Array} analytics_storage values of every consent update queued */
@@ -117,12 +124,24 @@ describe('ConsentBanner', () => {
     expect(analyticsUpdates()).toEqual(['denied'])
   })
 
-  // Both would cover it: a first-timer gets the welcome, the tour, then this.
-  test.each([['About', {isAboutVisible: true}], ['the onboarding overlay', {isOnboardingOverlayVisible: true}]])(
-    'steps aside while %s is up', (_, state) => {
-      renderBanner(state)
-      expect(screen.queryByTestId('consent-banner')).toBeNull()
+  test('steps aside while About is open', () => {
+    renderBanner({isAboutVisible: true})
+    expect(screen.queryByTestId('consent-banner')).toBeNull()
+  })
+
+  // A first-timer's About closes straight into the tour, Privacy settings
+  // included; waiting behind the tour made that link look like a no-op.
+  test('shows over the onboarding tour, and drops back under dialogs after it', () => {
+    renderBanner({isOnboardingOverlayVisible: true})
+    const banner = screen.getByTestId('consent-banner')
+    const zOf = () => Number(getComputedStyle(screen.getByTestId('consent-banner').parentElement).zIndex)
+    expect(banner).toBeInTheDocument()
+    expect(zOf()).toBeGreaterThan(ONBOARDING_OVERLAY_Z)
+    act(() => {
+      useStore.setState({isOnboardingOverlayVisible: false})
     })
+    expect(zOf()).toBe(BANNER_Z)
+  })
 
   test('links to the privacy policy page, in a new tab', () => {
     renderBanner()

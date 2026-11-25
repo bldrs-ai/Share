@@ -64,8 +64,9 @@ async function openRealModel(page: Page, path = REAL_MODEL) {
 
 
 /**
- * A first-timer's welcome: About, then the onboarding overlay, both of
- * which the banner waits behind (ConsentBanner.jsx).
+ * A first-timer's welcome: About, then the onboarding tour. The banner
+ * waits for About and shows over the tour (ConsentBanner.jsx); this clicks
+ * the tour away so the specs see the plain page.
  *
  * @param page Playwright page
  */
@@ -110,7 +111,7 @@ describeMobileAndDesktop('Analytics consent', () => {
 
   test('a fresh visitor is asked in a banner, and nothing is collected before they answer', async ({page}) => {
     const banner = page.getByTestId('consent-banner')
-    // First-timers get the About welcome and the tour; the banner waits.
+    // First-timers get the About welcome first; the banner waits for it.
     await expect(page.getByRole('dialog')).toBeVisible()
     await expect(banner).toHaveCount(0)
     await closeWelcome(page)
@@ -146,6 +147,18 @@ describeMobileAndDesktop('Analytics consent', () => {
     // Still unanswered, so still nothing for GA.
     expect(wasGranted(await gtagCommands(page))).toBe(false)
     await expect(page.getByTestId('consent-banner')).toBeVisible()
+  })
+
+  // The owner's path on the #2354 preview: a first visit, About's Privacy
+  // settings. About closes into the onboarding tour, and the banner has to
+  // be there over it, not waiting behind it.
+  test('About\'s Privacy settings shows the banner on a first visit, over the tour', async ({page}) => {
+    await page.getByTestId('about-privacy-settings').click()
+    await expect(page.getByTestId('onboarding-overlay')).toBeVisible()
+    await expect(page.getByTestId('consent-banner')).toBeVisible()
+    await page.getByTestId('consent-accept').click()
+    expect(await consentCookie(page)).toBe('1.functional')
+    await expect(page.getByTestId('consent-banner')).toHaveCount(0)
   })
 
   test('the banner leaves the page usable: the Open control works while it is up', async ({page}) => {

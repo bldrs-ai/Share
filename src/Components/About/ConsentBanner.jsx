@@ -53,6 +53,12 @@ export const CONSENT_TEXT =
 export const PRIVACY_POLICY_HREF = '/privacy/'
 
 
+// OnboardingOverlay.jsx's zIndex.
+export const ONBOARDING_OVERLAY_Z = 9999
+// Above the drawers (MUI 1200), under dialogs (Theme.jsx modal 2000).
+export const BANNER_Z = 1250
+
+
 /** What a visitor who reopens the banner already chose. */
 const CURRENT_CHOICE = Object.freeze({
   [CONSENT_LEVELS.FUNCTIONAL]: 'You accepted.',
@@ -64,9 +70,12 @@ const CURRENT_CHOICE = Object.freeze({
  * Shown while the store's `isConsentBannerVisible` is set: on every load
  * until the visitor answers (UISlice), and again from Privacy settings
  * (About, Open/LocalOnlyDialog) so a choice can be changed as easily as it
- * was made. Held back while About or the first-visit onboarding overlay
- * (zIndex 9999, OnboardingOverlay.jsx) is up, which would cover it: a
- * first-timer gets the welcome, then the tour, then this.
+ * was made. Held back while About is open (its Privacy settings link is the
+ * way here from it). Not held back by the first-visit onboarding tour
+ * (OnboardingOverlay.jsx, zIndex 9999): a first-timer's About closes
+ * straight into the tour, Privacy settings included, so waiting behind it
+ * made Privacy settings look like a no-op (owner, on the #2354 preview).
+ * While the tour is up the banner sits above it instead.
  *
  * @return {ReactElement|null}
  */
@@ -78,7 +87,7 @@ export default function ConsentBanner() {
   const privacyLevel = useStore((state) => state.privacyLevel)
   const isMobile = useIsMobile()
   const [isDetailed, setIsDetailed] = useState(false)
-  if (!isVisible || isAboutVisible || isOnboardingVisible) {
+  if (!isVisible || isAboutVisible) {
     return null
   }
   // Both answers apply even when unchanged: re-choosing is harmless, and it
@@ -104,8 +113,10 @@ export default function ConsentBanner() {
         px: '16px',
         // Above the canvas, the controls and the drawers, under any dialog
         // (Theme.jsx raises modal to 2000), and it's not a modal: the page
-        // behind it stays usable, drag-and-drop included.
-        zIndex: 1250,
+        // behind it stays usable, drag-and-drop included. Above the
+        // onboarding tour (9999) only while the tour is up, so it is never
+        // hidden behind it and never covers a dialog the rest of the time.
+        zIndex: isOnboardingVisible ? ONBOARDING_OVERLAY_Z + 1 : BANNER_Z,
         pointerEvents: 'none',
       }}
     >
