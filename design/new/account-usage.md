@@ -339,6 +339,16 @@ existing behaviour, shared with every function that uses it.
 
 ## Known gaps
 
+- **Two retention runs at once.** The sweep assumes one run at a time. That
+  holds for the daily schedule, since a run stops after about 20 s. A manual
+  trigger during a scheduled run would race on the checkpoint, last write
+  wins, and the final counts would come out low (never double). A conditional
+  (`onlyIfMatch`) checkpoint write would close it. The summary's `deleted`
+  also reads slightly high after a resume, because it counts `pendingDelete`
+  keys an earlier run already removed.
+- **The checkpoint holds account hashes** (keyed, never subs) of accounts that
+  may since have opted out or asked for deletion, until that period's rollup
+  is finished, normally within a day or a few.
 - **Two tabs toggling at once.** The Profile item is disabled only in its own
   tab. An opt-out and an opt-in racing from two tabs can interleave so that
   Auth0 ends at off with no mirror, and the server records. Closing that
