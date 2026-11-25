@@ -53,7 +53,6 @@
 // the load backend.
 
 import {isFeatureEnabled} from '../FeatureFlags'
-import {reportEngineVersion} from './loadProgress'
 import {makeBlobByteStore} from '../engine/opfsSourceByteStore'
 import {openDeferred} from '../engine/conwayOpen'
 import {beginOpenAttempt, conwayOpenFailure, conwayRefusedSchema, openModelFailure} from '../engine/unsupportedSchema'
@@ -125,12 +124,14 @@ import {enableStepPreviewFinishParse, testPumpBatchSize, testStepPreviewFinishPa
  *   pump batch, so a main-thread parse stops at its next batch with a
  *   LoadAbortedError. The open itself is one wasm call on this thread and
  *   runs to its end.
+ * @param {object} [options.report] the load's reporter
+ *   (loadProgress.js#LoadReporter), for the engine's version line
  * @return {Promise<{modelID: number, captured: Array,
  *   recapture: function(): Promise<Array>}>}
  */
 export async function parseIfcWithConway(
   buffer, ifcAPI, settings = undefined, onProgress = undefined, onMeshBatch = undefined, onPreviewMesh = undefined,
-  onIndexed = undefined, {signal} = {}) {
+  onIndexed = undefined, {signal, report = null} = {}) {
   if (!ifcAPI || typeof ifcAPI.OpenModel !== 'function') {
     throw new Error('parseIfcWithConway: ifcAPI.OpenModel is unavailable')
   }
@@ -146,7 +147,7 @@ export async function parseIfcWithConway(
   // Engine identity line for the load report (log line 2) — e.g.
   // "Conway v1.379.1190". Feature-detected, like the other engine extensions.
   if (typeof ifcAPI.getConwayVersion === 'function') {
-    reportEngineVersion(ifcAPI.getConwayVersion())
+    report?.engineVersion(ifcAPI.getConwayVersion())
   }
   const store = isBlobSource(buffer) &&
       !isFeatureEnabled('disableStreamOpen') &&
@@ -981,9 +982,11 @@ function applyEngineLogLevel(ifcAPI) {
  * @param {object|null} [opts.scene] scene Object3D to parent subsets
  *   under as a fallback when source meshes haven't been added to the
  *   scene yet (passed through to `attachInstanceMapSubsets`)
+ * @param {Function} [opts.onDepthCap] the load's BVH depth-cap callback
+ *   (model/bvhBuild.js), for the tree built here
  */
 export function decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, opts = {}) {
-  const {scene = null} = opts
+  const {scene = null, onDepthCap} = opts
   ifcModel.modelID = modelID
 
   // `ifcManager` shim. Several call-sites discriminate "is this an
@@ -1029,7 +1032,7 @@ export function decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, opts = {
   // put, only the index buffer is permuted) so the new map matches
   // the geometry's actual layout.
   if (typeof ifcModel.geometry?.computeBoundsTree === 'function') {
-    ifcModel.geometry.computeBoundsTree()
+    ifcModel.geometry.computeBoundsTree(onDepthCap ? {onDepthCap} : undefined)
   }
   // Instance-map rebuild only runs when the geometry has the
   // expected attributes. Auto-mocked test BufferGeometry has none;

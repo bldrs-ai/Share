@@ -17,7 +17,7 @@ export {sizeClass} from '../utils/sizeClass'
  * Conditions section") sends only immediately actionable conditions to
  * Sentry. These two are diagnostic after the fact (a best-effort preview
  * that dropped a unit; a slower-but-correct buffered open), so they are
- * counted in GA, like OPFS/reportOpfsSourceCondition.js's `sendToGa`. Each
+ * counted in GA, like reportOpfsSourceCondition.js's `sendToGa`. Each
  * event's params are exactly the fields below, bucketed where a raw number
  * could fingerprint a file, and never a file name, URL or path. The helpers
  * take none, which makes that structural.
@@ -149,7 +149,7 @@ export function leafBucket(triangles) {
 
 /**
  * One event for a load whose picking index hit three-mesh-bvh's depth cap
- * (model/bvhBuild.js, recorded by loadProgress.js#reportBvhDepthCap).
+ * (model/bvhBuild.js, recorded by loadProgress.js#LoadReporter#bvhDepthCap).
  * Picks stay correct, but a ray reaching a capped leaf tests its triangles
  * one by one; the leaf size is what decides whether raising `maxDepth` or
  * building with SAH is worth it. Volume-only diagnostic signal, so GA, not

@@ -1,6 +1,5 @@
 import {gtagEvent} from '../privacy/analytics'
 import debug from '../utils/debug'
-import {reportRendererInfo} from './loadProgress'
 
 
 /**
@@ -35,8 +34,9 @@ export const NO_MULTI_DRAW_LINE =
  *   viewer that is not fully set up can throw from it, and that must not
  *   fail the load.
  * @param {string} [format] the model's format tag, for GA
+ * @param {object} [report] the load's reporter (loadProgress.js#LoadReporter)
  */
-export function reportRendererLimits(model, getRenderer, format) {
+export function reportRendererLimits(model, getRenderer, format, report = null) {
   try {
     const extensions = getRenderer?.()?.extensions
     // The extension first: it is the rare case (Firefox), so on every other
@@ -49,7 +49,7 @@ export function reportRendererLimits(model, getRenderer, format) {
     if (!hasBatchedMesh(model)) {
       return
     }
-    reportRendererInfo(NO_MULTI_DRAW_LINE)
+    report?.line(NO_MULTI_DRAW_LINE)
     gtagEvent('renderer_fallback', {condition: 'no_multi_draw', format: format ?? 'unknown'})
   } catch (e) {
     debug().log('reportRendererLimits: ', e)

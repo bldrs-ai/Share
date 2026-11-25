@@ -153,7 +153,7 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
       handle = h
     }})
     expect(model).toBeTruthy()
-    expect(createEngineModelLoad).toHaveBeenCalledWith({format: 'step'})
+    expect(createEngineModelLoad).toHaveBeenCalledWith({format: 'step', report: null})
     expect(engineParse).toHaveBeenCalledTimes(1)
     expect(parseIfcWithConway).not.toHaveBeenCalled()
     expect(IncrementalBatchedBuilder.mock.calls[0][0]).toBe(facade)
@@ -166,7 +166,7 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
     const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
     loader.type = 'ifc'
     await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
-    expect(createEngineModelLoad).toHaveBeenCalledWith({format: 'ifc'})
+    expect(createEngineModelLoad).toHaveBeenCalledWith({format: 'ifc', report: null})
   })
 
   it('a format no Conway engine parses keeps to its own loader', async () => {

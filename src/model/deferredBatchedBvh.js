@@ -3,7 +3,6 @@ import {Box3} from 'three'
 import {computeBatchedBoundsTree, disposeBatchedBoundsTree} from 'three-mesh-bvh'
 import {isFeatureEnabled} from '../FeatureFlags'
 import debug from '../utils/debug'
-import {loadReportToken, reportBvhDepthCap} from '../loader/loadProgress'
 import {beginInstanceBoundsTree, disposeInstanceBoundsTree} from './batchedInstanceBvh'
 import {BVH_MAX_DEPTH, depthCapExtremes} from './bvhBuild'
 
@@ -47,7 +46,10 @@ import {BVH_MAX_DEPTH, depthCapExtremes} from './bvhBuild'
  *
  * The depth-cap Health line still reaches the load report: the job adds up
  * its trees' caps and reports once when it finishes, which is usually after
- * the load has ended (`reportBvhDepthCap` handles that case).
+ * the load has ended, through the `onDepthCap` its caller took from the
+ * load's reporter when it scheduled the job
+ * (loader/loadProgress.js#LoadReporter#lateBvhDepthCap). The model imports
+ * nothing from the loader (open-t200 slice R, layering.md §4.4).
  */
 
 
@@ -82,9 +84,12 @@ const jobs = new WeakMap()
  * @param {Function} [opts.schedule] `(run) => void`, calling `run(deadline)`
  *   later with `{timeRemaining(): number}`; defaults to requestIdleCallback,
  *   or a timer where there is none (Safari)
+ * @param {Function} [opts.onDepthCap] `({trees, maxLeafTriangles, maxDepth})`,
+ *   called once when the job finishes if any tree reached the depth cap; the
+ *   load's, however late the job finishes. None: the cap goes nowhere
  * @return {object|null} the job, or null when no mesh takes trees
  */
-export function scheduleBatchedBoundsTrees(meshes, {schedule = scheduleIdle} = {}) {
+export function scheduleBatchedBoundsTrees(meshes, {schedule = scheduleIdle, onDepthCap = undefined} = {}) {
   const targets = meshes.filter(takesBoundsTrees)
   if (targets.length === 0) {
     return null
@@ -93,7 +98,7 @@ export function scheduleBatchedBoundsTrees(meshes, {schedule = scheduleIdle} = {
     jobs.get(mesh)?.cancel()
     armBoundsTrees(mesh)
   }
-  const job = makeJob(targets, schedule)
+  const job = makeJob(targets, schedule, onDepthCap)
   for (const mesh of targets) {
     jobs.set(mesh, job)
   }
@@ -192,10 +197,10 @@ function armBoundsTrees(mesh) {
 /**
  * @param {Array<object>} meshes
  * @param {Function} schedule
+ * @param {Function} [onDepthCap]
  * @return {object} the job
  */
-function makeJob(meshes, schedule) {
-  const token = loadReportToken()
+function makeJob(meshes, schedule, onDepthCap) {
   let meshIndex = 0
   let geometryId = 0
   let trees = 0
@@ -278,7 +283,7 @@ function makeJob(meshes, schedule) {
       }
     }
     if (trees > 0) {
-      reportBvhDepthCap({trees, maxLeafTriangles, maxDepth: BVH_MAX_DEPTH}, token)
+      onDepthCap?.({trees, maxLeafTriangles, maxDepth: BVH_MAX_DEPTH})
     }
   }
 

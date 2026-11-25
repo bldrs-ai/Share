@@ -190,7 +190,7 @@ export function omitUndefined(obj) {
  * `load_outcome` verdict plus every `stats_*` value.
  *
  * Two sources merge. `completedStats` is the progress reporter's
- * cross-format snapshot (loadProgress#getCompletedLoadStats), `loadStats`
+ * cross-format snapshot (loadProgress.js#LoadReporter#completedStats), `loadStats`
  * is conway's engine view for IFC/STEP (ShareIfcLoader). The engine wins
  * where both speak (the engine's own counts, conway#740),
  * with ONE exception: `loadTime` always comes from the reporter. It is the

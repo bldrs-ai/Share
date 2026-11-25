@@ -16,7 +16,7 @@ import {
 } from '../OPFS/OPFSService.js'
 import {assertDefined} from '../utils/assert'
 import {withSentrySafeMessage, workerErrorLabel} from '../privacy/sentryRedaction'
-import {OPFS_DOWNLOAD_FAILURE_CONDITIONS, downloadSourceKind} from './reportOpfsSourceCondition'
+import {OPFS_DOWNLOAD_FAILURE_CONDITIONS, downloadSourceKind} from './messages'
 import debug, {WARN} from '../utils/debug'
 
 

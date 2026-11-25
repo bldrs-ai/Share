@@ -10,12 +10,6 @@ import {LoadAbortedError} from '../utils/loadAbort'
 // load's side of the abort (which awaits it races, what it closes), and the
 // stand-in makes each await one the test controls.
 
-jest.mock('../loader/loadProgress', () => ({
-  reportEngineLog: jest.fn(),
-  reportEngineVersion: jest.fn(),
-  reportSourceInfo: jest.fn(),
-}))
-
 
 /**
  * The EngineSession surface `createEngineModelLoad#parse` uses. `open`

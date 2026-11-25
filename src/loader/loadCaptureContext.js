@@ -1,8 +1,8 @@
 /**
  * What of a load's state may reach Sentry (Share#2107). Used by every path
  * that sends it: the stall message and the load-failure exception
- * (`LoadProgressReporter#applySentryLoadState`) and the condition events of
- * `OPFS/reportOpfsSourceCondition.js` (Share#2103).
+ * (`LoadReporter#applySentryLoadState`) and the condition events of
+ * `reportOpfsSourceCondition.js` (Share#2103).
  */
 
 // The only `contexts.load` fields these events carry. An allowlist, so a field
@@ -18,7 +18,7 @@ const LOAD_CONTEXT_FIELDS = ['phase', 'completed', 'total', 'unit', 'elapsedMs',
  * A load's capture context minus anything that identifies the
  * model: `load.*` tags (phase, and whether it stalled) and the allowlisted `load` fields.
  *
- * @param {{tags: object, contexts: object}} load LoadProgressReporter#sentryLoadState()
+ * @param {{tags: object, contexts: object}} load LoadReporter#sentryLoadState()
  * @return {{tags: object, contexts: object}}
  */
 export function nonIdentifyingLoadContext(load) {

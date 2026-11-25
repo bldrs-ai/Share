@@ -1,5 +1,4 @@
 import {Box3, Group, Sphere, Vector3} from 'three'
-import {reportFirstMesh, setLoadSummary} from './loadProgress'
 import debug, {WARN} from '../utils/debug'
 import {LOAD_PREVIEW_GROUP_KEY, PREVIEW_BASE_MATERIAL_KEY} from '../model/previewSelection'
 import {FRAMING_MARGIN, applyCameraLimits, cameraLimitsForSphere} from '../viewer/three/cameraLimits'
@@ -98,10 +97,13 @@ export default class ProgressiveLoadSession {
    *   load's first geometry is on screen (open-205 #2043: the caller lifts
    *   its loading overlay). Called whatever happens to the load afterwards;
    *   the caller decides whether the load is still the one it shows.
+   * @param {object} [args.report] the load's reporter
+   *   (loadProgress.js#LoadReporter): the first mesh's time and the model
+   *   summary on the Total line go to it. None in a bare parse.
    */
   constructor({
     scene = null, getControls, getCamera, frameCamera = true, onProgress, renderDemand = null,
-    onFirstMesh = null,
+    onFirstMesh = null, report = null,
   }) {
     this.state = SessionState.IDLE
     this.scene = scene
@@ -121,6 +123,7 @@ export default class ProgressiveLoadSession {
     this.renderDemand = scene !== null ? renderDemand : null
     this.hasAskedForFirstPaint = false
     this.onFirstMesh = onFirstMesh
+    this.loadReport = report
     this.endOnDemand = null
     try {
       this.endOnDemand = this.renderDemand?.begin(this.getControls()) ?? null
@@ -180,7 +183,7 @@ export default class ProgressiveLoadSession {
   setSummary(parts) {
     try {
       if (parts.length > 0) {
-        setLoadSummary(parts.join(' '))
+        this.loadReport?.summary(parts.join(' '))
       }
     } catch (e) {
       debug(WARN).warn('load summary skipped:', e)
@@ -221,7 +224,7 @@ export default class ProgressiveLoadSession {
       this.previewMeshCount++
       // First geometry on screen, for the GA `stats_firstMeshMs` timing.
       // Latches, so only the first mesh of the load is recorded.
-      reportFirstMesh()
+      this.loadReport?.firstMesh()
       if (!this.previewInstalled) {
         this.previewInstalled = true
         this.scene.add(this.previewGroup)
@@ -263,7 +266,7 @@ export default class ProgressiveLoadSession {
       // The incremental builder's batches are on screen as soon as their
       // bounds are announced: the same first-geometry moment as above, for
       // the demand/streaming path that never calls addPreviewMesh.
-      reportFirstMesh()
+      this.loadReport?.firstMesh()
       if (this.state === SessionState.IDLE) {
         this.state = SessionState.PREVIEWING
       }

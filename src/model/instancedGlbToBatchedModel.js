@@ -1060,6 +1060,8 @@ function buildPartition(pairs, transparent) {
  * @param {object} [opts]
  * @param {object} [opts.scene] subset fallbackParent, as in
  *   `assembleBatchedModel`
+ * @param {Function} [opts.onDepthCap] the load's BVH depth-cap callback,
+ *   for the deferred trees (`decorateBatchMeshes`)
  * @return {object|null} BatchedMesh or Group, decorated
  */
 export function hydrateBatchedModelFromInstancedGlb(gltfModel, opts = {}) {
@@ -1097,7 +1099,7 @@ export function hydrateBatchedModelFromInstancedGlb(gltfModel, opts = {}) {
 
   // The shared decoration core — snapshot, palette re-derivation, pick
   // tables, BVH. This is the parity-by-construction step (module doc).
-  decorateBatchMeshes(batches)
+  decorateBatchMeshes(batches, {onDepthCap: opts.onDepthCap})
 
   const model = batches.length === 1 ? batches[0].mesh : new Group()
   if (model.isGroup) {

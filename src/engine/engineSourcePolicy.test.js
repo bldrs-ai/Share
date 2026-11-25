@@ -15,12 +15,6 @@ import {makeWorkerTransport} from './transports'
 // fallback. The rules themselves are sourcePolicy.test.js's.
 
 jest.mock('../FeatureFlags', () => ({flags: [], isFeatureEnabled: jest.fn(() => false)}))
-jest.mock('../loader/loadProgress', () => ({
-  reportEngineLog: jest.fn(),
-  reportEngineVersion: jest.fn(),
-  reportSourceInfo: jest.fn(),
-}))
-
 
 const BYTES = Uint8Array.from({length: 64}, (_, i) => i)
 const NAME = 'model.ifc.etag.commit'

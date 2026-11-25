@@ -1,5 +1,4 @@
 import {computeBatchedBoundsTree, computeBoundsTree} from 'three-mesh-bvh'
-import {reportBvhDepthCap} from '../loader/loadProgress'
 
 
 /**
@@ -13,7 +12,11 @@ export const BVH_MAX_DEPTH = 40
 /**
  * `BufferGeometry.prototype.computeBoundsTree`, as ShareIfc installs it:
  * three-mesh-bvh's, built without its console warning, with a depth-cap hit
- * recorded on the load report instead.
+ * handed to the caller's `onDepthCap` instead, which records it on the load
+ * report (loader/loadProgress.js#LoadReporter#bvhDepthCap). The model takes
+ * a callback and imports nothing from the loader (open-t200 slice R,
+ * design/tracks/open-t200/layering.md §4.4). A build with none (an edit's
+ * new geometry, batchedEdit.js) is not a load's, and its cap goes nowhere.
  *
  * Why not the warning: `BVH: Max depth of 40 reached when generating BVH.
  * Consider increasing maxDepth.` is a performance note, not a defect: picks
@@ -28,13 +31,15 @@ export const BVH_MAX_DEPTH = 40
  * Installed as a prototype method, so `this` is the BufferGeometry.
  *
  * @this {object}
- * @param {object} [options] three-mesh-bvh MeshBVH options
+ * @param {object} [options] three-mesh-bvh MeshBVH options, plus
+ *   `onDepthCap({trees, maxLeafTriangles, maxDepth})`, which is not passed on
  * @return {object} the MeshBVH
  */
 export function computeQuietBoundsTree(options = {}) {
-  const resolved = {verbose: false, maxDepth: BVH_MAX_DEPTH, ...options}
+  const {onDepthCap, ...bvhOptions} = options
+  const resolved = {verbose: false, maxDepth: BVH_MAX_DEPTH, ...bvhOptions}
   const bvh = computeBoundsTree.call(this, resolved)
-  noteDepthCap([bvh], resolved.maxDepth)
+  noteDepthCap([bvh], resolved.maxDepth, onDepthCap)
   return bvh
 }
 
@@ -48,14 +53,16 @@ export function computeQuietBoundsTree(options = {}) {
  *
  * @this {object}
  * @param {number} [index] geometry id, or -1 for every geometry
- * @param {object} [options] three-mesh-bvh MeshBVH options
+ * @param {object} [options] three-mesh-bvh MeshBVH options, plus
+ *   `onDepthCap` as above
  * @return {object|Array<object>|null} what three-mesh-bvh returns: the
  *   bounds-tree array for -1, else the one tree (or null)
  */
 export function computeQuietBatchedBoundsTree(index = -1, options = {}) {
-  const resolved = {verbose: false, maxDepth: BVH_MAX_DEPTH, ...options}
+  const {onDepthCap, ...bvhOptions} = options
+  const resolved = {verbose: false, maxDepth: BVH_MAX_DEPTH, ...bvhOptions}
   const built = computeBatchedBoundsTree.call(this, index, resolved)
-  noteDepthCap(index < 0 ? built : [built], resolved.maxDepth)
+  noteDepthCap(index < 0 ? built : [built], resolved.maxDepth, onDepthCap)
   return built
 }
 
@@ -120,10 +127,14 @@ function largestCappedLeaf(bvh, maxDepth) {
 /**
  * @param {Array<object|null>} bvhs
  * @param {number} maxDepth
+ * @param {Function} [onDepthCap]
  */
-function noteDepthCap(bvhs, maxDepth) {
+function noteDepthCap(bvhs, maxDepth, onDepthCap) {
+  if (typeof onDepthCap !== 'function') {
+    return
+  }
   const capped = depthCapExtremes(bvhs, maxDepth)
   if (capped) {
-    reportBvhDepthCap({...capped, maxDepth})
+    onDepthCap({...capped, maxDepth})
   }
 }

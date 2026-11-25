@@ -1,10 +1,4 @@
-import {
-  LOAD_OUTCOMES,
-  captureLoadDiagnostics,
-  getCompletedLoadOutcome,
-  getCompletedLoadStats,
-  noGeometryAlert,
-} from '../loader/loadProgress'
+import {LOAD_OUTCOMES, noGeometryAlert} from '../loader/loadProgress'
 import {buildOutcomeParams} from '../loader/loadAnalytics'
 import {recordLocalUpload} from '../connections/uploadLedger'
 import {
@@ -41,12 +35,14 @@ import {modelOpenKind} from '../utils/reportModelOpen'
  * @param {object} loadedModel
  * @param {object} context
  * @param {string} context.installPrefix
+ * @param {object} context.report the load's reporter, ended
+ *   (loader/loadProgress.js#LoadReporter)
  * @param {{engagementStop: {current: *}, refusal: {current: *}, open: {current: *}}} context.refs
  *   CadView's stopModelEngagementRef, reportedRefusalRef and reportedOpenRef
  * @param {Function} context.setAlert the store's
  * @param {Function} context.getIsAuthenticated the latest auth state
  */
-export function reportModelOpened(routeResult, loadedModel, {installPrefix, refs, setAlert, getIsAuthenticated}) {
+export function reportModelOpened(routeResult, loadedModel, {installPrefix, report, refs, setAlert, getIsAuthenticated}) {
   // Replaces the retired `select_content` event, whose counts were
   // conflated with homepage visits because the demo model fired it
   // too. The isRealModelOpen guard keeps that from recurring — see
@@ -57,7 +53,7 @@ export function reportModelOpened(routeResult, loadedModel, {installPrefix, refs
   refs.engagementStop.current = null
   // The verdict the real_model_open below reports (load_outcome), read once
   // so the user's message and GA's count cannot disagree about this load.
-  const loadOutcome = getCompletedLoadOutcome()
+  const loadOutcome = report.completedOutcome()
   if (loadOutcome === LOAD_OUTCOMES.NO_GEOMETRY) {
     // The engine read the file and it has nothing to draw (Share#1962): say
     // so in place of leaving an empty viewer unexplained. Not a failure, so
@@ -104,7 +100,7 @@ export function reportModelOpened(routeResult, loadedModel, {installPrefix, refs
     // unusable verdict. loadTime stays the reporter's wall clock whatever
     // the engine says; see loadAnalytics#buildOutcomeParams.
     Object.assign(eventParams, buildOutcomeParams({
-      completedStats: getCompletedLoadStats() ?? undefined,
+      completedStats: report.completedStats() ?? undefined,
       loadStats: loadedModel.loadStats,
       loadOutcome,
     }))
@@ -123,7 +119,7 @@ export function reportModelOpened(routeResult, loadedModel, {installPrefix, refs
     // keeps it in the text slot; see analytics#getLocalHour.
     eventParams[LOCAL_HOUR_PARAM] = getLocalHour()
     if (isNewOpen) {
-      sendOpenEvents(routeResult, eventParams, getIsAuthenticated)
+      sendOpenEvents(routeResult, eventParams, report, getIsAuthenticated)
     }
     // The engagement window restarts on every load, a theme rebuild's
     // too: the stop above ended the last one, and the user is still on
@@ -143,9 +139,10 @@ export function reportModelOpened(routeResult, loadedModel, {installPrefix, refs
  *
  * @param {object} routeResult the route loaded, the store's modelPath
  * @param {object} eventParams real_model_open's params, assembled by reportModelOpened
+ * @param {object} report the load's reporter
  * @param {Function} getIsAuthenticated the latest auth state, read once auth settles
  */
-function sendOpenEvents(routeResult, eventParams, getIsAuthenticated) {
+function sendOpenEvents(routeResult, eventParams, report, getIsAuthenticated) {
   gtagEvent(FUNNEL_EVENTS.REAL_MODEL_OPEN, eventParams)
   // The normalized twin, beside — never instead of — real_model_open,
   // which the bizdev dashboard keys on. Sent once auth settles, with the
@@ -174,8 +171,8 @@ function sendOpenEvents(routeResult, eventParams, getIsAuthenticated) {
   // (conway#740; it does not yet), else the page-wide console tee the
   // reporter publishes as stats_pageErrorCount / stats_pageWarnCount.
   // Siting the call here is also what keeps it to real, successful
-  // opens. See loadProgress#captureLoadDiagnostics.
-  captureLoadDiagnostics({
+  // opens. See loadProgress.js#LoadReporter#captureDiagnostics.
+  report.captureDiagnostics({
     errorCount: eventParams.stats_errorCount ?? eventParams.stats_pageErrorCount,
     warningCount: eventParams.stats_warningCount ?? eventParams.stats_pageWarnCount,
     contentId: eventParams.content_id,

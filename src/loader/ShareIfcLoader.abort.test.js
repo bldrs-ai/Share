@@ -226,7 +226,7 @@ describe.each(['ifc', 'step'])('loader/ShareIfcLoader abort, %s', (type) => {
         .rejects.toBeInstanceOf(LoadAbortedError)
 
       expect(createEngineModelLoad).not.toHaveBeenCalled()
-      expect(parseIfcWithConway.mock.calls[0][7]).toEqual({signal: controller.signal})
+      expect(parseIfcWithConway.mock.calls[0][7]).toEqual({signal: controller.signal, report: null})
       // Dropped straight after the parse, before the streamed batches are
       // even assembled into a model.
       expect(finalize).not.toHaveBeenCalled()

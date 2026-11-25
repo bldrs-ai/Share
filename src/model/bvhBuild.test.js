@@ -1,11 +1,12 @@
 /* eslint-disable no-magic-numbers */
 import {BatchedMesh, BufferGeometry, Float32BufferAttribute, MeshBasicMaterial} from 'three'
-import {reportBvhDepthCap} from '../loader/loadProgress'
 import {getBVHExtremes} from 'three-mesh-bvh'
 import {BVH_MAX_DEPTH, computeQuietBatchedBoundsTree, computeQuietBoundsTree, depthCapExtremes} from './bvhBuild'
 
 
-jest.mock('../loader/loadProgress', () => ({reportBvhDepthCap: jest.fn()}))
+// The load's callback (loader/loadProgress.js#LoadReporter#onDepthCap): the
+// model takes it and imports nothing from the loader (open-t200 slice R).
+const reportBvhDepthCap = jest.fn()
 
 
 /**
@@ -40,7 +41,7 @@ describe('model/bvhBuild', () => {
   // load's Sentry diagnostics (SHARE-1MT); the report gets the leaf size.
   it('records a depth-cap hit with its largest leaf, and warns nothing', () => {
     const geometry = triangleStrip(400)
-    const bvh = computeQuietBoundsTree.call(geometry, {maxDepth: 2})
+    const bvh = computeQuietBoundsTree.call(geometry, {maxDepth: 2, onDepthCap: reportBvhDepthCap})
     expect(geometry.boundsTree).toBe(bvh)
     expect(warnSpy).not.toHaveBeenCalled()
     expect(reportBvhDepthCap).toHaveBeenCalledTimes(1)
@@ -64,7 +65,7 @@ describe('model/bvhBuild', () => {
     const geometry = new BufferGeometry()
     geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
 
-    const bvh = computeQuietBoundsTree.call(geometry, {maxDepth: 4})
+    const bvh = computeQuietBoundsTree.call(geometry, {maxDepth: 4, onDepthCap: reportBvhDepthCap})
     // The scenario holds: the tree's largest leaf overall is the stack.
     expect(getBVHExtremes(bvh)[0].primitives.max).toBe(200)
     const [{maxLeafTriangles}] = reportBvhDepthCap.mock.calls[0]
@@ -74,7 +75,7 @@ describe('model/bvhBuild', () => {
   })
 
   it('records nothing for a tree that stays under the cap', () => {
-    computeQuietBoundsTree.call(triangleStrip(400))
+    computeQuietBoundsTree.call(triangleStrip(400), {onDepthCap: reportBvhDepthCap})
     expect(reportBvhDepthCap).not.toHaveBeenCalled()
     expect(warnSpy).not.toHaveBeenCalled()
   })
@@ -84,7 +85,7 @@ describe('model/bvhBuild', () => {
     const mesh = new BatchedMesh(4, 4000, 0, material)
     mesh.addGeometry(triangleStrip(400))
     mesh.addGeometry(triangleStrip(3))
-    const trees = computeQuietBatchedBoundsTree.call(mesh, -1, {maxDepth: 2})
+    const trees = computeQuietBatchedBoundsTree.call(mesh, -1, {maxDepth: 2, onDepthCap: reportBvhDepthCap})
     expect(trees).toHaveLength(2)
     expect(warnSpy).not.toHaveBeenCalled()
     expect(reportBvhDepthCap).toHaveBeenCalledTimes(1)

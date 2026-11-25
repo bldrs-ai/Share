@@ -29,7 +29,7 @@
  * The console and the page keep all of it, since there the user is reading
  * their own file's details; only what Sentry records is rewritten. The load
  * report's Sentry context has its own copy for the same reason
- * (LoadProgressReporter#sentryModelLine), and the load reporter's console tee
+ * (LoadReporter#sentryModelLine), and the load reporter's console tee
  * runs teed text through {@link redactConsoleMessage}.
  */
 

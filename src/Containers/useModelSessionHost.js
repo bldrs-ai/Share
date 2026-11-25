@@ -1,4 +1,5 @@
 import {useEffect, useRef} from 'react'
+import {LoadReporter} from '../loader/loadProgress'
 import {ModelSessionHost} from '../session/modelSession'
 
 
@@ -32,7 +33,12 @@ export default function useModelSessionHost(onForget) {
   onForgetRef.current = onForget
   const hostRef = useRef(null)
   if (hostRef.current === null) {
-    hostRef.current = new ModelSessionHost({onForget: (options) => onForgetRef.current(options)})
+    hostRef.current = new ModelSessionHost({
+      onForget: (options) => onForgetRef.current(options),
+      // Each load run's reporter (open-t200 slice R), injected so the
+      // session layer imports no Sentry SDK (ModelSessionHost).
+      makeReport: (options) => new LoadReporter(options),
+    })
   }
   const isMountedRef = useRef(false)
   useEffect(() => {

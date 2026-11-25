@@ -81,6 +81,10 @@ export class LoadJob {
     // index), which the next job of the same session must not start on
     // (ModelSession#beginLoad).
     this.isComplete = false
+    // The reporter of this run's latest attempt (beginReport), or null before
+    // its first: what a failure or an abort of the run reads its phase from.
+    /** @type {object|null} a loader/loadProgress.js#LoadReporter */
+    this.report = null
   }
 
   /** @return {AbortSignal|undefined} handed down the load (utils/loadAbort.js) */
@@ -120,6 +124,41 @@ export class LoadJob {
     }
     useStore.setState(partial)
     return true
+  }
+
+  /**
+   * Read one store field: the state writer's other half (layering.md §4.3),
+   * for the reporter's sink.
+   *
+   * @param {string} key
+   * @return {*}
+   */
+  get(key) {
+    return useStore.getState()[key]
+  }
+
+  /**
+   * Begin this run's report for one load attempt (an authed retry is a
+   * second attempt of the same run): a reporter whose sink is this job, so
+   * its store writes land only while the run is current, and each attempt
+   * and each run reports into its own (open-t200 slice R,
+   * design/tracks/open-t200/layering.md §4.4). The previous attempt's is
+   * disposed, as it has ended by then. Made by the host's `makeReport`, the
+   * loader's LoadReporter injected from above: the class reaches Sentry's
+   * React SDK, which the session layer must not import
+   * (sessionImports.test.js, layering.md §6).
+   *
+   * @param {object} options
+   * @param {string} options.fileInfo see LoadReporter
+   * @param {Function} [options.onStall] see LoadReporter
+   * @return {object} the LoadReporter
+   */
+  beginReport({fileInfo, onStall}) {
+    this.report?.dispose()
+    // Foreground: the view shows the active session's run, and only it
+    // exists until background sessions (slice 3b).
+    this.report = this.session.host.makeReport({fileInfo, onStall, sink: this, isForeground: true})
+    return this.report
   }
 
   /**
@@ -211,6 +250,22 @@ export class LoadJob {
   abort() {
     this.controller?.abort()
   }
+
+  /**
+   * The run is replaced or its session closed: give it up and quiet its
+   * report. The reporter stops its stall and hang clocks, so a load that
+   * cannot be stopped is never reported to Sentry as hung for a model the
+   * user has left, and gives the console tee up if it still holds it. That
+   * is what the next load's begin did to the previous reporter before each
+   * run had its own, and exactly where: an abort alone (the viewer
+   * re-created, ModelSession#abortLoad) leaves the reporter running until
+   * the run that follows begins, as it did then. The report stays readable
+   * for the abort's GA event.
+   */
+  leave() {
+    this.abort()
+    this.report?.dispose()
+  }
 }
 
 
@@ -266,7 +321,7 @@ export class ModelSession {
     this.loadState = LoadState.LOADING
     if (previous !== null) {
       const wasGivenUp = isAborted(previous.signal) && !previous.isComplete
-      previous.abort()
+      previous.leave()
       if (wasGivenUp && this.isActive()) {
         this.host.forget({isSwitch: false})
       }
@@ -330,7 +385,7 @@ export class ModelSession {
     }
     this.isClosed = true
     this.loadState = LoadState.CLOSED
-    this.job?.abort()
+    this.job?.leave()
     for (const [name, handler] of Object.entries(this.windowHandlers)) {
       if (window[name] === handler) {
         window[name] = null
@@ -370,9 +425,14 @@ export class ModelSessionHost {
    *   changes (the view is about to show another model, or its first), false
    *   when the active session's run was given up mid-load and is restarted.
    *   CadView's `forgetLoadedModel`.
+   * @param {Function} [options.makeReport] `(options) => LoadReporter`, how a
+   *   run makes its reporter (LoadJob#beginReport):
+   *   `new loader/loadProgress.js#LoadReporter(options)`, passed in by the
+   *   view (useModelSessionHost.js) so this layer imports no Sentry SDK
    */
-  constructor({onForget}) {
+  constructor({onForget, makeReport = undefined}) {
     this.onForget = onForget
+    this.makeReport = makeReport
     /** @type {ModelSession|null} the session the view is bound to */
     this.active = null
   }

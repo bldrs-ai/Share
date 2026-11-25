@@ -21,35 +21,49 @@ import useStore from '../store/useStore'
 import {
   HANG_TIMEOUT_MS,
   LOAD_HUNG_MESSAGE,
+  LoadReporter,
   STALL_TIMEOUT_MS,
-  loadStallCaptureTags,
-  _getActiveReporterForTests,
-  attachLoadFailureContext,
-  beginLoadProgress,
-  captureLoadDiagnostics,
   NO_GEOMETRY_ALERT,
   classifyLoadOutcome,
-  currentLoadSerial,
-  endLoadProgress,
-  getCompletedLoadOutcome,
-  getCompletedLoadStats,
-  getLoadFailureInfo,
   isModelInfoProgress,
   isStructuredProgress,
-  loadFailureCaptureContext,
-  loadReportToken,
+  loadFailureInfoOf,
   noGeometryAlert,
-  reportBvhDepthCap,
-  reportCacheHit,
-  reportEngineVersion,
-  reportFirstMesh,
-  reportFramingExclusion,
-  reportEngineLog,
-  reportGeometryStats,
-  reportLoadProgress,
-  reportModelInfo,
-  reportSourceInfo,
 } from './loadProgress'
+import {consoleTeeHolder} from './consoleTee'
+
+
+/**
+ * The store as a reporter's sink, written as a load job that is still
+ * current writes it (session/modelSession.js#LoadJob#set). The report text
+ * is read back from the store, as the UI reads it.
+ */
+const storeSink = {
+  set: (partial) => {
+    useStore.setState(partial)
+    return true
+  },
+  get: (key) => useStore.getState()[key],
+}
+
+
+/**
+ * The reporter the test began last. Each test begins its own: a load holds
+ * its reporter (open-t200 slice R), and so does each test here.
+ */
+let report = null
+
+
+/**
+ * A load's reporter, publishing to the store.
+ *
+ * @param {object} opts LoadReporter's
+ * @return {LoadReporter}
+ */
+function beginReport(opts) {
+  report = new LoadReporter({sink: storeSink, ...opts})
+  return report
+}
 
 
 /** @return {string[]} the report lines currently in the store */
@@ -71,7 +85,8 @@ describe('loadProgress', () => {
   })
 
   afterEach(() => {
-    endLoadProgress()
+    report?.end()
+    report = null
     consoleInfoSpy.mockRestore()
     jest.useRealTimers()
   })
@@ -177,15 +192,15 @@ describe('loadProgress', () => {
 
   describe('report accumulation', () => {
     it('begins with the Share preamble line and mirrors it to the console', () => {
-      beginLoadProgress({fileInfo: 'index.ifc'})
+      beginReport({fileInfo: 'index.ifc'})
       expect(reportLines()[0]).toMatch(/^Share v/)
       expect(consoleInfoSpy).toHaveBeenCalledWith(reportLines()[0])
     })
 
     it('appends engine and model lines', () => {
-      beginLoadProgress({fileInfo: 'index.ifc'})
-      reportEngineVersion('Conway v1.379.1190')
-      reportLoadProgress({modelInfo: {fileName: 'index.ifc', schema: 'IFC4'}})
+      beginReport({fileInfo: 'index.ifc'})
+      report.engineVersion('Conway v1.379.1190')
+      report.progress({modelInfo: {fileName: 'index.ifc', schema: 'IFC4'}})
       expect(reportLines()).toContain('Conway v1.379.1190')
       expect(reportLines()).toContain('Model: index.ifc — IFC4')
     })
@@ -194,20 +209,20 @@ describe('loadProgress', () => {
     // summed over the load's builds, instead of the console warning that
     // titled its diagnostics event (model/bvhBuild.js).
     it('adds one Health line for BVH trees that hit the depth cap', () => {
-      beginLoadProgress({fileInfo: 'big.stp'})
-      reportBvhDepthCap({trees: 1, maxLeafTriangles: 120, maxDepth: 40})
-      reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
-      endLoadProgress()
+      beginReport({fileInfo: 'big.stp'})
+      report.bvhDepthCap({trees: 1, maxLeafTriangles: 120, maxDepth: 40})
+      report.bvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
+      report.end()
       expect(reportLines()).toContain(
         'Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 triangles, tested one by one per pick')
       // After the load it is a no-op.
-      reportBvhDepthCap({trees: 9, maxLeafTriangles: 9, maxDepth: 40})
+      report.bvhDepthCap({trees: 9, maxLeafTriangles: 9, maxDepth: 40})
       expect(reportLines().filter((line) => line.startsWith('Health: picking'))).toHaveLength(1)
     })
 
     it('reportModelInfo works for non-engine formats', () => {
-      beginLoadProgress({fileInfo: 'ISS_stationary.glb'})
-      reportModelInfo({fileName: 'ISS_stationary.glb', schema: 'GLB', byteLength: 39_950_000})
+      beginReport({fileInfo: 'ISS_stationary.glb'})
+      report.modelInfo({fileName: 'ISS_stationary.glb', schema: 'GLB', byteLength: 39_950_000})
       expect(reportLines()).toContain('Model: ISS_stationary.glb — GLB, 38.1 MB')
     })
 
@@ -221,15 +236,15 @@ describe('loadProgress', () => {
         configurable: true,
         value: {usedJSHeapSize: HEAP_MB * BYTES_PER_MB},
       })
-      beginLoadProgress({fileInfo: 'ISS_stationary.glb'})
-      reportModelInfo({fileName: 'ISS_stationary.glb', byteLength: 39_950_000})
+      beginReport({fileInfo: 'ISS_stationary.glb'})
+      report.modelInfo({fileName: 'ISS_stationary.glb', byteLength: 39_950_000})
       console.warn('recoverable material issue')
       console.error('missing texture')
       console.warn('recoverable material issue')
       jest.advanceTimersByTime(LOAD_TIME_MS)
-      endLoadProgress()
+      report.end()
 
-      expect(getCompletedLoadStats()).toEqual({
+      expect(report.completedStats()).toEqual({
         fileSize: 39_950_000,
         memoryUsed: HEAP_MB * BYTES_PER_MB,
         loadTime: LOAD_TIME_MS,
@@ -244,25 +259,32 @@ describe('loadProgress', () => {
     })
 
     it('reportSourceInfo appends a byte-source line', () => {
-      beginLoadProgress({fileInfo: 'model.ply'})
-      reportSourceInfo('Source: OPFS cache (uploaded file)')
+      beginReport({fileInfo: 'model.ply'})
+      report.line('Source: OPFS cache (uploaded file)')
       expect(reportLines()).toContain('Source: OPFS cache (uploaded file)')
     })
 
+    // Before slice R: with no active reporter. A load that has none now
+    // holds none (Loader.js#load's `report?.`), so what is left to pin is
+    // that a line after the load's end is a no-op, as it was then.
     it('reportSourceInfo is a no-op without an active load', () => {
-      expect(() => reportSourceInfo('Source: OPFS cache (uploaded file)')).not.toThrow()
+      beginReport({fileInfo: 'model.ply'})
+      report.end()
+      const linesAtEnd = reportLines()
+      expect(() => report.line('Source: OPFS cache (uploaded file)')).not.toThrow()
+      expect(reportLines()).toEqual(linesAtEnd)
     })
 
     it('publishes a live bar and freezes a completed stage without a bar', () => {
-      beginLoadProgress({fileInfo: 'index.ifc'})
-      reportLoadProgress({phase: 'dataParse', completed: 50, total: 100, elapsedMs: 100})
+      beginReport({fileInfo: 'index.ifc'})
+      report.progress({phase: 'dataParse', completed: 50, total: 100, elapsedMs: 100})
       // Live stage keeps its bar.
       expect(useStore.getState().currentLoadLine).toMatch(/^Parsing \[0%/)
 
       // dataParse reaches 100%, then geometry begins → Parsing freezes as a
       // completed line: colon format, no bar.
-      reportLoadProgress({phase: 'dataParse', completed: 100, total: 100, elapsedMs: 150})
-      reportLoadProgress({phase: 'geometry', completed: 0, total: 10, elapsedMs: 200})
+      report.progress({phase: 'dataParse', completed: 100, total: 100, elapsedMs: 150})
+      report.progress({phase: 'geometry', completed: 0, total: 10, elapsedMs: 200})
       const frozenParsing = reportLines().find((line) => line.startsWith('Parsing'))
       expect(frozenParsing).toMatch(/^Parsing: /)
       expect(frozenParsing).not.toMatch(/\[/)
@@ -276,16 +298,16 @@ describe('loadProgress', () => {
       // timestamp produced "Parsing model geometry: -1.6s" whenever the
       // pre-parse stages (download, read) took longer than the engine's
       // first-event offset.
-      beginLoadProgress({fileInfo: 'index.ifc'})
+      beginReport({fileInfo: 'index.ifc'})
       // 5s of Share-side wall clock passes before the engine starts
       // (download + read stages under fake timers).
       const shareSideStagesMs = 5000
-      reportLoadProgress('Preparing file download...')
+      report.progress('Preparing file download...')
       jest.advanceTimersByTime(shareSideStagesMs)
-      reportLoadProgress('Parsing model geometry...')
+      report.progress('Parsing model geometry...')
       // Engine's first event: 10ms on ITS clock — far behind Share's.
-      reportLoadProgress({phase: 'dataParse', completed: 0, total: 100, elapsedMs: 10})
-      reportLoadProgress({phase: 'geometry', completed: 0, total: 100, elapsedMs: 250})
+      report.progress({phase: 'dataParse', completed: 0, total: 100, elapsedMs: 10})
+      report.progress({phase: 'geometry', completed: 0, total: 100, elapsedMs: 250})
       const frozen = reportLines()
       // Every closed stage line carries a non-negative duration (the legacy
       // "Parsing model geometry" line closes at 0.000s, not -4.99s).
@@ -305,18 +327,18 @@ describe('loadProgress', () => {
     })
 
     it('normalizes legacy strings into stages with stamped deltas', () => {
-      beginLoadProgress({fileInfo: 'model.fbx'})
-      reportLoadProgress('Downloading model data...')
+      beginReport({fileInfo: 'model.fbx'})
+      report.progress('Downloading model data...')
       expect(useStore.getState().currentLoadLine).toMatch(/^Downloading model data \[\.\.\.\]/)
-      reportLoadProgress('Processing model data...')
+      report.progress('Processing model data...')
       // Indeterminate stage completed → colon format, no bar.
       expect(reportLines().some((line) => /^Downloading model data: /.test(line))).toBe(true)
     })
 
     it('endLoadProgress freezes the running stage + Total and clears the live line', () => {
-      beginLoadProgress({fileInfo: 'index.ifc'})
-      reportLoadProgress({phase: 'geometry', completed: 5, total: 10, elapsedMs: 100})
-      endLoadProgress()
+      beginReport({fileInfo: 'index.ifc'})
+      report.progress({phase: 'geometry', completed: 5, total: 10, elapsedMs: 100})
+      report.end()
       const lines = reportLines()
       expect(lines.some((line) => line.startsWith('Geometry'))).toBe(true)
       expect(lines.some((line) => /^Total: /.test(line))).toBe(true)
@@ -327,53 +349,59 @@ describe('loadProgress', () => {
     // report and no "Load failed" grace line, and stops teeing the console.
     it('endLoadProgress for an aborted load clears the report instead of freezing it', () => {
       const consoleWarnBefore = console.warn
-      beginLoadProgress({fileInfo: 'index.ifc'})
-      reportLoadProgress({phase: 'geometry', completed: 5, total: 10, elapsedMs: 100})
+      beginReport({fileInfo: 'index.ifc'})
+      report.progress({phase: 'geometry', completed: 5, total: 10, elapsedMs: 100})
       expect(reportLines().length).toBeGreaterThan(0)
-      endLoadProgress(new Error('engine session closed'), {isAborted: true})
+      report.end(new Error('engine session closed'), {isAborted: true})
       expect(reportLines()).toEqual([])
       expect(useStore.getState().currentLoadLine).toBe(null)
       expect(useStore.getState().loadResult).toBe(null)
       expect(console.warn).toBe(consoleWarnBefore)
       // Ended: a late progress event from the given-up load writes nothing.
-      reportLoadProgress({phase: 'geometry', completed: 9, total: 10, elapsedMs: 200})
+      report.progress({phase: 'geometry', completed: 9, total: 10, elapsedMs: 200})
       expect(reportLines()).toEqual([])
       // Where it stopped is still readable, for the abort's GA event.
-      expect(getLoadFailureInfo(currentLoadSerial() - 1).phase).toBe('geometry')
+      expect(report.failureInfo().phase).toBe('geometry')
     })
 
     // open-205 #2019 (codex on #2247): a load the user has left can still be
     // unwinding after the next load has begun (a remount gives each view its
-    // own queue). With its own reporter in hand, its end and its late
-    // progress touch nothing of the next load's report.
+    // own queue). Its end and its late progress touch nothing of the next
+    // load's report: since open-t200 slice R each load holds its own
+    // reporter, and a left load's sink (its LoadJob, no longer current)
+    // writes nothing. Red with one shared reporter, as `activeReporter` was:
+    // A's end then ends B's report.
     it('a load holding its own reporter cannot end, or write into, the next load\'s report', () => {
-      const reporterOfA = beginLoadProgress({fileInfo: 'a.ifc'})
-      const reporterOfB = beginLoadProgress({fileInfo: 'b.ifc'})
-      reportLoadProgress({phase: 'geometry', completed: 1, total: 10, elapsedMs: 10}, reporterOfB)
+      let isACurrent = true
+      const sinkOfA = {set: (partial) => isACurrent && storeSink.set(partial), get: storeSink.get}
+      const reporterOfA = beginReport({fileInfo: 'a.ifc', sink: sinkOfA})
+      isACurrent = false
+      const reporterOfB = beginReport({fileInfo: 'b.ifc'})
+      reporterOfB.progress({phase: 'geometry', completed: 1, total: 10, elapsedMs: 10})
       const linesOfB = reportLines()
       const liveLineOfB = useStore.getState().currentLoadLine
 
-      reportLoadProgress('Parsing A late', reporterOfA)
-      endLoadProgress(null, {reporter: reporterOfA})
-      endLoadProgress(new Error('A gave up'), {isAborted: true, reporter: reporterOfA})
+      reporterOfA.progress('Parsing A late')
+      reporterOfA.end(null)
+      reporterOfA.end(new Error('A gave up'), {isAborted: true})
 
-      expect(loadReportToken()).toBe(reporterOfB)
+      expect(reporterOfA).not.toBe(reporterOfB)
       expect(reporterOfB.ended).toBe(false)
       expect(reportLines()).toEqual(linesOfB)
       expect(useStore.getState().currentLoadLine).toBe(liveLineOfB)
       expect(useStore.getState().loadResult).toBe(null)
-      endLoadProgress(null, {reporter: reporterOfB})
+      reporterOfB.end(null)
       expect(reporterOfB.ended).toBe(true)
     })
 
     it('summarizes captured console warnings/errors after the Total line', () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
-      beginLoadProgress({fileInfo: 'index.ifc'})
-      reportLoadProgress({phase: 'geometry', completed: 1, total: 10, elapsedMs: 50})
+      beginReport({fileInfo: 'index.ifc'})
+      report.progress({phase: 'geometry', completed: 1, total: 10, elapsedMs: 50})
       // Engine-style errors during the load — captured via the console tee.
       console.error('CDT Exception (hemisphere: 0)')
       console.error('CDT Exception (hemisphere: 0)')
-      endLoadProgress()
+      report.end()
 
       const lines = reportLines()
       const totalIndex = lines.findIndex((line) => /^Total: /.test(line))
@@ -390,10 +418,10 @@ describe('loadProgress', () => {
     // file is tallied by its safe message; the console still prints it whole.
     it('tallies a marked Error by its safe message', () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
-      beginLoadProgress({fileInfo: 'index.ifc'})
+      beginReport({fileInfo: 'index.ifc'})
       console.error(withSentrySafeMessage(new Error('Error writing to Tower-of-Secrets.ifc'),
         'Error from worker [condition=write-failed]: (details withheld)'))
-      endLoadProgress()
+      report.end()
       const line = reportLines().find((l) => /^Warnings & errors/.test(l))
       expect(line).toBe('Warnings & errors (1): Error from worker [condition=write-failed]: (details withheld)')
       expect(consoleErrorSpy.mock.calls[0][0].message).toContain('Tower-of-Secrets')
@@ -402,7 +430,7 @@ describe('loadProgress', () => {
 
     it('collapses many distinct warnings into that one line', () => {
       const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-      beginLoadProgress({fileInfo: 'Arty_Z7_PCB.stp'})
+      beginReport({fileInfo: 'Arty_Z7_PCB.stp'})
       // Per-entity engine diagnostics: textually distinct, so dedup can't
       // collapse them — a STEP model emits hundreds.
       const distinctCount = 200
@@ -412,7 +440,7 @@ describe('loadProgress', () => {
       // ...plus one repeated message, which wins the "most common" sample.
       console.warn('No basis found for brep!')
       console.warn('No basis found for brep!')
-      endLoadProgress()
+      report.end()
 
       const lines = reportLines()
       const diagLines = lines.filter((line) => /^Warnings & errors/.test(line))
@@ -427,9 +455,9 @@ describe('loadProgress', () => {
       const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
       const overlongChars = 200
       const readableLineChars = 120
-      beginLoadProgress({fileInfo: 'index.ifc'})
+      beginReport({fileInfo: 'index.ifc'})
       console.warn(`long ${'x'.repeat(overlongChars)}`)
-      endLoadProgress()
+      report.end()
 
       const diagLine = reportLines().find((line) => /^Warnings & errors/.test(line))
       expect(diagLine).toMatch(/^Warnings & errors \(1\): long x+…$/)
@@ -438,10 +466,10 @@ describe('loadProgress', () => {
     })
 
     it('a new load clears the previous report', () => {
-      beginLoadProgress({fileInfo: 'a.ifc'})
-      reportEngineVersion('Conway v1')
-      endLoadProgress()
-      beginLoadProgress({fileInfo: 'b.ifc'})
+      beginReport({fileInfo: 'a.ifc'})
+      report.engineVersion('Conway v1')
+      report.end()
+      beginReport({fileInfo: 'b.ifc'})
       expect(reportLines()).not.toContain('Conway v1')
     })
   })
@@ -468,25 +496,25 @@ describe('loadProgress', () => {
       // The reporter's tally reaches the verdict: Statistics says 0 errors, the
       // Logger saw one (Share#1998 review).
       it('an empty build is unusable when the logger saw an error Statistics did not count', () => {
-        beginLoadProgress({fileInfo: 'shell.ifc'})
-        reportGeometryStats({vertexCount: 0, triangleCount: 0, productCount: 0, errorCount: 0})
+        beginReport({fileInfo: 'shell.ifc'})
+        report.geometryStats({vertexCount: 0, triangleCount: 0, productCount: 0, errorCount: 0})
         Logger.error('Error extracting product', 1)
-        endLoadProgress()
-        expect(getCompletedLoadOutcome()).toBe('unusable')
+        report.end()
+        expect(report.completedOutcome()).toBe('unusable')
       })
 
       it('an empty build with a quiet logger and zero Statistics errors is no_geometry', () => {
-        beginLoadProgress({fileInfo: 'shell.ifc'})
-        reportGeometryStats({vertexCount: 0, triangleCount: 0, productCount: 0, errorCount: 0})
+        beginReport({fileInfo: 'shell.ifc'})
+        report.geometryStats({vertexCount: 0, triangleCount: 0, productCount: 0, errorCount: 0})
         Logger.warning('Unsupported type: IfcFoo', 1)
         Logger.error(DEFECT, 2, DATA_DEFECT)
-        endLoadProgress()
-        expect(getCompletedLoadOutcome()).toBe('no_geometry')
+        report.end()
+        expect(report.completedOutcome()).toBe('no_geometry')
       })
 
       it('counts engine errors total and distinct, warnings distinct, defects apart', () => {
-        beginLoadProgress({fileInfo: 'part.step'})
-        reportGeometryStats({vertexCount: 8, triangleCount: 4})
+        beginReport({fileInfo: 'part.step'})
+        report.geometryStats({vertexCount: 8, triangleCount: 4})
         Logger.error('Error extracting face', 1)
         Logger.error('Error extracting face', 2)
         Logger.error('Error extracting face', 3)
@@ -496,9 +524,9 @@ describe('loadProgress', () => {
         Logger.warning('Unsupported type: IfcBar', 7)
         Logger.error(DEFECT, 8, DATA_DEFECT)
         Logger.warning(DEFECT, 9, DATA_DEFECT)
-        endLoadProgress()
+        report.end()
 
-        expect(getCompletedLoadStats()).toMatchObject({
+        expect(report.completedStats()).toMatchObject({
           engineErrorTotal: 4,
           engineErrorDistinct: 2,
           engineWarnDistinct: 2,
@@ -510,9 +538,9 @@ describe('loadProgress', () => {
         // engine-worker.md §2.4 G3: the same entries as the test above, but
         // arriving folded with counts from a worker's Logger, which this
         // module's proxy cannot see.
-        beginLoadProgress({fileInfo: 'part.step'})
-        reportGeometryStats({vertexCount: 8, triangleCount: 4})
-        reportEngineLog({
+        beginReport({fileInfo: 'part.step'})
+        report.geometryStats({vertexCount: 8, triangleCount: 4})
+        report.engineLog({
           entries: [
             {level: 'error', message: 'Error extracting face', count: 3},
             {level: 'error', message: 'Error extracting product', count: 1},
@@ -523,8 +551,8 @@ describe('loadProgress', () => {
           ],
           lines: [{level: 'warning', text: 'Unsupported type: IfcFoo #5', count: 2}],
         })
-        endLoadProgress()
-        expect(getCompletedLoadStats()).toMatchObject({
+        report.end()
+        expect(report.completedStats()).toMatchObject({
           engineErrorTotal: 4,
           engineErrorDistinct: 2,
           engineWarnDistinct: 2,
@@ -536,25 +564,25 @@ describe('loadProgress', () => {
       })
 
       it('counts every occurrence, not just the first conway echoes', () => {
-        beginLoadProgress({fileInfo: 'part.step'})
-        reportGeometryStats({vertexCount: 1})
+        beginReport({fileInfo: 'part.step'})
+        report.geometryStats({vertexCount: 1})
         for (let i = 0; i < 50; i++) { // eslint-disable-line no-magic-numbers
           Logger.error('Error extracting face', i)
         }
-        endLoadProgress()
+        report.end()
         // The console tee sees one echo, because conway echoes only a message's
         // first occurrence; the engine tally sees all 50.
-        expect(getCompletedLoadStats().pageErrorCount).toBe(1)
-        expect(getCompletedLoadStats().engineErrorTotal).toBe(50) // eslint-disable-line no-magic-numbers
+        expect(report.completedStats().pageErrorCount).toBe(1)
+        expect(report.completedStats().engineErrorTotal).toBe(50) // eslint-disable-line no-magic-numbers
       })
 
       it('counts the unmarked data-defect fallback messages as defects, not engine errors', () => {
-        beginLoadProgress({fileInfo: 'a.ifc'})
-        reportGeometryStats({vertexCount: 1})
+        beginReport({fileInfo: 'a.ifc'})
+        report.geometryStats({vertexCount: 1})
         Logger.error('No IfcProjects found?')
         Logger.warning('No units defined.')
-        endLoadProgress()
-        expect(getCompletedLoadStats()).toMatchObject({
+        report.end()
+        expect(report.completedStats()).toMatchObject({
           engineErrorTotal: 0, engineWarnDistinct: 0, dataDefectTotal: 2,
         })
       })
@@ -563,22 +591,22 @@ describe('loadProgress', () => {
         // Logger echoes info through console.log; divert it so the test
         // console stays clean.
         const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'a.ifc'})
-        reportGeometryStats({vertexCount: 1})
+        beginReport({fileInfo: 'a.ifc'})
+        report.geometryStats({vertexCount: 1})
         Logger.info('Model loaded')
         Logger.debug('detail')
-        endLoadProgress()
+        report.end()
         logSpy.mockRestore()
-        expect(getCompletedLoadStats()).toMatchObject({
+        expect(report.completedStats()).toMatchObject({
           engineErrorTotal: 0, engineErrorDistinct: 0, engineWarnDistinct: 0, dataDefectTotal: 0,
         })
       })
 
       it('is absent, not zero, for a load no engine reported on', () => {
-        beginLoadProgress({fileInfo: 'a.obj'})
+        beginReport({fileInfo: 'a.obj'})
         Logger.error('conway message from some other load, not this format')
-        endLoadProgress()
-        const stats = getCompletedLoadStats()
+        report.end()
+        const stats = report.completedStats()
         expect(stats.engineErrorTotal).toBeUndefined()
         expect(stats.engineErrorDistinct).toBeUndefined()
         expect(stats.engineWarnDistinct).toBeUndefined()
@@ -586,20 +614,20 @@ describe('loadProgress', () => {
       })
 
       it('does not count what conway logs after the load window closed', () => {
-        beginLoadProgress({fileInfo: 'a.ifc'})
-        reportGeometryStats({vertexCount: 1})
-        endLoadProgress()
+        beginReport({fileInfo: 'a.ifc'})
+        report.geometryStats({vertexCount: 1})
+        report.end()
         Logger.error('late demand-geometry error')
-        expect(getCompletedLoadStats().engineErrorTotal).toBe(0)
+        expect(report.completedStats().engineErrorTotal).toBe(0)
       })
 
       it('keeps page noise separate from the engine tally', () => {
-        beginLoadProgress({fileInfo: 'a.ifc'})
-        reportGeometryStats({vertexCount: 1})
+        beginReport({fileInfo: 'a.ifc'})
+        report.geometryStats({vertexCount: 1})
         console.warn('some third-party script')
         console.error('three.js complained')
-        endLoadProgress()
-        expect(getCompletedLoadStats()).toMatchObject({
+        report.end()
+        expect(report.completedStats()).toMatchObject({
           pageWarnCount: 1, pageErrorCount: 1, engineErrorTotal: 0, engineWarnDistinct: 0,
         })
       })
@@ -607,27 +635,27 @@ describe('loadProgress', () => {
 
     describe('geometry counts and outcome', () => {
       it('carries vertex and triangle counts when the loader reported them', () => {
-        beginLoadProgress({fileInfo: 'a.ifc'})
-        reportGeometryStats({vertexCount: 120, triangleCount: 40})
-        endLoadProgress()
-        expect(getCompletedLoadStats()).toMatchObject({vertexCount: 120, triangleCount: 40})
-        expect(getCompletedLoadOutcome()).toBe('displayed')
+        beginReport({fileInfo: 'a.ifc'})
+        report.geometryStats({vertexCount: 120, triangleCount: 40})
+        report.end()
+        expect(report.completedStats()).toMatchObject({vertexCount: 120, triangleCount: 40})
+        expect(report.completedOutcome()).toBe('displayed')
       })
 
       it('an empty build is unusable', () => {
-        beginLoadProgress({fileInfo: 'nist.stp'})
-        reportGeometryStats({vertexCount: 0, triangleCount: 0})
-        endLoadProgress()
-        expect(getCompletedLoadOutcome()).toBe('unusable')
-        expect(getCompletedLoadStats()).toMatchObject({vertexCount: 0, triangleCount: 0})
+        beginReport({fileInfo: 'nist.stp'})
+        report.geometryStats({vertexCount: 0, triangleCount: 0})
+        report.end()
+        expect(report.completedOutcome()).toBe('unusable')
+        expect(report.completedStats()).toMatchObject({vertexCount: 0, triangleCount: 0})
       })
 
       it('an empty build of a file with no products is no_geometry, counts kept', () => {
-        beginLoadProgress({fileInfo: 'shell.ifc'})
-        reportGeometryStats({vertexCount: 0, triangleCount: 0, productCount: 0, errorCount: 0})
-        endLoadProgress()
-        expect(getCompletedLoadOutcome()).toBe('no_geometry')
-        expect(getCompletedLoadStats()).toMatchObject({vertexCount: 0, triangleCount: 0})
+        beginReport({fileInfo: 'shell.ifc'})
+        report.geometryStats({vertexCount: 0, triangleCount: 0, productCount: 0, errorCount: 0})
+        report.end()
+        expect(report.completedOutcome()).toBe('no_geometry')
+        expect(report.completedStats()).toMatchObject({vertexCount: 0, triangleCount: 0})
       })
 
       it('has a typed, constant alert for the no_geometry outcome', () => {
@@ -636,30 +664,30 @@ describe('loadProgress', () => {
       })
 
       it('omits counts for formats that reported none', () => {
-        beginLoadProgress({fileInfo: 'a.obj'})
-        endLoadProgress()
-        expect(getCompletedLoadStats().vertexCount).toBeUndefined()
-        expect(getCompletedLoadOutcome()).toBe('displayed')
+        beginReport({fileInfo: 'a.obj'})
+        report.end()
+        expect(report.completedStats().vertexCount).toBeUndefined()
+        expect(report.completedOutcome()).toBe('displayed')
       })
 
       it('has no completed stats until the load ends', () => {
-        beginLoadProgress({fileInfo: 'a.ifc'})
-        expect(getCompletedLoadStats()).toBeNull()
+        beginReport({fileInfo: 'a.ifc'})
+        expect(report.completedStats()).toBeNull()
       })
     })
 
     describe('cacheHit', () => {
       it.each([[true, 'true'], [false, 'false']])('reports %s as the string %s', (isHit, expected) => {
-        beginLoadProgress({fileInfo: 'a.ifc'})
-        reportCacheHit(isHit)
-        endLoadProgress()
-        expect(getCompletedLoadStats().cacheHit).toBe(expected)
+        beginReport({fileInfo: 'a.ifc'})
+        report.cacheHit(isHit)
+        report.end()
+        expect(report.completedStats().cacheHit).toBe(expected)
       })
 
       it('is absent when the loader never said', () => {
-        beginLoadProgress({fileInfo: 'a.ifc'})
-        endLoadProgress()
-        expect(getCompletedLoadStats().cacheHit).toBeUndefined()
+        beginReport({fileInfo: 'a.ifc'})
+        report.end()
+        expect(report.completedStats().cacheHit).toBeUndefined()
       })
     })
 
@@ -672,83 +700,81 @@ describe('loadProgress', () => {
       const GLB_BYTES = 1_394_746
 
       it('reports the source as fileSize and the GLB as artifactSize', () => {
-        beginLoadProgress({fileInfo: 'Momentum.ifc'})
-        reportModelInfo({fileName: 'Momentum.ifc', schema: 'IFC', byteLength: SOURCE_BYTES, artifactByteLength: GLB_BYTES})
-        endLoadProgress()
-        expect(getCompletedLoadStats().fileSize).toBe(SOURCE_BYTES)
-        expect(getCompletedLoadStats().artifactSize).toBe(GLB_BYTES)
+        beginReport({fileInfo: 'Momentum.ifc'})
+        report.modelInfo({fileName: 'Momentum.ifc', schema: 'IFC', byteLength: SOURCE_BYTES, artifactByteLength: GLB_BYTES})
+        report.end()
+        expect(report.completedStats().fileSize).toBe(SOURCE_BYTES)
+        expect(report.completedStats().artifactSize).toBe(GLB_BYTES)
       })
 
       it('shows both sizes on the model line', () => {
-        beginLoadProgress({fileInfo: 'Momentum.ifc'})
-        reportModelInfo({fileName: 'Momentum.ifc', schema: 'IFC', byteLength: SOURCE_BYTES, artifactByteLength: GLB_BYTES})
+        beginReport({fileInfo: 'Momentum.ifc'})
+        report.modelInfo({fileName: 'Momentum.ifc', schema: 'IFC', byteLength: SOURCE_BYTES, artifactByteLength: GLB_BYTES})
         expect(reportLines()).toContain('Model: Momentum.ifc — IFC, 5.6 MB (cached GLB 1.3 MB)')
-        endLoadProgress()
+        report.end()
       })
 
       it('reports no source size, not the GLB\'s, for an artifact that predates the stamp', () => {
-        beginLoadProgress({fileInfo: 'Momentum.ifc'})
-        reportModelInfo({fileName: 'Momentum.ifc', schema: 'IFC', artifactByteLength: GLB_BYTES})
+        beginReport({fileInfo: 'Momentum.ifc'})
+        report.modelInfo({fileName: 'Momentum.ifc', schema: 'IFC', artifactByteLength: GLB_BYTES})
         expect(reportLines()).toContain('Model: Momentum.ifc — IFC (source size not recorded; cached GLB 1.3 MB)')
-        endLoadProgress()
-        expect(getCompletedLoadStats().fileSize).toBeUndefined()
-        expect(getCompletedLoadStats().artifactSize).toBe(GLB_BYTES)
+        report.end()
+        expect(report.completedStats().fileSize).toBeUndefined()
+        expect(report.completedStats().artifactSize).toBe(GLB_BYTES)
       })
 
       it('has no artifact size on a load that parsed the source', () => {
-        beginLoadProgress({fileInfo: 'a.ifc'})
-        reportModelInfo({fileName: 'a.ifc', schema: 'IFC', byteLength: SOURCE_BYTES})
-        endLoadProgress()
-        expect(getCompletedLoadStats().artifactSize).toBeUndefined()
+        beginReport({fileInfo: 'a.ifc'})
+        report.modelInfo({fileName: 'a.ifc', schema: 'IFC', byteLength: SOURCE_BYTES})
+        report.end()
+        expect(report.completedStats().artifactSize).toBeUndefined()
       })
     })
 
     describe('firstMeshMs', () => {
       it('is the load-clock time of the first mesh and latches', () => {
         const FIRST_MS = 400
-        beginLoadProgress({fileInfo: 'a.ifc'})
+        beginReport({fileInfo: 'a.ifc'})
         jest.advanceTimersByTime(FIRST_MS)
-        reportFirstMesh()
+        report.firstMesh()
         jest.advanceTimersByTime(FIRST_MS * 3)
-        reportFirstMesh()
-        endLoadProgress()
-        expect(getCompletedLoadStats().firstMeshMs).toBe(FIRST_MS)
+        report.firstMesh()
+        report.end()
+        expect(report.completedStats().firstMeshMs).toBe(FIRST_MS)
       })
 
       it('can still be recorded after the report froze, for one-shot formats', () => {
         const LOAD_MS = 900
         const SCENE_ADD_MS = 50
-        beginLoadProgress({fileInfo: 'a.glb'})
+        beginReport({fileInfo: 'a.glb'})
         jest.advanceTimersByTime(LOAD_MS)
-        endLoadProgress()
-        expect(getCompletedLoadStats().firstMeshMs).toBeUndefined()
+        report.end()
+        expect(report.completedStats().firstMeshMs).toBeUndefined()
         jest.advanceTimersByTime(SCENE_ADD_MS)
-        reportFirstMesh()
-        expect(getCompletedLoadStats().firstMeshMs).toBe(LOAD_MS + SCENE_ADD_MS)
+        report.firstMesh()
+        expect(report.completedStats().firstMeshMs).toBe(LOAD_MS + SCENE_ADD_MS)
         // And it shares loadTime's clock, so the two are comparable.
-        expect(getCompletedLoadStats().firstMeshMs).toBeGreaterThanOrEqual(getCompletedLoadStats().loadTime)
+        expect(report.completedStats().firstMeshMs).toBeGreaterThanOrEqual(report.completedStats().loadTime)
       })
 
       it('is absent when nothing ever reported a mesh', () => {
-        beginLoadProgress({fileInfo: 'a.ifc'})
-        endLoadProgress()
-        expect(getCompletedLoadStats().firstMeshMs).toBeUndefined()
+        beginReport({fileInfo: 'a.ifc'})
+        report.end()
+        expect(report.completedStats().firstMeshMs).toBeUndefined()
       })
     })
 
-    describe('getLoadFailureInfo', () => {
-      it('reads the last phase, size and format of the load that began since the serial', () => {
-        const before = currentLoadSerial()
-        beginLoadProgress({fileInfo: 'https://host/models/house.ifc?x=1'})
-        reportModelInfo({fileName: 'house.ifc', byteLength: 5000})
-        reportLoadProgress({phase: 'geometry', completed: 3, total: 10})
-        expect(getLoadFailureInfo(before)).toEqual({phase: 'geometry', fileSize: 5000, format: 'ifc'})
+    describe('failureInfo', () => {
+      it('reads the last phase, size and format of its own load', () => {
+        beginReport({fileInfo: 'https://host/models/house.ifc?x=1'})
+        report.modelInfo({fileName: 'house.ifc', byteLength: 5000})
+        report.progress({phase: 'geometry', completed: 3, total: 10})
+        expect(report.failureInfo()).toEqual({phase: 'geometry', fileSize: 5000, format: 'ifc'})
       })
 
       it('reads the format off a URL object, which is what a GitHub route passes', () => {
-        const before = currentLoadSerial()
-        beginLoadProgress({fileInfo: new URL('https://github.com/bldrs-ai/test-models/main/ifc/misc/box.ifc')})
-        expect(getLoadFailureInfo(before).format).toBe('ifc')
+        beginReport({fileInfo: new URL('https://github.com/bldrs-ai/test-models/main/ifc/misc/box.ifc')})
+        expect(report.failureInfo().format).toBe('ifc')
       })
 
       it.each([
@@ -757,31 +783,35 @@ describe('loadProgress', () => {
         // A bare .gz names no format underneath.
         ['https://host/models/archive.gz', undefined],
       ])('strips the gzip envelope: %s -> %s', (fileInfo, expected) => {
-        const before = currentLoadSerial()
-        beginLoadProgress({fileInfo})
-        expect(getLoadFailureInfo(before).format).toBe(expected)
+        beginReport({fileInfo})
+        expect(report.failureInfo().format).toBe(expected)
       })
 
+      // Before slice R this read "the reporter begun since a serial", so a
+      // failure thrown before the next load's reporter began could not
+      // borrow the previous load's phase. Now the failing attempt's caller
+      // holds the reporter its attempt began (LoadJob#report), or none; the
+      // job side is in session/modelSession.test.js.
       it('reports nothing for a failure that came before any load began', () => {
-        beginLoadProgress({fileInfo: 'previous.ifc'})
-        reportModelInfo({fileName: 'previous.ifc', byteLength: 5000})
-        reportLoadProgress({phase: 'geometry', completed: 3, total: 10})
-        endLoadProgress()
+        beginReport({fileInfo: 'previous.ifc'})
+        report.modelInfo({fileName: 'previous.ifc', byteLength: 5000})
+        report.progress({phase: 'geometry', completed: 3, total: 10})
+        report.end()
         // The reporter lingers after its load. A failure thrown before the
-        // NEXT beginLoadProgress must not borrow its phase and size.
-        const before = currentLoadSerial()
-        expect(getLoadFailureInfo(before)).toEqual({
+        // NEXT attempt's reporter began must not borrow its phase and size.
+        expect(loadFailureInfoOf(null)).toEqual({
           phase: undefined, fileSize: undefined, format: undefined,
         })
+        expect(loadFailureInfoOf(report).phase).toBe('geometry')
       })
     })
   })
 
   describe('grace result', () => {
     it('publishes a terse "Loaded <name>" success result (no timing/heap)', () => {
-      beginLoadProgress({fileInfo: 'path/to/index.ifc'})
-      reportLoadProgress({phase: 'geometry', completed: 10, total: 10, elapsedMs: 100})
-      endLoadProgress()
+      beginReport({fileInfo: 'path/to/index.ifc'})
+      report.progress({phase: 'geometry', completed: 10, total: 10, elapsedMs: 100})
+      report.end()
       const result = useStore.getState().loadResult
       expect(result.status).toBe('success')
       // Just the name (basename of fileInfo when no header was parsed) — no
@@ -792,16 +822,16 @@ describe('loadProgress', () => {
     it('uses the filename, ignoring an unreliable STEP header fileName', () => {
       // The STEP header's fileName is often junk (a comment); the grace line
       // falls back to the source filename (the snackbar prefers model.name).
-      beginLoadProgress({fileInfo: 'path/to/Arty_Z7_PCB.stp'})
-      reportLoadProgress({modelInfo: {fileName: `/* name */ 'export2`, schema: 'AP214'}})
-      endLoadProgress()
+      beginReport({fileInfo: 'path/to/Arty_Z7_PCB.stp'})
+      report.progress({modelInfo: {fileName: `/* name */ 'export2`, schema: 'AP214'}})
+      report.end()
       expect(useStore.getState().loadResult.summaryLine).toBe('Loaded Arty_Z7_PCB.stp')
     })
 
     it('publishes an error result with the failure summary', () => {
-      beginLoadProgress({fileInfo: 'index.ifc'})
-      reportLoadProgress({phase: 'dataParse', completed: 1, total: 4, elapsedMs: 10})
-      endLoadProgress(new Error('bad STEP header'))
+      beginReport({fileInfo: 'index.ifc'})
+      report.progress({phase: 'dataParse', completed: 1, total: 4, elapsedMs: 10})
+      report.end(new Error('bad STEP header'))
       const result = useStore.getState().loadResult
       expect(result.status).toBe('error')
       expect(result.summaryLine).toBe('Load failed: bad STEP header')
@@ -810,16 +840,16 @@ describe('loadProgress', () => {
     it('summarizes an out-of-memory failure specially', () => {
       const oom = new Error('Cannot enlarge memory arrays')
       oom.isOutOfMemory = true
-      beginLoadProgress({fileInfo: 'big.ifc'})
-      endLoadProgress(oom)
+      beginReport({fileInfo: 'big.ifc'})
+      report.end(oom)
       expect(useStore.getState().loadResult.summaryLine).toBe('Load failed: out of memory')
     })
 
     it('a new load clears the previous grace result', () => {
-      beginLoadProgress({fileInfo: 'a.ifc'})
-      endLoadProgress()
+      beginReport({fileInfo: 'a.ifc'})
+      report.end()
       expect(useStore.getState().loadResult).not.toBe(null)
-      beginLoadProgress({fileInfo: 'b.ifc'})
+      beginReport({fileInfo: 'b.ifc'})
       expect(useStore.getState().loadResult).toBe(null)
     })
   })
@@ -827,10 +857,10 @@ describe('loadProgress', () => {
   describe('framing exclusion (robust auto-framing, test-models-private#26)', () => {
     it('appends a Health line, warns the console, and notes the grace result', () => {
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-      beginLoadProgress({fileInfo: 'basel.ifc'})
-      endLoadProgress()
+      beginReport({fileInfo: 'basel.ifc'})
+      report.end()
 
-      reportFramingExclusion({excludedElements: 3, excludedVertices: 0, maxDistance: 1877.4})
+      report.framingExclusion({excludedElements: 3, excludedVertices: 0, maxDistance: 1877.4})
 
       const healthLine = reportLines().find((line) => line.startsWith('Health:'))
       expect(healthLine).toBe(
@@ -847,10 +877,10 @@ describe('loadProgress', () => {
 
     it('reports vertex-granularity exclusions too', () => {
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-      beginLoadProgress({fileInfo: 'basel.ifc'})
-      endLoadProgress()
+      beginReport({fileInfo: 'basel.ifc'})
+      report.end()
 
-      reportFramingExclusion({excludedElements: 0, excludedVertices: 52, maxDistance: 1450})
+      report.framingExclusion({excludedElements: 0, excludedVertices: 52, maxDistance: 1450})
 
       expect(reportLines().find((line) => line.startsWith('Health:'))).toBe(
         'Health: stray geometry excluded from view framing (52 vertices, up to 1450 model units out)')
@@ -859,12 +889,12 @@ describe('loadProgress', () => {
 
     it('is silent when nothing was excluded, or with no load reported', () => {
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-      beginLoadProgress({fileInfo: 'clean.ifc'})
-      endLoadProgress()
+      beginReport({fileInfo: 'clean.ifc'})
+      report.end()
       const linesBefore = reportLines().length
 
-      reportFramingExclusion({excludedElements: 0, excludedVertices: 0, maxDistance: 0})
-      reportFramingExclusion(null)
+      report.framingExclusion({excludedElements: 0, excludedVertices: 0, maxDistance: 0})
+      report.framingExclusion(null)
 
       expect(reportLines().length).toBe(linesBefore)
       expect(warnSpy).not.toHaveBeenCalled()
@@ -874,10 +904,10 @@ describe('loadProgress', () => {
 
     it('does not touch an error grace result', () => {
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-      beginLoadProgress({fileInfo: 'broken.ifc'})
-      endLoadProgress(new Error('bad header'))
+      beginReport({fileInfo: 'broken.ifc'})
+      report.end(new Error('bad header'))
 
-      reportFramingExclusion({excludedElements: 1, excludedVertices: 0, maxDistance: 500})
+      report.framingExclusion({excludedElements: 1, excludedVertices: 0, maxDistance: 500})
 
       expect(useStore.getState().loadResult.note).toBeUndefined()
       // The Health line still lands in the report for the "i" dialog.
@@ -891,8 +921,8 @@ describe('loadProgress', () => {
     // still silent at HANG_TIMEOUT_MS, once, tagged with its phase.
     it('tells the UI at the stall, and Sentry only once the load is hung', () => {
       const onStall = jest.fn()
-      beginLoadProgress({fileInfo: 'index.ifc', onStall})
-      reportLoadProgress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
+      beginReport({fileInfo: 'index.ifc', onStall})
+      report.progress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
       jest.advanceTimersByTime(STALL_TIMEOUT_MS + 1)
       expect(onStall).toHaveBeenCalledWith(expect.objectContaining({phase: 'geometry'}))
       expect(captureMessage).not.toHaveBeenCalled()
@@ -909,71 +939,71 @@ describe('loadProgress', () => {
     })
 
     it('does not report a hang when progress resumes after a stall', () => {
-      beginLoadProgress({fileInfo: 'index.ifc', onStall: jest.fn()})
-      reportLoadProgress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
+      beginReport({fileInfo: 'index.ifc', onStall: jest.fn()})
+      report.progress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
       jest.advanceTimersByTime(STALL_TIMEOUT_MS + 1)
-      reportLoadProgress({phase: 'geometry', completed: 4, total: 10, elapsedMs: 40_000})
+      report.progress({phase: 'geometry', completed: 4, total: 10, elapsedMs: 40_000})
       jest.advanceTimersByTime(HANG_TIMEOUT_MS - STALL_TIMEOUT_MS)
       // Still within one stall period of the last event: the hang clock reset.
       expect(captureMessage).not.toHaveBeenCalled()
-      endLoadProgress()
+      report.end()
       jest.advanceTimersByTime(HANG_TIMEOUT_MS * 2)
       expect(captureMessage).not.toHaveBeenCalled()
     })
 
     // One condition, one sink: a stall the load came back from is GA's.
     it('counts a stall the load recovered from in GA, once, on success', () => {
-      beginLoadProgress({fileInfo: 'part.step', onStall: jest.fn()})
-      reportLoadProgress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
+      beginReport({fileInfo: 'part.step', onStall: jest.fn()})
+      report.progress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
       jest.advanceTimersByTime(STALL_TIMEOUT_MS + 1)
-      reportLoadProgress({phase: 'geometry', completed: 10, total: 10, elapsedMs: 40_000})
-      endLoadProgress()
-      captureLoadDiagnostics()
-      captureLoadDiagnostics()
+      report.progress({phase: 'geometry', completed: 10, total: 10, elapsedMs: 40_000})
+      report.end()
+      report.captureDiagnostics()
+      report.captureDiagnostics()
       expect(reportLoadStallRecovered).toHaveBeenCalledTimes(1)
       expect(reportLoadStallRecovered).toHaveBeenCalledWith({phase: 'geometry', format: 'step', sizeBytes: undefined})
       expect(captureMessage).not.toHaveBeenCalled()
     })
 
     it('does not count a load that never stalled, or one already reported hung', () => {
-      beginLoadProgress({fileInfo: 'index.ifc'})
-      reportLoadProgress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
-      endLoadProgress()
-      captureLoadDiagnostics()
+      beginReport({fileInfo: 'index.ifc'})
+      report.progress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
+      report.end()
+      report.captureDiagnostics()
       expect(reportLoadStallRecovered).not.toHaveBeenCalled()
 
-      beginLoadProgress({fileInfo: 'index.ifc', onStall: jest.fn()})
-      reportLoadProgress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
+      beginReport({fileInfo: 'index.ifc', onStall: jest.fn()})
+      report.progress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
       jest.advanceTimersByTime(HANG_TIMEOUT_MS + 1)
-      endLoadProgress()
-      captureLoadDiagnostics()
+      report.end()
+      report.captureDiagnostics()
       expect(captureMessage).toHaveBeenCalledWith(LOAD_HUNG_MESSAGE, expect.objectContaining({level: 'warning'}))
       expect(reportLoadStallRecovered).not.toHaveBeenCalled()
     })
 
     // A load that fails after a stall: the stall rides the failure's own event.
     it('tags a failed load that stalled', () => {
-      beginLoadProgress({fileInfo: 'index.ifc', onStall: jest.fn()})
-      reportLoadProgress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
+      beginReport({fileInfo: 'index.ifc', onStall: jest.fn()})
+      report.progress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
       jest.advanceTimersByTime(STALL_TIMEOUT_MS + 1)
-      endLoadProgress(new Error('boom'))
-      expect(loadFailureCaptureContext().tags).toEqual({'load.phase': 'geometry', 'load.stalled': 'true'})
-      expect(loadStallCaptureTags()).toEqual({'load.stalled': 'true'})
+      report.end(new Error('boom'))
+      expect(report.captureContext().tags).toEqual({'load.phase': 'geometry', 'load.stalled': 'true'})
+      expect(report.stallCaptureTags()).toEqual({'load.stalled': 'true'})
       // The scope gets the phase only.
-      attachLoadFailureContext()
+      report.attachFailureContext()
       expect(setTag).not.toHaveBeenCalledWith('load.stalled', expect.anything())
 
       // The next load starts clean.
-      beginLoadProgress({fileInfo: 'index.ifc'})
-      expect(loadStallCaptureTags()).toBeNull()
+      beginReport({fileInfo: 'index.ifc'})
+      expect(report.stallCaptureTags()).toBeNull()
     })
 
     it('failure context includes the accumulated report text, and not the file path', () => {
       // fileInfo is the route path or URL: the name of a private model (Share#2107).
-      beginLoadProgress({fileInfo: 'secret/plan.ifc'})
-      reportLoadProgress({phase: 'dataParse', completed: 1, total: 4, elapsedMs: 10})
-      endLoadProgress()
-      attachLoadFailureContext()
+      beginReport({fileInfo: 'secret/plan.ifc'})
+      report.progress({phase: 'dataParse', completed: 1, total: 4, elapsedMs: 10})
+      report.end()
+      report.attachFailureContext()
       expect(setTag).toHaveBeenCalledWith('load.phase', 'dataParse')
       expect(setContext).toHaveBeenCalledWith('load', expect.objectContaining({
         phase: 'dataParse',
@@ -986,12 +1016,12 @@ describe('loadProgress', () => {
     // returned for one capture's own context and NOT written to the
     // session scope, where they would ride along on every later event.
     it('hands back the failure context for one event without touching the scope', () => {
-      beginLoadProgress({fileInfo: 'road.ifc'})
-      reportLoadProgress({phase: 'dataParse', completed: 1, total: 4, elapsedMs: 10})
-      endLoadProgress()
+      beginReport({fileInfo: 'road.ifc'})
+      report.progress({phase: 'dataParse', completed: 1, total: 4, elapsedMs: 10})
+      report.end()
       setTag.mockClear()
       setContext.mockClear()
-      const {tags, contexts} = loadFailureCaptureContext()
+      const {tags, contexts} = report.captureContext()
       expect(tags).toEqual({'load.phase': 'dataParse'})
       expect(contexts.load).toEqual(expect.objectContaining({
         phase: 'dataParse',
@@ -1017,39 +1047,39 @@ describe('loadProgress', () => {
         preprocessorVersion: 'CATIA V5 STEP AP203 v1',
       }
 
-      /** @param {string} report the report text Sentry would receive */
-      function expectWithheld(report) {
-        expect(report).toContain('Model: (name withheld) — CONFIG_CONTROL_DESIGN, 121.7 MB, Dassault CATIA')
-        expect(report).not.toContain('10.0.0.5')
-        expect(report).not.toContain('ACME')
-        expect(report).not.toContain('Bracket')
-        expect(report).not.toContain('jane@example.com')
-        expect(report).not.toContain('AP203')
+      /** @param {string} reportText the report text Sentry would receive */
+      function expectWithheld(reportText) {
+        expect(reportText).toContain('Model: (name withheld) — CONFIG_CONTROL_DESIGN, 121.7 MB, Dassault CATIA')
+        expect(reportText).not.toContain('10.0.0.5')
+        expect(reportText).not.toContain('ACME')
+        expect(reportText).not.toContain('Bracket')
+        expect(reportText).not.toContain('jane@example.com')
+        expect(reportText).not.toContain('AP203')
       }
 
       it('keeps the full model line in the report the user sees', () => {
-        beginLoadProgress({fileInfo: 'a518f06c.stp'})
-        reportLoadProgress({modelInfo: header})
+        beginReport({fileInfo: 'a518f06c.stp'})
+        report.progress({modelInfo: header})
         expect(reportLines().join('\n')).toContain('Bracket rev2.stp')
       })
 
       it('withholds it from the failure context', () => {
-        beginLoadProgress({fileInfo: 'a518f06c.stp'})
-        reportLoadProgress({modelInfo: header})
-        reportLoadProgress({phase: 'geometry', completed: 1, total: 4, elapsedMs: 10})
-        endLoadProgress()
-        const {report} = loadFailureCaptureContext().contexts.load
-        expect(report).toMatch(/^Share v/)
-        expectWithheld(report)
+        beginReport({fileInfo: 'a518f06c.stp'})
+        report.progress({modelInfo: header})
+        report.progress({phase: 'geometry', completed: 1, total: 4, elapsedMs: 10})
+        report.end()
+        const {report: sentryReport} = report.captureContext().contexts.load
+        expect(sentryReport).toMatch(/^Share v/)
+        expectWithheld(sentryReport)
       })
 
       it('withholds it from the diagnostics event', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'a518f06c.stp'})
-        reportLoadProgress({modelInfo: header})
+        beginReport({fileInfo: 'a518f06c.stp'})
+        report.progress({modelInfo: header})
         console.warn('No basis found for brep!')
-        endLoadProgress()
-        captureLoadDiagnostics({warningCount: 1})
+        report.end()
+        report.captureDiagnostics({warningCount: 1})
         const call = captureMessage.mock.calls.find(([message]) => message.startsWith('Load diagnostics'))
         expectWithheld(call[1].contexts.loadDiagnostics.report)
         warnSpy.mockRestore()
@@ -1062,13 +1092,13 @@ describe('loadProgress', () => {
       it('withholds a teed warning\'s file name from the diagnostics event', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
         try {
-          beginLoadProgress({fileInfo: 'a518f06c.stp'})
+          beginReport({fileInfo: 'a518f06c.stp'})
           console.warn(`handleFileDrop: ${consoleFileName('Secret Tower.dwg')} (267 bytes) is not a recognized model format`)
-          endLoadProgress()
+          report.end()
         } finally {
           warnSpy.mockRestore()
         }
-        captureLoadDiagnostics({warningCount: 1})
+        report.captureDiagnostics({warningCount: 1})
         const [title, context] = captureMessage.mock.calls.find(([message]) => message.startsWith('Load diagnostics'))
         expect(title).toContain('handleFileDrop: file (name withheld)')
         expect(JSON.stringify([title, context])).not.toContain('Secret Tower')
@@ -1077,12 +1107,12 @@ describe('loadProgress', () => {
       // The non-engine path (reportModelInfo) carries the user's own file
       // name, e.g. a Drive file's, so it is withheld the same way.
       it('withholds a non-engine format\'s file name too', () => {
-        beginLoadProgress({fileInfo: 'gdrive:abc123'})
-        reportModelInfo({fileName: 'Client site survey.glb', schema: 'GLB', byteLength: 39_950_000})
-        endLoadProgress()
-        const {report} = loadFailureCaptureContext().contexts.load
-        expect(report).toContain('Model: (name withheld) — GLB, 38.1 MB')
-        expect(report).not.toContain('Client site survey')
+        beginReport({fileInfo: 'gdrive:abc123'})
+        report.modelInfo({fileName: 'Client site survey.glb', schema: 'GLB', byteLength: 39_950_000})
+        report.end()
+        const {report: sentryReport} = report.captureContext().contexts.load
+        expect(sentryReport).toContain('Model: (name withheld) — GLB, 38.1 MB')
+        expect(sentryReport).not.toContain('Client site survey')
         expect(reportLines()).toContain('Model: Client site survey.glb — GLB, 38.1 MB')
       })
     })
@@ -1094,7 +1124,7 @@ describe('loadProgress', () => {
      * the counts here are the GA stats_* ones that colour the chip —
      * NOT the console tee's, which disagree with them on IFC/STEP.
      */
-    describe('captureLoadDiagnostics', () => {
+    describe('captureDiagnostics', () => {
       /** @return {Array} the [message, context] of the diagnostics capture */
       function diagnosticsCall() {
         return captureMessage.mock.calls.find(([, arg]) => typeof arg === 'object' && arg !== null)
@@ -1114,11 +1144,11 @@ describe('loadProgress', () => {
 
       it('sends one event per noisy load, tagged with the bare cid, content_id and type', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'gdrive:abc123'})
+        beginReport({fileInfo: 'gdrive:abc123'})
         console.warn('No basis found for brep!')
         console.warn('No basis found for brep!')
-        endLoadProgress()
-        captureLoadDiagnostics({
+        report.end()
+        report.captureDiagnostics({
           warningCount: 2,
           contentId: 'https://drive/abc123',
           contentType: 'ifc',
@@ -1148,21 +1178,21 @@ describe('loadProgress', () => {
       // Conditions): GA, once per load, and no Sentry event of its own.
       it('retries a cap hit that GA dropped (gtag/js not loaded yet), and stops once it is sent', () => {
         reportBvhDepthCapToGa.mockReturnValueOnce(false)
-        beginLoadProgress({fileInfo: 'index.stp'})
-        reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
-        endLoadProgress()
-        captureLoadDiagnostics({})
-        captureLoadDiagnostics({})
-        captureLoadDiagnostics({})
+        beginReport({fileInfo: 'index.stp'})
+        report.bvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
+        report.end()
+        report.captureDiagnostics({})
+        report.captureDiagnostics({})
+        report.captureDiagnostics({})
         expect(reportBvhDepthCapToGa).toHaveBeenCalledTimes(2)
       })
 
       it('counts a cap hit in GA once, and sends nothing to Sentry for it', () => {
-        beginLoadProgress({fileInfo: 'index.stp'})
-        reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
-        endLoadProgress()
-        captureLoadDiagnostics({})
-        captureLoadDiagnostics({})
+        beginReport({fileInfo: 'index.stp'})
+        report.bvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
+        report.end()
+        report.captureDiagnostics({})
+        report.captureDiagnostics({})
 
         expect(reportBvhDepthCapToGa.mock.calls).toEqual([[{format: 'stp', trees: 2, maxLeafTriangles: 3400}]])
         expect(diagnosticsCall()).toBeUndefined()
@@ -1170,19 +1200,21 @@ describe('loadProgress', () => {
 
       // A batched model builds its trees once it is on screen
       // (deferredBatchedBvh.js), so its cap usually lands after the load
-      // ended. It keeps its Health line and its one GA event.
+      // ended. It keeps its Health line and its one GA event. The deferred
+      // build reports through the callback it took when it was scheduled,
+      // `onLateDepthCap`: the load's own, in place of the token of the
+      // module's one reporter before slice R.
       describe('a depth cap that lands after the load', () => {
         const healthLines = () => reportLines().filter((line) => line.startsWith('Health: picking'))
 
         it('gets its Health line after Total and is counted in GA once', () => {
-          const reporter = beginLoadProgress({fileInfo: 'index.stp'})
-          const token = loadReportToken()
-          expect(token).toBe(reporter)
-          endLoadProgress()
-          captureLoadDiagnostics({})
+          beginReport({fileInfo: 'index.stp'})
+          const onLateDepthCap = report.onLateDepthCap
+          report.end()
+          report.captureDiagnostics({})
           expect(reportBvhDepthCapToGa).not.toHaveBeenCalled()
 
-          reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40}, token)
+          onLateDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
           const lines = reportLines()
           expect(healthLines()).toEqual([
             'Health: picking index hit its depth cap (40) in 2 trees; largest leaf 3400 triangles, ' +
@@ -1192,12 +1224,12 @@ describe('loadProgress', () => {
         })
 
         it('replaces the Health line rather than adding a second one', () => {
-          beginLoadProgress({fileInfo: 'index.stp'})
-          const token = loadReportToken()
-          reportBvhDepthCap({trees: 1, maxLeafTriangles: 90, maxDepth: 40})
-          endLoadProgress()
-          captureLoadDiagnostics({})
-          reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40}, token)
+          beginReport({fileInfo: 'index.stp'})
+          const onLateDepthCap = report.onLateDepthCap
+          report.onDepthCap({trees: 1, maxLeafTriangles: 90, maxDepth: 40})
+          report.end()
+          report.captureDiagnostics({})
+          onLateDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
 
           expect(healthLines()).toEqual([
             'Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 triangles, ' +
@@ -1207,42 +1239,51 @@ describe('loadProgress', () => {
         })
 
         it('waits for the load to be known good before counting it in GA', () => {
-          beginLoadProgress({fileInfo: 'index.stp'})
-          const token = loadReportToken()
-          endLoadProgress()
-          reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40}, token)
+          beginReport({fileInfo: 'index.stp'})
+          const onLateDepthCap = report.onLateDepthCap
+          report.end()
+          onLateDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
           expect(healthLines()).toHaveLength(1)
           expect(reportBvhDepthCapToGa).not.toHaveBeenCalled()
-          captureLoadDiagnostics({})
+          report.captureDiagnostics({})
           expect(reportBvhDepthCapToGa).toHaveBeenCalledTimes(1)
         })
 
+        // Before slice R the token told the load apart from the next; now the
+        // first load's own reporter takes it, and its sink, a load job no
+        // longer current, drops it. Red with one shared reporter: the cap
+        // lands in the second load's report.
         it('is dropped once another load has started', () => {
-          beginLoadProgress({fileInfo: 'first.stp'})
-          const token = loadReportToken()
-          endLoadProgress()
-          beginLoadProgress({fileInfo: 'second.stp'})
-          reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40}, token)
-          endLoadProgress()
-          captureLoadDiagnostics({})
+          let isFirstCurrent = true
+          beginReport({
+            fileInfo: 'first.stp',
+            sink: {set: (partial) => isFirstCurrent && storeSink.set(partial), get: storeSink.get},
+          })
+          const onLateDepthCap = report.onLateDepthCap
+          report.end()
+          isFirstCurrent = false
+          beginReport({fileInfo: 'second.stp'})
+          onLateDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
+          report.end()
+          report.captureDiagnostics({})
           expect(healthLines()).toEqual([])
           expect(reportBvhDepthCapToGa).not.toHaveBeenCalled()
         })
 
-        it('needs the token: a later tree of an edit is not the load\'s', () => {
-          beginLoadProgress({fileInfo: 'index.stp'})
-          endLoadProgress()
-          captureLoadDiagnostics({})
-          reportBvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
+        it('needs the late callback: a later tree of an edit is not the load\'s', () => {
+          beginReport({fileInfo: 'index.stp'})
+          report.end()
+          report.captureDiagnostics({})
+          report.bvhDepthCap({trees: 2, maxLeafTriangles: 3400, maxDepth: 40})
           expect(healthLines()).toEqual([])
           expect(reportBvhDepthCapToGa).not.toHaveBeenCalled()
         })
       })
 
       it('sends nothing anywhere for a clean load that did not hit the cap', () => {
-        beginLoadProgress({fileInfo: 'index.stp'})
-        endLoadProgress()
-        captureLoadDiagnostics({})
+        beginReport({fileInfo: 'index.stp'})
+        report.end()
+        report.captureDiagnostics({})
         expect(diagnosticsCall()).toBeUndefined()
         expect(reportBvhDepthCapToGa).not.toHaveBeenCalled()
       })
@@ -1251,11 +1292,11 @@ describe('loadProgress', () => {
       // and carries no cap field: the cap is counted in GA alone.
       it('titles a cap hit with console diagnostics by the diagnostics', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'index.stp'})
+        beginReport({fileInfo: 'index.stp'})
         console.warn('No basis found for brep!')
-        reportBvhDepthCap({trees: 1, maxLeafTriangles: 90, maxDepth: 40})
-        endLoadProgress()
-        captureLoadDiagnostics({warningCount: 1})
+        report.bvhDepthCap({trees: 1, maxLeafTriangles: 90, maxDepth: 40})
+        report.end()
+        report.captureDiagnostics({warningCount: 1})
 
         const [message, context] = diagnosticsCall()
         expect(message).toBe('Load diagnostics: No basis found for brep!')
@@ -1275,11 +1316,11 @@ describe('loadProgress', () => {
        */
       it('keeps regular severity when errors came with a model that displays', () => {
         const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'index.stp'})
+        beginReport({fileInfo: 'index.stp'})
         console.error('CDT Exception (hemisphere: 0)')
-        reportGeometryStats({vertexCount: 120_000, triangleCount: 40_000})
-        endLoadProgress()
-        captureLoadDiagnostics({errorCount: 1})
+        report.geometryStats({vertexCount: 120_000, triangleCount: 40_000})
+        report.end()
+        report.captureDiagnostics({errorCount: 1})
 
         expect(diagnosticsCall()[1].level).toBe('warning')
         expect(diagnosticsCall()[1].tags.load_outcome).toBe('displayed')
@@ -1288,11 +1329,11 @@ describe('loadProgress', () => {
 
       it('raises severity to error when the load built no geometry at all', () => {
         const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'index.stp'})
+        beginReport({fileInfo: 'index.stp'})
         console.error('CDT Exception (hemisphere: 0)')
-        reportGeometryStats({vertexCount: 0, triangleCount: 0})
-        endLoadProgress()
-        captureLoadDiagnostics({errorCount: 1})
+        report.geometryStats({vertexCount: 0, triangleCount: 0})
+        report.end()
+        report.captureDiagnostics({errorCount: 1})
 
         expect(diagnosticsCall()[1].level).toBe('error')
         expect(diagnosticsCall()[1].tags.load_outcome).toBe('unusable')
@@ -1309,15 +1350,15 @@ describe('loadProgress', () => {
       // diagnostic it also hit still reaches Sentry (codex on #2235).
       it('counts a no-geometry load in GA, and sends its engine gap to Sentry', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'tiny.ifc'})
+        beginReport({fileInfo: 'tiny.ifc'})
         console.warn('No units defined.')
         console.warn('No basis found for brep!')
-        reportGeometryStats({
+        report.geometryStats({
           vertexCount: 0, triangleCount: 0,
           productCount: 3, productsWithGeometryCount: 0, errorCount: 0, dataDefectCount: 1,
         })
-        endLoadProgress()
-        captureLoadDiagnostics({warningCount: 2})
+        report.end()
+        report.captureDiagnostics({warningCount: 2})
 
         const [message, context] = diagnosticsCall()
         expect(message).toBe('Load diagnostics: No basis found for brep!')
@@ -1335,13 +1376,13 @@ describe('loadProgress', () => {
 
       it('sends a no-geometry load with only defects to GA alone', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'tiny.ifc'})
+        beginReport({fileInfo: 'tiny.ifc'})
         console.warn('No units defined.')
-        reportGeometryStats({
+        report.geometryStats({
           vertexCount: 0, triangleCount: 0, productCount: 3, productsWithGeometryCount: 0, errorCount: 0, dataDefectCount: 1,
         })
-        endLoadProgress()
-        captureLoadDiagnostics({warningCount: 1})
+        report.end()
+        report.captureDiagnostics({warningCount: 1})
 
         expect(diagnosticsCall()).toBeUndefined()
         expect(reportLoadDiagnosticsToGa).toHaveBeenCalledWith(expect.objectContaining({outcome: 'no_geometry', defect: 'no_units'}))
@@ -1350,14 +1391,14 @@ describe('loadProgress', () => {
 
       it('puts the same counts on the error event of an empty build the file does not explain', () => {
         const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'index.stp'})
+        beginReport({fileInfo: 'index.stp'})
         console.error('CDT Exception (hemisphere: 0)')
-        reportGeometryStats({
+        report.geometryStats({
           vertexCount: 0, triangleCount: 0,
           productCount: 3, productsWithGeometryCount: 0, errorCount: 4, dataDefectCount: 2,
         })
-        endLoadProgress()
-        captureLoadDiagnostics({errorCount: 4})
+        report.end()
+        report.captureDiagnostics({errorCount: 4})
 
         const [, context] = diagnosticsCall()
         expect(context.level).toBe('error')
@@ -1370,11 +1411,11 @@ describe('loadProgress', () => {
 
       it('leaves the counts absent, not zero, when the engine reported none', () => {
         const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'index.stp'})
+        beginReport({fileInfo: 'index.stp'})
         console.error('boom')
-        reportGeometryStats({vertexCount: 5, triangleCount: 2})
-        endLoadProgress()
-        captureLoadDiagnostics({errorCount: 1})
+        report.geometryStats({vertexCount: 5, triangleCount: 2})
+        report.end()
+        report.captureDiagnostics({errorCount: 1})
 
         const loadDiagnostics = diagnosticsCall()[1].contexts.loadDiagnostics
         expect(loadDiagnostics.productCount).toBeUndefined()
@@ -1385,10 +1426,10 @@ describe('loadProgress', () => {
 
       it('defaults to regular severity when no loader reported geometry', () => {
         const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'ISS_stationary.glb'})
+        beginReport({fileInfo: 'ISS_stationary.glb'})
         console.error('missing texture')
-        endLoadProgress()
-        captureLoadDiagnostics({errorCount: 1})
+        report.end()
+        report.captureDiagnostics({errorCount: 1})
 
         expect(diagnosticsCall()[1].level).toBe('warning')
         expect(diagnosticsCall()[1].tags.load_outcome).toBe('displayed')
@@ -1404,16 +1445,16 @@ describe('loadProgress', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
         const sizeBytes = 14_365_000
         const sizeMb = 14
-        beginLoadProgress({fileInfo: 'https://example.test/models/Tower.ifc'})
-        reportModelInfo({
+        beginReport({fileInfo: 'https://example.test/models/Tower.ifc'})
+        report.modelInfo({
           fileName: 'Tower.ifc',
           schema: 'IFC4',
           byteLength: sizeBytes,
           originatingSystem: 'Autodesk Revit 2024 (ENU)',
         })
         console.warn('No basis found for brep!')
-        endLoadProgress()
-        captureLoadDiagnostics({warningCount: 1, contentType: 'ifc'})
+        report.end()
+        report.captureDiagnostics({warningCount: 1, contentType: 'ifc'})
 
         const {tags} = diagnosticsCall()[1]
         expect(tags.authoring_tool).toBe('Autodesk Revit 2024')
@@ -1428,18 +1469,18 @@ describe('loadProgress', () => {
 
       it('prefers the parsed header over the extension-derived schema', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'Arty_Z7_PCB.stp'})
+        beginReport({fileInfo: 'Arty_Z7_PCB.stp'})
         // What Loader stamps from the filename before the parse...
-        reportModelInfo({fileName: 'Arty_Z7_PCB.stp', schema: 'STP', byteLength: 1_000_000})
+        report.modelInfo({fileName: 'Arty_Z7_PCB.stp', schema: 'STP', byteLength: 1_000_000})
         // ...then what conway's ON_MODEL_INFO reports once the header parses.
-        reportLoadProgress({modelInfo: {
+        report.progress({modelInfo: {
           fileName: 'Arty_Z7_PCB.stp',
           schema: 'AP242',
           preprocessorVersion: 'KiCad 8.0',
         }})
         console.warn('No basis found for brep!')
-        endLoadProgress()
-        captureLoadDiagnostics({warningCount: 1})
+        report.end()
+        report.captureDiagnostics({warningCount: 1})
 
         const {tags} = diagnosticsCall()[1]
         expect(tags.model_schema).toBe('AP242')
@@ -1457,11 +1498,11 @@ describe('loadProgress', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
         const overlongChars = 300
         const maxTagChars = 200
-        beginLoadProgress({fileInfo: 'noext'})
-        reportModelInfo({fileName: 'noext', schema: 'S'.repeat(overlongChars)})
+        beginReport({fileInfo: 'noext'})
+        report.modelInfo({fileName: 'noext', schema: 'S'.repeat(overlongChars)})
         console.warn('No basis found for brep!')
-        endLoadProgress()
-        captureLoadDiagnostics({warningCount: 1})
+        report.end()
+        report.captureDiagnostics({warningCount: 1})
 
         const {tags} = diagnosticsCall()[1]
         expect(tags.model_schema).toHaveLength(maxTagChars)
@@ -1474,10 +1515,10 @@ describe('loadProgress', () => {
 
       it('falls back to the content type when the name carries no extension', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'gdrive:1sWR7x4BZ'})
+        beginReport({fileInfo: 'gdrive:1sWR7x4BZ'})
         console.warn('No basis found for brep!')
-        endLoadProgress()
-        captureLoadDiagnostics({warningCount: 1, contentType: 'IFC'})
+        report.end()
+        report.captureDiagnostics({warningCount: 1, contentType: 'IFC'})
 
         expect(diagnosticsCall()[1].tags.model_format).toBe('ifc')
         warnSpy.mockRestore()
@@ -1499,11 +1540,11 @@ describe('loadProgress', () => {
           // exercise several headers have to start from a clean mock.
           captureMessage.mockClear()
           const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-          beginLoadProgress({fileInfo: 'Tower.ifc'})
-          reportModelInfo({fileName: 'Tower.ifc', ...info})
+          beginReport({fileInfo: 'Tower.ifc'})
+          report.modelInfo({fileName: 'Tower.ifc', ...info})
           console.warn('No basis found for brep!')
-          endLoadProgress()
-          captureLoadDiagnostics({warningCount: 1})
+          report.end()
+          report.captureDiagnostics({warningCount: 1})
           warnSpy.mockRestore()
           return diagnosticsCall()[1].tags
         }
@@ -1609,12 +1650,12 @@ describe('loadProgress', () => {
        */
       it('keeps the richer authoring system when a later header names only a preprocessor', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'Tower.ifc'})
-        reportModelInfo({fileName: 'Tower.ifc', originatingSystem: 'Autodesk Revit 2024 (ENU)'})
-        reportLoadProgress({modelInfo: {fileName: 'Tower.ifc', preprocessorVersion: 'KiCad 8.0'}})
+        beginReport({fileInfo: 'Tower.ifc'})
+        report.modelInfo({fileName: 'Tower.ifc', originatingSystem: 'Autodesk Revit 2024 (ENU)'})
+        report.progress({modelInfo: {fileName: 'Tower.ifc', preprocessorVersion: 'KiCad 8.0'}})
         console.warn('No basis found for brep!')
-        endLoadProgress()
-        captureLoadDiagnostics({warningCount: 1})
+        report.end()
+        report.captureDiagnostics({warningCount: 1})
 
         expect(diagnosticsCall()[1].tags.authoring_tool).toBe('Autodesk Revit 2024')
         warnSpy.mockRestore()
@@ -1624,20 +1665,20 @@ describe('loadProgress', () => {
       // the literal string is what an unknown type looks like here.
       it('omits model_format rather than tagging the literal "undefined"', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'gdrive:1sWR7x4BZ'})
+        beginReport({fileInfo: 'gdrive:1sWR7x4BZ'})
         console.warn('No basis found for brep!')
-        endLoadProgress()
-        captureLoadDiagnostics({warningCount: 1, contentType: 'undefined'})
+        report.end()
+        report.captureDiagnostics({warningCount: 1, contentType: 'undefined'})
 
         expect(diagnosticsCall()[1].tags).not.toHaveProperty('model_format')
         warnSpy.mockRestore()
       })
 
       it('stays silent when the load reported no errors or warnings', () => {
-        beginLoadProgress({fileInfo: 'index.ifc'})
-        reportLoadProgress({phase: 'geometry', completed: 1, total: 1, elapsedMs: 5})
-        endLoadProgress()
-        captureLoadDiagnostics({errorCount: 0, warningCount: 0})
+        beginReport({fileInfo: 'index.ifc'})
+        report.progress({phase: 'geometry', completed: 1, total: 1, elapsedMs: 5})
+        report.end()
+        report.captureDiagnostics({errorCount: 0, warningCount: 0})
         expect(captureMessage).not.toHaveBeenCalled()
       })
 
@@ -1649,9 +1690,9 @@ describe('loadProgress', () => {
        * disagree with the chip in both directions.
        */
       it('fires on engine counts even when the console tee caught nothing', () => {
-        beginLoadProgress({fileInfo: 'index.ifc'})
-        endLoadProgress()
-        captureLoadDiagnostics({errorCount: 4, contentType: 'ifc'})
+        beginReport({fileInfo: 'index.ifc'})
+        report.end()
+        report.captureDiagnostics({errorCount: 4, contentType: 'ifc'})
 
         const [message, context] = diagnosticsCall()
         // No console text to name a family by, so the title stays generic.
@@ -1665,11 +1706,11 @@ describe('loadProgress', () => {
 
       it('stays silent when the engine reports clean but the console was chatty', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'index.ifc'})
+        beginReport({fileInfo: 'index.ifc'})
         console.warn('No basis found for brep!')
-        endLoadProgress()
+        report.end()
         // Conway said zero, so the chip is green — no event behind it.
-        captureLoadDiagnostics({errorCount: 0, warningCount: 0, contentType: 'ifc'})
+        report.captureDiagnostics({errorCount: 0, warningCount: 0, contentType: 'ifc'})
         expect(captureMessage).not.toHaveBeenCalled()
         warnSpy.mockRestore()
       })
@@ -1679,10 +1720,10 @@ describe('loadProgress', () => {
       // entity of every model opens its own issue.
       it('groups by message family, collapsing per-entity numbers', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-        beginLoadProgress({fileInfo: 'Arty_Z7_PCB.stp'})
+        beginReport({fileInfo: 'Arty_Z7_PCB.stp'})
         console.warn('Error processing representation #1204')
-        endLoadProgress()
-        captureLoadDiagnostics({warningCount: 1})
+        report.end()
+        report.captureDiagnostics({warningCount: 1})
         expect(diagnosticsCall()[0]).toBe('Load diagnostics: Error processing representation #')
         warnSpy.mockRestore()
       })
@@ -1691,15 +1732,15 @@ describe('loadProgress', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
         const distinctCount = 200
         const overlongChars = 300
-        beginLoadProgress({fileInfo: 'Arty_Z7_PCB.stp'})
+        beginReport({fileInfo: 'Arty_Z7_PCB.stp'})
         for (let i = 0; i < distinctCount; i++) {
           console.warn(`Error processing representation #${i}`)
         }
         // A collapsed wasm stack trace: one very long line.
         console.warn(`stack ${'x'.repeat(overlongChars)}`)
         console.warn(`stack ${'x'.repeat(overlongChars)}`)
-        endLoadProgress()
-        captureLoadDiagnostics({warningCount: distinctCount + 2})
+        report.end()
+        report.captureDiagnostics({warningCount: distinctCount + 2})
 
         const {loadDiagnostics} = diagnosticsCall()[1].contexts
         const maxCarried = 25
@@ -1718,10 +1759,10 @@ describe('loadProgress', () => {
       it('omits the cid tag when analytics consent is withheld', () => {
         const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
         Cookies.set('consentLevel', '1.restricted')
-        beginLoadProgress({fileInfo: 'index.ifc'})
+        beginReport({fileInfo: 'index.ifc'})
         console.warn('No basis found for brep!')
-        endLoadProgress()
-        captureLoadDiagnostics({warningCount: 1})
+        report.end()
+        report.captureDiagnostics({warningCount: 1})
         expect(diagnosticsCall()[1].tags).not.toHaveProperty('open_cid')
         warnSpy.mockRestore()
       })
@@ -1756,10 +1797,10 @@ describe('loadProgress', () => {
         // An authoring defect on a load the user is looking at is GA's: its
         // family only ('marked'), never conway's prose about the file.
         it('sends a diagnostic conway marked as a data defect to GA, not Sentry', () => {
-          beginLoadProgress({fileInfo: 'part.step'})
+          beginReport({fileInfo: 'part.step'})
           Logger.error(DANGLING, EXPRESS_ID, DATA_DEFECT)
-          endLoadProgress()
-          captureLoadDiagnostics({errorCount: 1})
+          report.end()
+          report.captureDiagnostics({errorCount: 1})
 
           expect(diagnosticsCall()).toBeUndefined()
           expect(reportLoadDiagnosticsToGa).toHaveBeenCalledWith(expect.objectContaining({
@@ -1772,11 +1813,11 @@ describe('loadProgress', () => {
         // whose diagnostics are all defects still reaches Sentry, titled and
         // tagged by the defect.
         it('still sends an unusable load to Sentry when its only diagnostic is a defect', () => {
-          beginLoadProgress({fileInfo: 'part.step'})
+          beginReport({fileInfo: 'part.step'})
           Logger.error(DANGLING, EXPRESS_ID, DATA_DEFECT)
-          reportGeometryStats({vertexCount: 0, triangleCount: 0})
-          endLoadProgress()
-          captureLoadDiagnostics({errorCount: 1})
+          report.geometryStats({vertexCount: 0, triangleCount: 0})
+          report.end()
+          report.captureDiagnostics({errorCount: 1})
 
           const [message, context] = diagnosticsCall()
           // The tee holds conway's echo, record id appended — the separator
@@ -1789,10 +1830,10 @@ describe('loadProgress', () => {
         it('leaves the same text unmarked when conway did not mark it', () => {
           // Identical prose, no category: only the marker differs, so this
           // is what fails if the tag were derived from the message text.
-          beginLoadProgress({fileInfo: 'part.step'})
+          beginReport({fileInfo: 'part.step'})
           Logger.error(DANGLING, EXPRESS_ID)
-          endLoadProgress()
-          captureLoadDiagnostics({errorCount: 1})
+          report.end()
+          report.captureDiagnostics({errorCount: 1})
 
           expect(diagnosticsCall()[1].tags).not.toHaveProperty('data_defect')
         })
@@ -1801,19 +1842,19 @@ describe('loadProgress', () => {
           // conway logs both of these: the first marked, the second (a
           // different failure carrying its error text) not.
           const untypeable = 'Skipping property definition representation that is untypeable in AP214'
-          beginLoadProgress({fileInfo: 'part.step'})
+          beginReport({fileInfo: 'part.step'})
           // One tee echo each, so the tie goes to the first seen: the
           // unmarked variant titles the event while the marked one is still
           // registered — a prefix match would tag it.
           Logger.warning(`${untypeable}: TypeError: boom`, '#8')
           Logger.warning(untypeable, '#7', DATA_DEFECT)
-          endLoadProgress()
-          captureLoadDiagnostics({warningCount: 2})
+          report.end()
+          report.captureDiagnostics({warningCount: 2})
 
           const [message, context] = diagnosticsCall()
           // Titled by the unmarked variant (digits normalized, ellipsized).
           expect(message).toMatch(/untypeable in AP#: TypeErro…$/)
-          expect(_getActiveReporterForTests().dataDefectMessages.has(untypeable)).toBe(true)
+          expect(report.dataDefectMessages.has(untypeable)).toBe(true)
           expect(context.tags).not.toHaveProperty('data_defect')
         })
 
@@ -1828,10 +1869,10 @@ describe('loadProgress', () => {
           ['marked, then unmarked', [DATA_DEFECT, undefined]],
           ['unmarked, then marked', [undefined, DATA_DEFECT]],
         ])('does not tag a message logged both marked and unmarked: %s', (_label, categories) => {
-          beginLoadProgress({fileInfo: 'part.step'})
+          beginReport({fileInfo: 'part.step'})
           categories.forEach((category) => Logger.error(DANGLING, EXPRESS_ID, category))
-          endLoadProgress()
-          captureLoadDiagnostics({errorCount: 2})
+          report.end()
+          report.captureDiagnostics({errorCount: 2})
 
           const [message, context] = diagnosticsCall()
           // One merged tee diagnostic, seen twice — the collision itself.
@@ -1843,11 +1884,11 @@ describe('loadProgress', () => {
 
         it('is not cancelled by an info-level sighting the tee never captures', () => {
           const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
-          beginLoadProgress({fileInfo: 'part.step'})
+          beginReport({fileInfo: 'part.step'})
           Logger.info(DANGLING)
           Logger.error(DANGLING, EXPRESS_ID, DATA_DEFECT)
-          endLoadProgress()
-          captureLoadDiagnostics({errorCount: 1})
+          report.end()
+          report.captureDiagnostics({errorCount: 1})
 
           // The info entry really was logged and echoed — to console.log,
           // which the tee does not capture.
@@ -1864,20 +1905,20 @@ describe('loadProgress', () => {
           // The tee collapses whitespace; the fallback must see the same form.
           ['a whitespace variant', 'No  units\n  defined.', 'no_units'],
         ])('sends the unmarked data-quality fallback to GA, not Sentry: %s', (_label, text, defect) => {
-          beginLoadProgress({fileInfo: 'index.ifc'})
+          beginReport({fileInfo: 'index.ifc'})
           Logger.warning(text)
-          endLoadProgress()
-          captureLoadDiagnostics({warningCount: 1})
+          report.end()
+          report.captureDiagnostics({warningCount: 1})
 
           expect(diagnosticsCall()).toBeUndefined()
           expect(reportLoadDiagnosticsToGa).toHaveBeenCalledWith(expect.objectContaining({outcome: 'displayed', defect}))
         })
 
         it('does not tag an ordinary engine diagnostic', () => {
-          beginLoadProgress({fileInfo: 'index.ifc'})
+          beginReport({fileInfo: 'index.ifc'})
           Logger.warning('No basis found for brep!')
-          endLoadProgress()
-          captureLoadDiagnostics({warningCount: 1})
+          report.end()
+          report.captureDiagnostics({warningCount: 1})
 
           expect(diagnosticsCall()[1].tags).not.toHaveProperty('data_defect')
         })
@@ -1890,17 +1931,17 @@ describe('loadProgress', () => {
          * very searches the tag exists to clean up.
          */
         it('does not tag when an engine error, not the defect, is the top diagnostic', () => {
-          beginLoadProgress({fileInfo: 'part.step'})
+          beginReport({fileInfo: 'part.step'})
           Logger.error(DANGLING, EXPRESS_ID, DATA_DEFECT)
           console.error('CDT Exception (hemisphere: 0)')
           console.error('CDT Exception (hemisphere: 0)')
-          endLoadProgress()
-          captureLoadDiagnostics({errorCount: 3})
+          report.end()
+          report.captureDiagnostics({errorCount: 3})
 
           const [message, context] = diagnosticsCall()
           expect(message).toBe('Load diagnostics: CDT Exception (hemisphere: #)')
           // The defect was seen — the tag's absence is the rule, not a miss.
-          expect(_getActiveReporterForTests().dataDefectMessages.has(DANGLING)).toBe(true)
+          expect(report.dataDefectMessages.has(DANGLING)).toBe(true)
           expect(context.tags).not.toHaveProperty('data_defect')
           // The defect is still counted, in GA.
           expect(reportLoadDiagnosticsToGa).toHaveBeenCalledWith(expect.objectContaining({defect: 'marked'}))
@@ -1909,13 +1950,13 @@ describe('loadProgress', () => {
         // A minority engine gap is still the Sentry event when a defect is
         // the most frequent diagnostic: it is what someone can go fix.
         it('titles Sentry by the engine gap even when a defect is more frequent', () => {
-          beginLoadProgress({fileInfo: 'index.ifc'})
+          beginReport({fileInfo: 'index.ifc'})
           Logger.warning('No units defined.')
           console.warn('No units defined.')
           console.warn('No units defined.')
           console.error('CDT Exception (hemisphere: 0)')
-          endLoadProgress()
-          captureLoadDiagnostics({errorCount: 1, warningCount: 3})
+          report.end()
+          report.captureDiagnostics({errorCount: 1, warningCount: 3})
 
           const [message, context] = diagnosticsCall()
           expect(message).toBe('Load diagnostics: CDT Exception (hemisphere: #)')
@@ -1924,33 +1965,181 @@ describe('loadProgress', () => {
         })
 
         it('stops listening to conway when the load ends', () => {
-          beginLoadProgress({fileInfo: 'part.step'})
-          endLoadProgress()
+          beginReport({fileInfo: 'part.step'})
+          report.end()
           Logger.error(DANGLING, EXPRESS_ID, DATA_DEFECT)
 
-          expect(_getActiveReporterForTests().dataDefectMessages.size).toBe(0)
+          expect(report.dataDefectMessages.size).toBe(0)
         })
       })
     })
 
     it('ignores straggler progress after endLoadProgress', () => {
       const onStall = jest.fn()
-      beginLoadProgress({fileInfo: 'index.ifc', onStall})
-      reportLoadProgress({phase: 'dataParse', completed: 2, total: 4, elapsedMs: 10})
-      endLoadProgress()
+      beginReport({fileInfo: 'index.ifc', onStall})
+      report.progress({phase: 'dataParse', completed: 2, total: 4, elapsedMs: 10})
+      report.end()
       const linesAtEnd = reportLines()
 
-      reportLoadProgress({phase: 'geometry', completed: 9, total: 10, elapsedMs: 20})
+      report.progress({phase: 'geometry', completed: 9, total: 10, elapsedMs: 20})
       jest.advanceTimersByTime(STALL_TIMEOUT_MS * 2)
       expect(onStall).not.toHaveBeenCalled()
       expect(reportLines()).toEqual(linesAtEnd)
     })
 
-    it('is a safe no-op with no active load', () => {
-      endLoadProgress()
-      expect(() => reportLoadProgress({phase: 'geometry', completed: 1})).not.toThrow()
-      expect(() => reportEngineVersion('Conway v1')).not.toThrow()
-      expect(() => attachLoadFailureContext()).not.toThrow()
+    // Before slice R: with no active reporter. Now a load holds its own, and
+    // the caller of one that never began holds none (`report?.`); what is
+    // left to pin is that an ended one takes anything without throwing.
+    it('is a safe no-op once ended', () => {
+      beginReport({fileInfo: 'index.ifc'})
+      report.end()
+      expect(() => report.progress({phase: 'geometry', completed: 1})).not.toThrow()
+      expect(() => report.engineVersion('Conway v1')).not.toThrow()
+      expect(() => report.attachFailureContext()).not.toThrow()
+    })
+  })
+
+  // open-t200 slice R (design/tracks/open-t200/layering.md §4.4, §7 "R"):
+  // one reporter per load run, the page-wide parts held by the foreground
+  // run's. Each case names the bug it is red against.
+  describe('a reporter per load', () => {
+    /** @return {{set: Function, get: Function, lines: Function}} a sink that records its own report */
+    function recordingSink() {
+      const written = {}
+      return {
+        set: (partial) => {
+          Object.assign(written, partial)
+          return true
+        },
+        get: (key) => written[key],
+        lines: () => written.loadReportLines ?? [],
+      }
+    }
+
+    // Red with a shared instance (one reporter for the page, as
+    // `activeReporter` was): A's line lands in B's report, and A's end
+    // ends B.
+    it('two at once keep their lines apart, and each ends only itself', () => {
+      const sinkOfA = recordingSink()
+      const sinkOfB = recordingSink()
+      const reportOfA = new LoadReporter({fileInfo: 'a.ifc', sink: sinkOfA})
+      const reportOfB = new LoadReporter({fileInfo: 'b.ifc', sink: sinkOfB, isForeground: false})
+      reportOfA.line('Source: A')
+      reportOfB.line('Source: B')
+      reportOfA.progress({phase: 'geometry', completed: 1, total: 4, elapsedMs: 10})
+      reportOfB.progress({phase: 'dataParse', completed: 1, total: 4, elapsedMs: 10})
+
+      reportOfA.end()
+
+      expect(sinkOfA.lines()).toContain('Source: A')
+      expect(sinkOfA.lines()).not.toContain('Source: B')
+      expect(sinkOfB.lines()).toContain('Source: B')
+      expect(sinkOfB.lines()).not.toContain('Source: A')
+      expect(reportOfA.ended).toBe(true)
+      expect(sinkOfA.lines().some((line) => line.startsWith('Total'))).toBe(true)
+      expect(reportOfB.ended).toBe(false)
+      expect(sinkOfB.lines().some((line) => line.startsWith('Total'))).toBe(false)
+      expect(sinkOfB.get('loadResult')).toBe(null)
+      expect(sinkOfB.get('currentLoadLine')).not.toBe(null)
+      reportOfB.end()
+      expect(sinkOfB.lines().some((line) => line.startsWith('Total'))).toBe(true)
+    })
+
+    // A left load that ends late (a mesh parse that could not be stopped, a
+    // remount's unwinding view) must not strip the next load's tee. Red with
+    // each reporter restoring the console it saved when it began, as
+    // `restoreConsole` did before slice R: A puts back the console it found,
+    // B's tee goes with it, and B's warning is never counted.
+    it('a left reporter that ends after the next has begun leaves the next one\'s console tee in place', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        const consoleWarnBefore = console.warn
+        const reportOfA = beginReport({fileInfo: 'a.ifc'})
+        const reportOfB = new LoadReporter({fileInfo: 'b.ifc', sink: recordingSink()})
+        expect(consoleTeeHolder()).toBe(reportOfB)
+
+        reportOfA.end()
+        console.warn('No basis found for brep!')
+
+        expect(consoleTeeHolder()).toBe(reportOfB)
+        expect(reportOfB.warningCount).toBe(1)
+        expect(reportOfA.warningCount).toBe(0)
+        reportOfB.end()
+        expect(reportOfB.sink.lines()).toContain('Warnings & errors (1): No basis found for brep!')
+        // The last holder's end puts the true console back.
+        expect(console.warn).toBe(consoleWarnBefore)
+        expect(consoleTeeHolder()).toBe(null)
+      } finally {
+        warnSpy.mockRestore()
+      }
+    })
+
+    // A pump held by backpressure, or a background load waiting its turn, is
+    // not hung. Red if pausing leaves the clocks running.
+    it('a paused reporter\'s hang watchdog does not fire', () => {
+      const onStall = jest.fn()
+      beginReport({fileInfo: 'index.ifc', onStall})
+      report.progress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
+      report.pauseWatchdog()
+      // Progress while paused (a held pump can still say where it is) does
+      // not re-arm it.
+      report.progress({phase: 'geometry', completed: 4, total: 10, elapsedMs: 60})
+      jest.advanceTimersByTime(HANG_TIMEOUT_MS * 2)
+      expect(onStall).not.toHaveBeenCalled()
+      expect(captureMessage).not.toHaveBeenCalled()
+
+      // Non-vacuity: resumed, the same silence is a hang.
+      report.resumeWatchdog()
+      jest.advanceTimersByTime(HANG_TIMEOUT_MS)
+      expect(onStall).toHaveBeenCalledTimes(1)
+      expect(captureMessage).toHaveBeenCalledWith(LOAD_HUNG_MESSAGE, expect.anything())
+    })
+
+    // The scope is the foreground load's. Red with a background reporter
+    // stamping it as the foreground's does: its hang event then has no
+    // phase of its own, and the scope says `dataParse` for the foreground's
+    // next capture.
+    it('a background reporter\'s Sentry capture carries its own load.phase', () => {
+      const foreground = beginReport({fileInfo: 'shown.ifc'})
+      foreground.progress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
+      const background = new LoadReporter({fileInfo: 'left.ifc', sink: recordingSink(), isForeground: false})
+      background.progress({phase: 'dataParse', completed: 1, total: 10, elapsedMs: 50})
+      foreground.pauseWatchdog()
+
+      jest.advanceTimersByTime(HANG_TIMEOUT_MS)
+
+      expect(captureMessage).toHaveBeenCalledTimes(1)
+      const [message, context] = captureMessage.mock.calls[0]
+      expect(message).toBe(LOAD_HUNG_MESSAGE)
+      expect(context.tags).toEqual({'load.phase': 'dataParse', 'load.stalled': 'true'})
+      expect(context.contexts.load.phase).toBe('dataParse')
+      // Allowlisted per event, as the OPFS reports are: no file identity.
+      expect(JSON.stringify(context)).not.toContain('left.ifc')
+      expect(setTag).not.toHaveBeenCalled()
+      expect(setContext).not.toHaveBeenCalled()
+      // The foreground's own failure capture still stamps its own phase.
+      foreground.attachFailureContext()
+      expect(setTag).toHaveBeenCalledWith('load.phase', 'geometry')
+      background.end()
+    })
+
+    it('a background reporter does not take the page\'s console', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        const foreground = beginReport({fileInfo: 'shown.ifc'})
+        const background = new LoadReporter({fileInfo: 'left.ifc', sink: recordingSink(), isForeground: false})
+        console.warn('three.js complained')
+        expect(consoleTeeHolder()).toBe(foreground)
+        expect(foreground.warningCount).toBe(1)
+        expect(background.warningCount).toBe(0)
+        // Its engine's own log still reaches it (layering.md §4.4).
+        background.engineLog({lines: [{level: 'warning', text: 'engine said so', count: 2}]})
+        expect(background.warningCount).toBe(2)
+        background.end()
+        expect(consoleTeeHolder()).toBe(foreground)
+      } finally {
+        warnSpy.mockRestore()
+      }
     })
   })
 })

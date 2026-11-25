@@ -1,6 +1,5 @@
 /** @jest-environment node */ // eslint-disable-line jsdoc/check-tag-names
 /* eslint-disable require-await, no-magic-numbers */
-import {reportSourceInfo} from '../loader/loadProgress'
 import {EngineSession} from './EngineSession'
 import {createEngineHandler} from './engineHandler'
 import {createEngineModelLoad, shouldRetryWindowed} from './engineModelLoad'
@@ -21,12 +20,6 @@ import {makeWorkerTransport} from './transports'
 // and OpenModelStreamed returns -1. So the page sees an open that failed
 // with an OOM-shaped recorded reason, and must retry on a NEW engine: an
 // Emscripten OOM abort leaves the failed one's wasm unusable.
-
-jest.mock('../loader/loadProgress', () => ({
-  reportEngineLog: jest.fn(),
-  reportEngineVersion: jest.fn(),
-  reportSourceInfo: jest.fn(),
-}))
 
 
 const BYTES = Uint8Array.from({length: 64}, (_, i) => i)
@@ -164,14 +157,18 @@ function spawner(engines, flags = {}) {
 }
 
 
+// The load's report, as the engine takes it: callbacks (open-t200 slice R).
+const report = {line: jest.fn(), engineVersion: jest.fn(), engineLog: jest.fn()}
+
+
 /** @return {Array<string>} the report lines the load added */
 function reportedLines() {
-  return reportSourceInfo.mock.calls.map(([line]) => line).filter(Boolean)
+  return report.line.mock.calls.map(([line]) => line).filter(Boolean)
 }
 
 
 beforeEach(() => {
-  reportSourceInfo.mockClear()
+  report.line.mockClear()
 })
 
 
@@ -181,7 +178,7 @@ describe('engine/engineModelLoad: a buffered open that runs out of memory (Share
     const first = conwayDouble(log, {buffered: {status: 'OPEN_FAIL', reason: WASM_OOM}})
     const second = conwayDouble(log)
     const {spawn, sessions, closedBeforeSpawn} = spawner([first, second])
-    const load = createEngineModelLoad({format: 'ifc', spawn})
+    const load = createEngineModelLoad({format: 'ifc', spawn, report})
     const result = await load.parse(snapshot(), {})
     expect(sessions).toHaveLength(2)
     expect(sessions[0].closed).toBe(true)
@@ -209,7 +206,7 @@ describe('engine/engineModelLoad: a buffered open that runs out of memory (Share
     it(`a buffered open recorded as "${reason.slice(0, 30)}…" is retried, reported as ${code}`, async () => {
       const log = []
       const {spawn, sessions} = spawner([conwayDouble(log, {buffered: {status: 'OPEN_FAIL', reason}}), conwayDouble(log)])
-      const result = await createEngineModelLoad({format: 'ifc', spawn}).parse(snapshot(), {})
+      const result = await createEngineModelLoad({format: 'ifc', spawn, report}).parse(snapshot(), {})
       expect(sessions).toHaveLength(2)
       expect(result.summary.sourceMode).toMatchObject({reason: SourceModeReason.BUFFERED_FAILED, failure: code})
       expect(reportedLines()).toContain(`Engine source: windowed (buffered open failed: ${text})`)
@@ -221,7 +218,7 @@ describe('engine/engineModelLoad: a buffered open that runs out of memory (Share
     const log = []
     const reason = 'Cannot read properties of undefined (reading \'length\')'
     const {spawn, sessions} = spawner([conwayDouble(log, {buffered: {status: 'OPEN_FAIL', reason}})])
-    await expect(createEngineModelLoad({format: 'ifc', spawn}).parse(snapshot(), {})).rejects.toThrow()
+    await expect(createEngineModelLoad({format: 'ifc', spawn, report}).parse(snapshot(), {})).rejects.toThrow()
     expect(sessions).toHaveLength(1)
   })
 
@@ -247,7 +244,7 @@ describe('engine/engineModelLoad: a buffered open that runs out of memory (Share
       spawned.push(session)
       return session
     }
-    await expect(createEngineModelLoad({format: 'ifc', spawn}).parse(snapshot(), {})).rejects.toThrow()
+    await expect(createEngineModelLoad({format: 'ifc', spawn, report}).parse(snapshot(), {})).rejects.toThrow()
     expect(spawned).toHaveLength(2)
     expect(spawned.every((s) => s.closed)).toBe(true)
   })
@@ -256,7 +253,7 @@ describe('engine/engineModelLoad: a buffered open that runs out of memory (Share
     const log = []
     const first = conwayDouble(log, {buffered: {status: 'OPEN_FAIL', reason: 'Array buffer allocation failed'}})
     const {spawn, sessions} = spawner([first, conwayDouble(log)])
-    const result = await createEngineModelLoad({format: 'step', spawn}).parse(snapshot(), {})
+    const result = await createEngineModelLoad({format: 'step', spawn, report}).parse(snapshot(), {})
     expect(sessions).toHaveLength(2)
     expect(result.summary.sourceMode).toMatchObject({reason: SourceModeReason.BUFFERED_FAILED, failure: 'outOfMemory'})
     await sessions[1].close()
@@ -266,7 +263,7 @@ describe('engine/engineModelLoad: a buffered open that runs out of memory (Share
     const log = []
     const oom = {status: 'OPEN_FAIL', reason: WASM_OOM}
     const {spawn, sessions} = spawner([conwayDouble(log, {buffered: oom}), conwayDouble(log, {windowed: oom})])
-    const parse = createEngineModelLoad({format: 'ifc', spawn}).parse(snapshot(), {})
+    const parse = createEngineModelLoad({format: 'ifc', spawn, report}).parse(snapshot(), {})
     const error = await parse.catch((e) => e)
     expect(error).toBeInstanceOf(Error)
     // Exactly two engines: no third attempt.
@@ -282,7 +279,7 @@ describe('engine/engineModelLoad: a buffered open that runs out of memory (Share
     const log = []
     const corrupt = {status: 'OPEN_FAIL', reason: 'Unexpected token at offset 1234'}
     const {spawn, sessions} = spawner([conwayDouble(log, {buffered: corrupt})])
-    const error = await createEngineModelLoad({format: 'ifc', spawn}).parse(snapshot(), {}).catch((e) => e)
+    const error = await createEngineModelLoad({format: 'ifc', spawn, report}).parse(snapshot(), {}).catch((e) => e)
     expect(error).toBeInstanceOf(Error)
     expect(sessions).toHaveLength(1)
     expect(log).toEqual(['buffered open'])
@@ -297,7 +294,7 @@ describe('engine/engineModelLoad: a buffered open that runs out of memory (Share
       throw new Error('malformed')
     }
     const {spawn, sessions} = spawner([api])
-    const error = await createEngineModelLoad({format: 'ifc', spawn}).parse(snapshot(), {}).catch((e) => e)
+    const error = await createEngineModelLoad({format: 'ifc', spawn, report}).parse(snapshot(), {}).catch((e) => e)
     expect(error.message).toBe('malformed')
     expect(sessions).toHaveLength(1)
     expect(error.engineSource).toBe('buffered')
@@ -308,7 +305,7 @@ describe('engine/engineModelLoad: a buffered open that runs out of memory (Share
     const log = []
     const refused = {status: 'UNSUPPORTED_SCHEMA', reason: 'out of memory while refusing'}
     const {spawn, sessions} = spawner([conwayDouble(log, {buffered: refused})])
-    await expect(createEngineModelLoad({format: 'ifc', spawn}).parse(snapshot(), {})).rejects.toThrow()
+    await expect(createEngineModelLoad({format: 'ifc', spawn, report}).parse(snapshot(), {})).rejects.toThrow()
     expect(sessions).toHaveLength(1)
   })
 
@@ -319,7 +316,7 @@ describe('engine/engineModelLoad: a buffered open that runs out of memory (Share
     // open, which fails too: neither is the policy's buffered open.
     const {spawn, sessions} = spawner([conwayDouble(log, {windowed: oom, buffered: oom})],
       {disableBufferedSource: true})
-    await expect(createEngineModelLoad({format: 'ifc', spawn}).parse(snapshot(), {})).rejects.toThrow()
+    await expect(createEngineModelLoad({format: 'ifc', spawn, report}).parse(snapshot(), {})).rejects.toThrow()
     expect(sessions).toHaveLength(1)
     expect(log).toEqual(['windowed open', 'buffered open'])
   })

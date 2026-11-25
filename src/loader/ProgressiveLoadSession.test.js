@@ -1,5 +1,5 @@
 import {Box3, BoxGeometry, Matrix4, Mesh, MeshBasicMaterial, Scene, Sphere, Vector3} from 'three'
-import {beginLoadProgress, endLoadProgress, getCompletedLoadStats} from './loadProgress'
+import {LoadReporter} from './loadProgress'
 import ProgressiveLoadSession, {SessionState} from './ProgressiveLoadSession'
 import {LOAD_PREVIEW_GROUP_KEY, PREVIEW_EXPRESS_ID_KEY, loadPreviewGroups, paintPreviewSelection} from '../model/previewSelection'
 import RenderDemand from '../viewer/three/renderDemand'
@@ -126,16 +126,26 @@ describe('ProgressiveLoadSession', () => {
   describe('first-mesh timing', () => {
     const FIRST_MESH_AT_MS = 250
     let infoSpy
+    let report
 
     beforeEach(() => {
       jest.useFakeTimers()
       // The reporter mirrors its report lines to console.info.
       infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {})
-      beginLoadProgress({fileInfo: 'a.ifc'})
+      // The load's own reporter, handed to the session as the loader does.
+      report = new LoadReporter({fileInfo: 'a.ifc'})
+      session.finish()
+      session = new ProgressiveLoadSession({
+        scene,
+        getControls: () => controls,
+        getCamera: () => camera,
+        onProgress: jest.fn(),
+        report,
+      })
     })
 
     afterEach(() => {
-      endLoadProgress()
+      report.end()
       infoSpy.mockRestore()
       jest.useRealTimers()
     })
@@ -145,20 +155,20 @@ describe('ProgressiveLoadSession', () => {
       session.addPreviewMesh(cubeAt(0))
       jest.advanceTimersByTime(FIRST_MESH_AT_MS)
       session.addPreviewMesh(cubeAt(1))
-      endLoadProgress()
-      expect(getCompletedLoadStats().firstMeshMs).toBe(FIRST_MESH_AT_MS)
+      report.end()
+      expect(report.completedStats().firstMeshMs).toBe(FIRST_MESH_AT_MS)
     })
 
     it('is stamped by the first streamed batch bounds on the incremental path', () => {
       jest.advanceTimersByTime(FIRST_MESH_AT_MS)
       session.notifyBounds(new Box3(new Vector3(0, 0, 0), new Vector3(1, 1, 1)))
-      endLoadProgress()
-      expect(getCompletedLoadStats().firstMeshMs).toBe(FIRST_MESH_AT_MS)
+      report.end()
+      expect(report.completedStats().firstMeshMs).toBe(FIRST_MESH_AT_MS)
     })
 
     it('is absent when no geometry ever arrived', () => {
-      endLoadProgress()
-      expect(getCompletedLoadStats().firstMeshMs).toBeUndefined()
+      report.end()
+      expect(report.completedStats().firstMeshMs).toBeUndefined()
     })
   })
 
