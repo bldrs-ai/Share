@@ -383,7 +383,7 @@ rather than a CPU-versus-bandwidth one. Playwright has no `page.metrics()`
   *buffer capacity*, not drawn triangles: `IncrementalBatchedBuilder`
   assembles the durable model into `THREE.BatchedMesh` batches preallocated
   at `INITIAL_INDICES = 1 << 19` and grown 2× in place
-  (`src/viewer/ifc/incrementalBatchedBuilder.js`). The arithmetic is exact
+  (`src/model/incrementalBatchedBuilder.js`). The arithmetic is exact
   and worth keeping here, because this caveat has been misread once as an
   instancing artifact and once as not applying at all:
 

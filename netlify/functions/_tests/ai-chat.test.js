@@ -28,7 +28,7 @@ import handler, {
   resetReportedConditions,
   serverSystemMessage,
 } from '../ai-chat.js'
-import {shareAssistInstructions} from '../../../src/viewer/tools/assistInstructions.js'
+import {shareAssistInstructions} from '../../../src/tools/assistInstructions.js'
 import {FREE_MODELS_ALIAS, PAID_MODELS, resolveModel} from '../_lib/aiModels.js'
 import {
   OPENROUTER_MODELS_URL,
@@ -38,7 +38,7 @@ import {
   pricingCeiling,
   resetCatalogueCache,
 } from '../_lib/aiCatalogue.js'
-import {ASSIST_FREE_MODELS, ASSIST_MODEL} from '../../../src/viewer/tools/assistModels.js'
+import {ASSIST_FREE_MODELS, ASSIST_MODEL} from '../../../src/tools/assistModels.js'
 import {createAssist} from '../../../src/assist/loop'
 import {createMemoryConversationStore} from '../../../src/assist/conversation'
 import {createRegistry} from '../../../src/assist/registry'

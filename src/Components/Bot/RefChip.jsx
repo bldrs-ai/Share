@@ -2,7 +2,7 @@ import React, {ReactElement, useMemo} from 'react'
 import {Chip, Tooltip} from '@mui/material'
 import {ViewInArOutlined as ElementIcon} from '@mui/icons-material'
 import useStore from '../../store/useStore'
-import {describeRef, jumpToRef} from '../../viewer/tools/refLinks'
+import {describeRef, jumpToRef} from '../../tools/refLinks'
 
 
 /**

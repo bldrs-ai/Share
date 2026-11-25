@@ -9,7 +9,7 @@ import {
   gtagEventWithCid,
   modelContentId,
 } from '../privacy/analytics'
-import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
+import {trackModelActionWhenAuthSettled} from '../app/modelActionTracking'
 import {localOnlyPath} from '../routes/localOnly'
 import {modelOpenId} from '../routes/modelOpen'
 import {navigateBaseOnModelPath} from '../utils/location'
@@ -222,7 +222,7 @@ export default function useDirectLinkQuota(appPrefix) {
       // over the limit. The tier is the one record-load acted on (free or
       // paid: only a signed-in user is metered, so this can't be a signed-out
       // tier), and an explicit one sends at once
-      // (privacy/modelActionTracking.js). If the outcome ever carries none,
+      // (app/modelActionTracking.js). If the outcome ever carries none,
       // the sign-in tier at emit time stands in instead of a guess. The view
       // itself is model_view {gate: 'none'} from CadView.
       trackModelActionWhenAuthSettled(MODEL_ACTIONS.SHARE, {

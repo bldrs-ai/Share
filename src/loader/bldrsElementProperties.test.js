@@ -8,7 +8,7 @@ import {
   captureBldrsElementProperties,
   decodeElementProperties,
   encodeElementProperties,
-} from './bldrsElementPropertiesCapture'
+} from '../engine/bldrsElementPropertiesCapture'
 import {
   injectGlbExtensions,
   parseGlb,

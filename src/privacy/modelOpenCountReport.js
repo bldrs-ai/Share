@@ -1,7 +1,7 @@
 /*
  * The shape of a model-open count: what the page may say about one real model
  * open, and the only thing the `model-open-count` function will pass on to
- * GA. Shared by the page (privacy/modelOpenCount.js) and the function
+ * GA. Shared by the page (app/modelOpenCount.js) and the function
  * (netlify/functions/model-open-count.js), so neither can send or accept a
  * value the other doesn't know. design/new/model-open-counts.md says why it
  * exists: since #2051 GA sees only consenting visitors, and this count is the

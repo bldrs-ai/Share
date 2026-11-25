@@ -73,8 +73,8 @@ const FAKE_CLIENT_ID = '1871520000.1754700000'
 
 /**
  * The homepage auto-loads the bundled demo model, and counting that as a
- * model open once polluted the metric this event feeds into Google Ads
- * conversion bidding — hence the guarded, separately-named event
+ * model open once polluted the metric this event feeds into the funnel
+ * and the bizdev dashboard — hence the guarded, separately-named event
  * (CadView#loadModel + analytics#isRealModelOpen).
  */
 describeMobileAndDesktop('real_model_open GA event', () => {

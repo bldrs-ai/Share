@@ -9,7 +9,7 @@ import {
 import AlertDialog from '../Components/AlertDialog'
 import useStore from '../store/useStore'
 import {assert} from '../utils/assert'
-import {navToDefault} from '../utils/navigate'
+import {navToDefault} from '../app/navigate'
 
 
 const LOAD_LINE_SX = {

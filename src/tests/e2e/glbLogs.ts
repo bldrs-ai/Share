@@ -7,7 +7,7 @@ import {Page, expect} from '@playwright/test'
  * The pipeline's observable state transitions — cache HIT/MISS, writer wrote,
  * reader hydrated an extension — are only reported through these lines, so a
  * cache round-trip spec asserts on them rather than racing on timing. See
- * `src/loader/glbLog.js` for the emit side.
+ * `src/utils/glbLog.js` for the emit side.
  *
  * @param page the page to listen on
  * @return the buffer, filled as lines arrive

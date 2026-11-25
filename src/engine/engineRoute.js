@@ -13,7 +13,7 @@
 //     `?feature=engineWorker` (a pre-flip opt-in, a shared spec link) in the
 //     worker (Codex review on #2083). engine-worker.md §7.2 has the procedure;
 //   - `?feature=disableEngineWorker`, the per-session kill switch;
-//   - the legacy `?view=` rules (IfcViewsManager, `viewer/legacyViewRules.js`),
+//   - the legacy `?view=` rules (IfcViewsManager, `engine/legacyViewRules.js`),
 //     which style elements through `viewer.IFC.loader.ifcManager` and so need
 //     the model open in THAT engine. The stack is due to be deleted (§8 item
 //     7, viewer-replacement.md §8.1); until it is, a `?view=` link keeps
@@ -25,7 +25,7 @@
 // worker like any other.
 // Each is read from the URL at load time, like every other `?feature=`.
 import {flags, isFeatureEnabled} from '../FeatureFlags'
-import {viewRules} from '../viewer/legacyViewRules'
+import {viewRules} from './legacyViewRules'
 
 
 /** Why a load runs on the main-thread engine, by `mainThreadEngineReason`. */
@@ -57,7 +57,7 @@ const REASON_TEXT = {
 
 /**
  * Does the URL ask for a legacy `?view=` rule set that ShareViewer knows
- * (`viewer/legacyViewRules.js`, anything but `default`)? An unknown name
+ * (`engine/legacyViewRules.js`, anything but `default`)? An unknown name
  * already does nothing on either engine, so it does not move a load.
  *
  * @param {string} [search] `location.search`

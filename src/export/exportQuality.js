@@ -64,7 +64,7 @@
 // reach — Draco encodes mesh primitives and cannot see an instancing
 // accessor. Every rung in this table has been tuning that 1.3 MB slice. That
 // is the entire explanation for the 12%, and it is why the work moved to
-// compressing the CONTAINER: losslessly, in `export/glbGzip.js` (#1854),
+// compressing the CONTAINER: losslessly, in `loader/glbGzip.js` (#1854),
 // which beats this whole axis by ~6× at zero fidelity cost, and structurally
 // in #1853.
 //
@@ -133,7 +133,7 @@
 //
 // `TEX_COORD` and `COLOR` were swept too and are not named: Share's writers
 // emit POSITION, NORMAL, `_EXPRESSID` and `_INSTANCEID` and nothing else
-// (`viewer/ifc/flatMeshToBufferGeometry.js`, `batchedSubset.js`), so both
+// (`model/flatMeshToBufferGeometry.js`, `batchedSubset.js`), so both
 // buckets measured byte-for-byte identical on both models. A key that cannot
 // move a byte on any artifact Share writes is a key the allowlist has to
 // carry for nothing.
@@ -164,13 +164,13 @@
 //     every key here is spread straight into `setEncoderOptions`.
 //   - `quantizationBits.GENERIC`. `_EXPRESSID`/`_INSTANCEID` map to Draco's
 //     GENERIC bucket, and are safe today only because Share writes them as
-//     `Uint32Array` (`viewer/ifc/batchedToMergedMesh.js`), which takes Draco's
+//     `Uint32Array` (`model/batchedToMergedMesh.js`), which takes Draco's
 //     integer path where quantization bits are ignored. The same attribute
 //     typed FLOAT came back corrupted at the pinned 12-bit default. Not
 //     exposed — and since `quantizationBits` MERGES with the library's
 //     defaults, the guard `exportQuality.test.js` can give is that no rung
 //     ever names that bucket. The collapsed layout's row tag
-//     (`loader/bldrsInstanceTables.js#ROW_TAG_SEMANTIC`) is GENERIC too and
+//     (`model/bldrsInstanceTables.js#ROW_TAG_SEMANTIC`) is GENERIC too and
 //     rests on the same two facts: typed UNSIGNED_SHORT, never quantized.
 //   - The Draco `method`. Derived from the layout
 //     (`glbCompression.js#planDraco`), never from quality: SEQUENTIAL is what

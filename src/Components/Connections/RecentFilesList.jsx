@@ -1,6 +1,6 @@
 import React from 'react'
 import {Box, Stack, Typography} from '@mui/material'
-import {recentDisplayName} from '../../utils/modelDisplayName'
+import {recentDisplayName} from '../../app/modelDisplayName'
 import {
   Description as DocIcon,
   InsertDriveFile as FileIcon,

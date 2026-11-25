@@ -320,8 +320,9 @@ would export actually render, which makes it a natural test oracle.
   at replay or at export.
 - A deterministic UUIDv5 over (source content key, op id) would also work, but
   ties identity to op ids, which breaks when a log is rebased or merged.
-- Source elements keep their `e<expressID>` refs (the source is immutable).
-  Created elements use the `g<GlobalId>` ref kind.
+- Created elements use the `g<GlobalId>` ref kind, and so do source IFC
+  elements: an expressID is reassigned by any re-export of the base model, so
+  it is only a per-load resolution cache (#1916 thread; model-edit.md §5).
 - Express ids for created records are allocated at export from
   `maxIndexedExpressID + 1` and never persisted.
 

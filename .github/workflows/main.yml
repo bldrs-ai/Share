@@ -107,6 +107,16 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build-prod
       - run: bun run lint
+      # The layer allowlist only shrinks (design/tracks/open-t200/layering.md §5,
+      # "The ratchet"): a pair the base branch does not have fails. On a PR the
+      # checkout is the merge into the base, so the base's tip is what to compare.
+      - name: Layer allowlist only shrinks
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_REF"
+          node tools/lint/checkLayerAllowlist.mjs FETCH_HEAD
       - run: bun run test-ci
       - name: Upload coverage report
         if: always()

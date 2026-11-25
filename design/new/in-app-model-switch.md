@@ -28,7 +28,7 @@ open — the first in-app switch), #91 (the `modelID = 0` hack), #1776 (burned
 model handles).
 
 Opening a model has always been a full page load: `navigateToModel`
-(`src/utils/navigate.js:158`) ends in `window.location.assign`, "to free
+(`src/app/navigate.js:158`) ends in `window.location.assign`, "to free
 memory". That kept the page and model lifecycles identical, so per-model
 state never had to be reset — the page was. The workspace shell switches
 models from the ProjectsDrawer and multi-model sessions keep several open;
@@ -44,7 +44,7 @@ were checked by reading and which are unmeasured.
 
 The owner's decisions, in order, moved here from the epic's description
 (#2011) on 2026-11-23 so the issue can stay short. Decisions 1–4 are argued
-in §4.0, §4.6, §5.1 and §7; 5–7 are recorded only here; 8–10 are
+in §4.0, §4.6, §5.1 and §7; 5–7 are recorded only here; 8–11 are
 designed in [layering.md](../tracks/open-t200/layering.md).
 
 | Date | # | Decision |
@@ -59,6 +59,7 @@ designed in [layering.md](../tracks/open-t200/layering.md).
 | 2026-11-23 | 8 | **Six layers, each importing only from the layers below it.** (1) *engine*: the worker protocol, the per-worker connection, sources, sidecars, and `EngineHost`, the one owner of every engine. (2) *model*: the in-memory model (`ShareModel`, element subsets, the batched-mesh builders, the instance tables), moved out of `viewer/`. (3) *loader*: fetch, sniff, cache and convert into a model, given a load context (signal, its own reporter, an engine lease, a scene root, a state writer) instead of `(viewer, useStore)`. (4) *session*: `ModelSession`, outside the engine layer. It holds an engine lease from the host, can have none (mesh formats, a GLB cache hit, the main-thread path) and can go through several (an out-of-memory retry, a rehydrate, a sidecar reopen); eviction drops the lease and keeps the session. (5) *viewer*: one per page, `attach(root)` / `detach(root)`, owning no engines. (6) *UI*: React and the store, which becomes a projection of the active session written by one binder, landing with cap N. `EngineSession` is renamed to a per-worker connection name in slice 1 (named `WorkerEngine` by decision 10; slice 1a), so that "session" means `ModelSession` only. The boundaries are linted from the first slice (`import/no-restricted-paths`), with an allowlist that shrinks slice by slice and never grows. The cleanups ride in the `EngineHost` slices, plus one standalone mechanical move; there is no separate refactor pass. Nothing below the UI touches the DOM, with how far to prove it left open. Designed in [layering.md](../tracks/open-t200/layering.md): the layer map, the seams, the lint rule, the headless test and the slice plan. |
 | 2026-11-24 | 9 | **Five answers to the layering design** (layering.md §9). **One viewer on the main-thread engine route too:** the viewer-per-open exception is dropped, and comes back only if the `IfcAPI` collection check (`modelSwitchMemory.spec.ts`) can't be kept green. **The `?view=` rules stack is deleted, with no replacement and no flag:** it was old client work that never went anywhere, and it colours nothing today; the Widget API's `ChangeViewSettings` keeps answering success. **`src/tools/` and `src/app/`** become top-level directories, for the assistant's tools and the app-level files that sit in leaf directories. **The check that the lint allowlist only shrinks runs in the `build` job**, though drafts skip it. **A background load's page-side console lines are not counted in its diagnostics**, a known gap left to the coming console cleanup. The main-thread engine is agreed to be a lease the host owns; its name is decision 10. |
 | 2026-11-24 | 10 | **The engine's names: one `Engine` interface, `WorkerEngine` and `ConwayEngine`.** The main-thread engine is a lease the host owns, and it is not called `IfcAPI`, which covers STEP too and which other mesh types will probably move under. `Engine` is the format-neutral interface (`open`, `tree`, `properties`, `propertiesMany`, `propertyTables`, `propertySets`, `itemsOfType`, `typeName`, `pump`, `capture`, `spill`, `stats`, `abort`, `close`), kept as small as the session, the tools and the loader need. The design adds the three members a load cannot do without: `on` (events), `geometry` (the batch builder's synchronous reads) and `capabilities`. A lease exposes one field, `lease.engine`; `lease.kind` stays as the host's bookkeeping for the budget and the tiers, and callers must not branch on it; a caller that must vary asks `engine.capabilities`. **`WorkerEngine`** is today's `EngineSession` renamed ("bc it's on a Worker thread"), replacing the `EngineConnection` the design first proposed; the in-process fallback stays a `WorkerEngine` on an in-process transport, with `kind: 'inProcess'` recording where it runs. **`ConwayEngine`** is Conway's `IfcAPI` in process (IFC and STEP) adapted to `Engine`: today's raw main-thread path, and a real change on the kill-switch path, landing in slice 1a with its own test. **`MeshEngine`** (the three.js-loaded formats answering the same reads from the parsed scene) is the convergence follow-up, not built. `IfcAPI` stays Conway's export; Share names it only inside the engine's adapters, held by a `no-restricted-imports` rule on `@bldrs-ai/conway/web-ifc` outside `src/engine/`. Designed in [layering.md](../tracks/open-t200/layering.md) §4.1. |
+| 2026-11-24 | 11 | **Session names, and `src/workspace/` in the session layer.** No class is a bare `Session`; every session class is qualified. **`ModelSession`** is one open model's load, lease, scene root and per-model state. **`WorkspaceSession`** is the user's document: its conversation, pinned model versions, placements, one op log per model, and view ("to highlight that it comes from a workspace with multiple projects"). A bare "session" in prose and UI copy means the user's document, as [workspace-sessions.md](workspace-sessions.md) uses it. This corrects decision 8's "so that 'session' means `ModelSession` only", and keeps decision 10's `WorkerEngine`, which supersedes workspace-sessions.md's `ModelEngine`. `src/workspace/` (the workspace's project and model list and its persistence) sits in layer 4, beside `src/session/`. The same day: #2347 writes `GlobalId` into the cached artifact's spatial tree and bumps the artifact schema, so a GlobalId lookup answers on a cache hit. Designed in [layering.md](../tracks/open-t200/layering.md) §2.2, §4.1 and §5. |
 
 
 ## 1. Conclusion first
@@ -397,7 +398,7 @@ helps with or without the page reload, so it can land before sessions.
 Mid-stream property reads worked in the Node harness. Concurrent reads against Share's own batch pump in the browser still need a test as part of this work.
 
 **How it's built.**
-- **The seam is the deferred open's return,** inside `parseIfcWithConway` (`viewer/ifc/conwayDirectIfcLoader.js`), between the open and the first pump batch. IFC and STEP both take it, since both go through `ShareIfcLoader#parse`. Its `onIndexed(modelID)` is started there and **not awaited**: the pump starts at once and the tree walk runs beside it, and a throw there only costs the early tree. It was awaited at first. PSB (860 MB, windowed) showed why that fails: conway's `getSpatialStructure(modelID, 'names')` awaits `ensureLine` for every relationship and every node, one at a time, and each miss pages in a source window. That was ~86 s of serial I/O, which held the pump back and showed up as Parsing (89.7 s against prod's 15.4 s). Prod pays the same walk after the load resolves, outside Total. conway#753 (pinned from 1.1632) walks the tree once, in file order, which takes it from 81 s to 4 s in Node. The walk still awaits window reads, so it stays started-not-awaited. Classic opens, GLB cache hits and non-Conway formats don't call it; they bring the tree up at the end, as before.
+- **The seam is the deferred open's return,** inside `parseIfcWithConway` (`loader/conwayDirectIfcLoader.js`), between the open and the first pump batch. IFC and STEP both take it, since both go through `ShareIfcLoader#parse`. Its `onIndexed(modelID)` is started there and **not awaited**: the pump starts at once and the tree walk runs beside it, and a throw there only costs the early tree. It was awaited at first. PSB (860 MB, windowed) showed why that fails: conway's `getSpatialStructure(modelID, 'names')` awaits `ensureLine` for every relationship and every node, one at a time, and each miss pages in a source window. That was ~86 s of serial I/O, which held the pump back and showed up as Parsing (89.7 s against prod's 15.4 s). Prod pays the same walk after the load resolves, outside Total. conway#753 (pinned from 1.1632) walks the tree once, in file order, which takes it from 81 s to 4 s in Node. The walk still awaits window reads, so it stays started-not-awaited. Classic opens, GLB cache hits and non-Conway formats don't call it; they bring the tree up at the end, as before.
 - **What CadView gets is the model at its index** (`makeIndexedModelHandle`): the finished model's property and spatial surface, with no geometry. It goes in the store as `indexedModel`, not `model`, because scene consumers (clipper, isolator, ViewCube) take `model` to be the object in the scene. The tree, Properties, TopBar, search and the assistant's read-only `model.*` tools and context read through `selectReadModel`, which prefers it; `view.*` still waits for the finished model. Three things clear it:
   - the load's own `setModel`, which only clears the handle that load set;
   - a failure, which also takes the tree down;
@@ -433,7 +434,7 @@ selects an element. Tree, properties and search still need the index
 - **The pick** (`CadView#canvasDoubleClickHandler`, installed when the load
   starts, not at its end) raycasts only the preview while one is in the
   scene, and takes the nearest hit that names an element
-  (`viewer/previewSelection.js`). The durable batches streaming beside it get
+  (`model/previewSelection.js`). The durable batches streaming beside it get
   their pick tables only at the load's end
   (`incrementalBatchedBuilder#finalize`), so they are not raycast: a spot
   only they cover selects nothing until the model is in. That is the main gap
@@ -611,8 +612,8 @@ The suspect was a long synchronous initial parse, and P1.0 cleared it: Conway al
    - It already blocks every large cold load today, and it would land in the middle of the foreground model's interaction when a background load finishes.
    - Fix: chunk it, or move the preparation into the existing GLB writer worker.
 2. **End-of-load assembly: 2.2–2.4 s.**
-   - Path: `assembleBatchedModel` (`src/viewer/ifc/buildBatchedConwayModel.js:165`) → `decorateBatchMeshes` `:81` → `computeBoundsTree` per batch (`:140`, three-mesh-bvh `computeBatchedBoundsTree`).
-   - `robustBoundsFor` (`src/viewer/three/robustBounds.js:204`) shows up in the same task.
+   - Path: `assembleBatchedModel` (`src/model/buildBatchedConwayModel.js:165`) → `decorateBatchMeshes` `:81` → `computeBoundsTree` per batch (`:140`, three-mesh-bvh `computeBatchedBoundsTree`).
+   - `robustBoundsFor` (`src/model/robustBounds.js:204`) shows up in the same task.
    - Fix: slice it across batches, or build the BVH lazily.
 3. **Conway's `prepareDemandExtraction` → `populateStyledItemsMap`: about 1 s on 231 MB in Node, 0.6–0.7 s in the browser.** It needs a Conway issue asking for it to be sliced.
 4. **A worker for the engine: deferred.**
@@ -636,7 +637,7 @@ exceeded (phones first).
 
 1. abort the download and the parse — an `AbortSignal` through
    `Loader.load` to `ProgressiveLoadSession.abort()`
-   (`src/viewer/ProgressiveLoadSession.js:298`) and the batch pump;
+   (`src/loader/ProgressiveLoadSession.js:298`) and the batch pump;
 2. drop or cancel the session's idle GLB writer;
 3. release every reference to the session's `IfcAPI` so the whole
    instance is collectable (§2.4), then `CloseModel` — never before the
@@ -860,7 +861,7 @@ behaviour**: a switch still closes the old model, as in Phase 1a. Background
 sessions (a left load runs on and a return restores it) are step 2's, under
 `?feature=workspace`.
 
-**The shape** (`Containers/modelSession.js`):
+**The shape** (`session/modelSession.js`):
 
 ```
 ModelSessionHost            one per CadView (a ref, like previousThemeChangeCbRef)
@@ -968,7 +969,7 @@ an indexed tree), as §4.5a decided.
   the load reporter (`loader/loadProgress.js`: the report lines, the stall
   watchdog, `currentLoadSerial`), the artifact generation
   (`loader/glbArtifactPublish.js`'s `generation`), the streaming selection
-  (`viewer/streamingBatchPick.js`, one per scene, on the viewer's
+  (`model/streamingBatchPick.js`, one per scene, on the viewer's
   `scene.userData`), and the GLB writer's in-flight owner
   added here (`Loader.js#cacheWriteOwner`). Cap N (slice 3b of
   [layering.md](../tracks/open-t200/layering.md) §7) needs each per session. The reporter has ownership already (below),

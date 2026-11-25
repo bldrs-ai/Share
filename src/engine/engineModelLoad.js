@@ -24,7 +24,7 @@
 //     session forwards (EngineSession.js#makePropertiesApi).
 // `format` itself only travels as a label (the `open` request, the `done`
 // packet, the pump line): what the file's suffix names
-// (loader/part21Formats.js), which is not evidence of the schema, so it
+// (engine/part21Formats.js), which is not evidence of the schema, so it
 // decides nothing.
 //
 // The seam is an IfcAPI-shaped facade (`makeEngineIfcApi`). Everything that
@@ -40,10 +40,10 @@
 // There is no other engine on the page for this model, so no sync engine
 // method can be reached by accident: the facade has none to offer.
 import {reportEngineLog, reportEngineVersion, reportSourceInfo} from '../loader/loadProgress'
-import {HEADER_SNIFF_BYTES, openModelFailure} from '../loader/unsupportedSchema'
-import {engineFormatOf} from '../loader/part21Formats'
-import {conwayDirectInfo, conwayDirectWarn} from '../viewer/ifc/conwayDirectLog'
-import {testPumpBatchSize, testStepPreviewFinishParse} from '../viewer/ifc/pumpTestSeams'
+import {HEADER_SNIFF_BYTES, openModelFailure} from './unsupportedSchema'
+import {engineFormatOf} from './part21Formats'
+import {conwayDirectInfo, conwayDirectWarn} from './conwayDirectLog'
+import {testPumpBatchSize, testStepPreviewFinishParse} from './pumpTestSeams'
 import {Ev, Op} from './protocol'
 import {POLICY_BUFFERED_REASONS, SourceModeReason} from './sourcePolicy'
 import {isOutOfMemoryError} from '../utils/oom'
@@ -52,7 +52,7 @@ import {LoadAbortedError} from '../utils/loadAbort'
 
 
 // Re-exported: callers that pick an engine load ask the same list the
-// Loader does (loader/part21Formats.js).
+// Loader does (engine/part21Formats.js).
 export {engineFormatOf}
 
 

@@ -40,7 +40,7 @@
  *    `COST_FACTOR` times the median of the last `COST_SAMPLES` picks' cost
  *    (capped at `MAX_INTERVAL_MS`), so hover's own synchronous work takes at
  *    most about 1 / (1 + COST_FACTOR) of the main thread however slow a pick
- *    is. That is the instance tree not built yet (`ifc/deferredBatchedBvh.js`
+ *    is. That is the instance tree not built yet (`model/deferredBatchedBvh.js`
  *    builds it after the model is on screen), or a model that has none. The
  *    frame scheduler drops the interval altogether while the median is at or
  *    under `CHEAP_PICK_MS` — well under a frame, which with the tree is every

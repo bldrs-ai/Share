@@ -1,7 +1,7 @@
 // Test capture for the `[glb]` pipeline logs.
 //
 // The GLB loader/writer emit `[glb]` milestone and error-path diagnostics
-// through `src/loader/glbLog.js`; in the app those go to the console, but
+// through `src/utils/glbLog.js`; in the app those go to the console, but
 // under jest we divert them into a buffer instead of printing. Tests that
 // exercise an error path assert the diagnostic fired via `getGlbLogs()`
 // (turning would-be console noise into positive coverage); everything else
@@ -12,7 +12,7 @@
 //
 //   import {getGlbLogs} from '../../tools/jest/glbLogCapture'
 //   expect(getGlbLogs().some((l) => l.text.includes('out-of-range'))).toBe(true)
-import {setGlbLogSink} from '../../src/loader/glbLog'
+import {setGlbLogSink} from '../../src/utils/glbLog'
 import {createLogCapture} from './logCapture'
 
 

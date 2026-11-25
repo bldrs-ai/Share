@@ -27,7 +27,7 @@ export default {
   // Share
   OPFS_IS_ENABLED: true,
   THEME_IS_ENABLED: true,
-  // The §6e look (src/viewer/lookMode.js) is on by default; only the
+  // The §6e look (src/model/lookMode.js) is on by default; only the
   // Playwright build makes it opt-in (vars.playwright.js).
   LOOK_IS_OPT_IN: false,
 

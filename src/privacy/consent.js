@@ -10,7 +10,7 @@ import Expires from './Expires'
  *   functional  OK. GA with a pseudonymous client id, and our own model
  *               events. Analytics only: no ad signal is granted (index/ga.js).
  *   restricted  Cancel. Google Analytics never loads and sets no cookie, and
- *               the app runs in local-only mode (privacy/localOnlyMode.js,
+ *               the app runs in local-only mode (app/localOnlyMode.js,
  *               named to the visitor as LOCAL_ONLY_MODE_NAME).
  *
  * A third, "public" (consent to analyzing public models' content), was

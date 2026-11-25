@@ -1,6 +1,6 @@
 import {BufferGeometry, Group, Mesh} from 'three'
 import {mergeVertices} from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import {makeSurfaceMaterial, makeSurfaceVertexColors} from '../viewer/lookMaterial'
+import {makeSurfaceMaterial, makeSurfaceVertexColors} from '../model/lookMaterial'
 
 
 // What an STL with no color of its own has always rendered as.

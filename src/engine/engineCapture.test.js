@@ -2,7 +2,7 @@
 import fs from 'fs'
 import path from 'path'
 import {IfcAPI} from '@bldrs-ai/conway/web-ifc'
-import {captureEngineExtensions, ifcManagerOver} from '../loader/glbEngineCapture'
+import {captureEngineExtensions, ifcManagerOver} from './glbEngineCapture'
 import {EngineSession} from './EngineSession'
 import {createEngineHandler} from './engineHandler'
 import {makeInProcessTransport} from './transports'

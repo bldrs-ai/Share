@@ -22,7 +22,7 @@ several things that would otherwise each need their own list:
 | `src/routes/*` | `splitAroundExtension` splits `/share/v/gh/...` paths into (model file, element path) |
 | `Components/Open/GitHubFileBrowser` | `pathSuffixSupported` filters the browsable file list |
 | `Containers/CadView` | `fileSuffixBoundaryRegex` finds the model file inside a permalink |
-| `utils/dragAndDrop` | routes a dropped file to the right loader |
+| `app/dragAndDrop` | routes a dropped file to the right loader |
 
 **Prefix trap.** `typeRegexStr` sorts alternatives longest-first
 because regex alternation is first-match: with `usd` ahead of `usda`,
@@ -95,8 +95,8 @@ Two modules. `loader/zipArchive.js` is the format — the central directory
 fflate `Inflate`, so no new dependency. `loader/modelArchive.js` is the
 policy — which entry is the model, and what each seam is told.
 
-**The seams.** `utils/dragAndDrop.js#handleFileDrop` and
-`utils/loader.js#loadLocalFile`, each right after
+**The seams.** `app/dragAndDrop.js#handleFileDrop` and
+`app/loader.js#loadLocalFile`, each right after
 `inflateIfGzipEnvelope`, through `openUploadThroughArchive`. A file that is
 not a zip reaches the seam's own open exactly as before, untyped. An entry
 taken out of a zip reaches it as a `File` named for the entry (`Tower.ifc`,
@@ -536,7 +536,7 @@ Add a `case` returning the tuple
   wraps so the basePath string never reaches it.
 
 
-## 3. Declare capabilities — `src/viewer/ShareModel.js`
+## 3. Declare capabilities — `src/model/ShareModel.js`
 
 Add the extension to `UNSTRUCTURED_MESH` (or `IFC_LIKE` if it carries
 real spatial structure and typed properties), and to the

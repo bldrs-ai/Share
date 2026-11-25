@@ -9,7 +9,7 @@ import {
 import {LOCAL_ONLY_ROUTE, toLocalOnlyPath} from './routes/localOnly'
 import debug from './utils/debug'
 import {disablePageReloadApprovalCheck} from './utils/event'
-import {navWith} from './utils/navigate'
+import {navWith} from './app/navigate'
 import About from './pages/share/About'
 import Conway from './pages/share/Conway'
 import Quotas from './pages/share/Quotas'
@@ -36,7 +36,7 @@ import Share from './Share'
  * keeps the CadView and swaps the viewer. Opening a model from the app's
  * own surfaces takes that path too, by default since open-205 step F; with
  * `?feature=disableSpaModelNav` (or the rollback) it is a page load
- * (utils/navigate.js#navigateToModel, utils/spaModelNavMode.js, #2021).
+ * (app/navigate.js#navigateToModel, utils/spaModelNavMode.js, #2021).
  *
  * Examples for this component:
  *   http://host/share/v/p/haus.ifc

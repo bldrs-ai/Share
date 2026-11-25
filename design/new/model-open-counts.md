@@ -31,7 +31,7 @@ isn't exactly them.
 | --- | --- | --- |
 | `content_type` | `Filetype.js#supportedTypes`, plus `other` | the loaded model's `type` (the loader's extension; `glb` for a cache hit). The list is written out in the report module, which has no imports, and a test holds it equal to `Filetype.js` |
 | `size_bucket` | `<1mb`, `1-10mb`, `10-50mb`, `50-200mb`, `200mb+`, `unknown` | `loadAnalytics.js#bucketFileSize` over the size `real_model_open` reports (`stats_fileSize`), the buckets `load_failed` uses |
-| `source` | `local`, `sample`, `github`, `gdrive`, `url` | the route (`privacy/modelOpenCount.js#modelOpenSource`): an upload is `local`; a sample from the Open dialog (`localOnlyMode.js#isSampleModel`) or any other Bldrs-hosted project file is `sample`; the rest by provider |
+| `source` | `local`, `sample`, `github`, `gdrive`, `url` | the route (`app/modelOpenCount.js#modelOpenSource`): an upload is `local`; a sample from the Open dialog (`app/localOnlyMode.js#isSampleModel`) or any other Bldrs-hosted project file is `sample`; the rest by provider |
 | `open_kind` | `page`, `in_app` | `utils/reportModelOpen.js#modelOpenKind`, as on `real_model_open` |
 | `form_factor` | `mobile`, `desktop` | `clientCapabilities.js#formFactor` |
 | `consent` | `on`, `off` | `privacy/analytics.js#isAllowed`: which way the visitor's setting was. GA can then split the count into the opens it also saw as `real_model_open` (`on`) and the ones it didn't (`off`) |
@@ -42,7 +42,7 @@ closed enum doesn't belong here.
 
 ## How it travels
 
-1. `privacy/modelOpenCount.js#reportModelOpenCount` builds the report and posts
+1. `app/modelOpenCount.js#reportModelOpenCount` builds the report and posts
    it to `/.netlify/functions/model-open-count`, Share's own origin, with
    `navigator.sendBeacon` (a text/plain simple request, no preflight) or
    `fetch` with `keepalive` as the fallback. Every error is swallowed.
@@ -73,8 +73,12 @@ the visitor's device; GDPR applies to personal data. This count does neither:
 - **The visitor's IP never reaches Google.** The request to GA comes from the
   function. Netlify sees the request, as it sees every page load.
 
-The privacy policy's always-on "Error and reliability reports" paragraph says
-so, in both copies (`src/pages/Privacy.jsx`, `marketing/src/app/privacy/page.tsx`).
+The privacy policy's disclosure of this count is #2354's: the owner decided
+(2026-11-25) to take GA out of the browser and drop the consent banner, making
+these first-party counts the main usage signal, and #2354 rewrites the policy
+(both copies, `src/pages/Privacy.jsx` and `marketing/src/app/privacy/page.tsx`)
+for that model. `consent` stays in the report: it reads `off` for everyone once
+GA is off, and a later opt-in may reuse it.
 
 ## Reading it
 
@@ -102,7 +106,7 @@ so, in both copies (`src/pages/Privacy.jsx`, `marketing/src/app/privacy/page.tsx
 - A tab closed before the beacon is handed over sends nothing; a blocker that
   blocks first-party function paths drops it. Both undercount, never overcount.
 - Tests: `src/privacy/modelOpenCountReport.test.js`,
-  `src/privacy/modelOpenCount.test.js`,
+  `src/app/modelOpenCount.test.js`,
   `src/Containers/modelOpenEvents.test.js` (once per new real open, not the
   demo, not a reload), `netlify/functions/_tests/model-open-count.test.js`,
   `netlify/functions/_lib/shareOrigin.test.js`, four replay scenarios

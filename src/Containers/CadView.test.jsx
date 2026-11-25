@@ -16,7 +16,7 @@ import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
 // bodies below read its singleton.
 import '../../__mocks__/shareViewerTestHarness'
 import {ShareViewer} from '../viewer/ShareViewer'
-import {getSelectionFunnel} from '../viewer/tools/selectionFunnel'
+import {getSelectionFunnel} from '../tools/selectionFunnel'
 import Clipper from '../viewer/three/Clipper'
 import IfcIsolator from '../viewer/three/IfcIsolator'
 import Picker from '../viewer/three/Picker'
@@ -24,8 +24,8 @@ import ThreeContext from '../viewer/three/ThreeContext'
 import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
 import * as Loader from '../loader/Loader'
-import {EngineOpenFailureError} from '../loader/engineOpenFailure'
-import {UnsupportedSchemaError} from '../loader/unsupportedSchema'
+import {EngineOpenFailureError} from '../engine/engineOpenFailure'
+import {UnsupportedSchemaError} from '../engine/unsupportedSchema'
 import {ZipArchiveError} from '../loader/zipArchive'
 import {registerInMemoryUpload, resetInMemoryUploadsForTest} from '../loader/inMemoryUploads'
 import {LoadAbortedError} from '../utils/loadAbort'
@@ -86,12 +86,12 @@ jest.mock('../search/SearchIndex')
 // `ShareIfcLoader.degraded.test.js`, whose builder doubles assert on the
 // meshes they receive. This double is here to stop a fixture from
 // contradicting the contract it stands in for, not to catch a regression.
-jest.mock('../viewer/ifc/conwayDirectIfcLoader', () => ({
+jest.mock('../loader/conwayDirectIfcLoader', () => ({
   // eslint-disable-next-line require-await
   parseIfcWithConway: () => ({modelID: 0, captured: [], recapture: async () => []}),
   decorateConwayDirectIfcModel: () => {},
 }))
-jest.mock('../viewer/ifc/buildConwayIfcModel', () => ({
+jest.mock('../model/buildConwayIfcModel', () => ({
   buildConwayIfcModel: () => {
     const {__getShareViewerMockSingleton} = require('../../__mocks__/shareViewerTestHarness')
     return {
@@ -483,7 +483,7 @@ describe('CadView', () => {
 
 
   // The funnel is reachable outside React for the Assist view tools
-  // (viewer/tools/selectionFunnel.js, #1674). What's registered must BE the
+  // (tools/selectionFunnel.js, #1674). What's registered must BE the
   // funnel — the same store contract a NavTree click gets, including the
   // per-instance reset above — and must go away with the CadView that
   // registered it, or a tool would select into an unmounted viewer.
@@ -1008,7 +1008,7 @@ describe('CadView', () => {
   })
 
   // local_link_missing: what GA could not say about the alert above. The
-  // ledger (OPFS/uploadLedger.js) decides origin; the event is first-sighting
+  // ledger (connections/uploadLedger.js) decides origin; the event is first-sighting
   // only, like the `alert` event it sits beside.
   describe('local_link_missing analytics', () => {
     const ID = '12345678-1234-4abc-9def-123456789abc.ifc'
@@ -2793,7 +2793,7 @@ describe('CadView', () => {
       })
 
       it('a durable batch still streaming in answers the pick with its row, resolved at the index', async () => {
-        // viewer/streamingBatchPick.js: the builder's root offers the rows it
+        // model/streamingBatchPick.js: the builder's root offers the rows it
         // has written; the ray hits a BatchedMesh under it, nearer than any
         // preview mesh.
         const {result} = renderHook(() => useStore((state) => state))

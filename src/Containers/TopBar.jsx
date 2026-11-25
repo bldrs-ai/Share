@@ -14,7 +14,7 @@ import useStore from '../store/useStore'
 import {selectReadModel} from '../store/IFCSlice'
 import {modelPathFromPathname} from '../workspace/modelPath'
 import {prettyType} from '../utils/ifc'
-import {labelForModelPath} from '../utils/modelDisplayName'
+import {labelForModelPath} from '../app/modelDisplayName'
 import {TOP_BAR_HEIGHT} from './layoutConstants'
 import {Search as SearchIcon} from '@mui/icons-material'
 

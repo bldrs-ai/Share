@@ -4,15 +4,15 @@ import {StoreRouteThemeCtx} from '../../Share.fixture'
 import ViewerContainer from '../../Containers/ViewerContainer'
 import useQuota from '../../hooks/useQuota'
 import useStore from '../../store/useStore'
-import {handleFileDrop} from '../../utils/dragAndDrop'
+import {handleFileDrop} from '../../app/dragAndDrop'
 import HelpControl, {testId as helpTestId} from '../Help/HelpControl'
 
 
 // The drop itself is dragAndDrop.test.js's subject. Here it is refused
 // outright, so what is under test is what the overlay does with the refusal:
 // handleFileDrop's own quota wiring calls onExceeded once record() says no.
-jest.mock('../../utils/dragAndDrop', () => ({
-  ...jest.requireActual('../../utils/dragAndDrop'),
+jest.mock('../../app/dragAndDrop', () => ({
+  ...jest.requireActual('../../app/dragAndDrop'),
   handleFileDrop: jest.fn(),
 }))
 jest.mock('../../hooks/useQuota')

@@ -1,6 +1,6 @@
 import {http, HttpHandler} from 'msw'
 import {HTTP_BAD_REQUEST, HTTP_OK, HTTP_PAYMENT_REQUIRED} from '../net/http'
-import {ASSIST_FREE_MODELS, ASSIST_MODEL} from '../viewer/tools/assistModels'
+import {ASSIST_FREE_MODELS, ASSIST_MODEL} from '../tools/assistModels'
 import {assertDefined} from '../utils/assert'
 import {SSE_HEADERS, scriptedReply, sseStream} from '../assist/openrouterSse.fixture'
 
@@ -120,7 +120,7 @@ export default function apiHandlersOpenrouter(defines: Defines): HttpHandler[] {
 }
 
 
-/** The relay's path (viewer/tools/assistHost.js AI_RELAY_URL), same origin. */
+/** The relay's path (tools/assistHost.js AI_RELAY_URL), same origin. */
 export const AI_RELAY_PATH = '/.netlify/functions/ai-chat'
 
 

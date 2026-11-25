@@ -5,7 +5,7 @@ FILE_NAME('storeyQuantities.ifc','2026-11-18T00:00:00',(''),(''),'','','');
 FILE_SCHEMA(('IFC4'));
 ENDSEC;
 DATA;
-/* Assist analysis fixture (src/viewer/tools/assistTools.spec.ts): two storeys,
+/* Assist analysis fixture (src/tools/assistTools.spec.ts): two storeys,
    one wall on each, authored in MILLIMETRES with area and volume in m2 / m3 —
    the mix real exporters write — and a Qto_WallBaseQuantities set on each wall.
 

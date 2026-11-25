@@ -543,7 +543,7 @@ describe('Filetype', () => {
       // folds both into 'ifc'. Kept for callers that want to report what a
       // file declared rather than pick a name for it; the format decision
       // that used to depend on it now goes through conway's detector
-      // (`src/loader/stepFormat.js`).
+      // (`src/engine/stepFormat.js`).
       expect(stepSchemaName('HEADER;\nENDSEC;')).toBeNull()
       expect(stepSchemaName(hdr(`FILE_SCHEMA(());`))).toBeNull()
       expect(stepSchemaName(hdr(`FILE_SCHEMA((''));`))).toBeNull()
@@ -737,7 +737,7 @@ describe('binary STL, recognized by its structure', () => {
   })
 
   it('detects a dropped binary STL, which is sniffed without its name', async () => {
-    // The drag-and-drop seam (`utils/dragAndDrop.js`) goes by the bytes
+    // The drag-and-drop seam (`app/dragAndDrop.js`) goes by the bytes
     // alone, so this is the path test-models#69's files failed on.
     const file = Object.assign(new Blob([binaryStl(ZERO_HEADER, TRIANGLES)]), {name: 'part.stl'})
     expect(await guessTypeFromFile(file)).toBe('stl')

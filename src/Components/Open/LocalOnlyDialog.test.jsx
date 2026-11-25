@@ -3,12 +3,12 @@ import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {CONSENT_LEVELS} from '../../privacy/consent'
 import useStore from '../../store/useStore'
-import {navigateToModel} from '../../utils/navigate'
+import {navigateToModel} from '../../app/navigate'
 import LocalOnlyDialog from './LocalOnlyDialog'
 
 
-jest.mock('../../utils/navigate', () => ({
-  ...jest.requireActual('../../utils/navigate'),
+jest.mock('../../app/navigate', () => ({
+  ...jest.requireActual('../../app/navigate'),
   navigateToModel: jest.fn(),
 }))
 

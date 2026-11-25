@@ -14,7 +14,7 @@ import {supportedTypes} from '../Filetype'
  *
  * - **URLs**: anything `scheme://…` (http, https, s3, file, ftp, …) and
  *   `www.`-style hosts. Not `ref:`, the assistant's element-link scheme
- *   (viewer/tools/refLinks.js), which has no `//` and carries a ref.
+ *   (tools/refLinks.js), which has no `//` and carries a ref.
  * - **Windows paths**: `C:\…` and `\\server\share\…`.
  * - **Paths of two or more segments**: a token with two or more `/` (`/a/b`,
  *   `/private/`, `a/b/c.ext`), or one starting `~/`, `./` or `../`. Not a

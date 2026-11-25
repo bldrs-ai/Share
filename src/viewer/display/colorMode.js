@@ -1,8 +1,8 @@
 import {Vector4} from 'three'
-import {forEachActiveInstance} from '../ifc/batchedInstanceTables'
-import {eachBatch} from '../ifc/batchedModel'
-import {repaintBatchedColors} from '../ifc/batchedHighlight'
-import {computePartPalette, paletteUnit, writePaletteColors} from '../ifc/productPalette'
+import {forEachActiveInstance} from '../../model/batchedInstanceTables'
+import {eachBatch} from '../../model/batchedModel'
+import {repaintBatchedColors} from '../../model/batchedHighlight'
+import {computePartPalette, paletteUnit, writePaletteColors} from '../../model/productPalette'
 import {requestPaint} from '../three/renderDemand'
 
 

@@ -18,11 +18,11 @@ import {getOrganizations} from '../../net/github/Organizations'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
 import {getBranches} from '../../net/github/Branches'
 import useStore from '../../store/useStore'
-import {isLocalOnlyLevel} from '../../privacy/localOnlyMode'
+import {isLocalOnlyLevel} from '../../app/localOnlyMode'
 import LocalOnlyNotice from './LocalOnlyNotice'
 import debug, {WARN} from '../../utils/debug'
 import {navigateBaseOnModelPath} from '../../utils/location'
-import {navigateToModel} from '../../utils/navigate'
+import {navigateToModel} from '../../app/navigate'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {ControlButton} from '../Buttons'
 import Dialog from '../Dialog'
@@ -417,7 +417,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
         >
           {/* A signed-out user reaches this dialog (it opens on Export for
               them, Share#1964); on this tab, log in is all there is to do. */}
-          {/* Local-only mode (privacy/localOnlyMode.js): saving to GitHub
+          {/* Local-only mode (app/localOnlyMode.js): saving to GitHub
               is a remote write. The Export tab, a local download, stays. */}
           {isLocalOnly ? (
             <LocalOnlyNotice source='GitHub' action='save to'/>

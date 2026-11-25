@@ -553,7 +553,7 @@ above that joins on them, are the main-thread ones. The tree's
      (`visibilityHash.js#visibilityRefsAreExact`). The Share dialog then
      says the state is not in the link. Every link that is written reopens
      exactly the hidden or isolated set it was written from.
-   - **The assistant's view tools go the same way** (`viewer/tools/`,
+   - **The assistant's view tools go the same way** (`tools/`,
      #1946). `view.hide` and `view.isolate` on a product's row name the
      whole product as one pathless entry, and on a multi-root file's
      `Model` wrapper as one entry for all its parts. They hand those to

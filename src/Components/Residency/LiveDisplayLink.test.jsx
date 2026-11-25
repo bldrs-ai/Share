@@ -3,7 +3,7 @@ import React from 'react'
 import {act, render} from '@testing-library/react'
 import useStore from '../../store/useStore'
 import {HASH_DEBOUNCE_WAIT_MS} from '../../utils/debounce'
-import {ResidencyMetric} from '../../viewer/residency/ResidencyController'
+import {ResidencyMetric} from '../../model/ResidencyController'
 import {noteUserDisplayChange} from '../Share/viewLink'
 import LiveDisplayLink, {livePaths} from './LiveDisplayLink'
 

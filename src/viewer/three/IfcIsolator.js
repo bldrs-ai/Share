@@ -1,16 +1,16 @@
 import {ShareViewer} from '../ShareViewer'
 import {unsortedArraysAreEqual, arrayRemove} from '../../utils/arrays'
-import {clearBatchedSelection} from '../ifc/batchedHighlight'
+import {clearBatchedSelection} from '../../model/batchedHighlight'
 import {requestPaint} from './renderDemand'
-import {BatchEditKind, onBatchEdit} from '../ifc/batchedEdit'
-import {forEachActiveInstance, instanceIdSpan, isActive} from '../ifc/batchedInstanceTables'
-import {eachBatch, isBatchedModel} from '../ifc/batchedModel'
+import {BatchEditKind, onBatchEdit} from '../../model/batchedEdit'
+import {forEachActiveInstance, instanceIdSpan, isActive} from '../../model/batchedInstanceTables'
+import {eachBatch, isBatchedModel} from '../../model/batchedModel'
 import {
   applySceneGraphVisibility,
   initiallyHiddenIds,
   isSceneGraphModel,
   sceneGraphElementIds,
-} from './sceneGraphVisibility'
+} from '../../model/sceneGraphVisibility'
 import {
   coverInstancesByOccurrences,
   findRootLevelProductNode,
@@ -673,7 +673,7 @@ export default class IfcIsolator {
    * batch returns to whatever visibility its other owner (residency) had set.
    *
    * Ownership handshake with `ResidencyController`. Residency
-   * (`src/viewer/residency/ResidencyController.js`) also drives `setVisibleAt`
+   * (`src/model/ResidencyController.js`) also drives `setVisibleAt`
    * — it evicts instances for the residency slider / LOD, and it tracks its own
    * `instance.visible` belief. Two owners of one bit needs an arbiter, so while
    * a mask is installed the isolator wraps the batch's `setVisibleAt`
@@ -1325,7 +1325,7 @@ export default class IfcIsolator {
    * (#1924 item 2).
    *
    * Hide and Isolate call it on the selection's occurrences, and so do the
-   * view tools on theirs (`viewer/tools/viewTools.js`), which name a whole
+   * view tools on theirs (`tools/viewTools.js`), which name a whole
    * product, or a multi-root file's wrapper, as one pathless entry.
    *
    * @param {Array<object>} occurrences from `_selectionOccurrences`, or the
@@ -1365,7 +1365,7 @@ export default class IfcIsolator {
       if (!product) {
         // Not a top-level product: Conway's synthetic `Model` wrapper of a
         // multi-root file, which the view tools hide and isolate whole
-        // (`viewer/tools/viewTools.js#wholeProductOccurrence`). Its parts are
+        // (`tools/viewTools.js#wholeProductOccurrence`). Its parts are
         // products, each split on its own. Anything left has no ref of its
         // own (`e<wrapper>` names no geometry), so it is `inexact`.
         const left = new Set(occurrence.instanceIds)
@@ -1402,7 +1402,7 @@ export default class IfcIsolator {
 
   /**
    * Plain-data copy of what each product hide hid with it (`_productParts`),
-   * for a snapshot of the visibility state (`viewer/tools/visibilityState.js`).
+   * for a snapshot of the visibility state (`tools/visibilityState.js`).
    * Restoring the hides alone re-records every row restored with a product as
    * hidden with it, which would make the product's eye show a row the user
    * had hidden on its own.
@@ -1980,7 +1980,7 @@ export default class IfcIsolator {
         ...(inexact === true ? {inexact: true} : {}),
         // A product's own geometry has no path to resolve, and an inexact
         // entry's path resolves to more than it holds, so each keeps its
-        // instances. A snapshot (`viewer/tools/visibilityState.js`) restores
+        // instances. A snapshot (`tools/visibilityState.js`) restores
         // the isolation from this list.
         ...((occurrencePath.length === 0 || inexact === true) && Array.isArray(held) ?
           {instanceIds: [...held]} : {}),

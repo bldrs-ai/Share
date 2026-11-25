@@ -30,7 +30,7 @@ import {isBldrsExtension} from '../loader/glbArtifactSize'
 import {loadDracoDecoder, loadDracoEncoder} from '../loader/glbCompress'
 import {stripGlbBldrs} from '../loader/glbStrip'
 import {injectGlbExtensions, parseGlb} from '../loader/injectGlbExtensions'
-import {ROW_TAG_SEMANTIC} from '../loader/bldrsInstanceTables'
+import {ROW_TAG_SEMANTIC} from '../model/bldrsInstanceTables'
 import {WITNESSED_PAYLOAD, planCollapsedDraco} from './collapsedWitness'
 import {
   QUALITY_DEFAULT,
@@ -444,7 +444,7 @@ function declareMeshQuantization(doc, KHRMeshQuantization, isFilterPending) {
  * drop the triangles it dropped (zero-area ones, which EDGEBREAKER would drop
  * anyway) and the vertices only they used, and — for a primitive several
  * rows share — add each kept vertex's row as an integer attribute
- * (`loader/bldrsInstanceTables.js#ROW_TAG_SEMANTIC`). Every attribute is
+ * (`model/bldrsInstanceTables.js#ROW_TAG_SEMANTIC`). Every attribute is
  * compacted the same way, so vertex k of every accessor is still one vertex.
  * Rows share the merged artifact's primitive, and a portable file's primitive
  * for an element of several rows (#1900); a portable one-row element's gets

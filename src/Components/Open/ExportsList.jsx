@@ -10,7 +10,7 @@ import {getExportFormat} from '../../export/exportRegistry'
 import {hydrateExports, loadExports, subscribeToExports} from '../../export/exportHistory'
 import useExport, {formatBytes} from '../../export/useExport'
 import useStore from '../../store/useStore'
-import {navigateToModel} from '../../utils/navigate'
+import {navigateToModel} from '../../app/navigate'
 
 
 // dayjs ships `fromNow` as an opt-in plugin; without this every relative

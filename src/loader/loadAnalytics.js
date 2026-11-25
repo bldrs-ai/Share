@@ -1,8 +1,8 @@
 import {supportedTypes} from '../Filetype'
 import {prefixObjectKeys} from '../utils/objects'
 import {isOutOfMemoryError} from '../utils/oom'
-import {EngineOpenFailureError, STATUS_UNRECOGNIZED_FORMAT} from './engineOpenFailure'
-import {UnsupportedSchemaError} from './unsupportedSchema'
+import {EngineOpenFailureError, STATUS_UNRECOGNIZED_FORMAT} from '../engine/engineOpenFailure'
+import {UnsupportedSchemaError} from '../engine/unsupportedSchema'
 
 
 /*

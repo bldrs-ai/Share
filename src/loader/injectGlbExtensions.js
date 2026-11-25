@@ -32,7 +32,7 @@
 // buffer; the spec only requires alignment for accessor-typed bufferViews
 // but enforcing it everywhere keeps any future accessor reuse safe.
 import * as pako from 'pako'
-import {glbInfo} from './glbLog'
+import {glbInfo} from '../utils/glbLog'
 
 
 const GLB_MAGIC = 0x46546C67 // "glTF" LE
@@ -215,7 +215,7 @@ export function serializeGlb(json, bin) {
  *   json.buffers[0].byteLength += pad4(payload bytes)
  *
  * The reader counterpart for each extension lives next to the writer
- * helper that produces it (e.g. src/loader/bldrsSpatialTree.js exports
+ * helper that produces it (e.g. src/engine/bldrsSpatialTree.js exports
  * both `captureBldrsSpatialTree` and `BldrsSpatialTreeReader`).
  *
  * Pass-through behavior: when `extensions` is empty AND `sceneExtras`

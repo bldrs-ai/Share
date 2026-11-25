@@ -1,18 +1,18 @@
 import React, {ReactElement, useEffect, useRef} from 'react'
 import {Link} from '@mui/material'
 import {ErrorOutline as ErrorOutlineIcon, InfoOutlined as InfoOutlinedIcon} from '@mui/icons-material'
-import {ENGINE_FAILURE_ALERT_EVENT} from '../loader/engineOpenFailure'
+import {ENGINE_FAILURE_ALERT_EVENT} from '../engine/engineOpenFailure'
 import {archiveGuidance, formatGuidance} from '../loader/formatGuidance'
 import {ARCHIVE_ENTRY_CHOICE, ARCHIVE_UNREADABLE} from '../loader/modelArchive'
 import {NotFoundError} from '../loader/Loader'
 import {UNRECOGNIZED_FORMAT_ALERT_EVENT, unrecognizedFormatGaParams} from '../loader/unrecognizedFormat'
-import {UNSUPPORTED_SCHEMA_ALERT_EVENT} from '../loader/unsupportedSchema'
+import {UNSUPPORTED_SCHEMA_ALERT_EVENT} from '../engine/unsupportedSchema'
 import {getProvider} from '../connections/registry'
 import {CACHE_CLEAR_SKIPPED} from '../OPFS/messages'
 import useStore from '../store/useStore'
 import {gtagEventWithCid, LOCAL_LINK_EVENTS} from '../privacy/analytics'
 import {trackAlert, trackAlertEvent} from '../utils/alertTracking'
-import {DROP_REFUSED} from '../utils/dragAndDrop'
+import {DROP_REFUSED} from '../app/dragAndDrop'
 import ArchiveEntryChoice from './ArchiveEntryChoice'
 import Dialog from './Dialog'
 
@@ -95,7 +95,7 @@ export default function AlertDialog({onClose}) {
       // (loader/modelArchive.js#unwrapHostedArchive). Its message names no
       // file; `dialogText`, which may name the entries inside, is shown but
       // never counted. `dropRefused` is a drop with no file in it, or several
-      // (utils/dragAndDrop.js#handleFileDrop); its two messages are constants.
+      // (app/dragAndDrop.js#handleFileDrop); its two messages are constants.
       trackAlertEvent(alert.message)
     } else if (alert.type === 'unrecognizedFormat') {
       // Also an expected outcome, GA only: the constant, since the picker's

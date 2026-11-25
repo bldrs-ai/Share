@@ -212,8 +212,8 @@ under one class hierarchy:
   Used for "select this specific visible placement" workflows.
 
 Both are populated from the same Conway `StreamAllMeshes` walk
-(see `src/viewer/ifc/IfcItemsMap.js#itemsMapFromFlatMeshes` and
-`src/viewer/ifc/IfcInstanceMap.js#instanceMapFromFlatMeshes`) — the
+(see `src/model/IfcItemsMap.js#itemsMapFromFlatMeshes` and
+`src/model/IfcInstanceMap.js#instanceMapFromFlatMeshes`) — the
 extra cost of building both is one extra typed-array allocation;
 the walk is shared. The `flatMeshToBufferGeometry` assembler emits
 both `expressID` and `instanceID` per-vertex attributes so picking
@@ -228,11 +228,11 @@ through GLTFExporter's `_UPPERCASE` rename verbatim.
 flipped **default-on 2026-05** (PR #1529) once the §3b.iii open items
 landed, so `?feature=conwayDirectIfc` is now redundant):
 
-- `src/viewer/ifc/IfcItemsMap.js` — per-IFC-product table. Three
+- `src/model/IfcItemsMap.js` — per-IFC-product table. Three
   populators: per-vertex-attribute (fallback / cache-hit before
   Conway-direct), ordered-ranges (data-flow), Conway stream walk.
 
-- `src/viewer/ifc/IfcInstanceMap.js` — per-PlacedGeometry table.
+- `src/model/IfcInstanceMap.js` — per-PlacedGeometry table.
   Three populators mirroring `IfcItemsMap`'s set:
   - `instanceMapFromOrderedPlacedRanges(ranges, {geometry})` — data-flow
     populator. Used by the assembler hand-off.
@@ -248,7 +248,7 @@ landed, so `?feature=conwayDirectIfc` is now redundant):
     path (the assembler's data feeds the BVH-safe populator
     instead).
 
-- `src/viewer/ifc/flatMeshToBufferGeometry.js` — the assembler.
+- `src/model/flatMeshToBufferGeometry.js` — the assembler.
   Walks captured FlatMeshes, applies `flatTransformation` to
   positions and normals, bins PlacedGeometries by
   `PlacedGeometry.color` into contiguous index-buffer groups,
@@ -256,7 +256,7 @@ landed, so `?feature=conwayDirectIfc` is now redundant):
   `web-ifc-three.IFCParser#storeGeometryByMaterial`'s shape exactly).
   Returns `{geometry, ranges, materials}`.
 
-- `src/viewer/ifc/buildConwayIfcModel.js` — glue. Combines the
+- `src/model/buildConwayIfcModel.js` — glue. Combines the
   assembler + `instanceMapFromOrderedPlacedRanges` into a
   `{mesh, instanceMap, materials, stats}` bundle.
 
@@ -288,8 +288,8 @@ landed, so `?feature=conwayDirectIfc` is now redundant):
 
   *During a load* the same handler raycasts what is on screen before
   the model exists: the parse-time preview group
-  (`viewer/previewSelection.js`) and the durable BatchedMeshes the
-  demand pump is still filling (`viewer/streamingBatchPick.js`). The
+  (`model/previewSelection.js`) and the durable BatchedMeshes the
+  demand pump is still filling (`model/streamingBatchPick.js`). The
   incremental builder offers each row it writes on its root
   (`root.userData.streamingBatches`, withdrawn at `finalize`), and a hit
   on one reads the same `{parent, instance, occurrence path, geometry}`
@@ -324,7 +324,7 @@ GLTFExporter preserves attribute values verbatim.
 `this.ifcModel.createSubset(...)` expecting `web-ifc-three.SubsetCreator`'s
 single-Mesh return against the *original* (pre-swap) geometry. Now
 resolved by routing through `attachInstanceMapSubsets`
-(`src/viewer/three/elementSubsets.js`) — a sibling of
+(`src/model/elementSubsets.js`) — a sibling of
 `attachElementSubsets` that backs `model.createSubset` with each
 child mesh's `IfcInstanceMap.createSubsetMeshByParent`.
 
@@ -354,7 +354,7 @@ Visual quality follows model shape:
   "parts lose color when isolated" report. Both subset builders now
   map each kept triangle back to the source group it came from and
   emit coalesced destination groups
-  (`src/viewer/three/subsetMaterialGroups.js`, shared by
+  (`src/model/subsetMaterialGroups.js`, shared by
   `elementSubsets.buildSubsetMesh` and `IfcInstanceMap`'s
   `buildSubsetMesh`). The whole-buffer group survives only as a
   fallback for sources carrying no `groups[]` at all, or for an
@@ -420,7 +420,7 @@ hydrate the NavTree without a live IFC parser.
   extension wiring lives in one well-tested seam. Returns
   `{bytes, stats}`; collision-safe (won't overwrite an existing
   entry); synthesises a BIN chunk on input with none.
-- `src/loader/bldrsSpatialTree.js` — `BLDRS_spatial_tree` extension
+- `src/engine/bldrsSpatialTree.js` — `BLDRS_spatial_tree` extension
   codec. Writer-side `captureBldrsSpatialTree(ifcManager, modelID)`
   whitelists `{expressID, type, Name, LongName, children}` (drops
   parser internals, depth-bounded via `MAX_TREE_DEPTH=100`).
@@ -436,7 +436,7 @@ hydrate the NavTree without a live IFC parser.
 - `src/loader/Loader.js#parseBldrsGlbContainer` — bubbles
   `gltf.scene.userData` up to the merged Group so downstream
   consumers see extension data on the returned root.
-- `src/viewer/ShareModel.js#inferModelCapabilities` — flips
+- `src/model/ShareModel.js#inferModelCapabilities` — flips
   `capabilities.spatialStructure: true` when the userData payload
   is present.
 - `src/Containers/CadView.jsx` — NavTree path discriminates on the
@@ -491,7 +491,7 @@ hydrate the Properties panel without a live IFC parser.
   per cached GLB). Returns undefined / [] for missing IDs so
   consumer null-guards (e.g. `Properties.jsx#createPsetsList`,
   `itemProperties.jsx#unpackHelper`) trigger cleanly.
-- `src/viewer/ShareModel.js#inferModelCapabilities` — flips
+- `src/model/ShareModel.js#inferModelCapabilities` — flips
   `capabilities.typedProperties: true` when the userData payload
   is present.
 - `src/loader/glbCacheKey.js` — schema bump `0.6.0` → `0.7.0`.
@@ -538,7 +538,7 @@ The fix: stop trusting per-vertex IDs post-compression. Store
 per-triangle expressID + instanceID in a separate JSON payload that
 neither compressor touches.
 
-- `src/loader/bldrsFaceIds.js` — `BLDRS_face_ids` extension codec.
+- `src/engine/bldrsFaceIds.js` — `BLDRS_face_ids` extension codec.
   Writer-side `capturePerTriangleIds(json, bin)` walks freshly-
   exported GLB primitives, reads the index buffer + per-vertex
   `_EXPRESSID` / `_INSTANCEID` accessors, and projects to per-
@@ -555,7 +555,7 @@ neither compressor touches.
   (`json.meshes[].primitives[]` flat scan) and reader (GLTFLoader
   scene-graph traversal) that the length-only check could miss if
   two meshes happen to share triangle counts.
-- `src/viewer/ifc/IfcInstanceMap.js#instanceMapFromTriangleIds` —
+- `src/model/IfcInstanceMap.js#instanceMapFromTriangleIds` —
   direct twin of `instanceMapFromGeometry` minus the per-vertex
   indirection. Same output shape (`triangleIndexToInstanceId`,
   `instanceIdToTriangleIndices`, etc.) so picking code doesn't
@@ -584,7 +584,7 @@ neither compressor touches.
   compression. The capture path's catch block intentionally leaves
   `faceIds = null` on failure, which cascades to compressGlb
   skipping DRACO rather than running it with corrupted IDs.
-- `src/viewer/ShareModel.js#inferModelCapabilities` — flips
+- `src/model/ShareModel.js#inferModelCapabilities` — flips
   `instancePicking` / `expressIdPicking` from the face_ids extension
   presence (the per-vertex attrs still exist on compressed
   artifacts but aren't trustworthy; face_ids is the source of truth).
@@ -756,7 +756,7 @@ Three settled conclusions:
 
 **Slicing.**
 - **PR1 (#1568) — grouper + verbose analysis.**
-  `src/viewer/ifc/flatMeshToInstancedModel.js` is a pure grouper that
+  `src/model/flatMeshToInstancedModel.js` is a pure grouper that
   dedupes the captured FlatMeshes by `geometryExpressID` and returns the
   per-shape placement lists (matrix/color/parent/instanceId) + the stats
   above. There is **no feature flag** (it is a permanent diagnostic and
@@ -780,7 +780,7 @@ Three settled conclusions:
 
   **Interaction follow-ups — landed (this slice).**
 
-  - *Selection + hover highlight (`src/viewer/ifc/batchedHighlight.js`).*
+  - *Selection + hover highlight (`src/model/batchedHighlight.js`).*
     **Recolor, not overlay.** The merged paths highlight by dropping a
     translucent subset Mesh into the scene coplanar with the source; that
     only renders because the subset shares the source's *exact* vertex
@@ -798,11 +798,11 @@ Three settled conclusions:
     `PlacedGeometry.occurrencePath` (PR #1573,
     `design/new/step-occurrence-selection.md`, follow-up #3); bringing that to
     the batched path is the remaining follow-up.
-  - *Isolate / hide (`src/viewer/ifc/batchedSubset.js`).* `IfcIsolator`
+  - *Isolate / hide (`src/model/batchedSubset.js`).* `IfcIsolator`
     drives the batched model unchanged through a `createSubset` /
     `removeSubset` surface that re-bakes the kept instances (`getMatrixAt` +
     the shape read back out of the batch's own buffers,
-    `src/viewer/ifc/batchedInstanceGeometry.js` — the retained
+    `src/model/batchedInstanceGeometry.js` — the retained
     `instanceGeometry` table it used to bake from was a full duplicate of the
     batch, 171.5 MB on a 231 MB model, dropped in Share#1810) into
     world-aligned subset Meshes
@@ -847,7 +847,7 @@ Three settled conclusions:
 
 **Status (2026-08-28): shipped and default-on.** All three "genuinely new
 work" items below were built under view-140 S9 (`loader/glbBatchedExport.js`
-writer, `viewer/ifc/instancedGlbToBatchedModel.js` reader, per-instance colour
+writer, `model/instancedGlbToBatchedModel.js` reader, per-instance colour
 solved by the colour sub-key option — group by geometry × source colour). The
 `glbBatched` flag survives as the layout switch but now defaults on; the
 stored-format safety argument and its two consequences are in
@@ -1178,7 +1178,7 @@ decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
 // closures attached by `decorateConwayDirectIfcModel`
 ```
 
-New module: `src/viewer/ifc/conwayDirectIfcLoader.js`.
+New module: `src/loader/conwayDirectIfcLoader.js`.
 
 - `parseIfcWithConway(buffer, ifcAPI, settings?)` → `{modelID, captured}`
   Conway `OpenModel` + `StreamAllMeshes` in one sync call. Defaults
@@ -1235,16 +1235,16 @@ comments (`grep "5d\." src/`).
   the live consumer paths that used to read the fork's
   `viewer.IFC.loader` (web-ifc-three `IFCLoader`) and
   `viewer.IFC.loader.ifcManager` (web-ifc-three `IFCManager`):
-    - `src/viewer/ifc/ShareIfcManager.js` — minimal IFC-manager
+    - `src/engine/ShareIfcManager.js` — minimal IFC-manager
       surface (`ifcAPI`, `getExpressId`, `getSpatialStructure`,
       `getItemProperties`, `getPropertySets`, `getIfcType`,
       `idsByType`, plus `state.models` + a `parser` stub for
       `IfcViewsManager`). Methods the fork exposed but live code no
       longer needs are intentionally absent — failures are loud.
-    - `src/viewer/ifc/ShareIfcLoader.js` — owns the Conway-direct
+    - `src/loader/ShareIfcLoader.js` — owns the Conway-direct
       `parse(buffer, …)` entry point `Loader.js#readModel` invokes;
       holds a `ShareIfcManager` as `loader.ifcManager`.
-    - `src/viewer/ifc/ifcItemsMapParity.js` — `runIfcItemsMapParityCheck`
+    - `src/model/ifcItemsMapParity.js` — `runIfcItemsMapParityCheck`
       extracted from `Loader.js` to live next to the parse it
       diagnoses.
   **Key gotcha (cost a CI round):** ShareIfcLoader is installed at a
@@ -1812,7 +1812,7 @@ legacy today).
 
 **What the flag turns on:** uniform `MeshStandardMaterial` + sRGB albedo across
 the generated-surface loaders, built through one factory
-(`src/viewer/lookMaterial.js` — `makeSurfaceMaterial` / `makeSurfaceColor`;
+(`src/model/lookMaterial.js` — `makeSurfaceMaterial` / `makeSurfaceColor`;
 covers IFC `flatMeshToBufferGeometry`, Conway-batched `batchedToMergedMesh` /
 `flatMeshToBatchedModel`, and `stl.js`), tagged `userData.isLookManaged` so a
 look toggle restyles them but authored glTF/GLB PBR is left untouched; a
@@ -1820,7 +1820,7 @@ zero-asset **gradient studio IBL** (PMREM-prefiltered canvas gradient);
 **Khronos PBR-Neutral tone-mapping** in the postprocessing composer
 (`CustomPostProcessor`) with `outputColorSpace` back at the r184 sRGB default;
 Neutral-look **retuned lights** (`scene.js`); named **looks**
-(`src/viewer/looks.js` — the single source of truth: **Neutral** default +
+(`src/model/looks.js` — the single source of truth: **Neutral** default +
 **Flat** legacy-style high-key) applied live by `ShareViewer.applyLook`, with a
 user-facing **Neutral / Flat** toggle in the profile menu (`ProfileControl`,
 cookie-persisted like the day/night theme); and dev-only tuning via a
@@ -1834,7 +1834,7 @@ separate step.
 
 **r187 and default-on (2026-11, #2167):**
 
-- **The look is on by default.** `viewer/lookMode.js#isLookOn` is the one
+- **The look is on by default.** `model/lookMode.js#isLookOn` is the one
   predicate every pipeline decision reads (materials and colours in the
   loaders, lights, output colour space, IBL, tone mapping, AO, the ground
   plane, the profile menu's Neutral/Flat toggle).

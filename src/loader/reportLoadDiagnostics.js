@@ -1,4 +1,10 @@
 import {gtagEvent} from '../privacy/analytics'
+import {sizeClass} from '../utils/sizeClass'
+
+
+// Cut to utils/ so the engine's unsupportedSchema.js takes it from below
+// (design/tracks/open-t200/layering.md §7 M1); re-exported for this module's callers.
+export {sizeClass} from '../utils/sizeClass'
 
 
 /**
@@ -26,15 +32,9 @@ import {gtagEvent} from '../privacy/analytics'
  * before they can be queried (design/new/quotas.md §"Funnel analytics").
  */
 
-/* eslint-disable no-magic-numbers */
-const MIB = 1024 * 1024
-const GIB = 1024 * MIB
-const TEN_MIB = 10 * MIB
-const HUNDRED_MIB = 100 * MIB
 const LEAF_SMALL = 100
 const LEAF_MEDIUM = 1000
 const LEAF_LARGE = 10000
-/* eslint-enable no-magic-numbers */
 
 /**
  * Why a worker load's source buffered, derived at the decision point in
@@ -65,22 +65,6 @@ export function skippedBucket(skipped) {
     return '1'
   }
   return skipped <= 10 ? '2-10' : '11+'
-}
-
-
-/**
- * @param {number} sizeBytes the source's size
- * @return {string} '<10MB' | '10-100MB' | '100MB-1GB' | '>=1GB'; '>=1GB'
- *   edges are inclusive below (exactly 10 MiB is '10-100MB')
- */
-export function sizeClass(sizeBytes) {
-  if (sizeBytes < TEN_MIB) {
-    return '<10MB'
-  }
-  if (sizeBytes < HUNDRED_MIB) {
-    return '10-100MB'
-  }
-  return sizeBytes < GIB ? '100MB-1GB' : '>=1GB'
 }
 
 
@@ -165,7 +149,7 @@ export function leafBucket(triangles) {
 
 /**
  * One event for a load whose picking index hit three-mesh-bvh's depth cap
- * (viewer/ifc/bvhBuild.js, recorded by loadProgress.js#reportBvhDepthCap).
+ * (model/bvhBuild.js, recorded by loadProgress.js#reportBvhDepthCap).
  * Picks stay correct, but a ray reaching a capped leaf tests its triangles
  * one by one; the leaf size is what decides whether raising `maxDepth` or
  * building with SAH is worth it. Volume-only diagnostic signal, so GA, not

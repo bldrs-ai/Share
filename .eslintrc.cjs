@@ -1,4 +1,23 @@
 /* eslint-disable no-magic-numbers */
+const {layerOverrides} = require('./tools/lint/layers.cjs')
+
+
+// The pro-module and Assist fences (the overrides below say why each exists).
+// Shared by the fence override and every layer override.
+const FENCE_ZONES = [{
+  target: './src',
+  from: './src/export/pro',
+  message: 'src/export/pro is premium code built outside docs/ — ' +
+    'load it at runtime via src/export/proModuleLoader.js, never by import',
+}, {
+  target: './src/assist',
+  from: '.',
+  except: ['./src/assist', './node_modules'],
+  message: 'src/assist must not import from outside src/assist (ai-workspace.md §2.1, D15): ' +
+    'the host imports Assist and injects tool providers, never the reverse',
+}]
+
+
 module.exports = {
   // Stop the config cascade at the repo root. Without this ESLint keeps
   // walking up the filesystem and merges every ancestor `.eslintrc` it finds,
@@ -159,22 +178,15 @@ module.exports = {
       files: ['src/**/*.js', 'src/**/*.jsx', 'src/**/*.ts', 'src/**/*.tsx'],
       excludedFiles: ['src/export/pro/**'],
       rules: {
-        'import/no-restricted-paths': ['error', {
-          zones: [{
-            target: './src',
-            from: './src/export/pro',
-            message: 'src/export/pro is premium code built outside docs/ — ' +
-              'load it at runtime via src/export/proModuleLoader.js, never by import',
-          }, {
-            target: './src/assist',
-            from: '.',
-            except: ['./src/assist', './node_modules'],
-            message: 'src/assist must not import from outside src/assist (ai-workspace.md §2.1, D15): ' +
-              'the host imports Assist and injects tool providers, never the reverse',
-          }],
-        }],
+        'import/no-restricted-paths': ['error', {zones: FENCE_ZONES}],
       },
     },
+    // The layers (design/tracks/open-t200/layering.md §5): more zones of the
+    // same rule, for production files, each override repeating the fences
+    // above because an override replaces the rule's options. Then one
+    // override per allowlisted file (tools/lint/layerAllowlist.json), adding
+    // exactly that file's upward imports. tools/lint/layers.cjs has the table.
+    ...layerOverrides(FENCE_ZONES),
     // --- TS / TSX
     {
       files: ['*.ts', '*.tsx'],

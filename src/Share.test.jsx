@@ -289,7 +289,7 @@ describe('Share deciding whether a route names a new model', () => {
 
 
 /**
- * Local-only mode (privacy/localOnlyMode.js): a visitor who declined
+ * Local-only mode (app/localOnlyMode.js): a visitor who declined
  * analytics can't open a model from GitHub, Drive or a link, but a remote
  * model opened before they declined stays open. Selecting an element in it
  * rewrites the route's element path, which reruns Share's route effect for

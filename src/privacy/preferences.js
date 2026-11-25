@@ -23,7 +23,7 @@ const COOKIE_NAME_RENDER_MODE = 'preferences.renderMode'
 
 
 /**
- * Persisted §6e render-mode look key (see src/viewer/looks.js). Undefined
+ * Persisted §6e render-mode look key (see src/model/looks.js). Undefined
  * until the user picks one; callers default to DEFAULT_LOOK.
  *
  * @return {string|undefined}

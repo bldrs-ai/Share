@@ -2,8 +2,8 @@ import React from 'react'
 import {act, render, screen} from '@testing-library/react'
 import useStore from '../../store/useStore'
 import {ThemeCtx} from '../../theme/Theme.fixture'
-import {registerSelectionFunnel} from '../../viewer/tools/selectionFunnel'
-import {loadFixture, makeStoreFunnel} from '../../viewer/tools/tools.fixture'
+import {registerSelectionFunnel} from '../../tools/selectionFunnel'
+import {loadFixture, makeStoreFunnel} from '../../tools/tools.fixture'
 import RefChip from './RefChip'
 
 

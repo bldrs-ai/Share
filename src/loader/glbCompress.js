@@ -32,7 +32,7 @@ import {
   BLDRS_GLB_COLLAPSED_SCHEMA_VERSION,
   BLDRS_GLB_SCHEMA_VERSION,
 } from './glbCacheKey'
-import {glbInfo, glbVerbose} from './glbLog'
+import {glbInfo, glbVerbose} from '../utils/glbLog'
 import {parseGlb} from './injectGlbExtensions'
 
 

@@ -6,7 +6,7 @@ import {
   noGeometryAlert,
 } from '../loader/loadProgress'
 import {buildOutcomeParams} from '../loader/loadAnalytics'
-import {recordLocalUpload} from '../OPFS/uploadLedger'
+import {recordLocalUpload} from '../connections/uploadLedger'
 import {
   FUNNEL_EVENTS,
   LOCAL_HOUR_PARAM,
@@ -22,8 +22,8 @@ import {
   startModelEngagement,
 } from '../privacy/analytics'
 import {trackEngagementOnOpen} from '../privacy/engagementTracking'
-import {trackModelActionWhenAuthSettled} from '../privacy/modelActionTracking'
-import {reportModelOpenCount} from '../privacy/modelOpenCount'
+import {trackModelActionWhenAuthSettled} from '../app/modelActionTracking'
+import {reportModelOpenCount} from '../app/modelOpenCount'
 import modelIdentity from '../routes/modelIdentity'
 import {modelOpenId} from '../routes/modelOpen'
 import {modelOpenKind} from '../utils/reportModelOpen'
@@ -35,7 +35,7 @@ import {modelOpenKind} from '../utils/reportModelOpen'
  * no-geometry alert, the local-upload ledger, and the open's analytics
  * (real_model_open, model_view, the engagement count, the load
  * diagnostics), once per open. Called only by a load job that is still
- * current (open-205 #2019, Containers/modelSession.js), so all of it is
+ * current (open-205 #2019, session/modelSession.js), so all of it is
  * about the model shown.
  *
  * @param {object} routeResult the route loaded, the store's modelPath
@@ -126,7 +126,7 @@ export function reportModelOpened(routeResult, loadedModel, {installPrefix, refs
     if (isNewOpen) {
       sendOpenEvents(routeResult, eventParams, getIsAuthenticated)
       // The cookieless first-party count of the same open
-      // (privacy/modelOpenCount.js, design/new/model-open-counts.md): sent
+      // (app/modelOpenCount.js, design/new/model-open-counts.md): sent
       // whatever the consent choice, so it counts the opens real_model_open
       // stopped seeing when GA became opt-in (#2051). Same gate as
       // real_model_open, so the two count the same opens; the size is the
@@ -156,8 +156,8 @@ export function reportModelOpened(routeResult, loadedModel, {installPrefix, refs
 function sendOpenEvents(routeResult, eventParams, getIsAuthenticated) {
   gtagEvent(FUNNEL_EVENTS.REAL_MODEL_OPEN, eventParams)
   // The normalized twin, beside — never instead of — real_model_open,
-  // which Ads and the dashboard key on. Sent once auth settles, with the
-  // auth state of then (privacy/modelActionTracking.js says why: a
+  // which the bizdev dashboard keys on. Sent once auth settles, with the
+  // auth state of then (app/modelActionTracking.js says why: a
   // non-GitHub load doesn't wait for auth, and the auth-change reload is
   // deduped). The route is read now, so a later navigation can't
   // relabel it. Always `gate: 'none'`: a view a soft gate let through

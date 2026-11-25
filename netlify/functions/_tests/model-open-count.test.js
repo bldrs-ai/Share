@@ -1,6 +1,6 @@
 /*
  * Tests for the model-open-count Netlify Function: the page's cookieless
- * count of a real model open (src/privacy/modelOpenCount.js) passed to GA4
+ * count of a real model open (src/app/modelOpenCount.js) passed to GA4
  * through the Measurement Protocol. In `_tests/`, not beside the function, for
  * the reason pro-module.test.js gives: every top-level `.js` there is deployed.
  */

@@ -1,6 +1,6 @@
 import {AutoResidency, FrameRateEstimate} from './autoResidency'
 import {createGpuFrameTimer} from './gpuFrameTimer'
-import {ResidencyMetric} from './ResidencyController'
+import {ResidencyMetric} from '../../model/ResidencyController'
 import {PaintKind} from '../three/renderDemand'
 
 

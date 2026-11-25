@@ -3,7 +3,7 @@ import {HOSTED_TRANSPORT_ID} from '../../assist'
 import {SCREENSHOT, setFeedbackStore} from '../../feedback/feedback.fixture'
 import {isFeedbackRecord} from '../../feedback/feedbackRecord'
 import {FEEDBACK_SUBMITTED_EVENT} from '../../feedback/submitFeedback'
-import {ASSIST_FREE_MODELS, ASSIST_MODEL} from '../../viewer/tools/assistModels'
+import {ASSIST_FREE_MODELS, ASSIST_MODEL} from '../../tools/assistModels'
 import {RATINGS, modelChoiceOf, rateReply, ratableReplyIds, replyContext} from './assistFeedback'
 import {assistAuth, assistChat, resetAssistChat} from './assistState'
 

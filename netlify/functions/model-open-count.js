@@ -2,7 +2,7 @@
  * netlify/functions/model-open-count.js
  * -------------------------------------
  * Receives a cookieless count of one real model open from the page
- * (src/privacy/modelOpenCount.js) and passes it to GA4 through the
+ * (src/app/modelOpenCount.js) and passes it to GA4 through the
  * Measurement Protocol. Modeled on client-capabilities.js, which it mirrors
  * line for line where it can.
  *

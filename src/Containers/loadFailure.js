@@ -1,11 +1,11 @@
 import {captureException} from '@sentry/react'
 import {NeedsReconnectError} from '../connections/errors'
-import {EngineOpenFailureError, engineFailureCaptureContext, engineSourceTags} from '../loader/engineOpenFailure'
+import {EngineOpenFailureError, engineFailureCaptureContext, engineSourceTags} from '../engine/engineOpenFailure'
 import {loadFailureParams, omitUndefined} from '../loader/loadAnalytics'
 import {attachLoadFailureContext, getLoadFailureInfo, loadStallCaptureTags} from '../loader/loadProgress'
 import {ARCHIVE_UNREADABLE} from '../loader/modelArchive'
 import {NotFoundError} from '../loader/notFoundError'
-import {UnsupportedSchemaError, unsupportedSchemaAlert} from '../loader/unsupportedSchema'
+import {UnsupportedSchemaError, unsupportedSchemaAlert} from '../engine/unsupportedSchema'
 import {ZipArchiveError} from '../loader/zipArchive'
 import {
   InMemoryUploadGoneError,
@@ -13,7 +13,7 @@ import {
   inMemoryUploadGoneAlert,
   uploadNotInBrowserAlert,
 } from '../OPFS/messages'
-import {hasSeenLocalUpload} from '../OPFS/uploadLedger'
+import {hasSeenLocalUpload} from '../connections/uploadLedger'
 import {
   FUNNEL_EVENTS,
   LOCAL_LINK_EVENTS,
@@ -137,7 +137,7 @@ export function reportLoadFailure(e, {
     const repeat = reported.refusal.current === goneKey
     reported.refusal.current = goneKey
     // `origin` says whether this browser once held the file
-    // (OPFS/uploadLedger.js) or the link's source is unknown; it rides on
+    // (connections/uploadLedger.js) or the link's source is unknown; it rides on
     // the alert so AlertDialog's follow-up action event can repeat it.
     const origin = hasSeenLocalUpload(e.storageId) ? 'this_browser' : 'unknown'
     setAlert({...uploadNotInBrowserAlert(), repeat, origin})

@@ -4,12 +4,12 @@ import {BrowserRouter} from 'react-router-dom'
 import OnboardingOverlay from './OnboardingOverlay'
 import useStore from '../../store/useStore'
 import {ThemeCtx} from '../../theme/Theme.fixture'
-import {handleFileDrop} from '../../utils/dragAndDrop'
+import {handleFileDrop} from '../../app/dragAndDrop'
 
 
 // Mock dependencies
 jest.mock('../../store/useStore')
-jest.mock('../../utils/dragAndDrop')
+jest.mock('../../app/dragAndDrop')
 
 // Mock the navigation hook
 const mockNavigate = jest.fn()

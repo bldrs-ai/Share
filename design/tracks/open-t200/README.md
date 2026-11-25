@@ -28,7 +28,7 @@ The sub-issues of #2315, in order: the slices of [layering.md](layering.md) §7,
 | Work item | What becomes possible | Evidence |
 |---|---|---|
 | [#2316](https://github.com/bldrs-ai/Share/issues/2316) M1: move the model, the engine helpers and the Conway loader; the lint rule | A new upward import fails `bun run lint`. | The boundary test; the move changes only import and path lines. |
-| [#2317](https://github.com/bldrs-ai/Share/issues/2317) M2: `viewer/tools/` and the app-level leaves up to the UI | The allowlist is 19 entries, each with a slice that removes it. | As M1. |
+| [#2317](https://github.com/bldrs-ai/Share/issues/2317) M2: `viewer/tools/` and the app-level leaves up to the UI | The allowlist is 19 entries, each with a slice that removes it (20 as measured: `uploadedFileName.js`, added since, is 3a's; layering.md §3). | As M1. |
 | [#2318](https://github.com/bldrs-ai/Share/issues/2318) V: delete the `?view=` rules stack | No viewer is built over an `IfcAPI`'s parser. | A `?view=` link loads in a worker. |
 | [#2319](https://github.com/bldrs-ai/Share/issues/2319) 1a: one `Engine` interface, `WorkerEngine`, `ConwayEngine` | One interface on either engine; `IfcAPI` named only in `src/engine`. | A contract test against both engines and both formats. |
 | [#2320](https://github.com/bldrs-ai/Share/issues/2320) 1b: `EngineHost` at cap 1, and the lease | One owner for every engine; the viewer owns none. | A → B → C and a theme toggle each leave one worker and one lease. |
@@ -40,6 +40,8 @@ The sub-issues of #2315, in order: the slices of [layering.md](layering.md) §7,
 | [#2326](https://github.com/bldrs-ai/Share/issues/2326) 3a: session state, the store as its projection, `load(source, ctx)` | A session off screen writes its own state. | The headless test loads an IFC and a STEP under Node. |
 | [#2327](https://github.com/bldrs-ai/Share/issues/2327) 3b: cap N under `?feature=workspace` | Leave a model loading and come back to it finished. | Background finish and selection restore, desktop and mobile. |
 | [#2328](https://github.com/bldrs-ai/Share/issues/2328) 4: eviction that keeps the session, and rehydrate | Under memory pressure a background model loses its engine and keeps its scene. | The eviction E2E. |
+
+**Sequencing (2026-11-24).** Create's #2346 merged first, the same day. Then M1 and M2, which the owner holds until the other sessions' work settles. Then the Conversational CAD work (`search-320` slice 2, #1704, the TopBar and drawer stories) starts on the new paths.
 
 Planned, with no issue yet (lines on #2315 until picked up):
 
@@ -55,7 +57,8 @@ Planned, with no issue yet (lines on #2315 until picked up):
 
 - [layering.md](layering.md): the layer map and where every file goes, the import graph and its allowlist, the seams, the lint rule, the headless test, the slices, the risks, and the owner's answers.
 - [engine-worker.md](../../new/engine-worker.md): §5.2–§5.5, what `EngineHost` does inside (cap, cost, admission, eviction, rehydrate, Reported Conditions); §5.2a, one viewer for the page; §7 step 8, the engine side of slices 3b and 4.
-- [in-app-model-switch.md](../../new/in-app-model-switch.md): §0, the owner's decision log (decisions 6–10 are this track's); §4.9, sessions as built; §4.10, the CadView split plan.
+- [in-app-model-switch.md](../../new/in-app-model-switch.md): §0, the owner's decision log (decisions 6–11 are this track's); §4.9, sessions as built; §4.10, the CadView split plan.
+- [workspace-sessions.md](../../new/workspace-sessions.md): the user's document, the `WorkspaceSession`, which sits in the session layer with `src/workspace/`; what a bare "session" means (§2).
 - Code at [`3b623a3f`](https://github.com/bldrs-ai/Share/tree/3b623a3fc7140cdf0aa15907ccc6700c88fc6741):
   - [`src/engine/`](https://github.com/bldrs-ai/Share/tree/3b623a3fc7140cdf0aa15907ccc6700c88fc6741/src/engine): the worker, its client (`EngineSession.js`, to be `WorkerEngine`), sources and sidecars;
   - [`src/Containers/modelSession.js`](https://github.com/bldrs-ai/Share/blob/3b623a3fc7140cdf0aa15907ccc6700c88fc6741/src/Containers/modelSession.js): `ModelSession`, `LoadJob`, `ModelSessionHost`;

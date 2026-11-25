@@ -1,9 +1,9 @@
-import {modelHasPostLoadEdits} from '../viewer/ifc/batchedEdit'
+import {modelHasPostLoadEdits} from '../model/batchedEdit'
 import {yieldToBrowser} from '../utils/scheduling'
 import {buildBatchedGlbInWorker} from './GlbWriterService'
 import {buildInstancedGlbFromSnapshot} from './glbBatchedBuild'
 import {snapshotBatchedModel} from './glbBatchedSnapshot'
-import {glbInfo, glbVerbose} from './glbLog'
+import {glbInfo, glbVerbose} from '../utils/glbLog'
 
 
 /**

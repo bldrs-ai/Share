@@ -1,15 +1,15 @@
-import {reportModelOpenCount} from '../privacy/modelOpenCount'
+import {reportModelOpenCount} from '../app/modelOpenCount'
 import {resetModelOpenReportForTest} from '../utils/reportModelOpen'
 import {reportModelOpened} from './modelOpenEvents'
 
 
-// The count's own module is tested in privacy/modelOpenCount.test.js; here,
+// The count's own module is tested in app/modelOpenCount.test.js; here,
 // only that reportModelOpened calls it for exactly the opens real_model_open
 // counts. Its siblings in sendOpenEvents are stubbed, being tested elsewhere.
-jest.mock('../privacy/modelOpenCount', () => ({reportModelOpenCount: jest.fn(() => true)}))
-jest.mock('../privacy/modelActionTracking', () => ({trackModelActionWhenAuthSettled: jest.fn()}))
+jest.mock('../app/modelOpenCount', () => ({reportModelOpenCount: jest.fn(() => true)}))
+jest.mock('../app/modelActionTracking', () => ({trackModelActionWhenAuthSettled: jest.fn()}))
 jest.mock('../privacy/engagementTracking', () => ({trackEngagementOnOpen: jest.fn()}))
-jest.mock('../OPFS/uploadLedger', () => ({recordLocalUpload: jest.fn()}))
+jest.mock('../connections/uploadLedger', () => ({recordLocalUpload: jest.fn()}))
 jest.mock('../loader/loadProgress', () => ({
   ...jest.requireActual('../loader/loadProgress'),
   captureLoadDiagnostics: jest.fn(),

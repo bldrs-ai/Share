@@ -9,8 +9,8 @@
 // the buffered values, so the diagnostic becomes a tested signal instead of
 // noise.
 //
-// Consumers: `src/loader/glbLog.js` (`[glb]`),
-// `src/viewer/ifc/conwayDirectLog.js` (`[conwayDirect]`).
+// Consumers: `src/utils/glbLog.js` (`[glb]`),
+// `src/engine/conwayDirectLog.js` (`[conwayDirect]`).
 
 
 /**

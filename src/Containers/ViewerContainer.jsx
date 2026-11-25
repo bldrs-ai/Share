@@ -6,7 +6,7 @@ import {PlacemarkHandlers as placemarkHandlers} from '../Components/Markers/Mark
 import useStore from '../store/useStore'
 import useQuota from '../hooks/useQuota'
 import QuotaLimitDialog from '../Components/Open/QuotaLimitDialog'
-import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from '../utils/dragAndDrop'
+import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from '../app/dragAndDrop'
 
 
 /** @return {ReactElement} */

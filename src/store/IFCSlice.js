@@ -1,7 +1,7 @@
 /**
  * The IFC slice's per-model state: what belongs to the one model the view
  * shows, and so goes with it when the user leaves it (open-205 #2019,
- * Containers/modelSession.js). The slice's initial state spreads this, so a
+ * session/modelSession.js). The slice's initial state spreads this, so a
  * field declared here starts and resets to the same value by construction;
  * `store/modelState.js#resetModelState` is the one place that resets it.
  * A new per-model field belongs here, not in a list somewhere else.
@@ -28,7 +28,7 @@ export function ifcModelState() {
 
 /**
  * The store fields `setIsModelLoading` writes, for a load job's `set`
- * (Containers/modelSession.js) to write the same. A load that ends also ends
+ * (session/modelSession.js) to write the same. A load that ends also ends
  * its first mesh: `isFirstMeshShown` belongs to the load in flight, and the
  * next one starts without it.
  *
@@ -63,7 +63,7 @@ export default function createIFCSlice(set, get) {
 
     // Not per-model state (ifcModelState): the overlay belongs to the load
     // job that put it up, which alone takes it down
-    // (Containers/modelSession.js#LoadJob#showLoading), so a switch leaves
+    // (session/modelSession.js#LoadJob#showLoading), so a switch leaves
     // the left load's overlay up until that load unwinds or the next begins.
     isModelLoading: false,
     setIsModelLoading: (isLoading) => set(() => modelLoadingState(isLoading)),
@@ -151,7 +151,7 @@ export default function createIFCSlice(set, get) {
 
     // The model at its index while a Conway (IFC/STEP) load still streams
     // geometry (open-205 #2029; `makeIndexedModelHandle` in
-    // viewer/ifc/conwayDirectIfcLoader.js). Carries the property and spatial
+    // loader/conwayDirectIfcLoader.js). Carries the property and spatial
     // surface only — no geometry, not an Object3D — so it is kept apart from
     // `model`, which scene consumers (clipper, isolator, ViewCube) take to be
     // the object in the scene. Readers of properties and the tree take it

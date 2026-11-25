@@ -1,5 +1,5 @@
-import {PART21_LOADER_TYPES} from './part21Formats'
-import {looksLikeTruncatedPart21Blob} from './stepFormat'
+import {PART21_LOADER_TYPES} from '../engine/part21Formats'
+import {looksLikeTruncatedPart21Blob} from '../engine/stepFormat'
 import {looksLikeZipBytes} from './zipArchive'
 
 

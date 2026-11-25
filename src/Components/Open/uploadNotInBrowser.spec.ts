@@ -81,7 +81,7 @@ async function gaEvents(page: Page, eventName: string): Promise<Record<string, u
 }
 
 
-// Mirrors OPFS/uploadLedger.js#UPLOAD_LEDGER_KEY, which a spec can't import.
+// Mirrors connections/uploadLedger.js#UPLOAD_LEDGER_KEY, which a spec can't import.
 // Any file the loader accepts; this one is small and already served.
 const PICKED_FILE = 'public/index.ifc'
 // Two model loads in one test, as in shareLocalFile.spec.ts.

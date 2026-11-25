@@ -4,7 +4,7 @@ import {Box3, Object3D, Mesh, BufferGeometry, Material, BufferAttribute, Raycast
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
 import {unzipSync, zipSync} from 'three/examples/jsm/libs/fflate.module.js'
 import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
-import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
+import ShareIfcLoader from './ShareIfcLoader'
 import * as contentHash from '../utils/contentHash'
 import {dicomSeriesToNrrd, groupSeries, parseDicomSlice} from './dicom'
 import * as loadProgress from './loadProgress'
@@ -478,7 +478,7 @@ describe('Loader', () => {
 
       // The `[conwayDirect] parsed …` summary is the integration-boundary
       // signal `conwayDirect.spec.ts` gates on in a real browser; here it
-      // rides the same swappable sink (src/viewer/ifc/conwayDirectLog.js), so
+      // rides the same swappable sink (src/engine/conwayDirectLog.js), so
       // assert its whole text rather than letting it print. This mock's
       // StreamAllMeshes yields nothing, so every count is the empty-model
       // zero — the non-empty counts are pinned in the test below.
