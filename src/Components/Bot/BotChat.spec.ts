@@ -112,8 +112,9 @@ describeMobileAndDesktop('Assistant', (ff) => {
     const panel = await openTree(page)
     await expect(panel.locator('[data-is-selected="true"]')).toHaveCount(PROXY_COUNT)
 
-    const token = await page.evaluate(() => localStorage.getItem('bldrs.assist.anonToken'))
-    expect(token).toMatch(/^ba1\./)
+    // The shared anonymous metering token (quota/meterToken.js).
+    const token = await page.evaluate(() => localStorage.getItem('bldrs.meter.token'))
+    expect(token).toMatch(/^bm1\./)
     expect(relayAuth.length).toBeGreaterThanOrEqual(2)
     expect(relayAuth[0]).toBeNull()
     expect(relayAuth.slice(1)).toEqual(relayAuth.slice(1).map(() => `Bearer ${token}`))

@@ -517,11 +517,11 @@ design/new/ai-workspace.md §7 D5). `bm1.<anonId>.<issuedAt>.<sig>`:
   unset, so production needs no new secret to start. The schemes differ in
   prefix and key namespace, so neither's token or IP hash is ever accepted as
   the other's (`_tests/meteringToken.test.js`).
-- **AI chat stays on its own 24-hour token and budgets for now**
-  (`src/quota/aiCredits.js`, unchanged): the owner hasn't chosen a 30-day
-  anonymous AI budget. Moving it is a small change: `ai-chat.js#identify`
-  verifies the metering scheme instead of `aiToken.js`'s, and the anonymous
-  window in `aiCredits.js` becomes `PERIOD_DAYS`.
+- **AI chat is keyed to it too** (owner, 2026-11-25): the hosted
+  assistant's anonymous budget is the token's, with nested day, 7-day and
+  period caps (design/new/ai-workspace.md §6), and the page keeps one token
+  for both (`src/quota/meterToken.js`). The relay's old 24-hour `ba1` token
+  is retired.
 
 ### The IP cap
 
@@ -550,8 +550,12 @@ can't reset a budget:
   browser's token) takes the larger count and the further stage, so the write
   is idempotent and two tokens count as the larger, not the sum.
 - **It does not use up private-model slots.** A signed-in free user's public
-  remote loads are unlimited; the carry records how far the visitor got
-  signed out, and is the account's copy of the limit stage.
+  remote loads are unlimited; the remote-load carry records how far the
+  visitor got signed out, for the funnel.
+- **AI spend is the carry that limits something.** The token's AI spend is
+  added to the account's AI ledger record (`aiLedger.js#carryAnonymousSpend`,
+  once per token, remembered by a keyed digest), so it counts toward the free
+  account's day, 7-day and period caps (ai-workspace.md §6).
 - **Only the current token is linked**, once; the ledger marks it merged. No
   older period is backfilled. The token keeps metering after a sign-out, so
   the visitor who signs out is where they were (`anonMeter.spec.ts`).
@@ -1483,8 +1487,8 @@ The per-layer PRs carry the review history; layers 2–4 reached `main` via the
 
 ## Out of scope / follow-ups
 
-- **The 30-day anonymous AI budget** (owner's choice pending): move the
-  relay onto the metering token and `PERIOD_DAYS` (§"The metering token").
+- **Pay-as-you-go above an AI cap** (cost +50%): a billing feature; its seam
+  is `ai-chat.js#capReachedDecision` (ai-workspace.md §6).
 - **Pro's AI budget on its Stripe billing period**: the one metered Pro
   limit (§"Tiers & limits"). Needs the period start from the subscription
   (`current_period_start`), which stripe-webhook could stamp into

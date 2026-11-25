@@ -21,6 +21,7 @@ const MODEL_C = '/share/v/gh/bldrs-ai/test-models/main/glb/NamedScene.glb'
 
 const METER_PATH = '/.netlify/functions/meter'
 const TEST_TIMEOUT_MS = 120_000
+const HTTP_OK = 200
 const HTTP_FORBIDDEN = 403
 
 
@@ -32,6 +33,51 @@ const HTTP_FORBIDDEN = 403
  */
 async function openLink(page: Page, path: string) {
   await page.goto(path, {waitUntil: 'domcontentloaded'})
+}
+
+
+type LedgerEntry = {count: number, models: string[], stage: string | null, merged: boolean}
+type MeterMockWindow = Window & {
+  __bldrsMeterMock?: (body: object, token: string | null, authorization: string | null) => {status: number, json: object}
+}
+
+
+/**
+ * Route meter requests that get past the MSW worker (it may not yet be
+ * active for a page when the load's early meter call goes out) to the
+ * mock's own decision in the page, `window.__bldrsMeterMock`. So every
+ * meter request is answered from the one localStorage ledger, whichever way
+ * it went ({@link mockLedger}). The function's own rules are pinned by
+ * netlify/functions/_tests/meter.test.js and its replays.
+ *
+ * @param page
+ */
+async function routeMeterToMock(page: Page) {
+  await page.context().route(`**${METER_PATH}`, async (route) => {
+    const request = route.request()
+    const decided = await page.evaluate(({body, token, authorization}) => {
+      const mock = (window as MeterMockWindow).__bldrsMeterMock
+      return mock ? mock(body, token, authorization) : null
+    }, {
+      body: JSON.parse(request.postData() ?? '{}'),
+      token: (await request.headerValue('x-bldrs-meter-token')) ?? null,
+      authorization: (await request.headerValue('authorization')) ?? null,
+    })
+    if (decided === null) {
+      await route.abort()
+      return
+    }
+    await route.fulfill({status: decided.status, contentType: 'application/json', body: JSON.stringify(decided.json)})
+  })
+}
+
+
+/**
+ * @param page
+ * @return the mock meter's ledger: per token, `{count, models, stage, merged}`
+ */
+async function mockLedger(page: Page): Promise<LedgerEntry[]> {
+  return await page.evaluate(() => Object.values(JSON.parse(window.localStorage.getItem('__mockMeterLedger') ?? '{}')))
 }
 
 
@@ -63,6 +109,7 @@ describeMobileAndDesktop('Anonymous metering of remote models', () => {
     await page.addInitScript(() => {
       window.localStorage.setItem('bldrs.mock.meterEnforce', '1')
     })
+    await routeMeterToMock(page)
     await homepageSetup(page)
     for (const [path, file] of [[MODEL_A, 'box.ifc'], [MODEL_B, 'slotted_disk.stl'], [MODEL_C, 'NamedScene.glb']]) {
       await setupVirtualPathIntercept(page, path, file)
@@ -76,13 +123,17 @@ describeMobileAndDesktop('Anonymous metering of remote models', () => {
     const first = meterResponse(page, 'remote_load')
     await openLink(page, MODEL_A)
     await waitForModelReady(page)
-    expect((await (await first).json())).toMatchObject({allowed: true, used: 1, notice: null})
+    expect((await first).status()).toBe(HTTP_OK)
+    // One token, minted at this first metered load, holding one model.
+    expect(await mockLedger(page)).toEqual([{count: 1, models: [MODEL_A], stage: null, merged: false}])
     await expect(page.getByTestId('anon-last-free-notice')).toHaveCount(0)
 
     const second = meterResponse(page, 'remote_load')
     await openLink(page, MODEL_B)
     await waitForModelReady(page)
-    expect((await (await second).json())).toMatchObject({allowed: true, used: ANON_LIMIT, notice: 'last_free'})
+    expect((await second).status()).toBe(HTTP_OK)
+    expect(await mockLedger(page)).toEqual([{count: ANON_LIMIT, models: [MODEL_A, MODEL_B], stage: 'last_free',
+      merged: false}])
     // Non-blocking: the model is open under it.
     const notice = page.getByTestId('anon-last-free-notice')
     await expect(notice).toContainText('This was your last free model from GitHub, Google Drive or a link')
@@ -113,7 +164,9 @@ describeMobileAndDesktop('Anonymous metering of remote models', () => {
     const reopen = meterResponse(page, 'remote_load')
     await openLink(page, MODEL_A)
     await waitForModelReady(page)
-    expect((await (await reopen).json())).toMatchObject({allowed: true, alreadyCounted: true})
+    expect((await reopen).status()).toBe(HTTP_OK)
+    // Not counted again.
+    expect((await mockLedger(page))[0].models).toEqual([MODEL_A, MODEL_B])
     await expect(page.getByTestId('anon-limit-dialog')).toHaveCount(0)
   })
 
@@ -126,10 +179,10 @@ describeMobileAndDesktop('Anonymous metering of remote models', () => {
     // Sign in: the browser's metering token is linked to the account once.
     const link = meterResponse(page, 'link')
     await auth0Login(page)
-    expect(await (await link).json())
-      .toEqual({merged: true, carried: {remote_load: {count: ANON_LIMIT, stage: 'last_free'}}})
+    expect((await link).status()).toBe(HTTP_OK)
     expect(await page.evaluate(() => JSON.parse(window.localStorage.getItem('__mockMeterCarry') ?? 'null')))
       .toEqual({remote_load: {count: ANON_LIMIT, stage: 'last_free'}})
+    expect((await mockLedger(page))[0].merged).toBe(true)
 
     // Signed in, a public remote model isn't metered at all: it opens.
     await openLink(page, MODEL_C)

@@ -134,7 +134,7 @@ describe('ai-ledger-stats', () => {
     const res = await handler(request({authorization: `Bearer ${SECRET}`}))
     const body = await res.json()
     expect(body.breakers).toEqual({error: 'ledger_unavailable'})
-    expect(body.limits.budgets.anonymous).toBe(20000)
+    expect(body.limits.budgets.anonymous).toBe(300000)
   })
 
   it('counts a request settled after midnight in the blob it reserved against (Codex on #2254)', () => {

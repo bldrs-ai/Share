@@ -30,7 +30,7 @@ const WINDOW_WORDS = {7: 'a week', 30: 'every 30 days'}
 const freePrivateModelsClaim = (n, days) => `${n} private models ${WINDOW_WORDS[days]}`
 // The signed-out tier's metered remote loads (design/new/quotas.md
 // §"Anonymous metering"), the only other count the page may state.
-const anonymousRemoteModelsClaim = (n, days) => `${n} remote models every ${days} days`
+const anonymousRemoteModelsClaim = (n, days) => `${n} GitHub, Drive or web-address models every ${days} days`
 // The Free account's allowance line, whole: the owner's wording with the
 // slot rule (2026-10-28, "unlimited X").
 const freePrivateModelsLine = (n, days) =>
@@ -88,6 +88,10 @@ function planProblems(plans, expected) {
   } else if (!/\bexport/i.test(allowanceLine)) {
     // The slot rule's point: what is inside the allowance exports freely.
     problems.push(`Free account doesn't say its ${expected.models} export freely: "${allowanceLine}"`)
+  }
+  // The signed-out remote-load count, as built from the constants.
+  if (expected.anonymous && !(byName.get('Bldrs Share') || []).some((text) => text.includes(expected.anonymous))) {
+    problems.push(`Bldrs Share doesn't state "${expected.anonymous}"`)
   }
   if (!pro.includes(PRO_CLAIM)) {
     problems.push(`Share Pro doesn't state "${PRO_CLAIM}"`)
@@ -148,7 +152,8 @@ describe('marketing pricing plans', () => {
     // The owner's numbers (#1970; the per-user 30-day period 2026-11-25), so
     // a change to a constant is a decision someone sees here, not just copy
     // that silently follows it.
-    expect(ENFORCED).toEqual({models: '2 private models every 30 days', anonymous: '2 remote models every 30 days'})
+    expect(ENFORCED).toEqual({models: '2 private models every 30 days',
+      anonymous: '2 GitHub, Drive or web-address models every 30 days'})
   })
 
   it('reads "2 private models every 30 days — unlimited open, share and export", with no export count', () => {
@@ -167,11 +172,13 @@ describe('marketing pricing plans', () => {
       'Open local models in your browser. No waiting for upload',
       'IFC and STEP loaded by our Conway engine, fastest in the industry (see the benchmark)',
       'USD, GLB, STL, OBJ and many others also supported',
-      '2 remote models every 30 days from public GitHub, Google Drive or a URL, plus every sample' +
-        ' — sign in free for unlimited',
+      'Your own files without limit, plus 2 GitHub, Drive or web-address models every 30 days.' +
+        ' Sign in free for unlimited.',
     ])
     // ...and it follows the constants.
-    expect(anonymousRemoteModelsLine(5, PERIOD_DAYS)).toMatch(/^5 remote models every 30 days /)
+    expect(anonymousRemoteModelsLine(5, PERIOD_DAYS)).toMatch(/, plus 5 GitHub, Drive or web-address models every 30 days\./)
+    expect(featuresOf('Bldrs Share')[3])
+      .toBe(anonymousRemoteModelsLine(ANONYMOUS_REMOTE_LOAD_LIMIT, PERIOD_DAYS))
     const link = PLANS.find((plan) => plan.name === 'Bldrs Share').sections
       .flatMap((section) => section.features).find((feature) => typeof feature !== 'string').link
     // An absolute site path: the marketing site and the viewer share the origin.
@@ -206,8 +213,8 @@ describe('marketing pricing plans', () => {
     expect(planProblems(editPlans('2 private models every 30 days', '2 private models a week'), ENFORCED).join('\n'))
       .toMatch(/a count the viewer doesn't enforce: "2 private models a week/)
     // ...and a wrong signed-out count.
-    expect(planProblems(editPlans('2 remote models every 30 days', '3 remote models every 30 days'), ENFORCED).join('\n'))
-      .toMatch(/Bldrs Share: a count the viewer doesn't enforce: "3 remote models every 30 days/)
+    expect(planProblems(editPlans('plus 2 GitHub', 'plus 3 GitHub'), ENFORCED).join('\n'))
+      .toMatch(/Bldrs Share doesn't state "2 GitHub, Drive or web-address models every 30 days"/)
   })
 
   it('fails the retired export cap if it comes back, in any wording', () => {

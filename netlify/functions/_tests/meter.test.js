@@ -328,6 +328,20 @@ describe('meter', () => {
       expect((await load(URL_D, {token})).status).toBe(403)
     })
 
+    it('carries the token\'s AI spend into the account\'s AI caps, once', async () => {
+      const {body: {token}} = await load(GH_A)
+      const {anonId, period} = verifyMeteringToken(SECRET, token)
+      const today = new Date().toISOString().slice(0, 10)
+      // The relay's ledger shares this fake store in the test (getStore's mock).
+      await fake.store.set(`ai/anonymous/${anonId}`, JSON.stringify({v: 1, days: {[today]: {spent: 4000, free: 0}},
+        holds: {}, estimates: {}}))
+      expect((await linkWith(token)).body).toMatchObject({merged: true})
+      const user = JSON.parse([...fake.data.entries()].find(([path]) => path.endsWith('ai/user/auth0%7Cvisitor'))[1].body)
+      expect(user).toMatchObject({days: {[today]: {spent: 4000, free: 0}}, periodStart: period.start})
+      expect(JSON.stringify(user)).not.toContain(anonId)
+      expect((await linkWith(token)).body).toEqual({merged: false, reason: 'already_merged'})
+    })
+
     it('carries nothing for a token whose period has ended', async () => {
       const old = mintMeteringToken(SECRET, Date.now() - PERIOD_MS - 1000)
       expect((await linkWith(old.token)).body).toEqual({merged: false, reason: 'no_token'})

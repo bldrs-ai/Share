@@ -48,6 +48,9 @@ export function initHandlers(defines) {
   handlers.push(...apiHandlersGithub(defines, true))
   handlers.push(...apiHandlersGithub(defines, false))
   handlers.push(...netlifyHandlers())
+  if (typeof window !== 'undefined') {
+    window.__bldrsMeterMock = meterMockDecision
+  }
   handlers.push(...subscribePageHandler())
   handlers.push(...stripePortalHandlers())
   handlers.push(...gaHandlers())
@@ -236,40 +239,57 @@ function mockStorageJson(name) {
 
 
 /**
- * The meter function's mock (see netlifyHandlers).
+ * The meter function's mock (see netlifyHandlers), as a Response.
  *
  * @param {Request} request
  * @return {Promise<Response>}
  */
 async function meterMockResponse(request) {
   const body = await request.json().catch(() => null)
+  const {status, json} = meterMockDecision(body, request.headers.get('x-bldrs-meter-token'),
+    request.headers.get('authorization'))
+  return jsonMockResponse(status, json)
+}
+
+
+/**
+ * The meter mock's decision, over the localStorage ledger. Also on `window`
+ * as `__bldrsMeterMock` in mocked builds, for a Playwright spec to answer a
+ * meter request that went out before this worker was active for the page.
+ *
+ * @param {*} body the request body
+ * @param {?string} given the `x-bldrs-meter-token` header
+ * @param {?string} authorization
+ * @return {{status: number, json: object}}
+ */
+function meterMockDecision(body, given, authorization) {
   const action = body?.action
+  const answer = (status, json) => ({status, json})
   if (!(action === 'remote_load' && typeof body.key === 'string') && action !== 'link') {
-    return jsonMockResponse(HTTP_BAD_REQUEST, {error: 'invalid_meter_request'})
+    return answer(HTTP_BAD_REQUEST, {error: 'invalid_meter_request'})
   }
   const ledger = mockStorageJson('__mockMeterLedger') ?? {}
   const save = () => window.localStorage.setItem('__mockMeterLedger', JSON.stringify(ledger))
-  const given = request.headers.get('x-bldrs-meter-token')
   const periodEnd = new Date(Date.now() + PERIOD_MS).toISOString()
   if (action === 'link') {
-    if (!request.headers.get('authorization')) {
-      return jsonMockResponse(HTTP_AUTHORIZATION_REQUIRED, {error: 'missing_auth0_token'})
+    if (!authorization) {
+      return answer(HTTP_AUTHORIZATION_REQUIRED, {error: 'missing_auth0_token'})
     }
     const entry = given ? ledger[given] : null
     if (!entry) {
-      return jsonMockResponse(HTTP_OK, {merged: false, reason: 'no_token'})
+      return answer(HTTP_OK, {merged: false, reason: 'no_token'})
     }
     if (entry.merged) {
-      return jsonMockResponse(HTTP_OK, {merged: false, reason: 'already_merged'})
+      return answer(HTTP_OK, {merged: false, reason: 'already_merged'})
     }
     entry.merged = true
     save()
     const carried = {remote_load: {count: entry.count, stage: entry.stage}}
     window.localStorage.setItem('__mockMeterCarry', JSON.stringify(carried))
-    return jsonMockResponse(HTTP_OK, {merged: true, carried})
+    return answer(HTTP_OK, {merged: true, carried})
   }
   if (!isAnonMeteredKey(body.key)) {
-    return jsonMockResponse(HTTP_OK, {allowed: true, metered: false})
+    return answer(HTTP_OK, {allowed: true, metered: false})
   }
   let token = given && ledger[given] ? given : null
   let minted = null
@@ -284,13 +304,12 @@ async function meterMockResponse(request) {
   const common = {limit, periodEnd, ...(minted ? {token: minted} : {})}
   if (entry.models.includes(body.key)) {
     save()
-    return jsonMockResponse(HTTP_OK, {allowed: true, alreadyCounted: true, used: entry.count, notice: null, ...common})
+    return answer(HTTP_OK, {allowed: true, alreadyCounted: true, used: entry.count, notice: null, ...common})
   }
   if (enforce && entry.count >= limit) {
     entry.stage = 'gated'
     save()
-    return jsonMockResponse(HTTP_FORBIDDEN, {allowed: false, gate: 'sign_in', gatedBy: 'token', used: entry.count,
-      ...common})
+    return answer(HTTP_FORBIDDEN, {allowed: false, gate: 'sign_in', gatedBy: 'token', used: entry.count, ...common})
   }
   entry.count += 1
   entry.models.push(body.key)
@@ -299,7 +318,7 @@ async function meterMockResponse(request) {
     entry.stage = 'last_free'
   }
   save()
-  return jsonMockResponse(HTTP_OK, {allowed: true, alreadyCounted: false, used: entry.count,
+  return answer(HTTP_OK, {allowed: true, alreadyCounted: false, used: entry.count,
     notice: lastFree ? 'last_free' : null, ...common})
 }
 
@@ -313,7 +332,12 @@ function netlifyHandlers() {
     // ledger lives in localStorage (`__mockMeterLedger`, by token), so it
     // survives the page loads a remote link is, as the server's does.
     //
-    // It ENFORCES only when a spec opts in with localStorage
+    // This service worker may not yet be active for a page when the load's
+    // early meter call goes out, so a spec routes the request to the same
+    // decision in the page (`window.__bldrsMeterMock`, below) when it gets
+    // past: one ledger either way.
+    //
+    // It ENFORCES only when a spec or a dev opts in with localStorage
     // `bldrs.mock.meterEnforce` = '1'; otherwise it counts and always
     // allows, with no notice, so the many specs that open several GitHub
     // models signed out keep their behaviour. A spec reads a link's carry

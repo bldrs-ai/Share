@@ -100,6 +100,7 @@
  */
 
 
+import {PERIOD_MS} from '../../../src/quota/period.js'
 import {CAS_ATTEMPTS, compareAndSwap as sharedCompareAndSwap} from './blobCas.js'
 
 
@@ -108,6 +109,9 @@ const HOLD_TTL_MINUTES = 15
 export const HOLD_TTL_MS = HOLD_TTL_MINUTES * MILLIS_PER_MINUTE
 const DAY_MS = 86400000
 const RECORD_VERSION = 1
+// Anonymous tokens carried into one account (`carryAnonymousSpend`); a bound
+// on the list, which only ever needs the current period's.
+const MAX_CARRIED = 16
 
 // Compare-and-swap retries before giving up with 'contention' (`blobCas.js`;
 // a bucket that loses them all is a hot key, the global breaker under real
@@ -161,6 +165,13 @@ function normalize(data) {
     days: data.days && typeof data.days === 'object' ? {...data.days} : {},
     holds: data.holds && typeof data.holds === 'object' ? {...data.holds} : {},
     estimates: data.estimates && typeof data.estimates === 'object' ? {...data.estimates} : {},
+    // Only on a record that has them, so a bucket with no period writes the
+    // shape it always has: `periodStart` (a signed-in identity's metering
+    // period, applyPeriod) and `carried` (carryAnonymousSpend).
+    ...(Number.isFinite(data.periodStart) ? {periodStart: data.periodStart} : {}),
+    ...(Array.isArray(data.carried) ?
+      {carried: data.carried.filter((c) => typeof c === 'string').slice(-MAX_CARRIED)} :
+      {}),
   }
 }
 
@@ -315,6 +326,10 @@ function compareAndSwap(store, key, change) {
  * @property {?number} [concurrency] cap on in-flight holds, or none
  * @property {boolean} [soft] admit while under the limit rather than only when the hold fits
  *   (the header's "Soft and strict budgets")
+ * @property {Array<{days: number, limit: number}>} [windows] nested caps, all enforced: a day, 7
+ *   days and the period (src/quota/aiCredits.js). Without, the one `{windowDays, limit}`
+ * @property {('self'|{start: number})} [period] the per-user metering period the spend is
+ *   counted in ({@link applyPeriod}); none for a rolling window
  */
 
 
@@ -331,20 +346,249 @@ function compareAndSwap(store, key, change) {
 export function reserve(store, bucket, {id, micro, free, nowMs}) {
   return compareAndSwap(store, bucket.key, (record) => {
     prune(record, nowMs, bucket.windowDays)
-    const {used, freeToday, inFlight} = usageOf(record, nowMs)
-    const refuse = (reason) => ({write: false, ok: false, reason, used, limit: bucket.limit})
+    const period = applyPeriod(record, bucket, nowMs)
+    const {freeToday, inFlight} = usageOf(record, nowMs)
+    const standing = windowStanding(record, bucket, nowMs, period)
+    const refuse = (reason, at = standing) => ({write: false, ok: false, reason, used: at.used, limit: at.limit})
     if (Number.isInteger(bucket.concurrency) && inFlight >= bucket.concurrency) {
       return refuse('concurrency')
     }
     if (free && Number.isInteger(bucket.freeRequestsPerDay) && freeToday >= bucket.freeRequestsPerDay) {
       return refuse('free_requests')
     }
-    if (!admits(bucket, used, micro)) {
-      return {...refuse('budget'), resumeAt: resumeAtOf(record, bucket, micro, nowMs)}
+    const refusing = windowsOf(bucket).map((w) => ({w, ...windowUsage(record, nowMs, w, period)}))
+      .filter(({w, used}) => !admits({...bucket, limit: w.limit}, used, micro))
+    if (refusing.length > 0) {
+      // The cap reached: every window that refuses, and the user waits for the
+      // last of them to admit again.
+      const resumes = refusing.map(({w}) => windowResumeAt(record, bucket, w, micro, nowMs, period))
+      const resumeAt = resumes.includes(null) ? null : Math.max(...resumes)
+      return {...refuse('budget', {used: refusing[0].used, limit: refusing[0].w.limit}), resumeAt,
+        windowDays: refusing.map(({w}) => w.days)}
     }
     record.holds[id] = {micro, free: free ? 1 : 0, at: nowMs}
-    return {ok: true, used, limit: bucket.limit}
+    return {ok: true, used: standing.used, limit: standing.limit}
   })
+}
+
+
+/**
+ * A bucket's cap windows: its nested `windows` (day, 7 days, the period),
+ * or the one window `{windowDays, limit}` of a bucket that has none.
+ *
+ * @param {Bucket} bucket
+ * @return {Array<{days: number, limit: number}>}
+ */
+function windowsOf(bucket) {
+  return Array.isArray(bucket.windows) && bucket.windows.length > 0 ?
+    bucket.windows :
+    [{days: bucket.windowDays, limit: bucket.limit}]
+}
+
+
+/**
+ * The metering period a bucket's spend is counted in, if it has one, with
+ * the days before it dropped from the record. Mutates `record`.
+ *
+ *  - `period: {start}`: given (an anonymous identity's period is its
+ *    metering token's, `_lib/meteringToken.js`).
+ *  - `period: 'self'`: kept in the record (`periodStart`), for a signed-in
+ *    identity: a period runs PERIOD_MS from the first metered use after the
+ *    last one ended. With none running, every day is dropped, and the next
+ *    spend booked starts one ({@link settle}, at the hold's time); a released
+ *    hold starts nothing.
+ *  - none: no period, the rolling `windowDays` as before (the IP bucket and
+ *    the breakers).
+ *
+ * @param {object} record
+ * @param {Bucket} bucket
+ * @param {number} nowMs
+ * @return {?{start: number, end: number}}
+ */
+function applyPeriod(record, bucket, nowMs) {
+  let start = null
+  if (bucket.period && Number.isFinite(bucket.period.start)) {
+    start = bucket.period.start
+  } else if (bucket.period === 'self' && Number.isFinite(record.periodStart) &&
+      nowMs < record.periodStart + PERIOD_MS) {
+    start = record.periodStart
+  }
+  if (!bucket.period) {
+    return null
+  }
+  const firstDay = start === null ? null : utcDay(start)
+  for (const day of Object.keys(record.days)) {
+    if (firstDay === null || day < firstDay) {
+      delete record.days[day]
+    }
+  }
+  if (start === null) {
+    delete record.periodStart
+    return null
+  }
+  return {start, end: start + PERIOD_MS}
+}
+
+
+/**
+ * Spend inside one window (its days, and not before the period's first day)
+ * plus every live hold.
+ *
+ * @param {object} record
+ * @param {number} nowMs
+ * @param {{days: number}} w
+ * @param {?{start: number}} period
+ * @return {{used: number}}
+ */
+function windowUsage(record, nowMs, w, period) {
+  return {used: windowView(record, nowMs, w.days, period).used}
+}
+
+
+/**
+ * @param {object} record
+ * @param {number} nowMs
+ * @param {number} days
+ * @param {?{start: number}} period
+ * @return {{record: object, used: number}} the record with only the window's days, and its usage
+ */
+function windowView(record, nowMs, days, period) {
+  let oldest = utcDay(nowMs - ((days - 1) * DAY_MS))
+  if (period) {
+    const periodDay = utcDay(period.start)
+    oldest = periodDay > oldest ? periodDay : oldest
+  }
+  const view = {...record, days: {}}
+  for (const [day, entry] of Object.entries(record.days)) {
+    if (day >= oldest) {
+      view.days[day] = entry
+    }
+  }
+  return {record: view, used: usageOf(view, nowMs).used}
+}
+
+
+/**
+ * The window nearest its cap (by the share of it used), as `{used, limit}`:
+ * what the relay reports in `x-bldrs-ai-used` / `x-bldrs-ai-limit`.
+ *
+ * @param {object} record
+ * @param {Bucket} bucket
+ * @param {number} nowMs
+ * @param {?{start: number}} period
+ * @return {{used: number, limit: number}}
+ */
+function windowStanding(record, bucket, nowMs, period) {
+  let best = null
+  for (const w of windowsOf(bucket)) {
+    const {used} = windowUsage(record, nowMs, w, period)
+    const share = w.limit > 0 ? used / w.limit : Infinity
+    if (best === null || share > best.share) {
+      best = {share, used, limit: w.limit}
+    }
+  }
+  return {used: best.used, limit: best.limit}
+}
+
+
+/**
+ * When one refusing window admits again: as its oldest days age out
+ * ({@link resumeAtOf}), and at the latest when the period ends, which frees
+ * everything. The period's own window frees only then.
+ *
+ * @param {object} record
+ * @param {Bucket} bucket
+ * @param {{days: number, limit: number}} w
+ * @param {number} micro
+ * @param {number} nowMs
+ * @param {?{start: number, end: number}} period
+ * @return {?number} epoch ms
+ */
+function windowResumeAt(record, bucket, w, micro, nowMs, period) {
+  if (period && w.days * DAY_MS >= PERIOD_MS) {
+    return period.end
+  }
+  const at = resumeAtOf(windowView(record, nowMs, w.days, period).record, {...bucket, limit: w.limit, windowDays: w.days},
+    micro, nowMs)
+  if (!period) {
+    return at
+  }
+  return at === null ? period.end : Math.min(at, period.end)
+}
+
+
+/**
+ * When a bucket that refuses `micro` now admits it again, over all its
+ * windows: the last of them. Read-only; call after {@link prune}.
+ *
+ * @param {object} record
+ * @param {Bucket} bucket
+ * @param {number} micro
+ * @param {number} nowMs
+ * @return {?number}
+ */
+function bucketResumeAt(record, bucket, micro, nowMs) {
+  const period = applyPeriod(record, bucket, nowMs)
+  let latest = null
+  for (const w of windowsOf(bucket)) {
+    if (admits({...bucket, limit: w.limit}, windowUsage(record, nowMs, w, period).used, micro)) {
+      continue
+    }
+    const at = windowResumeAt(record, bucket, w, micro, nowMs, period)
+    if (at === null) {
+      return null
+    }
+    latest = latest === null ? at : Math.max(latest, at)
+  }
+  return latest
+}
+
+
+/**
+ * Carry an anonymous identity's spend into a signed-in one at the link at
+ * sign-in (netlify/functions/meter.js, design/new/quotas.md §"Link at
+ * sign-in"): the anonymous token's days are added to the account's, so the
+ * visitor's day, 7-day and period spend count toward the account's caps.
+ * Once per token: `carryId` (a keyed digest of the token, never its id) is
+ * remembered in the account's record, so a retry adds nothing. An account
+ * with no period running starts one at the token's period start.
+ *
+ * @param {object} store the AI ledger
+ * @param {object} carry
+ * @param {string} carry.fromKey the anonymous bucket's key
+ * @param {string} carry.toKey the account's bucket key
+ * @param {string} carry.carryId
+ * @param {{start: number}} carry.tokenPeriod
+ * @param {number} carry.nowMs
+ * @return {Promise<{carried: boolean, micro: number}>}
+ * @throws {LedgerUnavailableError}
+ */
+export async function carryAnonymousSpend(store, {fromKey, toKey, carryId, tokenPeriod, nowMs}) {
+  let from
+  try {
+    from = normalize((await store.getWithMetadata(fromKey, {type: 'json', consistency: 'strong'}))?.data)
+  } catch (err) {
+    throw new LedgerUnavailableError('store', {cause: err})
+  }
+  const days = Object.entries(from.days).filter(([day]) => day >= utcDay(tokenPeriod.start))
+  const micro = days.reduce((sum, [, entry]) => sum + entry.spent, 0)
+  if (micro === 0) {
+    return {carried: false, micro: 0}
+  }
+  const {carried} = await compareAndSwap(store, toKey, (record) => {
+    if ((record.carried ?? []).includes(carryId)) {
+      return {write: false, carried: false, micro: 0}
+    }
+    if (!(Number.isFinite(record.periodStart) && nowMs < record.periodStart + PERIOD_MS)) {
+      record.periodStart = tokenPeriod.start
+    }
+    for (const [day, entry] of days) {
+      addToDay(record, day, entry.spent, 0)
+    }
+    record.carried = [...(record.carried ?? []), carryId]
+    return {carried: true}
+  })
+  return {carried, micro: carried ? micro : 0}
 }
 
 
@@ -377,6 +621,10 @@ export function settle(store, bucket, {id, micro, nowMs, release = false, estima
     prune(record, nowMs, bucket.windowDays)
     if (release) {
       return {settled: true}
+    }
+    if (bucket.period === 'self' && !(Number.isFinite(record.periodStart) && hold.at < record.periodStart + PERIOD_MS)) {
+      // The first metered use with no period running starts one (src/quota/period.js).
+      record.periodStart = hold.at
     }
     addToDay(record, utcDay(nowMs), micro, hold.free)
     if (estimate) {
@@ -458,7 +706,7 @@ export async function reserveAll(store, buckets, hold) {
       if (!result.ok) {
         await releaseAll(store, taken, hold)
         return {ok: false, bucket: bucket.name, reason: result.reason, used: result.used, limit: result.limit, standing,
-          resumeAt: result.resumeAt ?? null}
+          resumeAt: result.resumeAt ?? null, windowDays: result.windowDays ?? null}
       }
       taken.push(bucket)
     }
@@ -499,7 +747,7 @@ export async function latestResumeAt(store, buckets, {micro, nowMs, resumeAt}) {
     }
     const record = normalize(current?.data)
     prune(record, nowMs, bucket.windowDays)
-    const at = resumeAtOf(record, bucket, micro, nowMs)
+    const at = bucketResumeAt(record, bucket, micro, nowMs)
     if (at !== null && (latest === null || at > latest)) {
       latest = at
     }

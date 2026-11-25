@@ -27,13 +27,12 @@
 import {isFeatureEnabled} from '../FeatureFlags'
 import {HTTP_FORBIDDEN} from '../net/http'
 import {isAnonMeteredKey} from './anonMeterKeys'
+import {METER_TOKEN_HEADER, METER_TOKEN_KEY} from './meterToken'
 import {modelSlotKey} from './modelSlotKey'
 
 
 export const METER_ENDPOINT = '/.netlify/functions/meter'
-export const METER_TOKEN_HEADER = 'x-bldrs-meter-token'
-/** localStorage: the visitor's metering token. */
-export const METER_TOKEN_KEY = 'bldrs.meter.token'
+export {METER_TOKEN_HEADER, METER_TOKEN_KEY}
 /** localStorage: the token last carried into an account, so the link is asked for once. */
 export const METER_LINKED_KEY = 'bldrs.meter.linked'
 export const ANON_NOTICES = Object.freeze({LAST_FREE: 'last_free'})

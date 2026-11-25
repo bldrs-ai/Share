@@ -1,4 +1,4 @@
-import {aiCreditsCopy} from '../../quota/aiCreditsCopy'
+import {AI_TIERS} from '../../quota/aiCredits'
 
 
 /** At or past this share of the window's credits, the meter turns to a warning. */
@@ -24,7 +24,6 @@ export const LOW_CREDITS_PERCENT = 80
  */
 export function meterView(credits) {
   const {tier, used, limit, exhausted} = credits
-  const {windowLabel} = aiCreditsCopy(tier)
   const raw = limit > 0 ? Math.floor((used / limit) * 100) : 100 // eslint-disable-line no-magic-numbers
   const percent = exhausted ? 100 : Math.max(0, Math.min(100, raw)) // eslint-disable-line no-magic-numbers
   let state = 'normal'
@@ -33,7 +32,9 @@ export function meterView(credits) {
   } else if (percent >= LOW_CREDITS_PERCENT) {
     state = 'low'
   }
-  const what = windowLabel === 'today' ? 'today\'s AI credits used' : `your AI credits used ${windowLabel}`
+  // Window-neutral (aiCreditsCopy.js): the relay reports the window nearest
+  // its cap, which may be the day, the week or the period.
+  const what = `your ${tier === AI_TIERS.PRO ? 'Pro' : 'free'} AI credits used`
   const label = exhausted ? `All of ${what}` : `${percent}% of ${what}`
   return {percent, state, label}
 }

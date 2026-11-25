@@ -19,6 +19,7 @@ import {
   LedgerUnavailableError,
   SETTLE_ATTEMPTS,
   admits,
+  carryAnonymousSpend,
   latestResumeAt,
   recordForReconciliation,
   resumeAtOf,
@@ -463,5 +464,90 @@ describe('aiLedger', () => {
     const err = await reserve(store, bucket(), {id: 'r', micro: 1, free: false, nowMs: NOW}).catch((e) => e)
     expect(err).toBeInstanceOf(LedgerUnavailableError)
     expect(err.reason).toBe('store')
+  })
+
+  // Nested caps and per-user periods (owner, 2026-11-25; src/quota/aiCredits.js).
+  describe('nested caps over a metering period', () => {
+    const PERIOD_DAYS = 30
+    const nested = (overrides = {}) => bucket({windowDays: PERIOD_DAYS, limit: 300, soft: true,
+      windows: [{days: 1, limit: 10}, {days: 7, limit: 70}, {days: PERIOD_DAYS, limit: 300}], ...overrides})
+    const dayOf = (daysAgo) => utcDay(NOW - (daysAgo * DAY_MS))
+    const seed = (fake, key, record) => fake.store.set(key, JSON.stringify({v: 1, holds: {}, estimates: {}, ...record}))
+
+    it('refuses at the day cap, resuming tomorrow, with the week and period still open', async () => {
+      const fake = createFakeBlobs({delayMs: 1})
+      const b = nested({period: {start: NOW - (3 * DAY_MS)}})
+      await seed(fake, b.key, {days: {[TODAY]: {spent: 10, free: 0}}})
+      const r = await reserve(fake.store, b, {id: 'r1', micro: 1, free: false, nowMs: NOW})
+      expect(r).toMatchObject({ok: false, reason: 'budget', used: 10, limit: 10, windowDays: [1]})
+      expect(r.resumeAt).toBe(Date.parse(`${utcDay(NOW + DAY_MS)}T00:00:00.000Z`))
+    })
+
+    it('refuses at the 7-day cap on an unspent day, until the oldest of the week\'s spend leaves it', async () => {
+      const fake = createFakeBlobs({delayMs: 1})
+      const b = nested({period: {start: NOW - (10 * DAY_MS)}})
+      const days = {}
+      for (let i = 1; i <= 7; i++) {
+        days[dayOf(i)] = {spent: 10, free: 0}
+      }
+      await seed(fake, b.key, {days})
+      // Six of those seven days are inside today's 7-day window: 60 < 70, so it admits.
+      expect((await reserve(fake.store, b, {id: 'r1', micro: 1, free: false, nowMs: NOW})).ok).toBe(true)
+      await settle(fake.store, b, {id: 'r1', micro: 10, nowMs: NOW})
+      const r = await reserve(fake.store, b, {id: 'r2', micro: 1, free: false, nowMs: NOW})
+      expect(r).toMatchObject({ok: false, reason: 'budget', windowDays: [1, 7]})
+    })
+
+    it('frees the whole period at its end, not as its days roll off', async () => {
+      const fake = createFakeBlobs({delayMs: 1})
+      const start = NOW - (20 * DAY_MS)
+      const b = nested({windows: [{days: 1, limit: 1000}, {days: 7, limit: 1000}, {days: PERIOD_DAYS, limit: 300}],
+        period: {start}})
+      await seed(fake, b.key, {days: {[dayOf(19)]: {spent: 300, free: 0}}})
+      const r = await reserve(fake.store, b, {id: 'r1', micro: 1, free: false, nowMs: NOW})
+      expect(r).toMatchObject({ok: false, windowDays: [PERIOD_DAYS], resumeAt: start + (PERIOD_DAYS * DAY_MS)})
+    })
+
+    it('a signed-in identity\'s period starts at its first booked spend, and a release starts none', async () => {
+      const fake = createFakeBlobs({delayMs: 1})
+      const b = nested({key: 'ai/user/u1', period: 'self'})
+      await reserve(fake.store, b, {id: 'r1', micro: 5, free: false, nowMs: NOW})
+      await settle(fake.store, b, {id: 'r1', micro: 0, nowMs: NOW, release: true})
+      expect(storedRecord(fake, b.key).periodStart).toBeUndefined()
+      await reserve(fake.store, b, {id: 'r2', micro: 5, free: false, nowMs: NOW})
+      await settle(fake.store, b, {id: 'r2', micro: 4, nowMs: NOW})
+      expect(storedRecord(fake, b.key).periodStart).toBe(NOW)
+    })
+
+    it('drops an ended period\'s spend: the next period starts empty', async () => {
+      const fake = createFakeBlobs({delayMs: 1})
+      const b = nested({key: 'ai/user/u2', period: 'self'})
+      await seed(fake, b.key, {days: {[dayOf(29)]: {spent: 300, free: 0}}, periodStart: NOW - (31 * DAY_MS)})
+      expect(await reserve(fake.store, b, {id: 'r1', micro: 5, free: false, nowMs: NOW})).toMatchObject({ok: true, used: 0})
+    })
+
+    it('carries an anonymous token\'s spend into an account once, starting its period if none runs', async () => {
+      const fake = createFakeBlobs({delayMs: 1})
+      const tokenPeriod = {start: NOW - (2 * DAY_MS)}
+      await seed(fake, 'ai/anonymous/a9', {days: {[dayOf(1)]: {spent: 7, free: 0}, [TODAY]: {spent: 3, free: 0}}})
+      const carry = {fromKey: 'ai/anonymous/a9', toKey: 'ai/user/u3', carryId: 'c1', tokenPeriod, nowMs: NOW}
+      expect(await carryAnonymousSpend(fake.store, carry)).toEqual({carried: true, micro: 10})
+      expect(await carryAnonymousSpend(fake.store, carry)).toEqual({carried: false, micro: 0})
+      const user = storedRecord(fake, 'ai/user/u3')
+      expect(user).toMatchObject({periodStart: tokenPeriod.start, carried: ['c1'],
+        days: {[dayOf(1)]: {spent: 7, free: 0}, [TODAY]: {spent: 3, free: 0}}})
+      // It counts toward the account's day cap now.
+      const b = nested({key: 'ai/user/u3', period: 'self', windows: [{days: 1, limit: 3}, {days: 7, limit: 70},
+        {days: PERIOD_DAYS, limit: 300}]})
+      expect((await reserve(fake.store, b, {id: 'r1', micro: 1, free: false, nowMs: NOW})).ok).toBe(false)
+    })
+
+    it('leaves a bucket with no windows and no period exactly as before', async () => {
+      const fake = createFakeBlobs({delayMs: 1})
+      const b = bucket({limit: 100})
+      await reserve(fake.store, b, {id: 'r1', micro: 10, free: false, nowMs: NOW})
+      await settle(fake.store, b, {id: 'r1', micro: 9, nowMs: NOW})
+      expect(storedRecord(fake, b.key)).toEqual({v: 1, days: {[TODAY]: {spent: 9, free: 0}}, holds: {}, estimates: {}})
+    })
   })
 })

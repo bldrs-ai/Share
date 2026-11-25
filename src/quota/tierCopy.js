@@ -58,18 +58,11 @@ export const SIGNED_OUT_FEATURES = Object.freeze([
  * @return {string}
  */
 export function anonymousRemoteModelsLine(limit, days) {
-  return `${anonymousRemoteModelsClaim(limit, days)} from public GitHub, Google Drive or a URL,` +
-    ' plus every sample — sign in free for unlimited'
-}
-
-
-/**
- * @param {number} limit
- * @param {number} days
- * @return {string} the counted phrase alone, e.g. "2 remote models every 30 days"
- */
-export function anonymousRemoteModelsClaim(limit, days) {
-  return `${limit} remote models every ${days} days`
+  // The owner's wording (2026-11-25, via the coordinator; for owner review in
+  // the PR). Link-shared Drive files do open signed out (the API-key path,
+  // design/new/quotas.md §"Signing out forgets Drive"), so Drive stays.
+  return `Your own files without limit, plus ${limit} GitHub, Drive or web-address models every ${days} days.` +
+    ' Sign in free for unlimited.'
 }
 
 

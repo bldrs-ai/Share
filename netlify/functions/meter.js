@@ -50,6 +50,8 @@ import {getStore} from '@netlify/blobs'
 import * as Sentry from '@sentry/serverless'
 import {ANONYMOUS_IP_DAILY_REMOTE_LOADS, ANONYMOUS_REMOTE_LOAD_LIMIT, slotPeriod} from '../../src/quota/limits.js'
 import {isAnonMeteredKey} from '../../src/quota/anonMeterKeys.js'
+import {createHmac} from 'node:crypto'
+import {carryAnonymousSpend} from './_lib/aiLedger.js'
 import {getUserAppMetadata, patchUserAppMetadata, verifyAuth0Bearer} from './_lib/auth0.js'
 import {isAllowedOrigin, originHostForLog} from './_lib/aiOrigin.js'
 import {gaMeasurementConfig, sendMeasurementProtocolEvent} from './_lib/measurementProtocol.js'
@@ -84,6 +86,9 @@ export const MAX_METER_REQUEST_BYTES = 2048
  */
 export const METER_CLIENT_ID = '2310583466.891516497'
 
+/** The AI relay's ledger store (ai-chat.js), which the link carries AI spend into. */
+export const AI_LEDGER_STORE = 'ai-ledger'
+
 export const STAGE_EVENT = 'anon_limit_stage'
 export const SIGNIN_EVENT = 'anon_limit_signin'
 
@@ -93,6 +98,7 @@ const HTTP_FORBIDDEN = 403
 const HTTP_METHOD_NOT_ALLOWED = 405
 const HTTP_INTERNAL_ERROR = 500
 const HTTP_SERVICE_UNAVAILABLE = 503
+const CARRY_ID_HEX_CHARS = 24
 const STAGE_RANK = {[STAGES.LAST_FREE]: 1, [STAGES.GATED]: 2}
 
 
@@ -231,9 +237,12 @@ async function remoteLoad(req, context, {store, secret, nowMs, key}) {
  * linked (no backfill of older periods), and it keeps metering afterwards,
  * so signing out leaves the visitor where they were.
  *
- * Order: the account is written first, then the token is marked merged. The
- * account write is a max-merge (`mergeAnonymousCarry`), so a retry after a
- * failed mark writes the same thing again rather than adding twice.
+ * Order: the account is written first (its `usageQuota.anonymous`, then the
+ * token's AI spend into the account's AI ledger record), then the token is
+ * marked merged. Both account writes are idempotent (a max-merge,
+ * `mergeAnonymousCarry`, and a carry remembered by digest,
+ * `aiLedger.js#carryAnonymousSpend`), so a retry after a failed mark writes
+ * the same thing again rather than adding twice.
  *
  * @param {Request} req
  * @param {object} context
@@ -269,6 +278,16 @@ async function link(req, context, {store, secret, nowMs}) {
       nowMs,
     })
     await patchUserAppMetadata(auth.sub, {usageQuota: {...usageQuota, anonymous}})
+    // The carry that limits something: the token's AI spend counts toward
+    // the account's day, 7-day and period caps (owner, 2026-11-25). Once per
+    // token, by a keyed digest the account's AI record remembers.
+    await carryAnonymousSpend(getStore({name: AI_LEDGER_STORE, consistency: 'strong'}), {
+      fromKey: `ai/anonymous/${verified.anonId}`,
+      toKey: `ai/user/${encodeURIComponent(auth.sub)}`,
+      carryId: createHmac('sha256', secret).update(`bldrs-meter|ai-carry|${verified.anonId}`).digest('hex').slice(0, CARRY_ID_HEX_CHARS),
+      tokenPeriod: verified.period,
+      nowMs,
+    })
     await markMerged(store, verified.anonId, verified.period, nowMs)
     const stage = carried[FEATURES.REMOTE_LOAD]?.stage ?? null
     if (stage) {
@@ -280,7 +299,8 @@ async function link(req, context, {store, secret, nowMs}) {
   } catch (err) {
     // A ledger or Auth0 step that failed: the page tries again at its next
     // sign-in settle. Never the sub, the token or the error's body.
-    await report(context, 'link_failed', {reason: err instanceof MeterLedgerError ? err.reason : (err.step || err.name)})
+    await report(context, 'link_failed', {reason: err instanceof MeterLedgerError || err?.name === 'LedgerUnavailableError' ?
+      err.reason : (err.step || err.name)})
     return json(HTTP_SERVICE_UNAVAILABLE, {error: 'meter_unavailable'})
   }
 }

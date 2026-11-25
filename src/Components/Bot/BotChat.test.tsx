@@ -442,7 +442,7 @@ describe('BotChat', () => {
         assistErrorMessage('credits_exhausted', HOSTED_TRANSPORT_LABEL, HTTP_PAYMENT_REQUIRED, 'anonymous'))
       expect(screen.getByTestId('BotChat-Error')).toHaveTextContent('Sign in for more')
       const dialog = await screen.findByTestId('dialog-ai-credits')
-      expect(dialog).toHaveTextContent('Out of assistant credits for today')
+      expect(dialog).toHaveTextContent('Out of assistant credits for now')
       expect(within(dialog).getByTestId('button-quota-sign-in')).toBeInTheDocument()
       expect(limitEvents().map(([, , params]) => params)).toEqual([{tier: 'anonymous', feature: 'ai_credits'}])
       expect(reportAssistCondition).not.toHaveBeenCalled()
@@ -463,7 +463,7 @@ describe('BotChat', () => {
       render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
       send('Hello bot')
       const dialog = await screen.findByTestId('dialog-ai-credits')
-      expect(dialog).toHaveTextContent('They come back as the days roll on')
+      expect(dialog).toHaveTextContent('They come back as the days, the week and your 30-day period roll on')
       expect(within(dialog).queryByRole('button', {name: /upgrade|sign in/i})).toBeNull()
       expect(limitEvents().map(([, , params]) => params)).toEqual([{tier: 'pro', feature: 'ai_credits'}])
     })
@@ -574,24 +574,24 @@ describe('BotChat', () => {
         expect(await screen.findByText('Hosted reply.')).toBeInTheDocument()
         const meter = screen.getByTestId('BotChat-CreditsMeter')
         expect(meter).toHaveAttribute('data-state', 'normal')
-        expect(screen.getByRole('progressbar', {name: '0% of today\'s AI credits used'})).toHaveAttribute('aria-valuenow', '0')
+        expect(screen.getByRole('progressbar', {name: '0% of your free AI credits used'})).toHaveAttribute('aria-valuenow', '0')
 
         relayReplies(meterHeaders(USED_85_PERCENT, MICRO))
         await waitFor(() => expect(screen.getByTestId('BotChat-SendButton')).toBeInTheDocument())
         send('Hello again')
         await waitFor(() => expect(screen.getAllByText('Hosted reply.')).toHaveLength(2))
         expect(screen.getByTestId('BotChat-CreditsMeter')).toHaveAttribute('data-state', 'low')
-        expect(screen.getByRole('progressbar', {name: '85% of today\'s AI credits used'})).toHaveAttribute('aria-valuenow', '85')
+        expect(screen.getByRole('progressbar', {name: '85% of your free AI credits used'})).toHaveAttribute('aria-valuenow', '85')
       })
 
-      it('never shows dollars, and words a signed-in tier by its 30-day window', async () => {
+      it('never shows dollars, and names no single window', async () => {
         mockAuth.isAuthenticated = true
         relayReplies(meterHeaders(USED_25_PERCENT, MICRO, 'free'))
         render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
         send('Hello bot')
         expect(await screen.findByText('Hosted reply.')).toBeInTheDocument()
         const meter = screen.getByTestId('BotChat-CreditsMeter')
-        expect(meter).toHaveTextContent('25% of your AI credits used over the last 30 days')
+        expect(meter).toHaveTextContent('25% of your free AI credits used')
         expect(meter).not.toHaveTextContent('$')
       })
 

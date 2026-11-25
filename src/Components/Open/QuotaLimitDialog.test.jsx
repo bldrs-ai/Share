@@ -158,7 +158,7 @@ describe('QuotaLimitDialog', () => {
       act(() => useStore.setState({isLoginVisible: false}))
       const onClose = jest.fn()
       const {getByTestId, getByText, queryByTestId} = renderDialog({tier: 'anonymous', isOpen: true, feature: AI, onClose})
-      expect(getByText('Out of assistant credits for today')).toBeInTheDocument()
+      expect(getByText('Out of assistant credits for now')).toBeInTheDocument()
       expect(queryByTestId('button-quota-subscribe')).toBeNull()
       expect(queryByTestId('button-quota-sign-in')).toHaveTextContent('Sign in')
       fireEvent.click(getByTestId('button-quota-sign-in'))
@@ -177,7 +177,7 @@ describe('QuotaLimitDialog', () => {
 
     it('Pro: only a wait, with Close and no call to action', () => {
       const {getByRole, queryByTestId, getByText} = renderDialog({tier: 'pro', isOpen: true, feature: AI})
-      expect(getByText(/They come back as the days roll on/)).toBeInTheDocument()
+      expect(getByText(/They come back as the days, the week and your 30-day period roll on/)).toBeInTheDocument()
       expect(queryByTestId('button-quota-subscribe')).toBeNull()
       expect(queryByTestId('button-quota-sign-in')).toBeNull()
       expect(getByRole('button', {name: 'Close'})).toBeInTheDocument()
