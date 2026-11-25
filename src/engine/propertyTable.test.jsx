@@ -146,7 +146,7 @@ function engineReads(lines) {
 
 /**
  * The main-thread engine's model: conway's `properties.*` and the model
- * methods conwayDirectIfcLoader.js#attachConwayDirectModelMethods puts over
+ * methods model/engineModelReads.js#attachEngineReads puts over
  * them.
  *
  * @param {object} lines

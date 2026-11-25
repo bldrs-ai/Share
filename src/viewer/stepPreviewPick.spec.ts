@@ -47,8 +47,8 @@ interface PreviewTarget {
 
 /**
  * Turn conway's parse-end preview tick on and hold the load before its index
- * (conwayDirectIfcLoader.js#holdIndexForTest; the worker starts its pump
- * paused for it): the preview is on screen and nothing else is.
+ * (engine/engineModelLoad.js#parse; either engine starts its pump paused
+ * for it): the preview is on screen and nothing else is.
  *
  * @param page
  */

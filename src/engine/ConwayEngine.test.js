@@ -15,6 +15,18 @@ import {EngineOpenFailureError} from './engineOpenFailure'
 import {UnsupportedSchemaError} from './unsupportedSchema'
 import {LoadAbortedError} from '../utils/loadAbort'
 
+
+/**
+ * @param {function(): boolean} condition
+ * @return {Promise<void>} once it holds, polled a task at a time
+ */
+async function waitUntil(condition) {
+  const maxTasks = 100
+  for (let i = 0; i < maxTasks && !condition(); i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
+
 // Controllable flag surface: defaults to "everything off" (matching
 // the real module for every flag these tests touch except
 // `streamOpen`, whose default-on is pinned separately against the
@@ -1486,6 +1498,123 @@ describe('engine/ConwayEngine', () => {
       expect(api.ReleaseModelGeometry).toHaveBeenCalledWith(3)
       await engine.close()
       expect(await engine.release({geometry: true})).toBe(false)
+    })
+
+    // Review of #2373, round 1 (S2): a classic open has no pump loop, so its
+    // one-shot ask must check a close or an abort itself.
+    /** @return {object} a stub whose open is classic: no deferred calls */
+    function makeClassicApi() {
+      const api = makeApi(3)
+      delete api.OpenModelStreamed
+      delete api.ExtractGeometryBatch
+      api.OpenModel = jest.fn(() => 3)
+      api.StreamAllMeshes = jest.fn((id, cb) => cb({expressID: 100, geometries: []}))
+      return api
+    }
+
+    it('a classic open given up by abort() ends as failed {aborted}, without the whole-model walk', async () => {
+      const api = makeClassicApi()
+      const engine = new ConwayEngine({ifcAPI: api})
+      const events = []
+      for (const ev of ['batch', 'done', 'failed']) {
+        engine.on(ev, (msg) => events.push(msg.kind ? `${ev} ${msg.kind}` : ev))
+      }
+      const ended = new Promise((resolve) => engine.on('failed', resolve))
+      await engine.open({bytes: new Uint8Array(4)}, {stream: {}})
+      engine.abort()
+      await ended
+      expect(events).toEqual(['failed aborted'])
+      expect(api.StreamAllMeshes).not.toHaveBeenCalled()
+    })
+
+    it('a classic open closed after it resolves never walks the model, and the close does not wait one out', async () => {
+      const api = makeClassicApi()
+      const engine = new ConwayEngine({ifcAPI: api})
+      await engine.open({bytes: new Uint8Array(4)}, {stream: {}})
+      await engine.close()
+      expect(api.StreamAllMeshes).not.toHaveBeenCalled()
+      expect(api.CloseModel).toHaveBeenCalledWith(3)
+    })
+
+    it('an abort during the one-shot ask delivers nothing and ends as failed {aborted}, not done', async () => {
+      const api = makeApi(0)
+      api.wasmModule = {}
+      let finishAsk
+      // A windowed open, so the one-shot ask is the async one, and held.
+      api.OpenModelStream = jest.fn(() => Promise.resolve(3))
+      api.ExtractGeometryBatchAsync = jest.fn(() => Promise.resolve({extracted: 0, remaining: 0}))
+      api.StreamAllMeshesAsync = jest.fn((id, cb) => new Promise((resolve) => {
+        finishAsk = () => {
+          cb({expressID: 100, geometries: []})
+          resolve()
+        }
+      }))
+      const engine = new ConwayEngine({ifcAPI: api})
+      const events = []
+      for (const ev of ['batch', 'done', 'failed']) {
+        engine.on(ev, (msg) => events.push(msg.kind ? `${ev} ${msg.kind}` : ev))
+      }
+      const ended = new Promise((resolve) => engine.on('failed', resolve))
+      await engine.open({file: new Blob([new Uint8Array(8)])}, {stream: {}})
+      await waitUntil(() => typeof finishAsk === 'function')
+      engine.abort()
+      finishAsk()
+      await ended
+      expect(events).toEqual(['failed aborted'])
+    })
+
+    it('fails the load with the engine\'s own Error, stack and all (S4)', async () => {
+      const api = makeApi(3)
+      const fault = new Error('conway: extraction fault')
+      api.ExtractGeometryBatch = jest.fn(() => {
+        throw fault
+      })
+      const engine = new ConwayEngine({ifcAPI: api})
+      const load = createEngineModelLoad({spawn: () => Promise.resolve(engine)})
+      await expect(load.parse(new Uint8Array(4), {onMeshBatch: () => null})).rejects.toBe(fault)
+      expect(fault.engineFailureKind).toBe('pump')
+    })
+
+    it('lets the retained stream go with the native geometry', async () => {
+      const api = makeApi(3)
+      const engine = new ConwayEngine({ifcAPI: api})
+      await engine.open({bytes: new Uint8Array(4)}, {stream: {retain: true}})
+      await new Promise((resolve) => engine.on('done', resolve))
+      expect((await engine.recapture()).length).toBe(3)
+      await engine.release({geometry: true})
+      expect(engine.captured).toEqual([])
+      expect(engine.recaptured).toBeNull()
+    })
+
+    it('does not open after a close that landed while Init ran (N6)', async () => {
+      const api = makeApi(3)
+      api.wasmModule = undefined
+      let finishInit
+      api.Init = jest.fn(() => new Promise((resolve) => {
+        finishInit = () => {
+          api.wasmModule = {}
+          resolve()
+        }
+      }))
+      const engine = new ConwayEngine({ifcAPI: api})
+      const opening = engine.open({bytes: new Uint8Array(4)}, {stream: {}})
+      engine.close()
+      finishInit()
+      await expect(opening).rejects.toThrow(/closed/)
+      expect(api.OpenModelStreamed).not.toHaveBeenCalled()
+    })
+
+    it('forLoad() makes a fresh engine of the same make, with the wasm path', () => {
+      const api = makeApi()
+      api.SetWasmPath = jest.fn()
+      const viewerEngine = new ConwayEngine({ifcAPI: api})
+      viewerEngine.setWasmPath('./static/js/')
+      const loadEngine = viewerEngine.forLoad()
+      expect(loadEngine).not.toBe(viewerEngine)
+      expect(loadEngine.kind).toBe('mainThread')
+      expect(loadEngine.wasmPath).toBe('./static/js/')
+      loadEngine.close()
+      expect(viewerEngine.closed).toBe(false)
     })
   })
 })

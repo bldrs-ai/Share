@@ -167,14 +167,6 @@ function makeIfcViewer() {
     },
   }
   viewer.ifcLoader = new ShareIfcLoader(withViewerEngine(viewer.IFC, ifcAPI))
-  // Each child parses into an engine of its own, as each does on the worker
-  // route (layering.md §7 "1b": a nested load of two engine-backed children
-  // holds two leases). The page's ConwayEngine holds one model, and in a
-  // real viewer the first child's registration refuses the second anyway
-  // (ShareIfcLoader#parse's "A model is already present"); the stub
-  // `addIfcModel` here registers nothing, which is what lets this file pin
-  // the artifact slot across children at all.
-  Object.defineProperty(viewer.ifcLoader, 'engine', {get: () => new ConwayEngine({ifcAPI})})
   return viewer
 }
 

@@ -35,8 +35,8 @@ const HELD_TIMEOUT_MS = 60_000
 
 /**
  * Hold the load at the end of its parse, before its index
- * (conwayDirectIfcLoader.js#holdIndexForTest; the worker starts its pump
- * paused for it). What is on screen then is the parse-time preview and
+ * (engine/engineModelLoad.js#parse; either engine starts its pump paused
+ * for it). What is on screen then is the parse-time preview and
  * nothing else.
  *
  * @param page

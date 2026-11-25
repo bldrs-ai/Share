@@ -311,7 +311,7 @@ export class WorkerEngine {
         return
       }
       if (msg.ev === Ev.DONE) {
-        logPump(msg.summary)
+        logPump(msg.summary, this.openFormat)
       }
       this.dispatch(msg)
     }
@@ -435,6 +435,8 @@ export class WorkerEngine {
    * @return {Promise<object>} `{modelID, windowed, format, openMs, wasmBytes}`
    */
   async open(source, {format = null, stream = null, sourceOverride = null} = {}) {
+    // The pump line's fallback when the `done` packet names none.
+    this.openFormat = format
     const {source: sent, transfer} = transferableSource(source)
     try {
       const result = await this.request(Op.OPEN, {source: sent, format, stream, sourceOverride}, transfer)
@@ -780,14 +782,15 @@ function transferableSource(source) {
  * is its own.
  *
  * @param {object|undefined} done the `done` summary
+ * @param {string|null} [format] the open's label, if the packet has none
  */
-function logPump(done) {
+function logPump(done, format = null) {
   if (!done) {
     return
   }
   // `format` is what the suffix named (part21Formats.js), said as such: the
   // bytes may be the other schema, and conway opened whatever they are.
-  conwayDirectInfo(`engine worker pump: format=${done.format ?? 'unknown'} (by suffix) ` +
+  conwayDirectInfo(`engine worker pump: format=${done.format ?? format ?? 'unknown'} (by suffix) ` +
     `batches=${done.batches} meshes=${done.meshes} ` +
     `geometries=${done.geometries} windowed=${done.windowed ? 'yes' : 'no'}`)
   if (done.meshes === 0) {

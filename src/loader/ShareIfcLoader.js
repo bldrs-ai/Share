@@ -356,7 +356,8 @@ export default class ShareIfcLoader {
   /**
    * @param {object} args
    * @param {object} args.engine the viewer's ConwayEngine (`viewer.IFC.engine`):
-   *   the engine a load runs on when the route keeps it off a worker
+   *   the make of the engine a load runs on when the route keeps it off a
+   *   worker (`forLoad`)
    * @param {object} args.ifc The IFC namespace (`viewer.IFC`) — used
    *   to reach `context.items.ifcModels` (model registry) +
    *   `addIfcModel(model)` (scene-graph install) + the context's
@@ -465,12 +466,15 @@ export default class ShareIfcLoader {
     let builder = null
     // The first error the incremental builder hit on a batch, if any.
     let batchError = null
-    // The load runs over one Engine, and which is the route's decision: a
-    // WorkerEngine of its own (engine-worker.md §7 steps 3, 6 and 9: the
-    // default), or the viewer's ConwayEngine when the route keeps the load on
-    // the main thread (the kill switch, the rollback), or when there is no
-    // streamed build for a worker's batches to feed (`demandGeometry` off, no
-    // scene). Everything below is the same code for both: `ifcAPI` is the
+    // The load runs over one Engine of its own, and which is the route's
+    // decision: a WorkerEngine (engine-worker.md §7 steps 3, 6 and 9: the
+    // default), or a ConwayEngine of the viewer's make (`forLoad`) when the
+    // route keeps the load on the main thread (the kill switch, the
+    // rollback), or when there is no streamed build for a worker's batches
+    // to feed (`demandGeometry` off, no scene). Its own, on either route,
+    // because a failed or given-up load closes its engine, and the viewer's
+    // must survive that for the next parse into it (an auth retry, CadView's
+    // re-run after a failure; ConwayEngine.js says why close is terminal). Everything below is the same code for both: `ifcAPI` is the
     // load's web-ifc-shaped alias of the engine (engine/engineModelLoad.js),
     // and IFC and STEP alike, STEP's occurrence paths arriving on the same
     // placements the builder reads.
@@ -479,8 +483,9 @@ export default class ShareIfcLoader {
     const engineLoad = createEngineModelLoad({
       format: engineFormatOf(this.type),
       spawn: onWorker ? this.spawnWorker : async () => {
-        await viewerEngine.init()
-        return viewerEngine
+        const engine = viewerEngine.forLoad()
+        await engine.init()
+        return engine
       },
     })
     // open-205 #2011 step A, the engine's close path for a load that never

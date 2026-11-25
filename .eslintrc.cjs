@@ -210,7 +210,10 @@ module.exports = {
               '(src/engine/Engine.js; design/tracks/open-t200/layering.md §4.1)',
           }],
           patterns: [{
-            group: ['@bldrs-ai/conway/src/compat/web-ifc/*', '@bldrs-ai/conway/compiled/src/compat/web-ifc/*'],
+            group: [
+              '@bldrs-ai/conway/src/compat/web-ifc', '@bldrs-ai/conway/src/compat/web-ifc/*',
+              '@bldrs-ai/conway/compiled/src/compat/web-ifc', '@bldrs-ai/conway/compiled/src/compat/web-ifc/*',
+            ],
             message: 'Conway\'s web-ifc compat surface is named only in src/engine ' +
               '(design/tracks/open-t200/layering.md §4.1)',
           }],

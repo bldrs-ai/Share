@@ -193,12 +193,12 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
     expect(createEngineModelLoad).toHaveBeenCalledWith({format: 'ifc', spawn: spawnWorker})
   })
 
-  it('a format no engine worker parses runs on the viewer\'s engine', async () => {
+  it('a format no engine worker parses runs on a page engine of the viewer\'s make', async () => {
     const loader = makeLoader()
     loader.type = 'glb'
     await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
     expect(createEngineModelLoad).toHaveBeenCalledTimes(1)
-    await expect(spawnOfLoad()()).resolves.toBe(viewerEngine)
+    expect(facade.engine).toBe(viewerEngine.forLoad.mock.results[0].value)
     expect(spawnWorker).not.toHaveBeenCalled()
   })
 
@@ -330,9 +330,9 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
       await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
       // The same model load, on the viewer's engine.
       expect(createEngineModelLoad).toHaveBeenCalledTimes(1)
-      await expect(spawnOfLoad()()).resolves.toBe(viewerEngine)
+      expect(facade.engine).toBe(viewerEngine.forLoad.mock.results[0].value)
       expect(spawnWorker).not.toHaveBeenCalled()
-      expect(assembleBatchedModel.mock.calls[0][3].engine).toBe(viewerEngine)
+      expect(assembleBatchedModel.mock.calls[0][3].engine).toBe(viewerEngine.forLoad.mock.results[0].value)
       expect(getConwayDirectLogs().map((l) => l.text)).toContain(note)
     })
 
@@ -347,7 +347,7 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
         loader.type = 'ifc'
         await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
         expect(spawnWorker).not.toHaveBeenCalled()
-        await expect(spawnOfLoad()()).resolves.toBe(viewerEngine)
+        expect(facade.engine).toBe(viewerEngine.forLoad.mock.results[0].value)
         expect(getConwayDirectLogs().map((l) => l.text)).toContain(
           'Engine: main thread (the engine worker is rolled back: disableEngineWorker is on in FeatureFlags.js)')
       } finally {

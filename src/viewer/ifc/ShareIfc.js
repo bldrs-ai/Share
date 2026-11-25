@@ -31,13 +31,17 @@
 //
 // The engine: one `ConwayEngine` (engine/ConwayEngine.js) per viewer build,
 // constructed where this class constructed Conway's `IfcAPI` before slice 1a
-// of design/tracks/open-t200/layering.md, with the same lifetime: idle on
-// the worker route, and the engine a load parses into on the main-thread
-// route (the kill switch). Slice 1b makes it a `mainThread` lease the engine
-// host owns. ShareIfc is mocked in the ShareViewer test harness
-// (`__mocks__/ShareViewer.js`), so no engine is constructed under Jest. The
-// wasm `Init` is lazy (ConwayEngine#init, on the first open), so
-// `setWasmPath` only records the path.
+// of design/tracks/open-t200/layering.md, with the same lifetime. It is idle
+// on both routes: what reads it directly is Loader.js#canOpenFromStore's
+// probe and the manager below, and a main-thread load (the kill switch)
+// parses into an engine of its make, `forLoad()`, so a load that fails and
+// closes its engine leaves this one for the next. Slice 1b makes it a
+// `mainThread` lease the engine host owns. ShareIfc is mocked in the
+// ShareViewer test harness (`__mocks__/shareViewerTestHarness.js`, which
+// gives the mock its own engine over a stub IfcAPI); ShareIfc.dispose.test.js
+// constructs the real one. The wasm `Init` is lazy (ConwayEngine#init, on an
+// engine's first open), so `setWasmPath` only records the path, which
+// `forLoad` passes on.
 
 import {ConwayEngine} from '../../engine/ConwayEngine'
 import ShareIfcManager from '../../engine/ShareIfcManager'
@@ -208,10 +212,12 @@ export default class ShareIfc {
    * @return {void}
    */
   dispose() {
-    // Each registered model's engine (`model.engine`). A worker is
-    // terminated, which frees the whole engine at once (§3), the one thing
-    // `CloseModel` on the page's engine cannot do. The page's engine is this
-    // viewer's own, closed below, and closing it twice closes it once.
+    // Each registered model's engine (`model.engine`), the one its load
+    // made. A worker is terminated, which frees the whole engine at once
+    // (§3), the one thing `CloseModel` on a page engine cannot do; a page
+    // engine closes its model and drops its Conway object, which lets the
+    // wasm heap be collected once nothing else holds the model
+    // (in-app-model-switch.md §4.5).
     for (const model of this.context?.items?.ifcModels ?? []) {
       try {
         model?.engine?.close()
@@ -225,9 +231,10 @@ export default class ShareIfc {
     // parse rejects as aborted, which CadView, having aborted the load itself
     // first, takes as the switch it is (Containers/CadView.jsx#abortLoadInFlight).
     // With the kill switch (`?feature=disableSpaModelNav`) or the rollback on,
-    // the load keeps running into the disposed viewer, as before step F:
-    // there, a viewer is disposed mid-load only by a theme change, and what
-    // that load does next is the pre-step-A behaviour.
+    // the load keeps running into the disposed viewer, as before step F, on
+    // either route (a main-thread load has its own engine, `forLoad`, which
+    // this does not close): there, a viewer is disposed mid-load only by a
+    // theme change, and what that load does next is the pre-step-A behaviour.
     if (isSpaModelNavOn()) {
       for (const engineLoad of this.engineLoads) {
         try {
@@ -238,9 +245,8 @@ export default class ShareIfc {
       }
     }
     this.engineLoads.clear()
-    // The viewer's own engine: CloseModel on the model it holds, if any, and
-    // its Conway object dropped, which is what lets the wasm heap be
-    // collected once this viewer is (in-app-model-switch.md §4.5).
+    // The viewer's own engine, idle (see the file header): closed and its
+    // Conway object dropped, with nothing left for this viewer to reach.
     this.engine?.close().catch((e) => console.warn('ShareIfc.dispose: engine close failed:', e))
     this.engine = null
     this.selector = null

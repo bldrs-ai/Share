@@ -173,9 +173,11 @@ async function workerArtifactMatchesMainAndExports(page: Page, glbLogs: string[]
   const mainEngine = watchEngineWorker(page)
   const reference = await loadAndWaitForArtifact(page, glbLogs, `${path}${MAIN_FLAGS}`)
   // The reference really came from the main-thread engine, and its captures
-  // ran in process, with no line.
+  // ran as that engine's capture job (ConwayEngine#capture, slice 1a of
+  // layering.md: the same job the worker's CAPTURE op runs).
   await mainEngine.expectMainThreadEngine()
-  expect(glbLogs.some((l) => l.includes('engine captures ran in'))).toBe(false)
+  expect(glbLogs.some((l) => l.includes('engine captures ran in the mainThread engine'))).toBe(true)
+  expect(glbLogs.some((l) => l.includes('engine captures ran in the worker engine'))).toBe(false)
 
   await clearOpfs(page)
   // Watched from here on: the main-thread load above printed its own pump

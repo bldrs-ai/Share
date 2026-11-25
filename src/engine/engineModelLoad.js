@@ -112,10 +112,9 @@ export function makeEngineIfcApi() {
       facade.engine?.release({geometry: true}).catch(() => null)
       return true
     },
-    getStatistics: () => statisticsView(facade.summary?.statistics),
     getConwayVersion: () => facade.engine?.info?.conwayVersion,
   }
-  // These two are present only when the engine reported a value, as the
+  // These are present only when the engine reported a value, as the
   // method is on an engine that has it: `ShareIfcLoader#parse` feature-detects
   // both with `typeof`, and an always-present one would print
   // `units=undefined m`, or warn of a non-frame where the engine had none to
@@ -123,6 +122,11 @@ export function makeEngineIfcApi() {
   Object.defineProperty(facade, 'GetLinearScalingFactor', {
     get: () => (typeof facade.summary?.linearScalingFactor === 'number' ?
       () => facade.summary.linearScalingFactor : undefined),
+  })
+  // And statistics, the same way: `parse` reads them only when the engine has
+  // the call, and an engine without it (an old pin) sends none.
+  Object.defineProperty(facade, 'getStatistics', {
+    get: () => (facade.summary?.statistics ? () => statisticsView(facade.summary.statistics) : undefined),
   })
   Object.defineProperty(facade, 'GetAppliedCoordinationMatrix', {
     get: () => (facade.summary?.appliedCoordination !== undefined ?
@@ -581,12 +585,21 @@ export function withEngineSource(error, sourceMode) {
 
 /**
  * @param {object} msg a `failed` event
- * @return {Error} the message verbatim, so `isOutOfMemoryError` and the
- *   load report classify a worker's failure as they would a main-thread one
+ * @return {Error} the engine's own Error when it could send one (the page's
+ *   engine, by reference: its stack and `cause` intact, so Sentry groups
+ *   conway's faults apart, as it did before the page engine went behind
+ *   `Engine`), else the message verbatim, so `isOutOfMemoryError` and the
+ *   load report classify a worker's failure as they would a page one
  */
 function engineLoadError(msg) {
+  if (msg.error instanceof Error) {
+    msg.error.engineFailureKind = msg.kind
+    return msg.error
+  }
   // A string, whatever the worker sent: a stale worker beside a new page can
-  // still post an object here (SHARE-1Y7, `Error: [object Object]`).
+  // still post an object here (SHARE-1Y7, `Error: [object Object]`). Only a
+  // worker gets here (the page engine sends its Error, above), so the text,
+  // and its Sentry grouping, stays the worker's.
   const message = typeof msg.message === 'string' ? msg.message :
     `engine worker load failed (${typeof msg.kind === 'string' ? msg.kind : 'unknown'})`
   const error = new Error(message)

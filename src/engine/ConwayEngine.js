@@ -29,7 +29,15 @@
 //
 // Freed by `close()` (CloseModel) and dropping every reference, then garbage
 // collection: the wasm heap is returned only once nothing references the
-// `IfcAPI` (in-app-model-switch.md §4.5).
+// `IfcAPI` (in-app-model-switch.md §4.5). `close()` is terminal, as a
+// WorkerEngine's is: one model per engine, and a load that fails or is given
+// up closes its engine. So a load never parses into the viewer's own engine
+// (ShareIfc#engine), which has to outlive any one load: it gets one of its
+// own, `forLoad()`, of the same make (review of #2373, round 1: a failed load
+// had closed the viewer's engine under every later parse into that viewer, an
+// auth retry's included). The viewer's stays idle, for what reads it
+// directly until slice 1b: Loader.js#canOpenFromStore's probe and the
+// manager a GLB cache hit and a mesh model share.
 import {IfcAPI} from '@bldrs-ai/conway/web-ifc'
 import {isFeatureEnabled} from '../FeatureFlags'
 import debug, {WARN} from '../utils/debug'
@@ -75,9 +83,13 @@ export class ConwayEngine {
    * @param {object} [options]
    * @param {object} [options.ifcAPI] a Conway `IfcAPI`; one is made when not
    *   given (tests pass a stub)
+   * @param {function(): object} [options.makeIfcAPI] how {@link forLoad} makes
+   *   the next engine's: a new `IfcAPI` by default, or the `ifcAPI` stub given
    * @param {function(): number} [options.now] clock, for timings
    */
-  constructor({ifcAPI = new IfcAPI(), now = () => performance.now()} = {}) {
+  constructor({ifcAPI = null, makeIfcAPI = null, now = () => performance.now()} = {}) {
+    this.makeIfcAPI = makeIfcAPI ?? (ifcAPI ? () => ifcAPI : () => new IfcAPI())
+    ifcAPI = ifcAPI ?? this.makeIfcAPI()
     this.kind = 'mainThread'
     // Conway's object, exposed for the two holders slice 1b and slice N
     // remove: the viewer's `ShareIfcManager` (a GLB cache hit's and a mesh
@@ -86,6 +98,7 @@ export class ConwayEngine {
     // `src/engine` calls it: they use this engine.
     this.ifcAPI = ifcAPI
     this.now = now
+    this.wasmPath = null
     this.closed = false
     this.modelID = -1
     this.windowed = false
@@ -96,6 +109,7 @@ export class ConwayEngine {
     this.paused = false
     this.pauseAfterBatch = false
     this.aborted = false
+    this.abortReported = false
     this.resume = null
     // The streamed load's pump, while it runs; close() waits for it before
     // closing the model under it.
@@ -146,8 +160,25 @@ export class ConwayEngine {
    * @param {string} path
    */
   setWasmPath(path) {
+    this.wasmPath = path
     // eslint-disable-next-line new-cap
     this.ifcAPI?.SetWasmPath?.(path)
+  }
+
+
+  /**
+   * A fresh engine of the same make, with the same wasm path, for one load
+   * (see the file header): what a main-thread load parses into, so that its
+   * close, on a failure or an abort, never reaches this one.
+   *
+   * @return {ConwayEngine}
+   */
+  forLoad() {
+    const engine = new ConwayEngine({makeIfcAPI: this.makeIfcAPI, now: this.now})
+    if (this.wasmPath !== null) {
+      engine.setWasmPath(this.wasmPath)
+    }
+    return engine
   }
 
 
@@ -256,6 +287,8 @@ export class ConwayEngine {
     const api = this.ifcAPI
     try {
       await this.init()
+      // A close while Init ran: nothing is open yet, so stop before opening.
+      this.requireOpen_()
       const file = isBlobSource(source?.file) ? source.file : null
       const store = file !== null && !isFeatureEnabled('disableStreamOpen') &&
         typeof api.OpenModelStream === 'function' ? makeBlobByteStore(file) : null
@@ -391,12 +424,9 @@ export class ConwayEngine {
             this.resume = resolve
           })
         }
-        if (this.closed) {
-          // close() has already ended the stream (`failed {kind: 'closed'}`).
-          return
-        }
-        if (this.aborted) {
-          this.emit_(EngineEvent.FAILED, {kind: 'aborted', message: 'engine: load aborted'})
+        if (this.stopped_()) {
+          // close() has already ended the stream (`failed {kind: 'closed'}`),
+          // or an abort ended it here.
           return
         }
         const batch = []
@@ -451,10 +481,15 @@ export class ConwayEngine {
           `asyncAsk=${hasAsyncWholeModelAsk ? 'yes' : 'no'} ` +
           `retained=${this.retain ? 'yes' : 'no'}`)
       }
-      if (meshes === 0) {
+      // Checked before the one-shot ask and again after it, as the loop checks
+      // before each pump call: a classic open has no loop, and the whole-model
+      // ask is the longest single stretch of the load, so a close or an abort
+      // must not walk (or wait out) the whole model, nor end as `done`
+      // (review of #2373, round 1).
+      if (meshes === 0 && !this.stopped_()) {
         await this.deliverOneShot_(deferred)
       }
-      if (this.closed) {
+      if (this.stopped_()) {
         return
       }
       this.emit_(EngineEvent.DONE, {summary: await this.summarize_({
@@ -462,7 +497,11 @@ export class ConwayEngine {
       })})
     } catch (e) {
       if (!this.closed) {
-        this.emit_(EngineEvent.FAILED, {kind: 'pump', message: e?.message ?? String(e), name: e?.name})
+        // `error` by reference: on this engine the thrown value is on the same
+        // thread, so the load fails with conway's own Error, its stack and
+        // `cause` intact, as parseIfcWithConway's did (engineModelLoad.js
+        // #engineLoadError). A worker can send only its message.
+        this.emit_(EngineEvent.FAILED, {kind: 'pump', message: e?.message ?? String(e), name: e?.name, error: e})
       }
     } finally {
       this.pumping = null
@@ -498,7 +537,7 @@ export class ConwayEngine {
     }
     this.retain = true
     const captured = await this.wholeModel_()
-    for (let at = 0; at < captured.length && !this.closed; at += ONE_SHOT_CHUNK) {
+    for (let at = 0; at < captured.length && !this.stopped_(); at += ONE_SHOT_CHUNK) {
       this.deliver_(captured.slice(at, at + ONE_SHOT_CHUNK), {done: undefined, total: undefined})
     }
   }
@@ -826,6 +865,13 @@ export class ConwayEngine {
       // eslint-disable-next-line new-cap
       released = api.ReleaseModelGeometry(this.modelID) || released
     }
+    if (geometry) {
+      // The scene is built and the natives are gone: nothing recaptures from
+      // here, so the retained stream and the memoised ask go too, rather than
+      // hold the conway#638 graph until the engine closes.
+      this.captured = []
+      this.recaptured = null
+    }
     return Promise.resolve(released)
   }
 
@@ -869,6 +915,27 @@ export class ConwayEngine {
     }
     this.closing = (this.pumping ?? Promise.resolve()).then(release, release)
     return this.closing
+  }
+
+
+  /**
+   * Whether the stream has ended without `done`: closed (`failed {closed}`
+   * already sent), or aborted (`failed {aborted}` sent here, once).
+   *
+   * @return {boolean}
+   */
+  stopped_() {
+    if (this.closed) {
+      return true
+    }
+    if (this.aborted) {
+      if (!this.abortReported) {
+        this.abortReported = true
+        this.emit_(EngineEvent.FAILED, {kind: 'aborted', message: 'engine: load aborted'})
+      }
+      return true
+    }
+    return false
   }
 
 

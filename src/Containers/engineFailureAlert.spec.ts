@@ -13,7 +13,7 @@ import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
  * handed to GA (the alert is counted under a constant, and `load_failed`
  * carries only a closed-set class).
  *
- * Unit tests cover the plumbing (conwayDirectIfcLoader.test.js,
+ * Unit tests cover the plumbing (engine/ConwayEngine.test.js,
  * CadView.test.jsx, AlertDialog*.test.jsx); this is the one test of the
  * user's own action across the real engine, route and dialog.
  */

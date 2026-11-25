@@ -203,7 +203,7 @@ describe.each(['ifc', 'step'])('loader/ShareIfcLoader abort, %s', (type) => {
       isFeatureEnabled.mockImplementation((name) => name === 'demandGeometry' || name === 'disableEngineWorker')
     })
 
-    it('runs on the viewer\'s engine, closes it on the abort, and drops a parse that returns after it', async () => {
+    it('runs on an engine of the viewer\'s make, closes it on the abort, and drops a parse that returns after it', async () => {
       const controller = new AbortController()
       const finalize = jest.fn(() => ({batches: [], stats: {vertexCount: 3, triangleCount: 1}}))
       IncrementalBatchedBuilder.mockImplementation(() => ({
@@ -214,11 +214,13 @@ describe.each(['ifc', 'step'])('loader/ShareIfcLoader abort, %s', (type) => {
         finalize,
       }))
       const viewerEngine = makeFakeEngine()
+      const loadEngine = makeFakeEngine()
+      viewerEngine.forLoad.mockReturnValue(loadEngine)
       let load
       createEngineModelLoad.mockImplementation(() => {
         load = makeFakeEngineLoad({
           ifcAPI: makeIfcAPI(),
-          engine: viewerEngine,
+          engine: loadEngine,
           play: ({onMeshBatch}) => {
             onMeshBatch([{expressID: 101, geometries: {size: () => 1}}], 0, {done: 1, total: 1})
             // The open cannot be interrupted; it returns after the user left.
@@ -235,10 +237,12 @@ describe.each(['ifc', 'step'])('loader/ShareIfcLoader abort, %s', (type) => {
       await expect(loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn(), {signal: controller.signal}))
         .rejects.toBeInstanceOf(LoadAbortedError)
 
-      // The route gave the load the viewer's engine, not a worker of its own.
-      await expect(createEngineModelLoad.mock.calls[0][0].spawn()).resolves.toBe(viewerEngine)
+      // The route gave the load a page engine of the viewer's make, not a
+      // worker, and the abort closed that one, never the viewer's own.
+      await expect(createEngineModelLoad.mock.calls[0][0].spawn()).resolves.toBe(loadEngine)
       expect(load.abort).toHaveBeenCalledTimes(1)
-      expect(viewerEngine.close).toHaveBeenCalled()
+      expect(loadEngine.close).toHaveBeenCalled()
+      expect(viewerEngine.close).not.toHaveBeenCalled()
       // Dropped straight after the parse, before the streamed batches are
       // even assembled into a model.
       expect(finalize).not.toHaveBeenCalled()

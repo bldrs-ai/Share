@@ -618,9 +618,6 @@ describe('Loader', () => {
     }
     hashSpy.mockClear()
     blobHashSpy.mockClear()
-    // A viewer is built per open (until slice 2d of layering.md), and its
-    // engine holds one model, so the second open gets a fresh one.
-    mockViewer.ifcLoader = new ShareIfcLoader(withViewerEngine(mockViewer.IFC, mockViewer.IFC.loader.ifcManager.ifcAPI))
     const ifczip = zipSync({'index.ifc': new Uint8Array(Buffer.from(ifcText))})
     restoreArrayBuffer = setupMockBlobWithContent(Buffer.from(ifczip))
     try {

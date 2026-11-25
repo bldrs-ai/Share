@@ -34,18 +34,24 @@ describe('viewer/ifc/ShareIfc#dispose', () => {
     expect(close).toHaveBeenCalledTimes(1)
   })
 
-  it('closes its own engine, which holds the main-thread route\'s model, and drops it', async () => {
+  it('closes a main-thread model\'s engine, one of its own make, and its own idle one', async () => {
     isSpaModelNavOn.mockReturnValue(false)
     const ifc = new ShareIfc(makeContext())
-    const engine = ifc.engine
-    const conway = engine.ifcAPI
-    // As a kill-switch load leaves it: the model registered, on this engine.
-    engine.modelID = 0
-    ifc.addIfcModel({engine})
+    const viewerEngine = ifc.engine
+    // As a kill-switch load leaves it: the model registered, on the engine
+    // its load made (ConwayEngine#forLoad).
+    const loadEngine = viewerEngine.forLoad()
+    const conway = loadEngine.ifcAPI
+    loadEngine.modelID = 0
+    ifc.addIfcModel({engine: loadEngine})
     ifc.dispose()
-    await engine.closing
-    expect(conway.CloseModel).toHaveBeenCalledTimes(1)
-    expect(engine.ifcAPI).toBeNull()
+    await loadEngine.closing
+    await viewerEngine.closing
+    expect(conway.CloseModel).toHaveBeenCalledWith(0)
+    // Both let their Conway objects go, which is what lets the heap be
+    // collected (modelSwitchMemory.spec.ts checks that in the browser).
+    expect(loadEngine.ifcAPI).toBeNull()
+    expect(viewerEngine.ifcAPI).toBeNull()
     expect(ifc.engine).toBeNull()
   })
 

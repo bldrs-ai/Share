@@ -420,7 +420,7 @@ describe('IncrementalBatchedBuilder', () => {
   })
 
   it('skips one budget-evicted geometry without dropping the rest of the batch (SHARE-1NK)', () => {
-    // conway's GEOMETRY_BUDGET_MB eviction (conwayDirectIfcLoader.js,
+    // conway's GEOMETRY_BUDGET_MB eviction (engine/engineHandler.js,
     // conway#535) can free geometry 777's native asset between the demand
     // pump delivering it and this call reading it, so GetGeometry throws
     // embind's "Cannot pass deleted object..." for that one id while 999

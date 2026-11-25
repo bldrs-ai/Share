@@ -38,9 +38,9 @@ interface RowTarget {
 
 
 /**
- * Hold the pump after its first `holds` batches (conwayDirectIfcLoader.js
- * #holdMidPumpForTest; the worker is stepped a batch at a time,
- * engineModelLoad.js): durable geometry on screen, the load not finished, no
+ * Hold the pump after its first `holds` batches (engine/engineModelLoad.js
+ * #parse: either engine is stepped a batch at a time while the hook is
+ * installed): durable geometry on screen, the load not finished, no
  * pick tables stamped.
  *
  * @param page

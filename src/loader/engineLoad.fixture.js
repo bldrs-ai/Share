@@ -20,6 +20,8 @@
 export function makeFakeEngine({kind = 'mainThread', canRecapture = kind === 'mainThread', modelID = 4} = {}) {
   return {
     kind,
+    // ConwayEngine#forLoad: a fresh engine of the same make for one load.
+    forLoad: jest.fn(() => makeFakeEngine({kind, canRecapture, modelID})),
     modelID,
     closed: false,
     capabilities: {recapture: canRecapture},
