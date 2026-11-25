@@ -1,15 +1,21 @@
 import React, {ReactElement} from 'react'
 import {Helmet} from 'react-helmet-async'
-import {Box, Button, Link, Stack, SvgIcon, Typography} from '@mui/material'
+import {Box, Link, Stack, SvgIcon, Typography} from '@mui/material'
 import {Email as EmailIcon, GitHub as GitHubIcon, X as XIcon} from '@mui/icons-material'
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
 import {LogoB} from '../Logo/Logo'
-import {CONSENT_LEVELS, getConsentLevel} from '../../privacy/consent'
-import chooseConsentLevel from '../../app/consentChoice'
 import {ABOUT_MISSION, ABOUT_PAGE_TITLE} from './component'
-import ConsentNotice from './ConsentNotice'
 import DiscordIcon from './Discord.svg'
+
+
+/**
+ * The privacy policy, served by the marketing build (netlify.toml: /privacy/
+ * is a file match, so it wins on bldrs.ai). The SPA keeps its own copy at
+ * /privacy (BaseRoutes.jsx, pages/Privacy.jsx), which is what a dev server
+ * without the marketing build shows; Privacy.test.jsx keeps the two in step.
+ */
+export const PRIVACY_POLICY_HREF = '/privacy/'
 
 
 /** First of the About dialog's socials (owner, 2026-11-24). */
@@ -27,11 +33,9 @@ export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, on
   // Dialog closes itself on backdrop click, Escape and the X button by
   // calling setIsDialogDisplayed(false) directly, which skips actionCb. Every
   // close has to go through onClose instead: that's where the first-time
-  // cookie is set and where an undecided visitor's dismissal is stored as a
-  // decline (AboutControl/LogoMenu, consentChoice#dismissConsent), and
-  // without it a first-timer who dismissed About by clicking the backdrop
-  // got About + the onboarding overlay replayed on the reload after their
-  // first drag-and-drop.
+  // cookie is set (AboutControl/LogoMenu), and without it a first-timer who
+  // dismissed About by clicking the backdrop got About + the onboarding
+  // overlay replayed on the reload after their first drag-and-drop.
   const setIsDisplayed = (isDisplayed) => {
     if (isDisplayed) {
       setIsDialogDisplayed(true)
@@ -39,19 +43,6 @@ export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, on
       onClose()
     }
   }
-  // The two answers to ConsentNotice's text. OK is the only path that can
-  // consent to anything. Cancel declines for anyone, so a visitor who
-  // allowed analytics can take it back here; X, backdrop and Escape decline
-  // only for a visitor who hasn't chosen (dismissConsent), so closing About
-  // to get back to a model doesn't undo a choice.
-  const answer = (level) => {
-    if (getConsentLevel() !== level) {
-      chooseConsentLevel(level)
-    }
-    onClose()
-  }
-  const onOk = () => answer(CONSENT_LEVELS.FUNCTIONAL)
-  const onCancel = () => answer(CONSENT_LEVELS.RESTRICTED)
   return (
     <Dialog
       headerText={ABOUT_MISSION}
@@ -70,27 +61,8 @@ export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, on
           />
         </Link>
       }
-      // Cancel and OK side by side at the same size, so declining is as
-      // easy as accepting. Both close through onClose like every other path.
-      actionTitle={
-        <>
-          <Button
-            variant='outlined'
-            onClick={onCancel}
-            data-testid='button-dialog-cancel'
-          >
-            Cancel
-          </Button>
-          <Button
-            variant='contained'
-            onClick={onOk}
-            aria-label='action-button'
-            data-testid='button-dialog-main-action'
-          >
-            OK
-          </Button>
-        </>
-      }
+      actionTitle='OK'
+      actionCb={onClose}
     >
       <AboutContent/>
     </Dialog>
@@ -188,7 +160,7 @@ function AboutContent() {
           </Typography>
         </li>
         <li>Drag &amp; Drop; no upload</li>
-        <li>Open: IFC 2&4, STEP, STL, OBJ, ...</li>
+        <li>Open: IFC, STEP, STL, OBJ, ...</li>
       </Box>
       <table style={{
         width: '100%',
@@ -206,7 +178,19 @@ function AboutContent() {
           <tr><td>Private</td><Tdc>X</Tdc><Tdc>X</Tdc><Tdc>✓</Tdc></tr>
         </tbody>
       </table>
-      <ConsentNotice/>
+      <Typography variant='body2' color='text.secondary' data-testid='about-privacy'>
+        Your models stay on your device.{' '}
+        {/* A new tab, so reading the policy doesn't leave the loaded model. */}
+        <Link
+          href={PRIVACY_POLICY_HREF}
+          target='_blank'
+          rel='noopener noreferrer'
+          color='inherit'
+          data-testid='about-privacy-policy'
+        >
+          Privacy policy
+        </Link>
+      </Typography>
       <Stack direction='row' justifyContent='center' alignItems='center' spacing={1} sx={{fontSize: '0.9em', opacity: 0.5}}>
         <Link
           href={X_PROFILE_URL}
@@ -233,10 +217,12 @@ function AboutContent() {
           href='https://github.com/bldrs-ai/Share'
           target='_blank'
           rel='noopener'
+          aria-label='Bldrs on GitHub: bldrs-ai'
           sx={{display: 'flex', alignItems: 'center', color: 'inherit'}}
+          data-testid='about-social-github'
         >
           <GitHubIcon className='icon-share' sx={{marginRight: '0.25em'}}/>{
-            isMobile ? '' : 'GitHub'
+            isMobile ? '' : 'bldrs-ai'
           }
         </Link>
         <Link href='mailto:info@bldrs.ai'

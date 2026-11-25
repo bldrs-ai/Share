@@ -821,6 +821,19 @@ tab) read the constants directly.
 
 ## Funnel analytics
 
+> **Status since #2354 (2026-11-25): browser GA is off**
+> (`privacy/analytics.js#IS_BROWSER_GA_ON`), so every event below that the
+> browser sends (`real_model_open`, `load_failed`, `model_view` and the rest
+> of the normalized events, `quota_limit_reached`, `login`,
+> `begin_checkout`, the gate events, `subscription_*_client`,
+> `engaged_use` / `return_visit`) is dormant: it only buffers in the inert
+> inline stub. What still reaches GA4 is sent from servers:
+> `subscription_started` / `_ended` (stripe-webhook) and the cookieless
+> per-load `model_open_count` (#2355, `design/new/model-open-counts.md`).
+> Server-side limit, gate, login and checkout counts follow in
+> `claude/account-usage`. The tables below describe the events as built,
+> for when they move server-side or a later opt-in turns browser GA back on.
+
 GA4 events that let the bizdev GA dashboard's funnel card (`bldrs-ai/bizdev`,
 `ga/static/index.html`) show **Visit → Model open → Hit a limit → Signed in →
 Upgrade click → Subscribed**, so there is a baseline before `quotas` flips on.
@@ -1037,11 +1050,14 @@ The parts that aren't obvious:
     previous counted open's. Opening the same model again counts, on a later
     page load or in-app (A → B → A, and A → demo → A, which the model-keyed
     guard before open-205 #2022 skipped).
-  - **Consent:** analytics is opt-in since Share#2051. `isAllowed()` is
-    `allowsAnalytics(getConsentLevel())`, which is false until the visitor
-    presses OK in About (`design/new/analytics-consent.md`). Nothing is read,
-    written or sent without that consent, and opens made before it are never
-    counted retroactively. The check repeats
+  - **Consent:** analytics is opt-in since Share#2051, and since #2354 Google
+    Analytics is off in the browser for everyone, with nothing that asks
+    (`design/new/analytics-consent.md`). So these two events are dormant:
+    `isAllowed()` (`allowsAnalytics(getConsentLevel())`) is true only for a
+    visitor who accepted under #2051, and even then gtag/js never loads to
+    send them. They come back with a later opt-in. Nothing is read, written
+    or sent without consent, and opens made before it are never counted
+    retroactively. The check repeats
     inside the lock, because consent can be withdrawn while an open waits
     behind another tab's hold.
   - **Fails closed.** If localStorage cannot be read or written the open is
