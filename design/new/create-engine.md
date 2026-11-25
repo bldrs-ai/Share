@@ -264,7 +264,9 @@ a second login, billing system and chat.
 calls `api.CreateIfcGuidToExpressIdMapping` and then reads
 `api.ifcGuidMap.get(modelID)`. Under the Conway shim that mapping is not
 implemented, so GlobalId-keyed view settings (e.g. through the WidgetApi
-`ChangeViewSettings` handler) likely throw. Not traced at runtime.
+`ChangeViewSettings` handler) likely throw. Not traced at runtime. (Moot
+since open-t200 slice V, #2318, deleted the file; the handler now answers
+success and applies nothing.)
 
 ### B2. Smallest useful slice [I]
 

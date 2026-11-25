@@ -333,7 +333,7 @@ const BYTES_PER_MIB = BYTES_PER_KIB * BYTES_PER_KIB
  * `.ifczip`) and STEP/AP214 — through one worker load
  * (engine/engineModelLoad.js), and only on the streamed path that feeds the
  * incremental builder. Default on; `engine/engineRoute.js` says when a load
- * stays on the main-thread engine instead (the kill switch, `?view=` rules).
+ * stays on the main-thread engine instead (the kill switch, the rollback).
  *
  * @param {string|undefined} loaderType `loader.type` (Loader.js#findLoader)
  * @param {object|null} scene
@@ -501,8 +501,8 @@ export default class ShareIfcLoader {
     }
     if (engineLoad === null && isEngineWorkerCandidate(this.type, scene)) {
       // Say in the report and the console why this load runs on the slower
-      // main-thread engine, so a `?view=` link or a kill-switched session
-      // reads as deliberate rather than as a lost worker.
+      // main-thread engine, so a kill-switched or rolled-back session reads
+      // as deliberate rather than as a lost worker.
       const reason = mainThreadEngineReason()
       if (reason !== MainThreadReason.FLAG_OFF) {
         const note = mainThreadEngineNote(reason)

@@ -1049,7 +1049,9 @@ viewer.clipper.dispose()
 
 **Remaining §3c.iv slices:**
 
-1. **`IfcViewsManager` deletion** *(per §8.1)*. Single referenced
+1. **`IfcViewsManager` deletion** *(per §8.1; done in open-t200 slice V,
+   #2318, with no post-build hook: the handler answers success and applies
+   nothing)*. Single referenced
    site is the `view=ch.sia380-1.heatmap` URL-parameter branch in
    `ShareViewer.js` lines 3, 56–61. Drop together with
    `Infrastructure/IfcElementsStyleManager.js`,
@@ -2047,6 +2049,7 @@ rewrite.
 ## 8. Resolved decisions
 
 ### 8.1 Drop `IfcViewsManager` — yes
+**Done** in open-t200 slice V (#2318, design/tracks/open-t200/layering.md §7), with no replacement.
 `src/Infrastructure/IfcElementsStyleManager` and the `view=ch.sia380-1.heatmap` URL branch in `IfcViewerAPIExtended.js` are unused. Delete in Phase 2/3; revisit when type-rule recoloring comes back. `IfcModelService` will still expose a generic post-build hook (`onModelBuilt(model)`) so a future recolor pass has somewhere clean to attach.
 
 ### 8.2 `IFC.type === 'glb' | 'gltf'` — replace with capability flags on the model

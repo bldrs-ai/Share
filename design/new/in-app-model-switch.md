@@ -108,8 +108,9 @@ the page load was quietly covering.
   Web Worker; the model's `ifcManager.ifcAPI` is a facade over that session
   (`engineSession`). `terminate()` frees the whole WASM instance at once
   (engine-worker.md §3: PSB 2.25 GB → 0.9 MB).
-- **Main-thread engine** (`?feature=disableEngineWorker`, a `?view=` rule
-  set, the legacy `?feature=bot`; `engine/engineRoute.js`). `new
+- **Main-thread engine** (`?feature=disableEngineWorker`, the rollback;
+  `engine/engineRoute.js`. A `?view=` rule set and the legacy
+  `?feature=bot` used to route here too, until slice V (#2318) and #1675). `new
   ShareViewer` builds `new ShareIfc`, whose constructor creates `new
   IfcAPI()`, and the first parse `Init()`s a fresh Conway geometry module —
   a new `WebAssembly.Memory` — per `IfcAPI`. GLB cache hits never call it.
@@ -1040,7 +1041,7 @@ responsibility lives in a module with its own tests.
    change becomes a material and look update, not a rebuild and reload.
    `modelPlacement.js#placeModelInScene` is where the attach goes.
    *Tests:* a hook test over a mocked `initViewer` (one viewer per
-   `[modelPath, customViewSettings]` pair, StrictMode's repeat builds none,
+   `modelPath` (`[modelPath, customViewSettings]` until slice V), StrictMode's repeat builds none,
    a theme change rebuilds and aborts the active session's load, the
    listener is removed on rebuild), plus `viewerInit.spec.ts` and
    `modelSwitchMemory.spec.ts`'s collection legs unchanged.
@@ -1132,7 +1133,7 @@ inventory).
 | `real_model_open`, `model_view`, load diagnostics (Sentry, for the chip) | `CadView#sendOpenEvents`, `reportedOpenRef` | Every load, theme toggles included | **Per open** | A theme rebuild is not an open (§5.2); one failure, one event for the diagnostics |
 | Engagement count (`engaged_use`, `return_visit`) | `engagementTracking.js` `lastCountedOpenKey` | Per model, which skipped A → demo → A | **Per open** | Decision 1, and the under-count goes |
 | Drive export visibility | `driveExportVisibility.js` | One lookup per file per page | **Per open** | An in-app return asks again, as a page load did; the file's sharing may have changed |
-| `?view=` | `ShareViewer.js` `viewParameter`, read at module load | Read once | **Read once; a link asking for another view loads the page** (`navigate.js#isViewChange`) | An in-app open can't change what was read at module load |
+| `?view=` | `ShareViewer.js` `viewParameter`, read at module load (deleted with the rules in slice V, #2318) | Read once | **Not read** since slice V: a link asking for another view opens in-app like any other (`navigate.js#isViewChange`, which loaded the page for it, went with the rules, #2360) | Nothing to keep per open |
 | `load_failed`, schema refusals, the no-geometry alert, upload-not-in-browser | `CadView` `reportedLoadFailureRef`, `reportedRefusalRef` | Cleared on each model identity change | Unchanged: already per open | A → B → A changes the identity twice, so the return counts again |
 | `model_engagement` window | `CadView` `startModelEngagement` | Restarted per load | Unchanged | The user is still on the model through a theme toggle |
 | `renderer_fallback`, load-report lines (first mesh, Health) | `reportRendererLimits.js`, `loadProgress.js` | Per load | Unchanged | They describe a load, and a theme rebuild is one |
@@ -1148,7 +1149,7 @@ inventory).
 Tests: `useDirectLinkQuota.test.js` (A → B → A records A twice; a re-init of
 one open once; A → unmetered → A; one count per page when every open is a
 page load), `engagementTracking.test.js`, `driveExportVisibility.test.js`,
-`modelOpen.test.ts`, `navigate.test.js` (`?view=`), and
+`modelOpen.test.ts`, `navigate.test.js` (`?view=` opens in-app), and
 `src/Containers/openPerOpen.spec.ts` (a theme toggle sends no second open,
 by default and with the kill switch; in-app, a Back and Forward to a model
 sends it again).

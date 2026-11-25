@@ -699,31 +699,6 @@ function warnIndexFailure(e) {
 }
 
 
-/**
- * Was this model parsed by a worker engine? For the legacy consumers that
- * reach for a main-thread engine directly and must refuse clearly rather
- * than read nothing (the `?view=` rules, useLegacyViewRulesNotice.js;
- * engine-worker.md §8 item 7).
- *
- * @param {object|null|undefined} model
- * @return {boolean}
- */
-export function isWorkerEngineModel(model) {
-  return Boolean(model?.ifcManager?.ifcAPI?.engineSession)
-}
-
-
-/**
- * What `?view=` says on a worker-engine model (useLegacyViewRulesNotice). A
- * load with a known `?view=` in its URL runs on the main-thread engine
- * (engineRoute.js), so this shows only when the view was asked for after the
- * model loaded in a worker, and reloading applies it.
- */
-export const LEGACY_VIEW_RULES_MESSAGE =
-  'View rules (?view=) need the main-thread engine, and this model was parsed in an engine worker. ' +
-  'Reload the page to apply them.'
-
-
 /* eslint-disable no-magic-numbers */
 const MIB = 1024 * 1024
 const MS_PER_S = 1000

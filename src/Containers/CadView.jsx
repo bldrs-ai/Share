@@ -24,7 +24,6 @@ import {isVolumeModel} from '../loader/nrrd'
 import {InMemoryUploadGoneError} from '../OPFS/messages'
 import {getBrowser} from '../connections/registry'
 import {installEngineDevHook} from '../app/engineDevHook'
-import useLegacyViewRulesNotice from '../hooks/useLegacyViewRulesNotice'
 import modelIdentity from '../routes/modelIdentity'
 import useExistInFeature from '../hooks/useExistInFeature'
 import useDirectLinkQuota from '../quota/useDirectLinkQuota'
@@ -121,7 +120,6 @@ export default function CadView({
   const connections = useStore((state) => state.connections)
   const isViewCubeVisible = useStore((state) => state.isViewCubeVisible)
   const isTempIsolationModeOn = useStore((state) => state.isTempIsolationModeOn)
-  const customViewSettings = useStore((state) => state.customViewSettings)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
   const searchIndex = useStore((state) => state.searchIndex)
@@ -159,12 +157,12 @@ export default function CadView({
   // Set when three got no WebGL context: no viewer exists, so nothing the
   // viewer gates renders, and Components/WebglUnavailable takes its place.
   const [isWebglUnavailable, setIsWebglUnavailable] = useState(false)
-  // The `[modelPath, customViewSettings]` pair the viewer was last built for
-  // (see that effect). Its dependencies change only when a new viewer is
-  // wanted, so the only run that sees the same pair again is StrictMode's
-  // dev-only repeat of a mount effect. That repeat used to build a second
-  // ShareViewer and WebGL context on every dev and Playwright page load,
-  // disposing the first ~80 ms later. Prod builds never ran it.
+  // The `modelPath` the viewer was last built for (see that effect). Its
+  // dependency changes only when a new viewer is wanted, so the only run that
+  // sees the same path again is StrictMode's dev-only repeat of a mount
+  // effect. That repeat used to build a second ShareViewer and WebGL context
+  // on every dev and Playwright page load, disposing the first ~80 ms later.
+  // Prod builds never ran it.
   const viewerBuiltForRef = useRef(null)
   const stopModelEngagementRef = useRef(null)
   // The path and tree the location watcher last selected from (see there).
@@ -216,11 +214,11 @@ export default function CadView({
   // the refusal again, inflating the demand numbers the report exists for
   // (codex review of Share#1899). Keyed by model identity and cleared when
   // the identity changes (a new model session, forgetLoadedModel), not on
-  // every run of it: that effect also re-runs for the same model (Widget API
-  // view settings), and clearing there let one model count twice (codex
-  // review of Share#1961). The upload-not-in-browser count (#1955) is gated
-  // by the same ref, under its own key prefix, and so is the no-geometry
-  // alert (#1962), which is shown once per model rather than counted.
+  // every run of it: that effect re-runs for the same model, and clearing
+  // there let one model count twice (codex review of Share#1961). The
+  // upload-not-in-browser count (#1955) is gated by the same ref, under its
+  // own key prefix, and so is the no-geometry alert (#1962), which is shown
+  // once per model rather than counted.
   const reportedRefusalRef = useRef(null)
   // This render's `selectItemsInScene`, for the funnel registered with
   // `tools/selectionFunnel.js` (see the effect near the end).
@@ -247,18 +245,17 @@ export default function CadView({
   // (quota/useDirectLinkQuota.js, design/new/quotas.md §"Drive visibility").
   const driveDownloadRef = useRef(null)
   // The model a `load_failed` was last sent for, for the same reason and
-  // with the same keying as reportedRefusalRef: the auth-state effect and
-  // the customViewSettings effect re-run onViewer for the SAME route after
-  // any failure (isViewerLoaded stays false), and without this each re-run
-  // would send another load_failed for one user open (codex review of
-  // Share#1961).
+  // with the same keying as reportedRefusalRef: the auth-state effect
+  // re-runs onViewer for the SAME route after any failure (isViewerLoaded
+  // stays false), and without this each re-run would send another
+  // load_failed for one user open (codex review of Share#1961).
   const reportedLoadFailureRef = useRef(null)
   // The open (routes/modelOpen.ts) the open events below were last sent for:
   // real_model_open, model_view, the engagement count and the load
-  // diagnostics. A theme toggle or a view-settings change re-runs the load
-  // for the SAME open, and is not an open of the model (open-205, #2022;
-  // design/new/in-app-model-switch.md §5), so it sends none of them again;
-  // an in-app return to a model is a new open and sends them.
+  // diagnostics. A theme toggle re-runs the load for the SAME open, and is
+  // not an open of the model (open-205, #2022; design/new/in-app-model-switch.md
+  // §5), so it sends none of them again; an in-app return to a model is a
+  // new open and sends them.
   const reportedOpenRef = useRef(0)
 
   // IFCSlice
@@ -278,7 +275,6 @@ export default function CadView({
   // UISlice
   const setAlert = useStore((state) => state.setAlert)
   const setIsCutPlaneActive = useStore((state) => state.setIsCutPlaneActive)
-  const setSnackMessage = useStore((state) => state.setSnackMessage)
   const setVh = useStore((state) => state.setVh)
   const vh = useStore((state) => state.vh)
 
@@ -553,8 +549,9 @@ export default function CadView({
     if (isSwitch) {
       // A different model starts a new open, so its failures count again
       // even when the model in between never touched the dedupe refs (A
-      // fails, B loads, A fails). Reruns of the SAME model (customViewSettings)
-      // keep the session, and so these. Share#1961 codex review.
+      // fails, B loads, A fails). Reruns of the SAME model (the auth-state
+      // effect, a theme change) keep the session, and so these. Share#1961
+      // codex review.
       reportedRefusalRef.current = null
       reportedLoadFailureRef.current = null
     }
@@ -1000,9 +997,6 @@ export default function CadView({
     }
     const loadingMessageBase = `Loading ${isGoogleResult ? routeResult.fileId : filepath}`
     job.showLoading(`${loadingMessageBase}`)
-
-    // Call this before loader, as IFCLoader needs it.
-    viewer.setCustomViewSettings(customViewSettings)
 
     // Per-load progress reporter (conway #301): accumulates the normalized
     // load-log report (status-bar expando + post-load dialog + console
@@ -2043,7 +2037,7 @@ export default function CadView({
     // landed in the viewer slot, so its guard failed and nothing reset: after
     // Clear (deselectItems, which deletes the planes itself) the store still
     // reported the planes and the menu showed them checked (open-205, #2014).
-    // The `cp:` hash term is left alone: on a model or view-settings change it
+    // The `cp:` hash term is left alone: on a model change it
     // already belongs to the destination, and Clear's navigation drops it.
     resetCutPlaneState(viewer, setCutPlaneDirections, setIsCutPlaneActive)
     setIsSearchBarVisible(false)
@@ -2585,19 +2579,16 @@ export default function CadView({
   useEffect(() => {
     debug().log('CadView#useEffect1[modelPath], calling onModelPath, modelPath:', modelPath)
     const builtFor = viewerBuiltForRef.current
-    if (builtFor !== null && builtFor.modelPath === modelPath &&
-        builtFor.customViewSettings === customViewSettings) {
+    if (builtFor !== null && builtFor.modelPath === modelPath) {
       return
     }
-    viewerBuiltForRef.current = {modelPath, customViewSettings}
+    viewerBuiltForRef.current = {modelPath}
     // The model's session. A different model closes the active one (step 1:
     // a switch is a close; its load is aborted under the in-app switch) and
     // forgets its state before anything renders with it (forgetLoadedModel).
-    // Re-runs for the SAME model (view settings) keep the session and that
-    // state, and so one failed open stays one event (Share#1961).
     sessionHost.open(modelIdentity(modelPath, installPrefix))
     onModelPath()
-  }, [modelPath, customViewSettings])
+  }, [modelPath])
 
 
   // Viewer changes in onModelPath (above)
@@ -2866,10 +2857,6 @@ export default function CadView({
   // sessions directly, for the E2E, before any load goes through them.
   // Same install-on-flag, uninstall-on-unflag shape as the assist hook.
   useEffect(() => (isEngineDevHookAsked ? installEngineDevHook() : undefined), [isEngineDevHookAsked])
-  // `?view=` rules cannot run on a worker-engine model; say so (engine-worker.md
-  // §8 item 7). A load that asks for them runs on the main thread
-  // (engine/engineRoute.js), so this covers a `?view=` added after the load.
-  useLegacyViewRulesNotice(model, setSnackMessage)
 
 
   const abs = {position: 'absolute'}

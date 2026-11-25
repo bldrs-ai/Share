@@ -288,8 +288,8 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
   })
 
   // §7 step 9: the flag is on by default, and engine/engineRoute.js keeps a
-  // load on the main-thread engine for the kill switch and the two legacy
-  // consumers that read that engine directly. Each such load says why.
+  // load on the main-thread engine for the kill switch. Each such load says
+  // why.
   describe('loads that stay on the main-thread engine', () => {
     let originalLocation
     beforeEach(() => {
@@ -307,7 +307,6 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
 
     it.each([
       ['?feature=disableEngineWorker', ['disableEngineWorker'], 'Engine: main thread (?feature=disableEngineWorker)'],
-      ['?view=ch.sia380-1.heatmap', [], 'Engine: main thread (?view= rules need the main-thread engine)'],
     ])('%s parses on the main-thread engine, and says so', async (search, urlFlags, note) => {
       Object.defineProperty(window, 'location', {writable: true, value: {...originalLocation, search}})
       isFeatureEnabled.mockImplementation((name) =>
