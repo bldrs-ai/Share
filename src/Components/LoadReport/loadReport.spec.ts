@@ -3,8 +3,9 @@ import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
 
 
-// The hosted demo IFC, opened from the project's own copy.
-const MODEL_PATH = '/share/v/p/index.ifc'
+// A fixture IFC, not the hosted demo: the homepage model's load is quiet,
+// with no live or "Loaded" snackbar line (AlertDialogAndSnackbar.jsx, #2354).
+const MODEL_PATH = '/share/v/p/__test_fixtures__/Momentum.ifc'
 const TEST_TIMEOUT_MS = 120_000
 const LOAD_TIMEOUT_MS = 60_000
 

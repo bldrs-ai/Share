@@ -1,10 +1,11 @@
+import Cookies from 'js-cookie'
 import React from 'react'
 import {render, screen} from '@testing-library/react'
 import {MemoryRouter, Route, Routes} from 'react-router-dom'
 import {MockComponent} from './__mocks__/MockComponent'
 import MockRoutes from './BaseRoutesMock.test'
 import useStore from './store/useStore'
-import {UNSUPPORTED_FILE_ALERT, handleRoute, processFile} from './routes/routes'
+import {UNSUPPORTED_FILE_ALERT, processFile} from './routes/routes'
 import {processGoogleFileId} from './routes/google'
 import {actAsyncFlush} from './utils/tests'
 // Slice 5d.4: Share renders the app, which loads ShareViewer (→
@@ -289,29 +290,27 @@ describe('Share deciding whether a route names a new model', () => {
 
 
 /**
- * Local-only mode (app/localOnlyMode.js): a visitor who declined
- * analytics can't open a model from GitHub, Drive or a link, but a remote
- * model opened before they declined stays open. Selecting an element in it
- * rewrites the route's element path, which reruns Share's route effect for
- * the same model, and that must not count as an open (codex review on
- * #2051).
+ * #2051's Test only mode refused GitHub, Drive and link models to a visitor
+ * whose `consentLevel` cookie said restricted. #2354 removed the mode, and
+ * such a cookie can still be on returning visitors' browsers, so it must not
+ * block a shared link any more (design/new/analytics-consent.md §"History").
  */
-describe('Share in local-only mode', () => {
-  const ghParams = {org: 'bldrs-ai', repo: 'test-models', branch: 'main'}
+describe('Share for a visitor left with a restricted consent cookie', () => {
+  const GITHUB_SPLAT = 'bldrs-ai/test-models/main/ifc/misc/box.ifc'
 
   beforeEach(() => {
-    useStore.setState({repository: null})
+    useStore.setState({alert: null, modelPath: null})
+    Cookies.set('consentLevel', '1.restricted')
   })
 
   afterEach(() => {
-    useStore.setState({privacyLevel: 'functional', blockedRemoteModel: null, modelPath: null, repository: null})
+    Cookies.remove('consentLevel')
   })
 
-  /** @param {string} splat The route's '*' under /share/v/gh/:org/:repo/:branch */
-  function renderGithubRoute(splat) {
+  it('opens a GitHub model', async () => {
     render(
       <MockComponent>
-        <MemoryRouter initialEntries={[`/share/v/gh/bldrs-ai/test-models/main/${splat}`]}>
+        <MemoryRouter initialEntries={[`/share/v/gh/${GITHUB_SPLAT}`]}>
           <Routes>
             <Route
               path='/share/v/gh/:org/:repo/:branch/*'
@@ -320,27 +319,12 @@ describe('Share in local-only mode', () => {
           </Routes>
         </MemoryRouter>
       </MockComponent>)
-  }
-
-  it('keeps an already-open remote model when only its element path changes', async () => {
-    const open = handleRoute('/share/v/gh', {...ghParams, '*': 'ifc/misc/box.ifc'})
-    useStore.setState({modelPath: open, privacyLevel: 'restricted', blockedRemoteModel: null})
-    renderGithubRoute('ifc/misc/box.ifc/12/34')
     await actAsyncFlush()
-    expect(useStore.getState().modelPath).toBe(open)
-    expect(useStore.getState().blockedRemoteModel).toBeNull()
-    // The route went on to its repository setup, which a refusal skips.
-    expect(useStore.getState().repository).toEqual({orgName: 'bldrs-ai', name: 'test-models'})
-  })
-
-  it('refuses a different remote model', async () => {
-    const open = handleRoute('/share/v/gh', {...ghParams, '*': 'ifc/misc/box.ifc'})
-    useStore.setState({modelPath: open, privacyLevel: 'restricted'})
-    renderGithubRoute('ifc/misc/other.ifc')
-    await actAsyncFlush()
-    // Not opened: the store still holds the model that was open.
-    expect(useStore.getState().modelPath).toBe(open)
-    expect(useStore.getState().modelPath.filepath).not.toContain('other.ifc')
-    expect(useStore.getState().repository).toBeNull()
+    expect(useStore.getState().alert).toBeNull()
+    const modelPath = useStore.getState().modelPath
+    expect(modelPath).not.toBeNull()
+    expect(modelPath.org).toBe('bldrs-ai')
+    expect(modelPath.repo).toBe('test-models')
+    expect(modelPath.filepath).toMatch(/box\.ifc$/)
   })
 })

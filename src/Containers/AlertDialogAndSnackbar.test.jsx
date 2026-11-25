@@ -38,6 +38,7 @@ describe('AlertAndSnackbar grace period', () => {
       useStore.getState().setCurrentLoadLine(null)
       useStore.getState().setLoadReportLines([])
       useStore.getState().setModel(null)
+      useStore.getState().setModelPath(null)
     })
   })
 
@@ -153,5 +154,71 @@ describe('AlertAndSnackbar grace period', () => {
     })
     expect(screen.getByTestId('LoadStatusLine').textContent).toBe(
       'Loaded basel — stray geometry far from the model was left out of the zoom fit')
+  })
+
+  // The homepage model loads on every visit; its status line is noise there
+  // (owner, 2026-11-25). Its report stays on the "i" control.
+  describe('the homepage model', () => {
+    const DEMO = {kind: 'file', isUploadedFile: false, filepath: 'index.ifc'}
+
+    it.each([['index.ifc'], ['index.step']])('shows no live line or "Loaded" line for %s', (filepath) => {
+      render(<ShareMock><AlertAndSnackbar/></ShareMock>)
+      act(() => {
+        useStore.getState().setModelPath({...DEMO, filepath})
+        useStore.getState().setCurrentLoadLine('Parse [=====     ] 50%')
+      })
+      expect(screen.queryByTestId('LoadStatusLine')).toBeNull()
+      act(() => {
+        useStore.getState().setCurrentLoadLine(null)
+        useStore.getState().setModel({name: 'Bldrs'})
+        useStore.getState().setLoadResult({status: 'success', summaryLine: `Loaded ${filepath}`})
+      })
+      expect(screen.queryByTestId('LoadStatusLine')).toBeNull()
+    })
+
+    // codex on #2354: a quiet demo load must not take over an ordinary
+    // message's controls or lifecycle.
+    it('leaves an ordinary message its own close button during a quiet demo load', () => {
+      render(<ShareMock><AlertAndSnackbar/></ShareMock>)
+      act(() => {
+        useStore.getState().setModelPath(DEMO)
+        useStore.getState().setCurrentLoadLine('Parse [=====     ] 50%')
+        useStore.getState().setSnackMessage('Copied link')
+      })
+      expect(screen.getByText('Copied link')).toBeInTheDocument()
+      expect(screen.queryByTestId('LoadStatusOk')).toBeNull()
+      expect(screen.getByRole('button', {name: /close/i})).toBeInTheDocument()
+      act(() => {
+        useStore.getState().setCurrentLoadLine(null)
+        useStore.getState().setSnackMessage(null)
+      })
+    })
+
+    it('drops a quiet demo success at once, with no grace timer behind it', () => {
+      render(<ShareMock><AlertAndSnackbar/></ShareMock>)
+      act(() => {
+        useStore.getState().setModelPath(DEMO)
+        useStore.getState().setLoadResult({status: 'success', summaryLine: 'Loaded index.ifc'})
+      })
+      expect(useStore.getState().loadResult).toBe(null)
+    })
+
+    it('still shows a failed load', () => {
+      render(<ShareMock><AlertAndSnackbar/></ShareMock>)
+      act(() => {
+        useStore.getState().setModelPath(DEMO)
+        useStore.getState().setLoadResult({status: 'error', summaryLine: 'Load failed: bad header'})
+      })
+      expect(screen.getByTestId('LoadStatusLine').textContent).toBe('Load failed: bad header')
+    })
+
+    it('shows the line for a file someone opened, even one named index.ifc', () => {
+      render(<ShareMock><AlertAndSnackbar/></ShareMock>)
+      act(() => {
+        useStore.getState().setModelPath({...DEMO, isUploadedFile: true})
+        useStore.getState().setLoadResult({status: 'success', summaryLine: 'Loaded index.ifc'})
+      })
+      expect(screen.getByTestId('LoadStatusLine').textContent).toBe('Loaded index.ifc')
+    })
   })
 })

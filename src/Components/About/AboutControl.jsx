@@ -1,5 +1,4 @@
 import React, {ReactElement, useEffect, useState} from 'react'
-import {dismissConsent} from '../../app/consentChoice'
 import {isFirst, setVisited} from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
@@ -49,9 +48,6 @@ export default function AboutControl() {
 
   // Ensure that the dialog can be closed by updating the state appropriately
   const handleDialogClose = () => {
-    // Before the visit is marked: a no-op unless consent is still undecided,
-    // in which case any close but OK is a decline (consentChoice.js).
-    dismissConsent()
     if (isFirst()) {
       setVisited() // Mark as visited to prevent the dialog from being forced open again
       // Improve first-time experience by showing Notes

@@ -6,9 +6,7 @@ import useStore from '../../store/useStore'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
 import {takeGateLoginSource} from '../../Auth0/gateLogin'
 import {gtagEvent, gtagEventWithCid, modelActionTier, trackModelAction} from '../../privacy/analytics'
-import {CONSENT_LEVELS} from '../../privacy/consent'
 import ShareControl, {
-  MSG_LOCAL_ONLY_SHARE_TITLE,
   MSG_LOCAL_SHARE_BODY,
   MSG_LOCAL_SHARE_TITLE,
   MSG_SHARE_COMING_SOON,
@@ -36,7 +34,7 @@ jest.mock('../../privacy/analytics', () => ({
 // signed-in user set it themselves.
 //
 // Auth starts SETTLED: the normalized model_share waits for isAuthResolved
-// (app/modelActionTracking.js), and only the restore-race case below
+// (privacy/modelActionTracking.js), and only the restore-race case below
 // wants it unsettled.
 beforeEach(() => {
   mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
@@ -405,44 +403,5 @@ describe('ShareControl for a local upload (#705)', () => {
         useStore.setState({model: null})
       })
     }
-  })
-})
-
-
-// Local-only mode (app/localOnlyMode.js): Browse only doesn't share,
-// whatever the model, and the help points at the privacy settings.
-describe('ShareControl in Browse only', () => {
-  afterEach(() => {
-    act(() => {
-      useStore.setState({privacyLevel: CONSENT_LEVELS.FUNCTIONAL, isAboutVisible: false, modelPath: null})
-    })
-  })
-
-  it('is gated on a GitHub model, and its action opens the privacy settings', async () => {
-    act(() => {
-      useStore.setState({
-        privacyLevel: CONSENT_LEVELS.RESTRICTED,
-        isAboutVisible: false,
-        modelPath: {kind: 'provider', provider: 'github', org: 'o', repo: 'r', branch: 'b', filepath: 'm.ifc'},
-      })
-    })
-    const {findByTestId, findByText, queryByRole} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
-    fireEvent.click(await findByTestId('gated-share-local-only'))
-    expect(await findByText(MSG_LOCAL_ONLY_SHARE_TITLE)).toBeInTheDocument()
-    // No share dialog behind the gate.
-    expect(queryByRole('dialog', {name: /share/i})).toBeNull()
-    fireEvent.click(await findByText('Privacy settings'))
-    await waitFor(() => expect(useStore.getState().isAboutVisible).toBe(true))
-  })
-
-  it('is not gated once the visitor allows Functional', () => {
-    act(() => {
-      useStore.setState({
-        privacyLevel: CONSENT_LEVELS.FUNCTIONAL,
-        modelPath: {kind: 'provider', provider: 'github', org: 'o', repo: 'r', branch: 'b', filepath: 'm.ifc'},
-      })
-    })
-    const {queryByTestId} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
-    expect(queryByTestId('gated-share-local-only')).toBeNull()
   })
 })

@@ -13,7 +13,8 @@ Share#2051 made GA opt-in, and `real_model_open` and `model_view` then counted
 only consenting visitors; the dashboard's model-open series roughly halved.
 The owner then took browser GA out altogether. These reports need no consent,
 so they count every real load. They were the "first-party, cookie-free
-counts" item in analytics-consent.md §"Open questions". The owner widened the
+counts" open question in analytics-consent.md before #2354 settled it
+(now its §"What runs"). The owner widened the
 first version (a count by format, size and source) into a per-load report on
 2026-11-25.
 
@@ -32,8 +33,9 @@ first version (a count by format, size and source) into a per-load report on
 Both go out only where GA itself would have loaded:
 `index/ga.js#shouldInitGa`'s host rule (production, or a bldrs deploy preview
 with `?feature=gaEnableInPreview`; never localhost, never under webdriver).
-Dev, unit tests and E2E send nothing. If #2354 retires `ga.js`, that host rule
-must move with the report, not go.
+Dev, unit tests and E2E send nothing. #2354 kept `ga.js` (its loader sits
+behind `IS_BROWSER_GA_ON`, off), so the host rule stays there; it gates
+where this report is sent, not whether GA loads.
 
 ## What a report carries
 
