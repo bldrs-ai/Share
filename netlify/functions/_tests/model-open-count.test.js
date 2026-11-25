@@ -11,7 +11,12 @@ import handler, {MODEL_OPEN_COUNT_CLIENT_ID} from '../model-open-count.js'
 
 
 /* eslint-disable no-magic-numbers */
-const REPORT = {content_type: 'ifc', size_bucket: '1-10mb', source: 'gdrive', open_kind: 'in_app', form_factor: 'mobile', consent: 'off'}
+const REPORT = {
+  content_type: 'ifc', size_bucket: '1-10mb', source: 'gdrive', sample_id: 'none', open_kind: 'in_app',
+  form_factor: 'mobile', load_outcome: 'displayed', reason_class: 'none', last_phase: 'none',
+  triangle_bucket: '1m-10m', error_bucket: '0', warning_bucket: '10-99',
+  session_id: '4503599627370497', load_ms: 8123,
+}
 const GA_ENV = {GA4_MEASUREMENT_ID: 'G-UNIT0001', GA4_API_SECRET: 'mp-secret-unit'}
 
 
@@ -65,6 +70,9 @@ describe('model-open-count', () => {
     ['a format outside the enum', JSON.stringify({...REPORT, content_type: 'secret-plans.ifc'})],
     ['a content id', JSON.stringify({...REPORT, content_id: 'https://example.com/private.ifc'})],
     ['a client id', JSON.stringify({...REPORT, client_id: '123.456'})],
+    ['a session id that is not GA\'s integer', JSON.stringify({...REPORT, session_id: 'visit-1'})],
+    ['a measure that is not an integer', JSON.stringify({...REPORT, load_ms: '8123'})],
+    ['an exact triangle count', JSON.stringify({...REPORT, triangle_count: 1234567})],
     ['an oversized body', JSON.stringify({...REPORT, pad: 'x'.repeat(2000)})],
   ])('refuses %s with 400 and sends nothing', async (_, body) => {
     const res = await handler(request({body}))

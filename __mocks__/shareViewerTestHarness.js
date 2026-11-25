@@ -200,7 +200,6 @@ const impl = {
             getIfcType: jest.fn(),
           },
         },
-        parser: {},
         setupCoordinationMatrix: jest.fn(),
         state: {},
       },
@@ -251,7 +250,6 @@ const impl = {
   preselectElementsByIds: jest.fn(),
   setSelection: jest.fn(),
   setInstanceSelection: jest.fn(),
-  setCustomViewSettings: jest.fn(),
   takeScreenshot: jest.fn(),
 }
 // This harness can be evaluated more than once within a test run (it's

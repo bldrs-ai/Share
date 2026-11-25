@@ -71,15 +71,14 @@
         var m = document.cookie.match(/(?:^|;\s*)_ga=GA\d+\.\d+\.([^;]+)/);
         return m ? {user_properties: {open_cid: 'cid.' + m[1]}} : {};
       }
-      // config is queued only for a visitor who has already consented. One
-      // who hasn't gets it from ga.js#updateGaConsent if they allow analytics
-      // later, queued AFTER the consent update, so page_view goes out granted.
+      // config is queued only for a visitor who has already consented.
       //
-      // Host and automation are deliberately NOT re-checked. Everything the
-      // stub queues is inert off-prod because ga.js#shouldInitGa never
-      // injects gtag/js there (asserted in ga.test.js), and the E2E suite
-      // reads this buffer on localhost — the same reason isRealModelOpen
-      // documents localhost as a deliberate exception.
+      // Everything the stub queues is inert: browser GA is off for everyone
+      // (ga.js#IS_BROWSER_GA_ON, 2026-11-25), so gtag/js is never injected
+      // and nothing here is sent. The stub stays because gtagEvent calls
+      // buffer here, the E2E suite reads this buffer on localhost (the same
+      // reason isRealModelOpen documents localhost as an exception), and a
+      // later opt-in would turn the loader back on behind this same queue.
       if (consentAllowsAnalytics()) {
         // Analytics only: every ad signal stays denied, and the config turns
         // off Google signals and ad-personalization signals (ga.js

@@ -1,4 +1,4 @@
-import {FUNNEL_EVENTS, gtagFunnelEvent, isAllowed} from './analytics'
+import {FUNNEL_EVENTS, IS_BROWSER_GA_ON, gtagFunnelEvent, isAllowed} from './analytics'
 import {withCrossTabLock} from './crossTabLock'
 
 
@@ -43,6 +43,23 @@ export const RETURN_MAX_DAYS = 14
 // window count and only the newest for the return gap; the slack keeps a
 // hand-edited or older-shaped list harmless.
 export const MAX_STORED_OPENS = 10
+
+// Browser GA's switch (analytics#IS_BROWSER_GA_ON), overridable in tests.
+// While it is off nothing here reads, writes or sends, consent or not: the
+// open history is device storage kept for an analytics purpose, and the
+// events could only buffer in the inert gtag stub.
+let isBrowserGaOn = IS_BROWSER_GA_ON
+
+
+/**
+ * Test-only: run the tracker as if browser GA were on (or off again).
+ *
+ * @param {boolean} isOn
+ */
+export function _setBrowserGaOnForTests(isOn) {
+  isBrowserGaOn = isOn
+}
+
 
 /** Forget the page-load model memory. Test seam only. */
 export function resetEngagementPageState() {
@@ -121,7 +138,8 @@ function readState() {
  * Record one real model open and send engaged_use / return_visit when this
  * open earns them. Call once per real open, after real_model_open is sent.
  *
- * Writes nothing and sends nothing when the user has opted out of analytics, when
+ * Writes nothing and sends nothing while browser GA is off (the default,
+ * analytics#IS_BROWSER_GA_ON), when the user has opted out of analytics, when
  * localStorage is unavailable, or when the write fails (the state that would
  * stop a repeat could not be saved).
  *
@@ -138,7 +156,7 @@ function readState() {
  * @return {Promise<string[]>} names of the events sent
  */
 export function trackEngagementOnOpen(now = Date.now(), modelKey = undefined) {
-  if (!isAllowed()) {
+  if (!isBrowserGaOn || !isAllowed()) {
     return Promise.resolve([])
   }
   if (modelKey !== undefined) {

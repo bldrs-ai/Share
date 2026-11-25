@@ -8,7 +8,7 @@ import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
 /**
  * engine-worker.md §7 step 9: the engine worker is on by default, and
  * engine/engineRoute.js keeps a load on the main-thread engine for the
- * kill switch and the two legacy consumers that read that engine directly.
+ * kill switch.
  * Each leg loads a real model and checks WHICH engine parsed it
  * (watchEngineWorker), and each main-thread leg checks the load report says
  * why, so a route that quietly sent everything one way fails here.
@@ -48,24 +48,26 @@ describeMobileAndDesktop('Engine route: worker by default, main thread where ask
     expect(await mainThreadNote(page)).toBeNull()
   })
 
-  for (const {name, query, note} of [
-    {name: 'the kill switch', query: '?feature=disableEngineWorker',
-      note: 'Engine: main thread (?feature=disableEngineWorker)'},
-    // The legacy view rules style elements through the main-thread engine
-    // (IfcViewsManager), so a `?view=` link keeps working there.
-    {name: 'a ?view= rule set', query: '?view=ch.sia380-1.heatmap',
-      note: 'Engine: main thread (?view= rules need the main-thread engine)'},
-  ]) {
-    test(`${name} loads on the main-thread engine, and the report says why`, async ({page}) => {
-      const engine = watchEngineWorker(page)
-      await page.goto(`${MODEL}${query}`)
-      await waitForModelReady(page)
-      await engine.expectMainThreadEngine()
-      expect(await mainThreadNote(page)).toBe(note)
-      // Nothing tells the user the view rules are unavailable: here they are.
-      await expect(page.getByText('View rules (?view=) need the main-thread engine')).toHaveCount(0)
-    })
-  }
+  // The `?view=` rules styled nothing on either engine and were deleted
+  // (design/tracks/open-t200/layering.md §7, slice V): a link that still
+  // names a rule set loads in the worker like any other, and nothing says
+  // the rules are unavailable.
+  test('a ?view= link loads in the engine worker, and nothing mentions view rules', async ({page}) => {
+    const engine = watchEngineWorker(page)
+    await page.goto(`${MODEL}?view=ch.sia380-1.heatmap`)
+    await waitForModelReady(page)
+    await engine.expectWorkerEngine()
+    expect(await mainThreadNote(page)).toBeNull()
+    await expect(page.getByText(/View rules|\?view= rules/)).toHaveCount(0)
+  })
+
+  test('the kill switch loads on the main-thread engine, and the report says why', async ({page}) => {
+    const engine = watchEngineWorker(page)
+    await page.goto(`${MODEL}?feature=disableEngineWorker`)
+    await waitForModelReady(page)
+    await engine.expectMainThreadEngine()
+    expect(await mainThreadNote(page)).toBe('Engine: main thread (?feature=disableEngineWorker)')
+  })
 
   test('a worker that cannot start leaves the load on the in-process engine, and the model opens', async ({page}) => {
     // Only the engine's worker fails: the module-worker probe (a blob URL),

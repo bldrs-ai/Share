@@ -48,9 +48,11 @@ export const LIMIT_GATES = Object.freeze({BLOCKED: 'blocked', SOFT: 'soft'})
 export const LIMIT_DECIDERS = Object.freeze({SERVER: 'server', CLIENT: 'client'})
 
 /**
- * The enum fields of a load report: #2355's count (minus `consent`, which
- * means nothing here: a signed-in report is not consent-based, see the design
- * doc) plus the load's verdict and the account's tier.
+ * The enum fields of a load report: the format, size, source, open kind and
+ * form factor enums of #2355's count, so the two divide opens the same way,
+ * plus the load's verdict and the account's tier. The account's own report
+ * keeps exact timings and rounded counts where #2355's buckets them
+ * (design/new/account-usage.md).
  */
 export const LOAD_REPORT_FIELDS = Object.freeze({
   content_type: MODEL_OPEN_COUNT_FIELDS.content_type,

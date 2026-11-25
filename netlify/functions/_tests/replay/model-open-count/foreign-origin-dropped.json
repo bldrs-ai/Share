@@ -1,12 +1,20 @@
 {
   "description": "A valid count from an origin that isn't Share's is dropped quietly: 204, and nothing reaches GA.",
-  "env": {"GA4_MEASUREMENT_ID": "G-REPLAY0001", "GA4_API_SECRET": "mp-secret-replay"},
+  "env": {
+    "GA4_MEASUREMENT_ID": "G-REPLAY0001",
+    "GA4_API_SECRET": "mp-secret-replay"
+  },
   "request": {
     "method": "POST",
     "path": "/.netlify/functions/model-open-count",
-    "headers": {"origin": "https://elsewhere.example", "content-type": "text/plain;charset=UTF-8"},
-    "body": "{\"content_type\":\"ifc\",\"size_bucket\":\"10-50mb\",\"source\":\"github\",\"open_kind\":\"page\",\"form_factor\":\"desktop\",\"consent\":\"off\"}"
+    "headers": {
+      "origin": "https://elsewhere.example",
+      "content-type": "text/plain;charset=UTF-8"
+    },
+    "body": "{\"content_type\":\"ifc\",\"size_bucket\":\"10-50mb\",\"source\":\"github\",\"sample_id\":\"none\",\"open_kind\":\"page\",\"form_factor\":\"desktop\",\"load_outcome\":\"displayed\",\"reason_class\":\"none\",\"last_phase\":\"none\",\"triangle_bucket\":\"1m-10m\",\"error_bucket\":\"0\",\"warning_bucket\":\"10-99\",\"session_id\":\"4503599627370497\",\"load_ms\":8123,\"first_mesh_ms\":2100}"
   },
   "exchanges": [],
-  "expect": {"statusCode": 204}
+  "expect": {
+    "statusCode": 204
+  }
 }

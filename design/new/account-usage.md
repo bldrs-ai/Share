@@ -22,7 +22,9 @@ The anonymous count can't answer any of that: it has no account and no
 timings.
 
 **The legal footing is legitimate interest** in providing and improving the
-service. It is disclosed in the privacy policy, and the Profile menu has an
+service. It is disclosed in the privacy policy's "Your account’s usage."
+paragraph (`src/pages/Privacy.jsx` and `marketing/src/app/privacy/page.tsx`,
+kept word for word alike by `Privacy.test.jsx`), and the Profile menu has an
 opt-out that is easy to find. Signing in already stores what sign-in strictly
 needs, and this adds nothing to the device, so no cookie consent is involved.
 That is why a report is sent whatever the visitor chose about analytics, and
@@ -168,7 +170,7 @@ Per-user questions go to our own reader (§"The reader"), never to GA.
 the bizdev dashboard's funnel card reads the server's events without a query
 change. The page's `gtagFunnelEvent` / `gtagEventWithCid` calls are still in
 the code. Since #2354, browser GA is off for everyone
-(`index/ga.js#IS_BROWSER_GA_ON = false`), so gtag/js never loads and those
+(`privacy/analytics.js#IS_BROWSER_GA_ON = false`), so gtag/js never loads and those
 calls only buffer in the inline stub. They are never sent, and nothing is
 double-counted. The server's events are the source of truth. Removing the
 dormant client calls, or routing them through the server, is a follow-up

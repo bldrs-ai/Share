@@ -200,8 +200,8 @@ export const flags = [
   // Default-ON since §7 step 9. Where a load's engine runs is decided in ONE
   // place, `engine/engineRoute.js#mainThreadEngineReason`: the main-thread
   // engine stays permanently (§8 item 6) for `disableEngineWorker` below
-  // and for the legacy `?view=` rules, which read the main-thread engine
-  // directly (the legacy `?feature=bot` eval did too, until #1675 deleted it). Where module workers
+  // (the legacy `?view=` rules and `?feature=bot` eval read it directly
+  // too, until slice V and #1675 deleted them). Where module workers
   // are missing, or a worker fails to start, the same handler runs in
   // process on this thread (spawnEngine.js).
   // Do NOT roll back by setting this to false: `?feature=engineWorker` in a
