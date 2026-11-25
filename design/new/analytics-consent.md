@@ -43,10 +43,13 @@ to GA4 under one fixed client id, so the bizdev dashboard keeps working.
 
 ## What runs
 
-- **No GA tag.** `index/ga.js#IS_BROWSER_GA_ON` is `false`: `setupGa` never
+- **No GA tag.** `privacy/analytics.js#IS_BROWSER_GA_ON` (re-exported by
+  `index/ga.js`) is `false`: `setupGa` never
   injects gtag/js, for anyone. On our own GA hosts (`isOwnGaHost`: prod and
   bldrs' deploy previews) it deletes any leftover `_ga`, `_ga_*` or `_gcl_*`
-  on every load. GA ran for everyone until 2026-11, and for consenting
+  on every load, along with the `bldrs.ga.engagement` open history that
+  `privacy/engagementTracking.js` kept (it now records nothing while the
+  switch is off). GA ran for everyone until 2026-11, and for consenting
   visitors until 2026-11-25. The loader and its tests are kept behind the
   switch for a later opt-in.
 - **The inline stub** in `public/index.html` still defines `dataLayer` and

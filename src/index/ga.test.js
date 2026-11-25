@@ -297,6 +297,16 @@ describe('consent', () => {
     expect(Cookies.get('_ga')).toBeUndefined()
   })
 
+  // A #2051 consenter's engaged-use open history is analytics device
+  // storage; with browser GA off it goes too. Share's own key in Share's own
+  // origin, so cleared on any host (unlike the GA cookies).
+  test.each(['bldrs.ai', 'localhost', 'share.example.com'])(
+    'deletes the leftover engaged-use history at setup on %s', (hostname) => {
+      localStorage.setItem('bldrs.ga.engagement', JSON.stringify({opens: [1, 2]}))
+      setupGa({hostname, isWebdriver: false})
+      expect(localStorage.getItem('bldrs.ga.engagement')).toBeNull()
+    })
+
   test('a visitor who has not chosen gets no loader on prod', () => {
     Cookies.remove('consentLevel')
     setupGa(PROD)
@@ -341,12 +351,6 @@ describe('consent', () => {
       expect(Cookies.get('_ga')).toBe('GA1.1.1234567890.0987654321')
       Cookies.remove('_ga')
     })
-
-  test('keeps the GA cookie at setup for a consenting visitor', () => {
-    Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
-    setupGa({hostname: 'localhost', isWebdriver: false, isBrowserGaOn: true})
-    expect(Cookies.get('_ga')).toBe('GA1.1.1234567890.0987654321')
-  })
 
   test('a visitor who chose Browse only gets no loader on prod', () => {
     Cookies.set('consentLevel', '1.restricted')

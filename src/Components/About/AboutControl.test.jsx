@@ -5,7 +5,7 @@ import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import * as FirstTime from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
 import AboutControl, {testId} from './AboutControl'
-import {X_PROFILE_URL} from './AboutDialog'
+import {PRIVACY_POLICY_HREF, X_PROFILE_URL} from './AboutDialog'
 import {ABOUT_MISSION, ABOUT_PAGE_TITLE} from './component'
 
 
@@ -56,6 +56,21 @@ describe('AboutControl', () => {
     expect(github).toHaveTextContent('bldrs-ai')
     expect(github).not.toHaveTextContent('GitHub')
     expect(screen.getByText('Open: IFC, STEP, STL, OBJ, ...')).toBeInTheDocument()
+    act(() => useStore.setState({isAboutVisible: false}))
+  })
+
+  // No choice is offered (design/new/analytics-consent.md §"The About
+  // dialog"): a plain line and the policy link, opening in a new tab.
+  it('says models stay on the device and links the privacy policy', () => {
+    act(() => useStore.setState({isAboutVisible: false}))
+    render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(screen.getByTestId(testId))
+    expect(screen.getByTestId('about-privacy')).toHaveTextContent('Your models stay on your device.')
+    const policy = screen.getByTestId('about-privacy-policy')
+    expect(policy).toHaveAttribute('href', PRIVACY_POLICY_HREF)
+    expect(PRIVACY_POLICY_HREF).toBe('/privacy/')
+    expect(policy).toHaveAttribute('target', '_blank')
+    expect(screen.queryByRole('button', {name: /Cancel|Decline/})).not.toBeInTheDocument()
     act(() => useStore.setState({isAboutVisible: false}))
   })
 

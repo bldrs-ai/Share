@@ -105,7 +105,14 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   volume-only (an evicted cache entry, a browser limit, a skipped
   preview unit) — goes to GA through `gtagEvent`
   (`src/privacy/analytics.js`), not as an info-level Sentry message;
-  migrate an existing info reporter when you touch it. Every Sentry
+  migrate an existing info reporter when you touch it. **But browser GA is
+  off since #2354** (`privacy/analytics.js#IS_BROWSER_GA_ON`): `gtagEvent`
+  only buffers in the inert inline stub, and the `beforeSend`
+  `reported_condition` shadow goes nowhere, so a GA-bound signal reaches
+  nobody until a server-side path exists for it. Send what must be counted
+  through a cookieless, ID-free first-party report instead (the
+  `model-open-count` / `client-capabilities` functions are the pattern;
+  `design/new/analytics-consent.md`). Every Sentry
   error/warning also sends one coarse `reported_condition` GA event per
   session per (level, category), automatically from `beforeSend`
   (`src/index/sentry.js`), so a reporter sends to Sentry or to GA, never

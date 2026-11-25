@@ -11,7 +11,9 @@ import DiscordIcon from './Discord.svg'
 
 /**
  * The privacy policy, served by the marketing build (netlify.toml: /privacy/
- * is a file match). The app has no /share/privacy route.
+ * is a file match, so it wins on bldrs.ai). The SPA keeps its own copy at
+ * /privacy (BaseRoutes.jsx, pages/Privacy.jsx), which is what a dev server
+ * without the marketing build shows; Privacy.test.jsx keeps the two in step.
  */
 export const PRIVACY_POLICY_HREF = '/privacy/'
 

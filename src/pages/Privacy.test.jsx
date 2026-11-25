@@ -6,8 +6,9 @@ import {HelmetThemeCtx} from '../Share.fixture'
 import Privacy from './Privacy'
 
 
-// The policy has two copies: this page (/share/privacy) and the marketing
-// site's (/privacy/, the one search and the About dialog's link reach).
+// The policy has two copies: this page (the SPA's /privacy route, BaseRoutes.jsx)
+// and the marketing site's (/privacy/, which wins on bldrs.ai and is the one
+// search and the About dialog's link reach).
 const MARKETING_POLICY = path.join(__dirname, '../../marketing/src/app/privacy/page.tsx')
 
 
@@ -48,12 +49,17 @@ describe('Privacy', () => {
   it('says there is no in-app tracking, and what each always-on report carries', () => {
     const {getByText} = render(<Privacy/>, {wrapper: HelmetThemeCtx})
     const loads = paragraph(getByText, 'How models load.')
-    expect(loads).toMatch(/We don’t use Google Analytics or any other tracking in the app/)
+    expect(loads).toMatch(/There is no Google Analytics or other tracking code in the app/)
     expect(loads).toMatch(/never includes a model’s name, path, web address or contents/)
     expect(loads).toMatch(/the only model it names is one of our own sample models/)
     expect(loads).toMatch(/lives only while the page is open/)
     const limits = paragraph(getByText, 'Free-use limits.')
     expect(limits).toMatch(/used only to apply the free allowance/)
+    // What the limit records actually keep (record-load.js stores the model's
+    // key and time), and that error reports can carry the page address.
+    expect(limits).toMatch(/which model, and when/)
+    const errors = paragraph(getByText, 'Error and reliability reports.')
+    expect(errors).toMatch(/that page address includes where the model is/)
   })
 
   it('says the same about telemetry as the marketing copy', () => {

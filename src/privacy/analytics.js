@@ -8,6 +8,20 @@ import {encodeGaClientReference} from './gaClientReference'
 import {SUBSCRIPTION_EVENT_NAMES} from './subscriptionEventNames'
 
 
+/*
+ * Google Analytics in the browser is OFF (owner, 2026-11-25): gtag/js is
+ * never loaded, for anyone, and nothing asks for consent. Everything that
+ * would collect for GA in the browser checks this as well as consent:
+ * index/ga.js#setupGa (the tag) and privacy/engagementTracking.js (its
+ * localStorage history). Usage is measured instead by cookieless, ID-free
+ * reports to our own server (app/modelOpenCount.js,
+ * netlify/functions/model-open-count.js). design/new/analytics-consent.md
+ * says why and what a later opt-in would turn back on. Here, in a base
+ * leaf, so privacy/ modules can read it without importing index/.
+ */
+export const IS_BROWSER_GA_ON = false
+
+
 /**
  * Whether the visitor has consented to Google Analytics. Fails closed: a
  * visitor who hasn't chosen yet has not consented (privacy/consent.js).

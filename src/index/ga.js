@@ -1,6 +1,7 @@
 import Cookies from 'js-cookie'
 import {captureException} from '@sentry/react'
-import {isAllowed, setGaClientId, setUserCidProperty, syncSentryCidTag} from '../privacy/analytics'
+import {IS_BROWSER_GA_ON, isAllowed, setGaClientId, setUserCidProperty, syncSentryCidTag} from '../privacy/analytics'
+import {ENGAGEMENT_STORAGE_KEY} from '../privacy/engagementTracking'
 import {reportClientCapability} from '../privacy/clientCapabilities'
 import {isFeatureEnabled} from '../FeatureFlags'
 
@@ -10,18 +11,9 @@ import {isFeatureEnabled} from '../FeatureFlags'
 // fetches the loader. A property migration has to update both.
 export const GA_MEASUREMENT_ID = 'G-GRLNVMZRGW'
 
-/*
- * Google Analytics in the browser is OFF (owner, 2026-11-25): gtag/js is
- * never loaded, for anyone, and no consent is asked. Usage is measured
- * without it: cookieless, ID-free reports to our own server
- * (privacy/modelOpenCount.js and netlify/functions/model-open-count.js,
- * #2355), which passes them to GA4 under one fixed id, plus server-side
- * per-account and metering records. design/new/analytics-consent.md says
- * why and what a later opt-in would turn back on. This one switch, and the
- * loader below it, are kept for that opt-in; setupGa's tests run the
- * loader with it on.
- */
-export const IS_BROWSER_GA_ON = false
+// The browser-GA switch lives with the consent check it qualifies
+// (privacy/analytics.js#IS_BROWSER_GA_ON); re-exported for setupGa's tests.
+export {IS_BROWSER_GA_ON}
 
 
 // Apex is canonical; www is included in case a client renders before
@@ -140,12 +132,31 @@ export default function setupGa(env = undefined) {
   const isOn = env?.isBrowserGaOn ?? IS_BROWSER_GA_ON
   if (!isOn || !isAllowed()) {
     deleteGoogleCookies(env?.hostname)
+    if (!isOn) {
+      deleteEngagementHistory()
+    }
     return
   }
   if (!shouldInitGa(env)) {
     return
   }
   loadGtag(env)
+}
+
+
+/**
+ * Delete the engaged-use open history (privacy/engagementTracking.js) a
+ * visitor who accepted under #2051 may hold: device storage kept for an
+ * analytics purpose, which nothing may keep while browser GA is off. It is
+ * Share's own key in Share's own origin, so unlike the GA cookies it is
+ * ours to clear on any host.
+ */
+function deleteEngagementHistory() {
+  try {
+    window.localStorage.removeItem(ENGAGEMENT_STORAGE_KEY)
+  } catch (_) {
+    // Storage blocked or unavailable: there is nothing we could have kept.
+  }
 }
 
 

@@ -627,7 +627,7 @@ export default function CadView({
     // The homepage model gets the overlay but no snackbar line: its load is
     // quiet (owner, 2026-11-25; AlertDialogAndSnackbar.jsx hides its live and
     // "Loaded" lines, and this is the plain line before them).
-    job.showLoading(isHostedDemoModel(modelPath) ? undefined : 'Loading model...')
+    job.showLoading(isHostedDemoModel(modelPath) ? null : 'Loading model...')
 
     // Only GitHub-hosted models use the Auth0-brokered token; local files,
     // other external URLs, and Drive (its own connection tokens) shouldn't
@@ -1001,7 +1001,7 @@ export default function CadView({
     const loadingMessageBase = `Loading ${isGoogleResult ? routeResult.fileId : filepath}`
     // Quiet for the homepage model, as above. The stall watchdog below still
     // speaks for it: a homepage load that stalls is a problem worth seeing.
-    job.showLoading(isHostedDemoModel(routeResult) ? undefined : loadingMessageBase)
+    job.showLoading(isHostedDemoModel(routeResult) ? null : loadingMessageBase)
 
     // Per-load progress reporter (conway #301): accumulates the normalized
     // load-log report (status-bar expando + post-load dialog + console

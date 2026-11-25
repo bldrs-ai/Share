@@ -1,3 +1,4 @@
+import Cookies from 'js-cookie'
 import React from 'react'
 import {render, screen} from '@testing-library/react'
 import {MemoryRouter, Route, Routes} from 'react-router-dom'
@@ -284,5 +285,46 @@ describe('Share deciding whether a route names a new model', () => {
     await actAsyncFlush()
     // Same object: a re-parse of the same model must not re-trigger a load.
     expect(useStore.getState().modelPath).toBe(seeded)
+  })
+})
+
+
+/**
+ * #2051's Test only mode refused GitHub, Drive and link models to a visitor
+ * whose `consentLevel` cookie said restricted. #2354 removed the mode, and
+ * such a cookie can still be on returning visitors' browsers, so it must not
+ * block a shared link any more (design/new/analytics-consent.md §"History").
+ */
+describe('Share for a visitor left with a restricted consent cookie', () => {
+  const GITHUB_SPLAT = 'bldrs-ai/test-models/main/ifc/misc/box.ifc'
+
+  beforeEach(() => {
+    useStore.setState({alert: null, modelPath: null})
+    Cookies.set('consentLevel', '1.restricted')
+  })
+
+  afterEach(() => {
+    Cookies.remove('consentLevel')
+  })
+
+  it('opens a GitHub model', async () => {
+    render(
+      <MockComponent>
+        <MemoryRouter initialEntries={[`/share/v/gh/${GITHUB_SPLAT}`]}>
+          <Routes>
+            <Route
+              path='/share/v/gh/:org/:repo/:branch/*'
+              element={<Share installPrefix='' appPrefix='/share' pathPrefix='/share/v/gh'/>}
+            />
+          </Routes>
+        </MemoryRouter>
+      </MockComponent>)
+    await actAsyncFlush()
+    expect(useStore.getState().alert).toBeNull()
+    const modelPath = useStore.getState().modelPath
+    expect(modelPath).not.toBeNull()
+    expect(modelPath.org).toBe('bldrs-ai')
+    expect(modelPath.repo).toBe('test-models')
+    expect(modelPath.filepath).toMatch(/box\.ifc$/)
   })
 })
