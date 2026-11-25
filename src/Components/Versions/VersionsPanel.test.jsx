@@ -3,7 +3,7 @@ import {act, fireEvent, render, renderHook, waitFor} from '@testing-library/reac
 import {handleRoute} from '../../routes/routes'
 import {StoreRouteThemeCtx} from '../../Share.fixture'
 import useStore from '../../store/useStore'
-import {navigateToModel} from '../../utils/navigate'
+import {navigateToModel} from '../../app/navigate'
 import VersionsPanel from './VersionsPanel'
 import {
   MOCK_MODEL_PATH_GIT,
@@ -15,8 +15,8 @@ import {MOCK_COMMITS} from './VersionsTimeline.fixture'
 
 
 jest.mock('./useVersions')
-jest.mock('../../utils/navigate', () => ({
-  ...jest.requireActual('../../utils/navigate'),
+jest.mock('../../app/navigate', () => ({
+  ...jest.requireActual('../../app/navigate'),
   navigateToModel: jest.fn(),
 }))
 

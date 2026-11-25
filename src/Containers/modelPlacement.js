@@ -1,7 +1,7 @@
 import {onHash} from '../Components/Camera/CameraControl'
 import {reportFirstMesh, reportFramingExclusion} from '../loader/loadProgress'
 import useStore from '../store/useStore'
-import {robustBoundsFor} from '../viewer/three/robustBounds'
+import {robustBoundsFor} from '../model/robustBounds'
 
 
 /**

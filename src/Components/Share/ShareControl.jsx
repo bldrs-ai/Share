@@ -12,7 +12,7 @@ import {
   gtagEventWithCid,
   modelContentId,
 } from '../../privacy/analytics'
-import {trackModelActionWhenAuthSettled} from '../../privacy/modelActionTracking'
+import {trackModelActionWhenAuthSettled} from '../../app/modelActionTracking'
 import {ControlButtonWithHashState, TooltipIconButton} from '../Buttons'
 import GatedAction from '../GatedAction'
 import {HASH_PREFIX_SHARE} from './hashState'

@@ -6,7 +6,7 @@
  * app would be inlined into the main bundle, +196 KB gz on cold load).
  *
  * So the rule is: the main bundle reaches this module only through a
- * runtime-built URL (Share's `viewer/tools/assistRuntime.js`), never by an
+ * runtime-built URL (Share's `tools/assistRuntime.js`), never by an
  * import. `index.ts` must not re-export from here, and the build fails if the
  * AI SDK shows up among the main bundle's inputs (`assistEntry.js`
  * `assertAiSdkNotInMain`).

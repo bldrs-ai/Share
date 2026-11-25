@@ -5,6 +5,7 @@ import createBrowserSlice from './BrowserSlice'
 import createConnectionsSlice from './ConnectionsSlice'
 import createCutPlanesSlice from './CutPlanesSlice'
 import createDisplaySlice from './DisplaySlice'
+import createEditSlice from './EditSlice'
 import createIFCSlice from './IFCSlice'
 import createIsolatorSlice from './IfcIsolatorSlice'
 import createNavTreeSlice from './NavTreeSlice'
@@ -31,6 +32,7 @@ const useStore = create((set, get) => ({
   ...createConnectionsSlice(set, get),
   ...createCutPlanesSlice(set, get),
   ...createDisplaySlice(set, get),
+  ...createEditSlice(set, get),
   ...createIFCSlice(set, get),
   ...createIsolatorSlice(set, get),
   ...createNavTreeSlice(set, get),

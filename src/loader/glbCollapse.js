@@ -1,12 +1,12 @@
 import {Box3, Matrix3, Vector3} from 'three'
-import {makeRangeCanary} from './bldrsInstanceTables'
+import {makeRangeCanary} from '../model/bldrsInstanceTables'
 
 
 /**
  * glbCollapse — merge the batched writer's single-placement groups into one
  * primitive per source colour, addressed by per-element index ranges
  * (share-140 #1871, glb-export-premium.md §1.1d). The WRITER half; the
- * reader is `viewer/ifc/batchedGeometryRanges.js` (#1870).
+ * reader is `model/batchedGeometryRanges.js` (#1870).
  *
  * Why: on a DSA-shaped model every element is its own glTF node + mesh +
  * accessors over a three-vertex shape, and that declaration is ~99.99% of the

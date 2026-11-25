@@ -7,7 +7,7 @@ import {getRepositories, getUserRepositories} from '../../net/github/Repositorie
 import {getFilesAndFolders} from '../../net/github/Files'
 import {getBranches} from '../../net/github/Branches'
 import {getOAuthScopes} from '../../net/github/OAuthScopes'
-import {navigateToModel} from '../../utils/navigate'
+import {navigateToModel} from '../../app/navigate'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../../connections/persistence'
 import {getGrantedGithubScope, saveGrantedGithubScope} from '../../Auth0/githubGrant'
 import useStore from '../../store/useStore'
@@ -25,7 +25,7 @@ jest.mock('../../net/github/Repositories')
 jest.mock('../../net/github/Files')
 jest.mock('../../net/github/Branches')
 jest.mock('../../net/github/OAuthScopes')
-jest.mock('../../utils/navigate', () => ({navigateToModel: jest.fn()}))
+jest.mock('../../app/navigate', () => ({navigateToModel: jest.fn()}))
 jest.mock('../../connections/persistence', () => ({
   addRecentFileEntry: jest.fn(),
   setPendingModelNameUpdate: jest.fn(),

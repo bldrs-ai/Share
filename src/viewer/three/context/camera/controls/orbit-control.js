@@ -5,7 +5,7 @@
 import {Sphere, Vector3} from 'three'
 import {IfcComponent, NavigationModes} from '../../base-types'
 import {LiteEvent} from '../../LiteEvent'
-import {robustBoundsFor} from '../../../robustBounds'
+import {robustBoundsFor} from '../../../../../model/robustBounds'
 import {FRAMING_MARGIN, applyCameraLimits, cameraLimitsForSphere} from '../../../cameraLimits'
 
 

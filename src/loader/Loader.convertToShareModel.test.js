@@ -8,13 +8,13 @@
 import {BufferAttribute, BufferGeometry, Mesh, Scene} from 'three'
 import {__sanitizeCachedTitleForTest, convertToShareModel} from './Loader'
 import {makeElementPropertiesPayload} from './bldrsElementProperties'
-import {encodeElementProperties} from './bldrsElementPropertiesCapture'
+import {encodeElementProperties} from '../engine/bldrsElementPropertiesCapture'
 import {
   APPLIED_COORDINATION_KEY,
   COORDINATION_OFFSET_KEY,
-} from '../viewer/ifc/appliedCoordination'
-import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
-import {attachElementSubsets} from '../viewer/three/elementSubsets'
+} from '../model/appliedCoordination'
+import {decorateShareModel, inferModelCapabilities} from '../model/ShareModel'
+import {attachElementSubsets} from '../model/elementSubsets'
 
 
 /**

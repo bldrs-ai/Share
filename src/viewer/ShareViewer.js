@@ -19,32 +19,29 @@ import {
   SRGBColorSpace,
   Vector3,
 } from 'three'
-import {LOOKS, DEFAULT_LOOK, forEachLookManagedMaterial} from './looks'
+import {LOOKS, DEFAULT_LOOK, forEachLookManagedMaterial} from '../model/looks'
 import {RoomEnvironment} from 'three/examples/jsm/environments/RoomEnvironment.js'
-import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
-import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'
 import Clipper from './three/Clipper'
 import IfcHighlighter from './three/IfcHighlighter'
 import IfcIsolator from './three/IfcIsolator'
 import CustomPostProcessor from './three/CustomPostProcessor'
 import Selector from './three/Selector'
-import ShareIfcLoader from './ifc/ShareIfcLoader'
-import {robustBoundsFor} from './three/robustBounds'
+import ShareIfcLoader from '../loader/ShareIfcLoader'
+import {robustBoundsFor} from '../model/robustBounds'
 import ShareIfc from './ifc/ShareIfc'
 import {IfcContext} from './three/context'
 import ThreeContext from './three/ThreeContext'
 import debug from '../utils/debug'
 import {occurrencePathKey} from '../utils/occurrencePaths'
-import {modelHasCapability} from './ShareModel'
-import {paintPreviewSelection} from './previewSelection'
-import {paintStreamingSelection, streamingTablesModel} from './streamingBatchPick'
-import {isLookOn} from './lookMode'
+import {modelHasCapability} from '../model/ShareModel'
+import {paintPreviewSelection} from '../model/previewSelection'
+import {paintStreamingSelection, streamingTablesModel} from '../model/streamingBatchPick'
+import {isLookOn} from '../model/lookMode'
 import {isSoftwareRenderer} from './three/softwareRenderer'
 import {gtagEvent} from '../privacy/analytics'
 import {MotionAO} from './motionAO'
 import LightingGui from './three/LightingGui'
 import {requestPaint} from './three/renderDemand'
-import {viewRules} from './legacyViewRules'
 import {
   applyBatchedInstancePreselection,
   applyBatchedInstanceSelection,
@@ -53,7 +50,7 @@ import {
   clearBatchedPreselection,
   clearBatchedSelection,
   resolveBatchedHighlight,
-} from './ifc/batchedHighlight'
+} from '../model/batchedHighlight'
 
 
 // Minimum index-buffer capacity for the preselection pool. 256 u32
@@ -69,7 +66,7 @@ const ENV_MAP_BLUR = 0.04
 
 
 // Default env-map intensity (§6e) — derived from the Neutral look (single
-// source of truth: src/viewer/looks.js LOOKS.neutral). Scales the gradient
+// source of truth: src/model/looks.js LOOKS.neutral). Scales the gradient
 // studio IBL contribution (`scene.environmentIntensity`); `applyLook`
 // overrides it on a render-mode toggle. Also live-tunable via `?feature=look`.
 const ENV_MAP_INTENSITY = LOOKS.neutral.envIntensity
@@ -169,9 +166,6 @@ import {areDefinedAndNotNull} from '../utils/assert'
 ColorManagement.enabled = true
 
 
-const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
-
-
 /* eslint-disable jsdoc/no-undefined-types */
 /**
  * ShareViewer — the top-level viewer facade for Bldrs Share.
@@ -198,8 +192,8 @@ const viewParameter = (new URLSearchParams(window.location.search)).get('view')?
  *   - `this.clipper` — in-repo `Clipper` (MeshClipper-backed)
  *   - `this.selector` — local `Selector` facade over `IFC.selector`
  *   - `this.ifcLoader` — `ShareIfcLoader` (Conway-direct IFC parse)
- *   - `this.isolator`, `this.highlighter`, `this.postProcessor`,
- *     `this.viewsManager` — local plugins constructed here.
+ *   - `this.isolator`, `this.highlighter`, `this.postProcessor` — local
+ *     plugins constructed here.
  */
 export class ShareViewer {
   // TODO: might be useful if we used a Set as well to handle large selections,
@@ -362,7 +356,6 @@ export class ShareViewer {
     // single `MeshClipper` this facade builds per `setModel`. Call-sites
     // call `viewer.clipper.X` and never branch on model type.
     this.clipper = new Clipper(this)
-    this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
   }
 
 
@@ -807,11 +800,6 @@ export class ShareViewer {
       console.warn('env/shadow-map dispose failed:', e)
     }
     try {
-      this.viewsManager?.dispose?.()
-    } catch (e) {
-      console.warn('viewsManager.dispose failed:', e)
-    }
-    try {
       this.isolator?.dispose?.()
     } catch (e) {
       console.warn('isolator.dispose failed:', e)
@@ -861,15 +849,6 @@ export class ShareViewer {
         console.warn('context.dispose failed:', e)
       }
     }
-  }
-
-  /**
-   * Loads the given IFC in the current scene.
-   *
-   * @param {IfcCustomViewSettings} customViewSettings (optional) override the ifc elements file colors
-   */
-  setCustomViewSettings(customViewSettings) {
-    this.viewsManager.setViewSettings(customViewSettings)
   }
 
   /**
@@ -1002,11 +981,9 @@ export class ShareViewer {
    * @param {boolean} fitToFrame (optional) if true, brings the perspectiveCamera to the loaded IFC.
    * @param {Function} onProgress (optional) a callback function to report on downloading progress
    * @param {Function} onError (optional) a callback function to report on loading errors
-   * @param {IfcCustomViewSettings} customViewSettings (optional) override the ifc elements file colors
    * @return {IfcModel} ifcModel object
    */
-  async loadIfcUrl(url, fitToFrame, onProgress, onError, customViewSettings) {
-    this.viewsManager.setViewSettings(customViewSettings)
+  async loadIfcUrl(url, fitToFrame, onProgress, onError) {
     return await this.IFC.loadIfcUrl(url, fitToFrame, onProgress, onError)
   }
 
@@ -1016,11 +993,9 @@ export class ShareViewer {
    * @param {string} file IFC as File.
    * @param {boolean} fitToFrame (optional) if true, brings the perspectiveCamera to the loaded IFC.
    * @param {Function} onError (optional) a callback function to report on loading errors
-   * @param {IfcCustomViewSettings} customViewSettings (optional) override the ifc elements file colors
    * @return {IfcModel} ifcModel object
    */
-  async loadIfcFile(file, fitToFrame, onError, customViewSettings) {
-    this.viewsManager.setViewSettings(customViewSettings)
+  async loadIfcFile(file, fitToFrame, onError) {
     return await this.IFC.loadIfc(file, fitToFrame, onError)
   }
 

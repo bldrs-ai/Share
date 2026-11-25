@@ -45,7 +45,7 @@ import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
 // writer, on fixture-sized models.
 const HISTORY_TEST_TIMEOUT_MS = 180_000
 const RACE_TEST_TIMEOUT_MS = 120_000
-// index.ifc's home camera (utils/navigate.js#navToDefault), off any auto-fit.
+// index.ifc's home camera (app/navigate.js#navToDefault), off any auto-fit.
 const A_CAMERA = 'c:-57.022,131.828,173.3,37.922,22.64,9.136'
 const A_CAMERA_POSITION = A_CAMERA.substring('c:'.length).split(',').slice(0, 3).map(Number)
 // A horizontal cut through index.ifc at its centre.

@@ -10,7 +10,7 @@ import {
   MODEL_SOURCES,
   gtagFunnelEvent,
 } from '../../privacy/analytics'
-import {trackModelActionWhenAuthSettled} from '../../privacy/modelActionTracking'
+import {trackModelActionWhenAuthSettled} from '../../app/modelActionTracking'
 import {aiCreditsCopy} from '../../quota/aiCreditsCopy'
 import {LIMITS, QUOTA_FEATURES, ROLLING_WINDOW_DAYS, TIERS} from '../../quota/quota'
 import useStore from '../../store/useStore'

@@ -23,7 +23,7 @@
 // `.eslintrc.cjs`).
 //
 // Design: design/new/glb-export-premium.md §4.3, §4.4.
-import {gunzipBytes} from '../export/glbGzip'
+import {gunzipBytes} from './glbGzip'
 import {readGlbContainerHeader, readGlbContainerJsonExtent} from './glbContainer'
 
 

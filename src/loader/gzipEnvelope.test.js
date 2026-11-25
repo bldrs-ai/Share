@@ -9,7 +9,7 @@ import {
   DecompressionStream as NodeDecompressionStream,
 } from 'node:stream/web'
 import {gzipSync} from 'node:zlib'
-import {GzipExpansionError, gunzipBytes} from '../export/glbGzip'
+import {GzipExpansionError, gunzipBytes} from './glbGzip'
 import {
   GzipEnvelopeError,
   decodeGzipEnvelope,
@@ -19,9 +19,9 @@ import {
 
 // The real inflate everywhere but the one test that needs it to fail on
 // demand: a bomb that trips the ceiling for real costs 512 MiB and ~7s per
-// run, which is `export/glbGzip.test.js`'s job at a cap it can choose.
-jest.mock('../export/glbGzip', () => {
-  const actual = jest.requireActual('../export/glbGzip')
+// run, which is `loader/glbGzip.test.js`'s job at a cap it can choose.
+jest.mock('./glbGzip', () => {
+  const actual = jest.requireActual('./glbGzip')
   return {...actual, gunzipBytes: jest.fn((...args) => actual.gunzipBytes(...args))}
 })
 
@@ -188,7 +188,7 @@ describe('gzipEnvelope', () => {
       // The decompression bomb. gzip reaches ~1032:1, so a few MB of hostile
       // input is hundreds of GB, and an unbounded inflate ends the tab rather
       // than the load. The ceiling itself is enforced mid-inflate inside
-      // `gunzipBytes`, where `export/glbGzip.test.js` measures it on real
+      // `gunzipBytes`, where `loader/glbGzip.test.js` measures it on real
       // bytes; what is checked HERE is the half that reaches the user — that
       // the refusal arrives as a `GzipEnvelopeError` naming the model, not as
       // a stream error naming a byte count. Driven through the mocked inflate

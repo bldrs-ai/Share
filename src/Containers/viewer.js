@@ -1,5 +1,5 @@
 import {Color} from 'three'
-import {getMeshMaterials} from '../viewer/ShareModel'
+import {getMeshMaterials} from '../model/ShareModel'
 import {ShareViewer} from '../viewer/ShareViewer'
 import {isFeatureEnabled} from '../FeatureFlags'
 import {createFrameHoverPicker, createTimerHoverPicker} from '../viewer/hoverPick'
@@ -105,7 +105,7 @@ export function disposeViewer() {
 
     // Belt-and-suspenders: call any built-in dispose on the viewer for
     // subsystems the manual traverse above doesn't reach (controls,
-    // post-processor, highlighter, isolator, viewsManager, etc.).
+    // post-processor, highlighter, isolator, etc.).
     if (typeof currentViewer.dispose === 'function') {
       try {
         currentViewer.dispose()

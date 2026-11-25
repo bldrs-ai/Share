@@ -22,7 +22,7 @@
 
 import axios from 'axios'
 import {downloadToOPFS, doesFileExistInOPFS} from '../OPFS/utils'
-import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
+import ShareIfcLoader from './ShareIfcLoader'
 import useStore from '../store/useStore'
 import BLDLoader from './BLDLoader'
 import {load} from './Loader'

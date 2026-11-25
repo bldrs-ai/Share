@@ -7,7 +7,7 @@ import {homepageSetup, pauseViewerRendering, setIsReturningUser} from '../tests/
 /**
  * The engine session layer (engine-worker.md §7 step 2), driven through the
  * `?feature=engineWorker` dev hook `window.__bldrsEngine`
- * (src/engine/engineDevHook.js). No product load goes through it yet, so
+ * (src/app/engineDevHook.js). No product load goes through it yet, so
  * the page's own load is just the way to get an app with the hook
  * installed; the session under test opens its own copy of `index.ifc`.
  *

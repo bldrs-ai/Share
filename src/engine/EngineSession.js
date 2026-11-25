@@ -361,7 +361,7 @@ export class EngineSession {
 
   /**
    * The Properties panel's tables, resolved in the engine
-   * (Components/Properties/propertyTable.js): one request for all of them.
+   * (engine/propertyTable.js): one request for all of them.
    *
    * @param {Array<object>} tables `{record, isPset}` each
    * @return {Promise<Array<object>>} propertyTable.js `Node.TABLE`s, in order

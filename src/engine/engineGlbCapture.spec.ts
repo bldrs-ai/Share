@@ -40,7 +40,7 @@ import {
  *      asserts a worker session, not the in-process fallback), and expects
  *      the captures to have run there and the artifact to be the reference
  *      BYTE FOR BYTE. Both engines run the same capture code
- *      (loader/glbEngineCapture.js) over the same conway, and the geometry
+ *      (engine/glbEngineCapture.js) over the same conway, and the geometry
  *      comes from the same main-side scene build, so any difference is a
  *      defect;
  *   3. exports it as a Pro user, and expects the file to carry the

@@ -105,6 +105,15 @@
  * input (`noteUserCamera`), which stops the follow for good, so no follow move
  * can run while a UI's own move is queued.
  */
+import {USER_CAMERA_EVENT, liveDemands} from '../../utils/paintRequest'
+
+
+// The asks live below the model, which asks for paints but must not import
+// this scheduler (design/tracks/open-t200/layering.md §2.2). Re-exported, so
+// no viewer caller changes.
+export {
+  USER_CAMERA_EVENT, requestBackgroundPaint, requestOverlayPaint, requestPaint, runPaint,
+} from '../../utils/paintRequest'
 
 
 /**
@@ -117,11 +126,6 @@ export const BACKGROUND_MIN_GAP_MS = 100
 export const BACKGROUND_COST_FACTOR = 4
 /** With nothing asking, a background frame is still requested this often. */
 export const HEARTBEAT_MS = 1000
-/**
- * The camera-controls event a camera UI sends when the user works it: see
- * `noteUserCamera`.
- */
-export const USER_CAMERA_EVENT = 'bldrsusercamera'
 /**
  * After user input or a store change, keep painting this long: what the
  * event changes is often applied a frame or two later, by a React effect or
@@ -160,77 +164,6 @@ export const EXPENSIVE_PAINT_MS = 33
  * `OVERLAY` frame into a full one whenever the overlay can't compose it.
  */
 export const PaintKind = Object.freeze({FULL: 'full', OVERLAY: 'overlay'})
-
-
-// Every live RenderDemand, so `requestPaint` reaches the viewer without the
-// caller holding it. One viewer at a time today; a disposed one leaves.
-const liveDemands = new Set()
-// Above zero while a paint runs (`runPaint`): the hooks don't count what
-// three mutates inside its own render as a change to paint.
-let paintDepth = 0
-
-
-/**
- * The picture changed: paint it on the next frame, in every live viewer.
- * Cheap enough to call from anywhere (a flag per viewer). For the sources
- * three can't see change: `visible`, a material's colour or opacity, an
- * outline selection, a light. During a load it paints at once like any user
- * action; work the load pipeline does itself asks with
- * `requestBackgroundPaint` instead, which the load's frame budget spaces.
- */
-export function requestPaint() {
-  for (const demand of liveDemands) {
-    demand.invalidate()
-  }
-}
-
-
-/**
- * Only the hover overlay changed: the hovered instance(s), not the scene
- * under them (hoverOverlay.js). Between loads, with nothing else asking and
- * the probe still, the next frame redraws just the overlay on the cached
- * frame; anything else that asks in the same frame makes it a full paint,
- * which draws the overlay too. During a load, or off a session, it is a
- * plain `requestPaint`. The only caller is the overlay itself, and
- * `renderOnDemandSources.test.js` holds it to that.
- */
-export function requestOverlayPaint() {
-  for (const demand of liveDemands) {
-    demand.invalidateOverlay()
-  }
-}
-
-
-/**
- * The scene changed as part of ongoing work: paint when the budget allows
- * during a load, on the next frame otherwise. What the three hooks call
- * (renderDemandHooks.js). Ignored while a paint is running.
- */
-export function requestBackgroundPaint() {
-  if (paintDepth > 0) {
-    return
-  }
-  for (const demand of liveDemands) {
-    demand.invalidateBackground()
-  }
-}
-
-
-/**
- * Run a draw, so that what three mutates inside it isn't taken for a change
- * (module doc). The render closure and the screenshot path draw through it.
- *
- * @param {Function} draw
- * @return {*} what `draw` returns
- */
-export function runPaint(draw) {
-  paintDepth++
-  try {
-    return draw()
-  } finally {
-    paintDepth--
-  }
-}
 
 
 /**

@@ -1,5 +1,5 @@
 import {getHashParams, removeHashParams, setParamsToHash} from '../utils/location'
-import {elementRef, parseRef, sceneGraphNamePaths} from '../viewer/visibilityRefs'
+import {elementRef, parseRef, sceneGraphNamePaths} from '../model/visibilityRefs'
 
 
 /**

@@ -370,7 +370,7 @@ describeMobileAndDesktop('Open 205: interactive at first mesh', () => {
         /* eslint-disable @typescript-eslint/no-explicit-any */
         const s = (window as any).store.getState()
         // The finished model paints it: some instance of the element is in the
-        // batched selection layer (viewer/ifc/batchedHighlight.js).
+        // batched selection layer (model/batchedHighlight.js).
         let paintedInstances = 0
         s.model.traverse((o: any) => {
           const selected: Set<number> | undefined = o.userData?.batchedHighlight?.selSet

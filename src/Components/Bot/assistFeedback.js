@@ -1,7 +1,7 @@
 import {HOSTED_TRANSPORT_ID} from '../../assist'
 import {FEEDBACK_SOURCES} from '../../feedback/feedbackRecord'
 import {RATINGS, submitFeedback} from '../../feedback/submitFeedback'
-import {ASSIST_FREE_MODELS} from '../../viewer/tools/assistModels'
+import {ASSIST_FREE_MODELS} from '../../tools/assistModels'
 import {isUserChosenModel} from './assistModelChoice'
 import {assistAuth, assistChat} from './assistState'
 

@@ -1,7 +1,7 @@
 /* eslint-disable no-magic-numbers */
 import {ColorMode, hasAutoColor, setColorMode} from './colorMode'
-import {applyProductPalette, isDefaultColor} from '../ifc/productPalette'
-import {DEFAULT_COLOR} from '../ifc/flatMeshToBatchedModel'
+import {applyProductPalette, isDefaultColor} from '../../model/productPalette'
+import {DEFAULT_COLOR} from '../../model/flatMeshToBatchedModel'
 
 
 const grey = () => ({x: DEFAULT_COLOR.x, y: DEFAULT_COLOR.y, z: DEFAULT_COLOR.z, w: 1})

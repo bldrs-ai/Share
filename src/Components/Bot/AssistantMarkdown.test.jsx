@@ -1,15 +1,15 @@
 import React from 'react'
 import {act, render, screen, within} from '@testing-library/react'
 import {ThemeCtx} from '../../theme/Theme.fixture'
-import {describeRef, jumpToRef} from '../../viewer/tools/refLinks'
+import {describeRef, jumpToRef} from '../../tools/refLinks'
 import AssistantMarkdown, {allowedLinkUri} from './AssistantMarkdown'
 
 
 // The plugin is a URL import in the app (markdownGfm.js); Jest has the module itself.
 const mockGfm = {load: () => Promise.resolve(jest.requireActual('remark-gfm').default)}
 // The chip's model lookup and jump have their own suite (refLinks.test.js); here only the wiring.
-jest.mock('../../viewer/tools/refLinks', () => ({
-  ...jest.requireActual('../../viewer/tools/refLinks'),
+jest.mock('../../tools/refLinks', () => ({
+  ...jest.requireActual('../../tools/refLinks'),
   describeRef: jest.fn(),
   jumpToRef: jest.fn(),
 }))

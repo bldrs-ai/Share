@@ -2,7 +2,7 @@
 // open-205 #2011 Phase 1a), or the full page load it always was. One
 // decision, read by everything that behaves differently for an in-app
 // switch, so none of them can disagree about which mode a page is in:
-//   - `navigateToModel` (utils/navigate.js), which picks the switch or the
+//   - `navigateToModel` (app/navigate.js), which picks the switch or the
 //     page load;
 //   - CadView's load ownership (`loadAbortRef`, `forgetLoadedModelState`,
 //     the viewer-replaced reload; Containers/CadView.jsx, step A);

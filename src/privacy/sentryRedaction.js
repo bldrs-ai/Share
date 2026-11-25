@@ -11,7 +11,7 @@
  *   header text is whatever the exporter wrote, and has included a full UNC
  *   path to a company file share (SHARE-1MT, 2026-11-03).
  * - Console lines that name a file the user handed Share, such as the drop
- *   path's rejected-upload warning (`utils/dragAndDrop.js`, test-models#69)
+ *   path's rejected-upload warning (`app/dragAndDrop.js`, test-models#69)
  *   and the no-model-in-archive warning (`loader/modelArchive.js`). They name
  *   it through {@link consoleFileName}, and every console line of that shape
  *   has the quoted name withheld here, so a new producer that follows the

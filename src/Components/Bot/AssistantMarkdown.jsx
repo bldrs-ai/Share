@@ -1,14 +1,14 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import Markdown from 'react-markdown'
 import {Box, Link} from '@mui/material'
-import {REF_SCHEME, refOfLinkUri, splitMultiRefLinks} from '../../viewer/tools/refLinks'
+import {REF_SCHEME, refOfLinkUri, splitMultiRefLinks} from '../../tools/refLinks'
 import RefChip from './RefChip'
 import {loadMarkdownGfm} from './markdownGfm'
 
 
 /**
  * Only http(s) links are followed, plus `ref:<ref>` element mentions (#1673;
- * viewer/tools/refLinks.js), which `LinkOrText` renders as chips. The default
+ * tools/refLinks.js), which `LinkOrText` renders as chips. The default
  * allows `mailto:` and `tel:` too, which a model reply has no business
  * offering; anything else (a `javascript:` URL, a relative path that would
  * navigate Share itself, a `ref:` with a malformed ref) is rendered as plain

@@ -35,7 +35,7 @@ export const flags = [
   // See design/new/conversational-cad.md §2.
   {name: 'workspace', isActive: false},
   // Open a model in-app instead of with a page load (open-205 Phase 1a, #2011,
-  // #2021): `navigateToModel` (utils/navigate.js) routes through react-router's
+  // #2021): `navigateToModel` (app/navigate.js) routes through react-router's
   // `navigate()` rather than `window.location.assign`, and the load the user
   // leaves is aborted and its state dropped (CadView step A). Its own flag,
   // not `workspace`, so the switch burns in and rolls back without the shell
@@ -59,7 +59,7 @@ export const flags = [
   // The AI assistant (epic assist-310, #1659; design/new/ai-workspace.md §13,
   // D12). It shows the assistant panel (Components/Bot/, whose agent loop is
   // #1675) and installs the dev hook `window.__bldrsAssistTools` that drives
-  // the viewer tool registry (src/viewer/tools/assistHost.js, #1674). The old
+  // the viewer tool registry (src/tools/assistHost.js, #1674). The old
   // `?feature=bot` turns it on too (FEATURE_IMPLICATIONS below), until the
   // tray's rename in #1672. A `#bot:` permalink opens the panel only where
   // this flag is on (TabbedPanels.jsx, NotesAndPropertiesDrawer.jsx). The registry and tool providers ship
@@ -200,8 +200,8 @@ export const flags = [
   // Default-ON since §7 step 9. Where a load's engine runs is decided in ONE
   // place, `engine/engineRoute.js#mainThreadEngineReason`: the main-thread
   // engine stays permanently (§8 item 6) for `disableEngineWorker` below
-  // and for the legacy `?view=` rules, which read the main-thread engine
-  // directly (the legacy `?feature=bot` eval did too, until #1675 deleted it). Where module workers
+  // (the legacy `?view=` rules and `?feature=bot` eval read it directly
+  // too, until slice V and #1675 deleted them). Where module workers
   // are missing, or a worker fails to start, the same handler runs in
   // process on this thread (spawnEngine.js).
   // Do NOT roll back by setting this to false: `?feature=engineWorker` in a
@@ -236,14 +236,14 @@ export const flags = [
   // on-demand painting (DESIGN.md §"Render loop & perf monitor", "Rolling
   // back").
   {name: 'disableRenderOnDemand', isActive: false},
-  // OFF-switch for the §6e render look (viewer/lookMode.js), on by default
+  // OFF-switch for the §6e render look (model/lookMode.js), on by default
   // since #2167. `?feature=disableLook` puts one session back on the pre-§6e
   // pipeline (Lambert materials, linear output, no IBL, no AO); setting this
   // `isActive: true` is the PROD ROLLBACK, which no URL can override. Not
   // `look: false`: `?feature=look` now only opens the tuning panels.
   {name: 'disableLook', isActive: false},
   // OFF-switch for the instance tree hover and click picks go through on a
-  // batched model (viewer/ifc/batchedInstanceBvh.js): with it on, no tree is
+  // batched model (model/batchedInstanceBvh.js): with it on, no tree is
   // built and every pick walks every instance, as before the tree. Same
   // inverted shape as the two above: `?feature=disableInstanceBvh` is the
   // per-session A/B (the before/after in that module's PR was measured with
@@ -321,7 +321,7 @@ export const flags = [
   // legible instead of a grey blob. Strictly no-op the moment any real
   // color is present, so IFC and colored STEP are untouched. Default-on; it
   // only changes models that had zero color to begin with.
-  // See src/viewer/ifc/productPalette.js.
+  // See src/model/productPalette.js.
   {name: 'autoColorParts', isActive: true},
   // Model display controls (view-140): additive Display-popover sections
   // beyond the always-on color toggle — shading (Shaded/Wireframe, S4) today,
@@ -341,6 +341,13 @@ export const flags = [
   // both of which now run in the default configuration.
   // See design/new/model-display-controls.md §7.
   {name: 'displayControls', isActive: true},
+  // Model editing (create-300, #1914; design/new/model-edit.md §7): delete,
+  // transform, duplicate and create over an op log with undo/redo. Gates the
+  // user-visible pieces only, and L1 (#1916) has none: the op log, the
+  // applier and the store's EditSlice ship unconditionally and nothing calls
+  // them yet. L2's minimal UI (#1917: Delete, copy/paste, undo/redo keys)
+  // is the first thing behind it. Default off.
+  {name: 'edit', isActive: false},
   // OFF-switch for adaptive residency during camera motion (B3 of
   // design/new/demand-tiled-rendering.md; viewer/residency/MotionResidency.js),
   // on by default since the owner's A/B on a real GPU (it was the opt-in

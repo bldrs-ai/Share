@@ -43,7 +43,7 @@ export function fileNameFromPath(path) {
  * Original filename for an uploaded (drag-drop / file-picker) model.
  * The upload flow stores the file in OPFS under a UUID and records the
  * user's original filename in the recent-files entry keyed by that
- * UUID (`utils/dragAndDrop.js#onWritten` → `addRecentFileEntry`).
+ * UUID (`app/dragAndDrop.js#onWritten` → `addRecentFileEntry`).
  * Falls back to the UUID-based storage name when the entry is missing
  * (cleared localStorage, direct navigation to a stale /v/local-only/ URL).
  *

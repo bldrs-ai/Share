@@ -11,7 +11,7 @@ import PopupAuth from './Components/Auth/PopupAuth'
 import PopupCallback from './Components/Auth/PopupCallback'
 import {checkOPFSAvailability, setUpGlobalDebugFunctions} from './OPFS/utils'
 import pruneMissingLocalRecents from './connections/pruneLocalRecents'
-import {seedUploadLedgerFromRecents} from './OPFS/uploadLedger'
+import {seedUploadLedgerFromRecents} from './connections/uploadLedger'
 import ShareRoutes from './ShareRoutes'
 import Styles from './Styles'
 import About from './pages/About'
@@ -20,11 +20,11 @@ import Privacy from './pages/Privacy'
 import TOS from './pages/TOS'
 import BlogRoutes from './pages/blog/BlogRoutes'
 import {initializeOctoKitAuthenticated, initializeOctoKitUnauthenticated} from './net/github/OctokitExport'
-import {trackSubscriptionFromToken} from './privacy/subscriptionTracking'
+import {trackSubscriptionFromToken} from './app/subscriptionTracking'
 import useStore from './store/useStore'
 import useShareTheme from './theme/Theme'
 import debug from './utils/debug'
-import {navWith} from './utils/navigate'
+import {navWith} from './app/navigate'
 
 
 const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
@@ -186,7 +186,7 @@ export default function BaseRoutes({testElt = null}) {
         // Ordering requirement: seed the upload ledger from the local recents
         // BEFORE the prune below deletes the recents of uploads OPFS has lost,
         // or those lost uploads would never be recognised as "held here once"
-        // (OPFS/uploadLedger.js). Synchronous, so it finishes before the
+        // (connections/uploadLedger.js). Synchronous, so it finishes before the
         // prune's first read.
         seedUploadLedgerFromRecents()
         // Fire-and-forget: a handful of handle lookups, off the load path.

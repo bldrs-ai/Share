@@ -5,7 +5,7 @@
  * three r187 replaced `Ray.intersectTriangle` with a watertight
  * (Woop–Benthin–Wald) test. Its rejections are all `<`/`>`/`===`
  * comparisons, so a triangle with a NaN vertex — which real IFC exports do
- * carry (see the NaN-box case in `viewer/ifc/batchedInstanceBvh.test.js`) —
+ * carry (see the NaN-box case in `model/batchedInstanceBvh.test.js`) —
  * is no longer rejected: it "hits" at distance NaN, through three's own Mesh
  * raycast and three-mesh-bvh's alike (both call `intersectTriangle`).
  * r184's version returned null for it.

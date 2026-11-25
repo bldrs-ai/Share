@@ -138,7 +138,7 @@ describeMobileAndDesktop('ADF crown picking', () => {
 
   // Each NavTree element hides on its own. ADF is a scene-graph model (no
   // `createSubset`); hide used to detach the whole model and then throw, so
-  // one tooth's eye blanked the scene. See viewer/three/sceneGraphVisibility.js.
+  // one tooth's eye blanked the scene. See model/sceneGraphVisibility.js.
   test('a NavTree eye hides one tooth, and the landmark curves start hidden but can be shown', async ({page}) => {
     const {row, expand} = await loadAndOpenTree(page)
     const before = await shownState(page)

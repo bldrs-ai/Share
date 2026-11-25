@@ -2,7 +2,7 @@ import React, {ReactElement, useState} from 'react'
 import {MenuItem, TextField} from '@mui/material'
 import useQuota from '../../hooks/useQuota'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
-import {navigateToModel} from '../../utils/navigate'
+import {navigateToModel} from '../../app/navigate'
 import {SAMPLE_MODELS} from './sampleModelRoster'
 
 

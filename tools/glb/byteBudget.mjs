@@ -39,7 +39,7 @@
  * ## Why this file re-reads the GLB chunk headers
  *
  * `src/loader/glbContainer.js` imports cleanly under plain Node (the root
- * package.json is `"type": "module"`, and it plus the `src/export/glbGzip.js`
+ * package.json is `"type": "module"`, and it plus the `src/loader/glbGzip.js`
  * it pulls in use no npm dependencies — hence that import's explicit `.js`,
  * which plain Node's ESM resolver requires), so the BLDR container header is
  * read with the real reader rather than a copy. `src/loader/injectGlbExtensions.js#parseGlb` is NOT reused: it

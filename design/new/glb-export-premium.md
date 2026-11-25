@@ -296,7 +296,7 @@ the group count multiplies straight through the JSON chunk.
 **It used to bin on `geometry.uuid`, which is object identity, not content.**
 The shapes arrive from `makeInstanceGeometryReader`, whose cache keys on
 conway's `geometryExpressID`
-(`viewer/ifc/batchedInstanceGeometry.js#sourceKey`), so two IFC types that
+(`model/batchedInstanceGeometry.js#sourceKey`), so two IFC types that
 emit byte-identical meshes arrived as two objects and were written twice.
 Measured on a real Snowdon artifact: **12,251 groups over 7,178 distinct
 contents** — 5,031 of them (41%) byte-identical in geometry *and* colour, i.e.
@@ -641,7 +641,7 @@ whether a merged artifact could be hydrated at all without re-splitting the
 buffer on every cache hit and spending the win at load time. That question is
 now answered, and the answer is the reason the writer is worth building.
 
-**`src/viewer/ifc/batchedGeometryRanges.js` registers slices.**
+**`src/model/batchedGeometryRanges.js` registers slices.**
 `addGeometryRanges(mesh, merged, ranges)` uploads the merged primitive ONCE
 through three's own `addGeometry`, then synthesises the `_geometryInfo`
 entries `addGeometry` would have produced for each element, pointing them at
@@ -789,10 +789,10 @@ the change still hit.
 per-geometry bounds (0.62 s), the partition's upload into the BatchedMesh
 (0.43 s) and the join (0.22 s). The BVH is now built after the model is on
 screen, in idle time, INDIRECT so that it never reorders the index under the
-writer's sliced snapshot (`viewer/ifc/deferredBatchedBvh.js`; picks stay
+writer's sliced snapshot (`model/deferredBatchedBvh.js`; picks stay
 correct meanwhile, through the library's per-geometry fallback). The bounds are
 seeded from the batch's typed arrays, to three's own values (to the sign of a zero)
-(`viewer/ifc/batchedBounds.js`). Both run in `decorateBatchMeshes`, so the
+(`model/batchedBounds.js`). Both run in `decorateBatchMeshes`, so the
 cache miss gets them too, for IFC and STEP alike. The partition was left as
 it is: what it spends is three's own `setGeometryAt`, which copies the index
 one `getX`/`setX` at a time and an interleaved attribute one component at a
@@ -812,7 +812,7 @@ fires that ray up to 30 times a second. The owner's trace had 1.7 s of
 mousemove handlers in 16 s, one of them 99 ms.
 
 Each batch now also gets a tree over its INSTANCES
-(`viewer/ifc/batchedInstanceBvh.js`, #2127). The deferred job builds it first,
+(`model/batchedInstanceBvh.js`, #2127). The deferred job builds it first,
 in the same idle slices: about 150 ms of slice work per 16k instances,
 measured in Node. A ray then runs the library's own per-instance raycast on
 just the ids whose padded box it crosses, in ascending id order. The hit list,
@@ -1790,7 +1790,7 @@ what the measured size beside each codec in the dropdown tells the user.
 
 `TEX_COORD` and `COLOR` were swept too and are **not** named — Share's writers
 emit POSITION, NORMAL, `_EXPRESSID` and `_INSTANCEID` and nothing else
-(`viewer/ifc/flatMeshToBufferGeometry.js`, `batchedSubset.js`), so both
+(`model/flatMeshToBufferGeometry.js`, `batchedSubset.js`), so both
 measured byte-for-byte identical on both models, and a key that cannot move a
 byte on any artifact Share writes is a key the allowlist would carry for
 nothing.
@@ -1838,7 +1838,7 @@ runs, or the uncompressed cell would split three ways and Portable+None would
 run the whole rewrite once per rung for three identical files.
 
 **Compress download** (#1854) is the fifth option and the last rewrite to
-run, because it wraps whatever the other four produced. `export/glbGzip.js`,
+run, because it wraps whatever the other four produced. `loader/glbGzip.js`,
 `CompressionStream('gzip')`, no dependency — and on a real model it is the
 largest win the panel has, for the reason above: the container is ~92% of a
 Snowdon-sized Draco export and gzip takes ~6× off it losslessly, where the
@@ -2651,8 +2651,8 @@ There is still no `supportedTypes` entry and no `findLoader` arm.
 
 `loader/gzipEnvelope.js` owns it, at two seams:
 
-- **Upload** — `inflateIfGzipEnvelope(file)`, called by `utils/dragAndDrop.js`
-  and `utils/loader.js#loadLocalFile` **before** the file reaches OPFS. What
+- **Upload** — `inflateIfGzipEnvelope(file)`, called by `app/dragAndDrop.js`
+  and `app/loader.js#loadLocalFile` **before** the file reaches OPFS. What
   gets cached and named `<blob-uuid>.glb` is then really a GLB, so every later
   reader of that entry — a re-open from Recents, a save, a size report — sees
   what its name says, and no `.gz` ever enters the app's URL space.
@@ -2716,7 +2716,7 @@ because "not required" is not the same as "no behaviour":
 
 **Tests.** `loader/gzipEnvelope.test.js` (both seams, against Node's real
 `DecompressionStream`), `Filetype.test.js` (envelope sniff, `.gz` names,
-name-vs-header), `export/glbGzip.test.js` (the ceiling, including that it
+name-vs-header), `loader/glbGzip.test.js` (the ceiling, including that it
 stops mid-inflate), `Loader.test.js` (a gzipped `cube.glb` through `load()`),
 plus the two upload seams' own suites. E2E: the step *"a gzipped export opens
 back in Share, with its BLDRS data intact"* of *"a Pro user exports index.ifc

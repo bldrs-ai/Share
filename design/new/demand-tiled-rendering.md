@@ -122,7 +122,7 @@ the list once before any geometry exists.
 
 ### Progressive-load session (format-neutral instrumentation)
 
-`src/viewer/ProgressiveLoadSession.js` — a small state machine
+`src/loader/ProgressiveLoadSession.js` — a small state machine
 (idle → previewing → assembling → finished/aborted) that owns
 everything the user sees/reads while a model loads, shared by IFC and
 STEP (both route through `ShareIfcLoader.parse`): demand-preview

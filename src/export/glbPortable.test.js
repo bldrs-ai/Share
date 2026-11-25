@@ -23,8 +23,8 @@ import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
 import * as pako from 'pako'
 import {
   BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
-} from '../loader/bldrsInstanceTables'
-import {BLDRS_SPATIAL_TREE_EXTENSION_NAME} from '../loader/bldrsSpatialTree'
+} from '../model/bldrsInstanceTables'
+import {BLDRS_SPATIAL_TREE_EXTENSION_NAME} from '../engine/bldrsSpatialTree'
 import {
   batchedArtifactBytes,
   interleavedLegacyArtifact,

@@ -414,8 +414,8 @@ describe('viewer/three/IfcIsolator', () => {
     let attachInstanceMapSubsets
     let instanceMapFromOrderedPlacedRanges
     beforeAll(() => {
-      attachInstanceMapSubsets = require('./elementSubsets').attachInstanceMapSubsets
-      instanceMapFromOrderedPlacedRanges = require('../ifc/IfcInstanceMap').instanceMapFromOrderedPlacedRanges
+      attachInstanceMapSubsets = require('../../model/elementSubsets').attachInstanceMapSubsets
+      instanceMapFromOrderedPlacedRanges = require('../../model/IfcInstanceMap').instanceMapFromOrderedPlacedRanges
     })
 
     /**
@@ -951,11 +951,11 @@ describe('viewer/three/IfcIsolator', () => {
     let applyBatchedSelection
     let applyBatchedInstanceSelection
     beforeAll(() => {
-      flatMeshToBatchedModel = require('../ifc/flatMeshToBatchedModel').flatMeshToBatchedModel
-      attachBatchedSubsets = require('../ifc/batchedSubset').attachBatchedSubsets
-      ResidencyController = require('../residency/ResidencyController').ResidencyController
-      applyBatchedSelection = require('../ifc/batchedHighlight').applyBatchedSelection
-      applyBatchedInstanceSelection = require('../ifc/batchedHighlight').applyBatchedInstanceSelection
+      flatMeshToBatchedModel = require('../../model/flatMeshToBatchedModel').flatMeshToBatchedModel
+      attachBatchedSubsets = require('../../model/batchedSubset').attachBatchedSubsets
+      ResidencyController = require('../../model/ResidencyController').ResidencyController
+      applyBatchedSelection = require('../../model/batchedHighlight').applyBatchedSelection
+      applyBatchedInstanceSelection = require('../../model/batchedHighlight').applyBatchedInstanceSelection
     })
 
     /** Identity 4x4, three.js column-major flat form. */
@@ -1704,7 +1704,7 @@ describe('viewer/three/IfcIsolator', () => {
     describe('around edits', () => {
       let edit
       beforeAll(() => {
-        edit = require('../ifc/batchedEdit')
+        edit = require('../../model/batchedEdit')
       })
 
       /**

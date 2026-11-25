@@ -1,4 +1,4 @@
-import {ASSIST_FREE_MODELS, ASSIST_MODEL} from '../../viewer/tools/assistModels'
+import {ASSIST_FREE_MODELS, ASSIST_MODEL} from '../../tools/assistModels'
 import {
   AI_CATALOGUE_URL,
   ASSIST_MODEL_CHOICE_KEY,

@@ -12,8 +12,8 @@ import {homepageSetup, returningUserVisitsHomepageWaitForModel} from '../tests/e
  * every help anchor is a section on the marketing page), and so is the
  * dialog's rendering of it (`AlertDialog.test.jsx`). This is the user's own
  * action, both ways a local file reaches Share: a drop on the viewer
- * (`utils/dragAndDrop.js`) and a pick from Open › Local › Browse
- * (`utils/loader.js#loadLocalFile`), each through the real sniff that has to
+ * (`app/dragAndDrop.js`) and a pick from Open › Local › Browse
+ * (`app/loader.js#loadLocalFile`), each through the real sniff that has to
  * reject the file first. The help page itself isn't served here — Playwright
  * builds without the marketing site (SKIP_MARKETING) — so the link is checked
  * by where it points.
