@@ -893,6 +893,23 @@ const HOSTED_DEMO_FILEPATHS = ['index.ifc', 'index.step']
 
 
 /**
+ * Whether a route is one of the hosted demo models (HOSTED_DEMO_FILEPATHS),
+ * matched as routes.ts#processFile outputs a hosted project file:
+ * {kind: 'file', isUploadedFile: false, filepath}. Shared by
+ * isRealModelOpen (GA) and the load status bar, which stays quiet for the
+ * homepage model (AlertDialogAndSnackbar.jsx).
+ *
+ * @param {object} routeResult from routes.ts#handleRoute
+ * @return {boolean}
+ */
+export function isHostedDemoModel(routeResult) {
+  return routeResult?.kind === 'file' &&
+    !routeResult.isUploadedFile &&
+    HOSTED_DEMO_FILEPATHS.includes(routeResult.filepath)
+}
+
+
+/**
  * True for model loads worth counting as the `real_model_open` GA event:
  * any remote source (GitHub, Google Drive, generic URL) or an uploaded
  * file. False for the bundled demo model the homepage auto-loads
@@ -938,8 +955,5 @@ export function isRealModelOpen(
   if (hostname.endsWith('.netlify.app') && !(isDeployPreview && enableInPreview)) {
     return false
   }
-  const isBundledDemo = routeResult?.kind === 'file' &&
-    !routeResult.isUploadedFile &&
-    HOSTED_DEMO_FILEPATHS.includes(routeResult.filepath)
-  return !isBundledDemo
+  return !isHostedDemoModel(routeResult)
 }

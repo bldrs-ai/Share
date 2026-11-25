@@ -46,6 +46,19 @@ describe('AboutControl', () => {
     act(() => useStore.setState({isAboutVisible: false}))
   })
 
+  // Named for the org, not the site (owner, 2026-11-25).
+  it('labels the GitHub link with the bldrs-ai org, and lists IFC without versions', () => {
+    act(() => useStore.setState({isAboutVisible: false}))
+    render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(screen.getByTestId(testId))
+    const github = screen.getByTestId('about-social-github')
+    expect(github).toHaveAttribute('href', 'https://github.com/bldrs-ai/Share')
+    expect(github).toHaveTextContent('bldrs-ai')
+    expect(github).not.toHaveTextContent('GitHub')
+    expect(screen.getByText('Open: IFC, STEP, STL, OBJ, ...')).toBeInTheDocument()
+    act(() => useStore.setState({isAboutVisible: false}))
+  })
+
   // A first-timer who dismissed About any way but OK was never marked
   // visited, so the reload after their first drag-and-drop replayed About +
   // the onboarding overlay. Each close path must set the cookie.

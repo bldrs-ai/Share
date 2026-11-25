@@ -165,7 +165,7 @@ function AboutContent({onClose}) {
           </Typography>
         </li>
         <li>Drag &amp; Drop; no upload</li>
-        <li>Open: IFC 2&4, STEP, STL, OBJ, ...</li>
+        <li>Open: IFC, STEP, STL, OBJ, ...</li>
       </Box>
       <table style={{
         width: '100%',
@@ -231,10 +231,12 @@ function AboutContent({onClose}) {
           href='https://github.com/bldrs-ai/Share'
           target='_blank'
           rel='noopener'
+          aria-label='Bldrs on GitHub: bldrs-ai'
           sx={{display: 'flex', alignItems: 'center', color: 'inherit'}}
+          data-testid='about-social-github'
         >
           <GitHubIcon className='icon-share' sx={{marginRight: '0.25em'}}/>{
-            isMobile ? '' : 'GitHub'
+            isMobile ? '' : 'bldrs-ai'
           }
         </Link>
         <Link href='mailto:info@bldrs.ai'

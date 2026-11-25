@@ -6,6 +6,7 @@ import {
   ExpandLess as ExpandLessIcon,
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material'
+import {isHostedDemoModel} from '../privacy/analytics'
 import AlertDialog from '../Components/AlertDialog'
 import useStore from '../store/useStore'
 import {assert} from '../utils/assert'
@@ -115,9 +116,15 @@ export default function AlertAndSnackbar() {
   // grace line over the reporter's filename fallback, since a STEP header's
   // fileName is often junk.
   const model = useStore((state) => state.model)
+  const modelPath = useStore((state) => state.modelPath)
   const isLoadActive = currentLoadLine !== null
   const isGrace = loadResult !== null
-  const showLoadView = isLoadActive || isGrace
+  // The homepage model (index.ifc, index.step) loads on every visit; its
+  // progress and "Loaded …" line read as noise to a visitor who opened
+  // nothing (owner, 2026-11-25). Its report stays a click away on the "i"
+  // control (LoadReportControl), and a failed load still shows here.
+  const isQuietDemoLoad = isHostedDemoModel(modelPath) && loadResult?.status !== 'error'
+  const showLoadView = (isLoadActive || isGrace) && !isQuietDemoLoad
 
   const [isSnackOpen, setIsSnackOpen] = useState(false)
   const [text, setText] = useState(null)
