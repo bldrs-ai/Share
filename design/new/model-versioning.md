@@ -1,4 +1,6 @@
-# Model versioning and sharing — share-200
+# Model versioning and sharing — earlier technical proposal
+
+**Current direction:** [SHARE-T200](../tracks/share-t200/README.md) owns the resolver and model delivery. Its [delivery design](../tracks/share-t200/delivery.md) supersedes the source-first S1, mandatory Git publication and public-mirror assumptions below. [Section 5a](#5a-share-link-contract-binding-ux-requirement) remains the Phase C link contract. Local history belongs to versions-100 (#57). The following records the proposals for storage, semantic versions and historical milestones.
 
 **Status:** Draft v0.1 — implementation plan; no feature shipped by this doc.
 **Date:** 2026-11-11

@@ -26,11 +26,7 @@ plan, test plan, telemetry, codec notes, how-tos) is at
   could later write the same artifact, but nothing does today.
 - **Realtime collaboration.** The artifact is immutable; live edits belong
   elsewhere (see §"Round-trippable Notes & Versions").
-- **Sharing the GLB with a recipient.** This is post-MVP (`share-t101` Phases 4–6).
-  A recipient-side GLB becomes a derived artifact of a published version
-  under `share-200` ([#2144](https://github.com/bldrs-ai/Share/issues/2144)).
-  `share-110` ([#2205](https://github.com/bldrs-ai/Share/issues/2205)) is
-  Drive Save only.
+- **Publication and transport.** [`share-t200`](../tracks/share-t200/README.md) owns progressive delivery of the effective model and optional original-file delivery. This track owns the GLB artifact and cache contract. `share-110` is Drive Save.
 
 
 ## Who produces the GLB

@@ -1,6 +1,6 @@
 # Bldrs Share Roadmap
 
-**Status:** Draft v0.25 — documented the shipped Share dialog, local-only gate and GLB export
+**Status:** Draft v0.26 — reconcile Share UX and technical tracks
 **Date:** 2026-11-25
 **Owner:** Pablo
 **Source baseline:** `Share Requirements` Google Doc (Aug 2021, last updated Nov 2022); PDF extract is in this repo's history.
@@ -86,7 +86,7 @@ User can inspect the model in 3D with the navigation, properties, search-by-elem
 
 User shares a model, a view, a note, or a region with another user — privately or publicly — and the recipient sees what was intended.
 
-**Status:** **Current-view links** (`share-100`) are shipped. Copy Link and the QR code use the current viewer URL and the source's own access rules. The [dialog story](https://github.com/bldrs-ai/Share/issues/2374) records remaining acceptance. Local uploads show the shipped sign-in gate (`share-120`); the extended sign-in and upgrade flow and Drive Save (`share-110`) are open. **GLB export** (`share-140`) is default-on in Save. Pro exports without limit, and signed-in free users export public models without a slot and private/local models through their model slots. [Residual rollout checks](https://github.com/bldrs-ai/Share/issues/1835) remain. **Model versioning and sharing** (`share-200`, [design](new/model-versioning.md)) is design only. Its exact-version resolver is in Phase C. The `share-130` visibility chip and private-link flow and the `share-201` grants UI are pending. `share-t100` has shipped the Drive grants adapter and visibility lookup used by quotas.
+**Status:** **Current-view links** (`share-100`) are shipped. Copy Link and the QR code use the current viewer URL and the source's own access rules. The [dialog story](https://github.com/bldrs-ai/Share/issues/2374) records remaining acceptance. Local uploads show the shipped sign-in gate (`share-120`); the extended sign-in and upgrade flow and Drive Save (`share-110`) are open. **GLB export** (`share-140`) is default-on in Save. Pro exports without limit, and signed-in free users export public models without a slot and private/local models through their model slots. [Residual rollout checks](https://github.com/bldrs-ai/Share/issues/1835) remain. **Exact-version sharing** (`share-200`) is design only. [Share revision delivery](tracks/share-t200/README.md) provides the Phase C resolver and later progressive model delivery with optional original-file backfill. The `share-130` visibility chip and private-link flow and the `share-201` grants UI are pending. `share-t100` has shipped the Drive grants adapter and visibility lookup used by quotas.
 
 | Verb | ID | Name | Status | Phase | Tracks | Issue |
 |---|---|---|---|---|---|---|
@@ -95,7 +95,7 @@ User shares a model, a view, a note, or a region with another user — privately
 | Share | `share-120` | Extended Share/Login flow | 🟡 | C, D | — | <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a> |
 | Share | `share-130` | Private-by-default links + visibility chip | ⬜ | C | `share-t100` | <a href="https://github.com/bldrs-ai/Share/issues/2206" target="_blank" rel="noopener noreferrer">#2206</a> |
 | Share | `share-140` | GLB export with Pro entitlement and free model slots | 🟡 | D | `share-t101`, `subscribe-t100` | <a href="https://github.com/bldrs-ai/Share/issues/1831" target="_blank" rel="noopener noreferrer">#1831</a> |
-| Share | `share-200` | Model versioning and sharing: git + progressive decomposition | 🟡 | C (link resolver), Post, AI | `share-t101`, `create-t300` (V1+) | <a href="https://github.com/bldrs-ai/Share/issues/2144" target="_blank" rel="noopener noreferrer">#2144</a> |
+| Share | `share-200` | Share an exact model revision with optional original file | 🟡 | C (link resolver), Post, AI | `share-t200`, `share-t101`, `create-t300` (V1+) | <a href="https://github.com/bldrs-ai/Share/issues/2144" target="_blank" rel="noopener noreferrer">#2144</a> |
 | Share | `share-201` | Share with named people (grants) | ⬜ | Post | `share-t100` | <a href="https://github.com/bldrs-ai/Share/issues/2207" target="_blank" rel="noopener noreferrer">#2207</a> |
 | Share | `share-400` | Folder-scoped boundaries | ⬜ | Post | `share-t100` | <a href="https://github.com/bldrs-ai/Share/issues/2208" target="_blank" rel="noopener noreferrer">#2208</a> |
 
@@ -224,9 +224,10 @@ Each track has a tracking issue (the Issue column) that holds its status, its wo
 | ID | Name | Status | Phase | Issue | Docs | Unblocks |
 |---|---|---|---|---|---|---|
 | `view-t100` | Viewer Replacement | 🟡 | A (launch gate) | <a href="https://github.com/bldrs-ai/Share/issues/2300" target="_blank" rel="noopener noreferrer">#2300</a> | [viewer-replacement](new/viewer-replacement.md), [engine-worker](new/engine-worker.md) | `view-100`, `view-110`, `view-200`, `view-130`, `view-140`, `view-230`, `view-300`, `open-205`, `share-t101` |
-| `share-t101` | GLB Model Sharing | 🟡 | Post (Ph 4–6) | <a href="https://github.com/bldrs-ai/Share/issues/2201" target="_blank" rel="noopener noreferrer">#2201</a> | [glb-model-sharing](new/glb-model-sharing.md), [glb-export-premium](new/glb-export-premium.md) | `share-140` cache, `share-200` derived GLB, `view-100`, `view-130`, `view-140` |
+| `share-t101` | GLB Model Sharing | 🟡 | Post (Ph 4–6) | <a href="https://github.com/bldrs-ai/Share/issues/2201" target="_blank" rel="noopener noreferrer">#2201</a> | [Track snapshot](tracks/share-t101.md) | `share-140` export, `share-t200` GLB contract, `view-100`, `view-130`, `view-140` |
 | `identity-t100` | Identity Decoupling | 🟡 | Post (PR3) | <a href="https://github.com/bldrs-ai/Share/issues/2202" target="_blank" rel="noopener noreferrer">#2202</a> | [identity-decoupling-decisions](new/identity-decoupling-decisions.md) | `identity-110`, `identity-300`, `open-300`, `subscribe-120`, `share-t100` PR3 |
-| `share-t100` | Multi-User Sharing | 🟡 | C (chip), Post | <a href="https://github.com/bldrs-ai/Share/issues/2203" target="_blank" rel="noopener noreferrer">#2203</a> | [multi-user-sharing](new/multi-user-sharing.md) | `share-130`, `share-201`, `share-400` |
+| `share-t100` | Multi-User Sharing | 🟡 | C (chip), Post | <a href="https://github.com/bldrs-ai/Share/issues/2203" target="_blank" rel="noopener noreferrer">#2203</a> | [Track snapshot](tracks/share-t100.md) | `share-130`, `share-201`, `share-400` |
+| `share-t200` | Shared revision delivery | 🟡 | C (link resolver), Post, AI | <a href="https://github.com/bldrs-ai/Share/issues/2376" target="_blank" rel="noopener noreferrer">#2376</a> | [Track snapshot](tracks/share-t200/README.md) | `share-200`, `share-130` resolver |
 | `open-t100` | Drive Recents HEAD-check | ⬜ | E (polish) | <a href="https://github.com/bldrs-ai/Share/issues/2301" target="_blank" rel="noopener noreferrer">#2301</a> | [drive-recents-head-check](new/drive-recents-head-check.md) | `open-130` |
 | `open-t200` | In-app model lifecycle: `EngineHost`, sessions, one viewer, layering (NEW) | 🟡 | AI (§7) | <a href="https://github.com/bldrs-ai/Share/issues/2315" target="_blank" rel="noopener noreferrer">#2315</a> | [snapshot](tracks/open-t200/README.md), [layering](tracks/open-t200/layering.md), [engine-worker](new/engine-worker.md), [in-app-model-switch](new/in-app-model-switch.md) | `open-205`, `open-200`, `open-210` |
 | `community-t100` | Feedback pipeline | 🟡 | E | <a href="https://github.com/bldrs-ai/Share/issues/2330" target="_blank" rel="noopener noreferrer">#2330</a> | [snapshot](tracks/community-t100/README.md), [feedback](tracks/community-t100/feedback.md) | `community-110`, `community-200`, `assist-310` reply rating |
@@ -293,8 +294,8 @@ Demoted out of the MVP band (not load-bearing for the trickle): `share-201`, `gr
 
 ### Phase C: Sharing v1
 **Goal:** share a model privately by default, with its audience shown plainly; save to Drive.
-- `share-200` link-resolver slice: unguessable tokens resolving to an exact version (`model-versioning.md` §5a), the part of `share-200` that `share-130` needs.
-- `share-130`: private-by-default links and the visibility chip (`share-t100` chip, <a href="https://github.com/bldrs-ai/Share/issues/2206" target="_blank" rel="noopener noreferrer">#2206</a>). The unguessable link comes from `share-200`'s resolver.
+- `share-t200` [link resolver](https://github.com/bldrs-ai/Share/issues/2379): unguessable tokens resolving to the exact version under the [link contract](new/model-versioning.md#5a-share-link-contract-binding-ux-requirement), for `share-200` and `share-130`.
+- `share-130`: private-by-default links and the visibility chip (`share-t100` chip, <a href="https://github.com/bldrs-ai/Share/issues/2206" target="_blank" rel="noopener noreferrer">#2206</a>). The unguessable link comes from `share-t200`'s resolver.
 - `share-110`: Drive Save (<a href="https://github.com/bldrs-ai/Share/issues/2205" target="_blank" rel="noopener noreferrer">#2205</a>).
 - `share-120`: the Share and sign-in flow with its upgrade prompt (<a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>).
 - `grow-200` OG image written with the share, if that is the chosen mechanism.
@@ -392,7 +393,7 @@ Held over for after Phase E; items marked **→ §7** ride the pivot instead. Ro
 17. PDF "Hangouts" (Miro, FPV, WebXR); out of scope until demand.
 18. PDF "Social Updates" (ActivityPub); no current pull.
 19. `assist-410` Social broadcast plugins; placeholder from `conversational-cad.md` §5.
-20. `share-200` Model versioning and sharing ([#2144](https://github.com/bldrs-ai/Share/issues/2144)): S0 feasibility → V0 whole-file history → S1 public links; V1+ semantic stages coordinate with `create-t300` / AI.5. [Milestones and dispatch](new/model-versioning.md#8-milestones-and-acceptance-gates).
+20. `share-200` [exact-version sharing](https://github.com/bldrs-ai/Share/issues/2144): progressively deliver the effective model with optional original-file backfill. The [technical track](tracks/share-t200/README.md) owns delivery; later semantic stages coordinate with `create-t300` / AI.5.
 
 ## 9. Issues and wiki
 
@@ -403,7 +404,7 @@ Standing convention (the original migration is done):
 
 ## 10. Open questions
 
-- **Model-version hosting.** `share-200` S1 needs a proven public blob provider, retention/operating policy and browser upload/read path; GitHub is the initial metadata-remote recommendation. No free/permanent-hosting promise or private-storage rollout is implied ([design](new/model-versioning.md)).
+- **Model-version hosting.** `share-t200` needs a measured publication path, an access and retention policy, and a way to deliver optional original files without delaying the effective model. [Delivery design](tracks/share-t200/delivery.md).
 - **Free-tier numbers.** Public anonymous share TTL, public hosting size ceiling (<10MB per <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>), refresh-token-mint rate.
 - **BCF priority.** Industry credibility vs cost; MVP scope or §8 item 7.
 - **Engine write path.** IFC/STEP export of edited models needs a Conway writer; scope in `create-engine.md` Part B.
@@ -427,6 +428,8 @@ Standing convention (the original migration is done):
 - **Privacy firewall:** this doc is public. Growth/traffic numbers (spend, CAC, geo, raw counts) and bizdev decision outcomes never land here; event names, stage definitions and qualitative conclusions are fine.
 
 # Changelog
+
+- **v0.26 (2026-11-25):** added `share-t200` for the exact-version resolver and progressive delivery. Recorded the effective model as the default and original-file delivery as optional. Phase assignments and the MVP bar stay as decided.
 
 - **v0.25 (2026-11-25):** documented the shipped Share dialog and its acceptance story ([#2374](https://github.com/bldrs-ai/Share/issues/2374)), the local-only Share gate and default-on GLB export. Updated the [scope snapshot](reqs/share-100.md) and [triage](reqs/share-100-triage.md). Epic IDs, phases and the MVP bar are unchanged.
 - **v0.24 (2026-11-24):** added Track `community-t100` (<a href="https://github.com/bldrs-ai/Share/issues/2330" target="_blank" rel="noopener noreferrer">#2330</a>): the feedback pipeline every feedback surface records through (`src/feedback/` and the `feedback` function, landed in <a href="https://github.com/bldrs-ai/Share/issues/2313" target="_blank" rel="noopener noreferrer">#2313</a> for the assistant's reply rating), with the store's reader, retention and rate limit as its first work item (<a href="https://github.com/bldrs-ai/Share/issues/2329" target="_blank" rel="noopener noreferrer">#2329</a>). Moved `design/new/feedback.md` into `design/tracks/community-t100/`. <a href="https://github.com/bldrs-ai/Share/issues/2312" target="_blank" rel="noopener noreferrer">#2312</a>, the app-wide feedback item, is now a `community-110` story. No IDs changed.
