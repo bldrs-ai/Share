@@ -14,6 +14,7 @@ import {MOCK_FILES} from '../net/github/Files.fixture'
 import {createMockIssues, sampleIssues, testModelsIssues} from '../net/github/Issues.fixture'
 import {MOCK_ORGANIZATIONS} from '../net/github/Organizations.fixture'
 import {MOCK_REPOSITORY, MOCK_USER_REPOSITORIES} from '../net/github/Repositories.fixture'
+import {ADVANCED_HEAD_COOKIE, VERSION_HISTORY_PATH, versionCommits, versionContents} from '../tests/fixtures/versionHistory'
 import {fixtureBlobSha} from './fixtureBlobSha'
 
 
@@ -153,6 +154,11 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
               headers: {'Content-Type': 'application/json'},
             },
           )
+        }
+
+        if (org === 'bldrs-ai' && repo === 'test-models' && decodeURIComponent(path) === VERSION_HISTORY_PATH) {
+          const contents = versionContents(ref, isAdvancedVersionHead())
+          return contents ? Response.json(contents) : Response.json({message: 'Not Found'}, {status: HTTP_NOT_FOUND})
         }
 
         if (org === 'bldrs-ai' && repo === 'test-models') {
@@ -424,7 +430,12 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
     http.get<{owner: string, repo: string}>(
       `${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/commits`,
       ({params, request}) => {
-      // Directly check params for 'failurecaseowner' and 'failurecaserepo'
+        const path = new URL(request.url).searchParams.get('path')
+        if (params.owner === 'bldrs-ai' && params.repo === 'test-models' &&
+            path?.replace(/^\//, '') === VERSION_HISTORY_PATH) {
+          return Response.json(versionCommits(isAdvancedVersionHead()))
+        }
+        // Directly check params for 'failurecaseowner' and 'failurecaserepo'
         if (params.owner === 'failurecaseowner' && params.repo === 'failurecaserepo') {
           return new Response(
             JSON.stringify({sha: 'error'}),
@@ -608,4 +619,16 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
       )
     }),
   ]
+}
+
+
+/**
+ * The clean browser in the revision E2E sees a newer upstream head. Fixed
+ * refs still resolve to the same fixture in either browser.
+ *
+ * @return Whether this browser sees the advanced mock branch.
+ */
+function isAdvancedVersionHead() {
+  return typeof document !== 'undefined' &&
+    document.cookie.split('; ').includes(`${ADVANCED_HEAD_COOKIE}=1`)
 }
