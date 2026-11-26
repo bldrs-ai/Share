@@ -1,7 +1,7 @@
 import {expect, test} from '@playwright/test'
 import {readFile} from 'node:fs/promises'
 import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
-import {waitForModelReady} from '../../tests/e2e/models'
+import {rememberShownModel, waitForModelOtherThan} from '../../tests/e2e/modelSwitch'
 import {
   auth0Login,
   homepageSetupWithAuth,
@@ -42,7 +42,8 @@ describeMobileAndDesktop('Versions 100: Save a model to GitHub', () => {
       await page.getByRole('option', {name: 'main', exact: true}).click()
       await dialog.getByRole('textbox', {name: 'Enter file name'}).fill(filename)
 
-      const [blob, tree, commit, ref] = await Promise.all([
+      await rememberShownModel(page, 'beforeSave')
+      const [blob, tree, commit, ref, contents] = await Promise.all([
         page.waitForResponse((response) => response.request().method() === 'POST' &&
           new URL(response.url()).pathname.endsWith(`${REPOSITORY}/blobs`)),
         page.waitForResponse((response) => response.request().method() === 'POST' &&
@@ -51,6 +52,10 @@ describeMobileAndDesktop('Versions 100: Save a model to GitHub', () => {
           new URL(response.url()).pathname.endsWith(`${REPOSITORY}/commits`)),
         page.waitForResponse((response) => response.request().method() === 'PATCH' &&
           decodeURIComponent(new URL(response.url()).pathname).endsWith(`${REPOSITORY}/refs/heads/main`)),
+        page.waitForResponse((response) => response.request().method() === 'GET' &&
+          decodeURIComponent(new URL(response.url()).pathname).endsWith(
+            `/repos/cypresstester/test-repo/contents/${filename}`,
+          )),
         dialog.getByRole('button', {name: 'action-button'}).filter({hasText: 'Save model'}).click(),
       ])
 
@@ -74,7 +79,15 @@ describeMobileAndDesktop('Versions 100: Save a model to GitHub', () => {
       expect(ref.request().postDataJSON()).toMatchObject({sha})
 
       await expect.poll(() => new URL(page.url()).pathname).toBe(`${SAVED_MODEL}${sha}/${filename}`)
-      await waitForModelReady(page)
+      expect(contents.ok()).toBe(true)
+      expect(new URL(contents.url()).searchParams.get('ref')).toBe(sha)
+      await waitForModelOtherThan(page, 'beforeSave')
+
+      await page.getByTestId('control-button-navigation').click()
+      await expect(page.getByTestId('NavTreePanel').getByText('Bldrs', {exact: true})).toBeVisible()
+      await page.getByTestId('control-button-navigation').click()
+      await page.getByTestId('control-button-save').click()
+      await expect(dialog.getByRole('button', {name: 'action-button'}).filter({hasText: 'Save model'})).toBeEnabled()
     })
   }
 })
