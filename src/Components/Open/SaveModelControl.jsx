@@ -647,7 +647,8 @@ async function fileSave(
       if (commitHash !== null) {
         // save to opfs
         if (opfsIsAvailable) {
-          const opfsResult = await writeSavedGithubModelOPFS(file, pathWithFileName, commitHash, orgName, repoName, branchName)
+          // The pinned route looks up its source file under the commit ref.
+          const opfsResult = await writeSavedGithubModelOPFS(file, pathWithFileName, commitHash, orgName, repoName, commitHash)
 
           if (opfsResult) {
             redirectToNewModel(onPathname, orgName, repoName, commitHash, pathWithFileName, setSnackMessage)
