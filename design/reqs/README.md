@@ -6,7 +6,7 @@
 
 | Document | Owns | Epic assignments and temporary references |
 |---|---|---|
-| [Sharing — live requirements](https://github.com/bldrs-ai/Share/issues/2144) | Publishing exact versions, opening them without signing in, recovering from publish failures | `share-200` (former S04, S06, S07, S10); [snapshot](share-200.md) |
+| [Sharing — live requirements](https://github.com/bldrs-ai/Share/issues/2144) | Sharing the exact effective model during load, optional original-file access, and publish recovery | `share-200` (former S04, S06, S07, S10); [snapshot](share-200.md) |
 | [Share audience and links — live requirements](https://github.com/bldrs-ai/Share/issues/2206) | Who can open a share, unguessable links to a version and view, why a share won't open | `share-130` (former S05, S08, S12); [snapshot](share-130.md) |
 | [Versions — live requirements](https://github.com/bldrs-ai/Share/issues/57) | External revisions, history, local retention, updates and backup | `versions-100` (former V21, V01–V03, V09, V11) |
 | [Later semantic workflows — live requirements](https://github.com/bldrs-ai/Share/issues/2144) | Semantic persistence, contribution, conflict resolution and authoring-tool round trips | Existing `share-200` (former V13–V16); separate from structural diff and portable Drive sidecars |
