@@ -1,12 +1,12 @@
 # Versions 100
 
-**Epic:** [versions-100: Exact model versions and local history · #57](https://github.com/bldrs-ai/Share/issues/57) · **Scope snapshot: 2026-11-12**
+**Epic:** [versions-100: Exact model versions and local history · #57](https://github.com/bldrs-ai/Share/issues/57) · **Scope snapshot: 2026-11-25**
 
 ## Motivation
 
 Model reviewers and authors need to return to the model they actually inspected, with its origin and discussion intact. Versions builds on Share's existing GitHub file history and revision navigation. A repository can contain many models; viewing one file at an existing revision requires source-read access, without importing a history, uploading a copy or obtaining model-write access.
 
-The basic journey is **open an exact revision → inspect its identity and history → retain it explicitly if wanted → revisit it → deliberately open a newer revision**. Authors can create a local history, add a replacement and make a usable personal backup. Local saving, temporary caching, remote availability and publication have distinct meanings. Sharing supplies opaque exact-version links and publication; Notes retains each discussion's original version and anchor. Moving branches and tags help discover versions, while immutable identities pin what was opened.
+The basic journey is **open an exact revision → inspect its identity and history → retain it explicitly if wanted → revisit it → deliberately open a newer revision**. Authors can create a local history, add a replacement and make a usable personal backup. Local saving, temporary caching, remote availability and publication have distinct meanings. Versions owns opening an exact source revision and checking it by its existing source URL. Sharing owns opaque exact-version links and publication. Notes retains each discussion's original version and anchor. Moving branches and tags help discover versions, while immutable identities pin what was opened.
 
 ## UX stories
 

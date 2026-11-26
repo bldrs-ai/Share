@@ -38,3 +38,7 @@ None is instrumented yet.
 | `notes-200` | Post-MVP. BCF is what lets a team that reviews in Solibri or Navisworks adopt Share at all. | Teams (by distinct sources) that import or export a BCF file. | Correlational; a holdout isn't meaningful for an interoperability feature. | Not instrumented. |
 | `notes-300`, `versions-310` | Post-MVP. People whose files live on Drive expect their notes and history there too. | Notes or versions created on a Drive-hosted model. | Correlational. | Not instrumented. |
 | `versions-300` | Post-MVP. A diff is the reason to keep versions. | Opens of two versions of the same file in one session. | Correlational. | Not instrumented. |
+
+## Versions follow-up · 2026-11-25
+
+[#2282](https://github.com/bldrs-ai/Share/issues/2282) now specifies observable comparison results and how to report incomplete matching. [#2283](https://github.com/bldrs-ai/Share/issues/2283) specifies reopening exact portable versions from a second browser, including read-only and partial-availability cases. Both remain post-MVP with story issues pending. [#2204](https://github.com/bldrs-ai/Share/issues/2204) owns the portable format. [#2376](https://github.com/bldrs-ai/Share/issues/2376) owns live Share delivery, and the two designs need to agree on revision identity and provenance.

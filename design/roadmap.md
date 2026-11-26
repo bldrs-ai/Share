@@ -103,7 +103,7 @@ User shares a model, a view, a note, or a region with another user — privately
 
 User leaves comments anchored to model elements, replies in a thread, and can revisit a specific version of the model.
 
-**Status:** `notes-100` is shipped with a set of open follow-up stories (<a href="https://github.com/bldrs-ai/Share/issues/670" target="_blank" rel="noopener noreferrer">#670</a>); `versions-100` reuses the tracker <a href="https://github.com/bldrs-ai/Share/issues/57" target="_blank" rel="noopener noreferrer">#57</a>. Whether the open stories count toward MVP is a milestone hypothesis still to be measured (`design/reqs/ux-rubric.md`), so §6.0 is unchanged. BCF, Drive-backed notes, version diff and portable versions are post-MVP.
+**Status:** `notes-100` is shipped with a set of open follow-up stories (<a href="https://github.com/bldrs-ai/Share/issues/670" target="_blank" rel="noopener noreferrer">#670</a>); GitHub exact-revision access and Save are existing `versions-100` flows. Current verification gaps, expanded local retention, and backup are tracked in <a href="https://github.com/bldrs-ai/Share/issues/57" target="_blank" rel="noopener noreferrer">#57</a>. Whether the expanded local stories count toward MVP is a milestone hypothesis still to be measured (`design/reqs/ux-rubric.md`), so §6.0 is unchanged. BCF, Drive-backed notes, version diff and portable versions are post-MVP.
 
 | Verb | ID | Name | Status | Phase | Tracks | Issue |
 |---|---|---|---|---|---|---|

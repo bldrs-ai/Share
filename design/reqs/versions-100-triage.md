@@ -4,6 +4,18 @@
 
 The [Versions scope snapshot](versions-100.md) is the dated motivation and formal-story account. This record preserves the audit and ownership decisions. Current tasks, progress and acceptance decisions live in [versions-100 #57](https://github.com/bldrs-ai/Share/issues/57), its stories and the existing [share-200 #2144](https://github.com/bldrs-ai/Share/issues/2144) semantic owner. The [shared rubric](ux-rubric.md) governs reconciliation; the [UX index](README.md) owns common requirements.
 
+## Follow-up · 2026-11-25
+
+The existing GitHub flows and the proposed local retention journey have separate acceptance in #57. #850 checks distinct revision content through existing source URLs. #2144 and #2379 own opaque Share links. #887 owns the direct GitHub save result and recovery under the destination's access rules.
+
+| Case | Evidence at the reviewed commit |
+|---|---|
+| Revision selection | [ShowVersion.spec.ts](https://github.com/bldrs-ai/Share/blob/2305a45ab437b5573bf1f26b5997b5fb5a41f08b/src/Components/Versions/ShowVersion.spec.ts) still skips selection across three revisions. The mocks use the same model fixture. |
+| Destination save | [SaveModel.spec.ts](https://github.com/bldrs-ai/Share/blob/2305a45ab437b5573bf1f26b5997b5fb5a41f08b/src/Components/Versions/SaveModel.spec.ts) has an active signed-out dialog case. Its filled-form save is skipped. |
+| Overwrite | [EditModel.spec.ts](https://github.com/bldrs-ai/Share/blob/2305a45ab437b5573bf1f26b5997b5fb5a41f08b/src/Components/Versions/EditModel.spec.ts) still skips the overwrite case. |
+
+These are source observations. Existing stories, issue relationships, and milestone assignments were preserved.
+
 ## Scope, business tier and historical aliases
 
 Reuse the existing open GitHub Version Control tracker #57 as `versions-100: Exact model versions and local history`; do not create a replacement epic. Its original tracker description and all eleven comments remain. The basic journey covers external-source opening, exact identity, explicit local retention, history, replacement, deliberate updates and recovery. Opening exact revisions is the shipped baseline. Whether the new retention stories (#2157–#2160) are MVP is a milestone hypothesis, not a decision made here: measuring Versions use is planned in bizdev#366, and until there's an estimate the roadmap owner decides (`ux-rubric.md` §"Milestones are hypotheses"). Roadmap §6.0 is unchanged. Existing GitHub-save, revision-navigation and drop-file journeys remain baseline stories, with completed work preserved. This is UX ownership reconciliation, not evidence that the expanded target has shipped.
