@@ -10,11 +10,11 @@ A reviewer can point someone to the model and the view they are discussing witho
 
 Camera, cut planes and display follow the live-link rules in [model-display-controls.md](../new/model-display-controls.md) §6.4. An element link carries the selection when its permalink is in the URL.
 
-## UX stories
+## Linked story
 
-| Story | Scope |
-|---|---|
-| [Copy or scan a link to the current view · #2374](https://github.com/bldrs-ai/Share/issues/2374) | The dialog, link field, clipboard action, QR, and the local-only explanation. |
+[Copy or scan a link to the current view · #2374](https://github.com/bldrs-ai/Share/issues/2374)
+covers the dialog, link field, clipboard action, QR, and the local-only
+explanation. Its native attachment to the epic is pending.
 
 | Related capability | Owner |
 |---|---|

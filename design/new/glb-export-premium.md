@@ -5,8 +5,10 @@ Status: v0.1 (2026-09-10). Epic `share-140`, tracking issue
 [roadmap.md](../roadmap.md) §3.1).
 Owner: Pablo (with Claude).
 
-Share already converts every IFC/STEP it opens into a GLB and parks it in
-OPFS as the next-load cache (design/new/glb-model-sharing.md). This doc describes the GLB download in **Save → Export**, how
+Eligible IFC and STEP loads produce a GLB in OPFS for the next open.
+The Export tab needs that artifact for a download. See the
+[GLB cache design](glb-model-sharing.md) for cache eligibility. This doc
+describes the GLB download in **Save → Export**, how
 the artifact is prepared, how the server grants export access, and what
 each further format (OBJ, STL, USD, …) would need.
 
@@ -178,7 +180,7 @@ evolved.
 ### 1.1 The artifact
 
 `src/loader/glbExport.js#exportAndCacheGlb` runs post-parse (idle-scheduled
-from `Loader.js`) for every IFC/STEP source and writes **one** OPFS file at
+from `Loader.js`) for eligible IFC and STEP sources and writes **one** OPFS file at
 the key `src/loader/glbCacheKey.js#glbCacheKey` derives from the source
 (`<ns1>/<ns2>/<ns3>/<file>.<schemaVer>.glb` + commit hash). Per-source-kind
 adapters in `src/loader/sourceCacheKey.js` produce the key input for GitHub,

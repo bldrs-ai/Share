@@ -8,7 +8,7 @@ The roadmap's earlier reconciliation created epic [#2284](https://github.com/bld
 
 | Issue | Placement |
 |---|---|
-| [#2374](https://github.com/bldrs-ai/Share/issues/2374) | New story for the shipped Share dialog, clipboard and QR flow. It records the remaining desktop and mobile acceptance. Cross-linked to #2284; native parent attachment is pending. |
+| [#2374](https://github.com/bldrs-ai/Share/issues/2374) | Linked story for the shipped Share dialog, clipboard and QR flow. It records the remaining desktop and mobile acceptance. Cross-linked to #2284; native parent attachment is pending. |
 | [#2336](https://github.com/bldrs-ai/Share/issues/2336) | Camera-link coverage stays under `view-120`. |
 | [#184](https://github.com/bldrs-ai/Share/issues/184), [#185](https://github.com/bldrs-ai/Share/issues/185) | Closed dialog fixes retained as history. |
 
