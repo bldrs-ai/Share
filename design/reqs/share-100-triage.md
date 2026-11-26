@@ -1,39 +1,24 @@
 # Share 100 triage
 
-**Reconciliation date:** 2026-11-23. **Evidence commit:** [`3ab35f0`](https://github.com/bldrs-ai/Share/commit/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479). **Result:** one epic issue created; no story placed. No runtime acceptance is claimed. The [rubric](ux-rubric.md) sets the procedure.
+**Reconciliation date:** 2026-11-25. **Evidence commit:** [`c2191c3`](https://github.com/bldrs-ai/Share/commit/c2191c3cc3a84d6ddcc870ea0ca3aaa5725e0c6b). The [rubric](ux-rubric.md) sets the procedure. This pass inspected source and test definitions.
 
-## Epic, tier and aliases
+## Inventory and placement
 
-The roadmap's §3.1 row for `share-100` linked no issue. [#2284](https://github.com/bldrs-ai/Share/issues/2284) was created on 2026-11-23, labelled `epic` and `enhancement`. No code or band changed; `share-100` has not been renumbered ([ID lineage](../roadmap.md#id-lineage)).
+The roadmap's earlier reconciliation created epic [#2284](https://github.com/bldrs-ai/Share/issues/2284) on 2026-11-23. A follow-up search for `share-100`, `"copy link"` and `"share dialog"` found closed dialog bugs and stories owned by other epics. It found no UX story covering the dialog itself.
 
-## Inventory
-
-Searched on 2026-11-23, `repo:bldrs-ai/Share is:issue`: `share-100`, `"Share 100"`, `Share in:title dialog` and `"Share link"`. Matches were epics and stories of other features, the share-dialog bugs #184 and #185 (closed), and the GLB export stories under `share-140`. No issue describes the dialog as a story. No result set was marked incomplete.
-
-## Placement
-
-| Issue | Decision |
+| Issue | Placement |
 |---|---|
-| #184, #185 (closed share-dialog bugs) | Unchanged, as history. |
-| Everything else found | Owned by the epic named in the snapshot's table; unchanged. |
-
-No title, label or parent changed.
+| [#2374](https://github.com/bldrs-ai/Share/issues/2374) | New story for the shipped Share dialog, clipboard and QR flow. It records the remaining desktop and mobile acceptance. Cross-linked to #2284; native parent attachment is pending. |
+| [#2336](https://github.com/bldrs-ai/Share/issues/2336) | Camera-link coverage stays under `view-120`. |
+| [#184](https://github.com/bldrs-ai/Share/issues/184), [#185](https://github.com/bldrs-ai/Share/issues/185) | Closed dialog fixes retained as history. |
 
 ## Evidence
 
-Pinned to `3ab35f0`; test definitions read, no test run. "Not under `describeMobileAndDesktop`" means the spec has no `[mobile]` variant; it doesn't show the flow fails on a phone.
-
-- [liveViewLink.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Share/liveViewLink.spec.ts), [shareDisplay.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Share/shareDisplay.spec.ts) and [shareLocalFile.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Share/shareLocalFile.spec.ts): desktop and mobile.
-- [ShareableCamera.spec.ts](https://github.com/bldrs-ai/Share/blob/3ab35f04bf47ecd3465c0d0a25dd4f62a4d18479/src/Components/Share/ShareableCamera.spec.ts): not under `describeMobileAndDesktop`. Follow-up filed 2026-11-24: [#2336](https://github.com/bldrs-ai/Share/issues/2336), under `view-120`'s camera story.
-
-## Decisions left open
-
-- Whether to write the dialog story now or leave it pending until `share-120` and `share-130` land ([#2284](https://github.com/bldrs-ai/Share/issues/2284)).
+- [`ShareDialog.jsx`](https://github.com/bldrs-ai/Share/blob/c2191c3cc3a84d6ddcc870ea0ca3aaa5725e0c6b/src/Components/Share/ShareDialog.jsx) gives the link field, Copy Link and QR code the viewer URL. Camera, active cut planes and display have inclusion controls. An element selection travels in its existing permalink term.
+- [`ShareControl.jsx`](https://github.com/bldrs-ai/Share/blob/c2191c3cc3a84d6ddcc870ea0ca3aaa5725e0c6b/src/Components/Share/ShareControl.jsx) gates local uploads by route. It offers to open a hosted file and shows a sign-in action for signed-out users.
+- [`liveViewLink.spec.ts`](https://github.com/bldrs-ai/Share/blob/c2191c3cc3a84d6ddcc870ea0ca3aaa5725e0c6b/src/Components/Share/liveViewLink.spec.ts) covers the live display term, recipient reopening and the cut-plane switch on desktop and mobile. [`shareDisplay.spec.ts`](https://github.com/bldrs-ai/Share/blob/c2191c3cc3a84d6ddcc870ea0ca3aaa5725e0c6b/src/Components/Share/shareDisplay.spec.ts) covers inclusion and removal of the display term on both. [`shareLocalFile.spec.ts`](https://github.com/bldrs-ai/Share/blob/c2191c3cc3a84d6ddcc870ea0ca3aaa5725e0c6b/src/Components/Share/shareLocalFile.spec.ts) covers the local-only gate on both.
+- [`ShareableCamera.spec.ts`](https://github.com/bldrs-ai/Share/blob/c2191c3cc3a84d6ddcc870ea0ca3aaa5725e0c6b/src/Components/Share/ShareableCamera.spec.ts) checks the dialog and visible QR on desktop. Its clipboard stub returns success without asserting the copied value. #2336 tracks the camera-specific gap. #2374 tracks checking that the field, clipboard and QR agree and that the copied link reopens on both form factors.
 
 ## Milestone hypothesis
 
-None of these is instrumented yet. Measurement plans belong in bizdev, per the [rubric](ux-rubric.md#where-each-kind-of-work-lives).
-
-| Epic | Hypothesis | Metric | Test | Estimate |
-|---|---|---|---|---|
-| `share-100` | MVP. Shared links are the earned channel; a link that opens the intended view brings new visitors straight to a model. | Shared-link opens by new visitors, and their rate of reaching a displayed model. | Correlational, by link source. | Not instrumented. |
+Shared links can bring new visitors straight to a displayed model. Measure recipient opens and the share of those visits that display the intended model. The sender's Share dialog event describes the sender's action. Recipient funnel measurement belongs in bizdev under the [UX rubric](ux-rubric.md#where-each-kind-of-work-lives).
