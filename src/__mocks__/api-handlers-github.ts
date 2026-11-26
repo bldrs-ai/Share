@@ -9,7 +9,7 @@ import {
 } from '../net/http'
 import {MOCK_BRANCHES} from '../net/github/Branches.fixture'
 import {MOCK_COMMENTS, MOCK_COMMENTS_POST_DELETION} from '../net/github/Comments.fixture'
-import {MOCK_COMMITS} from '../net/github/Commits.fixture'
+import {MOCK_COMMITS, MOCK_SAVED_COMMIT_SHA} from '../net/github/Commits.fixture'
 import {MOCK_FILES} from '../net/github/Files.fixture'
 import {createMockIssues, sampleIssues, testModelsIssues} from '../net/github/Issues.fixture'
 import {MOCK_ORGANIZATIONS} from '../net/github/Organizations.fixture'
@@ -590,7 +590,7 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
         )
       }
       return new Response(
-        JSON.stringify({sha: 'newCommitSha'}),
+        JSON.stringify({sha: MOCK_SAVED_COMMIT_SHA}),
         {
           status: HTTP_OK,
           headers: {'Content-Type': 'application/json'},

@@ -10,7 +10,7 @@ import {
 
 
 const REPOSITORY = '/repos/cypresstester/test-repo/git'
-const SAVED_MODEL = '/share/v/gh/cypresstester/test-repo/main/'
+const SAVED_MODEL = '/share/v/gh/cypresstester/test-repo/'
 
 
 describeMobileAndDesktop('Versions 100: Save a model to GitHub', () => {
@@ -69,9 +69,11 @@ describeMobileAndDesktop('Versions 100: Save a model to GitHub', () => {
         parents: ['parentSha'],
       })
       expect(ref.ok()).toBe(true)
-      expect(ref.request().postDataJSON()).toMatchObject({sha: (await commit.json()).sha})
+      const {sha} = await commit.json()
+      expect(sha).toMatch(/^[a-f0-9]{40}$/)
+      expect(ref.request().postDataJSON()).toMatchObject({sha})
 
-      await expect.poll(() => new URL(page.url()).pathname).toBe(`${SAVED_MODEL}${filename}`)
+      await expect.poll(() => new URL(page.url()).pathname).toBe(`${SAVED_MODEL}${sha}/${filename}`)
       await waitForModelReady(page)
     })
   }
