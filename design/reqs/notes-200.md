@@ -1,6 +1,6 @@
 # Notes 200
 
-**Epics:** [notes-200: Exchange notes with other tools through BCF · #2280](https://github.com/bldrs-ai/Share/issues/2280), [notes-300: Keep notes on Google Drive · #2281](https://github.com/bldrs-ai/Share/issues/2281), [versions-300: See what changed between two versions · #2282](https://github.com/bldrs-ai/Share/issues/2282), [versions-310: Keep versions on Google Drive · #2283](https://github.com/bldrs-ai/Share/issues/2283) · **Scope snapshot: 2026-11-23**
+**Epics:** [notes-200: Exchange notes with other tools through BCF · #2280](https://github.com/bldrs-ai/Share/issues/2280), [notes-300: Keep notes on Google Drive · #2281](https://github.com/bldrs-ai/Share/issues/2281), [versions-300: See what changed between two versions · #2282](https://github.com/bldrs-ai/Share/issues/2282), [versions-310: Keep versions on Google Drive · #2283](https://github.com/bldrs-ai/Share/issues/2283) · **Scope snapshot: 2026-11-25**
 
 ## Motivation
 
@@ -10,14 +10,14 @@ The journeys are short. **Export a note to a BCF file, or import one**; **write 
 
 ## UX stories
 
-Only `notes-200` has a formal story. The other three epics are placeholders until the work is picked up; their stories are pending.
+Only `notes-200` has a formal story. The other three epics have stories pending. The Versions epics record their proposed user journeys and acceptance.
 
 | Epic | Story | User goal |
 |---|---|---|
 | `notes-200` | [Import and export BCF issues · #357](https://github.com/bldrs-ai/Share/issues/357) | Round-trip notes through BCF 2.1 files. |
 | `notes-300` | none yet | Notes stored in Drive. |
-| `versions-300` | none yet | See what changed between two versions (needs a structural IFC diff). |
-| `versions-310` | none yet | Versions stored in Drive in a portable layout. |
+| `versions-300` | none yet | Compare exact IFC revisions and inspect added, removed and changed elements. |
+| `versions-310` | none yet | Reopen exact versions from a clean browser using portable Drive history. Direct Drive Save and native Drive revisions are handled by `share-110`. |
 
 The roadmap's §3.1 row for `notes-100` now links [#670](https://github.com/bldrs-ai/Share/issues/670) (its epic existed but wasn't linked), and `versions-100` already linked [#57](https://github.com/bldrs-ai/Share/issues/57).
 
