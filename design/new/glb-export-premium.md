@@ -5,13 +5,12 @@ Status: v0.1 (2026-09-10). Epic `share-140`, tracking issue
 [roadmap.md](../roadmap.md) §3.1).
 Owner: Pablo (with Claude).
 
-Share already converts every IFC/STEP it opens into a GLB and parks it in
-OPFS as the next-load cache (design/new/glb-model-sharing.md). This doc is
-the plan for handing that GLB to the user as a **download**, sold as a Pro
-feature: what the artifact is and what has to happen to it before it leaves
-the browser, how the export code is delivered *only* to subscribed users,
-how a user sees what they have exported, and what each further format (OBJ,
-STL, USD, …) would need.
+Eligible IFC and STEP loads produce a GLB in OPFS for the next open.
+The Export tab needs that artifact for a download. See the
+[GLB cache design](glb-model-sharing.md) for cache eligibility. This doc
+describes the GLB download in **Save → Export**, how
+the artifact is prepared, how the server grants export access, and what
+each further format (OBJ, STL, USD, …) would need.
 
 Sections 1–3 are the investigation; §4–§6 the design (§4.8 is the free
 tier's export rule: model slots); §5 the stages that became the epic's sub-issues;
@@ -20,53 +19,32 @@ tier's export rule: model slots); §5 the stages that became the epic's sub-issu
 
 ## Status & remaining work
 
-*Updated 2026-10-08, after S4 (#1835) merged as #1939 (4cf2aef5). That PR
-flipped the `export` flag, built the §7 decisions (2 free exports per rolling
-7 days, §4.8; `shareProPendingReauth` counts as Pro), and moved the §8 smoke
-to the automated live smoke plus a residual manual list. The 2026-09-16 status
-it builds on covered #1837/#1851/#1852, the #1855 container gzip (§1.1a), the
-byte-attribution measurement on #1831, and the `.glb.gz` round trip (§4.7),
-which reverses a decision §4.3 used to record. §1.1d was updated 2026-09-30
-when `glbCollapse` went default-on. §4.8 and §7.1 were rewritten 2026-10-27
-for the owner's slot rule, which replaced the 2-exports-a-week count.*
+*Current as of 2026-11-25.*
 
-**Where things stand:** the feature described in §1–§6 below is fully built
-and on by default. S4 (#1939) flipped `export` to `isActive: true` in
-`src/FeatureFlags.js`, so export is on for everyone (`?feature=export` is
-redundant; flipping the flag back to `false` is the kill switch, since
-`?feature=` can only turn flags on). The flag gates only the UI; the
-`pro-module` function decides who gets the exporter (§1.3, §4.1). What ships:
-Pro (`sharePro` or `shareProPendingReauth`) without limit; a signed-in free
-user exports **public models unlimited, with no slot, and any model holding
-one of their 2 model slots unlimited** — the same slots, ledger and rolling
-7-day window as private opens (`app_metadata.usageQuota.loads`); a private
-model or local file holding no slot takes one on its first export, decided by `pro-module` as the module is handed over (§4.8);
-with every slot holding another model, the upgrade prompt saying when the
-next slot frees up; anonymous users get the login prompt. The cross-browser smoke (§8) is now the automated live smoke
-plus a short residual manual list.
-Export lives in the
-Save dialog's Export tab: the Include Bldrs metadata toggle, Portable
-toggle (on by default since #1831), Compression dropdown (None / Meshopt / Draco), Quality rung,
-Compress download toggle, a Download size line that *is* the file, and a
-centred accent Export GLB action last. #1837 landed the pro-module
-pipeline, Download GLB, and export tracking; #1851 added portable export +
-re-hydration; #1852 added the compression controls (three-rung quality
-ladder, background codec sweep, `.glb.gz`). **My Exports
-(`Open/ExportsList.jsx`) is built and unit-tested but not mounted**, per
-owner decision (#1838) — the `record-export.js` / `exportHistory.js`
-tracking data path stays live regardless. Code delivery is gated through
-the `pro-module` Netlify function (Auth0 bearer + Management API check on
-every request, `Cache-Control: private, no-store`), built with esbuild
-rather than Netlify's default nft bundler because nft crashes an ESM
-function importing axios on cold start (§4.2). Just landed on this branch:
-the byte-attribution instrument `tools/glb/byteBudget.mjs` (0ec7339) and the
-v3 gzipped OPFS container, #1855, 6d20d33 (§1.1a) — a real Snowdon artifact
-goes 67,830,692 → 21,396,007 B stored, 68.5% saved, ~0.5 s to inflate, the
-size read still never touching BIN. **And the `.glb.gz` round trip closes**
-(§4.7): Share opens its own compressed export by drag-and-drop and through the
-Open dialog's Local tab, with no `supportedTypes` entry and no `findLoader`
-arm — the envelope comes off at the upload seam, and a second seam in
-`Loader#load` covers the paths that skip it.
+**Save → Export is default-on.** The flag rolled out in #1939 and the
+docs followed in #1951. The tab offers Bldrs metadata, Portable (default
+on), None/Meshopt/Draco compression, a quality setting, a `.glb.gz`
+option and the size of the selected download. Share can reopen its own
+exports. Export tracking ships. My Exports remains unmounted. The
+`export` feature flag controls the tab; setting its default to false is
+the UI rollback.
+
+The `pro-module` function authorizes export. Pro (including pending
+re-auth) has unlimited export. Signed-in free users export public models
+without a slot and use the same two rolling seven-day model slots as
+private opens for private or local models. An export of a model already
+holding a slot uses no extra slot. Signed-out users get a sign-in prompt.
+See [quotas](quotas.md) and §4.8 for the shipped rules. The period change
+in [PR #2368](https://github.com/bldrs-ai/Share/pull/2368) is still a draft.
+
+Mesh collapse is default-on since #1902. The account-backed live smoke
+covers the main rollout paths. [#1835](https://github.com/bldrs-ai/Share/issues/1835)
+tracks the residual manual checks (§8) and the wiki entry.
+
+### Rollout and measurement history
+
+The following entries record how the implementation and rollout decisions
+evolved.
 
 1. **The measurement the epic was waiting on landed today, and it reframes
    the remaining lossless work.** §4.3's "container" finding (≈1.2 MB
@@ -88,9 +66,7 @@ arm — the envelope comes off at the upload seam, and a second seam in
    **node graph** (one full node + mesh + material + accessors +
    bufferViews per group), not per-instance placement data. Consequences:
    - **#1857** (Draco+Meshopt together / quantized instance transforms) is
-     re-scored from "the biggest remaining win" to **~2.7% of a Draco'd
-     export** and is deferred — not the priority the epic body still
-     states.
+     re-scored to **~2.7% of a Draco'd export** and deferred.
    - **#1854**'s two named JSON-slimming levers both measure **0 bytes**:
      dropping node `name` strings recovers nothing because the batched
      writer emits no names at all, and dropping `min`/`max` on everything
@@ -204,7 +180,7 @@ arm — the envelope comes off at the upload seam, and a second seam in
 ### 1.1 The artifact
 
 `src/loader/glbExport.js#exportAndCacheGlb` runs post-parse (idle-scheduled
-from `Loader.js`) for every IFC/STEP source and writes **one** OPFS file at
+from `Loader.js`) for eligible IFC and STEP sources and writes **one** OPFS file at
 the key `src/loader/glbCacheKey.js#glbCacheKey` derives from the source
 (`<ns1>/<ns2>/<ns3>/<file>.<schemaVer>.glb` + commit hash). Per-source-kind
 adapters in `src/loader/sourceCacheKey.js` produce the key input for GitHub,

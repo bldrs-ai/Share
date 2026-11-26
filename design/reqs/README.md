@@ -16,7 +16,7 @@
 | [View](view-100.md) | Looking at a model: tree, properties, selection, cut planes, camera, display, hide and isolate, placemarks, tables | `view-100` (#2270) to `view-300` (#2277), `view-140` (#1705), `view-220` (#1881), reconciled 2026-11-23; [triage](view-100-triage.md) |
 | [Search](search-100.md) | Finding elements, linking to one, fluid NavTree | `search-100` (#2278), `search-300` (#2279), `search-320` (#1658); [triage](search-100-triage.md) |
 | [Later Notes and Versions epics](notes-200.md) | BCF, notes and versions on Drive, version diff (all post-MVP) | `notes-200` (#2280) to `versions-310` (#2283); [triage](notes-200-triage.md) |
-| [Share link](share-100.md) | The link to the current view, and who owns each piece of it | `share-100` (#2284), reconciled 2026-11-23; [triage](share-100-triage.md) |
+| [Share link](share-100.md) | Copy or scan the current viewer URL, source access, and the local-only gate | `share-100` (#2284); [story #2374](https://github.com/bldrs-ai/Share/issues/2374), [triage](share-100-triage.md) |
 | [Identity](identity-100.md) | Sign-in, GitHub as a source, the Profile drawer and analytics consent | `identity-100` (#2285), `identity-110` (#2286), `identity-300` (#2287); [triage](identity-100-triage.md) |
 | [Apps](apps-100.md) | The apps drawer, the demo app, and the AI-arc apps epics | `apps-100` (#2288) to `apps-310` (#2291), `assist-320` (#2292); [triage](apps-100-triage.md) |
 | [Community](community-100.md) | Welcome, analytics and feedback, bug reports | `community-100` (#2293) to `community-200` (#2295); [triage](community-100-triage.md) |
