@@ -107,7 +107,7 @@ describeMobileAndDesktop('Versions 100: Open an exact GitHub revision', (formFac
     const missing = sourcePath('4444444444444444444444444444444444444444')
     await page.goto(missing)
 
-    await expect(page.getByTestId('LoadStatusLine')).toContainText("GitHub couldn't find this file")
+    await expect(page.getByTestId('LoadStatusLine')).toContainText('GitHub couldn\'t find this file')
     await expect.poll(() => new URL(page.url()).pathname).toBe(missing)
     await expect(page.getByTestId('cadview-dropzone')).toHaveAttribute('data-model-ready', 'false')
   })
