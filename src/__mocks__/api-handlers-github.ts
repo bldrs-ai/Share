@@ -9,7 +9,7 @@ import {
 } from '../net/http'
 import {MOCK_BRANCHES} from '../net/github/Branches.fixture'
 import {MOCK_COMMENTS, MOCK_COMMENTS_POST_DELETION} from '../net/github/Comments.fixture'
-import {MOCK_COMMITS} from '../net/github/Commits.fixture'
+import {MOCK_COMMITS, MOCK_SAVED_COMMIT_SHA} from '../net/github/Commits.fixture'
 import {MOCK_FILES} from '../net/github/Files.fixture'
 import {createMockIssues, sampleIssues, testModelsIssues} from '../net/github/Issues.fixture'
 import {MOCK_ORGANIZATIONS} from '../net/github/Organizations.fixture'
@@ -110,6 +110,20 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
               headers: {'Content-Type': 'application/json'},
             },
           )
+        }
+
+        if (org === 'cypresstester' && repo === 'test-repo' && ref === MOCK_SAVED_COMMIT_SHA) {
+          // A missing download URL target makes both Save E2Es depend on
+          // the source bytes already in OPFS. The in-app surface saves box.ifc;
+          // the Versions cases save public/index.ifc.
+          const blobSha = path === 'saved-in-app.ifc' ?
+            'b5789ca662cea7106a6d33971aa9a8ecb459f836' :
+            'bb68dd1c80942a2ad67362840bd20516edd40316'
+          return Response.json({
+            sha: blobSha,
+            download_url: '/__test_fixtures__/saved-source-must-be-cached.ifc',
+            type: 'file',
+          })
         }
 
         if ((org === 'cypresstester') ||
@@ -590,7 +604,7 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
         )
       }
       return new Response(
-        JSON.stringify({sha: 'newCommitSha'}),
+        JSON.stringify({sha: MOCK_SAVED_COMMIT_SHA}),
         {
           status: HTTP_OK,
           headers: {'Content-Type': 'application/json'},
