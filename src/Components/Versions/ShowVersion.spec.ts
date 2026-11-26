@@ -98,4 +98,17 @@ describeMobileAndDesktop('Versions 100: Open an exact GitHub revision', (formFac
       await recipient.close()
     }
   })
+
+  test('reports an unavailable commit without loading the branch head', async ({page}) => {
+    await homepageSetup(page)
+    await routeVersionFallback(page, true)
+    await returningUserVisitsHomepageWaitForModel(page)
+
+    const missing = sourcePath('4444444444444444444444444444444444444444')
+    await page.goto(missing)
+
+    await expect(page.getByTestId('LoadStatusLine')).toContainText("GitHub couldn't find this file")
+    await expect.poll(() => new URL(page.url()).pathname).toBe(missing)
+    await expect(page.getByTestId('cadview-dropzone')).toHaveAttribute('data-model-ready', 'false')
+  })
 })
