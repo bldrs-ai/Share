@@ -88,7 +88,7 @@ browser chat turn. Worked example: §9 "Worked example".
 |---|---|---|
 | D1 | Agent loop runs **in the browser**. The LLM call is the only remote hop, over one of two transports: **BYOK** (browser → provider) or **Hosted** (browser → Bldrs relay → OpenRouter) | The tools are in-page (viewer, store). A server loop would need the model, which breaks sovereignty |
 | D2 | Hosted transport = thin streaming relay `ai-chat`. It checks the tier, enforces the allowlist and `max_tokens`, forces `data_collection: "deny"` (except for the optional NVIDIA entry on the free-models path, D3), meters `usage.cost` (including after a client abort, §5), and never logs bodies. Vehicle (Edge vs v2 Function) is a spike. No per-user OpenRouter keys for now | Key custody and quota enforcement need a server. Minted browser keys are extractable, Bldrs is liable for them, and anonymous users can't get one |
-| D3 | Budgets are **USD-cost credits** from `usage.cost`. The **default** for anonymous and free tiers is a curated allowlist of **cheap paid** tool models with `data_collection: "deny"`. Every tier also gets an opt-in **"Free models (experimental)"** choice (`:free`, zero credits, labelled honestly), which is also the anonymous overflow when the spend breaker trips. Pro gets a live, priced model picker | Premium models must burn faster. `:free` caps are per account (≈300 agent turns a day for everyone, eval #1929, 2026-10-06), and availability is volatile, so free models can't be the default but are worth offering. Default allowlist (eval #1929): `qwen/qwen3.7-flash` → `deepseek/deepseek-v4-flash` → `openai/gpt-oss-120b`, measured **$0.00015 a turn** on the default |
+| D3 | Budgets are **USD-cost credits** from `usage.cost`. The **default** for anonymous and free tiers is a curated allowlist of **cheap paid** tool models with `data_collection: "deny"`. Every tier also gets an opt-in **"Free models (experimental)"** choice (`:free`, zero credits, labelled honestly), which is also the anonymous overflow when the spend breaker trips. Pro gets a live, priced model picker | Premium models must burn faster. `:free` caps are per account (≈300 agent turns a day for everyone, eval #1929, 2026-10-06), and availability is volatile, so free models can't be the default but are worth offering. Default allowlist (eval #1929): `qwen/qwen3.7-flash` → `deepseek/deepseek-v4-flash` → `openai/gpt-oss-120b`, measured **$0.XXXXX a turn** on the default |
 | D4 | Metering ledger in **Netlify Blobs** (or similar), keyed by Auth0 `sub` or anonymous id, in day buckets. Auth0 `app_metadata` stays tier-only | Per-message writes don't fit a ~16 KB, last-write-wins, Management-API store |
 | D5 | Anonymous identity = relay-issued **HMAC token**, plus an IP-hash rate limit and a global daily spend breaker | There is no server identity for anonymous users today. The free AI tier is the funnel top and needs a bounded cost |
 | D6 | **BYOK** for Anthropic (native), OpenAI, Gemini (native), xAI, and OpenRouter via **OAuth PKCE**. Keys are session-only by default, with opt-in "remember", and never reach Bldrs | All five pass CORS preflight from bldrs.ai (live). BYOK users skip Bldrs credits entirely |
@@ -334,10 +334,10 @@ generating and bill the whole thing. Measured via OpenRouter's
 
 | Model (upstream) | Aborted at | `/generation` |
 |---|---|---|
-| qwen3.7-flash (Alibaba) | 4.5 s | `cancelled:false`, 1,098 tokens, $0.000143 |
-| claude-haiku-4.5 (Bedrock) | 2.3 s | `cancelled:false`, 1,526 tokens, **$0.007654** (more than the un-aborted run, $0.005724) |
-| gemini-2.5-flash-lite (Google) | 1.1 s | `cancelled:false`, ran to `stop`, $0.000451 |
-| gpt-5-nano, `only:['openai']` | 3.4 s | **`cancelled:true`**, 597 reasoning tokens still billed ($0.00024) |
+| qwen3.7-flash (Alibaba) | 4.5 s | `cancelled:false`, 1,098 tokens, $0.XXXXXX |
+| claude-haiku-4.5 (Bedrock) | 2.3 s | `cancelled:false`, 1,526 tokens, **$0.XXXXXX** (more than the un-aborted run, $0.XXXXXX) |
+| gemini-2.5-flash-lite (Google) | 1.1 s | `cancelled:false`, ran to `stop`, $0.XXXXXX |
+| gpt-5-nano, `only:['openai']` | 3.4 s | **`cancelled:true`**, 597 reasoning tokens still billed ($0.XXXXX) |
 
 Requirements on the relay (#1928, #1932):
 
@@ -417,7 +417,7 @@ picker. The UI can show the budget as a percentage or as abstract "credits"
 **Why free models are not the default:**
 
 - **Caps are per account.** OpenRouter's free-model limits are 20 req/min,
-  plus 50 req/day under $10 of lifetime purchases or 1,000 req/day at or
+  plus 50 req/day under $XX of lifetime purchases or 1,000 req/day at or
   above it (granted from 9 credits). They are counted per account: "Making
   additional accounts or API keys will not affect your rate limits, as we
   govern capacity globally"
@@ -457,7 +457,7 @@ picker. The UI can show the budget as a percentage or as abstract "credits"
 each with a programmatic checker on final viewer state, over a canned
 63-element, 3-storey scene and 10 tools. Paid models ran 3 passes (36
 tasks), free models 1–2. Every request went out with `deny` and
-`require_parameters`. Total spend $0.73. Streaming tool calls worked on all
+`require_parameters`. Total spend $0.XX. Streaming tool calls worked on all
 8 paid models, and all 8 routed under `deny` on the first attempt.
 
 | Model | Tasks | Pass | Valid calls | Median call | $ / turn | Role |
@@ -519,7 +519,7 @@ uses `/api/v1/endpoints/zdr` as a conservative proxy, "Pro picker, as
 built" below). Two consequences:
 
 - Prices differ per endpoint. gpt-oss-120b has 23 endpoints, from
-  $0.03/$0.17 to $0.35/$0.75 per M. Deny may route to a pricier one.
+  $0.XX/$0.XX to $0.XX/$0.XX per M. Deny may route to a pricier one.
 - qwen3.7-flash has exactly one endpoint (Alibaba). If that endpoint isn't
   deny-compatible, the model can't be routed at all.
 
@@ -530,11 +530,11 @@ that survive deny can be single-provider (qwen, deepseek), the availability
 risk named above.
 
 **Cost per agent turn.** Measured (eval #1929, 2026-10-06): qwen3.7-flash
-costs **$0.00015 a user turn** ($0.03 / $0.13 per M): ≈3.3 requests and
+costs **$0.XXXXX a user turn** ($0.XX / $0.XX per M): ≈3.3 requests and
 ≈6.7k input / 0.5k output tokens per turn (372 of them reasoning). The
 eval's tool results are small and its histories short. Real element lists
 are longer and conversations accumulate, so the **planning figure is
-$0.0003–0.0006 a turn** (2–4×, about 2,000–3,000 turns per dollar). Prices
+$0.XXXX–0.XXXX a turn** (2–4×, about 2,000–3,000 turns per dollar). Prices
 are USD per M tokens, in/out (live check 2026-10-06, catalog price). The
 "list" column is catalog price at the measured 6.7k / 0.5k turn shape, uncached;
 "measured" is `usage.cost` per turn where the eval ran the model.
@@ -556,7 +556,7 @@ are USD per M tokens, in/out (live check 2026-10-06, catalog price). The
 **Prompt caching.** `cache_control` passes through OpenRouter when set via
 `@openrouter/ai-sdk-provider`'s `cacheControl`. Measured on claude-haiku-4.5
 with a ~15k-token system prompt: the 2nd identical call read 14,776 cached
-tokens and cost fell from $0.01883 to $0.00183, **−90%** (spike #1927,
+tokens and cost fell from $0.XXXXX to $0.XXXXX, **−90%** (spike #1927,
 2026-10-06). **Recommendation:** mark the system prompt and the tool
 schemas (the stable prefix) as cacheable on hosted Claude and Gemini routes.
 Explicit `cache_control` or the top-level form works on Anthropic, Vertex,
@@ -569,19 +569,30 @@ expect the Pro-model rows to fall, by up to the measured 90% on that share.
 The allowlist rows are already cheap, so caching matters least there.
 Eval #1929 ran uncached, so #1932 should measure the cached figure.
 
-**Tiers, with strawman numbers.** These are **placeholders for Pablo to
-set**. The windows mirror quotas.md: 30-day rolling for signed-in tiers.
+**Tiers: nested caps (owner, 2026-11-25; PROVISIONAL).** Every tier is
+held to three caps at once, all enforced: a **day**, **7 days**, and the
+user's **30-day metering period** (quotas.md §"Metering periods"). Each is
+multiplied out from the tier's **daily rate**, the one setting per tier
+(`AI_BUDGET_<TIER>_DAILY_USD`), and each window can be overridden on its own
+(`AI_BUDGET_<TIER>_7D_USD`, `_30D_USD`), all in `src/quota/aiCredits.js`. The
+day and 7-day caps are rolling UTC-day sub-windows inside the period. An
+anonymous identity's period is its **metering token's**, the one token every
+metered anonymous feature shares (quotas.md §"The metering token"); a
+signed-in identity's starts at its first booked spend after the last one
+ended (`_lib/aiLedger.js#applyPeriod`). Set the daily budget per tier and
+`AI_BUDGET_IP_USD` in the Netlify Functions environment before rollout.
+Unset or invalid monetary limits resolve to zero. The former
+`AI_BUDGET_ANONYMOUS_USD`, `AI_BUDGET_FREE_USD` and `AI_BUDGET_PRO_USD`
+variables are retired.
 
-| Tier | Models | Budget (placeholder) | ≈ turns | Window | Identity |
-|---|---|---|---|---|---|
-| Anonymous | allowlist (default), or free models | $0.02 | 35–65 | 24 h per anon id; also $0.10 / 24 h per IP hash | HMAC anon token (D5) |
-| Free (signed in) | allowlist (default), or free models | $0.50 | 800–1,700 | 30-day rolling | Auth0 `sub` |
-| Pro (`sharePro`) | allowlist + priced picker, or free models | $5.00 | ~135–270 Sonnet 5.5, ~70–135 Opus 5.5, ~25–55 Fable 5.1, ~10,000 on allowlist | 30-day rolling | Auth0 `sub` |
-| Free models (any tier, opt-in) | `openrouter/free` or curated `:free` | $0 (no credits) | ≈300 a day (≈1,000 requests) **in total**, shared by every user | UTC day (OpenRouter's) | caller's tier identity |
-| BYOK | anything the user's key allows | none from Bldrs | — | — | none needed |
-| Global breaker | — | *B* per day for all anonymous paid-model traffic (3–7× expected spend, never above the daily ad budget; method below, values in the private bizdev doc); past it, anonymous traffic overflows to free models | — | UTC day | relay-wide |
+| Tier | Models | Budget | Period | Ledger key |
+|---|---|---|---|---|
+| Anonymous | allowlist or free models | `AI_BUDGET_ANONYMOUS_DAILY_USD` and window overrides, plus `AI_BUDGET_IP_USD` per network per day | metering token’s period | metering token |
+| Free | allowlist or free models | `AI_BUDGET_FREE_DAILY_USD` and window overrides | account’s period | Auth0 `sub` |
+| Pro | allowlist, model picker, or free models | `AI_BUDGET_PRO_DAILY_USD` and window overrides | account’s period | Auth0 `sub` |
+| Free models | `openrouter/free` or curated `:free` | request-count cap | UTC day | caller’s tier identity |
 
-The dollar budgets can't limit free-model traffic, because it costs $0.
+The dollar budgets can't limit free-model traffic, because it costs $X.
 So the ledger also counts free-model requests per identity (anonymous
 token, IP hash, `sub`) against a small daily cap (placeholder: 30 requests,
 ~9 turns). Without it, one client could drain the shared daily pool for
@@ -601,8 +612,8 @@ public:
 | Daily ad budget | *A* | private bizdev doc |
 | Share of users who try the assistant | *p* | placeholder; `assist_open` (§7) measures it |
 | Turns per trying user | *t* | placeholder; `assist_turn` measures it |
-| Cost per turn, cheap default | *c* ≈ $0.0005 | planning figure $0.0003–0.0006; measured $0.00015 on qwen3.7-flash (eval #1929) |
-| Cost per turn, fallback 1 | ≈ $0.0023 | deepseek-v4-flash, measured $0.00058 at 4× |
+| Cost per turn, cheap default | *c* ≈ $0.XXXX | planning figure $0.XXXX–0.XXXX; measured $0.XXXXX on qwen3.7-flash (eval #1929) |
+| Cost per turn, fallback 1 | ≈ $0.XXXX | deepseek-v4-flash, measured $0.XXXXX at 4× |
 | **Expected anonymous + free spend per day** | ***E* = *V* · *p* · *t* · *c*** | |
 
 What follows from that:
@@ -613,10 +624,26 @@ What follows from that:
   user who has worked with the assistant on their own model is also a
   stronger conversion signal than a visit. Re-check it with the real *V*
   and *A* in the bizdev doc.
-- **Per-user budgets cover a trial with headroom.** The anonymous $0.02 is
-  35–65 cheap turns, against an assumed trial of about 10. A signed-in
-  free user's $0.50 a month is ~800–1,700 turns. Ten fully active free
-  users would cost ~$5 a month. None of this depends on traffic.
+- **Size the trial from the configured budget and observed cost per turn.**
+  The daily cap bounds immediate use and the period cap bounds repeat use.
+- **How the nested caps bind with the multiplied-out defaults.** With the
+  7-day cap 7× and the period cap 30× the daily one, a user held to the
+  daily cap can't reach either except through the soft rule's overshoot
+  (a hold past the limit, at most one per day). So by default the day cap
+  is the one that binds, and the 7-day and period caps bind only when an
+  override sets them below the multiple (`AI_BUDGET_<TIER>_7D_USD`,
+  `_30D_USD`), which is what they are for (review on Share#2368).
+- **Cap reached: the one decision point.** `ai-chat.js#capReachedDecision`
+  is where an identity whose day, 7-day or period cap refuses a turn is
+  decided. Today it always refuses (a 402 with `resumeAt`, the last of the
+  refusing windows to admit again). **Pay-as-you-go above the cap**, at cost plus a configurable markup, is a later billing feature and out of scope; it hooks in there, by
+  answering a top-up instead of a refusal. The breakers and the IP bucket
+  never reach it.
+- **Carried at sign-in.** A visitor who signs in brings the token's AI spend
+  with them: the link at sign-in (quotas.md §"Link at sign-in") adds the
+  token's days into the account's record, once per token
+  (`aiLedger.js#carryAnonymousSpend`), so it counts toward the free
+  account's day, 7-day and period caps.
 - **The breaker *B* is a multiple of expected spend, capped by the ad budget.**
   - Set the anonymous breaker *B* at about 3–7× *E*, and never above *A*,
     so the worst anonymous day, viral or abusive, costs no more than one
@@ -642,7 +669,7 @@ What follows from that:
   for the whole account (above), so it saturates as soon as *V* · *p* · *t*
   approaches 300. That is the D3 rationale in numbers.
 
-At the $25/mo Pro price mocked in #1421 (roadmap §3.1, Subscribe), a $5 AI budget is
+At the $XX/mo Pro price mocked in #1421 (roadmap §3.1, Subscribe), a $X AI budget is
 20% of revenue, plus OpenRouter's 5.5% credit-purchase fee
 ([FAQ](https://openrouter.ai/docs/faq.md)). Whether Pro gets **top-ups**
 (buy more credits), **pay-as-you-go** past the budget, or a hard stop is an
@@ -831,7 +858,7 @@ Per-message metering would multiply that write rate by roughly 100.
     (`AI_MAX_BODY_BYTES_ANONYMOUS` / `_FREE`, `src/quota/aiCredits.js`;
     refused 400 `ai_body_too_large` with the cap in `x-bldrs-ai-max-body-bytes`,
     "conversation may be too long"; a malformed body stays `ai_bad_request`), so
-    one hold, and the overshoot, is at most about $0.03. The loop retries a step
+    one hold, and the overshoot, is at most about $0.XX. The loop retries a step
     refused `ai_body_too_large` once, re-bounded to the cap the refusal names
     (`loop.ts` `retryTooLarge`, Share#2307): a tier can drop between two requests
     (Pro to Free, or the relay briefly serving Free), leaving the cached cap
@@ -888,15 +915,20 @@ Per-message metering would multiply that write rate by roughly 100.
   - `begin_checkout {from: 'assist'}`
   - No content, model ids from BYOK, or keys ever go to GA.
 
-**D5: Anonymous identity.** Today an anonymous user has no server identity:
-`useQuota` is OPFS-only for them. The relay adds a minimal one:
+**D5: Anonymous identity.** The relay keys an anonymous user's budget to
+the **shared anonymous metering token** (since 2026-11-25; quotas.md §"The
+metering token"):
 
-- **Token.** On the first hosted call without a token, the relay issues
-  `anonId.issuedAt.HMAC(secret, anonId|issuedAt)`. The client keeps it in
-  localStorage and sends it as a Bearer. The relay verifies it statelessly
-  and keys the ledger by `anonId`.
+- **Token.** `bm1.anonId.issuedAt.HMAC(...)`, issued by the relay or by the
+  remote-load meter, whichever a visitor uses first, and kept in
+  localStorage under `bldrs.meter.token` (`src/quota/meterToken.js`). It
+  lives exactly one 30-day period and is never renewed: an expired one is
+  answered with a new, unrelated token. The relay verifies it statelessly
+  and keys the ledger by `anonId`. The relay's own `ba1` token
+  (`_lib/aiToken.js`, 24 h) is retired: a page still sending one gets a
+  metering token back, and its old day's budget is not carried.
 - **IP-hash limit.** `HMAC(dailySalt, clientIp)` gets its own ledger bucket
-  (placeholder $0.10 / 24 h). This catches token churn: clearing storage
+  (placeholder $0.XX / 24 h). This catches token churn: clearing storage
   mints a new anonId, but not a new IP. No raw IP is stored. The salt
   rotates daily, so the hashes don't link across days.
 - **Global breaker.** A relay-wide daily spend counter for the anonymous
@@ -1456,7 +1488,7 @@ earlier draft of this section read it as text → UI; that was wrong.
   Decisions API `POST /api/alpha/decisions` (or System One,
   `/api/v1/systemone`), same OpenRouter key. Not chat-completions compatible.
   `@typesafe-ai/sdk` is MIT (0.6.0).
-- **Cost and maturity.** $0.042 per M input tokens, output free, 32k context.
+- **Cost and maturity.** $0.XXX per M input tokens, output free, 32k context.
   Early access began 2026-09-15 and the route is `/alpha/`. The vendor's
   70–500 ms latency is **UNVERIFIED**. Probabilities vary slightly between
   calls, so thresholds go on bands.
@@ -1670,7 +1702,7 @@ Dependencies are in brackets.
 | #1677 | large-model fixture + E2E | unchanged | #1675 |
 | [#1927](https://github.com/bldrs-ai/Share/issues/1927) | spike: providers + client library | **Done (2026-10-06).** D7 confirmed with three amendments (§9, §8, §5); results posted on #1927. Real-key success paths for the four direct providers remain open (§9 "Still unverified"). Original scope: provider matrix (§9), AI SDK vs TanStack AI, token-per-turn measurement (not recorded; see §6) | — |
 | [#1928](https://github.com/bldrs-ai/Share/issues/1928) | spike: relay vehicle + OpenRouter routing | Edge vs v2 Function limits, streaming, `verifyAuth0Bearer` adapter, **Blobs atomicity: gating, because the ledger must reserve atomically (§7 "Reserve, then settle")**, **abort metering (§5 Amendment 3):** after a client abort no usage reaches the client and Bedrock/Google/Alibaba bill the full generation with `cancelled:false`, so the relay must keep reading upstream to the final usage chunk, or reconcile via `X-Generation-Id` + `/api/v1/generation` (404 for >20 s, present by ~5 min). Prefer cancel-capable upstreams in `provider.order` | — |
-| [#1929](https://github.com/bldrs-ai/Share/issues/1929) | spike: free/cheap model eval | **Done, first run (2026-10-06); results on #1929.** Picked the default allowlist and the curated `:free` list (§6): $0.00015 a turn measured, deny routing confirmed for all 8 paid models, the free path keeps deny except the optional NVIDIA entry. Findings feed §9 (`query` optional) and §12.1 (Jev calibration). A **follow-up run on a real large-model scene** is wanted: the first used a synthetic 63-element scene. Original scope: tool-calling scorecard over the 17 free tool-capable models + 3–5 cheap paid ones, v0 tool schemas, deny-routing check | #1674 schemas (drafts are enough) |
+| [#1929](https://github.com/bldrs-ai/Share/issues/1929) | spike: free/cheap model eval | **Done, first run (2026-10-06); results on #1929.** Picked the default allowlist and the curated `:free` list (§6): $0.XXXXX a turn measured, deny routing confirmed for all 8 paid models, the free path keeps deny except the optional NVIDIA entry. Findings feed §9 (`query` optional) and §12.1 (Jev calibration). A **follow-up run on a real large-model scene** is wanted: the first used a synthetic 63-element scene. Original scope: tool-calling scorecard over the 17 free tool-capable models + 3–5 cheap paid ones, v0 tool schemas, deny-routing check | #1674 schemas (drafts are enough) |
 | [#1930](https://github.com/bldrs-ai/Share/issues/1930) | provider abstraction + BYOK key store + settings UI | `Provider` interface, four direct providers, key custody, Test/Forget, disclosure panel (§10). Evolves `BotSettings` | #1927 |
 | [#1931](https://github.com/bldrs-ai/Share/issues/1931) | OpenRouter PKCE connect | Connect/disconnect, callback route, key into #1930's store | #1930 |
 | [#1932](https://github.com/bldrs-ai/Share/issues/1932) | hosted relay `ai-chat` + anonymous identity | Relay (§5), HMAC token, IP-hash, global breaker with free-models overflow, the free-models path (deny kept; no-deny only for the optional NVIDIA entry) with server-side health checks, replay + smoke | #1928, #1929 |

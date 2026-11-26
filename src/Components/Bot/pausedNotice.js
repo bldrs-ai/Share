@@ -1,5 +1,4 @@
 import {AI_TIERS} from '../../quota/aiCredits'
-import {aiCreditsCopy} from '../../quota/aiCreditsCopy'
 import {formatClock, formatDayAndClock} from './taskTimes'
 
 
@@ -24,15 +23,14 @@ const DAY_MS = 86400000
  * @param {number} [options.now]
  * @param {string} [options.locale]
  * @param {string} [options.timeZone]
- * @return {string} e.g. "Paused: today's AI credits are used up. Resumes at 4:00 PM."
+ * @return {string} e.g. "Paused: your free AI credits are used up for now. Resumes at 4:00 PM."
  */
 export function pausedNoticeText(tier, notBefore, {awaitingResume = false, now = Date.now(), locale, timeZone} = {}) {
   if (awaitingResume) {
     return 'Paused: your AI credits should be back now. Resume to send your message.'
   }
-  const {windowLabel} = aiCreditsCopy(tier)
-  const what = windowLabel === 'today' ? 'today\'s AI credits are used up' :
-    `your ${tier === AI_TIERS.PRO ? 'Pro' : 'free'} AI credits ${windowLabel} are used up`
+  // Window-neutral (aiCreditsCopy.js says why): the resume time says which.
+  const what = `your ${tier === AI_TIERS.PRO ? 'Pro' : 'free'} AI credits are used up for now`
   const when = notBefore - now < DAY_MS ?
     `at ${formatClock(notBefore, {locale, timeZone})}` :
     formatDayAndClock(notBefore, {locale, timeZone})

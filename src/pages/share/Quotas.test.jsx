@@ -15,7 +15,8 @@ describe('pages/share/Quotas', () => {
       'Open local models in your browser. No waiting for upload',
       'IFC and STEP loaded by our Conway engine, fastest in the industry (see the benchmark)',
       'USD, GLB, STL, OBJ and many others also supported',
-      'Public Google Drive and GitHub models — unlimited open and share',
+      'Your own files without limit, plus 2 GitHub, Drive or web-address models every 30 days.' +
+        ' Sign in free for unlimited.',
     ])
     expect(within(list).getByRole('link', {name: 'see the benchmark'})).toHaveAttribute('href', '/share/about/conway')
     expect(list.textContent).not.toMatch(/export/i)

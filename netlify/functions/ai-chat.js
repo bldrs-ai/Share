@@ -108,7 +108,8 @@ import {loadCatalogue, pickerModels, resolveCatalogueModel} from './_lib/aiCatal
 import {DEFAULT_MODEL, FREE_MODELS_ALIAS, freeRoute, isFreeModel, resolveModel} from './_lib/aiModels.js'
 import {isAllowedOrigin, originHostForLog} from './_lib/aiOrigin.js'
 import {createUsageWatcher} from './_lib/aiSse.js'
-import {hashIp, looksLikeAnonToken, mintAnonToken, verifyAnonToken} from './_lib/aiToken.js'
+import {hashIp, looksLikeAnonToken} from './_lib/aiToken.js'
+import {METERING_TOKEN_PREFIX, meteringTokenSecret, mintMeteringToken, verifyMeteringToken} from './_lib/meteringToken.js'
 
 
 export const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions'
@@ -350,6 +351,13 @@ export default async function handler(req, context = {}) {
     await reports.report('ledger_unavailable', {reason: err.reason})
     return errorResponse('ai_unavailable', meta)
   }
+  if (!reservation.ok && reservation.reason === 'budget' && reservation.bucket === 'identity') {
+    const decision = capReachedDecision(reservation, identity)
+    if (decision.action !== 'refuse') {
+      // No other action exists yet (see capReachedDecision).
+      throw new Error(`ai-chat: unknown cap decision ${decision.action}`)
+    }
+  }
   if (!reservation.ok) {
     if (reservation.reason === 'budget') {
       // When the bucket that refused admits again, or a later bucket the
@@ -537,11 +545,11 @@ async function readRequestBody(req) {
  * default) keeps that hold small. At 64 KiB, on the default chain's ceiling
  * price (0.35 / 0.95 USD per million tokens) with the 1.1 margin:
  *   input  65,536 bytes + ~1.8 KB server system message + 1,024 base
- *          + 16 per message + 64 per tool  ≈ 68.4k tokens × 0.35 ≈ $0.0240
- *   output 2,048 (anonymous) × 0.95 ≈ $0.0019, or 4,096 (free) ≈ $0.0039
- *   × 1.1 ≈ $0.028 anonymous, $0.031 free for a one-message body; the
- *   message and tool allowances add up to about $0.003 more at their caps.
- * So a signed-out bucket can end a day at most about $0.03 past its limit
+ *          + 16 per message + 64 per tool  ≈ 68.4k tokens × 0.35 ≈ $0.XXXX
+ *   output 2,048 (anonymous) × 0.95 ≈ $0.XXXX, or 4,096 (free) ≈ $0.XXXX
+ *   × 1.1 ≈ $0.XXX anonymous, $0.XXX free for a one-message body; the
+ *   message and tool allowances add up to about $0.XXX more at their caps.
+ * So a signed-out bucket can end a day at most about $0.XX past its limit
  * (`_tests/ai-chat.test.js` pins the figure). Pro keeps MAX_BODY_BYTES: its
  * budget is strict.
  *
@@ -776,7 +784,10 @@ function clearSentryUser() {
  */
 async function identify(req, context, tokenSecret, nowMs) {
   const bearer = (req.headers.get('authorization') || '').match(/^Bearer\s+(.+)$/i)?.[1]?.trim()
-  if (bearer && !looksLikeAnonToken(bearer)) {
+  // Either anonymous shape stays off Auth0: the shared metering token, and
+  // the relay's own retired `ba1` one, which an older page may still send
+  // (it is answered with a metering token, below).
+  if (bearer && !looksLikeAnonToken(bearer) && !bearer.startsWith(`${METERING_TOKEN_PREFIX}.`)) {
     const signedIn = await identifySignedIn(bearer, nowMs)
     if (signedIn) {
       return signedIn
@@ -784,22 +795,30 @@ async function identify(req, context, tokenSecret, nowMs) {
     // `null`: Auth0 isn't configured on this deploy (verifyAuth0Bearer's dev
     // bypass), so there is no one to be signed in as. Serve anonymous.
   }
-  const verified = bearer ? verifyAnonToken(tokenSecret, bearer, nowMs) : {ok: false}
+  // Keyed to the shared anonymous metering token (owner, 2026-11-25;
+  // design/new/quotas.md §"The metering token"): one 30-day period, never
+  // renewed, the same token the remote-load meter counts by, so the
+  // anonymous AI budget's period is the token's. Missing, malformed, forged,
+  // expired or a retired `ba1`: mint, don't refuse (_lib/anonToken.js says why).
+  const meterSecret = meteringTokenSecret(process.env) ?? tokenSecret
+  const verified = bearer ? verifyMeteringToken(meterSecret, bearer, nowMs) : {ok: false}
   let anonId
   let mintedToken
+  let period
   if (verified.ok) {
     anonId = verified.anonId
+    period = verified.period
   } else {
-    // Missing, malformed, forged or expired: mint, don't refuse
-    // (_lib/aiToken.js says why).
-    const minted = mintAnonToken(tokenSecret, nowMs)
+    const minted = mintMeteringToken(meterSecret, nowMs)
     anonId = minted.anonId
     mintedToken = minted.token
+    period = minted.period
   }
   const ip = context.ip || req.headers.get('x-nf-client-connection-ip')
   return {
     tier: AI_TIERS.ANONYMOUS,
     ledgerKey: `ai/anonymous/${anonId}`,
+    period,
     ipHash: ip ? hashIp(tokenSecret, ip, utcDay(nowMs)) : null,
     mintedToken,
   }
@@ -856,7 +875,7 @@ async function identifySignedIn(bearer, nowMs) {
  * @param {object} identity
  * @param {object} limits aiCreditLimits(env)
  * @param {number} nowMs
- * @param {boolean} free whether this is the free-models path (no breaker: it costs $0)
+ * @param {boolean} free whether this is the free-models path (no breaker: it costs $X)
  * @return {Array<object>} aiLedger Buckets
  */
 function bucketsFor(identity, limits, nowMs, free) {
@@ -868,15 +887,19 @@ function bucketsFor(identity, limits, nowMs, free) {
   //  - anonymous and free identity, and the anonymous IP bucket: soft. Their
   //    budgets are set near one request's worst case, which is 100x+ a real
   //    turn's cost, so the strict rule refused after a few turns; the
-  //    overshoot is one hold, which maxBodyBytesFor keeps to ~$0.03.
+  //    overshoot is one hold, which maxBodyBytesFor keeps to ~$0.XX.
   //  - Pro identity: strict. Its budget is large next to one hold, so the
   //    strict rule costs it a few cents of headroom at the very end, and it
   //    has no body cap to bound an overshoot.
   //  - the breakers: strict. They are the hard dollar safety across all
   //    users of a tier; past one, requests overflow to the free models.
   const soft = tier !== AI_TIERS.PRO
+  // Nested caps, all enforced (src/quota/aiCredits.js AI_CAP_WINDOW_DAYS): a
+  // day, 7 days and the metering period. Anonymous: the token's period;
+  // signed in: the account's own, kept in its ledger record ('self').
   const buckets = [{name: 'identity', key: identity.ledgerKey, limit: limits.budgets[tier],
-    windowDays: AI_WINDOW_DAYS[tier], soft, ...caps}]
+    windowDays: AI_WINDOW_DAYS[tier], windows: limits.windows[tier],
+    period: identity.period ?? 'self', soft, ...caps}]
   if (identity.ipHash) {
     buckets.push({name: 'ip', key: `ai/ip/${identity.ipHash}`, limit: limits.ipBudget, windowDays: 1, soft: true,
       ...caps})
@@ -886,6 +909,27 @@ function bucketsFor(identity, limits, nowMs, free) {
       windowDays: 1})
   }
   return buckets
+}
+
+
+/**
+ * THE ONE place a turn's "cap reached" is decided: an identity whose day,
+ * 7-day or period cap refuses this turn's hold. Today the answer is always
+ * `refuse` (a 402 with `resumeAt`, below). It is the seam a paid top-up
+ * (pay-as-you-go above the cap, at cost plus a configurable markup; a later billing feature,
+ * design/new/ai-workspace.md §6 "Cap reached") hooks into: answer
+ * `{action: 'top_up', ...}` here and reserve against the top-up balance
+ * instead of refusing. The breakers and the IP bucket never come here: past
+ * a breaker the turn overflows to the free models, and the IP cap is abuse
+ * control, not an allowance.
+ *
+ * @param {object} reservation reserveAll's refusal: `{bucket: 'identity', used, limit, windowDays,
+ *   resumeAt}`
+ * @param {object} identity `{tier, ledgerKey}`
+ * @return {{action: 'refuse'}}
+ */
+export function capReachedDecision(reservation, identity) {
+  return {action: 'refuse', tier: identity.tier}
 }
 
 

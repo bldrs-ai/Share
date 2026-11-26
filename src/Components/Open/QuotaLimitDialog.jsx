@@ -12,7 +12,7 @@ import {
 } from '../../privacy/analytics'
 import {trackModelActionWhenAuthSettled} from '../../app/modelActionTracking'
 import {aiCreditsCopy} from '../../quota/aiCreditsCopy'
-import {LIMITS, QUOTA_FEATURES, ROLLING_WINDOW_DAYS, TIERS} from '../../quota/quota'
+import {LIMITS, QUOTA_FEATURES, SLOT_PERIOD_DAYS, TIERS} from '../../quota/quota'
 import useStore from '../../store/useStore'
 import {useMock} from '../Profile/ProfileControl'
 import {goToSubscription} from '../Profile/subscriptionNav'
@@ -138,7 +138,9 @@ export default function QuotaLimitDialog({
     signIn()
   }
 
-  const limitText = `${LIMITS[TIERS.FREE]} private models in any rolling ${ROLLING_WINDOW_DAYS}-day window`
+  // A per-user period (quota/period.js), not a calendar month: it began at
+  // the user's first private model, and every slot comes back at its end.
+  const limitText = `${LIMITS[TIERS.FREE]} private models per ${SLOT_PERIOD_DAYS}-day period`
   // The slots this dialog guards are the ones exports use too
   // (export/exportSlots.js), so it says so: a user here may also have just
   // been told no to an export, and the models already in their slots stay
@@ -168,8 +170,9 @@ export default function QuotaLimitDialog({
       <DialogContent>
         <Typography variant='body2' sx={{mb: 2}}>
           You&apos;ve reached your limit of {limitText}. The models you
-          already have open in that window stay yours: unlimited open, share
-          and export.
+          already have open this period stay yours: unlimited open, share
+          and export. Your slots all come back when the period ends, {SLOT_PERIOD_DAYS} days
+          after your first private model.
           {' '}<Link href='/share/quotas'>What counts?</Link>
         </Typography>
         <Stack divider={<Divider/>} spacing={2}>

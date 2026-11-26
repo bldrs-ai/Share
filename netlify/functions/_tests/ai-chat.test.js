@@ -15,6 +15,7 @@
 import axios from 'axios'
 import * as Sentry from '@sentry/serverless'
 import handler, {
+  capReachedDecision,
   MAX_BODY_BYTES,
   maxBodyBytesFor,
   MAX_MESSAGES,
@@ -45,7 +46,9 @@ import {createRegistry} from '../../../src/assist/registry'
 import {hostedTransport} from '../../../src/assist/transport'
 import {SCRIPT, scriptedReply, sseStream} from '../../../src/assist/openrouterSse.fixture'
 import {resetManagementApiTokenCache} from '../_lib/auth0.js'
-import {hashIp, mintAnonToken} from '../_lib/aiToken.js'
+import {hashIp} from '../_lib/aiToken.js'
+import {mintMeteringToken as mintAnonToken, verifyMeteringToken} from '../_lib/meteringToken.js'
+import {mintAnonToken as mintRetiredAiToken} from '../_lib/aiToken.js'
 import {utcDay} from '../_lib/aiLedger.js'
 import {createFakeBlobs, storedRecord} from './fakeBlobs.js'
 import {readFileSync} from 'fs'
@@ -91,8 +94,20 @@ jest.mock('@sentry/serverless', () => {
 const SECRET = 'test-token-secret'
 const OPENROUTER_KEY = 'sk-or-server-key'
 const IP = '203.0.113.9'
+// Synthetic budgets for the request and ledger fixtures below.
+const TEST_ANONYMOUS_DAILY_USD = '0.019'
+const TEST_ANONYMOUS_DAILY_MICRO_USD = 19000
+const TEST_FREE_BUDGET_USD = '0.52'
+const TEST_PRO_BUDGET_USD = '5.2'
+const TEST_IP_BUDGET_USD = '0.125'
+const TEST_IP_BUDGET_MICRO_USD = 125000
+const TEST_NESTED_DAILY_USD = '0.012'
+const TEST_NESTED_DAILY_MICRO_USD = 12000
 const ENV = {OPENROUTER_API_KEY: OPENROUTER_KEY, AI_TOKEN_SECRET: SECRET,
-  AI_BREAKER_ANONYMOUS_DAILY_USD: '5', AI_BREAKER_FREE_DAILY_USD: '5'}
+  AI_BREAKER_ANONYMOUS_DAILY_USD: '5', AI_BREAKER_FREE_DAILY_USD: '5', AI_BUDGET_IP_USD: TEST_IP_BUDGET_USD,
+  AI_BUDGET_ANONYMOUS_DAILY_USD: TEST_ANONYMOUS_DAILY_USD,
+  AI_BUDGET_FREE_DAILY_USD: TEST_FREE_BUDGET_USD, AI_BUDGET_FREE_7D_USD: TEST_FREE_BUDGET_USD, AI_BUDGET_FREE_30D_USD: TEST_FREE_BUDGET_USD,
+  AI_BUDGET_PRO_DAILY_USD: TEST_PRO_BUDGET_USD, AI_BUDGET_PRO_7D_USD: TEST_PRO_BUDGET_USD, AI_BUDGET_PRO_30D_USD: TEST_PRO_BUDGET_USD}
 const TODAY = utcDay(Date.now())
 const DAY_MS = 86400000
 /** The next UTC midnight: when a one-day bucket's spend leaves its window. */
@@ -393,9 +408,9 @@ describe('ai-chat', () => {
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toMatch(/^text\/event-stream/)
     expect(res.headers.get('x-bldrs-ai-tier')).toBe('anonymous')
-    expect(res.headers.get('x-bldrs-ai-token')).toMatch(/^ba1\./)
+    expect(res.headers.get('x-bldrs-ai-token')).toMatch(/^bm1\./)
     expect(res.headers.get('x-bldrs-ai-used')).toBe('0')
-    expect(res.headers.get('x-bldrs-ai-limit')).toBe('20000')
+    expect(res.headers.get('x-bldrs-ai-limit')).toBe(String(TEST_ANONYMOUS_DAILY_MICRO_USD))
     // Byte for byte: the relay watches the stream, it doesn't rewrite it.
     expect(await res.text()).toBe(SSE_TEXT.join(''))
   })
@@ -483,13 +498,13 @@ describe('ai-chat', () => {
 
   it('an exhausted anonymous budget is a 402 with the tier and when it resumes, and calls no upstream', async () => {
     const {token, anonId} = mintAnonToken(SECRET)
-    await fake.store.set(`ai/anonymous/${anonId}`, JSON.stringify({v: 1, days: {[TODAY]: {spent: 20000, free: 0}},
+    await fake.store.set(`ai/anonymous/${anonId}`, JSON.stringify({v: 1, days: {[TODAY]: {spent: TEST_ANONYMOUS_DAILY_MICRO_USD, free: 0}},
       holds: {}, estimates: {}}))
     const res = await call({bearer: token})
     expect(res.status).toBe(402)
     expect(await res.json()).toEqual({error: {code: 'ai_credits_exhausted', message: expect.any(String)},
       tier: 'anonymous', resumeAt: TOMORROW_ISO})
-    expect(res.headers.get('x-bldrs-ai-used')).toBe('20000')
+    expect(res.headers.get('x-bldrs-ai-used')).toBe(String(TEST_ANONYMOUS_DAILY_MICRO_USD))
     expect(res.headers.get('x-bldrs-ai-resume-at')).toBe(TOMORROW_ISO)
     expect(fetchSpy).not.toHaveBeenCalled()
     expect(Sentry.captureMessage).not.toHaveBeenCalled()
@@ -497,9 +512,9 @@ describe('ai-chat', () => {
 
   it('the IP bucket catches token churn: a fresh token from a spent IP is refused, with the IP\'s resumeAt', async () => {
     await fake.store.set(`ai/ip/${hashIp(SECRET, IP, TODAY)}`, JSON.stringify({v: 1,
-      days: {[TODAY]: {spent: 100000, free: 0}}, holds: {}, estimates: {}}))
+      days: {[TODAY]: {spent: TEST_IP_BUDGET_MICRO_USD, free: 0}}, holds: {}, estimates: {}}))
     const res = await call()
-    expect(res.headers.get('x-bldrs-ai-token')).toMatch(/^ba1\./)
+    expect(res.headers.get('x-bldrs-ai-token')).toMatch(/^bm1\./)
     expect(res.status).toBe(402)
     expect(await res.json()).toMatchObject({error: {code: 'ai_credits_exhausted'}, tier: 'anonymous',
       resumeAt: TOMORROW_ISO})
@@ -509,13 +524,60 @@ describe('ai-chat', () => {
     expect(storedRecord(fake, anonKeyOf(fake)).holds).toEqual({})
   })
 
+  describe('nested caps on the metering token', () => {
+    const configureNestedCaps = () => {
+      process.env.AI_BUDGET_ANONYMOUS_DAILY_USD = TEST_NESTED_DAILY_USD
+      delete process.env.AI_BUDGET_ANONYMOUS_7D_USD
+      delete process.env.AI_BUDGET_ANONYMOUS_30D_USD
+    }
+
+    it('reports the configured anonymous day cap as the window nearest its limit', async () => {
+      configureNestedCaps()
+      const res = await call()
+      await res.text()
+      expect(res.headers.get('x-bldrs-ai-limit')).toBe(String(TEST_NESTED_DAILY_MICRO_USD))
+      expect(verifyMeteringToken(SECRET, res.headers.get('x-bldrs-ai-token')).ok).toBe(true)
+    })
+
+    it('refuses on the 7-day cap with today unspent, and says when the week frees enough', async () => {
+      configureNestedCaps()
+      const {token, anonId, period} = mintAnonToken(SECRET, Date.now() - (8 * DAY_MS))
+      const todayStart = Date.parse(`${TODAY}T00:00:00.000Z`)
+      const days = {}
+      for (let i = 1; i <= 7; i++) {
+        days[utcDay(todayStart - (i * DAY_MS))] = {spent: 15000, free: 0}
+      }
+      await fake.store.set(`ai/anonymous/${anonId}`, JSON.stringify({v: 1, days, holds: {}, estimates: {}}))
+      expect(period.start).toBeLessThan(todayStart)
+      const res = await call({bearer: token})
+      expect(res.status).toBe(402)
+      const {resumeAt} = await res.json()
+      // Six days of spend exceed the weekly cap. At tomorrow’s UTC midnight
+      // the oldest day leaves the window and spend is under the cap.
+      expect(Date.parse(resumeAt)).toBe(todayStart + DAY_MS)
+      expect(fetchSpy).not.toHaveBeenCalled()
+    })
+
+    it('answers a retired relay token with a metering one, without asking Auth0', async () => {
+      const res = await call({bearer: mintRetiredAiToken(SECRET).token})
+      await res.text()
+      expect(res.status).toBe(200)
+      expect(res.headers.get('x-bldrs-ai-token')).toMatch(/^bm1\./)
+      expect(axios.get).not.toHaveBeenCalled()
+    })
+
+    it('decides a reached cap in one place, which refuses today (the top-up seam)', () => {
+      expect(capReachedDecision({bucket: 'identity'}, {tier: 'free'})).toEqual({action: 'refuse', tier: 'free'})
+    })
+  })
+
   describe('soft budgets (anonymous and free identity, IP) and strict ones (breakers, Pro)', () => {
     it('admits just under the budget, settles past it unreported, then refuses with resumeAt', async () => {
       const {token, anonId} = mintAnonToken(SECRET)
       const key = `ai/anonymous/${anonId}`
-      // 10 micro-USD left of 20,000: far less than this request's worst-case
+      // 10 micro-USD left: far less than this request's worst-case
       // hold, which the strict rule needed to fit.
-      await fake.store.set(key, JSON.stringify({v: 1, days: {[TODAY]: {spent: 19990, free: 0}}, holds: {},
+      await fake.store.set(key, JSON.stringify({v: 1, days: {[TODAY]: {spent: 18990, free: 0}}, holds: {},
         estimates: {}}))
       const res = await call({bearer: token})
       expect(res.status).toBe(200)
@@ -523,12 +585,12 @@ describe('ai-chat', () => {
       await res.text()
       // Settled at usage.cost, past the budget: the designed overshoot, and
       // not "exceeded its reservation" (143 is well within its own hold).
-      expect(storedRecord(fake, key).days[TODAY].spent).toBe(19990 + 143)
+      expect(storedRecord(fake, key).days[TODAY].spent).toBe(18990 + 143)
       expect(Sentry.captureMessage).not.toHaveBeenCalled()
       const next = await call({bearer: token})
       expect(next.status).toBe(402)
       expect(await next.json()).toMatchObject({error: {code: 'ai_credits_exhausted'}, resumeAt: TOMORROW_ISO})
-      expect(next.headers.get('x-bldrs-ai-used')).toBe(String(19990 + 143))
+      expect(next.headers.get('x-bldrs-ai-used')).toBe(String(18990 + 143))
       expect(fetchSpy).toHaveBeenCalledTimes(1)
     })
 
@@ -543,7 +605,7 @@ describe('ai-chat', () => {
       expect(upstreamBody().model).toMatch(/:free$/)
     })
 
-    it('a free user\'s 30-day budget is soft and resumes when its oldest spend leaves the window', async () => {
+    it('a free user\'s period budget is soft and resumes when the period ends (not as days roll off)', async () => {
       Object.assign(process.env, {AUTH0_DOMAIN: 'auth0.test', AUTH0_CLIENT_ID: 'id', AUTH0_CLIENT_SECRET: 'secret'})
       jest.mocked(axios.post).mockResolvedValue({data: {access_token: 'mgmt', expires_in: 86400}})
       jest.mocked(axios.get).mockImplementation((url) => Promise.resolve(url.endsWith('/userinfo') ?
@@ -551,15 +613,18 @@ describe('ai-chat', () => {
       const todayStart = Date.parse(`${TODAY}T00:00:00.000Z`)
       const tenDaysAgo = utcDay(todayStart - (10 * DAY_MS))
       const key = 'ai/user/github%7Csoft'
-      await fake.store.set(key, JSON.stringify({v: 1, days: {[tenDaysAgo]: {spent: 400000, free: 0},
-        [TODAY]: {spent: 99999, free: 0}}, holds: {}, estimates: {}}))
+      // The account's period began ten days ago, at its first metered turn.
+      await fake.store.set(key, JSON.stringify({v: 1, days: {[tenDaysAgo]: {spent: 420000, free: 0},
+        [TODAY]: {spent: 99999, free: 0}}, holds: {}, estimates: {}, periodStart: Date.parse(`${tenDaysAgo}T08:00:00.000Z`)}))
       const admitted = await call({bearer: 'auth0-access-token-soft'})
       expect(admitted.status).toBe(200)
       await admitted.text()
       const refused = await call({bearer: 'auth0-access-token-soft'})
       expect(refused.status).toBe(402)
-      // 500,142 used; the day ten days back leaving in 20 days takes it to 100,142.
-      expect((await refused.json()).resumeAt).toBe(new Date(todayStart + (20 * DAY_MS)).toISOString())
+      // The period is exhausted; it all comes back when the period ends,
+      // 30 days after its start (src/quota/period.js), not as days roll off.
+      expect((await refused.json()).resumeAt)
+        .toBe(new Date(Date.parse(`${tenDaysAgo}T08:00:00.000Z`) + (30 * DAY_MS)).toISOString())
     })
 
     it('Pro stays strict: refused while still under its limit when the hold doesn\'t fit', async () => {
@@ -570,9 +635,11 @@ describe('ai-chat', () => {
       const todayStart = Date.parse(`${TODAY}T00:00:00.000Z`)
       const fiveDaysAgo = utcDay(todayStart - (5 * DAY_MS))
       await fake.store.set('ai/user/github%7Cstrict', JSON.stringify({v: 1,
-        days: {[fiveDaysAgo]: {spent: 4999000, free: 0}}, holds: {}, estimates: {}}))
+        days: {[fiveDaysAgo]: {spent: 5199000, free: 0}}, holds: {}, estimates: {},
+        periodStart: Date.parse(`${fiveDaysAgo}T00:00:00.000Z`)}))
       const res = await call({bearer: 'auth0-access-token-strict', body: chatBody({model: 'anthropic/claude-haiku-4.5'})})
       expect(res.status).toBe(402)
+      // The period began five days ago: 25 days to its end.
       expect(await res.json()).toMatchObject({tier: 'pro', resumeAt: new Date(todayStart + (25 * DAY_MS)).toISOString()})
       expect(fetchSpy).not.toHaveBeenCalled()
     })
@@ -774,7 +841,7 @@ describe('ai-chat', () => {
     fetchSpy.mockImplementation(() => Promise.resolve(sseResponse([SSE_TEXT[0]])))
     await (await call()).text()
     const record = storedRecord(fake, anonKeyOf(fake))
-    // The reservation: at least 2048 output tokens at the chain's ceiling ($0.95/M).
+    // The reservation: at least 2048 output tokens at the chain's ceiling (the configured ceiling price).
     expect(record.days[TODAY].spent).toBeGreaterThan(MAX_OUTPUT_TOKENS.anonymous * 0.95)
     expect(Object.values(record.estimates)).toEqual([{micro: record.days[TODAY].spent, day: TODAY, generation: 'gen-1'}])
   })
@@ -1127,7 +1194,7 @@ describe('ai-chat', () => {
       const res = await call({bearer: 'auth0-access-token-pro', body: chatBody({model: 'anthropic/claude-haiku-4.5'})})
       expect(res.status).toBe(200)
       expect(res.headers.get('x-bldrs-ai-tier')).toBe('pro')
-      expect(res.headers.get('x-bldrs-ai-limit')).toBe('5000000')
+      expect(res.headers.get('x-bldrs-ai-limit')).toBe('5200000')
       expect(res.headers.get('x-bldrs-ai-token')).toBeNull()
       await res.text()
       expect(upstreamBody().max_tokens).toBe(MAX_OUTPUT_TOKENS.pro)
@@ -1141,7 +1208,7 @@ describe('ai-chat', () => {
       expect(refused.status).toBe(400)
       expect((await refused.json()).tier).toBe('free')
       const res = await call({bearer: 'auth0-access-token-free'})
-      expect(res.headers.get('x-bldrs-ai-limit')).toBe('500000')
+      expect(res.headers.get('x-bldrs-ai-limit')).toBe('520000')
       await res.text()
       expect(storedRecord(fake, `ai/breaker/free/${TODAY}`).days[TODAY].spent).toBe(143)
     })

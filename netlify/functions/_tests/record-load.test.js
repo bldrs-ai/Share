@@ -211,19 +211,18 @@ describe('record-load function', () => {
     expect(axios.patch).not.toHaveBeenCalled()
   })
 
-  // The window is 7 days (owner, 2026-10-26; was 30). A row older than that
-  // is pruned before counting — which is also what happens to a ledger
-  // written under the 30-day window at rollout — and the pruned list is what
-  // gets written back with the new load.
-  // Exclusive edge, the shared limits.js#loadsInsideRollingWindow: a row
-  // exactly 7 days old has rolled off.
-  it('does not count a private model opened exactly 7 days ago', async () => {
+  // The period is a per-user 30 days (owner, 2026-11-25; a rolling 7 before),
+  // chained from the rows' own loadedAt (src/quota/period.js). A row from an
+  // ended period is pruned before counting, and the pruned list is what gets
+  // written back with the new load. Exclusive edge: the period a row exactly
+  // 30 days old started has ended.
+  it('does not count a private model whose period ended: opened exactly 30 days ago', async () => {
     const now = Date.parse('2026-10-26T12:00:00.000Z')
     jest.spyOn(Date, 'now').mockReturnValue(now)
     try {
       const loads = [
         {key: '/share/v/g/recent', loadedAt: new Date(now).toISOString()},
-        {key: '/share/v/g/exactly-seven', loadedAt: new Date(now - (7 * 24 * 60 * 60 * 1000)).toISOString()},
+        {key: '/share/v/g/exactly-thirty', loadedAt: new Date(now - (30 * 24 * 60 * 60 * 1000)).toISOString()},
       ]
       mockAuth0({usageQuota: {loads}})
 
@@ -236,10 +235,23 @@ describe('record-load function', () => {
     }
   })
 
-  it('does not count a private model opened 8 days ago', async () => {
+  // Not a rolling window any more: a model opened 8 days ago still holds its
+  // slot while its period runs.
+  it('still counts a private model opened 8 days ago: its period runs to day 30', async () => {
+    mockAuth0({usageQuota: {loads: [{key: '/share/v/g/recent', loadedAt: daysAgo(0)},
+      {key: '/share/v/g/eight-days', loadedAt: daysAgo(8)}]}})
+
+    const res = await handler(getEvent({key: '/share/v/g/third-model'}))
+
+    expect(res.statusCode).toBe(403)
+    expect(JSON.parse(res.body)).toMatchObject({allowed: false, used: 2, limit: 2})
+    expect(axios.patch).not.toHaveBeenCalled()
+  })
+
+  it('does not count a private model opened 31 days ago, and drops it from the write', async () => {
     const loads = [
       {key: '/share/v/g/recent', loadedAt: daysAgo(0)},
-      {key: '/share/v/g/eight-days', loadedAt: daysAgo(8)},
+      {key: '/share/v/g/eight-days', loadedAt: daysAgo(31)},
     ]
     mockAuth0({usageQuota: {loads}})
 

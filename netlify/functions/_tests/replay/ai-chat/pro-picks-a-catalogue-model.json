@@ -208,7 +208,7 @@
     "bodyIncludes": "There are 7 proxies.",
     "headers": {
       "x-bldrs-ai-tier": "pro",
-      "x-bldrs-ai-limit": "5000000"
+      "x-bldrs-ai-limit": "5200000"
     }
   }
 }

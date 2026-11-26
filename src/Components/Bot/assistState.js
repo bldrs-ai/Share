@@ -1,6 +1,7 @@
 import {v4 as uuid} from 'uuid'
 import {createMemoryConversationStore, createSessionKeyStore} from '../../assist'
 import {AI_TIERS} from '../../quota/aiCredits'
+import {METER_TOKEN_KEY} from '../../quota/meterToken'
 import {assistModelChoice, hostedModelFor} from './assistModelChoice'
 
 
@@ -195,8 +196,13 @@ export const assistInstance = {current: null}
 export const assistAuth = {current: {isAuthenticated: false, getAccessTokenSilently: null, isPro: false}}
 
 
-/** localStorage key of the hosted relay's anonymous token (netlify/functions/_lib/aiToken.js). */
-export const ANON_TOKEN_KEY = 'bldrs.assist.anonToken'
+/**
+ * localStorage key of the relay's anonymous token: since 2026-11-25 the
+ * shared anonymous metering token (quota/meterToken.js), so the visitor's AI
+ * budget and remote loads are one identity and one 30-day period. The relay
+ * answers a retired `bldrs.assist.anonToken` (`ba1`) token with a new one.
+ */
+export const ANON_TOKEN_KEY = METER_TOKEN_KEY
 
 
 /**

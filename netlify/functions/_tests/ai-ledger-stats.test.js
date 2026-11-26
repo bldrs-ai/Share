@@ -91,7 +91,7 @@ describe('ai-ledger-stats', () => {
     const body = JSON.parse(text)
     expect(body.limits.breakers.anonymous).toBe(400000)
     expect(body.limits.breakersConfigured).toEqual({anonymous: true, free: false})
-    expect(body.limits.ipBudget).toBe(100000) // malformed reads as unset
+    expect(body.limits.ipBudget).toBe(0) // malformed reads as unset
     expect(body.envSet.AI_BUDGET_IP_USD).toBe(true) // …but it is set, so the dashboard can say so
     expect(body.envSet.AI_BREAKER_FREE_DAILY_USD).toBe(false)
     expect(body.secrets).toEqual({OPENROUTER_API_KEY: true, AI_TOKEN_SECRET: false})
@@ -134,7 +134,7 @@ describe('ai-ledger-stats', () => {
     const res = await handler(request({authorization: `Bearer ${SECRET}`}))
     const body = await res.json()
     expect(body.breakers).toEqual({error: 'ledger_unavailable'})
-    expect(body.limits.budgets.anonymous).toBe(20000)
+    expect(body.limits.budgets.anonymous).toBe(0)
   })
 
   it('counts a request settled after midnight in the blob it reserved against (Codex on #2254)', () => {

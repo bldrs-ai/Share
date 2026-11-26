@@ -1,14 +1,14 @@
 import {isFeatureEnabled} from '../FeatureFlags'
 import {viewRouteKind} from '../routes/localOnly'
-import {DRIVE_ROUTE_KIND, LIMITS, TIERS, isMeteredLocalRouteKind, loadsInsideRollingWindow} from './limits'
+import {DRIVE_ROUTE_KIND, LIMITS, TIERS, isMeteredLocalRouteKind, loadsInCurrentPeriod, slotPeriod} from './limits'
 import {AI_CREDITS_FEATURE} from './aiCredits'
 import {isProSubscriptionStatus} from './proStatus'
 
 
-// The tiers, their limits and the window are defined once, in limits.js,
+// The tiers, their limits and the period are defined once, in limits.js,
 // which record-load and the marketing pricing plans import too. Re-exported here
 // so the client keeps one import site.
-export {LIMITS, ROLLING_WINDOW_DAYS, TIERS} from './limits'
+export {LIMITS, SLOT_PERIOD_DAYS, TIERS} from './limits'
 
 /**
  * What a quota limits, as reported in the `feature` param of the
@@ -156,8 +156,8 @@ export function isQuotablePath(key, meterLocalFiles = isLocalFileMeteringEnabled
 
 
 /**
- * Drop loads older than the rolling window, by the exclusive-edge rule in
- * limits.js#loadsInsideRollingWindow, which `record-load` and the MSW mock
+ * Drop loads from ended metering periods, by the chaining rule in
+ * limits.js#loadsInCurrentPeriod, which `record-load` and the MSW mock
  * share.
  *
  * @param {Array<{key:string,loadedAt:string}>} loads
@@ -165,7 +165,21 @@ export function isQuotablePath(key, meterLocalFiles = isLocalFileMeteringEnabled
  * @return {Array<{key:string,loadedAt:string}>}
  */
 export function pruneLoads(loads, now = Date.now()) {
-  return loadsInsideRollingWindow(loads, now)
+  return loadsInCurrentPeriod(loads, now)
+}
+
+
+/**
+ * When the current slot period ends and every slot comes back, or null when
+ * no period is running (no slot is held).
+ *
+ * @param {Array<{key:string,loadedAt:string}>} loads
+ * @param {number} [now] millis since epoch
+ * @return {?Date}
+ */
+export function slotPeriodEnd(loads, now = Date.now()) {
+  const {period} = slotPeriod(loads, now)
+  return period ? new Date(period.end) : null
 }
 
 

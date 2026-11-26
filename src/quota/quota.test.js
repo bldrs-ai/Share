@@ -1,7 +1,7 @@
 import {
   TIERS,
   LIMITS,
-  ROLLING_WINDOW_DAYS,
+  SLOT_PERIOD_DAYS,
   isLocalFileMeteringEnabled,
   isDrivePath,
   isLocallyQuotable,
@@ -23,12 +23,12 @@ const HOURS_PER_DAY = 24
 const MILLIS_PER_SEC = 1000
 const DAY_MS = HOURS_PER_DAY * MINUTES_PER_HOUR * SECONDS_PER_MIN * MILLIS_PER_SEC
 
-// The free tier's window is 7 days (owner, 2026-10-26; was 30). Literal
-// days rather than ROLLING_WINDOW_DAYS-relative, so a change to the window
-// is a failing test here and not just a test that follows it.
-const WINDOW_DAYS = 7
-const DAYS_OUTSIDE_WINDOW = 8
-const DAYS_INSIDE_WINDOW = 6
+// The free tier's period is a per-user 30 days (owner, 2026-11-25; a rolling
+// 7 before). Literal days rather than SLOT_PERIOD_DAYS-relative, so a change
+// to the period is a failing test here and not just a test that follows it.
+const WINDOW_DAYS = 30
+const DAYS_OUTSIDE_WINDOW = 31
+const DAYS_INSIDE_WINDOW = 29
 const DAYS_NEAR_BOUNDARY = 0.01
 const DAYS_LONG_PAST = 60
 
@@ -186,15 +186,23 @@ describe('pruneLoads', () => {
   const NOW = Date.parse('2026-05-01T00:00:00.000Z')
   const dayBack = (n) => isoDaysBefore(NOW, n)
 
-  it('drops free-tier loads older than 7 days', () => {
-    expect(ROLLING_WINDOW_DAYS).toBe(WINDOW_DAYS)
+  it('drops loads from an ended period, and keeps the running one\'s', () => {
+    expect(SLOT_PERIOD_DAYS).toBe(WINDOW_DAYS)
     const loads = [
-      {key: 'a', loadedAt: dayBack(DAYS_OUTSIDE_WINDOW)}, // out: 8 days ago
-      {key: 'b', loadedAt: dayBack(DAYS_INSIDE_WINDOW)}, // in: 6 days ago
-      {key: 'c', loadedAt: dayBack(1)}, // in
+      {key: 'a', loadedAt: dayBack(DAYS_LONG_PAST)}, // its period ended long ago
+      {key: 'b', loadedAt: dayBack(DAYS_INSIDE_WINDOW)}, // started the running period
+      {key: 'c', loadedAt: dayBack(1)}, // in it
     ]
     const out = pruneLoads(loads, NOW)
     expect(out.map((l) => l.key)).toEqual(['b', 'c'])
+  })
+
+  // Not a rolling window (as it was until 2026-11-25): a load 8 days old
+  // still counts while its period runs, and all of a period's loads leave
+  // together.
+  it('keeps an 8-day-old load the old 7-day window would have dropped', () => {
+    const loads = [{key: 'a', loadedAt: dayBack(8)}, {key: 'b', loadedAt: dayBack(1)}]
+    expect(pruneLoads(loads, NOW).map((l) => l.key)).toEqual(['a', 'b'])
   })
 
   it('keeps loads just inside the boundary', () => {
@@ -202,15 +210,14 @@ describe('pruneLoads', () => {
     expect(pruneLoads(loads, NOW)).toHaveLength(1)
   })
 
-  // The edge itself, to the millisecond. Exclusive (`now < loadedAt +
-  // window`), the same comparison free exports and engagement tracking use
-  // (agent review on Share#1974): a load exactly 7 days old has rolled off,
-  // one a millisecond younger still counts.
-  it('drops a load exactly 7 days old, and counts one a millisecond younger', () => {
+  // The edge itself, to the millisecond. Exclusive (`now < start + period`),
+  // the same comparison free exports use: the period a load exactly 30 days
+  // old started has ended, one a millisecond younger's has not.
+  it('drops a load exactly 30 days old, and counts one a millisecond younger', () => {
     const exactly = new Date(NOW - (WINDOW_DAYS * DAY_MS)).toISOString()
     const justInside = new Date(NOW - (WINDOW_DAYS * DAY_MS) + 1).toISOString()
-    const loads = [{key: 'exactly', loadedAt: exactly}, {key: 'inside', loadedAt: justInside}]
-    expect(pruneLoads(loads, NOW).map((l) => l.key)).toEqual(['inside'])
+    expect(pruneLoads([{key: 'exactly', loadedAt: exactly}], NOW)).toEqual([])
+    expect(pruneLoads([{key: 'inside', loadedAt: justInside}], NOW).map((l) => l.key)).toEqual(['inside'])
   })
 
   it('prunes whatever the tier (keeps a paid mirror bounded too)', () => {
@@ -248,7 +255,7 @@ describe('checkQuota', () => {
     expect(alreadyCounted).toBe(true)
   })
 
-  it('free tier: two distinct private models in 7 days, the 3rd is denied', () => {
+  it('free tier: two distinct private models in a period, the 3rd is denied', () => {
     expect(LIMITS[TIERS.FREE]).toBe(2)
     expect(checkQuota(makeQuota(TIERS.FREE, ['/v/g/1']), '/v/g/2').allowed).toBe(true)
     const full = makeQuota(TIERS.FREE, ['/v/g/1', '/v/g/2'])

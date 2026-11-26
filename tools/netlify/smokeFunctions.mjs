@@ -61,6 +61,7 @@ const RETRY_DELAY_MS = 5000
 // replay scenarios cover these against the source and the bundle instead.
 export const UNPROBED_FUNCTIONS = {
   'reconcile-subscriptions': 'scheduled (netlify.toml); not reachable over HTTP in production',
+  'meter-sweep': 'scheduled (netlify.toml); not reachable over HTTP in production',
 }
 
 // Each answer a probe accepts is a status AND something only the function's
@@ -131,6 +132,17 @@ export const PROBES = [
     // probe stores nothing and needs no secret.
     accept: [{status: HTTP_BAD_REQUEST, body: 'invalid_feedback'}],
     strict: [{status: HTTP_BAD_REQUEST, body: 'invalid_feedback'}],
+  },
+  {
+    name: 'meter',
+    scenario: 'meter/invalid-request',
+    method: 'POST',
+    body: {},
+    // Signed-out callers are served, so there is no "missing bearer" answer
+    // to probe: an empty body is refused before a secret is read or the
+    // ledger opened, so the probe counts nothing and mints nothing.
+    accept: [{status: HTTP_BAD_REQUEST, body: 'invalid_meter_request'}],
+    strict: [{status: HTTP_BAD_REQUEST, body: 'invalid_meter_request'}],
   },
   {
     name: 'gh-oauth-exchange',

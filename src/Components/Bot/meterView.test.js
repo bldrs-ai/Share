@@ -32,11 +32,11 @@ describe('Bot/meterView', () => {
   })
 
   it('words the window by tier, in credits and never dollars', () => {
-    expect(meterView(credits({used: A_QUARTER})).label).toBe('25% of today\'s AI credits used')
-    expect(meterView(credits({tier: 'free', used: A_QUARTER})).label).toBe('25% of your AI credits used over the last 30 days')
+    expect(meterView(credits({used: A_QUARTER})).label).toBe('25% of your free AI credits used')
+    expect(meterView(credits({tier: 'free', used: A_QUARTER})).label).toBe('25% of your free AI credits used')
     expect(meterView(credits({tier: 'pro', used: A_QUARTER, exhausted: true})).label)
-      .toBe('All of your AI credits used over the last 30 days')
-    expect(meterView(credits({exhausted: true})).label).toBe('All of today\'s AI credits used')
+      .toBe('All of your Pro AI credits used')
+    expect(meterView(credits({exhausted: true})).label).toBe('All of your free AI credits used')
     expect(meterView(credits({tier: 'free'})).label).not.toMatch(/\$/)
   })
 })

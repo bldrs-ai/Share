@@ -5,9 +5,13 @@ import {
   FREE_PRIVATE_MODEL_LIMIT,
   LIMITS,
   LOCAL_ROUTE_KINDS,
-  ROLLING_WINDOW_DAYS,
-  ROLLING_WINDOW_MS,
+  ANONYMOUS_IP_DAILY_REMOTE_LOADS,
+  ANONYMOUS_REMOTE_LOAD_LIMIT,
+  ANON_METERED_ROUTE_KINDS,
+  SLOT_PERIOD_DAYS,
   TIERS,
+  loadsInCurrentPeriod,
+  slotPeriod,
   isCountedByRouteKind,
   isMeteredLocalRouteKind,
   usageQuotaWithLoads,
@@ -22,14 +26,50 @@ describe('quota/limits', () => {
     expect([...LOCAL_ROUTE_KINDS].sort()).toEqual([LOCAL_ONLY_ROUTE, LEGACY_UPLOAD_ROUTE].sort())
   })
 
-  // The owner's tiers (Share#1966 PR, window 2026-10-26, export slots
-  // 2026-10-27): what the pricing page sells.
-  it('gives a free account 2 model slots per rolling 7 days', () => {
+  // The owner's tiers (Share#1966 PR, export slots 2026-10-27, the per-user
+  // 30-day period 2026-11-25): what the pricing page sells.
+  it('gives a free account 2 model slots per 30-day period', () => {
     expect(FREE_PRIVATE_MODEL_LIMIT).toBe(2)
     expect(LIMITS[TIERS.FREE]).toBe(FREE_PRIVATE_MODEL_LIMIT)
-    expect(ROLLING_WINDOW_DAYS).toBe(7)
-    expect(ROLLING_WINDOW_MS).toBe(7 * 24 * 60 * 60 * 1000)
+    expect(SLOT_PERIOD_DAYS).toBe(30)
     expect(LIMITS[TIERS.PAID]).toBe(Infinity)
+  })
+
+  it('gives a signed-out visitor 2 remote loads per period, from GitHub, Drive or a URL, 20 a day per network', () => {
+    expect(ANONYMOUS_REMOTE_LOAD_LIMIT).toBe(2)
+    expect([...ANON_METERED_ROUTE_KINDS].sort()).toEqual(['g', 'gh', 'u'])
+    expect(ANONYMOUS_IP_DAILY_REMOTE_LOADS).toBe(20)
+  })
+
+  describe('slot periods', () => {
+    const DAY = 86400000
+    const T0 = Date.parse('2026-11-01T00:00:00.000Z')
+    const row = (key, days) => ({key, loadedAt: new Date(T0 + (days * DAY)).toISOString()})
+
+    it('holds every slot of a period until its end, and frees them together', () => {
+      const loads = [row('a', 0), row('b', 20)]
+      // Day 29: both held (a rolling 7 days would have freed a by now).
+      expect(loadsInCurrentPeriod(loads, T0 + (29 * DAY))).toEqual(loads)
+      expect(slotPeriod(loads, T0 + (29 * DAY)).period).toEqual({start: T0, end: T0 + (30 * DAY)})
+      // Day 30 exactly: the period has ended, and both come back at once.
+      expect(loadsInCurrentPeriod(loads, T0 + (30 * DAY))).toEqual([])
+    })
+
+    it('starts the next period at the first use after the last one ended', () => {
+      const loads = [row('a', 0), row('b', 35)]
+      expect(slotPeriod(loads, T0 + (40 * DAY))).toEqual({period: {start: T0 + (35 * DAY), end: T0 + (65 * DAY)},
+        rows: [row('b', 35)]})
+    })
+
+    it('chains only well-formed rows, as export slots do', () => {
+      expect(slotPeriod([{key: 42, loadedAt: row('x', 0).loadedAt}, row('a', 20)], T0 + (21 * DAY)).period)
+        .toEqual({start: T0 + (20 * DAY), end: T0 + (50 * DAY)})
+    })
+
+    it('ignores rows it cannot read', () => {
+      expect(loadsInCurrentPeriod([{key: 'x', loadedAt: 'not a date'}, row('a', 0)], T0)).toEqual([row('a', 0)])
+      expect(loadsInCurrentPeriod(null, T0)).toEqual([])
+    })
   })
 
   // "Ultimately controlled by open slots, not export counts" (owner,
@@ -46,8 +86,8 @@ describe('quota/limits', () => {
     expect(usageQuotaWithLoads(['not', 'an', 'object'], loads)).toEqual({loads})
   })
 
-  // Signed-out users are never metered, so there is no tier for them, and no
-  // limit left behind for one (Share PR removing the anonymous tier).
+  // Signed-out users have no private-model tier (their remote loads are
+  // metered on the server's anonymous ledger instead), so none is here.
   it('has exactly the free and paid tiers, each with a limit', () => {
     expect(Object.values(TIERS).sort()).toEqual(['free', 'paid'])
     expect(Object.keys(LIMITS).sort()).toEqual(['free', 'paid'])

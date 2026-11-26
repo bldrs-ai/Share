@@ -12,19 +12,15 @@
  * Budgets are USD cost as OpenRouter reports it (`usage.cost`), stored as
  * integer micro-USD so the ledger never adds floats.
  *
- * **Where the values come from.** The per-tier budgets below are the design
- * doc's published placeholders (§6, "strawman numbers… for Pablo to set") and
- * each can be overridden by its env var, so changing one is a Netlify setting,
- * not a deploy. The global daily spend breaker *B* has NO default here: it is
- * sized against traffic and ad spend, which are business figures that live in
- * the private bizdev doc (§6 "Sizing method", roadmap §11), never in this
- * repo. Unset, it is zero, which degrades every anonymous (or signed-in free)
- * paid-model request to the free-models path (§7 D5 overflow) — fail closed
- * on money, not open.
+ * Monetary limits come from the Functions environment. Missing or malformed
+ * budgets resolve to zero so paid spend stays capped. Request-count and
+ * concurrency limits have code defaults.
  *
- * Dependency-free and imported with its `.js` extension by the functions,
- * which load under plain Node ESM (same constraint as `limits.js`).
+ * Imported with its `.js` extension by the functions, which load under
+ * plain Node ESM (same constraint as `limits.js`); its one import is the
+ * dependency-free `period.js`.
  */
+import {PERIOD_DAYS} from './period.js'
 
 
 /** AI tiers. Unlike model slots (`limits.js`), a signed-out user HAS one: the funnel top (D5). */
@@ -47,35 +43,47 @@ export const MICRO_USD_PER_USD = 1000000
 
 
 /**
- * Days each tier's budget is summed over. Anonymous is one UTC day (the anon
- * id is minted per day too, `_lib/aiToken.js`); signed-in tiers are 30-day
- * rolling per §6's table (not the 7 days of model slots: AI credits are a
- * monthly allowance in the pricing story, §6 "At the $25/mo Pro price").
+ * The nested cap windows every AI tier is held to, all enforced (owner,
+ * 2026-11-25; design/new/ai-workspace.md §6): a day, 7 days, and the
+ * user's 30-day metering period (`period.js`). Day and 7 days are rolling
+ * UTC-day sub-windows inside the period. An anonymous identity's period is
+ * its metering token's (`netlify/functions/_lib/meteringToken.js`), so the
+ * anonymous budget is keyed to the token every metered anonymous feature
+ * shares; a signed-in identity's starts at its first metered turn after the
+ * last one ended. Replaced 2026-11-25: anonymous 1 day, signed-in 30 rolling.
+ */
+export const AI_CAP_WINDOW_DAYS = Object.freeze([1, 7, PERIOD_DAYS])
+
+
+/**
+ * The longest window per tier, the period: how far back a ledger keeps
+ * days. The copy says what a refusal's window was (`aiCreditsCopy.js`).
  */
 export const AI_WINDOW_DAYS = Object.freeze({
-  [AI_TIERS.ANONYMOUS]: 1,
-  [AI_TIERS.FREE]: 30,
-  [AI_TIERS.PRO]: 30,
+  [AI_TIERS.ANONYMOUS]: PERIOD_DAYS,
+  [AI_TIERS.FREE]: PERIOD_DAYS,
+  [AI_TIERS.PRO]: PERIOD_DAYS,
 })
 
 
 /**
- * Each tunable: its env var, and its default when the var is unset (null:
- * no default, see the header). USD values are decimal strings in env
- * (`"0.02"`); counts are integers.
+ * Monetary tunables are decimal USD strings from the environment. The daily
+ * rate derives each longer cap unless its own override is set.
  */
 const TUNABLES = Object.freeze({
-  // §6 tiers table: anonymous $0.02 / 24 h, free $0.50 and Pro $5.00 / 30 days.
-  anonymousBudget: {env: 'AI_BUDGET_ANONYMOUS_USD', usd: '0.02'},
-  freeBudget: {env: 'AI_BUDGET_FREE_USD', usd: '0.50'},
-  proBudget: {env: 'AI_BUDGET_PRO_USD', usd: '5.00'},
-  // §7 D5: an IP-hash bucket catches token churn (a cleared localStorage
-  // mints a new anon id, not a new IP). Placeholder $0.10 / 24 h.
-  ipBudget: {env: 'AI_BUDGET_IP_USD', usd: '0.10'},
-  // §6: the global breakers *B*. Private values; no default (header).
-  anonymousBreaker: {env: 'AI_BREAKER_ANONYMOUS_DAILY_USD', usd: null},
-  freeBreaker: {env: 'AI_BREAKER_FREE_DAILY_USD', usd: null},
-  // §6: free models cost $0, so the dollar budget can't bound them; a daily
+  anonymousDaily: {env: 'AI_BUDGET_ANONYMOUS_DAILY_USD'},
+  anonymousWeek: {env: 'AI_BUDGET_ANONYMOUS_7D_USD'},
+  anonymousPeriod: {env: 'AI_BUDGET_ANONYMOUS_30D_USD'},
+  freeDaily: {env: 'AI_BUDGET_FREE_DAILY_USD'},
+  freeWeek: {env: 'AI_BUDGET_FREE_7D_USD'},
+  freePeriod: {env: 'AI_BUDGET_FREE_30D_USD'},
+  proDaily: {env: 'AI_BUDGET_PRO_DAILY_USD'},
+  proWeek: {env: 'AI_BUDGET_PRO_7D_USD'},
+  proPeriod: {env: 'AI_BUDGET_PRO_30D_USD'},
+  ipBudget: {env: 'AI_BUDGET_IP_USD'},
+  anonymousBreaker: {env: 'AI_BREAKER_ANONYMOUS_DAILY_USD'},
+  freeBreaker: {env: 'AI_BREAKER_FREE_DAILY_USD'},
+  // §6: free models cost $X, so the dollar budget can't bound them; a daily
   // request count per identity does, or one client drains the account-wide
   // free pool (~1,000 requests a day) for everyone. Placeholder 30.
   freeModelRequestsPerDay: {env: 'AI_FREE_MODEL_REQUESTS_PER_DAY', count: 30},
@@ -86,7 +94,7 @@ const TUNABLES = Object.freeze({
   // free caller, in bytes. Their budgets are soft (_lib/aiLedger.js: admitted
   // while under the limit), so one request's worst-case hold is how far a
   // bucket can overshoot, and the hold grows with the body: at 64 KiB it is
-  // about $0.028 anonymous, $0.031 free (ai-chat.js maxBodyBytesFor has the
+  // about $0.XXX anonymous, $0.XXX free (ai-chat.js maxBodyBytesFor has the
   // arithmetic). Pro keeps the relay's technical cap, MAX_BODY_BYTES.
   maxBodyBytesAnonymous: {env: 'AI_MAX_BODY_BYTES_ANONYMOUS', count: 65536},
   maxBodyBytesFree: {env: 'AI_MAX_BODY_BYTES_FREE', count: 65536},
@@ -94,7 +102,7 @@ const TUNABLES = Object.freeze({
 
 
 /**
- * @param {string|undefined} value a decimal USD string, e.g. '0.50'
+ * @param {string|undefined} value a decimal USD string
  * @return {number|null} integer micro-USD, or null when unset or malformed
  */
 export function usdToMicro(value) {
@@ -116,34 +124,49 @@ function parseCount(value) {
 
 
 /**
- * The limits in force, read from `env` over the defaults. A malformed env
- * value counts as unset (and so falls back to the default, or to zero for a
- * breaker): a typo in the Netlify UI must not become an unlimited budget.
+ * The limits in force. Invalid values use the same fallback as unset values.
  *
  * @param {object} env process.env, or a scenario's
  * @return {{
  *   budgets: {anonymous: number, free: number, pro: number},
+ *   windows: {anonymous: Array<{days: number, limit: number}>, free: Array<object>, pro: Array<object>},
  *   ipBudget: number,
  *   breakers: {anonymous: number, free: number},
  *   breakersConfigured: {anonymous: boolean, free: boolean},
  *   freeModelRequestsPerDay: number,
  *   concurrency: number,
  *   maxBodyBytes: {anonymous: number, free: number},
- * }} micro-USD budgets, integer counts, and byte caps (Pro has none here)
+ * }} micro-USD budgets (`budgets` is each tier's period cap, `windows` its nested caps), integer
+ *   counts, and byte caps (Pro has none here)
  */
 export function aiCreditLimits(env) {
-  const usd = (key) => {
-    const {env: name, usd: fallback} = TUNABLES[key]
-    return usdToMicro(env[name]) ?? usdToMicro(fallback ?? undefined)
-  }
+  const usd = (key) => usdToMicro(env[TUNABLES[key].env])
   const count = (key) => parseCount(env[TUNABLES[key].env]) ?? TUNABLES[key].count
+  // A tier's caps, multiplied out from its daily rate (each window's own
+  // override wins). One place to change a rate, or a window alone.
+  const tierWindows = (tier) => {
+    const daily = usd(`${tier}Daily`) ?? 0
+    const [day, week, period] = AI_CAP_WINDOW_DAYS
+    return [
+      {days: day, limit: daily},
+      {days: week, limit: usd(`${tier}Week`) ?? daily * week},
+      {days: period, limit: usd(`${tier}Period`) ?? daily * period},
+    ]
+  }
+  const windows = {
+    [AI_TIERS.ANONYMOUS]: tierWindows(AI_TIERS.ANONYMOUS),
+    [AI_TIERS.FREE]: tierWindows(AI_TIERS.FREE),
+    [AI_TIERS.PRO]: tierWindows(AI_TIERS.PRO),
+  }
+  const periodCap = (tier) => windows[tier][windows[tier].length - 1].limit
   return {
     budgets: {
-      [AI_TIERS.ANONYMOUS]: usd('anonymousBudget'),
-      [AI_TIERS.FREE]: usd('freeBudget'),
-      [AI_TIERS.PRO]: usd('proBudget'),
+      [AI_TIERS.ANONYMOUS]: periodCap(AI_TIERS.ANONYMOUS),
+      [AI_TIERS.FREE]: periodCap(AI_TIERS.FREE),
+      [AI_TIERS.PRO]: periodCap(AI_TIERS.PRO),
     },
-    ipBudget: usd('ipBudget'),
+    windows,
+    ipBudget: usd('ipBudget') ?? 0,
     breakers: {
       [AI_TIERS.ANONYMOUS]: usd('anonymousBreaker') ?? 0,
       [AI_TIERS.FREE]: usd('freeBreaker') ?? 0,

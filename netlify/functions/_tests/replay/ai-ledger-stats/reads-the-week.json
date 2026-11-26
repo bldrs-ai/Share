@@ -218,7 +218,14 @@
           "free": false
         },
         "budgets": {
-          "anonymous": 20000
+          "anonymous": 0
+        },
+        "windows": {
+          "anonymous": [
+            {"days": 1, "limit": 0},
+            {"days": 7, "limit": 0},
+            {"days": 30, "limit": 0}
+          ]
         }
       },
       "envSet": {

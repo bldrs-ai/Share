@@ -1,0 +1,26 @@
+{
+  "description": "A sample model (a GitHub route on the Samples tab) is never a metered remote load: 200 metered false, with no token minted and nothing read or written.",
+  "env": {
+    "$fixture": "env/meter.json"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/meter",
+    "headers": {
+      "content-type": "application/json",
+      "origin": "https://bldrs.ai"
+    },
+    "body": {
+      "action": "remote_load",
+      "key": "/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc"
+    }
+  },
+  "exchanges": [],
+  "expect": {
+    "statusCode": 200,
+    "json": {
+      "allowed": true,
+      "metered": false
+    }
+  }
+}

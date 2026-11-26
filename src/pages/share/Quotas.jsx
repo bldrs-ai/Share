@@ -1,7 +1,8 @@
 import React, {ReactElement} from 'react'
 import {Box, Link, Table, TableBody, TableCell, TableHead, TableRow, Typography} from '@mui/material'
 import TitledLayout from '../../layouts/TitledLayout'
-import {LIMITS, ROLLING_WINDOW_DAYS, TIERS} from '../../quota/limits'
+import {ANONYMOUS_REMOTE_LOAD_LIMIT, LIMITS, SLOT_PERIOD_DAYS, TIERS} from '../../quota/limits'
+import {PERIOD_DAYS} from '../../quota/period'
 import {SIGNED_OUT_FEATURES} from '../../quota/tierCopy'
 
 
@@ -19,8 +20,14 @@ export default function Quotas() {
           Google account. Files from your own computer, public GitHub models
           and Drive files shared &ldquo;Anyone with the link&rdquo; are free
           and unlimited to view. Each private model you open holds one of
-          your model slots for {ROLLING_WINDOW_DAYS} days, and the same slots
-          cover GLB exports (below).
+          your model slots until your {SLOT_PERIOD_DAYS}-day period ends, and
+          the same slots cover GLB exports (below).
+        </Typography>
+        <Typography paragraph data-testid='quotas-period'>
+          Limits are counted per {PERIOD_DAYS}-day period of your own, not per
+          calendar month. Your period starts the first time you use a limited
+          feature, and everything it counted comes back together when it
+          ends; the next one starts with your next use.
         </Typography>
 
         <Table sx={{marginTop: '1em'}}>
@@ -28,19 +35,19 @@ export default function Quotas() {
             <TableRow>
               <TableCell><strong>Tier</strong></TableCell>
               <TableCell><strong>Model slots</strong></TableCell>
-              <TableCell><strong>Window</strong></TableCell>
+              <TableCell><strong>Period</strong></TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             <TableRow>
               <TableCell>Signed out</TableCell>
-              <TableCell>Not counted</TableCell>
-              <TableCell>—</TableCell>
+              <TableCell>{ANONYMOUS_REMOTE_LOAD_LIMIT} remote models</TableCell>
+              <TableCell>{PERIOD_DAYS} days</TableCell>
             </TableRow>
             <TableRow>
               <TableCell>Free (signed in)</TableCell>
               <TableCell>{LIMITS[TIERS.FREE]}</TableCell>
-              <TableCell>Rolling {ROLLING_WINDOW_DAYS} days</TableCell>
+              <TableCell>{SLOT_PERIOD_DAYS} days</TableCell>
             </TableRow>
             <TableRow>
               <TableCell>Pro</TableCell>
@@ -73,7 +80,13 @@ export default function Quotas() {
           <li>Files opened from your computer (drag and drop, or Browse)</li>
           <li>Public GitHub repositories (including all sample models)</li>
           <li>Google Drive files shared &ldquo;Anyone with the link&rdquo;</li>
-          <li>Anything you open while signed out</li>
+          <li>
+            Anything public you open while signed in. Signed out, the {ANONYMOUS_REMOTE_LOAD_LIMIT} remote
+            models a period (from
+            GitHub, Google Drive or a URL; the samples and local files are
+            never counted) carry over into your account when you sign in, so
+            signing in or out doesn&apos;t reset them.
+          </li>
           <li>Browsing the model viewer itself, navigation, search, etc.</li>
         </Typography>
 
@@ -86,9 +99,9 @@ export default function Quotas() {
           models use the same {LIMITS[TIERS.FREE]} model slots as opening
           does: a model that holds one of your slots, unlimited export. A file
           from your computer takes a slot the first time you export it, then
-          unlimited export for the rest of the {ROLLING_WINDOW_DAYS} days.
+          unlimited export for the rest of the period.
           When every slot holds another model, exporting a new private model
-          or file waits until the oldest slot frees up.
+          or file waits until the period ends and the slots free up.
         </Typography>
 
         <Typography sx={{marginTop: '2em'}}>

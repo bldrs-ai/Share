@@ -1,4 +1,5 @@
-import {AI_TIERS, AI_WINDOW_DAYS} from './aiCredits'
+import {AI_TIERS} from './aiCredits'
+import {PERIOD_DAYS} from './period'
 
 
 /**
@@ -21,37 +22,41 @@ const BYOK = 'add your own OpenRouter key in the assistant\'s settings'
 
 
 /**
+ * Window-neutral since the nested caps (2026-11-25, aiCredits.js
+ * AI_CAP_WINDOW_DAYS): a turn may be refused by the day, the 7-day or the
+ * period cap, and the refusal's `resumeAt` is what says when it comes back,
+ * so the copy names no window of its own.
+ *
  * @param {?string} tier the relay's: 'anonymous', 'free' or 'pro'. Anything
  *   else is worded as anonymous, the safest next step (sign in)
  * @return {{title: string, body: string, cta: ?string, ctaLabel: ?string, windowLabel: string}}
  */
 export function aiCreditsCopy(tier) {
-  const days = AI_WINDOW_DAYS[tier] ?? AI_WINDOW_DAYS[AI_TIERS.ANONYMOUS]
   if (tier === AI_TIERS.PRO) {
     return {
       title: 'Out of assistant credits',
-      body: `You've used your Pro assistant credits for the last ${days} days. They come back as the days roll ` +
-        `on; meanwhile you can ${BYOK}.`,
+      body: `You've used your Pro assistant credits for now. They come back as the days, the week and your ` +
+        `${PERIOD_DAYS}-day period roll on; meanwhile you can ${BYOK}.`,
       cta: null,
       ctaLabel: null,
-      windowLabel: `over the last ${days} days`,
+      windowLabel: 'for now',
     }
   }
   if (tier === AI_TIERS.FREE) {
     return {
       title: 'Out of assistant credits',
-      body: `You've used your free assistant credits for the last ${days} days. Share Pro includes substantially ` +
+      body: `You've used your free assistant credits for now. Share Pro includes substantially ` +
         `more, or you can ${BYOK}.`,
       cta: 'subscribe',
       ctaLabel: 'Upgrade to Pro',
-      windowLabel: `over the last ${days} days`,
+      windowLabel: 'for now',
     }
   }
   return {
-    title: 'Out of assistant credits for today',
-    body: `You've used today's free assistant allowance. Sign in for more, or ${BYOK}.`,
+    title: 'Out of assistant credits for now',
+    body: `You've used the free assistant allowance for now. Sign in for more, or ${BYOK}.`,
     cta: 'sign-in',
     ctaLabel: 'Sign in',
-    windowLabel: 'today',
+    windowLabel: 'for now',
   }
 }
