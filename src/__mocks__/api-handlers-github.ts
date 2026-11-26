@@ -113,10 +113,14 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
         }
 
         if (org === 'cypresstester' && repo === 'test-repo' && ref === MOCK_SAVED_COMMIT_SHA) {
-          // public/index.ifc's Git blob hash. A missing download URL target
-          // makes the Save E2E depend on the source bytes already in OPFS.
+          // A missing download URL target makes both Save E2Es depend on
+          // the source bytes already in OPFS. The in-app surface saves box.ifc;
+          // the Versions cases save public/index.ifc.
+          const blobSha = path === 'saved-in-app.ifc' ?
+            'b5789ca662cea7106a6d33971aa9a8ecb459f836' :
+            'bb68dd1c80942a2ad67362840bd20516edd40316'
           return Response.json({
-            sha: 'bb68dd1c80942a2ad67362840bd20516edd40316',
+            sha: blobSha,
             download_url: '/__test_fixtures__/saved-source-must-be-cached.ifc',
             type: 'file',
           })
