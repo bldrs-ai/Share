@@ -1,5 +1,7 @@
 import useStore from '../store/useStore'
 import {LoadAbortedError} from '../utils/loadAbort'
+import {HANG_TIMEOUT_MS, LoadReporter, loadFailureInfoOf} from '../loader/loadProgress'
+import {consoleTeeHolder} from '../loader/consoleTee'
 import {LoadState, ModelSessionHost} from './modelSession'
 
 
@@ -14,7 +16,7 @@ describe('session/modelSession', () => {
 
   beforeEach(() => {
     forget = jest.fn()
-    host = new ModelSessionHost({onForget: forget})
+    host = new ModelSessionHost({onForget: forget, makeReport: (options) => new LoadReporter(options)})
     useStore.setState({model: null, rootElement: null, isModelReady: false})
   })
 
@@ -233,5 +235,83 @@ describe('session/modelSession', () => {
     expect(job.signal.aborted).toBe(true)
     expect(job.isCurrent()).toBe(false)
     expect(forget).not.toHaveBeenCalled()
+  })
+
+  // open-t200 slice R (design/tracks/open-t200/layering.md §4.4): each run
+  // makes its own reporter, whose sink is the run, so a run the user has
+  // left reports into nothing however late it reports.
+  describe('a reporter per run', () => {
+    let infoSpy
+
+    beforeEach(() => {
+      jest.useFakeTimers()
+      infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {})
+      useStore.setState({loadReportLines: [], currentLoadLine: null, loadResult: null})
+    })
+
+    afterEach(() => {
+      infoSpy.mockRestore()
+      jest.useRealTimers()
+    })
+
+    // The remount of #2247: the left view's run unwinds after the next
+    // view's has begun. Red with one reporter shared by the page, as
+    // `activeReporter` was: A's late line lands in B's report and A's end
+    // ends it.
+    it('two runs at once keep their lines apart, and each ends only itself', () => {
+      const jobOfA = host.open('A').beginLoad({isAbortable: true})
+      const reportOfA = jobOfA.beginReport({fileInfo: 'a.ifc'})
+      const nextView = new ModelSessionHost({onForget: () => null, makeReport: host.makeReport})
+      const jobOfB = nextView.open('B').beginLoad({isAbortable: true})
+      const reportOfB = jobOfB.beginReport({fileInfo: 'b.ifc'})
+      reportOfB.line('Source: B')
+      reportOfB.progress({phase: 'geometry', completed: 1, total: 4, elapsedMs: 10})
+
+      reportOfA.line('Source: A, late')
+      reportOfA.end(new Error('A failed after the user left'))
+
+      expect(reportOfA).not.toBe(reportOfB)
+      expect(reportOfA.lines).toContain('Source: A, late')
+      expect(reportOfB.lines).not.toContain('Source: A, late')
+      expect(reportOfB.ended).toBe(false)
+      // What the user sees is B's report alone: A's writes went nowhere.
+      expect(useStore.getState().loadReportLines).toEqual(reportOfB.lines)
+      expect(useStore.getState().loadResult).toBeNull()
+      expect(useStore.getState().currentLoadLine).not.toBeNull()
+      reportOfB.end()
+      expect(useStore.getState().loadResult).toEqual({status: 'success', summaryLine: 'Loaded b.ifc'})
+    })
+
+    // What the next load's begin did to the previous reporter before slice
+    // R, now done by the run being given up.
+    it('leaving a run quiets its reporter: no stall clock, and the console tee given up', () => {
+      const jobOfA = host.open('A').beginLoad({isAbortable: false})
+      const reportOfA = jobOfA.beginReport({fileInfo: 'a.ifc', onStall: jest.fn()})
+      reportOfA.progress({phase: 'geometry', completed: 1, total: 4, elapsedMs: 10})
+      expect(consoleTeeHolder()).toBe(reportOfA)
+
+      host.open('B')
+
+      expect(reportOfA.ended).toBe(true)
+      expect(consoleTeeHolder()).toBeNull()
+      jest.advanceTimersByTime(HANG_TIMEOUT_MS)
+      expect(reportOfA.onStall).not.toHaveBeenCalled()
+      // Still readable, for the abort's GA event.
+      expect(loadFailureInfoOf(jobOfA.report).phase).toBe('geometry')
+    })
+
+    // Before slice R a serial told "a reporter began for this attempt" apart
+    // from "an earlier load's is still lingering". Red if a run read the
+    // last reporter of the page: the new run would report A's phase.
+    it('a run that failed before its reporter began reads no earlier run\'s phase', () => {
+      const session = host.open('A')
+      const first = session.beginLoad({isAbortable: true})
+      first.beginReport({fileInfo: 'a.ifc'}).progress({phase: 'geometry', completed: 1, total: 4})
+      const second = session.beginLoad({isAbortable: true})
+
+      expect(second.report).toBeNull()
+      expect(loadFailureInfoOf(second.report)).toEqual({phase: undefined, fileSize: undefined, format: undefined})
+      expect(loadFailureInfoOf(first.report).phase).toBe('geometry')
+    })
   })
 })

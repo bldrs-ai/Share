@@ -7,8 +7,8 @@ import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 import ShareIfcLoader from './ShareIfcLoader'
 import * as contentHash from '../utils/contentHash'
 import {dicomSeriesToNrrd, groupSeries, parseDicomSlice} from './dicom'
-import * as loadProgress from './loadProgress'
 import {load, readModel} from './Loader'
+import {LoadReporter} from './loadProgress'
 import {ZipArchiveError} from './zipArchive'
 
 
@@ -537,15 +537,19 @@ describe('Loader', () => {
     })
 
   it('names the model inside on the load report\'s model line, not the zip', async () => {
-    const spy = jest.spyOn(loadProgress, 'reportModelInfo')
+    // The reporter mirrors its report lines to console.info.
+    const infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {})
+    const report = new LoadReporter({fileInfo: 'dicom/scan.zip'})
+    const spy = jest.spyOn(report, 'modelInfo')
     const zip = readTestDataFile('dicom/phantom-ct.zip', true)
     const restoreArrayBuffer = setupMockBlobWithContent(zip)
     try {
-      await load(testPathToUrl('dicom/scan.zip'), mockViewer, jest.fn(), true, jest.fn(), '')
+      await load(testPathToUrl('dicom/scan.zip'), mockViewer, jest.fn(), true, jest.fn(), '', {report})
       expect(spy).toHaveBeenCalledWith(expect.objectContaining({schema: 'NRRD'}))
     } finally {
       restoreArrayBuffer()
-      spy.mockRestore()
+      report.end()
+      infoSpy.mockRestore()
     }
   })
 

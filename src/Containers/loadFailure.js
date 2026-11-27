@@ -3,7 +3,7 @@ import {reportModelOpenFailure} from '../app/modelOpenCount'
 import {NeedsReconnectError} from '../connections/errors'
 import {EngineOpenFailureError, engineFailureCaptureContext, engineSourceTags} from '../engine/engineOpenFailure'
 import {loadFailureParams, omitUndefined} from '../loader/loadAnalytics'
-import {attachLoadFailureContext, getLoadFailureInfo, loadStallCaptureTags} from '../loader/loadProgress'
+import {loadFailureInfoOf} from '../loader/loadProgress'
 import {ARCHIVE_UNREADABLE} from '../loader/modelArchive'
 import {NotFoundError} from '../loader/notFoundError'
 import {UnsupportedSchemaError, unsupportedSchemaAlert} from '../engine/unsupportedSchema'
@@ -42,8 +42,9 @@ import {AUTH_SETTLE_RETRY_MS, waitForAuthSettled} from './authLoadGate'
  * @param {object} context
  * @param {object} context.modelPath the route loaded (the store's modelPath)
  * @param {string} context.installPrefix
- * @param {number} context.loadSerialBefore loadProgress#currentLoadSerial
- *   before the attempt, so the phase read is this attempt's
+ * @param {object|null} context.report the reporter of the attempt that
+ *   failed (LoadJob#report), or null when it failed before one began, so the
+ *   phase read is this attempt's and never an earlier load's
  * @param {{loadFailure: {current: *}, refusal: {current: *}}} context.reported
  *   CadView's per-open dedupe refs (reportedLoadFailureRef,
  *   reportedRefusalRef): an auth or view-settings re-run of the same open
@@ -56,7 +57,7 @@ import {AUTH_SETTLE_RETRY_MS, waitForAuthSettled} from './authLoadGate'
  * @return {{isOOM: boolean}}
  */
 export function reportLoadFailure(e, {
-  modelPath, installPrefix, loadSerialBefore, reported, setAlert, isLegacyUploadRoute, getIsAuthenticated,
+  modelPath, installPrefix, report, reported, setAlert, isLegacyUploadRoute, getIsAuthenticated,
 }) {
   const isOOM = isOutOfMemoryError(e)
   // GA's view of a load that did not display: the other half of
@@ -72,7 +73,7 @@ export function reportLoadFailure(e, {
   const failureKey = modelIdentity(modelPath, installPrefix)
   if (isRealModelOpen(modelPath) && reported.loadFailure.current !== failureKey) {
     reported.loadFailure.current = failureKey
-    const {phase, fileSize, format} = getLoadFailureInfo(loadSerialBefore)
+    const {phase, fileSize, format} = loadFailureInfoOf(report)
     gtagFunnelEvent(FUNNEL_EVENTS.LOAD_FAILED, omitUndefined({
       ...loadFailureParams({error: e, format, fileSize, phase}),
       open_kind: modelOpenKind(modelPath),
@@ -187,7 +188,7 @@ export function reportLoadFailure(e, {
   // (11k+ events / 2.7k users, ~100% old Android) — a device limit, not
   // a code defect. Real (non-OOM) loader failures are still captured,
   // and get load.* tags + context from the last progress event first
-  // (via attachLoadFailureContext), so they group by phase in Sentry
+  // (via the reporter's attachFailureContext), so they group by phase in Sentry
   // instead of landing in one detail-free "model loading failed"
   // bucket (conway #301 §7).
   // Same for an unsupported schema: an intended, documented limit that
@@ -204,10 +205,10 @@ export function reportLoadFailure(e, {
   const isExpectedNotFound = e instanceof NotFoundError && e.isExpected
   if (!isOOM && !(e instanceof UnsupportedSchemaError) && !(e instanceof InMemoryUploadGoneError) &&
       !(e instanceof UploadNotInBrowserError) && !(e instanceof ZipArchiveError) && !isExpectedNotFound) {
-    attachLoadFailureContext()
+    report?.attachFailureContext()
     // A load that stalled before it failed says so on this event only
-    // (loadProgress.js#loadStallCaptureTags), never on the scope.
-    const stallTags = loadStallCaptureTags()
+    // (loadProgress.js#LoadReporter#stallCaptureTags), never on the scope.
+    const stallTags = report?.stallCaptureTags() ?? null
     const withStall = (context) => (stallTags ? {...context, tags: {...context?.tags, ...stallTags}} : context)
     if (e instanceof EngineOpenFailureError) {
       // The engine's status and reason as tags/context on this event

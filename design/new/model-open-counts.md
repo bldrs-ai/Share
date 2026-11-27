@@ -57,7 +57,7 @@ Each written-out list there is held equal to its source by a test.
 | `reason_class` | `load_failed`'s (`oom`, `parse`, `unsupported_schema`, `unrecognized_format`, `other`), plus `none` | `loadAnalytics.js#loadFailureParams`; `none` unless failed |
 | `last_phase` | `load_failed`'s phases (`loadAnalytics.js#KNOWN_LOAD_PHASES`, `none`, `other`) | the same; `none` unless failed |
 | `triangle_bucket` | `<10k`, `10k-100k`, `100k-1m`, `1m-10m`, `10m+`, `unknown` | `stats_triangleCount`, bucketed by decade (`app/modelOpenCount.js#triangleBucket`); `unknown` when not measured, as on every failed load |
-| `error_bucket`, `warning_bucket` | `0`, `1-9`, `10-99`, `100-999`, `1000+`, `unknown` | the engine's counts when it supplies them (`stats_errorCount`, `stats_warningCount`), else the page-wide console tee's (`stats_pageErrorCount`, `stats_pageWarnCount`), as `captureLoadDiagnostics` reads them; bucketed (`#countBucket`) |
+| `error_bucket`, `warning_bucket` | `0`, `1-9`, `10-99`, `100-999`, `1000+`, `unknown` | the engine's counts when it supplies them (`stats_errorCount`, `stats_warningCount`), else the page-wide console tee's (`stats_pageErrorCount`, `stats_pageWarnCount`), as `LoadReporter#captureDiagnostics` reads them; bucketed (`#countBucket`) |
 
 **Counts are buckets, never exact.** An exact triangle count, or an exact
 vertex count or engine error tally, is the same on every open of a model. Next

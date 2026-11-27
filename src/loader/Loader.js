@@ -11,7 +11,6 @@ import {USDLoader} from 'three/examples/jsm/loaders/USDLoader.js'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader.js'
 import {MeshoptDecoder} from 'meshoptimizer/decoder'
 import * as Filetype from '../Filetype'
-import {reportCacheHit, reportModelInfo, reportSourceInfo} from './loadProgress'
 import {
   deleteFileFromOPFS,
   doesFileExistInOPFS,
@@ -77,7 +76,7 @@ import {PART21_LOADER_TYPES, engineFormatOf} from '../engine/part21Formats'
 import {reportEngineSourceBuffered, reportEngineSourceFallback, reportPreviewUnitsSkipped} from './reportLoadDiagnostics'
 import {POLICY_BUFFERED_REASONS, SourceModeReason} from '../engine/sourcePolicy'
 import {reportRendererLimits} from './reportRendererLimits'
-import {reportOpfsDownloadFailed, reportOpfsNotCached, reportOpfsSourceEvicted} from '../OPFS/reportOpfsSourceCondition'
+import {reportOpfsDownloadFailed, reportOpfsNotCached, reportOpfsSourceEvicted} from './reportOpfsSourceCondition'
 import {STORE_DETECT_PREFIX_BYTES, conwayStoreOpenRequirement} from '../engine/stepFormat'
 import {isEngineWorkerLoad} from './ShareIfcLoader'
 import {
@@ -359,6 +358,14 @@ function probeLfsBytes(data) {
  *   `onProgress` and `setOpfsFile` go quiet at the abort, so work that could
  *   not be stopped never writes into the next model's report or store.
  *   Without one the load is exactly as before.
+ * @param {object} [options.report] this load's reporter
+ *   (loadProgress.js#LoadReporter; open-t200 slice R), which every report
+ *   line of the load goes to: the source, the model line, the cache hit,
+ *   the engine's lines and the BVH depth cap. The caller's `onProgress`
+ *   normally feeds the same reporter. Without one, nothing is reported. A
+ *   nested load gets its parent's (BLDLoader), as before slice R, when the
+ *   one page-wide reporter took the child's lines too. Becomes `ctx.report`
+ *   with slice 1b's load context (layering.md §4.3).
  * @return {object} The model or undefined
  */
 export async function load(
@@ -369,7 +376,7 @@ export async function load(
   setOpfsFile,
   accessToken = '',
   {isNestedLoad = false, isUploadedRoute = false, onIndexed = undefined, onFirstMesh = undefined,
-    signal = undefined} = {},
+    signal = undefined, report = null} = {},
 ) {
   assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
   // Each is the identity without a signal (utils/loadAbort.js).
@@ -655,7 +662,7 @@ export async function load(
           debug().warn('Loader#load: could not evict truncated source:', evictError)
         }
         setOpfsFile(null)
-        reportSourceInfo(
+        report?.line(
           'Source: OPFS entry was truncated — evicted, re-fetching from network')
         // The catch below takes it to the direct fetch; the next load stores
         // a fresh entry.
@@ -674,9 +681,9 @@ export async function load(
       // (local/external kinds) decides hit/miss inside the worker and
       // doesn't surface it — no line rather than a guess.
       if (isUploadedFile) {
-        reportSourceInfo('Source: OPFS cache (uploaded file)')
+        report?.line('Source: OPFS cache (uploaded file)')
       } else if (kindLabel === 'github') {
-        reportSourceInfo(isCacheHit ?
+        report?.line(isCacheHit ?
           'Source: OPFS cache HIT (GitHub content unchanged)' :
           'Source: network download (GitHub), cached to OPFS')
       }
@@ -814,7 +821,7 @@ export async function load(
         // rendered model, and the report's Source line claims a cache
         // hit for bytes that are about to come from the network.
         setOpfsFile(null)
-        reportSourceInfo(
+        report?.line(
           'Source: OPFS entry was a stale Git LFS pointer — evicted, re-fetching from network')
         modelData = undefined
         glbExportContext = null
@@ -1009,7 +1016,7 @@ export async function load(
   // Read before readModel: a buffered worker open transfers the ArrayBuffer
   // away, which leaves its byteLength 0 afterwards.
   const sourceBytes = modelData?.byteLength ?? modelData?.length ?? modelData?.size
-  reportModelInfo({
+  report?.modelInfo({
     fileName: path.substring(path.lastIndexOf('/') + 1) || path,
     schema: formatTag,
     // On a GLB cache hit these bytes are the artifact's, and under the
@@ -1039,7 +1046,7 @@ export async function load(
     // mesh loaders cannot be stopped: their parse runs on and its model is
     // dropped, never registered with the viewer (below).
     const reading = readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb,
-      onProgress, {onIndexed, onFirstMesh, signal})
+      onProgress, {onIndexed, onFirstMesh, signal, report})
     try {
       model = await untilAborted(reading)
     } catch (e) {
@@ -1073,7 +1080,7 @@ export async function load(
     if (opfsFallbackCondition.evictedKind) {
       reportOpfsSourceEvicted(opfsFallbackCondition.evictedKind)
     } else {
-      reportOpfsDownloadFailed(opfsFallbackCondition)
+      reportOpfsDownloadFailed(opfsFallbackCondition, report)
     }
   }
   reportLoadDiagnostics(model, {
@@ -1157,7 +1164,7 @@ export async function load(
   if (isGlbBatchedActive() && model?.userData?.bldrsInstanceTables) {
     const hydrateScene =
       typeof viewer?.context?.getScene === 'function' ? viewer.context.getScene() : null
-    const hydrated = hydrateBatchedModelFromInstancedGlb(model, {scene: hydrateScene})
+    const hydrated = hydrateBatchedModelFromInstancedGlb(model, {scene: hydrateScene, onDepthCap: report?.onLateDepthCap})
     if (hydrated) {
       // "instance-table", not "batched-native": the portable rewrite of the
       // same artifact (#1849) hydrates through this very line, and it carries
@@ -1215,10 +1222,10 @@ export async function load(
   // it was, so GA can separate warm opens from cold parses
   // (`stats_cacheHit`). Read here, after the OPFS block, because the stale
   // Git LFS pointer path above can still reset it to false.
-  reportCacheHit(cameFromGlbCache)
+  report?.cacheHit(cameFromGlbCache)
   // A batched model on a renderer without WEBGL_multi_draw draws per
   // instance: say so in the report (Share#2094).
-  reportRendererLimits(model, () => viewer?.context?.getRenderer?.(), loader.type)
+  reportRendererLimits(model, () => viewer?.context?.getRenderer?.(), loader.type, report)
 
   // ShareModel decoration (see src/model/ShareModel.js): adds
   // `format` + `capabilities` so call-sites can branch on intrinsic
@@ -1288,7 +1295,7 @@ export async function load(
   // `isGlbParse` is what keeps a live IFC parse out: its meshes carry
   // per-vertex expressID too, and `decorateConwayDirectIfcModel` has
   // already built their BVHs.
-  restoreCacheHitPicking(model, isGlbParse && isBldrsGlbArtifact(model))
+  restoreCacheHitPicking(model, isGlbParse && isBldrsGlbArtifact(model), {onDepthCap: report?.onDepthCap})
 
   // Fire-and-forget: serialize the rendered model to GLB and stash in
   // OPFS so the next load of the same source can skip the IFC parse.
@@ -1535,8 +1542,11 @@ export function isBldrsGlbArtifact(model) {
  * @param {boolean} isGlbArtifact true when the model came off a GLTFLoader
  *   parse of a Bldrs artifact (gates the BVH build; live parses build their
  *   own in `decorateConwayDirectIfcModel`) — see `isBldrsGlbArtifact`
+ * @param {object} [options]
+ * @param {Function} [options.onDepthCap] the load's BVH depth-cap callback
+ *   (model/bvhBuild.js), for the trees built here
  */
-export function restoreCacheHitPicking(model, isGlbArtifact) {
+export function restoreCacheHitPicking(model, isGlbArtifact, {onDepthCap} = {}) {
   // Restore per-mesh `IfcInstanceMap` on cache-hit Conway-direct
   // models. The GLB write captured per-vertex `instanceID` alongside
   // `expressID`; `inferModelCapabilities` flipped `instancePicking`
@@ -1793,7 +1803,7 @@ export function restoreCacheHitPicking(model, isGlbArtifact) {
         // order, so tables, raycasts and subsets all stay aligned. The
         // cache-MISS path never had this problem: `decorateConwayDirectIfcModel`
         // rebuilds its map FROM the geometry after its (permuting) build.
-        obj.geometry.computeBoundsTree({indirect: true})
+        obj.geometry.computeBoundsTree({indirect: true, onDepthCap})
         bvhBuilt++
         const idx = obj.geometry.index
         bvhTris += idx ? (idx.count / 3) : 0
@@ -2340,7 +2350,8 @@ export function convertToShareModel(model, viewer, {fileName = null} = {}) {
  * @param {Function} [fixupCb] to modify the model
  * @param {Function} [onProgress] progress callback for IFC loading
  * @param {object} [parseOptions] passed to an IFC/STEP loader's `parse` as
- *   its options (`ShareIfcLoader#parse`: `onIndexed`, `onFirstMesh`)
+ *   its options (`ShareIfcLoader#parse`: `onIndexed`, `onFirstMesh`,
+ *   `signal`, `report`); a BLDLoader takes its `report`
  * @return {object}
  */
 export async function readModel(
@@ -2381,7 +2392,11 @@ export async function readModel(
       if (onProgress) {
         onProgress('Parsing model data...')
       }
-      model = await loader.parse(modelData, basePath)
+      // A `.bld` assembly's nested loads report into this load's report
+      // (BLDLoader#parse); no other async loader takes options.
+      model = await (loader instanceof BLDLoader ?
+        loader.parse(modelData, basePath, {report: parseOptions.report}) :
+        loader.parse(modelData, basePath))
     }
   } else {
     debug().log(`sync loader(->) parsing data:`, loader, modelData)

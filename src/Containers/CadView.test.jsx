@@ -42,7 +42,7 @@ import {resetModelOpenReportForTest} from '../utils/reportModelOpen'
 import {actAsyncFlush, suppressActWarnings} from '../utils/tests'
 import CadView from './CadView'
 import * as viewerModule from './viewer'
-import * as loadProgressModule from '../loader/loadProgress'
+import {LoadReporter} from '../loader/loadProgress'
 import {GITHUB_NOT_FOUND_MESSAGE, NotFoundError} from '../loader/notFoundError'
 import * as clientCapabilities from '../privacy/clientCapabilities'
 import {WEBGL_UNAVAILABLE_TITLE} from '../viewer/webglUnavailable'
@@ -922,7 +922,7 @@ describe('CadView', () => {
     jest.spyOn(Loader, 'load').mockImplementation(() => {
       throw genericErr
     })
-    const stallTags = jest.spyOn(loadProgressModule, 'loadStallCaptureTags').mockReturnValue({'load.stalled': 'true'})
+    const stallTags = jest.spyOn(LoadReporter.prototype, 'stallCaptureTags').mockReturnValue({'load.stalled': 'true'})
     jest.spyOn(console, 'error').mockImplementation(() => {})
     const Sentry = require('@sentry/react')
     const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
@@ -1602,7 +1602,7 @@ describe('CadView', () => {
       render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix='/v/new'/></ShareMock>)
       await actAsyncFlush()
       await waitFor(() => expect(result.current.alert).toEqual(inMemoryUploadGoneAlert()))
-      // Thrown before beginLoadProgress ran for this attempt: no phase, no
+      // Thrown before this attempt's reporter began: no phase, no
       // size and no format, whatever an earlier test's reporter left behind.
       expect(gaEvents().filter(([name]) => name === 'load_failed')).toEqual([['load_failed', {
         content_type: 'unknown',
@@ -1968,8 +1968,12 @@ describe('CadView', () => {
       let finishA
       let progressOfA
       const calls = []
-      loadSpy = jest.spyOn(Loader, 'load').mockImplementation((path, loadViewer, onProgress) => {
+      // Each load's own reporter, as CadView hands it to the Loader (open-t200
+      // slice R).
+      const reports = []
+      loadSpy = jest.spyOn(Loader, 'load').mockImplementation((path, loadViewer, onProgress, ...rest) => {
         calls.push(String(path))
+        reports.push(rest[3]?.report)
         if (calls.length === 1) {
           progressOfA = onProgress
           return new Promise((resolve) => {
@@ -1992,7 +1996,7 @@ describe('CadView', () => {
       await actAsyncFlush()
       await waitFor(() => expect(calls.length).toBe(2))
       await waitFor(() => expect(result.current.isModelLoading).toBe(true))
-      const reportOfB = loadProgressModule.loadReportToken()
+      const [reportOfA, reportOfB] = reports
       const snackOfB = result.current.snackMessage
       expect(snackOfB).toContain('other.ifc')
 
@@ -2002,7 +2006,8 @@ describe('CadView', () => {
       await act(() => finishA())
       await actAsyncFlush()
 
-      expect(loadProgressModule.loadReportToken(), 'B\'s reporter is still the active one').toBe(reportOfB)
+      expect(reportOfA, 'each load reports into its own').not.toBe(reportOfB)
+      expect(reportOfB.lines.join('\n')).not.toContain('Parsing A late')
       expect(reportOfB.ended, 'and still reporting').toBe(false)
       expect(result.current.isModelLoading, 'B\'s overlay stays up').toBe(true)
       expect(result.current.snackMessage).toBe(snackOfB)

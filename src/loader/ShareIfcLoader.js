@@ -33,7 +33,6 @@ import {hasParams} from '../utils/location'
 import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
 import {isFeatureEnabled} from '../FeatureFlags'
 import {createEngineModelLoad, engineFormatOf} from '../engine/engineModelLoad'
-import {reportGeometryStats, reportSourceInfo} from './loadProgress'
 import {MainThreadReason, mainThreadEngineNote, mainThreadEngineReason} from '../engine/engineRoute'
 import {runIfcItemsMapParityCheck} from '../model/ifcItemsMapParity'
 import ProgressiveLoadSession from './ProgressiveLoadSession'
@@ -426,11 +425,14 @@ export default class ShareIfcLoader {
    *   into the wasm on this thread and cannot be interrupted). Either way
    *   nothing reaches the scene registry after it, and the parse rejects with
    *   a LoadAbortedError instead of returning null.
+   * @param {object} [options.report] the load's reporter
+   *   (loadProgress.js#LoadReporter), handed to the engine and the model's
+   *   BVH builds as callbacks (open-t200 slice R); none in a bare parse
    * @return {Promise<object|null>} the loaded IfcModel, or null on
    *   handled error (re-throws on OOM so the caller can show a
    *   tailored UX message).
    */
-  async parse(buffer, onProgress, onError, {onIndexed, onFirstMesh, signal} = {}) {
+  async parse(buffer, onProgress, onError, {onIndexed, onFirstMesh, signal, report = null} = {}) {
     const ifc = this._ifc
     // Clear any error stashed by a prior load on this shared IFC namespace.
     // readModel (Loader.js) reads `viewer.IFC.ifcLastError` to surface the
@@ -471,6 +473,7 @@ export default class ShareIfcLoader {
       // (three/renderDemand.js).
       renderDemand: ifc.context?.renderDemand ?? null,
       onFirstMesh,
+      report,
     })
 
     let builder = null
@@ -487,7 +490,7 @@ export default class ShareIfcLoader {
     // stream into, there is no incremental builder for the worker's batches
     // to feed.
     const engineLoad = isEngineWorkerLoad(this.type, scene) ?
-      createEngineModelLoad({format: engineFormatOf(this.type)}) : null
+      createEngineModelLoad({format: engineFormatOf(this.type), report}) : null
     // open-205 #2011 step A, the engine's close path for a load that never
     // registers: a model joins `ifcModels` (which ShareIfc#dispose closes)
     // only at the end of this parse, so an engine given up mid-parse was
@@ -507,7 +510,7 @@ export default class ShareIfcLoader {
       if (reason !== MainThreadReason.FLAG_OFF) {
         const note = mainThreadEngineNote(reason)
         conwayDirectInfo(note)
-        reportSourceInfo(note)
+        report?.line(note)
       }
     }
 
@@ -643,7 +646,7 @@ export default class ShareIfcLoader {
       const {modelID, recapture} = engineLoad !== null ?
         await engineLoad.parse(buffer, {onProgress, onMeshBatch, onPreviewMesh, onIndexed: onModelIndexed}) :
         await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress, onMeshBatch, onPreviewMesh,
-          onModelIndexed, {signal})
+          onModelIndexed, {signal, report})
       // A parse that resolved after its abort (the abort landed on its last
       // await) is dropped here, before anything is assembled or registered.
       throwIfLoadAborted(signal)
@@ -661,7 +664,7 @@ export default class ShareIfcLoader {
         try {
           const incremental = builder.finalize()
           ifcModel = assembleBatchedModel(
-            incremental.batches, ifcAPI, modelID, {scene, root: builder.root})
+            incremental.batches, ifcAPI, modelID, {scene, root: builder.root, onDepthCap: report?.onLateDepthCap})
           buildStats = incremental.stats
         } catch (e) {
           debug(WARN).warn('incremental assembly failed; end-of-load fallback:', e)
@@ -697,7 +700,8 @@ export default class ShareIfcLoader {
       if (ifcModel === undefined && isFeatureEnabled('batchedMesh')) {
         try {
           const batched =
-            buildBatchedConwayModel(await recapture(), ifcAPI, modelID, {scene, coordination})
+            buildBatchedConwayModel(await recapture(), ifcAPI, modelID,
+              {scene, coordination, onDepthCap: report?.onLateDepthCap})
           ifcModel = batched.model
           buildStats = batched.stats
         } catch (e) {
@@ -709,7 +713,7 @@ export default class ShareIfcLoader {
           buildConwayIfcModel(await recapture(), ifcAPI, modelID, {coordination})
         ifcModel = merged.mesh
         buildStats = merged.stats
-        decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
+        decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene, onDepthCap: report?.onDepthCap})
       }
 
       // Drop parse-time imposters before the durable model installs.
@@ -853,7 +857,7 @@ export default class ShareIfcLoader {
           // severity: a build that emitted nothing is a model the user
           // cannot see, whatever the warning counts say (ops#27 T0 —
           // loadProgress#classifyLoadOutcome).
-          reportGeometryStats({
+          report?.geometryStats({
             vertexCount: buildStats.vertexCount ?? buildStats.totalVerts,
             triangleCount: buildStats.triangleCount ?? buildStats.totalTriangles,
             ...emptinessCounts,

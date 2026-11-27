@@ -14,12 +14,6 @@ jest.mock('../privacy/analytics', () => ({
   gtagFunnelEvent: jest.fn(),
   gtagEventWithCid: jest.fn(),
 }))
-jest.mock('../loader/loadProgress', () => ({
-  ...jest.requireActual('../loader/loadProgress'),
-  attachLoadFailureContext: jest.fn(),
-  getLoadFailureInfo: jest.fn(() => ({phase: 'dataParse', fileSize: 1234, format: 'ifc'})),
-  loadStallCaptureTags: jest.fn(() => ({})),
-}))
 
 
 /**
@@ -30,7 +24,13 @@ function context(modelPath) {
   return {
     modelPath,
     installPrefix: '',
-    loadSerialBefore: 0,
+    // The failed attempt's reporter (LoadJob#report), of which only these
+    // three are read.
+    report: {
+      attachFailureContext: jest.fn(),
+      failureInfo: jest.fn(() => ({phase: 'dataParse', fileSize: 1234, format: 'ifc'})),
+      stallCaptureTags: jest.fn(() => ({})),
+    },
     reported: {loadFailure: {current: null}, refusal: {current: null}},
     setAlert: jest.fn(),
     isLegacyUploadRoute: false,

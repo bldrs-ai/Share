@@ -39,7 +39,6 @@
 //     and applied matrices, the unit scale) come from the `done` packet.
 // There is no other engine on the page for this model, so no sync engine
 // method can be reached by accident: the facade has none to offer.
-import {reportEngineLog, reportEngineVersion, reportSourceInfo} from '../loader/loadProgress'
 import {HEADER_SNIFF_BYTES, openModelFailure} from './unsupportedSchema'
 import {engineFormatOf} from './part21Formats'
 import {conwayDirectInfo, conwayDirectWarn} from './conwayDirectLog'
@@ -251,9 +250,15 @@ export function makeEngineIfcApi(store) {
  *   what the file's SUFFIX names, so a label only (see the file header);
  *   null when the caller did not say
  * @param {function(): Promise<object>} [options.spawn] for tests
+ * @param {object} [options.report] the load's report, as callbacks: the
+ *   engine imports nothing from the loader (open-t200 slice R,
+ *   design/tracks/open-t200/layering.md §4.4). `engineVersion(text)` for
+ *   the engine line, `engineLog(log)` for the worker's forwarded log, and
+ *   `line(text)` for the source and retry lines. Each optional; the loader
+ *   passes its `LoadReporter`
  * @return {{ifcAPI: object, parse: Function, abort: Function, aborted: boolean}}
  */
-export function createEngineModelLoad({format = null, spawn = spawnEngineSession} = {}) {
+export function createEngineModelLoad({format = null, spawn = spawnEngineSession, report = null} = {}) {
   const store = makeGeometryStore()
   const ifcAPI = makeEngineIfcApi(store)
   // open-205 #2011 step A: the load can be given up before its parse ends —
@@ -341,7 +346,7 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
       ifcAPI.engineSession = session
       session.on(Ev.PROGRESS, (msg) => onProgress?.(msg.event))
       session.on(Ev.MODEL_INFO, (msg) => onProgress?.({modelInfo: msg.info}))
-      session.on(Ev.LOG, (msg) => reportEngineLog(msg))
+      session.on(Ev.LOG, (msg) => report?.engineLog?.(msg))
       session.on(Ev.PREVIEW, (msg) => onPreviewMesh?.(msg.payload))
       session.on(Ev.BATCH, (msg) => {
         for (const geometry of msg.geometries) {
@@ -393,7 +398,7 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
       }
     }
     let session = await spawnLive()
-    reportEngineVersion(session.info?.conwayVersion)
+    report?.engineVersion?.(session.info?.conwayVersion)
     let finished = wire(session)
     let opened
     let sourceOverride = null
@@ -422,8 +427,8 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
           sourceOverride = {windowed: true, failure: retryFailure}
           // Said in the report before the retry's lines, so the failed
           // attempt's engine warnings and errors in the load's tally read as
-          // that attempt's (loadProgress.js#reportEngineLog counts both).
-          reportSourceInfo(`Engine retry: buffered open failed (${FAILURE_TEXT[retryFailure]}); ` +
+          // that attempt's (the reporter's `engineLog` counts both).
+          report?.line?.(`Engine retry: buffered open failed (${FAILURE_TEXT[retryFailure]}); ` +
             'retrying windowed on a fresh engine')
           session = await spawnLive()
           finished = wire(session)
@@ -468,9 +473,9 @@ export function createEngineModelLoad({format = null, spawn = spawnEngineSession
       // which says nothing of why: say it was given up.
       throw isAbortedLoad ? new LoadAbortedError() : e
     }
-    reportSourceInfo(sourceModeLine(ifcAPI.summary.sourceMode))
-    reportSourceInfo(sourceIoLine(ifcAPI.summary.source))
-    reportSourceInfo(indexLine(ifcAPI.summary.index))
+    report?.line?.(sourceModeLine(ifcAPI.summary.sourceMode))
+    report?.line?.(sourceIoLine(ifcAPI.summary.source))
+    report?.line?.(indexLine(ifcAPI.summary.index))
     // The integration-boundary line conwayDirectIfcLoader prints for the
     // main-thread pump (Share#1744), for a worker load. Named differently on
     // purpose: E2E specs tell the two engines apart by which line appears.

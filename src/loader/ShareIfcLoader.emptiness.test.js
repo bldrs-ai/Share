@@ -19,7 +19,7 @@ import {buildConwayIfcModel} from '../model/buildConwayIfcModel'
 import {IncrementalBatchedBuilder} from '../model/incrementalBatchedBuilder'
 import {parseIfcWithConway} from './conwayDirectIfcLoader'
 import {isFeatureEnabled} from '../FeatureFlags'
-import {beginLoadProgress, endLoadProgress, getCompletedLoadOutcome} from './loadProgress'
+import {LoadReporter} from './loadProgress'
 
 
 jest.mock('./conwayDirectIfcLoader', () => ({
@@ -164,7 +164,6 @@ describe('loader/ShareIfcLoader counts for the no-geometry verdict (Share#1962)'
   })
 
   afterEach(() => {
-    endLoadProgress()
     consoleInfoSpy.mockRestore()
   })
 
@@ -175,11 +174,11 @@ describe('loader/ShareIfcLoader counts for the no-geometry verdict (Share#1962)'
    * @return {Promise<{model: object, outcome: string}>}
    */
   async function loadAndClassify(statistics) {
-    beginLoadProgress({fileInfo: 'shell.ifc'})
+    const report = new LoadReporter({fileInfo: 'shell.ifc'})
     const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(statistics), ifc: makeIfcNamespace()})
-    const model = await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
-    endLoadProgress()
-    return {model, outcome: getCompletedLoadOutcome()}
+    const model = await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn(), {report})
+    report.end()
+    return {model, outcome: report.completedOutcome()}
   }
 
   it('a file with no products is no_geometry', async () => {

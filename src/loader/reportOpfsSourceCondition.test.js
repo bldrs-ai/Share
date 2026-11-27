@@ -1,8 +1,7 @@
 import {captureMessage} from '@sentry/react'
-import {loadFailureCaptureContext} from '../loader/loadProgress'
 import {gtagEvent} from '../privacy/analytics'
+import {downloadSourceKind} from '../OPFS/messages'
 import {
-  downloadSourceKind,
   reportOpfsDownloadFailed,
   reportOpfsNotCached,
   reportOpfsSourceEvicted,
@@ -10,8 +9,12 @@ import {
 
 
 jest.mock('@sentry/react', () => ({captureMessage: jest.fn()}))
-jest.mock('../loader/loadProgress', () => ({loadFailureCaptureContext: jest.fn()}))
 jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn()}))
+
+// The load's reporter, of which the warning reads only its capture context
+// (loadProgress.js#LoadReporter#captureContext).
+const loadFailureCaptureContext = jest.fn()
+const report = {captureContext: loadFailureCaptureContext}
 
 const SECRET_PATH = 'secret-org/secret-repo/main/private.ifc'
 
@@ -45,7 +48,7 @@ describe('reportOpfsSourceCondition', () => {
   })
 
   it('reports a failed download as one warning with the status as a tag', () => {
-    reportOpfsDownloadFailed({kind: 'local', condition: 'http-error', status: 404})
+    reportOpfsDownloadFailed({kind: 'local', condition: 'http-error', status: 404}, report)
 
     expect(captureMessage).toHaveBeenCalledTimes(1)
     const [, context] = captureMessage.mock.calls[0]
@@ -55,7 +58,7 @@ describe('reportOpfsSourceCondition', () => {
   })
 
   it('omits the status tag when the condition has none', () => {
-    reportOpfsDownloadFailed({kind: 'external', condition: 'fetch-rejected'})
+    reportOpfsDownloadFailed({kind: 'external', condition: 'fetch-rejected'}, report)
 
     expect(captureMessage.mock.calls[0][1].tags).not.toHaveProperty('http_status')
   })
@@ -69,7 +72,7 @@ describe('reportOpfsSourceCondition', () => {
   })
 
   it('sends a failed download to Sentry only, not GA', () => {
-    reportOpfsDownloadFailed({kind: 'external', condition: 'http-error', status: 404})
+    reportOpfsDownloadFailed({kind: 'external', condition: 'http-error', status: 404}, report)
 
     expect(captureMessage).toHaveBeenCalledTimes(1)
     expect(gtagEvent).not.toHaveBeenCalled()
@@ -79,7 +82,7 @@ describe('reportOpfsSourceCondition', () => {
     // The helpers take no path or message, so a private source's name can't
     // get in; this pins that the event stays that way.
     reportOpfsSourceEvicted('external')
-    reportOpfsDownloadFailed({kind: 'external', condition: 'http-error', status: 500})
+    reportOpfsDownloadFailed({kind: 'external', condition: 'http-error', status: 500}, report)
     reportOpfsNotCached('local')
 
     const everything = JSON.stringify(captureMessage.mock.calls)
@@ -89,9 +92,9 @@ describe('reportOpfsSourceCondition', () => {
   })
 
   it('carries the load phase and report but not the load context\'s file identity', () => {
-    // Red if the whole loadFailureCaptureContext() is spread back onto the
+    // Red if the whole captureContext() is spread back onto the
     // event: its `fileInfo` is the raw path of a private model.
-    reportOpfsDownloadFailed({kind: 'external', condition: 'http-error', status: 500})
+    reportOpfsDownloadFailed({kind: 'external', condition: 'http-error', status: 500}, report)
 
     expect(captureMessage).toHaveBeenCalledTimes(1)
     expect(JSON.stringify(captureMessage.mock.calls)).not.toMatch(/secret|private\.ifc/)
@@ -125,7 +128,7 @@ describe('reportOpfsSourceCondition', () => {
     })
 
     expect(() => reportOpfsSourceEvicted('github')).not.toThrow()
-    expect(() => reportOpfsDownloadFailed({kind: 'local', condition: 'no-body'})).not.toThrow()
+    expect(() => reportOpfsDownloadFailed({kind: 'local', condition: 'no-body'}, report)).not.toThrow()
     expect(() => reportOpfsNotCached('local')).not.toThrow()
   })
 

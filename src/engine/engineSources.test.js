@@ -14,12 +14,6 @@ import {makeWorkerTransport} from './transports'
 // READ-ONLY sync access handle on the entry it finds itself, and the Blob
 // store otherwise.
 
-jest.mock('../loader/loadProgress', () => ({
-  reportEngineLog: jest.fn(),
-  reportEngineVersion: jest.fn(),
-  reportSourceInfo: jest.fn(),
-}))
-
 
 const BYTES = Uint8Array.from({length: 64}, (_, i) => i)
 const NAME = 'model.ifc.etag.commit'

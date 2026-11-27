@@ -1,6 +1,5 @@
 import {captureMessage} from '@sentry/react'
-import {loadFailureCaptureContext} from '../loader/loadProgress'
-import {nonIdentifyingLoadContext} from '../loader/loadCaptureContext'
+import {nonIdentifyingLoadContext} from './loadCaptureContext'
 import {gtagEvent} from '../privacy/analytics'
 
 
@@ -18,6 +17,11 @@ import {gtagEvent} from '../privacy/analytics'
  * `opfs_not_cached`, whose params are exactly `kind` and `condition`. Those
  * need event-scoped custom dimensions registered in GA Admin before they can
  * be queried (design/new/quotas.md §"Funnel analytics").
+ *
+ * The loader's, not the OPFS module's (open-t200 slice R, layering.md §4.4):
+ * the one Sentry report here carries the load's own context, from the load's
+ * reporter, which the base layer may not import. The worker's conditions and
+ * the source kind, which `OPFS/utils.js` needs too, are in `OPFS/messages.js`.
  *
  * Main thread only. The OPFS worker has no Sentry (`index.jsx` initialises it
  * on the page, and the worker bundle never imports it), so the worker tells
@@ -42,32 +46,7 @@ import {gtagEvent} from '../privacy/analytics'
  * structural: it takes no path and no message.
  */
 
-/** Source kinds a download can have. `local` is a Share-hosted path such as `/index.ifc`. */
-export const OPFS_SOURCE_KINDS = ['local', 'external', 'github']
-
-/**
- * The worker conditions downloadModelToOPFS replies with for a download that
- * failed, i.e. those {@link reportOpfsDownloadFailed} reports. The worker's
- * other error replies carry a `condition` too (OPFS.worker.js; Share#2107),
- * but those are the best-effort housekeeping family this file deliberately
- * does not report.
- */
-export const OPFS_DOWNLOAD_FAILURE_CONDITIONS = ['fetch-rejected', 'http-error', 'no-body', 'empty-body', 'stream-error']
-
 const COMPONENT_TAG = 'opfs-source'
-
-
-/**
- * The source kind of a `downloadToOPFS` call. Hosted and external models are
- * stored under the URL's host; a Share-hosted `/index.ifc`-style path is
- * stored under the constant commit hash 'bldrs-ai' (Loader.js#load).
- *
- * @param {string} commitHash the `commitHash` argument of downloadToOPFS
- * @return {string} 'local' | 'external'
- */
-export function downloadSourceKind(commitHash) {
-  return commitHash === 'bldrs-ai' ? 'local' : 'external'
-}
 
 
 /**
@@ -93,13 +72,16 @@ export function reportOpfsSourceEvicted(kind) {
  * @param {string} args.condition the worker's condition: 'fetch-rejected',
  *   'http-error', 'no-body', 'empty-body' or 'stream-error'
  * @param {number} [args.status] HTTP status for 'http-error'
+ * @param {object} [report] the load's reporter (loadProgress.js#LoadReporter),
+ *   whose phase and report the warning carries
  */
-export function reportOpfsDownloadFailed({kind, condition, status}) {
+export function reportOpfsDownloadFailed({kind, condition, status}, report = null) {
   const tags = {kind, condition}
   if (Number.isFinite(status)) {
     tags.http_status = String(status)
   }
-  send('OPFS download failed; fetched directly', 'warning', ['opfs-source', 'download-failed', condition, kind], tags)
+  send('OPFS download failed; fetched directly', 'warning', ['opfs-source', 'download-failed', condition, kind], tags,
+    report)
 }
 
 
@@ -140,10 +122,11 @@ function sendToGa(name, params) {
  * @param {string} level 'warning'
  * @param {string[]} fingerprint
  * @param {object} tags
+ * @param {object|null} report the load's reporter
  */
-function send(message, level, fingerprint, tags) {
+function send(message, level, fingerprint, tags, report) {
   try {
-    const load = nonIdentifyingLoadContext(loadFailureCaptureContext())
+    const load = nonIdentifyingLoadContext(report?.captureContext())
     captureMessage(message, {
       level,
       fingerprint,

@@ -245,7 +245,7 @@ export function countBucket(count) {
 /**
  * The bucketed counts of a finished load. Errors and warnings are the
  * engine's own counts when it supplies them, else the page-wide console
- * tee's, as captureLoadDiagnostics reads them.
+ * tee's, as LoadReporter#captureDiagnostics reads them.
  *
  * @param {object} outcomeParams buildOutcomeParams' result
  * @return {object} triangle_bucket, error_bucket, warning_bucket

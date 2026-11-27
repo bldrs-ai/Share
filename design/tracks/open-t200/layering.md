@@ -371,6 +371,9 @@ below, and 3a's with entry 14.
 entry 20. The slice table's counts (§7) run one above its column from M2
 until 3a removes entry 20.
 
+**Measured after R** (#2322), on its branch: `tools/lint/layerAllowlist.json`
+holds 12 pairs, from 18 on `main` after V: entries 1–6 below are gone.
+
 **After the mechanical move** (§7): **55 in 31 files** after M1, **19 in
 15 files** after M2. The 19 are the allowlist the plan works off.
 `src/workspace/` and #2346's `session/edit/` add nothing to either
@@ -381,12 +384,12 @@ makes its store imports upward.
 
 | # | From → to | Import | Removed by |
 |---|---|---|---|
-| 1 | engine → loader | `engineModelLoad.js` → `loadProgress.js` | R |
-| 2 | model → loader | `bvhBuild.js` → `loadProgress.js` | R |
-| 3 | model → loader | `deferredBatchedBvh.js` → `loadProgress.js` | R |
-| 4 | base → loader | `OPFS/reportOpfsSourceCondition.js` → `loadProgress.js` | R |
-| 5 | base → loader | `OPFS/reportOpfsSourceCondition.js` → `loadCaptureContext.js` | R |
-| 6 | loader → ui | `loadProgress.js` → `store/useStore.js` | R |
+| 1 | engine → loader | `engineModelLoad.js` → `loadProgress.js` | R (removed, #2322) |
+| 2 | model → loader | `bvhBuild.js` → `loadProgress.js` | R (removed, #2322) |
+| 3 | model → loader | `deferredBatchedBvh.js` → `loadProgress.js` | R (removed, #2322) |
+| 4 | base → loader | `OPFS/reportOpfsSourceCondition.js` → `loadProgress.js` | R (removed, #2322) |
+| 5 | base → loader | `OPFS/reportOpfsSourceCondition.js` → `loadCaptureContext.js` | R (removed, #2322) |
+| 6 | loader → ui | `loadProgress.js` → `store/useStore.js` | R (removed, #2322) |
 | 7 | model → loader | `buildBatchedConwayModel.js` → `conwayDirectIfcLoader.js` | 1a |
 | 8 | loader → viewer | `ProgressiveLoadSession.js` → `three/cameraLimits.js` | 2a |
 | 9 | loader → ui | `ShareIfcLoader.js` → `Components/Camera/hashState.js` | 2a |
@@ -921,19 +924,25 @@ write to whichever reporter is active (the name appears 60 times in the
 file).
 
 ```js
-// loader/loadProgress.js
-new LoadReporter({fileInfo, sink, hasConsoleTee})
-// sink: {lines(lines), currentLine(line), result(result)}; the session passes its state writer
+// loader/loadProgress.js (as built in slice R)
+new LoadReporter({fileInfo, onStall, sink, isForeground})
+// sink: the state writer of §4.3, {set(partial) → boolean, get(key)}; the
+// run's LoadJob is it, so a run that is not current writes nothing.
+// The session makes it through ModelSessionHost's injected `makeReport`
+// (useModelSessionHost.js): the class reaches Sentry's React SDK, which
+// sessionImports.test.js keeps out of the session layer (§6).
 
-report.progress(evt)                 report.line(text)
+report.progress(evt)                 report.line(text)        // source, engine and renderer lines
 report.engineVersion(text)           report.engineLog(msg)
 report.modelInfo(info)               report.geometryStats(stats)
 report.cacheHit(isHit)               report.firstMesh()
-report.summary(text)                 report.bvhDepthCap({trees, maxLeafTriangles, maxDepth})
-report.rendererInfo(line)            report.framingExclusion(bounds)
+report.summary(text)                 report.framingExclusion(bounds)
+report.bvhDepthCap(capped)           report.lateBvhDepthCap(capped)
+report.onDepthCap / onLateDepthCap   // the same two, bound, for the model's builders
 report.pauseWatchdog() / resumeWatchdog()
-report.failureInfo() / captureContext() / captureDiagnostics(…)
-report.end(error, {isAborted})
+report.failureInfo() / captureContext() / attachFailureContext() / stallCaptureTags()
+report.captureDiagnostics(…) / completedStats() / completedOutcome()
+report.end(error, {isAborted})       report.dispose()         // LoadJob#leave quiets a replaced run's
 ```
 
 - **Below the loader it is a plain object of callbacks.** The engine
@@ -1991,9 +2000,21 @@ rename what Share calls the thing.
   page's one console patch (§4.4);
   `reportOpfsSourceCondition.js` moves to the loader.
 - **Removes:** entries 1–6.
-- **Neutral:** the report text is unchanged (`loadProgress.test.js`,
-  `tests/e2e/loadReport.test.js` unchanged). #2247's remount fix holds by
-  construction instead of by an `=== activeReporter` check.
+- **Neutral:** the report text and the Sentry and GA output (fingerprints,
+  levels, tags) are unchanged, apart from a background reporter carrying
+  its own `load.phase` on its own captures (§4.4). #2247's remount fix
+  holds by construction instead of by an `=== activeReporter` check.
+  `tests/e2e/loadReport.test.js` is unchanged. `loadProgress.test.js`
+  changed its call shape and nothing it asserts: it was written against
+  the module-level functions this slice deletes, so "unchanged" could not
+  hold beside "deleted". Decided on 2026-11-25 (the coordinator, telling
+  the owner, who may overrule it): the bar is the output, and the test's
+  "unchanged" was only a device for proving it. Its expected values and
+  mock assertions, extracted from main's file and the slice's, are the
+  same multiset except in the tests that pinned the singleton itself
+  (`loadReportToken`, `currentLoadSerial`, `getLoadFailureInfo`'s serial,
+  "no active load"), which are rewritten per reporter and are part of the
+  slice's evidence. The slice's PR shows the extraction and how to rerun it.
 - **Tests:** two reporters at once keep their lines apart, each ending
   only itself (red with a shared instance); a left reporter that ends
   after the next has begun leaves the next one's console tee in place, so

@@ -55,6 +55,8 @@ import {applyProductPalette} from './productPalette'
  *   `fallbackParent` so selection / preselection overlays still attach (and
  *   render their fill) when a source batch has no parent at subset-build
  *   time. Mirrors the merged paths (`attachInstanceMapSubsets(model, scene)`).
+ * @param {Function} [opts.onDepthCap] the load's BVH depth-cap callback, for
+ *   the deferred trees (decorateBatchMeshes)
  * @return {object} `{model, stats}` — `model` is a BatchedMesh or a Group of them.
  */
 export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID, opts = {}) {
@@ -80,8 +82,12 @@ export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID, opt
  * parse derives it — the determinism the cache round-trip relies on.
  *
  * @param {Array} batches BatchHandle list (`{mesh, instanceParents, ...}`)
+ * @param {object} [opts]
+ * @param {Function} [opts.onDepthCap] the load's BVH depth-cap callback
+ *   (loader/loadProgress.js#LoadReporter#onLateDepthCap), handed to the
+ *   deferred build; none outside a load (fixtures, tools)
  */
-export function decorateBatchMeshes(batches) {
+export function decorateBatchMeshes(batches, {onDepthCap = undefined} = {}) {
   // Snapshot the file's own colors before any display override repaints
   // them. `applyProductPalette` REPLACES entries in `instanceColors` — the
   // restore table `batchedHighlight` reads — so without this the source
@@ -146,7 +152,7 @@ export function decorateBatchMeshes(batches) {
   // the stage, and picks stay correct while they build
   // (deferredBatchedBvh.js). Meshes without the patch (the Jest `three`
   // harness) are skipped, as the old `computeBoundsTree?.()` skipped them.
-  scheduleBatchedBoundsTrees(batches.map((batch) => batch.mesh))
+  scheduleBatchedBoundsTrees(batches.map((batch) => batch.mesh), {onDepthCap})
   // These batches are one model: an edit that mints a model-global id on one
   // of them must see the others' ids too (batchedEdit `mintOccurrenceId`).
   linkBatchedModel(batches.map((batch) => batch.mesh))
@@ -168,6 +174,7 @@ export function decorateBatchMeshes(batches) {
  * @param {object} [opts.root] existing Group already holding the batch
  *   meshes (the incremental path's scene-installed root) — used as the
  *   model object so the on-screen group IS the durable model, no swap.
+ * @param {Function} [opts.onDepthCap] as for decorateBatchMeshes
  * @return {object} the decorated model
  */
 export function assembleBatchedModel(batches, ifcAPI, modelID, opts = {}) {
@@ -177,7 +184,7 @@ export function assembleBatchedModel(batches, ifcAPI, modelID, opts = {}) {
     throw new Error('buildBatchedConwayModel: no renderable geometry')
   }
 
-  decorateBatchMeshes(batches)
+  decorateBatchMeshes(batches, {onDepthCap: opts.onDepthCap})
 
   // Single batch → the BatchedMesh is the model; two → a Group of them.
   // The incremental path passes its scene-installed root instead.

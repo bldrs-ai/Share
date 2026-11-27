@@ -690,7 +690,7 @@ switch mid-load still waits behind the load.
   catch takes an abort as an abort: no alert, no `load_failed`, no Sentry;
   one GA `model_load_aborted` (`phase`, `format`, real opens only). The load
   report is cleared, not frozen with a "Load failed" line
-  (`endLoadProgress(…, {isAborted})`).
+  (`LoadReporter#end(…, {isAborted})`).
 - **The store's per-model state goes when the user leaves**
   (`CadView#forgetLoadedModel`, through `store/modelState.js` since #2019,
   §4.9): `model`, `isModelReady`, the tree, search, `loadedFileInfo`, the
@@ -927,9 +927,12 @@ can't be stopped. Before, that unwind ended the next load's report
 and snackbar down, and wrote its late progress into the next report. That
 was already on main since #2222. Now:
 
-- **The report.** A load holds the reporter `beginLoadProgress` returned,
-  and its `onProgress` and `endLoadProgress` are no-ops once that reporter
-  is not the active one.
+- **The report.** A load holds its own reporter. Until open-t200's slice R
+  it was the module's one reporter, and its `onProgress` and end were
+  no-ops once that reporter was not the active one. Since R each load job
+  makes its own (`LoadJob#beginReport`), which writes the store only
+  through the job, so only while the run is current: the fix holds by
+  construction (design/tracks/open-t200/layering.md §4.4).
 - **The overlay and the "Loading …" snackbar.** They belong to the load job
   that put them up (`LoadJob#showLoading`, a page-wide owner), and only that
   job takes them down. A job given up with no load after it still takes its

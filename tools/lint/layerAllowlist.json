@@ -1,11 +1,4 @@
 {
-  "src/OPFS/reportOpfsSourceCondition.js": [
-    "src/loader/loadCaptureContext.js",
-    "src/loader/loadProgress.js"
-  ],
-  "src/engine/engineModelLoad.js": [
-    "src/loader/loadProgress.js"
-  ],
   "src/loader/Loader.js": [
     "src/connections/persistence.ts",
     "src/store/useStore.js"
@@ -22,20 +15,11 @@
   "src/loader/glbArtifactPublish.js": [
     "src/store/useStore.js"
   ],
-  "src/loader/loadProgress.js": [
-    "src/store/useStore.js"
-  ],
   "src/loader/uploadedFileName.js": [
     "src/connections/persistence.ts"
   ],
   "src/model/buildBatchedConwayModel.js": [
     "src/loader/conwayDirectIfcLoader.js"
-  ],
-  "src/model/bvhBuild.js": [
-    "src/loader/loadProgress.js"
-  ],
-  "src/model/deferredBatchedBvh.js": [
-    "src/loader/loadProgress.js"
   ],
   "src/privacy/analytics.js": [
     "src/quota/quota.js"
