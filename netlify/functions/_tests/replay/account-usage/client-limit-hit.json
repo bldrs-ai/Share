@@ -1,0 +1,112 @@
+{
+  "description": "A private-model refusal the page decided: stored as a limit hit (kept whatever the opt-out), its first-hit marker written onlyIfNew, and both GA events sent under the fixed client id: quota_limit_reached and, the marker being new, limit_first_reached.",
+  "env": {
+    "$fixture": "env/account-usage.json"
+  },
+  "now": "2026-11-25T12:00:00.000Z",
+  "uuid": "00000000-0000-4000-8000-000000000001",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/account-usage",
+    "headers": {
+      "authorization": "Bearer user-access-token",
+      "content-type": "application/json",
+      "origin": "https://bldrs.ai"
+    },
+    "body": {
+      "kind": "limit",
+      "limit": "private_model",
+      "gate": "blocked",
+      "route_kind": "github"
+    }
+  },
+  "exchanges": [
+    {
+      "$fixture": "exchanges/auth0-userinfo.json"
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/limit/2026-11/84a40528eaa5146ae8b4b4089614b29a/2026-11-25T12:00:00.000Z-00000000-0000-4000-8000-000000000001",
+        "bodyJson": {
+          "limit": "private_model",
+          "gate": "blocked",
+          "tier": "free",
+          "decided_by": "client",
+          "route_kind": "github",
+          "at": "2026-11-25T12:00:00.000Z"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e1\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/first/2026-11/84a40528eaa5146ae8b4b4089614b29a/private_model",
+        "headers": {
+          "if-none-match": "*"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"e2\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://www.google-analytics.com/mp/collect?measurement_id=G-REPLAY0001&api_secret=mp-secret-replay",
+        "bodyJson": {
+          "client_id": "188986569.3581900407",
+          "events": [
+            {
+              "name": "quota_limit_reached",
+              "params": {
+                "tier": "free",
+                "feature": "private_load",
+                "source": "server",
+                "route_kind": "github"
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://www.google-analytics.com/mp/collect?measurement_id=G-REPLAY0001&api_secret=mp-secret-replay",
+        "bodyJson": {
+          "client_id": "188986569.3581900407",
+          "events": [
+            {
+              "name": "limit_first_reached",
+              "params": {
+                "limit": "private_model",
+                "gate": "blocked",
+                "tier": "free",
+                "period": "2026-11"
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 204
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 204
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "description": "No bearer: 401 before the store is touched (the deployed smoke probe sends exactly this).",
+  "env": {
+    "NODE_ENV": "test",
+    "ADMIN_STATS_SECRET": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+    "NETLIFY_BLOBS_CONTEXT": "eyJzaXRlSUQiOiJyZXBsYXktc2l0ZSIsInRva2VuIjoicmVwbGF5LWJsb2JzLXRva2VuIiwiZWRnZVVSTCI6Imh0dHBzOi8vYmxvYnMucmVwbGF5LnRlc3QiLCJ1bmNhY2hlZEVkZ2VVUkwiOiJodHRwczovL2Jsb2JzLXVuY2FjaGVkLnJlcGxheS50ZXN0In0="
+  },
+  "request": {
+    "method": "GET",
+    "path": "/.netlify/functions/account-usage-stats",
+    "headers": {}
+  },
+  "exchanges": [],
+  "expect": {
+    "statusCode": 401,
+    "json": {
+      "error": {
+        "code": "admin_stats_unauthorized"
+      }
+    }
+  }
+}

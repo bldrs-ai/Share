@@ -243,3 +243,5 @@ export const MOCK_COMMITS = {
   ],
 }
 
+
+export const MOCK_SAVED_COMMIT_SHA = '01d6af6711a6b23dab7a5944fda02f5221ffa172'

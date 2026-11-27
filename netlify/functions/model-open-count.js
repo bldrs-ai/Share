@@ -28,20 +28,17 @@
  */
 
 import {MAX_REPORT_BYTES, MODEL_OPEN_COUNT_EVENT, parseModelOpenCountReport} from '../../src/privacy/modelOpenCountReport.js'
+import {FIRST_PARTY_CLIENT_ID} from './_lib/firstPartyClientId.js'
 import {gaMeasurementConfig, sendMeasurementProtocolEvent} from './_lib/measurementProtocol.js'
 import {isShareOrigin} from './_lib/shareOrigin.js'
 
 
 /**
- * The GA client id every count is sent under, for client-capabilities.js
- * #CAPABILITY_CLIENT_ID's reasons: one id adds no users and ties no count to
- * a browser, and it is in GA's `<uint32>.<uint32>` web shape because GA
- * answers 2xx to a malformed id yet may not process the event. The first
- * eight bytes of SHA-256('bldrs-share:model-open-count'), written out so the
- * replays can match it exactly. Its own id, not the capability one, so the
- * two streams can never be read as one client's.
+ * The GA client id every count is sent under: _lib/firstPartyClientId.js's,
+ * shared with page-visit. Its own id, not the capability one, so the two
+ * streams can never be read as one client's.
  */
-export const MODEL_OPEN_COUNT_CLIENT_ID = '3587090903.711617492'
+export const MODEL_OPEN_COUNT_CLIENT_ID = FIRST_PARTY_CLIENT_ID
 
 const HTTP_NO_CONTENT = 204
 const HTTP_BAD_REQUEST = 400

@@ -1,0 +1,19 @@
+{
+  "description": "A body that isn't one of the shapes: 400 before the token is checked or the store opened (the deployed smoke probe sends exactly this).",
+  "env": {
+    "$fixture": "env/account-usage.json"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/account-usage",
+    "headers": {},
+    "body": {}
+  },
+  "exchanges": [],
+  "expect": {
+    "statusCode": 400,
+    "json": {
+      "error": "invalid_account_usage"
+    }
+  }
+}

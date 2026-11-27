@@ -18,9 +18,13 @@ import {navigateToInMemoryModel, navigateToModel} from '../../app/navigate'
 import useStore from '../../store/useStore'
 import {GATE_RETURN_EXPORT, noteGateLogin, takeGateLoginReturn, takeGateLoginSource} from '../../Auth0/gateLogin'
 import OpenModelDialog from './OpenModelDialog'
+import {reportClientLimitHit} from '../../app/accountUsage'
 
 
 jest.mock('../../Auth0/Auth0Proxy')
+// The limit-hit report for a refusal the dialog decides itself
+// (design/new/account-usage.md); the module is tested on its own.
+jest.mock('../../app/accountUsage', () => ({reportClientLimitHit: jest.fn(() => Promise.resolve(true))}))
 jest.mock('../../connections/persistence')
 jest.mock('../../connections/pruneLocalRecents', () => ({
   __esModule: true,
@@ -308,6 +312,27 @@ describe('OpenModelDialog — Google Drive tab', () => {
     } finally {
       // Unmount before swapping the real hook back (as the in-memory denial
       // test below explains).
+      unmount()
+      useQuota.mockImplementation(realUseQuota)
+    }
+  })
+
+  // record-load never sees a refusal the dialog makes from its own ledger,
+  // so the dialog reports it, by route kind only (account-usage.md).
+  it('reports a refusal its pre-check makes, without the key', async () => {
+    reportClientLimitHit.mockClear()
+    const record = jest.fn()
+    const realUseQuota = useQuota.getMockImplementation()
+    useQuota.mockImplementation(() => ({
+      tier: 'free', record, check: jest.fn(() => ({allowed: false})), hasCapacity: false,
+    }))
+    const {unmount} = render(<OpenModelDialog {...defaultProps}/>, {wrapper: HelmetStoreRouteThemeCtx})
+    try {
+      fireEvent.click(screen.getByTestId('button-open-by-id'))
+      await waitFor(() => expect(reportClientLimitHit).toHaveBeenCalledWith({routeKind: 'gdrive'}))
+      expect(record).not.toHaveBeenCalled()
+      expect(navigateToModel).not.toHaveBeenCalled()
+    } finally {
       unmount()
       useQuota.mockImplementation(realUseQuota)
     }

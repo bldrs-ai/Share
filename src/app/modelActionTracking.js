@@ -95,7 +95,7 @@ export function trackModelActionWhenAuthSettled(action, {gate, source, routeKind
  * @param {number} timeoutMs
  * @return {Promise<boolean>} true iff settled for that state within the window
  */
-function waitForSettledFor(readIsAuthenticated, timeoutMs) {
+export function waitForSettledFor(readIsAuthenticated, timeoutMs) {
   const isSettled = (state) => state.isAuthResolved && state.authResolvedFor === readIsAuthenticated()
   if (isSettled(useStore.getState())) {
     return Promise.resolve(true)

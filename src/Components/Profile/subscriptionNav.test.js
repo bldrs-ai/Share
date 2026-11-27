@@ -1,9 +1,11 @@
 import Cookies from 'js-cookie'
 import {_resetGaClientIdForTests, setGaClientId} from '../../privacy/analytics'
+import {reportFunnelStep} from '../../app/accountUsage'
 import {goToSubscription} from './subscriptionNav'
 
 
 jest.mock('@sentry/react', () => ({captureException: jest.fn(), setTag: jest.fn()}))
+jest.mock('../../app/accountUsage', () => ({reportFunnelStep: jest.fn(() => Promise.resolve(true))}))
 
 
 describe('goToSubscription', () => {
@@ -52,6 +54,8 @@ describe('goToSubscription', () => {
     // client-reference-id, which the stripe-webhook attributes its
     // server-side subscription_started by.
     expect(window.location.href).toBe('/subscribe/?theme=light&userEmail=a%2Bb%40c.d&gaRef=gacid_111_222')
+    // The same step, for the server to count (design/new/account-usage.md).
+    expect(reportFunnelStep).toHaveBeenCalledWith('begin_checkout', {from: 'quota', destination: 'checkout'})
   })
 
   it('sends no gaRef without a client id, or without analytics consent', async () => {

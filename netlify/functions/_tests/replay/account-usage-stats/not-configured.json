@@ -1,0 +1,23 @@
+{
+  "description": "No ADMIN_STATS_SECRET (or one too short to trust): 500 not configured, whatever the bearer.",
+  "env": {
+    "NODE_ENV": "test",
+    "ADMIN_STATS_SECRET": "short"
+  },
+  "request": {
+    "method": "GET",
+    "path": "/.netlify/functions/account-usage-stats",
+    "headers": {
+      "authorization": "Bearer short"
+    }
+  },
+  "exchanges": [],
+  "expect": {
+    "statusCode": 500,
+    "json": {
+      "error": {
+        "code": "admin_stats_not_configured"
+      }
+    }
+  }
+}

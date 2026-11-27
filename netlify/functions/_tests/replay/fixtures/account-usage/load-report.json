@@ -1,0 +1,14 @@
+{
+  "content_type": "ifc",
+  "size_bucket": "1-10mb",
+  "source": "github",
+  "open_kind": "page",
+  "form_factor": "desktop",
+  "load_outcome": "displayed",
+  "cache_hit": "false",
+  "tier": "free",
+  "loadTime": 2310,
+  "firstMeshMs": 880,
+  "openMs": 1204,
+  "engineErrorTotal": 0
+}

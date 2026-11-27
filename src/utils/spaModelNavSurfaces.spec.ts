@@ -1,5 +1,6 @@
 import {readFileSync} from 'fs'
 import {Page, expect, test} from '@playwright/test'
+import {MOCK_SAVED_COMMIT_SHA} from '../net/github/Commits.fixture'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
 import {setupVirtualPathIntercept} from '../tests/e2e/models'
 import {
@@ -55,11 +56,10 @@ const CAFFEINE_PATH = '/share/v/gh/bldrs-ai/test-models/main/pdb/caffeine.pdb'
 // test-repo lists window.ifc, which downloads index.ifc's bytes from the test
 // server.
 const WINDOW_PATH = '/share/v/gh/cypresstester/test-repo/main/window.ifc'
-// The commit the Versions panel lists first (net/github/Commits.fixture).
-// Where SaveModelControl opens what it saved (the double's cypresstester
-// repo answers every file with index.ifc's bytes).
+// Where SaveModelControl opens the exact commit it saved.
 const SAVED_NAME = 'saved-in-app.ifc'
-const SAVED_PATH = `/share/v/gh/cypresstester/test-repo/main/${SAVED_NAME}`
+const SAVED_PATH = `/share/v/gh/cypresstester/test-repo/${MOCK_SAVED_COMMIT_SHA}/${SAVED_NAME}`
+// The commit the Versions panel lists first (net/github/Commits.fixture).
 const COMMIT_SHA = 'testsha1testsha1testsha1testsha1testsha1'
 const BOX_AT_COMMIT_PATH = `/share/v/gh/bldrs-ai/test-models/${COMMIT_SHA}/ifc/misc/box.ifc`
 
