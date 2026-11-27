@@ -1,5 +1,4 @@
 import {onHash} from '../Components/Camera/CameraControl'
-import {reportFirstMesh, reportFramingExclusion} from '../loader/loadProgress'
 import useStore from '../store/useStore'
 import {robustBoundsFor} from '../model/robustBounds'
 
@@ -17,13 +16,14 @@ import {robustBoundsFor} from '../model/robustBounds'
  * @param {object} options.location the router location, for a `#c:` camera
  * @param {boolean} options.isCameraTakenDuringLoad the user drove the camera
  *   while the model streamed in (open-205 #2043), so it is not re-framed
+ * @param {object} options.report the load's reporter (loader/loadProgress.js#LoadReporter)
  */
-export function placeModelInScene(viewer, loadedModel, {location, isCameraTakenDuringLoad}) {
+export function placeModelInScene(viewer, loadedModel, {location, isCameraTakenDuringLoad, report}) {
   viewer.context.getScene().add(loadedModel)
   // First geometry in the scene, for formats with no progressive preview
   // (and GLB cache hits): their one-shot arrival is their first mesh. A
   // no-op when ProgressiveLoadSession already recorded an earlier one.
-  reportFirstMesh()
+  report.firstMesh()
 
   // Size the dolly range + near/far clip planes to the model *before*
   // any camera pose is applied, so the first frame is already drawn
@@ -53,12 +53,12 @@ export function placeModelInScene(viewer, loadedModel, {location, isCameraTakenD
 
   // Framing just ran on outlier-robust bounds (robustBounds.js), and
   // this repeats that cached measurement. If strays were excluded, say
-  // so: Health line + console warning + grace-snackbar note. After
-  // endLoadProgress by design — it amends the published loadResult.
+  // so: Health line + console warning + grace-snackbar note. After the
+  // report's end by design — it amends the published loadResult.
   // The traverse guard skips the Jest MockModel, which isn't an
   // Object3D.
   if (typeof loadedModel.traverse === 'function') {
-    reportFramingExclusion(robustBoundsFor(loadedModel))
+    report.framingExclusion(robustBoundsFor(loadedModel))
   }
 
   // §6e: apply the active render look's materials to the new model, so a

@@ -12,7 +12,10 @@ import {importModuleFromUrl} from '../../export/importModuleFromUrl'
 export function loadMarkdownGfm() {
   if (!gfm) {
     gfm = importModuleFromUrl(new URL('./Components/Bot/remarkGfmEntry.js', import.meta.url).href)
-      .then((module) => module.default)
+      .then((module) => {
+        loaded = module.default
+        return loaded
+      })
     // A failed fetch must not stick: the next reply retries.
     gfm.catch(() => {
       gfm = null
@@ -22,4 +25,19 @@ export function loadMarkdownGfm() {
 }
 
 
+/**
+ * The plugin if `loadMarkdownGfm` has already resolved, else null. Lets a
+ * component seed its state synchronously: BotChat re-parents a reply's bubble
+ * when it becomes ratable (#2313), which remounts AssistantMarkdown, and a
+ * remount that had to wait on the promise again rendered one commit without
+ * GFM (a table as raw pipes).
+ *
+ * @return {?Function} the `remark-gfm` plugin, once loaded
+ */
+export function loadedMarkdownGfm() {
+  return loaded
+}
+
+
 let gfm = null
+let loaded = null

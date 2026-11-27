@@ -10,7 +10,6 @@ import {
 } from 'three'
 import {captureException} from '@sentry/react'
 import {computeBatchedBoundsTree} from 'three-mesh-bvh'
-import {reportBvhDepthCap} from '../loader/loadProgress'
 import {withBvhPrototypes} from './batchedModel.fixture'
 import {hasInstanceBoundsTree} from './batchedInstanceBvh'
 import {raycastActiveInstances} from './batchedRaycast'
@@ -29,14 +28,15 @@ jest.mock('three-mesh-bvh', () => {
   const actual = jest.requireActual('three-mesh-bvh')
   return {...actual, computeBatchedBoundsTree: jest.fn(actual.computeBatchedBoundsTree)}
 })
-jest.mock('../loader/loadProgress', () => ({
-  loadReportToken: jest.fn(() => 'load-token'),
-  reportBvhDepthCap: jest.fn(),
-}))
 jest.mock('./bvhBuild', () => {
   const actual = jest.requireActual('./bvhBuild')
   return {...actual, depthCapExtremes: jest.fn(actual.depthCapExtremes)}
 })
+
+// The scheduling load's callback (loader/loadProgress.js#LoadReporter
+// #onLateDepthCap): the model takes it and imports nothing from the loader
+// (open-t200 slice R).
+const reportBvhDepthCap = jest.fn()
 
 
 const GEOMETRIES = 4
@@ -273,7 +273,7 @@ describe('model/deferredBatchedBvh', () => {
     withBvhPrototypes(raycastActiveInstances, () => {
       const {mesh} = scatteredBatch()
       const idle = manualSchedule()
-      scheduleBatchedBoundsTrees([mesh], {schedule: idle.schedule})
+      scheduleBatchedBoundsTrees([mesh], {schedule: idle.schedule, onDepthCap: reportBvhDepthCap})
       idle.runOne()
       disposeDeferredBatchedBoundsTree.call(mesh)
       while (idle.pending() > 0) {
@@ -298,14 +298,14 @@ describe('model/deferredBatchedBvh', () => {
       const {mesh: second} = scatteredBatch()
       depthCapExtremes.mockImplementation(() => ({trees: 1, maxLeafTriangles: 12}))
       try {
-        scheduleBatchedBoundsTrees([mesh, second], {schedule: () => undefined})
+        scheduleBatchedBoundsTrees([mesh, second], {schedule: () => undefined, onDepthCap: reportBvhDepthCap})
         finishBatchedBoundsTrees(mesh)
       } finally {
         depthCapExtremes.mockImplementation(jest.requireActual('./bvhBuild').depthCapExtremes)
       }
       expect(reportBvhDepthCap).toHaveBeenCalledTimes(1)
       expect(reportBvhDepthCap).toHaveBeenCalledWith(
-        {trees: GEOMETRIES * 2, maxLeafTriangles: 12, maxDepth: 40}, 'load-token')
+        {trees: GEOMETRIES * 2, maxLeafTriangles: 12, maxDepth: 40})
       expect(second.boundsTrees.every(Boolean)).toBe(true)
     })
   })
@@ -394,7 +394,7 @@ describe('model/deferredBatchedBvh', () => {
   it('reports nothing when no tree reached the cap', () => {
     withBvhPrototypes(raycastActiveInstances, () => {
       const {mesh} = scatteredBatch()
-      scheduleBatchedBoundsTrees([mesh], {schedule: () => undefined})
+      scheduleBatchedBoundsTrees([mesh], {schedule: () => undefined, onDepthCap: reportBvhDepthCap})
       finishBatchedBoundsTrees(mesh)
       expect(depthCapExtremes).toHaveBeenCalled()
       expect(reportBvhDepthCap).not.toHaveBeenCalled()

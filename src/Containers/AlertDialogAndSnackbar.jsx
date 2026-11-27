@@ -301,7 +301,7 @@ export default function AlertAndSnackbar() {
   // error: the failure summary.
   const graceBase = (loadResult?.status === 'success' && model?.name) ?
     `Loaded ${model.name}` : (loadResult?.summaryLine ?? '')
-  // A post-load note (e.g. reportFramingExclusion's "stray geometry …")
+  // A post-load note (e.g. LoadReporter#framingExclusion's "stray geometry …")
   // rides the grace line so the user sees it without expanding the report.
   const graceLine = loadResult?.note ? `${graceBase} — ${loadResult.note}` : graceBase
   const shownLine = isLoadActive ? padLiveLine(currentLoadLine) : graceLine

@@ -19,12 +19,6 @@ import {makeWorkerTransport} from './transports'
 // reopen skips the parse — for IFC and STEP alike — and both of its stores
 // read synchronously, which is what a windowed STEP open needs.
 
-jest.mock('../loader/loadProgress', () => ({
-  reportEngineLog: jest.fn(),
-  reportEngineVersion: jest.fn(),
-  reportSourceInfo: jest.fn(),
-}))
-
 
 const BYTES = Uint8Array.from({length: 64}, (_, i) => i)
 const NAME = 'logo.step.etag.commit'

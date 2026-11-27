@@ -115,3 +115,28 @@ export function cacheClearSkippedAlert(count, onDismiss) {
     `${count} files are open in another tab and weren't cleared. Close that tab and clear again.`
   return {type: CACHE_CLEAR_SKIPPED, message, onDismiss}
 }
+
+
+/**
+ * The worker conditions downloadModelToOPFS replies with for a download that
+ * failed, i.e. those `loader/reportOpfsSourceCondition.js#reportOpfsDownloadFailed`
+ * reports. The worker's other error replies carry a `condition` too
+ * (OPFS.worker.js; Share#2107), but those are the best-effort housekeeping
+ * family that file deliberately does not report. Here, beside the OPFS
+ * module that tags its errors with them (utils.js), since the report moved
+ * to the loader (open-t200 slice R).
+ */
+export const OPFS_DOWNLOAD_FAILURE_CONDITIONS = ['fetch-rejected', 'http-error', 'no-body', 'empty-body', 'stream-error']
+
+
+/**
+ * The source kind of a `downloadToOPFS` call. Hosted and external models are
+ * stored under the URL's host; a Share-hosted `/index.ifc`-style path is
+ * stored under the constant commit hash 'bldrs-ai' (Loader.js#load).
+ *
+ * @param {string} commitHash the `commitHash` argument of downloadToOPFS
+ * @return {string} 'local' | 'external'
+ */
+export function downloadSourceKind(commitHash) {
+  return commitHash === 'bldrs-ai' ? 'local' : 'external'
+}

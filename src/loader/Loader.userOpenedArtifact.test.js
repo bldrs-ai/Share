@@ -29,7 +29,7 @@ import {downloadToOPFS} from '../OPFS/utils'
 import {INSTANCE_TABLES_VERSION} from '../model/bldrsInstanceTables'
 import {packGlbChunks} from './glbContainer'
 import {isBldrsGlbArtifact, load} from './Loader'
-import {beginLoadProgress, endLoadProgress, getCompletedLoadStats} from './loadProgress'
+import {LoadReporter} from './loadProgress'
 import {
   batchedArtifactBytes,
   liveBatchedModel,
@@ -116,11 +116,12 @@ function makeViewerStub() {
  * Open `bytes` the way a user opens a downloaded export.
  *
  * @param {Uint8Array} bytes the `.glb` file's contents
+ * @param {object} [report] the load's reporter (loadProgress.js#LoadReporter)
  * @return {Promise<object>} the loaded model
  */
-async function openGlb(bytes) {
+async function openGlb(bytes, report = null) {
   downloadToOPFS.mockResolvedValue(new MockFile(bytes))
-  return await load(ARTIFACT_PATH, makeViewerStub(), jest.fn(), true, jest.fn(), '')
+  return await load(ARTIFACT_PATH, makeViewerStub(), jest.fn(), true, jest.fn(), '', {report})
 }
 
 
@@ -171,14 +172,14 @@ describe('Loader#load — a user-opened Bldrs GLB artifact (#1844)', () => {
   it('reports a file the user opened as not a cache hit (Share#1954 stats_cacheHit)', async () => {
     // The reporter mirrors its report lines to console.info.
     const infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {})
-    beginLoadProgress({fileInfo: ARTIFACT_PATH})
+    const report = new LoadReporter({fileInfo: ARTIFACT_PATH})
     try {
-      await openGlb(await batchedArtifactBytes(liveBatchedModel()))
+      await openGlb(await batchedArtifactBytes(liveBatchedModel()), report)
     } finally {
-      endLoadProgress()
+      report.end()
       infoSpy.mockRestore()
     }
-    expect(getCompletedLoadStats().cacheHit).toBe('false')
+    expect(report.completedStats().cacheHit).toBe('false')
   })
 
   // The size half of the same split. A hit reports the source's size as the
@@ -188,14 +189,14 @@ describe('Loader#load — a user-opened Bldrs GLB artifact (#1844)', () => {
   it('reports a file the user opened at its own size', async () => {
     const bytes = await batchedArtifactBytes(liveBatchedModel())
     const infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {})
-    beginLoadProgress({fileInfo: ARTIFACT_PATH})
+    const report = new LoadReporter({fileInfo: ARTIFACT_PATH})
     try {
-      await openGlb(bytes)
+      await openGlb(bytes, report)
     } finally {
-      endLoadProgress()
+      report.end()
       infoSpy.mockRestore()
     }
-    expect(getCompletedLoadStats().fileSize).toBe(bytes.byteLength)
+    expect(report.completedStats().fileSize).toBe(bytes.byteLength)
   })
 
   describe('…wrapped in a gzipped v3 container (#1855)', () => {

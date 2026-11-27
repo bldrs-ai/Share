@@ -58,7 +58,7 @@ export const Op = Object.freeze({
   // Release a RESIDENT source (a buffered open: every STEP) and serve later
   // reads through windows from `{file}`, the OPFS File it was read from;
   // the writer's `finally` sends it after the capture, as Loader.js runs
-  // spillModelSource for a main-thread model. `{spilled, reason?, source}`.
+  // `ConwayEngine#spill` for a main-thread model. `{spilled, reason?, source}`.
   SPILL: 'spill',
 })
 

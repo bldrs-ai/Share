@@ -38,7 +38,6 @@
 //     and applied matrices, the unit scale) come from the `done` summary.
 // It offers no other engine method, so none can be reached synchronously
 // by accident.
-import {reportEngineLog, reportEngineVersion, reportSourceInfo} from '../loader/loadProgress'
 import {HEADER_SNIFF_BYTES, openModelFailure} from './unsupportedSchema'
 import {engineFormatOf} from './part21Formats'
 import {testPumpBatchSize, testStepPreviewFinishParse} from './pumpTestSeams'
@@ -149,9 +148,15 @@ export function makeEngineIfcApi() {
  *   ConwayEngine (ShareIfcLoader#parse). Called again only for the windowed
  *   retry after a buffered open ran out of memory, which only an engine that
  *   reports a source mode can ask for (retryableBufferedFailure)
+ * @param {object} [options.report] the load's report, as callbacks: the
+ *   engine imports nothing from the loader (open-t200 slice R,
+ *   design/tracks/open-t200/layering.md §4.4). `engineVersion(text)` for
+ *   the engine line, `engineLog(log)` for the worker's forwarded log, and
+ *   `line(text)` for the source and retry lines. Each optional; the loader
+ *   passes its `LoadReporter`
  * @return {{ifcAPI: object, parse: Function, abort: Function, aborted: boolean, engine: (object|null)}}
  */
-export function createEngineModelLoad({format = null, spawn = spawnWorkerEngine} = {}) {
+export function createEngineModelLoad({format = null, spawn = spawnWorkerEngine, report = null} = {}) {
   const ifcAPI = makeEngineIfcApi()
   // open-205 #2011 step A: the load can be given up before its parse ends —
   // the user switched to another model in-app (CadView's load signal, through
@@ -250,7 +255,7 @@ export function createEngineModelLoad({format = null, spawn = spawnWorkerEngine}
       ifcAPI.engine = engine
       engine.on(EngineEvent.PROGRESS, (msg) => onProgress?.(msg.event))
       engine.on(EngineEvent.MODEL_INFO, (msg) => onProgress?.({modelInfo: msg.info}))
-      engine.on(EngineEvent.LOG, (msg) => reportEngineLog(msg))
+      engine.on(EngineEvent.LOG, (msg) => report?.engineLog?.(msg))
       if (onPreviewMesh) {
         engine.on(EngineEvent.PREVIEW, (msg) => onPreviewMesh(msg.payload))
       }
@@ -302,7 +307,7 @@ export function createEngineModelLoad({format = null, spawn = spawnWorkerEngine}
       }
     }
     let engine = await spawnLive()
-    reportEngineVersion(engine.info?.conwayVersion)
+    report?.engineVersion?.(engine.info?.conwayVersion)
     let finished = wire(engine)
     let opened
     let sourceOverride = null
@@ -332,8 +337,8 @@ export function createEngineModelLoad({format = null, spawn = spawnWorkerEngine}
           sourceOverride = {windowed: true, failure: retryFailure}
           // Said in the report before the retry's lines, so the failed
           // attempt's engine warnings and errors in the load's tally read as
-          // that attempt's (loadProgress.js#reportEngineLog counts both).
-          reportSourceInfo(`Engine retry: buffered open failed (${FAILURE_TEXT[retryFailure]}); ` +
+          // that attempt's (the reporter's `engineLog` counts both).
+          report?.line?.(`Engine retry: buffered open failed (${FAILURE_TEXT[retryFailure]}); ` +
             'retrying windowed on a fresh engine')
           engine = await spawnLive()
           finished = wire(engine)
@@ -384,9 +389,9 @@ export function createEngineModelLoad({format = null, spawn = spawnWorkerEngine}
       // which says nothing of why: say it was given up.
       throw isAbortedLoad ? new LoadAbortedError() : e
     }
-    reportSourceInfo(sourceModeLine(ifcAPI.summary.sourceMode))
-    reportSourceInfo(sourceIoLine(ifcAPI.summary.source))
-    reportSourceInfo(indexLine(ifcAPI.summary.index))
+    report?.line?.(sourceModeLine(ifcAPI.summary.sourceMode))
+    report?.line?.(sourceIoLine(ifcAPI.summary.source))
+    report?.line?.(indexLine(ifcAPI.summary.index))
     // The degraded end-of-load builds in ShareIfcLoader#parse read the whole
     // stream back through `recapture`. The page's engine can re-extract it
     // (`capabilities.recapture`). A worker cannot, and re-emits a one-shot

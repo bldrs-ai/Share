@@ -18,12 +18,6 @@ import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 // transfers exactly as a worker would, so "the page received it" here means
 // it would have crossed a real worker boundary too.
 
-jest.mock('../loader/loadProgress', () => ({
-  reportEngineLog: jest.fn(),
-  reportEngineVersion: jest.fn(),
-  reportSourceInfo: jest.fn(),
-}))
-
 
 const MB = 1024 * 1024
 const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]

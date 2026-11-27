@@ -11,13 +11,7 @@ import {getRenderMode} from '../privacy/preferences'
 import {resetPlanes as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
-import {
-  beginLoadProgress,
-  currentLoadSerial,
-  endLoadProgress,
-  getLoadFailureInfo,
-  reportLoadProgress,
-} from '../loader/loadProgress'
+import {loadFailureInfoOf} from '../loader/loadProgress'
 import {omitUndefined} from '../loader/loadAnalytics'
 import {hasInMemoryUpload} from '../loader/inMemoryUploads'
 import {isVolumeModel} from '../loader/nrrd'
@@ -410,18 +404,19 @@ export default function CadView({
    *
    * @param {object} job the run (see onViewerInternal). Its loading UI goes
    *   down only if it is still the one up (LoadJob#endLoading): after a
-   *   remount the next view's load may already have put up its own.
-   * @param {number|null} [serialBefore] currentLoadSerial before the run's
-   *   attempt, or null when it was aborted before one began (the auth wait)
+   *   remount the next view's load may already have put up its own. Where
+   *   it stopped is its latest attempt's reporter's (LoadJob#report).
+   * @param {object} [options]
+   * @param {boolean} [options.isInAuthWait] aborted before an attempt began
    */
-  function endAbortedLoad(job, serialBefore = null) {
+  function endAbortedLoad(job, {isInAuthWait = false} = {}) {
     job.endLoading()
     if (!isRealModelOpen(modelPath)) {
       return
     }
-    const {phase, format} = serialBefore === null ?
+    const {phase, format} = isInAuthWait ?
       {phase: 'auth', format: undefined} :
-      getLoadFailureInfo(serialBefore)
+      loadFailureInfoOf(job.report)
     gtagEvent('model_load_aborted', omitUndefined({phase, format, open_kind: modelOpenKind(modelPath)}))
   }
 
@@ -657,7 +652,7 @@ export default function CadView({
         isAuthSettledBeforeLoad = await raceLoadAbort(waitForAuthSettled(AUTH_SETTLE_GRACE_MS), loadSignal)
       } catch (e) {
         // Only the abort rejects here (waitForAuthSettled never does).
-        endAbortedLoad(job)
+        endAbortedLoad(job, {isInAuthWait: true})
         return
       }
     }
@@ -722,9 +717,6 @@ export default function CadView({
 
     let tmpModelRef
     let isOOM = false
-    // Read before the attempt so the catch can tell whether a load reporter
-    // began for THIS attempt (getLoadFailureInfo).
-    const loadSerialBefore = currentLoadSerial()
     const stopWatchingCamera = watchCameraTakenDuringLoad()
     // Paint on demand for the whole load, not only the progressive session's
     // part of it (three/renderDemand.js): before the session begins, the
@@ -756,7 +748,7 @@ export default function CadView({
         // alert, no load_failed, no Sentry; the store's per-model state was
         // forgotten when the user left (forgetLoadedModel).
         pendingPreviewPickRef.current = null
-        endAbortedLoad(job, loadSerialBefore)
+        endAbortedLoad(job)
         return
       }
       // A tree that came up at the index belongs to a model that then never
@@ -779,7 +771,7 @@ export default function CadView({
       isOOM = reportLoadFailure(e, {
         modelPath,
         installPrefix,
-        loadSerialBefore,
+        report: job.report,
         reported: {loadFailure: reportedLoadFailureRef, refusal: reportedRefusalRef},
         setAlert,
         isLegacyUploadRoute: isLegacyUploadRouteRef.current,
@@ -811,7 +803,7 @@ export default function CadView({
     }
     if (!job.isCurrent()) {
       // Left after the load resolved, while its tree was still being walked.
-      endAbortedLoad(job, loadSerialBefore)
+      endAbortedLoad(job)
       return
     }
     // Reuse the index's tree only while it is still the one shown: an
@@ -835,7 +827,7 @@ export default function CadView({
       // selection and visibility links, the camera listener) is this model's
       // to write any more. Everything below runs in one synchronous stretch,
       // so this one check covers it.
-      endAbortedLoad(job, loadSerialBefore)
+      endAbortedLoad(job)
       return
     }
     // The finished model now answers everything the indexed one did, and it
@@ -1005,14 +997,14 @@ export default function CadView({
 
     // Per-load progress reporter (conway #301): accumulates the normalized
     // load-log report (status-bar expando + post-load dialog + console
-    // mirror), Sentry breadcrumbs, and the stall watchdog. Disposed in the
+    // mirror), Sentry breadcrumbs, and the stall watchdog. Ended in the
     // finally below. Live progress renders in the snackbar (AlertDialogAndSnackbar),
     // so the snackbar keeps only the base "Loading <file>" message.
-    // This load's own reporter: its progress and its end reach the report
-    // only while it is still the active one (loadProgress.js), so a load the
-    // user has left, unwinding after the next one began, can't write into or
-    // end the next one's.
-    const reporter = beginLoadProgress({
+    // This attempt's own reporter (LoadJob#beginReport): it writes the
+    // store only while the run is current, so a load the user has left,
+    // unwinding after the next one began, can't write into or end the next
+    // one's.
+    const report = job.beginReport({
       fileInfo: isGoogleResult ? `gdrive:${routeResult.fileId}` : filepath,
       onStall: (lastEvent) => {
         const where = lastEvent?.phase ? ` on ${lastEvent.phase}` : ''
@@ -1020,9 +1012,9 @@ export default function CadView({
       },
     })
 
-    const onProgress = (progressMsg) => reportLoadProgress(progressMsg, reporter)
+    const onProgress = (progressMsg) => report.progress(progressMsg)
     let loadedModel
-    // Captured in the catch so the finally can tell endLoadProgress whether
+    // Captured in the catch so the finally can tell the report's end whether
     // the load succeeded (success grace line) or failed (error grace line),
     // even though the error is re-raised to onViewerInternal's handler.
     let loadError = null
@@ -1052,7 +1044,7 @@ export default function CadView({
           const blobUrl = URL.createObjectURL(download.blob)
           try {
             loadedModel = await load(blobUrl, viewer, onProgress, false, publishOpfsFile, '',
-              {onIndexed, onFirstMesh, signal})
+              {onIndexed, onFirstMesh, signal, report})
           } finally {
             // The URL pins the whole download for the life of the page, and
             // each load mints a new one (a theme toggle reloads the model).
@@ -1067,7 +1059,7 @@ export default function CadView({
           // published) downloads this way, which is why the quota meter
           // treats a Drive file loaded here as public.
           loadedModel = await load(routeResult.downloadUrl, viewer, onProgress, false, publishOpfsFile, '',
-            {onIndexed, onFirstMesh, signal})
+            {onIndexed, onFirstMesh, signal, report})
         }
       } else {
         // Read the token at call time, not from the render closure — the
@@ -1079,7 +1071,7 @@ export default function CadView({
           (gitpath && gitpath === 'external') ? false : isOpfsAvailable, publishOpfsFile, tokenNow,
           // Route provenance, which the loader can't recover from `filepath`
           // alone: /v/local-only/<id> and /v/p/<id> give the same URL (#1956).
-          {isUploadedRoute: routeResult.isUploadedFile === true, onIndexed, onFirstMesh, signal})
+          {isUploadedRoute: routeResult.isUploadedFile === true, onIndexed, onFirstMesh, signal, report})
       }
     } catch (error) {
       loadError = error
@@ -1101,9 +1093,9 @@ export default function CadView({
       // Freeze the report (Total line) + stall watchdog off. The
       // reporter's last-event state stays queryable after end —
       // onViewerInternal's catch stamps it onto Sentry via
-      // attachLoadFailureContext before capturing. The captured error (or
+      // attachFailureContext before capturing. The captured error (or
       // null on success) drives the end-of-load grace snackbar.
-      endLoadProgress(loadError, {isAborted: isAborted(signal), reporter})
+      report.end(loadError, {isAborted: isAborted(signal)})
       job.hideLoading()
     }
     // `load` checks the signal itself, up to its last await; this is the
@@ -1139,7 +1131,7 @@ export default function CadView({
     // onViewerInternal's watch (an upload), which must not see this load's.
     const isCameraTakenDuringLoad = isCameraTakenDuringLoadRef.current
     isCameraTakenDuringLoadRef.current = false
-    placeModelInScene(viewer, loadedModel, {location, isCameraTakenDuringLoad})
+    placeModelInScene(viewer, loadedModel, {location, isCameraTakenDuringLoad, report})
 
     // TODO(pablo): centralize capability check somewhere
     if (loadedModel.ifcManager) {
@@ -1154,6 +1146,7 @@ export default function CadView({
     // modelOpenEvents.js.
     reportModelOpened(routeResult, loadedModel, {
       installPrefix,
+      report,
       refs: {engagementStop: stopModelEngagementRef, refusal: reportedRefusalRef, open: reportedOpenRef},
       setAlert,
       getIsAuthenticated: () => isAuthenticatedRef.current,

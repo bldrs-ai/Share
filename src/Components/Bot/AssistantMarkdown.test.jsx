@@ -1,19 +1,29 @@
 import React from 'react'
-import {act, render, screen, within} from '@testing-library/react'
+import {act, cleanup, render, screen, within} from '@testing-library/react'
 import {ThemeCtx} from '../../theme/Theme.fixture'
 import {describeRef, jumpToRef} from '../../tools/refLinks'
 import AssistantMarkdown, {allowedLinkUri} from './AssistantMarkdown'
 
 
 // The plugin is a URL import in the app (markdownGfm.js); Jest has the module itself.
-const mockGfm = {load: () => Promise.resolve(jest.requireActual('remark-gfm').default)}
+const mockGfm = {
+  load: () => Promise.resolve(jest.requireActual('remark-gfm').default),
+  // Mirrors markdownGfm.js: the resolved plugin is kept so a remount can seed from it.
+  loaded: null,
+}
 // The chip's model lookup and jump have their own suite (refLinks.test.js); here only the wiring.
 jest.mock('../../tools/refLinks', () => ({
   ...jest.requireActual('../../tools/refLinks'),
   describeRef: jest.fn(),
   jumpToRef: jest.fn(),
 }))
-jest.mock('./markdownGfm', () => ({loadMarkdownGfm: () => mockGfm.load()}))
+jest.mock('./markdownGfm', () => ({
+  loadMarkdownGfm: () => mockGfm.load().then((plugin) => {
+    mockGfm.loaded = plugin
+    return plugin
+  }),
+  loadedMarkdownGfm: () => mockGfm.loaded,
+}))
 
 
 /**
@@ -41,19 +51,35 @@ describe('AssistantMarkdown', () => {
   })
 
   it('renders a GFM table, inside a scrolling wrapper, once the plugin has loaded', async () => {
-    let load = () => undefined
-    mockGfm.load = () => new Promise((resolve) => {
-      load = () => resolve(jest.requireActual('remark-gfm').default)
-    })
-    await renderMarkdown('| a | b |\n|---|---|\n| 1 | 2 |')
-    // Until it loads, the reply is plain Markdown: the table is its pipes.
-    expect(screen.queryByRole('table')).toBeNull()
-    expect(screen.getByText(/\| a \| b \|/)).toBeInTheDocument()
-    await act(() => Promise.resolve(load()))
-    const table = screen.getByRole('table')
-    expect(within(table).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['a', 'b'])
-    expect(getComputedStyle(table.parentElement).overflowX).toBe('auto')
-    mockGfm.load = () => Promise.resolve(jest.requireActual('remark-gfm').default)
+    try {
+      let load = () => undefined
+      // An earlier test has loaded the plugin; this one is the first load.
+      mockGfm.loaded = null
+      mockGfm.load = () => new Promise((resolve) => {
+        load = () => resolve(jest.requireActual('remark-gfm').default)
+      })
+      await renderMarkdown('| a | b |\n|---|---|\n| 1 | 2 |')
+      // Until it loads, the reply is plain Markdown: the table is its pipes.
+      expect(screen.queryByRole('table')).toBeNull()
+      expect(screen.getByText(/\| a \| b \|/)).toBeInTheDocument()
+      await act(() => Promise.resolve(load()))
+      const table = screen.getByRole('table')
+      expect(within(table).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['a', 'b'])
+      expect(getComputedStyle(table.parentElement).overflowX).toBe('auto')
+    } finally {
+      mockGfm.load = () => Promise.resolve(jest.requireActual('remark-gfm').default)
+    }
+  })
+
+  it('renders a table on the first commit of a remount after the plugin has loaded (#2313)', async () => {
+    const table = '| a | b |\n|---|---|\n| 1 | 2 |'
+    await renderMarkdown(table)
+    cleanup()
+    // No act, no await: only the first commit is checked. BotChat remounts a
+    // reply's bubble when it becomes ratable, and that commit must not be raw pipes.
+    render(<AssistantMarkdown text={table}/>, {wrapper: ThemeCtx})
+    expect(screen.getByRole('table')).toBeInTheDocument()
+    expect(screen.queryByText(/\| a \| b \|/)).toBeNull()
   })
 
   it('renders a fenced block as pre > code that scrolls', async () => {

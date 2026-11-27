@@ -1,11 +1,9 @@
 import {BatchedMesh, Group, Mesh, MeshBasicMaterial} from 'three'
 import {gtagEvent} from '../privacy/analytics'
-import {reportRendererInfo} from './loadProgress'
 import {NO_MULTI_DRAW_LINE, reportRendererLimits} from './reportRendererLimits'
 
 
 jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn()}))
-jest.mock('./loadProgress', () => ({reportRendererInfo: jest.fn()}))
 
 
 /**
@@ -25,13 +23,18 @@ function batchedModel() {
 }
 
 
+// The load's reporter, of which this takes only `line`.
+const report = {line: jest.fn()}
+const reportRendererInfo = report.line
+
+
 describe('loader/reportRendererLimits', () => {
   beforeEach(() => {
     jest.clearAllMocks()
   })
 
   it('reports a batched model drawing without WEBGL_multi_draw, to the report and to GA', () => {
-    reportRendererLimits(batchedModel(), rendererWith(false), 'glb')
+    reportRendererLimits(batchedModel(), rendererWith(false), 'glb', report)
     expect(reportRendererInfo).toHaveBeenCalledWith(NO_MULTI_DRAW_LINE)
     expect(gtagEvent).toHaveBeenCalledWith('renderer_fallback', {condition: 'no_multi_draw', format: 'glb'})
   })
@@ -44,22 +47,22 @@ describe('loader/reportRendererLimits', () => {
       walked++
       return children
     }})
-    reportRendererLimits(model, rendererWith(true), 'glb')
+    reportRendererLimits(model, rendererWith(true), 'glb', report)
     expect(walked).toBe(0)
     expect(reportRendererInfo).not.toHaveBeenCalled()
     expect(gtagEvent).not.toHaveBeenCalled()
     // Non-vacuity: without the extension, the same model is walked.
-    reportRendererLimits(model, rendererWith(false), 'glb')
+    reportRendererLimits(model, rendererWith(false), 'glb', report)
     expect(walked).toBeGreaterThan(0)
   })
 
   it('says nothing for a model with no BatchedMesh, which draws the same either way', () => {
     const model = new Group()
     model.add(new Mesh())
-    reportRendererLimits(model, rendererWith(false), 'obj')
+    reportRendererLimits(model, rendererWith(false), 'obj', report)
     expect(reportRendererInfo).not.toHaveBeenCalled()
     // A bare BatchedMesh model (no Group) is still one.
-    reportRendererLimits(new BatchedMesh(1, 3, 3, new MeshBasicMaterial()), rendererWith(false), 'ifc')
+    reportRendererLimits(new BatchedMesh(1, 3, 3, new MeshBasicMaterial()), rendererWith(false), 'ifc', report)
     expect(reportRendererInfo).toHaveBeenCalledTimes(1)
   })
 

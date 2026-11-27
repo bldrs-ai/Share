@@ -122,15 +122,17 @@ export function makeIndexedModelHandle(engine, ifcAPI) {
  * @param {object} [opts]
  * @param {object|null} [opts.scene] the parent subsets fall back to when the
  *   model has not been added to the scene yet
+ * @param {Function} [opts.onDepthCap] the load's BVH depth-cap callback
+ *   (model/bvhBuild.js), for the tree built here
  */
-export function decorateConwayDirectIfcModel(ifcModel, engine, ifcAPI, modelID, {scene = null} = {}) {
+export function decorateConwayDirectIfcModel(ifcModel, engine, ifcAPI, modelID, {scene = null, onDepthCap} = {}) {
   ifcModel.modelID = modelID
   // Optional-chained because tests `jest.mock('three')`, whose mocked
   // BufferGeometry has none of these; a real one always does.
   ifcModel.geometry?.computeBoundingBox?.()
   ifcModel.geometry?.computeBoundingSphere?.()
   if (typeof ifcModel.geometry?.computeBoundsTree === 'function') {
-    ifcModel.geometry.computeBoundsTree()
+    ifcModel.geometry.computeBoundsTree(onDepthCap ? {onDepthCap} : undefined)
   }
   // The pre-reorder map from `buildConwayIfcModel` is keyed by emission
   // position; the raycaster's `faceIndex` is the post-reorder one, so a

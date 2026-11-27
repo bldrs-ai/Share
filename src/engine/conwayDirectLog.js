@@ -54,7 +54,7 @@ export function conwayDirectInfo(...args) {
  *
  * WARN rather than info is load-bearing for the one caller so far
  * (`decideCoordinationOffset`'s georeferenced-recenter line): the load
- * report's console tee in `loadProgress.js#installConsoleTee` captures
+ * report's console tee (`loader/consoleTee.js`) captures
  * `console.warn` and `console.error` only — its own report lines go through
  * `console.info`, so info is deliberately not teed. Emitting at warn is what
  * puts the line in the snackbar expando and the copyable "i" report, which

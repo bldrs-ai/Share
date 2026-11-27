@@ -17,7 +17,7 @@ show it:
 
 When a load settles, the snackbar doesn't vanish — it hands off to the "i"
 report control with a short grace period, driven by the store's `loadResult`
-(`{status, summaryLine}`, set by `loadProgress.js#endLoadProgress`):
+(`{status, summaryLine}`, set by `loadProgress.js#LoadReporter#end`):
 
 - **Success** shows a terse `Loaded <name>` (just the outcome + model name —
   the timing/heap Total and diagnostics stay one expand, or the "i" report,
@@ -173,10 +173,10 @@ Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 trian
 7. **Health** — optional lines after Total, each for a condition the load
    survived but that someone triaging the model wants to know about:
    - `Health: stray geometry excluded from view framing (…)` — auto-framing
-     left outliers out (`reportFramingExclusion`; added post-load, since
+     left outliers out (`LoadReporter#framingExclusion`; added post-load, since
      framing runs after the load settles).
    - `Health: picking index hit its depth cap (40) in N trees; largest leaf
-     M triangles, tested one by one per pick` (`reportBvhDepthCap`).
+     M triangles, tested one by one per pick` (`LoadReporter#bvhDepthCap`).
      three-mesh-bvh stops splitting at `maxDepth` and makes one leaf of whatever is left, so a ray reaching
      that leaf tests its triangles linearly; picks stay correct. Share builds
      BVHs with `verbose: false` (`model/bvhBuild.js`) because the
@@ -195,12 +195,14 @@ Health: picking index hit its depth cap (40) in 3 trees; largest leaf 3400 trian
      A batched model (Conway-direct IFC and STEP, and their GLB cache hits)
      builds its trees after it is on screen, in idle time
      (`model/deferredBatchedBvh.js`), so its cap usually arrives after
-     Total. The build reports once, when its last tree is built, with the
-     token of the load that scheduled it (`loadReportToken`): the line is
-     added after Total, as the framing line is, or replaces the one the load
-     wrote; GA counts it once the load is known to have succeeded; a cap
-     from a load that has since been replaced is dropped. A tree built for
-     an edit's new geometry later carries no token and is not the load's.
+     Total. The build reports once, when its last tree is built, through
+     the callback the load handed it when it scheduled it
+     (`LoadReporter#onLateDepthCap`): the line is added after Total, as the
+     framing line is, or replaces the one the load wrote; GA counts it once
+     the load is known to have succeeded; a cap from a load the user has
+     since left is dropped by the reporter's sink, the load job, which
+     writes only while its run is current. A tree built for an edit's new
+     geometry later is handed no callback and is not the load's.
 
 8. **Engine source lines** — an engine-worker load (engine-worker.md
    §5.6, §7) adds up to three lines after its stages, each a fact about how

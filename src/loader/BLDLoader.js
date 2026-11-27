@@ -17,11 +17,14 @@ export default class BLDLoader {
   /**
    * @param {string|Buffer} data
    * @param {string} basePath
-   * @param {Function} onLoad
-   * @param {Function} onError
+   * @param {object} [options]
+   * @param {object} [options.report] the assembly's load reporter
+   *   (loadProgress.js#LoadReporter): each nested load's lines (its source,
+   *   its model line) go to it, as they did when one reporter served the
+   *   page. Their progress events do not, as before.
    * @return {Object3D}
    */
-  async parse(data, basePath) {
+  async parse(data, basePath, {report = null} = {}) {
     assertDefined(data)
     const model = JSON.parse(data)
     const root = new Object3D
@@ -50,7 +53,7 @@ export default class BLDLoader {
       // .bld hands the user whichever object finished last
       // (loader/glbArtifactPublish.js).
       // eslint-disable-next-line no-empty-function
-      const subModel = await load(subUrlStr, this.viewer, () => {}, () => {}, () => {}, '', {isNestedLoad: true})
+      const subModel = await load(subUrlStr, this.viewer, () => {}, () => {}, () => {}, '', {isNestedLoad: true, report})
       debug().log('adding submodel:', subModel)
       root.add(subModel)
 

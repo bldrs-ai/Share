@@ -1,6 +1,5 @@
 import {addBreadcrumb, captureMessage, setContext, setTag} from '@sentry/react'
 import {SENTRY_CID_TAG, getOpenCidForSentry} from '../privacy/analytics'
-import useStore from '../store/useStore'
 import debug from '../utils/debug'
 import {normalizeMessageDigits} from '../utils/messageGrouping'
 // Named import so esbuild can prune the rest of the JSON (same trick as
@@ -15,13 +14,10 @@ import {LoadLogAccumulator, formatMb} from '@bldrs-ai/conway/src/core/progress_l
 import {nonIdentifyingLoadContext} from './loadCaptureContext'
 import {SENTRY_MODEL_LINE_PREFIX, redactConsoleMessage, sentrySafeMessageOf} from '../privacy/sentryRedaction'
 import {reportBvhDepthCapToGa, reportLoadDiagnosticsToGa, reportLoadStallRecovered} from './reportLoadDiagnostics'
-// Conway's static Logger, for the data-defect marker (conway#712) on the
-// entries it logs — see installDefectProxy. This is the SAME module instance
-// the engine logs through: `@bldrs-ai/conway/web-ifc` (ShareIfc's import)
-// resolves to compiled/src/compat/web-ifc/index.js, whose ifc_api.js imports
-// ../../logging/logger.js — the file this `./src/*` subpath resolves to — so
-// esbuild bundles one Logger, not two.
-import Logger, {DATA_DEFECT} from '@bldrs-ai/conway/src/logging/logger'
+import {releaseConsoleTee, takeConsoleTee} from './consoleTee'
+// The data-defect marker (conway#712) on the entries conway's Logger logs:
+// see recordLogEntry, and consoleTee.js for which Logger instance this is.
+import {DATA_DEFECT} from '@bldrs-ai/conway/src/logging/logger'
 
 
 /**
@@ -32,11 +28,22 @@ import Logger, {DATA_DEFECT} from '@bldrs-ai/conway/src/logging/logger'
  * post-load report dialog, and a console mirror — plus Sentry breadcrumbs,
  * stall detection, and `load.*` failure tags for phase-grouped issues.
  *
- * A load is a singleton in the viewer (one model at a time), so the
- * reporter is module-global: `beginLoadProgress()` in CadView's loadModel,
- * `reportLoadProgress()` / `reportModelInfo()` / `reportEngineVersion()`
- * from any layer that has a signal, and `attachLoadFailureContext()` from
- * the catch that calls `captureException`.
+ * One {@link LoadReporter} per load run (open-t200 slice R,
+ * design/tracks/open-t200/layering.md §4.4): the run's `LoadJob` makes it
+ * (session/modelSession.js#LoadJob#beginReport) and hands it down the load
+ * as `report`. Below the loader it is a plain object of callbacks: the
+ * engine (engine/engineModelLoad.js) and the model's BVH builders
+ * (model/bvhBuild.js, model/deferredBatchedBvh.js) take what they call and
+ * import nothing from here. Its store writes go through its sink, the job's
+ * state writer, so a run the user has left writes nothing, however late it
+ * reports; and one run's report cannot end or write into another's, because
+ * each holds its own. Until slice R the reporter was one module-level
+ * instance, `activeReporter`, which the next load's begin replaced.
+ *
+ * Three things stay page-wide, held by the foreground load's reporter
+ * (`isForeground`): the console tee and Logger proxy (consoleTee.js), and
+ * Sentry's scope (applySentryLoadState). A background reporter's own Sentry
+ * captures carry its load state per event instead.
  */
 
 const BREADCRUMB_INTERVAL_MS = 1000
@@ -77,10 +84,17 @@ export const HANG_TIMEOUT_MS = 180_000
 /** The Sentry message for a hung load. Not "stalled": that title is SHARE-1HJ's 30 s report. */
 export const LOAD_HUNG_MESSAGE = 'Model load hung'
 
-let activeReporter = null
-// Incremented by every beginLoadProgress, so a caller can tell whether a
-// load began since it last looked (see getLoadFailureInfo).
-let loadSerial = 0
+/**
+ * Grace-snackbar note when framing excluded strays — kept short: the
+ * numbers live in the Health line one expand (or the "i" report) away.
+ */
+const FRAMING_NOTE = 'stray geometry far from the model was left out of the zoom fit'
+
+/**
+ * A sink that drops every write: a reporter with nowhere to publish (a
+ * caller that only reads its Sentry state or stats).
+ */
+export const NO_SINK = Object.freeze({set: () => false, get: () => undefined})
 
 
 /**
@@ -128,18 +142,38 @@ export function isModelInfoProgress(progressArg) {
 }
 
 
-/** Per-load report state: accumulator, breadcrumb throttle, stall watchdog. */
-class LoadProgressReporter {
+/**
+ * One load run's report: accumulator, breadcrumb throttle, stall watchdog,
+ * and the Sentry and GA reports drawn from them. See the module doc.
+ */
+export class LoadReporter {
   /**
    * @param {object} opts
    * @param {string} opts.fileInfo short model identity (path/type/size) for
    *   Sentry context and the fallback model line
    * @param {Function} [opts.onStall] called once per silent period with the
    *   last event when the watchdog fires
+   * @param {{set: function(object): boolean, get: function(string): *}} [opts.sink]
+   *   where the report is published: `set` takes store fields
+   *   (`loadReportLines`, `currentLoadLine`, `loadResult`), and drops them
+   *   once the run is not current (LoadJob's `set`); `get` reads one back.
+   *   The state writer of layering.md §4.3. NO_SINK when absent.
+   * @param {boolean} [opts.isForeground] whether this run holds the page-wide
+   *   state: the console tee (consoleTee.js) and Sentry's scope. A
+   *   background run (a load the user is not looking at; none yet, until
+   *   slice 3b) gets its engine's own log (`engineLog`) but not the page's
+   *   console, and carries its load state on each of its own captures.
    */
-  constructor({fileInfo, onStall}) {
+  constructor({fileInfo, onStall, sink = NO_SINK, isForeground = true}) {
     this.fileInfo = fileInfo
     this.onStall = onStall
+    this.sink = sink
+    this.isForeground = isForeground
+    // The model's builders take callbacks (layering.md §4.4), so these two
+    // are bound once here: `onDepthCap` for a tree built during the load,
+    // `onLateDepthCap` for one built once the model is on screen.
+    this.onDepthCap = (capped) => this.bvhDepthCap(capped)
+    this.onLateDepthCap = (capped) => this.lateBvhDepthCap(capped)
     // Filename for the "Loaded <name>" grace line when the snackbar has no
     // better name. The STEP header's fileName is unreliable (often a comment),
     // so the snackbar prefers the store's model.name — the same name the page
@@ -173,16 +207,18 @@ class LoadProgressReporter {
     // stalled: what the GA recovery event and the failure tag go by.
     this.stallPhase = undefined
     this.stallRecoveryReported = false
+    // A pump paused by backpressure is not a stall (pauseWatchdog).
+    this.isWatchdogPaused = false
     this.startTime = Date.now()
     this.fileSize = undefined
     // A GLB cache hit's artifact size, beside the source's fileSize: the
     // bytes that load actually parsed (recordModelInfo).
     this.artifactSize = undefined
     // Page-wide console.warn / console.error calls in the load window, from
-    // the console tee. NOT engine severity: see completedStats.
+    // the console tee. NOT engine severity: see finishReport's finalStats.
     this.warningCount = 0
     this.errorCount = 0
-    // Engine severity tally, from conway's Logger via installDefectProxy.
+    // Engine severity tally, from conway's Logger via recordLogEntry.
     // Engine = not a data defect: a defect is a statement about the input
     // file, so it is counted on its own (dataDefectTotal), per the ops#28
     // rubric. The Sets key distinct entries as level|message, matching how
@@ -192,9 +228,11 @@ class LoadProgressReporter {
     this.engineErrorTotal = 0
     this.dataDefectTotal = 0
     // True when the load was served from the GLB artifact cache rather than
-    // parsed by the engine (reportCacheHit); undefined until the loader says.
-    this.cacheHit = undefined
-    // Load-clock ms of the first geometry on screen (reportFirstMesh).
+    // parsed by the engine (cacheHit); undefined until the loader says.
+    this.isCacheHit = undefined
+    // The model summary the loader puts on the Total line (summary).
+    this.summaryText = undefined
+    // Load-clock ms of the first geometry on screen (firstMesh).
     this.firstMeshMs = undefined
     // Engine events carry their own elapsedMs measured from the ENGINE's
     // clock (conway's tracker starts at OpenModel), not from load start.
@@ -206,23 +244,23 @@ class LoadProgressReporter {
     this.ended = false
     // Model-header fields the Sentry diagnostics tags are built from, kept
     // structured as they arrive (recordModelInfo) rather than re-parsed out
-    // of the formatted model line. See captureDiagnostics for why they need
+    // of the formatted model line. See sendDiagnostics for why they need
     // to be tags rather than context.
     this.schema = undefined
     this.originatingSystem = undefined
     this.preprocessorVersion = undefined
     // Geometry the load actually produced, when the loader reports it
-    // (reportGeometryStats) — the load-outcome signal classifyLoadOutcome
+    // (geometryStats) — the load-outcome signal classifyLoadOutcome
     // reads. Undefined means "not reported", which is not the same as zero.
-    this.geometryStats = undefined
+    this.builtStats = undefined
     // Distinct console warning/error text → occurrence count, captured via
     // the console tee below and appended after the Total line (issue #301
     // preview feedback #4). Includes conway's engine warnings/errors, which
     // route through console.warn/error.
     this.diagnostics = new Map()
     // BVH trees that reached three-mesh-bvh's depth cap during the load
-    // (reportBvhDepthCap), or null when none did.
-    this.bvhDepthCap = null
+    // (bvhDepthCap), or null when none did.
+    this.depthCapped = null
     // Set once the cap has been counted in GA (reportBvhDepthCapOnce).
     this.bvhDepthCapReported = false
     // Set when the load succeeded and its cap may go to GA, with the content
@@ -237,14 +275,24 @@ class LoadProgressReporter {
     // tee's text) conway logged during this load, split by whether the entry
     // carried the data-defect marker — what isDataDefectDiagnostic matches
     // the captured diagnostic against. Both are kept because a message can
-    // land in both; see installDefectProxy.
+    // land in both; see recordLogEntry.
     this.dataDefectMessages = new Set()
     this.unmarkedMessages = new Set()
-    this.installConsoleTee()
-    this.installDefectProxy()
+    // Open from here to finishReport (releaseConsole): the window in which
+    // the page's console (through the tee, foreground only) and the engine's
+    // log (engineLog) count towards this report.
+    this.isCapturing = true
+
+    // Before the preamble, so the previous run's report is gone when this
+    // one's first line lands. Clears any lingering grace snackbar too, before
+    // this run's live line takes the snackbar over.
+    this.sink.set({loadReportLines: [], currentLoadLine: null, loadResult: null})
+    if (this.isForeground) {
+      takeConsoleTee(this)
+    }
 
     // Report preamble (log lines 1-2): Share version + memory condition
-    // before the load. The engine line arrives via reportEngineVersion once
+    // before the load. The engine line arrives via engineVersion once
     // the wasm is initialized.
     const heap = usedHeapMb()
     const heapNote = heap !== undefined ? `, ${formatMb(heap)} MB heap before load` : ''
@@ -252,64 +300,45 @@ class LoadProgressReporter {
   }
 
   /**
-   * Tee console.warn / console.error for the load window so their text is
-   * captured into the report (deduplicated with counts). Restored by
-   * dispose(). Our own report lines use console.info, so they aren't
-   * captured. Multi-line messages (wasm stack traces) collapse to one line.
+   * One console.warn / console.error line the page's tee routed here while
+   * this reporter held it (consoleTee.js): counted, and its text kept,
+   * deduplicated with a count, for the report's diagnostics line. Multi-line
+   * messages (wasm stack traces) collapse to one line.
+   *
+   * @param {Array<*>} args what the console method was called with
+   * @param {string} level 'warning' | 'error'
    */
-  installConsoleTee() {
-    this.originalWarn = console.warn
-    this.originalError = console.error
-    const capture = (args, level) => {
-      if (level === 'warning') {
-        this.warningCount++
-      } else {
-        this.errorCount++
-      }
-      // Redacted at capture: teed text reaches Sentry as the diagnostics
-      // event's title, its `messages` and the report's `Warnings & errors`
-      // line, none of which pass through beforeBreadcrumb. A warning that
-      // names the user's file (a drop rejected mid-load) would otherwise
-      // carry the name there (`privacy/sentryRedaction.js`). The user's own
-      // report shows the redacted form too, since its warnings line is built
-      // from the same tally; the console still prints the warning whole.
-      // Keying the tally by the redacted text also folds the same warning
-      // about different files into one diagnostic.
-      const text = redactConsoleMessage(collapseWhitespace(args
-        .map((arg) => (arg instanceof Error ? sentrySafeMessageOf(arg) ?? arg.message : String(arg)))
-        .join(' ')))
-      if (text !== '') {
-        this.diagnostics.set(text, (this.diagnostics.get(text) ?? 0) + 1)
-      }
+  captureConsole(args, level) {
+    if (level === 'warning') {
+      this.warningCount++
+    } else {
+      this.errorCount++
     }
-    console.warn = (...args) => {
-      capture(args, 'warning')
-      this.originalWarn.apply(console, args)
-    }
-    console.error = (...args) => {
-      capture(args, 'error')
-      this.originalError.apply(console, args)
+    // Redacted at capture: teed text reaches Sentry as the diagnostics
+    // event's title, its `messages` and the report's `Warnings & errors`
+    // line, none of which pass through beforeBreadcrumb. A warning that
+    // names the user's file (a drop rejected mid-load) would otherwise
+    // carry the name there (`privacy/sentryRedaction.js`). The user's own
+    // report shows the redacted form too, since its warnings line is built
+    // from the same tally; the console still prints the warning whole.
+    // Keying the tally by the redacted text also folds the same warning
+    // about different files into one diagnostic.
+    const text = redactConsoleMessage(collapseWhitespace(args
+      .map((arg) => (arg instanceof Error ? sentrySafeMessageOf(arg) ?? arg.message : String(arg)))
+      .join(' ')))
+    if (text !== '') {
+      this.diagnostics.set(text, (this.diagnostics.get(text) ?? 0) + 1)
     }
   }
 
   /**
-   * Watch conway's Logger for the load window and remember which entries it
-   * marked `category: 'dataDefect'` (conway#712) — the classification
-   * source #1863 prefers for the `data_defect` tag.
+   * One entry conway's Logger logged (the tee's Logger proxy, or a worker's
+   * forwarded log, engineLog): remember which entries it marked
+   * `category: 'dataDefect'` (conway#712) — the classification source #1863
+   * prefers for the `data_defect` tag.
    *
-   * Why a proxy, and not `Logger.getDataDefects()` at capture time: conway's
-   * `StreamAllMeshes` / `StreamAllMeshesAsync` end with `Logger.clearLogs()`,
-   * so the buffer that call reads is already empty by the time the load
-   * reaches CadView's captureLoadDiagnostics — and a demand-geometry load
-   * keeps logging after that point, into a fresh buffer. A proxy is handed
-   * every entry synchronously as it is logged (`Logger.log` echoes to the
-   * console sink first, then calls the proxies), so nothing depends on when
-   * the buffer is cleared, and the category is read straight off the
-   * `LogEntry` rather than reconstructed from prose.
-   *
-   * The proxy only records; the text the Sentry event is titled by still
-   * comes from the console tee, and isDataDefectDiagnostic joins the two.
-   * Detached with the tee in restoreConsole, so both cover the same window.
+   * This only records; the text the Sentry event is titled by still comes
+   * from the console tee, and isDataDefectDiagnostic joins the two.
    *
    * Unmarked warnings/errors are recorded too, because the join is lossy in
    * one case. Conway's category is part of an entry's dedup identity
@@ -318,22 +347,19 @@ class LoadProgressReporter {
    * the tee folds into one diagnostic. Only warning/error are kept: those
    * are the levels the tee captures, so only they can collide with a
    * defect's echo.
+   *
+   * @param {object} entry conway LogEntry {level, message, category}
    */
-  installDefectProxy() {
-    this.defectProxy = {
-      log: (entry) => {
-        if (typeof entry?.message !== 'string') {
-          return
-        }
-        this.tallySeverity(entry)
-        if (entry.category === DATA_DEFECT) {
-          this.dataDefectMessages.add(collapseWhitespace(entry.message))
-        } else if (entry.level === 'warning' || entry.level === 'error') {
-          this.unmarkedMessages.add(collapseWhitespace(entry.message))
-        }
-      },
+  recordLogEntry(entry) {
+    if (typeof entry?.message !== 'string') {
+      return
     }
-    Logger.addProxy(this.defectProxy)
+    this.tallySeverity(entry)
+    if (entry.category === DATA_DEFECT) {
+      this.dataDefectMessages.add(collapseWhitespace(entry.message))
+    } else if (entry.level === 'warning' || entry.level === 'error') {
+      this.unmarkedMessages.add(collapseWhitespace(entry.message))
+    }
   }
 
   /**
@@ -372,20 +398,26 @@ class LoadProgressReporter {
   /**
    * Fold in what an engine WORKER logged (engine-worker.md §2.4 G3). The
    * worker's conway Logger is another module instance and its console is
-   * its own, so neither reaches {@link installDefectProxy} or the console
-   * tee; the worker folds both by text with a count
+   * its own, so neither reaches the page's tee (consoleTee.js); the worker
+   * folds both by text with a count
    * (`engine/engineStream.js#makeLogForwarder`), and this replays each row
    * `count` times through the same two paths, so Total vs Distinct, the
    * data-defect join and the diagnostics block read as they would for a
    * main-thread engine. Nothing is echoed: the worker already printed it.
+   * Per engine, so a background run gets its own (layering.md §4.4).
    *
    * @param {object} log `{entries: [{level, category, message, count}],
    *   lines: [{level, text, count}]}`
    */
-  ingestEngineLog({entries = [], lines = []} = {}) {
-    for (const {count = 1, ...entry} of entries) {
+  engineLog({entries = [], lines = []} = {}) {
+    if (this.ended) {
+      return
+    }
+    // Entries only while the capture window is open, as the Logger proxy
+    // they stand in for was detached at finishReport.
+    for (const {count = 1, ...entry} of this.isCapturing ? entries : []) {
       for (let i = 0; i < count; i++) {
-        this.defectProxy?.log(entry)
+        this.recordLogEntry(entry)
       }
     }
     for (const {level, text, count = 1} of lines) {
@@ -402,22 +434,13 @@ class LoadProgressReporter {
   }
 
   /**
-   * Close the capture window: restore the console methods the tee replaced
-   * and detach the conway log proxy. Idempotent.
+   * Close the capture window: give the page's tee up (a no-op if another
+   * run has taken it since, consoleTee.js) and stop counting the engine's
+   * log entries. Idempotent.
    */
-  restoreConsole() {
-    if (this.originalWarn !== undefined) {
-      console.warn = this.originalWarn
-      this.originalWarn = undefined
-    }
-    if (this.originalError !== undefined) {
-      console.error = this.originalError
-      this.originalError = undefined
-    }
-    if (this.defectProxy !== undefined) {
-      Logger.removeProxy(this.defectProxy)
-      this.defectProxy = undefined
-    }
+  releaseConsole() {
+    this.isCapturing = false
+    releaseConsoleTee(this)
   }
 
   /**
@@ -426,7 +449,7 @@ class LoadProgressReporter {
    *
    * Two sources, in the issue's preference order:
    *
-   * 1. conway's own marker, via installDefectProxy. The tee holds the
+   * 1. conway's own marker, via recordLogEntry. The tee holds the
    *    console ECHO, which conway spells `<message> expressID: <id>` when the
    *    entry names a record (Logger.log in conway src/logging/logger.ts), so
    *    the text is cut at that separator before comparing — the same split
@@ -436,7 +459,7 @@ class LoadProgressReporter {
    *    <error>"), and only the first is a defect.
    *
    *    A base message this load ALSO logged without the marker is not a
-   *    defect. That is the identical-text case installDefectProxy describes:
+   *    defect. That is the identical-text case recordLogEntry describes:
    *    the tee has merged a defect with an engine diagnostic, the text cannot
    *    say which one dominated, and the tag errs toward engine triage — the
    *    same rule as a load whose top diagnostic is an engine error, because
@@ -468,6 +491,7 @@ class LoadProgressReporter {
    *   the post-Total diagnostics, which were already on the console
    * @param {string} [sentryLine] this line as the Sentry copy of the report
    *   carries it, when that must differ (a model line: sentryModelLine)
+   * @return {boolean} whether the sink took it (publishReport)
    */
   addReportLine(line, echo = true, sentryLine = line) {
     this.lines.push(line)
@@ -476,23 +500,26 @@ class LoadProgressReporter {
       // eslint-disable-next-line no-console
       console.info(line)
     }
-    this.publishReport()
+    return this.publishReport()
   }
 
-  /** Push the full report + live line into the store. */
+  /**
+   * Push the full report + live line through the sink.
+   *
+   * @return {boolean} whether the sink took it: false once the run is not
+   *   current (LoadJob#set)
+   */
   publishReport() {
-    const state = useStore.getState()
-    state.setLoadReportLines([...this.lines])
-    state.setCurrentLoadLine(this.log.currentLine() ?? null)
+    return this.sink.set({loadReportLines: [...this.lines], currentLoadLine: this.log.currentLine() ?? null})
   }
 
   /**
    * Ingest one progress signal (structured event, model-info envelope, or
-   * legacy string).
+   * legacy string): what the load's `onProgress` is handed.
    *
    * @param {object|string} progressArg
    */
-  report(progressArg) {
+  progress(progressArg) {
     if (this.ended) {
       return
     }
@@ -652,9 +679,9 @@ class LoadProgressReporter {
    * @return {object|undefined}
    */
   outcomeInputs() {
-    return this.geometryStats === undefined ?
+    return this.builtStats === undefined ?
       undefined :
-      {...this.geometryStats, engineErrorTotal: this.engineErrorTotal}
+      {...this.builtStats, engineErrorTotal: this.engineErrorTotal}
   }
 
   /**
@@ -664,7 +691,7 @@ class LoadProgressReporter {
    */
   recordGeometryStats(stats) {
     if (stats) {
-      this.geometryStats = {...this.geometryStats, ...stats}
+      this.builtStats = {...this.builtStats, ...stats}
     }
   }
 
@@ -705,7 +732,32 @@ class LoadProgressReporter {
   /** (Re)arm the stall watchdog: silence for STALL_TIMEOUT_MS → surface it. */
   armStallWatchdog() {
     this.clearStallWatchdog()
+    if (this.isWatchdogPaused) {
+      return
+    }
     this.stallTimer = setTimeout(() => this.handleStall(), STALL_TIMEOUT_MS)
+  }
+
+  /**
+   * Stop the stall and hang clocks while the load is held on purpose: a
+   * pump paused by backpressure, a background session's load waiting for
+   * the page (layering.md §4.4, `lease.onPause`). Silence then is not a
+   * stall, and three minutes of it is not a hang to send to Sentry.
+   */
+  pauseWatchdog() {
+    this.isWatchdogPaused = true
+    this.clearStallWatchdog()
+  }
+
+  /** The load runs again: silence from here on counts. */
+  resumeWatchdog() {
+    if (!this.isWatchdogPaused) {
+      return
+    }
+    this.isWatchdogPaused = false
+    if (!this.ended) {
+      this.armStallWatchdog()
+    }
   }
 
   /** Cancel the pending watchdog timers, if any: progress resumed, or the load ended. */
@@ -748,8 +800,16 @@ class LoadProgressReporter {
     }
     this.stallReported = true
     try {
-      this.applySentryLoadState()
-      captureMessage(LOAD_HUNG_MESSAGE, {level: 'warning', tags: {'load.stalled': 'true'}})
+      if (this.isForeground) {
+        this.applySentryLoadState()
+        captureMessage(LOAD_HUNG_MESSAGE, {level: 'warning', tags: {'load.stalled': 'true'}})
+      } else {
+        // Its own phase on its own event: the scope is the foreground
+        // load's, and a background hang stamped there would ride on the
+        // foreground's next capture (layering.md §4.4).
+        const {tags, contexts} = this.ownLoadState()
+        captureMessage(LOAD_HUNG_MESSAGE, {level: 'warning', tags: {...tags, 'load.stalled': 'true'}, contexts})
+      }
     } catch (e) {
       debug().log('loadProgress#handleHang: ', e)
     }
@@ -787,15 +847,28 @@ class LoadProgressReporter {
     // Phase only. `load.stalled` stays off the session's scope, where it
     // would ride on every later event of the page, the next load's included
     // (codex on #2235): the hang message and CadView's failure capture carry
-    // it per event (loadStallCaptureTags).
+    // it per event (stallCaptureTags).
     setTag('load.phase', tags['load.phase'])
     setContext('load', contexts.load)
   }
 
   /**
+   * This run's `load.*` tags and `load` context, allowlisted, for a capture
+   * of its own when it does not hold Sentry's scope; nothing when it does,
+   * since the scope already carries them.
+   *
+   * @return {{tags: object, contexts: object}}
+   */
+  ownLoadState() {
+    return this.isForeground ?
+      {tags: {}, contexts: {}} :
+      nonIdentifyingLoadContext(this.sentryLoadState())
+  }
+
+  /**
    * The `load.*` tags + `load` context {@link applySentryLoadState} stamps,
    * without stamping them — for an event that should carry them and leave
-   * the session's scope alone (loadFailureCaptureContext).
+   * the session's scope alone (captureContext).
    *
    * @return {{tags: object, contexts: object}}
    */
@@ -839,25 +912,24 @@ class LoadProgressReporter {
       this.addReportLine(closedLine)
     }
     // Model stats ride the Total line (products/triangles/units etc. —
-    // set by the loader via setLoadSummary) instead of their own
+    // set by the loader via summary) instead of their own
     // stage lines.
     const total = this.log.totalLine()
-    this.addReportLine(this.summary ? `${total} | ${this.summary}` : total)
-    if (this.bvhDepthCap) {
+    this.addReportLine(this.summaryText ? `${total} | ${this.summaryText}` : total)
+    if (this.depthCapped) {
       this.writeBvhDepthCapLine(true)
     }
 
     // Warnings & errors captured from the console during the load, appended
-    // after Total (issue #301 preview feedback #4). Restore the console
-    // first so re-echoing these lines can't loop back through the tee.
-    this.restoreConsole()
+    // after Total (issue #301 preview feedback #4). Give the tee up first so
+    // re-echoing these lines can't loop back through it.
+    this.releaseConsole()
     this.appendDiagnostics()
 
     // Keep the dashboard fields beside the report source of truth. Values
-    // are captured before dispose restores the console tee and before the
-    // next load replaces this reporter.
+    // are captured here, at the end of the load's window.
     //
-    // `loadTime` is the wall clock from beginLoadProgress to here, the same
+    // `loadTime` is the wall clock from the reporter's start to here, the same
     // definition for every format; CadView lets nothing overwrite it
     // (loadAnalytics#buildOutcomeParams).
     //
@@ -872,8 +944,8 @@ class LoadProgressReporter {
     // the conway engine path (it reported geometry stats). Elsewhere the
     // proxy never fires, and a 0 would claim "the engine logged nothing"
     // about a load no engine logged for.
-    const hasEngine = this.geometryStats !== undefined
-    this.completedStats = {
+    const hasEngine = this.builtStats !== undefined
+    this.finalStats = {
       fileSize: this.fileSize,
       artifactSize: this.artifactSize,
       memoryUsed: heapMb === undefined ? undefined : Math.round(heapMb * BYTES_PER_MB),
@@ -884,12 +956,12 @@ class LoadProgressReporter {
       engineErrorTotal: hasEngine ? this.engineErrorTotal : undefined,
       engineWarnDistinct: hasEngine ? this.engineWarningKeys.size : undefined,
       dataDefectTotal: hasEngine ? this.dataDefectTotal : undefined,
-      vertexCount: this.geometryStats?.vertexCount,
-      triangleCount: this.geometryStats?.triangleCount,
-      cacheHit: this.cacheHit === undefined ? undefined : String(this.cacheHit),
+      vertexCount: this.builtStats?.vertexCount,
+      triangleCount: this.builtStats?.triangleCount,
+      cacheHit: this.isCacheHit === undefined ? undefined : String(this.isCacheHit),
     }
 
-    useStore.getState().setCurrentLoadLine(null)
+    this.sink.set({currentLoadLine: null})
   }
 
   /**
@@ -941,10 +1013,10 @@ class LoadProgressReporter {
   reportBvhDepthCapOnce(contentType) {
     this.bvhDepthCapGaArmed = true
     this.bvhDepthCapContentType = contentType
-    if (!this.bvhDepthCap || this.bvhDepthCapReported) {
+    if (!this.depthCapped || this.bvhDepthCapReported) {
       return
     }
-    const {trees, maxLeafTriangles} = this.bvhDepthCap
+    const {trees, maxLeafTriangles} = this.depthCapped
     // Counted as reported only once GA took it: with gtag/js not loaded yet
     // (or no consent) a later call for this load may still send it.
     this.bvhDepthCapReported =
@@ -954,7 +1026,7 @@ class LoadProgressReporter {
   /**
    * Report this load's diagnostics (issue #1767): engine gaps to Sentry,
    * authoring defects and nothing-to-draw loads to GA. Called only via
-   * captureLoadDiagnostics — see there for why the counts are the caller's
+   * captureDiagnostics — see there for why the counts are the caller's
    * rather than this reporter's.
    *
    * The split is the Reported Conditions rule (AGENTS.md). Sentry gets what
@@ -979,7 +1051,7 @@ class LoadProgressReporter {
    * @param {string} [opts.contentId] the GA `content_id`
    * @param {string} [opts.contentType] the GA `content_type`
    */
-  captureDiagnostics({errorCount, warningCount, contentId, contentType}) {
+  sendDiagnostics({errorCount, warningCount, contentId, contentType}) {
     const summary = this.diagnosticsSummary()
     // Severity is the load's outcome, not its noise level (ops#27 T0): a
     // model the user is looking at is a regular bug however many warnings it
@@ -1015,7 +1087,10 @@ class LoadProgressReporter {
     if (sentryText === undefined) {
       return
     }
-    const tags = {}
+    // A background run's own phase and load context (ownLoadState); none for
+    // the foreground's, whose scope carries them.
+    const own = this.ownLoadState()
+    const tags = {...own.tags}
     tags.load_outcome = loadOutcome
     // Also set on the global scope at init by index/ga.js. Re-read here
     // because this reads later: a first-ever visitor's id only resolves
@@ -1073,6 +1148,7 @@ class LoadProgressReporter {
       level: loadOutcome === LOAD_OUTCOMES.UNUSABLE ? 'error' : 'warning',
       tags,
       contexts: {
+        ...own.contexts,
         loadDiagnostics: {
           // The counts the dashboard chip is coloured by: Conway's own
           // once conway#740 supplies them (ShareIfcLoader#loadStats; none
@@ -1084,9 +1160,9 @@ class LoadProgressReporter {
           // inferred (Share#1962): products in the file, how many of them
           // got drawable geometry, and the occurrences of bad input it
           // skipped. Absent (undefined) when the engine did not report them.
-          productCount: this.geometryStats?.productCount,
-          productsWithGeometryCount: this.geometryStats?.productsWithGeometryCount,
-          dataDefectCount: this.geometryStats?.dataDefectCount,
+          productCount: this.builtStats?.productCount,
+          productsWithGeometryCount: this.builtStats?.productsWithGeometryCount,
+          dataDefectCount: this.builtStats?.dataDefectCount,
           // The console tee's own view, which on IFC/STEP can disagree
           // with the counts above — these two describe the messages
           // carried below, not the chip.
@@ -1106,7 +1182,7 @@ class LoadProgressReporter {
   /**
    * The most frequent engine-gap diagnostic and the most frequent authoring
    * defect (isDataDefectDiagnostic), each undefined when the load had none.
-   * captureDiagnostics sends the first to Sentry and the second to GA.
+   * sendDiagnostics sends the first to Sentry and the second to GA.
    *
    * @return {{engineText: (string|undefined), defectText: (string|undefined)}}
    */
@@ -1132,7 +1208,7 @@ class LoadProgressReporter {
   /**
    * The most frequent diagnostics, each prefixed with its occurrence
    * count, most frequent first. Trimmed per entry as well as capped in
-   * number: installConsoleTee collapses multi-line wasm stack traces
+   * number: captureConsole collapses multi-line wasm stack traces
    * onto one line, so an untrimmed entry can be very long.
    *
    * @param {number} limit how many distinct messages to keep
@@ -1173,73 +1249,475 @@ class LoadProgressReporter {
    *
    * @param {boolean} echo whether to echo it to the console (only while the
    *   console tee is still ours, during finishReport)
+   * @return {boolean} whether the sink took it
    */
   writeBvhDepthCapLine(echo) {
-    const {trees, maxLeafTriangles, maxDepth} = this.bvhDepthCap
+    const {trees, maxLeafTriangles, maxDepth} = this.depthCapped
     const line = `Health: picking index hit its depth cap (${maxDepth}) in ` +
       `${trees} ${trees === 1 ? 'tree' : 'trees'}; largest leaf ${maxLeafTriangles} triangles, ` +
       'tested one by one per pick'
     if (this.bvhDepthCapLineIndex >= 0) {
       this.lines[this.bvhDepthCapLineIndex] = line
       this.sentryLines[this.bvhDepthCapLineIndex] = line
-      this.publishReport()
-      return
+      return this.publishReport()
     }
     this.bvhDepthCapLineIndex = this.lines.length
-    this.addReportLine(line, echo)
+    return this.addReportLine(line, echo)
   }
 
   /**
    * A depth cap that arrived after the load ended: a batched model builds its
    * trees once it is on screen (deferredBatchedBvh.js). Same Health line,
-   * after Total like reportFramingExclusion's, and the same one GA event once
+   * after Total like framingExclusion's, and the same one GA event once
    * the load is known to have succeeded. A cap already counted in GA during
    * the load is not counted again; the line still shows the sum.
+   *
+   * Nothing reaches GA once the run is not current (the sink refused the
+   * line): a deferred build that finishes after the user left the model, or
+   * after a theme change reloaded it, is not that open's. Before slice R the
+   * load's token did this, dropping a cap once another load had begun.
    *
    * @param {{trees: number, maxLeafTriangles: number, maxDepth: number}} capped
    */
   addLateBvhDepthCap({trees, maxLeafTriangles, maxDepth}) {
-    const previous = this.bvhDepthCap
-    this.bvhDepthCap = {
+    const previous = this.depthCapped
+    this.depthCapped = {
       trees: (previous?.trees ?? 0) + trees,
       maxLeafTriangles: Math.max(previous?.maxLeafTriangles ?? 0, maxLeafTriangles),
       maxDepth,
     }
-    this.writeBvhDepthCapLine(false)
-    if (this.bvhDepthCapGaArmed) {
+    const isCurrent = this.writeBvhDepthCapLine(false)
+    if (isCurrent && this.bvhDepthCapGaArmed) {
       this.reportBvhDepthCapOnce(this.bvhDepthCapContentType)
     }
   }
 
-  /** Stop watching (load finished or failed); restore the console tee. */
+  /**
+   * Stop watching and give the console tee up: the load ended, or the run
+   * was left (LoadJob#leave), which is what the next load's begin did to
+   * the previous reporter before slice R. The report stays readable.
+   */
   dispose() {
     this.ended = true
     this.clearStallWatchdog()
-    this.restoreConsole()
+    this.releaseConsole()
+  }
+
+  /**
+   * Report the engine identity (log line 2), e.g. "Conway v1.377.1188" from
+   * ifcAPI.getConwayVersion().
+   *
+   * @param {string} versionLine
+   */
+  engineVersion(versionLine) {
+    if (!this.ended && versionLine) {
+      this.addReportLine(versionLine)
+    }
+  }
+
+  /**
+   * A report line of its own, during the load: where the model bytes came
+   * from — OPFS cache vs network (PR #1727 feedback: reloads served from
+   * OPFS should say "cache HIT" for every format, not just the GLB-artifact
+   * path's console log) — how the engine read them, or a renderer limit the
+   * load will draw under (reportRendererLimits.js).
+   *
+   * @param {string} line e.g. 'Source: OPFS cache HIT (GitHub content unchanged)'
+   */
+  line(line) {
+    if (!this.ended && line) {
+      this.addReportLine(line)
+    }
+  }
+
+  /**
+   * Report early model-header info (log line 3) directly (the engine path
+   * arrives via the onProgress envelope instead — see isModelInfoProgress).
+   *
+   * @param {object} info {fileName, schema, byteLength, ...}
+   */
+  modelInfo(info) {
+    if (!this.ended) {
+      this.recordModelInfo(info)
+      this.addReportLine(
+        this.log.setModelInfo(info) + cachedArtifactSuffix(info, this.fileSize),
+        true, this.sentryModelLine())
+    }
+  }
+
+  /**
+   * Report what the loader actually built, as the structured twin of the
+   * `vertices=… triangles=…` segment the summary puts on the Total line.
+   * Structured because it is a decision input, not display text: it is the
+   * only signal that separates a noisy load whose model still rendered from
+   * one that finished with an empty scene (classifyLoadOutcome).
+   *
+   * @param {object} stats {vertexCount, triangleCount}
+   */
+  geometryStats(stats) {
+    if (!this.ended) {
+      this.recordGeometryStats(stats)
+    }
+  }
+
+  /**
+   * Say whether the load was served from the GLB artifact cache (true) or
+   * produced by parsing the source (false). Reported by Loader#load once the
+   * source is settled, because that is where a cache hit is decided: the
+   * loader tuple is swapped to the GLB loader and `model.type` becomes `glb`,
+   * which is why a cache hit is otherwise indistinguishable from a native GLB
+   * (ops#28 §3).
+   *
+   * @param {boolean} isHit
+   */
+  cacheHit(isHit) {
+    if (!this.ended) {
+      this.isCacheHit = isHit === true
+    }
+  }
+
+  /**
+   * Mark the moment geometry first reached the scene, in the load's own clock
+   * (ms since the reporter's start, the same clock as `loadTime`). Latches:
+   * only the first call counts. Called from ProgressiveLoadSession when the
+   * first preview mesh or streamed bounds arrive, and from CadView right
+   * after the finished model is added to the scene, so formats with no
+   * progressive path report their one-shot arrival instead of nothing.
+   */
+  firstMesh() {
+    if (this.firstMeshMs === undefined) {
+      this.firstMeshMs = Date.now() - this.startTime
+    }
+  }
+
+  /**
+   * Attach a one-line model summary (products, triangles, units, ...) to the
+   * in-flight report — appended to the Total line at finish.
+   *
+   * @param {string} text the summary segment
+   */
+  summary(text) {
+    if (!this.ended) {
+      this.summaryText = text
+    }
+  }
+
+  /**
+   * Record BVH trees built during the load that reached three-mesh-bvh's
+   * depth cap (`model/bvhBuild.js`, through `onDepthCap`). Accumulates across
+   * the load's builds, a batched model building one tree per geometry, and
+   * becomes one `Health:` line after Total and, on a successful load, one GA
+   * `bvh_depth_cap` event (reportBvhDepthCapOnce). A no-op once the load has
+   * ended: a tree built later through this callback is not the load's.
+   *
+   * @param {{trees: number, maxLeafTriangles: number, maxDepth: number}} capped
+   */
+  bvhDepthCap({trees, maxLeafTriangles, maxDepth}) {
+    if (this.ended) {
+      return
+    }
+    const previous = this.depthCapped
+    this.depthCapped = {
+      trees: (previous?.trees ?? 0) + trees,
+      maxLeafTriangles: Math.max(previous?.maxLeafTriangles ?? 0, maxLeafTriangles),
+      maxDepth,
+    }
+  }
+
+  /**
+   * The same, for trees a deferred build makes once the model is on screen
+   * (deferredBatchedBvh.js, through `onLateDepthCap`, which it took when it
+   * was scheduled): the load's however late it lands. Its writes go through
+   * the sink like any other, so they are dropped once the run is not current.
+   *
+   * @param {{trees: number, maxLeafTriangles: number, maxDepth: number}} capped
+   */
+  lateBvhDepthCap(capped) {
+    if (this.ended) {
+      this.addLateBvhDepthCap(capped)
+    } else {
+      this.bvhDepthCap(capped)
+    }
+  }
+
+  /**
+   * Stats from this load once it completed, named to match the GA4 custom
+   * dimensions consumed by the bizdev dashboard.
+   *
+   * @return {object|null} null until the report is frozen
+   */
+  completedStats() {
+    if (!this.finalStats) {
+      return null
+    }
+    // firstMeshMs is read live, not frozen with the rest at finishReport: a
+    // format with no progressive preview only has a first mesh once CadView
+    // adds the finished model to the scene, which is after the report is
+    // frozen (firstMesh).
+    return {...this.finalStats, firstMeshMs: this.firstMeshMs}
+  }
+
+  /**
+   * The GA `load_outcome` of this load: `displayed` or `unusable` or
+   * `no_geometry`, from classifyLoadOutcome over what the loader reported.
+   *
+   * @return {string}
+   */
+  completedOutcome() {
+    return classifyLoadOutcome(this.outcomeInputs())
+  }
+
+  /**
+   * Everything `load_failed` needs from this run's reporter. The caller holds
+   * the reporter of the attempt that failed (LoadJob#report), so a failure
+   * thrown before any reporter began, such as an in-memory upload that no
+   * longer exists, has none to read and borrows no earlier load's phase
+   * (loadFailureInfoOf).
+   *
+   * @return {{phase: (string|undefined), fileSize: (number|undefined), format: (string|undefined)}}
+   */
+  failureInfo() {
+    return {
+      phase: this.lastEvent?.phase,
+      fileSize: this.fileSize,
+      // From the identity itself rather than fallbackName: a GitHub route's
+      // fileInfo is a URL object, which basenameOf (string-only) answers with
+      // '' for, so fallbackName is empty for exactly the models users share.
+      //
+      // A gzip suffix is an envelope, not a format: `model.glb.gz` is routed
+      // and loaded as a GLB (Filetype#getValidExtension strips it the same
+      // way), so GA must see `glb`, not `gz`.
+      format: extensionOf(basenameOf(String(this.fileInfo)).replace(/\.gz$/i, '')),
+    }
+  }
+
+  /**
+   * This load's `load.*` tags and `load` context, for ONE event's capture
+   * context — the non-sticky counterpart of {@link attachFailureContext}.
+   * `setTag`/`setContext` write the session's persistent scope, so a load's
+   * context applied that way rides along on every later, unrelated event in
+   * the SPA session; passing it as a capture context attaches it to the one
+   * event only (codex review of Share#1899). Raw: a caller allowlists it
+   * (loadCaptureContext.js#nonIdentifyingLoadContext).
+   *
+   * @return {{tags: object, contexts: object}}
+   */
+  captureContext() {
+    try {
+      return this.sentryLoadState()
+    } catch (e) {
+      debug().log('LoadReporter#captureContext: ', e)
+    }
+    return {tags: {}, contexts: {}}
+  }
+
+  /**
+   * Attach this load's final progress state to Sentry's scope (tags +
+   * context) ahead of a captureException call. Call from the load-failure
+   * catch. The foreground run's only: a background run's failure capture
+   * takes captureContext() per event instead (layering.md §4.4).
+   */
+  attachFailureContext() {
+    if (!this.isForeground) {
+      return
+    }
+    try {
+      this.applySentryLoadState()
+    } catch (e) {
+      debug().log('LoadReporter#attachFailureContext: ', e)
+    }
+  }
+
+  /**
+   * `load.stalled` for one failure capture (CadView), or null when this
+   * load never stalled. Per event, never on the scope: see
+   * applySentryLoadState.
+   *
+   * @return {?object} `{'load.stalled': 'true'}` or null
+   */
+  stallCaptureTags() {
+    return this.stallPhase === undefined ? null : {'load.stalled': 'true'}
+  }
+
+  /**
+   * Report a completed load's console or engine diagnostics (issue #1767), so
+   * a dashboard model-open chip with non-zero errors/warnings has a searchable
+   * counterpart to link to: a Sentry event for an engine gap, and a GA
+   * `load_diagnostics` event, under the same client id, for authoring defects
+   * and nothing-to-draw loads (sendDiagnostics has the split). A chip whose
+   * load had only defects therefore has no Sentry event behind it since
+   * 2026-11; its counterpart is the GA event.
+   *
+   * The two populations the bizdev dashboard tries to join were close to
+   * disjoint before this. The counts behind each chip come from a load
+   * that *succeeded*, and a successful load produced no Sentry event at
+   * all; the loads that did reach Sentry hard-failed, so they never fired
+   * `real_model_open` and never became a chip. This is the missing
+   * overlap: one event per noisy load, carrying the same client id the
+   * chip does, so the chip's `open_cid:<id>` link resolves to something.
+   *
+   * One event per load, not one per console line. Sentry's
+   * captureConsoleIntegration would do the latter and wasm loaders are
+   * chatty enough that it would flood the project.
+   *
+   * **The counts must be the caller's, not this reporter's.** The obvious
+   * gate — the console tee's own errorCount/warningCount — is the wrong
+   * number on exactly the formats this join is about. What colours a chip
+   * is GA's engine `stats_errorCount` / `stats_warningCount` when
+   * ShareIfcLoader publishes them on `loadStats` (conway#740; today it
+   * cannot, because conway's Statistics has no such methods), and the
+   * tee's `stats_pageErrorCount` / `stats_pageWarnCount` otherwise —
+   * CadView picks per load. Gating on the tee alone would, once the engine
+   * counts exist, let the two disagree, and each direction of
+   * disagreement is worse than the gap
+   * this closes — a red chip whose Sentry link resolves to nothing, or a
+   * green chip with an issue behind it. Both look like the join working.
+   *
+   * So CadView calls this with the very numbers it is about to send to
+   * GA, from inside the `isRealModelOpen` success branch. That siting is
+   * what makes the other two gates structural rather than flags: only
+   * real opens reach it (never the bundled demo, which loads on every
+   * homepage visit and can never be a chip), and only successes do (a
+   * failure is already reported by that path's captureException, with
+   * this same report attached by attachFailureContext).
+   *
+   * Safe no-op when the load reported nothing. Reads the reporter *after*
+   * its end, which is deliberate and matches completedStats: the end stops
+   * the watchdog and gives the console tee up but leaves the report
+   * readable.
+   *
+   * @param {object} opts
+   * @param {number} [opts.errorCount] GA `stats_errorCount` for this load
+   * @param {number} [opts.warningCount] GA `stats_warningCount`
+   * @param {string} [opts.contentId] GA `content_id`, tagged so the event
+   *   names the same model as the chip
+   * @param {string} [opts.contentType] GA `content_type`, tagged because
+   *   it is the first filter worth having when triaging these
+   */
+  captureDiagnostics({
+    errorCount = 0,
+    warningCount = 0,
+    contentId = undefined,
+    contentType = undefined,
+  } = {}) {
+    // A depth-cap hit goes to GA whether or not the load had anything for
+    // Sentry: it is volume-only signal (AGENTS.md, "PRs: a Reported Conditions
+    // section"). Here, on a successful real open, so a failed load never also
+    // counts it.
+    this.reportBvhDepthCapOnce(contentType)
+    // Likewise a stall the load recovered from (HANG_TIMEOUT_MS).
+    this.reportStallRecoveredOnce(contentType)
+    if (errorCount + warningCount === 0) {
+      return
+    }
+    try {
+      this.sendDiagnostics({errorCount, warningCount, contentId, contentType})
+    } catch (e) {
+      debug().log('LoadReporter#captureDiagnostics: ', e)
+    }
+  }
+
+  /**
+   * Finish reporting (success or failure): freezes the report (Total line)
+   * and stops the stall watchdog, then publishes the end-of-load grace result
+   * that the snackbar lingers on (success → "Loaded <name>", auto-dismissed
+   * with the shrink-to-"i" animation; error → the failure summary, dismissed
+   * only on OK). Timing/heap detail stays in the expandable report, not this
+   * terse line. The reporter stays readable, so attachFailureContext can
+   * still stamp the final progress state onto a captureException that
+   * happens after the load's finally block. Ends this report only: another
+   * run's is its own.
+   *
+   * @param {Error} [error] the loader error when the load failed; omitted /
+   *   null on success. Called from CadView's load `finally`, which captures
+   *   the thrown error before re-raising it to the outer handler.
+   * @param {object} [options]
+   * @param {boolean} [options.isAborted] the load was given up, not failed
+   *   (an in-app switch, utils/loadAbort.js): its report belongs to a model
+   *   the user has left, so it is cleared rather than frozen, and no grace
+   *   line says the load failed. failureInfo can still say where it stopped.
+   */
+  end(error = null, {isAborted = false} = {}) {
+    if (this.ended) {
+      return
+    }
+    if (isAborted) {
+      this.dispose()
+      // Through a LoadJob this write is always dropped, an aborted run being
+      // no longer current; the view's forget (ModelSessionHost#onForget) has
+      // cleared or will clear the report instead: at the switch, or as the
+      // next run of the session begins. Kept for a sink that is not gated.
+      this.sink.set({loadReportLines: [], currentLoadLine: null, loadResult: null})
+      return
+    }
+    this.finishReport()
+    // The collapsed grace line stays deliberately terse — just the outcome
+    // and a name; the timing/heap Total and diagnostics live one expand (or
+    // the "i" report) away. The snackbar prefers the store's model.name (the
+    // page-title name); this filename is the fallback when that's absent.
+    const summaryLine = error ?
+      loadErrorSummary(error) :
+      `Loaded ${this.fallbackName || 'model'}`
+    this.sink.set({loadResult: {status: error ? 'error' : 'success', summaryLine}})
+    this.dispose()
+  }
+
+  /**
+   * Report that auto-framing excluded stray outlier geometry
+   * (`robustBounds.js`; conway design/new/model-diagnostics.md §4.3): a
+   * Health line on the load report (§4.1 shape), a console.warn for the
+   * standard log, and a note the grace snackbar appends to its "Loaded
+   * <name>" line.
+   *
+   * Framing runs after the load settles, so call this after `end` — the
+   * report gains a post-Total line and the already-published success
+   * `loadResult` is amended in place. No-op for a clean model (nothing
+   * excluded).
+   *
+   * @param {object} [bounds] robustBounds result ({excludedElements,
+   *   excludedVertices, maxDistance, ...}); null/undefined tolerated
+   */
+  framingExclusion(bounds) {
+    const excludedElements = bounds?.excludedElements ?? 0
+    const excludedVertices = bounds?.excludedVertices ?? 0
+    if (excludedElements === 0 && excludedVertices === 0) {
+      return
+    }
+    const parts = []
+    if (excludedElements > 0) {
+      parts.push(`${excludedElements} ${excludedElements === 1 ? 'element' : 'elements'}`)
+    }
+    if (excludedVertices > 0) {
+      parts.push(`${excludedVertices} ${excludedVertices === 1 ? 'vertex' : 'vertices'}`)
+    }
+    const distance = Math.round(bounds.maxDistance)
+    const line = `Health: stray geometry excluded from view framing ` +
+      `(${parts.join(' + ')}, up to ${distance} model units out)`
+    // The console tee is already given up post-load, so this reaches the
+    // real console once, as a warning; the report line carries the same
+    // text without re-echoing it.
+    console.warn(line)
+    this.addReportLine(line, false)
+
+    // Read back rather than remembered: the snackbar clears it on dismiss,
+    // and a dismissed result must stay dismissed.
+    const loadResult = this.sink.get('loadResult')
+    if (loadResult?.status === 'success' && !loadResult.note) {
+      this.sink.set({loadResult: {...loadResult, note: FRAMING_NOTE}})
+    }
   }
 }
 
 
 /**
- * Start reporting a new load, replacing any prior reporter and clearing
- * the prior report in the store.
+ * `load_failed`'s fields for the reporter of the attempt that failed, or
+ * nothing when the failure came before any reporter began.
  *
- * @param {object} opts see LoadProgressReporter
- * @return {LoadProgressReporter}
+ * @param {LoadReporter|null} [report]
+ * @return {{phase: (string|undefined), fileSize: (number|undefined), format: (string|undefined)}}
  */
-export function beginLoadProgress(opts) {
-  if (activeReporter) {
-    activeReporter.dispose()
-  }
-  const store = useStore.getState()
-  store.setLoadReportLines([])
-  store.setCurrentLoadLine(null)
-  // Clear any lingering grace snackbar from the previous load before this
-  // one's live line takes over the snackbar.
-  store.setLoadResult(null)
-  activeReporter = new LoadProgressReporter(opts)
-  loadSerial++
-  return activeReporter
+export function loadFailureInfoOf(report) {
+  return report ? report.failureInfo() : {phase: undefined, fileSize: undefined, format: undefined}
 }
 
 
@@ -1302,7 +1780,7 @@ function ellipsize(text) {
  * fingerprint) because engine diagnostics are per-entity ("Error processing
  * representation #1234"): the raw text would open a fresh Sentry issue for
  * every entity of every model, which is the per-line flood
- * captureLoadDiagnostics exists to avoid. Normalized, each family of warning
+ * captureDiagnostics exists to avoid. Normalized, each family of warning
  * gets one issue.
  *
  * @param {string} topText most frequent diagnostic, '' when the console
@@ -1456,14 +1934,14 @@ function isGeometrylessFile({productCount, productsWithGeometryCount, errorCount
  *
  * Ambiguity resolves to `displayed`, deliberately. Most formats report no
  * geometry counts at all (only the conway engine path calls
- * reportGeometryStats), and treating "didn't say" as "produced nothing"
+ * geometryStats), and treating "didn't say" as "produced nothing"
  * would raise every warning in the project to major — the inverse of what
  * this split is for.
  *
  * @param {object} [geometry] {vertexCount, triangleCount} as reported by the
  *   loader, plus conway's {productCount, productsWithGeometryCount,
  *   errorCount} when the engine supplied them, and the reporter's
- *   {engineErrorTotal} logger tally (LoadProgressReporter#outcomeInputs);
+ *   {engineErrorTotal} logger tally (LoadReporter#outcomeInputs);
  *   undefined when the loader reported nothing
  * @return {string} one of LOAD_OUTCOMES
  */
@@ -1594,50 +2072,6 @@ function knownAuthoringTool(value) {
 
 
 /**
- * Report a progress signal to the active load, if any. Safe no-op when no
- * load is active (e.g. background cache writes after dispose).
- *
- * @param {object|string} progressArg
- * @param {LoadProgressReporter} [reporter] the load's own reporter, from
- *   beginLoadProgress: when given, the signal is dropped unless that reporter
- *   is still the active one. A load the user has left can still be running
- *   after the next load has begun (a remount gives each view its own queue,
- *   open-205 #2019), and its progress is not the next load's.
- */
-export function reportLoadProgress(progressArg, reporter = undefined) {
-  if (activeReporter && (reporter === undefined || reporter === activeReporter)) {
-    activeReporter.report(progressArg)
-  }
-}
-
-
-/**
- * Report the engine identity (log line 2), e.g. "Conway v1.377.1188" from
- * ifcAPI.getConwayVersion(). Safe no-op with no active load.
- *
- * @param {string} versionLine
- */
-export function reportEngineVersion(versionLine) {
-  if (activeReporter && !activeReporter.ended && versionLine) {
-    activeReporter.addReportLine(versionLine)
-  }
-}
-
-
-/**
- * An engine worker's forwarded log (see LoadProgressReporter#ingestEngineLog).
- * Safe no-op with no active load.
- *
- * @param {object} log `{entries, lines}`
- */
-export function reportEngineLog(log) {
-  if (activeReporter && !activeReporter.ended) {
-    activeReporter.ingestEngineLog(log)
-  }
-}
-
-
-/**
  * The model line's tail on a GLB cache hit: the cached artifact's size,
  * beside the source's that `formatModelLine` already printed, so
  * "Momentum.ifc — IFC, 5.6 MB (cached GLB 1.3 MB)". When the artifact
@@ -1657,479 +2091,3 @@ export function cachedArtifactSuffix(info, sourceBytes) {
   return Number.isFinite(sourceBytes) ? ` (${glb})` : ` (source size not recorded; ${glb})`
 }
 
-
-/**
- * Report early model-header info (log line 3) directly (the engine path
- * arrives via the onProgress envelope instead — see isModelInfoProgress).
- *
- * @param {object} info {fileName, schema, byteLength, ...}
- */
-export function reportModelInfo(info) {
-  if (activeReporter && !activeReporter.ended) {
-    activeReporter.recordModelInfo(info)
-    activeReporter.addReportLine(
-      activeReporter.log.setModelInfo(info) + cachedArtifactSuffix(info, activeReporter.fileSize),
-      true, activeReporter.sentryModelLine())
-  }
-}
-
-
-/**
- * Report what the loader actually built, as the structured twin of the
- * `vertices=… triangles=…` segment setLoadSummary puts on the Total line.
- * Structured because it is a decision input, not display text: it is the
- * only signal that separates a noisy load whose model still rendered from
- * one that finished with an empty scene (classifyLoadOutcome).
- *
- * Safe no-op with no active load.
- *
- * @param {object} stats {vertexCount, triangleCount}
- */
-export function reportGeometryStats(stats) {
-  if (activeReporter && !activeReporter.ended) {
-    activeReporter.recordGeometryStats(stats)
-  }
-}
-
-
-/**
- * Stats from the most recently completed load, named to match the GA4
- * custom dimensions consumed by the bizdev dashboard.
- *
- * @return {object|null}
- */
-export function getCompletedLoadStats() {
-  if (!activeReporter?.completedStats) {
-    return null
-  }
-  // firstMeshMs is read live, not frozen with the rest at finishReport: a
-  // format with no progressive preview only has a first mesh once CadView
-  // adds the finished model to the scene, which is after the report is
-  // frozen (reportFirstMesh).
-  return {...activeReporter.completedStats, firstMeshMs: activeReporter.firstMeshMs}
-}
-
-
-/**
- * The GA `load_outcome` of the most recently completed load: `displayed` or
- * `unusable` or `no_geometry`, from classifyLoadOutcome over what the loader
- * reported.
- * Undefined with no reporter, so the param is omitted rather than invented.
- *
- * @return {string|undefined}
- */
-export function getCompletedLoadOutcome() {
-  return activeReporter ? classifyLoadOutcome(activeReporter.outcomeInputs()) : undefined
-}
-
-
-/**
- * Say whether the load was served from the GLB artifact cache (true) or
- * produced by parsing the source (false). Reported by Loader#load once the
- * source is settled, because that is where a cache hit is decided: the
- * loader tuple is swapped to the GLB loader and `model.type` becomes `glb`,
- * which is why a cache hit is otherwise indistinguishable from a native GLB
- * (ops#28 §3). Safe no-op with no active load.
- *
- * @param {boolean} isHit
- */
-export function reportCacheHit(isHit) {
-  if (activeReporter && !activeReporter.ended) {
-    activeReporter.cacheHit = isHit === true
-  }
-}
-
-
-/**
- * Mark the moment geometry first reached the scene, in the load's own clock
- * (ms since beginLoadProgress, the same clock as `loadTime`). Latches: only
- * the first call counts. Called from ProgressiveLoadSession when the first
- * preview mesh or streamed bounds arrive, and from CadView right after the
- * finished model is added to the scene, so formats with no progressive path
- * report their one-shot arrival instead of nothing. Safe no-op with no load.
- */
-export function reportFirstMesh() {
-  if (activeReporter && activeReporter.firstMeshMs === undefined) {
-    activeReporter.firstMeshMs = Date.now() - activeReporter.startTime
-  }
-}
-
-
-/**
- * Everything `load_failed` needs from the reporter, for a failure that
- * surfaced after `serialBefore` was read from currentLoadSerial().
- *
- * The serial matters because the reporter outlives its load (so Sentry can
- * still read the last phase after endLoadProgress). A failure thrown BEFORE
- * beginLoadProgress ran, such as an in-memory upload that no longer exists,
- * would otherwise be reported with the PREVIOUS load's phase and size.
- *
- * @param {number} serialBefore currentLoadSerial() from before the attempt
- * @return {{phase: (string|undefined), fileSize: (number|undefined), format: (string|undefined)}}
- */
-export function getLoadFailureInfo(serialBefore) {
-  if (!activeReporter || loadSerial <= serialBefore) {
-    return {phase: undefined, fileSize: undefined, format: undefined}
-  }
-  return {
-    phase: activeReporter.lastEvent?.phase,
-    fileSize: activeReporter.fileSize,
-    // From the identity itself rather than fallbackName: a GitHub route's
-    // fileInfo is a URL object, which basenameOf (string-only) answers with
-    // '' for, so fallbackName is empty for exactly the models users share.
-    //
-    // A gzip suffix is an envelope, not a format: `model.glb.gz` is routed
-    // and loaded as a GLB (Filetype#getValidExtension strips it the same
-    // way), so GA must see `glb`, not `gz`.
-    format: extensionOf(basenameOf(String(activeReporter.fileInfo)).replace(/\.gz$/i, '')),
-  }
-}
-
-
-/** @return {number} how many loads have begun; pair with getLoadFailureInfo */
-export function currentLoadSerial() {
-  return loadSerial
-}
-
-
-/**
- * Report a renderer limit the load will draw under, as its own report line
- * during the load (reportRendererLimits.js: no `WEBGL_multi_draw`). Safe
- * no-op with no active load.
- *
- * @param {string} line e.g. 'Renderer: WEBGL_multi_draw unsupported; …'
- */
-export function reportRendererInfo(line) {
-  if (activeReporter && !activeReporter.ended && line) {
-    activeReporter.addReportLine(line)
-  }
-}
-
-
-/**
- * Report where the model bytes came from — OPFS cache vs network — as its
- * own report line (PR #1727 feedback: reloads served from OPFS should say
- * "cache HIT" for every format, not just the GLB-artifact path's console
- * log). Emitted by Loader#load once the bytes are in hand, for the source
- * kinds where hit-ness is actually known. Safe no-op with no active load.
- *
- * @param {string} line e.g. 'Source: OPFS cache HIT (GitHub content unchanged)'
- */
-export function reportSourceInfo(line) {
-  if (activeReporter && !activeReporter.ended && line) {
-    activeReporter.addReportLine(line)
-  }
-}
-
-
-/**
- * The active load's `load.*` tags and `load` context, for ONE event's
- * capture context — the non-sticky counterpart of
- * {@link attachLoadFailureContext}. `setTag`/`setContext` write the
- * session's persistent scope, so a load's context applied that way rides
- * along on every later, unrelated event in the SPA session; passing it as
- * a capture context attaches it to the one event only (codex review of
- * Share#1899).
- *
- * @return {{tags: object, contexts: object}} empty when no load is active
- */
-export function loadFailureCaptureContext() {
-  if (activeReporter) {
-    try {
-      return activeReporter.sentryLoadState()
-    } catch (e) {
-      debug().log('loadProgress#loadFailureCaptureContext: ', e)
-    }
-  }
-  return {tags: {}, contexts: {}}
-}
-
-
-/**
- * Attach the active load's final progress state to Sentry (tags + context)
- * ahead of a captureException call. Call from the load-failure catch.
- */
-export function attachLoadFailureContext() {
-  if (activeReporter) {
-    try {
-      activeReporter.applySentryLoadState()
-    } catch (e) {
-      debug().log('loadProgress#attachLoadFailureContext: ', e)
-    }
-  }
-}
-
-
-/**
- * Report a completed load's console or engine diagnostics (issue #1767), so
- * a dashboard model-open chip with non-zero errors/warnings has a searchable
- * counterpart to link to: a Sentry event for an engine gap, and a GA
- * `load_diagnostics` event, under the same client id, for authoring defects
- * and nothing-to-draw loads (captureDiagnostics has the split). A chip whose
- * load had only defects therefore has no Sentry event behind it since
- * 2026-11; its counterpart is the GA event.
- *
- * The two populations the bizdev dashboard tries to join were close to
- * disjoint before this. The counts behind each chip come from a load
- * that *succeeded*, and a successful load produced no Sentry event at
- * all; the loads that did reach Sentry hard-failed, so they never fired
- * `real_model_open` and never became a chip. This is the missing
- * overlap: one event per noisy load, carrying the same client id the
- * chip does, so the chip's `open_cid:<id>` link resolves to something.
- *
- * One event per load, not one per console line. Sentry's
- * captureConsoleIntegration would do the latter and wasm loaders are
- * chatty enough that it would flood the project.
- *
- * **The counts must be the caller's, not this reporter's.** The obvious
- * gate — the console tee's own errorCount/warningCount — is the wrong
- * number on exactly the formats this join is about. What colours a chip
- * is GA's engine `stats_errorCount` / `stats_warningCount` when
- * ShareIfcLoader publishes them on `loadStats` (conway#740; today it
- * cannot, because conway's Statistics has no such methods), and the
- * tee's `stats_pageErrorCount` / `stats_pageWarnCount` otherwise —
- * CadView picks per load. Gating on the tee alone would, once the engine
- * counts exist, let the two disagree, and each direction of
- * disagreement is worse than the gap
- * this closes — a red chip whose Sentry link resolves to nothing, or a
- * green chip with an issue behind it. Both look like the join working.
- *
- * So CadView calls this with the very numbers it is about to send to
- * GA, from inside the `isRealModelOpen` success branch. That siting is
- * what makes the other two gates structural rather than flags: only
- * real opens reach it (never the bundled demo, which loads on every
- * homepage visit and can never be a chip), and only successes do (a
- * failure is already reported by that path's captureException, with
- * this same report attached by attachLoadFailureContext).
- *
- * Safe no-op when the load reported nothing, or when no reporter ran.
- * Reads the reporter *after* endLoadProgress disposed it, which is
- * deliberate and matches getCompletedLoadStats: dispose stops the
- * watchdog and restores the console but leaves the report readable.
- *
- * @param {object} opts
- * @param {number} [opts.errorCount] GA `stats_errorCount` for this load
- * @param {number} [opts.warningCount] GA `stats_warningCount`
- * @param {string} [opts.contentId] GA `content_id`, tagged so the event
- *   names the same model as the chip
- * @param {string} [opts.contentType] GA `content_type`, tagged because
- *   it is the first filter worth having when triaging these
- */
-export function captureLoadDiagnostics({
-  errorCount = 0,
-  warningCount = 0,
-  contentId = undefined,
-  contentType = undefined,
-} = {}) {
-  if (activeReporter === null) {
-    return
-  }
-  // A depth-cap hit goes to GA whether or not the load had anything for
-  // Sentry: it is volume-only signal (AGENTS.md, "PRs: a Reported Conditions
-  // section"). Here, on a successful real open, so a failed load never also
-  // counts it.
-  activeReporter.reportBvhDepthCapOnce(contentType)
-  // Likewise a stall the load recovered from (HANG_TIMEOUT_MS).
-  activeReporter.reportStallRecoveredOnce(contentType)
-  if (errorCount + warningCount === 0) {
-    return
-  }
-  try {
-    activeReporter.captureDiagnostics({errorCount, warningCount, contentId, contentType})
-  } catch (e) {
-    debug().log('loadProgress#captureLoadDiagnostics: ', e)
-  }
-}
-
-
-/**
- * `load.stalled` for one failure capture (CadView), or null when the last
- * load never stalled. Per event, never on the scope: see
- * LoadProgressReporter#applySentryLoadState.
- *
- * @return {?object} `{'load.stalled': 'true'}` or null
- */
-export function loadStallCaptureTags() {
-  return activeReporter?.stallPhase === undefined ? null : {'load.stalled': 'true'}
-}
-
-
-/**
- * Attach a one-line model summary (products, triangles, units, ...) to the
- * in-flight load report — appended to the Total line at finish. No-op when
- * no load is being reported.
- *
- * @param {string} text the summary segment
- */
-export function setLoadSummary(text) {
-  if (activeReporter && !activeReporter.ended) {
-    activeReporter.summary = text
-  }
-}
-
-
-/**
- * Finish reporting (success or failure): freezes the report (Total line)
- * and stops the stall watchdog, then publishes the end-of-load grace result
- * that the snackbar lingers on (success → "Loaded <name>", auto-dismissed
- * with the shrink-to-"i" animation; error → the failure summary, dismissed
- * only on OK). Timing/heap detail stays in the expandable report, not this
- * terse line. The reporter stays referenced so
- * attachLoadFailureContext can still stamp the final progress state onto a
- * captureException that happens after the load's finally block; the next
- * beginLoadProgress replaces it.
- *
- * @param {Error} [error] the loader error when the load failed; omitted /
- *   null on success. Called from CadView's load `finally`, which captures
- *   the thrown error before re-raising it to the outer handler.
- * @param {object} [options]
- * @param {boolean} [options.isAborted] the load was given up, not failed
- *   (an in-app switch under `?feature=spaModelNav`, utils/loadAbort.js): its
- *   report belongs to a model the user has left, so it is cleared rather
- *   than frozen, and no grace line says the load failed. The reporter is
- *   kept as the last one, so getLoadFailureInfo can still say where it
- *   stopped.
- * @param {LoadProgressReporter} [options.reporter] the load's own reporter,
- *   from beginLoadProgress: a no-op unless it is still the active one
- */
-export function endLoadProgress(error = null, {isAborted = false, reporter = undefined} = {}) {
-  // A load ends only its own report: when the next load has begun meanwhile,
-  // the active reporter is that load's (see reportLoadProgress).
-  if (reporter !== undefined && reporter !== activeReporter) {
-    return
-  }
-  if (isAborted) {
-    if (activeReporter && !activeReporter.ended) {
-      activeReporter.dispose()
-      const store = useStore.getState()
-      store.setLoadReportLines([])
-      store.setCurrentLoadLine(null)
-      store.setLoadResult(null)
-    }
-    return
-  }
-  if (activeReporter && !activeReporter.ended) {
-    activeReporter.finishReport()
-    // The collapsed grace line stays deliberately terse — just the outcome
-    // and a name; the timing/heap Total and diagnostics live one expand (or
-    // the "i" report) away. The snackbar prefers the store's model.name (the
-    // page-title name); this filename is the fallback when that's absent.
-    const summaryLine = error ?
-      loadErrorSummary(error) :
-      `Loaded ${activeReporter.fallbackName || 'model'}`
-    useStore.getState().setLoadResult({
-      status: error ? 'error' : 'success',
-      summaryLine,
-    })
-    activeReporter.dispose()
-  }
-}
-
-
-/**
- * Grace-snackbar note when framing excluded strays — kept short: the
- * numbers live in the Health line one expand (or the "i" report) away.
- */
-const FRAMING_NOTE = 'stray geometry far from the model was left out of the zoom fit'
-
-
-/**
- * Which load is being reported now, as an opaque token: for work that
- * finishes after the load and must report against that load or not at all
- * (reportBvhDepthCap).
- *
- * @return {object|null}
- */
-export function loadReportToken() {
-  return activeReporter
-}
-
-
-/**
- * Record BVH trees that reached three-mesh-bvh's depth cap
- * (`model/bvhBuild.js`). Accumulates across the load's builds, a batched
- * model building one tree per geometry, and becomes one `Health:` line after
- * Total and, on a successful load, one GA `bvh_depth_cap` event
- * (reportBvhDepthCapOnce). Safe no-op with no active load.
- *
- * Without a token, a no-op after the load ended too: a tree built later (an
- * edit's new geometry, batchedEdit.js) is not part of the load. With the
- * token a deferred build took when it was scheduled (loadReportToken), the
- * cap is that load's however late it lands, and is dropped if another load
- * has started since.
- *
- * @param {{trees: number, maxLeafTriangles: number, maxDepth: number}} capped
- * @param {object} [token] from loadReportToken
- */
-export function reportBvhDepthCap({trees, maxLeafTriangles, maxDepth}, token = undefined) {
-  if (!activeReporter || (token !== undefined && token !== activeReporter)) {
-    return
-  }
-  if (activeReporter.ended) {
-    if (token !== undefined) {
-      activeReporter.addLateBvhDepthCap({trees, maxLeafTriangles, maxDepth})
-    }
-    return
-  }
-  const previous = activeReporter.bvhDepthCap
-  activeReporter.bvhDepthCap = {
-    trees: (previous?.trees ?? 0) + trees,
-    maxLeafTriangles: Math.max(previous?.maxLeafTriangles ?? 0, maxLeafTriangles),
-    maxDepth,
-  }
-}
-
-
-/**
- * Report that auto-framing excluded stray outlier geometry
- * (`robustBounds.js`; conway design/new/model-diagnostics.md §4.3): a
- * Health line on the load report (§4.1 shape), a console.warn for the
- * standard log, and a note the grace snackbar appends to its "Loaded
- * <name>" line.
- *
- * Framing runs after the load settles, so call this after
- * `endLoadProgress` — the report gains a post-Total line and the
- * already-published success `loadResult` is amended in place. No-op for
- * a clean model (nothing excluded) or when no load was being reported.
- *
- * @param {object} [bounds] robustBounds result ({excludedElements,
- *   excludedVertices, maxDistance, ...}); null/undefined tolerated
- */
-export function reportFramingExclusion(bounds) {
-  const excludedElements = bounds?.excludedElements ?? 0
-  const excludedVertices = bounds?.excludedVertices ?? 0
-  if (!activeReporter || (excludedElements === 0 && excludedVertices === 0)) {
-    return
-  }
-  const parts = []
-  if (excludedElements > 0) {
-    parts.push(`${excludedElements} ${excludedElements === 1 ? 'element' : 'elements'}`)
-  }
-  if (excludedVertices > 0) {
-    parts.push(`${excludedVertices} ${excludedVertices === 1 ? 'vertex' : 'vertices'}`)
-  }
-  const distance = Math.round(bounds.maxDistance)
-  const line = `Health: stray geometry excluded from view framing ` +
-    `(${parts.join(' + ')}, up to ${distance} model units out)`
-  // The console tee is already restored post-load, so this reaches the
-  // real console once, as a warning; the report line carries the same
-  // text without re-echoing it.
-  console.warn(line)
-  activeReporter.addReportLine(line, false)
-
-  const store = useStore.getState()
-  const loadResult = store.loadResult
-  if (loadResult?.status === 'success' && !loadResult.note) {
-    store.setLoadResult({...loadResult, note: FRAMING_NOTE})
-  }
-}
-
-
-/**
- * Test-only: the active reporter.
- *
- * @return {LoadProgressReporter|null}
- */
-export function _getActiveReporterForTests() {
-  return activeReporter
-}

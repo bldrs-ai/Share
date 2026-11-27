@@ -20,7 +20,7 @@ import {IncrementalBatchedBuilder} from '../model/incrementalBatchedBuilder'
 import {createEngineModelLoad} from '../engine/engineModelLoad'
 import {makeFakeEngine, makeFakeEngineLoad} from './engineLoad.fixture'
 import {isFeatureEnabled} from '../FeatureFlags'
-import {beginLoadProgress, endLoadProgress, getCompletedLoadOutcome} from './loadProgress'
+import {LoadReporter} from './loadProgress'
 
 
 jest.mock('../engine/engineModelLoad', () => ({
@@ -169,7 +169,6 @@ describe('loader/ShareIfcLoader counts for the no-geometry verdict (Share#1962)'
   })
 
   afterEach(() => {
-    endLoadProgress()
     consoleInfoSpy.mockRestore()
   })
 
@@ -180,13 +179,13 @@ describe('loader/ShareIfcLoader counts for the no-geometry verdict (Share#1962)'
    * @return {Promise<{model: object, outcome: string}>}
    */
   async function loadAndClassify(statistics) {
-    beginLoadProgress({fileInfo: 'shell.ifc'})
+    const report = new LoadReporter({fileInfo: 'shell.ifc'})
     const ifcAPI = makeIfcAPI(statistics)
     createEngineModelLoad.mockImplementation(() => makeFakeEngineLoad({ifcAPI, play}))
     const loader = new ShareIfcLoader({engine: makeFakeEngine(), ifc: makeIfcNamespace()})
-    const model = await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
-    endLoadProgress()
-    return {model, outcome: getCompletedLoadOutcome()}
+    const model = await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn(), {report})
+    report.end()
+    return {model, outcome: report.completedOutcome()}
   }
 
   it('a file with no products is no_geometry', async () => {

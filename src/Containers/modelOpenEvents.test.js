@@ -12,12 +12,6 @@ jest.mock('../app/accountUsage', () => ({reportAccountLoad: jest.fn(() => Promis
 jest.mock('../app/modelActionTracking', () => ({trackModelActionWhenAuthSettled: jest.fn()}))
 jest.mock('../privacy/engagementTracking', () => ({trackEngagementOnOpen: jest.fn()}))
 jest.mock('../connections/uploadLedger', () => ({recordLocalUpload: jest.fn()}))
-jest.mock('../loader/loadProgress', () => ({
-  ...jest.requireActual('../loader/loadProgress'),
-  captureLoadDiagnostics: jest.fn(),
-  getCompletedLoadOutcome: jest.fn(() => 'displayed'),
-  getCompletedLoadStats: jest.fn(() => ({fileSize: 3 * 1024 * 1024, loadTime: 10})), // eslint-disable-line no-magic-numbers
-}))
 jest.mock('../privacy/analytics', () => ({
   ...jest.requireActual('../privacy/analytics'),
   gtagEvent: jest.fn(),
@@ -29,6 +23,12 @@ jest.mock('../privacy/analytics', () => ({
 function context() {
   return {
     installPrefix: '',
+    // The load's ended reporter, of which only these three are read.
+    report: {
+      captureDiagnostics: jest.fn(),
+      completedOutcome: jest.fn(() => 'displayed'),
+      completedStats: jest.fn(() => ({fileSize: 3 * 1024 * 1024, loadTime: 10})), // eslint-disable-line no-magic-numbers
+    },
     refs: {engagementStop: {current: null}, refusal: {current: null}, open: {current: null}},
     setAlert: jest.fn(),
     getIsAuthenticated: () => false,

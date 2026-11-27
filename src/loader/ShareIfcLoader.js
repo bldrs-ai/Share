@@ -39,7 +39,6 @@ import {hasParams} from '../utils/location'
 import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
 import {isFeatureEnabled} from '../FeatureFlags'
 import {createEngineModelLoad, engineFormatOf} from '../engine/engineModelLoad'
-import {reportGeometryStats, reportSourceInfo} from './loadProgress'
 import {MainThreadReason, mainThreadEngineNote, mainThreadEngineReason} from '../engine/engineRoute'
 import {spawnWorkerEngine} from '../engine/spawnEngine'
 import {runIfcItemsMapParityCheck} from '../model/ifcItemsMapParity'
@@ -416,11 +415,14 @@ export default class ShareIfcLoader {
    *   open is one call into the wasm on this thread and cannot be
    *   interrupted). Either way nothing reaches the scene registry after it,
    *   and the parse rejects with a LoadAbortedError instead of returning null.
+   * @param {object} [options.report] the load's reporter
+   *   (loadProgress.js#LoadReporter), handed to the engine and the model's
+   *   BVH builds as callbacks (open-t200 slice R); none in a bare parse
    * @return {Promise<object|null>} the loaded IfcModel, or null on
    *   handled error (re-throws on OOM so the caller can show a
    *   tailored UX message).
    */
-  async parse(buffer, onProgress, onError, {onIndexed, onFirstMesh, signal} = {}) {
+  async parse(buffer, onProgress, onError, {onIndexed, onFirstMesh, signal, report = null} = {}) {
     const ifc = this._ifc
     // Clear any error stashed by a prior load on this shared IFC namespace.
     // readModel (Loader.js) reads `viewer.IFC.ifcLastError` to surface the
@@ -461,6 +463,7 @@ export default class ShareIfcLoader {
       // (three/renderDemand.js).
       renderDemand: ifc.context?.renderDemand ?? null,
       onFirstMesh,
+      report,
     })
 
     let builder = null
@@ -483,6 +486,7 @@ export default class ShareIfcLoader {
     const viewerEngine = this.engine
     const engineLoad = createEngineModelLoad({
       format: engineFormatOf(this.type),
+      report,
       spawn: onWorker ? this.spawnWorker : async () => {
         const engine = viewerEngine.forLoad()
         await engine.init()
@@ -507,7 +511,7 @@ export default class ShareIfcLoader {
       if (reason !== MainThreadReason.FLAG_OFF) {
         const note = mainThreadEngineNote(reason)
         conwayDirectInfo(note)
-        reportSourceInfo(note)
+        report?.line(note)
       }
     }
 
@@ -660,7 +664,7 @@ export default class ShareIfcLoader {
         try {
           const incremental = builder.finalize()
           ifcModel = assembleBatchedModel(
-            incremental.batches, ifcAPI, modelID, {scene, root: builder.root, engine})
+            incremental.batches, ifcAPI, modelID, {scene, root: builder.root, engine, onDepthCap: report?.onLateDepthCap})
           buildStats = incremental.stats
         } catch (e) {
           debug(WARN).warn('incremental assembly failed; end-of-load fallback:', e)
@@ -695,7 +699,8 @@ export default class ShareIfcLoader {
       if (ifcModel === undefined && isFeatureEnabled('batchedMesh')) {
         try {
           const batched =
-            buildBatchedConwayModel(await recapture(), ifcAPI, modelID, {scene, coordination, engine})
+            buildBatchedConwayModel(await recapture(), ifcAPI, modelID,
+              {scene, coordination, engine, onDepthCap: report?.onLateDepthCap})
           ifcModel = batched.model
           buildStats = batched.stats
         } catch (e) {
@@ -707,7 +712,7 @@ export default class ShareIfcLoader {
           buildConwayIfcModel(await recapture(), ifcAPI, modelID, {coordination})
         ifcModel = merged.mesh
         buildStats = merged.stats
-        decorateConwayDirectIfcModel(ifcModel, engine, ifcAPI, modelID, {scene})
+        decorateConwayDirectIfcModel(ifcModel, engine, ifcAPI, modelID, {scene, onDepthCap: report?.onDepthCap})
       }
 
       // Drop parse-time imposters before the durable model installs.
@@ -851,7 +856,7 @@ export default class ShareIfcLoader {
           // severity: a build that emitted nothing is a model the user
           // cannot see, whatever the warning counts say (ops#27 T0 —
           // loadProgress#classifyLoadOutcome).
-          reportGeometryStats({
+          report?.geometryStats({
             vertexCount: buildStats.vertexCount ?? buildStats.totalVerts,
             triangleCount: buildStats.triangleCount ?? buildStats.totalTriangles,
             ...emptinessCounts,

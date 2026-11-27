@@ -191,16 +191,19 @@ describe('layerBoundary: the rule fires', () => {
   }, LINT_TIMEOUT_MS)
 
   it('excepts an allowlisted pair, and only that pair', async () => {
-    const file = 'src/engine/engineModelLoad.js'
-    expect(allowlist[file]).toEqual(['src/loader/loadProgress.js'])
-    const allowed = `import {getLoadReporter} from '../loader/loadProgress'\nexport const r = getLoadReporter\n`
+    // The pair no slice of this redesign removes (layering.md §3, entry 19),
+    // so the fixture outlives the slices that empty the rest. It was
+    // `engineModelLoad.js` → `loadProgress.js` until slice R removed it.
+    const file = 'src/privacy/analytics.js'
+    expect(allowlist[file]).toEqual(['src/quota/quota.js'])
+    const allowed = `import {getTier} from '../quota/quota'\nexport const t = getTier\n`
     expect(await zoneMessages(allowed, file)).toEqual([])
     // The same file importing a second upward module.
     const second = await zoneMessages(
       `${allowed}import {load} from '../loader/Loader'\nexport const l = load\n`, file)
     expect(second.map((m) => m.line)).toEqual([3])
     // Another file making the allowlisted import.
-    expect(await zoneMessages(allowed, 'src/engine/layerFixture.js')).toHaveLength(1)
+    expect(await zoneMessages(allowed, 'src/privacy/layerFixture.js')).toHaveLength(1)
   }, LINT_TIMEOUT_MS)
 
   it('leaves a test reaching up alone', async () => {

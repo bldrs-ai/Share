@@ -78,7 +78,7 @@ export default function createIFCSlice(set, get) {
     // frozen lines (Share/engine/model preamble + finished stage lines +
     // Total) mirrored 1:1 with what loader/loadProgress.js prints to the
     // console. Drives the status-bar expando and the post-load report
-    // dialog. Reset by beginLoadProgress on each load.
+    // dialog. Reset by each load's reporter as it begins (LoadReporter).
     setLoadReportLines: (lines) => set(() => ({loadReportLines: lines})),
 
     // The running stage's animated line ("Geometry [0%....56%] 41.0s,
@@ -93,8 +93,8 @@ export default function createIFCSlice(set, get) {
     // shrink-to-"i" animation that draws the eye to where the report now
     // lives; on error it shows the error line and waits for an explicit OK,
     // never animating. null when no load has settled or once the grace
-    // snackbar is dismissed. Set by loader/loadProgress.js#endLoadProgress,
-    // cleared by beginLoadProgress (next load) and by the snackbar on
+    // snackbar is dismissed. Set by loader/loadProgress.js#LoadReporter#end,
+    // cleared by the next load's reporter and by the snackbar on
     // dismiss. See AlertDialogAndSnackbar.jsx for the grace state machine.
     setLoadResult: (result) => set(() => ({loadResult: result})),
 

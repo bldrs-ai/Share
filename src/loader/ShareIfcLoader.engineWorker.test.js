@@ -179,7 +179,7 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
       handle = h
     }})
     expect(model).toBeTruthy()
-    expect(createEngineModelLoad).toHaveBeenCalledWith({format: 'step', spawn: spawnWorker})
+    expect(createEngineModelLoad).toHaveBeenCalledWith({format: 'step', report: null, spawn: spawnWorker})
     expect(engineParse).toHaveBeenCalledTimes(1)
     expect(IncrementalBatchedBuilder.mock.calls[0][0]).toBe(facade)
     await handle.getSpatialStructure(0, 'names')
@@ -190,7 +190,7 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
     const loader = makeLoader()
     loader.type = 'ifc'
     await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
-    expect(createEngineModelLoad).toHaveBeenCalledWith({format: 'ifc', spawn: spawnWorker})
+    expect(createEngineModelLoad).toHaveBeenCalledWith({format: 'ifc', report: null, spawn: spawnWorker})
   })
 
   it('a format no engine worker parses runs on a page engine of the viewer\'s make', async () => {
