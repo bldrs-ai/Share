@@ -2,6 +2,7 @@ import React, {ReactElement, useEffect, useRef} from 'react'
 import {Helmet} from 'react-helmet-async'
 import {useNavigate, useParams} from 'react-router-dom'
 import CadView from './Containers/CadView'
+import {isHomepageModel} from './Components/Versions/homepageModel'
 import useConnectionsInit from './connections/useConnectionsInit'
 import useGithubLastModified from './connections/useGithubLastModified'
 import useSignedOutDriveCleanup from './connections/useSignedOutDriveCleanup'
@@ -145,10 +146,10 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       setIsVersionsEnabled(true)
       setIsShareEnabled(true)
       setIsNotesEnabled(true)
-    } else if (pathPrefix.startsWith('/share/v/p')) {
+    } else if (pathPrefix.endsWith('/v/p')) {
       debug().log('Setting default repo pablo-mayrgundter/Share')
       setRepository('pablo-mayrgundter', 'Share')
-      setIsVersionsEnabled(true)
+      setIsVersionsEnabled(isHomepageModel(modelPath))
       setIsShareEnabled(true)
       setIsNotesEnabled(true)
     } else if (

@@ -10,6 +10,7 @@ import defines from './defines.js'
 
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../')
 const indexFile = path.resolve(repoRoot, 'src', 'index.jsx')
+const homepageVersionsFile = path.resolve(repoRoot, 'src', 'Components', 'Versions', 'homepageGit.js')
 const subscribeFile = path.resolve(repoRoot, 'src', 'subscribe', 'index.jsx')
 
 // Add entry points for watch mode to know what to rebuild.
@@ -21,7 +22,7 @@ const serveConfig = {
   ...config,
   plugins: [...config.plugins, staticCopyPlugin],
   // The lazy Assist runtime too, so watch mode rebuilds it (assistEntry.js).
-  entryPoints: [indexFile, subscribeFile, ASSIST_RUNTIME_ENTRY, GFM_ENTRY],
+  entryPoints: [indexFile, subscribeFile, ASSIST_RUNTIME_ENTRY, GFM_ENTRY, homepageVersionsFile],
 }
 
 const ctx = await esbuild.context(serveConfig)
