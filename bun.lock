@@ -11,7 +11,7 @@
         "@babel/plugin-syntax-import-assertions": "7.18.6",
         "@babel/preset-env": "7.18.10",
         "@babel/preset-react": "7.18.6",
-        "@bldrs-ai/conway": "1.1656.798-gac3a6af9",
+        "@bldrs-ai/conway": "1.1660.803-g7b88c21f",
         "@bldrs-ai/ifclib": "6.0.0",
         "@emotion/react": "11.10.0",
         "@emotion/styled": "11.10.0",
@@ -430,7 +430,7 @@
 
     "@bcoe/v8-coverage": ["@bcoe/v8-coverage@0.2.3", "", {}, "sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw=="],
 
-    "@bldrs-ai/conway": ["@bldrs-ai/conway@1.1656.798-gac3a6af9", "", { "dependencies": { "gl-matrix": "3.4.3", "seedrandom": "3.0.5", "three": "^0.184.0", "yargs": "17.7.1" }, "bin": { "cli": "compiled/examples/cli-bundled.cjs", "step": "compiled/examples/cli-step-bundled.cjs", "browser": "compiled/examples/browser-bundled.js", "validator": "compiled/examples/validator-bundled.js" } }, "sha512-Jlih37eL0gs+jRDeuvMyvnuvBPMUVwXztfR5Wp4rbhxK2ovi6W9c6vIWsI6Pw7JtaoubdemEeAaidWVINI8oVw=="],
+    "@bldrs-ai/conway": ["@bldrs-ai/conway@1.1660.803-g7b88c21f", "", { "dependencies": { "gl-matrix": "3.4.3", "seedrandom": "3.0.5", "three": "^0.184.0", "yargs": "17.7.1" }, "bin": { "cli": "compiled/examples/cli-bundled.cjs", "step": "compiled/examples/cli-step-bundled.cjs", "browser": "compiled/examples/browser-bundled.js", "validator": "compiled/examples/validator-bundled.js" } }, "sha512-aidFvNkWCUPYLocGq09HwmYyYzKR9IhH+FnxEqY1gATdk8H4urmjisNiRgeb08z1XKTkaCn59AFbB6CIN7V59A=="],
 
     "@bldrs-ai/ifclib": ["@bldrs-ai/ifclib@6.0.0", "", { "dependencies": { "@log4js-node/log4js-api": "^1.0.2", "json2csv": "^5.0.7" } }, "sha512-kPJeGL/5N4d7EI/U02H95/c/cRJnEP7aWQ7xsNLGBWgt01Hitl4xfEuolITyx50DnPzlG71FNV/IMK/z6P3qAg=="],
 
