@@ -1821,6 +1821,17 @@ The Widget API's `ChangeViewSettings` keeps answering success.
 
 One interface over both engines, before anything changes hands (§4.1).
 
+**Status: built in #2373.** As planned, with one change from review: a
+main-thread load parses into an engine of its own,
+`ConwayEngine#forLoad` (a fresh engine of the viewer's make), not into
+the viewer's. `close()` is terminal on every `Engine`, and a failed load
+closes its engine, so parsing into the viewer's left it closed for the
+next parse into that viewer (CadView's re-run after a failure, the Drive
+auth retry). The viewer's `ConwayEngine` stays idle (the store-open probe,
+the manager a GLB cache hit and a mesh model share), which is the shape
+1b's lease and 2d assume. The allowlist went 18 → 17 (entry 7). The PSB
+kill-switch numbers are in the PR.
+
 - **Builds:**
   - the rename `EngineSession` → `WorkerEngine`, as its own commit;
   - `engine/Engine.js`: the interface as a typedef, and the event names;
@@ -2476,11 +2487,13 @@ values). The tripwire itself is not written; 3a writes it.
 
 **Not run, and a slice has to:**
 
-- that `ConwayEngine` can call its listeners in the same tick and keep
-  the kill-switch load's timings (slice 1a measures PSB before and
-  after), and that the contract test's deep-equality between the two
-  engines holds on both fixtures. The byte identity of their artifacts
-  was established on PSB by hand (engine-worker.md §7.1), not by a test;
+- ~~that `ConwayEngine` can call its listeners in the same tick and keep
+  the kill-switch load's timings, and that the contract test's
+  deep-equality between the two engines holds on both fixtures~~. Run in
+  slice 1a (#2373): `engine/engineContract.test.js` holds on `index.ifc`
+  and `index.step` (events, placements, reads, the `done` summary, and one
+  GLB SHA-256 through either engine), and the PSB kill-switch load was
+  measured before and after (n=3, in the PR);
 - that the `?view=` stack colours nothing (slice V's E2E). The owner's
   account agrees with the reading: old client work that never went
   anywhere (§9, item 3);
