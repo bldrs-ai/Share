@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import {IfcAPI} from '@bldrs-ai/conway/web-ifc'
 import {captureEngineExtensions, ifcManagerOver} from './glbEngineCapture'
-import {EngineSession} from './EngineSession'
+import {WorkerEngine} from './WorkerEngine'
 import {createEngineHandler} from './engineHandler'
 import {makeInProcessTransport} from './transports'
 
@@ -27,7 +27,7 @@ const TIMEOUT_MS = 60_000
 
 /**
  * @param {Function} loadIfcAPI
- * @return {{session: EngineSession, posts: Array}}
+ * @return {{session: WorkerEngine, posts: Array}}
  */
 function sessionOver(loadIfcAPI) {
   const posts = []
@@ -38,7 +38,7 @@ function sessionOver(loadIfcAPI) {
       post(msg, transfer)
     },
   }))
-  return {session: new EngineSession(transport), posts}
+  return {session: new WorkerEngine(transport), posts}
 }
 
 
@@ -96,7 +96,7 @@ describe('engine/capture and spill against the real engine', () => {
 describe('engine/spill', () => {
   /**
    * @param {object} overrides on the stub engine
-   * @return {Promise<EngineSession>} with a buffered model open
+   * @return {Promise<WorkerEngine>} with a buffered model open
    */
   async function openBuffered(overrides = {}) {
     const api = {

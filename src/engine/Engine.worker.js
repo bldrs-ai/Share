@@ -1,7 +1,7 @@
 // One model's Conway engine, off the main thread (design/new/engine-worker.md).
 //
 // The page spawns one of these per model session (`spawnEngine.js`) and
-// talks to it through `EngineSession`. Evicting the model is
+// talks to it through `WorkerEngine`. Evicting the model is
 // `worker.terminate()`, which returns the whole engine to the browser (§3).
 //
 // Module worker only. The engine's fallback for browsers without module
@@ -31,7 +31,7 @@ self.addEventListener('message', (event) => {
 })
 
 // Announce the engine, and the protocol version it speaks, now that the
-// module (and its copy of Conway) has evaluated. EngineSession#init waits for
+// module (and its copy of Conway) has evaluated. WorkerEngine#init waits for
 // this, on the same clock as its init reply (ENGINE_INIT_TIMEOUT_MS), and
 // refuses at once if the version is not the page's.
 self.postMessage({v: ENGINE_PROTOCOL_VERSION, epoch: 0, ev: Ev.HELLO, seq: 0})

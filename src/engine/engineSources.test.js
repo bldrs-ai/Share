@@ -1,6 +1,6 @@
 /** @jest-environment node */ // eslint-disable-line jsdoc/check-tag-names
 /* eslint-disable no-magic-numbers, require-await */
-import {ENGINE_CLOSE_TIMEOUT_MS, EngineSession} from './EngineSession'
+import {ENGINE_CLOSE_TIMEOUT_MS, WorkerEngine} from './WorkerEngine'
 import {createEngineHandler} from './engineHandler'
 import {sourceIoLine} from './engineModelLoad'
 import {
@@ -342,7 +342,7 @@ function readingApi(log) {
  *   tests are of the windowed open, which the source policy
  *   (sourcePolicy.js) takes by default only over the cap; its buffered
  *   default is tested in engineSourcePolicy.test.js
- * @return {Promise<EngineSession>}
+ * @return {Promise<WorkerEngine>}
  */
 async function workerSession(api, root, log, flags = {}) {
   const listeners = []
@@ -360,7 +360,7 @@ async function workerSession(api, root, log, flags = {}) {
     postMessage: (msg) => queueMicrotask(() => handler.handle(msg)),
     terminate: () => log.push('terminate'),
   }
-  const session = new EngineSession(makeWorkerTransport(fakeWorker), {epoch: 1})
+  const session = new WorkerEngine(makeWorkerTransport(fakeWorker), {epoch: 1})
   toPage({v: ENGINE_PROTOCOL_VERSION, epoch: 0, ev: Ev.HELLO, seq: 0})
   await session.init({flags: {disableBufferedSource: true, ...flags}})
   return session

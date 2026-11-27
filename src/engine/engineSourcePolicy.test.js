@@ -1,7 +1,7 @@
 /** @jest-environment node */ // eslint-disable-line jsdoc/check-tag-names
 /* eslint-disable no-magic-numbers, require-await */
 import {flags as staticFlags, isFeatureEnabled} from '../FeatureFlags'
-import {EngineSession} from './EngineSession'
+import {WorkerEngine} from './WorkerEngine'
 import {createEngineHandler, isAllocationFailure} from './engineHandler'
 import {sourceModeLine} from './engineModelLoad'
 import {ENGINE_PROTOCOL_VERSION, Ev} from './protocol'
@@ -171,7 +171,7 @@ function policyApi(log) {
  * @param {object} [options]
  * @param {object} [options.flags]
  * @param {object} [options.device]
- * @return {Promise<EngineSession>}
+ * @return {Promise<WorkerEngine>}
  */
 async function session(api, root, {flags = {}, device = DESKTOP} = {}) {
   const listeners = []
@@ -189,7 +189,7 @@ async function session(api, root, {flags = {}, device = DESKTOP} = {}) {
     postMessage: (msg) => queueMicrotask(() => handler.handle(msg)),
     terminate: () => null,
   }
-  const s = new EngineSession(makeWorkerTransport(fakeWorker), {epoch: 1})
+  const s = new WorkerEngine(makeWorkerTransport(fakeWorker), {epoch: 1})
   toPage({v: ENGINE_PROTOCOL_VERSION, epoch: 0, ev: Ev.HELLO, seq: 0})
   await s.init({flags, device})
   return s
@@ -199,7 +199,7 @@ async function session(api, root, {flags = {}, device = DESKTOP} = {}) {
 /**
  * Open the fixture streamed, to its `done` packet.
  *
- * @param {EngineSession} s
+ * @param {WorkerEngine} s
  * @return {Promise<{opened: object, summary: object}>}
  */
 async function load(s) {

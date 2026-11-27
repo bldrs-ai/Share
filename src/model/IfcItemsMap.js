@@ -284,7 +284,7 @@ export function itemsMapFromOrderedRanges(ranges, opts = {}) {
  * is no prior walk to collide with.
  *
  * conway#657 closes this at the source for models opened with
- * `STREAMING_CONSUMER` (which `conwayDirectIfcLoader` declares on every
+ * `STREAMING_CONSUMER` (which engine/ConwayEngine.js declares on every
  * deferred open, and which this pin now carries): there is no cache for the
  * walk to re-push into, so conway's own re-walk clears and rebuilds instead
  * of appending and the second call returns what the first did. Doubling

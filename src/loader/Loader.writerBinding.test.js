@@ -97,13 +97,13 @@ class FakeOpfsFile {
 
 
 /**
- * A viewer whose IFC loader returns a parsed model carrying `engineSession`,
- * the shape engineModelLoad.js gives a worker load (`ifcAPI.engineSession`).
+ * A viewer whose IFC loader returns a parsed model carrying its engine, the
+ * shape every IFC/STEP load has (`model.engine`, model/engineModelReads.js).
  *
- * @param {object} engineSession
+ * @param {object} engine the model's engine
  * @return {object}
  */
-function makeViewer(engineSession) {
+function makeViewer(engine) {
   const viewer = {
     IFC: {
       type: null,
@@ -121,11 +121,22 @@ function makeViewer(engineSession) {
       const model = new Group()
       model.add(new Mesh(new BufferGeometry()))
       model.modelID = 0
-      model.ifcManager = {ifcAPI: {engineSession}}
+      model.engine = engine
+      model.ifcManager = {ifcAPI: {}}
       return model
     }),
   }
   return viewer
+}
+
+
+/** @return {object} an Engine's writer-facing half (engine/Engine.js) */
+function makeEngine() {
+  return {
+    kind: 'mainThread',
+    capture: jest.fn(async () => ({captureMs: 1})),
+    spill: jest.fn(async () => ({spilled: false})),
+  }
 }
 
 
@@ -167,22 +178,22 @@ describe('Loader#load: the idle GLB writer is bound to its own load', () => {
   })
 
   it('captures from the engine its load parsed into, even if the viewer\'s changed before it runs', async () => {
-    // A main-thread load (no engine session): the writer's engine is the
-    // viewer's shared IFC manager.
-    const viewer = makeViewer(null)
-    const managerOfThisLoad = viewer.IFC.loader.ifcManager
+    // A main-thread load: its engine is the viewer's ConwayEngine as it was
+    // when the load ran.
+    const engineOfThisLoad = makeEngine()
+    const viewer = makeViewer(engineOfThisLoad)
 
     await loadThroughOpfs(viewer)
     // Before the browser is idle, the viewer moves on: the next load's
     // engine (a theme rebuild, or the viewer's dispose dropping it).
-    const nextManager = {state: {models: []}, ifcAPI: {}}
-    viewer.IFC.loader.ifcManager = nextManager
+    viewer.IFC.engine = makeEngine()
     await flushScheduledWork()
 
     expect(exportAndCacheGlb).toHaveBeenCalledTimes(1)
-    const {ifcManager} = exportAndCacheGlb.mock.calls[0][0]
-    expect(ifcManager).toBe(managerOfThisLoad)
-    expect(ifcManager).not.toBe(nextManager)
+    const {capture} = exportAndCacheGlb.mock.calls[0][0]
+    await capture({geometryExpressIds: null})
+    expect(engineOfThisLoad.capture).toHaveBeenCalledTimes(1)
+    expect(viewer.IFC.engine.capture).not.toHaveBeenCalled()
   })
 
   it('leaves the next load\'s in-flight flag up when the previous writer ends', async () => {
@@ -192,9 +203,9 @@ describe('Loader#load: the idle GLB writer is bound to its own load', () => {
     }))
 
     // A's writer starts, and is still running when B's starts.
-    await loadThroughOpfs(makeViewer(null))
+    await loadThroughOpfs(makeViewer(makeEngine()))
     await flushScheduledWork()
-    await loadThroughOpfs(makeViewer(null))
+    await loadThroughOpfs(makeViewer(makeEngine()))
     await flushScheduledWork()
     expect(finishers).toHaveLength(2)
     expect(useStore.getState().isCacheWriteInFlight).toBe(true)

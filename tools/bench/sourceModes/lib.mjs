@@ -176,6 +176,14 @@ export function checkArm(arm, report, phase) {
     return {ok: problems.length === 0, problems}
   }
   const {expect} = arm
+  if (expect.mainThread) {
+    // No source policy, store or sidecar on that engine: its one statement
+    // is the report's `Engine: main thread (…)` line (engine/engineRoute.js).
+    if (!report.lines.some((line) => line.startsWith('Engine: main thread'))) {
+      problems.push('the load did not run on the main-thread engine')
+    }
+    return {ok: problems.length === 0, problems}
+  }
   if (report.openKind !== expect.open) {
     problems.push(`open was ${report.openKind ?? 'unknown'}, expected ${expect.open}`)
   }

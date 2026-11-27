@@ -128,7 +128,7 @@ export function isStructuredProgress(progressArg) {
 
 
 /**
- * True for the model-info envelope conwayDirectIfcLoader forwards from the
+ * True for the model-info envelope engineModelLoad.js forwards from the
  * engine's ON_MODEL_INFO callback ({modelInfo: {...}}).
  *
  * @param {*} progressArg

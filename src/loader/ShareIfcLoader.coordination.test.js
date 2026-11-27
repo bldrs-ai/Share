@@ -21,14 +21,19 @@ import ShareIfcLoader from './ShareIfcLoader'
 import {assembleBatchedModel, buildBatchedConwayModel} from '../model/buildBatchedConwayModel'
 import {buildConwayIfcModel} from '../model/buildConwayIfcModel'
 import {IncrementalBatchedBuilder} from '../model/incrementalBatchedBuilder'
-import {parseIfcWithConway} from './conwayDirectIfcLoader'
+import {createEngineModelLoad} from '../engine/engineModelLoad'
+import {makeFakeEngine, makeFakeEngineLoad} from './engineLoad.fixture'
 import {isFeatureEnabled} from '../FeatureFlags'
 import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 
 
-jest.mock('./conwayDirectIfcLoader', () => ({
-  parseIfcWithConway: jest.fn(),
+jest.mock('../engine/engineModelLoad', () => ({
+  createEngineModelLoad: jest.fn(),
+  engineFormatOf: jest.requireActual('../engine/engineModelLoad').engineFormatOf,
+}))
+jest.mock('../model/engineModelReads', () => ({
   decorateConwayDirectIfcModel: jest.fn(),
+  makeIndexedModelHandle: jest.requireActual('../model/engineModelReads').makeIndexedModelHandle,
 }))
 jest.mock('../model/buildBatchedConwayModel', () => ({
   buildBatchedConwayModel: jest.fn(),
@@ -192,21 +197,22 @@ function makeIfcNamespace() {
 
 
 describe('loader/ShareIfcLoader engine coordination stamp (Share#1634)', () => {
+  // The engine's part of the load (engineLoad.fixture.js), set per test.
+  let play
+
   beforeEach(() => {
     jest.clearAllMocks()
     // `demandGeometry` on is what gives the session a preview group, which is
     // what gives `parse` an `onMeshBatch`, which is what puts the load on the
     // incremental path — the production path for every real model.
     isFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
-    parseIfcWithConway.mockImplementation(
+    play = ({onMeshBatch}) => {
+      if (onMeshBatch) {
+        onMeshBatch(PUMPED, 7, {done: 1, total: 1})
+      }
       // eslint-disable-next-line require-await
-      async (buffer, api, settings, onProgress, onMeshBatch) => {
-        if (onMeshBatch) {
-          onMeshBatch(PUMPED, 7, {done: 1, total: 1})
-        }
-        // eslint-disable-next-line require-await
-        return {modelID: 7, captured: [], recapture: async () => PUMPED}
-      })
+      return {modelID: 7, recapture: async () => PUMPED}
+    }
     IncrementalBatchedBuilder.mockImplementation(() => ({
       root: {parent: null},
       appendBatch: jest.fn(),
@@ -224,7 +230,8 @@ describe('loader/ShareIfcLoader engine coordination stamp (Share#1634)', () => {
    * @return {Promise<object>} the model `parse` resolved with
    */
   async function parseWith(ifcAPI) {
-    const loader = new ShareIfcLoader({ifcAPI, ifc: makeIfcNamespace()})
+    createEngineModelLoad.mockImplementation(() => makeFakeEngineLoad({ifcAPI, play}))
+    const loader = new ShareIfcLoader({engine: makeFakeEngine(), ifc: makeIfcNamespace()})
     return await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
   }
 

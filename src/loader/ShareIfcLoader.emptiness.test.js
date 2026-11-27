@@ -17,14 +17,19 @@ import ShareIfcLoader from './ShareIfcLoader'
 import {assembleBatchedModel, buildBatchedConwayModel} from '../model/buildBatchedConwayModel'
 import {buildConwayIfcModel} from '../model/buildConwayIfcModel'
 import {IncrementalBatchedBuilder} from '../model/incrementalBatchedBuilder'
-import {parseIfcWithConway} from './conwayDirectIfcLoader'
+import {createEngineModelLoad} from '../engine/engineModelLoad'
+import {makeFakeEngine, makeFakeEngineLoad} from './engineLoad.fixture'
 import {isFeatureEnabled} from '../FeatureFlags'
 import {LoadReporter} from './loadProgress'
 
 
-jest.mock('./conwayDirectIfcLoader', () => ({
-  parseIfcWithConway: jest.fn(),
+jest.mock('../engine/engineModelLoad', () => ({
+  createEngineModelLoad: jest.fn(),
+  engineFormatOf: jest.requireActual('../engine/engineModelLoad').engineFormatOf,
+}))
+jest.mock('../model/engineModelReads', () => ({
   decorateConwayDirectIfcModel: jest.fn(),
+  makeIndexedModelHandle: jest.requireActual('../model/engineModelReads').makeIndexedModelHandle,
 }))
 jest.mock('../model/buildBatchedConwayModel', () => ({
   buildBatchedConwayModel: jest.fn(),
@@ -133,6 +138,8 @@ function makeIfcNamespace() {
 describe('loader/ShareIfcLoader counts for the no-geometry verdict (Share#1962)', () => {
   let build
   let consoleInfoSpy
+  // The engine's part of the load (engineLoad.fixture.js).
+  let play
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -141,15 +148,13 @@ describe('loader/ShareIfcLoader counts for the no-geometry verdict (Share#1962)'
     consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation(() => {})
     build = EMPTY_BUILD
     isFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
-    parseIfcWithConway.mockImplementation(
+    play = ({onMeshBatch}) => {
+      if (onMeshBatch) {
+        onMeshBatch(PUMPED, 7, {done: 1, total: 1})
+      }
       // eslint-disable-next-line require-await
-      async (buffer, api, settings, onProgress, onMeshBatch) => {
-        if (onMeshBatch) {
-          onMeshBatch(PUMPED, 7, {done: 1, total: 1})
-        }
-        // eslint-disable-next-line require-await
-        return {modelID: 7, captured: [], recapture: async () => PUMPED}
-      })
+      return {modelID: 7, recapture: async () => PUMPED}
+    }
     IncrementalBatchedBuilder.mockImplementation(() => ({
       root: {parent: null},
       appendBatch: jest.fn(),
@@ -175,7 +180,9 @@ describe('loader/ShareIfcLoader counts for the no-geometry verdict (Share#1962)'
    */
   async function loadAndClassify(statistics) {
     const report = new LoadReporter({fileInfo: 'shell.ifc'})
-    const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(statistics), ifc: makeIfcNamespace()})
+    const ifcAPI = makeIfcAPI(statistics)
+    createEngineModelLoad.mockImplementation(() => makeFakeEngineLoad({ifcAPI, play}))
+    const loader = new ShareIfcLoader({engine: makeFakeEngine(), ifc: makeIfcNamespace()})
     const model = await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn(), {report})
     report.end()
     return {model, outcome: report.completedOutcome()}
@@ -241,9 +248,9 @@ describe('loader/ShareIfcLoader counts for the no-geometry verdict (Share#1962)'
 
   // On a deferred (demand) open the counts are 0 / the open's value until the
   // pump runs, and conway refreshes them on each pump call
-  // (IfcAPI#recordPumpStatistics_). The pump loop lives inside
-  // parseIfcWithConway, which parse awaits BEFORE it reads the statistics, so
-  // the read is post-drain. Pinned here because the verdict depends on it: read
+  // (IfcAPI#recordPumpStatistics_). The engine snapshots them into the `done`
+  // summary once the pump has drained (ConwayEngine#summarize_), and parse
+  // awaits the load BEFORE it reads them, so the read is post-drain. Pinned here because the verdict depends on it: read
   // before the pump, "0 products with geometry" would call this file empty
   // when the engine had geometry for 4 of its products.
   it('reads the counts and geometry time after the pump has drained', async () => {
@@ -253,12 +260,12 @@ describe('loader/ShareIfcLoader counts for the no-geometry verdict (Share#1962)'
       getProductsWithGeometryCount: () => (isPumped ? 4 : 0),
       getGeometryTime: () => (isPumped ? PUMP_MS : 0),
     }
-    const pumping = parseIfcWithConway.getMockImplementation()
-    parseIfcWithConway.mockImplementation(async (...args) => {
-      const parsed = await pumping(...args)
+    const pumping = play
+    play = (...args) => {
+      const parsed = pumping(...args)
       isPumped = true
       return parsed
-    })
+    }
 
     const {model, outcome} = await loadAndClassify(statistics)
 

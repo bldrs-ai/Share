@@ -23,6 +23,7 @@
 import axios from 'axios'
 import {downloadToOPFS, doesFileExistInOPFS} from '../OPFS/utils'
 import ShareIfcLoader from './ShareIfcLoader'
+import {ConwayEngine} from '../engine/ConwayEngine'
 import useStore from '../store/useStore'
 import BLDLoader from './BLDLoader'
 import {load} from './Loader'
@@ -165,7 +166,7 @@ function makeIfcViewer() {
       },
     },
   }
-  viewer.ifcLoader = new ShareIfcLoader({ifcAPI, ifc: viewer.IFC})
+  viewer.ifcLoader = new ShareIfcLoader(withViewerEngine(viewer.IFC, ifcAPI))
   return viewer
 }
 
@@ -175,6 +176,20 @@ async function flushScheduledWriters() {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
+
+/**
+ * The loader's arguments over a real ConwayEngine wrapping `ifcAPI` (a stub),
+ * installed on the viewer's IFC namespace as ShareIfc installs its own, so
+ * the parse and Loader.js#canOpenFromStore both see it.
+ *
+ * @param {object} ifc the `viewer.IFC` stub
+ * @param {object} ifcAPI the Conway IfcAPI stub
+ * @return {object} `{engine, ifc}`
+ */
+function withViewerEngine(ifc, ifcAPI) {
+  ifc.engine = new ConwayEngine({ifcAPI})
+  return {engine: ifc.engine, ifc}
+}
 
 describe('a .bld assembly and the page-level GLB artifact (#1833)', () => {
   let viewer

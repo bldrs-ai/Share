@@ -2,7 +2,7 @@
 import React from 'react'
 import {render, screen} from '@testing-library/react'
 import {decodeIFCString as ifclibDecodeIFCString, deref} from '@bldrs-ai/ifclib'
-import {EngineSession} from './EngineSession'
+import {WorkerEngine} from './WorkerEngine'
 import {createEngineHandler} from './engineHandler'
 import {ENGINE_PROTOCOL_VERSION, Op} from './protocol'
 import {makeInProcessTransport} from './transports'
@@ -146,7 +146,7 @@ function engineReads(lines) {
 
 /**
  * The main-thread engine's model: conway's `properties.*` and the model
- * methods conwayDirectIfcLoader.js#attachConwayDirectModelMethods puts over
+ * methods model/engineModelReads.js#attachEngineReads puts over
  * them.
  *
  * @param {object} lines
@@ -197,7 +197,7 @@ async function sessionModel(lines) {
     sent.push(msg.op)
     realPost(msg, transfer)
   }
-  const session = new EngineSession(transport)
+  const session = new WorkerEngine(transport)
   await session.init()
   await session.open({bytes: new Uint8Array(4)})
   sent.length = 0

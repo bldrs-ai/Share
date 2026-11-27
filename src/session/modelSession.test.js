@@ -124,7 +124,7 @@ describe('session/modelSession', () => {
   it('closing a session unbinds its window handlers, closes its engine and drops it', () => {
     const sessionA = host.open('A')
     const close = jest.fn()
-    sessionA.bindEngine({ifcManager: {ifcAPI: {engineSession: {close}}}})
+    sessionA.bindEngine({engine: {close}})
     const ondblclick = () => null
     sessionA.bindWindowHandler('ondblclick', ondblclick)
     expect(window.ondblclick).toBe(ondblclick)

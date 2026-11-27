@@ -1,22 +1,31 @@
-// Unit tests for the Conway-direct IFC parse path (Slice 5b of
-// design/new/viewer-replacement.md). Covers `parseIfcWithConway`
-// (OpenModel + StreamAllMeshes capture) + the property-method
-// closures `decorateConwayDirectIfcModel` attaches.
-//
-// `decorateConwayDirectIfcModel`'s BVH + IfcInstanceMap wiring is
-// exercised through the existing integration tests in
-// `Loader.test.js` (full load pipeline) — this file pins the
-// pieces that don't need a real BufferGeometry to validate.
+// ConwayEngine (engine/ConwayEngine.js): Conway's IfcAPI on the page behind
+// `Engine`, over IfcAPI stubs. It took over `parseIfcWithConway`'s open and
+// pump (layering.md §7 "1a"), and these are that function's tests, driven the
+// way a load drives the engine: through `createEngineModelLoad` with this
+// engine as its spawn (`parseWith`, below), so the open sequence, the pump,
+// the retention decision and the recapture are pinned where they now live,
+// and the callback shapes `ShareIfcLoader#parse` relies on are pinned too.
+// The two engines held to one contract on real Conway are
+// engineContract.test.js's.
 
-import {Mesh} from 'three'
-import {
-  decorateConwayDirectIfcModel,
-  makeIndexedModelHandle,
-  parseIfcWithConway,
-} from './conwayDirectIfcLoader'
-import {EngineOpenFailureError} from '../engine/engineOpenFailure'
-import {UnsupportedSchemaError} from '../engine/unsupportedSchema'
+import {ConwayEngine} from './ConwayEngine'
+import {ifcTypeName} from './Engine'
+import {createEngineModelLoad} from './engineModelLoad'
+import {EngineOpenFailureError} from './engineOpenFailure'
+import {UnsupportedSchemaError} from './unsupportedSchema'
 import {LoadAbortedError} from '../utils/loadAbort'
+
+
+/**
+ * @param {function(): boolean} condition
+ * @return {Promise<void>} once it holds, polled a task at a time
+ */
+async function waitUntil(condition) {
+  const maxTasks = 100
+  for (let i = 0; i < maxTasks && !condition(); i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
 
 // Controllable flag surface: defaults to "everything off" (matching
 // the real module for every flag these tests touch except
@@ -29,7 +38,7 @@ jest.mock('../FeatureFlags', () => ({
 
 
 /* eslint-disable no-magic-numbers */
-describe('loader/conwayDirectIfcLoader', () => {
+describe('engine/ConwayEngine', () => {
   // The demand-pump boundary logs are always-on (they must reach a
   // user's console without a flag), so divert them rather than let the
   // suite narrate every parse. PLAYBOOK.md §"Keep the test console clean".
@@ -46,7 +55,41 @@ describe('loader/conwayDirectIfcLoader', () => {
     warnSpy.mockRestore()
   })
 
-  describe('parseIfcWithConway', () => {
+  /**
+   * One load over a ConwayEngine wrapping `ifcAPI`, in the shape the old
+   * `parseWith(buffer, ifcAPI, settings, onProgress, onMeshBatch,
+   * onPreviewMesh, onIndexed, {signal})` had, so each case still reads as
+   * what the main-thread parse does. `captured` is the engine's retained
+   * stream.
+   *
+   * @param {ArrayBuffer|Uint8Array|Blob} buffer
+   * @param {object} ifcAPI Conway IfcAPI stub
+   * @param {undefined} _settings no longer taken: the open's settings are
+   *   the worker handler's (engineHandler.js#BASE_OPEN_SETTINGS)
+   * @param {Function} [onProgress]
+   * @param {Function} [onMeshBatch]
+   * @param {Function} [onPreviewMesh]
+   * @param {Function} [onIndexed]
+   * @param {object} [options]
+   * @param {AbortSignal} [options.signal] gives the load up, as
+   *   ShareIfcLoader#parse does on its signal
+   * @return {Promise<{modelID: number, captured: Array, recapture: Function, engine: ConwayEngine}>}
+   */
+  async function parseWith(
+    buffer, ifcAPI, _settings, onProgress, onMeshBatch, onPreviewMesh, onIndexed, {signal} = {}) {
+    const engine = new ConwayEngine({ifcAPI})
+    const load = createEngineModelLoad({
+      spawn: async () => {
+        await engine.init()
+        return engine
+      },
+    })
+    signal?.addEventListener('abort', () => load.abort(), {once: true})
+    const {modelID, recapture} = await load.parse(buffer, {onProgress, onMeshBatch, onPreviewMesh, onIndexed})
+    return {modelID, captured: engine.captured, recapture, engine}
+  }
+
+  describe('open and pump', () => {
     it('returns the modelID + captured FlatMeshes from a single Conway OpenModel + StreamAllMeshes pass', async () => {
       const fakeFlatMesh1 = {expressID: 42, geometries: {size: () => 0}}
       const fakeFlatMesh2 = {expressID: 43, geometries: {size: () => 0}}
@@ -59,7 +102,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         }),
       }
       const buffer = new ArrayBuffer(8)
-      const result = await parseIfcWithConway(buffer, ifcAPI)
+      const result = await parseWith(buffer, ifcAPI)
       expect(result.modelID).toBe(0)
       expect(result.captured).toEqual([fakeFlatMesh1, fakeFlatMesh2])
       // OpenModel called with a Uint8Array view of the buffer + the
@@ -68,7 +111,8 @@ describe('loader/conwayDirectIfcLoader', () => {
       expect(ifcAPI.OpenModel).toHaveBeenCalledTimes(1)
       const [data, settings] = ifcAPI.OpenModel.mock.calls[0]
       expect(data).toBeInstanceOf(Uint8Array)
-      expect(settings).toEqual({COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true})
+      expect(settings).toEqual({COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true,
+        ON_PROGRESS: expect.any(Function), ON_MODEL_INFO: expect.any(Function)})
     })
 
     it('accepts a Uint8Array buffer directly without re-wrapping', async () => {
@@ -78,7 +122,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         StreamAllMeshes: jest.fn(),
       }
       const bytes = new Uint8Array([1, 2, 3])
-      await parseIfcWithConway(bytes, ifcAPI)
+      await parseWith(bytes, ifcAPI)
       // The Uint8Array passed to OpenModel should be the same
       // reference we handed in — re-wrapping would lose buffer
       // ownership semantics for callers that rely on it.
@@ -107,7 +151,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         }),
         StreamAllMeshes: jest.fn(),
       }
-      await parseIfcWithConway(new ArrayBuffer(0), ifcAPI)
+      await parseWith(new ArrayBuffer(0), ifcAPI)
       expect(ifcAPI.Init).toHaveBeenCalledTimes(1)
       // Order matters: Init must complete before OpenModel runs.
       expect(initOrder).toEqual(['init', 'openModel'])
@@ -120,19 +164,19 @@ describe('loader/conwayDirectIfcLoader', () => {
         OpenModel: jest.fn(() => 0),
         StreamAllMeshes: jest.fn(),
       }
-      await parseIfcWithConway(new ArrayBuffer(0), ifcAPI)
+      await parseWith(new ArrayBuffer(0), ifcAPI)
       expect(ifcAPI.Init).not.toHaveBeenCalled()
     })
 
-    it('throws when the IfcAPI lacks OpenModel', async () => {
-      await expect(parseIfcWithConway(new ArrayBuffer(0), {})).rejects.toThrow(
-        /OpenModel is unavailable/)
+    it('fails the load when the IfcAPI has no open at all', async () => {
+      await expect(parseWith(new ArrayBuffer(0), {wasmModule: {}})).rejects.toThrow(/OpenModel/)
     })
 
-    it('throws when the IfcAPI lacks StreamAllMeshes', async () => {
-      await expect(parseIfcWithConway(new ArrayBuffer(0), {
-        OpenModel: () => 0,
-      })).rejects.toThrow(/StreamAllMeshes is unavailable/)
+    it('fails the load, not the page, when the IfcAPI cannot stream the model', async () => {
+      // A classic open, then no whole-model ask: the pump's throw ends the
+      // stream as `failed {kind: 'pump'}`, which the load rejects with.
+      await expect(parseWith(new ArrayBuffer(0), {wasmModule: {}, OpenModel: () => 0}))
+        .rejects.toThrow(/StreamAllMeshes/)
     })
 
     it('throws when OpenModel returns a negative modelID (Conway parse failure)', async () => {
@@ -141,7 +185,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         OpenModel: jest.fn(() => -1),
         StreamAllMeshes: jest.fn(),
       }
-      await expect(parseIfcWithConway(new ArrayBuffer(0), ifcAPI)).rejects.toThrow(
+      await expect(parseWith(new ArrayBuffer(0), ifcAPI)).rejects.toThrow(
         /OpenModel returned -1/)
       expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
     })
@@ -186,7 +230,7 @@ describe('loader/conwayDirectIfcLoader', () => {
 
     it('throws UnsupportedSchemaError when conway refused the open on schema', async () => {
       const ifcAPI = failingEngine('UNSUPPORTED_SCHEMA')
-      const rejection = parseIfcWithConway(ifc4x3Header, ifcAPI)
+      const rejection = parseWith(ifc4x3Header, ifcAPI)
       await expect(rejection).rejects.toBeInstanceOf(UnsupportedSchemaError)
       await expect(rejection).rejects.toThrow(/IFC4X3_RC2 \(IFC 4\.3\)/)
       expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
@@ -196,7 +240,7 @@ describe('loader/conwayDirectIfcLoader', () => {
     // an engine regression); the header alone must not relabel that as a
     // schema refusal (codex review of Share#1875).
     it('keeps the generic error when an IFC4X3 open failed for another reason', async () => {
-      const rejection = parseIfcWithConway(ifc4x3Header, failingEngine('FAILED'))
+      const rejection = parseWith(ifc4x3Header, failingEngine('FAILED'))
       await expect(rejection).rejects.not.toBeInstanceOf(UnsupportedSchemaError)
       await expect(rejection).rejects.toThrow('parseIfcWithConway: OpenModel returned -1')
     })
@@ -206,7 +250,7 @@ describe('loader/conwayDirectIfcLoader', () => {
     // instead of vanishing into the generic -1.
     it('throws an EngineOpenFailureError carrying conway\'s reason for a non-schema failure', async () => {
       const ifcAPI = failingEngine('UNRECOGNIZED_FORMAT', 'zip archive (such as .ifczip), not STEP text')
-      const rejection = parseIfcWithConway(ifc4x3Header, ifcAPI)
+      const rejection = parseWith(ifc4x3Header, ifcAPI)
       await expect(rejection).rejects.toBeInstanceOf(EngineOpenFailureError)
       await expect(rejection).rejects.not.toBeInstanceOf(UnsupportedSchemaError)
       await expect(rejection).rejects.toMatchObject({
@@ -219,12 +263,12 @@ describe('loader/conwayDirectIfcLoader', () => {
 
     it('keeps the schema refusal\'s own error when the status is UNSUPPORTED_SCHEMA and a reason is also set', async () => {
       const ifcAPI = failingEngine('UNSUPPORTED_SCHEMA', 'IFC4X3 content conway cannot read')
-      await expect(parseIfcWithConway(ifc4x3Header, ifcAPI)).rejects.toBeInstanceOf(UnsupportedSchemaError)
+      await expect(parseWith(ifc4x3Header, ifcAPI)).rejects.toBeInstanceOf(UnsupportedSchemaError)
     })
 
     // A status without a reason is what a conway older than #742 leaves.
     it('keeps the generic error when the statistics carry no reason', async () => {
-      const rejection = parseIfcWithConway(ifc4x3Header, failingEngine('OPEN_FAIL'))
+      const rejection = parseWith(ifc4x3Header, failingEngine('OPEN_FAIL'))
       await expect(rejection).rejects.not.toBeInstanceOf(EngineOpenFailureError)
       await expect(rejection).rejects.toThrow(/^parseIfcWithConway: OpenModel returned -1$/)
     })
@@ -246,7 +290,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         getStatistics: (id) => stats.get(id),
         StreamAllMeshes: jest.fn(),
       }
-      await expect(parseIfcWithConway(new Blob([ifc4x3Header]), api)).rejects.toMatchObject({
+      await expect(parseWith(new Blob([ifc4x3Header]), api)).rejects.toMatchObject({
         reason: 'buffered open failed',
       })
     })
@@ -254,7 +298,7 @@ describe('loader/conwayDirectIfcLoader', () => {
     it('does not take an earlier load\'s reason as this open\'s', async () => {
       const stats = new Map([[0, {getLoadStatus: () => 'OPEN_FAIL', getLoadFailureReason: () => 'stale'}]])
       const ifcAPI = conwayLikeEngine(stats, {})
-      const rejection = parseIfcWithConway(new Blob([ifc4x3Header]), ifcAPI)
+      const rejection = parseWith(new Blob([ifc4x3Header]), ifcAPI)
       await expect(rejection).rejects.not.toBeInstanceOf(EngineOpenFailureError)
     })
 
@@ -299,7 +343,7 @@ describe('loader/conwayDirectIfcLoader', () => {
     // returns, so reading it after finds no statistics.
     it('refuses from the store open without re-parsing through the fallback', async () => {
       const ifcAPI = conwayLikeEngine(new Map(), {OpenModelStream: 'UNSUPPORTED_SCHEMA'})
-      const rejection = parseIfcWithConway(new Blob([ifc4x3Header]), ifcAPI)
+      const rejection = parseWith(new Blob([ifc4x3Header]), ifcAPI)
       await expect(rejection).rejects.toBeInstanceOf(UnsupportedSchemaError)
       await expect(rejection).rejects.toThrow(/IFC4X3_RC2 \(IFC 4\.3\)/)
       expect(ifcAPI.OpenModelStreamed).not.toHaveBeenCalled()
@@ -314,7 +358,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         // be exercising the path its name says (agent review on #2057).
         const ifcAPI = conwayLikeEngine(new Map(), {OpenModelStream: 'UNSUPPORTED_SCHEMA'})
         ifcAPI.ExtractGeometryBatchAsync = jest.fn()
-        await expect(parseIfcWithConway(new Blob([ifc4x3Header]), ifcAPI))
+        await expect(parseWith(new Blob([ifc4x3Header]), ifcAPI))
           .rejects.toBeInstanceOf(UnsupportedSchemaError)
         expect(ifcAPI.OpenModelStreamed).not.toHaveBeenCalled()
       } finally {
@@ -330,21 +374,10 @@ describe('loader/conwayDirectIfcLoader', () => {
       stats.set(0, {getLoadStatus: () => 'UNSUPPORTED_SCHEMA'})
       stats.set(1, {getLoadStatus: () => 'UNSUPPORTED_SCHEMA'})
       const ifcAPI = conwayLikeEngine(stats, {})
-      const rejection = parseIfcWithConway(new Blob([ifc4x3Header]), ifcAPI)
+      const rejection = parseWith(new Blob([ifc4x3Header]), ifcAPI)
       await expect(rejection).rejects.not.toBeInstanceOf(UnsupportedSchemaError)
       await expect(rejection).rejects.toThrow('parseIfcWithConway: OpenModel returned -1')
       expect(ifcAPI.OpenModelStreamed).toHaveBeenCalledTimes(1)
-    })
-
-    it('forwards custom settings to OpenModel when provided', async () => {
-      const ifcAPI = {
-        wasmModule: {},
-        OpenModel: jest.fn(() => 0),
-        StreamAllMeshes: jest.fn(),
-      }
-      const settings = {COORDINATE_TO_ORIGIN: false, USE_FAST_BOOLS: false}
-      await parseIfcWithConway(new ArrayBuffer(0), ifcAPI, settings)
-      expect(ifcAPI.OpenModel.mock.calls[0][1]).toBe(settings)
     })
 
     describe('demandGeometry deferred open + batch pump (slice A)', () => {
@@ -378,7 +411,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
         const ifcAPI = makeDemandAPI(150)
         const batches = []
-        const result = await parseIfcWithConway(
+        const result = await parseWith(
           new ArrayBuffer(4), ifcAPI, undefined, undefined, (batch) => batches.push(batch.length))
         expect(result.modelID).toBe(5)
         // Deferred settings rode the open.
@@ -408,7 +441,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
         const ifcAPI = makeDemandAPI(150)
         const progress = []
-        await parseIfcWithConway(
+        await parseWith(
           new ArrayBuffer(4), ifcAPI, undefined, undefined,
           (batch, modelID, pumped) => progress.push(pumped))
         expect(progress).toEqual([
@@ -422,7 +455,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
         const ifcAPI = makeDemandAPI(150)
         const progress = []
-        await parseIfcWithConway(
+        await parseWith(
           new ArrayBuffer(4), ifcAPI, undefined, (event) => progress.push(event))
         const geometry = progress.filter((event) => event.phase === 'geometry')
         expect(geometry.length).toBeGreaterThan(1)
@@ -435,7 +468,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
         const ifcAPI = makeDemandAPI(10)
         delete ifcAPI.ExtractGeometryBatch
-        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        const result = await parseWith(new ArrayBuffer(4), ifcAPI)
         // Classic streamed open (no defer), one-shot capture.
         expect(result.modelID).toBe(5)
         const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
@@ -449,7 +482,7 @@ describe('loader/conwayDirectIfcLoader', () => {
       it('stays on the classic path when the flag is off', async () => {
         mockIsFeatureEnabled.mockImplementation(() => false)
         const ifcAPI = makeDemandAPI(10)
-        await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        await parseWith(new ArrayBuffer(4), ifcAPI)
         expect(ifcAPI.ExtractGeometryBatch).not.toHaveBeenCalled()
         expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
       })
@@ -458,7 +491,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         mockIsFeatureEnabled.mockImplementation(
           (name) => name === 'demandGeometry' || name === 'disableStreamOpen')
         const ifcAPI = makeDemandAPI(10)
-        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        const result = await parseWith(new ArrayBuffer(4), ifcAPI)
         // Full classic fallback: OpenModelAsync, not the deferred open.
         expect(result.modelID).toBe(8)
         expect(ifcAPI.ExtractGeometryBatch).not.toHaveBeenCalled()
@@ -494,23 +527,31 @@ describe('loader/conwayDirectIfcLoader', () => {
           }
         })
         const batches = []
-        const result = await parseIfcWithConway(
+        const result = await parseWith(
           new ArrayBuffer(4), ifcAPI, undefined, undefined, (batch) => batches.push(batch.length))
         expect(result.captured).toHaveLength(5)
         expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
-        // No preview batches for an already-complete extraction.
-        expect(batches).toEqual([])
+        // Delivered as batches, as the worker delivers its one-shot stream
+        // (engineHandler.js#oneShotFallback), so both engines build it through
+        // the incremental builder; and retained, since a second whole-model
+        // ask would double every triangle.
+        expect(batches).toEqual([5])
+        expect(await result.recapture()).toBe(result.captured)
       })
 
       it('threads onPreviewMesh into the deferred open as ON_PREVIEW_MESH (slice A2)', async () => {
         mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
         const ifcAPI = makeDemandAPI(10)
         const onPreviewMesh = jest.fn()
-        await parseIfcWithConway(
+        await parseWith(
           new ArrayBuffer(4), ifcAPI, undefined, undefined, undefined, onPreviewMesh)
         const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
         expect(settings.DEFER_GEOMETRY).toBe(true)
-        expect(settings.ON_PREVIEW_MESH).toBe(onPreviewMesh)
+        // The engine's own emitter, which hands the caller conway's payload
+        // as it is, by reference.
+        const payload = {expressID: 9}
+        settings.ON_PREVIEW_MESH(payload) // eslint-disable-line new-cap
+        expect(onPreviewMesh).toHaveBeenCalledWith(payload)
       })
 
       // open-205 #2029: the tree comes up at the index, so the caller is told
@@ -523,7 +564,7 @@ describe('loader/conwayDirectIfcLoader', () => {
           order.push(`indexed ${modelID}`)
           return Promise.resolve()
         })
-        await parseIfcWithConway(
+        await parseWith(
           new ArrayBuffer(4), ifcAPI, undefined, undefined, (batch) => order.push(`batch ${batch.length}`),
           undefined, onIndexed)
         expect(onIndexed).toHaveBeenCalledTimes(1)
@@ -540,7 +581,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         const onIndexed = jest.fn(() => new Promise((resolve) => {
           release = resolve
         }))
-        const result = await parseIfcWithConway(
+        const result = await parseWith(
           new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn(), undefined, onIndexed)
         // The whole parse finished with onIndexed still pending.
         expect(onIndexed).toHaveBeenCalledWith(5)
@@ -555,7 +596,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         const ifcAPI = makeDemandAPI(10)
         const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
         try {
-          const result = await parseIfcWithConway(
+          const result = await parseWith(
             new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn(), undefined, () => {
               throw new Error('handle failed')
             })
@@ -572,7 +613,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
         try {
           const batches = []
-          const result = await parseIfcWithConway(
+          const result = await parseWith(
             new ArrayBuffer(4), ifcAPI, undefined, undefined, (batch) => batches.push(batch.length),
             undefined, () => Promise.reject(new Error('tree walk failed')))
           expect(result.modelID).toBe(5)
@@ -584,12 +625,13 @@ describe('loader/conwayDirectIfcLoader', () => {
       })
 
       it('does not call onIndexed on the classic path', async () => {
-        // The classic open extracts every mesh in one synchronous call, so
-        // there is no streaming window for an early tree to fill.
+        // The classic open parses the whole model and its one-shot stream
+        // follows at once, so there is no streaming window for an early tree
+        // to fill (the open says `deferred: false`).
         mockIsFeatureEnabled.mockImplementation(() => false)
         const ifcAPI = makeDemandAPI(10)
         const onIndexed = jest.fn()
-        await parseIfcWithConway(new ArrayBuffer(4), ifcAPI, undefined, undefined, undefined, undefined, onIndexed)
+        await parseWith(new ArrayBuffer(4), ifcAPI, undefined, undefined, undefined, undefined, onIndexed)
         expect(onIndexed).not.toHaveBeenCalled()
       })
 
@@ -601,7 +643,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         const ifcAPI = makeDemandAPI(150)
         const controller = new AbortController()
         const batches = []
-        const parsing = parseIfcWithConway(
+        const parsing = parseWith(
           new ArrayBuffer(4), ifcAPI, undefined, undefined, (batch) => {
             batches.push(batch.length)
             controller.abort()
@@ -621,7 +663,7 @@ describe('loader/conwayDirectIfcLoader', () => {
           return Promise.resolve(5)
         })
         const onIndexed = jest.fn()
-        await expect(parseIfcWithConway(new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn(), undefined,
+        await expect(parseWith(new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn(), undefined,
           onIndexed, {signal: controller.signal})).rejects.toBeInstanceOf(LoadAbortedError)
         expect(onIndexed).not.toHaveBeenCalled()
         expect(ifcAPI.ExtractGeometryBatch).not.toHaveBeenCalled()
@@ -630,7 +672,7 @@ describe('loader/conwayDirectIfcLoader', () => {
       it('omits ON_PREVIEW_MESH when no preview callback is given', async () => {
         mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
         const ifcAPI = makeDemandAPI(10)
-        await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        await parseWith(new ArrayBuffer(4), ifcAPI)
         const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
         expect(settings.ON_PREVIEW_MESH).toBeUndefined()
       })
@@ -643,7 +685,7 @@ describe('loader/conwayDirectIfcLoader', () => {
           // eslint-disable-next-line new-cap
           ifcAPI.ExtractGeometryBatch(modelID, batchSize, cb))
         const file = new Blob([new Uint8Array([1, 2, 3, 4])])
-        const result = await parseIfcWithConway(file, ifcAPI)
+        const result = await parseWith(file, ifcAPI)
         expect(result.modelID).toBe(3)
         expect(ifcAPI.OpenModelStream).toHaveBeenCalledTimes(1)
         const [store, settings] = ifcAPI.OpenModelStream.mock.calls[0]
@@ -661,7 +703,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         const ifcAPI = makeDemandAPI(10)
         ifcAPI.OpenModelStream = jest.fn(() => Promise.resolve(-1))
         const file = new Blob([new Uint8Array([1, 2, 3, 4])])
-        const result = await parseIfcWithConway(file, ifcAPI)
+        const result = await parseWith(file, ifcAPI)
         expect(result.modelID).toBe(5)
         expect(ifcAPI.OpenModelStream).toHaveBeenCalledTimes(1)
         expect(ifcAPI.OpenModelStreamed).toHaveBeenCalledTimes(1)
@@ -727,7 +769,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         // engine-side contract is verified against the real pin separately.
         mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
         const ifcAPI = makeDemandAPI(10)
-        await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        await parseWith(new ArrayBuffer(4), ifcAPI)
         const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
         expect(settings.STREAMING_CONSUMER).toBe(true)
       })
@@ -738,7 +780,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         // nothing on this path honours.
         mockIsFeatureEnabled.mockImplementation(() => false)
         const ifcAPI = makeDemandAPI(10)
-        await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        await parseWith(new ArrayBuffer(4), ifcAPI)
         const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
         expect(settings.STREAMING_CONSUMER).toBeUndefined()
       })
@@ -750,7 +792,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         // — which is now 0. It has to report the meshes actually delivered.
         mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
         const ifcAPI = makeDemandAPI(150)
-        const result = await parseIfcWithConway(
+        const result = await parseWith(
           new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn())
         expect(result.captured).toHaveLength(0)
         const pumpLine = infoSpy.mock.calls
@@ -766,7 +808,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         // it — dropping here would hand the caller an empty model.
         mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
         const ifcAPI = makeDemandAPI(150)
-        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        const result = await parseWith(new ArrayBuffer(4), ifcAPI)
         expect(result.captured).toHaveLength(150)
         expect(await result.recapture()).toHaveLength(150)
         // Retained means whole: no re-extraction is needed or performed.
@@ -796,7 +838,7 @@ describe('loader/conwayDirectIfcLoader', () => {
             'ExtractGeometryBatch is synchronous and cannot page a windowed source')
         })
         const file = new Blob([new Uint8Array([1, 2, 3, 4])])
-        const result = await parseIfcWithConway(
+        const result = await parseWith(
           file, ifcAPI, undefined, undefined, jest.fn())
         expect(ifcAPI.OpenModelStream).toHaveBeenCalledTimes(1)
         expect(result.captured).toHaveLength(20)
@@ -842,7 +884,7 @@ describe('loader/conwayDirectIfcLoader', () => {
             'ExtractGeometryBatch is synchronous and cannot page a windowed source')
         })
         const file = new Blob([new Uint8Array([1, 2, 3, 4])])
-        await expect(parseIfcWithConway(file, ifcAPI, undefined, undefined, jest.fn()))
+        await expect(parseWith(file, ifcAPI, undefined, undefined, jest.fn()))
           .rejects.toThrow(/cannot page a windowed source/)
         // It really did reach the sentinel rather than failing earlier.
         expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
@@ -859,7 +901,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         const ifcAPI = makeWindowedDemandAPI(20)
         ifcAPI.OpenModelStream = jest.fn(() => Promise.resolve(-1))
         const file = new Blob([new Uint8Array([1, 2, 3, 4])])
-        const result = await parseIfcWithConway(
+        const result = await parseWith(
           file, ifcAPI, undefined, undefined, jest.fn())
         expect(ifcAPI.OpenModelStreamed).toHaveBeenCalledTimes(1)
         expect(result.captured).toHaveLength(0)
@@ -876,7 +918,7 @@ describe('loader/conwayDirectIfcLoader', () => {
             cb({expressID: 1000 + i, geometries: {size: () => 1}})
           }
         })
-        const result = await parseIfcWithConway(
+        const result = await parseWith(
           new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn())
         // Not paid unless a degraded reader actually asks.
         expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
@@ -898,7 +940,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         ifcAPI.StreamAllMeshes = jest.fn((modelID, cb) => {
           cb({expressID: 7, geometries: {size: () => 1}})
         })
-        const result = await parseIfcWithConway(
+        const result = await parseWith(
           new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn())
         const first = await result.recapture()
         const second = await result.recapture()
@@ -913,7 +955,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         // load from being mistaken for a no-op pump and re-extracted whole.
         mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
         const ifcAPI = makeDemandAPI(150)
-        await parseIfcWithConway(
+        await parseWith(
           new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn())
         expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
         expect(warnSpy).not.toHaveBeenCalledWith(
@@ -935,11 +977,13 @@ describe('loader/conwayDirectIfcLoader', () => {
           }
         })
         const onMeshBatch = jest.fn()
-        const result = await parseIfcWithConway(
+        const result = await parseWith(
           new ArrayBuffer(4), ifcAPI, undefined, undefined, onMeshBatch)
         expect(result.captured).toHaveLength(5)
         expect(await result.recapture()).toHaveLength(5)
-        expect(onMeshBatch).not.toHaveBeenCalled()
+        // Delivered as one batch (see the one-shot case above).
+        expect(onMeshBatch).toHaveBeenCalledTimes(1)
+        expect(onMeshBatch.mock.calls[0][0]).toHaveLength(5)
         // One walk, not two: `recapture` must not re-drive the engine on a
         // path where `captured` is already whole.
         expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
@@ -1016,7 +1060,7 @@ describe('loader/conwayDirectIfcLoader', () => {
           mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
           const ifcAPI = withAsyncWholeModelAsk(
             withWindowedSyncRefusal(makeWindowedDemandAPI(20)), 20)
-          const result = await parseIfcWithConway(
+          const result = await parseWith(
             windowedFile(), ifcAPI, undefined, undefined, jest.fn())
           expect(ifcAPI.OpenModelStream).toHaveBeenCalledTimes(1)
           expect(result.captured).toHaveLength(0)
@@ -1038,7 +1082,7 @@ describe('loader/conwayDirectIfcLoader', () => {
           mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
           const ifcAPI = withAsyncWholeModelAsk(
             withWindowedSyncRefusal(makeWindowedDemandAPI(20)), 20)
-          const result = await parseIfcWithConway(
+          const result = await parseWith(
             windowedFile(), ifcAPI, undefined, undefined, jest.fn())
           const recaptured = await result.recapture()
           expect(recaptured).toHaveLength(20)
@@ -1061,7 +1105,7 @@ describe('loader/conwayDirectIfcLoader', () => {
           mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
           const ifcAPI = withAsyncWholeModelAsk(
             withWindowedSyncRefusal(makeWindowedDemandAPI(20)), 20)
-          const result = await parseIfcWithConway(
+          const result = await parseWith(
             windowedFile(), ifcAPI, undefined, undefined, jest.fn())
           const [first, second] = await Promise.all(
             [result.recapture(), result.recapture()])
@@ -1081,7 +1125,7 @@ describe('loader/conwayDirectIfcLoader', () => {
           ifcAPI.StreamAllMeshes = jest.fn((modelID, cb) => {
             cb({expressID: 7, geometries: {size: () => 1}})
           })
-          const result = await parseIfcWithConway(
+          const result = await parseWith(
             new ArrayBuffer(4), ifcAPI, undefined, undefined, jest.fn())
           const pumpLine = pumpLineFrom(infoSpy)
           expect(pumpLine).toContain('windowed=no')
@@ -1104,7 +1148,7 @@ describe('loader/conwayDirectIfcLoader', () => {
           mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
           const ifcAPI = withAsyncWholeModelAsk(
             withWindowedSyncRefusal(makeWindowedDemandAPI(20)), 20)
-          const result = await parseIfcWithConway(windowedFile(), ifcAPI)
+          const result = await parseWith(windowedFile(), ifcAPI)
           expect(result.captured).toHaveLength(20)
           expect(await result.recapture()).toBe(result.captured)
           expect(pumpLineFrom(infoSpy)).toContain('retained=yes')
@@ -1125,7 +1169,7 @@ describe('loader/conwayDirectIfcLoader', () => {
           mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
           const ifcAPI = withAsyncWholeModelAsk(
             withWindowedSyncRefusal(makeWindowedDemandAPI(0)), 5)
-          const result = await parseIfcWithConway(
+          const result = await parseWith(
             windowedFile(), ifcAPI, undefined, undefined, jest.fn())
           expect(result.captured).toHaveLength(5)
           // Unconditionally retained here whatever the retention decision
@@ -1151,7 +1195,7 @@ describe('loader/conwayDirectIfcLoader', () => {
           mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
           const ifcAPI = withAsyncWholeModelAsk(
             withWindowedSyncRefusal(makeWindowedDemandAPI(20)), 12)
-          const result = await parseIfcWithConway(
+          const result = await parseWith(
             windowedFile(), ifcAPI, undefined, undefined, jest.fn())
           const recaptured = await result.recapture()
           expect(recaptured).toHaveLength(12)
@@ -1169,7 +1213,7 @@ describe('loader/conwayDirectIfcLoader', () => {
           ifcAPI.StreamAllMeshesAsync = jest.fn(() => Promise.reject(new Error(
             'StreamAllMeshesAsync: this model was opened with STREAMING_CONSUMER, ' +
             'so conway kept no reference to the meshes the pump delivered')))
-          const result = await parseIfcWithConway(
+          const result = await parseWith(
             windowedFile(), ifcAPI, undefined, undefined, jest.fn())
           await expect(result.recapture()).rejects.toThrow(/STREAMING_CONSUMER/)
           await expect(result.recapture()).rejects.toThrow(/STREAMING_CONSUMER/)
@@ -1183,7 +1227,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         ifcAPI.StreamAllMeshes = jest.fn((modelID, cb) => {
           cb({expressID: 11, geometries: {size: () => 1}})
         })
-        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        const result = await parseWith(new ArrayBuffer(4), ifcAPI)
         expect(await result.recapture()).toBe(result.captured)
         expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
       })
@@ -1222,12 +1266,13 @@ describe('loader/conwayDirectIfcLoader', () => {
       it('prefers OpenModelStreamed by default (no flags set)', async () => {
         mockIsFeatureEnabled.mockImplementation(() => false)
         const ifcAPI = makeTriplePathAPI()
-        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        const result = await parseWith(new ArrayBuffer(4), ifcAPI)
         expect(result.modelID).toBe(7)
         expect(ifcAPI.OpenModelStreamed).toHaveBeenCalledTimes(1)
         const [data, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
         expect(data).toBeInstanceOf(Uint8Array)
-        expect(settings).toEqual({COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true})
+        expect(settings).toEqual({COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true,
+          ON_PROGRESS: expect.any(Function), ON_MODEL_INFO: expect.any(Function)})
         expect(ifcAPI.OpenModelAsync).not.toHaveBeenCalled()
         expect(ifcAPI.OpenModel).not.toHaveBeenCalled()
       })
@@ -1236,7 +1281,7 @@ describe('loader/conwayDirectIfcLoader', () => {
         mockIsFeatureEnabled.mockImplementation(() => false)
         const ifcAPI = makeTriplePathAPI()
         delete ifcAPI.OpenModelStreamed
-        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        const result = await parseWith(new ArrayBuffer(4), ifcAPI)
         expect(result.modelID).toBe(8)
         expect(ifcAPI.OpenModelAsync).toHaveBeenCalledTimes(1)
         expect(ifcAPI.OpenModel).not.toHaveBeenCalled()
@@ -1245,7 +1290,7 @@ describe('loader/conwayDirectIfcLoader', () => {
       it('disableStreamOpen reverts to OpenModelAsync, even with OpenModelStreamed present', async () => {
         mockIsFeatureEnabled.mockImplementation((name) => name === 'disableStreamOpen')
         const ifcAPI = makeTriplePathAPI()
-        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        const result = await parseWith(new ArrayBuffer(4), ifcAPI)
         expect(result.modelID).toBe(8)
         expect(ifcAPI.OpenModelStreamed).not.toHaveBeenCalled()
         expect(ifcAPI.OpenModelAsync).toHaveBeenCalledTimes(1)
@@ -1255,190 +1300,336 @@ describe('loader/conwayDirectIfcLoader', () => {
         mockIsFeatureEnabled.mockImplementation(() => false)
         const ifcAPI = makeTriplePathAPI()
         ifcAPI.OpenModelStreamed = jest.fn(() => Promise.resolve(-1))
-        await expect(parseIfcWithConway(new ArrayBuffer(4), ifcAPI)).rejects.toThrow(
+        await expect(parseWith(new ArrayBuffer(4), ifcAPI)).rejects.toThrow(
           /OpenModel returned -1/)
         expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
       })
     })
   })
 
-  // open-205 #2029: what the tree, properties and search read while the
-  // geometry streams. It must answer like the finished model will.
-  describe('makeIndexedModelHandle', () => {
-    it('reads the tree, properties and types of the open model, with no geometry', async () => {
-      const tree = {expressID: 1, type: 'IFCPROJECT', children: []}
-      const ifcAPI = {
-        properties: {
-          getItemProperties: jest.fn().mockResolvedValue({expressID: 42}),
-          getPropertySets: jest.fn().mockResolvedValue([]),
-          getSpatialStructure: jest.fn().mockResolvedValue(tree),
-        },
-      }
-      const handle = makeIndexedModelHandle(ifcAPI, 3)
-      expect(handle.isIndexedModel).toBe(true)
-      expect(handle.modelID).toBe(3)
-      expect(handle.geometry).toBeUndefined()
-      // The tree as CadView#readModelTree asks for it, from the model's own
-      // closure, which is the one the NavTree feed takes (sub-solids on).
-      expect(await handle.getSpatialStructure(0, 'names')).toBe(tree)
-      expect(ifcAPI.properties.getSpatialStructure).toHaveBeenCalledWith(3, 'names', {includeSolids: true})
-      expect(await handle.getItemProperties(42)).toEqual({expressID: 42})
-      expect(ifcAPI.properties.getItemProperties).toHaveBeenCalledWith(3, 42, false)
-      expect(handle.getIfcType('IFCWALL')).toBe('IFCWALL')
-      // `onModel` and search discriminate an IFC model on its manager.
-      expect(handle.ifcManager.ifcAPI).toBe(ifcAPI)
-    })
-  })
 
-
-  describe('decorateConwayDirectIfcModel — property-method closures', () => {
-    /** @return {object} minimal Conway IfcAPI stub */
-    function makeIfcAPI() {
+  // What ConwayEngine adds to the old parse: the rest of `Engine`.
+  describe('the Engine surface', () => {
+    /**
+     * A deferred model of `products` single-shape products, opened as 3.
+     *
+     * @param {number} products
+     * @return {object} Conway IfcAPI stub
+     */
+    function makeApi(products = 3) {
+      let cursor = 0
       return {
+        wasmModule: {HEAPU8: {byteLength: 1024}},
+        OpenModelStreamed: jest.fn(() => Promise.resolve(3)),
+        ExtractGeometryBatch: jest.fn((modelID, size, cb) => {
+          const take = Math.min(size, products - cursor)
+          for (let i = 0; i < take; i++) {
+            cb({expressID: 100 + cursor + i, geometries: []})
+          }
+          cursor += take
+          return {extracted: take, remaining: products - cursor}
+        }),
+        StreamAllMeshes: jest.fn(),
+        CloseModel: jest.fn(),
+        IsModelOpen: jest.fn(() => true),
+        SpillModelSource: jest.fn(() => true),
+        ReleaseEntityCache: jest.fn(),
+        ReleaseModelGeometry: jest.fn(() => true),
+        GetCoordinationMatrix: jest.fn(() => Promise.resolve(new Float64Array(16))),
+        getStatistics: jest.fn(() => ({getProductCount: () => products, projectName: 'p'})),
         properties: {
-          getItemProperties: jest.fn(),
-          getPropertySets: jest.fn(),
-          getSpatialStructure: jest.fn(),
-          getIfcType: jest.fn(),
+          getSpatialStructure: jest.fn(() => Promise.resolve({expressID: 1})),
+          getItemProperties: jest.fn((m, id) => Promise.resolve({expressID: id})),
+          getPropertySets: jest.fn(() => Promise.resolve([])),
+          getAllItemsOfType: jest.fn(() => Promise.resolve([7])),
         },
       }
     }
 
-    it('attaches getItemProperties bound to the model\'s modelID', async () => {
-      const ifcAPI = makeIfcAPI()
-      ifcAPI.properties.getItemProperties.mockResolvedValue({expressID: 42, Name: {value: 'Wall'}})
-      const ifcModel = new Mesh()
-      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 7)
-      const props = await ifcModel.getItemProperties(42)
-      expect(props.Name.value).toBe('Wall')
-      // The model's bound modelID (7) flows through — consumers don't
-      // pass it.
-      expect(ifcAPI.properties.getItemProperties).toHaveBeenCalledWith(7, 42, false)
+    /**
+     * Open and stream `api`'s model, resolving with every event, in order.
+     *
+     * @param {ConwayEngine} engine
+     * @return {Promise<Array<object>>}
+     */
+    async function streamAll(engine) {
+      const events = []
+      for (const ev of ['indexed', 'batch', 'done', 'failed']) {
+        engine.on(ev, (msg) => events.push(msg))
+      }
+      const ended = new Promise((resolve) => {
+        engine.on('done', resolve)
+        engine.on('failed', resolve)
+      })
+      await engine.open({bytes: new Uint8Array(4)}, {format: 'ifc', stream: {}})
+      await ended
+      return events
+    }
+
+    beforeEach(() => mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry'))
+
+    it('is a mainThread engine that can recapture and runs no source policy', () => {
+      const engine = new ConwayEngine({ifcAPI: makeApi()})
+      expect(engine.kind).toBe('mainThread')
+      expect(engine.capabilities).toMatchObject({recapture: true, sourcePolicy: false, propertyTables: true})
     })
 
-    it('forwards recursive arg to getItemProperties', async () => {
-      const ifcAPI = makeIfcAPI()
-      const ifcModel = new Mesh()
-      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 0)
-      await ifcModel.getItemProperties(42, true)
-      expect(ifcAPI.properties.getItemProperties).toHaveBeenCalledWith(0, 42, true)
+    it('emits indexed before the first batch and done last, with the summary the load reads', async () => {
+      const engine = new ConwayEngine({ifcAPI: makeApi(3)})
+      const events = await streamAll(engine)
+      expect(events.map((e) => e.ev)).toEqual(['indexed', 'batch', 'done'])
+      expect(events[0]).toMatchObject({modelID: 3, windowed: false})
+      // By reference: the engine's own FlatMeshes, not a copy.
+      expect(events[1].flatMeshes.map((m) => m.expressID)).toEqual([100, 101, 102])
+      expect(events[2].summary).toMatchObject({
+        batches: 1, meshes: 3, windowed: false, format: 'ifc', wasmBytes: 1024,
+        coordinationMatrix: new Array(16).fill(0), statistics: {getProductCount: 3, projectName: 'p'},
+      })
     })
 
-    it('attaches getPropertySets bound to the model\'s modelID', async () => {
-      const ifcAPI = makeIfcAPI()
-      ifcAPI.properties.getPropertySets.mockResolvedValue([{Name: 'Pset_WallCommon'}])
-      const ifcModel = new Mesh()
-      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 3)
-      const psets = await ifcModel.getPropertySets(42)
-      expect(psets).toHaveLength(1)
-      expect(ifcAPI.properties.getPropertySets).toHaveBeenCalledWith(3, 42, false)
+    it('holds one model: a second open is refused', async () => {
+      const engine = new ConwayEngine({ifcAPI: makeApi()})
+      await streamAll(engine)
+      await expect(engine.open({bytes: new Uint8Array(4)})).rejects.toThrow(/already open/)
     })
 
-    it('getSpatialStructure accepts (modelID, withProperties) — the manager-shape call site', async () => {
-      const ifcAPI = makeIfcAPI()
-      ifcAPI.properties.getSpatialStructure.mockResolvedValue({expressID: 100, children: []})
-      const ifcModel = new Mesh()
-      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 0)
-      // Two-arg call (CadView.jsx / IfcIsolator.js shape). The
-      // leading arg is ignored — the bound modelID is used instead.
-      await ifcModel.getSpatialStructure(0, true)
-      expect(ifcAPI.properties.getSpatialStructure)
-        .toHaveBeenCalledWith(0, true, {includeSolids: true})
+    it('answers the reads for its one model, with no modelID asked', async () => {
+      const api = makeApi()
+      const engine = new ConwayEngine({ifcAPI: api})
+      await streamAll(engine)
+      await engine.tree({mode: 'names', includeSolids: true})
+      expect(api.properties.getSpatialStructure).toHaveBeenCalledWith(3, 'names', {includeSolids: true})
+      expect(await engine.propertiesMany([4, 5])).toEqual([{expressID: 4}, {expressID: 5}])
+      expect(await engine.itemsOfType('IFCWALL')).toEqual([7])
+      // The static table every engine shares.
+      expect(engine.typeName(1095909175)).toBe(ifcTypeName(1095909175))
+      expect(typeof engine.typeName(1095909175)).toBe('string')
     })
 
-    it('getSpatialStructure accepts a single boolean arg — the cache-hit closure shape', async () => {
-      const ifcAPI = makeIfcAPI()
-      const ifcModel = new Mesh()
-      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 0)
-      await ifcModel.getSpatialStructure(true)
-      expect(ifcAPI.properties.getSpatialStructure)
-        .toHaveBeenCalledWith(0, true, {includeSolids: true})
+    it('close() twice closes once, ends the stream, and refuses every later read', async () => {
+      const api = makeApi()
+      const engine = new ConwayEngine({ifcAPI: api})
+      await streamAll(engine)
+      const failed = jest.fn()
+      engine.on('failed', failed)
+      await Promise.all([engine.close(), engine.close()])
+      expect(api.CloseModel).toHaveBeenCalledTimes(1)
+      expect(api.CloseModel).toHaveBeenCalledWith(3)
+      expect(failed).toHaveBeenCalledTimes(1)
+      expect(failed.mock.calls[0][0].kind).toBe('closed')
+      // Its Conway object is let go, which is what lets the wasm heap go.
+      expect(engine.ifcAPI).toBeNull()
+      await expect(engine.tree()).rejects.toThrow(/closed/)
     })
 
-    it('getSpatialStructure passes Conway\'s \'names\' mode through un-coerced', async () => {
-      // Regression pin: 'names' must reach Conway as the string, not be
-      // boolean-coerced — a truthy coercion would silently upgrade the
-      // light Name/LongName/GlobalId walk back to the full-record visit
-      // that 'names' mode exists to avoid (CadView.jsx load path).
-      const ifcAPI = makeIfcAPI()
-      const ifcModel = new Mesh()
-      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 7)
-      // Two-arg manager shape (CadView.jsx): (modelID, 'names').
-      await ifcModel.getSpatialStructure(0, 'names')
-      expect(ifcAPI.properties.getSpatialStructure)
-        .toHaveBeenCalledWith(7, 'names', {includeSolids: true})
-      // Single-arg cache-hit closure shape: ('names').
-      await ifcModel.getSpatialStructure('names')
-      expect(ifcAPI.properties.getSpatialStructure)
-        .toHaveBeenLastCalledWith(7, 'names', {includeSolids: true})
+    it('closes the model only after a pump in flight has stopped, never under it', async () => {
+      const api = makeApi(100)
+      const engine = new ConwayEngine({ifcAPI: api})
+      const order = []
+      api.CloseModel.mockImplementation(() => order.push('close'))
+      const closed = new Promise((resolve) => engine.on('batch', () => {
+        order.push('batch')
+        // The user left mid-pump.
+        resolve(engine.close())
+      }))
+      await engine.open({bytes: new Uint8Array(4)}, {stream: {batchSize: 10}})
+      await closed
+      // One batch was delivered, then nothing, then the close.
+      expect(order).toEqual(['batch', 'close'])
     })
 
-    it('getIfcType is an identity over the spatial-tree node\'s string type', () => {
-      // Regression pin: SearchIndex (`src/search/SearchIndex.js#indexElement`)
-      // calls `Ifc.getType(model, elt)` → `model.properties.getIfcType(elt.type)`
-      // where `model = {properties: m}` and `elt` is a spatial-tree node.
-      // Conway's `properties.getSpatialStructure` returns nodes with `.type`
-      // already set to the IFC string (e.g. 'IFCWALL'), so the model-level
-      // `getIfcType` is the identity — matches Loader.js#convertToShareModel's
-      // cache-hit closure shape. An async / Promise-returning impl here would
-      // crash SearchIndex's `key.toLowerCase()`.
-      const ifcAPI = makeIfcAPI()
-      const ifcModel = new Mesh()
-      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 0)
-      expect(ifcModel.getIfcType('IFCWALL')).toBe('IFCWALL')
-      expect(ifcModel.getIfcType('IFCBUILDINGSTOREY')).toBe('IFCBUILDINGSTOREY')
+    it('stops at the next batch on abort(), as failed {aborted}', async () => {
+      const engine = new ConwayEngine({ifcAPI: makeApi(100)})
+      const events = []
+      engine.on('batch', () => {
+        events.push('batch')
+        engine.abort()
+      })
+      const ended = new Promise((resolve) => engine.on('failed', resolve))
+      await engine.open({bytes: new Uint8Array(4)}, {stream: {batchSize: 10}})
+      expect((await ended).kind).toBe('aborted')
+      expect(events).toEqual(['batch'])
     })
 
-    it('sets capabilities flips: ifcSubsets false, instancePicking + expressIdPicking true', () => {
-      const ifcAPI = makeIfcAPI()
-      const ifcModel = new Mesh()
-      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 0)
-      expect(ifcModel.capabilities.ifcSubsets).toBe(false)
-      expect(ifcModel.capabilities.instancePicking).toBe(true)
-      expect(ifcModel.capabilities.expressIdPicking).toBe(true)
+    it('captures what the worker\'s CAPTURE op captures, through the same job', async () => {
+      const engine = new ConwayEngine({ifcAPI: makeApi()})
+      await streamAll(engine)
+      const captured = await engine.capture({geometryExpressIds: null})
+      expect(captured).toMatchObject({spatialTree: expect.anything(), wasmBytes: 1024})
+      expect(typeof captured.captureMs).toBe('number')
     })
 
-    it('binds modelID on the model', () => {
-      const ifcAPI = makeIfcAPI()
-      const ifcModel = new Mesh()
-      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 17)
-      expect(ifcModel.modelID).toBe(17)
+    // The spill the Loader used to make itself (opfsSourceByteStore.js
+    // #spillModelSource, folded in here).
+    it('spills through the API with a store over the source File', async () => {
+      const api = makeApi()
+      const engine = new ConwayEngine({ifcAPI: api})
+      await streamAll(engine)
+      const file = new Blob([new Uint8Array(64)])
+      expect(await engine.spill(file)).toMatchObject({spilled: true, reason: null})
+      const [modelID, store] = api.SpillModelSource.mock.calls[0]
+      expect(modelID).toBe(3)
+      // Conway rejects a byteLength mismatch before mutating any state.
+      expect(store.byteLength).toBe(64)
     })
 
-    it('attaches an ifcManager shim — passes the !m.ifcManager IFC-discriminator check', () => {
-      // Regression pin: `CadView.jsx#onModel` early-returns when
-      // `!m.ifcManager`. Without this shim, the Conway-direct mesh
-      // would be treated as a non-IFC model and `setRootElement`
-      // would never fire — NavTree stays empty + selection effects
-      // skip.
-      const ifcAPI = makeIfcAPI()
-      const ifcModel = new Mesh()
-      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 0)
-      expect(ifcModel.ifcManager).toBeTruthy()
-      expect(ifcModel.ifcManager.ifcAPI).toBe(ifcAPI)
+    it('keeps the source resident when there is nothing to spill to, or Conway refuses', async () => {
+      const api = makeApi()
+      const engine = new ConwayEngine({ifcAPI: api})
+      await streamAll(engine)
+      expect((await engine.spill(null)).spilled).toBe(false)
+      api.SpillModelSource.mockImplementation(() => {
+        throw new Error('byteLength mismatch')
+      })
+      expect(await engine.spill(new Blob([new Uint8Array(8)]))).toMatchObject(
+        {spilled: false, reason: 'byteLength mismatch'})
+      api.IsModelOpen.mockReturnValue(false)
+      api.SpillModelSource.mockClear()
+      expect((await engine.spill(new Blob([new Uint8Array(8)]))).spilled).toBe(false)
+      expect(api.SpillModelSource).not.toHaveBeenCalled()
     })
 
-    it('ifcManager shim routes getSpatialStructure to Conway with the bound modelID', async () => {
-      const ifcAPI = makeIfcAPI()
-      ifcAPI.properties.getSpatialStructure.mockResolvedValue({expressID: 100})
-      const ifcModel = new Mesh()
-      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 5)
-      // IfcIsolator.js shape: `model.ifcManager.getSpatialStructure(0, false)`.
-      // The leading arg is ignored; the bound modelID (5) flows through.
-      await ifcModel.ifcManager.getSpatialStructure(0, false)
-      expect(ifcAPI.properties.getSpatialStructure).toHaveBeenCalledWith(5, false)
+    it('releases the entity cache and the native geometry on request, and nothing once closed', async () => {
+      const api = makeApi()
+      const engine = new ConwayEngine({ifcAPI: api})
+      await streamAll(engine)
+      expect(await engine.release({entityCache: true, geometry: true})).toBe(true)
+      expect(api.ReleaseEntityCache).toHaveBeenCalledWith(3)
+      expect(api.ReleaseModelGeometry).toHaveBeenCalledWith(3)
+      await engine.close()
+      expect(await engine.release({geometry: true})).toBe(false)
     })
 
-    it('ifcManager shim routes getItemProperties + getPropertySets to Conway', async () => {
-      const ifcAPI = makeIfcAPI()
-      ifcAPI.properties.getItemProperties.mockResolvedValue({Name: {value: 'X'}})
-      ifcAPI.properties.getPropertySets.mockResolvedValue([])
-      const ifcModel = new Mesh()
-      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 3)
-      await ifcModel.ifcManager.getItemProperties(0, 42, false)
-      expect(ifcAPI.properties.getItemProperties).toHaveBeenCalledWith(3, 42, false)
-      await ifcModel.ifcManager.getPropertySets(0, 42, false)
-      expect(ifcAPI.properties.getPropertySets).toHaveBeenCalledWith(3, 42, false)
+    // Review of #2373, round 1 (S2): a classic open has no pump loop, so its
+    // one-shot ask must check a close or an abort itself.
+    /** @return {object} a stub whose open is classic: no deferred calls */
+    function makeClassicApi() {
+      const api = makeApi(3)
+      delete api.OpenModelStreamed
+      delete api.ExtractGeometryBatch
+      api.OpenModel = jest.fn(() => 3)
+      api.StreamAllMeshes = jest.fn((id, cb) => cb({expressID: 100, geometries: []}))
+      return api
+    }
+
+    it('a classic open given up by abort() ends as failed {aborted}, without the whole-model walk', async () => {
+      const api = makeClassicApi()
+      const engine = new ConwayEngine({ifcAPI: api})
+      const events = []
+      for (const ev of ['batch', 'done', 'failed']) {
+        engine.on(ev, (msg) => events.push(msg.kind ? `${ev} ${msg.kind}` : ev))
+      }
+      const ended = new Promise((resolve) => engine.on('failed', resolve))
+      await engine.open({bytes: new Uint8Array(4)}, {stream: {}})
+      engine.abort()
+      await ended
+      expect(events).toEqual(['failed aborted'])
+      expect(api.StreamAllMeshes).not.toHaveBeenCalled()
+    })
+
+    it('a classic open closed after it resolves never walks the model, and the close does not wait one out', async () => {
+      const api = makeClassicApi()
+      const engine = new ConwayEngine({ifcAPI: api})
+      await engine.open({bytes: new Uint8Array(4)}, {stream: {}})
+      await engine.close()
+      expect(api.StreamAllMeshes).not.toHaveBeenCalled()
+      expect(api.CloseModel).toHaveBeenCalledWith(3)
+    })
+
+    it('an abort during the one-shot ask delivers nothing and ends as failed {aborted}, not done', async () => {
+      const api = makeApi(0)
+      api.wasmModule = {}
+      let finishAsk
+      // A windowed open, so the one-shot ask is the async one, and held.
+      api.OpenModelStream = jest.fn(() => Promise.resolve(3))
+      api.ExtractGeometryBatchAsync = jest.fn(() => Promise.resolve({extracted: 0, remaining: 0}))
+      api.StreamAllMeshesAsync = jest.fn((id, cb) => new Promise((resolve) => {
+        finishAsk = () => {
+          cb({expressID: 100, geometries: []})
+          resolve()
+        }
+      }))
+      const engine = new ConwayEngine({ifcAPI: api})
+      const events = []
+      for (const ev of ['batch', 'done', 'failed']) {
+        engine.on(ev, (msg) => events.push(msg.kind ? `${ev} ${msg.kind}` : ev))
+      }
+      const ended = new Promise((resolve) => engine.on('failed', resolve))
+      await engine.open({file: new Blob([new Uint8Array(8)])}, {stream: {}})
+      const pumping = engine.pumping
+      await waitUntil(() => typeof finishAsk === 'function')
+      engine.abort()
+      finishAsk()
+      await ended
+      // To the pump's end, not only the first `failed`: a `done` would come
+      // later, after the summary's awaits (review of #2373, round 2).
+      await pumping
+      expect(events).toEqual(['failed aborted'])
+    })
+
+    it('fails the load with the engine\'s own Error, stack and all (S4)', async () => {
+      const api = makeApi(3)
+      const fault = new Error('conway: extraction fault')
+      api.ExtractGeometryBatch = jest.fn(() => {
+        throw fault
+      })
+      const engine = new ConwayEngine({ifcAPI: api})
+      const load = createEngineModelLoad({spawn: () => Promise.resolve(engine)})
+      await expect(load.parse(new Uint8Array(4), {onMeshBatch: () => null})).rejects.toBe(fault)
+      expect(fault.engineFailureKind).toBe('pump')
+    })
+
+    it('fails the load with a frozen Error too, rather than hang it (round 2)', async () => {
+      const api = makeApi(3)
+      const fault = Object.freeze(new Error('conway: frozen fault'))
+      api.ExtractGeometryBatch = jest.fn(() => {
+        throw fault
+      })
+      const engine = new ConwayEngine({ifcAPI: api})
+      const load = createEngineModelLoad({spawn: () => Promise.resolve(engine)})
+      await expect(load.parse(new Uint8Array(4), {onMeshBatch: () => null})).rejects.toBe(fault)
+    })
+
+    it('lets the retained stream go with the native geometry', async () => {
+      const api = makeApi(3)
+      const engine = new ConwayEngine({ifcAPI: api})
+      await engine.open({bytes: new Uint8Array(4)}, {stream: {retain: true}})
+      await new Promise((resolve) => engine.on('done', resolve))
+      expect((await engine.recapture()).length).toBe(3)
+      await engine.release({geometry: true})
+      expect(engine.captured).toEqual([])
+      expect(engine.recaptured).toBeNull()
+    })
+
+    it('does not open after a close that landed while Init ran (N6)', async () => {
+      const api = makeApi(3)
+      api.wasmModule = undefined
+      let finishInit
+      api.Init = jest.fn(() => new Promise((resolve) => {
+        finishInit = () => {
+          api.wasmModule = {}
+          resolve()
+        }
+      }))
+      const engine = new ConwayEngine({ifcAPI: api})
+      const opening = engine.open({bytes: new Uint8Array(4)}, {stream: {}})
+      engine.close()
+      finishInit()
+      await expect(opening).rejects.toThrow(/closed/)
+      expect(api.OpenModelStreamed).not.toHaveBeenCalled()
+    })
+
+    it('forLoad() makes a fresh engine of the same make, with the wasm path', () => {
+      const api = makeApi()
+      api.SetWasmPath = jest.fn()
+      const viewerEngine = new ConwayEngine({ifcAPI: api})
+      viewerEngine.setWasmPath('./static/js/')
+      const loadEngine = viewerEngine.forLoad()
+      expect(loadEngine).not.toBe(viewerEngine)
+      expect(loadEngine.kind).toBe('mainThread')
+      expect(loadEngine.wasmPath).toBe('./static/js/')
+      loadEngine.close()
+      expect(viewerEngine.closed).toBe(false)
     })
   })
 })

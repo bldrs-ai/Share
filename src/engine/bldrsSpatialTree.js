@@ -197,7 +197,7 @@ export async function captureBldrsSpatialTree(ifcManager, modelID) {
   }
   try {
     // `'names'` is the call the live NavTree makes
-    // (`conwayDirectIfcLoader.js#attachConwayDirectModelMethods`), so a
+    // (`model/engineModelReads.js#attachEngineReads`), so a
     // cache-hit tree carries the names a fresh parse shows, by
     // construction. Conway reads each node's Name / LongName in one pass in
     // file order, which pages a windowed source forward. It is also what

@@ -18,9 +18,9 @@ const COLLAPSED_TOGGLE =
 
 
 /**
- * Hold the geometry pump from the first page script on: the conway loader
+ * Hold the geometry pump from the first page script on: the model load
  * awaits `window.__bldrsTestHoldGeometryPump` between the deferred open and
- * the first batch (conwayDirectIfcLoader.js#holdGeometryPumpForTest), and this
+ * the first batch (engine/engineModelLoad.js#parse, either engine), and this
  * one resolves only when the test calls `releaseGeometry`. Without the hold,
  * the bundled fixtures stream in well under a second and "before the geometry
  * finishes" would be a race the test could win or lose on runner speed.

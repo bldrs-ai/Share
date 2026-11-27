@@ -1,22 +1,27 @@
-// ShareIfcLoader#parse under `?feature=engineWorker` (engine-worker.md §7
-// steps 3 and 6): an IFC or STEP load drives the worker-engine load instead of the
-// main-thread parse, and everything after the parse assembles against the
-// facade it returns. The facade and the session are mocked here; their own
-// behaviour is engine/engineModelLoad.test.js's.
+// ShareIfcLoader#parse's engine route (engine-worker.md §7 steps 3, 6 and 9;
+// layering.md §7 "1a"): an IFC or STEP load gets a WorkerEngine of its own,
+// and a load the route keeps on the main thread gets the viewer's
+// ConwayEngine, through the SAME model load, and everything after the parse
+// assembles against the alias it returns. The load is mocked here; its own
+// behaviour is engine/engineModelLoad.test.js's, and the two engines'
+// engine/engineContract.test.js's.
 import ShareIfcLoader, {isEngineWorkerLoad} from './ShareIfcLoader'
 import {assembleBatchedModel} from '../model/buildBatchedConwayModel'
 import {IncrementalBatchedBuilder} from '../model/incrementalBatchedBuilder'
 import {buildConwayIfcModel} from '../model/buildConwayIfcModel'
-import {parseIfcWithConway} from './conwayDirectIfcLoader'
-import {flags, isFeatureEnabled} from '../FeatureFlags'
 import {createEngineModelLoad} from '../engine/engineModelLoad'
+import {makeFakeEngine} from './engineLoad.fixture'
+import {flags, isFeatureEnabled} from '../FeatureFlags'
 import {getConwayDirectLogs} from '../../tools/jest/conwayDirectLogCapture'
 
 
-jest.mock('./conwayDirectIfcLoader', () => ({
-  parseIfcWithConway: jest.fn(),
+jest.mock('../engine/engineModelLoad', () => ({
+  createEngineModelLoad: jest.fn(),
+  engineFormatOf: jest.requireActual('../engine/engineModelLoad').engineFormatOf,
+}))
+jest.mock('../model/engineModelReads', () => ({
   decorateConwayDirectIfcModel: jest.fn(),
-  makeIndexedModelHandle: jest.requireActual('./conwayDirectIfcLoader').makeIndexedModelHandle,
+  makeIndexedModelHandle: jest.requireActual('../model/engineModelReads').makeIndexedModelHandle,
 }))
 jest.mock('../model/buildBatchedConwayModel', () => ({
   buildBatchedConwayModel: jest.fn(),
@@ -31,10 +36,6 @@ jest.mock('../model/ifcItemsMapParity', () => ({runIfcItemsMapParityCheck: jest.
 jest.mock('../FeatureFlags', () => ({
   isFeatureEnabled: jest.fn(),
   flags: [{name: 'disableEngineWorker', isActive: false}],
-}))
-jest.mock('../engine/engineModelLoad', () => ({
-  createEngineModelLoad: jest.fn(),
-  engineFormatOf: jest.requireActual('../engine/engineModelLoad').engineFormatOf,
 }))
 jest.mock('../utils/location', () => ({hasParams: jest.fn(() => false)}))
 jest.mock('./ProgressiveLoadSession', () => jest.fn().mockImplementation(() => ({
@@ -88,13 +89,30 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
   let infoSpy
   let facade
   let engineParse
+  let workerEngine
+  let viewerEngine
+  // What the loader is given to spawn a worker with; the route picks it.
+  let spawnWorker
+
+  /** @return {object} a loader over this suite's engines */
+  function makeLoader() {
+    return new ShareIfcLoader({engine: viewerEngine, ifc: makeIfcNamespace(), spawnWorker})
+  }
+
+  /** @return {Function} the spawn the parse handed its load */
+  function spawnOfLoad() {
+    return createEngineModelLoad.mock.calls[0][0].spawn
+  }
 
   beforeEach(() => {
     jest.clearAllMocks()
     infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {})
     isFeatureEnabled.mockImplementation((name) => name === 'demandGeometry' || name === 'engineWorker')
+    workerEngine = makeFakeEngine({kind: 'worker', modelID: OPENED_MODEL_ID})
+    viewerEngine = makeFakeEngine({modelID: OPENED_MODEL_ID})
+    spawnWorker = jest.fn(() => Promise.resolve(workerEngine))
     facade = {
-      engineSession: {close: jest.fn()},
+      engine: workerEngine,
       GetCoordinationMatrix: jest.fn().mockResolvedValue(IDENTITY),
       properties: makeIfcAPI().properties,
     }
@@ -104,7 +122,15 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
       // eslint-disable-next-line require-await
       return {modelID: OPENED_MODEL_ID, recapture: async () => [], summary: {}}
     })
-    createEngineModelLoad.mockImplementation(() => ({ifcAPI: facade, parse: engineParse}))
+    // The load's engine is whichever its spawn makes: the route's choice.
+    createEngineModelLoad.mockImplementation(({spawn}) => {
+      const load = {ifcAPI: facade, parse: jest.fn(async (...args) => {
+        load.engine = await spawn()
+        facade.engine = load.engine
+        return engineParse(...args)
+      }), engine: null, abort: jest.fn(), aborted: false}
+      return load
+    })
     IncrementalBatchedBuilder.mockImplementation(() => ({
       root: {parent: null},
       appendBatch: jest.fn(),
@@ -117,75 +143,68 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
 
   afterEach(() => infoSpy.mockRestore())
 
-  it('an IFC load goes through the worker engine, and assembles against its facade', async () => {
-    const ifcAPI = makeIfcAPI()
-    const loader = new ShareIfcLoader({ifcAPI, ifc: makeIfcNamespace()})
+  it('an IFC load goes through the worker engine, and assembles against its alias', async () => {
+    const loader = makeLoader()
     loader.type = 'ifc'
     const model = await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
     expect(model).toBeTruthy()
     expect(engineParse).toHaveBeenCalledTimes(1)
-    expect(parseIfcWithConway).not.toHaveBeenCalled()
-    // The builder and the assembler were handed the facade, not the
-    // viewer's main-thread IfcAPI.
+    expect(spawnOfLoad()).toBe(spawnWorker)
+    // The builder and the assembler were handed the load's alias, and the
+    // model its engine.
     expect(IncrementalBatchedBuilder.mock.calls[0][0]).toBe(facade)
     expect(assembleBatchedModel.mock.calls[0][1]).toBe(facade)
+    expect(assembleBatchedModel.mock.calls[0][3].engine).toBe(workerEngine)
   })
 
-  it('the at-index handle reads through the facade\'s properties', async () => {
-    const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
+  it('the at-index handle reads through the load\'s engine', async () => {
+    const loader = makeLoader()
     loader.type = 'ifc'
     let handle
     await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn(), {onIndexed: (h) => {
       handle = h
     }})
     await handle.getSpatialStructure(0, 'names')
-    expect(facade.properties.getSpatialStructure).toHaveBeenCalledWith(OPENED_MODEL_ID, 'names', {includeSolids: true})
+    expect(workerEngine.tree).toHaveBeenCalledWith({mode: 'names', includeSolids: true})
   })
 
   // engine-worker.md §7 step 6: STEP goes through the SAME worker load as
   // IFC (one createEngineModelLoad, told the format as a label), and the
   // at-index handle asks the worker's tree for STEP's sub-solids.
   it.each(['step', 'stp'])('a .%s load goes through the worker engine as format \'step\'', async (type) => {
-    const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
+    const loader = makeLoader()
     loader.type = type
     let handle
     const model = await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn(), {onIndexed: (h) => {
       handle = h
     }})
     expect(model).toBeTruthy()
-    expect(createEngineModelLoad).toHaveBeenCalledWith({format: 'step', report: null})
+    expect(createEngineModelLoad).toHaveBeenCalledWith({format: 'step', report: null, spawn: spawnWorker})
     expect(engineParse).toHaveBeenCalledTimes(1)
-    expect(parseIfcWithConway).not.toHaveBeenCalled()
     expect(IncrementalBatchedBuilder.mock.calls[0][0]).toBe(facade)
     await handle.getSpatialStructure(0, 'names')
-    expect(facade.properties.getSpatialStructure)
-      .toHaveBeenCalledWith(OPENED_MODEL_ID, 'names', {includeSolids: true})
+    expect(workerEngine.tree).toHaveBeenCalledWith({mode: 'names', includeSolids: true})
   })
 
   it('an IFC load is told format \'ifc\'', async () => {
-    const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
+    const loader = makeLoader()
     loader.type = 'ifc'
     await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
-    expect(createEngineModelLoad).toHaveBeenCalledWith({format: 'ifc', report: null})
+    expect(createEngineModelLoad).toHaveBeenCalledWith({format: 'ifc', report: null, spawn: spawnWorker})
   })
 
-  it('a format no Conway engine parses keeps to its own loader', async () => {
-    // eslint-disable-next-line require-await
-    parseIfcWithConway.mockImplementation(async (b, api, s, p, onMeshBatch) => {
-      onMeshBatch?.([{expressID: 101, geometries: {size: () => 1}}], 0, {done: 1, total: 1})
-      // eslint-disable-next-line require-await
-      return {modelID: 0, captured: [], recapture: async () => []}
-    })
-    const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
+  it('a format no engine worker parses runs on a page engine of the viewer\'s make', async () => {
+    const loader = makeLoader()
     loader.type = 'glb'
     await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
-    expect(createEngineModelLoad).not.toHaveBeenCalled()
-    expect(parseIfcWithConway).toHaveBeenCalledTimes(1)
+    expect(createEngineModelLoad).toHaveBeenCalledTimes(1)
+    expect(facade.engine).toBe(viewerEngine.forLoad.mock.results[0].value)
+    expect(spawnWorker).not.toHaveBeenCalled()
   })
 
   it('a failed worker load closes its engine', async () => {
     engineParse.mockRejectedValue(new Error('engine: open failed (-1)'))
-    const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
+    const loader = makeLoader()
     loader.type = 'ifc'
     const onError = jest.fn()
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
@@ -196,7 +215,7 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
       errorSpy.mockRestore()
       warnSpy.mockRestore()
     }
-    expect(facade.engineSession.close).toHaveBeenCalledTimes(1)
+    expect(workerEngine.close).toHaveBeenCalledTimes(1)
     expect(onError).toHaveBeenCalled()
   })
 
@@ -210,7 +229,7 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
         throw new Error('BatchedMesh capacity exceeded')
       },
     }))
-    const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
+    const loader = makeLoader()
     loader.type = 'ifc'
     const onError = jest.fn()
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
@@ -237,7 +256,7 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
       hasContent: () => false,
       finalize: jest.fn(),
     }))
-    const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
+    const loader = makeLoader()
     loader.type = 'ifc'
     const onError = jest.fn()
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
@@ -266,7 +285,7 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
       mesh: {matrix: null, geometry: null, userData: {}},
       stats: {vertexCount: 0, triangleCount: 0},
     }))
-    const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
+    const loader = makeLoader()
     loader.type = 'ifc'
     const model = await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
     expect(model).toBeTruthy()
@@ -294,12 +313,6 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
     let originalLocation
     beforeEach(() => {
       originalLocation = window.location
-      // eslint-disable-next-line require-await
-      parseIfcWithConway.mockImplementation(async (b, api, s, p, onMeshBatch) => {
-        onMeshBatch?.([{expressID: 101, geometries: {size: () => 1}}], 0, {done: 1, total: 1})
-        // eslint-disable-next-line require-await
-        return {modelID: 0, captured: [], recapture: async () => []}
-      })
     })
     afterEach(() => {
       Object.defineProperty(window, 'location', {writable: true, value: originalLocation})
@@ -312,13 +325,14 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
       isFeatureEnabled.mockImplementation((name) =>
         name === 'demandGeometry' || name === 'engineWorker' || urlFlags.includes(name))
       expect(isEngineWorkerLoad('ifc', {})).toBe(false)
-      const ifcAPI = makeIfcAPI()
-      const loader = new ShareIfcLoader({ifcAPI, ifc: makeIfcNamespace()})
+      const loader = makeLoader()
       loader.type = 'ifc'
       await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
-      expect(createEngineModelLoad).not.toHaveBeenCalled()
-      expect(parseIfcWithConway).toHaveBeenCalledTimes(1)
-      expect(parseIfcWithConway.mock.calls[0][1]).toBe(ifcAPI)
+      // The same model load, on the viewer's engine.
+      expect(createEngineModelLoad).toHaveBeenCalledTimes(1)
+      expect(facade.engine).toBe(viewerEngine.forLoad.mock.results[0].value)
+      expect(spawnWorker).not.toHaveBeenCalled()
+      expect(assembleBatchedModel.mock.calls[0][3].engine).toBe(viewerEngine.forLoad.mock.results[0].value)
       expect(getConwayDirectLogs().map((l) => l.text)).toContain(note)
     })
 
@@ -329,11 +343,11 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
       flags[0].isActive = true
       try {
         expect(isEngineWorkerLoad('ifc', {})).toBe(false)
-        const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
+        const loader = makeLoader()
         loader.type = 'ifc'
         await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
-        expect(createEngineModelLoad).not.toHaveBeenCalled()
-        expect(parseIfcWithConway).toHaveBeenCalledTimes(1)
+        expect(spawnWorker).not.toHaveBeenCalled()
+        expect(facade.engine).toBe(viewerEngine.forLoad.mock.results[0].value)
         expect(getConwayDirectLogs().map((l) => l.text)).toContain(
           'Engine: main thread (the engine worker is rolled back: disableEngineWorker is on in FeatureFlags.js)')
       } finally {
@@ -345,7 +359,7 @@ describe('loader/ShareIfcLoader with ?feature=engineWorker', () => {
       Object.defineProperty(window, 'location', {writable: true, value: {...originalLocation, search: '?feature=disableEngineWorker'}})
       isFeatureEnabled.mockImplementation((name) =>
         name === 'demandGeometry' || name === 'engineWorker' || name === 'disableEngineWorker')
-      const loader = new ShareIfcLoader({ifcAPI: makeIfcAPI(), ifc: makeIfcNamespace()})
+      const loader = makeLoader()
       loader.type = 'glb'
       await loader.parse(new ArrayBuffer(4), jest.fn(), jest.fn())
       expect(getConwayDirectLogs().some((l) => l.text.startsWith('Engine:'))).toBe(false)

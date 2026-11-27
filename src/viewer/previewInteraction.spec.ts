@@ -47,8 +47,8 @@ interface PreviewTarget {
 
 /**
  * Hold the load at the end of its parse, before the model's index is
- * published: conwayDirectIfcLoader.js#holdIndexForTest awaits
- * `window.__bldrsTestHoldIndex` there. The parse-time preview meshes are on
+ * published: engine/engineModelLoad.js#parse awaits
+ * `window.__bldrsTestHoldIndex` there, on either engine. The parse-time preview meshes are on
  * screen by then and nothing else is — no tree, no properties, no durable
  * geometry — the state a large model's whole parse is in. Without the hold a
  * shippable fixture's parse is over in well under a second.

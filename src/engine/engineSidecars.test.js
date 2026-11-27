@@ -1,6 +1,6 @@
 /** @jest-environment node */ // eslint-disable-line jsdoc/check-tag-names
 /* eslint-disable no-magic-numbers, require-await */
-import {EngineSession} from './EngineSession'
+import {WorkerEngine} from './WorkerEngine'
 import {createEngineHandler} from './engineHandler'
 import {indexLine} from './engineModelLoad'
 import {
@@ -733,7 +733,7 @@ async function loadOnce(api, root, flags = {}) {
     postMessage: (msg) => queueMicrotask(() => handler.handle(msg)),
     terminate: () => null,
   }
-  const session = new EngineSession(makeWorkerTransport(fakeWorker), {epoch: 1})
+  const session = new WorkerEngine(makeWorkerTransport(fakeWorker), {epoch: 1})
   toPage({v: ENGINE_PROTOCOL_VERSION, epoch: 0, ev: Ev.HELLO, seq: 0})
   await session.init({flags: {disableBufferedSource: true, ...flags}})
   const done = new Promise((resolve) => session.on(Ev.DONE, (msg) => resolve(msg.summary)))
@@ -926,7 +926,7 @@ describe('engine/engineHandler: a STEP whose session fell back in process (#1776
       postMessage: (msg) => queueMicrotask(() => handler.handle(msg)),
       terminate: () => null,
     }
-    const session = new EngineSession(makeWorkerTransport(fakeWorker), {epoch: 1})
+    const session = new WorkerEngine(makeWorkerTransport(fakeWorker), {epoch: 1})
     toPage({v: ENGINE_PROTOCOL_VERSION, epoch: 0, ev: Ev.HELLO, seq: 0})
     await session.init({flags: {}})
     const opened = await session.open({file: snapshot()}, {format: 'step'})

@@ -18,9 +18,6 @@
   "src/loader/uploadedFileName.js": [
     "src/connections/persistence.ts"
   ],
-  "src/model/buildBatchedConwayModel.js": [
-    "src/loader/conwayDirectIfcLoader.js"
-  ],
   "src/privacy/analytics.js": [
     "src/quota/quota.js"
   ],

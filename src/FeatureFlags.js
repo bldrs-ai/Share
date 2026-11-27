@@ -211,7 +211,7 @@ export const flags = [
   // OFF-switch for the engine worker above, same inverted shape and reason as
   // `disableStreamOpen`: `?feature=` can only turn flags ON, so
   // `?feature=disableEngineWorker` is the per-session way back to the
-  // main-thread engine (parseIfcWithConway), for one A/B or one bad model.
+  // main-thread engine (engine/ConwayEngine.js), for one A/B or one bad model.
   // Setting it `isActive: true` here is the PROD ROLLBACK: engineRoute.js
   // reads the static value before any URL flag, so no link can opt back into
   // the worker (engine-worker.md §7.2, "Rolling back").

@@ -153,7 +153,7 @@ export interface LoadSample {
     /**
      * **The conway #544 cross-check number.** First mesh on screen,
      * measured from the `Opening model` status line — which ShareIfcLoader
-     * emits immediately before `parseIfcWithConway`, i.e. the same point
+     * emits immediately before the engine's open (engine/engineModelLoad.js), i.e. the same point
      * `scripts/preview_timeline.mjs` sets its `t0`. Excludes download.
      * INCLUDES conway's lazy wasm `Init()` on a cold sample (`warm:
      * false`), which the Node script pays for before its `t0`; compare
@@ -169,7 +169,7 @@ export interface LoadSample {
     firstMeshSinceParseStartMs: number | null
     /**
      * Millisecond-accurate but *includes* wasm init on a cold page, since
-     * conway's `Init()` is lazy inside `parseIfcWithConway`. Use it as the
+     * conway's `Init()` is lazy, in the engine's first open (ConwayEngine.js#init). Use it as the
      * upper bound on the same quantity.
      */
     firstMeshSinceDownloadMs: number | null

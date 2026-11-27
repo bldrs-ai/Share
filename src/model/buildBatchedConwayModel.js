@@ -5,10 +5,7 @@ import {buildOccurrencePathIndex} from './batchedInstanceTables'
 import {linkBatchedModel} from './batchedModel'
 import {attachBatchedSubsets} from './batchedSubset'
 import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
-import {
-  attachConwayDirectModelMethods,
-  makeConwayDirectIfcManager,
-} from '../loader/conwayDirectIfcLoader'
+import {attachEngineReads} from './engineModelReads'
 import {scheduleBatchedBoundsTrees} from './deferredBatchedBvh'
 import {applyProductPalette} from './productPalette'
 
@@ -51,6 +48,7 @@ import {applyProductPalette} from './productPalette'
  * @param {object} ifcAPI Conway-compatible IfcAPI
  * @param {number} modelID
  * @param {object} [opts]
+ * @param {object} [opts.engine] the load's Engine (see assembleBatchedModel)
  * @param {object} [opts.scene] the THREE scene; passed as the subset
  *   `fallbackParent` so selection / preselection overlays still attach (and
  *   render their fill) when a source batch has no parent at subset-build
@@ -167,9 +165,13 @@ export function decorateBatchMeshes(batches, {onDepthCap = undefined} = {}) {
  * the end.
  *
  * @param {Array} batches BatchHandle list (`{mesh, instanceParents, ...}`)
- * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @param {object} ifcAPI the load's IfcAPI-shaped alias of its engine
+ *   (engine/engineModelLoad.js#makeEngineIfcApi), kept on the model's
+ *   `ifcManager` until slice N
  * @param {number} modelID
  * @param {object} [opts]
+ * @param {object} [opts.engine] the load's Engine: the model's reads
+ *   (engineModelReads.js)
  * @param {object} [opts.scene] subset fallbackParent (see above)
  * @param {object} [opts.root] existing Group already holding the batch
  *   meshes (the incremental path's scene-installed root) — used as the
@@ -197,11 +199,6 @@ export function assembleBatchedModel(batches, ifcAPI, modelID, opts = {}) {
 
   model.modelID = modelID
 
-  // `ifcManager` shim — several call-sites discriminate "is this an IFC
-  // model?" by `if (!m.ifcManager)`; without it the model-loaded effects
-  // (NavTree, search index) are skipped. Same shape the merged path attaches.
-  model.ifcManager = makeConwayDirectIfcManager(ifcAPI, modelID)
-
   model.capabilities = model.capabilities ?? {}
   // Provisional capabilities for the window before `Loader.js` decorates the
   // model: `expressIdPicking` + `batchedPicking` (recolor selection via
@@ -225,10 +222,11 @@ export function assembleBatchedModel(batches, ifcAPI, modelID, opts = {}) {
   // `opts.scene` backstops the case where a source batch has no parent yet.
   attachBatchedSubsets(model, opts.scene ?? null, {})
 
-  // Property / spatial closures (getItemProperties, getPropertySets,
-  // getSpatialStructure, getIfcType) — identical to the merged path, so the
-  // STEP/IFC metadata surface is unchanged.
-  attachConwayDirectModelMethods(model, ifcAPI, modelID)
+  // The engine, the `ifcManager` shim (several call sites discriminate "is
+  // this an IFC model?" by `if (!m.ifcManager)`; without it the NavTree and
+  // search index are skipped) and the property and spatial closures:
+  // identical to the merged path, so the STEP/IFC metadata surface is too.
+  attachEngineReads(model, opts.engine ?? null, ifcAPI)
 
   return model
 }

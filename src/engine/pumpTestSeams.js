@@ -3,7 +3,7 @@ import {PREVIEW_FINISH_PARSE} from '@bldrs-ai/conway/src/compat/web-ifc/streamed
 
 /**
  * Test seam for the geometry pump, read by both engines' loads
- * (`conwayDirectIfcLoader.js` on the main thread, `engine/engineModelLoad.js`
+ * (`engine/ConwayEngine.js` on the main thread, `engine/engineModelLoad.js`
  * for the worker): `window.__bldrsTestPumpBatchSize` sets the pump's batch
  * size, so a spec can make a small fixture's assemblies arrive over several
  * batches (streamingBatchPick.spec.ts). Absent in production, where this is a

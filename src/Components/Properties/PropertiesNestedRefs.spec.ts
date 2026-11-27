@@ -119,7 +119,7 @@ describeMobileAndDesktop('Properties: an element whose references resolve to ent
     await page.evaluate(() => {
       /* eslint-disable @typescript-eslint/no-explicit-any */
       const w = window as any
-      const session = w.store.getState().model.ifcManager.ifcAPI.engineSession
+      const session = w.store.getState().model.engine
       w.__bldrsTestOps = []
       const request = session.request.bind(session)
       session.request = (op: string, args: any, ...rest: unknown[]) => {

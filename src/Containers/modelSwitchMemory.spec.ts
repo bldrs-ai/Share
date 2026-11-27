@@ -89,8 +89,9 @@ function watchEngineWorkers(page: Page): EngineWorker[] {
 
 
 /**
- * Hold A's model, and its main-thread IfcAPI when it has one, weakly, as
- * `window.__leftWeakRefs`, so the spec itself keeps neither alive.
+ * Hold A's model, and its main-thread IfcAPI when it has one (a ConwayEngine's
+ * Conway object, engine/ConwayEngine.js), weakly, as `window.__leftWeakRefs`,
+ * so the spec itself keeps neither alive.
  *
  * @param page
  */
@@ -99,11 +100,11 @@ async function rememberLeftModelWeakly(page: Page) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = window as any
     const model = w.store.getState().model
-    const ifcAPI = model?.ifcManager?.ifcAPI
+    const engine = model?.engine
     // The repo's TS lib predates WeakRef; the browser has it.
     w.__leftWeakRefs = {model: new w.WeakRef(model)}
-    if (ifcAPI && !ifcAPI.engineSession) {
-      w.__leftWeakRefs.ifcAPI = new w.WeakRef(ifcAPI)
+    if (engine?.kind === 'mainThread') {
+      w.__leftWeakRefs.ifcAPI = new w.WeakRef(engine.ifcAPI)
     }
   })
 }
@@ -179,7 +180,7 @@ describeMobileAndDesktop('open-205: an in-app model switch frees the engine it l
     await waitForModelSettled(page)
     const sessionKind = await page.evaluate(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).store.getState().model?.ifcManager?.ifcAPI?.engineSession?.kind ?? null)
+      (window as any).store.getState().model?.engine?.kind ?? null)
     expect(sessionKind, 'A must have loaded in a worker engine').toBe('worker')
     expect(workers.length, 'A started one engine worker').toBe(1)
     expect(workers[0].closed).toBe(false)
@@ -440,7 +441,7 @@ describeMobileAndDesktop('open-205: a switch while the model is still loading ab
       if (isWorker) {
         expect(await page.evaluate(() =>
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (window as any).store.getState().model?.ifcManager?.ifcAPI?.engineSession?.closed)).toBe(false)
+          (window as any).store.getState().model?.engine?.closed)).toBe(false)
       }
     })
   }

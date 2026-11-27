@@ -1,11 +1,9 @@
 /* eslint-disable no-magic-numbers, require-await, new-cap */
-import {EngineSession} from './EngineSession'
+import {WorkerEngine, decodePlacements, makeGeometryStore} from './WorkerEngine'
 import {createEngineHandler} from './engineHandler'
 import {
   createEngineModelLoad,
-  decodePlacements,
   makeEngineIfcApi,
-  makeGeometryStore,
   statisticsView,
 } from './engineModelLoad'
 import {makeBatchEncoder, makeLogForwarder, previewMessage, snapshotStatistics} from './engineStream'
@@ -150,7 +148,7 @@ function spawnOver(api) {
         post,
         yieldToLoop: () => Promise.resolve(),
       }))
-    const session = new EngineSession(transport, {epoch: 9})
+    const session = new WorkerEngine(transport, {epoch: 9})
     await session.init()
     return session
   }
@@ -248,7 +246,7 @@ describe('engine/engineModelLoad streamed IFC load', () => {
     const load = createEngineModelLoad({spawn: spawnOver(api)})
     const source = new Blob(['ISO-10303-21;\nHEADER;\nFILE_SCHEMA((\'IFC4X3_ADD2\'));\nENDSEC;'])
     await expect(load.parse(source, {onMeshBatch: () => null})).rejects.toBeInstanceOf(UnsupportedSchemaError)
-    expect(load.ifcAPI.engineSession.closed).toBe(true)
+    expect(load.ifcAPI.engine.closed).toBe(true)
   })
 
   it('a pump failure rejects the parse with the engine\'s message and frees the engine', async () => {
@@ -260,7 +258,7 @@ describe('engine/engineModelLoad streamed IFC load', () => {
     const load = createEngineModelLoad({spawn: spawnOver(api)})
     await expect(load.parse(new Blob(['x']), {onMeshBatch: () => null}))
       .rejects.toThrow('could not allocate memory')
-    expect(load.ifcAPI.engineSession.closed).toBe(true)
+    expect(load.ifcAPI.engine.closed).toBe(true)
   })
 
   it('a model the pump could not stream is re-emitted as batches by the engine', async () => {
@@ -543,7 +541,7 @@ describe('engine/engineModelLoad review fixes (#2058 round 1)', () => {
     const load = createEngineModelLoad({spawn: spawnOver(api)})
     const parsing = load.parse(new Blob(['x']), {onMeshBatch: () => null})
     await new Promise((resolve) => setTimeout(resolve, 10))
-    load.ifcAPI.engineSession.close()
+    load.ifcAPI.engine.close()
     release()
     await expect(parsing).rejects.toThrow('engine session closed')
   })

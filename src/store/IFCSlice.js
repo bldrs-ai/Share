@@ -148,7 +148,7 @@ export default function createIFCSlice(set, get) {
 
     // The model at its index while a Conway (IFC/STEP) load still streams
     // geometry (open-205 #2029; `makeIndexedModelHandle` in
-    // loader/conwayDirectIfcLoader.js). Carries the property and spatial
+    // model/engineModelReads.js). Carries the property and spatial
     // surface only — no geometry, not an Object3D — so it is kept apart from
     // `model`, which scene consumers (clipper, isolator, ViewCube) take to be
     // the object in the scene. Readers of properties and the tree take it

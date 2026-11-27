@@ -1,6 +1,6 @@
 /** @jest-environment node */ // eslint-disable-line jsdoc/check-tag-names
 /* eslint-disable require-await, no-magic-numbers */
-import {EngineSession} from './EngineSession'
+import {WorkerEngine} from './WorkerEngine'
 import {createEngineHandler} from './engineHandler'
 import {createEngineModelLoad, shouldRetryWindowed} from './engineModelLoad'
 import {SourceModeReason} from './sourcePolicy'
@@ -117,7 +117,7 @@ function conwayDouble(log, {buffered = null, windowed = null} = {}) {
  *
  * @param {Array<object>} engines conway doubles, one per expected spawn
  * @param {object} [flags] init flags
- * @return {{spawn: function(): Promise<EngineSession>, sessions: Array<EngineSession>}}
+ * @return {{spawn: function(): Promise<WorkerEngine>, sessions: Array<WorkerEngine>}}
  */
 function spawner(engines, flags = {}) {
   const sessions = []
@@ -146,7 +146,7 @@ function spawner(engines, flags = {}) {
       postMessage: (msg) => queueMicrotask(() => handler.handle(msg)),
       terminate: () => null,
     }
-    const session = new EngineSession(makeWorkerTransport(fakeWorker), {epoch: sessions.length + 1})
+    const session = new WorkerEngine(makeWorkerTransport(fakeWorker), {epoch: sessions.length + 1})
     toPage({v: ENGINE_PROTOCOL_VERSION, epoch: 0, ev: Ev.HELLO, seq: 0})
     sessions.push(session)
     // No sidecar: keep these opens to the policy's buffered/windowed choice.
@@ -184,7 +184,7 @@ describe('engine/engineModelLoad: a buffered open that runs out of memory (Share
     expect(sessions[0].closed).toBe(true)
     // Closed BEFORE the second engine was spawned, not after.
     expect(closedBeforeSpawn).toEqual([true, true])
-    expect(load.ifcAPI.engineSession).toBe(sessions[1])
+    expect(load.ifcAPI.engine).toBe(sessions[1])
     // The first engine buffered and failed; the second never tried buffered.
     expect(log).toEqual(['buffered open', 'windowed open'])
     expect(result.summary.sourceMode).toMatchObject({

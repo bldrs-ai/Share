@@ -467,7 +467,7 @@ export class IncrementalBatchedBuilder {
   /**
    * Record how far the demand pump has got through the model's products,
    * in the pump's own units (`geometryDone` / `geometryTotal` from
-   * `conwayDirectIfcLoader`'s loop — products extracted, not FlatMeshes
+   * engine/ConwayEngine.js's pump loop — products extracted, not FlatMeshes
    * delivered, which is a smaller number because not every product yields
    * geometry). This is the only signal that lets a builder assembling one
    * batch at a time size the batch for the WHOLE model instead of
@@ -497,7 +497,7 @@ export class IncrementalBatchedBuilder {
    *
    * Both loop bodies below are guarded individually rather than once
    * around the whole method: conway's GEOMETRY_BUDGET eviction
-   * (conwayDirectIfcLoader.js, conway#535) can free a native asset
+   * (engine/ConwayEngine.js, conway#535) can free a native asset
    * between delivery and our reading it, and embind then throws
    * "Cannot pass deleted object as a pointer of type IfcGeometry" from
    * whichever wrapper touches it next — a FlatMesh's own accessors, or
@@ -863,7 +863,7 @@ export class IncrementalBatchedBuilder {
       // eslint-disable-next-line new-cap
       rawIndices = this.api.GetIndexArray(geom.GetIndexData(), indexSize)
     } catch (e) {
-      // conway's GEOMETRY_BUDGET_MB (conwayDirectIfcLoader.js) evicts the
+      // conway's GEOMETRY_BUDGET_MB (engine/engineHandler.js) evicts the
       // least-recently-used native geometry at each pump batch (conway#535).
       // If eviction lands between the demand pump delivering this id and
       // our copying it out here, embind throws "Cannot pass deleted object

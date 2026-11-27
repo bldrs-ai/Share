@@ -252,6 +252,10 @@ const impl = {
   setInstanceSelection: jest.fn(),
   takeScreenshot: jest.fn(),
 }
+// The viewer's engine (ShareIfc#engine), over the stub IfcAPI above. Each
+// load parses into one of its make (ConwayEngine#forLoad), over the same stub.
+const {ConwayEngine: HarnessConwayEngine} = jest.requireActual('../src/engine/ConwayEngine')
+impl.IFC.engine = new HarnessConwayEngine({ifcAPI: impl.IFC.loader.ifcManager.ifcAPI})
 // This harness can be evaluated more than once within a test run (it's
 // re-required across separate module registries — e.g. a test's explicit
 // `import` of this harness plus a transitive load). Without dedup, each

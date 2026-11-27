@@ -50,12 +50,13 @@ export async function createPropertyTables(model, entries) {
 
 
 /**
- * Resolve tables where the model's reads are. A model whose engine is an
- * engine session (`?feature=engineWorker`, EngineSession.js#propertiesApi)
- * offers `properties.resolvePropertyTables`, which runs propertyTable.js next
- * to the engine: one round trip, instead of one per reference (Share#2070).
- * Every other model is resolved here, by the same code over the model's own
- * reads.
+ * Resolve tables where the model's reads are. A model with an engine
+ * (`model.engine`, engine/Engine.js#makePropertiesApi) offers
+ * `properties.resolvePropertyTables`, which runs propertyTable.js next to the
+ * engine: for a worker, one round trip instead of one per reference
+ * (Share#2070); for the page's engine, the same code with no trip at all.
+ * Every other model (a GLB cache hit) is resolved here, by the same code over
+ * the model's own reads.
  *
  * A record that will not cross to the worker (a DataCloneError, thrown by
  * postMessage before anything is sent) is resolved here instead, through the
@@ -92,7 +93,7 @@ async function resolveTables(model, entries) {
  *
  * The model's own `getItemProperties` first, for references too. Every live
  * model has one that takes `recursive` and reads the model's own engine
- * (conwayDirectIfcLoader.js#attachConwayDirectModelMethods). A GLB cache
+ * (model/engineModelReads.js#attachEngineReads). A GLB cache
  * hit's answers from its BLDRS_element_properties records, and is the only
  * thing that can: its `ifcManager.ifcAPI` is the viewer's engine, which has
  * no model open, so resolving through it gave `null` for every reference

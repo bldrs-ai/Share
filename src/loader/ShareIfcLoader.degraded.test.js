@@ -8,22 +8,27 @@
 //
 // The retention decision itself (which opens drop, which keep, and why a
 // windowed source cannot) lives one layer down and is pinned in
-// `conwayDirectIfcLoader.test.js`. Here `parseIfcWithConway` is mocked so
-// the two halves of its return value can disagree, which is exactly the
-// state a reader of the wrong one would get wrong.
+// `engine/ConwayEngine.test.js`. Here the engine's load is a fake
+// (engineLoad.fixture.js) that delivers the stream as batches and still
+// serves it through `recapture()`, the page engine's capability.
 
 import ShareIfcLoader from './ShareIfcLoader'
 import {assembleBatchedModel, buildBatchedConwayModel} from '../model/buildBatchedConwayModel'
 import {buildConwayIfcModel} from '../model/buildConwayIfcModel'
 import {IncrementalBatchedBuilder} from '../model/incrementalBatchedBuilder'
-import {parseIfcWithConway} from './conwayDirectIfcLoader'
+import {createEngineModelLoad} from '../engine/engineModelLoad'
+import {makeFakeEngine, makeFakeEngineLoad} from './engineLoad.fixture'
 import {flatMeshToInstancedModel} from '../model/flatMeshToInstancedModel'
 import {isFeatureEnabled} from '../FeatureFlags'
 
 
-jest.mock('./conwayDirectIfcLoader', () => ({
-  parseIfcWithConway: jest.fn(),
+jest.mock('../engine/engineModelLoad', () => ({
+  createEngineModelLoad: jest.fn(),
+  engineFormatOf: jest.requireActual('../engine/engineModelLoad').engineFormatOf,
+}))
+jest.mock('../model/engineModelReads', () => ({
   decorateConwayDirectIfcModel: jest.fn(),
+  makeIndexedModelHandle: jest.fn(),
 }))
 jest.mock('../model/buildBatchedConwayModel', () => ({
   buildBatchedConwayModel: jest.fn(),
@@ -137,11 +142,10 @@ describe('loader/ShareIfcLoader degraded end-of-load builds (conway#638)', () =>
     // drop the stream. Everything else off: `batchedMesh` is flipped on
     // per-test where that fallback is the subject.
     isFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
-    // The shape the streaming path returns: an EMPTY `captured` beside a
-    // `recapture()` that still serves the whole model. A reader that took
-    // the array would silently build nothing — which is the regression.
+    // The shape the streaming path returns: no retained stream, and a
+    // `recapture()` that still serves the whole model.
     //
-    // The mock drives `onMeshBatch` before resolving, the way the real pump
+    // The fake drives `onMeshBatch` before resolving, the way the real pump
     // does. Without that the loader's `builder` would stay null for every
     // case, and the three degraded paths this file separates would collapse
     // into one.
@@ -153,14 +157,15 @@ describe('loader/ShareIfcLoader degraded end-of-load builds (conway#638)', () =>
     // exactly the regression this file exists to catch.
     // eslint-disable-next-line require-await
     recapture = jest.fn(async () => PUMPED)
-    parseIfcWithConway.mockImplementation(
-      // eslint-disable-next-line require-await
-      async (buffer, api, settings, onProgress, onMeshBatch) => {
+    createEngineModelLoad.mockImplementation(() => makeFakeEngineLoad({
+      ifcAPI,
+      play: ({onMeshBatch}) => {
         if (onMeshBatch) {
           onMeshBatch(PUMPED, 4, {done: PUMPED.length, total: PUMPED.length})
         }
-        return {modelID: 4, captured: [], recapture}
-      })
+        return {modelID: 4, recapture}
+      },
+    }))
     buildConwayIfcModel.mockReturnValue({mesh: makeModel('merged'), stats: BUILD_STATS})
     buildBatchedConwayModel.mockReturnValue({model: makeModel('batched'), stats: BUILD_STATS})
     assembleBatchedModel.mockReturnValue(makeModel('incremental'))
@@ -168,6 +173,7 @@ describe('loader/ShareIfcLoader degraded end-of-load builds (conway#638)', () =>
     // forces on in two cases below. Given a real shape so the diagnostic
     // completes instead of throwing into its own catch and narrating the
     // suite (PLAYBOOK.md §"Keep the test console clean").
+    ifcAPI = makeIfcAPI()
     flatMeshToInstancedModel.mockReturnValue({
       stats: {
         instanceCount: 3,
@@ -182,9 +188,8 @@ describe('loader/ShareIfcLoader degraded end-of-load builds (conway#638)', () =>
         topInstancedCount: 3,
       },
     })
-    ifcAPI = makeIfcAPI()
     ifc = makeIfcNamespace()
-    loader = new ShareIfcLoader({ifcAPI, ifc})
+    loader = new ShareIfcLoader({engine: makeFakeEngine(), ifc})
   })
 
   afterEach(() => infoSpy.mockRestore())

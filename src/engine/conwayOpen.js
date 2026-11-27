@@ -1,6 +1,6 @@
 // The deferred open sequence, shared by both engines' paths
 // (engine-worker.md §8 item 6: one path, not two): the main-thread
-// `conwayDirectIfcLoader.js#parseIfcWithConway` and the engine worker's
+// page's `ConwayEngine.js#open` and the engine worker's
 // `engine/engineHandler.js`. Worker-safe: it imports only `openAttempt.js`.
 import {beginOpenAttempt, conwayLoadStatus, conwayOpenFailure, conwayRefusedSchema} from './openAttempt'
 

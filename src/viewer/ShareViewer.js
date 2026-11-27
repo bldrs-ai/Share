@@ -281,12 +281,12 @@ export class ShareViewer {
     // Install `ShareIfcLoader` at the top-level `viewer.ifcLoader` slot
     // (slice 5d.1). It owns the Conway-direct `parse(buffer)` entry point
     // `Loader.js#findLoader` reads for `case 'ifc'`, and shares ShareIfc's
-    // Conway IfcAPI handle (`viewer.IFC.loader.ifcManager.ifcAPI`). Kept
-    // distinct from `viewer.IFC.loader` — which since 5d.4 is ShareIfc's
-    // own `ShareIfcManager` (Conway-backed), not a wit-three IFCLoader.
-    const conwayIfcAPI = this.IFC.loader?.ifcManager?.ifcAPI
-    if (conwayIfcAPI) {
-      this.ifcLoader = new ShareIfcLoader({ifcAPI: conwayIfcAPI, ifc: this.IFC})
+    // engine (`viewer.IFC.engine`, the main-thread route's). Kept distinct
+    // from `viewer.IFC.loader` — which since 5d.4 is ShareIfc's own
+    // `ShareIfcManager` (Conway-backed), not a wit-three IFCLoader.
+    const engine = this.IFC.engine
+    if (engine) {
+      this.ifcLoader = new ShareIfcLoader({engine, ifc: this.IFC})
     }
     const renderer = this.context.getRenderer()
     const scene = this.context.getScene()
@@ -832,15 +832,14 @@ export class ShareViewer {
         console.warn('IFC.dispose failed:', e)
       }
     }
-    // ShareIfc#dispose drops its own manager, but the loader shares the
-    // same IfcAPI (constructor above). On the main-thread engine
-    // (`?feature=disableEngineWorker`) that IfcAPI is the whole WASM engine
-    // with the model's heap, and a disposed viewer can stay reachable for a
-    // while (stale React render scopes keep it). So after an in-app model
-    // switch the left model's engine stayed alive through
-    // `viewer.ifcLoader.ifcManager.ifcAPI` (open-205, #2019). A load reads
-    // `ifcLoader` when it starts (Loader.js#findLoader), and nothing loads
-    // into a disposed viewer.
+    // ShareIfc#dispose drops its own engine, but the loader shares it
+    // (constructor above). On the main-thread route
+    // (`?feature=disableEngineWorker`) that engine holds the whole WASM heap
+    // with the model's, and a disposed viewer can stay reachable for a while
+    // (stale React render scopes keep it). So after an in-app model switch
+    // the left model's engine stayed alive through the loader (open-205,
+    // #2019). A load reads `ifcLoader` when it starts (Loader.js#findLoader),
+    // and nothing loads into a disposed viewer.
     this.ifcLoader = null
     if (this.context) {
       try {

@@ -1,20 +1,131 @@
 // The client half of one engine (design/new/engine-worker.md §5.1): the async
 // read surface a model session talks to, whether its engine runs in a Web
-// Worker or in process (`transports.js`).
+// Worker or in process (`transports.js`). It is an `Engine` (Engine.js):
+// `kind` is the transport's, `worker` or `inProcess`.
 //
 // Nothing on the main thread holds an `IfcAPI` through this, so no sync
-// engine method can be reached: everything is a request with a reply.
-// `propertiesApi` re-presents those requests as the `ifcAPI.properties`
-// shape (`getSpatialStructure`, `getItemProperties`, `getPropertySets`,
-// `getAllItemsOfType`, `getIfcType`), so `makeIndexedModelHandle` and every
-// async consumer in §2.1 can be handed it unchanged (step 3).
-// Resolves via conway's `./src/*` export map; a few KB, no wasm glue.
-import {IfcTypesMap} from '@bldrs-ai/conway/src/compat/web-ifc/types-map'
+// engine method can be reached: everything is a request with a reply, except
+// the two things a load needs synchronously and the worker has already sent:
+// each streamed batch's shapes, served through `geometry` while the batch's
+// listeners run, and the static type table (`typeName`).
 import {ENGINE_PROTOCOL_VERSION, Ev, Op, ProtocolMismatchError, deserializeError} from './protocol'
+import {ENGINE_CLOSED, ifcTypeName, makePropertiesApi} from './Engine'
+import {conwayDirectInfo, conwayDirectWarn} from './conwayDirectLog'
 
 
-/** Why a pending request was refused once the session can no longer answer. */
-export const SESSION_CLOSED = 'engine session closed'
+// Re-exported for the callers that matched on it before Engine.js held it.
+export {ENGINE_CLOSED}
+
+/* Column-major mat4 elements per placement. */
+const MATRIX_ELEMENTS = 16
+/* RGBA per placement. */
+const COLOR_COMPONENTS = 4
+
+/**
+ * The geometry the worker copied out, served through the slice of conway's
+ * IfcAPI that `incrementalBatchedBuilder` uses: a WorkerEngine's `geometry`
+ * (Engine.js), as a ConwayEngine's is the wasm heap. Adapted from #1756's
+ * `workerGeometryApi.js` (the geometry worker pool, draft): adapting the
+ * input rather than teaching the builder a second shape keeps its geometry
+ * cache, coincidence dedup, capacity growth and bounds accounting on one
+ * code path for both engines.
+ *
+ * Unlike #1756's, entries are DROPPED once their batch has been appended
+ * (`drop`): the builder copies every payload at delivery (the Share#1640
+ * invariant) and caches by geometry id, so keeping the worker's copy too
+ * would hold each shape twice — 337 MB extra on PSB (§3).
+ *
+ * The "pointer" the builder round-trips (`GetVertexData()` →
+ * `GetVertexArray(ptr, size)`) is the geometry's express ID here.
+ *
+ * @return {object} `{api, put, drop, size}`
+ */
+export function makeGeometryStore() {
+  const geometries = new Map()
+  return {
+    /** @param {object} geometry `{id, vertices, indices}` */
+    put(geometry) {
+      if (geometry?.id !== undefined && !geometries.has(geometry.id)) {
+        geometries.set(geometry.id, geometry)
+      }
+    },
+    /** @param {Array<object>} list the batch's geometries, once appended */
+    drop(list) {
+      for (const geometry of list) {
+        geometries.delete(geometry.id)
+      }
+    },
+    get size() {
+      return geometries.size
+    },
+    api: {
+      GetGeometry(_modelID, geometryExpressID) {
+        const entry = geometries.get(geometryExpressID)
+        if (entry === undefined) {
+          // Never sent (the worker found it degenerate by the builder's own
+          // rules), or already appended and cached by the builder.
+          return null
+        }
+        return {
+          GetVertexDataSize: () => entry.vertices.length,
+          GetIndexDataSize: () => entry.indices.length,
+          GetVertexData: () => geometryExpressID,
+          GetIndexData: () => geometryExpressID,
+        }
+      },
+      GetVertexArray: (token) => geometries.get(token).vertices,
+      GetIndexArray: (token) => geometries.get(token).indices,
+    },
+  }
+}
+
+
+/**
+ * Rebuild FlatMesh-shaped deltas from a batch's columns
+ * (`engineStream.js#makeBatchEncoder`). Consecutive placements sharing a
+ * parent are grouped into one entry, which changes nothing the builder
+ * computes (it only sees `(parent, placement)` pairs). Adapted from #1756's
+ * `decodePlacements`, plus the occurrence-path columns.
+ *
+ * @param {object} placements `{parents, geometryIds, transforms, colors,
+ *   pathOffsets?, pathIds?, pathPresent?}`
+ * @return {Array<object>}
+ */
+export function decodePlacements(placements) {
+  const {parents, geometryIds, transforms, colors, pathOffsets, pathIds, pathPresent} = placements
+  const flatMeshes = []
+  let current = null
+  for (let i = 0; i < parents.length; i++) {
+    const parent = parents[i]
+    if (current === null || current.expressID !== parent) {
+      current = {expressID: parent, geometries: []}
+      flatMeshes.push(current)
+    }
+    const m = i * MATRIX_ELEMENTS
+    const c = i * COLOR_COMPONENTS
+    const placed = {
+      geometryExpressID: geometryIds[i],
+      // A plain Array, not a subarray: the builder reads it positionally
+      // (`Matrix4.fromArray`, its coincidence key), and a copy keeps the
+      // placement independent of the transferred buffer.
+      flatTransformation: Array.from(transforms.subarray(m, m + MATRIX_ELEMENTS)),
+    }
+    if (!Number.isNaN(colors[c])) {
+      // NaN is the encoder's "no colour" (engineStream.js); left unset, the
+      // builder applies its DEFAULT_COLOR.
+      placed.color = {x: colors[c], y: colors[c + 1], z: colors[c + 2], w: colors[c + 3]}
+    }
+    if (pathPresent && pathPresent[i] === 1) {
+      // Present, and possibly EMPTY: `[]` is a STEP root-level instance, not
+      // a missing path (engineStream.js#makeBatchEncoder says why it must
+      // survive). A plain Array, as the builder and its consumers expect.
+      placed.occurrencePath = Array.from(pathIds.subarray(pathOffsets[i], pathOffsets[i + 1]))
+    }
+    current.geometries.push(placed)
+  }
+  return flatMeshes
+}
+
 
 /**
  * How long `init` waits for a working engine: the worker's `hello` and then
@@ -24,7 +135,7 @@ export const SESSION_CLOSED = 'engine session closed'
  * What the clock covers on a worker: fetching and evaluating the worker
  * script (6.3 MB minified), then `Init()` (decoding and compiling the inline
  * wasm, 94–148 ms per instance in §3). 30 s leaves room for a slow phone on
- * a cold cache. When it runs out the load is not lost: spawnEngineSession
+ * a cold cache. When it runs out the load is not lost: spawnWorkerEngine
  * falls back to the in-process engine, so a stalled worker costs at most
  * this long, and never hangs the load. A version mismatch does not wait it
  * out: every v1+ engine announces its version in `hello` and echoes a
@@ -45,7 +156,7 @@ export const ENGINE_CLOSE_TIMEOUT_MS = 1_000
 /**
  * One engine, seen from the page. See the file header.
  */
-export class EngineSession {
+export class WorkerEngine {
   /**
    * @param {object} transport from `transports.js`
    * @param {object} [options]
@@ -89,9 +200,18 @@ export class EngineSession {
       this.rejectHello = reject
     })
     this.hello.catch(() => null)
+    // Each streamed batch's shapes, from the moment the batch arrives until
+    // its listeners have run (`receive`): see makeGeometryStore.
+    this.geometryStore = makeGeometryStore()
     transport.onMessage((msg) => this.receive(msg))
     transport.onCrash((error) => this.fail(error, 'crash'))
     this.propertiesApi = makePropertiesApi(this)
+  }
+
+
+  /** @return {object} the GeometrySource a batch listener reads (Engine.js) */
+  get geometry() {
+    return this.geometryStore.api
   }
 
 
@@ -105,7 +225,7 @@ export class EngineSession {
    */
   request(op, args = {}, transfer = []) {
     if (this.closed) {
-      return Promise.reject(new Error(SESSION_CLOSED))
+      return Promise.reject(new Error(ENGINE_CLOSED))
     }
     const id = this.nextId++
     return new Promise((resolve, reject) => {
@@ -186,9 +306,44 @@ export class EngineSession {
         this.modelID = msg.modelID
         this.resolveIndexed({modelID: msg.modelID, windowed: msg.windowed})
       }
-      for (const cb of this.listeners.get(msg.ev) ?? []) {
-        cb(msg)
+      if (msg.ev === Ev.BATCH) {
+        this.receiveBatch(msg)
+        return
       }
+      if (msg.ev === Ev.DONE) {
+        logPump(msg.summary, this.openFormat)
+      }
+      this.dispatch(msg)
+    }
+  }
+
+
+  /** @param {object} msg an event, to every listener of its name */
+  dispatch(msg) {
+    for (const cb of this.listeners.get(msg.ev) ?? []) {
+      cb(msg)
+    }
+  }
+
+
+  /**
+   * One streamed batch: its columns decoded to the FlatMesh-shaped deltas
+   * every engine's `batch` carries (Engine.js), and its shapes served through
+   * `geometry` while the listeners run, then let go. The builder copies each
+   * shape at delivery (the Share#1640 invariant) and caches it by id, so
+   * keeping the worker's copy past the listener would hold it twice (§3).
+   *
+   * @param {object} msg a `batch` event: `{placements, geometries, progress}`
+   */
+  receiveBatch(msg) {
+    for (const geometry of msg.geometries) {
+      this.geometryStore.put(geometry)
+    }
+    try {
+      msg.flatMeshes = decodePlacements(msg.placements)
+      this.dispatch(msg)
+    } finally {
+      this.geometryStore.drop(msg.geometries)
     }
   }
 
@@ -243,7 +398,11 @@ export class EngineSession {
     } finally {
       clearTimeout(timer)
     }
-    this.capabilities = result.capabilities
+    // Two the handler does not report, because they are this class's: the
+    // handler runs the source policy (sourcePolicy.js) on every open, and
+    // `recapture` is the page's ConwayEngine's alone (a worker keeps no copy
+    // of the stream to rebuild from, since it sends each shape once).
+    this.capabilities = {...result.capabilities, sourcePolicy: true, recapture: false}
     /** `init`'s reply: `{conwayVersion, capabilities, wasmBytes, initMs}`. */
     this.info = result
     return result
@@ -276,6 +435,8 @@ export class EngineSession {
    * @return {Promise<object>} `{modelID, windowed, format, openMs, wasmBytes}`
    */
   async open(source, {format = null, stream = null, sourceOverride = null} = {}) {
+    // The pump line's fallback when the `done` packet names none.
+    this.openFormat = format
     const {source: sent, transfer} = transferableSource(source)
     try {
       const result = await this.request(Op.OPEN, {source: sent, format, stream, sourceOverride}, transfer)
@@ -401,7 +562,7 @@ export class EngineSession {
    * @return {string|undefined}
    */
   typeName(code) {
-    return IfcTypesMap[code]
+    return ifcTypeName(code)
   }
 
 
@@ -434,7 +595,7 @@ export class EngineSession {
     if (this.closing) {
       // A spill sent after close() began could take a sync handle that the
       // close already decided it need not release.
-      return Promise.reject(new Error(SESSION_CLOSED))
+      return Promise.reject(new Error(ENGINE_CLOSED))
     }
     // Until the reply lands, close() cannot know whether the engine now holds
     // a sync handle, so it waits for `settled` first (review on #2081).
@@ -463,6 +624,22 @@ export class EngineSession {
     const settled = spilling.then(() => null, () => null)
     this.spilling = settled
     return spilling
+  }
+
+
+  /**
+   * The two load-end releases (§2.1 rows 30, 31): CadView drops the entity
+   * cache after its load-time reads, and Loader.js the native geometry once
+   * the scene is built. Without them the worker kept both for the life of
+   * the session (review on #2058).
+   *
+   * @param {object} what
+   * @param {boolean} [what.entityCache]
+   * @param {boolean} [what.geometry]
+   * @return {Promise<boolean>} whether anything was released
+   */
+  release({entityCache = false, geometry = false} = {}) {
+    return this.request(Op.RELEASE, {entityCache, geometry})
   }
 
 
@@ -532,7 +709,7 @@ export class EngineSession {
       return this.closing
     }
     if (this.closed || (this.sourceKind !== 'syncHandle' && !this.spilling)) {
-      this.fail(new Error(SESSION_CLOSED), 'closed')
+      this.fail(new Error(ENGINE_CLOSED), 'closed')
       this.closing = Promise.resolve()
       return this.closing
     }
@@ -567,7 +744,7 @@ export class EngineSession {
         await bounded(this.request(Op.CLOSE).catch(() => null))
       }
     } finally {
-      this.fail(new Error(SESSION_CLOSED), 'closed')
+      this.fail(new Error(ENGINE_CLOSED), 'closed')
     }
   }
 }
@@ -598,30 +775,25 @@ function transferableSource(source) {
 
 
 /**
- * The `ifcAPI.properties` shape over a session. The leading `modelID`
- * argument every method takes is ignored: a session holds one model.
+ * The integration-boundary line for a worker load's pump (Share#1744), the
+ * twin of the `[conwayDirect] demand pump:` line a ConwayEngine prints. Named
+ * differently on purpose: E2E specs tell the two engines apart by which line
+ * appears (tests/e2e/engineWorker.ts). Page-side, since the worker's console
+ * is its own.
  *
- * @param {EngineSession} session
- * @return {object}
+ * @param {object|undefined} done the `done` summary
+ * @param {string|null} [format] the open's label, if the packet has none
  */
-function makePropertiesApi(session) {
-  const api = {
-    getSpatialStructure: (_modelID, mode = false, opts = {}) =>
-      session.tree({mode, includeSolids: opts?.includeSolids === true}),
-    getItemProperties: (_modelID, id, recursive = false) => session.properties(id, {recursive}),
-    getPropertySets: (_modelID, id, recursive = false) => session.propertySets(id, {recursive}),
-    getAllItemsOfType: (_modelID, type, verbose = false) => session.itemsOfType(type, {verbose}),
-    getIfcType: (code) => session.typeName(code),
+function logPump(done, format = null) {
+  if (!done) {
+    return
   }
-  // Not web-ifc's: the Properties panel feature-detects it
-  // (itemProperties.jsx#resolveTables) and resolves its tables itself when
-  // it is absent. Present only once the engine's init said it serves the op,
-  // so a stale worker bundle without it costs the old per-read path, not a
-  // failed table.
-  Object.defineProperty(api, 'resolvePropertyTables', {
-    enumerable: true,
-    get: () => (session.capabilities?.propertyTables === true ?
-      (_modelID, tables) => session.propertyTables(tables) : undefined),
-  })
-  return api
+  // `format` is what the suffix named (part21Formats.js), said as such: the
+  // bytes may be the other schema, and conway opened whatever they are.
+  conwayDirectInfo(`engine worker pump: format=${done.format ?? format ?? 'unknown'} (by suffix) ` +
+    `batches=${done.batches} meshes=${done.meshes} ` +
+    `geometries=${done.geometries} windowed=${done.windowed ? 'yes' : 'no'}`)
+  if (done.meshes === 0) {
+    conwayDirectWarn('engine worker pump produced no meshes; the model has nothing to draw')
+  }
 }
