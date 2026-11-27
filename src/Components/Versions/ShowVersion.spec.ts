@@ -1,107 +1,114 @@
-import {test} from '@playwright/test'
+import {expect, Page, test} from '@playwright/test'
+import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
+import {waitForModelReady} from '../../tests/e2e/models'
 import {
-  auth0Login,
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
 } from '../../tests/e2e/utils'
-import {setupVirtualPathIntercept, waitForModelReady} from '../../tests/e2e/models'
-import {expectScreen} from '../../tests/screens'
+import {
+  ADVANCED_HEAD_COOKIE,
+  ADVANCED_VERSION,
+  NEWER_VERSION,
+  OLDER_VERSION,
+  VERSION_HISTORY_PATH,
+  versionCommits,
+  versionContents,
+} from '../../tests/fixtures/versionHistory'
 
 
-const {beforeEach, describe} = test
+const sourcePath = (ref: string) => `/share/v/gh/bldrs-ai/test-models/${ref}/${VERSION_HISTORY_PATH}`
+
 
 /**
- * Tests for showing specific versions of a model.
- * Tests loading different versions and verifying the correct model is displayed.
+ * Open Navigation when needed and check the IFC project name from the model
+ * data. Both revisions have the same GitHub path and filename.
  *
- * Migrated from cypress/e2e/versions-100/show-specific-version.cy.js
- *
- * @see https://github.com/bldrs-ai/Share/issues/1154
+ * @param page Playwright page
+ * @param project Expected IFC project name
  */
-describe('Versions 100: Show a specific version', () => {
-  beforeEach(async ({page}) => {
+async function expectProject(page: Page, project: string) {
+  const panel = page.getByTestId('NavTreePanel')
+  if (!await panel.isVisible()) {
+    await page.getByTestId('control-button-navigation').click()
+  }
+  await expect(panel.getByText(project, {exact: false})).toBeVisible()
+}
+
+
+/**
+ * Fall back to the same fixtures if a full navigation fetches GitHub before
+ * the page is under MSW control. Keep the fallback scoped to this story.
+ *
+ * @param page Playwright page
+ * @param advanced Whether the upstream branch has advanced
+ */
+async function routeVersionFallback(page: Page, advanced: boolean) {
+  await page.context().route(
+    /^https:\/\/api\.github\.com(?:\.[\w-]+)?\/repos\/bldrs-ai\/test-models\/(?:commits|contents\/.*)(?:\?.*)?$/,
+    async (route) => {
+      const url = new URL(route.request().url())
+      const path = decodeURIComponent(url.pathname)
+      if (path.endsWith('/commits') && url.searchParams.get('path')?.replace(/^\//, '') === VERSION_HISTORY_PATH) {
+        await route.fulfill({json: versionCommits(advanced)})
+      } else if (path.endsWith(`/contents/${VERSION_HISTORY_PATH}`)) {
+        const contents = versionContents(url.searchParams.get('ref'), advanced)
+        if (contents) {
+          await route.fulfill({json: contents})
+        } else {
+          await route.fulfill({status: 404, json: {message: 'Not Found'}})
+        }
+      } else {
+        await route.fallback()
+      }
+    },
+  )
+}
+
+
+describeMobileAndDesktop('Versions 100: Open an exact GitHub revision', (formFactor) => {
+  test('opens an older revision signed out and keeps it after the branch advances', async ({page, browser, baseURL}) => {
     await homepageSetup(page)
+    await routeVersionFallback(page, false)
+    await returningUserVisitsHomepageWaitForModel(page)
+    await page.goto(sourcePath('main'))
+    await waitForModelReady(page)
+    await expect(page.getByTestId('AccountBoxOutlinedIcon')).toBeVisible()
+    await expectProject(page, NEWER_VERSION.project)
+
+    await page.getByTestId('control-button-versions').click()
+    await page.getByTestId('timeline-list').getByText(OLDER_VERSION.message, {exact: true}).click()
+    await expect.poll(() => new URL(page.url()).pathname).toBe(sourcePath(OLDER_VERSION.sha))
+    await waitForModelReady(page)
+    await expectProject(page, OLDER_VERSION.project)
+
+    // A separate browser context has no cached model and sees a new branch head.
+    const recipient = await browser.newPage({baseURL, viewport: page.viewportSize(), hasTouch: formFactor.isMobile})
+    try {
+      await homepageSetup(recipient)
+      await routeVersionFallback(recipient, true)
+      await recipient.context().addCookies([{name: ADVANCED_HEAD_COOKIE, value: '1', url: baseURL}])
+      await returningUserVisitsHomepageWaitForModel(recipient)
+      await recipient.goto(new URL(page.url()).pathname)
+      await waitForModelReady(recipient)
+      await expect.poll(() => new URL(recipient.url()).pathname).toBe(sourcePath(OLDER_VERSION.sha))
+      await expectProject(recipient, OLDER_VERSION.project)
+      await recipient.getByTestId('control-button-versions').click()
+      await expect(recipient.getByTestId('timeline-list').getByText(ADVANCED_VERSION.message)).toBeVisible()
+    } finally {
+      await recipient.close()
+    }
   })
 
-  describe('Returning user visits homepage', () => {
-    beforeEach(async ({page}) => {
-      await returningUserVisitsHomepageWaitForModel(page)
-    })
+  test('reports an unavailable commit without loading the branch head', async ({page}) => {
+    await homepageSetup(page)
+    await routeVersionFallback(page, true)
+    await returningUserVisitsHomepageWaitForModel(page)
 
-    describe('User login', () => {
-      beforeEach(async ({page}) => {
-        await auth0Login(page)
-      })
+    const missing = sourcePath('4444444444444444444444444444444444444444')
+    await page.goto(missing)
 
-      const percyLabelPrefix = 'Versions 100: Show a specific version,'
-
-      // TODO(https://github.com/bldrs-ai/Share/issues/1178)
-      test.skip('Open Momentum.ifc, open versions component, select three versions', async ({page}) => {
-        await page.getByTestId('control-button-open').click()
-        await page.getByTestId('textfield-sample-projects').click()
-
-        // set up initial momentum.ifc load
-        await setupVirtualPathIntercept(
-          page,
-          '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc',
-          '/Momentum.ifc',
-        )
-
-        // set up versioned momentum.ifc load (testsha commit)
-        await setupVirtualPathIntercept(
-          page,
-          '/share/v/gh/Swiss-Property-AG/Momentum-Public/testsha1testsha1testsha1testsha1testsha1/Momentum.ifc',
-          '/Momentum.ifc',
-        )
-
-        // set up versioned momentum.ifc load (testsha2 commit)
-        await setupVirtualPathIntercept(
-          page,
-          '/share/v/gh/Swiss-Property-AG/Momentum-Public/testsha2testsha2testsha2testsha2testsha2/Momentum.ifc',
-          '/Momentum.ifc',
-        )
-
-        // set up versioned momentum.ifc load (testsha3 commit)
-        await setupVirtualPathIntercept(
-          page,
-          '/share/v/gh/Swiss-Property-AG/Momentum-Public/testsha3testsha3testsha3testsha3testsha3/Momentum.ifc',
-          '/Momentum.ifc',
-        )
-
-        await page.getByText('Momentum').click()
-        await waitForModelReady(page)
-
-        // first commit version test
-        await page.getByTestId('control-button-versions').click()
-        const firstTimelineItem = page.getByTestId('timeline-list').locator('.MuiTimelineItem-root').nth(0)
-        await firstTimelineItem.click()
-        await waitForModelReady(page)
-
-        await page.getByTestId('control-button-versions').click()
-
-        const animWaitTimeMs = 1000
-        await page.waitForTimeout(animWaitTimeMs)
-        await expectScreen(page, `${percyLabelPrefix} first commit model visible with matching version selected.png`)
-
-        // second commit version test
-        const secondTimelineItem = page.getByTestId('timeline-list').locator('.MuiTimelineItem-root').nth(1)
-        await secondTimelineItem.click()
-        await waitForModelReady(page)
-
-        await page.getByTestId('control-button-versions').click()
-
-        await page.waitForTimeout(animWaitTimeMs)
-        await expectScreen(page, `${percyLabelPrefix} second commit model visible with matching version selected.png`)
-
-        // third commit version test
-        const thirdTimelineItem = page.getByTestId('timeline-list').locator('.MuiTimelineItem-root').nth(2)
-        await thirdTimelineItem.click()
-        await waitForModelReady(page)
-
-        await page.getByTestId('control-button-versions').click()
-        await page.waitForTimeout(animWaitTimeMs)
-        await expectScreen(page, `${percyLabelPrefix} third commit model visible with matching version selected.png`)
-      })
-    })
+    await expect(page.getByTestId('LoadStatusLine')).toContainText('GitHub couldn\'t find this file')
+    await expect.poll(() => new URL(page.url()).pathname).toBe(missing)
+    await expect(page.getByTestId('cadview-dropzone')).toHaveAttribute('data-model-ready', 'false')
   })
 })

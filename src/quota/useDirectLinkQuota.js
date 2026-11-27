@@ -15,6 +15,7 @@ import {modelOpenId} from '../routes/modelOpen'
 import {navigateBaseOnModelPath} from '../utils/location'
 import {driveFileQuotaVisibility} from './driveVisibility'
 import {isLocalFileMeteringEnabled} from './quota'
+import {LIMIT_GATES} from '../privacy/accountUsageReport'
 
 
 /**
@@ -206,7 +207,14 @@ export default function useDirectLinkQuota(appPrefix) {
     // record() never rejects: network and token failures fall back to OPFS
     // inside useQuota. Not awaited — the model is already on screen and
     // nothing here may hold it.
-    const outcomePromise = resolveDriveVisibility ? record(key, {resolveDriveVisibility}) : record(key)
+    // `gate: 'soft'`: this load stays on screen whatever record-load says,
+    // so a refusal is recorded against the account as soft, not blocked
+    // (design/new/account-usage.md §"Limit hits").
+    const options = {gate: LIMIT_GATES.SOFT}
+    if (resolveDriveVisibility) {
+      options.resolveDriveVisibility = resolveDriveVisibility
+    }
+    const outcomePromise = record(key, options)
     outcomePromise.then((outcome) => {
       if (outcome.allowed !== false) {
         return

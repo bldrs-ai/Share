@@ -1,0 +1,282 @@
+{
+  "description": "A run that died after writing its checkpoint: the next run first deletes the checkpoint's pendingDelete (counted, maybe not deleted), so that record is never counted twice, then counts what is left and finishes the rollup from the checkpoint's counts.",
+  "env": {
+    "NODE_ENV": "test",
+    "ADMIN_STATS_SECRET": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+    "NETLIFY_BLOBS_CONTEXT": "eyJzaXRlSUQiOiJyZXBsYXktc2l0ZSIsInRva2VuIjoicmVwbGF5LWJsb2JzLXRva2VuIiwiZWRnZVVSTCI6Imh0dHBzOi8vYmxvYnMucmVwbGF5LnRlc3QiLCJ1bmNhY2hlZEVkZ2VVUkwiOiJodHRwczovL2Jsb2JzLXVuY2FjaGVkLnJlcGxheS50ZXN0In0="
+  },
+  "now": "2026-11-25T03:41:00.000Z",
+  "exchangeOrder": "any",
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/account-usage-retention",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "next_run": "2026-11-26T03:41:00.000Z"
+    }
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F&directories=true"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": [
+            "load/2025-09"
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=limit%2F&directories=true"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=first%2F&directories=true"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=rollup-partial%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [
+            {
+              "key": "rollup-partial/2025-09",
+              "etag": "\"x\""
+            }
+          ],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup/2025-09"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup-partial/2025-09"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "v": 1,
+          "period": "2025-09",
+          "loads": {
+            "total": 1,
+            "byOutcome": {
+              "displayed": 1
+            },
+            "byFormat": {
+              "ifc": 1
+            },
+            "bySource": {
+              "github": 1
+            },
+            "byTier": {
+              "free": 1
+            }
+          },
+          "limits": {},
+          "accounts": [
+            "84a40528eaa5146ae8b4b4089614b29a"
+          ],
+          "pendingDelete": [
+            "load/2025-09/84a40528eaa5146ae8b4b4089614b29a/2025-09-03T10:00:00.000Z-a"
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2025-09/84a40528eaa5146ae8b4b4089614b29a/2025-09-03T10:00:00.000Z-a"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2025-09%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [
+            {
+              "key": "load/2025-09/84a40528eaa5146ae8b4b4089614b29a/2025-09-04T10:00:00.000Z-b",
+              "etag": "\"x\""
+            }
+          ],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=limit%2F2025-09%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=first%2F2025-09%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2025-09/84a40528eaa5146ae8b4b4089614b29a/2025-09-04T10:00:00.000Z-b"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "content_type": "step",
+          "load_outcome": "displayed",
+          "source": "github",
+          "tier": "free"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup-partial/2025-09",
+        "bodyJson": {
+          "loads": {
+            "total": 2
+          },
+          "pendingDelete": [
+            "load/2025-09/84a40528eaa5146ae8b4b4089614b29a/2025-09-04T10:00:00.000Z-b"
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"p\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/load/2025-09/84a40528eaa5146ae8b4b4089614b29a/2025-09-04T10:00:00.000Z-b"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage?prefix=load%2F2025-09%2F"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "blobs": [],
+          "directories": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup/2025-09",
+        "headers": {
+          "if-none-match": "*"
+        },
+        "bodyJson": {
+          "loads": {
+            "total": 2,
+            "accounts": 1,
+            "byFormat": {
+              "ifc": 1,
+              "step": 1
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "etag": "\"r\""
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://blobs-uncached.replay.test/replay-site/site:account-usage/rollup-partial/2025-09"
+      },
+      "response": {
+        "status": 204
+      }
+    }
+  ],
+  "expect": {
+    "statusCode": 200,
+    "json": {
+      "reduced": [
+        {
+          "period": "2025-09",
+          "rollup": "written",
+          "deleted": 2
+        }
+      ],
+      "pending": 0
+    }
+  }
+}

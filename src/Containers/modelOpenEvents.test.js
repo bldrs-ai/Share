@@ -1,4 +1,5 @@
 import {reportModelOpenCount} from '../app/modelOpenCount'
+import {reportAccountLoad} from '../app/accountUsage'
 import {resetModelOpenReportForTest} from '../utils/reportModelOpen'
 import {reportModelOpened} from './modelOpenEvents'
 
@@ -7,6 +8,7 @@ import {reportModelOpened} from './modelOpenEvents'
 // only that reportModelOpened calls it for exactly the opens real_model_open
 // counts. Its siblings in sendOpenEvents are stubbed, being tested elsewhere.
 jest.mock('../app/modelOpenCount', () => ({reportModelOpenCount: jest.fn(() => true), reportModelOpenFailure: jest.fn()}))
+jest.mock('../app/accountUsage', () => ({reportAccountLoad: jest.fn(() => Promise.resolve(true))}))
 jest.mock('../app/modelActionTracking', () => ({trackModelActionWhenAuthSettled: jest.fn()}))
 jest.mock('../privacy/engagementTracking', () => ({trackEngagementOnOpen: jest.fn()}))
 jest.mock('../connections/uploadLedger', () => ({recordLocalUpload: jest.fn()}))
@@ -43,7 +45,24 @@ describe('Containers/modelOpenEvents model_open_count', () => {
   beforeEach(() => {
     resetModelOpenReportForTest()
     reportModelOpenCount.mockClear()
+    reportAccountLoad.mockClear()
     gtagEvent.mockClear()
+  })
+
+  // The signed-in user's record of the same open (design/new/account-usage.md):
+  // same gate and once per open, with real_model_open's params, so its timings
+  // are the ones GA's event carries. Signed-in-ness and the opt-out are its
+  // own checks (app/accountUsage.test.js).
+  it('reports the same open against the account, with real_model_open\'s params', () => {
+    const route = githubRoute()
+    const model = {type: 'ifc'}
+    const ctx = context()
+    reportModelOpened(route, model, ctx)
+    reportModelOpened(route, model, ctx)
+    expect(reportAccountLoad).toHaveBeenCalledTimes(1)
+    const [calledRoute, calledModel, params, {openKind, getIsAuthenticated}] = reportAccountLoad.mock.calls[0]
+    expect([calledRoute, calledModel, openKind, getIsAuthenticated]).toEqual([route, model, 'page', ctx.getIsAuthenticated])
+    expect(params).toMatchObject({stats_fileSize: FILE_SIZE, load_outcome: 'displayed'})
   })
 
   it('counts a new real open once, beside real_model_open, with its size and kind', () => {

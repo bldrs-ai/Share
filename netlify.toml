@@ -104,6 +104,12 @@
 [functions."reconcile-subscriptions"]
   schedule = "17 4 * * *"
 
+# Daily retention sweep of the per-account usage store: periods older than 13
+# whole months become account-free counts (design/new/account-usage.md
+# §"Retention"). 03:41 UTC: off the hour, and clear of the reconcile sweep.
+[functions."account-usage-retention"]
+  schedule = "41 3 * * *"
+
 # COOP same-origin-allow-popups lets Google Identity Services deliver OAuth
 # tokens via postMessage without nulling window.opener in the cross-origin
 # popup. COEP is intentionally omitted (docs.google.com/picker sends

@@ -1,6 +1,7 @@
 import {StrictMode} from 'react'
 import {renderHook, waitFor} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../__mocks__/authentication'
+import {reportFunnelStep} from '../app/accountUsage'
 import {_resetGaClientIdForTests, setGaClientId} from '../privacy/analytics'
 import {installGatedFakeLocks, uninstallFakeLocks} from '../privacy/crossTabLock.fixture'
 import {GATE_LOGIN_KEY, GATE_LOGIN_TTL_MS, clearGateLogin, noteGateLogin} from './gateLogin'
@@ -9,6 +10,9 @@ import useLoginTracking, {
   loginMethodFromSub,
   markRedirectLogin,
 } from './useLoginTracking'
+
+
+jest.mock('../app/accountUsage', () => ({reportFunnelStep: jest.fn(() => Promise.resolve(true))}))
 
 
 const LOADING = {...mockedUserLoggedOut, isLoading: true}
@@ -24,6 +28,7 @@ describe('useLoginTracking', () => {
     clearGateLogin()
     localStorage.clear()
     window.gtag = jest.fn()
+    reportFunnelStep.mockClear()
   })
 
   afterEach(() => {
@@ -73,11 +78,15 @@ describe('useLoginTracking', () => {
     step(mockedUserLoggedIn)
     await waitFor(() => expect(loginEvents()).toHaveLength(1))
     expect(loginEvents()[0]).toEqual(['event', 'login', {method: 'github', open_cid: 'cid.111.222'}])
+    // The same login, for the server to count (design/new/account-usage.md):
+    // the same method and attribution, never the GA client id.
+    expect(reportFunnelStep).toHaveBeenCalledWith('login', {method: 'github'})
 
     // Refreshes after the login are not new logins.
     step({...mockedUserLoggedIn, user: {...mockedUserLoggedIn.user}})
     await flush()
     expect(loginEvents()).toHaveLength(1)
+    expect(reportFunnelStep).toHaveBeenCalledTimes(1)
   })
 
   // Share#1964: a sign-in started at a visible gate says so.

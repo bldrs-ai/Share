@@ -1,0 +1,30 @@
+{
+  "description": "A body that names its own country is refused (400): the country is Netlify's, never the page's.",
+  "env": {
+    "GA4_MEASUREMENT_ID": "G-REPLAY0001",
+    "GA4_API_SECRET": "mp-secret-replay"
+  },
+  "context": {
+    "geo": {
+      "country": {
+        "code": "BR"
+      }
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/.netlify/functions/page-visit",
+    "headers": {
+      "origin": "https://bldrs.ai",
+      "content-type": "text/plain;charset=UTF-8"
+    },
+    "body": "{\"route_kind\":\"viewer-github\",\"referrer_class\":\"search\",\"utm_source\":\"google\",\"utm_medium\":\"cpc\",\"form_factor\":\"desktop\",\"session_id\":\"4503599627370497\",\"country\":\"US\"}"
+  },
+  "exchanges": [],
+  "expect": {
+    "statusCode": 400,
+    "json": {
+      "error": "invalid_page_visit"
+    }
+  }
+}

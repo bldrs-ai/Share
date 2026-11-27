@@ -53,6 +53,15 @@ describe('Privacy', () => {
     expect(loads).toMatch(/never includes a model’s name, path, web address or contents/)
     expect(loads).toMatch(/the only model it names is one of our own sample models/)
     expect(loads).toMatch(/lives only while the page is open/)
+    // design/new/account-usage.md: per-account records, what they hold, how
+    // long, the opt-out, and that limit records stay.
+    const account = paragraph(getByText, 'Your account’s usage.')
+    expect(account).toMatch(/kept with your account/)
+    expect(account).toMatch(/never includes a model’s name, path, web address or contents/)
+    expect(account).toMatch(/run and improve the service/)
+    expect(account).toMatch(/kept for 13 months/)
+    expect(account).toMatch(/“Use my usage to improve Bldrs” in the Profile menu/)
+    expect(account).toMatch(/free-use limit are kept either way/)
     const limits = paragraph(getByText, 'Free-use limits.')
     expect(limits).toMatch(/used only to apply the free allowance/)
     // What the limit records actually keep (record-load.js stores the model's
@@ -65,7 +74,7 @@ describe('Privacy', () => {
   it('says the same about telemetry as the marketing copy', () => {
     const {getByText} = render(<Privacy/>, {wrapper: HelmetThemeCtx})
     const marketing = marketingPolicyText()
-    for (const heading of ['Error and reliability reports.', 'How models load.', 'Free-use limits.']) {
+    for (const heading of ['Error and reliability reports.', 'How models load.', 'Your account’s usage.', 'Free-use limits.']) {
       expect(marketing).toContain(paragraph(getByText, heading))
     }
   })

@@ -5,6 +5,7 @@ import {
   getFilesAndFolders,
   getPathContents,
 } from './Files'
+import {MOCK_SAVED_COMMIT_SHA} from './Commits.fixture'
 import {MOCK_FILES} from './Files.fixture'
 
 
@@ -48,7 +49,7 @@ describe('net/github/Files', () => {
 
         // if token passed but isn't valid, should throw 'Bad Credentials'
         const result = await commitFile('owner', 'repo', 'path', file, 'message', 'branch', 'dummyToken')
-        expect(result).toBe('newCommitSha')
+        expect(result).toBe(MOCK_SAVED_COMMIT_SHA)
       } finally {
         // Restore original FileReader
         global.FileReader = originalFileReader

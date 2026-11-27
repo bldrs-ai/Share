@@ -6,6 +6,7 @@ import {HTTP_BAD_REQUEST, HTTP_FORBIDDEN, HTTP_OK} from '../net/http'
 import {DRIVE_VISIBILITY, driveFileQuotaVisibility} from '../quota/driveVisibility'
 import {FREE_PRIVATE_MODEL_LIMIT} from '../quota/limits'
 import useStore from '../store/useStore'
+import {reportClientLimitHit} from '../app/accountUsage'
 import useQuota from './useQuota'
 
 
@@ -17,6 +18,9 @@ jest.mock('../FeatureFlags', () => ({
 }))
 // Only getProvider, so a test can hand driveFileQuotaVisibility a Drive
 // provider whose lookup fails.
+// The limit-hit report the hook makes for a refusal it decides itself
+// (design/new/account-usage.md); its module is tested on its own.
+jest.mock('../app/accountUsage', () => ({reportClientLimitHit: jest.fn(() => Promise.resolve(true))}))
 jest.mock('../connections/registry', () => ({
   ...jest.requireActual('../connections/registry'),
   getProvider: jest.fn(),
@@ -356,6 +360,33 @@ describe('useQuota — Drive visibility (signed in)', () => {
       .then((h) => h.getFile())
       .then((f) => f.text())
     expect(JSON.parse(stored).loads.map((l) => l.key)).toEqual([DRIVE_KEY])
+  })
+
+  // record-load can't record a refusal it never answered, so the hook
+  // reports it; a refusal record-load answered (403) it does not, since
+  // record-load records that one itself.
+  it('reports a refusal it decided offline, and not one record-load answered', async () => {
+    reportClientLimitHit.mockClear()
+    global.fetch = fakeRecordLoad(seeded).fetch
+    expect((await recordOnce(DRIVE_KEY, {resolveDriveVisibility: visibility(DRIVE_VISIBILITY.PRIVATE)})).allowed).toBe(false)
+    expect(reportClientLimitHit).not.toHaveBeenCalled()
+
+    // The 403 mirrored the full ledger into OPFS, so offline the next private
+    // file is refused by the page itself.
+    global.fetch = jest.fn(() => Promise.reject(new Error('offline')))
+    const refused = await recordOnce('/share/v/g/c', {resolveDriveVisibility: visibility(DRIVE_VISIBILITY.PRIVATE), gate: 'soft'})
+    expect(refused.allowed).toBe(false)
+    expect(reportClientLimitHit).toHaveBeenCalledTimes(1)
+    expect(reportClientLimitHit).toHaveBeenCalledWith({gate: 'soft', routeKind: 'gdrive'})
+  })
+
+  it('tells record-load a direct link is the soft gate, and nothing more', async () => {
+    const server = fakeRecordLoad()
+    global.fetch = server.fetch
+    await recordOnce(DRIVE_KEY, {resolveDriveVisibility: visibility(DRIVE_VISIBILITY.PRIVATE), gate: 'soft'})
+    await recordOnce('/share/v/g/other', {resolveDriveVisibility: visibility(DRIVE_VISIBILITY.PRIVATE)})
+    expect(server.fetch.mock.calls.map(([, init]) => JSON.parse(init.body)))
+      .toEqual([{key: DRIVE_KEY, gate: 'soft'}, {key: '/share/v/g/other'}])
   })
 })
 

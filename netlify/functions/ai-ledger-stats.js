@@ -35,15 +35,18 @@
  * counts as unset (500), so a placeholder can't open the endpoint. It is
  * compared in constant time.
  */
-import {createHash, timingSafeEqual} from 'node:crypto'
 import {getStore} from '@netlify/blobs'
 import {AI_CREDIT_ENV_VARS, aiCreditLimits} from '../../src/quota/aiCredits.js'
 import {HOLD_TTL_MS, utcDay} from './_lib/aiLedger.js'
+import {MIN_SECRET_LENGTH, bearerMatches} from './_lib/adminStatsAuth.js'
+
+
+// Re-exported for the tests, which import them from here.
+export {MIN_SECRET_LENGTH, bearerMatches}
 
 
 export const LEDGER_STORE = 'ai-ledger'
 export const STATS_DAYS = 7
-export const MIN_SECRET_LENGTH = 32
 export const BREAKER_TIERS = Object.freeze(['anonymous', 'free'])
 /** Secrets ai-chat needs: reported as set or not, never read further. */
 export const RELAY_SECRETS = Object.freeze(['OPENROUTER_API_KEY', 'AI_TOKEN_SECRET'])
@@ -79,23 +82,6 @@ export default async function handler(req) {
     store = null
   }
   return json(HTTP_OK, await ledgerStats(store, process.env, Date.now()))
-}
-
-
-/**
- * @param {string|null} header
- * @param {string} secret
- * @return {boolean} whether it is `Bearer <secret>`, compared in constant time
- */
-export function bearerMatches(header, secret) {
-  const match = /^Bearer (.+)$/.exec(header || '')
-  if (!match) {
-    return false
-  }
-  // Hash both sides first, so the comparison is over equal lengths and
-  // leaks nothing about the secret's length.
-  const digest = (s) => createHash('sha256').update(s).digest()
-  return timingSafeEqual(digest(match[1]), digest(secret))
 }
 
 

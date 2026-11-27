@@ -83,10 +83,33 @@ export default function PrivacyPage() {
           model it names is one of our own sample models, if that’s what you opened. It
           carries one random ID that lives only while the page is open, so the models
           opened in one visit can be counted together; it is never stored, and a reload
-          starts a new one. Our server passes these reports on to Google Analytics under
+          starts a new one. The app also reports each time you open a page: what kind of
+          page it was (the home page, or the viewer and where its model comes from), what
+          kind of site you came from (a search engine, a social network, our own site,
+          another site, or none), a campaign name only if it is one we know, and whether
+          you’re on a phone or a computer. It never includes the page’s address or the
+          site you came from, and it carries the same random ID, so a visit can be counted
+          with the models opened in it. Our server adds your country, as its hosting
+          provider locates the request, and keeps it nowhere. Our server passes these
+          reports on to Google Analytics under
           one shared ID, so Google never sees your browser or network address. They are
           always on, on the basis of our legitimate interest in running and improving the
           service.
+        </Typography>
+        <Typography variant="body1">
+          <strong>Your account’s usage.</strong> If you’re signed in, the report of each
+          model you open is also kept with your account, so we can see how much each
+          account uses Bldrs Share and how it performs for them: the same kind of file,
+          size range, where it came from, whether it loaded and how long it took, with how
+          complex it was rounded and your plan. Like every report, it never includes a
+          model’s name, path, web address or contents. We use it to run and improve the
+          service, on the basis of our legitimate interest in doing so. Your account’s
+          records are kept for 13 months, then reduced to totals that name no account. To
+          turn this off, use “Use my usage to improve Bldrs” in the Profile menu; turning
+          it off also deletes the records already kept. Records of when your account
+          reaches a free-use limit are kept either way, for the same 13 months, because
+          they are part of applying the limits. Sign-ins and upgrade clicks are counted in
+          Google Analytics from our server under one shared ID, never yours.
         </Typography>
         <Typography variant="body1">
           <strong>Free-use limits.</strong> Some features have a free allowance. If you’re

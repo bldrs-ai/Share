@@ -1,69 +1,93 @@
 import {expect, test} from '@playwright/test'
+import {readFile} from 'node:fs/promises'
+import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
+import {rememberShownModel, waitForModelOtherThan} from '../../tests/e2e/modelSwitch'
 import {
   auth0Login,
-  homepageSetup,
+  homepageSetupWithAuth,
   returningUserVisitsHomepageWaitForModel,
 } from '../../tests/e2e/utils'
-import {expectScreen} from '../../tests/screens'
 
 
-const {beforeEach, describe} = test
+const REPOSITORY = '/repos/cypresstester/test-repo/git'
+const SAVED_MODEL = '/share/v/gh/cypresstester/test-repo/'
 
-/**
- * Tests for saving models to GitHub.
- * Tests save button visibility and the complete save workflow.
- *
- * Migrated from cypress/e2e/versions-100/save-imported-model.cy.js
- *
- * @see https://github.com/bldrs-ai/Share/issues/980
- */
-describe('Versions 100: Save model', () => {
-  beforeEach(async ({page}) => {
-    await homepageSetup(page)
+
+describeMobileAndDesktop('Versions 100: Save a model to GitHub', () => {
+  test.beforeEach(async ({page}) => {
+    await homepageSetupWithAuth(page)
+    await returningUserVisitsHomepageWaitForModel(page)
   })
 
-  describe('Returning user visits homepage', () => {
-    beforeEach(async ({page}) => {
-      await returningUserVisitsHomepageWaitForModel(page)
-    })
+  test('opens the Save dialog for a signed-out user', async ({page}) => {
+    await expect(page.getByTestId('gated-save')).toHaveCount(0)
+    await page.getByTestId('control-button-save').click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+  })
 
-    test('Save button visible, and opens for a signed-out user', async ({page}) => {
-      // Signed out, Save opens like for anyone else (Share#1964; before that
-      // it was a gate of its own, #1838). The gates are inside: GitHub says
-      // to log in, and Export GLB carries the export gate.
-      await expect(page.getByTestId('control-button-save')).toBeVisible({timeout: 10000})
-      await expect(page.getByTestId('gated-save')).toHaveCount(0)
+  for (const {title, filename} of [
+    {title: 'saves to a new file', filename: 'save-model-test.ifc'},
+    {title: 'replaces an existing file', filename: 'window.ifc'},
+  ]) {
+    test(title, async ({page}) => {
+      await auth0Login(page)
       await page.getByTestId('control-button-save').click()
-      await expect(page.getByRole('dialog')).toBeVisible()
-    })
 
-    describe('User login', () => {
-      beforeEach(async ({page}) => {
-        await auth0Login(page)
+      const dialog = page.getByRole('dialog')
+      await dialog.getByRole('combobox', {name: 'Organization'}).click()
+      await page.getByRole('option', {name: '@cypresstester', exact: true}).click()
+      await dialog.getByRole('combobox', {name: 'Repository'}).click()
+      await page.getByRole('option', {name: 'test-repo', exact: true}).click()
+      await dialog.getByRole('combobox', {name: 'Branch'}).click()
+      await page.getByRole('option', {name: 'main', exact: true}).click()
+      await dialog.getByRole('textbox', {name: 'Enter file name'}).fill(filename)
+
+      await rememberShownModel(page, 'beforeSave')
+      const [blob, tree, commit, ref, contents] = await Promise.all([
+        page.waitForResponse((response) => response.request().method() === 'POST' &&
+          new URL(response.url()).pathname.endsWith(`${REPOSITORY}/blobs`)),
+        page.waitForResponse((response) => response.request().method() === 'POST' &&
+          new URL(response.url()).pathname.endsWith(`${REPOSITORY}/trees`)),
+        page.waitForResponse((response) => response.request().method() === 'POST' &&
+          new URL(response.url()).pathname.endsWith(`${REPOSITORY}/commits`)),
+        page.waitForResponse((response) => response.request().method() === 'PATCH' &&
+          decodeURIComponent(new URL(response.url()).pathname).endsWith(`${REPOSITORY}/refs/heads/main`)),
+        page.waitForResponse((response) => response.request().method() === 'GET' &&
+          decodeURIComponent(new URL(response.url()).pathname).endsWith(
+            `/repos/cypresstester/test-repo/contents/${filename}`,
+          )),
+        dialog.getByRole('button', {name: 'action-button'}).filter({hasText: 'Save model'}).click(),
+      ])
+
+      expect(blob.ok()).toBe(true)
+      const {content, encoding} = blob.request().postDataJSON()
+      expect(encoding).toBe('base64')
+      expect(Buffer.from(content, 'base64')).toEqual(await readFile('public/index.ifc'))
+      expect(tree.ok()).toBe(true)
+      expect(tree.request().postDataJSON()).toMatchObject({
+        base_tree: 'treeSha',
+        tree: [{path: filename, sha: (await blob.json()).sha}],
       })
-
-      test.skip('Save button visible, User inputs details and saves - Screens', async ({page}) => {
-        const percyLabelPrefix = 'Versions 100: Save Model,'
-
-        await expect(page.getByTitle('Save')).toBeVisible({timeout: 5000})
-        await expectScreen(page, `${percyLabelPrefix} save button visible.png`)
-
-        await page.getByTitle('Save').click({force: true})
-        await page.getByRole('textbox', {name: 'Organization'}).click()
-        await page.getByText('@cypresstester').click()
-        await page.getByRole('textbox', {name: 'Repository'}).first().click()
-        await page.getByText('test-repo').click()
-        await page.getByRole('textbox', {name: 'Branch'}).first().click()
-        await page.getByText('main').click()
-        await page.getByRole('textbox', {name: 'Enter file name'}).click()
-        await page.getByRole('textbox', {name: 'Enter file name'}).fill('save-model-test.ifc')
-        await expectScreen(page, `${percyLabelPrefix} form filled.png`)
-
-        await page.getByRole('button', {name: 'Save model'}).click()
-        const animWaitTimeMs = 2000
-        await page.waitForTimeout(animWaitTimeMs)
-        await expectScreen(page, `${percyLabelPrefix} model visible after save.png`)
+      expect(commit.ok()).toBe(true)
+      expect(commit.request().postDataJSON()).toMatchObject({
+        tree: (await tree.json()).sha,
+        parents: ['parentSha'],
       })
+      expect(ref.ok()).toBe(true)
+      const {sha} = await commit.json()
+      expect(sha).toMatch(/^[a-f0-9]{40}$/)
+      expect(ref.request().postDataJSON()).toMatchObject({sha})
+
+      await expect.poll(() => new URL(page.url()).pathname).toBe(`${SAVED_MODEL}${sha}/${filename}`)
+      expect(contents.ok()).toBe(true)
+      expect(new URL(contents.url()).searchParams.get('ref')).toBe(sha)
+      await waitForModelOtherThan(page, 'beforeSave')
+
+      await page.getByTestId('control-button-navigation').click()
+      await expect(page.getByTestId('NavTreePanel').getByText('Bldrs', {exact: true})).toBeVisible()
+      await page.getByTestId('control-button-navigation').click()
+      await page.getByTestId('control-button-save').click()
+      await expect(dialog.getByRole('button', {name: 'action-button'}).filter({hasText: 'Save model'})).toBeEnabled()
     })
-  })
+  }
 })

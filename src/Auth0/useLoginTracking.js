@@ -3,6 +3,8 @@ import {FUNNEL_EVENTS, gtagFunnelEvent} from '../privacy/analytics'
 import {withCrossTabLock} from '../privacy/crossTabLock'
 import {useAuth0} from './Auth0Proxy'
 import {takeGateLoginSource} from './gateLogin'
+import {reportFunnelStep} from '../app/accountUsage'
+import {FUNNEL_REPORT_EVENTS} from '../privacy/accountUsageReport'
 
 
 /*
@@ -183,6 +185,21 @@ async function readAuthTime(getIdTokenClaims) {
 
 
 /**
+ * Send one `login`: to GA from the page, as before, and to account-usage,
+ * which counts it server-side under a fixed GA client id
+ * (design/new/account-usage.md §"Funnel"). Both carry the same gate
+ * attribution, taken once by the caller.
+ *
+ * @param {string} method
+ * @param {object} gateSource takeGateLoginSource's `{from, feature}`, or {}
+ */
+function sendLogin(method, gateSource) {
+  gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, {method, ...gateSource})
+  reportFunnelStep(FUNNEL_REPORT_EVENTS.LOGIN, {method, ...gateSource})
+}
+
+
+/**
  * Claim the right to report this sign-in across tabs, and report it if won.
  *
  * The read-compare-write of LAST_LOGIN_KEY and the emit run under a Web Lock
@@ -208,7 +225,7 @@ async function readAuthTime(getIdTokenClaims) {
 function claimLogin(sub, authTime, method) {
   if (authTime === null) {
     // No auth_time, no identity for the sign-in: nothing to dedupe on.
-    gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, {method, ...takeGateLoginSource()})
+    sendLogin(method, takeGateLoginSource())
     return Promise.resolve(true)
   }
   const id = `${sub}|${authTime}`
@@ -221,7 +238,7 @@ function claimLogin(sub, authTime, method) {
     } catch {
       // Storage unavailable: no cross-tab dedupe, the in-page edge decides.
     }
-    gtagFunnelEvent(FUNNEL_EVENTS.LOGIN, {method, ...takeGateLoginSource()})
+    sendLogin(method, takeGateLoginSource())
     return true
   })
 }

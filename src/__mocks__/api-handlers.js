@@ -20,6 +20,7 @@ import {
   slotsHeaderValue,
 } from '../export/exportSlots'
 import {parseFeedbackRecord} from '../feedback/feedbackRecord'
+import {ACCOUNT_USAGE_KINDS, parseAccountUsageBody} from '../privacy/accountUsageReport'
 import {FREE_PRIVATE_MODEL_LIMIT, isCountedByRouteKind} from '../quota/limits'
 import {isProSubscriptionStatus} from '../quota/proStatus'
 import {isLocalFileMeteringEnabled, pruneLoads} from '../quota/quota'
@@ -238,6 +239,40 @@ function netlifyHandlers() {
           stored[record.feedback_id] = {...record, at: new Date().toISOString()}
         }
         window.__mockFeedback = stored
+      }
+      return new Response(null, {status: HTTP_NO_CONTENT_MOCK})
+    }),
+
+    // Per-account usage (design/new/account-usage.md): stands in for
+    // `netlify/functions/account-usage.js` in dev, Playwright and Jest. Same
+    // shape check (the module both share), same bearer requirement and
+    // answers. Every accepted body goes on `window.__mockAccountUsage`, in
+    // order, for a spec to read back; a load body after an opt-out is dropped
+    // there as the function drops it (limit and funnel bodies are kept). A spec sets
+    // `window.__mockAccountUsageFail` to make it answer 502.
+    http.post('/.netlify/functions/account-usage', async ({request}) => {
+      const body = parseAccountUsageBody(await request.text())
+      if (!body) {
+        return jsonMockResponse(HTTP_BAD_REQUEST, {error: 'invalid_account_usage'})
+      }
+      if (!/^Bearer\s+.+/i.test(request.headers.get('authorization') || '')) {
+        return jsonMockResponse(HTTP_AUTHORIZATION_REQUIRED, {error: 'missing_auth0_token'})
+      }
+      if (typeof window === 'undefined') {
+        return new Response(null, {status: HTTP_NO_CONTENT_MOCK})
+      }
+      if (window.__mockAccountUsageFail) {
+        return jsonMockResponse(HTTP_BAD_GATEWAY_MOCK, {error: 'account_usage_store_failed'})
+      }
+      const received = window.__mockAccountUsage || []
+      window.__mockAccountUsage = received
+      if (body.kind === ACCOUNT_USAGE_KINDS.PREFERENCE) {
+        window.__mockUsageReportsOff = body.usage_reports === false
+        received.push(body)
+        return jsonMockResponse(HTTP_OK, {usage_reports: body.usage_reports})
+      }
+      if (!(body.kind === ACCOUNT_USAGE_KINDS.LOAD && window.__mockUsageReportsOff)) {
+        received.push(body)
       }
       return new Response(null, {status: HTTP_NO_CONTENT_MOCK})
     }),

@@ -587,11 +587,11 @@ function scheduleSnackClear(setSnackMessage, pauseTimeMs) {
  * @param {Function} onPathname - Callback function to handle pathname changes.
  * @param {string} orgName - The organization name on GitHub.
  * @param {string} repoName - The repository name on GitHub.
- * @param {string} branchName - The branch name on GitHub.
+ * @param {string} commitHash - The exact commit that was saved
  * @param {string} pathWithFileName - The path including the file name on GitHub.
  * @param {Function} setSnackMessage - Function to set a snack message displayed to the user.
  */
-function redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage) {
+function redirectToNewModel(onPathname, orgName, repoName, commitHash, pathWithFileName, setSnackMessage) {
   setSnackMessage(MSG_SAVE_SUCCESS)
   const pauseTimeMs = 5000
   scheduleSnackClear(setSnackMessage, pauseTimeMs)
@@ -599,7 +599,7 @@ function redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithF
   const pathLeadingSlash = `/${ pathWithFileName}`
 
   // Redirect
-  onPathname(navigateBaseOnModelPath(orgName, repoName, branchName, pathLeadingSlash))
+  onPathname(navigateBaseOnModelPath(orgName, repoName, commitHash, pathLeadingSlash))
 }
 
 
@@ -647,17 +647,18 @@ async function fileSave(
       if (commitHash !== null) {
         // save to opfs
         if (opfsIsAvailable) {
-          const opfsResult = await writeSavedGithubModelOPFS(file, pathWithFileName, commitHash, orgName, repoName, branchName)
+          // The pinned route looks up its source file under the commit ref.
+          const opfsResult = await writeSavedGithubModelOPFS(file, pathWithFileName, commitHash, orgName, repoName, commitHash)
 
           if (opfsResult) {
-            redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage)
+            redirectToNewModel(onPathname, orgName, repoName, commitHash, pathWithFileName, setSnackMessage)
           } else {
             setSnackMessage(MSG_ERROR_OPFS)
             const pauseTimeMs = 5000
             scheduleSnackClear(setSnackMessage, pauseTimeMs)
           }
         } else {
-          redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage)
+          redirectToNewModel(onPathname, orgName, repoName, commitHash, pathWithFileName, setSnackMessage)
         }
       } else {
         setSnackMessage(MSG_ERROR_GITHUB)
