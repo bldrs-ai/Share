@@ -8,7 +8,7 @@ import NavTreePanel from '../Components/NavTree/NavTreePanel'
 import NotesPanel from '../Components/Notes/NotesPanel'
 import PropertiesPanel from '../Components/Properties/PropertiesPanel'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
-import VersionsPanel from '../Components/Versions/VersionsPanel'
+import ModelVersionsPanel from '../Components/Versions/ModelVersionsPanel'
 import useStore from '../store/useStore'
 import {selectReadModel} from '../store/IFCSlice'
 import useExistInFeature from '../hooks/useExistInFeature'
@@ -172,7 +172,7 @@ export default function TabbedPanels({
     versions: isVersionsEnabled && isVersionsVisible ?
       {
         label: createTabLabel('Versions', () => setIsVersionsVisible(false)),
-        panel: modelPath.repo !== undefined && <VersionsPanel filePath={modelPath.filepath} currentRef={branch}/>,
+        panel: <ModelVersionsPanel modelPath={modelPath} branch={branch}/>,
       } :
       null,
   }

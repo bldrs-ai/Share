@@ -3,7 +3,7 @@ import {Box} from '@mui/material'
 import useStore from '../store/useStore'
 import {selectReadModel} from '../store/IFCSlice'
 import NavTreePanel from '../Components/NavTree/NavTreePanel'
-import VersionsPanel from '../Components/Versions/VersionsPanel'
+import ModelVersionsPanel from '../Components/Versions/ModelVersionsPanel'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
 
 
@@ -78,9 +78,8 @@ export default function NavTreeAndVersionsDrawer({
         data-testid='VersionsContainer'
       >
         {isVersionsEnabled &&
-         (modelPath.repo !== undefined) &&
          isVersionsVisible &&
-         <VersionsPanel filePath={modelPath.filepath} currentRef={branch}/>}
+         <ModelVersionsPanel modelPath={modelPath} branch={branch}/>}
       </Box>
     </SideDrawer>
   )

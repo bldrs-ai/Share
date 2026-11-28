@@ -4,6 +4,7 @@ import esbuild from 'esbuild'
 import {fileURLToPath} from 'url'
 import {ASSIST_RUNTIME_ENTRY, GFM_ENTRY, assertAiSdkNotInMain, assertGfmNotInMain} from './assistEntry.js'
 import config, {staticCopyPlugin} from './common.js'
+import {buildHomepageVersions} from '../homepage-versions/build.js'
 import {proModuleBuilds} from './proModules.js'
 
 
@@ -11,6 +12,7 @@ const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../')
 
 // Main build
 const indexFile = path.resolve(repoRoot, 'src', 'index.jsx')
+const homepageVersionsFile = path.resolve(repoRoot, 'src', 'Components', 'Versions', 'homepageGit.js')
 const subscribeFile = path.resolve(repoRoot, 'src', 'subscribe', 'index.jsx')
 // The one build that owns the `public/` → `docs/` copy. Every build below
 // runs concurrently under the `Promise.all` at the foot of this file, and the
@@ -26,10 +28,11 @@ const subscribeFile = path.resolve(repoRoot, 'src', 'subscribe', 'index.jsx')
 const mainBuild = esbuild.build({
   ...config,
   plugins: [...config.plugins, staticCopyPlugin],
-  entryPoints: [indexFile, subscribeFile, ASSIST_RUNTIME_ENTRY, GFM_ENTRY],
+  entryPoints: [indexFile, subscribeFile, ASSIST_RUNTIME_ENTRY, GFM_ENTRY, homepageVersionsFile],
 }).then((result) => {
   assertAiSdkNotInMain(result.metafile)
   assertGfmNotInMain(result.metafile)
+  buildHomepageVersions(config.outdir)
   return result
 })
 
